@@ -175,20 +175,19 @@ record returns to a finite value). Log entry D8.
 
 ## The checker: FP8
 
-`verity_numerical.checker` was BF16-only by construction: `Params` asserted an adder at least as wide as the accumulator's
-significand (`width >= acc_sig`, 25 >= 24), and one exponent width served operands and accumulator alike. Hopper/Ada E4M3
-break both -- the FP8 adders are 14 bits wide and truncate the incoming FP32 accumulator's 24-bit significand to 14 before
+`verity_numerical.checker` checks the FP8 step beside BF16's. On BF16 the adder is at least as wide as the accumulator's
+significand (`width >= acc_sig`, 25 >= 24), and one exponent width serves operands and accumulator alike. Hopper/Ada E4M3
+have neither -- the FP8 adders are 14 bits wide and truncate the incoming FP32 accumulator's 24-bit significand to 14 before
 the grouped add (`verity.definitions.silicon.models.GroupSum.step`; a group of zero products is therefore not a no-op, log entry D10), and
 E4M3 has a 4-bit exponent with its own NaN rule (`0x7F`/`0xFF` are the NaNs, `0x7E` = 448 is finite, there are no infinities).
 
-What changed (`python/verity_numerical/checker/`):
+Where (`python/verity_numerical/checker/`):
 
 - `params.py`: `Params` carries the operand format (`sig`, `exp`, `op_nan_rule` in `{"ieee", "e4m3"}`) and the accumulator's
   (`acc_sig`, `acc_exp`, defaulting to `exp`) and admits `width < acc_sig` -- the *lossy* case, with `acc_drop = acc_sig - width`.
   `Params.from_model(model)` derives them from a `GroupSum`; at `AMPERE_BF16_M16N8K16` it is `REAL`. `TOY_LOSSY` is the small
-  lossy instance. Contracts, hint layout and outputs at `REAL` / `TOY` / `TINY` are byte-identical to before (every BF16 test
-  passes unchanged); the census over the checker's contracts is unaffected at `REAL`.
-- `gadgets.py`: one new gadget, `RescaleState` (`M = 2^drop * P + r`, `r < 2^drop`, `P < 2^W`): the truncation of the incoming
+  lossy instance; `REAL`, `TOY` and `TINY` are not lossy.
+- `gadgets.py`: `RescaleState` (`M = 2^drop * P + r`, `r < 2^drop`, `P < 2^W`): the truncation of the incoming
   significand to the adder width, placed before `AlignState` on lossy paths only. `Normalise` produces a `width`-bit magnitude
   and scales it back up exactly (`norm_up`) where the truncation no longer folds into one floor division. `Bf16Decode` (alias
   `OperandDecode`) admits the E4M3 NaN rule through one extra range check; the accumulator gadgets read the `acc_*` widths.
