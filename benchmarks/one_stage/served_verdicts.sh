@@ -273,7 +273,8 @@
 # the lane's first reserve after the close and opened on the run's commitment (served_pearlplus.sh's steps 2 and 4);
 # while the period is open its cap refuses every other reserve of the lane. PEARLC_CHALLENGER_GATE set
 # empty leaves Pearl+'s coins an
-# in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict.
+# in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict. A peer
+# set with the gate empty is a pair the preflight refuses.
 # With PEARLPLUS_TIE=1 too, the window itself is served under Pearl+, the way H1_TIE ties H1's: serve-openai serves
 # PEARLPLUS_ARM (default pouw:pearl-c-h100-v1-h3) on its one engine (`serve_pearl`, --protocols with --protocols-config
 # naming the cubin PEARLPLUS-CUBIN built before the lease), one Pearl+ epoch a Commit window beside sampled proofs cut at
@@ -474,6 +475,8 @@ case ${LOAD:=varied} in varied | fixed | front) ;; *) say "PREFLIGHT: LOAD is va
 case $POUW in h1 | pearlplus) ;; *) say "PREFLIGHT: POUW is h1 or pearlplus, not $POUW"; exit 3 ;; esac
 [ "$POUW" = h1 ] || [ -z "$H1_GATE" ] \
   || { say "PREFLIGHT: POUW=pearlplus is PoUW's piece, so the endpoint serves no H1, and H1_GATE is set: set it empty"; exit 3; }
+[ "$POUW" != pearlplus ] || [ -n "$PEARLC_CHALLENGER_GATE" ] || [ -z "$PEARLC_CHALLENGER_PEER" ] \
+  || { say "PREFLIGHT: PEARLC_CHALLENGER_PEER is $PEARLC_CHALLENGER_PEER and PEARLC_CHALLENGER_GATE is empty, which leaves Pearl+'s coins in-process, and Pearl+'s serve and verify refuse a peer with no gate (bench_arm.live_coins, bench_arm.live_draw): unset PEARLC_CHALLENGER_PEER, or set PEARLC_CHALLENGER_GATE (unset, it is the lane's gate)"; exit 3; }
 case $PRODUCT in
   onsite) ;;
   remote)

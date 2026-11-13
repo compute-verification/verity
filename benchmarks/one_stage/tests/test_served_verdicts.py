@@ -3159,6 +3159,33 @@ def test_under_pouw_pearlplus_the_challenger_peer_takes_its_default_only_where_t
     assert said.read_text().splitlines() == [str(gate) if live else "", exported]
 
 
+@pytest.mark.parametrize("extra, refused", [
+    ({"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "vy-peer"}, True),
+    ({"PEARLC_CHALLENGER_GATE": ""}, False),
+    ({"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": ""}, False),
+    ({"PEARLC_CHALLENGER_GATE": "a gate", "PEARLC_CHALLENGER_PEER": "vy-peer"}, False),
+    ({"POUW": "h1", "H1_GATE": "", "PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "vy-peer"}, False),
+])
+def test_the_preflight_refuses_a_pearlplus_challenger_peer_with_no_gate(tmp_path, extra, refused):
+    """Under POUW=pearlplus a peer set with PEARLC_CHALLENGER_GATE empty is a pair Pearl+'s serve and verify refuse
+    (`bench_arm.live_coins`, `bench_arm.live_draw`), the verify only once the window is served and tied: the preflight
+    refuses it before anything runs, naming both ways out. A peer with a gate, no peer, and the pair under H1, which
+    reads neither, pass."""
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    tree.mkdir()
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "POUW": "pearlplus", **extra}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    line = ("PREFLIGHT: PEARLC_CHALLENGER_PEER is vy-peer and PEARLC_CHALLENGER_GATE is empty, which leaves Pearl+'s coins "
+            "in-process, and Pearl+'s serve and verify refuse a peer with no gate (bench_arm.live_coins, "
+            "bench_arm.live_draw): unset PEARLC_CHALLENGER_PEER, or set PEARLC_CHALLENGER_GATE (unset, it is the lane's "
+            "gate)")
+    assert (rc, said) == ((3, [line]) if refused else (0, []))
+
+
 def test_the_script_parses_whole():
     """bash parses a top-level command only once a run reaches it, and no toy run here reaches the serve's later steps."""
     run = subprocess.run(["bash", "-n", str(HERE.parent / "served_verdicts.sh")], capture_output=True, text=True)
