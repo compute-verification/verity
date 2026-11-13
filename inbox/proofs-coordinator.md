@@ -151913,3 +151913,417 @@ No declaration's statement changes and no lock changes, as the 16:10Z entry said
 - **The word.** #9555 is open at `38b7c6df38ba`. Its last commit is 03:37Z and its merge base with `main` is `a2c3831345e0`, so it is behind both chains and lands only once its owner carries it [run: `gh pr view`, `git merge-base`]. The word waits behind that.
 
 **Not established:** anything run on a tree with chain 2: the mover, the generator, the certificate, any suite.
+
+
+## ADDRROW2, Fri 13 Nov 16:42Z: bare collisions, ENTRY 2: the four places are dead corollaries beside named theorems; 33 lemmas feed the pickers (31 built, 1 from an opening only said to exist, 1 by contradiction); the restatement is 74 declarations in 17 files and moves the `reads` records of 7 modules, for all 50, the two deployed among them, and no statement's text
+
+**In plain words.** The places soundness named (`LinksBind.lean:134,309`, `RecLinks.lean:525`, `Sha512.HasCollision`
+and the lemmas of `Verifier/Merkle.lean`) are neither a step toward a finder nor a conclusion a listed statement reads:
+each is a corollary written beside a theorem that already names its pair, and every chain of them ends at a lemma that
+nothing uses. The three lemmas of `Soundness/Merkle.lean` are the other kind: they are the root of everything the
+finders of 49 listed guarantees are built on, and those finders take their pair by choice (entry 1's third case, which
+you ruled at 16:03Z). The code's packages hold no bare form at all. Your items a to f are sections C to H; which of my
+branches are live is section I. Nothing was written or compiled.
+
+Clock: 16:03Z your message, 16:24Z my `FOR DANIEL` entry (commit `9a723bc7bcd`), this entry. Mailbox read at 16:37Z:
+nothing after your 16:03Z. Every path and line is at the pin `053b8e50fe8a37970e410ce9ffcb5694bbe4a59b`, under
+`security/` unless it starts elsewhere. A line is the line of the keyword (`theorem`, `def`, `structure`), read from the
+source. Corrections to my 16:24Z entry on that account, none of substance: `walk_binding`, `opening_binding`,
+`opening_bindingL` are at `Proofs/Flock/Soundness/Merkle.lean:36,54,72` (I wrote 38, 56, 74), `hm96Leaf_bind` at
+`Definitions/Flock/Merkle.lean:101` (102), `topRoot_collision` at `TopRoot.lean:300` (its docstring starts at 298),
+`top_bind` at `:267` (265), `TopColl.collision` at `TopFinder.lean:205` (204), `ClashHL.collision` at `HoloExec.lean:326`
+(325), `clashPickHLO` at `C3/Fork/Sound.lean:67` (65). And "33 handed to a picker" there means what section C counts:
+18 handed directly, 15 that feed those.
+
+### A. The four places and the Merkle lemmas (the order's part 2)
+
+Marks: the readers are [run] (the constant graph at the pin's own facts, `r20261113-155322-edca`: for each constant,
+every constant its type or its proof uses; it cannot miss a reader); what each proof does is [read].
+
+**A1. The Verifier area and `LinksBind`: corollaries, used by nothing.** 12 declarations name a bare form here; taken
+together, nothing outside the 12 uses any of them, in a type or in a proof, so no finder and no statement, listed or
+not. Each sits beside a theorem that names its pair, and that theorem is the one the tree uses.
+
+| bare lemma (file under `Proofs/Flock/`, line) | who uses it | the named theorem beside it, which is used |
+|---|---|---|
+| `Hm96.leaf_binding_of` (`Verifier/Hash.lean:86`) | `Default512.leaf_binding` | `Hm96.leafPair_collides` (`:66`), at `leafPair` (`:58`) |
+| `Hm96.Default512.leaf_binding` (`:97`) | `rowOpens_binding` | the same |
+| `Registered.opensLeaf_collision` (`Verifier/Registered.lean:312`) | `rowOpens_binding` | `opensLeaf_binding` (`:295`), at `openPair` (`:284`) |
+| `merkle_binding_collision` (`Verifier/Merkle.lean:195`) | nothing | `merkle_binding` (`:182`), at `merklePair` (`:174`) |
+| `MerkleScheme.sha256_collision`, `sha512_collision`, `hm96Sha512_collision` (`:252,256,260`) | `collision_hash` | `MerklePair.sha256_inputs`, `sha512_inputs`, `hm96_inputs` (`:217,223,239`) |
+| `MerkleScheme.collision_hash` (`:266`) | nothing | the same |
+| `RecLinkBind.Collides.collision` (`Verifier/RecLinks.lean:194`) | `link_binding_collision` | none needed: it only forgets the pair of `Collides` (`:192`) |
+| `RecLinkBind.link_binding_collision` (`:516`, the bare disjunct at `:525`) | nothing | `link_binding` (`:478`): `… ∨ Collides (readerPair …) ∨ Collides (writerPair …)` |
+| `RecDeploy.Links.rowOpens_binding` (`Recursive/LinksBind.lean:132`, bare at `:134`) | `linksHold_rows` | none yet (below) |
+| `RecDeploy.Links.linksHold_rows` (`:306`, bare at `:309`) | nothing | `linksHold_or_coll` (`Recursive/LinksDeployed.lean:161`): `… ∨ ∃ a ∈ linkMsgs x ws w, ∃ b ∈ linkMsgs x ws w, Claims.Collision FlockDeploy.sha512 a b` |
+
+- The three bare definitions of the area are used only by these: `Flock.Sha512.HasCollision` (`Verifier/Hash.lean:17`)
+  by 6 theorems (`leaf_binding_of`, `Default512.leaf_binding`, `opensLeaf_collision`, `sha512_collision`,
+  `hm96Sha512_collision`, `collision_hash`), `Sha256.HasCollision` (`:14`) by 2, `MerkleScheme.HasCollision`
+  (`Verifier/Merkle.lean:70`, `∃ p : MerklePair, p.Collides ms`) by 5. `LinksBind` and `RecLinks` write the raw shape.
+- `Verifier/Merkle.lean` says of itself (`:39-46`) that a proposition "a collision exists" "says nothing about the
+  verifier" and that the propositions "follow as corollaries"; `Verifier/Registered.lean:144` says the same of its own.
+- **`rowOpens_binding` and `linksHold_rows` say nothing as they stand** [read]: each concludes
+  `… ∨ ∃ u v : ByteArray, u ≠ v ∧ Sha512.hash u = Sha512.hash v`, which counting proves alone. The proof of the first
+  does build its pair, in three cases; the proof of the second also splits on the bare proposition itself (`by_cases`,
+  `:312`). Nothing uses either outside the pair, and no document names them but their own file's header (`:54`). The
+  theorem that does the work, `linksHold_or_coll`, is named.
+- Named forms: the first eight rows need none, the named theorem is there, so the corollary and the three definitions
+  can go. `rowOpens_binding` can conclude `row = row' ∨ Collides p` for `p` one of three computed pairs:
+  `(rowMsgOf row, rowMsgOf row')`, `Hm96.leafPair` at the two digests and salts, `Registered.openPair` at the two tree
+  leaves and paths; or `Hash.CollisionIn` over the list of those six strings. For that it must be given the two salts
+  and paths, which `RowOpens` (`:119`) hides under `∃`. `linksHold_rows` would be `CollisionIn` over those six strings
+  at every row position; since nothing uses it, deleting it is the smaller change.
+- One test names a bare definition: `verity/protocols/flock/prover/tests/test_lean_verifier.py:853`
+  (`test_merkle_collision_is_not_met_by_a_split_string`) checks that one split-string witness does not prove
+  `MerkleScheme.…HasCollision`. It goes or is aimed at `MerklePair.Collides` when the definition goes.
+
+**A2. `Proofs/Flock/Soundness/ZK/CoinBinding.lean`: a corollary chain, used by nothing, cited by one README line.**
+`chain_binding` (`:64`) feeds `coin_opening_binding` (`:82`), which feeds `coin_opening_binding_keyed` (`:121`,
+concluding `∃ m m', m ≠ m' ∧ H (ν ++ m) = H (ν ++ m')`), which nothing uses. The proofs build the pair (five cases: the
+leaf's split, the salt, the round digest, the chain, the walk). The file's header says the gap in its own words: "The
+conclusion is the proposition `Collision H`, that a collision exists. The proof's simulator also needs the collision
+computed from the two openings, in time linear in their size, to turn `⊥_bind` into A2's bound. That extraction is this
+proof's case split run as an algorithm, and it stays on paper." `Proofs/Flock/Soundness/README.md:413` cites it as T6. Named
+form: a pair function of the two coin openings with those five cases.
+
+**A3. `Proofs/Flock/Soundness/Merkle.lean`: steps toward finders, of the third case.** `walk_binding` (`:36`),
+`opening_binding` (`:54`), `opening_bindingL` (`:72`) are used by 3, 2 and 7 lemmas, and through them by every lemma of
+section C. 1,117 declarations reach them; 49 are keys of a lock (entry 1's families A1 34, A2 7, A3 2, B 1, C 3, D 2:
+all but `ServedRowsLinked`). No listed statement reads one as a conclusion: a statement's reads hold definitions only,
+and none of the three is one. They enter 49 statements as proof terms inside the finder definitions those statements read.
+
+**A4. `Proofs/Flock/Soundness/Discharge/Exec/Merkle.lean` concludes no collision** [run: no "collision" or "collid" in
+its 540 lines]. It proves which leaf scheme each table has (`setupH_hm96` and its neighbours).
+
+**A5. The bare definitions the Soundness area uses.** `Hash.HasCollision` (`Definitions/Core/Hash.lean:40`) has one
+user, the abbreviation `FlockSoundness.Merkle.Collision` (`Definitions/Flock/Merkle.lean:29`), which has 77: 45
+theorems, 26 definitions (`collOf`, `onePick`, `conflictPick`, `TreeRewind.ofNever` and 22 of the 25 finders; the
+other three, `selfFinder`, `selfFinderL` and `TreeRewind.finder`, reach it through a picker), and the structures `Leaf`
+and `TreeRewind` with their constructors and recursors.
+
+### B. The code's packages: no bare form
+
+[run + read] 785 tracked Lean files (678 under `verity/`, 107 under `security/Properties`), the same patterns as
+entry 1. No `HasCollision` and no `Merkle.Collision` in either. The raw shape (an `∃` of two strings with equal hashes
+and no bound) hits twice, and both are bound in the body: `Properties/Nci/Record.lean:435` (`Collides j j' key`: both
+strings are `Hashed` by the two given records) and `Properties/Pous/WipeSigned.lean:201` (inside `WipeBreak`, `:200`: the pair is
+`wipeFinder s dev`'s output). Every other collision predicate there is named: `Composition.BindCollision`
+(`Properties/Composition.lean:127`, the pair is `bindMessage id ds`, `bindMessage id ds'`), `Challenger.collisionIn`,
+`findBreak`, `Break` (`Properties/Challenger.lean:342-356`, a computed finder), `Pous/EndToEnd.RunBreak` (`:131`, two
+members of `runStrings s dev ++ blockStrings …`), `CommitBreak` (`:141`), `TableBreak` (`:176`),
+`Pouw/LiveSalt.Collides`, `Collides32` (`:221,225`, members of two lists), and `Attest`'s `Forges`, `Break`,
+`collisionFinder`. Under `verity/` there are only Boolean checks (`PortRoots.collidesBy` and its four neighbours,
+`KsScope.collidesT`) and the firewall's computed pair (`Flock/Firewall/Contract.lean`: `coinPair` `:690`,
+`commitBC_binding` `:696`, `holds_coins_binding` `:715`). So the table of section A has no row from the code.
+One thing I note and do not judge: `CommitBreak` states `W' ≠ W` and `hash x = hash y` for the two commit inputs, and
+not `x ≠ y`; it is named, and whether its two inputs differ rests on `commitInput` being one-to-one, which I did not read.
+
+### C. Item a: every lemma that concludes the bare form and is handed to a picker
+
+**What "built" means here, first.** It says what the lemma's proof does, which is what a restatement can copy. It does
+not say what the finder outputs. `collOf` (`Proofs/Flock/Soundness/StrictCR.lean:53`) is
+`if hp : p then some ((h hp).choose, (h hp).choose_spec.choose) else none` for `h : p → Merkle.Collision H`. A proof of
+a proposition carries no data, so the pair is the one that choice gives for "H has a collision", the same on every run
+and whatever lemma `h` was. The tree proves that: `collOf_congr` (`Proofs/Flock/Recursive/ForkLast.lean:328`):
+`(p ↔ q) → collOf H p h = collOf H q h'`, by `cases propext e; rfl`. [read]
+
+**The pickers and who calls them** [run]. 25 finder definitions; 10 are read by listed statements.
+
+| picker | finder (file under `Proofs/Flock/`, line) | listed statements that read it | lemma handed (line) | built? |
+|---|---|---|---|---|
+| `collOf` | `clashPickCL` (`Recursive/Compile.lean:89`) | 2 | `ClashCL.collision` (`:68`) | built: by cases, `SelfClashL.collision`, `op₀L_conflict_collision`, `opRL_conflict_collision` |
+| `collOf` | `clashPickHL` (`Recursive/HoloExec.lean:364`) | 0 | `ClashRunHL.collision` (`:345`) | built, through `ClashCL.collision` |
+| `collOf` | `clashPickHLO` (`C3/Fork/Sound.lean:67`) | 0 | `ClashHL.collision` (`HoloExec.lean:326`) | built, but through `RegClash.collision` (`:310`) one opening is the registrant's, only said to exist (my 16:24Z entry, item 2) |
+| `onePick` | `leafFinder` (`Recursive/LeafFinder.lean:64`) | 0 | `LeafColl.collision` (`:56`) | built: `TwoOpenings.collides` at the named `TwoOpenings.pair`, then forgotten |
+| `onePick` | `regFinder` (`Recursive/Registrants.lean:105`) | 3 | `RegColl.collision` (`:97`) | built: through `ReadsX.Clash.collision` (`:72`); `Clash` is already `Collides (….pair) ∨ Collides (hm96Pair …)` |
+| `onePick` | `saltFinder` (`Recursive/SaltFinder.lean:115`) | 0 | `SaltColl.collision` (`:103`) | built: through `ReadsX.SaltClash.collision` (`:81`), `Collides (hm96Pair …)` |
+| `onePick` | `topFinder` (`Recursive/TopFinder.lean:239`) | 0 | `TopColl.collision` (`:205`) | **NOT BUILT**: through `topRoot_collision` (`Recursive/TopRoot.lean:300`), by contradiction over the play's strings (my 16:24Z entry, item 1) |
+| `onePick` | `selfFinderL`, `selfSFinderL` (`Soundness/Discharge/Exec/StrictCRL.lean:60,164`) | 0, 2 | `SelfClashL.collision` (`…/Exec/CompiledL.lean:387`) | built: `ClashL.collision` (`:378`), then `opening_bindingL` |
+| `onePick` | `selfSFinderZ` (`Soundness/Discharge/ZkLink/StrictZ.lean:84`) | 48 | `SelfClashZ.collision` (`…/ZkLink/BadZ.lean:356`) | built: `ClashL.collision`, `ClashW.collision` (`:129`), `PadsClashAtZ.collision` (`:235`), each `opening_bindingL` |
+| `onePick` | `selfFinder`, `selfSFinder` (`Soundness/StrictCR.lean:293,397`) | 0, 0 | `SelfClash.collision` (`Soundness/CompiledSound.lean:327`) | built: `Clash.collision` (`:320`), then `opening_binding` |
+| `conflictPick` | `adv₀FinderL`, `adv₀SFinderL` (`StrictCRL.lean:41,156`) | 0, 2 | `op₀L_conflict_collision` (`CompiledL.lean:409`) | built: `opOfL_conflict_collision` (`:395`), then `opening_bindingL` |
+| `conflictPick` | `advRFinderL`, `advRSFinderL` (`:49,143`) | 0, 2 | `opRL_conflict_collision` (`:417`) | built: the same |
+| `conflictPick` | `advRSFinderZ` (`StrictZ.lean:50`) | 48 | `opRZ_conflict_collision` (`BadZ.lean:192`) | built: `Exec.opOfL_conflict_collision` |
+| `conflictPick` | `advPadsSFinderZ` (`:59`) | 48 | `opPadsAtZ_conflict_collision` (`:268`) | built: `opening_bindingL` |
+| `conflictPick` | `advTauSFinderZ` (`:68`) | 48 | `opTauZ_conflict_collision` (`:316`) | built, given the leaf's own binding: `Hs.Lτ.bind` at the two runs' `τ` openings (section E) |
+| `conflictPick` | `adv₀SFinderZ` (`:77`) | 48 | `op₀Z_conflict_collision` (`:151`) | built: `opOfW_conflict_collision` (`:138`), then `opening_bindingL` |
+| `conflictPick` | `adv₀Finder`, `adv₀SFinder` (`StrictCR.lean:274,389`) | 0, 0 | `op₀_conflict_collision` (`CompiledSound.lean:346`) | built: `opOf_conflict_collision` (`:334`), then `opening_binding` |
+| `conflictPick` | `advRFinder`, `advRSFinder` (`:282,376`) | 0, 0 | `opR_conflict_collision` (`:352`) | built: the same |
+| `conflictPick` | `TreeRewind.finder` (`StrictCR.lean:230`) | 0 | the field `TreeRewind.binds` (`:220`) | nothing is ever handed (below) |
+
+- The base of all of it [read]: `walk_binding` (`Soundness/Merkle.lean:36`) is built: by recursion on the two sibling
+  lists, at the first step where the two walks agree it gives the two inputs of that step. `opening_binding` (`:54`) is
+  built: the two column encodings when the leaves agree, else the walk's pair. `opening_bindingL` (`:72`) is built where
+  the leaves differ, and where they agree it is the leaf's own field `Lf.bind` (section E), which at the three leaf schemes the
+  tree has is built: `Leaf.plain` (`Definitions/Flock/Merkle.lean:67`) and `Refine.leafPlain`
+  (`Soundness/Refine/Paths.lean:146`) give the two column encodings, and `Leaf.hm96` (`:117`) gives `hm96Leaf_bind`
+  (`:101`), one of three explicit pairs. The deployed bundle `hs512`
+  (`Soundness/Discharge/ZkExec/VerdictStatements.lean:81`) uses `Leaf.hm96` for rows, pads and `τ`.
+- The count: 18 lemmas handed directly (the table's fourth column) and 15 that feed them (`walk_binding`,
+  `opening_binding`, `opening_bindingL`, `hm96Leaf_bind`, `Clash`, `ClashL`, `ClashW`, `PadsClashAtZ` `.collision`,
+  `opOf`, `opOfL`, `opOfW` `_conflict_collision`, `RegClash.collision`, `ReadsX.Clash.collision`,
+  `ReadsX.SaltClash.collision`, `topRoot_collision`). All 33 proofs are read. 31 built; `RegClash.collision` built from
+  an opening only said to exist; `topRoot_collision` not built. Those two reach no listed guarantee.
+- **`TreeRewind.binds`: nothing is handed to it anywhere.** The one `TreeRewind` the tree builds is
+  `TreeRewind.ofNever` (`StrictCR.lean:245`): no positions (`P := Empty`), `binds _ e := e.elim`. Every other use takes
+  a `TreeRewind` as a parameter. 38 declarations use the type [run]: its own `finder`, `bound`, `le` and `ofNever`, and
+  34 theorems of the `flock_e2e_*`, `flock_headline*` and `zk_flock_countC_execOS_*` families; none is a key of a lock,
+  and no listed statement reads `TreeRewind`. (One listed statement's facts, `flock_verify_sound`'s, name
+  `TreeRewind.bound._proof_1` and `_proof_2`. Those are two auxiliary proofs Lean made once and shares with `ksStrict`,
+  because both write `q²/2^513`; they are not the structure.) So the lemma that would be handed there (the serving
+  roots' binding) is not in the tree; `Soundness/ASSUMPTIONS.md:240` calls `tr` "intended to prove". While the field is
+  bare it asks nothing of whoever builds a `TreeRewind`: at SHA-512 the counting proof meets it for any `op`. Those
+  unlisted theorems stay true implications, since their premise `tr.finder.CR` then bounds the conflict itself, but the
+  "Merkle binding" their docstring names is not something Lean checks of the caller.
+
+### D. Item b: the restated conclusions [derived; nothing compiled]
+
+The shape is the one you named, `forkPick` (`Proofs/Flock/Recursive/Fork.lean:61`) and `LinkFinder.outOf`
+(`Proofs/Flock/Soundness/LinkFinder.lean:349`): choice picks *which* of the play's openings clash, and a named function
+of those openings gives the pair. In Lean's words:
+
+```lean
+-- Proofs/Flock/Soundness/Merkle.lean
+def walkPair : List D → List D → ℕ → D → D → List UInt8 × List UInt8   -- the two inputs of the first step where the walks agree
+theorem walkPair_spec : sibs.length = sibs'.length → a ≠ a' → walk H E idx a sibs = walk H E idx a' sibs' →
+    Hash.Collision H (walkPair H E sibs sibs' idx a a').1 (walkPair H E sibs sibs' idx a a').2
+def openPairL (Lf) (pos : ℕ) (c c' : Col) (s s' : S) (sibs sibs' : List D) : List UInt8 × List UInt8 :=
+  if Lf.leaf c s = Lf.leaf c' s' then Lf.pair c s c' s' else walkPair H E sibs sibs' pos (Lf.leaf c s) (Lf.leaf c' s')
+theorem openPairL_spec : c ≠ c' → VerifiesL H E Lf cap depth pos c s sibs → VerifiesL H E Lf cap depth pos c' s' sibs' →
+    Hash.Collision H (openPairL …).1 (openPairL …).2
+-- Proofs/Flock/Soundness/StrictCR.lean
+noncomputable def collOf {W : Type} (p : W → Prop) (pr : W → List UInt8 × List UInt8) : Pair :=
+  if h : ∃ w, p w then some (pr h.choose) else none
+theorem collOf_isColl (hpr : ∀ w, p w → Hash.Collision H (pr w).1 (pr w).2) (h : ∃ w, p w) : IsColl H (collOf p pr)
+def onePick (q : α → W → Prop) (pr : α → W → List UInt8 × List UInt8) (a : α) : Pair := collOf (q a) (pr a)
+def conflictPick (op : α → P → Option V) (pr : α → α → P → List UInt8 × List UInt8) (b b' : α) : Pair :=
+  collOf (fun p => Rewinding.ConflictAt op (b, b') p) (pr b b')
+structure TreeRewind … where …
+  pair : α → α → P → List UInt8 × List UInt8
+  binds : ∀ x p, Rewinding.ConflictAt op x p → Hash.Collision H (pair x.1 x.2 p).1 (pair x.1 x.2 p).2
+```
+
+`Hash.Collision H u v` is the pair predicate that is already in the definitions tree (`Definitions/Core/Hash.lean:37`).
+`walkPair` reads the two sibling lists, the position and the two start digests, and evaluates the hash once a level on
+each side until the walks meet. For each handed lemma, the function and what it reads:
+
+| lemma(s) | the function that gives the pair | what it reads |
+|---|---|---|
+| `op₀L`, `opRL`, `opRZ`, `op₀Z`, `opPadsAtZ` `_conflict_collision`, with `opOfL`, `opOfW` | `fun b b' p => openPairL … (hit b p) (hit b' p)`, where `hit b p` is the run's first verifying opening at `p`: the element `opOfL` already takes (`CompiledL.lean:136-140`) before it keeps only the row | the two runs' opening lists (position, row, salt, path) and the position |
+| `op₀`, `opR`, `opOf` `_conflict_collision` | the same with `openPair` (no salt) | the same, without salts |
+| `opTauZ_conflict_collision` | `Hs.Lτ.pair` at the two runs' `τ` openings | each run's `τ` value and salt |
+| `Clash`, `ClashL`, `ClashW`, `PadsClashAtZ` `.collision` | witness: two members of one opening list; pair: `openPairL` (or `openPair`) at them | one run's opening list |
+| `SelfClash`, `SelfClashL`, `SelfClashZ` `.collision` | witness: which list (level 0, or rep `r` and level `ℓ` with its recorded cap) and two members of it; pair as above | one run's output |
+| `ClashCL.collision`, `ClashRunHL.collision` | witness: the two outcomes and which of the cases holds; pair by cases, from the rows above | the two transcripts' outcomes |
+| `ClashHL.collision` with `RegClash.collision` | as `ClashRunHL`, and `openPairL` at a run's opening and the registrant's: `HoloReg.Opens` (`HoloExec.lean:134`) must hold the salt and path as data, as `Reads` does (`Soundness/Registered/Defs.lean:61`) | and the registrant's salt and path at that position |
+| `LeafColl.collision` | `TwoOpenings.pair` (`Soundness/Registered/Defs.lean:45`), which exists | the port, the position, two leaves, two paths |
+| `RegColl.collision`, `ReadsX.Clash.collision` | whichever of `TwoOpenings.pair` and `hm96Pair` (`Soundness/Binding/Leaf.lean:57`) collides; both exist | those, and the two rows' bytes and salts |
+| `SaltColl.collision`, `ReadsX.SaltClash.collision` | `hm96Pair`, which exists | two rows' bytes and salts |
+| `TopColl.collision`, `topRoot_collision` | the first two different members of `topStrings dom bcs ++ topStrings dom bcs'` with one digest (a search, as `Challenger.collisionIn` does); the lemma becomes `¬ CF S`, that is `Hash.CollisionIn` over `S` | the held top and the registered top |
+
+Three things about this shape, said once. (1) `collOf_congr` changes: it holds for equal witness predicates and equal
+pair functions, which is what its two users have (`clashPickCL_lastFree`, `clashPickHL_lastFree`: the outcome reads the
+transcript only through `schedSteps`). (2) Choice still picks which clash is output when a run has several; `forkPick`
+and `outOf` do the same. A form with no choice at all (a search of the finite lists, as `Claims.findColl` does) needs
+decidable equality carried through `Enc`, `Leaf` and `VerifiedL`, where the files now open `Classical`; I did not size
+it. (3) Lean checks that the output is a collision at the named function. It does not check that the function can be
+run; that becomes a property of one definition, which its axioms show, where today it is a property of 33 proofs.
+
+### E. Item c: `Leaf.bind` can give its pair, and the tree already has that structure once
+
+`Leaf` (`Definitions/Flock/Merkle.lean:62`) has the field `bind : ∀ c c' s s', c ≠ c' → leaf c s = leaf c' s' → Collision H`
+(`:64`). It can be two fields:
+
+```lean
+  pair : Col → S → Col → S → List UInt8 × List UInt8
+  pair_spec : ∀ c c' s s', c ≠ c' → leaf c s = leaf c' s' → Hash.Collision H (pair c s c' s').1 (pair c s c' s').2
+```
+
+- The two leaves' own inputs, as you say [read]. `Leaf.plain` (`:67`): `pair c _ c' _ := (E.col c, E.col c')`, which is
+  the term its `bind` already writes. `Leaf.hm96` (`:117`): `hm96Leaf_bind` (`:101-115`) splits twice, and the function
+  is those splits: the two outer inputs `leafPrefix ‖ b ‖ c` if they differ, else the two salt inputs `saltPrefix ‖ y`
+  if the salts differ, else the two column encodings. The tests are equalities of byte strings, so nothing is chosen.
+- This is `Binding.ExplicitLeaf` (`Proofs/Flock/Soundness/Binding/Leaf.lean:35`: `leaf`, `pair`, `pair_spec`) with
+  `hm96Pair` (`:57`), written for the link finder, at SHA-512 and byte salts. Its header gives the reason in the tree's
+  own words: "`Merkle.Leaf` states this as a proposition; the link theorem's finder (`LinkFinder`) has to output the
+  collision, so here each leaf scheme comes with the two colliding inputs". Listed statements already read it [run:
+  the lock's `reads` holds `ExplicitLeaf`, `ExplicitLeaf.pair`, `hm96Pair`]. After the change the two say one thing
+  and can be made one definition; that is a later step and not sized here.
+- What changes if it does: (1) `Leaf`'s fields and the bodies of the three instances (`Leaf.plain`, `Leaf.hm96`,
+  `Refine.leafPlain`). (2) The two uses of `Leaf.bind`, which are all there are [run]: `opening_bindingL`
+  (`Soundness/Merkle.lean:72`) and `opTauZ_conflict_collision` (`BadZ.lean:316`). (3) All 50 listed guarantees read
+  `Leaf` and `Leaf.hm96`, so the `reads` record of `Definitions.Flock.Merkle` moves for all 50, and it is in the
+  definitions tree, the one a reader checks. (4) `ServedRowsLinked`, the one of the 50 that reads no picker, then reads
+  no bare form at all. (5) A leaf can no longer be made from the counting proof. Today, at SHA-512, any function at all
+  is a `Leaf`, a constant one included, with `bind` met by "a collision exists" [derived: it follows from the counting
+  fact soundness names; no one has written it]. None of the 50 statements binds a leaf of its own [run: the source text
+  of the 50 statements and of their heads; all 50 read the instance `Leaf.hm96`], so no listed statement is touched by
+  that today.
+
+### F. Item d: what the restatement moves
+
+**Definitions that change** [run for the readers]:
+- `Merkle.Leaf` (fields) and `Merkle.Leaf.hm96` (body): read by 50. `Leaf.plain`: by none.
+- `StrictCR.collOf`, `onePick`, `conflictPick` (parameters and body): read by 49.
+- The 10 finders listed statements read (body: each hands a function where it handed a proof): `advRSFinderZ`,
+  `advPadsSFinderZ`, `advTauSFinderZ`, `adv₀SFinderZ`, `selfSFinderZ` (48 each), `advRSFinderL`, `adv₀SFinderL`,
+  `selfSFinderL` (2 each), `clashPickCL` (2), `regFinder` (3). And 15 finders no listed statement reads.
+- `StrictCR.TreeRewind` (a field): read by none.
+- New, and read from then on: `Leaf.pair` and the pair functions of section D.
+- Gone from every statement's reads: `FlockSoundness.Merkle.Collision` and `Hash.HasCollision`.
+
+**Which records move.** In `security/lean-audit.json` a statement's reads are recorded by module, a digest for each
+definition read there. Seven module records change, and at least one is new [run for the lists, derived for "change"]:
+`Definitions.Flock.Merkle` (`Leaf`, `Leaf.hm96` change, `Collision` goes; 3 of its 18, and the projection `Leaf.leaf`
+may move with its structure), `Definitions.Core.Hash` (`HasCollision` goes; 1 of 9),
+`Proofs.Flock.Soundness.StrictCR` (3 of 14), `Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ` (5 of 9),
+`Proofs.Flock.Soundness.Discharge.Exec.StrictCRL` (3 of 5), `Proofs.Flock.Recursive.Compile` (1 of 5),
+`Proofs.Flock.Recursive.Registrants` (1 of 4); new:
+`Proofs.Flock.Soundness.Merkle`, which is no reads module today, for `walkPair` and `openPairL` (unless they are put in
+`Definitions/Flock/Merkle.lean` beside `Leaf`).
+
+**Which of the 50** [run]. All 50 read a definition that changes:
+- 44, which are every listed guarantee not named in the five lines below, **the two deployed among them,
+  `Flock.SecurityProofs.SampledKSLiveV3` and `Flock.SecurityProofs.SampledKSLiveV5`**: `Leaf`, `Leaf.hm96`, the three
+  pickers, the five `…SFinderZ`.
+- `Flock.SecurityProofs.PublicAudit`, `RecursiveRanRegisteredExec`: those, and `clashPickCL`, `regFinder`.
+- `Flock.SecurityProofs.RecursiveRanRegistered`: those, and `regFinder`.
+- `FlockSoundness.Discharge.FailClosed.flock_verify_sound`: those, and the three `…SFinderL`.
+- `FlockSoundness.Discharge.FailClosed.flock_verify_sound_205`: `Leaf`, `Leaf.hm96`, the pickers, the three `…SFinderL`.
+- `Flock.SecurityProofs.ServedRowsLinked`: `Leaf` and `Leaf.hm96` only (and, through `Leaf`'s field, the two bare
+  definitions, which all 50 read).
+The list guarantee by guarantee (50 rows) is on my machine and I push it if you want it; the six lines above are all of it.
+
+**Whether any listed statement's text changes: no, only what it reads** [derived]. If every restated definition keeps
+its name and its parameters as the statements apply them, a guarantee's own record (`signature`, `type_hash`,
+`unfolded_hash`, `premises`) stays: the type hash is of the statement as written, and the unfolded hash is of the
+statement with its head definition unfolded once (`tools/verity/lean/Facts.lean:315`, `liftOf`;
+`tools/verity/lean/check.py:2329`: "Its type hash is the constant's, which a restated body leaves as it is"). Three
+statements name a finder once their head is unfolded (`PublicAudit`, `RecursiveRanRegistered`,
+`RecursiveRanRegisteredExec`: `regFinder`, `clashPickCL`) [run], by name, with arguments that do not change. No
+premise list changes: each still takes `SHA512CRStrict` at the same finders by name, with the same budgets. What changes
+is what those names mean, which is the point, and which is why it is a change of what 50 guarantees rest on.
+
+### G. Item e: its size [run for the counts; the line estimate is mine]
+
+- **Restated: 74 declarations in 17 files** (5,851 lines of files; the 74 are 595 lines today, docstrings included):
+  33 lemmas (278 lines), 10 of the pickers' own (`collOf`, `collOf_isColl`, `onePick`, `ind_le_onePick`,
+  `conflictPick`, `expect_one_le`, `expect₂_conflict_le`, `forkE_conflict_le`, `tree_le_strict`, `collOf_congr`; 61),
+  25 finders (202), 6 structures and instances (`Leaf`, `Leaf.plain`, `Leaf.hm96`, `TreeRewind`, `.ofNever`, `.le`; 54).
+  The files: `Definitions/Flock/Merkle.lean`; under `Proofs/Flock/`: `Soundness/Merkle.lean`, `Soundness/StrictCR.lean`,
+  `Soundness/CompiledSound.lean`, `Soundness/Discharge/Exec/{CompiledL,StrictCRL}.lean`,
+  `Soundness/Discharge/ZkLink/{BadZ,StrictZ}.lean`,
+  `Recursive/{Compile,ForkLast,HoloExec,LeafFinder,Registrants,SaltFinder,TopFinder,TopRoot}.lean`, `C3/Fork/Sound.lean`.
+- **Call sites: 32 more declarations** (31 theorems, 1 definition; 597 lines today, of which only the lines that pass
+  a lemma change) name a declaration whose parameters change; they are in 14 modules, 4 of them new to the list
+  (`C3/Fork/Extract`, `Soundness/Discharge/Exec/Headline`, `Soundness/Refine/Paths`, `Soundness/ZK/CoinBinding`).
+  **21 files in all.** 52 further declarations name only a finder and do not change if the finders keep their names
+  and parameters.
+- **Lines** [my estimate, not measured]: about 600 rewritten and 150 to 250 added. Two pieces have content,
+  `walkPair` with its spec and `hm96`'s pair; the other pair functions are compositions of one to four lines.
+- **Documents in the same change**: 7 lines of `Proofs/Flock/Soundness/` that name the lemmas (`ASSUMPTIONS.md:50,464`,
+  `DESIGN.md:118`, `README.md:67,176,350,413`), and the docstrings of `Finder.CR` (`StrictCR.lean:88-97`) and
+  `SHA512CRStrict` (`Definitions/Assumptions/Flock.lean:50`), which describe the finder the restatement makes true.
+- **Pull requests: three, one of which moves records.** (1) No record moves: add `walkPair`, `openPair`, `openPairL`
+  with their specs beside the three base lemmas, which become corollaries. (2) The one that moves records, once, and
+  goes to you and Daniel: `Leaf.pair`, the pickers, the 25 finders, `TreeRewind`, the 33 lemmas, the documents, and the
+  records commit. It cannot be split by family, because `collOf`'s parameters change for every caller at once.
+  (3) No record moves: section A's corollaries and the three bare definitions of the Verifier area, `linksHold_rows`,
+  `rowOpens_binding` restated or deleted, the coin tree's chain with the README's T6 line, and the test at
+  `test_lean_verifier.py:853`.
+- **What must be compiled to know it holds.** 2,473 of `security`'s 4,891 Lean modules import
+  `Proofs.Flock.Soundness.Merkle` (763,413 lines; 2,478 import `Definitions.Flock.Merkle`) [run: the import closure
+  over the pinned source], so (1) and (2) each rebuild that much of `security/Proofs` on a node. The 21 files hold every
+  declaration that names one whose type changes [run]. The 52 that name only a finder can break only where a proof
+  unfolds a finder's body, which I did not check. So the first run is those 21 modules, and within them five places
+  decide whether the shape holds: `walkPair_spec`; `collOf_isColl` with the four lemmas every
+  bound passes through (`StrictCR.lean:124,130,175,191`); one session finder end to end (`advRSFinderZ` with
+  `advRSZ_le_strict`); `Leaf.hm96` with its pair; and `collOf_congr` with its two users. Then the whole build, the
+  records run at that head, and the suites that read the lock.
+
+### H. Item f: one paragraph for Daniel
+
+Forty-nine listed guarantees, two of them deployed (`SampledKSLiveV3`, `SampledKSLiveV5`), say: if SHA-512 is collision
+resistant, a cheating prover is caught except with a small probability. They cannot assume collision resistance of
+every program at once, because some program simply prints a collision it was born with, since collisions exist. So they
+assume it of a few named programs, called finders. A finder is meant to be this: run the prover once or twice, and if
+the runs open one committed position to two different values, work out from those two openings two different strings
+with one SHA-512 digest, and output them. The lock's words for the premise say that: "a finder of at most q evaluations
+finds a collision with probability at most q²/2^513". The Lean says something slightly different. Its finder runs the
+prover and sees whether the runs disagree, but the pair it outputs is not worked out from the openings: Lean is told
+only that *a* collision exists when they disagree, and the finder outputs "a collision" taken from that bare existence.
+Since a collision of SHA-512 exists anyway, that output is one fixed pair, the same on every run, and the tree itself
+proves that the output depends on nothing but whether the runs disagree. So the premise, as written, is about a program
+that nobody could run: it has a collision built in and prints it when the runs disagree. Programs with a collision built
+in are the reason the premise is stated finder by finder. Nothing is false. Each guarantee
+is a true implication. Its premise says the runs disagree with probability at most q²/2^513, and that holds if SHA-512
+is collision resistant, because a program that can be run does exist: each of the 33 proofs that "a disagreement gives
+a collision" works the pair out from the openings (31 do so outright; of the other two, which feed no listed guarantee,
+one uses an opening that is only said to exist and one argues by contradiction over the strings of the play). And no
+premise or conclusion is true by counting alone. What is missing is one step that Lean does not check and a reader must
+take on trust: that those proofs could be run as programs. The restatement turns each proof into a function that gives
+the pair and makes the finders output that function's value, so that Lean checks that whenever the runs disagree the
+finder's output is a collision worked out from them. After it the premise means what the lock's words say, the bare
+"a collision exists" leaves all 50 statements, a leaf commitment can no longer be declared binding by counting, and the
+finder's cost in SHA-512 evaluations, which the budget q must cover and which Lean still does not check, can be read
+off a definition. It changes no guarantee's wording, no bound and nothing the verifier does. It changes what the two
+deployed guarantees and 48 others rest on, which is why it comes to you.
+
+### I. My four branches
+
+- `cursor/proofs-addrrow2-5e1b` at `d5889c79d6cdd6ab7b38fc4984453dec78bda5e7`: **LIVE, the one line of the row fact.**
+  The join's tip is merged in (your 13:29Z), and `RowUnlinked.lean` is compiled there (`r20261113-133857-2491`,
+  rc 0), under the named hypothesis `ReadersUnlinked`, which is false of the join's `wiresOk` as it stands. So it is
+  not for a batch until the join holds GATHER's clause, as your 14:07Z says. It is compiled and pushed, so by your carry rule:
+  **`cursor/proofs-addrrow2-5e1b` `d5889c79d6cdd6ab7b38fc4984453dec78bda5e7` my live line.** I commit nothing more on
+  it. The deletion of the hypothesis goes on a new branch cut from the carried head.
+- `cursor/proofs-addrrow2-unlinked-scratch-681e` at `b3889e4076680015bf206bba7fa3e47f2bd304dd`: **scratch, not live,
+  not to be carried.** It is the scratch merge you ordered (5e1b with GATHER's head and the held-copies branch), and the
+  two commits FRAME saw are the two tries you asked for there: `dfedb8cd3f7` (`RowUnlinked.lean` with the hypothesis
+  deleted, compiled, `r20261113-134107-b389`) and `b3889e40766` (`addressesConnected_of_matches`, compiled,
+  `r20261113-142845-1c3c`). Both are small and I write them again on the carried line once the join holds the clause.
+- `cursor/proofs-addrrow2-heldwires-681e` at `8be6ff6e48f403091d70372e28260bffc9b255ae`: **done, not live.** Its one
+  commit (`HeldOfWires.lean`) is an ancestor of the join's tip `6bae773eb3454a4c483293a1ed37f94aa704758f` [run:
+  `git merge-base --is-ancestor`], so it is carried with the join.
+- `cursor/proofs-addrrow2-programs-c41d` at `6dd041406c14e3ffa0589545936489df0605456c`: **scratch, not live.** The four
+  programs for GATHER under `scratch/wire-port-programs/`, never to merge.
+
+**STOP RULE.** Not touched: no code, no statement, no lock, nothing compiled. No listed guarantee is empty by a bare
+collision (entry 1), and the one lemma handed to a picker that builds no pair has its own entry (16:24Z).
+
+**NEEDS.** None that blocks. Two choices belong to whoever writes it, and I name them so they are made on purpose:
+(1) where `walkPair` and `openPairL` live: in `Definitions/Flock/Merkle.lean` beside `Leaf`, so that a reader of the
+definitions tree sees the function the deployed finders output, or in `Proofs/`, as `ExplicitLeaf` is today, which
+makes `Proofs.Flock.Soundness.Merkle` a new reads module of the lock; (2) whether `clashPickHLO` gets the registrant's
+openings as data or is left out, since no statement reads it.
+
+**Not established.**
+- Nothing is compiled. Every restated signature is read off a proof. The two places I expect to need care are
+  `walkPair`'s recursion (the proof recurses on both lists with the index halved) and `collOf_congr`.
+- That a guarantee's own record does not move (section F) is read off the tool's text, not seen in a records run.
+- The line estimate of section G is mine. The counts of declarations, files and importing modules are computed.
+- "Reaches" and "uses" are by the constant graph, which mixes a constant's type and its proof, and which counts an
+  auxiliary proof Lean shares between two declarations as a use of the one that made it first (the `TreeRewind.bound`
+  case of section C). So it can name a user that is none and cannot miss one: "nothing uses it" is safe, and a count
+  of reachers (1,117) is an upper bound. Which listed statements read a definition is from the facts' own reads, not
+  from the graph. The graph's line ranges disagree with the source for 541 of the 104,474 declarations it could
+  check; every line in this entry is read from the source.
+- That none of the 50 statements binds a leaf of its own is a search of source text (the statement, its head, and the
+  `variable` lines above them), not of elaborated binders. Two `_honest` witnesses sit in a file with a
+  `variable (Hs : Hashes F D Sl)`; both read `Leaf.hm96`.
+- Whether the tree holds a proof of the counting fact itself: I did not look for one.
+- `CommitBreak` (section B): whether its two inputs differ is not read.
+- The form with no choice at all (section D, point 2) is not sized.
+- The cross-check build at the pin, `r20261113-151544-df57`, failed (rc 3) and I did not find out why; its log here ends
+  where it takes its audit slot. Nothing in entries 1 or 2 rests on it: the facts are the pin's own, from the cache
+  (`r20261113-155322-edca`), with matching keys for `security` and `security/Proofs`.
+
+**Pushed.** This entry, and the 16:24Z one (`9a723bc7bcd`). My four branches are unchanged, at the heads of section I.
+
+**Runs.** None new since entry 1's. `r20261113-155322-edca` (cpu-1): done, rc 0, the constant graph at the pin's own
+facts. `r20261113-155027-8117` (cpu-14): done, rc 0, a graph from an older tree, not used. `r20261113-152354-412c`
+(cpu-14): done, rc 0, the four extracts of the facts. `r20261113-151544-df57` (cpu-3): failed, rc 3, cause not found.
+`r20261113-151740-4766`, `r20261113-152115-4cd9`, `r20261113-152231-9d5e` (cpu-1): failed, rc 3, my own mistakes.
+
+**To post.** Nothing. Section H is written to be lifted as it stands.
