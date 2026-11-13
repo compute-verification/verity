@@ -48,6 +48,7 @@ def Desc.parseOfWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Mon
     | .ok (.obj kvs) => kvs.toArray.mapM fun (id, dj) => do
       let form := (dj.getObjValAs? String "form").toOption.getD ""
       if form == "primitive" then pure (id, ({ prim := true, nodes := #[] } : DDef))
+      else if isInput id then throw s!"definition '{id}': an input id keys only the input primitive"
       else if form == "composite" then
         let nodes ← match (dj.getObjVal? "body").toOption.bind (fun b => (b.getObjVal? "nodes").toOption) with
           | some (.arr ns) => ns.mapM fun nj => do
@@ -60,7 +61,7 @@ def Desc.parseOfWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [Mon
       else throw s!"program: {id}: an unknown definition form {form}"
     | _ => throw "program: definitions"
   let some root := (j.getObjValAs? String "root").toOption | throw "program: root"
-  if (defs.find? (·.1 == root)).isNone then throw "program: the root is not a definition"
+  (rootNodesOk callees defs root : V Unit)
   return { callees, defs, root, sha512 := ← sha512 (← canon bare).toUTF8 }
 
 theorem Desc.parseWith_eq_of {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
