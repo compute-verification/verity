@@ -121458,3 +121458,76 @@ What I read: commit `783248625814` on `cursor/proofs-twoleg-c5e5` (its four file
 **Running** [run]: `r20261113-050956-1859` on vy-nebius-2, the `Within.lean` try for its axiom probe, launched 05:09:56Z; expected end about 05:20Z [guess]. If you rule that ACCEPTS's `readsWithin` stays, its result only records `reads_within`'s axioms before I delete the file.
 
 **Heads.** `cursor/proofs-runcoins-2d88` = `d4e1d1cf87`, pushed; nothing unpushed. **STOP RULE**, **NEEDS**, **To post**: as at 05:05Z. **Not established**: as at 05:05Z, less `firstSample`'s compile.
+
+
+## HONEST2, Fri 13 Nov 05:11Z: `Honest/Instance.lean` passes its try (31 theorems, only the three axioms); in `Wiring.lean` ten of eleven theorems elaborate, `wiringOk_held` among them, and the one that failed is the statement already fixed; the instance's facts now drop `NeededBits` (written on NEEDEDBITS's compiled theorem, not compiled); ADDRWC's `CopyOut.lean` failed in both its tries
+
+**In plain words.** Two of my ten files have now had their own verdict from Lean on the base that decides the wiring. The file that defines the one-template registration is clean: all 31 of its theorems, on the three permitted axioms. In the file that proves the wiring check passes there, Lean took every theorem except the last one, the one that stopped on a name not written in full; that was fixed an hour ago and has not been tried since. So the proof that this registration passes the base's wiring check is through the elaborator, but it has no axiom line yet, because Lean prints none for a file it refuses. Since then two other workers' results became usable. NEEDEDBITS proved, with no condition, that a checked unit needs only its own unit's bits, and ADDRWC removed the duplicate name that kept me from merging it. I merged both and wrote the three theorems that drop that hypothesis at the instance. I also wrote the next step, which reads the last two conditions on the template's circuit off the accepted design, but it stands on a file of ADDRWC's that does not compile yet.
+
+Clock: `date -u` read 05:11Z. Mailbox read at 05:07Z: nothing after your 03:59Z word.
+
+### What the run gave since 04:13Z
+
+[run: `r20261113-031311-97b2`, vy-nebius-2, still running, head `ec1ac520fa0d`, base `6c1a87cc54d3`]
+- `Honest/Instance.lean`: "lean exit 0 in 162 s" and "axiom probe: none of its 31 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Among the 31: `two_held`, `scope_held`, `inScope_of_accepts`, `honest_of_owed`, `builtWired_held`. The file has changed in one line since (the layout type's name, for `main`'s rename).
+- `Honest/Wiring.lean`: "lean exit 1 in 1930 s" and "axiom probe: 1 of its 11 theorems failed, with Lean's error above on its own lines: SpotFlock.Honest.two_of_ref; no axioms are shown for a file lean refuses". The error is the one of 04:13Z, `125:39`, the unqualified `filesReplay`.
+- [derived] So the ten others elaborate on that base: `name_held`, the seven clause lemmas of the file (`returnedWhole_held`, `writtenUnwired_held`, `refReadsOwn_held`, `values_held`, `namesOnce_held`, `wiresAlike_held`, `writtenRead_held`), `wiringOk_held (hR : RefPorts R) (hO : RefReadsNamed R B) : wiringOk (held …) = true` and `membersScoped_held`. None has an axiom line yet.
+- The third try, `Once.lean`, took a Lean place at about 05:04Z on a tree with 649 files changed. The run's limit is now 05:25:41Z [run: the runner adds each wait in the Lean line to the limit]. I expect the limit to end it before its probe [guess].
+- Cost, for whoever plans tries tonight: each `--try` drops the place it holds and takes a new one, on whichever tree is free. On a tree a few files away the try took 162 s; on a cold one, 1930 s. The run's limit is 90 minutes from its check slot whatever `--timeout` says, plus the waits in the Lean line (300 s, 661 s, 641 s, 80 s here). So a run holds about three tries on cold trees.
+
+### Merged and written, pushed at `c9815bc19544`, not compiled
+
+- **ADDRWC's head `d03a62e0c463`.** Its `BitsIn.lean` no longer declares `PortsOnce`, which was my 04:13Z NEEDS. Thank you, ADDRWC. [run: read ADDRWC's `dc99` log] At that head `WiringOk`, `EntryRoots`, `WidthOf`, `BitsIn`, `CopyOf`, `BitsOwn`, `WrittenOf` and `CopySrc` built, which is everything `Once.lean` imports from there.
+- **NEEDEDBITS's `NeededBitsHeld.lean`**, the text that compiled at `0a2a205017`, the same as at its head [run: `git show … | sha1sum`]. I merged `fdad33da82` and took that one file, not a later commit, for two reasons [read]. `0a2a205017` also holds the first `OutputsWritten.lean`, which NEEDEDBITS says stops. And the head `85dd57e03fcf` holds L1's second move, where `wiringOk` has eleven clauses; that is not on the base, and `wiringOk_held` is proved for the base's ten.
+- **`Honest/Needed.lean`** (new, 3 theorems): `widthFact_of_portsOnce`, `five_of_portsOnce`, `addressesConnected_of_portsOnce`. They are the 03:21Z theorems with `NeededBits (held …)` discharged by `neededBits_held`. Everything this file imports has built somewhere tonight; the file itself has not.
+- **`Honest/Design.lean`** (new, 9 theorems). At an accepted run of the instance the design evaluates, so ADDRWC's `portsOnce_of_rows` gives `PortsOnce` and its `copiesAt_of_two` gives the copy at each bit; `copiesHeld_of_at` turns that into my `CopiesHeld` (the instance has one member, and inside its row a position's place is its bit). The end is `addressesConnected_of_goal (hG : AddressRow.RowGoal …) (hR : RefPorts R) : AddressesConnected (held …)`, and `honest_of_goal`, which adds an accepted run and concludes `HonestExists`. It cannot compile today: it imports `PortsOnceOf`, which imports `CopyOut`.
+- [run: `python3` over the declarations of `SpotFlock/`, `AddressFacts/`, `Honest/`, `Bridge/`] No name is declared twice across NEEDEDBITS's and ADDRWC's files, so importing both, as `Design.lean` does, will not stop on a clash.
+- [run] `tests/test_lean_packages.py` and `tests/test_lean_vocabulary.py`: 50 passed at the head.
+
+### For ADDRWC: both tries failed in `CopyOut.lean`
+
+[run: `research status` and `research fetch` of `r20261113-040149-1f53` (cpu-3) and `r20261113-042843-dc99` (cpu-9); I only read them]
+- `1f53`: "CopyOut.lean: lean exit 1 in 2290 s" and "axiom probe: 3 of its 14 theorems failed … SpotFlock.wire_comp_uniform, SpotFlock.keyProg_wire_comp, SpotFlock.outGate_wire".
+- The four errors, the same in both: `55:37` and `65:41` "Tactic `rewrite` failed: Did not find an occurrence of the pattern"; `87:6` "Tactic `rewrite` failed: motive is not type correct"; `132:10` "unexpected token 'X'; expected '⟩'".
+- `dc99` stopped at `CopyOut` as a dependency, so `PortsOnceOf.lean` was not reached.
+- No entry of ADDRWC's after 04:32Z says this, so it may not have read them yet [guess].
+
+### Where the instance's hypotheses stand
+
+| Hypothesis | 04:13Z | Now |
+|---|---|---|
+| `NeededBits (held …)` | taken | discharged in `Needed.lean` (not compiled) |
+| `PortsOnce (held …)`, `CopiesHeld` | taken | read off the accepted design in `Design.lean` (not compiled; waits on ADDRWC's `CopyOut`) |
+| `AddressRow.RowGoal` | ADDRROW's, not proved | the same [read: `df9a5d5ec0c6`, its head still] |
+| `RefPorts R` | a condition of the registration | the same: every written row linked, no port named like an opening row |
+| the wiring check: `RefPorts R`, `RefReadsNamed R B`, `scopeOkH (stmtOf R.x)` | written | elaborates, bar the fixed statement; no axiom line |
+| an accepted run (`Accepts`) | none shown | none shown |
+
+No statement of mine that the join reads changed; the new theorems are additions.
+
+### Run plan
+
+`97b2` is started, so I leave it; its limit is 05:25:41Z. Then one run at `c9815bc19544` on vy-nebius-2: tries of `Needed`, `Wiring`, `Once`, `Five`, in that order, knowing the limit may cut it after three. `Design.lean` goes in a run only after ADDRWC's `CopyOut.lean` compiles. Timer set for 05:27Z.
+
+### STOP RULE
+
+Nothing.
+
+### NEEDS
+
+Nothing of you. ADDRWC: `CopyOut.lean`, as above. ADDRROW: `RowGoal`, as before.
+
+### Pushed
+
+[run] `cursor/proofs-honest2-7c4e` at `c9815bc19544`; nothing unpushed. The branch now carries ADDRWC's `CopyOut.lean` and `PortsOnceOf.lean`, which do not compile, and my `Design.lean` above them.
+
+### Not established
+
+- An axiom line for `wiringOk_held`, `membersScoped_held` or `two_of_ref`; that `two_of_ref` elaborates.
+- That `Needed.lean` or `Design.lean` compiles.
+- That anything of mine builds on the base `e033bfc14be4`: every verdict above is on `6c1a87cc54d3`.
+- An accepted run at the instance, so every theorem here still says nothing about any play.
+
+### To post
+
+Nothing.
