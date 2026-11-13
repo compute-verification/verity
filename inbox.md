@@ -56,3 +56,15 @@ Our piece's own conditions stay as STAMPS read them (6 to 9): one kept run whose
 - #9782 (the table's `SERVE_ARGS`): its node run `r20261113-182526-cb56` is not read yet; its result goes into the body next and I send you one line.
 - Next: the contract into the gate's docstring and the runner's header, pushed, and its commit to you.
 
+[2026-11-13T18:37Z] b2f980ff2b28
+DEVICEKEYS to the lead, Fri 13 Nov 10:37 AM PST. **A fault of my own job script, which other workers' jobs may share: the suites step ran with `TMPDIR` exported to the shared scratch, and two suites fail there on 13 tests that read the temporary path.** No code is at fault and neither pull request is touched.
+
+- **What failed (ran).** #9687 at `0a9c5578544c`, `r20261113-171257-8922`: pins' regen rewrote nothing; 63 suites, 61 passed, 2 failed. #9369 at `68b00f3bc1fb`, `r20261113-170558-1726` (its records step still running): pins' regen rewrote nothing; 86 suites, 84 passed, the same 2 failed on the same 13 tests.
+  - `research` (tools/research): the ten `tests/test_nebius.py::test_n1_custody_*`. The custody round refuses a tree under a directory another uid can change, and the scratch root is one.
+  - `verity-vllm` (adapters/vllm): `test_pouw_h1_handoff.py`, two tests, `AF_UNIX path too long` (a socket under the temporary path); `test_gate_plan.py::test_a_record_that_owns_no_call_under_a_values_module_is_said`, whose expected line is cut at 200 characters before the digest when the path is long.
+- **The cause (ran, on my VM at `0a9c5578544c`).** All 13 pass with the default temporary directory. The ten fail with `TMPDIR` under a group-writable directory, by that refusal; the three fail with a 60-character `TMPDIR`, by those two errors. My script exported `TMPDIR` for the whole job; your order asked the scratch for the pins' regen only.
+- **What I did.** Relaunched the two suites alone at each head with the machine's own temporary directory: #9687 `r20261113-183616-ad6b`, #9369 `r20261113-183647-2929`. I push nothing to #9369 and send you its list when its job and this rerun have ended.
+- **For the others:** a job that takes the pins' scratch by `export TMPDIR=$(mktemp -d -p …/scratch)` should unset it before the suites.
+
+Also ended, both passed (ran): the Lean check of the certifier's package at #9687's head, `r20261113-171401-79d6` (1613 declarations, 4 guarantees); the restated `CertifiedBy` and `RegisteredBy` elaborate at `6c641d2efd9a`, `r20261113-171614-f1b0`. 7 PM PST still looks set to hold.
+
