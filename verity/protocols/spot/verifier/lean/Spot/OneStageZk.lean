@@ -69,9 +69,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   exactly `{"member", "sessions"}`, the statements' sessions in order being v1's `sessions`. The statements are held as
   public structure before any session is read (`membersHeld`): each names a member of the parameters that no earlier
   statement named, in the members' order (by first unit), with exactly one session, on live coins and never retried;
-  an undrawn member has no statement: a statement of a member the sample holds no unit of refuses (`drawnHeld`, at the
-  evidence's `proved_units`), so the statements are exactly the members the sample holds, one session each
-  (`membersRun_drawn`). Each session's coins are one tree's, as the one statement's are, and its tree's
+  a member the sample missed has no statement: a statement of a member the sample holds no unit of refuses
+  (`sampledHeld`, at the evidence's `proved_units`), so the statements are exactly the members the sample holds, one
+  session each (`membersRun_sampled`). Each session's coins are one tree's, as the one statement's are, and its tree's
   last opening is its closing round (`Challenger.memberTreeReason`): one more `session` round, of no coins, opened after
   the SHA-512 of the session's evidence (`sessionEvidence`: its record's bytes, then each rep file's name and bytes,
   each under an 8-byte length, `evidenceBytes`, which `evidenceParts` decodes), so the files the verdict reads are
@@ -1190,25 +1190,25 @@ def stepMember (st : Member → V StepAt) (bs : Core.Blobs) (r : Run) (z : State
   (runFrom (st z.2) z.1.sessions bs r).mapError (s!"member {z.2.name}: {·}")
 
 /-- Whether the sample `want`, the evidence's `proved_units`, holds one of the member's units. -/
-def Member.drawn (m : Member) (want : Array Nat) : Bool :=
+def Member.sampled (m : Member) (want : Array Nat) : Bool :=
   want.any fun u => m.units.any fun x => decide (x.1 ≤ u) && decide (u < x.2)
 
-/-- The refusal of a statement of the member `name`, none of whose units the sample holds (`drawnHeld`). -/
-def undrawn (name : String) : String :=
-  s!"member {name}: the sample holds none of its units, and an undrawn member has no statement"
+/-- The refusal of a statement of the member `name`, none of whose units the sample holds (`sampledHeld`). -/
+def unsampled (name : String) : String :=
+  s!"member {name}: the sample holds none of its units, and a member the sample missed has no statement"
 
 /-- **Every statement's member is one the sample holds**: each of `held`, the statements' members in order
 (`membersHeld`), has a unit among the evidence's `proved_units` (`want`); the first that has none refuses, by name
-(`undrawn`). A session proves the units of the sample that are its member's, so a statement of a member the sample
+(`unsampled`). A session proves the units of the sample that are its member's, so a statement of a member the sample
 missed is a session that proves no unit: the units proved would still be the sample (`provedHeld`), with one more
 session than the sample's members. -/
-def drawnHeld (held : Array Member) (want : Array Nat) : V Unit :=
-  match held.find? fun m => !m.drawn want with
-  | some m => throw (undrawn m.name)
+def sampledHeld (held : Array Member) (want : Array Nat) : V Unit :=
+  match held.find? fun m => !m.sampled want with
+  | some m => throw (unsampled m.name)
   | none => pure ()
 
 /-- **The per-member form's run**, at each member's `slice` of the registration: the statements' structure held
-(`membersHeld`), each statement's member one the sample holds (`drawnHeld`), every member's files held, sampled or
+(`membersHeld`), each statement's member one the sample holds (`sampledHeld`), every member's files held, sampled or
 not (`membersFiles`), then each statement at its member's statement as that pass read it, after the statements before
 it (`stepMember`), so `step`'s coin-tree keys are fresh across statements; then, where every session accepted, the
 union of the statements' proved units held to the evidence's `want` (`provedHeld`). Every member's files are read
@@ -1216,7 +1216,7 @@ once, whichever members the sample holds. -/
 def runMembers (slice : Member → Json) (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat)
     (bs : Core.Blobs) : V Run :=
   membersHeld ms sts >>= fun held =>
-  drawnHeld held want >>= fun _ =>
+  sampledHeld held want >>= fun _ =>
   membersFiles slice bs ms.toList >>= fun files =>
   (sts.zip held).foldlM (stepMember (statementAt files) bs) ⟨#[], #[], #[], true⟩ >>= fun r =>
   (match r.all with
@@ -1278,31 +1278,31 @@ theorem runMembers_files {slice : Member → Json} {ms : Array Member} {sts : Ar
   obtain ⟨files, hf, _⟩ := Flock.HmNets.bind_ok h
   exact fun m hm => membersFiles_ok hf m (Array.mem_def.1 hm)
 
-/-- Where `drawnHeld` passes, the sample holds a unit of each of the members. -/
-theorem drawnHeld_ok {held : Array Member} {want : Array Nat} (h : drawnHeld held want = .ok ()) :
-    ∀ m ∈ held, m.drawn want = true := by
+/-- Where `sampledHeld` passes, the sample holds a unit of each of the members. -/
+theorem sampledHeld_ok {held : Array Member} {want : Array Nat} (h : sampledHeld held want = .ok ()) :
+    ∀ m ∈ held, m.sampled want = true := by
   intro m hm
-  unfold drawnHeld at h
-  cases hf : held.find? (fun m => !m.drawn want) with
+  unfold sampledHeld at h
+  cases hf : held.find? (fun m => !m.sampled want) with
   | some m' =>
     rw [hf] at h
     cases h
   | none =>
     have hn := Array.find?_eq_none.1 hf m hm
-    cases hd : m.drawn want with
+    cases hd : m.sampled want with
     | true => rfl
     | false => exact absurd (by simp [hd]) hn
 
 /-- **Every statement of the per-member form's run is of a member the sample holds**: where `runMembers` returns a
 run, the statements' members in order (`membersHeld`) each have a unit among the evidence's `want`. With the proved
 units held to `want` (`runMembers_proved`), the statements are the members the sample holds, each once. -/
-theorem runMembers_drawn {slice : Member → Json} {ms : Array Member} {sts : Array StatementFiles} {want : Array Nat}
+theorem runMembers_sampled {slice : Member → Json} {ms : Array Member} {sts : Array StatementFiles} {want : Array Nat}
     {bs : Core.Blobs} {r : Run} (h : runMembers slice ms sts want bs = .ok r) :
-    ∃ held, membersHeld ms sts = .ok held ∧ ∀ m ∈ held, m.drawn want = true := by
+    ∃ held, membersHeld ms sts = .ok held ∧ ∀ m ∈ held, m.sampled want = true := by
   unfold runMembers at h
   obtain ⟨held, hh, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨⟨⟩, hd, _⟩ := Flock.HmNets.bind_ok h
-  exact ⟨held, hh, drawnHeld_ok hd⟩
+  exact ⟨held, hh, sampledHeld_ok hd⟩
 
 /-- **Where every session of the per-member form's run accepted, the units they proved are the evidence's**: the
 units the accepted sessions proved (`Run.proved`, each session's read off its member's public file, `push`), sorted,
@@ -1433,15 +1433,15 @@ theorem membersRun_proved {p : Params} {ms : Array Member} {c : OneStage.Commitm
   exact runMembers_proved h hall
 
 /-- **Where the per-member form's run returns, every statement is of a member the sample holds**
-(`runMembers_drawn`): the statements' members in order each have a unit among the evidence's `proved_units`, so no
+(`runMembers_sampled`): the statements' members in order each have a unit among the evidence's `proved_units`, so no
 session of the run is of a member the sample missed. -/
-theorem membersRun_drawn {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
+theorem membersRun_sampled {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
     {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
-    ∃ held, membersHeld ms sts = .ok held ∧ ∀ m ∈ held, m.drawn e.base.provedUnits = true := by
+    ∃ held, membersHeld ms sts = .ok held ∧ ∀ m ∈ held, m.sampled e.base.provedUnits = true := by
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
-  exact runMembers_drawn h
+  exact runMembers_sampled h
 
 /-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
 verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check; and what would accept is
@@ -1777,13 +1777,13 @@ private def whyT {α : Type} : V α → String
 #guard (whyT (membersHeld membersT #[statementT "m0" 2])).startsWith "member m0: its statement has 2 sessions"
 #guard whyT (membersHeld membersT #[statementT "m3"]) == "member m3: the parameters name no such member"
 #guard (whyT (membersHeld membersT #[{ member := none, sessions := #[] }])).startsWith "a statement of the proofs names"
-#guard (memberT "m0" #[(0, 1), (5, 6)]).drawn #[5]
-#guard !(memberT "m0" #[(0, 1), (5, 6)]).drawn #[1, 2, 6]
-#guard !(memberT "m0" #[(0, 1)]).drawn #[]
-#guard (drawnHeld #[memberT "m0" #[(0, 1), (5, 6)], memberT "m2" #[(2, 3)]] #[2, 5]).toBool
-#guard whyT (drawnHeld #[memberT "m0" #[(0, 1), (5, 6)], memberT "m2" #[(2, 3)]] #[0, 3]) ==
-  "member m2: the sample holds none of its units, and an undrawn member has no statement"
-#guard (drawnHeld #[] #[]).toBool
+#guard (memberT "m0" #[(0, 1), (5, 6)]).sampled #[5]
+#guard !(memberT "m0" #[(0, 1), (5, 6)]).sampled #[1, 2, 6]
+#guard !(memberT "m0" #[(0, 1)]).sampled #[]
+#guard (sampledHeld #[memberT "m0" #[(0, 1), (5, 6)], memberT "m2" #[(2, 3)]] #[2, 5]).toBool
+#guard whyT (sampledHeld #[memberT "m0" #[(0, 1), (5, 6)], memberT "m2" #[(2, 3)]] #[0, 3]) ==
+  "member m2: the sample holds none of its units, and a member the sample missed has no statement"
+#guard (sampledHeld #[] #[]).toBool
 
 private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [("indices", natsJson us)])]
 
@@ -1811,9 +1811,9 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
   "the units the sessions proved are not the evidence's proved_units"
 #guard (whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[2] ⟨#[]⟩)).startsWith
   "member m2: circuit: "
-#guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[] ⟨#[]⟩) == undrawn "m2"
+#guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2"] #[] ⟨#[]⟩) == unsampled "m2"
 #guard whyT (runMembers (fun _ => Json.null) membersT #[statementT "m2", statementT "m10"] #[10] ⟨#[]⟩) ==
-  undrawn "m2"
+  unsampled "m2"
 #guard (whyT (runMembers (fun _ => Json.null) membersT #[] #[] ⟨#[]⟩)).startsWith "member m2: circuit: "
 #guard (whyT (runMembers (fun _ => Json.null) #[memberT "m0" #[(0, 1)], memberT "m2" #[(2, 3)]] #[statementT "m2"]
   #[2] ⟨#[]⟩)).startsWith "member m0: circuit: "

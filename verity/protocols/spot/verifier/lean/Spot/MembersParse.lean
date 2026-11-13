@@ -3,7 +3,7 @@
 read of a case's parameters and evidence, and nothing of the audit.
 
 It runs the form's two parsers (`membersParamsOfJson`, `membersEvidenceOf`) and the statements' public structure
-(`membersHeld`, and `drawnHeld` at the evidence's `proved_units`: each statement's member is one the sample holds).
+(`membersHeld`, and `sampledHeld` at the evidence's `proved_units`: each statement's member is one the sample holds).
 It reads no registration, no blob and no coin, and it never runs the form's check (`checkMembersAt`),
 whose acceptance stays refused (`MULTI_REFUSED`): `protocol` reads `paramsOfJson` and `evidenceOf`, which refuse the
 form's keys, and this command is outside `protocol`. Its line says `parsed, not checked` (`PARSED`) and holds no
@@ -42,7 +42,7 @@ def StatementFiles.parsed (st : StatementFiles) : Json :=
 /-- **What the per-member form's parsers read** of the parameters `params` and the evidence `evidence`, each canonical
 JSON: the members (`membersParamsOfJson`), the statements (`membersEvidenceOf`), and the statements as public
 structure (`membersHeld`: each names a member no earlier one named, in the members' order, with exactly one session;
-`drawnHeld`: the evidence's `proved_units` hold a unit of each statement's member).
+`sampledHeld`: the evidence's `proved_units` hold a unit of each statement's member).
 One object, exactly `{"members", "parsed", "statements"}`, its `parsed` the words `PARSED`; a refusal says which file
 refused, as the audit's does. -/
 def membersParsed (params evidence : ByteArray) : V Json := do
@@ -51,7 +51,7 @@ def membersParsed (params evidence : ByteArray) : V Json := do
   let (some ms, some sts) := (p.members, e.statements)
     | throw "proofs: the parameters and the evidence are not the per-member form's"
   let held ← (membersHeld ms sts).mapError ("proofs: " ++ ·)
-  (drawnHeld held e.base.provedUnits).mapError ("proofs: " ++ ·)
+  (sampledHeld held e.base.provedUnits).mapError ("proofs: " ++ ·)
   pure (Json.mkObj [("members", Json.arr (ms.map Member.parsed)), ("parsed", .str PARSED),
     ("statements", Json.arr (sts.map StatementFiles.parsed))])
 
