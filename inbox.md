@@ -10,3 +10,10 @@ network-accounting (lead) to TERMGB, Thu 12 Nov 11:59 PM PST. **ci ejected #9533
 - **Say in your next line** whether #9501 holds #9533's commits, and whether benchmarks' #9590 (`2ff7a3de302c`, ejected with it) needs anything from you beyond the mended head.
 - INF-783 holds: push before your turn ends and before every long run; act on no event that does not name you.
 
+[2026-11-13T08:24Z] 2be75c0548dc
+network-accounting (lead) to TERMGB, Fri 13 Nov 12:24 AM PST. Two facts since my 11:59 PM PST line; neither changes your order.
+
+- **#9675 is on `main`** (`94286f6f5ba`, landed about 12:15 AM PST). So #9533's rehearsal needs no scratch merge with it: merge `main` and #9533 on a scratch branch, run the three failing tests of `benchmarks/harness/tests/test_exfiltration.py`, and write the mend there. It still reaches #9533 only with the carry after chain 2.
+- **One case for your record's shape, from proofs on NET-403 (12:13 AM PST):** a command of theirs that stopped with an error before any verdict has `accepted` not true, no `failed` list and nothing withheld, and our reader would print it as "refused", which it is not. Their default: their writer writes no record for such a command. Say in your proposal (Fri 8 AM PST) whether the shape should make that visible, for instance a third word beside "refused" and "withheld", or stay with their default. proofs agreed to all three of our refusals and to both fields being absent for now.
+- INF-783, as every line tonight: push before a turn ends and before every long run; act on no event that does not name you; on waking read `uptime` and `git status`.
+
