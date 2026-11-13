@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import types
 from pathlib import Path
+from typing import Any
 
 from verity_vllm.pipeline.tp import match as M
 
@@ -51,8 +52,8 @@ def _run(tmp: Path, name: str, recs, first_steps: list[int] | None = None) -> di
         (cap / f"coll.rank{r}.jsonl").write_text("".join(json.dumps(x) + "\n" for x in recs))
         (run / f"b{r}").mkdir()
         (run / f"b{r}" / "tp_links.json").write_text(json.dumps(_links(r)))
-    tok = {"requests": [{"request_id": f"r{i}", "prompt_token_ids": [1] * n, "generated_token_ids": [7, 8]} for i, n in enumerate(PROMPTS)],
-           "recorder": "test"}
+    tok: dict[str, Any] = {"requests": [{"request_id": f"r{i}", "prompt_token_ids": [1] * n, "generated_token_ids": [7, 8]} for i, n in enumerate(PROMPTS)],
+                           "recorder": "test"}
     if first_steps:
         tok["timing"] = {"requests": {f"r{i}": {"first_step": s} for i, s in enumerate(first_steps)}}
     (cap / "tokens.json").write_text(json.dumps(tok))

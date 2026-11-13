@@ -6,12 +6,22 @@ import dataclasses
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import instance_sequence as SEQ
 
+#: the document's named checks, in its order
+CHECKS = ("requests_declared", "requests_observed", "subcircuits_x09", "identity_map", "shared_state", "chronology", "vu_population",
+          "within_step_order")
+
+
+def check_id(name: str) -> str:
+    """The document's id of a named check: `G` and its place in `CHECKS`, from 1."""
+    return f"G{CHECKS.index(name) + 1}"
+
 
 class NamedCheck:
-    """One named check of the document: its problems and evidence; `done` appends it to `res["checks"]`."""
+    """One named check of the document (`name`, one of `CHECKS`): its problems and evidence; `done` appends it to `res["checks"]`
+    under its id, with `what` it establishes after its name."""
 
     def __init__(self, res: dict, name: str, what: str):
-        self.res, self.name, self.what = res, name, what
+        self.res, self.name, self.id, self.what = res, name, check_id(name), f"{name}: {what}"
         self.problems: list[str] = []
         self.info: dict = {}
 
@@ -19,7 +29,7 @@ class NamedCheck:
         self.problems.append(msg)
 
     def done(self) -> bool:
-        self.res["checks"].append({"id": self.name, "what": self.what, "status": "FAIL" if self.problems else "PASS",
+        self.res["checks"].append({"id": self.id, "what": self.what, "status": "FAIL" if self.problems else "PASS",
                                    "problems": self.problems[:20], "n_problems": len(self.problems), **self.info})
         return not self.problems
 

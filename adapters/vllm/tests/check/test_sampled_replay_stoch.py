@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity.definitions.numerics import rows as RK
 
-from verity_vllm.check.replay import evaluate as EV, index as IX, population as POP
+from verity_vllm.check.replay import evaluate as EV
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.query.manifest import format as RM
-from verity.definitions.numerics import rows as RK
 
 V, H, T = 64, 8, 2          # vocab, hidden (the logits Gemm's K), decode steps after the arrival step
 
@@ -105,8 +107,9 @@ def _select_rows(pi):
 
 def test_the_stochastic_selector_has_a_registered_evaluator_equal_to_the_registry_difftest_walk():
     assert "GumbelTopPTokenSelect_v1" in RK.EVALUATORS and "GumbelTopPTokenSelect_v1" not in RC.NOT_YET
-    from verity_vllm.properties.admission import evaluate_spec
     from verity.definitions.registry import sampling_topp_difftest as DT
+
+    from verity_vllm.properties.admission import evaluate_spec
     rng = np.random.default_rng(11)
     lg = _logits(rng, 0)
     for S in (1, 2, 4, 8):
@@ -195,9 +198,7 @@ def test_a_selector_reading_its_split_count_from_a_program_input_is_unresolved_b
 
 def test_the_selector_is_a_replayed_stratum_of_the_population_not_a_no_evaluator_gap():
     inst, pi, blocks, _ = _honest()
-    pop = POP.population(pi, "r0", arrive=5) if hasattr(POP, "population") else None
-    if pop is None:
-        pytest.skip("population API not exposed by name")
+    pop = POP.population(pi, "r0", arrive=5)
     vus, not_ev = pop[0], pop[1]
     fams = {RM.spec_family(pi.by_i[v["i"]]["spec"]) for v in vus}
     assert "GumbelTopPTokenSelect_v1" in fams

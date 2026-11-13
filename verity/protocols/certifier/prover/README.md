@@ -12,12 +12,12 @@ with the ones they build on.
   - `adapters/vllm`: `ingress_scan`, `window_charge`;
   - `benchmarks/network_traces`: `ingress_scan`, `egress`;
   - `benchmarks/prove_path`: `ingress_scan`, `served_statics`, `served_tie`;
-  - `benchmarks/network_e2e`: `window_charge`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-    `compile_slice_v4`, `compile_slice_v7`;
+  - `benchmarks/network_e2e`: `window_charge`, `cache_step_v3`, `compile_slice_v4`, `compile_slice_v6`,
+    `compile_slice_v7`;
   - `benchmarks/mempool`: `cache_step_v3`, `compile_slice_v6`;
   - `verity/protocols/certifier/device`: its `program/lean/scripts/window_vectors.py`, `window_charge`;
-  - `verity/protocols/certifier/verifier`: its tests, every module, and they alone `advice_check`, `io_ids`,
-    `compile_slice_v3` and `compile_slice_v5`. No module of that package imports this one.
+  - `verity/protocols/certifier/verifier`: its tests, every module, and they alone `advice_check`, `io_ids` and
+    `compile_slice_v5`. No module of that package imports this one.
 - **Commands**: none. No console script, no `__main__`, no Lean.
 - **Circuit-check**: every module has a sidecar, `<module>.circuit-check.py`, with its pins in
   `<module>.circuit-check.json`, which `circuit-check` (`tools/verity/circuit_check`) reads.

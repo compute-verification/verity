@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from verity_vllm.config import option, row_file, workload_file
 
-__all__ = ["workload_file"]
+__all__ = ["Options", "main", "workload_file"]
 
 
 @dataclass(frozen=True)

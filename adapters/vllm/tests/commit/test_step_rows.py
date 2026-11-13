@@ -7,21 +7,28 @@ import hashlib
 import json
 import os
 import random
+from pathlib import Path
 
 import pytest
-
-from verity.errors import InvalidArtifact
 from verity.commitments import hm96, merkle
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.limits import VerificationLimits
-from verity.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, Opening, verify_opening
+from verity.commitments.merkle import (
+    Commitment,
+    CommitmentDomain,
+    MerkleTree,
+    Opening,
+    verify_opening,
+)
 from verity.commitments.multiproof import multiproof, multiproof_root
 from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.errors import InvalidArtifact
+
 from verity_vllm.commit import step_rows as R
 
 _CORE = os.path.dirname(merkle.__file__)
-FRAME = json.load(open(os.path.join(_CORE, "frame_v3", "vectors_sha512.json")))
-HM96 = json.load(open(os.path.join(_CORE, "hm96", "vectors_sha512.json")))
+FRAME = json.loads(Path(_CORE, "frame_v3", "vectors_sha512.json").read_text())
+HM96 = json.loads(Path(_CORE, "hm96", "vectors_sha512.json").read_text())
 OTHER_KEY = bytes.fromhex(HM96["other_key"])
 PD, CTX, GEO, LAYOUT = (hashlib.sha512(t).digest() for t in (b"program", b"ctx", b"geo", b"layout"))
 
