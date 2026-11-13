@@ -81,7 +81,7 @@ the bits read under the device model (the links' ceiling `Links` or `Identity`, 
 `Node.chipBlocks`), by the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksSampled`, in a lemma of
 the proofs (`Properties.RemoteAudit.Line.SecurityProofs.heldAt_of_read`).
 
-The bound follows from the line's W covering the session's pooled bound (`Properties.RemoteAudit.LineCoversSession`,
+The bound follows from the line's W covering the session's pooled bound (`Properties.RemoteAudit.LineCoversRun`,
 at the record's draws, whose draws the line holds to `min(s, U_c)` and whose receipts on an accepted record are
 `recordSample`'s sizes: the reached state is the run's, a window's receipts are below `RECEIPT_LIMIT`,
 `Properties.RemoteAudit.ReceiptsBelowLimit`, and the line refuses a draw of `g` > 1 windows with `RECEIPT_LIMIT` or
