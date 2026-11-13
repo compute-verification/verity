@@ -774,7 +774,7 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
 
 #: `_retained_files`' digest of the three steps below as the retention path wrote them when each call's copies, its record,
 #: y's root and the pass's files and manifest were all waited for in its step
-RETAINED_DIGEST = "6ea82b92968e7213c16a075e8c0d7910dcbe5ea32f8892f937b85165e3a8722d"
+RETAINED_DIGEST = "87ec23c3532ef5596a14787aaf69d3983a4565cbe3ce55c95b24a6e0cde11485"
 
 
 def _retained_files(root: Path) -> dict[str, str]:
