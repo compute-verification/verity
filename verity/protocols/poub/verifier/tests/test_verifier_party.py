@@ -14,7 +14,7 @@ import threading
 import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
-from verity.configuration.deploy.stream import Side
+from verity.runtime.stream import Side
 from verity.protocols.poub.verifier import audit, codec, verifier_party
 from verity.protocols.poub.verifier import period as P
 

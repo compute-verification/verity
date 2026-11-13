@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.hardware import site as S
+from verity import device as S
 from verity.hardware import registration as G
 from verity_vllm.config import UsageError, option
 

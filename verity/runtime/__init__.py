@@ -5,5 +5,5 @@ parties, live, simulated, replayed or mixed (`run`); `stream` one party over a b
 `sources` the clocks and coins. Outside code imports from those six, the names the README's Interface section lists.
 Internal: `transcript`, a party's view and the record, its public projection; `channels`, the pipes; and `process`, a
 party in a process of its own. The layer reads no message's meaning and imports no protocol: the frames are
-`verity.configuration.wire`'s.
+`verity.channel`'s.
 """
