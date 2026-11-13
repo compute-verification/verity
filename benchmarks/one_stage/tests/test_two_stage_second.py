@@ -32,7 +32,6 @@ sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "veri
 TS = importlib.import_module("two_stage")
 SM = importlib.import_module("two_stage_small")
 FC = importlib.import_module("fake_challenger")
-WP = importlib.import_module("window_place")
 
 V, O, N, Q, K = 128, 4, 6, 2, 1
 TID = SM.template(V)
@@ -58,7 +57,7 @@ def run(served) -> dict:
     side's half (`two_stage.replayed`)."""
     check, tmp = served["check"], served["tmp"]
     got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0),
-                   FC.Challenger("first", label=WP.family_of(served["class"].layout)))
+                   FC.Challenger("first", label=TS.family_of(served["class"].layout)))
     stage1 = json.loads(json.dumps(got.stage1()))
     again = TS.resume(stage1, check, FC.Challenger("second"))
     r = TS.replayed(again, served["class"], served["capture"], tmp / "interior")
@@ -257,7 +256,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     got, check = SM.serve(tmp_path, v, O, N, inline=True), BR.check_template(SM.template(v))
     c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
     first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0),
-                     FC.Challenger("first", label=WP.family_of(c.layout)))
+                     FC.Challenger("first", label=TS.family_of(c.layout)))
     again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
     with pytest.raises(ValueError, match="makes no wires round 2 derives"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")

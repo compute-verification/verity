@@ -89,6 +89,10 @@ class Challenger(T.ChallengerCoins):
         self._evidence: dict[bytes, dict[str, Any]] = {}
         super().__init__(None)
 
+    @property
+    def label(self) -> str:
+        return self.family
+
     def _session(self, after: bytes) -> C.LiveRecord:
         sid = f"s-{len(self.sessions) + 1}"
         d = self.directory / sid

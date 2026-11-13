@@ -28,7 +28,7 @@ from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.spot.device import challenger as Ch, coins as CC
-from verity.protocols.spot.verifier import second_stage as SS, service as S
+from verity.protocols.spot.verifier import second_stage as SS, service as S, window_place as WP
 from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
@@ -41,7 +41,6 @@ sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "veri
 TS = importlib.import_module("two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("a5_coins")
-WP = importlib.import_module("window_place")
 
 XOR8 = PrimitiveDefinition("TwoStageDriverTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -92,10 +91,12 @@ def _interior(layout: BR.Layout, previous: str, program: Program | None = None) 
     return rec, ports
 
 
-def _placed(layout: BR.Layout, seed: str = "first") -> FC.Challenger:
-    """A test's challenger for a class's first stage whose hand-off is resumed: its one family is the class's place's
-    (`two_stage.family_of`), the family `two_stage.resume` names."""
-    return FC.Challenger(seed, label=WP.family_of(layout))
+def _placed(of: BR.Layout | dict, seed: str = "first", blocks: bool = False) -> FC.Challenger:
+    """A test's challenger for the first stage of a class, given as its layout or its ``commit.json``: its one family
+    is the class's place's (`two_stage.family_of`), or with ``blocks`` its stop blocks' place's, the family
+    `two_stage.first`, `two_stage.stop_first` and the stream hold their source to and `two_stage.resume` names."""
+    window = TS.place_window(of, blocks) if isinstance(of, BR.Layout) else {**of, **({"population": "stop"} if blocks else {})}
+    return FC.Challenger(seed, label=WP.family(window))
 
 
 def _samples_q(got: TS.First) -> bool:
@@ -180,7 +181,7 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     assert TS.counts_refused({**ks, "Other_v0{}": 1}, c.layout.templates) == (
         "the counts name each of the check's templates once: Other_v0{} is no template of the check")
     with pytest.raises(ValueError, match="name each of the check's templates once"):
-        TS.first(c.public(), BOTH, TS.Rule(RULE.replay, {pair: 3}, INTERIOR, 60.0), FC.Challenger("first"))
+        TS.first(c.public(), BOTH, TS.Rule(RULE.replay, {pair: 3}, INTERIOR, 60.0), _placed(c.layout))
 
     (tmp_path / "p4-o4").mkdir()
     (tmp_path / "p4-o4" / BR.COMMIT).write_text(json.dumps(c.public()))
@@ -232,12 +233,12 @@ def test_resume_refuses_another_rule_registration_or_sample():
 def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
     """`resume` names the family of the first stage's challenges from the class's layout (`family_of`) and the
     session's root from the record's window, the run the first stage registers under (`_first_all`). A hand-off that
-    names the same, or names neither, resumes to the same registration and sample under them. Refused: a hand-off
-    that names another family, as one written by a second sample of the same registration on another family is; a
-    hand-off that names another session root than its record's; a caller's root that is not the record's; and a
+    names the same, or names neither, resumes to the same registration and sample under them. Refused: a first
+    stage on a source of another family (`first` holds its source to the place's); a hand-off that names another
+    family; a hand-off that names another session root than its record's; a caller's root that is not the record's; and a
     record whose window is of another run, or names another class, than the class's commitment."""
     c = _class()
-    pub, mine, elsewhere = c.public(), WP.family_of(c.layout), "ab" * 64
+    pub, mine, elsewhere = c.public(), TS.family_of(c.layout), "ab" * 64
     got = TS.first(pub, PAIR, RULE, _placed(c.layout), window_root=pub["run"])
     stage1 = json.loads(json.dumps(got.stage1()))
     assert stage1["family"] == mine and "window_root" not in stage1 and TS.first_root(stage1) == pub["run"]
@@ -246,10 +247,10 @@ def test_resume_names_the_first_stages_family_and_its_sessions_root_itself():
         assert again.registration.digest == got.registration.digest and again.sample.units == got.sample.units
         assert again.stream.family(again.sample) == mine
 
-    second = TS.first(pub, PAIR, RULE, FC.Challenger("another sample"), window_root=pub["run"])
-    other = json.loads(json.dumps(second.stage1()))
-    assert other["registration"] == stage1["registration"] and other["family"] == FC.LABEL != mine
-    for handoff in (other, {**stage1, "family": AC.family(0)}):
+    assert FC.LABEL != mine != AC.family(0)
+    with pytest.raises(ValueError, match="a class is sampled once, on its own family"):
+        TS.first(pub, PAIR, RULE, FC.Challenger("another sample"), window_root=pub["run"])
+    for handoff in ({**stage1, "family": FC.LABEL}, {**stage1, "family": AC.family(0)}):
         with pytest.raises(ValueError, match="does not choose among the families the session reserved"):
             TS.resume(handoff, PAIR, window_root=pub["run"])
 
@@ -294,7 +295,7 @@ def test_a_class_with_history_tables_declares_and_registers_them_beside_its_valu
         h.append(np.zeros((6, BT.WORDS), dtype=np.uint16))
         tables[t] = h.root
     pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables=tables).public()))
-    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"))
+    got = TS.first(pub, PAIR, RULE, _placed(pub))
     served = [(v.name, v.schema) for v in got.stream.spec.values if v.phase == "serve"]
     assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), *((t, HT.SCHEMA) for t in layout.tables)]
     assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
@@ -345,7 +346,7 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
     opening = tuple(IR.Operand("Read_v1", p, p, 2, (0, 1), w) for p, w in (("row", BT.WORDS), ("salt", 96), ("path", 128)))
     rule = replace(RULE, span_values=(("root", 1, IR.DIGEST), ("domain", 1, IR.DIGEST), *IR.span_values(opening)))
     assert TS.Rule.from_json(json.loads(json.dumps(rule.to_json()))) == rule
-    got = TS.first(pub, PAIR, rule, FC.Challenger("first"))
+    got = TS.first(pub, PAIR, rule, _placed(pub))
     linked = [v for v in got.stream.spec.values if v.registered]
     assert [(v.name, v.phase) for v in linked] == [(p, "interior") for p in ("root", "domain", "row", "salt", "path")]
     assert got.stream.span_values == rule.span_values
@@ -353,7 +354,7 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
         sig = dict(got.stream.interior_program(q).fn.signature()[0])
         assert sig["root"] == sig["domain"] == Array(q, RG.DIGEST)
         assert [sig[x.value] for x in opening] == [Array(2 * q, Array(x.words, Bits(16))) for x in opening]
-    assert not [v for v in TS.first(pub, PAIR, RULE, FC.Challenger("first")).stream.spec.values if v.registered]
+    assert not [v for v in TS.first(pub, PAIR, RULE, _placed(pub)).stream.spec.values if v.registered]
     names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.sample.units]
     bodies = {"m0": b"the interior's public body"}
     hist = got.history(1, {n: [bc.hex() for bc in hs[n].bcs] for n in names}, bodies)
@@ -404,12 +405,12 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     rule = TS.Rule(f"rate:{Q}/{N}", K, tuple(v for m in w.members for v in TS.interior_values(m)), 60.0,
                    IR.span_values(links))
     pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables={t: h.root for t, h in hs.items()}).public()))
-    got = TS.first(pub, check, rule, FC.Challenger("first"))
+    got = TS.first(pub, check, rule, _placed(pub))
     assert got.stream.replay is not None and descriptor_id(got.layout.replay) == key
     assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
     named = SS._by_template(got.record)
     assert named and not any("/" in x for x in BR.PORTS)
-    assert not SS._by_template(TS.first(_class().public(), PAIR, RULE, FC.Challenger("first")).record)
+    assert not SS._by_template(TS.first(_class().public(), PAIR, RULE, _placed(_class().layout)).record)
 
     defs = definitions(got.layout.program)
     cs = SS._callers_of(defs, defs[key])
@@ -472,7 +473,7 @@ def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
     c = BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), stop=stop), 0)
     assert list(c.public()["values"]) == [*BR.PARTS, BR.STOP]
-    got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"), stop=stop)
+    got = TS.first(c.public(), PAIR, RULE, _placed(c.public()), stop=stop)
     assert [v.name for v in got.stream.spec.values if v.phase == "serve"] == list(BR.PARTS)
     assert [r["port"] for r in got.registration.record["roots"]] == list(BR.PARTS)
     assert got.registration.record["population"] == N and len(got.sample.units) == Q
@@ -492,82 +493,37 @@ def _stop_class(held: bool = True) -> BR.Committed:
     return BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held), 0)
 
 
-#: `window_place.of`'s rows, a record's window and its place, None for a window that has none: the rows the Lean
-#: verifier's place is held to
-PLACES = [
-    ({"prompt": 4, "outputs": 4}, 68719476752),
-    ({"prompt": 4, "outputs": 4, "stopped": False}, 68719476752),
-    ({"prompt": 4, "outputs": 4, "stopped": True}, 68719476754),
-    ({"prompt": 4, "outputs": 4, "stopped": True, "population": "stop"}, 68719476755),
-    ({"prompt": 4, "outputs": 2}, 68719476744),
-    ({"prompt": 2, "outputs": 8}, 34359738400),
-    ({"prompt": 8, "outputs": 2}, 137438953480),
-    ({"prompt": 0, "outputs": 0}, 0),
-    ({"prompt": 0, "outputs": 1}, 4),
-    ({"prompt": 1, "outputs": 0}, 17179869184),
-    ({"prompt": 2**32 - 1, "outputs": 2**32 - 1, "stopped": True, "population": "stop"}, 2**66 - 1),
-    ({"prompt": 2**32, "outputs": 4}, None),
-    ({"prompt": 4, "outputs": 2**32}, None),
-    ({"prompt": 4, "outputs": -1}, None),
-    ({"prompt": "4", "outputs": 4}, None),
-    ({"prompt": 4.0, "outputs": 4}, None),
-    ({"prompt": True, "outputs": 4}, None),
-    ({"prompt": None, "outputs": 4}, None),
-    ({"outputs": 4}, None),
-    ({"prompt": 4}, None),
-    ({"prompt": 4, "outputs": 4, "stopped": 1}, None),
-    ({"prompt": 4, "outputs": 4, "stopped": "true"}, None),
-    ({"prompt": 4, "outputs": 4, "stopped": None}, None),
-    ({"prompt": 4, "outputs": 4, "population": "stop"}, None),
-    ({"prompt": 4, "outputs": 4, "stopped": False, "population": "stop"}, None),
-    ({"prompt": 4, "outputs": 4, "stopped": True, "population": "spans"}, None),
-    ({"prompt": 4, "outputs": 4, "stopped": True, "population": None}, None),
-    ({"prompt": 4, "outputs": 4, "stopped": True, "population": 1}, None),
-]
-
-
-def test_a_classs_place_in_its_windows_session_is_its_records_windows_alone():
-    """`window_place.of` is ((prompt · 2^32 + outputs) · 2 + stopped) · 2 + blocks over four items of a record's
-    window: its ``prompt``, its ``outputs``, ``stopped`` true and, on a stop record, ``population`` "stop"; no other
-    item moves it (`PLACES`). The family is ``draw/<place>``, the place in decimal. A layout's place is its record's
-    window's, and its stop blocks' its stop record's. Classes that differ in a size or in being a stop class have
+def test_a_classs_place_in_its_windows_session_is_its_records_windows():
+    """A layout's place (`two_stage.place`) is the place its boundary record's window names (`window_place.of`), and
+    its stop blocks' the place its stop record's window names; its family is that place's, the family
+    `a5_coins.family` gives the rank of that number. Classes that differ in a size or in being a stop class have
     places apart, and a stop class's stop blocks the place after its spans'. A class filed without a stop block has
-    its sizes' place with no stop bit, as a class under no rule has. Refused: a size that is no natural number below
-    2^32, a ``stopped`` that is neither true nor false, a ``population`` other than "stop", and the stop blocks of a
-    class that is no stop class."""
+    its sizes' place with no stop bit, as a class under no rule has. Refused: the stop blocks of a class that is no
+    stop class."""
     def layout(prompt: int = 4, outputs: int = 4, **more: object) -> BR.Layout:
         return BR.Layout(PAIR, 0, 1, prompt, outputs, N, ROOT, **more)
 
-    for window, at in PLACES:
-        more = {**window, "run": ROOT, "row": 3, "check": "c", "stop": STOP.to_json(), "verdicts": True}
-        if at is None:
-            for w in (window, more):
-                with pytest.raises(ValueError, match="no place in a window's session|is no stop class"):
-                    WP.of(w)
-        else:
-            assert WP.of(window) == WP.of(more) == at, window
-            assert WP.family(window) == AC.family(at) == f"draw/{at}"
     plain, filed, stopped = layout(), layout(stop=STOP, held=False), layout(stop=STOP)
     classes = (plain, filed, stopped)
-    assert [WP.of_layout(c) for c in classes] == [WP.of(c.provenance()) for c in classes]
-    assert [WP.of_layout(c) for c in classes] == [68719476752, 68719476752, 68719476754]
-    assert WP.of_layout(stopped, blocks=True) == WP.of({**stopped.provenance(), "population": "stop"}) == 68719476755
-    assert (WP.family_of(plain), WP.family_of(stopped)) == ("draw/68719476752", "draw/68719476754")
-    assert WP.family_of(stopped, blocks=True) == WP.family({**stopped.provenance(), "population": "stop"})
-    assert WP.family_of(stopped, blocks=True) == "draw/68719476755"
-    places = [WP.of_layout(layout(p, o, **more), blocks) for p in (2, 4, 8) for o, more, blocks in (
+    assert [TS.place(c) for c in classes] == [WP.of(c.provenance()) for c in classes]
+    assert [TS.place(c) for c in classes] == [68719476752, 68719476752, 68719476754]
+    assert TS.place(stopped, blocks=True) == WP.of({**stopped.provenance(), "population": "stop"}) == 68719476755
+    assert (TS.family_of(plain), TS.family_of(stopped)) == ("draw/68719476752", "draw/68719476754")
+    assert TS.family_of(stopped, blocks=True) == WP.family({**stopped.provenance(), "population": "stop"})
+    assert TS.family_of(stopped, blocks=True) == AC.family(TS.place(stopped, blocks=True)) == "draw/68719476755"
+    places = [TS.place(layout(p, o, **more), blocks) for p in (2, 4, 8) for o, more, blocks in (
         (2, {}, False), (4, {}, False), (8, {}, False), (4, {"stop": STOP}, False), (4, {"stop": STOP}, True))]
     assert len(set(places)) == len(places) == 15
     for c in (plain, filed):
         with pytest.raises(ValueError, match="is no stop class"):
-            WP.of_layout(c, blocks=True)
+            TS.place(c, blocks=True)
 
 
 def _stop_places() -> list[int]:
     """The places `_stop_class`'s two classes take in their window's session (`two_stage.place`): the stop class's
     spans', its stop blocks', and the other class's."""
     stopped, filed = (BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held) for held in (True, False))
-    return [WP.of_layout(stopped), WP.of_layout(stopped, blocks=True), WP.of_layout(filed)]
+    return [TS.place(stopped), TS.place(stopped, blocks=True), TS.place(filed)]
 
 
 class OneSession(CC.ChallengerCoins):
@@ -664,11 +620,13 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     """After a stop class's first stage its stop record registers on a one-stage stream of the verifier's stop block
     whose log starts with the class's boundary record: one stop block a span, `b.stop` its one port, its inputs that
     record's `b.request` and `b.egress` as output values. It is sampled at a rate over the class's N stop blocks on
-    coins opened after its own registration's digest. Refused: a boundary record that is another class's, another
-    rule than the commitment's, and a sampling design that is a fixed count."""
+    coins opened after its own registration's digest, of the family of its stop blocks' place. Refused: a boundary
+    record that is another class's, another rule than the commitment's, a sampling design that is a fixed count, and
+    a source of another family than that place's, the class's spans' among them."""
     pub = json.loads(json.dumps(_stop_class().public()))
-    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"), stop=STOP)
-    coins = FC.Challenger("stop")
+    got = TS.first(pub, PAIR, RULE, _placed(pub), stop=STOP)
+    blocks = TS.family_of(got.layout, blocks=True)
+    coins = _placed(pub, "stop", blocks=True)
     s = TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", coins, got.record)
     assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == N
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP]
@@ -677,15 +635,18 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     assert s["sample"]["population"] == N and len(s["units"]) == Q and set(s["units"]) <= set(range(N))
     assert s["spec"] == TS.stop_spec(got.layout, f"rate:{Q}/{N}").digest() != got.stream.spec.digest()
     read, after = bytes.fromhex(s["read"]), bytes.fromhex(s["registration"])
-    assert s["family"] == FC.LABEL
-    assert read and CC.coins_reason(coins.evidence(s["registration"]), ROOT, FC.LABEL, after, read, AC.lms_verify) is None
-    other = TS.first(json.loads(json.dumps(_stop_class().public())), PAIR, RULE, FC.Challenger("other"), stop=STOP)
+    assert s["family"] == blocks == coins.label != TS.family_of(got.layout)
+    assert read and CC.coins_reason(coins.evidence(s["registration"]), ROOT, blocks, after, read, AC.lms_verify) is None
+    other = TS.first(json.loads(json.dumps(_stop_class().public())), PAIR, RULE, _placed(pub, "other"), stop=STOP)
     with pytest.raises(ValueError, match="not this commitment's values"):
-        TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", FC.Challenger("x"), other.record)
+        TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", _placed(pub, "x", blocks=True), other.record)
     with pytest.raises(ValueError, match="not the verifier's own"):
-        TS.stop_first(pub, PAIR, BS.Stop((7,), 64, 4), f"rate:{Q}/{N}", FC.Challenger("y"), got.record)
+        TS.stop_first(pub, PAIR, BS.Stop((7,), 64, 4), f"rate:{Q}/{N}", _placed(pub, "y", blocks=True), got.record)
     with pytest.raises(ValueError, match="a fixed count samples each proof block with K/N"):
-        TS.stop_first(pub, PAIR, STOP, "subset:2", FC.Challenger("z"), got.record)
+        TS.stop_first(pub, PAIR, STOP, "subset:2", _placed(pub, "z", blocks=True), got.record)
+    for source in (FC.Challenger("w"), _placed(pub, "spans")):
+        with pytest.raises(ValueError, match="a class is sampled once, on its own family"):
+            TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", source, got.record)
 
 
 def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():

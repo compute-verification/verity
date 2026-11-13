@@ -22,7 +22,7 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
   The boundary record is the one the class's boundary stream registers again (`two_stage.resume`), never one rebuilt
   from ``commit.json``. The stop stream is built again on it, registers the stop record (R1 to R7) and samples it
   again on the bytes its sample read; each is held to the hand-off. Which family of which session those bytes are
-  challenges of is not the hand-off's to say: the family is the stop blocks' place's (`window_place.family_of`, from the
+  challenges of is not the hand-off's to say: the family is the stop blocks' place's (`two_stage.family_of`, from the
   class's layout), the session's root is the run its records' window names (`two_stage.first_root`), and a hand-off
   that names another of either is refused. The ``--registered`` file is the verifier's
   own: the two parameters' ports as `boundary_stop.stop_registration` gives them, and ``o0`` at the stop record's
@@ -85,7 +85,6 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import prove_leg as PL  # noqa: E402
 import two_stage as TS  # noqa: E402
-import window_place as WP  # noqa: E402
 import verity.definitions.registry.boolean_stop_rule  # noqa: E402, F401  (the stop rule's words on gates: Flock's pieces for them)
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import SpecializedDefinition  # noqa: E402
@@ -270,7 +269,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     sampling design: the boundary stream's record registered again (`two_stage.resume`), the stop stream built on the
     record of that stream's log (`Stream.log`) whose digest is the stop record's ``previous``, the stop record
     registered (R1 to R7) and sampled again on the bytes its sample read, as challenges of the family of the stop
-    blocks' place in the window's session (`window_place.family_of`, from the class's layout, as `two_stage.resume`
+    blocks' place in the window's session (`two_stage.family_of`, from the class's layout, as `two_stage.resume`
     names a class's own), on the session whose root is the boundary record's run, which the stop record's window
     repeats. `Unlogged` when that
     log holds no such record; ValueError when the first stage sampled no stop block, or
@@ -288,9 +287,9 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
                        f"boundary stream's log, which holds {', '.join(d[:16] for d in logged)}", first)
     received, boundary = logged[s["record"]["previous"]]
     coins = TS.Staged(bytes.fromhex(s["read"]))
-    coins.family = WP.family_of(layout, blocks=True)
+    coins.family = TS.family_of(layout, blocks=True)
     if s.get("family") not in (None, coins.family):
-        raise ValueError(WP.another_family(s["family"], coins.family))
+        raise ValueError(TS.another_family(s["family"], coins.family))
     stream = S.Stream(TS.stop_spec(layout, design, proof_deadline), layout.stop.template, budget=1, delta=delta,
                       challenger=TS.CHALLENGER, coins=coins, log=[boundary])
     if stream.spec.digest() != s["spec"]:
@@ -329,12 +328,12 @@ def link(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any]
     window's root, which is the run the class was laid out under (`resume` holds the hand-off's and its records' to
     it); the boundary stream's own log (``first``'s `Stream.log`); the boundary stream's audit record (``outcome``'s,
     none when no outcome is handed); the stop record; the stop sample's coin evidence and the bytes it read
-    (``handoff``'s ``stop``); and the family those are held to, the stop blocks' place's (`window_place.family_of`),
+    (``handoff``'s ``stop``); and the family those are held to, the stop blocks' place's (`two_stage.family_of`),
     never the one the hand-off names."""
     s = handoff["stop"]
     return {"window": first.layout.run, "log": [dict(x) for x in first.stream.log],
             "audit": outcome.get("audit") if isinstance(outcome, Mapping) else None, "later": dict(s["record"]),
-            "coins": s.get("evidence"), "family": WP.family_of(first.layout, blocks=True), "read": s["read"]}
+            "coins": s.get("evidence"), "family": TS.family_of(first.layout, blocks=True), "read": s["read"]}
 
 
 def across(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:

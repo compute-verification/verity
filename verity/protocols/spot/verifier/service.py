@@ -172,7 +172,7 @@ from verity.circuits.partition import Level
 from verity.circuits.program import Program
 from verity.protocols.spot.verifier.profile import Bernoulli, IntegrityProfile, Subset
 
-from . import second_stage as SS
+from . import second_stage as SS, window_place as WP
 from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
 from .one_stage.verdict import Verdict, _Collect
 from verity.protocols.spot.device.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
@@ -2129,7 +2129,8 @@ class Stream:
         work sample it widens proves a set whose size varies with the sample, which the sampled audit's soundness
         statement doesn't cover. The sample of record is the verifier's (`verifier.select`: the Lean's `Select.select` on the
         bytes of the coins this sample read), unless a `sampler` samples. Raises `Refused` for a registration sampled before
-        (nothing resamples), a closure map (before any coin is read), the two verifiers sampling differently
+        (nothing resamples), a closure map (before any coin is read), a two-stage design's first stage on coins of another
+        family than the place its record's window names (`place`, before any coin is read: `_placed`), the two verifiers sampling differently
         (`disagree`), and a sample that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`).
 
         Under a two-stage design, `select` of a registration is the first stage, and of its interior registration
@@ -2156,6 +2157,7 @@ class Stream:
                 if closure is not None:
                     raise _refuse("closure", "a closure map widens a work sample, which the sampled audit's soundness "
                                              "statement doesn't cover")
+                self._placed(registration)
                 obj = select_draw(self.spec.selection, e.law, registration.record["population"], coins, closure=closure,
                                   sampler=self._sampler)
                 if self._sampler is None:
@@ -2178,6 +2180,19 @@ class Stream:
         e.draw, e.drawn_at, e.read, e.closure = got["draw"], got["drawn_at"], got["read"], closure
         e.family = self._family(e.read)
         return e.draw
+
+    def _placed(self, registration: WindowCommitmentRecord) -> None:
+        """Under a two-stage design, `Refused` (`place`) where the first stage's coins are of another family of the
+        challenger's than the one of the place the record's window names (`window_place.family`): the sample's
+        family is its record's, never its coin source's to choose. A window that names no place is held to none."""
+        if not (isinstance(self.spec.selection, TwoStage) and isinstance(self._coins, ChallengerCoins)):
+            return
+        try:
+            mine = WP.family(registration.record.get("window"))
+        except ValueError:
+            return
+        if self._coins.label != mine:
+            raise _refuse("place", {"family": self._coins.label, "place": mine})
 
     def _family(self, read: bytes | None) -> str | None:
         """The challenger's family a sample that read `read` took its coins from: the stream's own coin source's at the
