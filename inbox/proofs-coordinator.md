@@ -124969,3 +124969,84 @@ Agent `bc-5f3b228a-8552-57bb-9f4c-49ea0821911d`, branch `cursor/proofs-rating-09
 - [derived] Both classes have one cause: the H100's 14-bit adder cuts products below its grid, and the debit charges only an atom that can be skipped in place, not a product or an atom whose contribution is the same for every salt.
 - [derived] A note on what the statement should say, not a rewrite: a charge of one unit for each position where both codes are dead, as Pearl-C4's debit has, would not close the larger class. Four planted groups would cost 24 units of debit a word under a cap of 26 and still save 384. The debit, or the row rules, has to account for every product the adder cuts to zero whatever the salt.
 - [guess] The sm_120 statements are not touched by the larger class, because that adder keeps 26 bits. Derived from the adder's width, not run.
+
+
+## HONEST2, Fri 13 Nov 06:29Z: CORRECTION (my 05:30Z guess was wrong: twelve of my files WERE orphans; their roots are in the lock now); seven of my files have clean probes on the new base (`ede4` ended rc 0); STATEMENT CHANGE in `Honest/Design.lean` (never compiled): its theorems take the ports' names, not `RefPorts R`; base `3b05c3a3b1a7` and ADDRWC's `f4fa2fbb2bc1` merged; run `r20261113-062724-60e7` is out
+
+**In plain words.** Three things. First, I told you at 05:30Z that none of my files would be refused by the records audit as a file nothing builds. That was a guess and it was wrong: the audit counts a file only when one of the lock's roots imports it, and twelve of mine were imported by none. They are roots now, in the lock and in the lakefile. Second, the run that was out has ended, and every file of mine that does not stand on the copy file compiles on the new base with nothing assumed beyond Lean's three axioms. Third, I found that one of the conditions my theorems asked of the instance's circuit need not be asked: at any accepted run the registration's own wiring check has already put every row the circuit writes among its ports. What is left to ask of the circuit's ports is only that none is named like an opening row. That change and the fix to the copy file are in a run now; neither has compiled.
+
+Clock: `date -u` read 06:29Z.
+
+### 1. Correction: the lock's roots
+
+- [read: `tools/verity/lean/Facts.lean`, the loop that fills `modules`; `check.py`'s `orphan.file`] A module counts only when it is in the import closure of the lock's `roots`. A name under `Proofs.Flock`, or a root of the lakefile, is not enough. My 05:30Z line "none is an orphan [guess]" was wrong.
+- [run: a script over the lock's roots and each file's imports, at `429c2e2ea5ad`] 29 files under `security/Proofs` were reached by no root: my twelve `Honest/` files and seventeen `AddressFacts/` files.
+- `a50585d439`: the twelve appended at the end of `roots` in `security/Proofs/lean-audit.json`, one a line. `c050e40cb4` adds `Honest.Written` with its file. Nothing else in the lock changed; `check.text` of the parsed lock equals the file.
+- Your 06:09Z second half [run: a script over both files at my head]: every root of the lock is under a root of `security/Proofs/lakefile.toml`. My thirteen are each listed there by name.
+- After ADDRWC's merge the ten `AddressFacts` files it owns are roots too. **Five are still reached by no root on my branch: `RowDraw`, `RowInstance`, `RowKind`, `RowLeaf`, `RowRead`.** They are ADDRROW's; its `f848c83a06` lists them, and I have not merged that head (below).
+- The lakefile lists `Proofs.Properties.Pouw.LiveSalt.Ledger` twice. That is on the base, from `main`, and not mine.
+
+### 2. The run that ended
+
+[run: `r20261113-052844-ede4`, vy-nebius-2, head `94f657c044b4`, base `e033bfc14be4`; ended 06:11:55Z, rc 0]
+
+| file | "lean exit" | theorems, probe |
+|---|---|---|
+| `Honest/Wiring.lean` | 0 in 160 s | 11, clean |
+| `Honest/Rows.lean` | 0 in 453 s | 6, clean |
+| `Honest/Width.lean` | 0 in 207 s | 1, clean |
+| `Honest/Entry.lean` | 0 in 91 s | 2, clean |
+| `Honest/Roots.lean` | 0 in 70 s | 12, clean |
+| `Honest/Addresses.lean` | 0 in 119 s | 7, clean |
+| `Honest/Instance.lean` | 0 in 332 s | 31, clean |
+
+- "clean" is the line "axiom probe: none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `Needed`, `Design`, `Five`, `Copy`: each stopped in the dependency build at `AddressFacts/Copy.lean:356:105`, the one error of my 05:44Z entry. No other error in any of the four.
+- It asked 24 GB; its process group peaked at 12.4 GiB [run: `resources.jsonl`]. I launch neither `walk_ab.sh` nor `walk_cut.sh`.
+
+### 3. STATEMENT CHANGE, in a file that has never compiled
+
+- **New, `Honest/Written.lean`** (`c050e40cb4`, not compiled), four theorems:
+  - `port_of_heldLink`: a link the instance holds is at one of `R`'s ports.
+  - `written_of_writtenRead`: where the wiring check's clause `writtenRead` holds, every written bit's row is one of `R`'s ports. The clause asks a link or a wire there, and the instance has no wire.
+  - `written_of_two (h2 : two (held R B desc q c₀) s = some d)`: the same, where the design evaluates.
+  - `refPorts_of_two (hP : ∀ p ∈ R.ports, Spot.SecondStage.OPENING_ROW.contains p = false) (h2 : …) : RefPorts R`.
+- **Changed, `Honest/Design.lean`** (`429c2e2ea5`, not compiled): `copyFact_of_goal`, `five_of_goal`, `addressesConnected_of_goal`, `premises_of_goal` and `honest_of_goal` take `hP` (the line above) where they took `hR : RefPorts R`. New beside them: `refPorts_of_ok`, `rowFact_of_goal`, `entryFact_of_ports`, `oneTreeFact_of_ports`.
+- Why it is sound to drop [read: the five facts' definitions]: each fact is stated at accepted runs, an accepted run's design evaluates (`two_of_ok`, compiled), and so the written half of `RefPorts` is there to use inside each.
+- So `honest_of_goal` now reads: the row goal, no port of `R` named like an opening row, and an accepted run give `HonestExists`.
+- [run: `git grep` over the join at `ac8d23dd32a6`] The join holds no file of `SpotFlock/Honest` and names none of these theorems, nor `RefPorts`. So no statement the join reads changed. The compiled form of record is still `addressesConnected_of_once`, with its five hypotheses, on the old base.
+
+### 4. Merged, and the run that is out
+
+- [run: `git merge`, both clean] The base at `3b05c3a3b1a7` (the lock `security/lean-audit.json` alone) and ADDRWC's `f4fa2fbb2bc1`. ADDRWC's line in `Copy.lean` is the same as mine: no difference in any file it owns. Its `CopyOut.lean` and `PortsOnceOf.lean` compiled on the old base [relayed: ADDRWC 05:58Z], so `Design.lean` no longer stands on a file that has never compiled; it stands on files not yet compiled on this base.
+- Head `c87ff3683dca`, pushed. Local: 67 tests of the root suite's Lean and repository files pass; no declaration under `SpotFlock/` is declared twice.
+- **Run `r20261113-062724-60e7`**, vy-nebius-2, launched 06:27Z, Lean slot `build/4` since 06:27Z. Tries, in order: `Written`, `Copy`, `Needed`, `Design`, `Once`, `Five`. Limit 08:57Z. The first try's tree may be cold; I expect the first verdict by about 06:45Z and the end by about 07:30Z [guess].
+
+### 5. ADDRROW's new file, read only
+
+- [read: `cursor/proofs-addrrow-d318` at `5cc811a8c927`, `AddressFacts/RowOf.lean`, pushed 06:21Z, no entry yet] `rowFact_of_runs (hW : ∀ r, r.Ok h → Wiring h) (hS : Sits h) (hPR : PortReads) (hL : OwnLeaves h) (hPub : PublishedRows h) : RowFact h (wireMap h) (returned h) (addressOf h)`.
+- It is not the row goal my theorems take (`AddressRow.RowGoal`); it gives the row fact another way.
+- [derived, not written] At my instance `OwnLeaves` and `PublishedRows` speak of a written port no link names, and at an accepted run there is none (`written_of_two`). So with it the instance's row fact would take `Wiring (held …)` at accepted runs, `Sits` and `PortReads`, and the row goal would go.
+- I have not merged it: it changes `RowRead.lean`, which my compiled `Rows.lean` builds over, and I have seen no verdict for it. When ADDRROW says it compiled, I merge and write that step.
+
+### STOP RULE
+
+Nothing: no statement the join reads changed, and nothing the verifier accepts.
+
+### NEEDS
+
+Nothing of you.
+
+### Pushed
+
+[run] `cursor/proofs-honest2-7c4e` at `c87ff3683dca`; nothing unpushed.
+
+### Not established
+
+- That `AddressFacts/Copy.lean` builds with the one-line fix; that `Written.lean`, `Needed.lean` or `Design.lean` compile; that `Copy`, `Five`, `Once` compile on the new base. All six are in `60e7`.
+- That a records run of `security/Proofs` passes at my head. I have run none.
+- That any circuit meets the conditions on `R` (no port named like an opening row; for the wiring check, `RefReadsNamed` and the scope check); the row goal; that any run is accepted at the instance. Every theorem here still says nothing about any play.
+
+### To post
+
+Nothing.
