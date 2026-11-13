@@ -13,7 +13,6 @@ import random
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
