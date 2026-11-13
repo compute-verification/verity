@@ -18,7 +18,7 @@ untraced = ["tests/test_pf_rounds.py", "tests/test_pfill_fold.py", "tests/test_p
 inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "tools/config/verity_config",
           "verity/protocols/pouw/receipts", "benchmarks/machine_model/verity_machine_model",
           "benchmarks/machine_model/data", "tools/research/src/research/__init__.py",
-          "tools/research/src/research/store", "verity/__init__.py", "verity/settings.py", 
+          "tools/research/src/research/store", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", 
           "verity/protocols/pouw/verifier/__init__.py",
           "verity/protocols/pouw/verifier/serving.py",
           # serving.py takes its tags from the table of domain separators, verity.commitments.domains

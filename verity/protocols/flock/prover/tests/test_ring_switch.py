@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from verity import settings
+from verity_config import verity_settings as settings
 
 SOURCE = Path(__file__).resolve().with_name("ring_switch.cu")
 #: (log2 of the rows, log2 of the eq's low half): the combine from k = 4 (an MMA tile's 16 rows), the fold from k = 8 (one
