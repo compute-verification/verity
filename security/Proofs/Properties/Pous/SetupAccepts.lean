@@ -47,7 +47,15 @@ The pieces an honest `C*` needs before the setup check's loops, none of which ev
 * the manifest, a flat object the kernel evaluates, is under 1,000 bytes (`manifest_deployed`);
 * the run on setup's output: the table of the honest blocks' row digests (`setupDigests`, rows by `digestTable_row`)
   has setup's leaves of the honest `C*` as its row leaves (`rowLeaves_digestTable`, `leaves_flat`, `rowLeaves_setup`),
-  so the composed check accepts a run on any published setup with their root (`runCheck_accepts_setup`).
+  so the composed check accepts a run on any published setup with their root (`runCheck_accepts_setup`);
+* the commitment's state before `W`: the manifest's header is accepted (`header_deployed`), so `commitState` is
+  `.ok` (`commitState_ok`, `commitState_deployed`);
+* setup's loop over 8 segments, at any parameters and any `C*` whose segments have the shape and decode
+  (`vk_generic`, the state `vkRun`), on the honest `C*` (`verifierKey_honest`), and the setup check accepts it
+  (`check_honest`): setup accepts, or SHA-512 has a collision (`setup_accepts_or_collision`);
+* setup's leaves are `setupDigests`' row leaves (`vkRun_snd`, `honest_leaves`), with a root (`root_of_size`,
+  `root_setup`), so setup accepts and the composed check accepts a run on what it published, or SHA-512 has a
+  collision (`setup_run_accept_or_collision`).
 -/
 
 @[expose] public section
@@ -762,12 +770,144 @@ theorem manifest_deployed : ∃ m, Commit.manifest P2.Params.deployed = .ok m �
   | error e => intro h; cases h
   | ok s => intro h; exact ⟨s.toUTF8, rfl, of_decide_eq_true h⟩
 
-/-! ## The run on setup's leaves -/
-
 /-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 local instance instLawfulBEqByteArray_accepts : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
+
+/-! ## The commitment's state before `W` -/
+
+theorem commitTag_size : 0 < Commit.COMMIT_TAG.toUTF8.size ∧ Commit.COMMIT_TAG.toUTF8.size < 2 ^ 32 := by
+  decide +kernel
+
+theorem wBytes_deployed : P2.Params.deployed.wBytes = 8 * (65536 * 2054) := rfl
+
+theorem header_deployed {m : ByteArray} (hsz : m.size < 1000) :
+    Identity.taggedHeader Commit.COMMIT_TAG (8 + m.size + P2.Params.deployed.wBytes) =
+      .ok (Identity.TAGGED_SHA512 ++ Flock.be32 Commit.COMMIT_TAG.toUTF8.size.toUInt32 ++ Commit.COMMIT_TAG.toUTF8 ++
+        Flock.be64 (8 + m.size + P2.Params.deployed.wBytes).toUInt64) :=
+  (Properties.Identity.taggedHeader_ok).2
+    ⟨⟨commitTag_size.1, commitTag_size.2, by rw [wBytes_deployed]; omega⟩, rfl⟩
+
+/-- `commitState` at any parameters whose manifest and header are accepted. -/
+theorem commitState_ok {q : P2.Params} {m hd : ByteArray} (hm : Commit.manifest q = .ok m)
+    (hh : Identity.taggedHeader Commit.COMMIT_TAG (8 + m.size + q.wBytes) = .ok hd) :
+    Commit.commitState q = .ok ((Identity.Sha512.init.update hd).update (Flock.be64 m.size.toUInt64 ++ m)) := by
+  unfold Commit.commitState Identity.taggedState
+  simp only [hm, hh, bind, Except.bind, pure, Except.pure]
+
+theorem commitState_deployed : ∃ st0, Commit.commitState P2.Params.deployed = .ok st0 := by
+  obtain ⟨m, hm, hsz⟩ := manifest_deployed
+  exact ⟨_, commitState_ok hm (header_deployed hsz)⟩
+
+/-! ## Setup's loop over any segments -/
+
+/-- Setup's loop state after segments `[0, n)`: the hash state absorbs each segment's payload `pay s`, and the leaves
+are the segments' `seg s`. -/
+def vkRun (salt : ByteArray) (st0 : Identity.Sha512.State) (seg : Nat → Array ByteArray) (pay : Nat → ByteArray)
+    (n : Nat) : Identity.Sha512.State × Array ByteArray :=
+  (List.range' 0 n).foldl (fun r s => (r.1.update (pay s), r.2 ++ Setup.segmentLeaves salt s (seg s))) (st0, #[])
+
+/-- **Setup's loop**, by `forIn'_ok`, at any parameters, for any `C*` whose segments `seg s` have the shape and decode
+to `pay s`, and a commitment that is the loop's digest. -/
+theorem vk_generic {q : P2.Params} {commitment salt : ByteArray} {C : Array (Array ByteArray)}
+    {st0 : Identity.Sha512.State} {seg : Nat → Array ByteArray} {pay : Nat → ByteArray}
+    (hst : Commit.commitState q = .ok st0) (hC : C.size = q.segments)
+    (hCs : ∀ s (h : s < C.size), C[s] = seg s)
+    (hsz : ∀ s, s < q.segments → (seg s).size = q.blocksPerSegment)
+    (hany : ∀ s, s < q.segments →
+      (seg s).any (fun b => b.size != q.blockBytes) 0 q.blocksPerSegment = false)
+    (hdec : ∀ s, s < q.segments → Setup.decodeSegment q salt s (seg s) = .ok (pay s))
+    (hcom : (vkRun salt st0 seg pay q.segments).1.finalize = commitment) :
+    Setup.verifierKeyFromEncoding q commitment salt C =
+      .ok ⟨(Merkle.root (vkRun salt st0 seg pay q.segments).2).getD .empty, (vkRun salt st0 seg pay q.segments).2⟩ := by
+  unfold Setup.verifierKeyFromEncoding
+  simp only [hst, Except.mapError, bind, Except.bind, pure, Except.pure]
+  rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_ok (fun s r =>
+    (r.1.update (pay s), r.2 ++ Setup.segmentLeaves salt s (seg s)))]
+  · unfold vkRun at hcom ⊢
+    simp only [hC, Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one, bne_self_eq_false,
+      Bool.false_eq_true, ↓reduceIte, hcom]
+  · rintro s hs ⟨h0, l0⟩
+    have hs' : s < q.segments := by
+      simp only [List.mem_range'] at hs
+      obtain ⟨i, hi, rfl⟩ := hs
+      simp only [Std.Legacy.Range.size, hC] at hi
+      omega
+    have hseg : ¬(q.segments ≤ s) := by omega
+    simp only [hCs, ge_iff_le, hseg, ↓reduceIte, hsz s hs', bne_self_eq_false, Bool.false_or, hany s hs',
+      Bool.false_eq_true, hdec s hs']
+
+/-! ## The honest `C*` -/
+
+theorem any_honest {pre : ByteArray} (hk : KeysOk pre) (s : Nat) :
+    (honestSegment pre s).any (fun b => b.size != P2.Params.deployed.blockBytes) 0
+      P2.Params.deployed.blocksPerSegment = false := by
+  rw [show P2.Params.deployed.blocksPerSegment = (honestSegment pre s).size from (honestSegment_size pre s).symm,
+    Bool.eq_false_iff]
+  intro h
+  obtain ⟨i, hi, hp⟩ := Array.any_eq_true.1 h
+  obtain ⟨k, t, _, hkeq⟩ := hk s i
+  simp only [honestSegment_get, honestBlock_eq hkeq, beOfNat_size, deployed_blockBytes, bne_self_eq_false,
+    Bool.false_eq_true] at hp
+
+/-- The honest commitment to `W`: the digest of setup's loop on the honest `C*` after `st0`. -/
+noncomputable def honestW (salt : ByteArray) (st0 : Identity.Sha512.State) : ByteArray :=
+  (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload) P2.Params.deployed.segments).1.finalize
+
+/-- **Setup's loop over 8 segments** on any array of the honest segments (`vk_generic`, `decodeSegment_honest`). -/
+theorem verifierKey_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (h24 : salt.size = 24)
+    (hk : KeysOk (keyPrefix salt)) {st0 : Identity.Sha512.State}
+    (hst : Commit.commitState P2.Params.deployed = .ok st0) {C : Array (Array ByteArray)}
+    (hC : C.size = P2.Params.deployed.segments) (hCs : ∀ s (h : s < C.size), C[s] = honestSegment (keyPrefix salt) s) :
+    Setup.verifierKeyFromEncoding P2.Params.deployed (honestW salt st0) salt C =
+      .ok ⟨(Merkle.root (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload)
+          P2.Params.deployed.segments).2).getD .empty,
+        (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload) P2.Params.deployed.segments).2⟩ :=
+  vk_generic hst hC hCs (fun s _ => honestSegment_size _ s) (fun s _ => any_honest hk s)
+    (fun _ hs => decodeSegment_honest hP h24 hk hs (honestSegment_size _ _) (honestSegment_get _ _)) rfl
+
+theorem honestEncoding_size (pre : ByteArray) : (honestEncoding pre).size = 8 := Array.size_ofFn
+
+theorem honestEncoding_get (pre : ByteArray) (s : Nat) (h : s < (honestEncoding pre).size) :
+    (honestEncoding pre)[s] = honestSegment pre s := by
+  simp only [honestEncoding, Array.getElem_ofFn]
+
+/-! ## The check -/
+
+/-- The setup check at any parameters `validate` accepts, on a `C*` whose verifier key is `⟨root, leaves⟩`. -/
+theorem check_of_vk {q q' : P2.Params} {w salt root : ByteArray} {leaves : Array ByteArray}
+    {C : Array (Array ByteArray)} (hq : q.validate = .ok q')
+    (h : Setup.verifierKeyFromEncoding q w salt C = .ok ⟨root, leaves⟩) :
+    SetupProtocol.check q ⟨w, salt⟩ C = .accept ⟨q.blocks, w, root, salt⟩ () := by
+  unfold SetupProtocol.check
+  rw [hq]
+  simp only [h]
+
+/-- **The setup check accepts the honest `C*`** at the deployed parameters, given every block's keys. -/
+theorem check_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (h24 : salt.size = 24)
+    (hk : KeysOk (keyPrefix salt)) {st0 : Identity.Sha512.State}
+    (hst : Commit.commitState P2.Params.deployed = .ok st0) :
+    SetupProtocol.check P2.Params.deployed ⟨honestW salt st0, salt⟩ (honestEncoding (keyPrefix salt)) =
+      .accept ⟨P2.Params.deployed.blocks, honestW salt st0,
+        (Merkle.root (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload)
+          P2.Params.deployed.segments).2).getD .empty, salt⟩ () := by
+  exact check_of_vk validate_deployed
+    (verifierKey_honest hP h24 hk hst (honestEncoding_size _) (honestEncoding_get _))
+
+/-- **Setup accepts, or SHA-512 has a collision**: under `PrimeP16448`, for every 24-byte salt, the setup check at the
+deployed parameters accepts the honest `C*` (`check_honest`), or a first `t` candidate at or above `p` gives two
+different inputs with one digest (`keysOk_or_collision`). -/
+theorem setup_accepts_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (h24 : salt.size = 24) :
+    (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),
+        c.salt = salt ∧ SetupProtocol.check P2.Params.deployed c C = .accept pub ()) ∨
+      ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
+  obtain ⟨st0, hst⟩ := commitState_deployed
+  rcases keysOk_or_collision (keyPrefix salt) (pad128_size _) with hk | hcol
+  · exact Or.inl ⟨⟨honestW salt st0, salt⟩, honestEncoding (keyPrefix salt), _, rfl, check_honest hP h24 hk hst⟩
+  · exact Or.inr hcol
+
+/-! ## The run on setup's leaves -/
 
 /-- The rows `f 0, …, f (n − 1)`, concatenated. -/
 def digestTable (f : Nat → ByteArray) : Nat → ByteArray
@@ -871,5 +1011,76 @@ theorem runCheck_accepts_setup {salt : ByteArray} (h24 : salt.size = 24) (pub : 
     (by rw [setupDigests]; exact digestTable_size (fun _ => rowDigest_size _) _) ?_
   rw [hs, rowLeaves_setup, hr]
   exact beq_self_eq_true _
+
+/-- Setup's leaves after segments `[0, n)` are the segments' leaves in turn. -/
+theorem vkRun_snd (salt : ByteArray) (st0 : Identity.Sha512.State) (seg : Nat → Array ByteArray)
+    (pay : Nat → ByteArray) : ∀ n, (vkRun salt st0 seg pay n).2 =
+      (List.range' 0 n).foldl (fun acc s => acc ++ Setup.segmentLeaves salt s (seg s)) #[]
+  | 0 => rfl
+  | n + 1 => by
+    have ih := vkRun_snd salt st0 seg pay n
+    unfold vkRun at ih ⊢
+    simp only [List.range'_concat, List.foldl_append, List.foldl_cons, List.foldl_nil]
+    rw [ih]
+
+/-- Setup's leaves of the honest `C*` are `setupDigests`' row leaves. -/
+theorem honest_leaves (salt : ByteArray) (st0 : Identity.Sha512.State) :
+    (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload) P2.Params.deployed.segments).2 =
+      PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt) := by
+  have h8 : P2.Params.deployed.segments = 8 := rfl
+  rw [vkRun_snd, h8, rowLeaves_setup]
+
+theorem rowLeaves_size (q : P2.Params) (salt digests : ByteArray) :
+    (PousCheck.Run.rowLeaves q salt digests).size = q.blocks := by
+  simp [PousCheck.Run.rowLeaves]
+
+/-- Leaves that are not empty have a root. -/
+theorem root_of_size {L : Array ByteArray} (h : L.size ≠ 0) :
+    Merkle.root L = some ((Merkle.root L).getD .empty) := by
+  have hne : L.isEmpty = false := by
+    rw [Bool.eq_false_iff]
+    intro he
+    rw [Array.isEmpty_iff_size_eq_zero] at he
+    exact h he
+  unfold Merkle.root
+  simp only [hne, Bool.false_eq_true, ↓reduceIte, Option.getD_some]
+
+theorem root_setup (salt : ByteArray) :
+    Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt)) =
+      some ((Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed salt (setupDigests salt))).getD .empty) :=
+  root_of_size (by rw [rowLeaves_size]; decide)
+
+/-- `runCheck_accepts_setup` at the published setup `⟨blocks, w, R, salt⟩`. -/
+theorem runCheck_accepts_setup' {salt : ByteArray} (h24 : salt.size = 24) (w R : ByteArray)
+    (hr : Merkle.root ((List.range' 0 8).foldl
+      (fun acc s => acc ++ Setup.segmentLeaves salt s (honestSegment (keyPrefix salt) s)) #[]) = some R) :
+    ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
+      PousCheck.Run.check trusted ⟨P2.Params.deployed.blocks, w, R, salt⟩ (setupDigests salt) r sid = .ok () :=
+  runCheck_accepts_setup h24 ⟨P2.Params.deployed.blocks, w, R, salt⟩ rfl rfl hr
+
+/-- **Setup accepts, and the composed check accepts a run on what it published, or SHA-512 has a collision**: under
+`PrimeP16448`, for every 24-byte salt, the setup check accepts the honest `C*` (`check_honest`) and `Run.check`
+accepts a run against the honest blocks' row digests on its public output (`runCheck_accepts_setup`), or a first `t`
+candidate at or above `p` gives two different inputs with one digest (`keysOk_or_collision`). -/
+theorem setup_run_accept_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray}
+    (h24 : salt.size = 24) :
+    (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),
+        c.salt = salt ∧ SetupProtocol.check P2.Params.deployed c C = .accept pub () ∧
+        ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
+          PousCheck.Run.check trusted pub (setupDigests salt) r sid = .ok ()) ∨
+      ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
+  obtain ⟨st0, hst⟩ := commitState_deployed
+  rcases keysOk_or_collision (keyPrefix salt) (pad128_size _) with hk | hcol
+  · have hr : Merkle.root ((List.range' 0 8).foldl
+        (fun acc s => acc ++ Setup.segmentLeaves salt s (honestSegment (keyPrefix salt) s)) #[]) =
+        some ((Merkle.root (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload)
+          P2.Params.deployed.segments).2).getD .empty) := by
+      rw [honest_leaves, ← rowLeaves_setup salt]
+      exact root_setup salt
+    exact Or.inl ⟨⟨honestW salt st0, salt⟩, honestEncoding (keyPrefix salt),
+      ⟨P2.Params.deployed.blocks, honestW salt st0, (Merkle.root (vkRun salt st0 (honestSegment (keyPrefix salt))
+        (fun _ => segPayload) P2.Params.deployed.segments).2).getD .empty, salt⟩, rfl,
+      check_honest hP h24 hk hst, runCheck_accepts_setup' h24 _ _ hr⟩
+  · exact Or.inr hcol
 
 end PousCheck.Properties.SecurityProofs.Accepts
