@@ -274,7 +274,7 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/definitions/evaluate",
+    "verity/circuits/evaluate",
 ]
 trusted = true
 
@@ -307,7 +307,7 @@ loads = [
 
 [[place]]
 paths = [
-    "verity/definitions/requirement",
+    "verity/circuits/requirement",
 ]
 trusted = true
 

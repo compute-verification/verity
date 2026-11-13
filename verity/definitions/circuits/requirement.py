@@ -19,7 +19,7 @@ the registered values, each produced value's engine step, each gate's operands a
 inputs), and `Requirement.of` derives each value's birth and last structural reader from it (`last`: the last step
 running a gate with it as an operand, whether or not that gate uses it). Placed on devices (`leaf`, and `ticks`: the
 tick at which each device begins each engine step), an `Execution` also has `Placement`'s regions, ingress and credits
-(`region`, `ingress`, `credits`). `verity/definitions/requirement/` holds `Requirement.of`, `pack`,
+(`region`, `ingress`, `credits`). `verity/circuits/requirement/` holds `Requirement.of`, `pack`,
 `credited`, `credited_reads`, `store_matches`, `plan_matches` and the placed functions to the Lean definitions on
 `Execution`s by difftest.
 

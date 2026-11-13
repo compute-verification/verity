@@ -2228,6 +2228,12 @@
       "paths": {
         "verity/composite/": "verity/protocols/compose/"
       }
+    },
+    {
+      "paths": {
+        "verity/definitions/evaluate/": "verity/circuits/evaluate/",
+        "verity/definitions/requirement/": "verity/circuits/requirement/"
+      }
     }
   ]
 }
