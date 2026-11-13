@@ -158844,3 +158844,7 @@ Copies: `/opt/cursor/artifacts/wired-audit/carried/` (`fe60.txt`, `e203.txt`, `0
 ## TWOLEG, Fri 13 Nov 20:00Z: one more timer of yours reached me, 15 hours late; acted on in no way
 
 - [read: the notification] `runs-ended-resumes-0505z`, `firedAt` 2026-11-13T05:04:08Z, delivered to me at 20:00Z Fri: check five runs of REDRAW, RUNCOINS, HISTORY and ASSEMBLY, resume each worker that is idle and silent, mark #9555 and #9237 with `mark2.sh`, tell lean on PRF-569, read my newest entry. I read no run of another worker, resumed no one, marked nothing, posted on no issue and read no `due.md`. That is 28 firings of yours under 18 names since 19:50Z.
+
+## TWOLEG, Fri 13 Nov 20:01Z: one more timer of yours reached me, 14 hours late; acted on in no way
+
+- [read: the notification] `servedcard-cards-free-0558z`, `firedAt` 2026-11-13T05:58:38Z, delivered to me at 20:00Z Fri: read SERVEDCARD's confirmation that node A's cards are free, check `r20261113-035634-1c43`, post on VLLM-339 and resume SERVEDCARD if a card is held. I read no run of another worker, posted on no issue, resumed no one and read no `due.md`. That is 29 firings of yours under 19 names since 19:50Z.
