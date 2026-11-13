@@ -56,7 +56,7 @@ then carries two more events on its coins:
   words, from a start state the proof pins, and the run's words in a unit are honest but for one position.
 * `LiUnits`: case (a)'s committed units for li (LI-CP-W): a warp's window of segments from a start the proof pins, one
   checkpoint a segment (each lane's XOR of its chains' states, XORed across the warp by `redux.sync.xor`), and the
-  run's words honest but for one position a segment. `LiUnits.sameWindow` is the window's last checkpoint alone.
+  run's words honest but for one position a segment. `LiUnits.sameExecutionPhase` is the window's last checkpoint alone.
 * `DuoCPUnits`, `Fx1CPUnits`: case (a)'s committed units for duo and fx1 a checkpoint a segment (DUO-CP-W): a warp's
   window of segments from a start the proof pins, one checkpoint a segment (the XOR of every chain's full state `(y, z)`
   across the warp), and the run's words honest but for one position a segment.
@@ -171,7 +171,7 @@ def same (D : LiUnits Ω U n S W C H) (ω : Ω) : Prop :=
 
 /-- The window's one receipt word alone (li without LI-CP's checkpoint a segment): every unit's last checkpoint is the
 honest words' one. -/
-def sameWindow (D : LiUnits Ω U n S W C H) (ω : Ω) : Prop :=
+def sameExecutionPhase (D : LiUnits Ω U n S W C H) (ω : Ω) : Prop :=
   ∀ u, D.checkpoint ω u (D.word ω u) (S - 1) = D.checkpoint ω u (D.honest ω u) (S - 1)
 
 end LiUnits
