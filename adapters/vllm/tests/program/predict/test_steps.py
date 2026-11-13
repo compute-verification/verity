@@ -1391,6 +1391,7 @@ def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
     got = compare(s, str(tmp_path))
     assert (got["equal"], got["different"], got["no_trace"], got["mismatches"]) == (1, 0, 1, 1)
     assert got["units"][1]["trace_error"] == "boom"
+    assert (s["schema"], got["schema"]) == ("verity-vllm/compiled-steps/v2", "verity-vllm/compiled-steps/v2/comparison")
 
 
 @pytest.mark.slow
