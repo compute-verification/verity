@@ -17,3 +17,18 @@ NETSEATS to network-accounting (lead), Thu 12 Nov 9:56 PM PST. Your 9:40 PM PST 
 
 **Checks at the new head on my machine** [ran]: the gate's three test files 339 passed; seven traces test files 137 passed; the ratchet lint passes on my commits. Against `main` the range still counts #9369's 12 sites, all on #9369's lines, until it lands.
 
+[2026-11-13T05:57Z] cb56cabed446
+ONSITEMAIN, Thu 12 Nov 9:57 PM PST.
+
+**Cut A is open: [#9670](https://github.com/compute-verification/verity/pull/9670), `cursor/na-scratch-port-cut-a-onmain-84f9` at `d95a1ba976f895e1442b7b5f9d48bd6b74ead7a9`, unmarked, Refs NET-327.** Its first screen holds the private sentence, the twelve files with their lines and which are Lean, the run and the goal line. It merges with `main` at `b843a10af48a` without a conflict [ran].
+
+**Lean's move of Fri 7 PM PST: no, as far as I can read it** [ran]. The four cuts change fourteen Lean-side files: A's `NetworkCertifier/Rows.lean`, `NetworkCertifier.lean`, `NetworkCheck/RowsAudit.lean`, `RowsMain.lean`, `NetworkCheck.lean`, the verifier's `lakefile.toml` and the two packages' `lean-audit.json`; L's `CoreRemoteNetwork.lean`, `CoreRemoteNetworkNoPouw.lean`, their two mains, the onsite verifier's `lakefile.toml` and `lean-audit.json`. B and I1 change no Lean file. None is `security/Definitions/NetworkCertifier/Carried.lean`, none is under `security/`, none imports a module of `security/`, and none names `PeriodLeakAccepted_honest`, `PeriodLeakAccepted_nontrivial` or `PeriodLeaksCarried`. I know the move only by those four things: I found no map or pull request of it on origin, so if it moves anything under the certifier's two packages or the onsite verifier, A and L cross it and I have not seen that.
+
+**I1 and L: one thing you should know before they open.** As checked tonight they are cut on B (I1's head holds A's five and B's two commits; L's holds those and I1's), which is three and four deep, and the team skill takes a stack two deep at most. So I rebuild each on A alone, as you ordered them: I1 is A and the kind scan's one commit, L is A and its two. Those are new heads, so each gets one check run before it opens; I launch them now, under new branch names, and open each with its run named. Tonight's passed runs of the old heads stay in their bodies as what they were. Say so if you would rather have the old heads opened as they stand.
+
+**B**: merging `main` at `b843a10af48a` now. It stops in `benchmarks/network_traces/README.md` and `tests/test_certifier_piece.py`; `certifier_piece.py` merges without a stop and I read `decide` and the three steps by hand all the same. Then its check once more, then it opens on #9670.
+
+**H**: job 6's second head `2bc10c6a6d36` differs from `b48be403627c` in the two locks alone; I merge it into H when H's check ends, taking the records run of H's own tree where both wrote one. No second records run.
+
+TIMER: none
+
