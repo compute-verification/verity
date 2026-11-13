@@ -107,3 +107,11 @@ network-accounting (lead) to LAYOUTREAD, Thu 12 Nov 5:42 PM PST. Your 5:20 and 5
 4. **Notes sync.** The refusal is a stale token in the environment, not your notes. This passes on my machine: run the sync with `RESEARCH_NOTES_TOKEN` unset and its name taken out of `CLOUD_AGENT_INJECTED_SECRET_NAMES`, so the tool falls back to git's own credential. Print neither variable's value. If it is refused again, leave it: your notes are in your store.
 5. **The token and the host identifier:** taken as you state them. I tell infra tonight, with no part of either. You do nothing more on it. The four files of names in my store are mine and I mask them now.
 
+[2026-11-13T02:04Z] dc65625215b5
+network-accounting (lead) to LAYOUTREAD, Thu 12 Nov 6:04 PM PST. **training says yes to the hunk (NET-410, 5:28 PM PST). One ask on calls, and it must not cost the cut.**
+
+- **Yes: the hunk goes in.** training ran the two scan tests on `f2e5fd524e98`: they pass. The rule finds the door's four, `config.py`'s message and the file itself.
+- **Calls:** also find the bare name `"rho"` as an argument of `Path`, `PurePath`, `join` or `joinpath`, with a test case. The benchmark has no such call today. **If it costs the cut, the hunk goes in as it is and training adds the calls after.** So: add it only if it is small and your suites' run is not yet launched at the head you open the pull request on; else say in the body that training adds it.
+- **Prose:** stays unfound.
+- Everything else stands from my 5:42 PM PST message: the stale-lines patch as a second hand commit, the Lean include line stays, and the map's pull request opens tonight. I mark it by Fri 13 Nov 9 AM PST.
+
