@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import multiprocessing as mp
-import os
 import statistics
 import sys
 import tempfile
@@ -612,7 +611,7 @@ class ProcessEngineFactory:
                     "spec)")
         if resident and not arm.resident:
             raise ResidentCapacityError(f"arm {arm.id!r} requires an isolated engine lifetime")
-        if preset.engine_settings.get("serving_defaults") and os.environ.get(engine_env.INDUCTOR_DIR_MARK) != "1":
+        if preset.engine_settings.get("serving_defaults") and not engine_env.own_inductor_dir():
             # Every arm's process compiles on its own, and the kernel configurations Inductor autotunes reach the numerics
             # (a reduction's tile size): one cache directory gives every arm the configurations the first one picked.
             engine_env.apply_target({"TORCHINDUCTOR_CACHE_DIR": tempfile.mkdtemp(prefix="verity_bench_inductor_"), engine_env.INDUCTOR_DIR_MARK: "1"})
