@@ -191,7 +191,7 @@ import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from fractions import Fraction
@@ -729,6 +729,21 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
 
 
+def bound_reads(file: Mapping[str, Any], m: CS.Member, ports: Iterable[str], roots: Mapping[str, Mapping[str, Any]],
+                want: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """Member ``m``'s ``--registered`` file ``file`` with each of its header's ``ports`` the file names no read for bound
+    (`REG.bind_ports`) to the port's own tree: the root the registration holds for ``<member>/<port>`` (``roots``, its
+    entries by port) and the domain the verifier's window derives for it (``want``), which the audit's check before the
+    sample held the header's to (``root:<port>``). A wired port with no tree of its own (`rows.Member.wired_trees`) has
+    neither: its rows are leaves of its writer's output tree, which the verifier's file names it a read of, each unit at
+    its writer unit's leaf (`rows.Binding.held_leaves`: `rows.own_reads`, the two-stage audit's `verifier_reads`), the
+    read the Lean verifier holds each session to. So it is never bound, and a file that leaves it out is refused
+    (ValueError, `REG.bind_ports`'s)."""
+    ports = list(ports)
+    own = {p: {"root": roots[q]["root"], "domain": want[q]["domain"]} for p in ports if (q := m.port(p)) in roots and q in want}
+    return REG.bind_ports(file, ports, own)
+
+
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
@@ -890,9 +905,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         if mm["m"].key in reads:
             m = mm["m"]
-            fv_roots = mm["header"]["frame_v3"]["roots"]
-            own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[m.port(p)]["root"], "domain": want[m.port(p)]["domain"]}
-                                                         for p in fv_roots})
+            own = bound_reads(reads[m.key], m, mm["header"]["frame_v3"]["roots"], roots, want)
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
             mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
             if iface is not None:
