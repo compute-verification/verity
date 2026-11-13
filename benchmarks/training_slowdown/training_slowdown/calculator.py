@@ -5,8 +5,9 @@ names it, and the benchmark's one entry point to a slowdown.
 on the slowdown and what binds. The grade (`formalism.bound`, which `grade.rho_of` reads) and the library's table
 (`library.bound`) both call it, and nothing else of this benchmark computes a slowdown from a step
 (`tests/test_one_calculator.py`). It reads the work the record states (`training_slowdown.work`: M, the products whose
-two operands both depend on the update), chooses the subset of M the bound is largest on, and asks the calculator's
-`min_cut.bound`, the statement its `min_cut` names (`theorem`) solved for the fewest blocks.
+two operands both depend on the update) into the calculator's products, priced as this benchmark charges them, and
+asks the calculator's `min_cut.slowdown_of`, which chooses the sub-work of M the bound is largest on and solves the
+statement its `min_cut` names (`theorem`) for the fewest blocks there.
 
 What else the calculator states is read from it through its public functions, never restated here:
 
@@ -48,9 +49,6 @@ WORK = ("N", "O", "beta_w", "beta_x", "b_y", "F")
 #: activation's; a source activation (a norm's output, a layer's output gradient) holds at least as much, so every
 #: activation takes them
 BETA_K_LABEL = "β(k) per the red-team of (H)"
-#: the subsets of M `slowdown` takes the best of: all of M, M less its short contractions, and the weight gradients
-#: alone
-HE_SUBSETS = ("M", "M without its short contractions", "the weight gradients alone")
 #: what `slowdown` says binds: the theorem's count on M (`products`), nothing (`none`: the slowdown is the floor's 1),
 #: or `unmeasured` where the record gives no slowdown
 BINDS = ("products", "none", "unmeasured")
@@ -144,43 +142,35 @@ def he_past() -> str:
             f"({BETA_K_LABEL} stops there)").replace("e+0", "e")
 
 
-def _bound(c_gates: float, k_bits: float, work: dict | None) -> dict:
-    """The bound of record at the policy (c, k) on a circuit's `work` (`WORK` and its `C_gates`): what every partition
-    of that circuit into the policy's blocks pays, the `slowdown` of the calculator's `min_cut.bound` (the statement's
-    count solved for the fewest blocks, times c/|C|, and at least 1), with its least `blocks`, its `statement` and
-    what it `rests_on`. A policy here states no output bits a block, so the function's n is None. Not `available`,
-    with what is missing, where the circuit has no `work`."""
+def _bound(c_gates: float, k_bits: float, work: dict | None, b=None) -> dict:
+    """The bound of record at the policy (c, k) on a circuit's `work` (`WORK` and its `C_gates`), `b` the calculator's
+    `Bound` there (`slowdown_of`'s): what every partition of that circuit into the policy's blocks pays, its `slowdown`
+    (the statement's count solved for the fewest blocks, times c/|C|, and at least 1), with its least `blocks`, its
+    `statement` and what it `rests_on`. Not `available`, with what is missing, where the circuit has no `work`."""
     out = {"available": False, "theorem": theorem(), "c_gates": c_gates, "k_bits": k_bits}
     if work is None:
         return out | {"why": "not available: the bound reads a traced step's N and O on M, and the config's search "
                              "record gives none"}
-    b = _min_cut().bound(c_gates, k_bits, None, N=work["N"], O=work["O"], size=work["C_gates"],
-                         beta_w=work["beta_w"], beta_x=work["beta_x"], b=work["b_y"], F=work["F"])
     return out | {"available": True, "theorem": b.statement, "slowdown": b.slowdown, "blocks": b.blocks,
                   "rests_on": b.rests_on, "work": work}
 
 
-def _figure(he: dict, c: float, C: float, tau: float | None = None, beta_code: float | None = None) -> dict:
-    """The choice of the work on M (`work.he_of_rows`) at (c, he's k) and |C|: the best of three valid choices of M
-    (`HE_SUBSETS`), each at its best threshold, with its term (`rho`: the bound of record's least blocks times c/|C|,
-    before the floor at 1, and 0 where no choice is positive). Each operand is charged its β, a
-    weight's at most `beta_code` (the run record's code bits a trained weight), an activation's at most β(k)
-    (the calculator's `min_cut.beta`); from `work.HEAD_K` the head's products leave M; and where M is over a run's
-    steps (he's `steps`, of `step_tokens` tokens each), their N and O lose the ⌊k/(τ·T)⌋ steps after the first update
-    (a block of k bits holds the inputs they read), τ the bits a token's input costs. On a subset, for each product P
-    of a group's two β, M_P its groups with product at least P, charged β_w·β_x = P (the group's weight's β and its
-    activation's, or its wider and narrower where its operands are of one class), the least pair among M_P's products,
-    which F needs where a layer's arrays differ in β (Motzkin-Straus sums u_r·u_s/(β_r·β_s) over the pairs M_P
-    multiplies), b_y M_P's least output width and F = 2/√3 where M_P holds a backward product (the calculator's
-    `min_cut.share`: a layer's forward, input-gradient and weight-gradient products share arrays; Motzkin-Straus bounds
-    π by 4/3 where no four arrays are pairwise multiplied), else 1, and 1 on the weight gradients alone; the subset's
-    term is the largest bound of record over P (`_bound`'s `blocks` times c/|C|). The second subset leaves out of M's
-    best the groups whose contraction K is below K_thr = (F·k/2)²·b_y/(β_w·β_x·(k + α)): on a group that short the
-    count's outputs' term is at least its main one at the m = N/(k + α) its MACs alone would need. What it read: the
-    binding subset, each subset's term, β_w, β_x, β (their geometric mean), b_y, F, α (the calculator's
-    `min_cut.alpha` times F), N, O, K_thr, β(k), `beta_code` where it bounds a weight in M (`code_bound`), the first
-    steps left out, M_P's share of the candidates' MACs, whether an operand's own β (its rate or β_eff, before either
-    bound) is below its width (`below_width`) and the step's r_step."""
+def _figure(he: dict, c: float, C: float, tau: float | None = None, beta_code: float | None = None) -> tuple:
+    """M (`work.he_of_rows`) read as the calculator's products and priced, and the calculator's choice on it at (c,
+    he's k) and |C| (`min_cut.slowdown_of`: the sub-work of its `SUBWORKS` and the F at which its bound is largest, with
+    its term `rho`, the least blocks times c/|C| before the floor at 1, and 0 where no choice is positive), as a record,
+    beside the calculator's `Bound` there (None where none binds).
+
+    How it reads M: each operand is charged its β, a weight's at most `beta_code` (the run record's code bits a trained
+    weight), an activation's at most β(k) (the calculator's `min_cut.beta`); from `work.HEAD_K` the head's products
+    leave M; where M is over a run's steps (he's `steps`, of `step_tokens` tokens each), N and O lose the ⌊k/(τ·T)⌋
+    steps after the first update (a block of k bits holds the inputs they read), τ the bits a token's input costs; a
+    group states its MACs, output wires, weight operand, output width b_y, contraction K and whether it is forward or
+    a weight gradient, and no arrays, so F is the kinds' rule. The record: the binding subset, each subset's term,
+    β_w, β_x, β (their geometric mean), b_y, F, α (the calculator's `min_cut.alpha` times F), N, O, K_thr, β(k),
+    `beta_code` where it bounds a weight in M (`code_bound`), the first steps left out, the binding products' share of
+    the candidates' MACs, whether an operand's own β (its rate or β_eff, before either bound) is below its width
+    (`below_width`) and the step's r_step."""
     k, mod = he["k"], _min_cut()
     bk = mod.beta(k)
     if bk is None:
@@ -190,63 +180,34 @@ def _figure(he: dict, c: float, C: float, tau: float | None = None, beta_code: f
         first = math.floor(k / (he["step_tokens"] * tau))
         scale = max(0.0, he["steps"] - first) / he["steps"]
 
-    def charged(g: dict) -> list[float]:
-        return [(b if beta_code is None else min(b, beta_code)) if w else min(b, bk)
-                for b, w in zip(g["beta"], g.get("weight", (False, False)))]
+    def charged(g: dict) -> tuple:
+        return tuple((b if beta_code is None else min(b, beta_code)) if w else min(b, bk)
+                     for b, w in zip(g["beta"], g.get("weight", (False, False))))
 
-    groups = [(math.prod(charged(g)), charged(g), g) for g in he["groups"] if not (k >= W.HEAD_K and g.get("head"))]
-
-    def w_x(cb: list[float], g: dict) -> tuple[float, float]:
-        w = g.get("weight", (False, False))
-        if sum(w) == 1:
-            return (cb[0], cb[1]) if w[0] else (cb[1], cb[0])
-        return tuple(sorted(cb, reverse=True))
-
-    def best(gs: list, one: bool = False) -> dict | None:
-        out = None
-        for P in sorted({p for p, _, _ in gs if p > 0}, reverse=True):
-            M = [x for x in gs if x[0] >= P]
-            bw, bx = next(w_x(cb, g) for p, cb, g in M if p == P)
-            N, O = scale * sum(g["macs"] for _, _, g in M), scale * sum(g["wires"] for _, _, g in M)
-            b_y = min(g["b_y"] for _, _, g in M)
-            F = 1.0 if one or all(g["forward"] for _, _, g in M) else mod.share(3)
-            work = {"N": N, "O": O, "beta_w": bw, "beta_x": bx, "b_y": b_y, "F": F, "C_gates": C}
-            raw = _bound(c, k, work)["blocks"] * c / C
-            if out is None or raw > out["raw"]:
-                out = {"raw": raw, "beta_w": bw, "beta_x": bx, "beta": math.sqrt(P), "b_y": b_y, "F": F,
-                       "alpha": F * mod.alpha(k, P, b_y), "N": N, "O": O,
-                       "code_bound": beta_code is not None and any(
-                           w and beta_code < b for _, _, g in M for b, w in zip(g["beta"], g.get("weight", ()))),
-                       "below_width": any(b < w for _, _, g in M for b, w in zip(g["beta"], g["width"])),
-                       "macs": sum(g["macs"] for _, _, g in M)}
-        return out
-
-    whole = best(groups)
-    K_thr = None
-    subsets = [whole]
-    if whole is not None:
-        K_thr = (whole["F"] * k / 2) ** 2 * whole["b_y"] / (whole["beta_w"] * whole["beta_x"] * (k + whole["alpha"]))
-        subsets.append(best([x for x in groups if x[2].get("k_dim", math.inf) >= K_thr]))
-    else:
-        subsets.append(None)
-    subsets.append(best([x for x in groups if x[2].get("dw")], one=True))
+    groups = [g for g in he["groups"] if not (k >= W.HEAD_K and g.get("head"))]
+    got = mod.slowdown_of(c, k, None, size=C, scale=scale, work=[mod.Product(
+        g["macs"], g["wires"], charged(g), tuple(g.get("weight", (False, False))), g["b_y"], g.get("k_dim", math.inf),
+        g.get("forward", False), bool(g.get("dw"))) for g in groups])
     total = he["candidates_macs"]
-    common = {"K_thr": K_thr, "beta_k": bk, "beta_code": beta_code, "first_steps": first, "r_step": he["r_step"],
-              "subsets": {name: None if s is None else max(0.0, s["raw"]) for name, s in zip(HE_SUBSETS, subsets)}}
-    on = [(s["raw"], -i, name, s) for i, (name, s) in enumerate(zip(HE_SUBSETS, subsets)) if s is not None]
-    if not on:
+    common = {"K_thr": got.K_thr, "beta_k": bk, "beta_code": beta_code, "first_steps": first, "r_step": he["r_step"],
+              "subsets": got.terms}
+    if got.choice is None:
         return {"rho": 0.0, "subset": None, "beta_w": None, "beta_x": None, "beta": None, "b_y": None, "F": None,
                 "alpha": None, "N": 0.0, "O": 0.0, "macs_share": 0.0, "below_width": False,
-                "code_bound": False} | common
-    _, _, name, top = max(on)
-    top = dict(top)
-    raw, macs = top.pop("raw"), top.pop("macs")
-    return {"rho": max(0.0, raw), "subset": name} | top | {"macs_share": macs / total if total else 0.0} | common
+                "code_bound": False} | common, None
+    M = [groups[i] for i in got.products]
+    macs = sum(g["macs"] for g in M)
+    return {"rho": got.term, "subset": got.choice, "beta_w": got.beta_w, "beta_x": got.beta_x,
+            "beta": math.sqrt(got.q), "b_y": got.b_y, "F": got.F, "alpha": got.alpha, "N": got.N, "O": got.O,
+            "code_bound": beta_code is not None and any(
+                w and beta_code < b for g in M for b, w in zip(g["beta"], g.get("weight", ()))),
+            "below_width": any(b < w for g in M for b, w in zip(g["beta"], g["width"])),
+            "macs_share": macs / total if total else 0.0} | common, got.bound
 
 
 def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
     """The benchmark's one slowdown: a lower bound on what every partition of a step's circuit into the policy's
-    blocks pays, the calculator's bound of record (`min_cut.bound`) on the work the step's record states.
+    blocks pays, the calculator's bound of record (`min_cut.slowdown_of`) on the work the step's record states.
 
     `policy` is the block: its `c_gates` and `k_bits` (`training_slowdown.policy.named`'s). `step` is a step's record:
     a job's trace (`run.trace_step`'s, its raw product rows priced here, `work.priced`), or the products stated from
@@ -272,7 +233,7 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
       has no slowdown.
 
     The work is M at the policy's k (the record's own, or a trace's at each k of the console's dial,
-    `work.classified_at`), the best of three choices of it (`HE_SUBSETS`). A weight's β is at most the run's code
+    `work.classified_at`), the best of the calculator's three choices of it (`min_cut.SUBWORKS`). A weight's β is at most the run's code
     bits over M's trained weights where M counts them, and τ is the run's. The bound needs no summation order and no
     premise that blocks hold whole multiply cells (a block's split MACs are charged k a block), so a step that writes
     products with elementwise ops has one (they are left out of M, and stay in |C|), and so does a circuit that
@@ -333,9 +294,9 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
         return out | {"why": NO_GATES}
     bits = (run or {}).get("code_bits")
     code = bits / he["trained_weights"] if bits and he.get("trained_weights") else None
-    figure = _figure(he, c, gates, (run or {}).get("tau_bits"), code)
+    figure, chosen = _figure(he, c, gates, (run or {}).get("tau_bits"), code)
     if figure["subset"] is None:
         return out | {"slowdown": 1.0, "binds": "none", "term": figure["rho"], "figure": figure}
-    b = _bound(c, k, {x: figure[x] for x in WORK} | {"C_gates": gates})
+    b = _bound(c, k, {x: figure[x] for x in WORK} | {"C_gates": gates}, chosen)
     return out | {"slowdown": b["slowdown"], "binds": "products" if b["slowdown"] > 1 else "none",
                   "term": figure["rho"], "bound": b, "figure": figure}

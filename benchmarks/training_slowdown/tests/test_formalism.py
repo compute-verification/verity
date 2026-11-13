@@ -16,6 +16,8 @@ from training_slowdown import formalism as F
 from training_slowdown.gates import per_mac
 
 FIXTURES = Path(__file__).parent / "fixtures"
+#: the calculator's three choices of the work, the subsets of M the entry point's figure names
+SUBWORKS = calculator._min_cut().SUBWORKS
 
 
 def measured(u1=1e8, sigma=0.8, delta=None, dgrad=None, decoder=0.0, tail=0.0, affected=0.5) -> F.Measured:
@@ -537,12 +539,12 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
         (8, False, False, (False, True)), (1024, False, False, (False, True)), (1024, False, False, (False, True)),
         (1024, True, False, (False, False)), (1024, True, True, (False, False)), (4096, False, True, (False, True))]
     fig = figure(he, c, C)
-    assert fig["subset"] == calculator.HE_SUBSETS[1] and fig["rho"] == max(fig["subsets"].values()) > fig["subsets"]["M"]
+    assert fig["subset"] == SUBWORKS[1] and fig["rho"] == max(fig["subsets"].values()) > fig["subsets"]["M"]
     assert 8 < fig["K_thr"] < 1024 and fig["beta_k"] == 15.9 and fig["F"] == pytest.approx(2 / math.sqrt(3))
     dw = [g for g in he["groups"] if g["dw"]]
     N, O = sum(g["macs"] for g in dw), sum(g["wires"] for g in dw)
     alone = {"N": N, "O": O, "beta_w": 15.9, "beta_x": 15.9, "b_y": 16, "F": 1.0, "C_gates": C}
-    assert fig["subsets"][calculator.HE_SUBSETS[2]] == calculators_count(c, k, alone)
+    assert fig["subsets"][SUBWORKS[2]] == calculators_count(c, k, alone)
     first = figure(he, c, C, tau=16)
     assert first["first_steps"] == 4 and first["N"] == pytest.approx(0.6 * fig["N"], rel=1e-12)
     assert fig["first_steps"] is None and figure(he, c, C, tau=1e3)["first_steps"] == 0
@@ -589,11 +591,11 @@ def test_all_of_m_binds_where_the_count_puts_it_above_the_weight_gradients_and_t
     count = {name: calculators_count(c, k, w) for name, w in (("M", whole), ("dw", alone))}
     assert (fig["subset"], fig["F"], fig["beta_w"], fig["N"], fig["O"]) == (
         "M", calculator._min_cut().share(3), 8.0, whole["N"], whole["O"])
-    assert fig["rho"] == fig["subsets"]["M"] == count["M"] > count["dw"] == fig["subsets"][calculator.HE_SUBSETS[2]]
+    assert fig["rho"] == fig["subsets"]["M"] == count["M"] > count["dw"] == fig["subsets"][SUBWORKS[2]]
     words = F.he_rests_on(fig)
     assert words.startswith(f"theorem of record on M at {F.SHARED_LABEL}, given (H): operands are hard at β_w = 8 "
                             f"({F.CODE_LABEL}) and β_x = 15.9 bits a word")
-    assert calculator.HE_SUBSETS[2] not in words
+    assert SUBWORKS[2] not in words
     second = calculator._min_cut().slowdown_at_least
     assert second(whole["N"], whole["O"], C, c, k, 8.0 * 15.9, 16.0, whole["F"]) < second(
         alone["N"], alone["O"], C, c, k, 15.9 * 15.9, 16.0, 1.0) < count["dw"]
@@ -713,10 +715,10 @@ def test_no_published_string_names_the_code():
             reasons |= set(b["unmeasured"].values())
             one = F.published(m, c, at)
             strings += [one["label"], one["rests_on"], one["why"] or "", one["products_rests_on"] or ""]
-    alone = F.he_rests_on({"subset": calculator.HE_SUBSETS[2], "F": 1.0, "beta_w": 1.6, "beta_x": 3.2, "b_y": 16.0,
+    alone = F.he_rests_on({"subset": SUBWORKS[2], "F": 1.0, "beta_w": 1.6, "beta_x": 3.2, "b_y": 16.0,
                            "below_width": True, "code_bound": True})
     assert alone.startswith("theorem of record on the weight gradients alone at F = 1, given (H)")
-    strings += [alone, F.SHARED_LABEL, *calculator.HE_SUBSETS]
+    strings += [alone, F.SHARED_LABEL, *SUBWORKS]
     assert {work.PRODUCTS_UNMEASURED, work.HE_RETRACE, work.HE_NO_ROWS} <= reasons
     assert all(any(x in r for r in reasons) for x in ("classified at k", "breaks the premise", "own program"))
     named = {s: CODE_NAME.findall(s) for s in strings if CODE_NAME.search(s)}

@@ -49,10 +49,14 @@ guarantee states.
 `bound_charged` the bound over a monitoring period's blocks when some of the words they read are untied, the blocks
 that read more than a threshold of them charged whole. `capped` is either one beside the share of the work no block
 is credited for, which no count here covers.
+
+`slowdown_of` is the one way from a work to a slowdown: a caller states its work's products (`Product`), each priced
+as it reads them, and `slowdown_of` chooses the sub-work and the `F` the bound is largest at and asks `bound`.
 """
 
 import math
 import tomllib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -84,6 +88,9 @@ BETA: tuple[tuple[float, float], ...] = tuple(
 BF16 = 16.0
 #: an untied output word's bits: the fresh input one is to the block that reads it, at most
 WORD = 32.0
+#: the sub-works `slowdown_of` takes the best of, M the work its caller states: all of it, it less its short
+#: contractions, and its weight gradients alone
+SUBWORKS = ("M", "M without its short contractions", "the weight gradients alone")
 
 
 def alpha(k: float, q: float, b: float) -> float:
@@ -203,6 +210,166 @@ def bound(c: float, k: float, n: float | None = None, *, N: float, O: float, siz
     m = blocks_at_least(N, O, k, q, b, F)
     return Bound(max(1.0, m * c / size), m, N / m, statement, (HARDNESS, EXPORTS), k, beta_w, beta_x, b, F,
                  alpha(k, q, b))
+
+
+def clique(edges) -> int:
+    """The most vertices pairwise joined by ``edges`` (pairs), at least 2 where there is an edge: the `ω` of `share`
+    on the graph of the arrays a work multiplies."""
+    adj: dict = {}
+    for e in edges:
+        a, b = tuple(e)
+        adj.setdefault(a, set()).add(b)
+        adj.setdefault(b, set()).add(a)
+    best = 0
+
+    def grow(r: int, p: set, x: set) -> None:
+        nonlocal best
+        if not p and not x:
+            best = max(best, r)
+            return
+        if r + len(p) <= best:
+            return
+        u = max(p | x, key=lambda v: len(adj[v] & p))
+        for v in list(p - adj[u]):
+            grow(r + 1, p & adj[v], x & adj[v])
+            p.discard(v)
+            x.add(v)
+
+    grow(0, set(adj), set())
+    return best
+
+
+@dataclass(frozen=True)
+class Product:
+    """A work's product as its caller reads and prices it: all `slowdown_of` reads of it. How a caller reads its
+    circuit or trace into products, and what it charges each operand, is its own."""
+
+    #: its MACs and output wires, before the work's `scale`
+    macs: float
+    wires: float
+    #: the bits (H) charges a word of each operand, as the caller charges them
+    beta: tuple[float, float]
+    #: which operand is a weight: its `β` is `β_w` and the other's `β_x`; with both or neither, the larger is `β_w`
+    weight: tuple[bool, bool] = (False, False)
+    #: the bits (E) charges one of its outputs, as the caller charges them
+    b_y: float = BF16
+    #: its contraction length; `inf` where its caller states none, so no sub-work leaves it out as short
+    k_dim: float = math.inf
+    forward: bool = False
+    #: whether it is a weight gradient
+    dw: bool = False
+    #: the pairs of arrays it multiplies, each a frozenset of two, where its caller knows them; None where not
+    pairs: frozenset | None = None
+
+
+@dataclass(frozen=True)
+class Chosen:
+    """What `slowdown_of` chose on a work, and the bound there."""
+
+    #: the bound on the sub-work that binds; where (H) states no activation's `β` at `k`, `bound`'s on the whole work,
+    #: which says nothing; None where no product's two operands both cost a bit
+    bound: Bound | None
+    #: the sub-work that binds (`SUBWORKS`), None where none does
+    choice: str | None
+    #: its products, by their places in the work
+    products: tuple[int, ...]
+    #: its term: `bound.blocks` times `c / size`, before the floor at 1; 0 where none binds
+    term: float
+    #: each sub-work's term at its best threshold, None where it holds no product whose operands both cost a bit
+    terms: dict
+    #: the contraction below which the second sub-work leaves a product out: where the count's outputs' term is at
+    #: least its main one at the `m = N / (k + F α)` a product's MACs alone would need, on the first sub-work's
+    #: choice. None where the first has no term
+    K_thr: float | None
+    #: what the bound was asked at, each None where none binds: the threshold `q` the sub-work's products' `β_w β_x`
+    #: are at least, the pair at it, the least `b_y`, `F`, `F α`, and `N` and `O` at the work's `scale`
+    q: float | None = None
+    beta_w: float | None = None
+    beta_x: float | None = None
+    b_y: float | None = None
+    F: float | None = None
+    alpha: float | None = None
+    N: float = 0.0
+    O: float = 0.0
+    #: `ω` where every product states its pairs and `F` is `share(ω)`; None where `F` is the kinds' rule or given
+    omega: int | None = None
+
+
+def slowdown_of(c: float, k: float, n: float | None = None, *, size: float, work: Sequence[Product],
+                scale: float = 1.0, F: float | None = None) -> Chosen:
+    """The bound at the policy `(c, k, n)` on a circuit of `size` gates whose charged work is `work`: the sub-work and
+    `F` it is largest at, and `bound` there. The one way from a work to a slowdown.
+
+    The sub-works are the three of `SUBWORKS`, each at its best threshold `q`: of its products, those whose
+    `β_w β_x` is at least `q`, charged at the pair of the first product at `q`, the least pair among them, which `F`
+    needs where the arrays differ in `β` (Motzkin–Straus sums `u_r u_s / (β_r β_s)` over the pairs multiplied), and at
+    their least `b_y`. The second leaves out of the work the products whose contraction is below `K_thr`, taken on the
+    first's choice; the third is the weight gradients alone. The sub-work that binds is the one whose term is largest,
+    the first of them on a tie.
+
+    `F` is `share(ω)`, `ω` the largest set of arrays the sub-work's products multiply pairwise (at least 2), wherever
+    every product states its `pairs`: where the arrays are stated, their graph is the rule. Where one doesn't, the
+    rule is the products' kinds': 1 on the weight gradients alone and on forward products alone, `share(3)` otherwise.
+    The two agree on a layer: its forward `Y = X W`, input gradient `dX = dY Wᵀ` and weight gradient `dW = Xᵀ dY`
+    multiply `{X, W}`, `{dY, W}` and `{X, dY}`, a triangle, so `ω = 3`; the weight gradients alone multiply disjoint
+    pairs and forward products alone a chain, so `ω = 2`. They differ on a sub-work whose backward products close no
+    triangle (forward products and input gradients without the weight gradients, a path: `F = 1` by the graph,
+    `share(3)` by the kinds), and where four or more arrays are multiplied pairwise (attention's `Q Kᵀ` and `P V` with
+    their gradients), where the graph gives `share(ω)` above `share(3)` and the kinds' rule does not hold: a caller
+    whose work holds such products states their pairs. `F` where given is every sub-work's, for a comparison at one
+    `F`.
+
+    `N` and `O` are `scale` times the sum of the products' MACs and wires: the share of the work its caller counts.
+    No `β` is capped and no product priced here: a product states what it costs as its caller reads it."""
+    if beta(k) is None:
+        N, O = scale * sum(p.macs for p in work), scale * sum(p.wires for p in work)
+        return Chosen(bound(c, k, n, N=N, O=O, size=size), None, (), 0.0, dict.fromkeys(SUBWORKS), None, N=N, O=O)
+    priced = [(math.prod(p.beta), i, p) for i, p in enumerate(work)]
+
+    def pair(p: Product) -> tuple[float, float]:
+        if sum(p.weight) == 1:
+            return (p.beta[0], p.beta[1]) if p.weight[0] else (p.beta[1], p.beta[0])
+        return tuple(sorted(p.beta, reverse=True))
+
+    def best(sub: list, alone: bool = False) -> dict | None:
+        out = None
+        for q in sorted({x for x, _, _ in sub if x > 0}, reverse=True):
+            M = [(x, i, p) for x, i, p in sub if x >= q]
+            bw, bx = next(pair(p) for x, _, p in M if x == q)
+            N, O = scale * sum(p.macs for _, _, p in M), scale * sum(p.wires for _, _, p in M)
+            b_y = min(p.b_y for _, _, p in M)
+            omega = None
+            if F is not None:
+                f = F
+            elif all(p.pairs is not None for _, _, p in M):
+                omega = max(2, clique(e for _, _, p in M for e in p.pairs))
+                f = share(omega)
+            else:
+                f = 1.0 if alone or all(p.forward for _, _, p in M) else share(3)
+            b = bound(c, k, n, N=N, O=O, size=size, beta_w=bw, beta_x=bx, b=b_y, F=f)
+            raw = b.blocks * c / size
+            if out is None or raw > out["term"]:
+                out = {"bound": b, "products": tuple(i for _, i, _ in M), "term": raw, "q": q, "beta_w": bw,
+                       "beta_x": bx, "b_y": b_y, "F": f, "alpha": f * alpha(k, q, b_y), "N": N, "O": O,
+                       "omega": omega}
+        return out
+
+    whole = best(priced)
+    K_thr = None
+    subs = [whole]
+    if whole is not None:
+        K_thr = (whole["F"] * k / 2) ** 2 * whole["b_y"] / (whole["beta_w"] * whole["beta_x"] * (k + whole["alpha"]))
+        subs.append(best([x for x in priced if x[2].k_dim >= K_thr]))
+    else:
+        subs.append(None)
+    subs.append(best([x for x in priced if x[2].dw], alone=True))
+    terms = {name: None if s is None else max(0.0, s["term"]) for name, s in zip(SUBWORKS, subs)}
+    on = [(s["term"], -i, name, s) for i, (name, s) in enumerate(zip(SUBWORKS, subs)) if s is not None]
+    if not on:
+        return Chosen(None, None, (), 0.0, terms, K_thr)
+    _, _, name, top = max(on)
+    return Chosen(top["bound"], name, top["products"], max(0.0, top["term"]), terms, K_thr, top["q"], top["beta_w"],
+                  top["beta_x"], top["b_y"], top["F"], top["alpha"], top["N"], top["O"], top["omega"])
 
 
 @dataclass(frozen=True)
