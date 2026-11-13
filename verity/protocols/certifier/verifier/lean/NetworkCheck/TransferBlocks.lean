@@ -32,7 +32,7 @@ Its public outputs are `verdict` and the proved `deadline` bit, and `digest` bin
 sessions and the accept bit (`verdictDigest`). A link is plain, served or a warden's (`service.OF_RECORD`); a case of
 kind ``advised`` is refused by name (`caseOf`): no advised link has a verdict of record.
 
-`linkWindowFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
+`transferBlocksFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
 through `lean_audit.SERVER`. `certificatesFn` is its `certificates` function, the client's check of one window's
 certificates as a reveal endpoint served them (`refusals`), which `lean_audit.certificate_refusals` calls with
 `audit.certificate_refusals` as its reference. Both read a certificate as v4's check does (`Check.Certificate`) and
@@ -45,7 +45,7 @@ certificate and its encodings (`NetworkCheck.Check`).
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace NetworkCheck.LinkWindow
+namespace NetworkCheck.TransferBlocks
 
 open Lean (Json toJson)
 open Flock (V)
@@ -53,7 +53,7 @@ open NetworkCheck.Check (Certificate)
 
 def verdictFormat : String := "verity-network-certifier/verdict/v0"
 /-- `verity.ml.commitments.window.WINDOW_DOMAIN`, one-stage's served domain. -/
-def windowDomainTag : String := "verity/one-stage/served-domain/v1"
+def executionPhaseDomainTag : String := "verity/one-stage/served-domain/v1"
 def value : String := "certificates"
 def schema : String := "hm96-sha512/row/v2"
 def leaves : Nat := 4
@@ -239,7 +239,7 @@ leaves, its binding the identity digest of the registered Program, the partition
 and the run `<run>/<link>/<window>`; the boundary's owner, positions `RangeIndexedDomain(0, 4)`
 (`Flock.FV3.Sha512.Domain.make`). -/
 def domainId (c : Case) : V ByteArray := do
-  let binding ← Identity.identityDigestSha512 windowDomainTag (Json.mkObj [
+  let binding ← Identity.identityDigestSha512 executionPhaseDomainTag (Json.mkObj [
     ("program", .str c.program), ("partition", .str c.partition), ("port", .str value), ("schema", .str schema),
     ("leaves", toJson leaves), ("run", .str s!"{c.run}/{c.link}/{c.window}")])
   return (Flock.FV3.Sha512.Domain.make binding (-1) 0 leaves).id
@@ -446,7 +446,7 @@ def verdictJson (v : Verdict) : Json :=
       ("certified", .bool v.certified), ("synced", .bool v.synced)])]
 
 /-- `network-records verdicts`' `link-window`: the verdict on a case, or its refusal of a case it can't read. -/
-def linkWindowFn (j : Json) : Except String Json := do
+def transferBlocksFn (j : Json) : Except String Json := do
   return verdictJson (← verdict (← caseOf j))
 
 /-! ## The client's certificates -/
@@ -524,4 +524,4 @@ def certificatesFn (j : Json) : Except String Json := do
   let codes (xs : Array (Option String)) : Json := .arr (xs.map fun | some r => .str r | none => .null)
   return Json.mkObj [("certificates", codes certs), ("clocks", codes clocks)]
 
-end NetworkCheck.LinkWindow
+end NetworkCheck.TransferBlocks
