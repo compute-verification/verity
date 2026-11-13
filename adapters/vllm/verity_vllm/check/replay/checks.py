@@ -9,14 +9,20 @@ name (`fold`); one it can't evaluate leaves the replay partial, never a pass.  T
 which no committed word holds: its body's seed, its id and the window's seed salt (`checks_of`'s ``certified``, `_seed_check`)."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import partial
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
 from verity_vllm.check.replay.compare import _interior_slice
 from verity_vllm.check.replay.evaluate import evaluated
-from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM, ProgramIndex, row_args
+from verity_vllm.check.replay.index import (
+    SAMPLER_OP,
+    SEED_PARAM,
+    ProgramIndex,
+    row_args,
+)
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit.opened import opened_check
 from verity_vllm.query.manifest import format as RM
@@ -74,7 +80,7 @@ def _check(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int,
             return rec | {"result": None, "why": why}
     else:
         got, why = evaluated(pi, store, weights, r, rid, arrive, rec["inputs"])
-        if why is not None:
+        if got is None:
             return rec | {"result": None, "why": why}
         bit = _interior_slice(got, lo, hi)
         if bit is None or bit.size != 1:

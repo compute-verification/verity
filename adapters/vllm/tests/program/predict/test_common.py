@@ -3,6 +3,7 @@ from __future__ import annotations
 import gc
 
 import pytest
+
 from verity_vllm.program.predict.common import cyclic_gc_off
 
 

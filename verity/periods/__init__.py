@@ -9,8 +9,6 @@ and it imports no other unit.
   `parts` are the spans between consecutive boundaries.
 - `MonitoringPeriod(span, execution, sampling)`: a span, its cut into its execution blocks' spans, and for each execution
   block its span's cut into its sampling blocks' spans. `MonitoringPeriod.of` builds one from boundaries.
-- `MONITORING_PERIODS`: the monitoring periods a result is presented for (week, month, year), each with its length in
-  seconds.
 - `block_count(seconds, block_s, machines)`: the blocks a monitoring period of `seconds` holds over `machines` machines,
   each audited in whole `block_s`-second blocks: the one count every period table scales a block's figures by.
 
@@ -24,9 +22,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
-
-#: The monitoring periods a result is presented for, each with its length in seconds.
-MONITORING_PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month", 30 * 86400), ("year", 365 * 86400))
 
 
 class PeriodError(ValueError):
@@ -170,4 +165,4 @@ class MonitoringPeriod:
         return cls.of(span, execution, [_ticks(bs, "monitoring period.sampling") for bs in o["sampling"]])
 
 
-__all__ = ["MONITORING_PERIODS", "Cut", "MonitoringPeriod", "PeriodError", "TickSpan", "block_count"]
+__all__ = ["Cut", "MonitoringPeriod", "PeriodError", "TickSpan", "block_count"]

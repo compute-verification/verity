@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import pytest
+
 from verity_vllm.engine import hooks
 from verity_vllm.protocols.linear import vllm_site
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Shard, Stack
