@@ -28,7 +28,7 @@ SERVE_DIR=${1:?usage: served_piece.sh SERVE_DIR WINDOW DIR}; WINDOW=${2:?WINDOW}
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 mkdir -p "$DIR"
 PY=${PY:-/workspace/cp/venv312/bin/python}
-export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/verity/configuration/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH=$ROOT:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 LIB=${P2_LIB:-}
 if [ -z "$LIB" ]; then

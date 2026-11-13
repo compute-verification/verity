@@ -25,7 +25,7 @@ step build $?
 uv venv -q -p 3.12 "$S/venv" && uv pip install -q -p "$S/venv" torch numpy safetensors huggingface_hub > "$O/venv.log" 2>&1
 step venv $?
 PY=$S/venv/bin/python
-export PYTHONPATH=$ROOT:$ROOT/$V:$ROOT/verity/configuration/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
+export PYTHONPATH=$ROOT:$ROOT/$V:$ROOT/tools/config:$ROOT/tools/research/src PYTHONDONTWRITEBYTECODE=1
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$O/python.txt" 2>&1
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$O/gpus.txt" 2>&1
 grep -qE "^(build|venv) rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt"; exit 2; }
