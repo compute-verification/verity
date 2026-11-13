@@ -179,6 +179,7 @@
   "Proofs.Properties.Verity.Sampled.RecursiveRefused",
   "Proofs.Properties.Verity.Sampled.MemberForm",
   "Proofs.Properties.Verity.Recursive.Audit",
+  "Proofs.Properties.Verity.SampledTwo.CoinPrefix",
   "Proofs.Properties.Verity.SampledTwo.CutFirst",
   "Proofs.Properties.Verity.SampledTwo.CutAccept",
   "Proofs.Properties.Verity.SampledTwo.SessionLogged",
