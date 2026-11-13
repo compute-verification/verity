@@ -15,7 +15,7 @@ PouwSegCheck statements, the r9 twin, the filler scorer's fold table) is held to
 Its two modules are `receipt_folds` (the steps, key rules and schedules) and `receipt_conform` (the checks). Each has
 two names, and a caller takes what the module's `__all__` lists:
 
-- `verity.protocols.pouw.receipts.receipt_folds` and `.receipt_conform`, for a test or any other reader in the
+- `verity.protocols.pouw.verifier.receipts.receipt_folds` and `.receipt_conform`, for a test or any other reader in the
   workspace, which edits no `sys.path` for them;
 - `receipt_folds` and `receipt_conform`, where this directory is on `sys.path`: in `python receipt_conform.py` itself,
   and in a file started by path, such as a script run where there is no workspace, which puts it there.
