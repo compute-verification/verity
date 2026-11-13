@@ -4,9 +4,9 @@ At LAYERS layers, rank 0, 43 prompt ids and 2 outputs (the census's Build, `benc
 the set of `IF.Table`s the node window declares for the experts (`node_window_sparse._table_reads`: name, words a row,
 rows), against `pipeline.expert_tables.tables_of` at ``--block w13=1 --block w2=32`` over the same Build's weight fields,
 each table's row width and row count from `expert_rows.table_words` on a zero stack of the field's shape. Serving's fields
-three ways: the class Program's weights record as `window_weights._fields` reads it (what the weight registration reads
-without a Program dir), and `weights_of_record.program_weight_fields` over ``[["weights", str(type)]]`` (a Program dir's
-``instances["params"]``, as `program/workload.py` writes it) of the request Program and of the class Program. Run from
+two ways: the weights record as `window_weights._fields` reads a Program's (on the request Program: the class Program is
+refused for this Build), and `weights_of_record.program_weight_fields` over ``[["weights", str(type)]]`` (a Program dir's
+``instances["params"]``, as `program/workload.py` writes it), which `expert_tables.register` reads. Run from
 the repository root:
 
     .venv/bin/python p3_names.py OUT [LAYERS]
@@ -32,7 +32,6 @@ from verity_vllm.pipeline.expert_rows import table_words  # noqa: E402
 from verity_vllm.program.predict import node_window as NW  # noqa: E402
 from verity_vllm.program.predict import node_window_dense as ND  # noqa: E402
 from verity_vllm.program.predict import node_window_sparse as NS  # noqa: E402
-from verity_vllm.program.predict import window_weights as WW  # noqa: E402
 from verity_vllm.program.predict.steps import plan_steps, request_program  # noqa: E402
 
 BLOCKS = {"w13": 1, "w2": 32}
@@ -63,13 +62,18 @@ def weights_type(fn) -> str:
     return str(dict(fn.signature()[0])[WR.PARAM])
 
 
-r, class_fields = WW._fields(reg)
+def record_fields(fn) -> list:
+    """`window_weights._fields`' reading of a Program's weights record, on ``fn`` (its class Program is refused for this
+    Build, which has no sweep: `launch_context._requests`)."""
+    from verity_vllm.program.predict.common import _arr_shape
+    return [(n, list(_arr_shape(t)), next(iter(t.width_set()))) for n, t in dict(fn.signature()[0])[WR.PARAM].fields]
+
+
 sides = {
-    "class_fields": class_fields,
-    "request_program_type": WR.program_weight_fields({"params": [[WR.PARAM, weights_type(p.program.fn)]]}),
-    "class_program_type": WR.program_weight_fields({"params": [[WR.PARAM, weights_type(r.program.fn)]]}),
+    "record_fields": record_fields(p.program.fn),
+    "program_dir_params": WR.program_weight_fields({"params": [[WR.PARAM, weights_type(p.program.fn)]]}),
 }
-rec = {"layers": layers, "rank": 0, "blocks": BLOCKS, "program": p.digest, "class_program": r.digest,
+rec = {"layers": layers, "rank": 0, "blocks": BLOCKS, "program": p.digest,
        "mine": {"count": len(mine), "tables": mine}}
 for k, fields in sides.items():
     theirs = serving(fields)
