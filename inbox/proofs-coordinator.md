@@ -153054,3 +153054,46 @@ It is in no place I can read: not in my mailbox branch's log (16:04Z, 16:40Z and
 - The stop rule: no listed guarantee's text changes by my reading; the records run names the readers of `Core.WorkStratum.problem`, and I bring you both texts before any push if one moves.
 
 To post: nothing. Runs going on: four elaborations on vy-nebius-2. I open the pull request with the pull-request tool my harness gives me (it cannot run `research queue open`), unmarked, and name its head here. Next entry by 18:15Z.
+
+## [2026-11-13T17:14Z] ACCEPTS: REGISTRATION'S SECOND READ, FINISHED AT THE DRAFT'S HEAD `13e68d1d0a3a`: none of A1 to A6 or B1 to B5 is changed by it; B3 is now load-bearing, because the ties' `AtHead` reads the prefix heads, which bind nothing unless an entry's digest does; the body's runs are still of `fc054660c82`; reading only
+
+**The head I read.** [read] `cursor/soundness-registration-8fb2` at `13e68d1d0a3a6e9c87e4144e35d9e717628fce10` (fetched 17:12Z; the pull request's head too, last edited 17:10:58Z). Since `fc054660c826` there are three commits: `26f8becd831` (prefix heads in the code's view and its Python mirror), `5e3c81b9efd` (prefix heads in the spec; the ties at a head, under `Properties.Ties`), `13e68d1d0a3` ("Lock: records for the views' prefix heads", two lock files, +18/−14). Thirteen files in all, +274/−76. The body's "Verified" section still names head `fc054660c82` and no run at a later head.
+
+**What I read that I had left out.** [read]
+- `security/Proofs/Properties/Core/Registration.lean`, every changed line: the invariant `Inv` (`:71-76`) gains `s.entries = p.length` and `heads (digests E) (composite c) (log B p) = s.heads`; a lemma `heads_concat` (`:82-91`, the heads of `L ++ [x]` are `L`'s then `(L.length + 1, D.entry x)`); `inv_empty`, `inv_add`, `refusal_eq` and `view_eq` carry the two new conjuncts. No statement changes: `Checks`, `checks`, `checks_honest`, `checks_nontrivial`, `denotes_once` and `names_accepted` are as I read them.
+- `security/Properties/Core/Registration.lean`: the denoted view `view B v` takes the code's `heads` as they are (`:66-68`).
+- `verity/protocols/interface/CoreProtocol/Registration.lean`: `State` gains `heads : List (Nat × String)`, `State.empty` starts it at `[(0, genesis c)]`, `State.add` appends `(s.entries + 1, e.digest)` for each kind, `View` gains `heads := []`, and `View.toJson` writes `"heads": [{"entries", "head"}]`. So the protocol's public output, the view, gains one field.
+- `verity/hardware/registration.py`: the same in the Python mirror, field for field (`State.heads`, `add`, `check`'s start, `View.heads`, `to_json`). I read no difftest for it.
+- `13e68d1d0a3`: only `reads` digests move: in `security/lean-audit.json` the module that reads `Verity.Registration.View`/`view` gains `Verity.Registration.heads`; in `security/Properties/lean-audit.json` the reads of `Core.Registration.State`, `.add`, `.empty`, `.view`, `View` move, and `State.heads`, `View.heads`, `Verity.Registration.heads` are added. No guarantee's record is added or dropped. The three `Properties.Registration.checks*` records are as before: owner `@proofs`; `checks_honest` alone lists `Verity.Site.Boundary` under `open`, `checks` and `checks_nontrivial` list nothing.
+
+### Each finding at `13e68d1d0a3a`
+
+- **A1** `View.Onsite`: UNCHANGED [read]. Now at `security/Definitions/Core/Registration.lean:140-142`, the same `∀ h ∈ v.site.host? x`.
+- **A2** `View.Holds`: UNCHANGED [read], `:150`, still `Devices ∧ Onsite ∧ Once`.
+- **A3** `DeclaredIsParams`: UNCHANGED in substance [read]. `DeclaredIn` (`security/Properties/Ties.lean:69`) keeps free `tags`, `tables`, `j` and META's label; the tie is it at a head (`:76`). The head `h` is one more free argument.
+- **A4** `CertifiedIsParams`: UNCHANGED [read] (`CertifiedIn`, `:99`; at a head, `:104`). The docstring now says the one key becomes per key entry once the certifier's parameters carry entries.
+- **A5** `RootIsRegistered` and the spec's `Theta`: UNCHANGED [read] (`RootIn`, `:113`; at a head, `:118`; `Theta` still a name and a root).
+- **A6** `AccountedFor`, `Lists`, `Site.parts`: UNCHANGED [read] (`:167`, `:159`, `:66`). `parts_take_mono` (`security/Proofs/Properties/Ties.lean`) proves a prefix's parts are a longer prefix's, which says nothing on A6's three ways.
+- **B1** what `Checks` says, who picks `B`: UNCHANGED [read]. The denoted view now also carries the heads, and `Checks` proves them the spec's.
+- **B2** `denotes_once`: UNCHANGED [read]; the statement and its use in `names_accepted` are as before. Choice (1)'s cost is now sharper [derived]: the spec's `heads` of a prefix `log.take n` are read under `names B l` of the WHOLE log, so a tie at a prefix head is under digests that depend on entries after it; `names_accepted` makes them agree on every accepted entry, so this costs a lemma, not soundness.
+- **B3** `Checks` holds with any entry digest: UNCHANGED, and NOW IT MATTERS [derived]. The proofs file still never opens `Entry.digest` or `Site.tagged` [read: the changed lines add `heads_concat` over the abstract `D.entry`]. `AtHead D c log h P := ∃ n, (n, h) ∈ (view D c log).heads ∧ P (view D c (log.take n))` reads a prefix by its head. With a digest that binds nothing (a constant, say), every prefix of length ≥ 1 has one head, and `AtHead` at that head lets the tie be read at any of them: "what the prefix the answer names registers" becomes "what some prefix registers". Under the ties' monotonicity this is at most "what the whole log registers", so no tie is made false; but the point of the prefix head, that an answer is held to what was registered when it was made, rests on the head naming one prefix, which nothing states. The statement needed is the one B3 names: two prefixes of accepted logs with one head are one prefix, or two entries' texts collide under SHA-512 (the skill's break form). The `n` in `(n, h)` doesn't fix it: the answer names `h`, not `n`.
+- **B4** about `check`, not `checkLog`/`protocol`: UNCHANGED [read]; `protocol`'s public view gains `heads`, still outside `Checks`.
+- **B5** the witnesses: UNCHANGED [read]. `honestLog` has three heads now; neither witness reads them.
+
+### One new line
+
+[read] The heads are now a field of the protocol's public output (`View.toJson`). [derived] They are public structure (one digest per entry, all derivable from the public log), so nothing is newly exposed. But `Checks` is still only about `check`'s fold; that the JSON a reader gets carries those heads is `View.toJson`'s, which no property states.
+
+## STOP RULE
+
+Item 1 of your order is done; nothing built, run or committed but this entry, no branch of theirs touched. Item 2 (link 1 of each chain, as text) follows by 20:00Z; item 3 only after it.
+
+## NEEDS
+
+Nothing.
+
+## Not established
+
+- Nothing compiled or run by me; no run of theirs at a head past `fc054660c82` is named in the body.
+- B3's "constant digest gives `AtHead` any prefix" is derived by reading, not compiled.
+- No difftest of `verity/hardware/registration.py`'s new `heads` against the Lean was read; whether one covers `heads` is not known.
