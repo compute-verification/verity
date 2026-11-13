@@ -118455,3 +118455,38 @@ Neither finding changes a listed guarantee's statement or a named assumption: bo
 **Not established:** that `Registered`, `Apart`, `Laid`, `WindowPasses`, `Units`, `Sample`, `Passes` (after the merge) and `States` compile in the tree: none has had its try, and the models stand in for the verifier's names, so a mismatch with a real definition would show only in the try. That soundness's instance can discharge `RegisteredHolds` (I have not read how the window's instance builds `registered`; none is built yet). That the lift's accept has the parse in reach for `FormApart`. `Reads.lean` is not started. The size against the merged tree is for the 18:00Z entry; today `MemberForm/` is 23 files, 5859 lines, 256 theorems, soundness's three files among them [run: counted at `36d7afc38f`].
 
 **To post:** to soundness (PRF-490): "WINDOWAT's `windowPasses_members` takes `RegisteredHolds I.base`: the instance's registered files hold a file under each digest the parameters' members name. Can the window's instance discharge it by construction, as `registeredFiles_of` does for one statement?" To MEMBERS: "The lift owes one more fact with `FormAccepts`: `FormApart` (no unit in two members' ranges at accepted parameters); `membersParamsOfJson_apart` on `cursor/proofs-windowat-5e4b` proves it of the parse."
+
+## ONSITE, Fri 13 Nov 03:49Z: correction to 03:30Z: the path I named fails `main`'s layout test; #9602's maps now send all three under `compose/verifier/`; #9486 has its ready line
+
+**What changed since 03:30Z.** `main` moved from `4a7291116e11` to `8ef93f01963c` and now holds `tests/tree.toml`, the layout of record, with `tests/test_tree.py` [read: `git ls-remote origin main`; `git log 4a7291116e11..origin/main`, the landing "Queue: #9539"]. A protocol's directory may hold only `verifier/`, `prover/`, `device/`, `tests/`, `README.md`, `PROTOCOL.md`, `__init__.py` and `pyproject.toml` [read: `tests/tree.toml:249-278`]. A stray entry fails; a stale line only warns [read: the header of `tests/tree.toml`].
+
+**What that refuses.** The tree my 03:30Z certificate made (`ff60989c6d29`) has nine strays under `verity/protocols/compose/`: the Lake package's seven entries at the protocol's top (`.gitignore`, `CoreComposition`, `CoreComposition.lean`, `lake-manifest.json`, `lakefile.toml`, `lean-audit.json`, `lean-toolchain`), and `remote` and `onsite` [run on my VM: `python3 tests/test_tree.py ff60989c6d29…` with `main`'s `tests/tree.toml`, rc 1]. Seven of the nine come from `compose_map.toml` as `main` holds it, so the map on `main` is refused too, not only the path I named. The move check still certifies that tree: it is a pure move, and the layout test is a different check [derived].
+
+**The path now** (proofs names it, so no line of `tests/tree.toml` changes and nothing is asked of top):
+
+| What | From | To |
+|---|---|---|
+| `core_composition` | `verity/protocols/remote/verifier/composition/` | `verity/protocols/compose/verifier/lean/` |
+| `core_remote` | `verity/protocols/remote/verifier/` | `verity/protocols/compose/verifier/remote/` |
+| `core_onsite` | `verity/protocols/onsite/verifier/` | `verity/protocols/compose/verifier/onsite/` |
+
+`verifier/lean/` is where AGENTS.md says a protocol's Lean verifier goes and where spot, poub and the certifier keep theirs [read: `git ls-files 'verity/protocols/**/lakefile.toml'`]. Three packages side by side under one `verifier/` is what `recursion/verifier/` already has [read: same]. No package directory sits inside another any more. Still two maps, same file names, and no `[roots]` line touched, so top's hand commit applies as before [read: my diff].
+
+**#9602 now:** branch `cursor/proofs-compose-lists-map-6c1e`, head `197e83675b2a8bf6c6d20483efeb577e999e0bcf`, open, unmarked. `main` (`8ef93f01963c`) is merged into it (`242bc16dd311`), then one commit changes the rows of both maps [read: `git log`]. The maps' own tests pass (10) and the ratchet gate passes on the head [run on my VM]. Its body still describes the old path; I rewrite it with the new certificate.
+
+**Not established for the new head:** the certificate. `r20261113-034657-11a1` (cpu-3) stages both maps on `197e83675b2a`, runs `move_check.py` and `resolve_check.py` on each commit, then the pins. It started at 03:47Z; the last one took 7 min to the certificate and 7 more for the pins, so about 04:05Z [derived]. The 03:30Z certificate (`r20261113-032249-91f3`) is of the old path and no longer describes the PR. I cancelled `r20261113-033109-0353` and `r20261113-033238-8ea1`, which tested the old head.
+
+**If you or top would rather keep the old path:** it needs nine `[[tree]]` lines for `compose/` in `tests/tree.toml`, which is top's file and Daniel's shape. Reverting my one commit restores it.
+
+**Ready line:** #9486, head `93817fbb2f8af377ca38a71057eb47a69dea51e1`, branch `cursor/proofs-world-map-3b9d`. `main` (`4a7291116e118e0a0f8b72c558aadb58aad6b428`) is in it and nothing else [read: `git diff --stat 4a7291116e11 93817fbb2f8a`, two files: `tools/move/world_map.toml`, `verity/protocols/certifier/device/README.md`].
+
+- Quick tier: 11 of 11 suites passed at `0a13c1c90cb3`, the head before the merge [run: `r20261112-212908-8f08`].
+- After merging `main` once: `tools/move` 257 passed, `repository` 382 passed, `verity-graph` 220 passed on `93817fbb2f8a` [run: `r20261113-032430-9441`, rc 0].
+- Ratchet gate passed on `93817fbb2f8a` [run on my VM].
+- The move certifies on that head: `93817fbb2f8a..63c2b83609da` is a pure move, 6 renames and 11 path-only edits; the rerun changes nothing; `resolve_check.py` 0 issues [run: `r20261113-031936-2dd7`].
+- The moved tree passes the layout of record, with one stale line that only warns [run on my VM: `tests/test_tree.py` over `63c2b83609da`, rc 0].
+- `main` has moved 13 landings since (`8ef93f01963c`); the branch merges onto it with no conflict [run on my VM: `git merge-tree`]. I merged once, as told, and not again.
+
+**Can #9486 ride Friday's chain:** it moves a Lake package, so lean's rule for such maps covers it, the same as ours. It is independent of the two compose maps. If top's config move lands first, `world_map.toml` needs the same `verity_config` root set by hand; top's list of files for that hand commit does not name it [read: TOP-398].
+
+Next entry when `r20261113-034657-11a1` ends, by 04:30Z at the latest.
