@@ -108,7 +108,7 @@ theorem filterMap_zipIdx_fst {α β : Type} (f : α → Option β) : ∀ (l : Li
   | a :: l, k => by
     have ih := filterMap_zipIdx_fst f l (k + 1)
     rw [List.zipIdx_cons, List.filterMap_cons, List.filterMap_cons]
-    rcases h : f a with _ | b <;> simp [h, ih]
+    rcases f a with _ | b <;> simp [ih]
 
 theorem map_zipIdx_fst {α β : Type} (f : α → β) : ∀ (l : List α) (k : ℕ),
     (l.zipIdx k).map (fun q => f q.1) = l.map f
@@ -158,7 +158,7 @@ theorem fill_dual : ∀ (S : List (ℚ × ℚ)) (b : ℝ), S.Pairwise (fun a c =
       have hf := fill_nonneg S 0 hnn' le_rfl
       simp only [min_eq_left hbw, sub_self, max_self, mul_zero, zero_add]
       linarith
-    · push_neg at hbw
+    · have hbw : (w : ℝ) < b := not_le.1 hbw
       obtain ⟨l, hl0, hlS, hl⟩ := fill_dual S (b - w) hs hnn' (by linarith)
       have hlρ : l ≤ ρ := by
         rcases hlS with h | ⟨x, hx, h⟩

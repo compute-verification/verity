@@ -579,7 +579,7 @@ cells. Every untied credited cell is a credited cell of a tile its table does no
 share, and the fill bounds the credited cells of tiles of that share. No probability: it is about the run's passes and
 table alone, and it needs no premise that the run is held to W. The tile a credited cell lies in is tile `x` of its
 record, whose id is the record's offset plus `x` (`Pass.tile?`'s numbering), and every tile has a width `n > 0`, so
-its ticket is its cells at `cellTicket`. -/
+its ticket is its cells at `cellTicket`. Proved: `untiedCellsAtMost` (`Proofs.Properties.Pouw.PearlPlus.Tie`). -/
 def UntiedCellsAtMost : Prop :=
   ∀ (R : Run) (ε : ℝ), R.wrongShare ≤ ε → (R.untiedCredited.card : ℝ) ≤ cellsAt R.passes ε
 
