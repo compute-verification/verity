@@ -1793,12 +1793,6 @@
    "type_hash": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a",
    "unfolded_hash": "886e1a4446361385b29acb248b94643c3c24993a290636bea27053884eb7dc11"
   },
-  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
-   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
-   "missing": "honest",
-   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld",
-   "unfolded_hash": "1c50962c1922c6ddacfb9742353e1de96fdd113bca73ae42a82d7c5ad0282b33"
-  },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
    "type_hash": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
    "unfolded_hash": "4d6ca0d165dc6a4581fbbf48c670e1e6887a45e0d7f9439256bb3947fa78b51b"
@@ -6768,7 +6762,34 @@
    "unfolded_hash": "1c50962c1922c6ddacfb9742353e1de96fdd113bca73ae42a82d7c5ad0282b33"
   },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_honest :",
+    "  Exists fun seed =>",
+    "    Exists fun k =>",
+    "      Exists fun ledger =>",
+    "        Exists fun pins =>",
+    "          Exists fun main =>",
+    "            Exists fun salt =>",
+    "              Exists fun calls =>",
+    "                Exists fun served =>",
+    "                  Exists fun commit =>",
+    "                    Exists fun rounds =>",
+    "                      Exists fun draw =>",
+    "                        And (Eq (Lms.keygen Lms.deployed seed) (Except.ok k))",
+    "                          (Eq",
+    "                            (PouwCheck.Credit.Internal.credited { params := Lms.deployed, pub := k.publicKey }.toJson",
+    "                              ledger pins main salt calls served commit rounds draw)",
+    "                            (Except.ok (List.cons 0 List.nil)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "f4df8411b5532943a218ace2a84ce72d094f5a3d3b7abb8a2c81aaa547eafcff"
   },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial": {
    "owner": "@compute-accounting",
@@ -22438,7 +22459,7 @@
    }
   },
   "PouwCheck.Credit": {
-   "digest": "86024082a88def37f5bbfc4dd03aa0ecc77aa75215e66ad1587b8a948dba748c",
+   "digest": "8f66ab82fd2f28379fa0958d76547b8099c93d285fdc5adfa86874d166a552c5",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -22567,7 +22588,7 @@
     "PouwCheck.Credit.capsRoot": "ecd9578d3ea23f00ca1f3b3185dbd0071a6417f7cd85b68c67d12220b1e3d45e",
     "PouwCheck.Credit.chunks?": "65256e121dbc5592830544c4284bb5a55ee3edd07dabd9880e8628a50de222f1",
     "PouwCheck.Credit.commitIds": "5fc5874c96e5ddc06fa4e59591298cbe784ebebc04c69e6a91f89d30c0bc356e",
-    "PouwCheck.Credit.commitOf?": "94e511b0d8cf72f2072e27abedd539ad10e20b2f3bf5e43eebb798dc4d6f7077",
+    "PouwCheck.Credit.commitOf?": "ee767cbf27bcd3cd0de4eb2d54c944cae6e3db732f282887f24b33e3e12d0321",
     "PouwCheck.Credit.commitRows": "935c00ed18db025df43f38a2cc865ba4565a9a46dd296c48cc4f9d49b2a0aab0",
     "PouwCheck.Credit.committedFloor": "5e718cbf6eca126e2cc52717d75328d2388ad29ed9115a039924fc3d1dec2206",
     "PouwCheck.Credit.committedK": "d0e8c0ca14be1d535e61496821fc7b3709330be668f8417c7fbf46a18ef06ddc",
@@ -26586,13 +26607,14 @@
    }
   },
   "Spot.ChallengerRecord": {
-   "digest": "ae9e8cd7e9852345ec3a820a32cb07fa1268cb1e8af9952a4cfa1ee08ea32300",
+   "digest": "d340a6312bf51a19edc1b1697a315f97f88e9420f417c7866284814f9672a191",
    "definitions": {
     "Spot.Challenger.COMMITMENT_TAG": "533b9e8aa59874facc70d607333a408dd5b2d893dbbbbbd3ff44360e1bca81d5",
     "Spot.Challenger.ChallengerKey": "28b8d7cf3733aafd4ec5fe39df55a719cc4712c962b00c6b39c49be8ab4f9804",
     "Spot.Challenger.ChallengerKey.ofJson": "2c7c120d650f2104d67f0199662f0b69d94bcee76c858ae61c247c9908c14d87",
     "Spot.Challenger.ChallengerKey.params": "496eb88d98078a52412a4459e869ca299c2a19198694f102ecea3b422278db9b",
     "Spot.Challenger.ChallengerKey.pub": "683d64dd20c754651509026792838007e590699136152ae61010d787339f8edf",
+    "Spot.Challenger.ChallengerKey.toJson": "130051f0f97937615bd57797ce11b41409a6f5ea344b3dbb85a877ba77c0a0c4",
     "Spot.Challenger.ChallengerRecord": "18efb288e2059a90fe75190dd9a234b7e7389a10119596d4475f9d8838acb600",
     "Spot.Challenger.ChallengerRecord.commitment": "4ff5dc3a1177c631d40ce46b9b806a90fee3cf1b1057d0e9672182609fbcbac9",
     "Spot.Challenger.ChallengerRecord.host": "ccc4b6e8dfacd3d1d68b8cc01d452ab775a47bfc630532139a895df79b773d4c",
