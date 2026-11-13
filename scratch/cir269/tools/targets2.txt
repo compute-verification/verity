@@ -1,0 +1,6 @@
+Fp8GroupScale_v2{G=32}
+Fp8RowAbsMax_v2{K=256}
+Fp8ActQuant_v2{K=256}
+F32ToE4m3Sat_v2
+Fp8RowScale_v2
+F32LtFtz_v2

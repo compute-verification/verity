@@ -23,3 +23,4 @@
 - 15:11Z (07:11 PST): stop condition (peak > 56 GB): fa99 cancelled at 72 targets, 12 failures; two unlisted DsaTopKReadRows_v1 at ~30.7 GiB own ran at once. #9660 body updated. Posting the CIR-269 comment and returning.
 - 15:25Z (07:25 PST): woke on a new machine (up 0 min), branches from origin (1333bd53, scratch 9ef1238b, 8854b824 detached); main 053b8e50 holds no moves. Launching named-target jobs (27 targets: the 12, 2 controls, 13 for the hooks) at both commits, declared 32, 16 cores.
 - 15:31Z (07:31 PST): r20261113-152642-49ba (1333bd53) and r20261113-152642-6785 (8854b824) running, bound peak 9.7 GiB each; targets 1-6 of the twelve: same block/past-range at both, 0 differences.
+- 15:40Z (07:40 PST): 49ba and 6785 done (bound peak 9.7 GiB each); 27 of 27 entries identical. boolean_version and kernels reached by one target only, so launching job 2 (6 Boolean versions of word families, and preload in process) at both commits, declared 32.
