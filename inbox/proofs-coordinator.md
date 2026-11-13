@@ -112039,3 +112039,25 @@ What compiled: my statements file, `Statements.lean`, built in the run of last n
 NEEDS: none new. Row B19's clauses stay as in my earlier entries: `TwoHolds` with HELDOF, `RecordsHeld` with RUNCOINS through `heldOf`, `RoundsHeld`, `ScopeHeld` and `PinHeld` open, `NamesDistinct` with HELDOF, and `InputsNone` true at the second try's design only.
 
 Not established: that `Round2.lean` and `RoundTwoOf.lean` elaborate, or that their axioms are only propext, Classical.choice and Quot.sound. That waits on `9b9a`.
+
+## NEEDEDBITS, Fri 13 Nov 01:26Z: DONE: `NeededBits h` is proved from one named hypothesis, `MembersRowed h` (owner FRAME), and `SideBySide h` with none; compiled in `r20261113-010728-cdf5` on vy-nebius-cpu-11, propext, Classical.choice and Quot.sound only
+
+The proof is finished and compiles. At every held code, the members' inner blocks stand side by side with no condition. Every gate a checked inner block needs is one of its own unit's committed bits, under one condition on the members' circuit files: each free source gate, and each returned output bit, has a commitment position. That condition is exactly what the 23:02Z GAP entry showed can fail, so it is a named `Prop`, `SpotFlock.MembersRowed h`, owned by FRAME until `templateOk` gives it.
+
+- [run] `r20261113-010728-cdf5` (`verity lean try security/Proofs/Flock/SpotFlock/NeededBitsOf.lean --on vy-nebius-cpu-11 --pool proofs --as proofs`): rc 0, `lean exit 0 in 287 s`; axiom probe: "none of its 70 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". No `sorry`, `axiom` or `native_decide` in the file; its only warnings are five deprecations of `if_pos`/`if_neg`, as in the files around it.
+- [run] The same run prints, for each statement: `SpotFlock.sideBySide_of_held`, `Flock.Bridge.NeededBitsOf.blocksClosed_bitsProgs`, `Flock.Bridge.NeededBitsOf.neededBits_of_membersRowed` and `SpotFlock.neededBits_of_rowed` each "depends on axioms: [propext, Classical.choice, Quot.sound]".
+- [read] Pushed: `cursor/proofs-neededbits-2597` at `aba961b663`, the new file `security/Proofs/Flock/SpotFlock/NeededBitsOf.lean` and its root `"Proofs.Flock.SpotFlock.NeededBitsOf",` on its own line in `security/Proofs/lakefile.toml`. Nothing unpushed.
+- [read] What FRAME uses:
+  - `SpotFlock.sideBySide_of_held (h : Held) : SideBySide h`
+  - `SpotFlock.MemberRowed c n`: each `g < (keyProg c n).inputs` with `consts c n g = none` has `(rowBit c n g).isSome`, and each `outGate c n u k j t = some x` has `(outRowBit c u k j t).isSome`; `SpotFlock.MembersRowed h := ∀ ci ∈ h.ms, MemberRowed ci.1 ci.2.size`
+  - `SpotFlock.neededBits_of_rowed {h : Held} (hR : MembersRowed h) : NeededBits h`
+- [run] Tries, all on the base `b8ca16854990` plus my commits: `r20261112-232707-2f63` waited 58 min on vy-nebius-2, never started, cancelled; `r20261113-002536-c9e4` (cpu-11, started at once) 12 errors; `r20261113-005937-528d` (cpu-11, started at once) one error; `r20261113-010728-cdf5` (cpu-11, waited 11 min for a slot) passed.
+
+STOP RULE: no listed guarantee changes. `MembersRowed` becomes a premise only where FRAME's code uses `neededBits_of_rowed`. Before: `NeededBits h` taken as a hypothesis. After: `MembersRowed h` taken in its place, which is open until `templateOk` gives it (the 23:02Z NEEDS).
+
+NEEDS
+- FRAME: discharge `MembersRowed h` from `templateOk` with the scopeOkH conjunct proposed at 23:02Z, or keep it as a named open premise with FRAME as owner. I can prove `templateOk … → MemberRowed c n` once that conjunct's statement is fixed.
+
+To post: none.
+
+Not established: that `MembersRowed` holds at the demo's members (I have not evaluated it on a real circuit file); whether `.pad` and `.lit` sources, which also leave `rowBit` none, are refused upstream of `Held`; how FRAME's assembly reads `neededBits_of_rowed`.
