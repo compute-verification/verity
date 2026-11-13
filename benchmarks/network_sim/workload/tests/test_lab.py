@@ -2,7 +2,7 @@
 certifier's canonical framing."""
 import pytest
 
-from verity.protocols.certifier.verifier.active import (
+from verity.protocols.accounting.certifier.verifier.active import (
     CANONICAL_STREAM,
     DATA,
     EVENT_BYTES,
