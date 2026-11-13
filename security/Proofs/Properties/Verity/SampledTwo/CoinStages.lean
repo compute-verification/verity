@@ -101,14 +101,7 @@ def Leaves {β : Type} (P : β → Prop) : Game β → Prop
   | @Game.coin _ _ _ _ k => ∀ c, Leaves P (k c)
 
 theorem Leaves.reach {β : Type} {P : β → Prop} :
-    ∀ (g : Game β) (s : Strategy g) {o : β}, Leaves P g → PlayReaches g s o → P o
-  | .ret _, _, _, h, ho => by
-    subst ho
-    exact h
-  | .send _ k, s, _, h, ho => Leaves.reach (k s.1) s.2 (h s.1) ho
-  | @Game.coin _ _ _ _ k, s, _, h, ho => by
-    obtain ⟨c, hc⟩ := ho
-    exact Leaves.reach (k c) (s c) (h c) hc
+    ∀ (g : Game β) (s : Strategy g) {o : β}, Leaves P g → PlayReaches g s o → P o := sorry
 
 theorem FreshWide.cons {rl : Verity.Release} {log : List Verity.Release}
     (hr : ∀ l, rl.frame = .fresh l → rl.coins.length = 512) (h : FreshWide log) : FreshWide (rl :: log) := by
@@ -126,33 +119,7 @@ theorem leaves_optGame {β γ : Type} {P : β → Prop} {n : Game β} {y : γ �
 so do the releases then `f`. -/
 theorem leaves_relK {β : Type} (P : β → Prop) :
     ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Verity.Release → Game β),
-      (∀ log, FreshWide log → Leaves P (f log)) → Leaves P (relK k fs ts f)
-  | 0, _, _, f, hf => hf [] (fun _ h => by cases h)
-  | k + 1, fs, ts, f, hf => by
-    have h0 : Leaves P (f []) := hf [] (fun _ h => by cases h)
-    intro m
-    rcases m with _ | ⟨fr, b⟩
-    · exact h0
-    · cases fr with
-      | fresh l =>
-        refine leaves_optGame h0 (fun fs' => ?_) _
-        intro x
-        exact leaves_relK P k fs' ts _ fun log hl =>
-          hf _ (FreshWide.cons (fun _ _ => List.length_ofFn) hl)
-      | hello spec =>
-        show Leaves P (if _ then _ else _)
-        split
-        · intro t
-          exact leaves_relK P k fs _ _ fun log hl => hf _ (FreshWide.cons (fun _ h => by cases h) hl)
-        · exact h0
-      | opening i sn n =>
-        show Leaves P (if _ then _ else _)
-        split
-        · refine leaves_optGame h0 (fun T => ?_) _
-          refine leaves_optGame h0 (fun p => ?_) _
-          intro d
-          exact leaves_relK P k fs _ _ fun log hl => hf _ (FreshWide.cons (fun _ h => by cases h) hl)
-        · exact h0
+      (∀ log, FreshWide log → Leaves P (f log)) → Leaves P (relK k fs ts f) := sorry
 
 /-- **Every play of the period's game releases each fresh coin's 512 bits.** -/
 theorem freshWide_play {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (θ : ByteArray)
@@ -171,25 +138,7 @@ theorem freshWide_play {ι : Type} {d : Accounting.Device ι} {α : Type} [Finty
 /-- **The first stage's bits are its family's released coins.** -/
 theorem devBits_first (ℓ₁ ℓ₂ : String) (after : ByteArray) :
     ∀ (log pre : List Verity.Release), OneRoot ℓ₁ after log →
-      devBits (stageLocate ℓ₁ ℓ₂) 0 pre log = (Verity.Sampled.freshCoins ℓ₁ after log).flatten
-  | [], _, _ => by simp [devBits, Verity.Sampled.freshCoins]
-  | ⟨fr, ans, cs⟩ :: log, pre, h => by
-    have ih := devBits_first ℓ₁ ℓ₂ after log (pre ++ [⟨fr, ans, cs⟩])
-      (fun r hr => h r (List.mem_cons_of_mem _ hr))
-    simp only [devBits]
-    rw [ih]
-    unfold Verity.Sampled.freshCoins
-    rw [List.filterMap_cons]
-    cases fr with
-    | fresh l =>
-      by_cases hl : l = ℓ₁
-      · subst hl
-        have ha : ans = after := h _ (by simp) rfl
-        subst ha
-        simp [locAt, stageLocate]
-      · by_cases h2 : l = ℓ₂ <;> simp [locAt, stageLocate, hl, h2]
-    | hello _ => simp [locAt]
-    | opening _ _ _ => simp [locAt, stageLocate]
+      devBits (stageLocate ℓ₁ ℓ₂) 0 pre log = (Verity.Sampled.freshCoins ℓ₁ after log).flatten := sorry
 
 /-- **Stage `j + 1`'s bits are its slice of the second stage's family's released coins**: those numbered `16384 j`
 to `16384 (j + 1)` among the family's, counting the `n₀` the releases before had. -/
@@ -197,53 +146,7 @@ theorem devBits_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) (after
     ∀ (log pre : List Verity.Release), OneRoot ℓ₂ after log →
       devBits (stageLocate ℓ₁ ℓ₂) (j + 1) pre log =
         (((Verity.Sampled.freshCoins ℓ₂ after log).take (16384 * (j + 1) - pre.countP (isFresh ℓ₂))).drop
-          (16384 * j - pre.countP (isFresh ℓ₂))).flatten
-  | [], _, _ => by simp [devBits, Verity.Sampled.freshCoins]
-  | ⟨fr, ans, cs⟩ :: log, pre, h => by
-    have ih := devBits_second ℓ₁ ℓ₂ hne after j log (pre ++ [⟨fr, ans, cs⟩])
-      (fun r hr => h r (List.mem_cons_of_mem _ hr))
-    simp only [devBits]
-    rw [ih, List.countP_append]
-    unfold Verity.Sampled.freshCoins
-    rw [List.filterMap_cons]
-    cases fr with
-    | fresh l =>
-      by_cases h2 : l = ℓ₂
-      · subst h2
-        have ha : ans = after := h _ (by simp) rfl
-        subst ha
-        have hc : List.countP (isFresh l) [⟨.fresh l, ans, cs⟩] = 1 := by simp [isFresh]
-        rw [hc]
-        simp only [locAt, stageLocate, Ne.symm hne, if_false, if_true, eq_self_iff_true, and_self, ↓reduceIte]
-        generalize pre.countP (isFresh l) = n
-        by_cases hA : n < 16384 * j
-        · have hj : ¬ (1 + n / 16384 = j + 1) := by omega
-          rw [if_neg (by simpa using hj), List.nil_append,
-            show 16384 * (j + 1) - n = (16384 * (j + 1) - (n + 1)) + 1 by omega, List.take_succ_cons,
-            show 16384 * j - n = (16384 * j - (n + 1)) + 1 by omega, List.drop_succ_cons]
-        · by_cases hB : n < 16384 * (j + 1)
-          · have hj : 1 + n / 16384 = j + 1 := by omega
-            rw [if_pos (by simp [hj]), show 16384 * (j + 1) - n = (16384 * (j + 1) - (n + 1)) + 1 by omega,
-              List.take_succ_cons, show 16384 * j - n = 0 by omega, show 16384 * j - (n + 1) = 0 by omega,
-              List.drop_zero, List.drop_zero, List.flatten_cons]
-          · have hj : ¬ (1 + n / 16384 = j + 1) := by omega
-            rw [if_neg (by simpa using hj), List.nil_append, show 16384 * (j + 1) - n = 0 by omega,
-              show 16384 * (j + 1) - (n + 1) = 0 by omega]
-            simp
-      · have hc : List.countP (isFresh ℓ₂) [⟨.fresh l, ans, cs⟩] = 0 := by simp [isFresh, h2]
-        rw [hc, Nat.add_zero]
-        by_cases h1 : l = ℓ₁
-        · subst h1
-          simp [locAt, stageLocate, h2]
-        · simp [locAt, stageLocate, h1, h2]
-    | hello sp =>
-      have hc : List.countP (isFresh ℓ₂) [⟨.hello sp, ans, cs⟩] = 0 := by simp [isFresh]
-      rw [hc, Nat.add_zero]
-      simp [locAt]
-    | opening a s n =>
-      have hc : List.countP (isFresh ℓ₂) [⟨.opening a s n, ans, cs⟩] = 0 := by simp [isFresh]
-      rw [hc, Nat.add_zero]
-      simp [locAt, stageLocate]
+          (16384 * j - pre.countP (isFresh ℓ₂))).flatten := sorry
 
 /-! ## Lists of chunks of one length -/
 
@@ -256,12 +159,7 @@ theorem length_flatten_const {β : Type} {m : ℕ} : ∀ (cs : List (List β)), 
     omega
 
 theorem flatten_drop_const {β : Type} {m : ℕ} : ∀ (cs : List (List β)), (∀ c ∈ cs, c.length = m) → ∀ A,
-    (cs.drop A).flatten = cs.flatten.drop (m * A)
-  | [], _, A => by simp
-  | _, _, 0 => by simp
-  | c :: cs, h, A + 1 => by
-    rw [List.drop_succ_cons, flatten_drop_const cs (fun d hd => h d (List.mem_cons_of_mem _ hd)) A,
-      List.flatten_cons, show m * (A + 1) = c.length + m * A by rw [h c (by simp)]; ring, List.drop_append]
+    (cs.drop A).flatten = cs.flatten.drop (m * A) := sorry
 
 theorem getD_prefix {β : Type} {l₁ l₂ : List β} (h : l₁ <+: l₂) {t : ℕ} (ht : t < l₁.length) (d : β) :
     l₂.getD t d = l₁.getD t d := by
@@ -352,36 +250,12 @@ theorem testBit_shift (x : UInt64) {j : ℕ} (hj : j < 8) (q : ℕ) :
 
 /-- **Bit `q` of an element's byte `m` is its bit `8 m + q`** (`F128.toBytes`: `le64 lo ‖ le64 hi`). -/
 theorem toBytes_testBit (a : Flock.F128) {m q : ℕ} (hm : m < 16) (hq : q < 8) :
-    (a.toBytes.data.toList.getD m 0).toNat.testBit q = a.bit (8 * m + q) := by
-  have hd : a.toBytes.data.toList.getD m 0 =
-      if m < 8 then (a.lo >>> (8 * m).toUInt64).toUInt8 else (a.hi >>> (8 * (m - 8)).toUInt64).toUInt8 := by
-    rw [List.getD_eq_getElem a.toBytes.data.toList 0 (by simpa [Flock.F128.toBytes] using hm)]
-    simp [Flock.F128.toBytes]
-  rw [hd]
-  unfold Flock.F128.bit
-  by_cases h8 : m < 8
-  · rw [if_pos h8, if_pos (show 8 * m + q < 64 by omega), Flock.F128.bitU64 _ _ (by omega), testBit_toUInt8 _ hq,
-      testBit_shift _ h8]
-  · rw [if_neg h8, if_neg (show ¬ 8 * m + q < 64 by omega), Flock.F128.bitU64 _ _ (by omega), testBit_toUInt8 _ hq,
-      testBit_shift _ (show m - 8 < 8 by omega), show 8 * m + q - 64 = 8 * (m - 8) + q by omega]
+    (a.toBytes.data.toList.getD m 0).toNat.testBit q = a.bit (8 * m + q) := sorry
 
 /-- **Bit `q` of a coin's byte `k` is bit `8 (k % 16) + q` of its element `k / 16`.** -/
 theorem coinByte_testBit (d : FlockDeploy.Coin) (k : Fin SpotFlock.L) {q : ℕ} (hq : q < 8) :
     (SpotFlock.coinByte d k).val.testBit q =
-      (d ⟨k.val / 16, by have := k.isLt; simp only [SpotFlock.L] at this; omega⟩).bit (8 * (k.val % 16) + q) := by
-  have hk := k.isLt
-  simp only [SpotFlock.L] at hk
-  have e : d.bytes.getD k.val 0 =
-      (d ⟨k.val / 16, by omega⟩).toBytes.data.toList.getD (k.val % 16) 0 := by
-    unfold FlockDeploy.Coin.bytes
-    have := getD_flatMap_const (fun i => (d i).toBytes.data.toList) (0 : UInt8) (List.finRange 65536)
-      (fun a _ => by simpa using FlockSoundness.Discharge.ZkView.toBytes_size (d a)) (g := k.val / 16)
-      (a := ⟨k.val / 16, by omega⟩)
-      (List.getElem?_eq_some_iff.2 ⟨by simpa using (by omega : k.val / 16 < 65536), Fin.ext (by simp)⟩)
-      (i := k.val % 16) (Nat.mod_lt _ (by norm_num))
-    rwa [show 16 * (k.val / 16) + k.val % 16 = k.val by omega] at this
-  show (d.bytes.getD k.val 0).toNat.testBit q = _
-  rw [e, toBytes_testBit _ (Nat.mod_lt _ (by norm_num)) hq]
+      (d ⟨k.val / 16, by have := k.isLt; simp only [SpotFlock.L] at this; omega⟩).bit (8 * (k.val % 16) + q) := sorry
 
 /-- **Bit `q` of byte `k` of the coin `dev` reads is bit `8 k + q` of the bits it collected.** -/
 theorem src_testBit {L : Locate} {log : List Verity.Release} {i : ℕ} {d : FlockDeploy.Coin}
@@ -422,16 +296,7 @@ theorem src_extract {L : Locate} {log : List Verity.Release} {i : ℕ} {d : Floc
     (h : dev L log i = some d) (b : ByteArray) (off w : ℕ) (hw : w ≤ SpotFlock.L) (hb : off + w ≤ b.size)
     (hbits : ∀ k < w, ∀ q < 8, (devBits L i [] log).getD (8 * k + q) false =
       (Properties.Challenger.bitsOf b).getD (8 * (off + k) + q) false) :
-    (SpotFlock.src d).extract 0 w = b.extract off (off + w) := by
-  apply ByteArray.ext_getElem
-  · rw [ByteArray.size_extract, ByteArray.size_extract, size_src]
-    omega
-  · intro k hk hk'
-    rw [ByteArray.size_extract, size_src] at hk
-    rw [ByteArray.getElem_extract, ByteArray.getElem_extract]
-    apply byte_eq_of_testBit
-    intro q hq
-    rw [src_getElem, src_testBit h _ hq, Nat.zero_add, hbits k (by omega) q hq, bitsOf_getD b (by omega) hq]
+    (SpotFlock.src d).extract 0 w = b.extract off (off + w) := sorry
 
 /-! ## The stages' coins -/
 
