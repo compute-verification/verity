@@ -1,6 +1,6 @@
 """The opcode table (data/cover/): the evidence for the card assumption, that every instruction a
 card executes is dominated by an ACCEL op (envelope.toml: `Accel.Op`, its pipes and formats, and the entries it
-proposes; each card's numbers are its card file's, `verity/hardware/cards/`) at no fewer units of the same resource,
+proposes; each card's numbers are its card file's, `hardware/cards/`) at no fewer units of the same resource,
 one row per opcode (rows.toml) on the H200 (sm_90) and the RTX PRO 6000 (sm_120).
 
 An opcode a card lists is in NVIDIA's family table (CUDA Binary Utilities 12.9 §4.3/§4.4, bu_12_9.json, and CUDA 13's,
@@ -25,7 +25,7 @@ from verity_machine_model import theta as T
 from verity_machine_model.model import DATA, card, device, kind_lists
 
 COVER = DATA / "cover"
-#: corpus.json and the two family tables are in fixtures/artifacts.json and gitignored; this brings them into a checkout
+#: corpus.json and the two family tables are in artifacts.json and gitignored; this brings them into a checkout
 FETCH = "uv run research data fetch-fixtures benchmarks/machine_model/data/cover"
 DEVICES = ("sm_90", "sm_120")
 FAMILY = {"sm_90": "hopper", "sm_120": "blackwell"}

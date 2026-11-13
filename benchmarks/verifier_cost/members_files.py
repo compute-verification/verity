@@ -61,7 +61,7 @@ def main() -> None:
     if (a.case is None) == (a.members is None) or (a.members is not None and not (a.bin and a.lean_bin)):
         ap.error("give --case, or --members with --bin and --lean-bin")
     import case_files as CF
-    from verity.protocols.spot.verifier.one_stage import proofs as PF
+    from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     path, audit_s = (a.case, None) if a.case else audited(a.dir, a.members, a.bin, a.lean_bin)
     case = json.loads(path.read_text())

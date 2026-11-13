@@ -1,6 +1,6 @@
 """`session_split.py` on a stand-in proof server and device whose sessions' parts are planted as fixed + per-block lines: the
 fit recovers each line, the rest is ``e2e_s`` less the other parts, the order is cold at the largest k, one warm-up at each
-other k and timed rounds ascending then descending, every draw is a subset of the population of its k, and one refused
+other k and timed rounds ascending then descending, every sample is a subset of the population of its k, and one refused
 session voids the run (no medians or fit, a VOID line, exit 1)."""
 from __future__ import annotations
 

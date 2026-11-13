@@ -528,12 +528,12 @@ noncomputable def memberDrawn (m : Flock.Guarantees.MemberV5 Reg nJ) : Bool :=
 
 open Classical in
 variable {S} in
-/-- A member is drawn exactly where its part of the sample is not empty. -/
+/-- A member is sampled exactly where its part of the sample is not empty. -/
 theorem memberDrawn_iff {m : Flock.Guarantees.MemberV5 Reg nJ} : memberDrawn S m = true ↔ (m.part S).Nonempty :=
   decide_eq_true_iff
 
 variable {S} in
-/-- A member that is not drawn has an empty part of the sample. -/
+/-- A member that is not sampled has an empty part of the sample. -/
 theorem not_nonempty_of_memberDrawn {m : Flock.Guarantees.MemberV5 Reg nJ} (h : memberDrawn S m = false) :
     ¬ (m.part S).Nonempty :=
   fun hne => Bool.false_ne_true (h.symm.trans (memberDrawn_iff.2 hne))

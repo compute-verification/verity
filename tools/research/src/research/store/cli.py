@@ -24,7 +24,7 @@
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
                                                    --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target,
                                                    even when the store pass fails (exit 3; `error` in the JSON)
-                                                   --keep-registry keeps every blob of the registry's artifacts (fixtures/artifacts.json)
+                                                   --keep-registry keeps every blob of the registry's artifacts (artifacts.json)
                                                    what nothing else removes, whatever the target (leftovers.py; each its own report in the JSON):
                                                    --requests-dir the request directories whose run dir is gone, --scratch-dir the clones of
                                                    runs that are over or whose run dir is gone, --locks the store's free lock files, --uv-cache
@@ -54,7 +54,7 @@
   research data vocab-check [--json] [--strict]    read-only audit of labels/: unknown keys, old spellings, strings in bool/int keys, off-enum values,
                                                    refs written as labels; counts, asserters, example targets
   research data refresh-fixtures [--preserve] [--dry-run] [--repo DIR]
-                                                   re-register every fixtures/artifacts.json entry whose bytes changed; old id kept under `previous`
+                                                   re-register every artifacts.json entry whose bytes changed; old id kept under `previous`
   research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                                    make the registry's fetched entries under PATH (default: all) present and exact, from the
                                                    private remote when reachable, else the public export; every byte checked; exit 1 if any is missing
@@ -381,7 +381,7 @@ def cmd_evict(argv: list[str]) -> int:
     ap.add_argument("--min-mb", type=float, default=EV.MIN_BYTES / 2**20, metavar="M", help="only blobs / files of at least this size (default 1)")
     ap.add_argument("--keep-trees", action="store_true", help="leave the trees/ cache alone")
     ap.add_argument("--keep-registry", action="append", default=[], metavar="FILE",
-                    help="keep every blob an artifact of this registry holds (fixtures/artifacts.json's form: its `art:` keys); repeatable")
+                    help="keep every blob an artifact of this registry holds (artifacts.json's form: its `art:` keys); repeatable")
     ap.add_argument("--runs", action="store_true", help="also evict preserved big files from finished run directories (writes run-files.evicted.json)")
     ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root for --runs (default $RESEARCH_RUNS or ~/.research/runs)")
     ap.add_argument("--quiet-min", type=float, default=EV.QUIET_S / 60, metavar="M", help="--runs: skip run dirs touched in the last M minutes (default 1440, a day)")
@@ -1249,20 +1249,20 @@ def cmd_mint_credential(argv: list[str]) -> int:
 
 
 def cmd_refresh_fixtures(argv: list[str]) -> int:
-    """Re-register every `fixtures/artifacts.json` entry whose bytes changed (`fixtures.refresh`): put under the new id (content-only
+    """Re-register every `artifacts.json` entry whose bytes changed (`fixtures.refresh`): put under the new id (content-only
     identity, as the entries were registered), `--preserve` pushes it, the entry is rewritten and the old id kept under `previous`.
     Prints `old -> new  path` per changed entry.  Exit 1 when an entry's path is missing, conflicts, or was not PRESERVED."""
     from . import fixtures as F  # noqa: PLC0415
 
     ap = _ap("refresh-fixtures")
-    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with fixtures/artifacts.json)")
+    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with artifacts.json)")
     ap.add_argument("--preserve", action="store_true", help="push each re-registered fixture to the remote and verify (as `put --preserve`)")
     ap.add_argument("--dry-run", action="store_true", help="report what would change; put nothing, write nothing")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store, repo=Path(ns.repo).expanduser().resolve() if ns.repo else None)
     repo = st.repo
-    if repo is None or not (repo / F.REPLICA_MAP).is_file():
+    if repo is None or not F.replica_map_file(repo).is_file():
         print(f"research data refresh-fixtures: no {F.REPLICA_MAP} found (give --repo DIR or set RESEARCH_REPO)", file=sys.stderr)
         return 1
     rep = F.refresh(st, repo, preserve=ns.preserve, dry_run=ns.dry_run)
@@ -1289,7 +1289,7 @@ def _fixture_repo(st: LocalStore, cmd: str, repo: str | None) -> Path | None:
     from . import fixtures as F  # noqa: PLC0415
 
     root = Path(repo).expanduser().resolve() if repo else st.repo
-    if root is None or not (root / F.REPLICA_MAP).is_file():
+    if root is None or not F.replica_map_file(root).is_file():
         print(f"research data {cmd}: no {F.REPLICA_MAP} found (give --repo DIR or set RESEARCH_REPO)", file=sys.stderr)
         return None
     return root
@@ -1320,7 +1320,7 @@ def _blob_list(path: str | None) -> list[tuple[str, int]]:
 
 
 def cmd_fetch_fixtures(argv: list[str]) -> int:
-    """Make the fetched entries of `fixtures/artifacts.json` under each PATH present and exactly their ids (`fixtures.fetch_registry`):
+    """Make the fetched entries of `artifacts.json` under each PATH present and exactly their ids (`fixtures.fetch_registry`):
     manifests and blobs come from the local store, else the private remote when this machine can reach it, else the public export
     (`--public-url`, `$RESEARCH_PUBLIC_URL`, else the built-in URL), `--jobs` at a time, every byte checked.  A tracked entry is
     left alone.  `--check` only reports (exit 1 if any is missing or differs).  `--stubs` also restores the history stubs in
@@ -1329,7 +1329,7 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
 
     ap = _ap("fetch-fixtures")
     ap.add_argument("paths", nargs="*", metavar="PATH", help="only entries under these paths (default: all)")
-    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with fixtures/artifacts.json)")
+    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with artifacts.json)")
     ap.add_argument("--check", action="store_true", help="report what is missing or different; fetch and write nothing")
     ap.add_argument("--stubs", action="store_true", help="also restore history stubs (verity-fixture/v1) in tracked files")
     ap.add_argument("--public-url", default=None, metavar="URL", help=f"the public export (default ${fetchset.PUBLIC_URL_ENV}, else the built-in one; '' for none)")
@@ -1370,7 +1370,7 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
 
 
 def cmd_export(argv: list[str]) -> int:
-    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs`, to the
+    """Copy every `artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs`, to the
     public export (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
     bytes from the repo, the local store or the private remote.  `--verify-url URL` exports nothing: it fetches all of it back
     through URL into a scratch store and checks every byte against its id (the end-to-end test of a public front end)."""
@@ -1378,7 +1378,7 @@ def cmd_export(argv: list[str]) -> int:
     from .remote import load_export  # noqa: PLC0415
 
     ap = _ap("export")
-    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with fixtures/artifacts.json)")
+    ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with artifacts.json)")
     ap.add_argument("--dry-run", action="store_true",
                     help="report what the local side would send; reads nothing from the export (its key may write but not read)")
     ap.add_argument("--write-check", action="store_true",

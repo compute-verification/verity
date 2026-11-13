@@ -20,8 +20,8 @@ import pytest
 
 from verity.commitments import coin_tree as CT
 from verity.commitments.crypto import lms
-from verity.protocols.spot.device import challenger as C, remote as R
-from verity.protocols.spot.verifier.one_stage import closing as K
+from verity.protocols.proofs.spot.device import challenger as C, remote as R
+from verity.protocols.proofs.spot.verifier.one_stage import closing as K
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

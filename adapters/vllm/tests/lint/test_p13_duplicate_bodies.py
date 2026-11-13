@@ -33,8 +33,9 @@ RULE = "P13 (no duplicate function bodies)"
 KIND = "duplicate-body"
 MIN_LINES = 9
 #: where the provers' side of ``verity`` is, from ``verity/``, beside the packages of ``verity/definitions``
-PROVER_PLACES = ("circuits", "commitments", "protocols/certifier/prover", "protocols/poub/verifier/commitments/gates",
-                 "protocols/pous/prover", "protocols/pouw/prover")
+PROVER_PLACES = ("circuits", "commitments", "protocols/accounting/certifier/prover",
+                 "protocols/accounting/poub/verifier/commitments/gates", "protocols/accounting/pous/prover",
+                 "protocols/accounting/pouw/prover")
 #: a verifier's package inside one of those
 VERIFIER_PLACES = ("commitments/attest",)
 _DEFS = (ast.FunctionDef, ast.AsyncFunctionDef)
@@ -232,8 +233,8 @@ def test_the_provers_side_is_there_to_compare_against() -> None:
     missing = [d for d in (*PROVER_PLACES, *VERIFIER_PLACES) if not (R.CORE_PKG / d).is_dir()]
     assert not missing, f"{RULE}: PROVER_PLACES or VERIFIER_PLACES names directories verity/ doesn't have: {missing}"
     compared = {R.rel(p).split("/")[1] for p in prover_files()}
-    assert {"circuits", "commitments", "definitions", "protocols"} <= compared, \
-        f"{RULE}: no module to compare against under verity/{{circuits,commitments,definitions,protocols}}: {sorted(compared)}"
+    assert {"circuits", "commitments", "protocols"} <= compared, \
+        f"{RULE}: no module to compare against under verity/{{circuits,commitments,protocols}}: {sorted(compared)}"
     assert not [p for p in prover_files() if R.in_library(p)], "the integration's own Definitions are compared as its copies"
 
 

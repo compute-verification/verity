@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from verity.protocols.spot.verifier.one_stage import partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R, verifier as V
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
 from verity.commitments import history as HT

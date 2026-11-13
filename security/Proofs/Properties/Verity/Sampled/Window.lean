@@ -281,7 +281,7 @@ noncomputable def joint (t : ℕ) : Flock.Guarantees.JointAuditV5 where
     exact W.hcls m hm ω
 
 /-- **The window with the sample's coins widened by the coins `S`**: the sample reads only the device's bytes, so its
-law is the window's and A3 holds at the widened coins (`uniform_fst`). -/
+sampling design is the window's and A3 holds at the widened coins (`uniform_fst`). -/
 noncomputable def extend (S : Widening) : Window where
   __ := W
   Ω := W.Ω × S.T

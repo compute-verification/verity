@@ -22,8 +22,8 @@
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
 [ $# -gt 0 ] || { echo "usage: members_files.sh N|all..." >&2; exit 2; }
-L=$PWD/verity/protocols/spot/verifier/lean
-F=$PWD/verity/protocols/flock/verifier
+L=$PWD/verity/protocols/proofs/spot/verifier/lean
+F=$PWD/verity/protocols/proofs/flock/verifier
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
@@ -31,7 +31,7 @@ if [ -z "${MF_CASE:-}" ]; then
   # what the audit can't do without, first: each ends at once where the machine lacks it, before any Lean is built
   git rev-list --first-parent -1 HEAD > /dev/null \
     || { echo "no git history here, and the audit's local challenger is pinned on the checkout's" >&2; exit 1; }
-  bash verity/protocols/flock/prover/check_build.sh bin "$S/flock-circuit" > "$O/prover-build.log" 2>&1 \
+  bash verity/protocols/proofs/flock/prover/check_build.sh bin "$S/flock-circuit" > "$O/prover-build.log" 2>&1 \
     || { tail -20 "$O/prover-build.log" >&2; exit 1; }
 fi
 uv sync -q --all-packages --extra torch-cpu

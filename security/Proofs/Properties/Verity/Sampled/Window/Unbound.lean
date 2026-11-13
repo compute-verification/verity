@@ -28,7 +28,7 @@ This file holds the statements, each a `Prop`, and the names they read; it prove
 * **The member is read at the claim** (`MemberV5.ReadAt`): the files are the member's, the claim's openings hold
   wherever the member's deployed commitment opens and at the files' constants, and the trace is the member's.
 * **One member** (`MemberV5.UnboundFaulty`, `MemberV5.FaultyWrong`): the units its trace doesn't bind are faulty in its
-  sampling statement (`MemberV5.faulty`), and its faulty units are incorrect at every registration
+  sampling statement (`MemberV5.faulty`), and its incorrect proof blocks are incorrect at every registration
   (`MemberV5.wrongAt`).
 * **The seats' traces** (`Seat.trace`, `tracesWith`): each member's transcript at its seat's trace, at its files'
   circuit, side by side in the members' order: the trace a window's extractor gives.
@@ -82,7 +82,7 @@ noncomputable def Cd := Flock.Bridge.commitDepL m.Cc m.rows m.D.unroll m.Lm m.ro
 noncomputable def κ : Fin m.Cc.N → Option Bool := fun g => Flock.Bridge.constsOfP m.D.unroll m.hU m.n m.pi m.pub g
 
 /-- **The member's sampling statement**: its program at its constants and its roots. Neither the witness's values nor
-the faulty units read the design, the descriptor's bytes or the query, so the statement holds none. -/
+the incorrect proof blocks read the design, the descriptor's bytes or the query, so the statement holds none. -/
 noncomputable def stmt : Claims.Sampling.AuditStatement :=
   Flock.Bridge.stmtOf m.P m.κ .all [] ⟨"", 0, []⟩ m.roots
 
@@ -94,7 +94,7 @@ evaluation on the trace's inputs, opened at the wire's claims position under the
 noncomputable def wit (Xv : Fin m.Cc.N → Bool) : Claims.Sampling.Wit :=
   Flock.Bridge.witDep m.Cc m.Cd Claims.Sampling.sha512Msg m.roots Xv
 
-/-- **The member's faulty units at a trace**: the units faulty in its sampling statement under the trace's witness. -/
+/-- **The member's incorrect proof blocks at a trace**: the units faulty in its sampling statement under the trace's witness. -/
 noncomputable def faulty (Xv : Fin m.Cc.N → Bool) : Finset ℕ :=
   Claims.Sampling.faulty Claims.Sampling.sha512Msg m.Cd m.stmt m.blocks (m.wit Xv)
 
@@ -161,7 +161,7 @@ def UnboundFaulty : Prop :=
   ∀ (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) (tr : r.circuit.Trace)
     (Xv : Fin m.Cc.N → Bool), m.ReadAt r op tr Xv → (Accounting.unbound r.parts op tr).image Fin.val ⊆ m.faulty Xv
 
-/-- **A member's faulty units are incorrect proof blocks**: at files that pass the verifier's checks, a unit faulty in
+/-- **A member's incorrect proof blocks are incorrect proof blocks**: at files that pass the verifier's checks, a unit faulty in
 the member's sampling statement at a trace is incorrect at that trace and every registration. -/
 def FaultyWrong : Prop :=
   m.Checked → ∀ (R : Reg) (Xv : Fin m.Cc.N → Bool) (u : Fin m.n), u.val ∈ m.faulty Xv → u ∈ m.wrongAt R Xv

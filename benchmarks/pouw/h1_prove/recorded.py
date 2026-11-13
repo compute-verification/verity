@@ -138,12 +138,12 @@ sys.path.insert(0, str(HERE))
 import h1unit as U  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.randomness import derive  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
-from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.pouw.verifier import credit as CR  # noqa: E402
-from verity.protocols.pouw.verifier import verifier  # noqa: E402
-from verity.protocols.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import core_check as CC  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import credit as CR  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import verifier  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.coins import Challenger, coin_reason  # noqa: E402
 
 SAMPLE_DOMAIN = "verity/pouw/h1-prove-draw/v0"
 R, C = U.TILE
@@ -380,7 +380,7 @@ def findings_of(doc: dict) -> dict:
 
 @functools.lru_cache(maxsize=4)
 def _layout_of(descriptor: bytes) -> tuple:
-    """`credit.layout_of` ``descriptor``, whose word-width check (`credit._reinterprets`) takes about 15 s on a window's
+    """`credit.layout_of` ``descriptor``, whose word-width check (`credit._reinterprets`) takes about 15 s on an execution phase's
     descriptor, kept for `credit_registration`'s calls on the same one."""
     return CR.layout_of(descriptor)
 

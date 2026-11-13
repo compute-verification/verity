@@ -6,7 +6,7 @@
 - **The execution phase** is re-started from the manifest's salt coin and every weight's root (`Epoch.start`): the coin must open
   against the execution phase's coin commitment as the challenger published it (``--coins``, not the pass's copy; a live session's
   when its scheme is `window.LIVE_SCHEME`, `epoch_coins`), as the salt coin, opened after the weights' root (a live
-  session's after its salt epoch's root), and the salt must be the manifest's.  A pass recorded before the execution phase's coins (a v1 manifest)
+  session's after its salt execution phase's root), and the salt must be the manifest's.  A pass recorded before the execution phase's coins (a v1 manifest)
   carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
 - **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
   `served_passes.py` holds a run's passes of one salt to distinct indices too.
@@ -22,7 +22,7 @@
 - **The tiles** are `clear_work.audit`'s: its t work-weighted samples (`draw`) and one tile per excluded row
   (`exclusion_tiles`).  Each is held to `Verifier.check_tile` and `check_opened`, as `audit` does, but mapped over J
   processes, since each costs about 11 s of CPU per 1,024 of k (``--fast``: about a tenth of that on `fast_tile`'s batch
-  forms, with the first tile and every ``--cross-check``-th after it, in the draw's order, replayed on the scalar reference
+  forms, with the first tile and every ``--cross-check``-th after it, in the sample's order, replayed on the scalar reference
   too).  `tests/test_pearl_c_vllm_verify.py` holds this to `audit`'s own verdict.
 - **The served y**, where a call commits it (`served_y`, the manifest's ``y``): an accepted tile's real rows of y open against
   its root, each holds a word for every column of the tile (the opening doesn't bind a row's length: one that ends before
@@ -30,14 +30,14 @@
   the tile's checked U (`pearl_c_u.y`, the kernels' epilogue), so the y that leaves the linear is the one the credited
   rows computed.
 
-`verify_passes` is a served run's verdict over all its passes (`served_passes.py verify`): one draw source ("The run's
-draw" below), drawn once every pass's roots are read, keys t draws over all the passes' tickets together, and an accept credits
+`verify_passes` is a served run's verdict over all its passes (`served_passes.py verify`): one sample source ("The run's
+sample" below), sampled once every pass's roots are read, keys t samples over all the passes' tickets together, and an accept credits
 the run's credited MACs at Pearl's Assumption 1, less what ε of the tickets' weight could hold at δ, in core's answer form.
-With a window record W (`tie`, Pearl+'s ``verity/registration/v2`` record of the retained rounds, written after the
+With an execution phase record W (`tie`, Pearl+'s ``verity/registration/v2`` record of the retained rounds, written after the
 retention, whose values the one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the served run's
 s-th pass with calls, its manifest's c-th call) is W's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>``
 (`window_class.PearlTables`), each with its call's root, the domain recomputed from the pass's salt and the call's index,
-and its rows, words and word bits; each weight w the passes read is W's ``pearl-b/<w>``, at the root the epoch's weights'
+and its rows, words and word bits; each weight w the passes read is W's ``pearl-b/<w>``, at the root the execution phase's weights'
 root folds and the tiles' B rows open against, under `audit.weight_binding`'s domain, its n rows of K 32-bit words; and W
 names no other Pearl+ value but a dropped round's calls'. Any mismatch rejects the run, since a tie to roots the verdict
 didn't credit is vacuous. W states its version (`pearl_c.window.version_of`): this is version 2's tie, and a version-2 W
@@ -54,43 +54,43 @@ records, and the verifier records its coin against it (``record``, ``coin.json``
 records after the coin is refused (``after-coin``), so neither a retention nor a give-up can follow the coin.
 
 An accepted run's verdict also says where its linears' MACs went uncredited, call by call (`uncredited_calls`, the verify
-document's ``uncredited``): excluded, voluntary and side-channel cells, and the deduction's terms (ε, the draws over
+document's ``uncredited``): excluded, voluntary and side-channel cells, and the deduction's terms (ε, the samples over
 the inert-work bound, and ρ). It is a property of the committed records, which the answer never states, and changes
 nothing the verdict accepts.
 
-**The run's draw** (`verify_passes`' ``draw``) is one source S, and the draws' key is
+**The run's sample** (`verify_passes`' ``draw``) is one source S, and the samples' key is
 ``derive(S, RUN_DRAW_DOMAIN, {"run": C})`` over the run's commitment C (`run_commitment`, 64 bytes).  S comes from one of:
-- ``challenger`` (`bench_arm.LiveDraw`, `served_passes.py verify` under ``PEARLC_CHALLENGER_GATE``): a draw session of
+- ``challenger`` (`bench_arm.LiveDraw`, `served_passes.py verify` under ``PEARLC_CHALLENGER_GATE``): a sample session of
   its own on the auditor host's challenger (`window.DRAW_FAMILIES`, its one coin ``pouw/draw`` 0), reserved withheld
   through the lane's gate once the lane has no period open (so it joins none, and the Pearl-C period's close lists the
   salt sessions alone) and, given the period the salt session joined, as the lane's first reserve after that period
   closed (`pouw_h1_window.after_close`, held before its coin is asked), opened on C, its coin released only after C and
   its commitment, salt and path only at its close. S is that coin's 64 bytes.
 - ``node`` (`node_draw`, the default): 32 bytes of the Lean verifier's coins on this node (``uniform/io-getrandombytes``),
-  a development draw no verdict of record takes.
+  a development sample no verdict of record takes.
 
-**The coin record** (``record``, `COIN_SCHEMA`) is what every reader of the draw reads, the Lean `PouwCheck.PearlPlus`
-among them; it is written before any replay, and once asked for a draw is never asked again (`ASKED`):
+**The coin record** (``record``, `COIN_SCHEMA`) is what every reader of the sample reads, the Lean `PouwCheck.PearlPlus`
+among them; it is written before any replay, and once asked for a sample is never asked again (`ASKED`):
 
     {"schema": "verity-pouw/pearl-plus-coin/v2",
      "commitment": C,                      128 lowercase hex
-     "source": S,                          lowercase hex: the draw coin's 64 bytes, or the node's 32
+     "source": S,                          lowercase hex: the sampling coin's 64 bytes, or the node's 32
      "passes": [...],                      each retained pass's manifest as `read` names it, in order
      "rounds": [...], "dropped": [...],    where the verdict read a retention (`served_passes.py retain`)
      "draw": {"from": "challenger",
               "label": "pouw/draw", "index": 0,
               "reserved": {...},           the gate's reserve answer: session, seq, peer, by, expires_utc, period (null)
               "session": {...},            the gate's open answer without its secret: session, seq, root (= C), port, ...
-              "commitment": {...},         `LiveCommitment.to_json`: the draw session's coin commitment, released at its close
+              "commitment": {...},         `LiveCommitment.to_json`: the sample session's coin commitment, released at its close
               "opening": {...}}            `LiveOpening.to_json`: coin pouw/draw 0, after = C, coin = S, salt and path
            | {"from": "node", "claim": "uniform/io-getrandombytes"}}
 
-A reader holds a challenger draw to: ``opening`` is coin ``pouw/draw`` 0 of ``commitment`` opened after C
-(`challenger.live_reason`) and its coin is S; ``commitment`` is the one the session's challenger signed, of a draw
+A reader holds a challenger sample to: ``opening`` is coin ``pouw/draw`` 0 of ``commitment`` opened after C
+(`challenger.live_reason`) and its coin is S; ``commitment`` is the one the session's challenger signed, of a sample
 session's layout (`window.draw_epoch_reason`); the auditor's ledger, under the pinned key, opens that session alone on C,
 withheld (`challenger.withheld_on`); and that session is its lane's first reserve after the lane's Pearl-C period closed
 (`served_verdicts.pearlplus_live_draw`, over `pouw_h1_window.after_close`), so a prover who tries again under another
-session holds a draw no reader takes.
+session holds a sample no reader takes.
 
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
 ``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with
@@ -115,7 +115,7 @@ from typing import Any
 
 import numpy as np
 from verity.commitments import Commitment, Opening, VerificationLimits, verify_opening
-from verity.protocols.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -127,16 +127,16 @@ from verity.protocols.pouw.verifier.audit import (
     rows_domain,
     weight_binding,
 )
-from verity.protocols.pouw.verifier import verifier as PV
-from verity.protocols.pouw.verifier.coins import CoinCommitment
-from verity.protocols.pouw.verifier.credit import passes_distinct
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape, Tile, tagged
-from verity.protocols.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.pouw.prover.schemes.pearl_c import K_MIN, TILE
-from verity.protocols.pouw.verifier.window import LIVE_SCHEME
-from verity.protocols.spot.device.challenger import LiveCommitment
-from verity.protocols.spot.verifier.one_stage import registered as G, registration as REG
+from verity.protocols.accounting.pouw.verifier import verifier as PV
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment
+from verity.protocols.accounting.pouw.verifier.credit import passes_distinct
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape, Tile, tagged
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c import K_MIN, TILE
+from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME
+from verity.protocols.proofs.spot.device.challenger import LiveCommitment
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as REG
 from verity.errors import ProtocolError
 from verity.commitments.randomness import derive
 from verity_vllm.protocols.pouw import pearl_c as PD
@@ -145,7 +145,7 @@ from verity_vllm.protocols.pouw.pearl_c import window as PWR
 from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
 import fast_tile as FT
 import clear_work as CW
 from clear_audit import TileOpening, Transcript, Verifier
@@ -268,7 +268,7 @@ def records_of(man: dict, matmuls) -> list[PW.UnitRecord]:
 
 @dataclass
 class Pass:
-    """One pass as the verifier holds it once its manifest is read: its epoch, records and transcript, checked against
+    """One pass as the verifier holds it once its manifest is read: its execution phase, records and transcript, checked against
     what the pass published, and the prover's openings from its files."""
 
     path: Path
@@ -287,7 +287,7 @@ class Pass:
 
 
 def epoch_coins(path: Path) -> CoinCommitment | LiveCommitment:
-    """The epoch's coin commitment in the coins file at `path` (a run's ``coins.json``): a live session's when its scheme is
+    """The execution phase's coin commitment in the coins file at `path` (a run's ``coins.json``): a live session's when its scheme is
     `window.LIVE_SCHEME`, else an in-process challenger's."""
     doc = json.loads(Path(path).read_text())
     live = isinstance(doc, dict) and doc.get("scheme") == LIVE_SCHEME
@@ -296,7 +296,7 @@ def epoch_coins(path: Path) -> CoinCommitment | LiveCommitment:
 
 def load(path: Path, coins: CoinCommitment | LiveCommitment | None = None, recorded: bool = False,
          man: dict | None = None) -> Pass:
-    """The pass at manifest `path`, its epoch re-started under `coins` (`pouw_pearl_c_device.manifest_epoch`); raises
+    """The pass at manifest `path`, its execution phase re-started under `coins` (`pouw_pearl_c_device.manifest_epoch`); raises
     `Refused` or ValueError on a pass that can't be checked."""
     man = read(path)[0] if man is None else man
     PD.manifest_schema(man, recorded)
@@ -326,7 +326,7 @@ _JOB: dict = {}
 
 
 def check(job: tuple[int, tuple[int, int, int]]) -> tuple[int, int, bool, str | None, bool, bool | None]:
-    """The verdict of the ``i``-th tile in the draw's order, ``job`` = (i, (pass, record position, tile id)): (pass, tile
+    """The verdict of the ``i``-th tile in the sample's order, ``job`` = (i, (pass, record position, tile id)): (pass, tile
     id, ok, reason, over, same) (`_check`'s, then ``same``), where on `--fast`, for the first tile and every
     `--cross-check`-th after it, ``same`` says whether the scalar reference's verdict is the same one (None where it was
     not replayed twice).  By place, not tile id: an
@@ -437,7 +437,7 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
     """The pass's verdict, its execution phase re-started under `coins`, the execution phase's published coin commitment
     (`pouw_pearl_c_device.manifest_epoch`; `recorded` reads a pass recorded before the execution phase's coins).  `fast` replays its tiles on `fast_tile`'s batch forms where they take the scheme (Pearl-C v1 on a
     promoted device; otherwise the scalar reference, ``replay``), and the first of its tiles and every `cross_check`-th after
-    it in the draw's order (`check`) on the scalar reference too: any verdict that differs is ``cross_check_failed``, and the
+    it in the sample's order (`check`) on the scalar reference too: any verdict that differs is ``cross_check_failed``, and the
     pass is not accepted."""
     man, digest, named = read(path)
     out = {"manifest": str(path), "transcript": named, "transcript_sha256": digest, "verifier_commit": commit, "draws": draws,
@@ -484,7 +484,7 @@ def y_roots(p: Pass) -> list[str | None]:
 
 
 def run_commitment(passes: list[Pass]) -> bytes:
-    """What the run committed before its draw: each pass's transcript root, records root, salt and its calls' y roots (empty
+    """What the run committed before its sample: each pass's transcript root, records root, salt and its calls' y roots (empty
     where none), in order."""
     return tagged(RUN_TAG, *(x for p in passes for x in (p.transcript.commitment.root, bytes.fromhex(p.man["records_root"]),
                                                          p.epoch.salt, *(bytes.fromhex(r or "") for r in y_roots(p)))))
@@ -503,32 +503,32 @@ WEIGHTS_UNTIED = "weights untied (W v1)"
 V1_WEIGHTS = "W states no version (version 1), whose values are the calls' alone, and registers"
 #: the coin record's schema (module docstring, "The coin record")
 COIN_SCHEMA = "verity-pouw/pearl-plus-coin/v2"
-#: the coin record's ``draw.from``: a draw session's coin on the auditor host's challenger, or this node's coins
+#: the coin record's ``draw.from``: a sample session's coin on the auditor host's challenger, or this node's coins
 DRAW_CHALLENGER, DRAW_NODE = "challenger", "node"
-#: the claim instance the node's draw source rests on (`pouw.verifier.coins`)
+#: the claim instance the node's sample source rests on (`pouw.verifier.coins`)
 NODE_CLAIM = "uniform/io-getrandombytes"
-#: beside the coin record, the mark written just before a draw is asked for: a draw asked and never recorded is not
+#: beside the coin record, the mark written just before a sample is asked for: a sample asked and never recorded is not
 #: asked again
 ASKED = ".asked"
-#: why `verify_passes` refuses passes other than those its recorded coin was drawn on
+#: why `verify_passes` refuses passes other than those its recorded coin was flipped on
 AFTER_COIN = ("after-coin", "the retained passes or their records are not those the verifier's coin was drawn on: a "
               "retention change or a give-up after the coin is refused, and a retry never redraws")
-#: why `verify_passes` refuses a run whose draw was asked for and never recorded
+#: why `verify_passes` refuses a run whose sample was asked for and never recorded
 ASKED_ONCE = ("asked-once", "the verifier's draw was asked for and never recorded (a draw that failed or was cut short), "
               "and a retry never redraws")
 
 
 def node_draw(root: bytes, asking: Any) -> tuple[bytes, dict]:
-    """The development draw (`DRAW_NODE`): 32 bytes of the Lean verifier's coins on this node, after `asking` marks it."""
+    """The development sample (`DRAW_NODE`): 32 bytes of the Lean verifier's coins on this node, after `asking` marks it."""
     asking({})
     return PV.coins(32), {"from": DRAW_NODE, "claim": NODE_CLAIM}
 
 
 def tie_entries(passes: list[Pass], rounds: list[int] | None = None, weights: bool = True) -> dict[str, dict]:
-    """What a window record must register for each call of the run (`tie`): A, its m16 committed rows of K FP32 words under
+    """What an execution phase record must register for each call of the run (`tie`): A, its m16 committed rows of K FP32 words under
     `activation_binding`'s domain, and y, its real rows of N FP32 words under `served_y.y_domain`'s, each at its root; then,
     with ``weights`` (a version-2 W's), for each weight the passes read (pass by pass, by ascending id), B, its n rows of K
-    FP32 words under `weight_binding`'s domain, at the root the pass's epoch commits it under. Pass i is round
+    FP32 words under `weight_binding`'s domain, at the root the pass's execution phase commits it under. Pass i is round
     ``rounds[i]`` (default i): its place among the served run's passes with calls. ValueError for a weight two passes
     commit under another root or shape."""
     want, ss = {}, list(range(len(passes)) if rounds is None else rounds)
@@ -561,7 +561,7 @@ def _owner(v: str) -> str:
 
 
 def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: tuple[int, ...] = ()) -> dict:
-    """``{"record": digest(W), "tables": n}`` for a window record W at version 2 (`pearl_c.window.version_of`) that
+    """``{"record": digest(W), "tables": n}`` for an execution phase record W at version 2 (`pearl_c.window.version_of`) that
     registers exactly the run's calls' A rows and y and its weights' B rows (`tie_entries`, pass i as round ``rounds[i]``)
     among its ``pearl-a/``, ``pearl-y/`` and ``pearl-b/`` values, beside any of the ``dropped`` rounds' calls' (passes
     left out of the retention before the coin, which credit nothing). For a W at version 1, which registers no ``pearl-b/``
@@ -596,7 +596,7 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
 
 def epsilon(t: int, delta: Fraction, over: int = 0) -> Fraction:
     """One more than the least k with Σ_{i ≤ over} C(t, i) (k/10⁹)^i (1 − k/10⁹)^(t − i) ≤ δ, over 10⁹, exactly (at
-    ``over`` = 0, (1 − ε)^t ≤ δ): of t work-weighted draws, ``over`` landed on tiles over their inert-work bound and the
+    ``over`` = 0, (1 − ε)^t ≤ δ): of t work-weighted samples, ``over`` landed on tiles over their inert-work bound and the
     rest passed, and the tiles wrong or over the bound hold more than ε of the tickets' weight only with δ.  The Lean's
     `epsilon`, step for step."""
     g, num, den = 10 ** 9, delta.numerator, delta.denominator
@@ -643,7 +643,7 @@ def _taken(passes: list[Pass], t: int, delta: Fraction, over: int) -> tuple[dict
 
 def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
     """The run's credit at Pearl's Assumption 1 (`pearl_kw`): a tile that passes the rule cost its credited cells' MACs,
-    (1 − ρ) of them at the scheme's cap.  Of t draws by ticket weight, ``over`` (X_O) landed on tiles over their
+    (1 − ρ) of them at the scheme's cap.  Of t samples by ticket weight, ``over`` (X_O) landed on tiles over their
     inert-work bound, credited nothing, and the rest passed: the tiles wrong or over the bound hold at most ε of the
     tickets' weight except with δ (`epsilon`); the most MACs that weight can hold, filled from the records whose cells hold
     the most MACs a ticket, are taken off (`_taken`)."""
@@ -684,11 +684,11 @@ def uncredited_calls(passes: list[Pass], t: int, delta: Fraction, over: int = 0)
     real MACs (its real rows × n × its weight's k), the MACs its credited cells hold at |K| (``checked_macs``, summing to
     the credit's ``macs``), its real MACs the credit leaves out by cause (`uncredited_cells` at |K|, and ``kept_width``,
     its real rows × n × the k − |K| side channels), and the credit's three terms on it: ``epsilon_macs``, what
-    `credit_at_assumption`'s deduction takes off it at ε with no draw over the inert-work bound; ``over_bound_macs``, what
-    the ``over`` draws on tiles over it add; ``rho_macs``, ρ of the rest; and ``credited_macs``, (1 − ρ) of the rest.  The
+    `credit_at_assumption`'s deduction takes off it at ε with no sample over the inert-work bound; ``over_bound_macs``, what
+    the ``over`` samples on tiles over it add; ``rho_macs``, ρ of the rest; and ``credited_macs``, (1 − ρ) of the rest.  The
     terms are exact fractions, so a call's real MACs are its checked MACs and its causes, and its checked MACs its three
     terms and its credit; ``totals`` sums them, ``credited`` floored as the credit is, which is the credit's.  It reads
-    only the records the run committed and the verdict's draws, δ and draws over the inert-work bound: properties of
+    only the records the run committed and the verdict's samples, δ and samples over the inert-work bound: properties of
     values the answer never states, so it stays in the verify document."""
     full, _ = _taken(passes, t, delta, over)
     clear, _ = _taken(passes, t, delta, 0)
@@ -732,14 +732,14 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                   rounds: list[int] | None = None, dropped: tuple[int, ...] = (), record: Path | None = None,
                   draw: Any = node_draw, over_cap: str = UNCREDITED, test_instance: bool = False) -> dict:
     """One served run's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
-    and held to what it published, and to the window record `window` where there is one (`tie`), then one source of the
-    verifier's coins (`pouw.verifier.coins`), drawn after, keys `draws` work-weighted tiles over every pass's tickets
+    and held to what it published, and to the execution phase record `window` where there is one (`tie`), then one source of the
+    verifier's coins (`pouw.verifier.coins`), sampled after, keys `draws` work-weighted tiles over every pass's tickets
     together (`clear_work.draw` on their records in order), and each pass opens one tile per excluded row.  It accepts iff
     every opened tile passes the tile rule, and credits the run at Pearl's assumption (`credit_at_assumption`) at δ.
 
     ``over_cap`` is the rule on an opened tile that passes every check but its inert-work bound (`clear_work.cap_failure`):
     ``uncredited`` (CMP-311 option A, the default) accepts it with its bound's reason and credits it nothing, the credit
-    taking X_O, the draws that landed on such tiles; ``reject`` rejects the run.  The verdict records the rule it ran under
+    taking X_O, the samples that landed on such tiles; ``reject`` rejects the run.  The verdict records the rule it ran under
     (``over_cap``, and the profile's).  The run of record is ``uncredited`` over passes with no voluntary row, since one
     uncredits its whole band or block (`pearl_c_work.UnitRecord.credited`; ``served_passes.py verify``).
 
@@ -751,9 +751,9 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
     verifier's record of its coin: the first verdict writes the run's commitment and the source there before any replay,
     and a later one over passes whose commitment is another (a retention or a give-up changed after the coin) is refused
-    (`AFTER_COIN`) while one over the same takes the same source, so a retry never redraws.  ``draw(C, asking)`` is the
-    source's draw on the run's commitment C (module docstring, "The run's draw"): it calls ``asking(info)`` just before it
-    asks, which marks the record (`ASKED`) so a draw that fails or is cut short is never asked again (`ASKED_ONCE`), and
+    (`AFTER_COIN`) while one over the same takes the same source, so a retry never resamples.  ``draw(C, asking)`` is the
+    source's sample on the run's commitment C (module docstring, "The run's sample"): it calls ``asking(info)`` just before it
+    asks, which marks the record (`ASKED`) so a sample that fails or is cut short is never asked again (`ASKED_ONCE`), and
     returns (S, the record's ``draw``).  A given ``source`` (a test's) is recorded as the node's."""
     if over_cap not in OVER_CAP:
         raise ValueError(f"over_cap {over_cap!r} is none of {', '.join(OVER_CAP)}")
@@ -811,7 +811,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
         else:
             try:
                 source, drew = draw(root, asking)
-            except Exception as ex:  # noqa: BLE001 - a draw that fails is a visible rejection, never redrawn
+            except Exception as ex:  # noqa: BLE001 - a sample that fails is a visible rejection, never redrawn
                 return reject(f"the verifier's draw: {type(ex).__name__}: {ex}")
         if record is not None:
             record.parent.mkdir(parents=True, exist_ok=True)

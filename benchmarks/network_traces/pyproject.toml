@@ -59,7 +59,7 @@ untraced = [
 # total_cost.py and the cards they read); where asked, the census's request and GPU peak at the workload card's MACs
 # a token. `verity bench certifier_term`'s runner runs it.
 inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "benchmarks/census/hardware.json",
-          "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml",
+          "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml",
           "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
           "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/breakeven",
           "benchmarks/certifier_term/run.py",
@@ -73,26 +73,26 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/engine/step_trace.py",
           "adapters/vllm/verity_vllm/records/__init__.py", "adapters/vllm/verity_vllm/records/fields.py",
           "adapters/vllm/verity_vllm/records/workload.py", "benchmarks/network_e2e/chain.py",
-          "verity/composite/device/live_challenger", "benchmarks/one_stage/a5_coins.py", "benchmarks/one_stage/a0.py",
+          "verity/protocols/compose/device/live_challenger", "benchmarks/one_stage/a5_coins.py", "benchmarks/one_stage/a0.py",
           "benchmarks/one_stage/a7.py", "benchmarks/one_stage/a8.py", "benchmarks/one_stage/prove_leg.py",
-          "benchmarks/one_stage/r2_population.py", "verity/protocols/flock/prover/python/verity_flock",
-          "verity/protocols/spot/verifier/lean/lakefile.toml",
+          "benchmarks/one_stage/r2_population.py", "verity/protocols/proofs/flock/prover/python/verity_flock",
+          "verity/protocols/proofs/spot/verifier/lean/lakefile.toml",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
           "adapters/vllm/verity_vllm/pipeline/advice_code",
           "benchmarks/network_e2e/encodings/tests/fixtures",
-          "verity/protocols/certifier/verifier/network/tests/fixtures/slot_entry.json",
-          "verity/protocols/certifier/verifier/network/tests/fixtures/select_entry.json",
-          "verity/protocols/flock/agreement/redigest.py", "verity/protocols/flock/agreement/transcript_check.py",
+          "verity/protocols/accounting/certifier/verifier/network/tests/fixtures/slot_entry.json",
+          "verity/protocols/accounting/certifier/verifier/network/tests/fixtures/select_entry.json",
+          "verity/protocols/proofs/flock/prover/agreement/redigest.py", "verity/protocols/proofs/flock/prover/agreement/transcript_check.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py", "benchmarks/census/deployments.json",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
           "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json",
-          "verity/protocols/certifier/verifier/network/tests/period_case.py", "verity/difftest/python/verity_difftest",
-          "verity/__init__.py", "verity/composite/__init__.py", "verity/composite/device/__init__.py"]
+          "verity/protocols/accounting/certifier/verifier/network/tests/period_case.py", "tools/difftest/python/verity_difftest",
+          "verity/__init__.py", "verity/protocols/compose/__init__.py", "verity/protocols/compose/device/__init__.py"]
 # The Lean verifier, whose statement setup test_warden_zk and test_egress_zk run on their staged members (`check` builds
 # it before this suite).
-artifacts = ["verity/protocols/flock/verifier/.lake/build/bin/flock-verify"]
+artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -107,11 +107,11 @@ paths = ["benchmarks/network_traces"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_compact_phase10.py"]
-paths = ["verity/protocols/certifier/verifier/tests"]
+paths = ["verity/protocols/accounting/certifier/verifier/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_compile_slice_zk.py"]
-paths = ["benchmarks/network_e2e/encodings", "verity/protocols/certifier"]
+paths = ["benchmarks/network_e2e/encodings", "verity/protocols/accounting/certifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_demo_stub.py"]

@@ -95,7 +95,7 @@
   "Proofs.Properties.Challenger",
   "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Challenger.Coins",
-  "Proofs.Properties.Challenger.Session",
+  "Proofs.Properties.Challenger.ChallengePhase",
   "Proofs.Properties.Firewall",
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
@@ -238,7 +238,7 @@
    },
    "generate": [
     "python3",
-    "{repo}/verity/protocols/pouw/verifier/lean/scripts/fp8atom_vectors.py",
+    "{repo}/verity/protocols/accounting/pouw/verifier/lean/scripts/fp8atom_vectors.py",
     "{repo}",
     "--out",
     "{out}"
@@ -283,7 +283,7 @@
   },
   "Proofs.Flock.Claims.Recursion.IrDepSession": {
    "why": "its one #eval runs IrDepSession.main only when VERITY_IRDEP_ARGS is set (the Lean side of test_irdep_difftest.py): it reads the run tree that variable names and prints one IRDEP line of JSON, writing nothing; unset, as in every build, it does nothing. The module declares no guarantee and nothing a guarantee reads.",
-   "digest": "4eb33b74f33b99a4b78c40ec39748681dc986b4c9f553e14553e3a5a64513033"
+   "digest": "f76917ac323400e3df89cc78aad3d944c14f6865aa59d263ab16a4f125837553"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",

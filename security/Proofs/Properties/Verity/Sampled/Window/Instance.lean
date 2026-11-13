@@ -45,7 +45,7 @@ of the named `Prop`s below.
   verifier doesn't set up on the committed files, an accepted play's blobs sent hold v2's tables and the members'
   files, so it sets the window up there (`WindowAt`), or the window's read finder outputs a collision, at most the
   read finder's bound, the δ's last term (`verdict_le_files`).
-* **The verifier's window at an accepted play** (`windowAt_members`): `WindowAt` from the deployment's window on the
+* **The verifier's window at an accepted play** (`executionPhaseAt_members`): `WindowAt` from the deployment's window on the
   registered files (`WindowRegistered`), which the vocabulary reads on every committed files alike (`read`,
   `MemberForm.WindowOn.of_read`), laid out with its members' files passing at an accepted play (`WindowPasses`).
 * **The leg and remote's soundness** (`spotSound`, `remote_soundness_window`): `windowSpotSound_sessions` at the
@@ -597,7 +597,7 @@ def WindowPasses (k : Verity.Registration.Composite) : Prop :=
 (`WindowRegistered`), is on every committed files, which the vocabulary reads alike (`read`,
 `MemberForm.WindowOn.of_read`), and at an accepted play it is laid out with its members' files passing
 (`WindowPasses`). -/
-theorem windowAt_members (k : Verity.Registration.Composite) (hW : I.WindowRegistered)
+theorem executionPhaseAt_members (k : Verity.Registration.Composite) (hW : I.WindowRegistered)
     (hpass : I.WindowPasses k) : I.WindowAt k := by
   intro θ F W hw hP hplay
   have hon : MemberForm.WindowOn I.base θ F W :=

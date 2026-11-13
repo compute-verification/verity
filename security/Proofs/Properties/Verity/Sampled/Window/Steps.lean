@@ -16,7 +16,7 @@ evidence the session's closing round reveals).
   many sessions as members before `i` have a proof block in the sample.
 * **What the verdict gives at a window** (`WindowSessions`, the premise): at the sample `S`, each tree the log opens
   names its streams once (`WindowSessions.specs`), an opening of a tree opened before is of the last tree opened
-  (`WindowSessions.order`), and the log opens at most as many trees as members `S` draws; and each drawn member has a
+  (`WindowSessions.order`), and the log opens at most as many trees as members `S` samples; and each sampled member has a
   session's verdict at its statement whose record carries the member's part of `S`, is the record sent for its
   session, decodes to what the verifier's read holds the log to at that session (`SessionRead`), and whose proof files
   are decoded from the evidence its closing round reveals.
@@ -135,7 +135,7 @@ theorem drawnBefore_succ_of_not {nJ : ℕ} {ms : List (Member nJ)} {S : Finset (
 theorem drawnBefore_le {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) (i : ℕ) : drawnBefore ms S i ≤ i :=
   countP_take_le _ ms i
 
-/-- **Each session before a place is a drawn member's**: the session after `v` others, of fewer than the sessions
+/-- **Each session before a place is a sampled member's**: the session after `v` others, of fewer than the sessions
 before place `n`, is that of a member with a proof block in the sample that `v` sessions come before. -/
 theorem drawnBefore_exists {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) (n v : ℕ)
     (h : v < drawnBefore ms S n) :
@@ -228,7 +228,7 @@ structure SessionSpecAt (x : Exchange) (tb : String) (v : ℕ) (text : String) (
 streams once (`specs`), and an opening of a tree opened before is of the last tree opened (`order`); the log opens at
 most as many trees as members have a proof block in `S` (`trees`); and each member `m` with a proof block in `S`, at
 place `i`, has a session's verdict (`SessionVerdict`) at a statement that is `m`'s whose record carries `m`'s part of
-`S` as its sample, is the record sent for the session after as many sessions as drawn members come before `m`,
+`S` as its sample, is the record sent for the session after as many sessions as sampled members come before `m`,
 decodes to what the verifier's read holds the log to at that session, a tree the log opens, and whose proof files
 `filesDec` decodes from the evidence `ev` the session's closing round reveals (`session`). -/
 structure WindowSessions (W : Window) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
@@ -248,7 +248,7 @@ structure WindowSessions (W : Window) (tb : String) (ev : ℕ → Exchange → O
       (openedTrees x.log)[drawnBefore W.ms S i]? = some τ ∧
       ev (drawnBefore W.ms S i) x = some w ∧ filesDec w = proofs
 
-/-- **A drawn member's session, with the session `--zk` sets up at the member**: `WindowSessions.session` with the
+/-- **A sampled member's session, with the session `--zk` sets up at the member**: `WindowSessions.session` with the
 session's shape at a member of one table (`Member.spec_at`). -/
 theorem WindowSessions.specAt {W : Window} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
     {filesDec : Claims.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
@@ -273,8 +273,8 @@ theorem WindowSessions.specAt {W : Window} {tb : String} {ev : ℕ → Exchange 
     ⟨hsent, hread, hdec, hv.verify, htab.trans (congrArg (fun t => #[t]) (hMA.table m hmem)), hsig, hret, hpts,
       h512, hdg⟩, hτ, hev, hfd⟩
 
-/-- **Every tree the log opens is a drawn member's session's**, with its verdict's read: the log opens at most as
-many trees as the sample draws members, and each count below that is the sessions before a drawn member. -/
+/-- **Every tree the log opens is a sampled member's session's**, with its verdict's read: the log opens at most as
+many trees as the sample samples members, and each count below that is the sessions before a sampled member. -/
 theorem WindowSessions.all {W : Window} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
     {filesDec : Claims.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
     (h : WindowSessions W tb ev filesDec S x) (hMA : MembersAt W tb) :
@@ -727,7 +727,7 @@ map that writes the link points' and each round's coins' bits into a stop's open
 `StepInv`, wherever a play on a tape through the first stop of the coin map's tape at `ω` that the sampled verdict
 accepts and `P` holds of has the sessions of the sample at `ω` (`WindowSessions`). The start is the play's first
 stop (`stopOf_rootStop`) with nothing answered; a member with no proof block in the sample has no session, so the
-sessions before the next place are the same; and a drawn member's step is `session_step` at its session, the one
+sessions before the next place are the same; and a sampled member's step is `session_step` at its session, the one
 after `drawnBefore` others, with the moves its record decodes to (`MemberMovesOf`). -/
 theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
