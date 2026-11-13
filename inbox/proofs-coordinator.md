@@ -110587,3 +110587,58 @@ NEEDS: ADDRROW to prove `AddressRow.RowGoal` (`AddressFacts/RowGive.lean`), or t
 ### To post
 
 Nothing.
+
+## SESSIONCOINS, Fri 13 Nov 00:37Z: the list half of piece E elaborates in a one-file check on my VM, with two errors found and fixed; no run of mine has reached a Lean slot yet (2 and 4 checks ahead)
+
+**In plain words.** Piece E says that in the two-stage audit's second stage each proof session reads its own coins: the coins of its own tree, in the order the device's log opens the trees. Everything is written in two files and nothing has compiled in a run, because my runs are still in line for a Lean slot. To not sit idle I checked the part that needs no project code on my VM: the session-round locator, the lemmas that say the trees open in the sessions' order, and the count of what a round's releases carry. That check found two small errors, both fixed, and now passes. TWOLEG changed the statement the projection takes to `CoinsAgree`, as I had asked; I prove that form now. TWOLEG's new `DevAgrees.lean` names a second obligation for this piece, `SessionsAgree`, and I wrote its proof too. What is left is to compile in a run, and to prove from the form's acceptance the two premises that are closest to my piece (`MembersAccepted`, `InteriorReads`).
+
+**Branch.** `cursor/proofs-sessioncoins-e4a0` at `3a8d583afb`, merged with TWOLEG's `052eb3aba5` (its head at 00:32Z) [run: `git push`, `git merge-base --is-ancestor`]. Nothing is left unpushed except the scratch file of the check below, which I do not keep (it is rebuilt from the two files in a minute). I was resumed on a new machine at about 00:16Z; nothing was lost, because `66a10d23f8` was pushed.
+
+**Mailbox.** Read at 00:17Z and 00:36Z [run]. It holds the 23:52Z rule (push before a turn ends) and the 00:17Z note (say "stage"; HELDOF, HISTORY and OWNREADS started). I use "two-stage audit", "first stage" and "second stage" from here on. Where my files say "round" they mean a round of the proof session or of a coin tree's stream, which is the cryptographic sense; I rename nothing tonight.
+
+**Files, lines, what each proves** [read]:
+- `security/Proofs/Properties/Verity/SampledTwo/SessionCoins.lean`, 884 lines.
+  - `stmtReadsNone`: the statements' round reads no coin.
+  - `coinsRead_sessions`: wherever the check read a coin at a session's round, it is the device's release for that round. Premises: `DevLocal` (COINMAP) and `InteriorLogged` (CUT).
+  - `coinsAgree_sessions`: `CoinsAgree … .sessions` at `formReading A C (withCoins A C tab dev Ms) dev`, the exact piece `ProjectionOf` takes at `052eb3aba5`. Same two premises. New since my last entry.
+  - `located_own`: each release the locator puts on round `j` of session `t` is an opening of session `t`'s own tree with the coins its own record gives that round. Premise: `MembersAccepted`.
+  - `located_one`: the locator puts at most one release on each round. Premise: `MembersAccepted`.
+- `security/Proofs/Properties/Verity/SampledTwo/SessionAgrees.lean`, 107 lines, new. It is a second file so that the first file's verdict does not wait on `DevAgrees.lean`.
+  - `sessionsAgree`: TWOLEG's `SessionsAgree A x (withCoins A C tab dev Ms) dev (FormAccepts C) Good Ag`, the sessions' input to `devAgrees_formReading`. Premises: `InteriorReads` (the form's acceptance reads the interior's log), `InteriorLogged` (CUT), and `DevElems` (COINMAP's agreement at my locator, in the play's log).
+- `security/Proofs/lakefile.toml`: two roots, each on a line of its own.
+
+**The one-file check on my VM** [run: `lake env lean` on one scratch file in `security/`, whose Mathlib is already built; 6 seconds; this is not a `research run` and not the real files]. The scratch file holds stand-ins for `Frame`, `Release`, `openedOf`, `helloSpecs` and `repStreamName`, copied from the tree, and then, word for word from my two files:
+- the locator and its lemmas (`firstsOf_append`, `treesOpened_append`, `sessLoc_congr`, `Same.snoc`, `same_append`, `located_append`, `located_none`, `located_same`, `off_mono`, `off_sep`, `roundOf_slot`, `mem_treesOpened`, `treesOpened_snoc_open`, `treesOpened_snoc_none`, `idxOf_map_range`, `find?_of_first`, `mem_located`, `located_two`, `located_widths`, `slot_exists`);
+- the order lemmas (`earlier`, `le`, `prefix`, `place`, `key`, `one`), with the four facts they take from the members' check as fields of a stand-in structure.
+
+It elaborates with no error. It found two errors in what I had pushed, both a case a tactic had already closed (`same_append`, `roundOf_slot`); fixed in `3a8d583afb`. It does not check anything that names the form, the reading, `readLog` or the members' check: `stmtReadsNone`, `coinsRead_sessions`, `coinsAgree_sessions`, `membersHeld_of`, `MembersHeld.opening`, `.find`, `.own`, `located_own`, `located_one`, `sessionsAgree` are unchecked.
+
+**Runs** (vy-nebius-2, pool `proofs`) [run: `research fetch`, `slot.json`]:
+- `r20261112-234440-6c1f` at `64be229ba8` (`SessionCoins.lean --siblings`): waiting since 23:45Z, 2 checks ahead at 00:36Z. It holds the two errors above, so it will fail; I keep it because its output shows the errors in the unchecked half.
+- `r20261113-003246-eaec` at `3a8d583afb` (`SessionAgrees.lean --siblings`, which builds `SessionCoins.lean` first): waiting since 00:33Z, 4 checks ahead at 00:36Z.
+- `r20261113-002320-ab0e` at `1b97a2f37a`: cancelled at 00:33Z after 10 minutes in line, superseded by `eaec`.
+- The line was 29 ahead at 23:45Z, 14 at 00:17Z, 12 at 00:26Z and 2 at 00:33Z. `6c1f` has waited 51 minutes.
+
+**What is left, and when** [guess for the hours]:
+1. The two files green in a run. First verdict by about 01:00Z; green by about 03:00Z if each fix waits 20 to 40 minutes in line. The statements as signatures that elaborate were owed at 01:12Z; they will be late by the time the line takes, as I said at 23:46Z.
+2. `MembersAccepted C` and `InteriorReads C` from `FormAccepts`, in a new file `SessionHeld.lean`. By about 06:00Z written; compiled by 12:00Z.
+   - `MembersAccepted` needs `membersRun`'s steps (the trees, the lines, `membersTreesHeld`) and that the records `membersTreesHeld` names are exactly the sessions' records, in order.
+   - `InteriorReads` is the second stage's `logRead_isSome` (`SampledRead.lean:1327` on main), through `readLog_isSome`.
+3. `DevLocal` and `DevElems` at COINMAP's `dev`, once `CoinMap.lean` compiles. Not started; I do not import an uncompiled file.
+
+One session's coins in a run by 07:00Z stands [guess]. My word on all sessions: `located_own` is stated and proved for every session at once, so there is no separate step from one session to all; whether it holds is the run's to say.
+
+**STOP RULE.** Nothing. No listed guarantee or lock changed, the form is not wired into `Sampled.lean`, the accept is not turned on. I touched only my two new files and their two root lines [read: `git diff` against the base].
+
+**NEEDS.**
+- TWOLEG: none now. `CoinsAgree` in `Projection.lean` is the change I asked for; my NEEDS of 23:46Z is withdrawn.
+- COINMAP (or ASSEMBLY):
+  - `DevLocal A (locOf A tab) dev`: `dev` at a session's round reads only the releases my locator puts there.
+  - `DevElems A x (locOf A tab) dev (FormAccepts C) Good Ag`: on an accepted play whose log is the device's, at coins your agreement holds of, `dev o.log i` and the run's coin `r i` have the same elements below the count the located releases carry. It is your `AgreeCovers` read at my locator.
+  - `LocatesSessions A tab L`: your `Locate` equals `locOf A tab` at sessions' rounds.
+- CUT: `InteriorLogged C Good` from `LogIsDevice`, as at 23:46Z. Also: your `members_trees` (`CutHeld.lean` at `6d551cb5a4`) drops the lines `membersRun` hands `membersTreesHeld`, and `named_mem` gives membership only. I need both the lines and the order, so I write the stronger pair in `SessionHeld.lean` (`membersRun_held`, `named_exact`); yours follow from them. Say if you would rather own them.
+- MESSAGES: `withCoins` keeps your `stmts` and `msg`; `tab t`, session `t`'s table name, is still a parameter for whoever matches session `t` to template `t`.
+
+**To post.** Nothing.
+
+**Not established.** Nothing of mine has compiled in a run. The one-file check covers stand-in definitions, not the tree's. `MembersAccepted`, `InteriorReads`, `InteriorLogged`, `DevLocal`, `DevElems` and `LocatesSessions` are premises, not proved. The brief's third clause, that each tree closes after its session's evidence's SHA-512, is on main as `Verity.Sampled.MemberForm.members_read`'s closing part; I do not yet restate it at the form's acceptance, because that needs the evidence digest `membersTreesHeld` names (`named_exact`, in step 2). The earlier period's challenger signature hole is open and nothing here reads a signature.
