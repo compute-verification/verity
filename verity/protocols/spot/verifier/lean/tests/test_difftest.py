@@ -2681,14 +2681,15 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
         assert (out["verdict"], out["reason"]) == ("reject", want), (s.templates, out)
 
 
-def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_path, server, server_v2):
+def test_the_per_member_form_as_written_is_what_v2_parses_and_its_check_reads(tmp_path, server, server_v2):
     """`proofs.members_v2` writes v2's per-member form of ``proofs`` for a window of several members, and
     `OneStageZk`'s parsers read what it wrote (`proofs.members_parsed`, the executable's ``members``:
     `membersParamsOfJson`, `membersEvidenceOf`, `membersHeld`, `sampledHeld`), on an audit v1 accepts: every member
     with its files' digests, its units and its ``vus_per_block``, and a statement for each member with a session, in
     the members' order, each a member the evidence's ``proved_units`` hold a unit of. The command's line says
-    ``parsed, not checked`` and names no verdict, and the audit refuses the same case for its keys, so no check of the
-    form is reached. What the parsers refuse the command refuses with their reason: statements out of the members'
+    ``parsed, not checked`` and names no verdict. The audit's check reads the same case in the form and rejects it at
+    the first check that fails: the stand-in sessions' records name no coin tree the challenger's release log shows.
+    What the parsers refuse the command refuses with their reason: statements out of the members'
     order, a statement of two sessions, of a member the parameters don't name or of a member the sample holds no unit
     of, v1's ``sessions`` other than the statements', and either file in the one statement's form."""
     rec, _, base, params = _audit_v1_accepts(SETUPS[3], "v2-members", server)
@@ -2725,7 +2726,7 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
 
     case = {"blobs": [f.read_bytes().hex() for f in blobs], "commitment": _hex(rec), "evidence": _hex(e2), "params": p2}
     out = server_v2.exchange(_json(case))
-    assert (out["verdict"], out["reason"]) == ("reject", "params: the keys of proofs are not circuit, public, registered")
+    assert (out["verdict"], out["reason"]) == ("reject", f"proofs: session s0's coins are not the challenger's: {NO_TREE}")
 
     def why(p: dict = p2, e: dict = e2) -> str:
         got, refused = PF.members_parsed(p, e)

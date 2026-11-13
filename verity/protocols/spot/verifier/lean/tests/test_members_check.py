@@ -27,7 +27,7 @@ def test_the_check_refuses_what_its_parsers_refuse_in_either_form_and_exits_1():
                        text=True)
     line = json.loads(p.stdout)
     assert p.returncode == M.EXITS["reject"] and line["verdict"] == "reject" and line["protocol"] == PF.V2
-    assert line["reason"].startswith("params: ") and line["published"] is None and line["profile"] is None
+    assert line["reason"].startswith("params: ") and line["public"] is None and line["profile"] is None
 
 
 def test_the_executable_has_no_command_beside_the_checks_and_the_parsers():
