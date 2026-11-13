@@ -168,11 +168,13 @@ its file and evaluating the query itself (`membersFiles_eq_kept` proves them equ
 on a check's result or a member's files are not held. The stated pass runs up to `REF_MAX` members (default 150). The
 compiled pass's microseconds at N less those at 1, over N - 1, are its work on one more member of a file; the stated
 pass's over N are a member's with its file's parse. `MEMBERS` may name several sizes, a window, a case and its rows
-each: a stand-in window's program has a root node a member, so the rows at one N across the cases are the pass against
-the program's size at a fixed count of members handed, where the compiled pass's work on one more member must not grow
-with the program. `$OUT` gets members_files.jsonl: each case's row (its members, blobs and bytes, the circuit
-file's, its program's bytes and root nodes, and the microseconds of one evaluation of its partition's query's strata)
-and one row per N and pass (members, circuit files, microseconds, peak RSS, the result's digest).
+each: the rows at one N across the cases are the pass against the window's members at a fixed count of members handed.
+A stand-in window's program does not grow with its members (its root holds the templates' nodes), so these rows do
+not vary the program's size; each case's row says how large its program is and what one evaluation of its partition's
+query costs on it, which is the part of the stated pass's work on a member that grows with the program. `$OUT` gets
+members_files.jsonl: each case's row (its members, blobs and bytes, the circuit file's, its program's bytes and root
+nodes, and the microseconds of one evaluation of its partition's query's strata) and one row per N and pass (members,
+circuit files, microseconds, peak RSS, the result's digest).
 
 ~~~sh
 research run --as proofs --project verity --on auto --source . --cwd clone --mem-gb 32 -- \

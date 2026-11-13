@@ -8,7 +8,8 @@
 # (benchmarks/one_stage/members_standin.py's), audited on Flock's prover (check_build.sh bin: the machine must hold the
 # Flock checkout and the toolchain check's flock-circuit-build step leaves), this tree's Lean verifier and ZK server.
 # MEMBERS may name several sizes ("300 1200"): a window, a case and its rows each, so the rows at one N are the pass
-# against the program's size (a root node a member) at a fixed count of members handed.
+# against the window's members at a fixed count of members handed. A stand-in window's program does not grow with its
+# members (its root holds the templates' nodes), so these rows do not vary the program's size.
 # v2's check must accept each case. Run from a clone (the builds write the verifiers' .lake):
 #   research run --as proofs --project verity --on auto --source . --cwd clone --mem-gb 32 -- \
 #     bash benchmarks/verifier_cost/members_files.sh 1 2 16 150 all

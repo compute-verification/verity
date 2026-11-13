@@ -10,8 +10,7 @@ parameters' order, so N members of one circuit file; `all` is every member of th
 case is parsed and the blobs are read and hashed; one `PHASE {json}` line each on stdout. The stated pass runs up to R
 members. The case's own line carries its program's size (its bytes and its root's nodes) and the microseconds of one
 evaluation of the strata of its partition's query on the program (`Partition.strata`), which the stated pass makes
-once a member and the compiled pass once for the members that share the parameters' partition: across cases of
-different sizes, the rows at one N are the pass against the program's size at a fixed count of members handed.
+once a member and the compiled pass once for the members that share the parameters' partition.
 
 The guard, without which no figure counts: both return every member's statement with its files held, and the two
 agree on every check's result of every statement; exit 1 otherwise. `members_files.sh` builds it against the
