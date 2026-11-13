@@ -19,6 +19,8 @@ public compression (`CallsAtPub`), with the network certifier's counts and the a
 * `WorkSoundOnCard c pb hr`: at the card's own `x`, the one `Assumptions.CardWithinAccel` gives with the card's runs as
   its model's (`CardRunsAt`). This is where the card premise (the card can do no more than its model) and the product
   form enter the headline.
+* `WorkSoundOnCardTables`: `WorkSoundOnCard` at every card table, menu and host row, which names no table, with the
+  card premise a hypothesis at each.
 
 `WorkSound` gives each (`Proofs.Pouw.DitherInstance`). Like `WorkSound`, each is stated over any round protocol, and
 the only ones the Lean defines are the no-fold round's, so none covers Dither v3.2's proof block, which no guarantee
@@ -159,5 +161,13 @@ def WorkSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Pr
   ∀ can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop,
     Verity.Assumptions.CardWithinAccel c can →
     ∃ x, c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ CardRunsAt c x can ∧ WorkSoundAtX c pb hr x
+
+/-- **The headline on every card itself**: `WorkSoundOnCard` at every card table `c`, every menu `pb` of public best
+methods on it and every host row `hr`, and no table is named. The card premise (`Assumptions.CardWithinAccel c can`)
+is a hypothesis at each table, and in the lock. Like `WorkSound`, it is stated over any round protocol, and the only
+ones the Lean defines are the no-fold round's, so it doesn't cover Dither v3.2's proof block, which no guarantee
+states yet. -/
+def WorkSoundOnCardTables : Prop :=
+  ∀ (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow), WorkSoundOnCard c pb hr
 
 end Pouw.Guarantees.DitherInstance

@@ -24,6 +24,7 @@ public import Proofs.Core.Accel.Model
   statement's.
 * `WorkSoundAtTables`: `workSoundAt_of_workSound` at every card table, menu and host row, the statement that names no
   table.
+* `WorkSoundOnCardTables`: `workSoundOnCard_of_workSound` at every card table, menu and host row.
 * `cardAccel_onCard`, `cardAccel_callsAtPub`: at any card with positive rates, at any semantics, on any period's
   devices, `cardAccel` (programs as runs within the devices' rates, no oracle calls, its call step at a public
   compression) is the devices under the identity match (`OnCard`), meets (G1), (G2) and (G3), and `CallsAtPub`, so the
@@ -144,6 +145,10 @@ theorem workSoundOnCard_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c :
 /-- **The headline on every card table at θ**, from `WorkSound`'s proof. -/
 theorem WorkSoundAtTables : Pouw.Guarantees.DitherInstance.WorkSoundAtTables :=
   fun c pb hr => workSoundAt_of_workSound Pouw.SecurityProofs.Dither.WorkSound c pb hr
+
+/-- **The headline on every card itself**, from `WorkSound`'s proof. -/
+theorem WorkSoundOnCardTables : Pouw.Guarantees.DitherInstance.WorkSoundOnCardTables :=
+  fun c pb hr => workSoundOnCard_of_workSound Pouw.SecurityProofs.Dither.WorkSound c pb hr
 
 section Witness
 
