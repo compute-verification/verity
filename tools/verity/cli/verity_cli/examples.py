@@ -39,7 +39,7 @@ SCHEMA = "demos/README.md has the schema"
 WHERE = "tools/verity/cli/verity_cli/examples.py"
 #: the composites a demo's protocol may name, each by its Lake package's directory. A composite is a name and not a
 #: directory of verity/protocols/, so the path is written out, and a move of the package rewrites it here.
-COMPOSITES = {"onsite": "verity/protocols/onsite/verifier", "remote": "verity/protocols/remote/verifier"}
+COMPOSITES = {"onsite": "verity/protocols/compose/verifier/onsite", "remote": "verity/protocols/compose/verifier/remote"}
 DECL = re.compile(r"^[ \t]*(?:@\[[^\]\n]*\][ \t]*\n?[ \t]*)?(?:(?:private|protected|noncomputable|nonrec|partial|unsafe)[ \t]+)*"
                   r"(?:theorem|lemma|def|abbrev|instance|structure|inductive|class|opaque)[ \t]+([^\s:({\[]+)", re.M)
 NAMESPACE = re.compile(r"^[ \t]*namespace[ \t]+(\S+)", re.M)
