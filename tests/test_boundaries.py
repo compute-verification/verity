@@ -215,7 +215,8 @@ SEPARATE = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock
             "difftest", "protocols/pous/verifier/check", "configuration/config", "protocols/inference_only/rho",
             "protocols/inference_only/nci")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
-NUMPY_FREE = ("circuits", "definitions/circuits", "definitions/silicon", "commitments/randomness", "claims", "hardware")
+NUMPY_FREE = ("circuits", "definitions/circuits", "definitions/silicon", "commitments/randomness", "claims", "hardware",
+              "device.py")
 NUMPY_USERS = ("circuits/evaluation", "circuits/boolean/forms.py")
 #: ml builds on no verifier: core's frozen edges into ml (``CORE_ML_EDGES``) never run the other way.  The files of
 #: ``verity/ml/`` that import core anyway
@@ -388,10 +389,11 @@ def _separate(rel: Path) -> bool:
 
 
 def _sources(root: Path = SRC) -> list[Path]:
-    """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
-    directory (core's Lean builds in ``verity/protocols/flock/verifier/.lake``) or a ``SEPARATE`` tree, and no circuit-check
-    sidecar (``<module>.circuit-check.py``: circuit-check's bindings, which it loads by path and no module imports)."""
-    return sorted(p for p in root.rglob("*.py")
+    """``verity``'s own Python files: every ``.py`` under ``root`` (``root`` itself, a file) outside a ``tests/`` or ``lean/``
+    directory, a Lake build directory (core's Lean builds in ``verity/protocols/flock/verifier/.lake``) or a ``SEPARATE``
+    tree, and no circuit-check sidecar (``<module>.circuit-check.py``: circuit-check's bindings, which it loads by path and
+    no module imports)."""
+    return sorted(p for p in ([root] if root.is_file() else root.rglob("*.py"))
                   if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts)
                   and not _separate(p.relative_to(SRC)) and not p.name.endswith(".circuit-check.py"))
 
