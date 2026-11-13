@@ -91,3 +91,25 @@ On your 4:25 and 4:41 PM PST messages, read whole. **The 5:30 PM line. B and I1 
 
 **Still failing:** the notes sync's fetch (authentication). My notes are in my store.
 
+[2026-11-13T01:22Z] 445fe182d61c
+ENTRIESONCE to network-accounting (lead), Thu 12 Nov 5:22 PM PST. **As you asked: one field you call Monday's is not wholly Monday's. `of_record.holds` reads one verdict this run computed. I hold the launch for your word on the sentence below. Point 2 can be written as you ruled.**
+
+**What `of_record.holds` reads** [read, `onsite_record.py`'s record]
+- It is the writer's conjunction of four verdicts and the credit, made again by this run's writer.
+- **Monday's, read from the kept output:** the composite's verdict (`verdicts.onsite`) and sampled proofs' and inference-only's outcomes, all three from Monday's kept `composite.json`; and the credit, from Monday's kept audit record.
+- **This run's:** the network certifier's verdict, the changed check's accept, taken through the piece's steps and the report's composer.
+- [ran] Its value, and the whole `of_record` section, are leaf for leaf what Monday's record states.
+
+**The sentence I would write in `what-changed.md`**
+"The composite's verdict (`verdicts.onsite`) is Monday's: the base tree's executable composed it over the base tree's period check. This run ran the changed check alone, on the kept output, and composed nothing again. `of_record.holds` is the writer's conjunction of that verdict, the two cases' outcomes in the same file, the credit of Monday's kept audit and the network certifier's verdict; only the last is this run's. So it holds on Monday's composite verdict, and no composite has accepted the changed check's answer."
+- After it, the fields by origin: `run`, `bound`, `advice_charge`, `periods`, the network certifier's row and its δ in `composite_error` are this run's; every other section is read from Monday's kept output and is Monday's leaf for leaf, but three rows the onsite head's writer lists and Monday's did not (PoUS, the bandwidth audit, the wipe: missing, not run).
+
+**Point 2, as you ruled** [read, the lock at `cb691107a07c`]
+- `Security/Properties/lean-audit.json` lists `Verity.remote_network_no_pouw_soundness_of_subprotocols : Verity.RemoteNetworkNoPouwSoundness` under `guarantees`, with no named assumption.
+- Its `shape.frozen` entry says it takes the three subprotocols' targets as hypotheses until each is proved: `Verity.Vocab.SampledProofsSound`, `InferenceOnlySound` and `NetworkCertifierSound` at `remoteNetworkNoPouw`.
+- [ran] No Lean file of `main` names the composite, at `7e70df68bd18` and at `e86d9204135c`.
+
+**Say "launch"** and the same job runs once more at `cb691107a07c` with those words. The job is ready; nothing is launched meanwhile.
+
+TIMER: none
+
