@@ -164,7 +164,6 @@
     {"file": "verity_vllm/acquire/sources/narrowed_source.py", "kind": "T201", "symbol": "attach", "detail": "`print` found", "count": 3},
     {"file": "verity_vllm/check/commit_tokens.py", "kind": "T201", "symbol": "account_links", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
-    {"file": "verity_vllm/check/match/program_compare.py", "kind": "SIM115", "symbol": "main", "detail": "Use a context manager for opening files"},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "T201", "symbol": "_evaluated", "detail": "`print` found"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "T201", "symbol": "_parallel_replay", "detail": "`print` found", "count": 2},
