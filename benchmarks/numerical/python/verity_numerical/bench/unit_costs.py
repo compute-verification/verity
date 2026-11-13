@@ -750,7 +750,7 @@ def reuse(path: str) -> dict[tuple, dict[str, Any]]:
     """The subcircuit results of an earlier ``unit-costs.json`` (its builds), with the fits and each attention head's cost past
     its first key block re-derived."""
     subs = {}
-    for s in json.loads(open(path).read())["subcircuits"]:
+    for s in json.loads(Path(path).read_text())["subcircuits"]:
         s = {k: v for k, v in s.items() if k not in ("per_extra_block", "block_curvature", "notes")}
         if s["template"] == "attention-head" and "fit" in s:
             s["method"] = "model"

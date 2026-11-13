@@ -64,7 +64,8 @@ def golden_records() -> list[Case]:
 def special_records(device: str) -> list[Case]:
     """Every all-finite record of the special-value campaign on ``device``: the ``cases`` list and the collapsed ``pos`` list."""
 
-    data = json.loads(gzip.open(SPECIAL[device]).read())
+    with gzip.open(SPECIAL[device]) as f:
+        data = json.loads(f.read())
     assert data["instruction"] == "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32"
     out = []
     for r in data["cases"]:
