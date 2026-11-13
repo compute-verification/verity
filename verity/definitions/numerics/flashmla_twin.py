@@ -4,7 +4,7 @@ scheduler.
 `decode` computes `FlashMlaDecode_v1` over numpy words, its heads at once; `split`, `combine` and the libm pieces are its parts.
 The arithmetic is written here again from the kernel's SASS rather than read from the registry (FADD / FMUL / FFMA round to
 nearest with subnormals, every NaN result 0x7FFFFFFF; MUFU through core's measured tables; the wgmma k16 step through
-`verity.definitions.kernels.tc`), so the self-check compares two writings.  `sched_meta` is `get_mla_metadata_kernel`
+`verity.circuits.kernels.tc`), so the self-check compares two writings.  `sched_meta` is `get_mla_metadata_kernel`
 (csrc/smxx/decode/get_decoding_sched_meta/get_decoding_sched_meta.cu:12-104) line for line, its one shared array included, and
 `request_splits` a request's SPLITS from its output, as the decode kernel walks it (splitkv_mla.cuh:164-183).
 
@@ -18,10 +18,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from verity.definitions.ops import mufu as MU
-from verity.definitions.ops.prims import HopperBF16WgmmaDot16
-from verity.definitions.silicon.total import HOPPER_BF16_WGMMA_K16
-from verity.definitions.kernels import tc as CK
+from verity.circuits.ops import mufu as MU
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
+from verity.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
+from verity.circuits.kernels import tc as CK
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics.kernel_registry import Declined, register
 

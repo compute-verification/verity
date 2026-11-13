@@ -1,4 +1,4 @@
-"""`verity.definitions.word`'s cut, the copy circuit-check's partition verdict reads, held to core's reference
+"""`verity.circuits.word`'s cut, the copy circuit-check's partition verdict reads, held to core's reference
 (`verity.circuits.cut`) on a spread of small Definitions: `Graph` is `CallGraph` field by field, `partition` gives
 `cut_word`'s owner per gate, kind per unit and head per gate, and `cut_verdict` with `units`' width rule gives `check_cut`'s
 verdict, detail for detail, on the cut and on cuts broken every way the verdict names."""
@@ -12,8 +12,8 @@ import pytest
 
 from verity.circuits import cut
 from verity.circuits.defs import bind
-from verity.definitions import word as W
-from verity.definitions.call_scope import specialization
+from verity.circuits import word as W
+from verity.circuits.call_scope import specialization
 
 
 def _spec(fam: str, **statics):
@@ -29,7 +29,7 @@ def _bound(module: str, name: str, **statics):
 
 def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
     """GLM-5.3's MoE expert FP8 GEMM (w13; w2 `routed`) on Hopper's tiles (G = KB = 128), scaled down in E, K and N."""
-    from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
     from verity.definitions.registry import fp8_moe_experts as XM
     return bind(XM.MoeExpertFp8GemmW if routed else XM.MoeExpertFp8Gemm, E=E, K=K, N=N, G=128, KB=128, SWAP=swap,
                 DOT=HopperE4m3QgmmaDot32 if swap else HopperE4m3MmaV2Dot32)

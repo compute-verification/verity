@@ -23,7 +23,7 @@ U_ij          acc = C̃_ij;  acc = k16(acc, P_A,i[16s:16s+16], P_B,j[16s:16s+16]
 y_ij          RN_bf16(RN_f32(RN_f32(U_ij · RN_f32(1/α_A,i)) · RN_f32(1/α_B,j)))      (the served y: the kernels' store_y)
 ~~~
 
-**The two tensor-core steps in integers** (`grouped`; ``verity.definitions.silicon``'s ``HOPPER_E4M3_K32`` and ``HOPPER_BF16_WGMMA_K16``
+**The two tensor-core steps in integers** (`grouped`; ``verity.circuits.silicon``'s ``HOPPER_E4M3_K32`` and ``HOPPER_BF16_WGMMA_K16``
 restated, and equal to them on every vector and the random sweep in the tests).  The device (`pearl_c_device`, the H100 by
 default) gives each step as Lean's `Pipeline` (`Device.pipelines`): its groups in k order, the width W and the floor F.  A
 step of several groups runs `grouped` once per group, the accumulator joining the first and each group's word the next
@@ -48,7 +48,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from verity.definitions.silicon import fp32
+from verity.circuits.silicon import fp32
 
 from .pearl_c_device import H100, Device
 
