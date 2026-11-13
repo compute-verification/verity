@@ -35,8 +35,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.verifier.active import DATA, PAD, VirtualClock
-from verity.protocols.certifier.verifier.warden import (
+from verity.protocols.accounting.certifier.verifier.active import DATA, PAD, VirtualClock
+from verity.protocols.accounting.certifier.verifier.warden import (
     END, FAIL, Warden as Certifier, WardenParams as Parameters, cells, read_cell,
 )
 
