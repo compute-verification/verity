@@ -292,11 +292,17 @@ noncomputable def memberSim (τ : Strategy w.game) (k : Fin w.ms.length) :=
 noncomputable def memberWrong (τ : Strategy w.game) (k : Fin w.ms.length) : Finset (Fin (w.ms.get k).n) :=
   (w.ms.get k).wrongSet (w.memberLaw τ k) (w.oneClass_memberLaw τ k) (w.memberStrat τ k)
 
-/-- **The window's incorrect proof blocks** at `τ`: every member's, in the population. -/
-noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.nJ) :=
-  Finset.univ.biUnion fun k => (w.memberWrong τ k).image (w.ms.get k).emb
-
 end Ended
+
+/-- **The window's incorrect proof blocks** at `τ`: every member's, in the population. Where no outcome of the stream
+ends the sample there are none: no run is accepted there (`prob_accepts_of_not_ends`). -/
+noncomputable def wrongSet (τ : Strategy w.game) : Finset (Fin w.nJ) :=
+  if _ : Nonempty w.EndΩ then Finset.univ.biUnion fun k => (w.memberWrong τ k).image (w.ms.get k).emb else ∅
+
+/-- Where some outcome of the stream ends the sample, the window's incorrect proof blocks are its members'. -/
+theorem wrongSet_eq [h : Nonempty w.EndΩ] (τ : Strategy w.game) :
+    w.wrongSet τ = Finset.univ.biUnion fun k => (w.memberWrong τ k).image (w.ms.get k).emb :=
+  dif_pos h
 
 /-- **The sampling design of member `k`'s part of the sample**: the sample's coins, member `k`'s part, with every proof
 block of the member where the sample ran out. -/
@@ -325,13 +331,14 @@ sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `RecordCustody
 (`Assumptions.TableCRZAt`) and `ecr/sha-512` (`Assumptions.LinkCRZCAt`) at each member's session played alone at `τ`,
 at the samples that ended. -/
 def JointSampledV5 : Prop :=
-  ∀ (w : JointAuditV5) [Nonempty w.EndΩ], Assumptions.UniformRandomBytes w.Lb w.src →
+  ∀ (w : JointAuditV5), Assumptions.UniformRandomBytes w.Lb w.src →
     ∀ τ : Strategy w.game,
-    (∀ k ω j, Assumptions.TableCRZAt execArith hs512
+    (∀ _ : Nonempty w.EndΩ, ∀ k ω j, Assumptions.TableCRZAt execArith hs512
       (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
       (w.ms.get k).qF (w.ms.get k).qS) →
-    (∀ k, Assumptions.LinkCRZCAt execArith hs512 (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
+    (∀ _ : Nonempty w.EndΩ, ∀ k, Assumptions.LinkCRZCAt execArith hs512 (w.ms.get k).P
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
       (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') →
     ∀ W : Finset (Fin w.nJ),
@@ -342,13 +349,14 @@ prover `τ` and every share `ε`, the probability that the sample ended, flock-v
 with a proof block in the sample and more than `ε·nJ` of the population's proof blocks are incorrect is at most the most the sampling design misses of any
 set of more than `ε·nJ` of them plus `Σ_m (ε_ks,m + ε_bind,m)`, under `JointSampledV5`'s named assumptions. -/
 def JointShareV5 : Prop :=
-  ∀ (w : JointAuditV5) [Nonempty w.EndΩ], Assumptions.UniformRandomBytes w.Lb w.src →
+  ∀ (w : JointAuditV5), Assumptions.UniformRandomBytes w.Lb w.src →
     ∀ τ : Strategy w.game,
-    (∀ k ω j, Assumptions.TableCRZAt execArith hs512
+    (∀ _ : Nonempty w.EndΩ, ∀ k ω j, Assumptions.TableCRZAt execArith hs512
       (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
       (w.ms.get k).qF (w.ms.get k).qS) →
-    (∀ k, Assumptions.LinkCRZCAt execArith hs512 (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
+    (∀ _ : Nonempty w.EndΩ, ∀ k, Assumptions.LinkCRZCAt execArith hs512 (w.ms.get k).P
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
       (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') →
     ∀ ε : ℝ,
@@ -379,7 +387,7 @@ end AuditRecV5
 namespace JointAuditV5
 
 /-- Window `t`'s record, at the strategy `τ` that played it and its output `o`. -/
-noncomputable def record (W : ℕ → JointAuditV5) [∀ t, Nonempty (W t).EndΩ] (t : ℕ) (τ : Strategy (W t).game)
+noncomputable def record (W : ℕ → JointAuditV5) (t : ℕ) (τ : Strategy (W t).game)
     (o : ((W t).Reg × Bool) × Finset (Fin (W t).nJ) × List Discharge.Exec.Transcript) : AuditRecV5 W :=
   ⟨t, (W t).Accepts o, (W t).wrongSet τ, ∃ u ∈ o.2.1, u ∈ (W t).wrongSet τ⟩
 
@@ -391,8 +399,7 @@ namespace JointPeriodV5
 noncomputable def game (W : ℕ → JointAuditV5) (T : ℕ) : Game Unit := periodG (fun t => (W t).game) 0 T
 
 /-- The period's run at the prover strategy `s`: each window's record, in order. -/
-noncomputable def run (W : ℕ → JointAuditV5) [∀ t, Nonempty (W t).EndΩ] (T : ℕ) (s : Strategy (game W T)) :
-    Game (List (AuditRecV5 W)) :=
+noncomputable def run (W : ℕ → JointAuditV5) (T : ℕ) (s : Strategy (game W T)) : Game (List (AuditRecV5 W)) :=
   periodRun (fun t => (W t).game) (JointAuditV5.record W) 0 T s
 
 /-- **The strategies the period plays window `t` with**: `τ` plays window `t` on some run of the period at `s`. -/
@@ -431,15 +438,15 @@ for its sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `Recor
 (`Assumptions.TableCRZAt`) and `ecr/sha-512` (`Assumptions.LinkCRZCAt`) at each member's session played alone at every
 strategy the window is played with on some run (`JointPeriodV5.Plays`). -/
 def JointHorizonV5 : Prop :=
-  ∀ (W : ℕ → JointAuditV5) [∀ t, Nonempty (W t).EndΩ] (T : ℕ) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).nJ → ℕ),
+  ∀ (W : ℕ → JointAuditV5) (T : ℕ) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).nJ → ℕ),
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
     ∀ s : Strategy (JointPeriodV5.game W T),
-    (∀ t (τ : Strategy (W t).game), JointPeriodV5.Plays W T s t τ → ∀ k ω j,
+    (∀ t (τ : Strategy (W t).game), JointPeriodV5.Plays W T s t τ → ∀ _ : Nonempty (W t).EndΩ, ∀ k ω j,
       Assumptions.TableCRZAt execArith hs512
         (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw τ k).draw ω) (reg ((W t).memberSim τ k))) j
         (zcStrat execArith hs512 (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) (cont ((W t).memberSim τ k) ω))
         ((W t).ms.get k).qF ((W t).ms.get k).qS) →
-    (∀ t (τ : Strategy (W t).game), JointPeriodV5.Plays W T s t τ → ∀ k,
+    (∀ t (τ : Strategy (W t).game), JointPeriodV5.Plays W T s t τ → ∀ _ : Nonempty (W t).EndΩ, ∀ k,
       Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
         (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) ((W t).ms.get k).vb (reg ((W t).memberSim τ k))
         (cont ((W t).memberSim τ k)) ((W t).ms.get k).k ((W t).ms.get k).Rw ((W t).ms.get k).M ((W t).ms.get k).t') →

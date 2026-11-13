@@ -405,7 +405,8 @@ theorem Window.ks (W : Window) (t : ℕ) (τ : FlockSoundness.Game.Strategy (W.j
   · exact show _ ≤ W.drawMiss + (W.joint t).eps + (W.ms.map Member.rootsErr).sum from
       le_add_rootsErr (Verity.Game.prob_le_one _ _ τ) W.ms (W.drawMiss + (W.joint t).eps) hcr fun hR =>
         (Verity.Game.prob_mono (fun _ ho => ⟨ho, hI he hR⟩) _ τ).trans
-          (Flock.SecurityProofs.JointShareV5 (W.joint t) W.hA3 τ (hF he).table (hF he).link W.ε)
+          (Flock.SecurityProofs.JointShareV5 (W.joint t) W.hA3 τ (fun h => (hF h).table) (fun h => (hF h).link)
+                W.ε)
   · exact ((W.joint t).prob_accepts_of_not_ends he τ).trans_le zero_le
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]

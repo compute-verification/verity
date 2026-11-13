@@ -385,7 +385,8 @@ theorem design_escape_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (k : 
 
 theorem wrongSet_eq_join (τ : Strategy w.game) : w.wrongSet τ = w.join (w.memberWrong τ) := by
   ext u
-  simp only [JointAuditV5.wrongSet, JointAuditV5.join, Finset.mem_biUnion, Finset.mem_univ, true_and,
+  rw [w.wrongSet_eq τ]
+  simp only [JointAuditV5.join, Finset.mem_biUnion, Finset.mem_univ, true_and,
     Finset.mem_image]
 
 variable {w}
