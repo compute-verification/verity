@@ -31,10 +31,13 @@ verity bench exfiltration --help          every parameter and its default
   other ways, and the print says how each differs: `headline plan` gives the bound at the plan's own pinned budget,
   whose total is that row's rather than the share, at λ = 1; `headline rows` gives λ times the bound at 10%, the
   total read between the two pinned budgets that bracket it alone.
-  - **Row `(i) honest`** prices its proving at the planner's assumed prices. Beside the figure it is read over the
-    world's year at the same share and printed only under the label "at the planner's assumed prices", never as the
-    figure; the document holds it as `at_assumed_prices`. Read with `--row "(i) honest"`, the figure itself carries
-    the label.
+  - **Row `(i) honest`**, the unfused tokens line, prices its proving at the planner's prices but where a table's
+    rows price its blocks: at `verity bench prove`'s table, under half of it. Beside the figure it is read over the
+    world's year at the same share and printed only under its label, never as the figure; the document holds it as
+    `at_assumed_prices`. Its label is what its own rows say of their pricing: the note the planner's driver writes on
+    them (no table's row priced their proving, or they priced under half of it, with the share each source prices),
+    else the share the table's rows price, else "at the planner's assumed prices" for rows that record no table's
+    row. Read with `--row "(i) honest"`, the figure itself carries the label.
 - **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
   the fail cells and the jitter, for the scan and N2 as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
@@ -88,11 +91,30 @@ field's name:
   stated in words (`the two-round form's soundness is not proved`). A record whose `open` names an issue's id is
   refused: the print carries no issue id, and the issue goes on the board.
 
-The class is complete when every piece's honest run is `accept`, and a changed id and a changed `max_tokens` are each
-refused, on a piece, by the verifier that accepted that piece's honest run, and no control is accepted. Then the
+An honest verdict (`control` null) also names the class it is on, in six top-level fields (`CLASS_FIELDS`). One it
+lacks keeps the class short of complete and is named; one that holds what it can't is refused by its name:
+
+- `registration`: the digest of the class's boundary record, the same on all four.
+- `stream_registration`: the digest of the verdict's own stream's registration.
+- `stream_names_boundary`: true or false, the verifier's recorded check that that registration names the boundary.
+  The command reads it and never recomputes it.
+- `serve`: the store id of the served run the class came from.
+- `class`: `w<window>/p<P>-o<O>`, with `-nostop` for a class with no stop block.
+- `rate`: `NUM/DEN` in lowest terms, from the registration record; every stop and tie block proved is `1/1`.
+
+A control's are not read: a control changes a committed value, so its registration differs. It is held to its piece
+and its verifier (module and commit) alone.
+
+The class is complete when every piece's honest run is `accept`, the four name one class (each with its
+`stream_names_boundary` true, all four agreeing on `registration`, `serve`, `class` and `rate`) at the rate the row
+assumes, `1/1`, and a changed id and a changed `max_tokens` are each
+refused, on a piece, by the verifier that accepted that piece's honest run, and no control is accepted. Where they
+don't name one class the print says which verdict lacks a field or records a failed check, or which field the four
+disagree on with each value's pieces, and claims nothing. Where the class is complete the
 output count's 0 is marked `run, not proved`, printed "run (Python verifier, not proved)" with each verdict's run and
-verifier and counted apart from measured, and the class prints as `complete (run, not proved: OPEN; Python verifier
-for PIECES)`, OPEN being each unproved piece's `open`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
+verifier and counted apart from measured, its source naming the boundary's registration, and the class prints as
+`complete on class C of serve S at rate 1/1 (run, not proved: OPEN; Python verifier for PIECES)`, OPEN being each
+unproved piece's `open`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
 from the field, never from a flag or a name. Short of complete, the inputs print as with no verdicts and the output
 count's line names what is missing; a `withheld` piece or control prints as `withheld: OPEN`, and a withheld control
 is not refused. A control on a withheld piece refused by that piece's verifier (the same module and commit) counts as
@@ -239,7 +261,7 @@ plan of the case, is left out and listed under "Refused".
 
 - **The figure**: over the world's year, the compute audit's part in GB with its copies of the weights, its bits a
   request and the requests it is priced over, how its proving time is priced by the row's plan and what prices it by
-  source, row `(i) honest` under its label at the planner's assumed prices, then the network
+  source, row `(i) honest` under its label, what its rows say of their pricing, then the network
   certifier's part under each of its rows at D_j = 2, then the two summed, each followed by a line under the
   network certifier's label for what rests on the simulated card, then the output count. The network certifier's
   figures end with their ε over the world's year and the δ of the scans it sums, and the sums with their error.
@@ -263,7 +285,9 @@ plan of the case, is left out and listed under "Refused".
   row's λ, the requests its rows are priced over, and each part of the total there. A β outside the pinned budgets is
   marked extrapolated. Under it, for each scope whose plan is read, its proving time by how its block families are
   priced, with the plan and its budget.
-- **The network certifier's part over the world's year**: each of its rows' schedules, cells, term at D_j = 2 with
+- **The network certifier's part over the world's year**: a legend line a row, with its standing and, where the
+  calculator gives the row one, its mark beside it (the `scan` row's accept, `run, not proved`); a row's mark the
+  command has no name for is refused. Then each of its rows' schedules, cells, term at D_j = 2 with
   its multiple of the weights, term at D_j = 1 in a column whose header carries the label, and the entries, then the
   δ of its scans and its ε. A row whose release times are taken once carries the label in its name. A row whose ε is
   1 or more has "no bound at this period" in place of each amount.
@@ -286,3 +310,25 @@ plan of the case, is left out and listed under "Refused".
 
 With `--json` the document holds the same: a scope's monitoring period has its `eps`, its `error` (the two together's,
 null for a scope no run of record holds) and its `phases`, and an amount that has no bound is null.
+
+## Under a research run
+
+`run.py`'s `METRICS` are the rows of `benchmarks/metrics.toml` this benchmark is held to. Under a research run
+(`RESEARCH_RUN_DIR` set) the command writes them into the run's `result.json` through the harness kit, each over the
+world's year at the share, in GB a world year at 10% of compute:
+
+- `benchmarks/exfiltration-gb-world-year`: the headline figure, the document's `value` (today the compute audit's
+  part, λ times the bound where row `(ii) honest`'s total is 10% of compute).
+- `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over the world's year.
+- `benchmarks/exfiltration-network-certifier-gb`: the network certifier's part of record, the `scan` row at D_j = 2,
+  with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
+
+Each measurement's first input opens with its mark (`modeled`, and the network certifier's with the mark its
+calculator gives the `scan` row beside it), its second is its error over the world's year (the compute audit's δ, or
+the network certifier's ε at its scans' δ), and the rest are the runs of record it read. The document is kept as
+`out/exfiltration.json`, the run's measurement file and its validation's evidence, and the fingerprint holds what
+ran. The print is the same in a run as outside one.
+
+```text
+research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py
+```

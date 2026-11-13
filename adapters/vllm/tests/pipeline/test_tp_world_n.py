@@ -8,14 +8,14 @@ import json
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
-from verity.definitions.registry import b1_tp2 as TP2, prims as P
-from verity_vllm.program.frontend import collective_kinds
+from verity.definitions.registry import b1_tp2 as TP2
+from verity.definitions.registry import prims as P
 
+from verity_vllm.program.frontend import collective_kinds
 
 # --- helpers --------------------------------------------------------------------------------------------------------------
 
@@ -140,7 +140,9 @@ def test_collective_bus_world_3_peer_layout_and_rank_order():
 
 
 def _derive_world8_collective(monkeypatch, *, fused: bool, custom: bool):
-    torch = pytest.importorskip("torch")
+    pytest.importorskip("torch")
+    import torch
+
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.export_ops import ensure_ops
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
@@ -181,13 +183,15 @@ RTX_PRO_6000 = ((12, 0), 188)
 
 
 def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: int = 8192):
-    torch = pytest.importorskip("torch")
+    pytest.importorskip("torch")
+    import torch
+    from verity.definitions.registry.tp_allreduce import settings_of
+
     from verity_vllm.program.frontend.derive import derive_report
     from verity_vllm.program.frontend.export_ops import ensure_ops
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.definitions.registry.tp_allreduce import settings_of
 
     ensure_ops()
     monkeypatch.setitem(VB._OBSERVED, "allreduce_settings", settings_of(True, env))
@@ -239,7 +243,14 @@ def test_read_tp_links_upgrades_v1_and_accepts_v2(tmp_path):
 # --- three-rank collective linkage over the capture logs -----------------------------------------------------------------------
 
 def _rank_events(rank: int, world: int, *, ar_shape=(4, 8), steps=(0,)):
-    from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, StorageAlloc, TritonLaunch, ViewDesc
+    from verity_vllm.observe.events import (
+        DispatchEnter,
+        DispatchExit,
+        RunHeader,
+        StorageAlloc,
+        TritonLaunch,
+        ViewDesc,
+    )
 
     def _v(a, shape, dtype="bfloat16"):
         strides = tuple(int(np.prod(shape[i + 1:])) for i in range(len(shape)))
@@ -338,7 +349,8 @@ def test_rank_commit_takes_worlds_2_4_and_8(world_args, W, tmp_path):
 
 @pytest.mark.parametrize("W", [2, 4, 8])
 def test_config_run_row_takes_worlds_2_4_and_8(W, monkeypatch):
-    from verity_vllm.pipeline import cli, row as ROW, row_tp
+    from verity_vllm.pipeline import cli, row_tp
+    from verity_vllm.pipeline import row as ROW
     seen = {}
 
     class Rec:
@@ -360,13 +372,15 @@ def test_collective_record_names_own_and_peer_operands_at_worlds_2_4_and_8(W, ki
     """World 2's binary ops keep their record's keys; a world-N op takes its `parts` as one list in rank order, and its record names
     the rank's own operand and every peer's input."""
     from types import SimpleNamespace
+
     import torch
+
     from verity_vllm.program.frontend import emit as E
     for rank in range(W):
         g = torch.fx.Graph()
         parts = [g.placeholder(f"p{r}") for r in range(W)]
         peer_in = {parts[p]: f"in.{kind}.k0.r{p}" for p in range(W) if p != rank}
-        ctx = SimpleNamespace(is_input_storage=lambda a: peer_in.get(a))
+        ctx = SimpleNamespace(is_input_storage=peer_in.get)
         rec = E._collective_record(ctx, SimpleNamespace(args=tuple(parts) if W == 2 else (parts,)), kind, 3)
         assert rec["kind"] == kind and rec["occurrence"] == 3 and rec["own_operand"] == rank and rec["operand_ranks"] == list(range(W))
         if W == 2:

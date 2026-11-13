@@ -8,12 +8,12 @@ import hashlib
 
 import numpy as np
 import pytest
-
 from verity.commitments import history as HT
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.commitments.windows import rows as CS
+
 from verity_vllm.commit import history_tables as H
 
 PORT = "DsaLatentRow_v1/c0/o0"

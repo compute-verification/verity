@@ -3,7 +3,7 @@
 `NativeRangeOpenings` is a mixin of `commit.committer.native_host.NativeHostCommitter`: a run of leaves of a step is opened from the retained copy
 with the boundary siblings of its tree (`open_range`) and verified against the run commitment (`verify_range`); `leaf_span` maps a tensor's
 bytes to the leaves that hold them.  `fault_retained_flip` is the negative test of that path.  `open_levels` is one leaf's path from level
-tensors; `level_sizes` is the number of nodes on each level.
+tensors.
 
 The step trees are rows-sha512's (`step_rows`): their leaves are hiding leaves salted from each step's 64-byte key (``row_keys``), their
 trees complete frame-v3-sha512 trees and their roots 64 bytes; a range opening carries its leaves' salts.
@@ -12,12 +12,17 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from verity.commitments import Commitment, Opening as FrameOpening, VerificationLimits, verify_opening
+from verity.commitments import Commitment, VerificationLimits, verify_opening
+from verity.commitments import Opening as FrameOpening
 from verity.commitments.multiproof import multiproof_root
+
 from verity_vllm.commit import step_rows
+
+__all__ = ["DROPPED"]
 
 # A leaf a `--retain device` window's draw-gated release did not keep (`committer.device_pool`): refused, never replayed.
 DROPPED = "dropped at its window's draw-gated release (--retain device): a draw that names it is refused, never answered from a recomputation"
@@ -56,26 +61,15 @@ def open_range_levels(levels: list, lo: int, hi: int) -> tuple:
         need.append((lo - 1 if lo % 2 else None, hi if (hi - 1) % 2 == 0 and hi < width else None))
         lo, hi = lo // 2, (hi + 1) // 2
     if not levels or not hasattr(levels[0], "shape"):
-        return tuple((None if l is None else levels[d][l], None if r is None else levels[d][r]) for d, (l, r) in enumerate(need))
+        return tuple((None if left is None else levels[d][left], None if right is None else levels[d][right]) for d, (left, right) in enumerate(need))
     import torch
 
     idx = [(d, i) for d, pair in enumerate(need) for i in pair if i is not None]
     parts = [levels[d][i] for d, i in idx]
     if len({p.device for p in parts}) > 1:
         parts = [p.cpu() for p in parts]
-    rows = torch.stack(parts).cpu().numpy() if parts else None
-    got = {di: rows[k].tobytes() for k, di in enumerate(idx)}
-    return tuple((None if l is None else got[(d, l)], None if r is None else got[(d, r)]) for d, (l, r) in enumerate(need))
-
-
-def level_sizes(leaf_count: int, levels: int) -> list[int]:
-    """Nodes per level of a step tree over `leaf_count` leaves, leaves first: ceil(n / 2^L) for L = 0..min(levels, height) (an odd
-    trailing node is lifted).  A windowed step keeps these levels on host below its window level (`levels` = the window's)."""
-    height, m = 0, leaf_count
-    while m > 1:
-        m = (m + 1) // 2
-        height += 1
-    return [-(-leaf_count // (1 << L)) for L in range(min(levels, height) + 1)]
+    got = {di: row.tobytes() for di, row in zip(idx, torch.stack(parts).cpu().numpy())} if parts else {}
+    return tuple((None if left is None else got[(d, left)], None if right is None else got[(d, right)]) for d, (left, right) in enumerate(need))
 
 
 class NativeRangeOpenings:
@@ -84,6 +78,21 @@ class NativeRangeOpenings:
     commit_scheme = step_rows.NAME
     rows = True
     replay_row_keys: dict[int, bytes] | None = None
+    #: what the class this is mixed into holds: the run's identity, its row size and retain mode, and per step its salt key, its metas,
+    #: its retained copy and its levels
+    program_digest: bytes
+    chunk: int
+    retain: str
+    row_keys: dict[int, bytes]
+    _geo_digest: bytes
+    _layouts: dict[int, list[Any]]
+    _gpu_blocks: dict[int, Any]
+    _gpu_levels: dict[int, Any]
+    #: and its rules: a step's context digest, a layout's digest, a leaf's identity, and whether a retained copy holds a byte range
+    _ctx_digest: Callable[[int], bytes]
+    layout_digest: Callable[[list[Any]], bytes]
+    identity_of: Callable[[int, int], dict]
+    _block_holds: Callable[[Any, int, int], bool]
 
     def _fold_run_root(self, roots: list[bytes]) -> bytes | None:
         """The run root over the step roots; None over a placeholder step root (b""): equal to no run root, the empty one included."""
@@ -125,9 +134,10 @@ class NativeRangeOpenings:
         retained copy (the copy every opening and value check reads).  The run root binds the unflipped bytes, so the opened value check must
         FAIL naming the member.  Raises when no member matches or its retained copy does not hold that byte."""
         sub = spec.partition(":")[2] or "qkv_proj"
-        step, m = next(((s, m) for s in sorted(self._layouts) for m in self._layouts[s] if sub in m.name), (None, None))
-        if m is None:
+        hit = next(((s, m) for s in sorted(self._layouts) for m in self._layouts[s] if sub in m.name), None)
+        if hit is None:
             raise RuntimeError(f"{spec}: no committed member name contains {sub!r}")
+        step, m = hit
         a, _b, _o = self.leaf_span(step, m, 0, 1)
         blk, pos = self._gpu_blocks[step][0], m.stream_off
         if blk is None or not self._block_holds(blk, pos, pos + 1):
