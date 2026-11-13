@@ -107,7 +107,8 @@ def test_a_lock_that_holds_only_open_premises():
         "deployed": 0, "gap_zero": 0, "gap_premises": 0, "open": 2, "overdue": 0, "owners_differ": 0}
 
 
-@pytest.mark.parametrize(("due", "overdue"), [("2030-06-14", True), ("2030-06-15", False), ("2030-06-16", False)])
+@pytest.mark.parametrize(("due", "overdue"), [("2030-06-14", True), ("2030-06-15", False), ("2030-06-16", False),
+                                              ("June", False)])
 def test_a_premise_is_overdue_only_when_its_due_date_is_before_today(due, overdue):
     out = run({"pkg/lean-audit.json": {"open": {"D.P": entry(due=due)}}})
     assert premise(out, "D.P")["overdue"] is overdue
