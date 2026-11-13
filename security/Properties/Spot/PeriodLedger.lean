@@ -20,7 +20,8 @@ key; `Break`: the fixed finder's forgery or SHA-512 collision).
 under one number satisfies it while the presented ledger holds only one of them. That the device writes one ledger
 under a key, each line numbered by the lines before it, is the device's behaviour on its trusted host, which
 `History` does not hold; it is the one fact of the device the second form takes, a hypothesis of that statement
-alone.
+alone. `Numbered` asks it only of the lines that are entries the reader takes, each at the place its number names:
+a line of the device's that the reader refuses, wherever it is, leaves the premise as it is.
 
 **What neither says.** A line's signature is not held to the device's: the device's own line and the presented one
 say the same and may be signed apart. The order is the ledger's, and a line's stamp is the device's clock, of which
@@ -62,12 +63,13 @@ def LedgerLinesOfDevice : Prop :=
               ∃ own ∈ dev.ledger p.key.pub, unsignedText own = unsignedText line) ∨
         Break dev p.key p.label (Json.mkObj [("ledger", ledger)])
 
-/-- **The device numbers its ledger's lines**: under the key `pk`, line `i` of its ledger is an entry whose number
-is `i`. So it writes one ledger a key, and no two of its lines share a number (module docstring). It is a hypothesis
-only while `History` does not define the device to write line `i` under number `i`: once the device's definition
-carries the numbering, this is a lemma about that definition and no statement takes it. -/
+/-- **The device numbers its ledger's lines**: under the key `pk`, a line of its ledger that is an entry numbered
+`i` is its line `i`. So no two different lines of it share a number (module docstring). It asks nothing of a line
+that is no entry the reader takes, a later form's among them. It is a hypothesis only while `History` does not
+define the device to write line `i` under number `i`: once the device's definition carries the numbering, this is a
+lemma about that definition and no statement takes it. -/
 def Numbered (dev : History) (pk : ByteArray) : Prop :=
-  ∀ (i : Nat) (line : Json), (dev.ledger pk)[i]? = some line → ∃ e, ledgerEntry? line = some e ∧ e.seq = i
+  ∀ line ∈ dev.ledger pk, ∀ e, ledgerEntry? line = some e → (dev.ledger pk)[e.seq]? = some line
 
 /-- **The ledger a period's check reads is the device's own, whole up to the period's end.** For every challenger
 device that numbers its ledger's lines under the verifier's key (`Numbered`), and every ledger the ledger's half of
