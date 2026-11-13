@@ -49,7 +49,7 @@ def _built(rows: np.ndarray, salts: list[bytes] | None = None, device=None) -> H
 
 
 def test_two_builds_of_one_table_share_no_salt():
-    """A table built twice over the same rows, under the same program and name, draws each row's 192-byte salt afresh:
+    """A table built twice over the same rows, under the same program and name, samples each row's 192-byte salt afresh:
     the two builds share no salt, so no string, and their roots differ. Nothing the builder holds fixes a salt."""
     rows = _rows(9, 3, 4)
     a, b = _built(rows), _built(rows)
@@ -59,7 +59,7 @@ def test_two_builds_of_one_table_share_no_salt():
 
 def test_it_takes_salts_given_as_history_table_does():
     """Under another table's salts it is that table: its strings and root. A salt is refused when it is not 192 bytes, not
-    one a row, used twice in one append, or one the table has used, given or drawn."""
+    one a row, used twice in one append, or one the table has used, given or sampled."""
     rows = _rows(9, 3, 4)
     a = _built(rows)
     b = _built(rows, a.salts)
@@ -112,7 +112,7 @@ def test_the_device_table_is_history_table(words, capacity, batches):
 
 
 def test_the_device_table_appends_rows_already_on_the_device():
-    """The twin under the device table's salts is the device table; a second device build draws salts of its own."""
+    """The twin under the device table's salts is the device table; a second device build samples salts of its own."""
     torch = _cuda()
     t = HD.Table(PROGRAM, VALUE, H.WORDS, HT.CAPACITY, device=0)
     twin = HD.Table(PROGRAM, VALUE, H.WORDS, HT.CAPACITY)

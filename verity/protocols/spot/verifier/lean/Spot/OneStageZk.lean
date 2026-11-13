@@ -6,7 +6,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   the circuit and public files (lowercase hex of 64 bytes) and the verifier's own registered file (`flock-verify
   --registered`'s object, or null for a program that reads no registered value). The partition must not be null: the
   sessions are verified against the verifier's own partition object; and v1's `challenger`, with its `window_root`, must
-  be named (`NO_CHALLENGER`), its key at the deployed LMS parameters, `Lms.deployed` (`KEY_PARAMS`). The law must be a
+  be named (`NO_CHALLENGER`), its key at the deployed LMS parameters, `Lms.deployed` (`KEY_PARAMS`). The sampling design must be a
   `subset` one, or a rate stated as text that names one over the population (`rate:NUM/DEN[:T]`): a `stratified` or
   `work` law, written as an object or as a rate, is refused by its kind (`SUBSET_ONLY`, `paramsOfJson_subset`), since
   the one statement's soundness statement covers a uniform sample of a fixed count alone;
@@ -72,7 +72,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   exactly `{"member", "sessions"}`, the statements' sessions in order being v1's `sessions`. The statements are held as
   public structure before any session is read (`membersHeld`): each names a member of the parameters that no earlier
   statement named, in the members' order (by first unit), with exactly one session, on live coins and never retried;
-  an undrawn member has no statement. Each session's coins are one tree's, as the one statement's are, and its tree's
+  an unsampled member has no statement. Each session's coins are one tree's, as the one statement's are, and its tree's
   last opening is its closing round (`Challenger.memberTreeReason`): one more `session` round, of no coins, opened after
   the SHA-512 of the session's evidence (`sessionEvidence`: its record's bytes, then each rep file's name and bytes,
   each under an 8-byte length, `evidenceBytes`, which `evidenceParts` decodes), so the files the verdict reads are
@@ -251,7 +251,7 @@ def SUBSET_ONLY (kind : String) : String :=
   s!"the law is {kind}, which the one-statement audit's soundness statement doesn't cover: it covers a subset law"
 
 /-- The one statement's parameters as parsed, before `paramsOfJson`'s refusal of a sampling design that is no `subset`
-one. The per-member form's parameters read them (`membersParamsOfJson`), under any law v1 parses. -/
+one. The per-member form's parameters read them (`membersParamsOfJson`), under any sampling design v1 parses. -/
 def paramsParsed (j : Json) : V Params := do
   let some pr := field? j "proofs"
     | throw ("the parameters name no proofs (the auditor's circuit and public files' digests and the verifier's " ++
@@ -270,7 +270,7 @@ def paramsParsed (j : Json) : V Params := do
 
 /-- **The one statement's parameters** (`paramsParsed`), with every sampling design that is no `subset` one refused by
 its kind (`SUBSET_ONLY`), after every refusal of `paramsParsed`. The kind is the parsed law's, the one the sample is
-drawn under (`OneStage.drawnFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over the population
+sampled under (`OneStage.drawnFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over the population
 (`OneStage.design`), so `rate:NUM/DEN[:T]` is a `subset` law here and passes, and `stratified-rate:` and `work-rate:`
 are refused as `stratified` and `work`. -/
 def paramsOfJson (j : Json) : V Params := do
@@ -842,7 +842,7 @@ private def NO_FILE : String := "".pushn '0' 128
 
 /-- **The per-member form's parameters**: `proofs` exactly `{"members"}` (`membersOf`, on the program and the
 partition every member's statement reads), and everything else as the one statement's parameters hold it
-(`paramsParsed`, read at `proofs` of no file, so under any law v1 parses and not the one statement's `subset` alone):
+(`paramsParsed`, read at `proofs` of no file, so under any sampling design v1 parses and not the one statement's `subset` alone):
 `own` is that program and partition, with no file. -/
 def membersParamsOfJson (j : Json) : V Params := do
   let some pr := field? j "proofs" | throw "the parameters name no proofs (the members and their statements' files)"
@@ -893,7 +893,7 @@ def follows (held : Array Member) (m : Member) : Bool :=
 /-- One statement held, after the members `held` of the statements before it: it names a member of the parameters
 `ms` that no earlier statement named, in the members' order (`follows`: by first unit, the registration's, one order
 so one statement), and has exactly one session (one pass on live coins, never retried; none would prove nothing, and
-an undrawn member has no statement). The members so far, with its own. -/
+an unsampled member has no statement). The members so far, with its own. -/
 def heldStep (ms : Array Member) (held : Array Member) (st : StatementFiles) : V (Array Member) :=
   match st.member with
   | none => throw "a statement of the proofs names no member, and the parameters' proofs are per member"
@@ -1376,8 +1376,8 @@ theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
 theorem paramsOfJson_parsed {j : Json} {p : Params} (h : paramsOfJson j = .ok p) : paramsParsed j = .ok p :=
   (paramsOfJson_ok h).1
 
-/-- **Parsed parameters' law is a `subset` one**: whatever `paramsOfJson` returns names a law of kind `subset`, the
-kind the sample's draw reads (`Draw.deriveLaw`, `Draw.flockLaw`). -/
+/-- **Parsed parameters' law is a `subset` one**: whatever `paramsOfJson` returns names a sampling design of kind `subset`, the
+kind the sample's sample reads (`Draw.deriveLaw`, `Draw.flockLaw`). -/
 theorem paramsOfJson_subset {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
     getD p.base.verifier.law "law" = .str "subset" :=
   (paramsOfJson_ok h).2

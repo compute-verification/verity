@@ -17,7 +17,7 @@ little-endian 16-bit element is stored, an odd h's last word's high byte zero (a
 file holds them) and compresses every block that completes, floor((H + 2 W) / 128) of them; the state it returns is the next
 Row's. **The Last** appends a stream's last row the same way and then ends it: the bytes left pending and the padding of a
 LEN-byte message (`sha512.pad_tail`), one block or two (H' >= 112). Its Digest is SHA-512 of the stream, the digest's bytes
-its words big-endian (`sha512.words_be`). The end is the last row's unit rather than one of its own because C-Flock proves a
+its words big-endian (`sha512.words_be`). The end is the last row's unit rather than one of its own because Flock proves a
 unit only with a row that compresses before its last block (at least 112 bytes), and a stream's state alone, a 64-byte
 chaining value and fewer than 128 pending bytes, need not have one.
 
