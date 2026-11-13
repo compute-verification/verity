@@ -129,6 +129,24 @@ def test_a_lenient_hex_decoder_is_caught(server):
     assert any(c.isupper() or c == " " for c in e.value.input["commitment"] + e.value.input["evidence"]), e.value.input
 
 
+def test_hex_and_evidence_past_ascii_are_refused_as_lean_refuses_them(server):
+    """What `unhex` and `canonical_json` scan a megabyte at a time: a hex digit past ASCII (which `str.isdigit` and
+    `int` take), and DEL or a byte past it inside evidence that is canonical JSON otherwise."""
+    case = {"commitment": bytes(range(32)).hex(), "evidence": b'{"drawn":2,"passed":2}'.hex(), "params": {"k": 2}}
+    for digits in ("\uff10\uff10", "0\u0660", "\xe90"):
+        with pytest.raises(D.Reject, match="not lowercase hex"):
+            P.unhex(digits)
+        for field in ("commitment", "evidence"):
+            kind, line = D.replay(port(), case | {field: digits + case[field][2:]}, server)
+            assert kind == "reject" and '"commitment":null' in line
+    for text in (b'{"drawn":2,"passed":2,"x":"\x7f"}', b'{"drawn":2,"passed":2,"x":"\xc3\xa9"}'):
+        with pytest.raises(D.Reject, match="not ASCII without DEL"):
+            P.canonical_json(text)
+        kind, line = D.replay(port(), case | {"evidence": text.hex()}, server)
+        assert kind == "reject" and f'"commitment":"{case["commitment"]}"' in line
+    assert P.unhex("") == b"" and P.unhex("00ff") == b"\x00\xff" and P.canonical_json(b'{"x":"~"}') == {"x": "~"}
+
+
 def test_undecided_is_not_reject(server):
     """Verdict agreement is the reject/undecided parity."""
     def undecided_as_reject(k, root, e):

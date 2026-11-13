@@ -919,7 +919,7 @@ why = "GH100 has none (the H100 WP's SM has no RT core)"
 key = "clocks"
 what = "clock limits: fmax 1,980 MHz, tensor 1,830 MHz, 1,518-1,797 MHz measured under a saturated wgmma"
 verdict = "scale"
-why = "θ's rates are a SM-clock's, so d, the exchange rate, B_RF and r_H don't move with the clock; per-second figures use the sustained clock; the driver caps the clock at fmax (locks only lower it), and a higher clock speeds the honest kernel too"
+why = "θ's rates are a SM-clock's, so d, the exchange rate, B_RF and r_H don't move with the clock; per-second figures use the sustained clock; the driver limits the clock to fmax (locks only lower it), and a higher clock speeds the honest kernel too"
 
 [[unit]]
 key = "compression"
