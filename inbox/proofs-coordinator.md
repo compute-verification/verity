@@ -109960,3 +109960,76 @@ Clock: `date -u` read 23:59Z. Agent id `bc-3ddfb587-549a-5964-9ddf-80547065f684`
 **STOP RULE.** None. **NEEDS.** None yet. **To post.** Nothing.
 
 **Not established.** Everything: nothing is written or compiled. Whether `xS₀` can be built from the members' files at all in the shape `pinOk` and `refsOf` read is the first thing I check.
+
+## GATHER, Fri 13 Nov 00:01Z: your eight questions of 23:43Z and 23:51Z, each read on both trees: only the second stage samples by strata (1 unit of 64 a stratum); the second try's 20 templates meet the three wiring conditions; no template is a table read or a templated file; no stop block is proved on any tree
+
+**The second try's branch: `cursor/proofs-gather-second-try-5a28`, head `957d763fb52498aa1e2f1b4410b50ad32f0b80a7`.** The head I stand behind as rehearsed with a prover and the Lean verifier is `875bc9485045` (`92eb`: plain, under a stop rule, and 55 tests); `957d763fb524` differs from it in four files, the stand-in serve and tests, none of which `two_stage.py first` or `second` reads [run: `git diff --stat 875bc94850 957d763fb5`], and its own rehearsals wait for a slot. The first try's tree is `496aa183544b` (#9480); rehearsed with a prover at `bdf9fd1086` (`7ad8` plain, `5326` under a stop rule, both exit 0), from which it differs in the same kind of four files; `ab11` rehearses `496aa183544b` on cpu-10 since 23:42Z. **One thing you may not have from me in these words: on both trees, and on the cards branch, the stop sample is registered and drawn and its order held, and no proof of a sampled stop block is built** [read: `two_stage.py:27–28` on the first try's tree, the same sentence on the cards branch at `2c5806b33e8c`]. Neither tree has had `main` merged since your 23:51Z and neither will until Friday's run has ended.
+
+### A. Your 23:43Z
+
+**A1. Designs by strata.** [read: both trees; run: `92eb`'s and `5326`'s `second/summary.json` and `first/p4-o4/stage1.json`]
+
+| Audit, both tries alike | Law, as the record carries it | Strata | Units a stratum | Units drawn |
+|---|---|---|---|---|
+| first stage, the replay sample | `rate:2/8`, resolved to `{"law":"subset","k":2}` over 8 replay blocks | none | | 2 of 8 |
+| first stage, the stop sample (a stop class) | `--stop-design`, the first stage's rate unless given, so `subset:2` over 8 stop blocks (`a.stop_design or a.replay`, `two_stage.py:915` on the first try's tree, `:998` on the second's) | none | | 2 of 8 |
+| the interior registration's own record | `{"law":"subset","k":<its population>}` (`interior_rows.py:390`) | none | | all |
+| **second stage, the interior sample** | **`{"law":"work","k":1,"strata":[…]}`** | one a cell: a sampled replay block and a template, named `r/t`. 2 × 20 = 40 at Friday's shape | the class's tokens a span, T = 64, so 64 (4 in the rehearsals) | **1 of each stratum: 40 of 2,560. Not every unit** |
+
+- [read] The second stage's law is not the driver's choice: the verifier writes it (`second_law`, `service.py:937–950` on the first try's tree, `:963–976` on the second's; Lean `Select.secondLaw`, `Spot/Select.lean:273`), always `work` at k = 1 with each cell's count as its floor. The driver's `--k` only sets that count.
+- [read: `service.py:973` and `:1702` on the first try's tree] **A draw that takes every unit of every stratum is refused in the two-stage form**: "counts … prove every cell … whole, and so whole replay blocks". So the case soundness ruled sound everywhere is not reachable through `second`; it is the one-stage audit of the sampled replay blocks, which at Friday's shape proves 2,560 units where the second stage proves 40.
+- [read] `served_verdicts.sh:286` sets `stratified:1` only when `H1_TIE` is set, for the served one-stage audit that script runs. Neither `two_stage.py` nor `two_stage_small.sh` calls that script. Whether serving's runner on Friday calls it I have not read: its script is not in the tree.
+- [run: `92eb`'s `second/audit/audit.json`, `case-v2-error.txt`] MEMBERS's refusal would not change a two-stage run's verdict as the driver stands: the second stage's one-stage audit writes no case for the compiled one-statement check ("v2 verifies one table's session on its circuit and public file; this audit drew 20 members"), and its several-member case file is "no audit's input and nothing here reads it as a case" (`a5.py:1195–1197`). The run's verdict is the stream's.
+- **What `subset:` or `rate:` would cost for the second stage, on the second try's tree** [derived]. It is not a flag. It is a change to what the verifier does, on both sides: `second_law` and `select_second` in `service.py`, `Select.secondLaw` and `Select.selectSecond` in Lean with their difftest, the lock records that read them, and the two-round proof's statements about the second stage's law and coins. In the driver, `second_need` and the layout of the draw onto members. Proving cost would be about the same: a plain subset of 40 of 2,560 units lands in at most 20 templates, so at most 20 sessions. I have not started it and would not put it in a tree that runs on Friday without your word: it changes the verifier under every rehearsal run so far.
+
+**A2. FRAME's three conditions at the second try's 20 templates.** I read all three on a run's own files, so HONEST2 need not: say so to it. [run on my VM, 23:55Z: `wiring-conditions-probe.py`, the verifier's own `replay_links` and `replay_wires` at the run's layout, on `92eb`'s `second/statements.json`, `summary.json` and interior registration; V = 2,560, round 2 clean, Lean's verdict an accept in 20 of 20 sessions]
+
+- **`wiresAlike`: holds.** 19 wires, each the combine's `r<k>` from chunk k's `o0`: 3 words of 16 bits at both ends, row schema `hm96-sha512/row/v2` at both ends. [read: `Registered.lean:274–277`] I compared the sessions' registered-reads entries, which stand for the circuits' ports because Flock's registered check refuses an entry whose schema or width is not its circuit's port's.
+- **`refReadsOwn`: holds.** Every port of every template is named by a link, named by a wire, or reads its own port of the interior registration:
+
+  | Template's port | Named by | Value it reads |
+  |---|---|---|
+  | a chunk's `logits` (19) | a link | round 1's `logits` |
+  | a chunk's `o0` (19) | nothing | `<its template>/o0`, one of the interior registration's 40 ports |
+  | the combine's `logits` | a link | round 1's `logits` |
+  | the combine's `r0`…`r18` | a wire | chunk k's `o0` |
+  | the combine's `o0` | a link (the return) | round 1's `o0` |
+
+  The verifier holds 21 links over two values (`logits`, `o0`) on both tries; what differs is who holds `logits`: the interior registration at the first try, round 1's record at the second. FRAME's open case, an output port no link or wire names that reads a registered value, does not occur: the one such port, a chunk's `o0`, reads its own port.
+- **`scopeOkH`: holds at V = 2,560, by the Lean verifier's own accept.** [read: `KsScope.lean:90–95`, `FlockVerify.lean:1171`, `a0.py:351`] Under `--zk` the compiled verifier refuses any flat statement whose circuit is outside `ProvedScope.scopeOkH`, and every session of the driver is a `--zk` session of a flat statement; 20 of 20 were accepted.
+- **At V = 154,880: not run for the second try's circuits.** [run: `c30d`, `86b4`] The first try's 20 circuits at V = 154,880 passed the Lean verifier in 20 of 20 sessions twice, and the probe on `c30d`'s files gives the same two answers as above (3 words both ends; the same table). [run on my VM, V = 256, 4 units, both trees] The second try's circuit files differ from the first try's only in two fields of the header, the class's `partition` digest and `program_sha512`; every gate and port line is the same. So I expect the same at V = 154,880 [derived]; `b032` (waiting) is the run that shows it.
+
+**A3. Heads.** Taken: the first paragraph of each entry now names the head, the head rehearsed, and the run.
+
+### B. Your 23:51Z
+
+**B1. Serving, a sampled table read: no unit of Friday's is one, on either tree.** [run: the design's members at a layout with and without `--tables`, my VM, 23:53Z] The audited templates are the select's 20 and nothing else: with history tables committed beside the ids the design's members are the same templates, and the tables' roots are ports of round 1's record that no unit reads. [read: `a5.py:738–766` on the first try's tree] The select's templates take the caller's own composer (`own`), not the chunked path that composes a table read. Under Friday's stop rule the serve commits no table at all (it refuses tables beside a rule). And no stop block is proved by any driver of ours (first paragraph), so "the stop driver builds those units another way" is not so: it builds none.
+
+**B2. Lean, templated statement files: none.** [run: `second/statements.json` of `92eb` (plain and stop), `5326`, `c30d`, `86b4`] All 20 statements of each run carry `"statement": "verity/flock-circuit"`, format `flock-circuit-inputs`, subcircuit `unit/<template>`; none carries `verity/flock-circuit/tmpl` and none has a `read` entry. [run: my VM, V = 256] A reference circuit file's first line is `flock-circuit unit/GreedyChunk_v2{…}`. No audited unit reads a history table through `EmbeddingRead_v1` or any other way (B1). One thing Lean's worker may want: every one of these statements has a shared-row public file (`shared_rows` names each port), the form the compiled verifier holds to `KsScope.sharedWhy`.
+
+**B3. Soundness, the challenger's key and ledger.** [read: first try's tree; `a5_coins.py` is the same file on the second try's]
+
+- `first` starts one session (`two_stage.py:911–913`; `:994–996` on the second try's tree) and `second` another (`:1042–1043`; `:1125–1126`), both by `a5_coins.start`.
+- Under `--challenger local`, `start` makes a new scratch directory for the command (`a5_coins.py:762–764`, `tempfile.mkdtemp(prefix="a5-challenger-")`) and `Local.__init__` (`:568–585`) makes in it the host's root, its ledger, its pins log and a new LMS key (`A.key_signer`). So yes: each command's key and ledger are made for it, and neither is the auditor host's standing one. One audit is therefore two sessions under two keys with two ledgers.
+- **What that is, in the file's own words** (`a5_coins.py:5–9`): "a development session on this machine … its key is this run's alone, so its samples show the path, not an auditor's coins", and the key is at `LOCAL_PARAMS = (4, 5)` (`:83`), not at the deployed LMS parameters; neither call passes `deployed`. The challenger is a thread of the driver's own process on the machine that proves. So "made for the run" holds, and "an auditor's device on a host the developer doesn't control" does not: a figure from it says what the path does, not what an auditor's coins give.
+- Serving's `CHALLENGER=local` [relayed: VLLM-412; guess: I have not read their script, which is not in the tree]: if it reaches `two_stage.py first --challenger local`, it gives exactly the above for `first`.
+
+**B4.** Taken. No merge of `main` into either tree.
+
+**B5. Network, the whole model's program behind the zero-knowledge server: no.** [read: `a0.py:289–306`, `a5.py:726`, `two_stage.py:1130` on the first try's tree] A session runs behind the server only under `second --firewall`, and then its Lean `Hello` is given the audit's own `program.json`, the class's program of the interior registration, never the served model's file. [run: `92eb`, `5326`] My rehearsals pass no `--firewall` (`"arm": "dev"`, `"firewall": null`), and that file is 1.6 MB at V = 2,560 with 160 units. [read: STOPDRIVER's 21:58Z entry] With `--devices` the parser refuses `--firewall`. Its size at Friday's shape I read from `b876` when it ends. Whether serving's runner passes `--firewall` I have not read.
+
+### C. Runs
+
+[run: `research fetch` of each, 23:57Z to 23:58Z]
+
+- **`b876`** (first try at Friday's shape, cpu-12): the stand-in serve ended 23:41:07Z, `first` ended 23:45:21Z with replay sample [1, 6], stop sample [2, 7], order held; `second` running since 23:45:23Z. I read it at 00:30Z.
+- **`8cac`** (first try, V = 154,880, k = 3, cpu-12): `second` running since 23:36Z, peak 57.7 GiB so far.
+- **`9e10`** (the two-stage toy at `bdf9fd1086`, cpu-10): done, exit 0 at 23:40:43Z. Honest: round 2 clean, the record accepted with own reads, the outcome refused by `two-stage-form` alone. Altered: round 2 refuses by `second-verified` and `second-reported`. Both as expected.
+- **Moved off vy-nebius-2**, where my runs were 20 to 35 back behind the lane's Lean tries: `7b1c` cancelled, its twin `ab11` took a slot on cpu-10 at once (23:42Z); `0d43` cancelled, relaunched at the head as `3ba5` on cpu-10 (waiting for memory, 13 GB free). The second try's larger rehearsal is in two lines, `9585` on vy-nebius-2 (12 ahead) and `b032` on cpu-8 (waiting for memory): I cancel the other the minute one starts.
+
+### D. Not established
+
+- No stop block is proved, on any tree.
+- The second try at V = 154,880, an early-stopped span in the replay sample, and tables beside the select's inputs: no run with a prover has ended.
+- What serving's runner passes (`--challenger`, `--firewall`, whether it calls `served_verdicts.sh`): not read.
+- The estimate: waits on `b876`.
