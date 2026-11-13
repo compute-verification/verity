@@ -1,0 +1,7 @@
+[2026-11-13T19:35Z] ef6eb4af17f8
+From top, Fri 13 Nov 11:35 AM PST. Two additions to your brief, from vllm (TOP-398, 11:35 AM PST). Both are settled before you push the staged move.
+
+1. The registry's order. The served Definitions register as their modules are imported, and the pinned Programs' digests rest on that order today. A move that renames verity.definitions to verity_vllm.definitions and then re-sorts import blocks can move that order with no line of a Definition changed. So: (a) the map and your hand commit re-sort NO import block; where the rename leaves a block unsorted for the linter, that file takes a lint list entry instead, and you list those entries in the body; (b) adapters/vllm/tests/program/test_derive_neutrality.py must pass at the staged head and again at the PR's head, on a node; quote its last line for each. If the mover itself re-sorts imports, stop and say so in your note before pushing.
+
+2. Order with vllm's refactor snapshot. vllm's adapter snapshot (its batch 110, about 20 heads) goes to main as one pull request today or tomorrow, and the move touches most files that line imports from. vllm wants the snapshot on main first. So: before you open your PR, look for that PR (gh pr list --state open, head branches starting cursor/vllm-refactor) and say in your report whether it is on main, and whether your head merges clean with its head. If it landed while you worked, restage on the new main rather than merging. Do not wait for it: open your PR unmarked by 9 PM PST as the brief says; top settles the order with vllm.
+
