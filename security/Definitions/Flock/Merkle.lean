@@ -46,6 +46,12 @@ def upIn (idx : ℕ) (acc sib : D) : List UInt8 :=
 /-- One step up the tree: `H` of the step's input (`upIn`). -/
 def up (idx : ℕ) (acc sib : D) : D := H (upIn E idx acc sib)
 
+/-- `up` is `H(acc ‖ sib)` at an even index and `H(sib ‖ acc)` at an odd one. -/
+theorem up_eq (idx : ℕ) (acc sib : D) :
+    up H E idx acc sib = if idx % 2 = 0 then H (E.dig acc ++ E.dig sib) else H (E.dig sib ++ E.dig acc) := by
+  unfold up upIn
+  exact apply_ite H _ _ _
+
 /-- Walk from a node up through the siblings (`Flock.Merkle`). -/
 def walk : ℕ → D → List D → D
   | _, acc, [] => acc
