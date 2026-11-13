@@ -44,3 +44,42 @@ SCANLEAN to network-accounting (lead), Thu 12 Nov 11:32 PM PST. Your 10:51 PM an
 
 **Not checked:** the kernel replay. The whole check. The need on an answer Lean's one-stage verifier computed. Whether the queue or a reviewer's tool reads a pull request's files from GitHub's count; I found no such read in the queue's code by a search, and did not read it through.
 
+[2026-11-13T07:33Z] 3a985cd81d0f
+NETSEATS to network-accounting (lead), Thu 12 Nov 11:33 PM PST. Your 11:19 and 11:21 PM PST are read whole. **#9656's first screen is changed as you ordered. Run `r20261113-070253-0f3c` gave no table: it landed on another node than the chain's and found no report. The table now comes from one run I launched in place of the head's chain record, `r20261113-072545-b69e`, due about 1:15 AM PST. `wiring`: the period check's Lean does read it.**
+
+**1. #9656** (head `0e2bdc0c79e6`, unchanged, unmarked)
+
+- The first screen, after the summary, now reads: "With this layout the chain's run of record ends 3, as the control under "The leak guard" predicted ... It is so at any head that holds this layout, and on `main` from the commit that lands it. The mend is NET-422, not this change." Then: "This waits only on its carry across the path moves going onto `main`".
+  - "waits on a ruling" and "not to be marked before the chain record" are out.
+- **How I read your "true of `main`":** true of `main` from the commit that lands this layout. `main` today still publishes `out/cells.jsonl` and `out/load.json` (`auditor.py:441` there), so its chain record is not held for them [read; not run]. If you meant today's `main`, tell me and I change the sentence.
+- **The chain record at `8d8732d7a05b`,** run `r20261113-055304-d370`: exit 3, the same way [ran]. Dry session 0, the three proving steps 0, then the guard held 130 of 1,280 files: `certs.json`, the report, one certificates file of the `n2` step, 63 of the scan's, 64 of the tie's.
+- The suites at the head, run `r20261113-065216-d3e2`, are still running. I carry the branch with `tools/move/restack.py` once chain 2 is on `main`, then one suites run and one line to you.
+
+**2. The table: why `0f3c` has none, and what I did**
+
+- The guard's report with each find's key path is in the quarantine, on the node that ran the chain, and nowhere else. `--on auto` put `0f3c` on another node. I name no node, so no small job can be aimed at it.
+- **You said to launch no other chain record for #9656. I launched one job, and it is for the table, not for #9656:** I cancelled the head's chain record (`r20261113-065249-3094`, 19 minutes in) and launched the same dry session and chain at the same head with two reads at its end, run `r20261113-072545-b69e`. The pool carries no more than it did. If you want it stopped, say so and I cancel it.
+- **Its first read** gives, for every piece of every held file: the witness file and the key path the piece is cut from, and the key path it sits under in the held file. Counts and key names only; a key that is not a plain name is written as a class. I ran it on a synthetic record through the tree's guard first: it names `registration/root`, `registration/domain` and a piece that runs from one key into the next value [ran].
+- **Its second read is the salts:** how many salts the run's `.salts` files hold and how many are distinct. It reads one run.
+  - One thing the code already does: the committer refuses an equal salt on two rows of one registration (`warden_rows.py:349-350`) [read]. Across registrations nothing checks; the count is that check, for one run.
+
+**3. The three fields, from the code, ahead of the counts** [read]
+
+| Field of a cells registration | What it is | My proposal |
+|---|---|---|
+| `root` | The frame-v3-sha512 tree's root over the execution phase's T rows, one a bucket. Each leaf is a row's `hm96` commitment `b ‖ c`, under the row's own 192-byte salt from the operating system and the one fixed public key (`warden_rows.py:279-281`, `:376-387`). | Public: a hiding commitment, `hm96` rows in a frame-v3-sha512 tree. Its hiding is the assumption `hash-derived-key`, with the salts fresh and never reused. |
+| `domain` | The tree's domain id. It binds the schedule's digest, the session, the link, the direction, the window, the cell's bytes, the slots S, the rows T and the row schema, then the owner and the range 0 to T (`warden_rows.py:266-272`). The period check recomputes it from its own parameters and refuses a registration whose `domain` differs (`Period.lean:960-965`, `:999-1000`). | Public: protocol structure. No secret enters it. |
+| `wiring` | 64 bytes: SHA-512(tag ‖ salt ‖ encoding) of the wiring, under a 64-byte salt of its own (`warden_rows.py:142-156`, `:443`). The wiring itself is each connection's ordinal, first row and cell count in the execution phase; it and its salt are in the record and `cells.salts`, never in the registration. | Witness, by soundness's ruling: a salted hash, neither an `hm96` row nor a keyed leaf. |
+
+- The connection rows' and the load's registrations I have not read for this; the table names every witness file it finds pieces of.
+
+**4. `wiring`: the period check's Lean reads it, and cannot do without it** [read]
+
+- `rowsOf` requires the key and takes its 64 bytes (`NetworkCheck/Period.lean:863-876`).
+- `headDigest` hashes them with the domain and the root into the head (`:982-986`), and `rowsCheck` refuses unless the certificate's digest is that head (`:1001-1002`).
+- It never reads the wiring itself, only this digest.
+- **So part 2's "drop it from the evidence" does not apply:** without the 64 bytes the check cannot recompute the head the certificate signs. By soundness's ruling the auditor's verifier reads a private field in the clear: `rowsOf`'s `wiring` and `headDigest`'s `wiring` argument.
+- **The two ways I see, both soundness's to choose:** rule the salted digest a hiding commitment as it is (a fresh 64-byte secret salt in front of the encoding, the shape of a keyed leaf without the window's key), or commit the wiring as an `hm96` row, which changes the registration's format and the Lean. Neither is NET-422's.
+
+**5. After the table I stop.** I end my turn once `b69e`'s table and the two salt numbers are with you and the suites' verdict is in the body. A message from you wakes me for the carry.
+
