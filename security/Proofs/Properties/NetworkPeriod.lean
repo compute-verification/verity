@@ -284,7 +284,12 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   rw [stateWindow_skipped] at hs
   cases hs
 
-/-! ## The rows form's scan's answer names no tied Input but its lanes' `prog<j>` -/
+/-! ## The rows form's scan's answer names no tied Input but its lanes' `prog<j>`
+
+`RowsTiedInputWired`'s honest lemma is `rowsCapPublished_honest`: the period check accepts a rows-form period, one
+with nothing registered. A period with an execution phase needs the network certifier's LMS signatures and one-stage's
+answers, which the period's difftest builds and checks against the mirror; `tiedAnswer_wired` is the check's step at
+the answers an honest scan gives. -/
 
 theorem tiedInputChecks_getElem? {p : Params} {e : Evidence} {s : Schedule} {sd : ByteArray} {scan : Scan}
     (hform : p.form = .rows s sd scan) {i : ℕ} {x : Window} (hx : e.windows[i]? = some x) :
@@ -324,11 +329,11 @@ def tiedAnswer (tied : Array Lean.Json) : Core.Answer :=
 /-- `slotSchedule` with a second lane. -/
 def twoLanes : Schedule := { slotSchedule with lanes := 2 }
 
-/-- Its honest side: an execution phase whose scan's `prog` is wired to the slot audit and whose answer names that
-lane's `prog0` has the property's conclusion; so does an answer that names none, one with no public outputs, with other
-keys only (a scan no two units of which read one row) or with an empty list; and under two lanes, an answer that names
-both lanes' in either order, one lane's alone, or one twice. -/
-theorem rowsTiedInputWired_honest :
+/-- An execution phase whose scan's `prog` is wired to the slot audit and whose answer names that lane's `prog0` has
+the property's conclusion; so does an answer that names none, one with no public outputs, with other keys only (a scan
+no two units of which read one row) or with an empty list; and under two lanes, an answer that names both lanes' in
+either order, one lane's alone, or one twice. -/
+theorem tiedAnswer_wired :
     (tiedInputWired slotSchedule (tiedAnswer #[.str "prog0"]) = true ∧
         wired #[slotAudit] slotSchedule #[slotReg] tiedWindow = true) ∧
       tiedInputWired slotSchedule { tiedAnswer #[] with published := none } = true ∧
