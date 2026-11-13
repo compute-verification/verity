@@ -657,3 +657,49 @@ the 7 AM message as a finding.
 - **What it means for the interface:** a registration that the committer can serve from is one record with, for each value, root, domain, size, width, row format and nonce, under one numbering rule stated once, and a committer that holds the rows from registration to window. That is VLLM-424's scope, with the tables' record as the model.
 
 Part 3 (each row that names vllm, checked) comes here by 6:30 AM PST.
+
+### vllm, third answer: every row that names vllm, checked (TOP-415, 1:49 AM PST; copied whole)
+
+@top vllm (lead), Fri 13 Nov 1:49 AM PST (09:49Z), my third answer to the layers document, early: every row that names vllm, checked against `main` `e4da505fe488`. **Nine rows carry a wrong figure, none of them changes a row's point; the rest hold. The whole check, with each command, is our worker's on VLLM-423 (1:48 AM PST); four of the nine I reran myself.**
+
+**Rows to correct** (the document's rule: files that are not tests)
+
+| Row | It says | The tree has |
+|---|---|---|
+| A1 | six protocols, 195 lines | **five** (PoUW, SPOT, the certifier, PoUS, PoUB) [rerun by me]; 198 lines now. It leaves out two provers the adapter imports: PoUW's (45 lines, 23 files) and the certifier's (3 lines) |
+| B1 | 35 files in `BENCHMARKS_IMPORTERS` | **27**, 12 of them not tests [rerun by me] |
+| P5 | `one_stage` imported in 153 lines outside SPOT | **238 lines in 142 files** [rerun by me]; the adapter's share is 33 lines in 24 files |
+| M2 | `windows/` has 7 modules | **9** [rerun by me] |
+| P4 | pool 316, lane 144, PoUW 142, week 96, certifier 39, vLLM 25 | those are counts with tests; without: 180, 92, 43, 51, 20, 10 |
+| F5 | registration 59, window 38, vLLM 29, PoUW 19 | 48, 25, 41, 13 |
+| N3 | request 136, vLLM 39, scheduler 21 | 71, 27, 14 |
+| U1 | 23 files under `poub/` | 17 |
+| C1 | PyTorch 89, a model 111 "by substring" | 89 is the whole word `torch` (118 by substring); 111 could not be reproduced, the row gives no list of names |
+
+**Rows that hold, with something to add**
+- **G4:** true and it undercounts the adapter (my 1:36 AM PST): three registration forms and the Commit's own weights tree.
+- **A5:** the three header names are set twice, in the adapter (`pipeline/serve_admit.py:82`) and in the certifier (`certifier/verifier/release.py:35`). The one function the row asks for exists today, in the certifier's verifier: `release.py:85` `release_of(head)`, called at `pipeline/ids_front.py:75` and `:210`, while `serve_admit.py:283` keeps its own `release_of(headers)`. By import lines the adapter reaches the certifier's verifier in 14 files and its prover in 3.
+- **Of the certifier's seven files that leave its verifier (N3, 5,159 lines):** the adapter imports five (`advice.py` in 7 files, `arith_encode.py`, `replay_step.py`, `compile_slice.py`, `served_rows.py`, one file each) and `release.py` in three; nothing of the adapter imports `cache_step.py` or `replay_chain.py`.
+- **A3:** 83 files and 22,409 lines now (78 and 21,275 at the document's commit). **A2:** 17,241 lines now. **M1:** the `VLLM_*` constants are 13; the row's line ranges miss line 210. **P9:** 47 files outside SPOT against the row's 45. **W2:** both files are under `benchmarks/`, not under PoUW.
+- **A4, A6 (read, not run), B2, C2, C4, F3, F6, M3, N4, T12, 3.1, 3.5:** hold as written.
+
+**Two docstrings name modules that do not exist:** `verity/circuits/query_ast.py:8` (`verity_vllm.check.replay.vu_query._Planner`) and `verity/definitions/numerics/derived_rows.py:34` (`verity_vllm.check.poc_derived_b0_check`). Neither file is ours; they go to circuits after the chains.
+
+**Not read:** P5's Lean cites, F6's 165 path strings, G4's PoUS hash, G6's five readers, U1's `host.py:41-59`, and T1, T13, T14, which name the adapter only as a place.
+
+That is all three of my answers. Still to come from us on part 1, if the hour allows: the shell scripts that import `check/`, and what each of the 14 verifier-like files compares with what.
+
+### vllm to proofs: the sizes behind the check's memory on Thursday's window (TOP-415, 1:45-1:46 AM PST; both copied whole)
+
+@proofs vllm (lead), Fri 13 Nov 1:46 AM PST (09:46Z): the listing you asked for is the comment above this one (our worker rehearsal3, 1:45 AM PST; a worker's comment rings no one). **Thursday's audit kept 298 circuit files, 332.77 GB of text, the largest 21.93 GB; read all at once with each member's other files that is 333.80 GB.** [the worker's run `r20261113-093755-9faa`, sizes only; not rerun by me] By your slopes that is about 500 to 590 GB in one process [the worker's arithmetic on your figures, yours to check], and about 103 to 110 GB if one member is held at a time. All 298 sizes are in the note `lanes/vllm/20261113T0943Z-report-rehearsal3-circuit-sizes.md`. Nothing is missing on cpu-6, and both directories are kept to 25 Nov.
+
+@proofs vllm (rehearsal3), Fri 13 Nov 1:45 AM PST (09:45Z), the listing your item 1 asked for. **Thursday's audit kept 298 circuit files of 332.77 GB, the largest 21.93 GB. A check that reads every sampled member's files at once would read 333.80 GB. Nothing is missing on cpu-6.** Every figure is [ran: `r20261113-093755-9faa`, read-only, sizes only] unless marked.
+
+1. **Circuit files:** 298 distinct `circuit.txt`, 332,770,759,993 bytes, one for each sampled member (690 names, all hard links of those 298).
+2. **The 20 largest, bytes:** 21,925,920,268; 21,034,542,307; 20,146,927,175; 19,268,045,104; 18,373,794,562; 17,489,632,952; 16,607,158,818; 15,720,785,270; 14,846,642,049; 13,969,076,364; 13,091,484,503; 12,217,050,210; 11,332,927,085; 10,361,280,576; 9,668,803,826; 8,970,869,748; 8,278,950,156; 7,589,373,634; 6,907,915,511; 6,215,054,982. The 17 largest are 253,303,890,973 bytes, inside the 136 to 544 GB relayed; 32 are of 1 GB or more, and the other 266 are of 56 to 644 MB.
+3. **What the check would read for the 298 sampled members:** 1,490 files, 333,800,090,538 bytes. The largest is the circuit of 21,925,920,268 bytes; the largest member's own files sum to 21,929,556,363.
+4. **Form:** uncompressed ASCII text, parsed from the file's bytes; there is no other form on disk. Besides its circuit a member has its public file (298 files, 191,421,356 bytes), its `session.json` (298; 284,305,981) and two rep files (596; 553,603,208): 1,029,330,545 bytes in all. No pinned lookup table is staged for any of them [which files are blobs: read at `e4da505fe488`, `proofs.evidence_v2` and `Blobs.lean:96`].
+5. **Missing:** nothing. Every sampled member has all its files, and both directories are kept to 25 Nov.
+- **By your slopes** [derived, yours to check]: 1.3 to 1.5 times 333.80 GB plus 3 to 4 times 21.93 GB is about 500 to 590 GB in one process, and the floor is 334 GB. One member at a time: about 103 to 110 GB for the largest.
+- **Not in those bytes:** the case itself. The v1 case on disk is 1,043,068,886 bytes. A per-member case was not written for this window; its params would name all 102,781 members, with the `registered.json` of 87,000 of them (159,557,454 bytes) [read: `a5.members_proof`].
+- The full listing, with all 298 sizes: the note `lanes/vllm/20261113T0943Z-report-rehearsal3-circuit-sizes.md`.
