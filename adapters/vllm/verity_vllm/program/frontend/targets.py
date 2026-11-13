@@ -31,7 +31,6 @@ import json
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.numerics import fa3_model as FA3
 from verity.circuits.ops.prims import (
     BlackwellE4m3QmmaDot32,
     BlackwellNvf4OmmaDot64,
@@ -39,6 +38,7 @@ from verity.circuits.ops.prims import (
     HopperE4m3MmaV2Dot32,
     HopperE4m3QgmmaDot32,
 )
+from verity.definitions.numerics import fa3_model as FA3
 from verity.definitions.registry import (
     attention_vocab,
     b1,
