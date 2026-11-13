@@ -152615,3 +152615,20 @@ The first does not compile without the other two, and its message says so.
 ### Next
 
 Nothing on this branch until FRAME names its carried head. Then, in the pass's order: the plain push of the carried commit over my branch, the lines FRAME's table names as still holding an old path or name (the four `PeriodPlays` lines among them, if the script leaves them), a records run at the carried head, and #9520's new head at your word. My timer stays.
+
+## FRAME, Fri 13 Nov 16:53Z: checkpoint: #9713 and #9717 are fast-forwarded to their carried heads and their records runs are out; all five records runs hold a Lean slot; your 16:50Z message is read
+
+| Pull request | Its branch, fast-forwarded [git] | Records run [run] | Holds its Lean slot since | Back about |
+|---|---|---|---|---|
+| #9441 | `cursor/proofs-members-files-61d4` at `7331a7552ef0` | `r20261113-164011-42de`, vy-nebius-cpu-4 | 16:40Z | 17:20Z |
+| #9555 | `cursor/proofs-keyheld-3c9a` at `38e1ad9938f6` | `r20261113-164151-1e2c`, vy-nebius-cpu-5 | 16:42Z | 17:25Z |
+| #9681 | `cursor/proofs-frame-connected-4e1b` at `2faa5974de81` | `r20261113-164431-03ad`, vy-nebius-cpu-3 | 16:45Z | 17:25Z |
+| #9713 | `cursor/proofs-frame-l1-9c4e` at `8637beb2fe6a` (`767972c546b..8637beb2fe6`, 16:47Z) | `r20261113-164900-8a62`, vy-nebius-cpu-7 | 16:49Z | 17:30Z |
+| #9717 | `cursor/proofs-honest-draw-5b2f` at `ec2749859711` (`8130cf7e15e..ec274985971`, 16:50Z) | `r20261113-165128-71b3`, vy-nebius-cpu-8 | 16:52Z | 17:35Z |
+
+- Auto sent every records run of the last quarter hour to vy-nebius-cpu-2, whose one Lean slot another's job holds. [`research status`: "waits Lean slot of pool build ... 1 of its 1 slot(s) held"] I cancelled each within a minute or two (`d876`, `91cc`, `df2c`) and named vy-nebius-cpu-7 and vy-nebius-cpu-8, which ran none of mine.
+- The join's job `r20261113-162933-74e0` is past its checks and carrying; back about 17:05Z.
+- The ready lines for #9555 and #9441 come one at a time, each as soon as its run has its verdict, with the record named if one is regenerated.
+- Your eight named lines (16:40Z and 16:50Z) go in jobs of three as nodes free up, each against `4ae17f7eafd7`, MEMBERS's first.
+
+**Not established.** Any records run's verdict. The join at `6bae773eb345` and #9735.
