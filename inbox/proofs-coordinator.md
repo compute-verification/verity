@@ -124018,3 +124018,53 @@ Kept. The lock's only edit is `roots`, appended at the end; no `unwitnessed` ent
 - A records run of `security/Proofs` that PASSes at the join's head, so no ready line.
 
 Join `cursor/proofs-join-42b8` at `ac8d23dd32`, PROBE at `52d1ff2738`; nothing unpushed.
+
+## MAJORITY, Fri 06:06Z: with the 12 names `security/Proofs` does NOT print PASS (r20261113-052157-b358): its build stops at "unknown module `Proofs.Properties.Verity.SampledTwo.ClaimInner`", so a name in the lock's `roots` must also be a root in the lakefile; THE JOIN at `ac8d23dd32a6` has that fault for `ClaimInner` and `SecondRead`; r20261113-050045-991a ended `RECORDS rc=1`, all three packages failed; a second rehearsal r20261113-060204-4e88 is in line
+
+In plain words: the rehearsal did not get as far as an audit. The lock named two of TWOLEG's files that the build file (the lakefile) does not list, and the build refused the first of them. So the rule "name each new file in the lock" needs a second half: the same name must be in the lakefile. The join has this fault today for the same two files, so its audit will stop the same way until two lines are added to its lakefile. What the orphan lines hide beyond that is still not known. A second rehearsal that leaves those two files out is waiting for a place.
+
+**The rehearsal** [run] r20261113-052157-b358 on vy-nebius-cpu-10, at `eb68ce804ee490bba542bd41f7cb5c307a1228b6`, 12 names added to the lock in the run's clone only:
+- "AUDIT …/security/Proofs: FAIL; built in the sandbox", then "build-roots: exit 1" and "error: unknown module `Proofs.Properties.Verity.SampledTwo.ClaimInner`".
+- "lean-records: security/Proofs: check.py exit 1 in 1320 s", and at the end `RECORDS rc=1`.
+- [derived] No audit ran, so this run says nothing about what else the orphan lines hide.
+- Why [read: `security/Proofs/lakefile.toml` at my head, lines 128 to 133; run: `git grep`]. At `059a9408fe59`, TWOLEG's `SampledTwo/ClaimInner.lean` and `SampledTwo/SecondRead.lean` are files, but the lakefile names neither as a root and no file imports either. So no build at that head has built them, and the build does not know a module the lock names.
+- [derived] The rule's second half: every name in the lock's `roots` is also under a root of `security/Proofs/lakefile.toml`.
+
+**The join has the same fault** [run: a script over `git show` and `git ls-tree` at `cursor/proofs-join-42b8`, `ac8d23dd32a6`, at 06:05Z]
+- 60 two-stage files, 248 lock roots, 60 of them two-stage, no file without a root. That half is whole.
+- Two lock roots are under no lakefile root: `Proofs.Properties.Verity.SampledTwo.ClaimInner` and `Proofs.Properties.Verity.SampledTwo.SecondRead`. [run: `git grep`] No file on the join imports either.
+- [derived, from the rehearsal] A records audit of the join stops in `build-roots` on "unknown module", as mine did, before it audits anything.
+- [run: the same script] TWOLEG's tip `5cd736faa60d` is whole on both halves: 15 files, 15 lock roots, both names in its lakefile. At `059a9408fe59` the lakefile had neither name.
+- What closes it: the two names in the join's lakefile roots. ASSEMBLY's check over `git ls-tree` and the lock wants one more line: each two-stage lock root is under a quoted `Proofs.…` name of the lakefile.
+- Not established: whether those two files compile at the join. Nothing has built them at `059a9408fe59`.
+
+**r20261113-050045-991a ended** [run] on vy-nebius-cpu-11, at `a7cacd92709df11273ea65e682bed82903cc7d39`: `RECORDS rc=1`, and "lean-records: OUTCOME {"outcome": "failed", "package": "security/Proofs", …}" with `security`, `security/Proofs` and `security/Properties` each "failed".
+- `security/Proofs`: FAIL on the 12 orphan lines only (my 05:24Z entry).
+- `security`: FAIL on 7 lines: the one about `Majority`, which my root in `62cd4b512f8e` covers, and 6 record differences (my 05:40Z entry).
+- `security/Properties`: "AUDIT …/security/Properties: FAIL  3480 declarations in 107 modules; … 536 guarantees", "check.py exit 1 in 800 s". Its report holds 10 failures:
+  - `proved_in.unaudited`, once: the same line about `Proofs.Properties.Verity.Majority`. My root covers it.
+  - `guarantees.signature`, once: "Properties.NetworkPeriod.rowsCapPublished_nontrivial's signature changed"; the built one has `entries := 0`, the recorded one does not.
+  - `guarantees.reads-changed`, six times, on definitions in `Circuits.Program`, `Commitments.FV3`, `NetworkCheck.Period`, `Properties.NetworkPeriod`, `Properties.Verity.Game` and `Properties.Verity.Idle`.
+  - `guarantees.reads-gone`, twice: "they no longer read Flock.FV3" and "they no longer read Flock.Program".
+
+**A correction to my 05:40Z entry** (pushed at 05:37Z; the time in its title was wrong)
+- I wrote that the record differences are between `main`'s records and its definitions. That was wrong. [run: `git rev-list --first-parent`] `34c5cbb3705c` is not a commit of `main`'s own line. It is a pull request's commit that both hold, so it says nothing about `main`'s records.
+- What I can show [run: `git show` of `security/Properties/lean-audit.json` at four heads]. The lock at my head records `rowsCapPublished_nontrivial` without `entries := 0`. The locks at the base `e033bfc14be4`, at the join `ac8d23dd32a6` and at `main` `b843a10af48a` record it with. The source has the field at all four.
+- [derived] So the differences come from where my head stands: on TWOLEG's `059a9408fe59`, without the base `e033bfc14be4` and its regenerated records. The join holds that base. I have not checked the other differences one by one.
+- Still true [run: `git diff --name-only`]: no file of mine is among the files those definitions are in.
+
+**The second rehearsal** [run] r20261113-060204-4e88 on vy-nebius-cpu-10, at `62cd4b512f8ecea66cc7cae066ecec0a899cf1e2`, where my three roots are committed.
+- In the run's clone only, it adds the seven names of TWOLEG's files that the lakefile does root (`Claim`, `DevAgrees`, `Leg`, `Projection`, `Reading`, `Refused`, `Steps`). It leaves `ClaimInner` and `SecondRead` out. It printed nothing yet. No branch holds that edit.
+- What to read from it: if the orphan lines hide nothing else, `security/Proofs` prints FAIL on exactly two orphan lines. `security` and `security/Properties` will print the record differences again, for the reason above.
+- Launched 06:02:04Z. At 06:04Z it waited for a Lean place: "0 ahead in line; 2 of its 2 slot(s) held". [guess] It ends about 06:45Z if it starts soon. I move it if it has not started by 06:18Z.
+- Memory, your 05:49Z item 2 [run: each run's `resources.jsonl`]: my two records runs asked 32 GB and held 41.7 GiB (991a) and 50.8 GiB (b358) at peak. This one asks `--mem-gb 64`. On a named node `research run` refuses `--cpus` and `--max-min` without `--queue`, so it has neither.
+
+**For ASSEMBLY** [run: `git merge-base --is-ancestor`, the join's lock] The join holds `eb68ce804e`, and its lock already names my three modules once each. `62cd4b512f8e` adds only those three names to the lock: if it is merged, keep one copy of each. `majorityBound_opens` and the warning on `OpensBy` stand as written.
+
+**Machines** [run: `uptime -s`] My machine was replaced again at 05:55:33Z. Nothing was lost. This loop took `~/wt/.pen` at 05:56Z. Your 05:49Z items 1 and 3 change nothing for me: I have no try on vy-nebius-2, and none of my theorems is stated at the form's accept.
+
+**STOP RULE.** None. **To post.** Nothing.
+
+**NEEDS.** Nothing for my files. For the join: `ClaimInner` and `SecondRead` in its lakefile roots, by ASSEMBLY or TWOLEG.
+
+**Not established.** What the orphan lines hide beyond the two files (r20261113-060204-4e88); whether `ClaimInner` and `SecondRead` compile at the join. Pushed head: `62cd4b512f8ecea66cc7cae066ecec0a899cf1e2`; nothing is left unpushed.
