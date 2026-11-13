@@ -14,7 +14,7 @@
 # every node every 30 minutes (store_evict_research.{service,timer}); vy-nebius-cpu-1 runs only that one.
 # A tool too old for --src-dir still evicts the rest, and the line says so. Python runs from / so nothing in a writable cwd imports.
 # The node's runs have no private remote, so a fixture whose blob is gone fails its suite whenever the public export lacks it.
-# Every artifact in `fixtures/artifacts.json` at the $VY_EVICT_KEEP_REFS newest `refs/research/src/*` commits
+# Every artifact in `artifacts.json` at the $VY_EVICT_KEEP_REFS newest `refs/research/src/*` commits
 # of $VY_EVICT_GIT (each tree `research run` shipped here) keeps its blobs (`--keep-registry`). When no registry can be read, or the
 # tool has no --keep-registry, no store blob (and no run file) is evicted, and the line says why.
 # With $VY_EVICT_PYCACHE (research's unit: its PYTHONPYCACHEPREFIX, /workspace/research/cache/pycache) it also removes every directory
@@ -83,11 +83,11 @@ shas = subprocess.run([*git, "for-each-ref", "--sort=-committerdate", f"--count=
                       capture_output=True, text=True, check=True).stdout.split()
 ids = {}
 for s in shas:
-    p = subprocess.run([*git, "show", f"{s}:fixtures/artifacts.json"], capture_output=True, text=True)
+    p = subprocess.run([*git, "show", f"{s}:artifacts.json"], capture_output=True, text=True)
     if p.returncode == 0:
         ids.update({k: v for k, v in json.loads(p.stdout).items() if k.startswith("art:")})
 if not ids:
-    sys.exit(f"no fixtures/artifacts.json at the newest refs/research/src commits of {g}")
+    sys.exit(f"no artifacts.json at the newest refs/research/src commits of {g}")
 json.dump(ids, open(out, "w"))
 print(len(ids))
 EOF
