@@ -144789,3 +144789,63 @@ Clock: `date -u` read 13:59Z when I wrote this. Mailbox: your 13:29Z (`d534a5fcf
 **Runs.** `r20261113-133857-2491` (my branch at `d5889c79d6`, vy-nebius-cpu-14): done, rc 0. `r20261113-134107-b389` (the scratch at `dfedb8cd3f`, vy-nebius-cpu-8): done, rc 0.
 
 **To post.** Nothing from me.
+
+## ASSEMBLY, Fri 13 Nov 14:06Z: the batch of five is on the join, tip `757ef18fdc` (pushed 13:55Z); its records run is OUT: `r20261113-135551-1520`, expected end about 14:45Z; the recursive verifier's package's own Lean check PASSES at the tip, and SPOT's verifier's package's does too; tries of `Leg.lean` and `AcceptsTop.lean` compile there, ten more files are still out
+
+**1. The tip moved: `4e986e339a` to `757ef18fdc`** [read: `git log --first-parent`; pushed]
+
+- `62c8e57f95`: ADDRWC's `79b8b4ec6e` (the leg at the connected program). No conflict.
+- `fbc06c4baa`: ADDRROW2's `8be6ff6e48` (`SpotFlock/HeldOfWires.lean`). No conflict.
+- `223ac724d5`: SESSIONCOINS's `250278de6b`, which holds MESSAGES's `086bbcde75`. No conflict.
+- `5dab590225`: ACCEPTS's `66a637cb91`. The one conflict you named, in `spot/verifier/lean/tests/test_difftest.py`: both blocks kept, the join's first. I could not compare with ACCEPTS's trial tree `26f5525b7ad`: the remote gives no object of that name.
+- `c42bc41b7a`: HONEST2's `2012857f64`. Nothing was building, so it is in this batch. No conflict.
+- `757ef18fdc`: the pin.
+- On the VM after them: 119 passed in the five named test files; the public boundary has the same 7 edges; `lock_roots.py --check` clean; `dup_names.py` 17 names; no pin stale.
+- **For ACCEPTS and HELDOF**: the tip to work off is `757ef18fdc67`. ACCEPTS's commit that takes `partsSizedAt` out of `JoinsAt` goes on it.
+
+**2. The records run** [run `r20261113-135551-1520`, vy-nebius-cpu-2, launched 13:55:51Z; its `job.json` names the commit `757ef18fdc67`]
+
+- Expected end about 14:45Z [guess, from `fb06`'s 45 minutes].
+- **It audits** `security/Proofs`, then `security`, then `security/Properties`.
+- **It does not audit** SPOT's verifier's package (`verity/protocols/spot/verifier/lean`, where ACCEPTS's `interior-parts` is), the recursive verifier's package or the certifier's. They are built as dependencies and their locks are not read. It runs no kernel replay and no test: not the rows ACCEPTS added to `test_difftest.py`, not the Python mirror in `service.py`.
+
+**3. The verifiers' packages' own Lean checks at the tip** (your 13:04Z item 2; both at `757ef18fdc67`, both `lean-fast/v1`)
+
+- [run `r20261113-135817-90e0`, vy-nebius-cpu-7] the recursive verifier's package, which holds `VStarRecursive/SampledTwoDesc.lean`: `verity/protocols/recursion/verifier/recursive: PASS  548 declarations in 5 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`, then `check.py exit 0 in 45 s`. Its one note: `168 definitions of the spec (VStarRecursive) are read by no guarantee`. No heartbeat override.
+- [run `r20261113-135851-33bd`, vy-nebius-cpu-9] SPOT's verifier's package, which I added because ACCEPTS's clause is in it: `verity/protocols/spot/verifier/lean: PASS  6161 declarations in 57 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`, then `check.py exit 0 in 44 s`. One heartbeat override, with its reason (`Spot/Registration.lean:784`).
+- The same run audits the certifier's verifier's package as a requirer: `verity/protocols/certifier/verifier/lean: PASS  1582 declarations in 11 modules; … 4 guarantees`.
+- Both runs go on to audit `security` and `security/Properties` again. I do not wait on that part; `1520` is the run for those.
+
+**4. Tries at `757ef18fdc`, so far** [runs `r20261113-135641-c19b`, vy-nebius-cpu-9, and `r20261113-135722-4e85`, vy-nebius-cpu-11; both still running]
+
+- `SampledTwo/Leg.lean`: `lean exit 0 in 269 s`, 4 theorems, probe clean.
+- `SampledTwo/AcceptsTop.lean`: `lean exit 0 in 324 s`, 35 theorems, probe clean.
+- Still out: `SampledTwo/PremisesAt`, `Honest/AtHeldOf`, `Honest/Any`, `Honest/Instance`, `Honest/Sits`, `SampledTwo/SessionRecordRounds`, `PrefixFixed`, `SessionExtra`, `SpotFlock/HeldOfWires`, `SampledTwo/JoinedForm`. HONEST2's five compiled against the old leg, so those are the ones to watch.
+
+**5. The three overrides without a reason: the history does not say why** (your 13:04Z item 4)
+
+- `RunsAs/Steps.lean:160` and `:209` came with `10ead454f12` ("RunsAs.Steps: an accepted two-stage run's steps…"). Its message gives no reason. Line 96 of the same file has a reason for a third override; these two have none.
+- `SampledTwo/RecordNames.lean:370` came with `1a93bfffa67` ("…RecordNames: the try's errors fixed (not compiled)"). It does not say which error.
+- So I added nothing. They go in the body's draft as open; each owner can add its one line.
+
+**6. The body's draft, as it now stands on my side**
+
+- Your sentence replaces mine: the refused kept plays of `241e` are stale cases, made by a tree with no `second-inputs` check, and their interior registers `logits`; an honest play with `--inline --units 1 --logits` is accepted at `e9346a9e70` (`r20261113-122758-b781`); the kept case is `b781`'s (`art:9c575558…`, `out/tip/form`); `check` skips the accept test today because nothing sets `VERITY_SAMPLED_TWO_CASE`.
+- Open: the three overrides above.
+- Premises to name beside the fields: (a) the parameters' root is the commitment's record's `window.run` and their family is the one that record's layout names; (b) `HeldOfAt`'s descriptor premise (`DescAt`: the form does not call `descOk`); (c) a non-empty sample at an accepted run; HONEST2's two, `0 < units (base h) x` at an accepted play and coins that `SeqCoinsRead` describes; MESSAGES's `LastSlotFree` once `session_prefix_fixed_form` is carried. `PortsDistinctAt` leaves when TWOLEG's parser lemma compiles.
+
+**7. The table, the rows this batch changes**
+
+| premise | kind | where it stands |
+|---|---|---|
+| `A.KS`, the leg's hypothesis | instance | `Live₂.ks_of_connected`: from `BuiltWired A.h (wireMap A.h) (returned A.h)` and `AddressesConnected A.h`. The leg's verifier and relation are now the connected program's. `builtWired_heldOf` (HONEST2) gives the first at a copy `heldOf` builds |
+| `partsSizedAt` | play | `partsSizedAt_of_formAccepts (hof : HeldOfAt A C)` is on the join (`AcceptsTop.lean`, tried). Still a field until ACCEPTS's commit; then `JoinsAt` has 20 |
+| `wiresChecked` | instance | at a copy `heldOf` builds: `wiresChecked_of_heldOf`, from `wiresUnlinked h = true` alone (`HeldOfWires.lean`, try out) |
+| HONEST2's `Premises A.h`, `InScope A.h` | play | `premises_of_formAccepts` and `inScope_of_formAccepts`, from `HeldOfAt A C`, one accepted play, `RefReadsWf A.h` and `wiresChecked A.h` (`PremisesAt.lean`, try out) |
+
+**8. Next**
+
+- I hold the tip at `757ef18fdc` until `1520` is read, about 14:45Z, so that a records run stands at the tip when it passes. Say so if you would rather I move earlier.
+- The batch after it, as I read your mails: ACCEPTS's commit off this tip; MESSAGES's `74bb74b46cb4` with `LastSlotFree` as its named field; the field for (a), which I write, with STOPDRIVER's function as its text (I read it at `b7e15e1d4cc`, where it is `window_place.of` and `family`); HELDOF's `join9441` branch and STAGECOINS's scripts branch each on your word.
+
+To post: nothing. Head pushed: `757ef18fdc`; nothing unpushed. Runs going on: `r20261113-135551-1520` (records), `r20261113-135641-c19b` and `r20261113-135722-4e85` (tries), and the tails of `90e0` and `33bd`. My timer is set for 14:47Z.
