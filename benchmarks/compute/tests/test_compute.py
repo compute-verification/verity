@@ -667,6 +667,30 @@ def test_a_per_call_split_that_is_not_the_answers_is_refused(store, tmp_path, ca
                                                             "share": float(Fraction(799, 800) / (TOTAL - CREDITED))}
 
 
+def test_per_call_reads_the_grid_form_of_an_answer_held_to_its_classs_fixed_load(store, tmp_path, capsys):
+    """An answer held to its class's fixed load publishes the passes' whole MACs (the fixture's checked MACs and its
+    excluded A rows') and their credit less the give-up padded up to the window grid. The split is that answer's where
+    its credit lies between the published credit and that plus the give-up. The padding past the split's credit is the
+    cause ``grid``, and the causes still sum to the give-up exactly. A split whose credit is past the give-up's room,
+    or whose whole MACs are not the answer's, is refused."""
+    whole, credited = 120_000_000_000 + 150_994_944, CREDITED - 1_000_000
+
+    def held(give_up: int = 4_194_304, macs: int = whole) -> dict:
+        work = {"credited": credited, "macs": macs, "epsilon": "1/100", "give_up": give_up}
+        return {"ANSWER": to("public", "work", value=work), "LEAN": to("work", value=work)}
+
+    store.add(RUN, a_record(tmp_path, **held()))
+    assert bench(store, "--from", RUN, "--per-call") == 0
+    got = printed(capsys)[1]["per_call"]
+    causes = {c["cause"]: Fraction(c["macs"]) for c in got["causes"]}
+    assert causes == {**GIVE_UP, "grid": 1_000_000} and got["give_up"] == TOTAL - credited == sum(causes.values())
+    for i, (give_up, macs) in enumerate([(999_999, whole), (4_194_304, whole + 1)]):
+        store.add(RUN, a_record(tmp_path / str(i), **held(give_up, macs)))
+        assert bench(store, "--from", RUN, "--per-call") == 2
+        assert (f"compute: the per-call split's calls credit {CREDITED:,} of {whole:,} whole MACs and the answer's grid "
+                f"form {credited:,} of {macs:,} less a give-up of {give_up:,}") in capsys.readouterr().err
+
+
 def test_per_call_reads_a_split_in_a_file_of_its_own_for_a_record_that_holds_none(store, tmp_path, capsys):
     """``--uncredited F`` reads a split in a file of its own, with its commitment and its passes' records, in place of
     the verify document, which isn't fetched, and holds those records to the answer's where the answer names them."""

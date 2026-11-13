@@ -15,6 +15,7 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.refs import runs
 from verity.circuits.types import Array
 from verity.definitions.ops.boolean import gemm as BG
+from verity.protocols.pouw.prover.circuit import compile as C
 from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import seeds as SD
 
@@ -246,7 +247,5 @@ def test_j10r_tile_is_its_reference(d, stream):
 
 def test_no_scheme_takes_j10r():
     """J10-R is a Definition only: every registered scheme's units still bind v1 or v3."""
-    from verity.protocols.pouw.prover.circuit import compile as C
-
     for name in (H.SCHEME, H.SCHEME_V3):
         assert {u.defn for u in C._scheme(name).units.values()} <= {H.PouwH1Tile, H.PouwH1Tile3}

@@ -40,12 +40,13 @@ paths = ["verity/hardware/cards/", "verity/hardware/nodes/"]
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), the
 # archive, files whose bytes a digest pins, every Lean file (a path in a Lean comment keeps the old name until an edit
-# of that file takes it: a rewritten Lean file recompiles every module that imports it), and every kernel source, whose
-# bytes change only with its owner's build check.
+# of that file takes it: a rewritten Lean file recompiles every module that imports it), every kernel source, whose
+# bytes change only with its owner's build check, and the tree file (`tests/tree.toml`), whose not-yet lines name each
+# path where it is before its move: a move doesn't edit it, and a line whose move landed is its owner's to delete.
 exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/TRUSTED.sha256",
            "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
            "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json", "**/*.lean",
-           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h"]
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "tests/tree.toml"]
 # Rewritten though a pattern above matches: the registry of fetched fixtures and the fixtures' READMEs.
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md"]
 
