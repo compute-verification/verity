@@ -255,7 +255,7 @@ def test_tile_read_finds_the_pass_leaf_from_the_rows_a_unit_reads():
         Wd.tile_read(Wd.Entry("filler"), 0, 0)
 
 
-def test_tile_at_maps_a_drawn_index_to_its_entry_and_dense_rows():
+def test_tile_at_maps_a_sampled_index_to_its_entry_and_dense_rows():
     """A side tree holds its call's kept rows only, so index u of a range is (u div n_b, u mod n_b)."""
     w = Wd.bucket(20)
     es = _entries(w)
@@ -344,12 +344,12 @@ def test_the_public_inputs_file_is_c_flocks_and_pads_with_the_last_filler_tile()
     instance-major, the ports in order): t as a u128, the execution phase root, its domain, the two side domains and the pass's -h3
     tile domain, from the registration, the sample and the pass alone.  Session σ of ⌈K′/cap⌉ holds sampled[σ·cap ..], then
     N − 1."""
-    reg, drawn, h3 = _registration(), [1, 4, 6], _d(11)
+    reg, sampled, h3 = _registration(), [1, 4, 6], _d(11)
     assert Wd.sessions(3, 2) == 2 and Wd.sessions(4, 2) == 2 and Wd.sessions(1, 4096) == 1
     sides = Wd.side_domain(_d(8), "a").domain_id + Wd.side_domain(_d(8), "b").domain_id
     for sigma, ts in ((0, [1, 4]), (1, [6, 8])):
-        assert Wd.instance_ts(reg, drawn, sigma, 2) == ts
-        head, body = Wd.public_inputs(reg, drawn, sigma, 2, h3).split(b"\n", 1)
+        assert Wd.instance_ts(reg, sampled, sigma, 2) == ts
+        head, body = Wd.public_inputs(reg, sampled, sigma, 2, h3).split(b"\n", 1)
         h = json.loads(head)
         assert head == json.dumps(h, sort_keys=True).encode() and h["format"] == Wd.PUBLIC_INPUTS_FORMAT
         assert h["instances"] == 2 and h["ports"] == list(Wd.PUBLIC_PORTS)
@@ -357,18 +357,18 @@ def test_the_public_inputs_file_is_c_flocks_and_pads_with_the_last_filler_tile()
         assert all(p["words"] % 8 == 0 for p in h["ports"])
         per = 2 * sum(p["words"] for p in h["ports"])
         assert per == 336 and body == b"".join(t.to_bytes(16, "little") + _d(7) + _d(8) + sides + h3 for t in ts)
-    assert Wd.instance_ts(reg, drawn, 0, 4) == [1, 4, 6, 8]
-    bad = {"population": (_registration(n=0), drawn, 0, 2), "2^40": (_registration(n=(1 << 40) + 1), drawn, 0, 2),
-           "subset": ({**reg, "law": {"law": "bernoulli", "k": 3}}, drawn, 0, 2),
+    assert Wd.instance_ts(reg, sampled, 0, 4) == [1, 4, 6, 8]
+    bad = {"population": (_registration(n=0), sampled, 0, 2), "2^40": (_registration(n=(1 << 40) + 1), sampled, 0, 2),
+           "subset": ({**reg, "law": {"law": "bernoulli", "k": 3}}, sampled, 0, 2),
            "distinct": (reg, [4, 1, 6], 0, 2), "distinct ascending": (reg, [1, 1, 6], 0, 2),
-           "not 3": (reg, [1, 4], 0, 2), "of [0, 9)": (reg, [1, 4, 9], 0, 2), "session 2": (reg, drawn, 2, 2),
-           "roots of port": ({**reg, "roots": reg["roots"][1:]}, drawn, 0, 2),
-           "window root and its domain id are 64 bytes": (_registration(root=b"\1" * 32), drawn, 0, 2)}
+           "not 3": (reg, [1, 4], 0, 2), "of [0, 9)": (reg, [1, 4, 9], 0, 2), "session 2": (reg, sampled, 2, 2),
+           "roots of port": ({**reg, "roots": reg["roots"][1:]}, sampled, 0, 2),
+           "window root and its domain id are 64 bytes": (_registration(root=b"\1" * 32), sampled, 0, 2)}
     for why, args in bad.items():
         with pytest.raises(ValueError, match=re.escape(why)):
             Wd.public_inputs(*args, h3)
     with pytest.raises(ValueError, match="-h3 domain id is 64 bytes"):
-        Wd.public_inputs(reg, drawn, 0, 2, h3[:32])
+        Wd.public_inputs(reg, sampled, 0, 2, h3[:32])
     with pytest.raises(ValueError):
         Wd.sessions(3, 0)
 
@@ -378,7 +378,7 @@ POINTS = ((Fraction(1, 1000), Fraction(1, 2**40)), (Fraction(1, 100), Fraction(1
 LEVELS = range(87, 144)
 
 
-def test_sessions_hold_the_largest_served_draw_at_both_points():
+def test_sessions_hold_the_largest_served_sample_at_both_points():
     """Over levels 87 to 143 (N from 9,216 to 1,179,648) K′ is N at the small levels and at most 31,178 at ε = 0.1%,
     δ = 2^-40 (27,713 unpadded, times up to g_(ℓ+1)/g_ℓ = 9/8), and at most 9,937 at ε = 1%, δ = 2^-128, both at level 143.
     A session of the tile unit at k_log 24 (`Pc8TileLeafH3`'s) holds at most 2,048 instances (m <= 35), so S is 16 and 5;
@@ -396,12 +396,12 @@ def test_sessions_hold_the_largest_served_draw_at_both_points():
         assert (Wd.sessions(k_max, Wd.session_cap(24)), Wd.sessions(k_max, Wd.session_cap(25))) == (s24, s25)
         largest.append(k_max)
     n, k, cap = Wd.Work.at(143).n, largest[0], Wd.session_cap(24)
-    drawn = sorted(random.Random(0).sample(range(n - 1), k))
+    sampled = sorted(random.Random(0).sample(range(n - 1), k))
     reg = _registration(n=n, k=k)
     s = Wd.sessions(k, cap)
-    last = Wd.instance_ts(reg, drawn, s - 1, cap)
-    assert last[:k - (s - 1) * cap] == drawn[(s - 1) * cap:] and last[k - (s - 1) * cap:] == [n - 1] * (s * cap - k)
-    head, body = Wd.public_inputs(reg, drawn, s - 1, cap, _d(11)).split(b"\n", 1)
+    last = Wd.instance_ts(reg, sampled, s - 1, cap)
+    assert last[:k - (s - 1) * cap] == sampled[(s - 1) * cap:] and last[k - (s - 1) * cap:] == [n - 1] * (s * cap - k)
+    head, body = Wd.public_inputs(reg, sampled, s - 1, cap, _d(11)).split(b"\n", 1)
     assert json.loads(head)["instances"] == cap and len(body) == cap * 336
     assert int.from_bytes(body[-336:-320], "little") == n - 1 < 1 << Wd.T_BITS
 

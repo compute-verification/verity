@@ -127,8 +127,9 @@ emptied, or is lost, its connection closing, failed or ended first; the line nam
 its way (its connection opening, its bytes buffered) holds its line and the later ones until it arrives or its
 connection ends. The run's end sends the lines still held, then the terminating chunk. The network certifier never
 reads that connection and no tick waits on it: the lines sent before it opens are kept for it, and once more than
-`WRITE_BACKLOG` of them are unwritten it is closed. Each line's t and n are functions of the ingress record, its lost
-releases the server connections' state, and no cell or record changes.
+`WRITE_BACKLOG` of them are unwritten it is closed. It is the one connection to the server the network certifier opens
+with no admission: every other is opened by `connect` when the client's connection is admitted. Each line's t and n
+are functions of the ingress record, its lost releases the server connections' state, and no cell or record changes.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
 cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included.

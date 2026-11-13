@@ -223,6 +223,8 @@ def _one(**task):
     ({"outputs": [{"name": "o", "path": "out"}, {"name": "p", "path": "out/y"}]}, "lands inside"),
     ({"outputs": [{"name": "o", "path": graph.LOG}]}, "both land at"),
     ({"resources": {"cores": 0}}, "resources are"),
+    ({"resources": {"mem_gb": 9}}, "toy:a: asks mem_gb 9 \\(its largest 8\\), more than .*\\[slot\\].*no slot would take it"),
+    ({"resources": {"cores": 5, "mem_gb": 8}}, "toy:a: asks cores 5 \\(its largest 4\\), more than"),
     ({"timeout_s": 1.5}, "timeout_s is a positive integer"),
 ])
 def test_the_core_refuses_what_is_not_graph_v2(tree, task, error):
@@ -253,6 +255,10 @@ def test_the_tables_are_checked(tmp_path):
         graph.spec(toy_tree(tmp_path / "b", SPEC + "\n[family.x]\nkinds = ['x']\n"))
     with pytest.raises(graph.GraphError, match="a lister with no \\[family.\\*\\] table"):
         graph.listing(toy_tree(tmp_path / "c"), listers={**LISTERS, "gone": toy})
+    with pytest.raises(graph.GraphError, match="\\[slot\\] holds cores and mem_gb"):
+        graph.spec(toy_tree(tmp_path / "d", SPEC.replace("[slot]\ncores = 4\nmem_gb = 8\n", "")))
+    with pytest.raises(graph.GraphError, match="\\[family.toy\\]: asks mem_gb 64 \\(its largest 8\\)"):
+        graph.spec(toy_tree(tmp_path / "e", SPEC.replace("cores = 1, mem_gb = 1,", "cores = 1, mem_gb = 64,")))
 
 
 def test_a_kind_needs_its_runner(tree):
@@ -267,6 +273,7 @@ def test_the_real_tables_parse():
     from verity_graph import ROOT, families
 
     s = graph.spec(ROOT)
+    assert set(s["slot"]) == {"cores", "mem_gb"}
     assert {"test-file", "lean-module", "lean-lock", "circuit-binding", "build"} <= set(s["family"])
     assert set(s["env"]) == {"py", "lean", "rust"}
     assert set(families.listers()) <= set(s["family"]), "every lister in families/ has its table"

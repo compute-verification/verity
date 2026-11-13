@@ -421,7 +421,9 @@ STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test
 
 @pytest.fixture
 def stamped(monkeypatch):
-    """The kit's writer under a `research run` of its own, stamping with `STAMP` rather than asking the host."""
+    """The kit's writer under a `research run` of its own, stamping with `STAMP` rather than asking the host, and with
+    no run directory, so it writes `$OUT/result.json` and never the result of a run the suite itself runs under."""
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setenv("RESEARCH_RUN_ID", BENCH)
     monkeypatch.setattr(C.kit, "host_stamp", lambda: dict(STAMP))
 

@@ -8,8 +8,8 @@ import random
 import numpy as np
 import pytest
 
-from verity.circuits.evaluation.bits import evaluate_bits, evaluate_words
 from verity.circuits.boolean.forms import Circuit
+from verity.circuits.evaluation.bits import evaluate_bits, evaluate_words
 from verity.protocols.pouw.prover.circuit import boolean as B
 from verity.protocols.pouw.prover.circuit import words as W
 

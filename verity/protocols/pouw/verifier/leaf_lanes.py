@@ -1,5 +1,5 @@
 """A sampled H1 leaf proved as its lanes and their combine: the statement set, the values each statement
-reads and at which row, and the lane partials' layout, the after-draw value the statements share.
+reads and at which row, and the lane partials' layout, the produced value the statements share.
 
 Serving keeps one CP-W receipt a 32 × 32 leaf. A sampled leaf's proof is its 32 lane statements and one combine statement
 (`circuit.h1zy`'s `PouwH1LaneZy_v1{TILE}`, lane l by its public index, and `PouwH1Combine_v1{TILE}`), each proved under the
@@ -58,7 +58,7 @@ n = `weights.chunks`(K) chunks along K (`h1zy.lane_statements`; every served J10
   public. The combine reads ``p<x>``, ``receipt`` and ``ok<i>``, row i of ``oks`` for each statement i < 32 n.
 * `known`: lane l's ``pub`` (`PUBLIC_J10R`: the unit's call and blocks after its roots, `pub_words`) in each of its
   chunks, ``admit`` in its last, and the combine's ``o0`` (value ``ok<32 n>``), the leaf's one known ok.
-* The carries and ``oks`` are after-draw values like the partials, each one table committed once
+* The carries and ``oks`` are produced values like the partials, each one table committed once
   (`one_stage.produced`): ``carry<c>`` 32 rows of `carry_words`, ``oks`` 32 n rows of one word (`verifier_entries`).
   A port of a carry or of ``oks`` is read in full (`read_in_full`), but never ``o0``: an output row binds only the bits
   the circuit returns, and the combine holds the rest of each ok row to 0.
@@ -66,7 +66,7 @@ n = `weights.chunks`(K) chunks along K (`h1zy.lane_statements`; every served J10
 STAND-IN: the rows of ``a``, ``b``, ``zy`` and ``receipt`` are leaf-local (the leaf's own registration); in a served
 execution phase they are the execution phase's table rows (`circuit.h1window`), which this module then takes as an offset.
 
-**In a served execution phase** (`served`): a sampled leaf u's after-draw values and its known rows are its own,
+**In a served execution phase** (`served`): a sampled leaf u's produced values and its known rows are its own,
 ``<prefix><value>@<u>`` (``<prefix>partials@<u>``, ``<prefix>pub<l>@<u>``, ``<prefix>ok<i>@<u>``, ...), so no two leaves
 of an execution phase share a tree, and each known row is committed under `known_salt` of the execution phase's sample root and its name,
 which the verifier and the prover derive alike (`credit`'s lanes form).
@@ -98,7 +98,7 @@ READ_IN_FULL = "read_in_full"
 PUBLIC_J10R = ("salt", "position", "roots", "call", "blocks", "lane")
 #: their bits: a digest, a u64, two digests, a u64, two u64 and the lane index's u16 word
 PUBLIC_J10R_BITS = (512, 64, 1024, 64, 128, 16)
-#: a J10-R leaf's after-draw ok rows (`h1zy.OK_WORD`), statement i's at row i, and its carries, chunk c's ``carry<c>``
+#: a J10-R leaf's produced ok rows (`h1zy.OK_WORD`), statement i's at row i, and its carries, chunk c's ``carry<c>``
 OKS, CARRY = "oks", "carry"
 #: the values a statement reads in full (`READ_IN_FULL`): each is read by several statements at one row
 FULL = (A, B, PARTIALS, OKS)
@@ -325,7 +325,7 @@ def known_rows(r: int, c: int, kind: str, ln: int | None = None, ch: int | None 
 
 
 def produced_values(r: int, c: int, k: int, *, j10r: bool = False) -> dict[str, tuple[int, int]]:
-    """The sampled leaf's after-draw values (`one_stage.produced`), each ``(rows, u16 words a row)``: ``partials`` (a row a
+    """The sampled leaf's produced values (`one_stage.produced`), each ``(rows, u16 words a row)``: ``partials`` (a row a
     lane of 2 `words`(k)), and a J10-R leaf's ``carry<ch>`` (a row a lane, `carry_words`) and ``oks`` (a row a lane or
     chunk statement, one word)."""
     out = {PARTIALS: (lanes(r, c), 2 * words(k))}
@@ -343,7 +343,7 @@ def verifier_entries(registration: Mapping[str, Any], produced: Mapping[str, Any
     produced record alone (Lean's `PouwWindow.Lanes.roots?`): each registered value's entry in the registration's
     ``registered`` (the first of its value) and that entry's root, and ``partials``' own entry (`produced.entry`:
     ``lanes_`` rows of ``words_`` u16 words under the registration's digest) at the produced record's root of
-    ``partials``; with ``values`` (`produced_values`, a J10-R leaf's) each of those after-draw values' the same way.
+    ``partials``; with ``values`` (`produced_values`, a J10-R leaf's) each of those produced values' the same way.
     `registered_file` reads them; `pouw-leaf-own` holds a statement's file to them."""
     ent: dict[str, Mapping[str, Any]] = {}
     roots: dict[str, str] = {}

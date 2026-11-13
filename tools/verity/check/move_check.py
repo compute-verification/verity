@@ -8,7 +8,8 @@ Every path git sees changed must be one of:
 - an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root, also
   after a variable such as `$REPO/`) is rewritten to where it is now or, in a line, left as it was (a top-level directory's
   name is also a word: `examples` in prose, a JSON key, a function's name), in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
-  the file's own directory first (in a `*.md` file, one in backticks or a link's target), in a `*.py` file a pathlib
+  the file's own directory first (in a `*.md` file, one in backticks or a link's target; in a Lake file, a requirement's
+  `path` and a path package's `dir` also where written with no leading dot, `"composition"`), in a `*.py` file a pathlib
   chain `ROOT / "a" / "b"` read as `"a/b"`. A changed line may also, the rest of it kept byte for byte, rewrite each
   place it names from the file's own to name, from where the file now is, where that place moved (`placed`): a relative path from the file's directory (`../../verity/x/`, in a
   comment, prose or code), a path below a moved directory the file is in and stays in (`rho/circuits.py` in a file of
@@ -414,7 +415,9 @@ def module_sub(text: str, mods: dict[str, str]) -> str:
 
 def resolve_relative(text: str, path: str, pmap: dict[str, str]) -> str:
     """Each quoted relative path (in Markdown, in backticks or a link's target), as `<root>/` and the repository path it names
-    from `path`'s directory, mapped by `pmap`."""
+    from `path`'s directory, mapped by `pmap`. In a Lake file, a path to another package is one with no leading dot too
+    (`path = "composition"`, a package inside the requiring one): Lake reads it from the package's directory, and
+    `tools/move/layout.py` rewrites it as one (its `lake_spans`)."""
     here = posixpath.dirname(path)
 
     def rooted(rel: str) -> str | None:
@@ -422,6 +425,9 @@ def resolve_relative(text: str, path: str, pmap: dict[str, str]) -> str:
         return None if p.startswith("..") else f"<root>/{map_path(p, pmap)}"
     if path.endswith(".md"):
         return MD_RELATIVE.sub(lambda m: rooted(m.group(0)) or m.group(0), text)
+    for a, b in reversed(_rename().L.lake_spans(posixpath.basename(path), text)):
+        if not text[a:b].startswith(".") and (r := rooted(text[a:b])):
+            text = text[:a] + r + text[b:]
     return RELATIVE.sub(lambda m: (r := rooted(m.group(2))) and f"{m.group(1)}{r}{m.group(1)}" or m.group(0), text)
 
 

@@ -11,7 +11,8 @@ the figures the prover states for an SKU: its compute figures (`DeviceFigures`: 
 rate of each operand class) and its memory figures (bits from device memory to the chip a tick, bits of on-chip state and
 bytes of device memory). The auditor's data sheets, public and looked up by SKU, are sheets too, whose figures are its
 estimate of the SKU's (`Auditor.estimate`); they come from the card files (`verity/hardware/cards/<sku>.toml`):
-`Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it.
+`Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it. A node's entry comes from its files too:
+`Registration.node_entry` reads a node file's table (`verity.hardware.nodes.load(kind)`) and its GPU card's.
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -174,6 +175,17 @@ def _rat_str(q: Fraction) -> str:
     """A nonnegative rational's one encoding, which `_rat_json` reads back."""
     n = _nat_str(q.numerator)
     return n if q.denominator == 1 else f"{n}/{_nat_str(q.denominator)}"
+
+
+def _whole(entry: Any, what: str) -> int:
+    """The whole number a card or node file's entry states, read from its value's decimal text."""
+    try:
+        n = Fraction(str(entry["value"]))
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        raise Malformed(f"{what}: {entry!r} is not an entry with a number as its value") from None
+    if n < 0 or n.denominator != 1:
+        raise Malformed(f"{what}: {n} is not a whole number")
+    return int(n)
 
 
 def within_tolerance(tau: Fraction, e: Fraction, x: Fraction) -> bool:
@@ -427,6 +439,45 @@ class Registration:
     def entry(self, sheets: Iterable[Sheet] = (), locs: Iterable[Loc] = (), links: Iterable[Link] = ()) -> Entry:
         """An entry adding `sheets`, `locs` and `links`, following this log's head."""
         return Entry(self.head, tuple(sheets), tuple(locs), tuple(links))
+
+    def node_entry(self, node: Mapping[str, Any], card: Mapping[str, Any], host: str, site: str = "site",
+                   tick: Fraction = TICK) -> Entry:
+        """**A node's entry**, following this log's head: what a node file's table (`verity.hardware.nodes.load(kind)`)
+        and the table of the GPU card it names (`verity.hardware.cards.load(sku)`) register as host `host` at site
+        `site`. It adds the sheet `Sheet.of_file` gives the card and the site's location, each only where the log has
+        none; the host; the node's `device.count` devices `host/gpuI`, each naming the sheet, with one `hbm` leaf
+        `host/gpuI/hbm` holding the sheet's device memory, whole; and for each `memory.NAME` of the file a leaf
+        `host/NAME` under the host, at the tier and bytes it states, in the file's order. The file names no host, so
+        the caller gives its id, and every id under it starts with that. The entry holds no link and none of the
+        auditor's devices.
+
+        A file that states no `dram` leaf or no `disk` leaf is refused: its entry would pass `check` for `remote` with
+        a host that holds less memory than the node has, and whatever reads the site would take the node for smaller
+        than it is."""
+        try:
+            sku, count = node["device"]["sku"], _whole(node["device"]["count"], "a node's device.count")
+            leaves = [(name, leaf["tier"], _whole(leaf["bytes"], f"a node's memory.{name}.bytes"))
+                      for name, leaf in node.get("memory", {}).items()]
+        except (AttributeError, KeyError, TypeError) as e:
+            raise Malformed(f"a node file's table: {e!r}; it has device.sku, device.count and, for each memory.NAME, "
+                            "a tier and bytes") from None
+        unread = [tier for tier in ("dram", "disk") if all(t != tier for _, t, _ in leaves)]
+        if unread:
+            raise Malformed(f"the node file states no {' and no '.join(unread)} leaf of its host's, so its entry would "
+                            "understate the node's memory; read them on a node of its kind (`lsmem -b --summary=only; "
+                            "lsblk -b -d -n -o NAME,SIZE,TYPE` under `research run --on NODE`) and state each as a "
+                            "memory.NAME table: the memory the host is given, and every block device")
+        sheet = Sheet.of_file(card, tick)
+        if sheet.sku != sku:
+            raise Malformed(f"the node's devices are {sku!r}, and the card given is {sheet.sku!r}'s")
+        before, digest = Site.of_log(self), sheet.digest()
+        locs = [] if before.known(site) else [Loc(site, "site")]
+        locs.append(Loc(host, "host", site))
+        for gpu in (f"{host}/gpu{i}" for i in range(count)):
+            locs += [Loc(gpu, "device", host, sheet=digest),
+                     Loc(f"{gpu}/hbm", "memory", gpu, tier="hbm", bytes=sheet.mem)]
+        locs += [Loc(f"{host}/{name}", "memory", host, tier=tier, bytes=n) for name, tier, n in leaves]
+        return self.entry(() if any(k.digest() == digest for k in before.sheets) else (sheet,), locs)
 
     def to_json(self) -> dict[str, Any]:
         return {"composite": self.composite, "entries": [e.to_json() for e in self.entries]}
