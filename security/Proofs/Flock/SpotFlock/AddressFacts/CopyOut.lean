@@ -194,11 +194,13 @@ theorem scopeOkH_member {s : AuditStatement} {d : Design.Two} (hd : two h s = so
   unfold membersScoped at h1
   exact List.all_eq_true.1 h1 t (List.mem_range.2 ht)
 
-/-- **Where the design evaluates, each member's rows are covered** (`RowsFitS`): its statement circuit is a committed
-circuit unrolled, in `scopeOkH`'s scope (`HiddenExec.rowsFit_of_committed`). -/
-theorem rowsFit_member {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
-    (ht : t < h.ms.length) : FlockSoundness.Discharge.Hidden.Any.RowsFitS (memberCircuit h t) := by
-  have hsc := scopeOkH_member hd ht
+/-- **Where the design evaluates, each member's circuit is a committed circuit unrolled**: its reference statement
+reads (`templateOk`) untyped, under hidden outputs, and its circuit file parses (`HmOut.parseCommit`) to `c`. -/
+theorem member_commit {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
+    (ht : t < h.ms.length) :
+    ∃ (r : _root_.Flock.Readable.Read) (c : _root_.Flock.Circuit), r.tags.typed = false ∧
+      _root_.Flock.HmOut.parseCommit r.tags r.I.circuitFile r.I.tables = .ok c ∧
+      memberCircuit h t = _root_.Flock.HmOut.unrolled c := by
   have hok := templateOk_of_two h hd ht
   unfold templateOk at hok
   cases hr : FlockDeploy.readOf true (h.xS₀ t) with
@@ -207,9 +209,7 @@ theorem rowsFit_member {s : AuditStatement} {d : Design.Two} (hd : two h s = som
     rw [hr] at hok
     simp only [Bool.and_eq_true] at hok
     obtain ⟨⟨⟨⟨⟨hho, hty⟩, hps⟩, -⟩, -⟩, -⟩ := hok
-    have hty' : r.tags.typed = false := by simpa using hty
     have hm : memberCircuit h t = r.stmt := by simp [memberCircuit, stmtOf, hr]
-    rw [hm] at hsc ⊢
     obtain ⟨c, hc⟩ : ∃ c, _root_.Flock.HmOut.parseCommit r.tags r.I.circuitFile r.I.tables = .ok c := by
       cases hD : _root_.Flock.Desc.parseStmt r.tags r.I.circuitFile r.I.tables with
       | error e =>
@@ -228,15 +228,23 @@ theorem rowsFit_member {s : AuditStatement} {d : Design.Two} (hd : two h s = som
           | ok c => exact ⟨c, rfl⟩
     have hcirc : r.circ = c := by
       simp only [_root_.Flock.Readable.Read.circ, _root_.Flock.ProvedScope.circuitOf, hho, ↓reduceIte, hc]
-    change FlockSoundness.Discharge.Layout.scopeOkH (_root_.Flock.HmOut.unrolled r.circ) = true at hsc
-    show FlockSoundness.Discharge.Hidden.Any.RowsFitS (_root_.Flock.HmOut.unrolled r.circ)
-    rw [hcirc] at hsc ⊢
-    have hrb := FlockSoundness.Discharge.Layout.scopeOkH_rowsB hsc
-    rw [FlockSoundness.Discharge.HiddenExec.v1PortsL_unrolled, FlockSoundness.Discharge.HiddenExec.bitRowsL_unrolled]
-      at hrb
-    exact (FlockSoundness.Discharge.HiddenExec.rowsFit_unrolled c).2
-      (FlockSoundness.Discharge.HiddenExec.rowsFit_of_committed hty'
-        (FlockSoundness.Discharge.Hidden.committed_of_commit hc) hrb)
+    refine ⟨r, c, by simpa using hty, hc, ?_⟩
+    rw [hm, ← hcirc]
+    rfl
+
+/-- **Where the design evaluates, each member's rows are covered** (`RowsFitS`): its statement circuit is a committed
+circuit unrolled, in `scopeOkH`'s scope (`HiddenExec.rowsFit_of_committed`). -/
+theorem rowsFit_member {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
+    (ht : t < h.ms.length) : FlockSoundness.Discharge.Hidden.Any.RowsFitS (memberCircuit h t) := by
+  obtain ⟨r, c, hty, hc, hm⟩ := member_commit hd ht
+  have hsc := scopeOkH_member hd ht
+  rw [hm] at hsc ⊢
+  have hrb := FlockSoundness.Discharge.Layout.scopeOkH_rowsB hsc
+  rw [FlockSoundness.Discharge.HiddenExec.v1PortsL_unrolled, FlockSoundness.Discharge.HiddenExec.bitRowsL_unrolled]
+    at hrb
+  exact (FlockSoundness.Discharge.HiddenExec.rowsFit_unrolled c).2
+    (FlockSoundness.Discharge.HiddenExec.rowsFit_of_committed hty
+      (FlockSoundness.Discharge.Hidden.committed_of_commit hc) hrb)
 
 /-! ## The copy -/
 
