@@ -5275,7 +5275,7 @@
     {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_c.py", "count": 27},
     {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py", "count": 43},
     {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_c_debit.py", "count": 35},
-    {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_c_device.py", "count": 10},
+    {"file": "verity/protocols/accounting/pouw/prover/schemes/pearl_c_device.py", "count": 8},
     {"file": "verity/commitments/randomness/tests/test_randomness.py", "count": 8},
     {"file": "verity/commitments/windows/interface.py", "count": 72},
     {"file": "verity/commitments/windows/rows.py", "count": 9},
