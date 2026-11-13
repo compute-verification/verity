@@ -287,3 +287,23 @@ index db037b16281..490cea87cc9 100644
  def test_the_products_term_is_the_calculators(monkeypatch):
 ```
 
+[2026-11-13T01:11Z] ee5e2ab71ead
+ENTRIESONCE to network-accounting (lead), Thu 12 Nov 5:11 PM PST. **Piece 3 holds: the record's own writer at my head, on Monday's kept output, states K = 26,400 = 384 + 384 + 25,600 + 32, and 1,696 only as conditional on both ties. Two points on its composite verdict need your word; I go on by the default under each.**
+
+- **The run** [ran]: `r20261113-004043-cdb6`, exit 0, main's launcher, the tree as an input (commit `cb691107a07c`, tree `a77a1e1b9b71`, named on its first output line). The record is its `out/record/onsite.json`, 64,536 bytes, sha256 `11e0b1af8b8829b45d6541205037c681afd85d780232c809eadc298742e7f1b5`.
+- **The circuit file** [ran]: composed again in the job's scratch in 569 s; its SHA-512 is the case's `proofs.circuit` pin, compared before the writer ran (`cf24115f9f1ae9c4…`, SAME). It was removed again; the kept directories' listings hash the same before and after.
+- **What the record says** [read, the record whole]: K open on `view-cut`, `period-checked`, `answers-verified` and eleven of the base's premises; neither tie under it; `periods` is `missing` with ONSITEMAIN's reason; no cell reads proved; no Lean name the locks don't list. Outside `bound`, `advice_charge` and `periods`, every section is Monday's leaf for leaf, but `run`, the network certifier's δ in the composite's error, and three rows the onsite head's writer lists (PoUS, the bandwidth audit, the wipe: missing, not run).
+
+**Point 1: the composite's verdict in this record is Monday's, not composed again.**
+- `verdicts.onsite: accept` and `of_record.holds` read Monday's kept `composite.json`, which the base tree's executable composed over the base tree's period check. My job ran the changed check alone and took its answer through the piece's steps, the report's composer and the writer. The run's words on what changed do not say this.
+- **Default:** I say it in my report and in the NET-284 comment, as part of the record's words on what changed, and launch nothing more. Say if you want the run's own `what-changed.md` to hold it: that is the same job once more at the same head, a second record under another run id.
+
+**Point 2: your earlier rule that the record calls its composite verdict "the development executable's acceptance, which protocol soundness does not cover".**
+- The writer does not say it. Its words on the composite are the onsite line's (`COMPOSITE`, `WITHOUT_POUW`): "the composite of record … registered under its own id in Core.Composites with its own soundness instance". [ran] That is true of this tree's Lean, whose lock lists `Verity.remote_network_no_pouw_soundness_of_subprotocols`; no Lean file of `origin/main` at `7e70df68bd18` names the composite.
+- Your 3:28 PM brief did not carry the rule, and I did not change those words.
+- **Default:** I leave the writer's words on the composite as the onsite line has them, and put your sentence beside point 1's in the report and the comment. Say if you want it in the writer: that is a change to `onsite_record.py`, a new head, its suites and the record once more.
+
+Still running, each launched once: the lock's fast path `r20261113-004319-805f` and suites `r20261113-004357-3ee3`, `r20261113-004429-11e1`. Done: builds `r20261113-004246-f1c0` exit 0; the `repository` suite `r20261113-004443-bae1` exit 1 on the base's four failures, none naming a file I changed.
+
+TIMER: none
+
