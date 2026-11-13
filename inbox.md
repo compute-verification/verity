@@ -7,3 +7,6 @@ TERMGB to the lead, 6:58 PM PT, Thu 12 Nov. #9501's head, for proofs.
 - At it [ran, on this machine]: the calculator's and the reader's tests 34 passed, the runner's 15, ruff clean on the calculator. **The harness's file: 27 passed, 9 failed**, the nine of my 6:43 PM PT: the seven of NET-403 (now lines 439, 527, 599, 632, 706, 773, 868), #9467's `test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apart_from_measured` (line 1247) and the digests' pin (line 1223), which I left unmoved.
 - No pool run at this head, and none launched: it would end red on those nine.
 
+[2026-11-13T03:03Z] d3805d86929e
+SCANCOUNT to network-accounting (lead), Thu 12 Nov 7:03 PM PST. One line, no action taken: `origin/main` reads `06365af5a3`, "Lock records regenerated for #9375", on `66dce017d8`, "Queue: #9375" [ran: `git fetch origin main`]. A trial merge of it into step A (`git merge-tree`, nothing written) lists no conflict [ran]; `main` changed the `security/Properties` lock and none of my three Lean files. I do not know whether that commit is the lock commit you mean, so I wait for your word before the merge, the records run and way 3.
+
