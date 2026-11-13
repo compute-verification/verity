@@ -140577,3 +140577,68 @@ Nothing new to post: the check soundness ruled on appears to be in the switch's 
 - [read] All of it came onto the join's first-parent line at `26e01cd9f8` ("Merge ACCEPTS's 2d2bf8a4d3 … RUNCOINS's accepted line on the new base", 05:07Z). That is before the form at `1e20910586` reached the join at `0c7a84c235` (08:35Z).
 - So `241e`'s accepts at `9425ffd35b` were at a tree with no `second-inputs` check.
 - [run going] `r20261113-122758-b781` on vy-nebius-cpu-11 puts both kept cases through the form at `1e20910586` and at `0c7a84c235`, then runs the `--logits` play at the join's tip `e9346a9e70`. The full entry follows by 13:15Z.
+
+## MEMBERS, Fri 13 Nov 12:29Z: `tablesHeld` at EVERY member before the sessions is ALREADY the form's, since `3d03860e75a` (in #9441's marked head, WINDOWAT's `e977fbc96f6` and the switch); HELDOF's base predates it. Suites `5f94` at the summary's head: the accept repeats. The cost row is written, not run
+
+Your 12:05Z and 12:18Z mails are read. Head pushed: `ad3efc0ca19c` on `cursor/proofs-members-switch-34fd`; nothing unpushed. No pull request, no mark. This is the entry you asked for before any Lean.
+
+**1. The check soundness asked for is there; nothing of the check is to write.**
+- **Where** [read: `Spot/OneStageZk.lean` at each head]. `3d03860e75a` (Thu 12 Nov 10:54Z, "every member's files are held, sampled or not (`membersRun_files`)") is an ancestor of #9441's marked head `51a2e803cb83`, of WINDOWAT's `e977fbc96f6` and of the switch. It is not an ancestor of HELDOF's `2861eed8d0a` (its merge-base with WINDOWAT's head is `4a7291116e11`), whose `runMembers` is the earlier one. HELDOF's finding is true of that base and of none of the three heads above.
+- **The text, before** (HELDOF's `2861eed8d0a`):
+```lean
+def runMembers (slice : Member → Json) (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat)
+    (bs : Core.Blobs) : V Run :=
+  membersHeld ms sts >>= fun held =>
+  (sts.zip held).foldlM (stepMember slice bs) ⟨#[], #[], #[], true⟩ >>= fun r => …
+```
+- **After** (#9441, WINDOWAT's base and the switch, unchanged by the switch):
+```lean
+  membersHeld ms sts >>= fun held =>
+  sampledHeld held want >>= fun _ =>
+  membersFiles slice bs ms.toList >>= fun files =>          -- every member of the parameters, sampled or not
+  (sts.zip held).foldlM (stepMember (statementAt files) bs) ⟨#[], #[], #[], true⟩ >>= fun r => …
+```
+  `membersFiles` is `Member.files` at each member in the parameters' order; `Member.files` is `Member.statement` then `StepAt.filesHeld`; `Member.statement` is `statementOf m.own …`, whose first step is `tablesHeld m.own bs`. So it is one call in `runMembers`, the one there, before the first session, at every member (so at each template's member, and at template 0's).
+- **The refusal's word:** `proofs: member NAME: tables: the blobs' pinned MUFU tables are not the ones the registered circuit looks up (its META's lookups): the circuit looks up X, the blobs hold Y` (`NO_TABLES`, under `Member.files`' `member NAME:` and `checkMembersAt`'s `proofs:`).
+- **What is held:** one list for the play, the pinned tables its blobs hold (`tablesOf bs`), against each member's circuit file's lookups, exactly. So two plays that name different members are both held at every member, and a play with no statement is held at every member too.
+- **Cost at Thursday's size:** with the summary, a circuit file's lookups are read once a file (298 reads of a META line) and the compare is at most four names a member, 102,781 times: well under a second [derived]. Before the summary it was a scan of the blobs with a hex encoding of each digest, three to four times a member (my 11:51Z finding); that is gone at `10948fd9d3a9`.
+- **Statements and lock records moved:** none by this, on any head. The definition changed in #9441, whose records are that pull request's. The switch does not touch `runMembers`' text.
+- **The theorem HELDOF can read, there today:** `membersRun_files` (`∃ roots, rootsOf ms c.record = .ok roots ∧ ∀ m ∈ ms, m.FilesHeld (m.slice c.record roots) bs`), and `FilesHeld` holds `m.statement … = .ok a`, which HELDOF's own `stepMember_tables` step opens to `tablesHeld m.own bs = .ok ()`.
+
+**2. What I write next, unless you say no: a lemma and a test, no change to what the check decides.**
+- Lean, in `Spot/OneStageZk.lean`, two new theorems, about twelve lines, no statement moved:
+```lean
+theorem Member.FilesHeld.tables {m : Member} {slice : Json} {bs : Core.Blobs} (h : m.FilesHeld slice bs) :
+    tablesHeld m.own bs = .ok ()
+theorem membersRun_tables {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
+    {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
+    ∀ m ∈ ms, tablesHeld m.own bs = .ok ()
+```
+- **The negative test** (your item 3). There today, in `test_members_twin.py`: a member with a statement whose circuit looks up `rcp` where the blobs hold none (row `tables`), and a member with no statement refused for its circuit (`test_a_member_with_no_statement_has_its_files_held_by_both_before_any_session`). Not there: the two together. I add the row at the member no statement names (`Audit(opened=(B,))`, member A's circuit looking up `rcp`, the blobs holding none), held on Lean's check and the twin.
+- Your wording is the other direction: the blobs HOLD a pinned table the circuit does not look up. That needs a blob whose SHA-512 is a pinned table's, so the table's real bytes, which only the prover's `ir_lower.write_tables` makes; the verifier's tests may not load it. I put that row in `benchmarks/one_stage/tests` (which loads the prover's Python already), on the same `Audit` of two members with a statement of the second alone: expected `proofs: member <first>: tables: …: the circuit looks up none, the blobs hold rcp`. Say if the first row alone is enough.
+
+**3. Completeness** (your item 4): no window we test is refused by it; Thursday's is not known from here.
+- **The toy** (the difftests' two members, stand-in files): both circuits' META name no lookups and the blobs hold no pinned table; the honest row passes the tables' check at the first member and ends at its parse [run `5f94`, `test_members_twin.py`].
+- **The stand-in window** (two templates of `ScaledMmS8Coordinate`): the compiled check accepts the two-member case, so both circuit files look up what the blobs hold [run `5f94`, `test_audit_two_members.py`].
+- **Thursday's window: not known.** It is known when vllm lists each of the 298 circuit files' META `lookups` (one line a file). What can be said without it [read]: the form holds every member to the unit's form (`KsScope.filesOf`: `scopeOkH` or `scopeOkT`, the unit reads its one input group and returns the outputs), and a template staged with table reads in lookup slots is outside it (the adapter's tests: a word template has `lookups` `ex2`, `rcp` and is refused by `ks_form_why`; the unit templates it stages have `lookups == {}`). So a window with one template that reads tables is refused by the form with or without the tables' check, at that template; and a window the form otherwise accepts has no lookup at any member. The tables' check refuses first in the order, so its word, not the form's, is what such a window would read.
+- One thing in the driver to know: `a5.members_proof` brings the tables of the SAMPLED members' circuits only (their union), and its unit test stages members of different lookups. On a window of members with different lookups the case is refused at the first member whose lookups are not that union. No window above is one.
+
+**4. Suites `r20261113-114947-5f94`** [run, vy-nebius-cpu-9, at `10948fd9d3a9`, every layer of the kept pass and the summary; rc 1 for the one test below]
+- `benchmarks/one_stage`: 1046 passed, none failed, none skipped. `test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_accepts_the_case` passes: the compiled check accepts the two-member case with the summary kept and the parse dropped.
+- `verity-core-composition`: 28 passed, 5 skipped.
+- `verity-core-sampled-proofs`: 326 passed, 2 skipped, 1 failed: `test_members_twin.py::test_the_one_row_run_here_where_the_twin_is_not_leans`, the base's, as in `7a94`.
+
+**5. The cost row** (your 12:05Z item 1): written, not run; it runs after the tables' lemma is compiled, as you ordered.
+- FIRSTACCEPT's `9683ae5e92d` is on the switch's branch unedited as `623ce07628a` (one docstring conflict in `a5.case_members`, resolved to both sentences; the code merged clean). The row is `benchmarks/verifier_cost/members_files.{py,sh}` and `members_files/Main.lean` with a README paragraph (`bfd33ad9c31`, `ad3efc0ca19`).
+- It makes the stand-in window (`members_standin.window` and `audit_argv`, called, not edited; 300 members by default, 150 a template), audits it, requires v2's `check` to accept the case (`case_files.run`), then times `membersFiles` as compiled against `Member.files` a member on the first N members of one circuit file and on all of them. Guard: both hold every member's files and agree on every check's result, else exit 1.
+- The figure it is against [run `r20261113-113652-fee5`, SESSIONOF2's, its `rows.jsonl`]: on that window the check with a parse a member took 312.6 s and 321.4 s for 300 members (308 files, 134.9 MB), about a second a member.
+- Not known before the run: whether the compiled check accepts a stand-in case of 300 members on the switch.
+- In FIRSTACCEPT's file, not touched: `members_standin.py`'s `one` reads `members.ALL_PASSED`, which neither its head nor the switch defines [read], so `members_standin.sh` ends in an `AttributeError` once a case exists.
+
+**6. The index around `Blobs.get`**, one line: a member's public file is found by a scan of the blobs comparing 64-byte digests (`lean_sarray_dec_eq`, a `memcmp` [read: the toolchain]); at Thursday's size about 102,781 × 51,000 ≈ 5 × 10⁹ compares, under a minute [derived; 10 ns a compare is a guess]; the index is a `Std.HashMap` built once beside the blobs and a lemma of about 40 lines, `Blobs.get` unchanged. Not needed for the first accept.
+
+**7. The Lean queue is through** [run; each a `verity lean try`, exit 0, only `propext`, `Classical.choice`, `Quot.sound`; on vy-nebius-cpu-1]: at `52af849ddef1` `Sampled/Members`, `Window/Members`, `OpenGap`, `Nci/RecordCounts`; at `bfd33ad9c31a` `Remote/Honest`, `Recursive/Audit`; at `623ce07628af` `Spot/ZkMain`, `Spot.lean` (the root, with `Spot.CircuitKept`), `CoreRemote`, `CoreOnsite`, `VStarRecursiveMain`, `Sampled/Binding`; at `ad3efc0ca19c` `MemberForm/Named`, `Accept`, `Apart`, `Sampled/Assembled`, `SampledRead`, `Sampled/Held`, `Sampled/OpensAt`. Run ids are in `/tmp/w/q-summary.txt`'s order: `60b2`, `1255`, `bc13`, `463b`, `0e8a`, `6ef2`, `f0ac`, `acaf`, `86ab`, `0673`, `b44c`, `3d11`, `5dbb`, `1dce`, `43b2`, `25c2`, `6648`, `8ac8`, `5fdf`.
+
+**The compiled head to give HELDOF today:** `10948fd9d3a9` for `Spot/OneStageZk.lean` (`r20261113-114546-92e2`); the commits after it change no Lean but the root's one import. With the lemma I name a new one.
+
+**Need from you:** (a) whether the test in your direction (the blobs hold a table) is wanted beside the row in the verifier's own tests; (b) vllm's list of the 298 files' `lookups`, or its word that every served template is a unit template.
