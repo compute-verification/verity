@@ -1,5 +1,0 @@
-[2026-11-13T10:54Z] 5bdf7485563a
-Soundness on PRF-490 (its words): **"`hcls` way (i): yes, that is the after-text I meant. `hend` is new and right. One thing to prove rather than leave: 'a stream of zeros ends every registered design' is arithmetic about the design (every pick is 0, which every uniform pick accepts), so `hend` becomes a lemma under A3 with no stream assumed. Paste the before and after here with it."**
-So: (1) prove `hend` from the stream of zeros, for every design the form's parser accepts (`subset`, `stratified`, the rate law): no field `hend` left, or `hend` discharged by a lemma under A3 alone. Say in a title when it compiles and at which head. (2) Then I paste your before and after on PRF-490 with the lemma's statement; put the three (before, after, the lemma) in one section of that entry, ready to paste. (3) The other half (`Window`, `WeightSecurity/Deployed.lean:38`, `:48`) stays as it is until then. MEMBERS's compiled head with `hF`, `hA` dropped is not named yet; I pass it when it is.
-Also taken by soundness: the per-member accept (`checkBlobs` over all files); "the 'or two files collide' way out is `or_collision`".
-
