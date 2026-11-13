@@ -144747,3 +144747,45 @@ To post: nothing. Head pushed: `4e986e339a`; nothing unpushed. No run of mine is
 - [git] #9734's head moved at 13:35Z to `bf7cbe637b4b`: one commit over `942e1ef43899`, one test file, no move. The runs use `942e1ef43899`.
 
 Not established: the result of any branch but the join; every merge between carried results. The entry by 14:45Z.
+
+
+## ADDRROW2, Fri 13 Nov 13:59Z: the join's tip is MERGED into my branch (`d5889c79d6cdd6ab7b38fc4984453dec78bda5e7`; `RowUnlinked.lean` there: COMPILED over the join's files, `r20261113-133857-2491`, rc 0); on a scratch merge with GATHER's head the hypothesis is DELETED and `RowUnlinked.lean`: COMPILED with no hypothesis (`r20261113-134107-b389`, rc 0) (`cursor/proofs-addrrow2-unlinked-scratch-681e` at `dfedb8cd3f76eee28802d9cd56565b664b6106d4`).
+
+**In plain words.** Your 13:29Z said yes to the merge and asked for one try over GATHER's clause. Both are done. My branch now holds the join's tip, and the file with the named hypothesis compiles over the join's files. On a scratch branch that also holds GATHER's head, the hypothesis is gone: GATHER's lemma takes its place, and the row fact and the address premise are stated with "the wires are the derived ones" where they had the condition on the wires, and with nothing else new. It compiles, with the siblings check and no extra axiom. With the held-copies file, that equation is a fact of the form's own copies, so on that scratch tree the condition on the wires is no longer a premise of the address premise at those copies.
+
+Clock: `date -u` read 13:59Z when I wrote this. Mailbox: your 13:29Z (`d534a5fcf374`), by the hook at 13:36Z and in the mailbox file; nothing newer [run: `git show` of the mailbox at 13:59Z].
+
+**1. The merge of the join's tip into my branch** [run: `git merge`, no conflict].
+- `cursor/proofs-addrrow2-5e1b` is now `d5889c79d6cdd6ab7b38fc4984453dec78bda5e7`, a merge commit of `e97aee1794` and the join's tip `4e986e339ad24a9885d38ac61c10199bd460d4fd` (fetched at 13:37Z; still the 12:31Z tip).
+- What my branch has that the join's tip has not [run: `git diff --stat` of the two]: the file `AddressFacts/RowUnlinked.lean`, its root's line in `security/Proofs/lakefile.toml`, and its line in `security/Proofs/lean-audit.json`'s `roots`. The lock's merge driver also reordered `roots`: the list is the join's 326 and mine, 327, none twice.
+- **Verdict on the merged head** [run: `r20261113-133857-2491`, vy-nebius-cpu-14, rc 0, at `d5889c79d6`]: "lean exit 0 in 1033 s" (most of it the build of the join's files below it); siblings clean; "none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". No warning on the file. This is the file with the hypothesis `ReadersUnlinked` still in.
+- On my VM, on the merged tree [run]: `pytest tests/test_lean_packages.py tests/test_boundaries.py tests/test_tree.py tests/test_lean_vocabulary.py tests/test_doc_paths.py`: 119 passed. The two tests that failed on my branch before (my 13:10Z item 5) pass now. `tools/verity/check/public_boundary.py` prints the same lines as on the join's tip.
+
+**2. The scratch merge with GATHER's head, and the try** [run: `r20261113-134107-b389`, vy-nebius-cpu-8, rc 0, at `dfedb8cd3f`].
+- Branch `cursor/proofs-addrrow2-unlinked-scratch-681e`, pushed nowhere else. Two commits on my head `d5889c79d6`: the merge of GATHER's `faaa93a07807665e57d3b50fc155147a3bd465c5` (`9ca5b19ea9`), then the change to `RowUnlinked.lean` (`dfedb8cd3f76eee28802d9cd56565b664b6106d4`).
+- The merge had the one conflict you named, `benchmarks/one_stage/a5.py`; I took GATHER's file whole [run: the merged file is the same as at `faaa93a078`]. No other conflict.
+- The change: `AddressRow.ReadersUnlinked` is deleted, and the argument `hcl` is gone from all five theorems. `CheckedRun.wiresUnlinked_of_ok (hr : r.Ok h) : wiresUnlinked h = true` now ends with `have hl := Spot.SecondStage.wiresOk_unlinked hdes.2 (w := w) hmem` and `exact Option.isNone_iff_eq_none.2 hl`. The other four are as before without `hcl`: `CheckedRun.wiresChecked_of_ok (hw) (hr)`, `AddressRow.ownLeaves_of_derived (hW) (hw)`, `rowFact_of_derived (hW) (hna) (hp) (hK) (hw)`, `addressesConnected_of_derived (hWf) (hna) (hp) (hK) (hw)`, where `hw : h.wires = SecondStage.replayWires P key`.
+- **Verdict: "lean exit 0 in 432 s"; siblings clean; "none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".** No warning on the file. The build below it includes `SecondStage.lean` with GATHER's clause, `InsideOf.lean` and `RowLeaves.lean`, so those three compile on this merge too.
+- On my VM, on the scratch tree [run]: the same five test files, 119 passed.
+
+**3. What this gives at the form's own copies** [derived; each piece is compiled, the composition is not, since the pieces are on two branches].
+- On the scratch tree: `addressesConnected_of_derived hWf hna hp hK hw : AddressesConnected h`.
+- On the held-copies branch (`8be6ff6e48f4`): `hw` is `HeldOf.wires_of_heldOf hh` where `heldOf i it u = some h`, or `hm.wires` where `hm : HeldMatches i it h`.
+- So where ASSEMBLY has `HeldMatches i it h`, the address premise would be `addressesConnected_of_derived hWf hna hp hK hm.wires`, with no premise about the wires. I can write that one-line theorem (`addressesConnected_of_matches`) once the three are on one tree; say if you want it, and on which.
+
+**STOP RULE.** Nothing. No statement or named assumption of a `lean-audit.json` changed on any branch of mine; the lock's `roots` gained one line and was reordered by its merge driver. No verifier code changed by me: the scratch branch carries GATHER's change to `wiresOk` only through the merge of its head.
+
+**NEEDS.**
+1. **Coordinator: your word when GATHER's clause is on the join.** Then I merge that tip into my branch and make the deletion there, as the scratch has it (one commit, one run).
+2. **Coordinator: yes or no on item 3's one-line theorem**, and on which tree.
+
+**Not established.**
+- On my branch `RowUnlinked.lean` still has the hypothesis `ReadersUnlinked`, which is false of the join's `wiresOk`. The form without it is on the scratch branch only.
+- Item 3's composition is not compiled.
+- The scratch tree was compiled at `RowUnlinked.lean` and what it imports; I ran no other file of the merge of the join with GATHER's head.
+
+**Pushed.** `cursor/proofs-addrrow2-5e1b` at `d5889c79d6cdd6ab7b38fc4984453dec78bda5e7`. `cursor/proofs-addrrow2-unlinked-scratch-681e` at `dfedb8cd3f76eee28802d9cd56565b664b6106d4`, scratch. `cursor/proofs-addrrow2-heldwires-681e` at `8be6ff6e48f403091d70372e28260bffc9b255ae` and `cursor/proofs-addrrow2-programs-c41d` at `6dd041406c14e3ffa0589545936489df0605456c`, unchanged. Nothing is uncommitted.
+
+**Runs.** `r20261113-133857-2491` (my branch at `d5889c79d6`, vy-nebius-cpu-14): done, rc 0. `r20261113-134107-b389` (the scratch at `dfedb8cd3f`, vy-nebius-cpu-8): done, rc 0.
+
+**To post.** Nothing from me.
