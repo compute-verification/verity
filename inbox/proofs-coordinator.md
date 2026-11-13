@@ -122989,3 +122989,71 @@ In plain words. Pull request #9577 replaces one assumption about the H100 ("no p
 - Item 4, consequence: the new guarantees stay sound; they say nothing about a cost model with a program that leaves a declared unit blank or reads the oracle. The transfer needs less than `SimulatedBy`: credit of good tiles at least as large, at the adversary's own inputs. [derived]
 
 **Not established.** Item 1 (the conjecture over W1) is not rated: so far I ran only the request's own test file (2 passed in 3.12 s on my VM at `9ef197a2fca0`), whose tiles are 4 × 4 words at k = 1,024, not a 64 × 64 fragment. Item 3 is not rated: the clock lead rests on documents and on the card file, not on a timed loop, and I have not checked the sparse and FP16-accumulate rows or the memory effects. I did not check the lock records (`security/lean-audit.json`) beyond reading the diff, and I ran no full Lean check, only the two proof files and my probe. One earlier run of mine, `r20261113-051653-8d74`, failed on an error in my own probe's proof script and is superseded by `-1231`.
+
+## ASSEMBLY, Fri 05:46Z: at `792359daab` (`a4b0`), `GoodCase.lean` COMPILES ("lean exit 0 in 330 s"; "axiom probe: none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound") and `JoinedForm.lean` has NO verdict (its imports failed: "lake build …JoinedForm:deps exit 1 in 443 s"); the lock's roots are added (70 names, `7db836c5f0`, `b44cb8cc65`); the records run `r20261113-053539-c6ff` is NOT BACK (fetching its dependencies cold on cpu-14); STATEMENT CHANGE: `JoinsAt` has 26 fields, and a new top theorem `joinedCoupling` calls `majorityBound_opens`
+
+COINMAP: item 3 is yours. MAJORITY, ACCEPTS, SESSIONCOINS, STAGECOINS, HELDOF, RUNCOINS: a line each under item 5.
+
+In plain words: the piece that lets the join use STAGECOINS's theorems unchanged compiled. The join's last proof has not been read by Lean yet, because a file of COINMAP's it imports does not build. The lock now lists every two-stage file, so the audit will read them; the audit run is in progress. The join's top now goes one step further, to the leg's coupling, with MAJORITY's bound in it. Every statement at the form's accept is empty until the form accepts a play [relayed: your 05:12Z and 05:29Z].
+
+**1. `a4b0`** [run: `research fetch --all`, its `stdout.log`]. `r20261113-050456-a4b0`, vy-nebius-2, tree `792359daab`, done rc 0.
+- `GoodCase.lean`: "lean exit 0 in 330 s"; the probe line as in the title. Your 05:12Z condition on item 4 is met: `CoinsAgree … .second` is proved through `goodCase C JoinGood`, not carried.
+- `JoinedForm.lean` (then one file): "lake build +Proofs.Properties.Verity.SampledTwo.JoinedForm:deps exit 1 in 443 s". The failed imports: `CoinMapAgree` (19 errors at the join's old copy, `a36ddec487`) and STAGECOINS's `CoinBytes` ("(kernel) deep recursion detected", cured at `91de14e478`, which the join then lacked). No verdict on the file.
+
+**2. `r20261113-052107-100d`** [run] (vy-nebius-2, tree `43f6a7478d`, `JoinsAt.lean`), failed rc 1. Lake printed "Built" for each of: HISTORY's `DeviceOrder` (its first build I know of), CUT's `CutOrder`, SESSIONCOINS's `SessionDev` at `68faced794`, `CoinBytes` at `91de14e478`, `StageAlone`, `StageCut`, `FirstCoins`, `SecondCoins`, `Reached`, and mine (`JoinElems` as changed, `Joined`, `GoodCase`). A "Built" line is an elaboration with no error, not a probe. One import failed: "- Proofs.Properties.Verity.SampledTwo.CoinStages". So `JoinsAt.lean` has no verdict.
+
+**3. COINMAP: `CoinStages.lean`'s first build, 9 errors in 8 theorems, all inside proofs** [run: `100d`'s `stdout.log` lines 10558 to 10657].
+- `Leaves.reach` 106:4 "failed to create binder due to failure when reverting variable dependencies"; `leaves_relK` 141:43 and `coinByte_testBit` 383:2 "maximum recursion depth has been reached".
+- "unsolved goals": `devBits_first` 187:38 and 190:6, `devBits_second` 213:38 (both leave `?m = {…} ∨ ?m ∈ log`), `flatten_drop_const` 262:25, `toBytes_testBit` 357:106.
+- `src_extract` 434:41 "Tactic `rewrite` failed: motive is not type correct".
+- No error at a definition or a statement (`FreshWide`, `stageLocate`, `StageDraws`, `freshWide_play`, `size_le_fit_first`, `stageWidth_le_fit_second`, `devFirst_stage`, `devSecond_stage`).
+- **One line of your file changed on the join only** (`79f349b99c`): `CoinStages.lean` imports `CoinMapLaw` again, as before your `4bdc5f384c`, not `CoinMapAgree`. It reads none of `CoinMapAgree.lean`'s 37 declared names, and that file declares no instance, notation or attribute [run: `rg` over both]. With the import, it could not build before `law_freshA` and `coinMapHolds` do. Take the line on your branch and the two merge clean; if you want the import back, say so and I revert.
+- Your try17 `r20261113-033625-67ea`: "2 of its 31 theorems failed: … law_freshA, … coinMapHolds" (381:6 maximum recursion depth; 612:40 "synthesized type class instance is not definitionally equal", `instDecidableAnd` against `Classical.propDecidable`), "lean exit 1 in 2241 s" [run].
+
+**4. The lock's roots** (your 05:29Z and 05:37Z) [run].
+- `7db836c5f0`: 69 names appended at the end of `roots` in `security/Proofs/lean-audit.json`, one a line: the 59 files under `SampledTwo/` and `Verity/Majority.lean`, and 10 more files no root reached by imports, so the audit would fail on them as orphans: HELDOF's `Flock.SpotFlock.HeldOf`, `HeldOfCheck`, `HeldOfFiles`, `HeldOfRun`, and `Flock.SpotFlock.RunsAs`, `RunsAs.Coins`, `RunsAs.Played`, `RunsAs.Round2`, `RunsAs.RoundTwoOf`, `RunsAs.Within`. `b44cb8cc65`: `SampledTwo.JoinedCoupling` (new, item 6). Nothing else in the lock changed (`git diff --stat`: one file, roots only). 248 roots, none twice, none without a file.
+- The script, kept and rerun after each merge: `/cursor/stores/self/assembly/lock_roots.py` (my persistent store, outside the tree). It reads `git ls-tree HEAD` and each file's imports, adds what is missing, and `--check` exits 1 when a name is missing. After ACCEPTS's merge (`3e31195391`) it added nothing.
+- **The records run** `r20261113-053539-c6ff` (`--on auto`, vy-nebius-cpu-14, the README's line: `lean_changed.py --records security/Proofs --update`), at `7db836c5f0`. Lean slot `build/1` since 05:37Z; it printed "security/Proofs: its dependencies are fetched cold, once for this tree". It audits security/Proofs, then security, then security/Properties. No verdict yet.
+- **What it can print** [read: `check.py` at about line 5786: a step with a nonzero exit appends one failure and returns]. At that head `CoinStages` and `CoinMapAgree` do not build, and so neither do `JoinsAt`, `JoinedCoupling` and `JoinedForm`. So I expect one line, the build's failure, naming those modules, and no orphan lines or audit lines for the other files [derived]. A PASS needs COINMAP's two files, or (NEEDS 2) an audit-only branch without the files that cannot build.
+
+**5. Merged since 05:08Z** [run: `git merge-tree` before each]. All clean; the form on the join is untouched.
+- ACCEPTS `2d2bf8a4d3`, the tip `66e1ede150`, then `ddbac96a10` (`3e31195391`; your 05:37Z, never `bb06c823bc`). ACCEPTS: `playAccepts` is now your nine premises, as fields (item 6).
+- MAJORITY `a7cacd9270`, then `eb68ce804e` (`38aa9c570d`). MAJORITY: `majorityBound_opens` is called in `JoinedCoupling.lean`; `opens` is a field, and no `exists_opensBy` is used anywhere on the join.
+- SESSIONCOINS `68faced794`; `JoinElems.lean` dropped `usedOf_congr` and `fitOf_congr` for your `SessionCoins.fitOf_congr`. `firstTreeless` waits for `523c` to pass, as you ruled.
+- STAGECOINS `91de14e478`. Your 05:31Z weakening is already in: `hFirst` and `hSecond` go through `coinsAgree_mono (fun o (hg : JoinGood o) => hg.1.2) …` before `coinsAgree_goodCase`. `b637342d9f` waits for `1915`.
+- HELDOF `488e6131f4` (its `28f4`: `HeldOfRun.lean` "lean exit 0 in 304 s", "none of its 21 theorems uses an axiom beyond …").
+- CUT `e242db0feb`; HISTORY's `19734e8d9f` alone; COINMAP `21830e1f9e`; OWNREADS `9179aaea5a`.
+- RUNCOINS: `RunsAs/Within.lean` (came with HELDOF's line) and ACCEPTS's `SampledTwo/Within.lean` both sit on the join; ACCEPTS's 05:23Z says you delete yours.
+
+**6. The statements** [read; none compiled].
+- `JoinsAt.lean`: `joinedOfLaw … (hHolds : CoinMap.CoinMapHolds) (h : JoinsAt …) : ProjectionBound …`. It does not import `CoinMapAgree.lean`. `JoinedForm.lean`: `joinedForm … (h : JoinsAt …) := joinedOfLaw … CoinMap.coinMapHolds h`, statement as in my 05:08Z item 3. So the 330 lines of the join's proof wait only on `CoinStages.lean`.
+- `JoinedCoupling.lean` (new): `joinedCouplingOfLaw V k A θ F x C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' s Pt dd readX openOf dColl hHolds (h : ∀ c σ, CouplesAt …) : CouplingTargetTwo V k A θ F fun c σ => joinBound … + bindBound …`. It is `coupling_of` with `joinedOfLaw` as the projection's bound and `majorityBound_opens` as the majority's, both at the join's frame. `CouplesAt` is one structure a commitment and strategy: `joins` (`JoinsAt`), `scope`, `extract`, `parse`, `partition`, `two`, `units`, `caps`, `opens`, `collisionResistant`, `delta`. `JoinedForm.lean` adds `joinedCoupling := joinedCouplingOfLaw … CoinMap.coinMapHolds h`. The statement `x` and the majority's data vary with `c` and `σ`; the case, readings, families and deployment are fixed.
+- `JoinsAt`'s 26 fields: `ledgerInOrder`, `distinctFamilies`, `draws₁`, `draws₂`, `firstReads`, `orderShown`, `firstDrawn`, `sessionMatches`, `interiorLogged`, `msgOpens`, `digestBefore`, `heldAt`, `twoHolds`, `recordsHeldAt`, `recordsRead`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun`, `sessionMsgs`, `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`. `sourcesFit` left (ACCEPTS's `sourcesFit A C`); `playAccepts` became its nine premises (`playAccepts_form`).
+
+**7. One try at a time** [run]. `a4b0` ended 05:20Z; `100d` ran 05:21Z to about 05:33Z; `c6ff` from 05:35Z. The probe branch `cursor/proofs-join-probe-42b8` (`d39b5c3007`: the join at `bf27c5f837` with `CoinStages.lean`'s eight failing proofs replaced by `sorry`, "PROBE ONLY, never to merge") has had no try.
+
+**8. Loops** [run: `uptime -s`]. The machine was replaced at 05:33:31Z. This loop made `~/wt/.pen` at 05:33:56Z. The other loop (the one that wrote 05:08Z) found it and stopped, leaving its notes and your 05:37Z message, which only it had received, in `~/wt/.pen/from-other-loop.md`. This entry carries its work: items 1 to 3 and the merges to `853e655a69` are its. Lost with the old machine and redone here: the MAJORITY merge and the roots edit.
+
+### STOP RULE
+Not reached. The one lock edit is `roots` (your 05:29Z). No guarantee, assumption, `unwitnessed`, `open` or `exempt` entry; no `Sampled.lean`; no change to the form; nothing listed.
+
+### NEEDS
+1. COINMAP: the eight theorems of `CoinStages.lean` (item 3) and the two of `CoinMapAgree.lean`, then the head. COINMAP's branch has not moved since 03:36Z and its last entry is 04:36Z: coordinator, resume it with item 3 if it is between turns.
+2. Coordinator, one line: when `c6ff` prints the build's failure, may I run the records run instead on an audit-only branch, the join's head without `CoinStages`, `CoinMapAgree`, `JoinsAt`, `JoinedCoupling`, `JoinedForm` (their lakefile and lock roots removed, named PROBE like the other), so the audit reads the 55 others? It would show their PASS or their lines; it would not count as the join's.
+3. Coordinator: when may the join take TWOLEG's tip (the key change)? CUT's `CutAccept.lean` and HISTORY's whole head come with it, and then `firstReads` and `orderShown` leave `JoinsAt`.
+4. TWOLEG, when it compiles: `Shown.paramsOfJson_families` for `distinctFamilies`; the `label = ℓ` half of `draws₁`, `draws₂`.
+
+### To post
+Nothing.
+
+### Not established
+- **The device's ledger** (`ledgerInOrder`, HISTORY's `Sessions.LedgerInOrder`): taken as a hypothesis; a lemma of the modelled device after soundness's device pull request (PRF-490). In no lock entry.
+- `JoinsAt.lean`, `JoinedCoupling.lean`, `JoinedForm.lean`: not compiled. `GoodCase.lean` compiled at `376e6a23bb`; at `bf27c5f837` I removed two proof alternatives Lean reported as never reached, and that text built in `100d` as an import (a "Built" line, no probe).
+- `CoinStages.lean` and `CoinMapAgree.lean` do not build, so `freshWide_play`, `size_le_fit_first`, `stageWidth_le_fit_second`, `devFirst_stage`, `devSecond_stage` and `coinMapHolds` are unproved.
+- No records audit has read any two-stage file; `c6ff` is out.
+- The fields, each its owner's: `distinctFamilies`, the families' half of `draws₁`, `draws₂`, `recordsRead` (TWOLEG); the one-root half of `draws₁`, `draws₂` (CUT with HISTORY's device); `firstReads`, `orderShown` (CUT's `CutAccept.lean`, not compiled); `firstDrawn`, `sessionMatches` (TWOLEG, REDRAW); `interiorLogged` (SESSIONCOINS, to become `firstTreeless` after `523c`); `msgOpens`, `digestBefore`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions' workers); `heldAt`, `twoHolds` (HELDOF); `recordsHeldAt` (HELDOF's names, ACCEPTS's rest); `sessionMsgs` (nobody's yet); `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer` (the instance's). `CouplesAt`'s majority fields are MAJORITY's and the instance's; `scope` and `delta` are the deployment's.
+- Every statement at the form's accept is empty until the form accepts a play, and the join lists nothing (soundness, 05:02Z).
+- An earlier period's genuine challenger signature still makes the cut's forger term `⊤`.
+- No test suite or package check has run on the join.
+
+**Heads** [run]: `cursor/proofs-join-42b8` at `72c589ad29`, nothing unpushed; `cursor/proofs-join-probe-42b8` at `d39b5c3007`. The pen is this loop's (`~/wt/.pen`, 05:33:56Z). Out: `r20261113-053539-c6ff` (records, cpu-14), expected end about 06:30Z [guess: a cold dependency fetch, then a build that stops at `CoinStages`].
