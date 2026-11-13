@@ -215,6 +215,7 @@
   "Proofs.Flock.SpotFlock.Honest.Sits",
   "Proofs.Flock.SpotFlock.Honest.Any",
   "Proofs.Flock.SpotFlock.Honest.AtHeldOf",
+  "Proofs.Flock.SpotFlock.Honest.Checked",
   "Proofs.Flock.SpotFlock.SampleBelow",
   "Proofs.Properties.Verity.SampledTwo.CoinPrefix",
   "Proofs.Properties.Verity.SampledTwo.CutFirst",
@@ -334,6 +335,8 @@
   "Proofs.Properties.Verity.SampledTwo.RefsOfSent",
   "Proofs.Properties.Verity.SampledTwo.RoundsRise",
   "Proofs.Properties.Verity.SampledTwo.PrefixFixed",
+  "Proofs.Properties.Verity.SampledTwo.SessionAsk",
+  "Proofs.Properties.Verity.SampledTwo.LastSlot",
   "Proofs.Flock.SpotFlock.HeldOfWires"
  ],
  "exempt": {

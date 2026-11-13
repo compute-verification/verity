@@ -29,9 +29,10 @@ from __future__ import annotations
 import difflib
 from typing import Any
 
-from verity_vllm.properties.record import digest_of, seal as seal_record
+from verity_vllm.properties.record import REGISTRY, digest_of
+from verity_vllm.properties.record import seal as seal_record
 
-SCHEMA = "verity-vllm/norm-tap-exactness/v1"
+SCHEMA = REGISTRY["norm_tap_exactness"].schema
 RECORD = "norm_tap_exactness.json"
 KERNELS = ("cuda", "triton")
 #: two scale-buffer fills (NaN payloads the kernels never write): a word both launches leave at their fill was not written
@@ -80,22 +81,29 @@ def _scale_gate(kernel: str, call: Any) -> int:
 def ir_scale(kernel: str, N: int, eps: float, x: list[int], res: list[int] | None, w: list[int]) -> int:
     """The circuit's scale word of one row: evaluate `RMSNormFusedCuda_v2{N,EPS}` (x, res, w) or `RMSNormTriton_v1{N,EPS}` (x, w) as a
     standalone Call and read its scale gate from the trace."""
-    from verity.circuits.evaluation.reference import standalone_call
+    # inside the function: these load numpy, and importing this module must not
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
+    from verity.circuits.evaluation.reference import standalone_call
     from verity.definitions.registry import b1
 
     spec = bind(b1.RMSNormFusedCuda if kernel == "cuda" else b1.RMSNormTriton, N=N, EPS=eps)
     prog, call = standalone_call(spec)
+    operands = [int(v) for v in x]
+    if kernel == "cuda":
+        if res is None:
+            raise TypeError("RMSNormFusedCuda_v2 reads a residual; res is None")
+        operands += [int(v) for v in res]
+    operands += [int(v) for v in w]
     t: dict[int, int] = {}
-    evaluate_call(prog.circuit, call, [int(v) for v in x] + ([int(v) for v in res] if kernel == "cuda" else []) + [int(v) for v in w], trace=t)
+    evaluate_call(prog.circuit, call, operands, trace=t)
     return int(t[_scale_gate(kernel, call)])
 
 
 def twin_scales(kernel: str, x: Any, res: Any, w: Any, eps: float) -> Any:
     """Every row's circuit scale word by the vectorised twin (uint32): `derived_rows.rmsnorm_fused_v2_rows(...)["s"]` / `rmsnorm_triton_rows(...)["inv"]`."""
+    # inside the function: these load numpy, and importing this module must not
     import numpy as np
-
     from verity.definitions.numerics import derived_rows as D
 
     if kernel == "cuda":
