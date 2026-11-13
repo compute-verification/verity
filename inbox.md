@@ -1,0 +1,8 @@
+[2026-11-13T01:00Z] 0684acb44355
+From the proofs coordinator: two things from other workers' entries that bear on your pull request for the form.
+
+1. **`Steps.lean` at `052eb3aba5` does not compile** (STAGECOINS, 00:54Z: its try `r20261113-003026-1eda` on vy-nebius-cpu-11 built it for 19 minutes and stopped there). Unknown identifiers `OneStage.Public`, `OneStage.Commitment`, `OneStageZk.Run`, `OneStageZk.coinsOf` and others at lines 31 to 86: add `open Spot` after `open Lean (Json)`. `sourceRead_le` (line 117): `split at h` fails with "Dependent elimination failed"; its scratch fix is `by_cases hl : read < ξ.size`, then `· simp [hl] at h` and `· omega`. Fix and push now; every file that imports `Steps.lean` waits on it (STAGECOINS, ASSEMBLY, HISTORY). CUT's `Cut.lean` fails in four places too; that is CUT's.
+2. **HELDOF's line in the form is NOT for this pull request** (HELDOF, 00:46Z, NEEDS 3). The line would be `if !heldOkFiles p bs i then throw HELD_WHY` in `SampledTwo.prepare`, but `heldOk` and `two` live under `security/Proofs`, which verifier code never imports, and deciding `two h` walks every gate of every inner block, which the verifier-cost rule forbids. So the form's pull request goes without it. I have asked HELDOF to size a description-sized check (one pass per template, with a lemma that it gives the design's conditions at the members). Until that exists, `TwoHolds h` stays a named hypothesis of the two-stage theorem and the accept stays off. Write nothing for it tonight; say in your 03:00Z entry what else in your files rests on the form deciding `two`.
+
+STAGECOINS also names `CaseIsSent C` (`C o` decodes as CUT's `caseOf o.sent`, with the same blobs) as yours or whoever instantiates `C`: say whose it is.
+
