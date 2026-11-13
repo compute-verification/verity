@@ -16,27 +16,25 @@ from types import SimpleNamespace
 import pytest
 
 from verity.protocols.certifier.verifier import compile_slice as CS
-from verity.protocols.certifier.prover import compile_slice_v2 as V2, compile_slice_v3 as V3
-from verity.protocols.certifier.prover import compile_slice_v4 as V4, compile_slice_v5 as V5
+from verity.protocols.certifier.prover import cache_step_v3 as V3S, compile_slice_v4 as V4, compile_slice_v5 as V5
 from verity.protocols.certifier.verifier import replay_chain as RC
 from verity.protocols.certifier.verifier.head_check import ands
 from verity.circuits import boolean as BL
 
 
-def _x(f, f3):
+def _x(f):
     st, sl = f()
-    st3, _ = f3()
-    return SimpleNamespace(st=st, S=SimpleNamespace(**st), sl=sl, st3=st3, S3=SimpleNamespace(**st3))
+    return SimpleNamespace(st=st, S=SimpleNamespace(**st), sl=sl)
 
 
 @pytest.fixture(scope="module")
 def synth():
-    return _x(V5.demo, V3.demo)
+    return _x(V5.demo)
 
 
 @pytest.fixture(scope="module")
 def asynth():
-    return _x(V5.demo_async, V3.demo_async)
+    return _x(V5.demo_async)
 
 
 def _agrees(st: dict, slices: list[CS.Slice]) -> list:
@@ -230,7 +228,7 @@ def test_every_advice_is_its_reference(request, which):
 
 
 def _window(rng: random.Random, AS: int) -> CS.Slice:
-    """Three arrivals of 4 to 16 tokens, most sharing a first block, and five random decisions (CompileSlice_v3's
+    """Three arrivals of 4 to 16 tokens, most sharing a first block, and five random decisions (CompileSlice_v4's
     tests')."""
     base = [rng.randrange(1, 15) for _ in range(4)]
     arrivals, tokens = [], []
@@ -242,9 +240,14 @@ def _window(rng: random.Random, AS: int) -> CS.Slice:
     return CS.Slice(tuple(arrivals), tuple(rng.randrange(2) for _ in range(5)), 5, tuple(tokens))
 
 
+def _evicts(ref) -> bool:
+    """Whether the reference's window evicts: an alloc of its stream takes a block whose key is cached and clears it."""
+    return any(s.use and s.tag == V3S.TAGS["K"] and s.v and not s.w for s in ref.scan.stream.slots)
+
+
 @pytest.mark.parametrize("which", ["synth", "asynth"])
 def test_random_windows_under_eviction(request, which):
-    """CompileSlice_v3's 40 random windows of the demo's class (26 synchronous and 13 asynchronous evict): the circuit
+    """CompileSlice_v4's 40 random windows of the demo's class (26 synchronous and 13 asynchronous evict): the circuit
     accepts every one with the reference's rows and witness, CompileSlice_v4's rows, and refuses each with another
     window's ``srv`` and ``cout`` where they differ."""
     x = request.getfixturevalue(which)
@@ -254,8 +257,7 @@ def test_random_windows_under_eviction(request, which):
     assert all(refs)
     for sl, ref in zip(slices, refs):
         _as_v4(x, sl, ref)
-    S2 = SimpleNamespace(**V3._v2(x.st3))
-    assert sum(any(any(w[3]) for w in V2.scan(S2, sl).wit) for sl in slices) == (13 if x.S.AS else 26)
+    assert sum(_evicts(ref) for ref in refs) == (13 if x.S.AS else 26)
     swapped = [V5.arguments(x.S, sl, srv=refs[j - 1].srv, cout=refs[j - 1].cout) for j, sl in enumerate(slices)]
     want = [V5.ACCEPT & ~(0x8 * (refs[j - 1].srv != r.srv)) & ~(0x10 * (refs[j - 1].cout != r.cout))
             for j, r in enumerate(refs)]

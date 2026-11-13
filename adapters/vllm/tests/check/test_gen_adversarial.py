@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.properties import census
-from verity_vllm.check import gates
 from tests.check import adversarial as G
+from verity_vllm.check import gates
 from verity_vllm.observe.fold.resolver import Transparent, spec_module
+from verity_vllm.properties import census
 
 
 @pytest.fixture(scope="module")

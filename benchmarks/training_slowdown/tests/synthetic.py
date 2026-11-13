@@ -160,18 +160,21 @@ def run_job(root: Path, *more: str, split: str = "search", read: tuple[int, ...]
 
 
 LORA = {"targets": "blocks.0.wq.weight,blocks.0.w_up.weight", "rank": 2, "alpha": 4.0, "lr": 1e-2}
-#: the whole model, one block, LoRA's adapters, one block's average, and one block under Muon in two micro-batches
+#: the whole model, one block, LoRA's adapters, one block's average, one block under Muon in two micro-batches (its
+#: Newton-Schulz products cast to bf16), and one block under Shampoo (its factors' products and roots in f32)
 JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
         "block": {"dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2}},
         "lora": {"route": "lora", "dials": LORA},
         "ema": {"route": "ema", "dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2, "ema_decay": 0.5}},
-        "muon": {"dials": {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "micro_batches": 2}}}
+        "muon": {"dials": {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "micro_batches": 2}},
+        "shampoo": {"dials": {"trainable": "blocks.0.*,norm", "opt": "shampoo", "lr": 1e-2}}}
 
 
 def job_counted(root: Path, steps: int, math: bool = False, **over):
     """A job's steps through the harness's own loop (`run.train` under `run.Harness`), in this process, under the
-    attention kernel torch picks as a job runs (a fused one) or under the math kernel: the counter's record, and what
-    the job's trace is taken from (its config, route, model and optimizers)."""
+    attention kernel torch picks (a fused one, a job's on a GPU) or under the math kernel (a job's on a CPU,
+    `run.cpu_attention`): the counter's record, and what the job's trace is taken from (its config, route, model
+    and optimizers)."""
     reg = tiny_registry(root / "reg")
     registry = starts.registry(reg)
     cfg = config.load(write_config(root / "a.toml", budget={"steps": steps, "batch": 4}, **over), registry)

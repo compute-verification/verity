@@ -75,7 +75,7 @@ BASE, CIRCUITS, COMMITMENTS = ("verity/circuits/base/Base/", "verity/circuits/le
                                "verity/commitments/lean/Commitments/")
 PROTOCOL = "verity/protocols/interface/CoreProtocol/Protocol.lean"
 REQ, REQ_PY = "verity/definitions/requirement/CircuitRequirement.lean", "verity/definitions/circuits/requirement.py"
-SITE_LEAN, SITE_PY = "verity/protocols/interface/CoreProtocol/Site.lean", "verity/hardware/site/__init__.py"
+SITE_LEAN, SITE_PY = "verity/protocols/interface/CoreProtocol/Site.lean", "verity/device.py"
 #: Each concept's canonical declarations: at most one in Core or Hash, one in code Lean and one in Python, and when a concept
 #: has both code Lean and Python, ``MIRRORS`` holds the two together. An empty entry: no canonical yet, so every hit is known.
 CANONICAL: dict[str, tuple[str, ...]] = {
@@ -771,7 +771,7 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`, not yet in Core): becomes a view of its head (vllm)",
     "adapters/vllm/verity_vllm/query/units.py::Program": "homonym, what a query reads: rename (circuits)",
     # tools/
-    "verity/configuration/config/verity_config/settings.py::Registry":
+    "tools/config/verity_config/settings.py::Registry":
         "homonym, one distribution's settings from the environment: rename (ci)",
     "tools/move/layout.py::Layout": "homonym, a layout move's directory map: rename (ci)",
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
@@ -779,7 +779,7 @@ KNOWN: dict[str, str] = {
     # verity/core/
     "verity/commitments/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
-    "verity/configuration/deploy/party.py::Record": "homonym, a party's log entry: rename (proofs)",
+    "verity/party.py::Record": "homonym, a party's log entry: rename (proofs)",
     "verity/protocols/certifier/device/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes it (deleted; it already requires `network_check`) (network-accounting)",
     "verity/protocols/certifier/device/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
@@ -788,8 +788,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "verity/protocols/certifier/verifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
-    "verity/protocols/certifier/prover/cache_step_v2.py::Op":
-        "homonym, a cache call's inputs: rename (network-accounting)",
     "verity/protocols/certifier/device/program/lean/NetworkCertifier/Run.lean::NetworkCertifier.Program":
         "homonym, a Program's egress prediction: rename (network-accounting)",
     "verity/protocols/certifier/device/program/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
@@ -971,7 +969,7 @@ KNOWN: dict[str, str] = {
     "verity/commitments/windows/interface.py::Window":
         "duplicate of the execution block (no canonical yet): becomes the builder's output for it (proofs)",
     # verity/
-    "verity/settings.py::Registry": "homonym, one distribution's settings from the environment: rename (proofs)",
+    "tools/config/verity_config/verity_settings.py::Registry": "homonym, one distribution's settings from the environment: rename (proofs)",
 }
 
 _REASON = re.compile(r"^(?:duplicate of .+?: becomes .+|homonym, .+?: rename.*) \(([\w-]+)\)$")
