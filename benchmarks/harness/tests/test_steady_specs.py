@@ -247,7 +247,7 @@ def test_the_setup_builds_the_prover_and_leaves_the_environment_a_point_runs_in(
     assert path.split(":")[0] == f"{toolkit}/bin", "the toolkit the prover is built with is first on PATH"
     assert libraries == f"{toolkit}/lib64", "the toolkit's own libraries, and no compat library over the node's driver"
     assert pythonpath.split(":") == [
-        f"{root}/benchmarks/harness", f"{root}/verity/configuration/config", str(root), f"{root}/tools/research/src",
+        f"{root}/benchmarks/harness", f"{root}/tools/config", str(root), f"{root}/tools/research/src",
         str(root), f"{root}/verity/protocols/flock/prover/python", f"{root}/adapters/vllm",
         f"{root}/tools/verity/circuit_check/src", f"{root}/benchmarks/numerical/python"]
     setup = launcher.run_dir / "out" / "setup"
