@@ -72,10 +72,9 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   on the host, never leaving it. `bw_party`'s registration is the host's, never the caller's: with `--pous-session SID`, the
   setup the block challenger kept for its PoUS session SID (`<root>/parties/pous/setups/SID.json`, the store that session
   bound), with `--fixture` the fixture store's in the pinned tree (`PARTY_FIXED`), and with neither the gate refuses it,
-  so a forced command that drops the caller's words can't hold a store the caller didn't name. `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`.
-  `party_log wipe|pous|bw [LOG]` reads the sessions and each one's stdout as the host kept it, on the host only
-  (`sudo vy-verifier-gate party_log ...`): the gate refuses it over ssh to every key, named or not, since a party's log
-  holds what its device received and signed. A lane
+  so a forced command that drops the caller's words can't hold a store the caller didn't name. `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
+  `party_log wipe|pous|bw [LOG]`, to root on the host alone (`PARTY_LOG_REFUSED` over ssh, to every key), the sessions and each one's stdout as the host kept it (its signed t0 and
+  t1). A lane
   never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
   count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
