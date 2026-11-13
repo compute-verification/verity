@@ -1,0 +1,309 @@
+# Pearl's retired "debit" and "cap" in the code's names: what `tools/move/rename.py --map
+# tools/move/inert_work_names_map.toml` renames, GLOSSARY.md's row of Pearl's older names to its terms, in paths,
+# modules, Python names and the Lean.
+#
+# Names. Pearl's debit is the inert work the replay prices (Lean's `Debit` and `debitOf`), so `debit` becomes
+# `inert_work` as a name or one part of one (`InertWork`, `inertWorkOf`, `INERT_WORK`, `inert_work_units`), and takes no
+# plural. Pearl's cap is two things, and each name takes the one it names: the inert-work share ι, which is ρ itself
+# (`Cap1000` is ι = 1/1,000, `OfCap400` 1/400, `NAME_CAPS`, `row_cap_at`), becomes `inert_share`, and
+# `CENSUS_ROW_CAP`, a row's share as a multiple of ρ, `CENSUS_ROW_INERT_SHARE_MULTIPLE`; the inert-work bound, ρ times
+# a credit, which a tile or a row must not pass (`capOK`, `tile_cap`, `overCapTiles`, the circuit of
+# `prover/circuit/cap.py` and the Lean `Pouw.PearlC.Cap` about it), becomes `inert_bound`. In a name that holds debit,
+# cap is the bound beside it: `debit_over_cap` becomes `inert_work_over_bound`, and `_debit_cap`, which returns both,
+# `_inert_work_and_bound`. An unneeded element is an inert element (`unneeded_positions` becomes `inert_positions`), and
+# `forming_elements`, which counts them, `inert_elements`. A test name's verb "caps" becomes "bounds".
+#
+# Only names are here. The bare words, `cap` and `debit` as a local, a parameter or an attribute (`Device.cap`) and in
+# prose, are left to a prose map and a tokens map after it: the names' form would misspell a sentence, and a bare local
+# renamed in one form and not another would break the code. The cap circuit's module is renamed in the files that
+# import it, in the forms they use it in, and the share's constants `CAP` and `CAPS` in the files that define and read
+# them ([[words_in]]).
+#
+# Kept bytes ([keep]):
+# - a record's keys (`debit_exact`, `forming_elements`, `max_debit_over_cap`, the census's and the k256 gate's columns,
+#   a certificate's `census_row_cap`): kept runs, the committed vectors and the readers outside the tree carry them, so
+#   a key changes only as a new format version, with a reader of both spellings;
+# - names staged into a circuit (`Pc8TileCap` and the other `Pc8…Cap…` Definitions), which circuit-check pins;
+# - the Lean store's pin names (`pearlCGamma…`), which the price-twin table reads as the store spells them;
+# - a word inside another name it doesn't rename: `PEARLPLUS_OVER_CAP`, and the caps of Recursion
+#   (`capCheck_of_check`), Accounting (`coinPasses_overCap`) and a proof-throughput workload;
+# - the Glossary's row of older names.
+#
+# Not renamed, so not here: Pearl+'s `over_cap`, `--over-cap`, `over_cap_draws` and `PEARLPLUS_OVER_CAP`, a verdict's
+# key, the CLI flag and the variable that sets it, which its Lean verifier and the stored verdicts share; and the names
+# of a kernel source (`debit_sm90` and its build logs, the kernels `debit_fwd`, `debit_bounds` and `debit_flags`, which
+# a launch names, and `DEBIT_CUBIN`).
+#
+# Left as they are ([rewrite] exclude): the retired-terms lint, which names the retired words as the words, this
+# directory's maps and toy fixtures, research's store vocabulary and `moves.json`, fixtures, whose bytes tests pin, and
+# kernel sources (`*.cu`, `*.cuh`, `*.c`, ...), whose rename a build must show leaves every cubin as it was.
+
+
+[[words_in]]                              # the cap circuit's module, as the files that import it use it
+files = ["verity/protocols/pouw/prover/circuit/pc8.py",
+         "verity/protocols/pouw/prover/circuit/leaves.py",
+         "verity/protocols/pouw/prover/circuit/cap.circuit-check.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_cap.py",
+         "verity/protocols/pouw/verifier/tests/test_circuit_leaves.py",
+         "verity/protocols/pouw/verifier/tests/test_cap_lean.py",
+         "verity/protocols/pouw/verifier/tests/circuit_fixtures.py",
+         "benchmarks/pouw/tests/test_pearlc_cap_agreement.py"]
+
+[words_in.words]
+"cap = pytest.importorskip" = "inert_bound = pytest.importorskip"
+"cap.Pc8CapRowDigestDef"    = "inert_bound.Pc8CapRowDigestDef"
+"cap.Pc8CapRowTallyDef"     = "inert_bound.Pc8CapRowTallyDef"
+"cap.Pc8CheckCapDefV2"      = "inert_bound.Pc8CheckCapDefV2"
+"cap.Pc8CallCapDefV2"       = "inert_bound.Pc8CallCapDefV2"
+"cap.Pc8CheckCapDef"        = "inert_bound.Pc8CheckCapDef"
+"cap._cap_constants"        = "inert_bound._inert_bound_constants"
+"cap.unit_templates"        = "inert_bound.unit_templates"
+"cap.Pc8CallCapDef"         = "inert_bound.Pc8CallCapDef"
+"\"PearlC\" / \"Cap\""      = "\"PearlC\" / \"InertBound\""
+"cap.certificates"          = "inert_bound.certificates"
+"cap.CHUNK_WORDS"           = "inert_bound.CHUNK_WORDS"
+"cap.check_shape"           = "inert_bound.check_shape"
+"cap.STRIP_BITS"            = "inert_bound.STRIP_BITS"
+"cap.STRIP_TAIL"            = "inert_bound.STRIP_TAIL"
+"cap.SALT_DEAD"             = "inert_bound.SALT_DEAD"
+"cap.flag_bits"             = "inert_bound.flag_bits"
+"cap.templates"             = "inert_bound.templates"
+"cap.ROLE_OF"               = "inert_bound.ROLE_OF"
+"cap.WINDOWS"               = "inert_bound.WINDOWS"
+"cap.row_rho"               = "inert_bound.row_rho"
+"cap.ADVICE"                = "inert_bound.ADVICE"
+"cap.served"                = "inert_bound.served"
+"import cap"                = "import inert_bound"
+"cap.PORTS"                 = "inert_bound.PORTS"
+"cap.ROLES"                 = "inert_bound.ROLES"
+"cap.check"                 = "inert_bound.check"
+"cap.reads"                 = "inert_bound.reads"
+"cap.call"                  = "inert_bound.call"
+
+[[words_in]]                              # the share's constants, where they are defined and read
+files = ["verity/protocols/pouw/prover/schemes/pearl_c4.py",
+         "verity/protocols/pouw/prover/schemes/pearl_c_debit.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c4.py",
+         "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_sm120.py",
+         "benchmarks/pouw/pearl_c4/replay.py",
+         "benchmarks/pouw/pearl_c_vllm/served_debit.py",
+         "benchmarks/pouw/harness/price_twins.py"]
+
+[words_in.words]
+"CAPS" = "INERT_SHARES"
+"CAP" = "INERT_SHARE"
+
+[words]
+"test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_and_refuses_an_unretained_serve" = "test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_an_inert_bound_and_refuses_an_unretained_serve"
+"test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_cap"                 = "test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row_over_its_inert_bound"
+"test_volunteer_leaves_each_pass_no_tile_over_a_cap_and_its_transcript_as_captured"                         = "test_volunteer_leaves_each_pass_no_tile_over_an_inert_bound_and_its_transcript_as_captured"
+"test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_passes"                          = "test_volunteer_pass_gives_up_the_rows_over_their_inert_bounds_and_every_tile_then_passes"
+"test_every_per_call_row_but_ok_the_tile_the_caps_and_the_cuts_is_a_row_seg_row"                            = "test_every_per_call_row_but_ok_the_tile_the_inert_bounds_and_the_cuts_is_a_row_seg_row"
+"test_the_cap_flag_is_off_by_default_and_refuses_shapes_outside_the_split"                                  = "test_the_inert_bound_flag_is_off_by_default_and_refuses_shapes_outside_the_split"
+"test_a_row_the_old_cap_rejected_is_admitted_and_debited_on_the_witness"                                    = "test_a_row_the_old_inert_bound_rejected_is_admitted_and_debited_on_the_witness"
+"test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit"                                     = "test_served_inert_work_share_is_the_tile_rules_inert_work_over_its_rev1_credit"
+"test_volunteer_words_ranks_a_units_rows_over_their_caps_in_one_scan"                                       = "test_volunteer_words_ranks_a_units_rows_over_their_inert_bounds_in_one_scan"
+"test_served_debits_batch_replay_and_resume_record_the_scalar_lines"                                        = "test_served_inert_work_batch_replay_and_resume_record_the_scalar_lines"
+"test_the_per_row_cap_refuses_an_admitted_row_over_its_cap_alone"                                           = "test_the_per_row_inert_bound_refuses_an_admitted_row_over_its_inert_bound_alone"
+"test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_cap"                                             = "test_volunteer_gives_up_the_row_that_puts_a_tile_over_the_inert_bound"
+"test_census_k_caps_each_row_at_four_rho_and_the_tile_at_rho"                                               = "test_census_k_bounds_each_row_at_four_rho_and_the_tile_at_rho"
+"test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap"                                               = "test_r1_uncredits_a_row_whose_own_inert_work_passes_its_cell_bound"
+"test_served_debit_records_the_tile_rules_own_debit_and_cap"                                                = "test_served_inert_work_records_the_tile_rules_own_inert_work_and_bound"
+"test_the_split_call_is_the_hiding_call_with_each_tiles_cap"                                                = "test_the_split_call_is_the_hiding_call_with_each_tiles_inert_bound"
+"test_the_row_capped_tile_is_v1_and_each_admitted_rows_cap"                                                 = "test_the_row_capped_tile_is_v1_and_each_admitted_rows_inert_bound"
+"test_v1_publishes_at_its_cap_1_1000_from_both_price_twins"                                                 = "test_v1_publishes_at_its_inert_share_1_1000_from_both_price_twins"
+"test_f1_prime_charges_the_base_split_rows_past_the_cap"                                                    = "test_f1_prime_charges_the_base_split_rows_past_the_inert_bound"
+"test_v_ex_leaves_r1_and_the_cap_on_the_credited_rows"                                                      = "test_v_ex_leaves_r1_and_the_inert_bound_on_the_credited_rows"
+"test_the_over_cap_rules_and_default_are_verify_runs"                                                       = "test_the_over_inert_bound_rules_and_default_are_verify_runs"
+"test_a_salt_dead_element_puts_its_row_over_the_cap"                                                        = "test_a_salt_dead_element_puts_its_row_over_the_inert_bound"
+"test_h3_caps_each_credited_row_as_well_as_the_tile"                                                        = "test_h3_bounds_each_credited_row_as_well_as_the_tile"
+"GapSm120v1LoopCast8p72Rev1Cap1000_16384OfCap400"                                                           = "GapSm120v1LoopCast8p72Rev1InertShare1000_16384OfInertShare400"
+"test_the_tile_is_pc8s_and_its_verdict_rev1s_cap"                                                           = "test_the_tile_is_pc8s_and_its_verdict_rev1s_inert_bound"
+"test_the_zero_word_debits_every_later_promotion"                                                           = "test_the_zero_word_counts_every_later_promotion_as_inert_work"
+"GapSm120v1LoopCast8p72Rev1Cap1000_8192OfCap400"                                                            = "GapSm120v1LoopCast8p72Rev1InertShare1000_8192OfInertShare400"
+"test_aligned_spike_unit_is_rejected_by_the_cap"                                                            = "test_aligned_spike_unit_is_rejected_by_the_inert_bound"
+"pearlCSampledSm120v1LoopCast8p72Rev1Cap_16384"                                                             = "pearlCSampledSm120v1LoopCast8p72Rev1InertShare_16384"
+"pearlCSampledUnpromotedChainCap1000Loop_16384"                                                             = "pearlCSampledUnpromotedChainInertShare1000Loop_16384"
+"pearlCSampledSm120v1LoopCast8p72Rev1Cap_8192"                                                              = "pearlCSampledSm120v1LoopCast8p72Rev1InertShare_8192"
+"pearlCSampledUnpromotedChainCap1000Loop_8192"                                                              = "pearlCSampledUnpromotedChainInertShare1000Loop_8192"
+"PearlCSm120Rev1Cap1000ByDeadline_llama31_8b"                                                               = "PearlCSm120Rev1InertShare1000ByDeadline_llama31_8b"
+"test_the_window_is_the_debits_masked_words"                                                                = "test_the_window_is_the_inert_work_masked_words"
+"PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b"                                                                 = "PearlCSm120Rev1InertShare1000ByDeadline_qwen3_8b"
+"pearlCGapSm120v1LoopCast8p72Rev1Cap_16384"                                                                 = "pearlCGapSm120v1LoopCast8p72Rev1InertShare_16384"
+"pearlCGapUnpromotedChainCap1000Loop_16384"                                                                 = "pearlCGapUnpromotedChainInertShare1000Loop_16384"
+"pearlCSampledSm120v1Cast8p72Rev1Cap_16384"                                                                 = "pearlCSampledSm120v1Cast8p72Rev1InertShare_16384"
+"pearlCGapSm120v1LoopCast8p72Rev1Cap_8192"                                                                  = "pearlCGapSm120v1LoopCast8p72Rev1InertShare_8192"
+"pearlCGapUOnlyUnpromotedCap1000Loop_8192"                                                                  = "pearlCGapUOnlyUnpromotedInertShare1000Loop_8192"
+"pearlCGapUnpromotedChainCap1000Loop_8192"                                                                  = "pearlCGapUnpromotedChainInertShare1000Loop_8192"
+"pearlCSampledSm120v1Cast8p72Rev1Cap_8192"                                                                  = "pearlCSampledSm120v1Cast8p72Rev1InertShare_8192"
+"pearlCSampledUnpromotedCap1000Loop_16384"                                                                  = "pearlCSampledUnpromotedInertShare1000Loop_16384"
+"test_credit_and_cap_are_the_pinned_twins"                                                                  = "test_credit_and_inert_bound_are_the_pinned_twins"
+"pearlCSampledUnpromotedCap1000Loop_8192"                                                                   = "pearlCSampledUnpromotedInertShare1000Loop_8192"
+"test_a_row_over_its_cap_and_its_give_up"                                                                   = "test_a_row_over_its_inert_bound_and_its_give_up"
+"test_aligned_spike_tile_is_over_the_cap"                                                                   = "test_aligned_spike_tile_is_over_the_inert_bound"
+"PearlCSm120Rev1Cap1000ByDeadline_16384"                                                                    = "PearlCSm120Rev1InertShare1000ByDeadline_16384"
+"pearlCGammaSm120v1Cast8p72Rev1Cap_8192"                                                                    = "pearlCGammaSm120v1Cast8p72Rev1InertShare_8192"
+"PearlCSm120Rev1Cap1000ByDeadline_8192"                                                                     = "PearlCSm120Rev1InertShare1000ByDeadline_8192"
+"pearlCGapSm120v1Cast8p72Rev1Cap_16384"                                                                     = "pearlCGapSm120v1Cast8p72Rev1InertShare_16384"
+"test_the_cap_refuses_a_short_tile_row"                                                                     = "test_the_inert_bound_refuses_a_short_tile_row"
+"pearlCGapSm120v1Cast8p72Rev1Cap_8192"                                                                      = "pearlCGapSm120v1Cast8p72Rev1InertShare_8192"
+"pearlCGapUnpromotedCap1000Loop_16384"                                                                      = "pearlCGapUnpromotedInertShare1000Loop_16384"
+"test_the_hidden_and_clear_caps_agree"                                                                      = "test_the_hidden_and_clear_inert_bounds_agree"
+"pearlCGapUnpromotedCap1000Loop_8192"                                                                       = "pearlCGapUnpromotedInertShare1000Loop_8192"
+"ttOutTilePearlCDevRev1_cap_transfer"                                                                       = "ttOutTilePearlCDevRev1_inert_bound_transfer"
+"pearlCSampledDevRev1KShapes_of_cap"                                                                        = "pearlCSampledDevRev1KShapes_of_inert_bound"
+"test_the_word_is_the_debits_replay"                                                                        = "test_the_word_is_the_inert_work_replay"
+"test_the_verdict_turns_at_the_cap"                                                                         = "test_the_verdict_turns_at_the_inert_bound"
+"ttOutTilePearlCDevChainCap_of_cap"                                                                         = "ttOutTilePearlCDevChainInertBound_of_inert_bound"
+"ttOutTilePearlCDevChainCap_of_w1"                                                                          = "ttOutTilePearlCDevChainInertBound_of_w1"
+"pearlCSampledDevRev1KAt_of_cap"                                                                            = "pearlCSampledDevRev1KAt_of_inert_bound"
+"pearlCSampledDevRev1KNK_of_cap"                                                                            = "pearlCSampledDevRev1KNK_of_inert_bound"
+"pearlCSampledDevRev1KRowCapAt"                                                                             = "pearlCSampledDevRev1KRowInertBoundAt"
+"ttOutPearlCDevChainCap_of_cap"                                                                             = "ttOutPearlCDevChainInertBound_of_inert_bound"
+"pearlCProtocolDevRev1KRowCap"                                                                              = "pearlCProtocolDevRev1KRowInertBound"
+"ttOutPearlCDevChainCap_of_w1"                                                                              = "ttOutPearlCDevChainInertBound_of_w1"
+"pearlCProtocolDevRev1RowCap"                                                                               = "pearlCProtocolDevRev1RowInertBound"
+"pearlCSampledDevChainCapKAt"                                                                               = "pearlCSampledDevChainInertBoundKAt"
+"test_the_cap_is_the_records"                                                                               = "test_the_inert_bound_is_the_records"
+"ttOutPearlCDevRev1_cap_anti"                                                                               = "ttOutPearlCDevRev1_inert_bound_anti"
+"TTOutTilePearlCDevChainCap"                                                                                = "TTOutTilePearlCDevChainInertBound"
+"pearlCSampledDevChainCapAt"                                                                                = "pearlCSampledDevChainInertBoundAt"
+"pearlCProtocolDevChainCap"                                                                                 = "pearlCProtocolDevChainInertBound"
+"pearlCTilesDevRev1KRowCap"                                                                                 = "pearlCTilesDevRev1KRowInertBound"
+"test_pearlc_cap_agreement"                                                                                 = "test_pearlc_inert_bound_agreement"
+"TilePassGivesTheChainCap"                                                                                  = "TilePassGivesTheChainInertBound"
+"pearlCTilesDevRev1RowCap"                                                                                  = "pearlCTilesDevRev1RowInertBound"
+"tilePassGivesTheChainCap"                                                                                  = "tilePassGivesTheChainInertBound"
+"pearlCGapDevChainCapKAt"                                                                                   = "pearlCGapDevChainInertBoundKAt"
+"ttOutPearlCDev_cap_anti"                                                                                   = "ttOutPearlCDev_inert_bound_anti"
+"TTOutPearlCDevChainCap"                                                                                    = "TTOutPearlCDevChainInertBound"
+"pearlCGapDevChainCapAt"                                                                                    = "pearlCGapDevChainInertBoundAt"
+"pearlCTilesDevChainCap"                                                                                    = "pearlCTilesDevChainInertBound"
+"rejected_at_scheme_cap"                                                                                    = "rejected_at_scheme_inert_bound"
+"DeviceSm120CapRev1Gap"                                                                                     = "DeviceSm120InertBoundRev1Gap"
+"chainOnlyGap16384Cap"                                                                                      = "chainOnlyGap16384InertBound"
+"debit_max_word_share"                                                                                      = "inert_work_max_word_share"
+"TilePassGivesTheCap"                                                                                       = "TilePassGivesTheInertBound"
+"chainOnlyGap8192Cap"                                                                                       = "chainOnlyGap8192InertBound"
+"tilePassGivesTheCap"                                                                                       = "tilePassGivesTheInertBound"
+"max_debit_over_cap"                                                                                        = "max_inert_work_over_bound"
+"unneeded_positions"                                                                                        = "inert_positions"
+"ChainCapKernelGap"                                                                                         = "ChainInertBoundKernelGap"
+"cap_credit_sum_le"                                                                                         = "inert_bound_credit_sum_le"
+"debitIsTheReplay"                                                                                          = "inertWorkIsTheReplay"
+"debit_atom_share"                                                                                          = "inert_work_atom_share"
+"forming_elements"                                                                                          = "inert_elements"
+"row_cap_multiple"                                                                                          = "row_inert_share_multiple"
+"test_circuit_cap"                                                                                          = "test_circuit_inert_bound"
+"TileKeepsTheCap"                                                                                           = "TileKeepsTheInertBound"
+"_call_cap_units"                                                                                           = "_call_inert_bound_units"
+"_check_cap_body"                                                                                           = "_check_inert_bound_body"
+"_row_a_cap_body"                                                                                           = "_row_an_inert_bound_body"
+"tileKeepsTheCap"                                                                                           = "tileKeepsTheInertBound"
+"CENSUS_ROW_CAP"                                                                                            = "CENSUS_ROW_INERT_SHARE_MULTIPLE"
+"DeviceChainCap"                                                                                            = "DeviceChainInertBound"
+"_cap_constants"                                                                                            = "_inert_bound_constants"
+"_row_a_cap_sig"                                                                                            = "_row_an_inert_bound_sig"
+"census_row_cap"                                                                                            = "census_row_inert_share"
+"debit_eF_share"                                                                                            = "inert_work_eF_share"
+"debit_over_cap"                                                                                            = "inert_work_over_bound"
+"over_cap_tiles"                                                                                            = "over_inert_bound_tiles"
+"capTile_sound"                                                                                             = "inertBoundTile_sound"
+"over_cap_rule"                                                                                             = "over_inert_bound_rule"
+"Cap.SaltDead"                                                                                              = "InertBound.SaltDead"
+"CapConstants"                                                                                              = "InertBoundConstants"
+"capConstants"                                                                                              = "inertBoundConstants"
+"Cap.IntForm"                                                                                               = "InertBound.IntForm"
+"ComputesCap"                                                                                               = "ComputesInertBound"
+"_TILE_DEBIT"                                                                                               = "_TILE_INERT_WORK"
+"cap_failure"                                                                                               = "inert_bound_failure"
+"cap_iff_int"                                                                                               = "inert_bound_iff_int"
+"circuit.cap"                                                                                               = "circuit.inert_bound"
+"circuit/cap"                                                                                               = "circuit/inert_bound"
+"debit_exact"                                                                                               = "inert_work_exact"
+"debit_share"                                                                                               = "inert_work_share"
+"debit_units"                                                                                               = "inert_work_units"
+"rowTile_cap"                                                                                               = "rowTile_inert_bound"
+"tilesCap_eq"                                                                                               = "tilesInertBound_eq"
+"word_debits"                                                                                               = "words_inert_work"
+"PearlC.Cap"                                                                                                = "PearlC.InertBound"
+"PearlC/Cap"                                                                                                = "PearlC/InertBound"
+"_DEBIT_CAP"                                                                                                = "_INERT_WORK_AND_BOUND"
+"_debit_cap"                                                                                                = "_inert_work_and_bound"
+"capFailure"                                                                                                = "inertBoundFailure"
+"debitUnits"                                                                                                = "inertWorkUnits"
+"debit_pure"                                                                                                = "inert_work_pure"
+"row_cap_at"                                                                                                = "row_inert_share_at"
+"CapDomain"                                                                                                 = "InertBoundDomain"
+"DeviceCap"                                                                                                 = "DeviceInertBound"
+"HonestCap"                                                                                                 = "HonestInertBound"
+"NAME_CAPS"                                                                                                 = "NAME_INERT_SHARES"
+"RowCap100"                                                                                                 = "RowInertShare100"
+"_bind_cap"                                                                                                 = "_bind_inert_bound"
+"_rev1_cap"                                                                                                 = "_rev1_inert_bound"
+"capRecord"                                                                                                 = "inertBoundRecord"
+"of_cap400"                                                                                                 = "of_inert_share400"
+"Cap.Pins"                                                                                                  = "InertBound.Pins"
+"Cap/Pins"                                                                                                  = "InertBound/Pins"
+"OVER_CAP"                                                                                                  = "OVER_INERT_BOUND"
+"RowCapAt"                                                                                                  = "RowInertBoundAt"
+"_CAP_ARG"                                                                                                  = "_INERT_SHARE_ARG"
+"capCheck"                                                                                                  = "inertBoundCheck"
+"capTests"                                                                                                  = "inertBoundTests"
+"chainCap"                                                                                                  = "chainInertBound"
+"debitDev"                                                                                                  = "inertWorkDev"
+"test_cap"                                                                                                  = "test_inert_bound"
+"tile_cap"                                                                                                  = "tile_inert_bound"
+"CAP_DEN"                                                                                                   = "INERT_BOUND_DEN"
+"CAP_NUM"                                                                                                   = "INERT_BOUND_NUM"
+"Cap1000"                                                                                                   = "InertShare1000"
+"CapFits"                                                                                                   = "InertBoundFits"
+"CapLoop"                                                                                                   = "InertBoundLoop"
+"OverCap"                                                                                                   = "OverInertBound"
+"ROW_CAP"                                                                                                   = "ROW_INERT_BOUND"
+"TileCap"                                                                                                   = "TileInertBound"
+"_cu_cap"                                                                                                   = "_cu_inert_bound"
+"_r1_cap"                                                                                                   = "_r1_inert_bound"
+"cap1000"                                                                                                   = "inert_share1000"
+"debitOf"                                                                                                   = "inertWorkOf"
+"overCap"                                                                                                   = "overInertBound"
+"row_cap"                                                                                                   = "row_inert_bound"
+"_debit"                                                                                                    = "_inert_work"
+"capNum"                                                                                                    = "inertBoundNum"
+"capOps"                                                                                                    = "inertBoundOps"
+"capPin"                                                                                                    = "inertBoundPin"
+"rowCap"                                                                                                    = "rowInertBound"
+"Debit"                                                                                                     = "InertWork"
+"capOK"                                                                                                     = "inertBoundOK"
+
+[keep]
+patterns = [
+    '''["'](?:pouw_pearl_c_served_debit/per-input|cross_group_beyond_debit_mean_worst|cross_group_beyond_debit_mean|cross_group_beyond_debit_max|worst_word_share_tile_cap_ok|debit_share_of_credit|debit_max_word_share|rejected_at_scheme_cap|pouw_pearl_c_served_debit|unneeded_positions|max_debit_over_cap|rows_over_row_cap|forming_elements|debit_atom_share|debit_eF_share|census_row_cap|debit_over_cap|over_cap_tiles|tile_cap_ok|debit_exact|debit_share)["']''',    # a record's keys
+    '''["'](?:tile_cap|row_cap)["'](?=: str\()''',    # ... the k256 gate's header
+    'max_debit_over_cap=',    # ... the replay's accept line
+    '(?<!cap\.)Pc8\w*Cap\w*',    # a Definition staged into a circuit
+    'pearlCGamma\w*',    # the Lean store's pin names
+    '(?<!\w)(?:PEARLPLUS_OVER_CAP|test_cap_is_the_largest_power_of_two_a_statement_holds|coinPasses_overCap|capCheck_of_check)(?!\w)',    # a word inside another name: Pearl+'s over-cap variable, Recursion's, Accounting's and a workload's cap
+    '''(?m)^\| Pearl's "debit" and "cap".*$''',    # the Glossary's row of older names
+]
+
+[rewrite]
+exclude = [
+    "tools/move/**",
+    "tools/research/**",
+    "tests/lint/test_repo_retired_terms.py",
+    "archive/**",
+    "**/fixtures/**",
+    "**/CHANGELOG.md",
+    "*.patch",
+    "**/TRUSTED.sha256",
+    "uv.lock",
+    "**/*.lock",
+    "**/*.cu",
+    "**/*.cuh",
+    "**/*.c",
+    "**/*.cc",
+    "**/*.cpp",
+    "**/*.h",
+    "**/*.hpp",
+]
