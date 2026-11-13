@@ -130449,3 +130449,132 @@ Run `r20261113-082637-50ae` (vy-nebius-2, `--tree-sha cfa7443a49ec7c2f35509f4006
 - **Roots, both halves** [run: a script at `cfa7443a49`]: `Proofs.Flock.SpotFlock.AddressFacts.Connected` is in the lock's `roots` and a quoted root of the lakefile, in the commit that adds the file; the lock's 190 roots are each once and each under a lakefile root.
 - **What is NOT shown.** `RowFact` and `RefReadsWf` are hypotheses here. No records run of `security/Proofs` at my head, and the lock I carry from `013955525dbe` is the one FRAME says is not regenerated; I write no ready line. FRAME's clause `portsOnce` and my `portsOnce_of_rows` are now in one tree, two proofs of one fact, FRAME's to decide.
 - **No `GAP`.** Nothing of mine is running.
+
+## WINDOWAT, Fri 13 Nov 08:40Z: #9576's quick tier is green, 75 suites of 75, with its records run; and the limit on `Window.hcls` at a sample that runs out is compiled
+
+**#9576 (the refusal of an unsampled member's statement), head `338c4ad877ca`.**
+- Quick tier `r20261113-054307-ec73`: done, rc 0, 08:34Z. 75 suites, 75 passed, none failed, none cached, at tree `338c4ad877ca` (`job.json`'s `source.commit`) [run].
+- Records run `r20261113-055558-8c61`: rc 0 [run], as my 08:04Z entry has it.
+- The pull request is open with no label at 08:35Z [run: `gh pr view`]. Both checks stand at its head as it is today. It crosses tonight's moves, so I carry it when you say and give a new ready line then.
+
+**The limit of my 08:25Z entry, compiled.** Run `r20261113-083340-937f`: lean exit 0 in 207 s, 8 theorems, none with an axiom beyond `propext`, `Classical.choice` and `Quot.sound` [run]. It ran on vy-nebius-cpu-1 by `--on auto`, 16 GB, with no wait (sent 08:33Z, ended 08:37Z). Its tree is my head `e977fbc96f` and one scratch file, in no branch; the file is at the end of this entry.
+- `probe_hcls_ranOut`: at any `W : Window`, any `ω` where `Spot.Draw.drawUnits W.law W.nJ (bytesOf (W.src ω 0))` is an error, and any member `m ∈ W.ms`: `mPtsOf g m.n = mPtsOf g (m.kd / nTab m.I)` [run].
+- `probe_window_small`: there, if `⌈(m.kd / nTab m.I) / g⌉ ≤ 8` then `⌈m.n / g⌉ ≤ 8` [run]. A member whose session has the link points of at most 8 blocks holds at most 8 blocks.
+- Not compiled: that such an `ω` exists. A3 gives every stream [derived, as at 08:25Z]. The Python sample, which the difftest holds to Lean's (`coins.ran_out`, "Lean `Draw.ranOutOf`", `device/coins.py:491-507`), on a stream of all `0xFF` [run on the VM]:
+
+| sampling design | runs out |
+|---|---|
+| `subset` 2 of 5, 1 of 5, 2 of 8 | yes |
+| `stratified`, one of a stratum of 12 | yes |
+| `subset` 1 of 8 | no |
+| `stratified`, one of each stratum of 8 | no |
+
+  That is the rule read at 08:25Z: it runs out where one pick is among a number that is not a power of two. A window is free of the limit only if every pick of its sampling design is among a power of two.
+
+**The one statement is not under it** [read the two definitions; derived the conclusion]. Its guarantee takes the sample's size from the sample file: a file that decodes holds `kd` units (`lawOn_size`, `Flock/Bridge/Draw.lean:500-503`; `RecordCustodyZKJPLaw`'s second half, `Soundness/Assumptions/ZkP.lean:44-50`). A sample that ran out is every unit, so its file decodes only where `n = kd` [derived]; I did not trace that no session is accepted there. A member's file is the `subset |S|` print (`printedPart`, `Sampled/Deployed.lean:94`; `toV5`, `Sampled/Window.lean:152`), which decodes at every part, so the per-member form needs `hcls` at every `ω`. This is the precedent for way (i) of 08:25Z: ask the link points only where the sample ends.
+
+**For the 10:00Z list, item 1.** Add a sixth thing `soundnessAt_form` waits on: `Window.hcls` restated, or a refusal that makes it hold. As it stands the statement covers a window only if every member's whole size has its session's link points, or its sampling design never runs out. The decision is under my STOP RULE heading of 08:25Z. Every theorem over the form's accept is true and empty until the compiled check accepts parameters naming members.
+
+**Not established.** The existence of the `ω` in Lean (above). The members' sizes and strata of any real window. Whether soundness has another route.
+
+Mailbox read at `5f06f6bbb9`; my file is unchanged since `9b4fa7248f`, and my newest message is yours of 07:54Z. No `~/wt/.pen`. Branch `cursor/proofs-windowat-5e4b` at `e977fbc96f`, unchanged. No run of mine is going.
+
+**To post** (PRF-490, for soundness; it replaces the line of 08:25Z): "WINDOWAT: compiled (`r20261113-083340-937f`): at any `Window` and any `ω` where `drawUnits` errors, `hcls` gives `mPtsOf g m.n = mPtsOf g (m.kd / nTab m.I)` for every member. A stream of all `0xFF` runs out wherever a pick is among a number that is not a power of two. So a window exists only where each member's whole size has its session's link points. The one statement avoids this through its sample file (`lawOn_size`). How does the window's builder get `hcls`? Entries of 08:25Z and of this hour."
+
+The probe (`security/Proofs/Properties/Verity/Sampled/MemberForm/ProbeRanOut.lean` in the run's tree, in no branch):
+
+```lean
+module
+
+public import Proofs.Properties.Verity.Sampled.Window
+
+/-!
+# A window's link points at a sample that runs out
+
+A scratch file, in no commit. Where the sample's source runs out the deployed sample is every unit
+(`Flock.Bridge.execSel`), so `Window.hcls` there reads each member's whole size.
+-/
+
+@[expose] public section
+
+namespace Verity.Sampled
+
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
+  FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
+  FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
+
+/-- Where the sample's source runs out, the deployed sample is every unit. -/
+theorem probe_execSel_error {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
+    (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (law : Flock.Draw.Law) (pop : ℕ) (ω : Ω) {e : String}
+    (h : _root_.Spot.Draw.drawUnits law pop (_root_.Properties.Spot.bytesOf (t ω 0)) = .error e) :
+    (Flock.Bridge.execSel (n := n) t law pop).draw ω = Finset.univ := by
+  first
+    | (simp only [Flock.Bridge.execSel, h]; done)
+    | (simp [Flock.Bridge.execSel, h]; done)
+    | (unfold Flock.Bridge.execSel; simp [h]; done)
+    | (unfold Flock.Bridge.execSel; split <;> simp_all)
+
+/-- A member's part of every unit is all its proof blocks. -/
+theorem probe_part_univ {nJ : ℕ} (m : Member nJ) : (m.part Finset.univ).card = m.n := by
+  have hu : m.part Finset.univ = Finset.univ := by
+    first
+      | exact Finset.filter_true_of_mem fun u _ => Finset.mem_univ _
+      | (ext u; simp [Member.part, Flock.Guarantees.MemberV5.part])
+  first
+    | rw [hu, Finset.card_univ, Fintype.card_fin]
+    | simp [hu]
+
+/-- Where the deployed sample is every unit, each member's whole size has its session's link points. -/
+theorem probe_hcls_univ (W : Window) (ω : W.Ω)
+    (h : (Flock.Bridge.execSel (n := W.nJ) W.src W.law W.nJ).draw ω = Finset.univ)
+    (m : Member W.nJ) (hm : m ∈ W.ms) :
+    mPtsOf m.D.unroll.g m.n = mPtsOf m.D.unroll.g (m.kd / nTab m.I) := by
+  have h1 := W.hcls m hm ω
+  first
+    | (rw [h, probe_part_univ] at h1; exact h1)
+    | simpa [h, probe_part_univ] using h1
+
+/-- **At a sample whose source runs out, each member's whole size has its session's link points.** -/
+theorem probe_hcls_ranOut (W : Window) (ω : W.Ω) {e : String}
+    (h : _root_.Spot.Draw.drawUnits W.law W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) = .error e)
+    (m : Member W.nJ) (hm : m ∈ W.ms) :
+    mPtsOf m.D.unroll.g m.n = mPtsOf m.D.unroll.g (m.kd / nTab m.I) :=
+  probe_hcls_univ W ω (probe_execSel_error W.src W.law W.nJ ω h) m hm
+
+theorem probe_log2ceil_le {x : ℕ} (h : x ≤ 8) : Flock.log2ceil x ≤ 3 := by
+  unfold Flock.log2ceil
+  split
+  · omega
+  · have : Nat.log2 (x - 1) < 3 := (Nat.log2_lt (by omega)).2 (by omega)
+    omega
+
+theorem probe_log2ceil_ge {y : ℕ} (h : 9 ≤ y) : 4 ≤ Flock.log2ceil y := by
+  unfold Flock.log2ceil
+  split
+  · omega
+  · have : 3 ≤ Nat.log2 (y - 1) := (Nat.le_log2 (by omega)).2 (by omega)
+    omega
+
+/-- The link points of at most 8 proof blocks are not those of 9 or more. -/
+theorem probe_mPts_small {g a b : ℕ} (ha : (a + g - 1) / g ≤ 8) (h : mPtsOf g b = mPtsOf g a) :
+    (b + g - 1) / g ≤ 8 := by
+  unfold mPtsOf at h
+  apply Nat.le_of_not_lt
+  intro hb
+  have h1 := probe_log2ceil_le (x := max ((a + g - 1) / g) 1) (Nat.max_le.2 ⟨ha, by omega⟩)
+  have h2 := probe_log2ceil_ge (y := max ((b + g - 1) / g) 1) (Nat.le_trans hb (Nat.le_max_left _ _))
+  have e1 : max 3 (Flock.log2ceil (max ((a + g - 1) / g) 1)) = 3 := Nat.max_eq_left h1
+  have e2 : 4 ≤ max 3 (Flock.log2ceil (max ((b + g - 1) / g) 1)) := Nat.le_trans h2 (Nat.le_max_right _ _)
+  rw [e1] at h
+  omega
+
+/-- **At a sample whose source runs out, a member whose session proves at most 8 proof blocks holds at most 8.** -/
+theorem probe_window_small (W : Window) (ω : W.Ω) {e : String}
+    (h : _root_.Spot.Draw.drawUnits W.law W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) = .error e)
+    (m : Member W.nJ) (hm : m ∈ W.ms)
+    (hs : (m.kd / nTab m.I + m.D.unroll.g - 1) / m.D.unroll.g ≤ 8) :
+    (m.n + m.D.unroll.g - 1) / m.D.unroll.g ≤ 8 :=
+  probe_mPts_small hs (probe_hcls_ranOut W ω h m hm)
+
+end Verity.Sampled
+```
