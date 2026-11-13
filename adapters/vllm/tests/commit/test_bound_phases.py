@@ -14,8 +14,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity_vllm.commit.committer.native_host import (  # noqa: E402
+    bounded_host_bound,
+    schedule_stream_bound,
+)
 from verity_vllm.pipeline.commit import c2_programs_forecast  # noqa: E402
-from verity_vllm.commit.committer.native_host import bounded_host_bound, schedule_stream_bound  # noqa: E402
 
 MiB = 1 << 20
 ASZ = {"per_token_bytes": 2900996, "per_seq_bytes": 607744, "per_step_bytes": 93184,

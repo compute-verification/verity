@@ -235,7 +235,7 @@ def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carrie
     """v2 reads a sample's coins under the challenger its parameters name, on the window's root, from the evidence's
     coins: the case of an audit sampled on the challenger's coins holds all three, the key in the parameters alone, and
     its SPOT form is that case's. Its proofs, commitment and blobs are the unnamed case's."""
-    write(tmp_path, {}, coins=COINS, window_root=WINDOW_ROOT)
+    write(tmp_path, {}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY)
     got = json.loads((tmp_path / "case-v2.json").read_text())
     named = {"challenger": {"key": COINS["key"], "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
     assert got["params"] == {**zk["params"], **named}
@@ -251,7 +251,7 @@ def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carrie
 def test_an_audit_on_the_challengers_coins_with_no_window_root_has_no_v2_case(tmp_path, zk):
     """v2 reads the challenger's session as the one its ledger opens on the window's root: with no root to name, no
     case is written, the error file says why, and the v1 case stays."""
-    write(tmp_path, {}, coins=COINS, window_root=None)
+    write(tmp_path, {}, coins=COINS, window_root=None, family=a5.AC.FAMILY)
     assert not (tmp_path / "case-v2.json").exists() and not (tmp_path / "case-sampled.json").exists()
     assert "no window root" in (tmp_path / "case-v2-error.txt").read_text()
     assert (tmp_path / "case.json").exists()
@@ -265,7 +265,7 @@ def test_the_per_member_case_names_the_challenger_only_where_its_sessions_ran_on
     where they ran there."""
     pm = {**zk, "params": {"proofs": {"members": []}}}
     monkeypatch.setattr(a5, "case_members", lambda case, **k: pm)
-    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, member_trees=trees)
+    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY, member_trees=trees)
     named = {"challenger": {"key": COINS["key"], "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
     assert json.loads((tmp_path / "case-v2.json").read_text())["params"] == {**zk["params"], **named}
     assert json.loads((tmp_path / "case-v2-members.json").read_text())["params"] == {**pm["params"], **(named if trees else {})}
