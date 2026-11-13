@@ -3,7 +3,8 @@
 Each part of the record is read from a document a stage wrote: the circuit database's index, a fold Match's verdict, a Commit's
 summary, a line of `commit/runs.jsonl`, a Build's summary, a manifest, a sampled replay's result.  A block of such a document may be
 absent, null or empty (a stage that stopped early, a writer that had nothing to state), and the record then states that part with
-nothing in it.  Each test gives a block absent, null, empty and stated.
+nothing in it.  Each test gives a block absent, null, empty and stated; the last two are of the forms a summary states a gate in
+and of a row id that names no configuration or no file.
 """
 from __future__ import annotations
 
@@ -97,6 +98,29 @@ def test_a_commit_of_records_summary_states_its_manifest_its_roots_and_its_repla
     assert (replay["ok"], replay["mismatch_n"]) == (False, 2)
     _, replay = CR.summary_part({"sampled_replay": {"per_rank": {"0": "no rank", "1": None}}})
     assert replay["per_rank"] is None   # ranks none of which states a block are no ranks
+
+
+def test_a_summarys_gate_is_its_own_boolean_its_result_or_its_verdict_and_nothing_else():
+    """A gate is stated as a bare boolean, or as a block with a boolean `result` or a `verdict`; any other value states no result.
+    The Match oracle passes only when it names a member and every member passes."""
+    sm = {"weights_pin": True, "boundary_linkage": False, "cross_rank_collectives": "PASS", "fold_match_binding": None,
+          "query_population": {"result": True, "verdict": "FAIL"}, "oracle_compare": {"verdict": "PASS"}, "value_check": {"result": "yes"}}
+    assert CR.summary_part(sm)[0]["gates"] == {"weights_pin": True, "boundary_linkage": False, "cross_rank_collectives": None,
+                                               "fold_match_binding": None, "query_population": True, "oracle_compare": True,
+                                               "value_check": None}
+    assert CR.summary_part({"value_check": {"verdict": "FAIL"}})[0]["gates"] == {"value_check": False}
+    oracle: list[tuple[Any, dict[str, Any]]] = [({"a": True, "b": {"result": True}}, {"match_oracle": True}),
+                                                ({"a": True, "b": 1}, {"match_oracle": False}), ({}, {"match_oracle": False}),
+                                                ([True], {}), (None, {})]
+    for members, gates in oracle:
+        assert CR.summary_part({"match_oracle": members})[0]["gates"] == gates, members
+
+
+def test_a_row_id_that_names_no_configuration_states_itself_alone_and_a_row_without_a_file_has_no_part():
+    assert CR.config_of("not-a-row-id") == {"row": "not-a-row-id"}
+    assert CR.config_of(ROW) == {"row": ROW, "model": "llama32-1b", "dtype": "bf16", "gpu": "l40s", "tp": 1, "batch": 1, "input": 256,
+                                 "output": 32, "arrivals": "mixed", "sampling": "greedy", "engine": "bi-eager"}
+    assert CR.row_part("not-a-row-id") is None and CR.row_part(ROW.replace("__b1__", "__b3__")) is None
 
 
 def test_a_builds_part_reads_a_summary_without_its_workload_and_a_manifest_without_its_query(tmp_path):

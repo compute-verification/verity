@@ -196,6 +196,27 @@ def test_a_failed_plan_that_is_not_required_leaves_no_plan_and_does_not_stop(tmp
     assert not Path(RP.path(r)).exists() and "plan FAIL" in (Path(r.d) / "stages.txt").read_text()
 
 
+@pytest.mark.parametrize(("manifest", "why"), [(False, "no manifest of record"), (True, "no Build Programs (instances.json.gz)")])
+def test_a_plan_with_nothing_to_plan_passes_says_what_it_lacks_and_starts_nothing(tmp_path, monkeypatch, manifest, why):
+    """Without a manifest of record, or without the Build's Programs, a Commit takes nothing from a plan: the stage passes with the
+    one it lacks named, leaves no plan of an earlier attempt and starts no process."""
+    r, built = _row_with_build(tmp_path, monkeypatch)
+    (Path(r.d) / "build_request" / "instances.json.gz").unlink()
+    if manifest:
+        _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
+    Path(RP.path(r)).parent.mkdir(parents=True)
+    Path(RP.path(r)).write_text("{}")
+    started: list[str] = []
+    monkeypatch.setattr(r, "weights_of_record", lambda stage="commit": started.append(f"weights of record at {stage}"))
+    monkeypatch.setattr(r, "run_tl", lambda stage, to, log, cmd, *extra: started.append(stage))
+    RP.plan(r)
+    assert started == [] and built == [] and not Path(RP.path(r)).exists()
+    stages = (Path(r.d) / "stages.txt").read_text().splitlines()
+    assert len(stages) == 1 and stages[0].startswith("plan PASS ") and stages[0].endswith(f" nothing to plan: {why}")
+    end = json.loads((Path(r.d) / "timeline.jsonl").read_text().splitlines()[-1])
+    assert (end["stage"], end["ev"], end["ok"], end["planned"]) == ("stage.plan", "end", "PASS", False)
+
+
 @pytest.mark.parametrize("stages, config_run, planned", [("build", True, [False]), ("build,plan", True, [True]), ("build,commit", True, []),
                                                       ("plan", True, [True]), ("build", False, [])])
 def test_a_config_runs_build_without_the_commit_or_its_own_plan_stage_ends_with_the_plan(tmp_path, monkeypatch, stages, config_run, planned):

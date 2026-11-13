@@ -28,7 +28,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -457,7 +457,7 @@ class ProduceOptions:
     out: str = option("--out")
     record: str | None = option("--record", default=None)
     seed: int = option("--seed", type=int, default=MANIFEST_SEED)
-    cmd: str = field(default="produce", init=False)
+    cmd: Literal["produce"] = field(default="produce", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -465,13 +465,13 @@ class CheckOptions:
     dir: str = option("--dir")
     record: str | None = option("--record", default=None)
     out: str | None = option("--out", default=None)
-    cmd: str = field(default="check", init=False)
+    cmd: Literal["check"] = field(default="check", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
 class ManifestOptions:
     record: bool = option("--record", default=False, action="store_true")
-    cmd: str = field(default="manifest", init=False)
+    cmd: Literal["manifest"] = field(default="manifest", init=False)
 
 
 COMMANDS = {"produce": ProduceOptions, "check": CheckOptions, "manifest": ManifestOptions}

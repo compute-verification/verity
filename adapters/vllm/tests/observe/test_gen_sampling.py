@@ -1,4 +1,4 @@
-"""The torch-free recomputation of the sampler's uniforms (`program.sampling_rng`) and the sampling workloads."""
+"""The torch-free recomputation of the sampler's uniforms (`tests.program.sampling_rng`) and the sampling workloads."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import pytest
 
 from tests import fake_vllm
 from tests.program import sampling_rng as R
+from verity_vllm.config import workload_file
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
 WORKLOADS = ["workload_b0_sampling_temp07", "workload_b0_sampling_topk50_topp09", "workload_b0_sampling_n2", "workload_b0_sampling_2req_seeds"]
@@ -67,7 +68,7 @@ def _adapter_fn(name: str):
 
 @pytest.mark.parametrize("name", WORKLOADS)
 def test_sampling_workloads_schema(name):
-    doc = json.loads((PROFILES / f"{name}.json").read_text())
+    doc = json.loads(workload_file(PROFILES / f"{name}.json").read_text())
     assert doc["sampling"]["variant"] in doc["variants"]
     assert "greedy" in doc["variants"] and doc["variants"]["greedy"]["temperature"] == 0.0
     assert all(len(r["prompt_token_ids"]) == 32 and r["max_tokens"] == 16 and "accepted_token_ids" not in r for r in doc["requests"])
@@ -93,7 +94,7 @@ def test_load_workload_honours_sampling_block_and_keeps_greedy_default():
 
 def test_load_workload_rejects_unknown_variant(tmp_path):
     load = _adapter_fn("load_workload")
-    doc = json.loads((PROFILES / "workload_b0_sampling_temp07.json").read_text())
+    doc = json.loads(workload_file(PROFILES / "workload_b0_sampling_temp07.json").read_text())
     doc["sampling"]["variant"] = "nope"
     p = tmp_path / "w.json"
     p.write_text(json.dumps(doc))
