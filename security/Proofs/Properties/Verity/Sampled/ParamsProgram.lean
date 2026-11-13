@@ -31,13 +31,13 @@ theorem paramsParsed_program {j : Lean.Json} {p : _root_.Spot.OneStage.Params}
       _root_.Spot.Program.parse s.toUTF8 = .ok p.verifier.program := by
   unfold _root_.Spot.OneStage.paramsParsed at h
   obtain ⟨-, -, h⟩ := Trees.bind_ok h
-  obtain ⟨X, hX, h⟩ := Trees.bind_ok h
+  obtain ⟨x₀, hx₀, h⟩ := Trees.bind_ok h
   obtain ⟨s, hs, h⟩ := Trees.bind_ok h
   obtain ⟨prog, hprog, h⟩ := Trees.bind_ok h
-  have hXj : X = _root_.Spot.getD j "program" := by
-    cases hj : _root_.Spot.getD j "program" <;> rw [hj] at hX ⊢ <;>
-      first | exact (Except.ok.inj hX).symm | cases hX
-  subst hXj
+  have hxj : x₀ = _root_.Spot.getD j "program" := by
+    cases hj : _root_.Spot.getD j "program" <;> rw [hj] at hx₀ ⊢ <;>
+      first | exact (Except.ok.inj hx₀).symm | cases hx₀
+  subst hxj
   refine ⟨s, hs, ?_⟩
   have hpp : p.verifier.program = prog := by
     revert p
@@ -82,16 +82,18 @@ theorem zkParams_program {j : Lean.Json} {p : _root_.Spot.OneStageZk.Params}
 /-- **At the parameters v2 reads, its own program parses to its verifier's** (`zkParams_program`). -/
 theorem params_program {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (h : ParamsAt θ p) :
     _root_.Spot.Program.parse p.own.program = .ok p.base.verifier.program := by
-  obtain ⟨-, -, -, -, hx⟩ := h
+  obtain ⟨_, _, _, _, hx⟩ := h
   obtain ⟨j, -, hj⟩ := Trees.bind_ok hx
   have key : Ret (VStar.Recursive.Sampled.paramsOfJson j) fun r => ∀ q, r = .inl q →
       _root_.Spot.Program.parse q.own.program = .ok q.base.verifier.program := by
     rw [VStar.Recursive.Sampled.paramsOfJson.eq_def]
     ret_walk [_root_.Spot.OneStageZk.paramsOfJson]
     all_goals
-      intro q hq
-      cases hq
-      exact zkParams_program ‹_root_.Spot.OneStageZk.paramsOfJson _ = .ok _›
+      intros
+      rename_i hq
+      first
+        | (cases hq; exact zkParams_program ‹_root_.Spot.OneStageZk.paramsOfJson _ = .ok _›)
+        | cases hq
   exact key _ hj p rfl
 
 /-- **The parameters' own program is a descriptor of their verifier's program**, the one a session's statement reads
