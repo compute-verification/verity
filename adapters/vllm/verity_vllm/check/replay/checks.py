@@ -27,6 +27,8 @@ from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit.opened import opened_check
 from verity_vllm.query.manifest import format as RM
 
+__all__ = ["check_rows"]
+
 RULE = ("every check of every request's Program (instances header `checks`), evaluated from its committed inputs at every executed "
         "step, is its `accept` value")
 #: named records kept per class; the counts are uncapped
