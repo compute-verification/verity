@@ -51,6 +51,9 @@ capacity, the certified amount with its error, and the other, which follows.
 * A period's error, of a flow and of a moment alike, is its answers' errors as the amount's `Pool` says: summed, or
   the one answer's that states it once for the period.
 * A row whose error is 1 or more is `Status.noBound`: it prints "no bound at this period" in place of a number.
+* A row whose accepted answers verify nothing of a registered capacity is `Status.nothingVerified`, whatever it
+  leaves free. A row reads `Status.certified` only with an amount verified, or with no registered capacity to verify
+  against: that its answers were accepted does not make it certified.
 * What no accepted answer covers is `Status.notAudited`: charged at capacity. So is the memory of a device's sheet
   that none of its leaves holds.
 * An answer certifies a link only where the link joins a network certifier and a node of the prover's
@@ -505,17 +508,23 @@ def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   pure { place, certified, error, ticks, steps, capacity, series,
          amount := m.unit.base * ((ns.zip es).map fun x => kept x.1 x.2).sum }
 
-/-- A row's standing: an amount certified, an error of 1 or more ("no bound at this period"), or a resource no accepted
-answer covers ("not audited: charged at capacity"). -/
+/-- A row's standing: an amount certified; accepted answers that verify nothing of the registered capacity
+(`nothingVerified`), whatever they leave free; an error of 1 or more ("no bound at this period"); a resource no
+accepted answer covers ("not audited: charged at capacity"); or a link of a Site that is not mediated. `certified`
+says that the row's verified amount is more than 0, or that the registration holds no capacity to verify against: a
+row made from accepted answers does not read `certified` for that alone. -/
 inductive Status where
   | certified
+  | nothingVerified
   | noBound
   | notAudited
   | unmediated
   deriving DecidableEq, Repr
 
+/-- The text a row prints for its standing. Each text is written here and nowhere else. -/
 def Status.name : Status → String
   | .certified => "certified"
+  | .nothingVerified => "nothing verified"
   | .noBound => "no bound at this period"
   | .notAudited => "not audited: charged at capacity"
   | .unmediated => "egress not mediated: no bound"
@@ -586,15 +595,21 @@ private def together (each : List (Nat × List (Nat × Nat))) : Nat :=
   max ((each.map fun e => e.1).foldl max 0) ((each.map fun e => e.1).sum - common)
 
 /-- The row of amount `m` certified as `n` at `error`, against capacity `total`: the other amount follows, and neither
-is printed at an error of 1 or more. An amount above the capacity is printed as it is, and the other is 0. -/
+is printed at an error of 1 or more. An amount above the capacity is printed as it is, and the other is 0. A row whose
+verified amount is 0 against a registered capacity is `Status.nothingVerified`, whatever its free amount: its answers
+were accepted and verify nothing of the capacity. -/
 private def certifiedRow (m : Amount) (place reading : String) (total : Option Nat) (n : Nat) (error : Ratio)
     (sessions : Nat) (session : Option Nat) : Row :=
   let other : Option Nat := total.map fun c => c - n
   let bounded : Bool := !whole.le error
+  let verified : Option Nat := match m.side with
+    | .verified => some n
+    | .free => other
   { metric := m.metric, part := m.part, place, reading, session, sessions, side := some m.side, error,
-    status := if bounded then .certified else .noBound,
+    status :=
+      if !bounded then .noBound else if total.isSome && verified == some 0 then .nothingVerified else .certified,
     capacity := total,
-    verified := if bounded then (match m.side with | .verified => some n | .free => other) else none,
+    verified := if bounded then verified else none,
     free := if bounded then (match m.side with | .verified => other | .free => some n) else none,
     unpriced := m.unpriced }
 
@@ -1115,6 +1130,18 @@ private def cached : Site :=
    "\"place\":\"up0\",\"premises\":[],\"reading\":\"registered\",\"session\":null,\"sessions\":1," ++
    "\"status\":\"certified\"," ++
    "\"unit\":\"bits\",\"unpriced\":[],\"verified\":37000}"]
+-- a row's standing follows its verified column: accepted answers that verify nothing of the registered capacity do
+-- not make a certified row, whatever they leave free. A session that certifies nothing; a wipe of more memory than is
+-- registered; a check whose bits pass its link's capacity; and, certified, a check that verifies some of it
+private def standing (rs : List Row) : List (Status × Option Nat) := (rs.take 1).map fun r => (r.status, r.verified)
+#guard standing (table [held] [session 6000000000 "0" false]) == [(.nothingVerified, some 0)]
+#guard standing (table [wiped] [wipe 1000 9000000000]) == [(.nothingVerified, some 0)]
+#guard standing (table [sent] [check 200000 400 "1/1000"]) == [(.nothingVerified, some 0)]
+#guard standing (table [sent] [check 3000 400 "1/1000"]) == [(.certified, some 37000)]
+-- the row prints the standing's text, which no two standings share
+#guard ((table [sent] [check 200000 400 "1/1000"]).take 1).map (fun r =>
+    (r.toJson.getObjValAs? String "status").toOption) == [some Status.nothingVerified.name]
+#guard ([Status.certified, .nothingVerified, .noBound, .notAudited, .unmediated].map Status.name).Nodup
 
 /-- A read rate verified from below, in bytes, by an answer that names no span. -/
 private def reads : Account :=
@@ -1161,7 +1188,7 @@ private def linkRow (p : Monitored) (accounts : List Account) (answers : List An
   ((rowsOf site digest auditor p accounts answers).take 1).map fun r => (r.status, r.capacity, r.free)
 #guard linkRow period [sent] [check 3000 400 "1/1000"] == linkRow (from_ 0) [sent] [check 3000 400 "1/1000"]
 #guard (linkRow (from_ 400) [sent] [check 3000 400 "1/1000"]).map (fun r => (r.1, r.2.1.isSome, r.2.2 == r.2.1)) ==
-  [(.certified, true, true)]
+  [(.nothingVerified, true, true)]
 -- across the period's start: only its steps in the period cover, and its whole amount adds
 #guard (linkRow (from_ 300) [sent] [check 3000 400 "1/1000"]).map (·.2.2) ==
   (linkRow period [sent] [check 3000 100 "1/1000"]).map (·.2.2)
@@ -1218,12 +1245,12 @@ private def drifted (p : Monitored) (accounts : List Account) (answers : List An
 -- a device in a host that states no drift covers nothing: the link is charged at capacity, and its answer adds
 -- nothing; a device at the site, in no host, the same
 #guard ((rowsOf ⟨[sheet], hostedBy none, links⟩ digest auditor period [sent]
-    [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.certified, true)]
+    [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.nothingVerified, true)]
 #guard ((rowsOf ⟨[sheet], Core.Registration.Example.locs, links⟩ digest auditor period [sent]
-    [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.certified, true)]
+    [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.nothingVerified, true)]
 -- an origin that names a device the Site does not hold: the same
 #guard ((rowsOf site digest auditor (period (origin := fun _ => some ⟨0, 0, "nobody"⟩)) [sent]
-    [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.certified, true)]
+    [check 3000 400 "1/1000"]).take 1).map (fun r => (r.status, r.free == r.capacity)) == [(.nothingVerified, true)]
 -- the period's end: of 1000 steps over a period of 1000 ticks only 999 surely end in it, and they cover 998 ticks
 #guard drifted period [sent] [check 3000 1000 "1/1000"] == [some (3000 + 2 * 100)]
 -- two series end to end: 499 and 498 ticks surely covered, less the one tick the two can share
@@ -1295,9 +1322,9 @@ private def placedOn (device : String) (accounts : List Account) (answers : List
 #guard second.drift? "cert1" == second.drift? "cert0" ∧ (second.drift? "cert1").isSome
 #guard Part.certifiable .egress second none == ["up0", "up2"]
 #guard placedOn "cert0" [sent] [onLink "up0"] == [("up0", .certified, some 100000, some 37000, some 63000)]
-#guard placedOn "cert1" [sent] [onLink "up0"] == [("up0", .certified, some 100000, some 0, some 100000)]
+#guard placedOn "cert1" [sent] [onLink "up0"] == [("up0", .nothingVerified, some 100000, some 0, some 100000)]
 #guard placedOn "cert1" [sent] [onLink "up2"] == [("up2", .certified, some 100000, some 37000, some 63000)]
-#guard placedOn "cert0" [everywhere] [onLink "up0"] == [("", .certified, some 200000, some 0, some 200000)]
+#guard placedOn "cert0" [everywhere] [onLink "up0"] == [("", .nothingVerified, some 200000, some 0, some 200000)]
 -- a drift taken on a premise. The example's certifier's host states no drift, so its row on no premise covers nothing:
 -- the link is charged at capacity over the week. With 1/2000 premised for the host, the same row follows, covered,
 -- and names the premise: of a week of steps of a thousandth of a second, 302,400 might end past the week, and what is
