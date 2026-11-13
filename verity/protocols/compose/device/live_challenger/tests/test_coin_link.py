@@ -17,9 +17,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.spot.device import challenger as C
-from verity.protocols.spot.device import coins as T
-from verity.protocols.spot.device import remote as R
+from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.device import coins as T
+from verity.protocols.proofs.spot.device import remote as R
 
 from test_serve import Auditor, finish, session, start, trusted
 
