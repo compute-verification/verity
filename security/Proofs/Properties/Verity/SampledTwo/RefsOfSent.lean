@@ -410,4 +410,40 @@ theorem heldOfAt_or_collide {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VSt
     (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAtOr A (atStmt C x) o₀.sent.blobs :=
   heldOfAtOr_at u₀ hd hP (refsAt_of_accept (caseIsSent_at x hS) hP hA₀ hk₀ hd₀ hx₀) hj hA
 
+/-! ## Anchored on files the statement is given -/
+
+/-- **Each accepted play's reference statements are the files `B₀`'s, or its blobs collide with `B₀`**, on a case
+map whose cases are the ones sent (`CaseIsSent`) and whose accepted plays decode the parameters `P` (`DecodesAt`), at
+files `B₀` the statement is given that give the reference statements `xs₀` and passed the tables' check at template
+0's member. No accepted play is read beyond the one at hand. -/
+theorem refsAtOr_of_files {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {B₀ : Array ByteArray}
+    {xs₀ : List Claims.Msg} (hS : CaseIsSent C) (hP : DecodesAt C P)
+    (hT₀ : ∀ m₀, memberOf P 0 = some m₀ →
+      Properties.Spot.HoldsRegisteredTables m₀.own (_root_.Core.Blobs.ofArray B₀))
+    (hx₀ : refStmtsOf P (_root_.Core.Blobs.ofArray B₀) = some xs₀) : RefsAtOr C xs₀ B₀ := by
+  by_cases hz : P.circuits.size = 0
+  · intro o k p c e xs hA hk hdec hx
+    refine .inl ?_
+    have hpP : p = P := hP o k p c e hA hk hdec
+    subst hpP
+    have h1 := SpotFlock.HeldOf.refStmtsOf_length hx
+    have h2 := SpotFlock.HeldOf.refStmtsOf_length hx₀
+    rw [hz] at h1 h2
+    rw [List.eq_nil_of_length_eq_zero h1, List.eq_nil_of_length_eq_zero h2]
+  · obtain ⟨r, hr, -⟩ := SpotFlock.HeldOf.refStmtsOf_getElem? hx₀ (Nat.pos_of_ne_zero hz)
+    obtain ⟨m₀, -, -, hm, -⟩ := refRawOf_some hr
+    exact refsAtOr_of_tables hS hP (tablesHeldAt_of_accept hP hm) (hT₀ m₀ hm) hx₀
+
+/-- **Each accepted play at one statement has the held copies, or its blobs collide with the files `B₀`**:
+`heldOfAtOr_at` with `RefsAtOr` from `refsAtOr_of_files`, where `A.h` is the copy `heldOf` builds from the parameters
+`P`, the record read from `x` and the reference statements `xs₀` the files `B₀` give (`CopyOf`). -/
+theorem heldOfAtOr_of_files {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
+    {j : Lean.Json} {B₀ : Array ByteArray} {xs₀ : List Claims.Msg} (u₀ : Unread) (hS : CaseIsSent C)
+    (hd : DescAt (atStmt C x)) (hP : DecodesAt (atStmt C x) P)
+    (hT₀ : ∀ m₀, memberOf P 0 = some m₀ →
+      Properties.Spot.HoldsRegisteredTables m₀.own (_root_.Core.Blobs.ofArray B₀))
+    (hx₀ : refStmtsOf P (_root_.Core.Blobs.ofArray B₀) = some xs₀) (hj : SpotFlock.jsonMsg x = some j)
+    (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAtOr A (atStmt C x) B₀ :=
+  heldOfAtOr_at u₀ hd hP (refsAtOr_of_files (caseIsSent_at x hS) hP hT₀ hx₀) hj hA
+
 end Verity.SampledTwo
