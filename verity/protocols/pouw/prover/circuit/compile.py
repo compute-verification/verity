@@ -19,7 +19,7 @@ by its unit (Replace), PoUW's own Program and not the served one.
   salt, position, roots) -> {z: its cells' exact products, receipt}``. The unit derives its seed in its own proof from the
   salt, its position and its seed group's roots (`seeds.PouwSeed`, or `seeds.PouwUnitSeeds` for a unit whose
   receipt folds take keys: seed_j and σ_R), and its noise from the seed; nothing else reads the salt. The
-  salt `pouw.salt` is the Program's one coin (`In(kind="coin")` where ports.py is on the tree); unit u reads position slot
+  salt `pouw.salt` is the Program's one coin (`In(kind="coin")`); unit u reads position slot
   u (`Compiled.positions`) and its seed group's (root(A), root(B)). The three seed inputs are registered values the
   one-stage verifier fills itself, so the prover chooses none of them (`spot.one_stage.registered`'s
   `supplied_rows` and `supplied_root`): `pouw.roots` from the roots the record names for each group's operands (a served
@@ -68,6 +68,7 @@ from dataclasses import dataclass, field
 from functools import cache, cached_property, lru_cache
 from typing import Any
 
+from verity.circuits import ports as _ports
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.circuits.program import REGISTRATION, Program, is_input
@@ -78,11 +79,6 @@ from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.pouw.verifier import grind as GR
 from verity.protocols.pouw.verifier.protocol import DomainError
 from . import seeds as SD
-
-try:
-    from verity.circuits import ports as _ports
-except ImportError:  # port types (circuits PROTOCOL.md §12) are not on this tree
-    _ports = None
 
 SALT = "pouw.salt"
 POSITIONS = "pouw.positions"
@@ -603,8 +599,8 @@ def _rest_body(B: Any, S: Any, *args: Coll) -> Coll:
 
 def _composite(name: str, statics: tuple[str, ...], signature: Callable, body: Callable, ports: Callable | None,
                doc: str) -> CompositeDefinition:
-    kw = {"ports": ports} if _ports is not None else {}
-    return CompositeDefinition(name, 1, statics, signature, body, doc=doc, conformance="protocol-defined", register=False, **kw)
+    return CompositeDefinition(name, 1, statics, signature, body, doc=doc, conformance="protocol-defined", register=False,
+                               ports=ports)
 
 
 PouwRest = _composite(
@@ -838,8 +834,8 @@ def _compiled_body(B: Any, S: Any, *args: Coll) -> Coll:
 
 
 def _compiled_ports(S: Any) -> Any:
-    positions = {POSITIONS: _ports.In(kind="position")} if "position" in _ports.KINDS else {}
-    return _ports.Ports(params={SALT: _ports.In(kind="coin"), **positions}, ret={"receipts": _ports.Out(sink=True)})
+    return _ports.Ports(params={SALT: _ports.In(kind="coin"), POSITIONS: _ports.In(kind="position")},
+                        ret={"receipts": _ports.Out(sink=True)})
 
 
 PouwCompiled = _composite(
@@ -1202,7 +1198,7 @@ class Compiled(Tiles):
 # -- checks ------------------------------------------------------------------------------------------------------------------
 
 def _coin_ports(fn: Any) -> bool:
-    pt = _ports.port_types(fn) if _ports is not None else None
+    pt = _ports.port_types(fn)
     return pt is not None and any(p.kind == "coin" for rs in pt.params for _lo, _hi, p, _w in rs)
 
 
@@ -1483,7 +1479,7 @@ def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Seque
     try:
         compiled = Program(fn, registered=registered)
     except ValueError as e:
-        if _ports is not None and isinstance(e, _ports.PortError):
+        if isinstance(e, _ports.PortError):
             raise CompileError(e.code, str(e).removeprefix(f"{e.code}: ")) from e
         raise
     c = Compiled(program, SCHEMES[scheme], plan, group_of, compiled)
