@@ -103,7 +103,7 @@ ALLOWED = {
     # The memory challenger, an auditor-trusted device, over PoUS's protocol and verifier; its party is a party of the
     # deployment layer, its messages the wire's.
     "core.devices.memory_challenger": {"core.protocols.pous", "core.wire", "core.deploy"},
-    # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.configuration.deploy.stream`).
+    # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.runtime.stream`).
     # The remote bandwidth audit commits receipts in frame-v3-sha512
     # trees, samples from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof system's one challenger's (`spot.challenger`).
