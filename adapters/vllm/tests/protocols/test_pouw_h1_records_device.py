@@ -75,7 +75,7 @@ def test_a_served_y_that_isnt_the_records_is_left_to_the_hosts_read(device):
     y = y.clone()
     y[2, 7] = -y[2, 7] if float(y[2, 7]) else 1.0
     on, host = _read(zy, y, s_a, s_w)
-    assert not on and "served y" in host
+    assert not on and host is not None and "served y" in host
 
 
 @pytest.mark.parametrize("device", DEVICES)

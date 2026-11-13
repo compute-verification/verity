@@ -5,24 +5,30 @@ placement in the profile's list.  Bit-exactness of the Definitions is the pod di
 from __future__ import annotations
 
 import importlib
-
 import json
 import re
 
 import numpy as np
 import pytest
+from verity.definitions.registry import act, b1, gelu_erf_table, layer_norm
 
-from verity_vllm.program import model as analytic
-from verity_vllm.check.fold_compare import _f16_words_to_bf16, _layernorm_family_fields, _qkv_neox_permute
+from verity_vllm.check.fold_compare import (
+    _f16_words_to_bf16,
+    _layernorm_family_fields,
+    _qkv_neox_permute,
+)
 from verity_vllm.observe.events import RunHeader
+from verity_vllm.observe.fold.patterns import BiasAdd, RotaryEmbedding
 from verity_vllm.observe.fold.profiles import profile_module_for_case
-from verity_vllm.observe.fold.profiles.gen_ln_patterns import (GeluErfPattern, LayerNormAtenPattern, ResidualAddPattern,
-                                                     RotaryEmbeddingPartial)
+from verity_vllm.observe.fold.profiles.gen_ln_patterns import (
+    GeluErfPattern,
+    LayerNormAtenPattern,
+    ResidualAddPattern,
+    RotaryEmbeddingPartial,
+)
+from verity_vllm.program import model as analytic
 
 pythia = importlib.import_module("verity_vllm.observe.fold.profiles.derived_PYTHIA160M")
-from verity_vllm.observe.fold.patterns import BiasAdd, RotaryEmbedding
-from verity.definitions.registry import b1
-from verity.definitions.registry import act, gelu_erf_table, layer_norm
 
 C = pythia.C
 
@@ -147,8 +153,9 @@ def test_layer_norm_and_gelu_erf_are_registry_definitions():
 
 
 def test_layer_norm_body_matches_a_float64_layer_norm_within_bf16_rounding():
-    from verity_vllm.properties.admission import evaluate_spec
     from verity.circuits.defs import bind
+
+    from verity_vllm.properties.admission import evaluate_spec
     N = 64
     rng = np.random.default_rng(0)
     x, w, b = (rng.standard_normal(N).astype(np.float32).view(np.uint32) >> 16 for _ in range(3))

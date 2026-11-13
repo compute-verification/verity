@@ -30,3 +30,6 @@ class FrontendError(Exception):
         assert code in CODES, code
         self.code, self.message, self.where = code, message, where
         super().__init__(f"{code}{' @ ' + where if where else ''}: {message}")
+
+
+__all__ = ["CODES", "DeadGateWarning", "FrontendError"]
