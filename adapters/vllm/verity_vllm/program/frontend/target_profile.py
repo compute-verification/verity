@@ -527,7 +527,9 @@ class TargetProfile:
     def tuned_gemm_arch_family(self) -> str | None:
         """vLLM's tuned-GEMM arch family for the declared capability (`gemm_targets.vllm_tuned_gemm_arch_family`: vLLM's own function
         when importable, else its pinned rule). Selects vLLM's tuned table — and therefore the launch geometry — on the target."""
-        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # lazy: keeps this module light
+        from verity_vllm.program.frontend.gemm_targets import (
+            vllm_tuned_gemm_arch_family,  # lazy: keeps this module light
+        )
         return vllm_tuned_gemm_arch_family(self.compute_capability)
 
     def gemm_target(self, arch_family: Any = ...) -> GemmTarget:
@@ -552,7 +554,6 @@ class TargetProfile:
         import torch  # lazy: the module is torch-free on CPU hosts
         p = torch.cuda.get_device_properties(device)
         return cls.default().with_overrides(compute_capability=(int(p.major), int(p.minor)), num_sms=int(p.multi_processor_count))
-
 
     @classmethod
     def from_gpu_document(cls, doc: Any) -> TargetProfile | None:
@@ -595,11 +596,11 @@ class TargetProfile:
         tp = cls.from_gpu_document(profile_doc.get("gpu"))
         if tp is None:
             return None
-        fav = ((profile_doc.get("backends") or {}).get("attention_flash_attn_version"))
+        backends = profile_doc.get("backends")
+        fav = backends.get("attention_flash_attn_version") if backends else None
         if fav is not None and int(fav) != tp.effective_flash_attn_version():
             tp = tp.with_overrides(flash_attn_version=int(fav))
         return tp
-
 
     @property
     def capability_str(self) -> str:
@@ -676,7 +677,6 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
         if got != profile.moe_experts_class():
             bad.append(f"moe_backend declared {profile.moe_backend!r} ({profile.moe_experts_class()}), applied {got!r}")
     return bad
-
 
 
 # -- the artifact wrapper --------------------------------------------------------------------------------------------------
