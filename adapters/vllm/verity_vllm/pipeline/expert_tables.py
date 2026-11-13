@@ -44,8 +44,8 @@ __all__ = ["NONCES", "SCHEMA", "TABLES_NONCE", "ExpertTables", "committer", "ent
 #: the salt nonces of the tables under the committer's key start here, a rank's 2^32 apart (`nonces`): above every weight
 #: parameter's and the state's (`program.predict.window_weights.WEIGHTS_NONCE` and on)
 TABLES_NONCE = 3 << 61
-#: the nonce scheme `nonces` draws (a table's field's place in the source's weight-field order), which a key's sidecar names
-#: (`mint_key`, `key_of`): a key whose tables were drawn at another scheme's nonces is refused
+#: the nonce scheme `nonces` samples (a table's field's place in the source's weight-field order), which a key's sidecar names
+#: (`mint_key`, `key_of`): a key whose tables were sampled at another scheme's nonces is refused
 NONCES = "field-order"
 BITS = {"float8_e4m3fn": 8, "uint8": 8, "bfloat16": 16, "float16": 16, "float32": 32}
 
@@ -94,7 +94,7 @@ def nonces(tables: Mapping[str, Sequence[tuple[int, str, str, int]]], order: Seq
 
 
 def _minted(key: bytes) -> dict[str, str]:
-    """What a key's sidecar (``KEY.nonces``) holds: the nonce scheme its tables are drawn at (`NONCES`) and the key it was minted
+    """What a key's sidecar (``KEY.nonces``) holds: the nonce scheme its tables are sampled at (`NONCES`) and the key it was minted
     with, as SHA-512 under a tag, so a sidecar copied beside another key names none."""
     return {"nonces": NONCES, "key": hashlib.sha512(b"verity-vllm expert tables committer key\0" + key).hexdigest()}
 
@@ -115,7 +115,7 @@ def mint_key(path: str) -> bytes:
 def key_of(path: str) -> bytes:
     """The committer's key at ``path``, refused unless `mint_key` minted it for this nonce scheme, as its sidecar says.  Tables
     committed under the key at another scheme's nonces (by hand, or before a nonce was its field's place) can hold a nonce this
-    scheme draws for another table, and then two tables draw one salt."""
+    scheme samples for another table, and then two tables sample one salt."""
     key, side = Path(path).read_bytes(), Path(f"{path}.nonces")
     if not side.is_file() or json.loads(side.read_text()) != _minted(key):
         raise UsageError(f"--key {path}: not minted for {NONCES!r} nonces (no {side.name} beside it naming them and this key): its "
