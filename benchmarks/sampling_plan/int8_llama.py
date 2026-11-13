@@ -33,9 +33,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf_chain,  # noqa: E402
                     observations, s8_coord_ands, serve_rows, tree_chain)
 
-from verity.protocols.spot.candidates import Shape, cuts, pressure  # noqa: E402
-from verity.protocols.spot.costfit import Fitted, fit  # noqa: E402
-from verity.protocols.spot.optimize import (SHA512_ROWS, Candidate, TensorCommit, CostModel,  # noqa: E402
+from verity.protocols.spot.prover.candidates import Shape, cuts, pressure  # noqa: E402
+from verity.protocols.spot.prover.costfit import Fitted, fit  # noqa: E402
+from verity.protocols.spot.prover.optimize import (SHA512_ROWS, Candidate, TensorCommit, CostModel,  # noqa: E402
                                                            Objective, ReplayGrain, for_budget, for_target, frontier,
                                                            needs_benchmark, overlaps, perturb, structure, weigh)
 
