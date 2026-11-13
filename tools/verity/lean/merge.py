@@ -86,9 +86,11 @@ sides: two branches that each add a file a suite reads merge, each side's commen
 anything else stays git's. In
 both, an import, a require or a root that one side removed stays removed, judged on the whole files (`kept`), so a line the
 other side moved can't bring it back. For `tests/test_lean_packages.py` (`--caps`, `lean-caps`), each of its ratchet caps
-(`CAP_NAMES`: `UNWITNESSED = {...}`, `INLINE = {...}`...) merges over the whole files key by key as the larger of the two
-sides' caps (a key a side lacks counting as the base's), so two branches that each move a cap merge, a cap one side brings
-is that side's, and a conflict whose sides differ only in comment lines takes theirs'; any other conflict stays git's.
+(`CAP_NAMES`: `UNWITNESSED = {...}`, `INLINE = {...}`...) merges over the whole files key by key three-way (a key a side
+lacks counting 0): a side that kept the base's count takes the other's, so a lowering survives a merge that also holds
+another edit of the file, two raises or a raise and a lowering add their changes, and two lowerings take the larger. Two
+branches that each move a cap merge, a cap one side brings is that side's, and a conflict whose sides differ only in
+comment lines takes theirs'; any other conflict stays git's.
 """
 from __future__ import annotations
 
@@ -995,14 +997,21 @@ def _cap_lines(lines: list[str]) -> dict[str, dict[str, int]] | None:
     return out
 
 
-def _maxed(base: dict[str, int], ours: dict[str, int], theirs: dict[str, int]) -> dict[str, int]:
-    """One cap's counts merged as the larger of the two sides' (a key a side lacks counts as the base's there; one both sides
-    lack is gone), in ours' order with theirs' new keys after the key theirs has before them.  Each side's check held its
-    count under its cap, and a cap left above its count only warns (`_held`) until drive's lock run lowers it to the count
-    and its room.  Counters (theirs plus ours' change) can take a cap below its count, where both sides lowered it for
-    entries that overlap or from different bases, and then fail a PR that did nothing wrong."""
-    return {k: max(n for n in (ours.get(k, base.get(k)), theirs.get(k, base.get(k))) if n is not None)
-            for k in items([], list(ours), list(theirs))}
+def _merged(base: dict[str, int] | None, ours: dict[str, int], theirs: dict[str, int]) -> dict[str, int]:
+    """One cap's counts merged three-way, key by key, a key a side or the base lacks counting 0 there (as `_held` reads a
+    cap): a side that kept the base's count takes the other's, two raises or a raise and a lowering add their changes to
+    the base, and two lowerings take the larger.  Ours' order, with theirs' new keys after the key theirs has before them; a
+    key that merges to 0 is dropped unless both sides hold it.  Two lowerings can overlap (drive's lock run lowers a cap to
+    its count while a PR from an older base lowers it for entries the count already left out), so their sum can take a cap
+    below its merged count and fail every PR on it, while a cap above its count only warns until the lock run lowers it.
+    With no ``base`` (a cap both sides brought), each key is the larger of the sides'."""
+    def one(k: str) -> int:
+        o, a, b = (0 if base is None else base.get(k, 0)), ours.get(k, 0), theirs.get(k, 0)
+        if base is None or (a < o and b < o):
+            return max(a, b)
+        return b if a == o else a if b == o else max(0, a + b - o)
+    out = {k: one(k) for k in items([], list(ours), list(theirs))}
+    return {k: n for k, n in out.items() if n or (k in ours and k in theirs)}
 
 
 def _cap_line(head: str, counts: dict[str, int], end: str) -> str:
@@ -1010,8 +1019,8 @@ def _cap_line(head: str, counts: dict[str, int], end: str) -> str:
 
 
 def _caps(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
-    """A conflict all of whose sides are the same ratchet caps' lines, each merged as the larger (`_maxed`).  None when a
-    side holds anything else or the sides hold different caps."""
+    """A conflict all of whose sides are the same ratchet caps' lines, each merged three-way (`_merged`).  None when a side
+    holds anything else or the sides hold different caps."""
     x, y, z = _cap_lines(o), _cap_lines(a), _cap_lines(b)
     if x is None or y is None or z is None or not y or not set(x) == set(y) == set(z):
         return None
@@ -1021,7 +1030,7 @@ def _caps(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
         if m is None:
             out.append(s)
             continue
-        out.append(_cap_line(m.group(1), _maxed(x[m.group(1)], y[m.group(1)], z[m.group(1)]), "\n" if s.endswith("\n") else ""))
+        out.append(_cap_line(m.group(1), _merged(x[m.group(1)], y[m.group(1)], z[m.group(1)]), "\n" if s.endswith("\n") else ""))
     return out
 
 
@@ -1051,15 +1060,15 @@ def _file_caps(text: str) -> dict[str, tuple[str, dict[str, int]]] | None:
 
 def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
     """(the merged text, the number of conflicts left) of `tests/test_lean_packages.py`.  Each ratchet cap merges over the
-    whole files: a line both sides changed alike as that line, else key by key as the larger (`_maxed`, the base's count
-    standing in for a key a side lacks, so a cap both sides brought over a base without it is the larger of theirs too).
+    whole files: a line both sides changed alike as that line, else key by key three-way (`_merged`; a cap both sides
+    brought over a base without it as the larger of theirs, since both may hold one change).
     While git's own merge runs, each cap's line stands as one placeholder (`HEAD{}`) on every side, so the count never
     conflicts with the comment above it, and a conflict whose sides differ only in comment lines takes theirs'
     (`_comments`); the merged counts then replace the placeholders.  So two branches that each move a cap and reword its
     comment merge, whatever the bases git's recursive merge combines (it runs this driver on them too).  A cap only a side
     holds (a new cap, which the base lacks too) is that side's line.  Where a side's caps can't be read whole (a cap's line
     twice, a side without a cap the base holds), the conflicts merge one by one instead: one whose sides are only cap lines
-    as the larger (`_caps`), one that differs only in comments as theirs'.  Any other conflict is left as git writes it."""
+    three-way (`_caps`), one that differs only in comments as theirs'.  Any other conflict is left as git writes it."""
     def one_by_one():
         return lean(base, ours, theirs, (_caps, _comments))
 
@@ -1076,7 +1085,8 @@ def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
         if found[2][head][0] == line:
             merged[head] = line.rstrip("\n")
         else:
-            merged[head] = _cap_line(head, _maxed(found[0].get(head, ("", {}))[1], counts, found[2][head][1]), "")
+            merged[head] = _cap_line(head, _merged(found[0][head][1] if head in found[0] else None, counts,
+                                                   found[2][head][1]), "")
     with tempfile.TemporaryDirectory() as tmp:
         sides = []
         for name, text in zip(("base", "ours", "theirs"), texts):
@@ -1231,7 +1241,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--lakefile", action="store_true", help="BASE OURS THEIRS [PATH] are a `lakefile.toml`'s: merge its "
                     "`[[require]]` blocks and string arrays")
     ap.add_argument("--caps", action="store_true", help="BASE OURS THEIRS [PATH] are `tests/test_lean_packages.py`'s: merge "
-                    "its ratchet caps (`UNWITNESSED`, `INLINE`) key by key as the larger of the two sides'")
+                    "its ratchet caps (`UNWITNESSED`, `INLINE`) key by key three-way")
     ap.add_argument("--pyproject", action="store_true", help="BASE OURS THEIRS [PATH] are a `pyproject.toml`'s: merge its "
                     "`[tool.verity.tests]` lists")
     a = ap.parse_args(argv)

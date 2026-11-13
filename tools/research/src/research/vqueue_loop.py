@@ -10,7 +10,8 @@ records run's, the jobs and kinds its graph lacks, and the `queue/*` branches it
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
-`signed_verdicts`, a mark carried to a head with the same own change, or with an older head's own change mapped across the moves
+`signed_verdicts` (on "shadow" each mark and verdict counts, and each that doesn't authenticate is logged once:
+`unauthenticated`), a mark carried to a head with the same own change, or with an older head's own change mapped across the moves
 `main` landed since, as `tools/move/restack.py` carries a branch, from an older head with a land verdict of its own only, since
 mapping runs its tree's code: `Queue.mapped_change`, which the end of a tick starts working out, `--move-carry-jobs` heads
 at once in jobs detached from the tick, which outlive it), with a land verdict by a non-owner (its head's, or with
@@ -29,8 +30,9 @@ move may take it (`vqueue.decide`).  The owner of one that doesn't merge is told
 conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`), unless `main` fetched again holds that
 head; its mark stays.  `left` is why each other open PR into `main` isn't ready (`World.ready`: the queue's word on it, a
 withdrawn mark's author, a hold and by whom, no land verdict, the freeze, a move `main` landed that it lacks whose retired
-names its own change names, its owner told once a head and move: `queue.lacked_moves`, `Loop._lacking`), which a
-candidate's drop for a member no longer
+names its own change names, its owner told once a head and move: `queue.lacked_moves`, `Loop._lacking`, or a held PR's
+head it holds, directly or through others, its owner told once a head and held head which and what releases it:
+`queue.held_below`, `Loop._behind_held`), which a candidate's drop for a member no longer
 ready names (`vqueue._stale`); `pulled` those of them others than their owners took (a red's eject, any other eject or a
 mark withdrawn by another, a hold by a reviewer or a `hold` label, the freeze, the shadow's eject, or a PR holding one of
 them), at its head or at the head a candidate in flight holds it at (`World.taken`), the only ones that drop a candidate in
@@ -41,7 +43,9 @@ first; any other `queue/*` branch is no candidate, and is logged once (`ignore`)
 the command's (`--lean`, `--pending-hours`), and `wide` and `pinned` the PRs `--wide-file` and `--pins-file` name, read each
 tick as the priority file is (`World.wide`, `World.pinned`), `wide` with the PRs `--heavy-file` names while `--heavy-on` names
 machines (`World.heavy`; its `*` makes none wide); a tick that builds nothing while a Lean PR waits for a chain it may go on
-logs why, once a why (`wait`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
+logs why, once a why (`wait`).  A tick that applied every action logs why each PR marked ready waits in no candidate, once
+for each PR, head and cause (`leave`): the policy's reason for a PR it read (`vqueue.left_out`), or why `World.ready`
+doesn't take one the queue admits (`World.held_out`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
 no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`reds.RATCHET_STEP`: it judges
@@ -221,11 +225,12 @@ from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, W
                     QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
                     label_verifier, lands_on_mark, lean_change, listed, merged_tree, move_of, own_files,
                     priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
-from .queue import Retired, crossed, lacked_moves, lacks_why
+from .queue import Retired, crossed, held_below, held_waits, lacked_moves, lacks_why
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject,
-                     Failed, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait, _inherited)
+                     Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait,
+                     _inherited)
 from .vqueue_records import LOCK_SUBJECT
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
@@ -644,6 +649,12 @@ class Past:
         """The newest verdict carry decision logged of each PR's head (`World._carry`), by (number, head)."""
         return {(r.get("number"), (r.get("heads") or [""])[0]): r.get("why") for r in self.of("carry")}
 
+    def unauthenticated(self) -> dict[tuple, str]:
+        """Why each mark or verdict logged as counted unauthenticated wouldn't count (`Loop._unauthenticated`), by
+        `StoreLabels.unauthenticated`'s key."""
+        return {(r.get("number"), (r.get("heads") or [""])[0], r.get("label"), r.get("by"), r.get("written")): r.get("why")
+                for r in self.of("unauthenticated")}
+
     def flaked(self) -> set[str]:
         return {r.get("key") for r in self.of("flaky") if r.get("done") or r.get("shadow")} | self._posting(
             "flaky", lambda r: {r.get("key")})
@@ -653,8 +664,8 @@ class Past:
             "ring", lambda r: {(r.get("sha"), r.get("why"))})
 
     def told(self, kind: str = "skip") -> set[str]:
-        """Each `head@base` a message of ``kind`` told its owner of: a skip's (`Loop._merged`), or a move a head lacks
-        (`lacks`, `Loop._lacking`)."""
+        """Each `head@base` a message of ``kind`` told its owner of: a skip's (`Loop._merged`), a move a head lacks
+        (`lacks`, `Loop._lacking`), or a held head a head waits on (`behind_held`, `Loop._behind_held`)."""
         def heads(r: dict) -> set[str]:
             return {f"{h}@{r.get('base')}" for h in r.get("heads") or ()}
 
@@ -801,11 +812,11 @@ class Judged:
 
 def _off_mark(files: Iterable[str], flags: DriveFlags) -> str:
     """Why drive.toml (``flags``, `DriveFlags`) keeps a move PR changing ``files`` off its ready mark alone, however certified
-    its move: "" when it doesn't.  With `lowrisk_lane` off no PR lands without a land verdict, and under `signed_verdicts` a
+    its move: "" when it doesn't.  With `lowrisk_lane` off no PR lands without a land verdict, and with `signed_verdicts` "on" a
     change to `SIGNED_GUARDS`, a move's renames too, could change who holds a handle or how a label is judged."""
     if not flags.lowrisk_lane:
         return "drive.toml's `lowrisk_lane` is off, so a move lands only with one"
-    if flags.signed_verdicts and (guarded := sorted(f for f in files if vqueue.meets((f,), SIGNED_GUARDS))):
+    if flags.signed_verdicts == "on" and (guarded := sorted(f for f in files if vqueue.meets((f,), SIGNED_GUARDS))):
         return (f"it changes {', '.join(guarded)}, and under drive.toml's `signed_verdicts` a move changing `SIGNED_GUARDS` "
                 "lands only with one")
     return ""
@@ -939,6 +950,8 @@ class World:
         #: what the last `ready` decided of the verdict carry (`_carry`): {number: its head, the older head, why, whether it
         #: carries}
         self.carried: dict[int, dict] = {}
+        #: under drive.toml's `signed_verdicts = "shadow"`, the labels' `StoreLabels.unauthenticated`, filled as they are read
+        self.unauthenticated: dict[tuple, str] = {}
         self._prs: dict[int, PR] | None = None
         self._driver: Landing | None = None
         self._slim: Landing | None = None
@@ -952,8 +965,14 @@ class World:
         self.prs: dict[int, PR] = {}
         self.left: dict[int, tuple[str, str]] = {}
         self.pulled: set[int] = set()
+        #: of those, the ones the queue admits at their ready marks: {number: (head, cause, why)}, where the cause stays the same
+        #: while the reason does (`vqueue.Leave`)
+        self.held_out: dict[int, tuple[str, str, str]] = {}
         #: of those left out for a move they lack whose names their change names: {number: (head, the last such move, why)}
         self.lacking: dict[int, tuple[str, str, str]] = {}
+        #: of those, the marked ones holding a held PR's head, directly or through others (`queue.held_below`): {number: (head,
+        #: the held head, why)}
+        self.behind_held: dict[int, tuple[str, str, str]] = {}
         #: the move PRs the last `ready` took on their ready marks alone (`_uncertified`), and {number: what the last `build`
         #: regenerated of each move PR: its map, tip, commit and `move_check.py --json` report} (`_move`)
         self.on_mark: set[int] = set()
@@ -991,13 +1010,24 @@ class World:
         """New labels, read as drive's tick reads them (one `StoreLabels` keeps what it pulled, so a mark, a verdict or a
         withdrawal written since would go unread): marks from drive.toml's `marked_after` at ``main`` on (else the queue
         rules'), authenticated under its `signed_verdicts`, and a head's carried to a new head with the same own change, or,
-        while the queue maps heads across moves (`Queue.mapped_jobs`), whose own change is the head's mapped across them."""
+        while the queue maps heads across moves (`Queue.mapped_jobs`), whose own change is the head's mapped across them.
+        With `signed_verdicts = "shadow"` each mark and verdict counts, and the labels keep why one wouldn't
+        (`StoreLabels.unauthenticated`, which the loop logs); when the registry or the issuer's keys can't be read, none is
+        judged and the tick goes on."""
         q, flags = self.q, flags_at(self.repo, main)
         self.labels = labels = self.labels_at()
         labels.since, labels.change = flags.marked_after or q.rules().marked_after, q.own_change
         labels.moved, labels.owners = q.mapped_change if q.mapped_jobs else None, self._owners
-        if flags.signed_verdicts:
+        self.unauthenticated = {}
+        if flags.signed_verdicts == "on":
             labels.verify = label_verifier(self.repo, MAIN, self.keys, q.log)
+        elif flags.signed_verdicts == "shadow":
+            try:
+                labels.verify, labels.shadow = label_verifier(self.repo, MAIN, self.keys, q.log), True
+                self.unauthenticated = labels.unauthenticated
+            except Exception as e:  # noqa: BLE001 -- the shadow changes nothing the queue lands
+                self.log(f"research queue vqueue: drive.toml's `signed_verdicts` is \"shadow\" and no mark or verdict is judged "
+                         f"now: {type(e).__name__}: {e}")
         q.ready, q.before_cutoff, q.marked_by, q.marked_at, q.prefetch = (labels.ready, labels.before_cutoff, labels.marked_by,
                                                                           labels.marked_at, labels.prefetch)
 
@@ -1081,12 +1111,13 @@ class World:
             took, self.on_mark = [], set()
             uncertified = {n: self._uncertified(entries[n].pr, main) for n in admitted if entries[n].pr.move}
             off_mark = {n: _off_mark(files[n], flags) or uncertified[n] for n in uncertified}
+            cause: dict[int, str] = {}
             for n in admitted:
                 p, held = entries[n].pr, (why[n] or "").startswith("held")
                 if why[n] is None or n in carried or lands_on_mark(flags, p, why[n], files[n]):
                     took.append(n)
                 elif held:
-                    left[n] = (p.head, why[n])
+                    left[n], cause[n] = (p.head, why[n]), "held"
                     if (unreviewed([r for r in reviews[n] if self._another(n, r.by)], ()) or "").startswith("held"):
                         pulled.add(n)
                 elif p.move and not off_mark[n]:
@@ -1094,17 +1125,20 @@ class World:
                     self.on_mark.add(n)
                 else:
                     left[n] = (p.head, f"{why[n]}, and " + (off_mark[n] if p.move else "it isn't low-risk"))
+                    cause[n] = "no land verdict"
             specs, clears = self._frozen()
             if specs:
                 below = self._frozen_base(main)
                 frozen = [n for n in took if not self._cleared(n, entries[n].pr.head, clears)
                           and self._frozen_out(below, n, entries[n].pr.head, specs)]
                 left.update((n, (entries[n].pr.head, f"it waits for the freeze to end ({self.frozen_file})")) for n in frozen)
+                cause.update((n, "freeze") for n in frozen)
                 took, pulled = [n for n in took if n not in frozen], pulled | set(frozen)
             # a plain merge of a head below a move leaves its own lines naming what the move retired: such a head lands
             # crossed, and one whose own change names none of it crosses by that merge (`lacked_moves`)
             lacks = dict(zip(took, pool.map(lambda n: self._lacks(main, entries[n].pr.head, files[n]), took)))
             left.update((n, (entries[n].pr.head, lacks_why(m))) for n, m in lacks.items() if m)
+            cause.update((n, "lacks a move") for n, m in lacks.items() if m)
             self.lacking = {n: (entries[n].pr.head, m[-1][0], lacks_why(m)) for n, m in lacks.items() if m}
             took = [n for n in took if not lacks[n]]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
@@ -1118,7 +1152,14 @@ class World:
                       and a not in chosen and not (old and self._ancestor(entries[n].held[a], old))}:
             left.update((n, (entries[n].pr.head, f"it holds {entries[n].holds(a)}, which isn't taken"
                                                  + (f": {left[a][1]}" if a in left else ""))) for n, a in out.items())
+            cause.update((n, "stacked") for n in out)
             chosen = {n: v for n, v in chosen.items() if n not in out}
+        self.behind_held = {}
+        for n in sorted(left):
+            if n in entries and (cause.get(n) == "stacked" or entries[n].why.startswith("contains")) and (
+                    below := held_below(entries, n, lambda a: why[a] if cause.get(a) == "held" else None)):
+                self.behind_held[n] = (entries[n].pr.head, entries[below[0]].pr.head,
+                                       held_waits(below[0], entries[below[0]].pr.head, below[1]))
         while more := {n for n, e in entries.items() if n not in chosen and n not in pulled and pulled & set(e.after)}:
             pulled |= more
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
@@ -1138,6 +1179,7 @@ class World:
         for n in order:
             place(n)
         self.prs, self.left, self.pulled = {n: entries[n].pr for n in chosen}, left, pulled
+        self.held_out = {n: (left[n][0], c, left[n][1]) for n, c in cause.items()}
         inputs = self._lean_inputs(main, (f for v in chosen.values() for f in v[0])) if chosen else frozenset()
         # a move regenerated on its batch's tip doesn't merge its head, so whether that merges is moot
         return [Ready(n, (p := entries[n].pr).head, *chosen[n][:2], rank=i, conflict=chosen[n][2] and uncertified.get(n) != "",
@@ -2432,6 +2474,8 @@ class Tick:
     records: dict[str, dict] = field(default_factory=dict)
     #: the verdict carry's decisions (`World.carried`)
     carried: dict[int, dict] = field(default_factory=dict)
+    #: why each mark and verdict the tick's `ready` counted wouldn't count under `signed_verdicts` (`World.unauthenticated`)
+    unauthenticated: dict[tuple, str] = field(default_factory=dict)
     #: each ready PR a candidate on `main`'s chain holds without it as a member, left out of `snap.ready` (a build of it
     #: merges nothing): {number: (head, the lowest such candidate)}
     riding: dict[int, tuple[str, str]] = field(default_factory=dict)
@@ -2467,7 +2511,8 @@ class Loop:
                  gate: str = GRAPH2_GATE, shards: int | str = SHARDS, records=None, graph2_shadow: bool = True,
                  g2_read_s: float = G2_READ_S, g2_fresh: int = G2_FRESH, after: list[str] | None = None,
                  clock: Callable[[], float] = time.monotonic,
-                 peak: Callable[[], float] = _peak_gb, timing: Callable[[str], None] = print):
+                 peak: Callable[[], float] = _peak_gb, timing: Callable[[str], None] = print,
+                 left_out: Callable[[Snapshot], list[Leave]] | None = vqueue.left_out):
         if gate not in GATES or gate == CHECK_GATE and (slim is None or not _sharded(slim, shards)):
             raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
                              f"a gate is one of {', '.join(GATES)}, and `{CHECK_GATE}` is the run beside each check "
@@ -2480,6 +2525,7 @@ class Loop:
         self.graph2_shadow = graph2_shadow or gate != CHECK_GATE
         self.now, self.out, self.state, self.tree_ejects, self.records = now, out, state, tree_ejects, records
         self.after, self.clock, self.peak, self.timing, self.steps = after, clock, peak, timing, Steps(clock, peak)
+        self.left_out = left_out
         self.reads = Shadow(self.log_path.parent / G2_READS, now, g2_read_s, out) \
             if gate == CHECK_GATE and graph2_shadow else None
         if world is not None:
@@ -2578,7 +2624,7 @@ class Loop:
                         records=self.records is not None)
         steps.lap("chain")
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0], regen, dict(w.carried),
-                    riding=riding)
+                    dict(w.unauthenticated), riding=riding)
 
     def _reading(self, past: Past, whole: Past, main: str, mine: set[str], older: set[str]):
         """The tick's reads of the runs its judging reads (`Landing.reading`): every run of a record not yet decided (or a
@@ -2802,19 +2848,21 @@ class Loop:
             self.out("\n".join(f"would {_name(a)}: {a}" for a in actions) or "nothing to do")
             return []
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
-               for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._carried(t)
+               for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._carried(t) \
+            + self._unauthenticated(t)
         new += self._flaky(t) + self._bases(t) \
             + (self._disputes(t) if self.gate == GRAPH2_GATE else self._compare(t) + self._off_gate(t))
         steps.lap("notices")
         new += self._followed(t)
         steps.lap("followed")
-        new += self._conflicts(t) + self._lacking(t) + self._riding(t) + self._launched(t)
+        new += self._conflicts(t) + self._lacking(t) + self._behind_held(t) + self._riding(t) + self._launched(t)
         steps.lap("notices")
         new += self._moved(t)
         steps.lap("on_main")
         for rec in new:
             self.write(rec)
         logged = [*t.wrote, *new]
+        stopped = False
         for a in actions:
             try:
                 recs = self.apply(a, t)
@@ -2825,6 +2873,7 @@ class Loop:
                 self.write(rec)
                 logged.append(rec)
                 self.out(f"research queue vqueue: tick {t.n}: {_name(a)} failed, the tick stops: {e}")
+                stopped = True
                 break
             finally:
                 steps.lap(_name(a))
@@ -2833,6 +2882,7 @@ class Loop:
             logged += recs
             if failed := next((r["error"] for r in recs if r.get("error")), None):
                 self.out(f"research queue vqueue: tick {t.n}: {_name(a)} failed, the tick stops: {failed}")
+                stopped = True
                 break
             for adv in [r for r in recs if r.get("action") == "advance" and r.get("on_main")]:
                 for rec in self._landing(t, adv, []):
@@ -2853,6 +2903,11 @@ class Loop:
         except (QueueError, OSError, subprocess.SubprocessError) as e:
             self.out(f"research queue vqueue: tick {t.n}: mapping old heads across `main`'s moves failed: {e}")
         steps.lap("mapped")
+        if not stopped and self.left_out is not None:       # last: a failure here skips none of the tick's bookkeeping
+            for rec in self._leaves(t):
+                self.write(rec)
+                logged.append(rec)
+            steps.lap("leave")
         return logged
 
     def keep(self, t: Tick) -> None:
@@ -2926,6 +2981,18 @@ class Loop:
             end = f.seek(0, 2)
             torn = end > 0 and (f.seek(end - 1), f.read(1))[1] != b"\n"     # a crash's torn line stays a line of its own
             f.write((("\n" if torn else "") + json.dumps(rec, sort_keys=True) + "\n").encode())
+
+    def _leaves(self, t: Tick) -> list[dict]:
+        """A `leave` line for each PR marked ready that this tick's candidates leave out: of those `World.ready` admits and
+        takes no further (`World.held_out`), then of the PRs it took (`left_out`), each (PR, head, cause) once."""
+        seen = {(r.get("number"), h, r.get("cause")) for r in t.past.of("leave") for h in r.get("heads") or ()}
+        out = []
+        for n, head, cause, why in [*((n, *x) for n, x in sorted(self.world.held_out.items())),
+                                    *((x.number, x.head, x.cause, x.why) for x in self.left_out(t.snap))]:
+            if (n, head, cause) not in seen:
+                seen.add((n, head, cause))
+                out.append(self.record(t, "leave", number=n, heads=[head], why=why, cause=cause))
+        return out
 
     def apply(self, a: Action, t: Tick) -> list[dict]:
         if isinstance(a, Build):
@@ -3513,6 +3580,14 @@ class Loop:
         return [self.record(t, "carry", members=[n], heads=[c["head"]], number=n, why=c["why"], old=c["old"],
                             carries=c["carries"]) for n, c in sorted(t.carried.items()) if said.get((n, c["head"])) != c["why"]]
 
+    def _unauthenticated(self, t: Tick) -> list[dict]:
+        """Each ready mark and land verdict the tick counted that drive.toml's `signed_verdicts` wouldn't, on "shadow"
+        (`StoreLabels.unauthenticated`): the PR, the head the label is on, its key (`label`), author (`by`) and time
+        (`written`), and why, logged once a label while the reason is the same."""
+        said = t.past.unauthenticated()
+        return [self.record(t, "unauthenticated", members=[n], heads=[head], number=n, label=key, by=by, written=ts, why=why)
+                for (n, head, key, by, ts), why in sorted(t.unauthenticated.items()) if said.get((n, head, key, by, ts)) != why]
+
     def _flaky(self, t: Tick) -> list[dict]:
         """Ring the owners of each test graph2 says flaked (its verdict's `flaky`: a fail a rerun replaced), once a key: a test
         that flakes is deleted, not rerun.  With --shadow, logged only."""
@@ -3759,22 +3834,35 @@ class Loop:
 
     def _lacking(self, t: Tick) -> list[dict]:
         """Tell the owner of each PR `ready` left out for a move it lacks whose retired names its own change names
-        (`World.lacking`) the move and the fix: once a head and base, the base the last such move (`Past.told`, as a skip
-        is told).  A post that fails is told again by the next tick; with --shadow it is only logged."""
-        recs, told = [], t.past.told("lacks")
-        for n, (head, move, why) in sorted(self.world.lacking.items()):
-            if f"{head}@{move}" in told:
+        (`World.lacking`) the move and the fix: once a head and base, the base the last such move (`_tell_once`)."""
+        return self._tell_once(t, "lacks", "of the move it lacks", {
+            n: (head, move, why, f"#{n} at {head[:12]} isn't taken into the verified queue's candidates on `main` "
+                                 f"{t.main[:12]}: {why} (`research queue ready {n}`)")
+            for n, (head, move, why) in self.world.lacking.items()})
+
+    def _behind_held(self, t: Tick) -> list[dict]:
+        """Tell the owner of each marked PR `ready` left out for holding a held PR's head (`World.behind_held`) that head and
+        what releases it: once a head and held head, the base (`_tell_once`)."""
+        return self._tell_once(t, "behind_held", "that it waits on a held head", {
+            n: (head, held, why, f"#{n} at {head[:12]} goes into no candidate on `main` {t.main[:12]}: {why}")
+            for n, (head, held, why) in self.world.behind_held.items()})
+
+    def _tell_once(self, t: Tick, kind: str, what: str, notes: dict[int, tuple[str, str, str, str]]) -> list[dict]:
+        """Tell each PR's owner its note of ``notes`` ({number: (head, base, why, text)}) once a head and base (`Past.told`, as
+        a skip is told), logged as ``kind``.  A post that fails is told again by the next tick; with --shadow it is only
+        logged."""
+        recs, told = [], t.past.told(kind)
+        for n, (head, base, why, text) in sorted(notes.items()):
+            if f"{head}@{base}" in told:
                 continue
-            text = (f"#{n} at {head[:12]} isn't taken into the verified queue's candidates on `main` {t.main[:12]}: {why} "
-                    f"(`research queue ready {n}`)")
-            line = dict(base=move, members=[n], heads=[head], number=n, why=why, text=text, to=list(to := self.owner(n)))
+            line = dict(base=base, members=[n], heads=[head], number=n, why=why, text=text, to=list(to := self.owner(n)))
             if self.shadow:
-                recs.append(self.record(t, "lacks", **line, done=False))
-            elif not self._say(t, "lacks", text, to, base=move, heads=[head], number=n):
-                recs.append(self.record(t, "lacks", **line, done=False, posted=False,
-                                        error=f"telling #{n}'s owner of the move it lacks failed: the next tick tells again"))
+                recs.append(self.record(t, kind, **line, done=False))
+            elif not self._say(t, kind, text, to, base=base, heads=[head], number=n):
+                recs.append(self.record(t, kind, **line, done=False, posted=False,
+                                        error=f"telling #{n}'s owner {what} failed: the next tick tells again"))
             else:
-                recs.append(self.record(t, "lacks", **line, done=True, posted=True))
+                recs.append(self.record(t, kind, **line, done=True, posted=True))
         return recs
 
     def _riding(self, t: Tick) -> list[dict]:
