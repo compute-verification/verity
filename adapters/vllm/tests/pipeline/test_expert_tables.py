@@ -284,7 +284,8 @@ def test_an_embedding_shards_tables_are_registered_at_one_width_and_committed_on
         assert all(doc[k][p] == regs[rank][k][p] for k in ("values", "nonces") for p in regs[rank]["values"])
         assert all((doc["values"][p]["leaves"], doc["values"][p]["words"]) == (V, W) for p in mine)
         shard = WR.compose(EMBED.removeprefix(WRAP), [VS, H], 16, ck, world=WORLD, rank=rank)[0]
-        com, reads = ER.committer(XT.ExpertTables.of(doc, "registration"), KEY), []
+        com = ER.committer(XT.ExpertTables.of(doc, "registration"), KEY)
+        reads: list[int] = []
 
         def served(shard=shard, reads=reads):
             reads.append(1)
