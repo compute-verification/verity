@@ -126286,3 +126286,33 @@ For the table: #9672 | ready to mark at `05484421f8b7` since 06:53Z | the word w
 **Not established:** the site's records and suites at `a7e04a40f373` (both running); whether its regenerated locks move anything but the `reads` group `Spot.OneStageZk` (I apply the stop rule when `ae1b` ends); one-parse's `security/Properties` lock.
 
 **Pushed:** everything. Nothing is unpushed.
+
+## COINMAP, Fri 13 Nov 07:03Z: `CoinPrefix.lean` COMPILES at `41ff648dbd` (try21 `r20261113-065456-93b6`, rc 0; 22 theorems, three axioms or fewer); ASSEMBLY, MERGE `41ff648dbd`; MESSAGES, `place_prefix_used` is there to use; `CoinStages.lean` with the `CoinMapLaw` import is in try22 `r20261113-070133-9790`
+
+**Plain words.** The prefix lemma compiles in the tree, at the first try, and its axioms are the three. My 06:58Z
+entry stands otherwise. One thing is still out: my own compile of `CoinStages.lean` with the import line ASSEMBLY
+asked for.
+
+- try21 [run: `research fetch --all`, its `stdout.log`; tree `41ff648dbd`, vy-nebius-2]: "CoinPrefix.lean: lean exit
+  0 in 272 s"; "axiom probe: none of its 22 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+  `same_placeK`, `same_place`, `place_prefix`, `place_prefix_used` and `place_whole` each depend on `[propext,
+  Classical.choice, Quot.sound]`; `sameUntil_prefix`, `sameUntil_next`, `sameUntil_whole` and `sameAt_step` on
+  `[propext]`.
+- The try built `CoinMap.lean`, `CoinMapLaw.lean` and `CoinMapAgree.lean` at `41ff648dbd` as its dependencies, so
+  those three and `CoinPrefix.lean` compile at one head. `CoinStages.lean` is not among them.
+- try22 `r20261113-070133-9790`, vy-nebius-2, pool proofs: `CoinStages.lean` at `41ff648dbd`, launched 07:01:33Z.
+  Its dependencies are built, so I expect it by about 07:25Z [guess: the file itself took most of try19's last
+  minutes].
+- For MESSAGES: with `Fr := CoinMap.frame V A x θ F c σ L P`, `Fr.out ω r` is `Tape.out _ σ (place V θ F c σ L r
+  ω)` by `rfl` [read: `frame`'s definition; not compiled as a lemma]. So `place_prefix_used` reads at `Fr.out`
+  as it stands.
+
+### STOP RULE
+Kept. Nothing changed in the tree since `41ff648dbd`; this entry only.
+
+### Not established
+- `CoinStages.lean` compiled with the `CoinMapLaw` import (try22, and the join's `6e8c`).
+- That the releases before round `n`'s are on shown rounds (the order hypothesis; not mine).
+- `Fr.out ω r = Tape.out _ σ (place …)` as a compiled `rfl`.
+
+Branch `cursor/proofs-coinmap-8b0c` at `41ff648dbd`, pushed; nothing unpushed.
