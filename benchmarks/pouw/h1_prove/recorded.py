@@ -391,7 +391,7 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
     that refuses, or None: the layout of ``descriptor`` (`credit.layout_of`, `credit.strata`), each session's ok rows
     held to the verifier's own (`credit._ok_held`, step 5's rule: each sampled proof block's finding opened ``o1`` at ``ok``,
     the value and root of the verifier's ``ok``, `ok_registration`), one accepted outcome per sampled proof block
-    (`credit._proved`, ``drawn`` h1_prove's own sample, not credit's work-law sample), and the registration
+    (`credit._proved`, ``drawn`` h1_prove's own sample, not that of credit's work sampling design), and the registration
     (`credit._registration`): the execution phase's registered ``entries`` (the commitment's: no entry registers ``ok``), each
     proof's ``registered`` the finding of the session that proved the unit (``findings``, unit -> `findings_of`), under
     the open root ``window_root``, each call a step of its own (`h1unit.steps`). Each proof's ``program`` is the
