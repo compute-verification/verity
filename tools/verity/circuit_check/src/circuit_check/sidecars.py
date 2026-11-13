@@ -78,7 +78,7 @@ def discover() -> dict[str, dict[str, Path]]:
     it has from the top of the regular packages it is in (``__init__.py`` all the way down), so a package inside another's
     tree names its own (`verity_flock`'s is inside `verity`'s).  One counts only where Python imports that top directory as
     the package of its name: a copy of a package behind a directory without ``__init__.py`` would name modules that another
-    directory owns (``verity.protocols.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
+    directory owns (``verity.protocols.proofs.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
     out: dict[str, dict[str, Path]] = {}
     imported: dict[Path, bool] = {}
     with CC.internal():
