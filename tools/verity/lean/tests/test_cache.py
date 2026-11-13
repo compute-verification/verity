@@ -965,6 +965,78 @@ def test_a_copied_kept_build_the_cache_lacks_is_compiled_once_and_indexed_with_t
     assert not (store / MK.UNSTORED).exists()
 
 
+@pytest.mark.skipif(LAKE is None, reason="no lake")
+def test_a_put_reads_its_build_before_it_takes_the_store_s_lock_and_the_index_under_it(tmp_path, monkeypatch):
+    """A `put` reads its own build (the workspace, each module's key, what Lake left of each module, its sources for
+    code that runs while they compile, its outputs' digests) before it takes the store's lock, and the index only with
+    it. So of two builds that end together on one node, the second has read its whole build while the first holds the
+    lock: here the first waits, with the lock and nothing written, until the second asks for it. And the second decides
+    from the index as it is once it holds the lock: it compiled `Dep` over a `Dep.Word` its run didn't compile, which
+    the first indexed after the second read its build, and `Dep` goes in. Read with the build, the index would have
+    had no `Dep.Word`, and `Dep` would be recorded as loading a module that is not indexed."""
+    LC, LA = (_load(f"two_puts_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
+    MK = LA.MK
+    store = tmp_path / "artifacts"
+    one, two = (pair(tmp_path / n)[1] for n in ("first", "second"))
+    for pkg in (one, two):
+        subprocess.run(LC.in_sandbox(pkg, ["lake", "build"]), cwd=pkg, check=True, capture_output=True, env=LC.lake_env())
+    first, second = LA.LakeArtifacts(store), LA.LakeArtifacts(store)
+    holds, asks = threading.Event(), threading.Event()
+    me, lock = threading.current_thread(), LA.LakeArtifacts._lock
+    read: list[str] = []
+    seen: list[tuple[int, set[str], bool]] = []
+
+    def held():
+        f = lock(first)
+        holds.set()
+        asks.wait()
+        return f
+
+    def asked():
+        if not asks.is_set():
+            seen.append((len(read), set(read), (store / MK.INDEX).exists()))
+            asks.set()
+        return lock(second)
+
+    def noting(what: str, real, mine=lambda: threading.current_thread() is me):
+        """``real``, which reads a build, noted in `read` once it returns when the second `put` called it."""
+        def noted(*a):
+            got = real(*a)
+            if mine():
+                read.append(what)
+            return got
+        return noted
+
+    first._lock, second._lock = held, asked
+    second._built = noting("_built", LA.LakeArtifacts._built, lambda: True)       # on the threads of its pool
+    for of, what in ((MK, "workspace"), (MK, "keys"), (LA, "runs_code"), (MK, "read_digests")):
+        monkeypatch.setattr(of, what, noting(what, getattr(of, what)))
+    new: dict[str, int] = {}
+    said: list[str] = []
+
+    def put_first() -> None:
+        try:
+            new["first"] = first.put({one: {"sandbox": True, "compiled": ["Dep.Word"]}}, log=said.append)
+        finally:
+            holds.set()
+
+    other = threading.Thread(target=put_first, daemon=True)
+    other.start()
+    holds.wait()
+    try:
+        new["second"] = second.put({two: {"sandbox": True, "compiled": ["Dep"]}}, log=said.append)
+    finally:
+        asks.set()
+    other.join()
+    [(n, names, indexed)] = seen
+    assert names == {"workspace", "keys", "_built", "runs_code", "read_digests"} and not indexed, \
+        "the second had read its build when it asked for the lock, which the first held with nothing written"
+    assert read[n:] == [], "and with the lock it reads nothing more of its build"
+    assert new == {"first": 1, "second": 1} and said == [], "`Dep.Word` is indexed by the time the second holds the lock"
+    assert sorted(json.loads(f.read_text())["module"] for f in (store / MK.INDEX).glob("*.json")) == ["Dep", "Dep.Word"]
+    assert not (store / MK.UNSTORED).exists()
+
+
 #: the smallest shape whose key reads a module for its code that Lake doesn't hand its compile (`module_keys.indexable`):
 #: `Fold.Protocol` imports `Fold.Deployed` by a `public import` and by a private `meta import`, which `keys` folds into one
 #: `public meta import`, and `Fold.Deployed` imports `Fold.Sizes` privately; `Fold` imports `Fold.Protocol`
