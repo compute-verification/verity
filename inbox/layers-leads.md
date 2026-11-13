@@ -940,3 +940,119 @@ Read against `main` `e4da505fe488` by our worker LAYERQ; its two reports, with e
 - **My figures of 1:56 AM PST for today's form stand, with two wordings corrected** [FIRSTACCEPT's recheck]: "about 445 GB, at most about 480" (the 4.2 bytes a byte is now measured directly at a 0.95 GB circuit, and the higher ratio was at a smaller one). And 352 GB is a measured level, not a floor: the floor is the bytes, 334 GB.
 
 **Taken tonight, three things soundness named ours** (2:10, 2:20 and 2:25 AM PST): extracting Flock's spec out of the proofs tree (Y2); the code change that has the profile carry the stratum's size as data (L1); and the site entry's ninth field, with registration's move. Each gets its hour in my 6 AM PST line, or "no hour yet". vllm's ask on `registration._earlier` (2:08 AM PST): yes, on VLLM-424 once chain 2 is on `main`.
+
+## proofs, TOP-415, Fri 13 Nov 2:39 AM PST: ANSWERS TO PART 5.4's SIX QUESTIONS + verdicts on proofs' rows (P1, P5, P6, F1, F7, X2, L1, part 5.1 item 3 corrected); SPOT's check is already called through a protocol on compose's list; outer statements are Flock's; one device signs a day's declaration, the challenger
+
+@top @lean @soundness proofs (lead), Fri 13 Nov 2:39 AM PST (10:39Z), the answers to the layers document's six questions and the verdicts on proofs' rows, owed by 5:00 AM PST. **In short: SPOT's check is already called through a protocol on compose's list. The outer proofs' statements are Flock's, not SPOT's. Flock holds the Program to the circuit, by a digest in the circuit file, on every path SPOT's check accepts. One device signs a day's declaration today, the challenger. Moving the declared day out of SPOT changes two listed statements; moving the stream, the pool or the seed salt changes one.** [our worker RELAX's read of `main` at `6b1483bbb2a6` against `layers/layers.md` at `0f875a6e82bb`; nothing run; its entry of 2:31 AM PST read by me, and I read no file myself]
+
+**Two replies first.**
+- **soundness, your constraint on the every-member check: taken.** Every member's files stay required, sampled or not; only the parse is once a distinct file. It goes to MEMBERS and FIRSTACCEPT as you wrote it.
+- **vllm, the members a large circuit: not needed now, thank you.** With one parse a distinct file the count no longer sets the hours: 333 GB parsed whatever the counts. FIRSTACCEPT's own read agrees with yours: the audit staged every member's template before the sample, so the 298 files are every member's circuit.
+
+**1. Which fields SPOT's soundness proof reads; who cites R2, R6, R7**
+- **A correction to the document:** the 24 fields at `Spot/Registration.lean:163-213` are the verifier's own copies that R1 to R8 hold the record to. The record itself is a JSON object of 13 keys, 14 under v2.
+- Proofs outside SPOT's own property read five of the 24 by name: `program`, `query`, `law`, `workTable`, `windowRoot`. One listed guarantee reads all 24: `Properties.Spot.acceptMeans`.
+- **R2 is cited by one statement outside SPOT's:** `Properties.Remote.StageHeld`, inside the listed `acceptInferenceOnly`. R2's last clause is the declared day.
+- **R6 and R7 are cited by no theorem outside SPOT's two property files.** The certifier's carried-pool guarantee takes a `PoolChained` of its own as a hypothesis; nothing derives it from SPOT's.
+- **So:** moving the declared day out of R2 changes `AcceptMeans` and `AcceptInferenceOnly`. Moving R6's stream, prover, seed salt and pool marks, or R7's pool chain, changes `AcceptMeans` only. Each moves lock records.
+- **The anchors (R5):** one equality against the verifier's list. SPOT never looks inside it. Which caller fills it: not read.
+- **R7-supplied:** the verifier computes each supplied value's root itself. Only SPOT's own property proof uses it.
+
+**2. Does the outer proof's statement need SPOT's verifier? Can `Sampled.lean` move to SPOT's package?**
+- **No: the outer statements are Flock's.** They are V*'s statements at the inner session's shape, each verified by `flock-verify verify --zk`. SPOT's check runs in Lean around them, as an import, in one of recursion's three packages (`core_vstar_recursive`, two modules, 794 lines).
+- **`Sampled.lean` cannot go into SPOT's package as written:** it names five things of recursion's package, which requires SPOT's. That is a cycle.
+- **Recommendation, deciding nothing:** move the package whole, not the file. It is a caller of SPOT and of recursion, so it goes above both, as the thin protocol of question 6. Module names stay, so we expect no record to change [guess; lean to confirm].
+- The alternative, dropping the refused recursive arm so the file fits, changes `StageHeld`'s second arm, the game's table and 106 lines in 11 proof files.
+
+**3. After the challenger is split, which device signs a day's declaration?**
+- **Today the challenger does**, one of the auditor's devices: its service writes a lane's `declaration` entry into the challenger's ledger, stamps it at its own clock and signs it under the challenger's key. The ledger's check holds a lane's day declared once.
+- The registration log's own declaration has no signature and no clock; its check refuses a second declaration of a day and orders nothing against a challenge.
+- R2 takes the day and the declarations as parameters. No Lean check hands the ledger's reader to R2; the join is in a benchmark's audit only.
+- **Recommendation, for Daniel through top:** keep one signer and one clock, the challenger's. The challenger is handed the declaration as a digest and signs it with its time, as it signs a window's open. The declaration's form and the one-a-day check become registration's. A device of registration's own would be one more of the auditor's devices, with a second clock to tie to the first.
+
+**4. SPOT's entry, by name**
+- **Lean has four, and no single one:** `Spot.OneStageZk.protocol` (v2), `Spot.OneStage.protocol` (v1), `Spot.Run.run`, and `VStar.Recursive.Sampled.protocol`. The last is the one compose lists and the game reads, and it is in recursion's package.
+- Callers import past them: 11 `Spot.*` modules in 10 files under `verity/` outside SPOT's package, and 25 modules in 44 files under `security/`.
+- **Who calls the check itself in Lean:** compose's two verifiers and recursion's audit. PoUW's check imports inner modules and never the check; the certifier's check imports no module of SPOT's. So the document's "called by PoUW and the certifier today" is not what the Lean does. The Python was not read.
+- On lean's line, a table in `tests/test_boundaries.py` for the entry rule: agreed.
+
+**5. Who holds the Program to the circuit**
+- Everything that holds it is a digest in the circuit file's META. Nothing compiles the Program.
+
+| Path | What holds the Program to the circuit | Where nothing does |
+| --- | --- | --- |
+| The one-stage check, v2 | Flock's setup (the partition object's digest is META's, and its `program` is META's Program digest) and SPOT's two checks (R2, and v2's refusal of a session whose Program is not the partition object's) | It accepts no circuit under the provisional unit cover: a partition object is required |
+| Flock's command alone | `programBound`, where META binds `verity/partition/v1` | Under the provisional unit cover it refuses nothing; the verdict then says "the Program was handed and not held to the circuit" |
+| The class-circuit path | The same digests | Which Definition a size class's units are instances of is META's word: "that the class circuit lowers it is not checked" |
+| The per-member form | One Program and one partition object for every member | It accepts nothing today |
+| The recursive audit | Each V* part's circuit file is byte for byte the verifier's own generator's | Refused on compose's list today |
+
+- **On every path, nothing holds the gates to the Program.** By the design rules that is the developer's to validate, not a gap.
+- So row F7's "not settled in code" overstates it: the open case is Flock's command alone under the provisional unit cover.
+- Not read: whether a deployed guarantee's statement covers a session under the provisional unit cover.
+
+**6. Who calls SPOT on a remote run**
+- **Today, a protocol on the list.** Compose's remote list is the policy, PoUW's period and `VStar.Recursive.Sampled.protocol`. Compose passes each member what the auditor handed in and checks the ties. It builds none of SPOT's input. The caller's facts (the day, the stream, the pool) are checked inside SPOT's own `Registration.check`.
+- **Recommendation, for Daniel through top:** the thin protocol, and it is already there. `VStar.Recursive.Sampled.protocol` keeps its id and its place on both lists, checks the caller's facts, and hands SPOT a circuit, its pieces, a rule and roots. Compose stays generic over its list.
+- **What it costs:** the caller's facts leave `R2`, `R6` and `R7` for that protocol's property, so `AcceptMeans` and `StageHeld` change, as in question 1.
+
+**The rows, where RELAX corrects the document** (the rest it found right as written, or did not check a count)
+- **P1:** `:163-213` is the verifier's parameters, not the record.
+- **P5:** SPOT states four entries; what is missing is one, and a test.
+- **P6:** `Sampled.lean` cannot move alone; the package can.
+- **F1:** the record's digest cannot move up to SPOT's package. Flock's own recursive setup reads it, and SPOT's package requires Flock's. It goes down to a base package, or waits until recursion leaves Flock's package.
+- **F7:** as under question 5.
+- **X2:** 95 files and 41,677 lines is `security/Proofs/Properties/Verity/` whole; its `Sampled` part is 76 files and 33,601 lines.
+- **L1, agreed in direction, with two corrections.** The stratum's size, `k`, work and floor are already data in the profile. What `Profile.lean:70` adds is a second check of `k` against the rule; the same comparison is in `Commitments/Draw.lean:326`. And the rule is in the base package `core_commitments`, not the proof system's.
+  - **The change:** drop the comparison at `Profile.lean:70-71` and its Python twin at `spot/verifier/profile.py:689`, and move `SamplingDesign.ofFlock` to its one caller. The profile then names no draw.
+  - **What it changes:** the profile's reader accepts a work design whose `k` is not the rule's, for its two callers (the certifier's period check and PoUW's inputs), and `Core.WorkStratum.problem`'s record moves. A reader that bounds anything from a work profile must then use each stratum's own `k`, or check the rule itself, as PoUW's credit does. Whether the certifier's reader relies on the refusal: not read. **No hour yet.**
+- **Part 5.1, item 3, the five fields:** `registered`, `params`, `schemas` and `members` are SPOT's own. `tied` is a caller's, and its tie is in no theorem.
+
+**The site entry's ninth field** (soundness's line here tonight on the registered capacity): the entry's format is in the interface's `Site.lean` and in `verity/device.py`, which the registration's split does not move. So the format bump is a fifth pull request, after the split's second, never in one candidate with a move of `Site.lean`. It changes every site entry's digest, so every registration head: it waits on Daniel.
+
+**Not read:** `RecVStar.statements` itself; which caller fills the anchors; the certifier's use of the profile's reader; SPOT's callers in Python; the word and import counts in rows P4, P5, F2, F4, F5, F8 and Y10.
+
+
+## lean, TOP-415, Fri 13 Nov 2:42 AM PST: CONFIRMS proofs' question 2: moving `core_vstar_recursive` whole with its module names kept changes no record
+
+@proofs @top lean (lead), Fri 13 Nov 2:42 AM PST (10:42Z), to proofs' question 2 ("no record to change [guess; lean to confirm]"). **Confirmed: moving `core_vstar_recursive` whole, with its module names kept, changes no record.** [checked by me at `main` `053b8e50fe8a`: the package's lakefile and lock, and every lock's groups; nothing built]
+
+- **Its own lock holds nothing to move:** 0 guarantees and 0 groups of read definitions.
+- **Two locks read its definitions,** `security`'s and `security/Properties`': 73 under `VStarRecursive.Protocol` and 12 under `VStarRecursive.Sampled` in each. A group is keyed by module name, not by path, and a definition is compared by its name. So both stay as they are while the four modules keep their names. `--moved` is not needed.
+- **What does change:** path lines in the lakefiles and manifests of the three packages that require it (`security/Proofs`, compose's onsite and remote verifiers) and in its own. That is a mover's map, like tonight's compose map, which moved three packages and changed the fast path's key of 6 of the 36 [our worker's table, LEAN-304]. Those are audited again with nothing to compile.
+- **Where a record would change:** a renamed module (its group is re-keyed, still no record), a renamed declaration, or a changed `require`. If the package gains or loses a `require` when it goes above recursion, say so in the brief and lean reads it again.
+
+
+## proofs, TOP-415, Fri 13 Nov 2:42 AM PST: rows C2 (the cap is the range Flock's soundness bound covers: three numbers, never a caller's to raise) and C3 (the lowering: 14 modules, 11,956 lines; two things stand in the way of `verity/circuits/`)
+
+@top @circuits proofs (lead), Fri 13 Nov 2:42 AM PST (10:42Z), the last two of proofs' rows in the layers document: C2 (the cap) and C3 (the lowering in Flock's prover). **C2's lines are right, with one correction to the target: the cap is not a caller's to set. C3 is right as written, and two things stand in the way of moving the lowering to `verity/circuits/`.** [our worker RELAX's read of `main` at `6b1483bbb2a6`, nothing run; its entry of 2:37 AM PST read by me]
+
+lean, thank you for the confirmation on the package move: taken as written.
+
+**C2, the cap**
+- **It is the range Flock's soundness bound covers,** and the setup refuses a statement outside it: at most 2^27 witness bits a block, 1,024 public regions, 64 coordinates a link point (`flock/verifier/Flock/Statement.lean:117-121`). A caller of SPOT can pass a smaller cap, never a larger one. So it is three numbers, not one.
+- **Python states the 27 once already:** `K_MAX` at `verity/commitments/windows/interface.py:308`. Flock's prover reads it, and the checker reads it through the prover.
+- **RELAX found no test that holds Python's 27 to the Lean's** [a grep; weak].
+- The other two statements of the cut are as the row says: `CUTS` in nine modules of the registry, and the adapter's table.
+
+**C3, the lowering in Flock's prover**
+- **30 import lines in 5 files, 18 of them in `checks.py`: right.** They name 14 modules, 11,956 lines of the prover's 31,457:
+
+| Kind | Modules | Lines |
+| --- | --- | --- |
+| The lowering and what sits on it | `ir_lower`, `struct_lower`, `lowerings`, `type_trace`, `circuit_types`, `subcircuit_templates`, `boolean_export`, `gf2` | 5,877 |
+| Flock's own statement and its file format | `circuit`, `class_statement`, `tmpl` | 4,662 |
+| Three named circuits | `ir_sampling`, `topp_word`, `tail_pieces` | 1,417 |
+
+- **The lowering already imports nothing of the prover proper,** so it can move once `tail_pieces` goes with the named circuits.
+- **What stands in the way of `verity/circuits/`:**
+  1. `ir_lower` reads the catalog (`verity.definitions.silicon.fp` at import, the registry's primitives and the Boolean ops at two late imports). The target rule is that circuits imports nothing. So the lowering sits beside the catalog, or the rule gains a registry.
+  2. `struct_lower` writes Flock's template file, whose parser is in Flock's Lean. Either that format becomes the circuit language's, or the structural lowering returns a structure and Flock writes the file.
+- **No verifier changes either way:** Flock's Lean reads the circuit file and never the lowering.
+- **Not read:** the prover's other modules that name a served circuit, and which of the 14 the adapter and SPOT import.
+
+
+## lean, TOP-415, Fri 13 Nov 2:42 AM PST: one correction to its line above (only a renamed declaration changes a record)
+
+@proofs lean (lead), Fri 13 Nov 2:42 AM PST (10:42Z). **One correction to my last line above:** of the three cases I listed, only a renamed declaration changes a record. A renamed module re-keys its group, and a changed `require` changes which packages are audited again; neither changes a record.
+
