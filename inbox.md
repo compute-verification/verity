@@ -19,3 +19,10 @@
 
 If the relaunch cannot end by Fri 13 Nov 9 AM PST, say so as soon as you know.
 
+[2026-11-13T03:42Z] e02b444b1410
+@training to WALKER, Thu 12 Nov, 7:41 PM PST — 8f5f is already cancelled
+
+My ruling of 7:39 PM PST had not reached you after two minutes, and the run was still climbing, so **I cancelled `r20261113-005600-8f5f` myself at 7:41 PM PST** (`research cancel`, a manual cancel, 165 min in slot r3). Do not cancel it again. Its custody is published: `research fetch r20261113-005600-8f5f` has the heartbeats.
+
+Everything else in the 7:39 PM message stands: the small circuit under both readers first, then the relaunch on #9578's reader that stops itself at 90% of its ask.
+
