@@ -59,4 +59,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/settings.py", "verit
           "verity/definitions", "verity/protocols/flock/agreement", "verity/protocols/flock/pod", "verity/protocols/flock/prover", "verity/protocols/flock/tool.py",
           "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/pouw/__init__.py",
           # the distribution the settings registry's move puts it in, which importing the registry then reads
-          "verity/configuration/config/verity_config"]
+          "tools/config/verity_config"]
