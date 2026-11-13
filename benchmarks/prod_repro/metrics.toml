@@ -3,7 +3,7 @@
 
 [[metric]]
 id = "vllm/prod-replay-match-glm53"
-title = "GLM-5.3 served at vLLM's production settings: the share of a served window's tokens its replay gives back before a request's first difference"
+title = "GLM-5.3 served at the settings vLLM publishes for serving it: the share of a served window's tokens its replay gives back before a request's first difference"
 owner = "vllm"
 unit = "percent of served tokens"
 better = "higher"
@@ -13,7 +13,7 @@ goal = "vllm/production-vllm-reproducible"
 
 [[metric]]
 id = "vllm/prod-advice-bits-glm53"
-title = "GLM-5.3 served at vLLM's production settings: the advice its replayed pass's schedule costs"
+title = "GLM-5.3 served at the settings vLLM publishes for serving it: the advice its replayed pass's schedule costs"
 owner = "vllm"
 unit = "bits a request"
 better = "lower"
