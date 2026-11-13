@@ -92,7 +92,7 @@ def rel(p: Path) -> str:
 
 
 def module_name(p: Path) -> str:
-    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/definitions/tiny.py`` -> ``verity.definitions.tiny``; a
+    """``verity_vllm/a/b.py`` -> ``verity_vllm.a.b``, ``verity/circuits/tiny.py`` -> ``verity.circuits.tiny``; a
     package's ``__init__.py`` names the package."""
     parts = list(p.relative_to(ROOT if p.is_relative_to(ROOT) else REPO).with_suffix("").parts)
     if parts[-1] == "__init__":
