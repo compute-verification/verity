@@ -298,7 +298,9 @@ _REQUEST_LOCAL_PREFIXES = ("peers",)
 
 def _resumed(r: WorkloadRequest) -> bool:
     """Whether the request's history reaches its prompt's end, so its first step decodes (a request resumed mid-decode)."""
-    return bool(r.prefix) and r.prefix["rows"] >= r.prompt_len
+    if not r.prefix:
+        return False
+    return r.prefix["rows"] >= r.prompt_len
 
 
 def _is_request_local(group: str) -> bool:
