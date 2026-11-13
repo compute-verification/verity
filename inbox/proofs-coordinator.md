@@ -115925,3 +115925,114 @@ In plain words: the second command of the audit, at the joined head, proved all 
 STOP RULE: not reached. NEEDS: your word on the `serve_tax` red (item 2, last line); otherwise I go as written. To post: nothing. Not established: the suites at the join; `second --kept --devices` at the served vocabulary (this rehearsal is V = 2,560).
 
 **Pushed.** `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `bdd91c5b7bcb617fa555d14036b992574882a6f3`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`. Unpushed: nothing. I wake by timer at about 03:35Z to read `eed6` and `4995`.
+
+## FRAME, Fri 13 Nov 02:50Z: A LEAN SLOT ON vy-nebius-2 HAS HELD `5105`'s LAST FILE FOR 17 MINUTES, so nothing new is running. (ii) HAS NOT RUN AND CANNOT YET: the guard reads an export that only the toy's audit writes, and none exists for the second try's registration. The second move is written and pushed on L1 (`c50b9ec49e72`), not compiled. One finding by reading: the guard's toy has an output port nothing reads, which the design on the base refuses
+
+**In plain words.** You asked first for the model's verdict on Friday's registration. I cannot give it yet. The guard evaluates the model on a folder of files (the auditor's copies and the templates' reference statements) that one script writes, and that script is written for the toy only. The second try's driver writes no such folder, so there is nothing for the guard to read at its 20 templates. Below is what the folder needs and who can write it; my part is small and I start it now. Meanwhile the base still stands at `6c1a87cc54d3`, whole and checked by a run. On my own branch I changed how the design decides three of its conditions on the wiring (once per template and port, by reading the circuit file, instead of once per bit of every inner block), added the condition that a template names each port once, and wrote the theorem that gives the two-stage guarantee from the built frame and four remaining facts. A machine has compiled none of that: the last try stopped on two small errors in files of mine, which I fixed, and its last file has been waiting for a Lean slot since 02:33Z, so my next try has not started. Separately, by reading the toy: one of its inner block templates writes an output that no outer-block link names and no other template reads. The design on the base refuses such a port. So the guard's honest toy run will be refused at the registration until the toy or the test changes. That is about the toy, not about Friday's registration, where every such output is read.
+
+Clock: `date -u` read 02:50Z. Mailbox read at 02:50Z; newest heading 02:43Z (your answers), read and followed below.
+
+### (ii) the guard on the second try's registration: not run, and why
+
+- [read: `benchmarks/two_stage/guard.py`, `tests/guard_node.py`, `tests/TwoGuard.lean` on the base] The guard reads a run's `guard/` folder: `held.json` (the first stage's select input, the cells, the counts, the templates' names, the links, wires and rows, both registrations' names, the units, the descriptor, the query), `ref-<t>.bin` and `ref-<t>.reads.json` a template, and the run's records, statements and coins. `guard.export` writes it, and it is bound to the toy at four places (`toy.boundary_window`, `toy.interior_window`, `toy.REPLAY`, `toy.N_T`). Only the toy's `audit.py` calls it.
+- [read: `cursor/proofs-gather-second-try-5a28` at `5ad83c84ef5e`] The second try's driver is `benchmarks/one_stage/two_stage.py` with `two_stage_small.sh`. It keeps the same kinds of file (`proofs.json`, `references/`, `audit/`, `statements.json`, `coins.json`, `summary.json`) and calls no export. No kept run of it has a `guard/` folder [derived: nothing writes one].
+- So a verdict in Lean on that registration needs three things:
+  1. **The export, general**: `guard.export` takes the two windows, the replay Definition's key and the cells as arguments instead of reading the toy. About twenty lines, in my file. I write it now on a branch cut from the base.
+  2. **The call**: `two_stage.py second` calls it with its own design (`Design.window`, `references`) and writes `guard/` under `--out`. This is in GATHER's driver, which I have not read beyond its outline. Fastest if GATHER writes it against my signature; I can write it if you say so, on a branch cut from GATHER's head, pushing nothing to GATHER's branch.
+  3. **A rehearsal that writes the folder** (`7b90`'s command at `--units 20 --v 2560`, about half an hour [guess, from `7b90`'s times]), then the guard on it at the base. I add a mode to the guard that reads the registration alone and prints each clause of `two` it can evaluate with its time, so it needs no statement or coin of the run.
+- What the small vocabulary shows and does not: the wiring's clauses read the names, links, wires and rows, which are the same at every vocabulary [derived], so a refusal by the wiring shows at V = 2,560. `templateOk` and `membersScoped` read each template's circuit, which is larger at Friday's shape; those need the files of `c6bd` or `b025`.
+- Until then the evidence is by reading only: HONEST2 and GATHER read eight of the conditions true on the second try's records (`92eb`) [relayed: their 00:01Z and 00:10Z entries], and I read `namesOnce`, `writtenRead` and the empty `values` true off their descriptions [derived]. No Lean evaluation.
+- **NEEDS, coordinator: who writes the call in `two_stage.py`, GATHER or I?** I write items 1 and the guard's mode either way.
+
+### What a run has compiled since 02:20Z
+
+- [run: `r20261113-021143-5105`, vy-nebius-2, L1 at `a6ccdd66a686`, started within the minute] `BUILD_EXIT_L1 1`. Every file built but two of mine and what imports them:
+  - `BlockSize.lean:73`: `mem_insOf` resolved to the partition's lemma of that name in `Flock.Bridge`, not `NeededBitsOf`'s. One of five theorems failed (`length_insOf_le`).
+  - `BitsInUnitsOf.lean:37`: "`dsimp` made no progress" in `free_src`. One of five failed.
+  - `AddressesGive.lean` imports `BitsInUnitsOf`, so its try failed with it.
+- [run: the same] `NeededBitsOf.lean` at its root line: "none of its 70 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- [read] Both errors are fixed in `8e282166e9` (the qualified name; the `dsimp` line removed). Not compiled.
+- [run] The try's last file (`WiringOk`, which built in `6b8a`) has been waiting since 02:33Z (its log is on the node; the run is "running"). I do not cancel a running try, by your 00:23Z rule; say if I may, since that file has nothing left to show.
+
+### Written and pushed, not compiled: the second move (steps 1 and 2) and the assembly
+
+Branch `cursor/proofs-frame-l1-9c4e` at `c50b9ec49e72`. Since `a6ccdd66a686`, in order:
+
+1. Merges of `cursor/proofs-neededbits-2597` at `3f35084266` (`NeededBitsHeld.lean`, `OutputsWritten.lean`, their root lines kept) and `cursor/proofs-ownreads-9a1c` at `90bbf657c8` (`OwnReads.lean`).
+2. `8e282166e9`: the two fixes.
+3. `a7d1244838`: `OwnReads`' root is a line of `security/Proofs/Flock.lean`, and its line in `security/Proofs/lakefile.toml` is gone (lean's lead's rule).
+4. `46d49b7467`: the per-template clauses.
+   - `Code.lean`: `sourceRows c` (the rows one unit of circuit `c` reads source bits at), `writtenRows c` (its output row ports' names), `sourceRowsNamed`, `writtenRowsUnwired`, `writtenRowsRead`, `portsOnce`.
+   - `wiringOk` is now `namesOnce && writersFirst && sourceRowsNamed && wiresMove && wiresAlike && writtenRowsUnwired && writtenRowsRead && refReadsOwn && (interior registers no value) && portsOnce`. `returnedWhole` left it.
+   - `WiringRows.lean` (new): `sourcesNamed_of_rows`, `writtenUnwired_of_rows`, `writtenRead_of_rows`. The three statements bit by bit keep their text and follow from the clauses.
+   - `AddressesGive.lean`: `wiring_of_wiringOk` takes `(hWf : RefReadsWf h)` where it took `OwnReads h` (OWNREADS's section 5), and `returnedWhole` from `WrittenOnce`.
+   - `TwoGuard.lean`: `wiringSizedOk` and `diag` read the new clauses.
+5. `e55817522b`: `AddressesHeld.lean` (new). It reads `two` from the accepted run, as NEEDEDBITS proposed.
+   - `addressesConnected_of_held (hWf : RefReadsWf h) (hW : WidthFact h (addressOf h)) (hC : CopyFact h (addressOf h)) (hRow : RowFact h (wireMap h) (returned h) (addressOf h)) : AddressesConnected h`.
+   - `ksTwo_of_facts` and `exfilTwo_of_facts`: the two guarantees at the connected program from `BuiltWired h (wireMap h) (returned h)` and those four.
+   - What it uses of others, all on L1 now: `neededBits_held`, `writtenOnce_held`, `rowsArePorts_of_two` (NEEDEDBITS, uncompiled), `ownReads_of` (OWNREADS, compiled on its branch), `bitsInUnits`, `inside_of`, `sideBySide_of_held`.
+6. `e6eef32972`, `c50b9ec49e`: two tactic steps made tolerant; `portsOnce_of_two (hd : two h s = some d) : PortsOnce h` in `WiringOk.lean`.
+
+`wiresMove` is still decided bit by bit inside `wiringOk` (step 3 is not written), so `two` still gives it and the guarantee's premises do not change. The computed-rows clause for `templateOk` (your 02:43Z item 4b) is not written yet; it goes in with step 3.
+
+### What the second move changes (for the notice that goes with its head, when a run has compiled it)
+
+| | On the base, `6c1a87cc54d3` | At L1's head |
+|---|---|---|
+| The guarantees' statements (`SpotKSTwo`, `SpotExfilTwo`) | two premises: `BuiltWired`, `AddressesConnected` | the same text |
+| `two h`'s wiring clause | ten conditions, four of them over every bit (`sourcesNamed`, `wiresMove`, `returnedWhole`, `writtenUnwired`, `writtenRead`: five) | ten conditions, one over every bit (`wiresMove`) |
+| What `two` refuses that it accepted | | a template whose circuit has two ports of one name (`portsOnce`); a row a unit could read at, or an output row port, that fails its clause even where no unit's bit sits on it |
+| What `two` accepts that it refused | | nothing [derived: each old clause follows from the new ones, `WiringRows.lean`, and `returnedWhole` holds at every held code once `writtenOnce_held` compiles] |
+| Lock records | as moved at 02:11Z | `two` is read by both guarantees, so their records move again |
+
+### Finding: the guard's toy is outside the design on the base
+
+- [read: `benchmarks/two_stage/toy.py`, `tests/test_guard.py`] The toy's five templates are `LINK_IN`, `FOLD`, `FLIP`, `FLIP_B`, `LINK_OUT`. Its links name `LINK_IN`'s `row` and `LINK_OUT`'s `o0`. Its egress is `flip`. `FLIP_B`'s `o0` is, in the test's own words, the port "which no link or wire names".
+- [derived] `writtenRead` (on the base since 02:11Z; `writtenRowsRead` on L1) asks that every output row port no link names is some wire's writer port. I added it for ADDRROW's row fact at a template's own port: the leaf count of that row is pinned only by a reader's check. At the toy it is false for `FLIP_B`. So `two h = none` there, the model's verifier refuses every run of the toy, and `test_honest_run_passes` fails on `twoFilesOk`.
+- [read] The guard's test is opt-in (`VERITY_TWO_STAGE_GUARD`), so no gate reads it. It is the only evaluation of the model on a real run.
+- This says nothing about Friday's registration, where each `o0` is a wire's writer [relayed: GATHER's and HONEST2's readings].
+- Three ways, yours to choose:
+  1. **The toy changes**: `FLIP_B`'s output gets a reader (for example `LINK_OUT` reads `FLIP_B` and `FLIP_B` reads `FLIP`), and the fixture is exported again from a new toy run. The dropped-port test moves to a wire's writer port. Right, and not mine tonight: it needs the toy's owner and a run of the toy.
+  2. **The test says what is true**: the guard reports the wiring's clauses under their own key, the honest case asserts the run's conjuncts and the files, and asserts that the wiring refuses for `FLIP_B`'s port only. The docstring says the model refuses the toy's registration. I can make this change in the second move.
+  3. **Drop the clause** and prove the row's leaf count at an unread port another way: it needs the running `rowsOk` to refuse `leaves ≠ units`. Not before Friday.
+- I take way 2 in the second move unless you say otherwise, and name way 1 as owed.
+
+### Answers to NEEDS
+
+- **ADDRWC** (02:33Z, `PortsOnce`): the decided check is on L1, uncompiled: `portsOnce` in `wiringOk`, `portsOnce_of_two (h) (hd : two h s = some d) : PortsOnce h` in `WiringOk.lean`. Two things when you merge the base's second move:
+  - `WiringOk.lean` defines `SpotFlock.PortsOnce` with your text. Delete yours in `AddressFacts/BitsIn.lean` and import `WiringOk`, or the two clash as soon as both sit under `Flock.lean`.
+  - Your seven roots are lines of `security/Proofs/lakefile.toml` and you removed two lines of `Flock.lean`. Lean's lead's rule is the other way: one `public import` a line in `security/Proofs/Flock.lean`, no lakefile change. Please move them before I take your branch.
+  - No `qsort` lemma is needed. Take `CopiesAt`.
+- **OWNREADS**: your `OwnReads.lean` is on L1 at `90bbf657c8`, with section 5's change made in `AddressesGive.lean`. Your root moved from the lakefile to `Flock.lean` (same rule). `HeldOfReads.lean` (`f4162d4c2a`) is not taken.
+- **NEEDEDBITS**: merged at `3f35084266`; root kept; `two` comes from the run in `AddressesHeld.lean`, so `MembersRowed` needs no premise. The next try compiles `NeededBitsHeld.lean` and `OutputsWritten.lean` on L1 and I report each file's verdict.
+- **HELDOF**: `length_insOf_le` is the theorem that failed in `5105`; fixed, in the next try. I say when it has compiled.
+
+### NEEDS
+
+1. **Coordinator**: who writes the export's call in GATHER's driver (section (ii)).
+2. **Coordinator**: the guard's toy, way 1, 2 or 3 above.
+3. **Coordinator**: may the records run for the new PR go beside one try? It holds the node's records tree, not a try's, and takes one to two and a half hours. One run at a time puts the PR's opening after (ii) and (iii), about 07:00Z [guess].
+
+Your 02:43Z answers, as I follow them: no `main` in the base tonight; at 06:00Z, if #9375 is still open, a trial branch of mine with `main` merged, built, and what broke. One new PR for the connected statement from a branch cut at the base's head `6c1a87cc54d3` (so the base can move under the workers without moving the PR), opened unmarked after its records run, `Lane proofs` first in its body, the 02:20Z table in it. The second move is its own PR after it. The computed-rows clause goes into `templateOk` with the second move (NEEDEDBITS takes it as a named hypothesis until then); the per-template `wiresMove` decides the reader's bit is below the writer's `16 · w`.
+
+### STOP RULE
+
+Nothing new since the 02:20Z notice. The second move changes what `two` reads (table above) and so moves the two guarantees' records again. It reaches the base only after a run has compiled it, announced with its head and that table.
+
+### Pushed
+
+- `cursor/proofs-frame-l1-9c4e` at `c50b9ec49e72`. Nothing unpushed.
+- `cursor/proofs-two-round-base-84b5` at `6c1a87cc54d3`, unmoved since 02:11Z.
+- Machine: vy-nebius-2, `--pool proofs --mem-gb 16`. `5105` started within the minute; its last file has waited 17 minutes for a slot. The next try (L1's whole build, ten probes, then the toy's `diag`) is written and launches when `5105` ends; cpu-11 refused it for memory at 02:47Z (`r20261113-024727-e574`, asked 16 GB, "available -36.9 GB").
+
+### Not established
+
+- Nothing written since 02:20Z has compiled: the two fixes, `WiringRows.lean`, the new `wiringOk`, `AddressesGive.lean`'s change, `AddressesHeld.lean`, `portsOnce_of_two`, the guard's script. `NeededBitsHeld.lean` and `OutputsWritten.lean` have not compiled anywhere.
+- That the toy is refused for `FLIP_B`'s port only: my reading until the try's `diag` prints each clause.
+- `wiresMove` on any real registration: no run evaluates it (it is the one clause still over every bit).
+- `WidthFact`, `CopyFact`, `RowFact`, `RefReadsWf` at Friday's registration: other workers', stated or partly proved.
+- No records run, no suites, no merge of `main`. #9229's records run is not relaunched.
+
+### To post
+
+Nothing.
