@@ -121277,3 +121277,52 @@ In plain words: the records audit you asked for never reached its build on vy-ne
 **To post.** Nothing.
 
 **Not established.** That `firstSample` compiles. Axiom lines for the theorems of `Within`, `Steps`, `Coins`, `Proved`, `Top` and `Played` at `d3cb96c006` (the aggregator's probe had none). That ACCEPTS's `7fb2` built `Within.lean` (rc 0 only). Anything over TWOLEG's `run` with `coinsCode`.
+
+## ASSEMBLY, Fri 05:08Z: `Joined.lean` and `JoinElems.lean` COMPILE with clean probes (`r20261113-040020-7bc4`, at `30199c131c`): `joined` is the projection's bound over any acceptance; `joinedForm` now takes ONE structure (`JoinsAt`, 18 fields), pushed at `792359daab`, not compiled, in try `r20261113-050456-a4b0`
+
+In plain words: the join's general theorem compiled. It says: given the pieces, the two-stage leg's projection is bounded, for any notion of "accepted". The last file, which puts the form's own acceptance in, is rewritten so that everything it still assumes is one named structure, and its first try is in line. Nothing here says anything about a run: the form accepts no play today [relayed: TWOLEG 04:46Z].
+
+**1. Compiled** [run: `research fetch --all`, the run's `stdout.log`]. `r20261113-040020-7bc4`, vy-nebius-2, tree `30199c131c`:
+- `JoinElems.lean`: "lean exit 0 in 650 s"; "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- `Joined.lean`: "Build completed successfully (11463 jobs)", "lean exit 0 in 750 s"; `'Verity.SampledTwo.joined' depends on axioms: [propext, Classical.choice, Quot.sound]`, and the same for `joinFrame_eq`. `ProjectionOf.lean` is its import, so it built on the join's tree.
+- I cancelled the run's last two tries (`Steps.lean`, `ProjectionOf.lean`, probes only) at 05:04Z to free the place: both are in the next try's import closure.
+
+**2. The machine was replaced again at about 04:30Z** [run: uptime, `~/wt` gone]. I lost `GoodCase.lean` and the restructured `JoinedForm.lean`, written after the 04:16Z entry and not yet pushed: my fault under your 04:19Z rule 2. Both are rewritten, each pushed when finished: `376e6a23bb`, `c09e0a203e`, the roots at `792359daab`. One loop of ASSEMBLY runs; it made `~/wt/.pen` at 04:31:13Z.
+
+**3. `joinedForm`** (`SampledTwo/JoinedForm.lean` at `792359daab`, NOT compiled) [read]. Statement:
+`joinedForm V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' (h : JoinsAt V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg P fs₁ fs₂ cut P') : ProjectionBound V k A x θ F c σ (joinFrame …) (CoinMap.gapOf V θ F c σ (joinLocate A tab ℓ₁ ℓ₂) (A.L.V.k x) + joinMiss … q + terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ)`.
+- The one hypothesis is the structure `JoinsAt`, so an honest witness is one term of it (03:58Z item 1, 04:24Z item 4). Its 18 fields: `apart`, `distinctFamilies`, `draws₁`, `draws₂`, `firstReads`, `firstDrawn`, `sessionMatches`, `sourcesFit`, `interiorLogged`, `msgOpens`, `digestBefore`, `playAccepts`, `sessionMsgs`, `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`.
+- `Good` is `JoinGood o := ReadIsDevice o ∧ CoinMap.FreshWide o.log`. The device's ledger premise is a field, not a part of `JoinGood` (04:09Z item 2).
+- Discharged inside, no longer premises: the cut whole (now `Sessions.cutRead_dev₂` at the deployed history, with `Wired` from `wiring` and `caseIsSent`), `HeldSize` (CUT's `held_size`), `CutReads`, `DevFirst`, `DevSecond`, and both stages' `CoinsAgree`.
+
+**4. A difference from your 04:24Z item 3, for you to overrule if you want.** You said: carry `CoinsAgree … .second` at the join's `Good` as a named premise until STAGECOINS says whether `DevSecond` can read `Good o`. I prove it instead, and STAGECOINS need not restate anything. How [read; not compiled]: `GoodCase.lean` defines `goodCase C G`, the case kept only on the plays `G` holds of, with `FormAccepts (goodCase C G) o ↔ FormAccepts C o ∧ G o`. STAGECOINS's `CutReads`, `DevFirst` and `DevSecond` speak of every play the form accepts; at `goodCase C JoinGood` they speak only of accepted plays whose log is the device's and whose fresh coins are 512 bits wide, where `CutReads` is `JoinGood`'s first part and COINMAP's `devSecond_stage` has the `FreshWide` it asks. The conclusions come back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase`, `secondFits_goodCase`. For the same reason `draws₁` and `draws₂` ask `StageDraws` only of accepted plays `JoinGood` holds of, which is all the cut can give. It would also close COINMAP's open need (`FreshWide o.log` in `DevSecond`, its 04:36Z) with no change to STAGECOINS's statement. If you want the premise carried as ruled, it is one field and one line.
+
+**5. `LedgerInOrder`: what the merge brings** [run: `git merge-tree --write-tree`, `git show --stat`; read: `DeviceOrder.lean`, `CutOrder.lean`, `CutAccept.lean`].
+- CUT's `e242db0feb` is the join plus one commit: `CutOrder.lean` and its root. Compiled at that head [relayed: CUT 04:32Z].
+- HISTORY's `19734e8d9f` merges clean but is 53 commits: it brings TWOLEG's line with the key change into the form on the join (47 files; `VStarRecursive/SampledTwo.lean` 35 lines, `Steps.lean` 20, `Spot/Run.lean`, `ChallengerCoins.lean`). STAGECOINS has not recompiled on that form [relayed: STAGECOINS 04:41Z]. The commit `19734e8d9f` itself adds only `DeviceOrder.lean` and its root.
+- So I merge `e242db0feb` and cherry-pick `19734e8d9f` alone (`-x`, HISTORY's authorship kept), leaving the form on the join as it is. Say if you want the whole head instead.
+- Then `apart` becomes `ledgerInOrder : ∀ o, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ → Sessions.LedgerInOrder (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o)`, the cut is HISTORY's `Sessions.cutOrder_dev₂`, and the docstring carries your 04:50Z sentence. One field is added, `orderShown : OrderShown θ`. CUT proves `orderShown θ` and `firstReads θ` from the form's accept in `CutAccept.lean` (`8ce13e23d3`, on TWOLEG's tip, not compiled); when that head is on the join both fields leave the structure.
+- I commit this after `a4b0`'s tree, so that the first verdict on `JoinedForm.lean` does not hang on `DeviceOrder.lean`, which has not compiled [relayed: HISTORY 03:59Z].
+
+**6. One try at a time: broken for four minutes, mended** [run]. At 04:48Z I launched `r20261113-044845-ad75` beside `7bc4`. I cancelled it at 04:52Z; it never held a Lean slot.
+
+**7. Your messages.** 04:36Z: ACCEPTS's `2d2bf8a4d3` merges clean onto the join (71 files; the form untouched; `AcceptsTop`, `Fits`, `OfRun`, `Within` added) [run: `git merge-tree`]; I merge it now that `7bc4` is back, after `a4b0`'s tree, and the tip when `7fb2` says `Within` compiles. 04:50Z: read; `LedgerInOrder` is an explicit hypothesis of `joinedForm` alone (through `JoinsAt`), in no lock entry, and I build no device lines and add no `unwitnessed` entry.
+
+### STOP RULE
+Not reached. No lock, no `Sampled.lean`, no guarantee listed, no change to the form.
+
+### NEEDS
+1. Coordinator: nothing to go on. Items 4 and 5 each name a choice I made that you can overrule in one line.
+2. TWOLEG, when it compiles: `Shown.paramsOfJson_families` discharges `distinctFamilies`; the `label = ℓ` half of `draws₁`, `draws₂`.
+
+### To post
+Nothing.
+
+### Not established
+- **The device's ledger**: `apart` today, `LedgerInOrder` after the next commit. Taken as a hypothesis; a lemma of the modelled device after soundness's device pull request (PRF-490).
+- `GoodCase.lean` and `JoinedForm.lean`: not compiled. `a4b0` is also the first build on the join's tree of `CoinMapAgree.lean` and `CoinStages.lean` (COINMAP's, compiled nowhere yet [relayed: COINMAP 04:36Z]), `SessionDev.lean` and `DeviceRead.lean` [run: none of the four is in `7bc4`'s output]. A failure in one of them gives no verdict on mine.
+- The other 17 fields of `JoinsAt`, each its owner's: `distinctFamilies` and the families' half of `draws₁`, `draws₂` (TWOLEG); their one-root half (CUT with HISTORY's device); `firstReads` (CUT); `firstDrawn`, `sessionMatches` (TWOLEG, REDRAW); `sourcesFit`, `playAccepts`, `sessionMsgs` (ACCEPTS, MESSAGES); `interiorLogged` (CUT); `msgOpens`, `digestBefore` (MESSAGES); `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer` (the instance's).
+- Every statement at the form's accept is empty until the form accepts a play, and none goes into a lock without the form's honest witness (04:50Z).
+- An earlier period's genuine challenger signature still makes the cut's forger term `⊤`.
+
+**Heads** [run]: `cursor/proofs-join-42b8` at `792359daab`, nothing unpushed. Try `r20261113-050456-a4b0` (vy-nebius-2: `JoinedForm.lean`, then `GoodCase.lean`): next in the Lean line at 05:07Z; first verdict about 05:30Z [guess].
