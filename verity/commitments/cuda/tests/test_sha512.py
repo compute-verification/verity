@@ -15,7 +15,7 @@ from pathlib import Path
 import cuda_build
 import pytest
 
-from verity.circuits.kernels import SHA512
+from verity.commitments.cuda import SHA512
 
 SOURCE = Path(__file__).resolve().with_name("sha512_forms.cu")
 
