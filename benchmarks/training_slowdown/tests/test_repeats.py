@@ -30,7 +30,7 @@ def definition(rows: list[list[int]]) -> int:
     return sum(len(r) - 1 for r in rows) - len(past - first)
 
 
-def drawn(gen: np.random.Generator, n: int, length: int, vocab: int) -> np.ndarray:
+def random_rows(gen: np.random.Generator, n: int, length: int, vocab: int) -> np.ndarray:
     """`n` rows of `length` tokens of `vocab`, with planted repeats: some rows copy a prefix of an earlier row, and
     some start with a run of one token."""
     rows = gen.integers(0, vocab, (n, length))
@@ -45,12 +45,12 @@ def drawn(gen: np.random.Generator, n: int, length: int, vocab: int) -> np.ndarr
 
 @pytest.mark.parametrize("seed", range(4))
 def test_the_sorted_count_is_the_definition(seed):
-    """`flops.repeats`, counted on the sorted rows, against the definition on drawn batches with planted prefixes and
+    """`flops.repeats`, counted on the sorted rows, against the definition on random batches with planted prefixes and
     runs, over small vocabularies (many chance repeats) and large ones (few), and a row of one token."""
     gen = np.random.default_rng(seed)
     for _ in range(250):
         n, length, vocab = int(gen.integers(1, 9)), int(gen.integers(1, 12)), int(gen.choice([2, 3, 5, 50]))
-        rows = drawn(gen, n, length, vocab)
+        rows = random_rows(gen, n, length, vocab)
         assert flops.repeats(rows) == definition(rows.tolist())
     assert flops.repeats(np.array([[7] * 6])) == definition([[7] * 6]) == 5
 
@@ -219,13 +219,13 @@ TOKENS = synthetic.tokens
 
 def planting(monkeypatch) -> None:
     """`synthetic.tokens` writing `PLANT` at the start of every window the stream cuts at the tiny start's context,
-    in the training parts only (`synthetic.tiny_data` draws them first): the held-out pools stay their documents'
+    in the training parts only (`synthetic.tiny_data` makes them first): the held-out pools stay their documents'
     bytes."""
-    drawn = iter(range(len(synthetic.PARTS)))
+    parts = iter(range(len(synthetic.PARTS)))
 
     def planted(rng: np.random.Generator, n: int) -> np.ndarray:
         t = TOKENS(rng, n)
-        if next(drawn, None) is not None:
+        if next(parts, None) is not None:
             for i in range(0, n, synthetic.SHAPE["ctx"]):
                 t[i:i + len(PLANT)] = PLANT[: n - i]
         return t
