@@ -182,7 +182,8 @@
   "Proofs.Properties.Challenger.Steps",
   "Proofs.Properties.Challenger.Plain",
   "Proofs.Properties.Challenger.Entry",
-  "Proofs.Properties.Challenger.Signer"
+  "Proofs.Properties.Challenger.Signer",
+  "Proofs.Properties.Challenger.Built"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
