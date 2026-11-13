@@ -239,8 +239,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), each row registration whole with its cost (`cells.jsonl`, the cells', and `rows.jsonl`,
-  the connection rows', a line a registration), the cells' salts (each link-window's rows' and wiring's), the
-  traffic, the client's log and the check, all the prover's. Its unit publishes to `out/` only what isn't:
+  the connection rows', a line a registration), a load's registrations whole (`load.json`), the cells' salts
+  (each link-window's rows' and wiring's), the traffic, the client's log and the check, all the prover's. Its unit
+  publishes to `out/` only what isn't:
   `deployment.json` (the warden's key, session and schedule), `certificates.jsonl` (the records' certificates
   alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row registration's certificate alone,
   `ROW_CERTIFICATES`: of a registration `out/` and the end hold nothing else, no root, wiring, domain or layout,
@@ -265,9 +266,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
   endpoint on the weights the sink wrote, and the warden's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;
-  `out/` publishes `load.json` (the load's registrations, which the block record pins) and `load-relay.json` (the
-  relay's counts and the sink's acknowledgements, or why it was refused), and the end carries the relay's and the
-  check's `load` (values and how many registered).
+  of the load `out/` publishes `load-relay.json` alone (the relay's counts and the sink's acknowledgements, or why
+  it was refused), and the end carries the relay's and the check's `load` (values and how many registered). The
+  load's registrations (`load.json`, which the block record pins) stay in `witness/`.
 - **A rehearsal's sampling** (`sampling`, both verbs): `--temperature` 0 to 2 (0 by default) and `--top-p` above 0
   and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
   every one (`sampling_argv`), so every request the rehearsal sends carries both: an endpoint applies its own
@@ -443,8 +444,9 @@ PROMPTS = "prompts.json"
 #: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`);
 #: everything else `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's
 #: own lane alone. `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the
-#: request's public counts and the scan's schedule alone
-WARDEN_PUBLIC = ("deployment.json", "groups.json", "load.json", "load-relay.json")
+#: request's public counts and the scan's schedule alone. Of a load, `load-relay.json` alone: its registrations
+#: (`load.json`, each value's whole) stay in `witness/`, as the row registrations do
+WARDEN_PUBLIC = ("deployment.json", "groups.json", "load-relay.json")
 #: the row registrations' files of `witness/`, the cells' and the connection rows' (`connection_rows`), each with
 #: the file of `out/` that holds its lines' certificates, line for line (`row_certificate`). A line is a
 #: registration, or the execution phase it was refused for, and its cost; of a registration `out/` holds the

@@ -67,8 +67,9 @@ two gate verbs on the auditor's machine:
   `warden-rehearse`'s flags) is `warden-rehearse` with the load first. The store goes over 4 TCP streams, an SSH
   tunnel each, to `load_relay.py sink` on the H200's loopback; each value is held to its digest and committed under the
   reading program's domain as it crosses. The certifier's one signer on that link then signs the load's heads before
-  its first execution phase, so one LMS key and one attachment carry the load and the execution phases. `load.json` (the
-  registrations the server block's record pins) and `load-relay.json` are public in the run's `out/`.
+  its first execution phase, so one LMS key and one attachment carry the load and the execution phases.
+  `load-relay.json` is public in the run's `out/`. `load.json` (the registrations the server block's record pins) is in
+  the run's `witness/`, which `fetch` gives the run's own lane key.
 - The witness, every row's salts, is the sink's `--witness` file (0600) on the developer's host. The certifier's host
   never writes a salt.
 
