@@ -32,7 +32,7 @@ untraced = [
     "tests/test_session.py",
     "tests/test_store_layout.py",
 ]
-inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
+inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/poub/verifier", 
           "verity/hardware/record.py",
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
