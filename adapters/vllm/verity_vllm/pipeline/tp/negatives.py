@@ -2,6 +2,8 @@
 negative was injected on its target rank (`tp-commit` reports one that was not as an error run)."""
 from __future__ import annotations
 
+from verity_vllm.errors import Refused
+
 
 def negatives_applied(flip_partial: str | None, swap_requests: str | None, omit_partial_site: str | None, xrank_pairs: list[dict], made: list[dict]) -> dict[str, dict]:
     """Per requested negative: did the target rank actually inject it?  flip_partial -> the rank's flipped_collective_inputs over the pairs (from
@@ -10,7 +12,8 @@ def negatives_applied(flip_partial: str | None, swap_requests: str | None, omit_
     applied: dict[str, dict] = {}
     if flip_partial:
         tgt = str(flip_partial.split(":", 1)[0])
-        fl = [d_.get("flipped_collective_inputs") for xr_ in xrank_pairs for d_ in (xr_.get("dumps") or []) if str(d_.get("rank")) == tgt]
+        # a pair whose cross-rank pass wrote no dumps says nothing of the flip: with no count at all, `applied` is unknown (None)
+        fl = [d_.get("flipped_collective_inputs") for xr_ in xrank_pairs if xr_.get("dumps") for d_ in xr_["dumps"] if str(d_.get("rank")) == tgt]
         applied["flip_partial"] = {"rank": tgt, "flipped_collective_inputs_per_pair": fl, "applied": (any(int(f_ or 0) > 0 for f_ in fl) if fl else None)}
     if swap_requests:
         tgt = str(int(swap_requests.split(":")[0]))
@@ -18,7 +21,8 @@ def negatives_applied(flip_partial: str | None, swap_requests: str | None, omit_
         applied["swap_requests"] = {"rank": tgt, "swap_requests_applied": sw, "applied": (any(bool(x_) for x_ in sw) if sw else None)}
     if omit_partial_site:
         tgt = str(omit_partial_site.split(":", 1)[0])
-        om = [((m_.get("tp_partial_source") or {}).get("omit_site")) for m_ in made if str(m_.get("rank")) == tgt]
+        # a rank whose make reports no partial source omitted no site (None, which is not applied)
+        om = [m_["tp_partial_source"].get("omit_site") if m_.get("tp_partial_source") else None for m_ in made if str(m_.get("rank")) == tgt]
         applied["omit_partial_site"] = {"rank": tgt, "omit_site_per_rank": om, "applied": (any(bool(x_) for x_ in om) if om else None)}
     return applied
 
@@ -32,9 +36,9 @@ def parse_serve_shard_from(specs: list[str] | None, world: int) -> dict[str, lis
     for spec in specs:
         parts_ = str(spec).split(":")
         if len(parts_) != 3 or not parts_[1]:
-            raise SystemExit(f"--serve-shard-from <rank>:<served param name>:<from_rank> (got {spec!r})")
+            raise Refused(f"--serve-shard-from <rank>:<served param name>:<from_rank> (got {spec!r})")
         rank, frm = int(parts_[0]), int(parts_[2])
         if not (0 <= rank < world) or not (0 <= frm < world) or frm == rank:
-            raise SystemExit(f"--serve-shard-from {spec!r}: rank {rank} must serve ANOTHER rank's shard of a world of {world}")
+            raise Refused(f"--serve-shard-from {spec!r}: rank {rank} must serve ANOTHER rank's shard of a world of {world}")
         out.setdefault(str(rank), []).append({"param": parts_[1], "from_rank": frm})
     return out

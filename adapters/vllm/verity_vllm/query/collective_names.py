@@ -11,7 +11,8 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from typing import Any
 
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import ProgramView, param_reads, reads_any_of
@@ -46,7 +47,8 @@ def norm_sites(P: ProgramView, corr: Correspondence, record_fields: Mapping[Valu
                 for r in c.reads:
                     if r.call in unfused:
                         norms[r.call].add(m)
-    found, flat = Counter(), Counter()
+    found: Counter[tuple[str, Any]] = Counter()
+    flat: Counter[tuple[str, Any]] = Counter()
     for cid, ms in norms.items():
         if len(ms) == 1:
             found[key := (next(iter(ms)), step_of(cid))] += 1

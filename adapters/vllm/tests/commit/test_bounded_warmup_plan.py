@@ -6,33 +6,23 @@ and the sampler hook bound no `runner.sampler/seed`; every seeded record step th
 compares 256 B-padded lengths, so the tail shows only where the plan ends within 8 bytes of a chunk boundary -- 135M's decode step did,
 SmolLM2-360M's (the same vocabulary) and 135M top-p 0.95's (4 B of top-p splits before the seed) did not.
 
-The adapter imports torch, so `throwaway_requests` is exec'd from source; the collector's layout rule is restated from
-`native_collect.cpp` (`stage`: 4-byte alignment, gaps zeroed) and the worker's padded comparison from `native_collect.py`.
+The collector's layout rule is restated from `native_collect.cpp` (`stage`: 4-byte alignment, gaps zeroed) and the worker's
+padded comparison from `native_collect.py`.
 """
 
 from __future__ import annotations
 
-import ast
-from pathlib import Path
 from types import SimpleNamespace
 
-import numpy as np
+import pytest
+
+pytest.importorskip("torch")  # `vllm_adapter` imports it
+
+from verity_vllm.engine.vllm_adapter import throwaway_requests
 
 C = 256                                              # the chunk-leaf size the worker pads a step to
 DECODE_PLAN_BYTES = 2_005_504                        # the learned 135M decode plan of the failing runs (a multiple of C)
 
-
-def _adapter(name: str):
-    src = (Path(__file__).resolve().parents[2] / "verity_vllm" / "engine" / "vllm_adapter.py").read_text()
-    ns: dict = {"np": np, "Engine": object}
-    for node in ast.parse(src).body:
-        if (isinstance(node, ast.FunctionDef) and node.name == name) or \
-           (isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "THROWAWAY_SAMPLING_FIELDS" for t in node.targets)):
-            exec(compile(ast.Module([node], []), "vllm_adapter", "exec"), ns)
-    return ns[name]
-
-
-throwaway_requests = _adapter("throwaway_requests")
 ENGINE = SimpleNamespace(llm=SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=SimpleNamespace(
     model_config=SimpleNamespace(hf_config=SimpleNamespace(vocab_size=49152))))))
 

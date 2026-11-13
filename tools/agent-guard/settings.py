@@ -14,9 +14,14 @@ import time
 INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")
 #: seconds between the hook's background `inbox.py pull` for one agent; `off` stops it
 INBOX_POLL_S = os.environ.get("AGENT_INBOX_POLL_S", "30")
-#: one line per hook run: which hook, the event's name, its conversation, tool name and key names (never a value)
+#: one line per hook run: which hook, the event's name, its conversation, tool name and key names, and of the payload's
+#: other values only EVENT_VALUES
 EVENT_LOG = os.environ.get("AGENT_GUARD_EVENT_LOG", "/tmp/agent-guard-events.jsonl")
 EVENT_LOG_MAX_BYTES = 1 << 20
+#: the payload's values a line keeps, each where the payload has it as a string, cut at EVENT_VALUE_MAX characters: the
+#: model the payload names, and the id of the turn it belongs to
+EVENT_VALUES = ("model", "generation_id")
+EVENT_VALUE_MAX = 64
 #: this agent's conversation id where Cursor's shell sets it: the agent `inbox.py selftest` checks when none is named
 CONVERSATION_ID = os.environ.get("CURSOR_CONVERSATION_ID", "")
 #: a regex for the push URLs the push rules judge, in place of verity's and infra's on GitHub (`worktree_guard.QUEUE_URL`)
@@ -29,11 +34,15 @@ INJECTED_UNSET = [n for n in INJECTED if not os.environ.get(n)]
 
 def record_event(hook: str, event: object) -> None:
     """Append what `hook` was handed to EVENT_LOG, keeping the last EVENT_LOG_MAX_BYTES or so; `inbox.py check` reads it to
-    say whether this VM's shell hook runs for an agent, and its key names show which event shape Cursor sent."""
+    say whether this VM's shell hook runs for an agent, its key names show which event shape Cursor sent, and `inbox.py
+    turns` reads from it the model each turn's payloads name. Of the payload's other values a line keeps EVENT_VALUES
+    alone: never the command, a path or an address, nor anything of `tool_input` (a Task call's `model` argument is the
+    worker's, which `task_hook.py` logs)."""
     e = event if isinstance(event, dict) else {}
     tool_input = e.get("tool_input")
+    values = {k: e[k][:EVENT_VALUE_MAX] for k in EVENT_VALUES if isinstance(e.get(k), str) and e[k]}
     line = json.dumps({"t": int(time.time()), "hook": hook, "event": e.get("hook_event_name"),
-                       "conversation_id": e.get("conversation_id"), "tool_name": e.get("tool_name"),
+                       "conversation_id": e.get("conversation_id"), "tool_name": e.get("tool_name"), **values,
                        "keys": sorted(e) if isinstance(event, dict) else type(event).__name__,
                        "tool_input_keys": sorted(tool_input) if isinstance(tool_input, dict) else None})
     try:

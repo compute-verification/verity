@@ -41,13 +41,13 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.pipeline.tp import grain as G
-from verity_vllm.program import tp_binding as TB
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.definitions.registry import dead_free as DF
 from verity.commitments.windows import interface as I
+from verity.definitions.registry import dead_free as DF
+
+from verity_vllm.pipeline.tp import grain as G
+from verity_vllm.program import tp_binding as TB
 
 PRODUCER, GATHER, COMBINE, OUTPUT, NORM, CONSUMER = "producer", "gather", "combine", "output", "norm", "consumer"
 #: the rank of the stages every rank reads: combines, output gathers and norms
@@ -248,6 +248,7 @@ class _Window:
             if l1 >= h1:
                 continue
             dest, m, uw = off + l1 - lo, (h1 - l1) // w, u0 + (l1 - slo) // w
+            why: str | None
             if (l1 - slo) % w or (h1 - l1) % w:
                 why = f"part of {w}-word rows of {tw}"
             elif P % w or dest % w:
