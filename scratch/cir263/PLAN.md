@@ -3,59 +3,79 @@
 A turn starts on a new machine with a new clone on `main`; only what is pushed survives. Commit and push to
 `cursor/circuits-cir263-scratch-6f04` before every turn ends. Nothing goes to the PR branch except reviewed code changes.
 
-- PR branch: `cursor/circuits-cir263-draft-layer-kernels-6f04`, head of record `920597d5ca7f9d1ac9330eab4a6e0944a5c4215e`
-  (ratchet gate `failures: []`; `repository` r20261112-210847-6529 352 passed; `verity-vllm` r20261112-215601-1b52 14,983
-  passed, 0 failed, 485 skipped). No PR open yet: it opens after the captures, unmarked, by Mon 16 Nov 16:00Z.
-- Drafts here: `comment-draft.md` (CIR-263 comment, card results as `<...>` placeholders), `pr-body.md` (PR body), `jobs/`
-  (suite.sh, suites.sh, cc_pins.sh, ehnorm_ptx.py), `dry_*.py` (CPU dry runs of each capture's plumbing).
+- PR branch: `cursor/circuits-cir263-draft-layer-kernels-6f04`, head `78884a1b8aa7dc72de9cca98568faeea8b3a0b8a` (three commits
+  over `920597d5ca7f`, the head tonight's lease ran at): the three captures are registered properties (schema ids in
+  `verity_vllm/records/mtp_captures.py`), the split-K probe separates strided from contiguous at K 12288, 2 splits, bf16, and
+  `tests/properties/test_glm53_mtp_captures.py` drives each capture's `main` on a CPU to its sealed record. At this head: the
+  ratchet gate `failures: []`; `repository` r20261113-035227-475a 352 passed, 0 failed; `verity-vllm` r20261113-040826-9fec
+  (see `checkpoint.md` for its counts; if the last line there does not give them, read `research status` and fetch it).
+  No PR open yet: it opens after the captures, unmarked, by Mon 16 Nov 16:00Z.
+- Tonight's lease (Fri 03:15Z, r20261113-031522-215e at `920597d5ca7f`, `jobs/card_row.sh`): every comparison that ran found
+  0 differing words (eh_norm 25,165,824 words; indexer_logits 290,933 words), but no record was sealed (the schemas were not
+  registered) and eh_proj stopped at its first split launch (the probe). So nothing of tonight is a capture of record; the
+  numbers are in `checkpoint.md` and `tonight.md`.
+- Drafts here: `comment-draft.md` (CIR-263 comment, card results as `<...>` placeholders), `pr-body.md` (PR body), `tonight.md`
+  (tonight's run, read from its logs), `jobs/` (card_one.sh, card_row.sh, suite.sh, cc_pins.sh, ehproj_words.*, ehnorm_ptx.py),
+  `dry_*.py`.
 
 ## 1. Checkout (before anything is launched)
 
     git -C /agent/repos/verity fetch origin cursor/circuits-cir263-draft-layer-kernels-6f04 cursor/circuits-cir263-scratch-6f04
-    git -C /agent/repos/verity worktree add --detach /tmp/cir263-pr 920597d5ca7f9d1ac9330eab4a6e0944a5c4215e
-    git -C /tmp/cir263-pr rev-parse HEAD        # must print 920597d5ca7f9d1ac9330eab4a6e0944a5c4215e
+    git -C /agent/repos/verity worktree add -B cursor/circuits-cir263-draft-layer-kernels-6f04 /tmp/cir263-pr origin/cursor/circuits-cir263-draft-layer-kernels-6f04
+    git -C /tmp/cir263-pr rev-parse HEAD        # must print 78884a1b8aa7dc72de9cca98568faeea8b3a0b8a (or what checkpoint.md's last line names)
     git -C /agent/repos/verity worktree add -B cursor/circuits-cir263-scratch-6f04 /tmp/cir263-scratch origin/cursor/circuits-cir263-scratch-6f04
 
-Push the scratch branch from the worktree (`git -C /tmp/cir263-scratch push origin cursor/circuits-cir263-scratch-6f04`);
-a separate clone has no push credentials.
+Push from the worktrees only (`git -C /tmp/cir263-scratch push origin cursor/circuits-cir263-scratch-6f04`,
+`git -C /tmp/cir263-pr push -u origin cursor/circuits-cir263-draft-layer-kernels-6f04`); a separate clone has no push
+credentials. One named test file locally:
+`cd /tmp/cir263-pr/adapters/vllm && PYTHONPATH=/tmp/cir263-pr/adapters/vllm:/tmp/cir263-pr timeout 170 /agent/repos/verity/.venv/bin/python -m pytest -q -p no:cacheprovider tests/properties/FILE.py`
+(after `uv sync --all-packages --extra torch-cpu` in /agent/repos/verity if the venv is missing).
 
 ## 2. Calendar (read again right before the first launch)
 
     cd /agent/repos/verity && uv run -q --project tools/research research notes sync
     rg -n "CIR-263" ~/.research/notes/calendars/node-a.md
 
-Row: Fri 13 Nov, circuits; ours is card 0 with cores 0-9 from 03:15Z to 03:45Z, 30 minutes. Cards 0-3 and cores 0-39 are
-vllm's from 03:00Z to 03:15Z (VLLM-339, a serve on all eight cards): no lease on card 0 before 03:15Z, or that serve stops.
-ACCEPT (CIR-264) has card 0 from 03:45Z: be off the card by then. If the row moved again or does not fit, launch nothing
-and return to the coordinator.
+Friday's row as read at Fri 04:30Z: 2026-11-13T15:45Z to 19:45Z, circuits, PROVISIONAL; CIR-263 has card 0 with cores 0-9
+until 17:45Z, then CIR-264 has card 0. "One lease a job, none over 30 minutes, the same start check; untimed." Circuits says
+in the row by Fri 14:00Z which cards it still needs, so the row may have changed: if it moved, shrank or no longer names
+CIR-263 on card 0, launch nothing and return to the coordinator.
 
-## 3. Launch: ONE lease tonight, on node A (from /agent/repos/verity, shipping the worktree)
+## 3. Launch: one capture a lease, on node A, with the pull request's own card script
 
-Tonight is one lease, the first kernels first: `jobs/card_row.sh` (shipped with `--send`) takes ONE `gpu-lease` on card 0
-with `--cores 0-9` and runs the captures in order under it, each pinned with `taskset -c 0-9`. It starts nothing before
-NOT_BEFORE (exit 75 on the node, nothing touched), nothing when card 0 holds a compute process or 1 GiB or more (exit 75),
-and nothing with under 5 minutes of lease left. The lease ends by END less 2 minutes (03:43Z), each capture is ended at END
-less 3 minutes (03:42Z), and none starts with under 4 minutes to that. What does not finish goes to Friday's row, which
-holds the capture of record (there: the pull request's `glm53_mtp_capture_card.sh`, one lease a capture).
+`jobs/card_one.sh` (shipped with `--send`) adds only the row's clock to the PR's `glm53_mtp_capture_card.sh`: nothing before
+NOT_BEFORE (exit 75, the card untouched), MAX_MIN = whole minutes left before END less 2 minutes, at most 30, nothing with
+under 5. The card script checks card 0 is idle (exit 75 if not), takes ONE lease with `--cores 0-9`, pins every process, and
+runs the capture, whose record, PTX and words go to `$OUT/<NAME>`.
 
-- Launch at or after 03:15:00Z by `date -u` read in its own command (read it twice: the first read after a wait is stale).
-- Card 0 busy at 03:15Z (exit 75 from the start check) means vllm's serve overran: wait (the waiting tool), launch again,
-  last start 03:25Z; say in the return how many minutes it cost. A lease refused at the quota: no retry; read who holds
-  what (`gpu-lease` prints it) and write one checkpoint line with the refusal's text.
+- Read `date -u` in its own command (twice: the first read after a wait is stale) and launch only at or after 15:45:00Z.
+- One run at a time, each after the previous has ended (`research status RUN --refresh`); the last start is 17:10Z, so that a
+  30-minute lease is over by 17:43Z. Order: `eh_proj` first (the one with a launch tonight did not reach: split-K 2), then
+  `eh_norm`, then `indexer_logits`.
+- Card 0 busy (exit 75 from the start check): wait (the waiting tool, never a shell sleep) and launch again; say in the
+  return how many minutes it cost. A lease refused at the quota: no retry; read who holds what (`gpu-lease` prints it) and
+  write one checkpoint line with the refusal's text.
 
-    cd /agent/repos/verity && uv run -q --project tools/research research run --on vy-spot-glm53 --project verity --source /tmp/cir263-pr --cwd source --timeout 1740 --wait --send /tmp/cir263-scratch/scratch/cir263/jobs/card_row.sh --env NOT_BEFORE=2026-11-13T03:15:00Z --env END=2026-11-13T03:45:00Z --env CARD=0 --env CORES=0-9 --env GPU_LEASE_WHO=circuits-draftkernels -- bash -c 'exec bash "$RESEARCH_RUN_DIR/inputs/card_row.sh" eh_norm eh_proj indexer_logits'
+    cd /agent/repos/verity && uv run -q --project tools/research research run --on vy-spot-glm53 --project verity --source /tmp/cir263-pr --cwd source --timeout 2100 --wait --send /tmp/cir263-scratch/scratch/cir263/jobs/card_one.sh --env NOT_BEFORE=2026-11-13T15:45:00Z --env END=2026-11-13T17:45:00Z --env CARD=0 --env CORES=0-9 --env GPU_LEASE_WHO=circuits-draftkernels -- bash -c 'exec bash "$RESEARCH_RUN_DIR/inputs/card_one.sh" eh_proj'
 
-Friday's row (15:45Z-17:45Z, card 0, cores 0-9; CIR-264 from 17:45Z), one capture a lease, each after the previous ended,
-with the card script (`--env MAX_MIN=30 ... -- bash adapters/vllm/tests/properties/glm53_mtp_capture_card.sh NAME`), not before
-15:45:00Z and MAX_MIN the whole minutes left before 17:43Z (at most 30): each capture tonight's lease did not finish,
-`eh_proj` first (`--scans DIR` reuses an earlier run's finished scan chunks on the node), then the three of record.
+and the same line with `eh_norm`, then with `indexer_logits`. `--wait` stops after 20 minutes; then
+`research status RUN --refresh` between waits and `research fetch RUN --all` when done (into `~/.research/runs/RUN/`).
 
-`--wait` stops after 20 minutes; then read `research status RUN --refresh` between waits (the waiting tool, never a shell
-sleep), and `research fetch RUN --all` when done.
+What to read in each run: stdout's `start ... card 0: N compute processes, M MiB`, the lease's lines, the capture's last line
+`GLM53-MTP-<NAME> GO|NO-GO ...` and `end ... exit RC`; `out/<name>/glm53_mtp_<name>_capture.json` (`ok`, `digest`, the
+summary's rows and words compared and words that differ, the reference counts, the routes and splits for eh_proj, the PTX
+hash and counts for eh_norm, the alternatives' refutation counts). Say rows and words compared and words that differ, never
+"passes" alone. A phase that raises writes no record: the traceback is in stdout.
 
-Each record: `<OUT>/<name>/` holds the capture's JSON record (`ok`), words and PTX; the last stdout line is
-`GLM53-MTP-<NAME> GO|NO-GO ...` with words compared and words that differ. Say rows/words compared and words that differ,
-never "passes" alone. A phase that raises writes no record: the traceback is in stdout.log.
+Expected from tonight (to compare, not to copy): eh_norm 4 x 6,291,456 words; indexer_logits 100,664 + 190,269 words;
+eh_proj routes at K 12288, N 6144 unsplit except split-K 2 at M 105-111, 129-159, 161-223, 272, 288, 336, so 24 launches
+(M 1, 2, 3, 4, 5, 6, 8, 12, 16, 24, 32, 48, 64, 96, 105, 128, 192, 256, 384, 512, 768, 1024, 1025, 8192), split at M 105 and
+192, 4,458 rows compared (computed here from the capture's plan, about 4 to 5 minutes of words on 8 workers by tonight's
+2.2 rows per worker-second).
+
+If eh_proj's split launches do not fit `contiguous-f32-forward` (its `hypothesis` block names which model fits): that is a
+finding, not a failure to hide. Keep the words (they are under `out/eh_proj/words/`), write what fits and what does not in the
+checkpoint, and return to the coordinator before changing any Definition or binding.
 
 ## 4. After the captures
 
@@ -65,7 +85,10 @@ never "passes" alone. A phase that raises writes no record: the traceback is in 
   (from /agent/repos/verity with `uv run -q --project tools/research`). Then return to the coordinator.
 - eh_proj's routes give the splits: add `Gemm_v2{K=12288,N=6144,DOT=HopperBF16WgmmaDot16_v1}` and `CublasSplitKGemm_v1` at each
   split seen to `mtp_draft.circuit-check.py`, run `jobs/cc_pins.sh` with `--cwd clone`, apply its pins diff, rerun
-  `repository` and `verity-vllm` (`jobs/suite.sh NAME`), then the ratchet gate; any change of a Definition's name, statics
-  or ports since the first comment goes to the coordinator first, old and new.
-- Card row 2: Fri 15:45Z-17:45Z, card 0 cores 0-9 (CIR-264 from 17:45Z): any capture to repeat.
-- Commit and push the scratch branch before the turn ends.
+  `repository` and then `verity-vllm` (`jobs/suite.sh NAME`, one run at a time, `--on auto --cwd source --wait`), then the
+  ratchet gate (`git fetch origin main && python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD --json`); any change
+  of a Definition's name, statics or ports since the first comment goes to the coordinator first, old and new. A capture of
+  record that ran at an earlier head stays of record only with the PR body saying at which head it ran and what differs
+  since.
+- The PR: open, unmarked, no `### Mark` section, by Mon 16 Nov 16:00Z, from `pr-body.md`.
+- Commit and push the scratch branch before the turn ends; a checkpoint line at least every 60 minutes.
