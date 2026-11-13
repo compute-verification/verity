@@ -30,17 +30,43 @@ ci lands alone, in one candidate, in a queue it pauses for it. You stage it.
       1:15 AM PST, add the two rows yourself as a hand commit.
    b. top's four of `origin/cursor/top-moves-c-b396` (#9692, `747e26eeb168`): `definitions_kept_map`,
       `definitions_merge_map`, `definitions_served_map`, `definitions_lake_map`, in the order its body gives.
-   c. `compose_fix_map.toml` from `origin/cursor/top-tree-inventory-485d` when INVENTORY has pushed it (it replaces
-      `main`'s `compose_map.toml` and `configurations_map.toml`; proofs rules by 1:30 AM PST, silence is yes).
-   d. compute-research's two, on one branch `cursor/compute-move-chain2-maps-...` by 1:30 AM PST: `hardware_map.toml`
-      re-keyed for chain 1's tree with its patch file of three hand lines, and `sass_gate_map.toml` with its hand lines.
-   e. compute-accounting's map, on a pushed branch by 1:30 AM PST: PoUW's `clear/` and `receipts/` into `verifier/`,
-      its served GPU directories into `prover/kernels/`, and those rows for Dither and the FP4 variant that are
-      path-only. A row that needs a code edit is not in it.
-   f. memory-accounting's map of the PoUS grader (`verity/protocols/pous/lean/` to `tools/pous_grader/`), by 2:00 AM.
+   c. proofs' three, as proofs ruled (TOP-415, 11:36 PM PST):
+      - `tools/move/compose_map.toml` THEN `tools/move/configurations_map.toml`, both as they stand on
+        `origin/cursor/proofs-compose-lists-map-6c1e` (`c0ebc52445e2`, #9602), NOT `main`'s copies: the rule that
+        joins protocols goes to `verity/protocols/compose/verifier/lean/`, remote's and onsite's lists to
+        `verity/protocols/compose/remote/` and `compose/onsite/`;
+      - `tools/move/world_map.toml` as on `origin/cursor/proofs-world-map-interface-4d1c` (`b446d85535be`, #9674):
+        `verity/hardware/world/` to `verity/protocols/interface/world/`;
+      - one hand commit after the carve, proofs' worker's patch on a scratch branch (name and head by 12:30 AM PST,
+        passed to your inbox): in `tests/import_order.toml` the rows for `verity/protocols/remote` and
+        `verity/protocols/onsite` become one row for `verity/protocols/compose`, the place is renamed, the listing
+        is regenerated. Proofs' rule for every map: a move that empties a directory the listing names needs the
+        same kind of hand commit.
+      INVENTORY's `compose_fix_map.toml` is NOT used. If the tree test refuses `compose/remote/` or `compose/onsite/`,
+      write the `[[tree]]` lines it asks for in the `tests/tree.toml` hand commit and name them in your note.
+      The map of Flock's and SPOT's loose files (proofs' worker, by 2:00 AM PST if it certifies) rides only if top
+      passes you its branch.
+   d. compute-research's two, both from ITS worker's branch `cursor/compute-move-chain2-maps-...` (by 1:30 AM PST):
+      `hardware_map.toml` re-keyed for chain 1's tree, with its patch of three hand lines (two suites' inputs,
+      AGENTS.md's `verity/hardware/` entry); and `sass_gate_map.toml` (on `main`; chain 1 rewrote its `[roots]`):
+      `benchmarks/pouw/harness/sass_gate.py` and `sass_pins.json` to `verity/protocols/pouw/prover/`, with a second
+      patch (one row of `tests/test_boundaries.py`, one job script's line, prose in three files).
+   e. compute-accounting's map (its worker's branch, head on TOP-415): PoUW's `clear/` and `receipts/` into
+      `verifier/`, and of the GPU directories ONLY what kernels cleared (TOP-415, 11:36 PM PST), in this order:
+      1. `pouw_cuda`, with TWO mended joins in the row's second commit: `protocols/pouw/device.py:33` and the
+         adapter's `commit/row_tables_device.py:48` (vllm's worker writes that commit, on a pushed branch by 1:30 AM);
+      2. `pearl_c`, `served_zk`'s `hm96_rows.cu` and `pearl_c_sm120` as one group, with the owners' hand edits;
+      3. of `pearl_c_sm90` only the kernel's sources, `build.sh`, `run.py`, `fixture.py`, `sass_gate.py`.
+      OUT of chain 2: `filler`, `served_h1` with dither's two files, `pearl_c4`, and anything under
+      `verity/protocols/experimental/`. THE GPU ROWS RIDE ONLY IF their branch is posted by 2:00 AM PST with the
+      touched suites green on the moved tree (compute-accounting's worker) and vllm's host builds green; kernels'
+      build of the H200 kernel from your staged head, bytes against the stored binary's, is the gate before the
+      mark. If any of the three is missing, drop the GPU rows whole and keep `clear/` and `receipts/`.
+   f. memory-accounting's map of the PoUS grader (`verity/protocols/pous/lean/` to `tools/pous_grader/`), by 2:00 AM,
+      only if its worker says the package's own check passes after the move (its `TRUSTED.sha256` pins files by
+      relative path, four levels up; at the new place they are two levels up).
    g. LAST: `protocol_groups_map.toml` from `origin/cursor/top-protocol-groups-f911` (GROUPS), with its hand commits.
-   Top passes each branch and head to your inbox as it is posted. `world_map.toml` and the maps for Flock's and SPOT's
-   loose files stay OUT unless top says proofs ruled.
+   Top passes each branch and head to your inbox as it is posted.
 5. **Hand commits after the maps:** the import listing (delete the entries of moved directories, run the generator
    WITHOUT `--grow`; vllm's worker importcarry also runs it on the head top posts and answers on TOP-398);
    `tests/tree.toml` (the lines the chain lands are deleted, as the test asks); what each map's owner listed as its
@@ -48,8 +74,10 @@ ci lands alone, in one candidate, in a queue it pauses for it. You stage it.
 6. **The harness's pin:** run `benchmarks/harness`'s
    `test_exfiltration.py::test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte` on the staged tree (a
    node) and put the two digests it prints into `NO_VERDICTS`. Once, after every map.
-7. **lean's records commit**, made by lean's worker on your staged head, pushed onto your branch (top hands lean the
-   branch). The pull request is not marked before it is there.
+7. **lean's records commit**, made by lean's worker LAST, on the staged head that holds every map, pushed onto your
+   branch (top hands lean the branch). With no records run of the queue's, it must cover every lock the chain
+   changes. lean then runs the audit on that head with no moves file and says go or no. The pull request is not
+   marked before that. A restage after the records commit needs the 36 packages' input keys compared.
 
 ## Rules
 
