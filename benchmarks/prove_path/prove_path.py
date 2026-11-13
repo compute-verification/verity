@@ -1312,7 +1312,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     recomputes one. Refused (ValueError) for a checkpoint not of record or one the manifest pins as another model than
     ``serve.json``'s, a served rotary table outside its bound, and as `advice.registered_weights` refuses it. With
     ``--deployment-record FILE``, the registration as the first record of the serve's registration log
-    (`window_weights.deployment_record`) is written there too, for the serve's first window to be chained after. -> how
+    (`window_weights.deployment_record`) is written there too, for Pearl+'s W to be chained after on a serve tied to it. -> how
     many roots it registers, the weight parameters it leaves free (``unrooted``) and, given, that record's digest
     (``deployment``)."""
     import numpy as np
@@ -1931,7 +1931,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--tables", help="the dir holding the engine's served rotary table, cos_sin_cache.npy (serve-openai's; "
                    "default SERVE_RUN/private): registered once within its bound, else unrooted")
     p.add_argument("--deployment-record", metavar="FILE", help="write the registration there as the first record of the "
-                   "serve's registration log too (verity/registration/v2), which its first window's record is chained after")
+                   "serve's registration log too (verity/registration/v2), which Pearl+'s W is chained after on a serve tied to it")
     p.add_argument("--hf-config")
     p.add_argument("--target")
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")

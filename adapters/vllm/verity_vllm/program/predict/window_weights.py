@@ -10,7 +10,8 @@ value, leaves, words and domain and no root; `registration_pins`), so what it le
 and its hiding root. `verity-vllm advice --weights-of-record` records the registration's roots as each window's, and a
 window's committer commits the words it serves under the same key (`weight_values`), so a weight served otherwise
 has another root and its reads are free (`interface.input_count`). A serve puts the registration first in its registration
-log as a record of its own (`deployment_record`), which its first window's record is chained after.
+log as a record of its own (`deployment_record`). On a serve tied to Pearl+, Pearl+'s window record W is chained after it;
+no other record names it.
 
 A field the weights record holds to an analytic table (the rotary table: its words are the engine's libm's, within a
 bound of the analytic function of config.json, with no byte digest) is registered at the words the engine serves
@@ -330,10 +331,11 @@ def deployment_record(registration: Any) -> dict[str, Any]:
     the committer's ``registration`` roots (`weights_registration`), as the registered value of 16-bit words the
     registration states (its value, root, leaves, words and domain), by name, under a ``deployment`` header: the weights
     record's program, the model at its revision, the grain, and the weight parameters the registration leaves unrooted,
-    which no record registers and whose reads stay free. A serve writes it before its first request, and the first record of
-    its first window names it as ``previous`` (`registration.digest`), so a weight's root is in the log's first record
-    before any window's. It states what the registration states and nothing of the key. ValueError unless ``registration``
-    is one (`records.weights_registration`) whose values are all weight parameters'."""
+    which no record registers and whose reads stay free. A serve writes it before its first request. On a serve tied to
+    Pearl+, Pearl+'s window record W names it as ``previous`` (`registration.digest`), so there a weight's root is in the
+    log's first record before W. No other record names it: a window's own record is chained after its W or after nothing,
+    and H1's W after nothing, as before. It states what the registration states and nothing of the key. ValueError unless
+    ``registration`` is one (`records.weights_registration`) whose values are all weight parameters'."""
     reg = WeightsRegistration.of(registration, "the weights registration")
     for p in (*reg.values, *reg.unrooted):
         _param(p)
