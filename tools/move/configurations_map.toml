@@ -1,10 +1,12 @@
-# The configurations' move: what `tools/move/layout.py --map tools/move/configurations_map.toml` moves and rewrites.
+# The move of remote's and onsite's lists: what `tools/move/layout.py --map tools/move/configurations_map.toml` moves and
+# rewrites.
 #
-# Remote and onsite are configurations, what an auditor runs, and not protocols: each is a list of protocols on one
-# registration and the ties between their named values. They leave `verity/protocols/` for `verity/configurations/`.
+# Remote and onsite are what an auditor runs, and not protocols: each is a list of protocols on one registration and the
+# ties between their named values, with the executables that check it. They leave `verity/protocols/` for the inside of
+# the protocol that composes them, `verity/protocols/compose/`.
 #
-# - `verity/protocols/remote/` to `verity/configurations/remote/` and `verity/protocols/onsite/` to
-#   `verity/configurations/onsite/`, each whole and laid out as it was (`verifier/`, the Lake packages `core_remote` and
+# - `verity/protocols/remote/` to `verity/protocols/compose/remote/` and `verity/protocols/onsite/` to
+#   `verity/protocols/compose/onsite/`, each whole and laid out as it was (`verifier/`, the Lake packages `core_remote` and
 #   `core_onsite`). Onsite's package keeps the command that picks between the two (`CoreComposites.lean`,
 #   `ProductMain.lean`), which imports both.
 # - The two go in one map: `core_onsite` requires `core_remote` by path, so a move of one alone would change the other's
@@ -14,15 +16,16 @@
 # - No directory is split, so the map has no [split] table and reads the same on any base.
 # Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. This map runs after
 # `compose_map.toml`, on the commit that one makes: the package that states how protocols compose has left remote's
-# directory by then.
+# directory by then and is the directory the two lists go into. One map with all three rows would split remote's
+# package directory, and its [split] rows would name the files that write that directory on one base.
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
-"verity/protocols/remote/" = "verity/configurations/remote/"
-"verity/protocols/onsite/" = "verity/configurations/onsite/"
+"verity/protocols/remote/" = "verity/protocols/compose/remote/"
+"verity/protocols/onsite/" = "verity/protocols/compose/onsite/"
 
 [retired]
 # the directories this map empties: `layout.py` refuses a tracked file under one that has no row, and each row is a
@@ -54,5 +57,5 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 [modules]
 # the renames [paths] implies (`layout.py --modules`): each directory as a dotted path. No module lives in one: the
 # packages are Lean.
-"verity.protocols.onsite" = "verity.configurations.onsite"
-"verity.protocols.remote" = "verity.configurations.remote"
+"verity.protocols.onsite" = "verity.protocols.compose.onsite"
+"verity.protocols.remote" = "verity.protocols.compose.remote"
