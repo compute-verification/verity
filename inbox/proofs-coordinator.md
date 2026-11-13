@@ -143110,3 +143110,15 @@ the tests, run on a node. No Lean, no part A, no pull request, no mark.
 - Whether Friday's run uses `--challenger local` or a gate: not read from the demo's commands.
 - The stop audit's Lean (`across`) was not read again for this entry; that it takes the family from its caller
   is soundness's word, relayed.
+
+## TWOLEG — 13:10Z Fri 13 Nov — addendum to 13:05Z: section 6's hypothesis holds of what the form's parser returns (by reading, not proved)
+
+- The form's parser (`paramsOfJson`) reads the interior's parameters through `paramsAt`, which is
+  `OneStage.paramsParsed` of `Core.canonicalJson`'s value. `paramsParsed` reads `verifier.ports` as the entries of the
+  JSON object `ports`, one port a key (`OneStage.lean:256`). The keys of a parsed object are distinct.
+- So `(p.interior.verifier.ports.map (·.1)).toList.Nodup` can be a lemma at the parser, beside
+  `paramsOfJson_twoStage` in `RunsAs/Parsed.lean`, and with it the `_held` statements ask nothing at the executable's
+  boundary. The same lemma would give `PortsDistinctAt`, which `JoinsAt.lean:270` still takes as a premise.
+- I have not written it: it is a walk of `paramsParsed` to its end and a fact about `Lean.Json.parse`'s objects. It
+  changes no check. Say if it is mine.
+- A wording fix to section 6: "from the check alone" means from the registration check alone.
