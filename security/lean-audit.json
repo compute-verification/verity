@@ -31076,7 +31076,7 @@
    }
   },
   "CoreProtocol.Protocol": {
-   "digest": "2885ef43476ce9b5c0d286fe7ed8b7e92e48d03451f13a844df9c6e35f98c22a",
+   "digest": "cae02bb005260a68ea175ca918eb9c19837f651cc159881111356e62cebde949",
    "definitions": {
     "Core.Answer": "5da1a1dc7c3a38866fb726c7c8f20f4a5f59ee249feb3cda145b8e3cb4143014",
     "Core.Answer.digest": "d836aa67c9938f2a8b2b90aa9072dee781ea1e90129eca96845002ccbcb3e2b0",
@@ -31119,7 +31119,7 @@
     "Core.Verdict.rec": "95fcc45ffe00868cea717c9aeb8f804a76a79ade52403c90c3c140d84e39ba13",
     "Core.Verdict.reject": "51a3f6946f282bd4c992323d0eddaa4101c87759f7eb96f348ef4195e69d3dd3",
     "Core.Verdict.undecided": "c286e20877f53e983e2847548bf0864728a1ee7a2988a2c852bc9684a58c2b7d",
-    "Core.canonicalJson": "84d6d8a26a167678cc203fc3c446bb30f052fdaa0055c62a621b47bf412464ab",
+    "Core.canonicalJson": "8549ab14bf1dc25a60faa89be9aaa5b23bd8515c6dd788c81655242541972e17",
     "Core.instBEqVerdict": "3a92223c05122f3bb245c8d35a0f1d47b56812c35e707ecf1fcdac95919bc0d1",
     "Core.instBEqVerdict.beq": "76bbe255e5db0a448a42a787dd9079a4360ef3f625690d97069f8a6ce4f63504",
     "Core.instDecidableEqVerdict": "fda2c1814d4d8f97a3ba11166e4678afae9ae88d1e7152f1d082da05e314c945",
