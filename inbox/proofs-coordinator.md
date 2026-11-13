@@ -119059,3 +119059,37 @@ Nothing.
 - Nothing written since `ce92` has compiled in a run: not `SessionFits.lean`, `SessionRecord.lean`, `SessionDev.lean` or `SessionOpened.lean`.
 - The probes of `SessionCoins.lean` and `SessionHeld.lean`.
 - That `SessionDev.lean` builds against COINMAP's real `CoinMap.lean` and not only against my stand-in's copy of its definitions.
+
+## ADDRROW, Fri 13 Nov 04:06Z: five of my seven row files compiled with clean probes (`25a2`); `RowKind` and `RowDraw` each failed in one theorem and are mended, not recompiled; no try of mine is running; FRAME's `RowFact` at `addressOf` is being written now as `RowOf.lean`
+
+**In plain words.** The pieces under the row fact now have verdicts: the lemmas that read a row off the second stage's checks and off Flock's opened reads compile, and so does the leaf arithmetic. Two files failed in one small theorem each; both mends are pushed and wait for the next try. What I have not written yet is the theorem FRAME's assembly asks for: `SpotFlock.RowFact h (wireMap h) (returned h) (addressOf h)`. I am writing it now in one file, by the same four cases as FRAME's `holds_of_wiring`, with what is still open named as four premises. I am late with this entry: my last was 02:07Z.
+
+Clock: `date -u` read 04:05Z. Branch `cursor/proofs-addrrow-d318` at `df9a5d5ec0`, with the base `e033bfc14be4` merged at `bc8153ccb3` (no conflict; none of my files names `Spot.Slots.Layout`). Mailbox read at 04:00Z (FRAME 03:51Z).
+
+**1. Runs** [run: `research fetch --all`, the try lines of each `stdout.log`].
+- `r20261113-020223-25a2` (vy-nebius-cpu-12, at `e7710ed3ab`), ended 03:35Z:
+  - `RowRead.lean`: lean exit 0, 4 theorems, no axiom beyond the three.
+  - `RowGive.lean`: exit 0, 3 theorems, clean. `RowLeaf.lean`: exit 0, 8 theorems, clean. `RowInstance.lean`: exit 0, 2 theorems, clean.
+  - `RowKind.lean`: 1 of 7 theorems failed (`kindFact`, line 179, "No goals to be solved").
+  - lean-audit refused a `local macro` at `RowRead.lean:28` (code that runs while it compiles).
+- `r20261113-030941-8814` (vy-nebius-2, at `63a790db11`), ended about 03:55Z, exit 1: `RowDraw.lean`, 1 of 10 theorems failed: `subsetJson_obj`, stated by `rfl`, and the JSON library's `mkObj` is not exposed to a public `rfl`. The other nine elaborated, `subsetParses` and `proved_of_wf` among them. That file is refused, so no probe verdict.
+- Mended and pushed, NOT compiled: `kindFact`'s two spare lines and the macro written out at its four uses (`de20c9e35a`); `subsetJson_obj` by unfolding (`df9a5d5ec0`).
+- No try of mine is out. The next one goes out with `RowOf.lean`, at one head, on vy-nebius-2 or cpu-12.
+
+**2. The row fact FRAME's assembly reads** [read; not written yet].
+- Target: `rowFact_of_wiring (W : Wiring h) … : SpotFlock.RowFact h (wireMap h) (returned h) (addressOf h)`, the `hRow` of `addressesConnected_of_runs` and of L1's `addressesConnected_of_held`.
+- Shape: `holds_of_wiring`'s four cases (source bit at a linked port, source bit at a wired port, written bit at a linked port, written bit at a template's own port), with FRAME's `Reads`, `port_at`, `readOk_linked`, `readOk_wired` and my `placedOk`/`rowsOk` lemmas.
+- Named premises it will take, each a statement of its own to prove after:
+  - `Sits`: the checked inner block is counted among its session's instances, and its instance's label is the inner block's place in the second sample and its cell (from `InstanceFact`, the draw lemma and the sample having no repeat).
+  - `ReadsRows`: `Reads.reads` with the entry's `leaves` and `reads` fields as Flock parsed them (FRAME's `read_of_reg` drops both).
+  - `OwnLeaves`: at a template's own written port, the registered read's leaf count is the second sample's size times the template's count. FRAME's `writtenRead` (02:50Z) is the route: a reader's `readOk_wired` pins it.
+  - `PublishedRows`: `RowHolds`' last arm at a template's own port with no registered read (the public file's rows).
+- The `regNamed = none` arm is vacuous at a linked or wired port (`reg_of_named`).
+
+**3. My older statement.** `AddressRow.RowGoal` (`RowGive.lean`) stays stated and unproved; `RowOf.lean` replaces it as the route to FRAME's fact. I delete `RowGoal` and what only it reads once `RowOf.lean` compiles.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**Not established.** `RowOf.lean` (not written). The two mends. Each of the four premises. The hour stays Fri 12:00Z [guess] for `RowFact` under those premises; the premises come after.
