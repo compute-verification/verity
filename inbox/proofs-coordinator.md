@@ -111641,3 +111641,25 @@ Not established
 - The earlier-signature hole: at a history of one play, an earlier period's genuine signature in the evidence makes the error ⊤. Soundness's change of Tue 17 Nov closes it.
 
 Pushed head: `6c782c1022`. Nothing is left unpushed.
+
+## OWNREADS, Fri 13 Nov 01:11Z: `ownReads_of` compiles with only propext, Classical.choice and Quot.sound; `refReadsOwn h` gives `OwnReads h` under one premise, `RefReadsWf h`
+
+In plain words: the lemma my brief asks for is proved and compiled. Take an accepted run of the two-stage audit, and a checked inner block of it whose session registers a read at a port that no link or wire names. The read is of one of the ports of the first stage's record, wherever FRAME's decided check `refReadsOwn h` passes. The proof rests on one premise: every template's reference reads are well-formed JSON (`RefReadsWf h`). Whoever builds `heldOf` discharges it from the parser. It has no `sorry` and adds no axiom.
+
+- The run is `r20261113-004101-da4d` on vy-nebius-cpu-12. It compiled branch `cursor/proofs-ownreads-9a1c` at head `1cf9edc040` with `lean_changed.py --try security/Proofs/Flock/SpotFlock/OwnReads.lean --siblings`. Its result: "lean exit 0"; "axiom probe: none of its 35 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; and the sibling check found no other module declaring a name this file declares. [run]
+- The proved statements, all in `security/Proofs/Flock/SpotFlock/OwnReads.lean`: [run]
+  - `ownReads_of (hc : refReadsOwn h = true) (hW : RefReadsWf h) : OwnReads h`.
+  - `reads_ref_value (hW : RefReadsWf h) (hr : r.Ok h) (hown : r.ins.registered = some own) (hreg : reg ∈ own)`. At each registered read of a checked inner block's session, it gives an entry of the reference reads of a template of the same name, at the read's port, whose `value` is the read's value. It reads no link or wire, so the later widening (an inner block reading a registered value at an input port) can use it unchanged.
+  - `RefReadsWf h := ∀ t < h.ms.length, Claims.Json.Wf (h.refReads t)`.
+- Since 00:26Z I merged the new base `origin/cursor/proofs-two-round-base-84b5` (`1f049180cd`, which fixes `WiringOk.lean`) into my branch, as a merge commit, with no force push. My first try failed in `WiringOk.lean` before it reached my file. [run: r20261113-002429-f115]
+- Machine and waits, as you asked: every try went to vy-nebius-cpu-12. They waited 2 min 7 s (`r20261113-002429-f115`), 3 min 4 s (`r20261113-003306-2c60`) and 2 s (`r20261113-004101-da4d`) for a slot, by each run's `slot.json`. The third landed on a cold tree (643 files to rebuild), so it ran 27 minutes. [run]
+- A cleanup try is running: `r20261113-010934-0489` at head `90bbf657c8`. It only drops two fallback tactics that Lean never ran, names an unused pattern `_` and replaces the deprecated `if_neg` with `ite_eq_right`. The statements are unchanged. [run: launched]
+
+NEEDS: HELDOF (`bc-3ddfb587-549a-5964-9ddf-80547065f684`), or whoever builds `heldOf`: a proof of `RefReadsWf (heldOf …)`. If `heldOf` takes each template's reference reads from `Flock.JsonParse.parse`, then `FlockComplete.JsonRT.parse_wf` gives it directly. My `wf_of_jsonOf` does the same for `FlockDeploy.jsonOf`. [derived]
+
+To FRAME: `RefReadsWf` cannot be part of the `Bool` `refReadsOwn`, because `Wf` is a `Prop` with no decision procedure here. So the bridge from `two h` to `OwnReads` takes it as a second argument. [derived]
+
+Not established:
+- `RefReadsWf` at the real `heldOf`, which does not exist on the base yet.
+- That the cleanup head `90bbf657c8` compiles; its run is in progress.
+- The lemma has not gone through the full Lean check (`check.py`). No guarantee or lock record reads it yet, so nothing in a lock changes. [derived]
