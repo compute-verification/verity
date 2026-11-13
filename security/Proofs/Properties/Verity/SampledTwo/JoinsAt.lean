@@ -266,9 +266,13 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   scopeHeldAt : ScopeHeldAt A C (joinSessions A C Ms tab ℓ₁ ℓ₂)
   /-- Each session statement is its template's reference statement but for the run's fields. -/
   pinHeldAt : PinHeldAt A C (joinSessions A C Ms tab ℓ₁ ℓ₂)
-  /-- Flock accepts each session, on the provers `P'`. -/
+  /-- Flock accepts each session, on the provers `P'`. Holds at no honest play with two or more rounds a rep, with
+  `sessionMsgs` and the coins `SeqCoinsRead` fixes: the sessions' layout (`SessionCoins.slotStream`, `roundOf`)
+  alternates a session's two reps, and the deployed session's `custody` reads its recorded rounds rep stream by rep
+  stream. -/
   sessionsRun : SessionsRun A C (joinSessions A C Ms tab ℓ₁ ℓ₂) P'
-  /-- The sessions' messages are the ones the check read. -/
+  /-- The sessions' messages are the ones the check read. Holds at no honest play with two or more rounds a rep, with
+  `sessionsRun` and the coins `SeqCoinsRead` fixes (`sessionsRun`'s docstring). -/
   sessionMsgs : SessionMsgs A C (joinSessions A C Ms tab ℓ₁ ℓ₂) P'
   /-- The sampled verdict accepts, after `θ`, only where the form accepts the instance's case. -/
   wiring : ∀ o, o.params = θ → V.Verdict k .sampled o → FormAccepts C o
