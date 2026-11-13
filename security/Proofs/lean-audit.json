@@ -200,6 +200,7 @@
   "Proofs.Flock.SpotFlock.AddressFacts.CopyOut",
   "Proofs.Flock.SpotFlock.AddressFacts.PortsOnceOf",
   "Proofs.Flock.SpotFlock.AddressFacts.OfRuns",
+  "Proofs.Flock.SpotFlock.AddressFacts.Connected",
   "Proofs.Flock.SpotFlock.Honest.Instance",
   "Proofs.Flock.SpotFlock.Honest.Wiring",
   "Proofs.Flock.SpotFlock.Honest.Written",
