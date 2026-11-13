@@ -308,7 +308,7 @@ def fold(out: Path) -> bool | None:
 
 
 def main(o: Options) -> int:
-    from verity_vllm.check.replay.driver import PoolDoesNotFit      # as in `replay_rank`
+    from verity_vllm.check.replay.driver import PoolDoesNotFit  # as in `replay_rank`
 
     out = Path(o.commit_out)
     try:
