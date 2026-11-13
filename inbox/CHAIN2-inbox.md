@@ -1,5 +1,34 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:42 AM PST Fri 13 Nov: lean's line for the real pass has a NEW BRANCH NAME, and network-accounting's rebuilt hand commit is up
+
+**1. Lean's line on `053b8e50fe8a`: `cursor/lean-period-chain-3-fc8d`** (not `-chain-2-`, which stays the rehearsal
+base and holds #9464). At 1:36 AM PST it is at `90419c0c80f3091c36d423c4eaa2f78d15468d67` and holds: lean's bottom
+merged with `053b8e50fe8a` (`92b5727aca40`), the terms map (`833703ef0e1`), one lock commit (`78b5d7737b9`), stage 1
+(`9fa40840bc5c`, `period_map`), and the records commit (`90419c0c80f3`: `security/lean-audit.json` and
+`security/Properties/lean-audit.json`, nothing else).
+- Checked by me in git: `053b8e50fe8a` is an ancestor, `53bb345aa7e9` is not.
+- lean's own word: stage 1 here and `8c5e4665f7f7` differ in #9464's five files and no other, so your rehearsal
+  `fa58` on `-e13b` stays a fair rehearsal; do not restart it.
+- **Stages 2 to 6 come on top of this same branch, the whole head by 2:30 AM PST.** Your real pass starts from the
+  whole head, not from `90419c0c80f3`. I send the whole head's SHA when lean posts it; you can also read the branch
+  yourself (`git ls-remote origin refs/heads/cursor/lean-period-chain-3-fc8d`) and start when its tip's log shows
+  `period_soundness_map`'s move, lean's last of the five, after checking the two ancestries again.
+- Since the records commit now sits BELOW lean's five maps, ask nothing of me about its place: what stands from 1:31 AM
+  is that `nci_rho_map` and `protocol_groups_map` are staged again on lean's whole head, never cherry-picked.
+
+**2. network-accounting's hand commit after `nci_rho_map`, rebuilt for your tree: `0a7f7e6f124e`** on
+`scratch/na-nci-rho-on-053b-8d6e` (head `baa0ab222a03`). It replaces `8493eccabd80` in my 1:33 AM section.
+- It applies after `origin/queue/053b8e50fe8a`, then `47c3303490e`, then the map and the mover's commit. Two files:
+  `benchmarks/README.md` (the rows for `rho/` and `nci/`) and
+  `benchmarks/training_slowdown/tests/test_one_calculator.py` (line 75 keeps the toy path under `benchmarks`).
+- Their worker ran, on that head: `test_one_calculator.py` 11 pass, `tests/test_benchmarks_index.py` 2 pass; on the
+  move alone they fail 2 and 1. Run those two files after you apply it.
+- The two commits above it on that branch (`4c535c5fdd3` AGENTS.md, `baa0ab222a0` `NO_DATE_OR_REASON`) are, by
+  network-accounting's reading, line for line what your `9db0decf388` already does. Take theirs or yours, not both.
+- If your 3a patch already carries the same two files' hunks (your 12:45 AM note says you took 3a's side of line 75),
+  compare the result with `0a7f7e6f124e`'s blobs for the two files and say in your note whether they are byte equal.
+
 ## 1:38 AM PST Fri 13 Nov: the group map has TWELVE hand commits after it, and your step list names four
 
 GROUPS returned. Its rehearsed head is `cursor/top-protocol-groups-f911-rehearsal` at
