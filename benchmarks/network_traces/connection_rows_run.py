@@ -335,7 +335,8 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     """The module docstring's check of a run's connection rows under its deployment record `dep`: the summary (the
     registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
     with the word that they have no head, of those that have none) and the problems. None, and no problem, for a
-    schedule without lengths rows."""
+    schedule without lengths rows. A line's `tick` is the network certifier's own note beside the signed
+    registration, not under its signature, so this check refuses a late head only as far as the device's line says."""
     if params.lengths is None:
         return None, []
     key, session, windows = cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]

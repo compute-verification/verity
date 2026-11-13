@@ -2211,7 +2211,7 @@ prompt ids and a size of ids released, each a power of two.
     count alone, and a release is filed only in a class that holds its request's bytes.
   - **A hand the rule doesn't read** is no execution phase's of the schedule: `content_rows.tables` refuses it,
     naming the release, and no head is signed over it. So is one with a `max_tokens` past `max_tokens_cap` or with
-    more ids released than its `max_tokens`. These are the builder's own checks of what the device already holds:
+    more ids released than its `max_tokens`. These are `tables`' own checks of what the device already holds:
     under every signed head a words row's `max_tokens` is at most the schedule's and at least its response row's
     count.
   - **Nothing more is public** than without them: the table's rows are the class's count and its row size is the
@@ -2246,7 +2246,8 @@ prompt ids and a size of ids released, each a power of two.
   - **Who publishes.** Whoever takes the hand signs the head and hands it back to the network certifier
     (`Warden.head_back`). A tick of the device publishes it (`leave`), and nothing off the tick does. In a served
     run the publisher process sends the line of `rows.jsonl` back and the tick appends it with the tick it left
-    at.
+    at. That tick is the device's own note beside the signed registration, not under its signature, so the run's
+    check refuses a late head only as far as the device's line says.
   - **A head back by its due tick** leaves at that tick and never sooner.
   - **A head back later** leaves at the first tick it is back by, at most W = `head_wait` ticks after the due one.
   - **A head not back W ticks after its due tick** is never published: the execution phase has no head. A served
