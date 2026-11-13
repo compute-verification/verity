@@ -176,13 +176,13 @@
   "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": "verity/protocols/proofs/flock/prover/tests/fixtures/f1-gate",
   "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "verity/protocols/proofs/flock/prover/tests/fixtures/rec-links",
   "art:b3c6b626af8e260c5d51316ab4cb69b8059cb2823a4dd16e4e57b11f6c7711b4": "verity/protocols/proofs/spot/verifier/tests/fixtures/form-refusals",
-  "art:0f06d319352cda8ee686374ee342ad0e6ffd16ee19cd845b365ca33e09af8cc5": "verity/circuits/silicon/discrepancy_log.json",
   "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "verity/protocols/accounting/certifier/verifier/tests/fixtures/arith_encode_vectors.json",
   "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "benchmarks/training_slowdown/data/v3-selection.json",
   "art:1881d170c2833e3de28fa41662946272c99ca3e7edd13f10a3219b51bc657892": "benchmarks/network_e2e/encodings/tests/fixtures_draft",
   "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": "benchmarks/two_stage/tests/fixtures/guard.tar.xz",
   "art:ed3b2d968923fe39be309d15f9e2c41cae215ff4fcce40590131b9f0b02a2d52": "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case",
   "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": "verity/definitions/tests/fixtures/fa2_train_bwd_sm120.npz",
+  "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d": "verity/circuits/silicon/discrepancy_log.json",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -244,7 +244,14 @@
       "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073",
       "art:22fbef314a3ba3e417b9e49bfa30fe460a364913f1dbcc926768c7a254c5b50c"
     ],
-    "art:0f06d319352cda8ee686374ee342ad0e6ffd16ee19cd845b365ca33e09af8cc5": [
+    "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": [
+      "art:24eb213c31a789dfd2c989daa9ac64b9b55a37435b9ad6c18e9a11ce2eddbc81"
+    ],
+    "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": [
+      "art:cf13269bc59422f20c20c1a664879559b050c88054bba8b0d1e5b2e81bcbbedd",
+      "art:253bd5f4d35790a0f729bb2be897f0a72ca690e9a78c18b3aafa28b1c7d0a494"
+    ],
+    "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d": [
       "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
       "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
       "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
@@ -254,14 +261,8 @@
       "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887",
       "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941",
       "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58",
-      "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903"
-    ],
-    "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": [
-      "art:24eb213c31a789dfd2c989daa9ac64b9b55a37435b9ad6c18e9a11ce2eddbc81"
-    ],
-    "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": [
-      "art:cf13269bc59422f20c20c1a664879559b050c88054bba8b0d1e5b2e81bcbbedd",
-      "art:253bd5f4d35790a0f729bb2be897f0a72ca690e9a78c18b3aafa28b1c7d0a494"
+      "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903",
+      "art:0f06d319352cda8ee686374ee342ad0e6ffd16ee19cd845b365ca33e09af8cc5"
     ]
   }
 }

@@ -1231,7 +1231,8 @@ paths = ["tests"]
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/circuits",
           # the H1 units read both.
-          "verity/protocols/accounting/pouw/verifier/core_check.py", "verity/protocols/accounting/pouw/verifier/leaf_lanes.py",
+          "verity/protocols/accounting/pouw/verifier/core_check.py",
+          "verity/protocols/accounting/pouw/verifier/leaf_lanes.py",
           "verity/protocols/accounting/pous/prover/circuit.py"]
 untraced = ["fixtures"]
 '''
