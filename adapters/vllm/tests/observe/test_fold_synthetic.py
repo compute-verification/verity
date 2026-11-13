@@ -545,6 +545,23 @@ def test_a_weight_root_ahead_of_the_run_header_is_refused(memory):
                                   "'NoneType' object is not subscriptable")
 
 
+def test_a_weight_root_after_a_refused_run_header_is_refused():
+    """`_Fold._weight_root`: a run header refused for its workload has set the fold's header and its weights type and made no weights
+    parameter.  `fold` gives that fold no further event; a caller that holds the `_Fold` can, and a weight root is then refused as the
+    fold's own error, by the root's name and path and the weights type."""
+    import dataclasses
+
+    evs = toy_log()
+    root = evs[2]
+    assert isinstance(root, Root) and root.name == "model.embed_tokens.weight"
+    held = fold_mod._Fold(toy_profile(), True)
+    with pytest.raises(FoldError, match="RunHeader.workload has no requests"):
+        held._header(dataclasses.replace(evs[0], workload={"requests": []}))
+    with pytest.raises(FoldError) as refused:
+        held._weight_root(root)
+    assert str(refused.value).startswith(f"weight field path ('embed',) for 'model.embed_tokens.weight' is not in {held.weights_type!r}: ")
+
+
 def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_note(memory):
     """A workload's `children` and `sampling` and the notes' `tp2` are optional: missing, null, and empty or zero each read as none."""
     import dataclasses
