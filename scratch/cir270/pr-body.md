@@ -162,3 +162,5 @@ The other 117 suites passed at `3bf908ae14` and read none of what `b694e1efa6` c
 - `lean-audit`: this PR changes no Lean file and no lock.
 - `circuit-check`: no circuit changes.
 - The 117 suites that don't read `lean_audit.py`, at the head: they passed at `3bf908ae14`, and the head differs from it only in `lean_audit.NOT_READ`.
+- Any suite at `613b55f2d252`: the branch holds `main` up to `a2ba479e2b61` (just before the first move) and is not yet carried across the moves.
+
