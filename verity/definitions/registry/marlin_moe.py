@@ -16,7 +16,7 @@ One output word of one (token, slot) pair, column n, over K:
     y      = F2fpBf16(R); the w2 launch Bf16MulBf16(y, F2fpBf16(topk_weight))              write_result, 1769-1900; 518-527
 
 The k16 step is `mma.sync.m16n8k16` (bf16, f32 accumulate), which on sm_90 is `HopperBF16WgmmaDot16_v1` (`DOT`: measured equal on the
-H100, `verity.definitions.silicon` `_H100_MMA_EQ_WGMMA`); the moe block of 8 (`m_block_size_8`) runs `mma_trans`, the operands
+H100, `verity.circuits.silicon` `_H100_MMA_EQ_WGMMA`); the moe block of 8 (`m_block_size_8`) runs `mma_trans`, the operands
 swapped, which leaves each product a * b, and a block of 16 or more `mma` itself.  The f32 adds are FADD: Marlin MoE is built
 without fast-math.  `E2m1ToBf16` is the exact e2m1 value (the code's bits placed into a bf16 word, then times 2^126 by `__hmul2`:
 exact, a zero code's sign kept), `E8m0DequantBf16` the scale byte shifted to the bf16 exponent (code 0 is +0, 255 is +inf), so
@@ -79,8 +79,8 @@ MarlinMoeExpertGemm(W) reads the schedule once and every column of a tile its cu
 from __future__ import annotations
 
 from verity.circuits.defs import PrimitiveDefinition, bind, composite, primitive
-from verity.definitions.ops.prims import E2M1, F2fpBf16, HopperBF16WgmmaDot16, const
-from verity.definitions.ops.scalar import BIT, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity.circuits.ops.prims import E2M1, F2fpBf16, HopperBF16WgmmaDot16, const
+from verity.circuits.ops.scalar import BIT, BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
 from verity.circuits.refs import Coll, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.registry import fp8_moe_experts as X
