@@ -281,6 +281,24 @@ def test_sampled_accept_has_no_dead_gate():
         assert dead_gates(Program(fn), transitive=True).computed == 0, fn.id
 
 
+@pytest.mark.slow
+def test_the_call_s_kernel_is_the_definition_on_sampled_passes_and_the_zero_vector():
+    """`sampled_accept.accept_kernel`, circuit-check's reference for `SampledAccept_v1` (the sidecar registers it), at the
+    smallest layout: its sampler's draft passes and the all-zero vector, the one all-edge vector in its domain, each compared
+    and none a mismatch.  About 11 s, the Definitions' evaluator on four passes."""
+    from verity.circuits.evaluation import self_check
+    from verity.circuits.evaluation.batch import type_shape
+    from verity.circuits.evaluation.reference import signature_of
+
+    A.register_kernels()
+    t = bind(A.SampledAccept, K=K, V=V, TILE=TILE)
+    sc = self_check(t, kernel="numpy", n=3, seed=4)
+    assert (sc.compared, sc.mismatches) == (3, [])
+    zero = [np.zeros((1, *type_shape(pt)), np.uint64) for pt in signature_of(t)[0]]
+    sc = self_check(t, kernel="numpy", inputs=zero)
+    assert (sc.compared, sc.mismatches) == (1, [])
+
+
 def test_q_call_applies_to_every_unit_of_the_plan_no_gate_wider_than_its_x():
     """GLM-5.3's layout with five draft tokens: `Q_call` v1 at its X cuts each of the plan's twelve Definitions, so none
     computes a word wider than 32 bits (the resample selects the rows' 32-bit stream keys, not their 64-bit positions)."""

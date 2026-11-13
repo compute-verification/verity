@@ -10,9 +10,13 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     places and one that carries its tile's maximum, a tile's part of two threads, one that finishes a tile from carried
     thread sums, the row end at 17 tiles, a resample chunk in its three places) and at GLM-5.3's (154,880 logits in tiles of
     8,192, five draft tokens), where each is held to the Flock block; and the Call at its smallest layout, 17 tiles of 512
-    logits with a last tile of 16, held to the block by its cut."""
+    logits with a last tile of 16, held to the block by its cut, whose reference is `sampled_accept` (`accept_kernel`)."""
     from verity.circuits.defs import bind
     from verity.definitions.registry import sampled_accept as A
+
+    def call(**statics):
+        A.register_kernels()
+        return bind(A.SampledAccept, **statics)
 
     return [
         ("AcceptExpLane_v1", lambda: A.AcceptExpLane),
@@ -41,7 +45,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("AcceptResample_v1-glm53-first", lambda: bind(A.AcceptResample, K=5, N=32, FIRST=True, LAST=False)),
         ("AcceptResample_v1-glm53", lambda: bind(A.AcceptResample, K=5, N=32, FIRST=False, LAST=False)),
         ("AcceptResample_v1-glm53-last", lambda: bind(A.AcceptResample, K=5, N=32, FIRST=False, LAST=True)),
-        ("SampledAccept_v1", lambda: bind(A.SampledAccept, K=2, V=16 * 512 + 16, TILE=512)),
+        ("SampledAccept_v1", lambda: call(K=2, V=16 * 512 + 16, TILE=512)),
     ]
 
 

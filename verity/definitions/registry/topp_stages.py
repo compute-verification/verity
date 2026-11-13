@@ -568,19 +568,28 @@ def _masked(B, E, S, logits, temp, splits, rest, head: bool):
     scalars (``rest``: the six ``sw{S}``, then the carry unless FIRST) and each lane's positions, those ``splits`` names.
     Returns (the temperature's words, the masked lanes, the carry's head (``head``), each S's position past the chunk, the
     zero count word)."""
-    rest, N = list(rest), S.N
+    rest = list(rest)
     x = _x(B, E, logits, temp)
     tv, sp = E.param(temp, 32), E.param(splits, 32)
-    scal = {s: unpack_scalars(E, _words(E, rest[i]), s) for i, s in enumerate(K.SPLIT_COUNTS)}
+    sws = [_words(E, rest[i]) for i in range(len(K.SPLIT_COUNTS))]
+    cw = None if S.FIRST else _words(E, rest[len(K.SPLIT_COUNTS)])
+    return (tv, *mask_lanes(E, S.V, S.N, x, sp, sws, cw, head))
+
+
+def mask_lanes(E, V: int, N: int, x, sp, sws, cw, head: bool):
+    """`_masked` on its inputs as the engine's words: the lanes ``x`` after temperature, ``splits`` (sp), each S's row scalars
+    (``sws``) and the carry (``cw``; None on a row's first chunk).  Returns (the masked lanes, the carry's head (``head``),
+    each S's position past the chunk, the zero count word)."""
+    scal = {s: unpack_scalars(E, sws[i], s) for i, s in enumerate(K.SPLIT_COUNTS)}
     zero = E.const([0], CW)
-    if S.FIRST:
+    if cw is None:
         carried = (None, zero, zero) if head else None
         per = {s: (zero, zero, zero, zero, zero) for s in K.SPLIT_COUNTS}
     else:
-        carried, per = _carry_split(_words(E, rest[len(K.SPLIT_COUNTS)]), head)
+        carried, per = _carry_split(cw, head)
     keep, out_pos = E.const([0] * N, 1), {}
     for s in K.SPLIT_COUNTS:
-        geo = Geo(S.V, s)
+        geo = Geo(V, s)
         off, pb, ph, sl, c0 = per[s]
         h1, reset, wrapped, nxt = positions(E, geo, N, (off, pb, ph, sl))
         M, Zh, rZ, plog, dup, numkeep, pre, stop, ties = scal[s]
@@ -591,7 +600,7 @@ def _masked(B, E, S, logits, temp, splits, rest, head: bool):
         keep_s = keep_lanes(E, x, dm, E.op("iadd", c, lp), h1, plog, numkeep, stop, ties)
         keep = E.op("xor", keep, E.op("and", keep_s, E.op("weq", sp, s)))
         out_pos[s] = (*nxt, c[[N - 1]])
-    return tv, E.op("sel", keep, x, NEG_INF), carried, out_pos, zero
+    return E.op("sel", keep, x, NEG_INF), carried, out_pos, zero
 
 
 def _select_body(B, S, logits, temp, seed, pos, splits, *rest):

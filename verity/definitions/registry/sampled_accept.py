@@ -245,6 +245,48 @@ def sampled_accept(logits, draft, seed: int, pos, temp: int, tile: int = STATS_T
     return {**out, "verdict": verdict, "accepted": r, "appended": appended, "row": r, "token": token}
 
 
+def accept_kernel(logits, draft, seed, pos, temp, *, K: int, V: int, TILE: int) -> list[int]:
+    """`sampled_accept` on one instance of `SampledAccept_v1{K,V,TILE}`'s words, its outputs in the Call's leaf order.  It
+    declines outside the domain the reference is written for: a NaN, +inf or subnormal logit, a row with no finite one, a
+    draft token at V or past it."""
+    from verity.definitions.numerics.kernel_registry import Declined
+
+    w = (np.asarray(logits, np.uint64) & np.uint64(0xFFFFFFFF)).astype(np.uint32).reshape(K + 1, V)
+    x = w.view(_F)
+    if np.isnan(x).any() or np.isposinf(x).any() or (((w & 0x7F800000) == 0) & ((w & 0x7FFFFF) != 0)).any():
+        raise Declined("a NaN, +inf or subnormal logit")
+    if not np.isfinite(x).any(axis=1).all():
+        raise Declined("a row with no finite logit")
+    d = [int(np.uint32(int(t) & 0xFFFFFFFF).view(np.int32)) for t in np.asarray(draft).reshape(-1)]
+    if max(d) >= V:
+        raise Declined("a draft token at V or past it")
+    ref = sampled_accept(x, d, int(seed), [int(p) for p in np.asarray(pos).reshape(-1)], int(temp), TILE)
+    return [*ref["verdict"], ref["accepted"], *(t & 0xFFFFFFFF for t in ref["appended"])]
+
+
+def _sample_accept(rng, n: int, params, *, K: int, V: int, TILE: int) -> list[np.ndarray]:
+    """Draft passes the reference's domain holds: rows of normal logits, some -inf, draft tokens at a row's maximum, at a
+    random lane or the placeholder -1, a seed, positions and a temperature in [0.5, 1.5)."""
+    logits = rng.normal(0, 3, (n, K + 1, V)).astype(_F)
+    logits[rng.random((n, K + 1, V)) < 0.05] = -np.inf
+    logits[:, :, 0] = rng.normal(0, 3, (n, K + 1)).astype(_F)
+    best = logits[:, :K].argmax(axis=2)
+    draft = np.where(rng.random((n, K)) < 0.6, best, np.where(rng.random((n, K)) < 0.8, rng.integers(0, V, (n, K)), -1))
+    temp = rng.uniform(0.5, 1.5, n).astype(_F).view(np.uint32)
+    return [logits.view(np.uint32).astype(np.uint64), (draft & 0xFFFFFFFF).astype(np.uint64),
+            rng.integers(0, 1 << 63, n, dtype=np.uint64), rng.integers(0, 1 << 20, (n, K + 1)).astype(np.uint64),
+            temp.astype(np.uint64)]
+
+
+def register_kernels() -> None:
+    """Register `accept_kernel` as `SampledAccept_v1`'s numpy kernel, which circuit-check compares with the Definition on its
+    vectors and on `_sample_accept`'s."""
+    from verity.definitions.numerics import kernel_registry as KR
+
+    KR.register(SampledAccept, accept_kernel, kernel="numpy", domain="finite or -inf logits, none subnormal, each row one "
+                "finite; draft tokens below V", sample=_sample_accept)
+
+
 # ---------------------------------------------------------------------------------------------------------
 # the Definitions
 # ---------------------------------------------------------------------------------------------------------
@@ -654,4 +696,4 @@ ALL_COMPOSITES = [AcceptExpLane, AcceptUniform, LogitAtStep, AcceptTileHead, Acc
 __all__ = ["STATS_TILE", "PADDED_TILES", "PART", "RESAMPLE_N", "AcceptExpLane", "AcceptUniform", "LogitAtStep",
            "AcceptTileHead", "AcceptTileSum", "AcceptRowEnd", "AcceptResample", "SampledAccept",
            "ALL_COMPOSITES", "CUTS", "Unit", "ROW", "HEAD", "head", "part", "chunk", "plan", "pass_plan", "cut", "thread_lanes",
-           "tl_exp", "tile_stats", "row_lse", "accept_uniform", "sampled_accept"]
+           "tl_exp", "tile_stats", "row_lse", "accept_uniform", "sampled_accept", "accept_kernel", "register_kernels"]

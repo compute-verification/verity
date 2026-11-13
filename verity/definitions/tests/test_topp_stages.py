@@ -267,6 +267,31 @@ def test_a_mask_chunk_of_32_lanes_is_topp_mask_v4_across_chunk_and_slice_ends(S)
     assert 0 < int((row[ties] != K.NEG_INF).sum()) < len(ties), S
 
 
+@pytest.mark.slow
+@pytest.mark.parametrize("first, last", [(True, False), (False, False), (False, True)])
+def test_the_mask_chunk_s_kernel_is_the_definition_on_chunks_of_real_rows_at_every_split_count(first, last):
+    """The twin's mask chunk, circuit-check's reference for `TopPMaskChunk_v1` (the sidecar registers it), on the chunk of a
+    V = 64 row in each of its places, two rows at each split count: every one compared, none a mismatch; on uniform words
+    it declines only carries that are no lane's (`topp_stage_twins.carry_words`) and claims the all-zero carry.  About 20 s
+    a place, the twin's rows and the Definitions' evaluator."""
+    from verity.circuits.evaluation import sample_uniform, self_check
+    from verity.circuits.evaluation.reference import signature_of
+
+    TW.register_kernels()
+    st = dict(V=64, N=2, FIRST=first, LAST=last)
+    t = bind(T.TopPMaskChunk, **st)
+    params, _ = signature_of(t)
+    rng = np.random.default_rng(int(first) + 2 * int(last))
+    rows = [TW.mask_chunk_inputs(rng, S, **st) for S in K.SPLIT_COUNTS for _ in range(2)]
+    sc = self_check(t, kernel="numpy", inputs=[np.asarray([r[j] for r in rows], np.uint64) for j in range(len(params))])
+    assert (sc.compared, sc.mismatches) == (len(rows), [])
+    uniform = sample_uniform(np.random.default_rng(5), 16, params)
+    if not first:
+        uniform[-1][0] = 0
+    sc = self_check(t, kernel="numpy", inputs=uniform)
+    assert sc.mismatches == [] and sc.compared >= 1 and (sc.declined == 0) == first
+
+
 EDGE = ["ties", "nan", "few", "uniform", "posinf", "plain", "neginf"]
 
 
