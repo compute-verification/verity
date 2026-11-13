@@ -407,6 +407,211 @@ def test_a_warden_rehearsals_watermark_is_recorded_and_passed_on_only_when_asked
     assert "--minutes 3: 100 requests take" in json.loads(refusals[0][1])["refused"]
 
 
+#: a relay session of 20 link-windows at the scan's schedule (64 s of them), its clients' port 8012 on the peer
+SESSION = ["relay-session", *REQUEST[1:5], "--client-port", "8012", "--windows", "20", "--minutes", "5", "--height",
+           "10"]
+
+
+def test_a_lane_key_starts_a_relay_session_at_the_scans_schedule_one_at_a_time_with_the_rehearsals(host):
+    """`relay-session` records the peer, the endpoint's port, the clients' port and its link-windows, always with
+    ``scan`` and never with a rehearsal's traffic or sampling; its tick, class and watermark are recorded only when
+    given, as a scan rehearsal's. It shares the rehearsals' unit: one of any of them runs at a time, and a key that
+    reads only starts none."""
+    started = []
+    rc, out = gate(host, SESSION, started=started)
+    doc = json.loads(out)
+    assert rc == 0 and doc == {"run": "c20261024T110000Z-ab12", "device": "warden", "peer": REQUEST[2], "port": 8011,
+                               "client_port": 8012, "windows": 20, "minutes": 5, "height": 10, "scan": True,
+                               "by": LANE, "requested_utc": "2026-10-24T11:00:00Z",
+                               "unit": f"vy-certifier@{doc['run']}.service"}
+    assert started == [doc["run"]] and A.read_ledger(host.ledger) == []
+    assert json.loads((host.certifier / doc["run"] / "request.json").read_text()) == \
+        {k: v for k, v in doc.items() if k != "unit"}
+
+    for argv in (SESSION, REQUEST):
+        rc, out = gate(host, argv, active=lambda r: r == doc["run"], started=started, token="cd34")
+        assert rc == 3 and f"{doc['run']} still runs: one at a time" in json.loads(out)["refused"]
+    rc, out = gate(host, REQUEST, started=started, token="cd34")
+    assert rc == 0
+    rc, out = gate(host, SESSION, active=lambda r: r == "c20261024T110000Z-cd34", started=started, token="ef56")
+    assert rc == 3 and "c20261024T110000Z-cd34 still runs" in json.loads(out)["refused"]
+    assert started == [doc["run"], "c20261024T110000Z-cd34"]
+
+    given = SESSION[:-4] + ["--minutes", "6", "--height", "10", "--bucket-ms", "200", "--scan-class", "w63k4",
+                            "--watermark"]
+    rc, out = gate(host, given, started=started, token="ef56")
+    assert rc == 0 and {k: v for k, v in json.loads(out).items() if k not in doc} == \
+        {"bucket_ms": 200, "scan_class": "w63k4", "watermark": True}
+    rc, out = gate(host, SESSION[:-2], started=started, token="ab34")
+    assert rc == 3 and "--minutes 5: 20 link-windows of 3200 ms take 9 minutes" in json.loads(out)["refused"]
+
+    rc, out = gate(host, SESSION, key=None, started=started, token="ab56")
+    assert rc == 3 and json.loads(out)["refused"] == \
+        "this key reads only: a relay session is started with a lane's own gate key, or by vy-admin"
+    assert len(started) == 3
+
+
+@pytest.mark.parametrize("argv, why", [
+    (SESSION[:5] + SESSION[7:], "relay-session: the following arguments are required: --client-port"),
+    (SESSION[:7] + SESSION[9:], "relay-session: the following arguments are required: --windows"),
+    (SESSION + ["--client-port", "80"], "--client-port '80': 1024 to 65535"),
+    (SESSION + ["--client-port", "8011"], "--client-port 8011: a port of the peer's loopback for the relay's clients, "
+                                           "not the endpoint's --port and none of the challenge links' (7811 to 7899)"),
+    (SESSION + ["--client-port", "7811"], "--client-port 7811: a port of the peer's loopback"),
+    (SESSION + ["--client-port", "7899"], "--client-port 7899: a port of the peer's loopback"),
+    (SESSION + ["--windows", "0"], "--windows '0': 1 to 1119"),
+    (SESSION + ["--windows", "1120"], "--windows '1120': 1 to 1119"),
+    (SESSION + ["--windows", "205", "--minutes", "170"],
+     "--height 10: the key's 1024 one-time signatures don't sign 205 link-windows: give --height 11 or more, or "
+     "fewer --windows"),
+    (SESSION + ["--minutes", "4"], "--minutes 4: 20 link-windows of 3200 ms take 5 minutes (their span, the start, "
+                                   "the check and the key at height 10): give --minutes 5 or more, or fewer --windows"),
+    (SESSION + ["--bucket-ms", "200"], "--minutes 5: 20 link-windows of 6400 ms take 6 minutes"),
+    (SESSION + ["--bucket-ms", "50"], "--bucket-ms '50': 100 to 4000"),
+    (SESSION + ["--scan-class", "w1"], "--scan-class 'w1': one of ['w63', 'w63k4']"),
+    (SESSION + ["--scan"], "relay-session: unrecognized arguments: --scan"),
+    (SESSION + ["--requests", "4"], "relay-session: unrecognized arguments: --requests 4"),
+    (SESSION + ["--tokens", "16"], "relay-session: unrecognized arguments: --tokens 16"),
+    (SESSION + ["--prompts"], "relay-session: unrecognized arguments: --prompts"),
+    (SESSION + ["--window-per-group"], "relay-session: unrecognized arguments: --window-per-group"),
+    (SESSION + ["--temperature", "0"], "relay-session: unrecognized arguments: --temperature 0"),
+    (SESSION + ["--top-p", "1"], "relay-session: unrecognized arguments: --top-p 1"),
+    (SESSION[:2] + ["nobody"] + SESSION[3:], "--peer 'nobody': one of"),
+])
+def test_the_gate_refuses_a_relay_session_it_cant_check_and_writes_nothing(host, argv, why):
+    """Each refusal the verb adds (the clients' port, the link-windows, the key and the minutes they take), each
+    flag of a rehearsal's traffic or sampling, which a session has none of, and the scan rehearsal's own refusals of
+    what the two share."""
+    rc, out = gate(host, argv, started=[])
+    assert rc == 3 and why in json.loads(out)["refused"], out
+    assert not host.certifier.exists()
+
+
+def test_the_longest_relay_session_is_an_hour_of_link_windows_at_the_scans_tick_and_the_gates_minutes_past_280_ms():
+    """The numbers the module docstring gives a runner that asks whether its load fits: a session's link-windows last
+    windows · T · τ; `SESSION_WINDOWS`' most are 59 min 40 s at the scan's tick, and from τ = 280 ms the gate's most
+    `--minutes` bounds them, to the whole link-windows in 167 minutes less the key's seconds (162 min 44 s at the
+    deployed key's height, from 273 ms)."""
+    T = A.SCAN["--window"]
+
+    def longest(tick: int, height: int | None = None) -> tuple[int, int, float]:
+        """The most link-windows the gate takes at `tick`, their `--minutes` and their span in seconds."""
+        w = A.SESSION_WINDOWS[1]
+        while A.session_minutes(w, height or A.warden_height(w), T * tick) > A.CERTIFIER_MINUTES[1]:
+            w -= 1
+        return w, A.session_minutes(w, height or A.warden_height(w), T * tick), w * T * tick / 1000
+
+    assert A.SESSION_WINDOWS == (1, A.warden_windows(A.WARDEN_REQUESTS[1])) == (1, 1119)
+    assert A.SCAN_BUCKET_MS == (100, 4000) and T == 32 and A.CERTIFIER_MINUTES[1] == 170
+    assert {tick: longest(tick) for tick in (100, 200, 250, 279, 280, 1000, 4000)} == {
+        100: (1119, 63, 3580.8), 200: (1119, 123, 7161.6), 250: (1119, 153, 8952.0), 279: (1119, 170, 9990.432),
+        280: (1118, 170, 10017.28), 1000: (313, 170, 10016.0), 4000: (78, 170, 9984.0)}
+    assert (longest(1000)[2], longest(4000)[2]) == (166 * 60 + 56, 166 * 60 + 24)
+    for height, first, most in ((None, 280, 167 * 60), (20, 273, 162 * 60 + 44)):
+        assert longest(first - 1, height)[0] == 1119 > longest(first, height)[0]
+        for tick in range(first, A.SCAN_BUCKET_MS[1] + 1):
+            windows, minutes, span = longest(tick, height)
+            key = (1 << (height or A.warden_height(windows + 1))) // 4096
+            assert most - (0 if height else key) - T * tick / 1000 - 1 < span <= most, (tick, height)
+    assert longest(100, 20)[:2] == (1119, 67)
+    assert (A.session_minutes(1119, 13), A.session_minutes(1119, 20)) == (63, 67)
+    # a rehearsal's link-windows hold its tail, so the same 1119 as a session's leave the check a minute more
+    assert A.warden_minutes(A.WARDEN_REQUESTS[1], 13) == 60 and A.warden_height(1119) == 13
+    assert [A.session_minutes(1, h) for h in (10, 20)] == [4, 8]
+
+
+def session(source: str, seen: list):
+    """A stand-in for `warden_serve.py session`, as `rehearsal`: it is given where its relay listens."""
+    def command(req, out, url, listen):
+        seen.append((req, out, url, listen))
+        return [sys.executable, "-c", f"import json, pathlib; out, url = pathlib.Path({str(out)!r}), {url!r}\n{source}"]
+    return command
+
+
+def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_status_says_when_it_listens(
+        host, tmp_path):
+    """The unit's ssh forwards the peer's client port to the relay's listener, a free port here that is not the
+    tunnel's own local end, and the unit runs `warden_serve.py session` there for the request's link-windows at the
+    scan's schedule. `status` carries ``relay``: null until the relay's `deployment.json` is whole, then where a client
+    connects and the deployment; the end is a rehearsal's (`warden_outcome`), saying the session ended."""
+    ssh = ["-i", "KEY", "research@peer"]
+    assert A.forward_argv(ssh, 40002, 8011, (8012, 40003)) == [
+        *A.TUNNEL_SSH, "-L", "127.0.0.1:40002:127.0.0.1:8011", "-R", "127.0.0.1:8012:127.0.0.1:40003", *ssh]
+    assert A.forward_argv(ssh, 40002, 8011) == [*A.TUNNEL_SSH, "-L", "127.0.0.1:40002:127.0.0.1:8011", *ssh]
+    assert "ExitOnForwardFailure=yes" in A.TUNNEL_SSH
+
+    rc, out = gate(host, SESSION, started=[])
+    run = json.loads(out)["run"]
+    d = host.certifier / run
+    req = json.loads((d / "request.json").read_text())
+    argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/gate") / PIN, listen=40003)
+    assert argv == [sys.executable, f"/opt/gate/{PIN}/benchmarks/network_traces/warden_serve.py", "session",
+                    "--upstream", "127.0.0.1:40001", "--listen", "127.0.0.1:40003", "--out", str(tmp_path),
+                    "--height", "10", "--windows", "20", *A.scan_schedule()]
+    given = A.warden_command(req | {"bucket_ms": 200, "scan_class": "w63k4", "watermark": True}, tmp_path, "u",
+                             listen=1)
+    assert given[-len(A.SCAN_SCHEDULE) - 1:] == [*A.scan_schedule(200, "w63k4"), "--watermark"]
+
+    def status() -> dict:
+        rc, st = A.gate(["--ssh", f"status {run}"], host, certifier_active=lambda r: True)
+        assert rc == 0
+        return json.loads(st)
+
+    assert status() == {"run": run, "request": req, "end": None, "active": True, "relay": None}
+    deployment = {"listen": ["127.0.0.1", 40003], "windows": 20, "origin_unix": 1.5, "session": "00" * 32}
+    (d / A.WITNESS).mkdir(mode=0o700)
+    (d / A.WITNESS / "deployment.json").write_text(json.dumps(deployment)[:-9])
+    assert status()["relay"] is None
+    (d / A.WITNESS / "deployment.json").unlink()
+
+    seen, forwards = [], []
+    files = WARDEN_FILES.replace('(out / "client.json").write_text("{}")\n', "").replace(
+        '{"upstream": url, "session": "00" * 32}', repr(deployment))
+    assert repr(deployment) in files and "client.json" not in files
+    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1,
+                          tunnel_argv=lambda s, l, back: forwards.append((l, back)) or TUNNEL, up=lambda t, p: True,
+                          command=session(files, seen), wait=lambda proc, s: proc.wait())
+    ((got, work, url, listen),) = seen
+    ((local, back),) = forwards
+    assert got == req and work == d / A.WITNESS and url == f"http://127.0.0.1:{local}"
+    assert back == (8012, listen) and listen != local
+    assert end["rc"] == 0 and end["ended"] == "the session ended" and end["device"] == "warden"
+    assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.WARDEN_COUNTS
+                                                                   if k != "load"}}
+    assert "client.json" not in end["witness"] and "deployment.json" in end["files"]
+    assert status() | {"active": False} == {"run": run, "request": req, "end": end, "active": False,
+                                           "relay": {"client": "127.0.0.1:8012", "deployment": deployment}}
+    rehearsal_status = json.loads(A.gate(["--ssh", f"status {run_warden(host, token='cd34')[0]}"], host,
+                                         certifier_active=lambda r: False)[1])
+    assert "relay" not in rehearsal_status
+
+
+def test_a_relay_session_whose_ssh_exits_is_stopped_there_and_its_end_says_the_tunnel_closed(host):
+    """A session's clients reach its relay through the unit's ssh alone. When that ssh exits (the peer refused a
+    forward, or the link dropped) the unit stops the session's runner rather than let it run out its link-windows
+    with no client, and the end is nonzero and says the tunnel closed, whatever the check then reads; a session whose
+    runner fails says so as a rehearsal does."""
+    rc, out = gate(host, SESSION, started=[])
+    run = json.loads(out)["run"]
+    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l, back: [sys.executable, "-c", ""],
+                          up=lambda t, p: True, command=session("import signal; signal.pause()", []),
+                          wait=lambda proc, s: proc.wait())
+    assert end["rc"] != 0 and end["verdict"] is None
+    assert end["ended"] == (f"the tunnel to {REQUEST[2]} closed before the session ended, and with it the clients' "
+                            "way to the relay and the relay's to the endpoint (tunnel.log)")
+
+    rc, out = gate(host, SESSION, started=[], token="cd34")
+    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1,
+                          tunnel_argv=lambda s, l, back: TUNNEL, up=lambda t, p: True,
+                          command=session("raise SystemExit(1)", []), wait=lambda proc, s: proc.wait())
+    assert end["rc"] == 1 and end["ended"] == "the session exited 1"
+    rc, out = gate(host, SESSION, started=[], token="ef56")
+    end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1,
+                          tunnel_argv=lambda s, l, back: TUNNEL, up=lambda t, p: False,
+                          command=lambda *a, **k: pytest.fail("ran without its tunnel"))
+    assert end["rc"] == 2 and "didn't come up (tunnel.log)" in end["ended"]
+
+
 PROMPTS = [[70001, 3], [5], [7]]
 SCAN = REQUEST + ["--scan", "--prompts", "--height", "10"]
 
