@@ -282,3 +282,54 @@ beside it: wait for its end, inside your launcher's window (to 17:05Z); past tha
   and I ring compute-accounting.
 
 Return by Fri 13 Nov 06:00Z.
+
+## Fri 13 Nov 06:53Z: a small piece BEFORE Friday's card run, and it touches nothing of that run: HASH-132, the H200 kernel's bytes across the weekend's move. Your `cubin-main.sh` is most of it. Return by 12:00Z
+
+**Friday's card run stands as it is:** card 3, the go from me at about 16:42Z, launched from a
+clean worktree at `c5840ecef3`, your job files as they are in the notes. Nothing below changes
+a job file, #9489 or #9550. One thing to know for the go: compute-accounting said (HASH-131,
+06:45Z) that the red team broke the H100 conjecture on the model (PRF-612) and that the mend is
+on the verifier's side, so the kernel's sources should not change; if that changes, I say so
+in the go.
+
+**What happened tonight.** Daniel agreed the architecture page; its moves start now. Three of
+them rewrite an include line inside our kernel sources, because `pearl_c/hash_h3.cuh:18`,
+`pearl_c/sha512.cuh:9`, `served_zk/hm96_rows.cu:18` and `commit_gpu/commit_gpu.cuh:47`
+include `../../../verity/definitions/kernels/{row_commit,sha512}.cuh` [read by me on `main`]:
+- **the weekend's move (top, Sat 14 or Sun 15 Nov):** `verity/definitions/kernels/` goes to
+  `verity/circuits/kernels/` (`tools/move/definitions_kept_map.toml` on top's branch
+  `cursor/top-moves-c-b396` at `ec36d28b1dc5`; the map is not on `main`);
+- Monday's move of the two headers to `verity/commitments/` (proofs with circuits; no PR yet);
+- Wednesday's move of PoUW's package (compute-accounting; no branch yet).
+
+By reading, an include path does not reach the binary (you built the cubin from two
+directories and got the same bytes). **Nobody has built it across a move, and
+compute-accounting's timed slot on Tue 17 Nov builds `pearl_c_sm90` from `main` and holds it
+to the stored binary.** HASH-132 is that check for each of the three moves; this brief is the
+first.
+
+**Do, on a CPU node with CUDA 13.0's nvcc (where `cubin-main.sh` ran), outside an infra
+window, in a worktree and a run of their own:**
+1. **Before:** `origin/main` at a commit you name: `pearl_c_sm90`'s cubin by `build.sh`, its
+   sha256. It must be `5a6d7461f5f01bb209dcd40f144eff9f1edf3b289561e9b97c3836ca1bb19571`
+   (8,037,440 bytes, `art:20a1fa98…`). If it is not, stop and tell me: that is a finding
+   about `main`, not about the move.
+2. **After:** the same tree with the weekend's move applied, in a scratch copy inside the
+   job. Read top's branch first: which maps the move runs and in what order (its body or
+   TOP-398 if the branch does not say); if the branch's tree is already moved, build that
+   tree. The same toolkit, the same flags, the same `build.sh`. **Its sha256 against 1's.**
+3. **The diff of our sources across the move:** which lines of the four files (and of any
+   other `.cu`, `.cuh`, `build.sh` or `fixture.py` of ours) the move rewrites. If the map
+   leaves kernel sources alone, the includes point at a directory that is gone: then the
+   build fails, and that is the finding.
+4. **The other binaries whose sources it rewrites:** `pearl_c_sm120`'s cubin, `served_zk`'s
+   row hashing, `commit_gpu`. For each: is it pinned or named by a run of record; built
+   before and after with the same bytes, or not built and why.
+5. The opt-in build tests and the machine-code check's tests on the moved tree, as your job
+   runs them.
+6. One comment on HASH-132 (at most 100 words) with the two sha256 and the verdict. **Tell
+   me: I say it to top on HASH-131 before it marks the move** (promised by Sat 14 Nov 8 AM
+   PST).
+
+Your note: a section in your report note, a CHECKPOINT line each 30 minutes, synced by its
+own path. Return by Fri 13 Nov 12:00Z. I resume you for Monday's move when its PR exists.
