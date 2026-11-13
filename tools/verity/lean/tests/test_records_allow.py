@@ -314,6 +314,42 @@ def test_a_sampled_mismatch_beside_an_allowed_failure_is_still_compiled_again_an
     assert calls == [(S, False), (P, False)], "without the allowance the other failure keeps it from a second audit"
 
 
+def test_a_sampled_mismatch_sets_aside_every_report_of_the_check_py_a_batch_shares(lane, tmp_path, monkeypatch):
+    """`s` and `s/props` share one check.py, so their reports are one directory's: `audit.json` and an `audit-*` directory
+    each. When the sample of `s` alone differs, the first audit's reports all go to `mismatched/s/`, its requirer's
+    `audit-*` directory beside its own, and what is left where the run's verdict is read is the second audit's alone."""
+    _, run_dir, calls, standing, _ = lane
+    sampled = AUDIT.Failure("sampled", "S.M", "sampled: S.M: the build's S/M.olean differs from what its source compiles to")
+    fake, rounds = LC.subprocess.run, []
+
+    def run(argv, **kw):
+        got = fake(argv, **kw)
+        if argv[1:2] == [str(LC.AUDIT_PY)]:
+            rounds.append(out := Path(argv[argv.index("--out") + 1]))
+            for at in map(Path, argv[argv.index("--out") + 2:]):
+                (d := out / f"audit-{at.name}").mkdir(parents=True, exist_ok=True)
+                (d / "round").write_text(f"{len(rounds)}\n")
+            if sampled in standing.get(S, []):
+                doc = json.loads((f := out / "audit.json").read_text())
+                rep = next(r for r in doc["packages"] if os.path.relpath(r["package"], kw["cwd"]) == S)
+                rep["sampled"] = {"mismatched": {"S.M": rep["package"]}}
+                f.write_text(json.dumps(doc) + "\n")
+                standing[S] = []
+        return got
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    standing[S] = [sampled]
+    assert LC.audit_records(S, tmp_path / "deps", log=lambda _s: None) == 0
+    assert calls == [(S, False), (P, False)] * 2 and rounds[0] == rounds[1] == run_dir / "lean-audit"
+    aside, here = run_dir / "lean-audit" / "mismatched" / "s", run_dir / "lean-audit"
+    assert sorted(f.name for f in aside.iterdir()) == ["audit-props", "audit-s", "audit.json"]
+    assert [(aside / d / "round").read_text() for d in ("audit-s", "audit-props")] == ["1\n", "1\n"]
+    first = json.loads((aside / "audit.json").read_text())["packages"]
+    assert [os.path.basename(r["package"]) for r in first] == ["s", "props"] and first[0]["failure_codes"] == ["sampled"]
+    assert [(here / d / "round").read_text() for d in ("audit-s", "audit-props")] == ["2\n", "2\n"]
+    assert json.loads((here / "audit.json").read_text())["passed"]
+
+
 def test_an_allowance_names_a_failure_by_its_code_and_entry_never_its_text(lane, tmp_path):
     """The same code about another entry is not the failure allowed, nor is another code about the same entry; and a report
     that lists no entries (an older check.py's) matches nothing."""
