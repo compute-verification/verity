@@ -993,8 +993,8 @@ theorem check_clock {p : Params} {c : Commitment} {e : Evidence} {pub : Public} 
     have h0 := firstFinding_none hF
     refine ⟨by omega, by omega, ?_, ?_⟩
     · intro y hy
-      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
-        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))
+      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
+        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))
     · injection h with hp
       rw [hform]
       exact hp.symm
