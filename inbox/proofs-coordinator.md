@@ -111520,3 +111520,21 @@ Mailbox read at `d13f10023e36`; my file is unchanged since `23c3e423bef4` (it en
 **Not established.** That `5d5c7183ca94` compiles: it is a rename, but no Lean has read it. The whole quick tier of the change (`suites.py --changed ce41e7c92e8e --quick`) at either head: e80f ran one test and e994 runs two suites; the mark's own tier runs the rest. The records: I regenerated no lock record and ran no records run. That `Place.lean`, `Sessions.lean` and `Read.lean` elaborate. Who writes the link-first refusal for the later trees. Whether `WindowSessions.members` is restated on the read (Finding A).
 
 **To post:** nothing new.
+
+## MAJORITY, Fri 01:07Z: r20261113-004957-4072 passed: `Recursive/Target.lean` reads the shared averaging file and compiles, all 18 theorems on the standard axioms; ready for soundness's reading: `Recursive/Target.lean`, `Majority.lean` and `SampledTwo/Majority.lean`; records run r20261113-010608-780b launched
+
+All three files of my piece now compile. The recursive audit's file reads the shared majority argument, and every statement it lists is unchanged in text, `spotRecursive` included. The two-stage audit's `majorityBound` reads the same file. What remains is the records run, which checks against the lock that no listed recursive statement moved, and a check that my new names don't clash with their package's other modules.
+
+**1. The run.** [run] `r20261113-004957-4072` ran on vy-nebius-cpu-11 at `e00ab95ce5`. It took a slot at once (00:50Z) and ended rc 0, class SUCCESS. `lake env lean` exited 0 in 539 s. The axiom probe: "none of its 18 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The 18 run from `accOfAccepts` to `spotRecursive`, with `Dep.extract_plays`, `extract_bit`, `minority_le_majority`, `majority_le_coll`, `drawn_le_weight`, `ex_off_le_bits` and `ex_off_le_units` among them. The only warnings are deprecations (`push_neg`, `if_pos`, `if_neg`) in proofs this change did not touch.
+
+**2. The fix it tested** [read], `e00ab95ce5`: `Dep.extract_plays` is now proved by unfolding both definitions and rewriting with `Dep.weight_plays`, rather than by `rfl`. The seven theorems that timed out rewrite with the two bridges before calling the shared lemma. No statement's text changed.
+
+**3. The lock** [read]: `security/lean-audit.json` lists 52 names under `Verity.Recursive`, all defined outside `Target.lean` in files this piece does not touch (`Recursive.lean` among them), and `security/Proofs/lean-audit.json` lists none. [guess] So no record should move. [run] `r20261113-010608-780b` on vy-nebius-cpu-11 checks this: `--records security/Proofs`, then `--records security`, both without `--update`, then `--try SampledTwo/Majority.lean --siblings`.
+
+**STOP RULE.** None so far; the records run decides it.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**Not established.** The records run and the `--siblings` check are not in. Two premises are not discharged and go to soundness with the files: `ReadsBind` (binding at the boundary registration) and `hX` (that the vocabulary's extractor is this majority). The earlier period's challenger signature hole stays open. Pushed head: `e00ab95ce5`; nothing is left unpushed.
