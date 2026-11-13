@@ -158310,3 +158310,35 @@ STOP RULE: this entry holds item 3 (the ports' keys lemma) with its try's verdic
 - Whether circuit-check and the seven other suites pass at `ca7a92c69852`: `c4f7`.
 - Whether the kept play is refused at TWOLEG's hold alone: derived above, not run.
 - Nothing has run at `bf701e54dc6e`. It differs from `b678f3affc5a` by B's three input lists only.
+
+## REDRAW, Fri 13 Nov 19:48Z: #9728's names are mended at 7915e17cd3460d2a3edda87d0856f8e26bd2ff3a and all its Lean files build; the credit branch now conflicts with it in three files, not one
+
+1. **The head is `7915e17cd3460d2a3edda87d0856f8e26bd2ff3a` on `cursor/proofs-carried-9728-4ae1`.** [git] One commit over `ca0ae1a5b314f93483258335d9e08909b8c25ff7`, pushed at 19:43Z as a fast-forward: 2 files, 29 lines changed for 29 (22 in `Steps.lean`, 7 in `Withheld.lean`).
+2. **There are three old names, not two.** [git] Each is renamed as a whole identifier:
+   - `sessionNamed` → `challengePhaseNamed`: 7 in `Steps.lean`.
+   - `trustedSessionOf` → `trustedChallengePhaseOf`: 7 in `Steps.lean`, 2 in `Withheld.lean`.
+   - The one you did not list, `sessionOf` → `challengePhaseOf`: 7 in `Steps.lean` (a statement and an `unfold` among them), 2 in `Withheld.lean`. Neither file elaborates with it left.
+   - In `Steps.lean`'s module docstring only: the lemma prefix `Session.` → `ChallengePhase.` twice and `sessionNamed_ok` → `challengePhaseNamed_ok` once, the names those lemmas have in `Properties.Challenger.ChallengePhase`.
+3. **My own choice, beyond what the build needs: #9728's three lemmas take the new names too.** [git] `sessionOf_ok_of_steps`, `sessionNamed_ok_of_steps` and `trustedSessionOf_ok_of_steps` become `challengePhaseOf_ok_of_steps`, `challengePhaseNamed_ok_of_steps` and `trustedChallengePhaseOf_ok_of_steps`: declared in `Steps.lean`, cited once each in `Withheld.lean` and in the docstring, nowhere else in the tree. The chain renamed the challenger's own lemmas with their definitions in `Properties.Challenger` (`challengePhaseNamed_ok`, `trustedChallengePhaseOf_ok`, `challengePhaseOf_ok_spec`) and kept the old lemma names only in `Verity.Sampled`. If you want the three kept, say so: it is 9 words back.
+4. **All eleven of #9728's Lean files build at this head.** [run] On vy-nebius-cpu-8:
+   - `Steps.lean`, `r20261113-191926-986e`: "lean exit 0 in 115 s"; "axiom probe: none of its 20 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+   - `Withheld.lean`, `r20261113-192154-af7b`: "Build completed successfully (10791 jobs)"; "lean exit 0 in 1150 s"; "axiom probe: none of its 50 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+   - `Withheld.lean` imports the other nine through `Signer`, `Files`, `Logs`, `Messages` and `Ledger`, so its try built them: `Plain`, `Entry`, `Built`, `Bodies`, `Signer`, `Files`, `Logs`, `Messages`, `Ledger`, each "Built" in its log, and `Steps` again.
+5. **The credit branch now conflicts with #9728 in three files.** [git] `git merge-tree` of `7915e17cd346` and the carried credit head `1526d32a2426` exits 1 on `Steps.lean`, `Withheld.lean` and `tools/pous_grader/TRUSTED.sha256`. Against `ca0ae1a5b314` it was the pin file alone. The cause: the carried credit branch holds its own copies of #9728's two files with the old names (13 lines with `sessionNamed` or `trustedSessionOf`, 9 with `sessionOf`), so it does not build as carried either, and both branches have now changed those lines since their base `36d6e37cbc7b`.
+6. **Its settlement is mechanical, and I have not made it.** [local] Simulated in a scratch worktree, pushed nowhere:
+   - `Steps.lean`: the credit branch does not change it. With the same renames its copy is byte for byte the mended one, so the merge takes #9728's.
+   - `Withheld.lean`: with the same renames on the credit branch's copy, three hunks are left, each a line the credit branch also changed: `LABEL` → `p.label` in `session_read`'s statement and in `hsn`, and `record_read p` → `record_read h`. Each takes the credit branch's line under the new names.
+   - The pin file: `pins.py --regen`, as you said.
+   I push nothing to either credit branch without your word. If you want that merge from me, name the branch it goes on.
+
+### Not established
+
+- No records run at `7915e17cd346`. [read] Its properties lock still holds two records under old names, `Spot.Challenger.sessionNamed` and `Spot.Challenger.sessionOf`, which a records run with `--update` drops, as `71b3` did for #9717.
+- "Builds" is the try's: each file elaborates and the probe's line is clean. Nothing was replayed through the kernel, and no suite ran at this head.
+- I did not re-wrap. [local] 12 lines of `Steps.lean` and 8 of `Withheld.lean` are now over 120 characters (3 and 4 before), as the chain's renames left `ChallengePhase.lean`.
+
+### State
+
+- #9717: ready to mark at `3e1103ded562ad68a1e8c2286491c82b7c314782` (my 19:34Z entry).
+- #9795: its records run `r20261113-190838-cc57` on vy-nebius-cpu-7 is still building (Lean slot since 19:14Z). The ready line follows.
+- The names run `r20261113-182631-21be` holds a Lean slot since 19:23Z. The table keeps Sat 14 Nov 18:00Z.
