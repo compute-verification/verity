@@ -197,11 +197,13 @@ def stop_record(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Stop
     of its log after its boundary record ``boundary``: `Layout.stop_program` under `Layout.stop_query` at the sampling
     design ``design`` over the class's stop blocks, one a span; its one port `b.stop`, the blocks' outputs; its
     registered values the boundary record's ports (`stop_registration`); and that record's window with ``window``'s
-    items, named the stop population's."""
+    items, named the stop population's, without the registration head it names (`registration.HEAD`): the head is of
+    the boundary's declared day, and the stop population's verifier, which declares no day, holds its window to name
+    none (`R6-head`)."""
     L, c = layout_of(pub, check, stop), BoundaryCommit.of(pub, COMMIT)
     reg = stop_registration(pub, check, stop, boundary)
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.stop_ports().items()]
-    w = {**boundary["window"], **(window or {}), "population": "stop"}
+    w = {**{k: v for k, v in boundary["window"].items() if k != R.HEAD}, **(window or {}), "population": "stop"}
     return R.record(L.stop_program, L.stop_query, design, CS.SCHEME, roots, w, previous=R.digest(boundary),
                     registered=reg.registered)
 

@@ -417,14 +417,18 @@ def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coin
           **kwargs: Any) -> First:
     """One class's first stage on ``coins``, laid out under the verifier's own check template and stop rule (``stop``):
     its stream registers the boundary record (`boundary_rows.record`, at the rule's first-stage rate over its spans,
-    chained after ``previous``, its window naming ``window``'s items) under ``declared``, the verifier's declared day
-    and head (by default `declared_of` the record's program), the coins commit to the registration's digest, and the
-    stream samples once. Raises `service.Refused` as the stream does."""
+    chained after ``previous``, its window naming ``window``'s items and the head of ``declared``, which R6 holds it
+    to: `registration.HEAD`) under ``declared``, the verifier's declared day and head (by default `declared_of` the
+    class's program), the coins commit to the registration's digest, and the stream samples once. Raises
+    `service.Refused` as the stream does."""
     layout = BR.layout_of(pub, check, stop)
     coins = coins if isinstance(coins, Recorded) else Recorded(coins)
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
-    rec = BR.record(pub, check, S.selection_law(stream.spec.selection, layout.spans), previous, window, stop=stop)
-    reg = stream.register(rec, layout.ports(), declared=declared_of(rec["program"]) if declared is None else declared,
+    declared = declared_of(layout.partition["program"]) if declared is None else declared
+    head = {} if declared.get("head") is None else {RG.HEAD: declared["head"]}
+    rec = BR.record(pub, check, S.selection_law(stream.spec.selection, layout.spans), previous,
+                    {**head, **(window or {})}, stop=stop)
+    reg = stream.register(rec, layout.ports(), declared=declared,
                           **({} if window_root is None else {"window_root": window_root}))
     coins.commit(bytes.fromhex(reg.digest))
     sample = stream.select(reg)

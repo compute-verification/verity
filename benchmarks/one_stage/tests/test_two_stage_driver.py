@@ -206,6 +206,17 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     assert stopped(json.dumps({pair: 2}), *held) == 0 and reached == [({pair: 2}, STOP)]
 
 
+def test_the_boundary_record_names_the_registration_head_its_verifier_declares():
+    """The first stage's boundary record names, in its window, the head of the registration log's prefix its verifier's
+    declared day was filled from (`registration.HEAD`): the development log's by default (`declared_of`), the caller's
+    where it hands a declared day."""
+    pub = json.loads(json.dumps(_class().public()))
+    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"))
+    mine, later = TS.declared_of(got.record["program"]), TS.declared_of(got.record["program"], day=1)
+    assert got.record["window"][R.HEAD] == mine["head"] != later["head"]
+    assert TS.first(pub, PAIR, RULE, FC.Challenger("later"), declared=later).record["window"][R.HEAD] == later["head"]
+
+
 def test_resume_refuses_another_rule_registration_or_sample():
     got = TS.first(_class().public(), PAIR, RULE, FC.Challenger("first"))
     stage1 = json.loads(json.dumps(got.stage1()))
@@ -580,9 +591,10 @@ def _args(tmp_path: Path, **more: object) -> NS:
 def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sampled_on_a_stream_of_their_own():
     """After a stop class's first stage its stop record registers on a one-stage stream of the verifier's stop block
     whose log starts with the class's boundary record: one stop block a span, `b.stop` its one port, its inputs that
-    record's `b.request` and `b.egress` as output values. It is sampled at a rate over the class's N stop blocks on
-    coins opened after its own registration's digest. Refused: a boundary record that is another class's, another
-    rule than the commitment's, and a sampling design that is a fixed count."""
+    record's `b.request` and `b.egress` as output values, its window that record's without the registration head, which
+    its verifier declares none of. It is sampled at a rate over the class's N stop blocks on coins opened after its own
+    registration's digest. Refused: a boundary record that is another class's, another rule than the commitment's, and
+    a sampling design that is a fixed count."""
     pub = json.loads(json.dumps(_stop_class().public()))
     got = TS.first(pub, PAIR, RULE, FC.Challenger("first"), stop=STOP)
     coins = FC.Challenger("stop")
@@ -590,7 +602,8 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == N
     assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP]
     assert sorted(e["value"] for e in s["record"]["registered"]) == sorted(BS.STOP_READS)
-    assert s["record"]["window"] == {**got.record["window"], "population": "stop"}
+    assert R.HEAD in got.record["window"]
+    assert s["record"]["window"] == {**{k: v for k, v in got.record["window"].items() if k != R.HEAD}, "population": "stop"}
     assert s["sample"]["population"] == N and len(s["units"]) == Q and set(s["units"]) <= set(range(N))
     assert s["spec"] == TS.stop_spec(got.layout, f"rate:{Q}/{N}").digest() != got.stream.spec.digest()
     read, after = bytes.fromhex(s["read"]), bytes.fromhex(s["registration"])

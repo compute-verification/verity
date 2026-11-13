@@ -589,8 +589,7 @@ def declared_day(day: int | None, log: str | None, params: str | None,
                  w: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """``--day N --day-log LOG``: the window's day and the declarations of the registration log the verifier holds (its
     view's, `registration.check_log` under ``--day-params``, by default the log's composite under an auditor of no sheets or
-    keys), as one-stage's R2 takes them (a5's ``declared``), with the log's head they were filled at (``head``); empty
-    without ``--day``. ValueError where core's check refuses
+    keys), as one-stage's R2 takes them (a5's ``declared``); empty without ``--day``. ValueError where core's check refuses
     the log, and where the tied W (``--tie``) names a day's declaration (its window's ``day`` and ``declaration``,
     `serve_day.Day.naming`) other than one of day N the log holds by digest, or names one and the audit has no ``--day``."""
     named = {k: (w.get("window") or {}).get(k) for k in ("day", "declaration")} if isinstance(w, Mapping) else {}
@@ -611,7 +610,7 @@ def declared_day(day: int | None, log: str | None, params: str | None,
     if w is not None:
         _held_naming(named, day, {_rebuilt(e.day, e.program, e.blocks) for e in entries
                                   if isinstance(e, G.Declaration) and e.day == day}, f"--day-log {log}")
-    return {"day": day, "declarations": got[1]["declarations"], "head": got[1]["head"]}
+    return {"day": day, "declarations": got[1]["declarations"]}
 
 
 def _rebuilt(day: int, program: str, blocks: Any) -> str:

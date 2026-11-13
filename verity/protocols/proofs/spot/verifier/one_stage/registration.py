@@ -149,6 +149,8 @@ RECEIPT = "verity/registration-receipt/v1"
 KINDS = ("served", "stand-in")
 #: the window's field naming its seed salt (Seed salt)
 SEED_SALT = "seed_salt"
+#: the window's field naming the registration head its verifier's declarations were filled from
+HEAD = "head"
 #: the window's field naming the reset serving chose for its pool (Pool chain)
 POOL_RESET = "pool_reset"
 #: the window's field naming its week on the verifier's clock (Pool chain)

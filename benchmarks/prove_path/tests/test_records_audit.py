@@ -826,7 +826,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
         (tmp_path / "unnamed" / "summary.json").read_text())["refused"]["records"] and not seen
     assert RA.main([*base, "--out", str(tmp_path / "day"), "--tie", str(named), "--tie-prefix", "h1/", "--day", "0",
                     "--day-log", str(tmp_path / "log.json")]) == 1
-    assert seen["declared"] == {"day": 0, "declarations": [day[0].body()], "head": G.head("remote", day)}
+    assert seen["declared"] == {"day": 0, "declarations": [day[0].body()]}
     assert json.loads((tmp_path / "day" / "summary.json").read_text())["day"] == {
         "day": 0, "declared": [got.rec["program"]], "source": RA.DAY_SOURCES["development"]}
     root = RA.verifier_window(got.dir, D.parse_design(LAW), None)[0].run
@@ -857,7 +857,7 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
     log.write_bytes(G.committed("remote", entries))
     assert RA.declared_day(None, None, None) == {}
     day = RA.declared_day(3, str(log), None)
-    assert day == {"day": 3, "declarations": [e.body() for e in entries], "head": G.head("remote", entries)}
+    assert day == {"day": 3, "declarations": [e.body() for e in entries]}
 
     def r2(d: dict) -> list[str]:
         v = R.check(written.rec, mine.program, mine.query, D.parse_design(LAW), CS.SCHEME, {}, **d)

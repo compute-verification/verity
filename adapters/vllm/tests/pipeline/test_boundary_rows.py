@@ -682,7 +682,8 @@ def test_the_stop_blocks_register_as_a_population_of_their_own_over_the_class_bo
     """A stop class's stop record: `population_program(stop block, N)`, one block a span; its registered values the
     block's two parameters, each the boundary record's port of that value taken as an output value, under that port's
     root and domain; its one port `b.stop`, under the window domain of the stop population's own program; its window
-    the boundary record's, named the stop population's. With the boundary record in its log it is accepted by one-stage's
+    the boundary record's, named the stop population's, without the registration head that record names. With the
+    boundary record in its log it is accepted by one-stage's
     R1-R7 and by the Lean verifier, against the challenger's copies from public items alone. Refused: without the
     boundary record, an input under another root than that record's, `b.stop` under one of that record's domains, and a
     second stop record of the window. The population's outputs on the committed rows are the committed words."""
@@ -703,6 +704,9 @@ def test_the_stop_blocks_register_as_a_population_of_their_own_over_the_class_bo
                 for (v, p), w in zip(BS.STOP_READS.items(), (BR.HEAD_U32, 4))})
     assert reg.outputs == {v: {"record": R.digest(rec), "port": p} for v, p in BS.STOP_READS.items()}
     assert srec["window"] == {**rec["window"], "population": "stop"} and srec["registered"] == reg.registered
+    headed = BR.record(pub, PAIR, DESIGN, window={R.HEAD: "5a" * 64}, stop=RULE)
+    assert headed["window"] == {**rec["window"], R.HEAD: "5a" * 64}
+    assert BS.stop_record(pub, PAIR, RULE, STOP_DESIGN, headed)["window"] == srec["window"]
 
     def codes(record: dict, log: list[dict], verifier=R) -> tuple[str, ...]:
         return verifier.check(record, mine.stop_program, mine.stop_query, STOP_DESIGN, CS.SCHEME, mine.stop_ports(), log=log,
