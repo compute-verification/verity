@@ -51,3 +51,40 @@ ONSITEMAIN, Fri 13 Nov 3:26 AM PST.
 
 TIMER: none
 
+[2026-11-13T11:38Z] 559ed38907c9
+TERMGB to network-accounting (lead), Fri 13 Nov 3:38 AM PST, to your lines of 2:18, 2:56 and 3:14 AM PST.
+
+**The three reads are on NET-403 (3:34 AM PST), with one thing more: your read of our two cited places is right as text and is not what runs today. No signature is checked between a registration file and the charge. The mutations ended: 245 of 249 caught, and the 4 not caught are the same program as the line they change. #9501 is at `f4d2e20e290d`, pushed, nothing since. I hold for your line that the carry is open.**
+
+**1. The signature: your sentence to proofs does not hold at this head.**
+- `class_charge.py` 70 to 71 say what `charge` expects of its caller. Its one caller outside tests is the reader [ran: a search at `f4d2e20e290d`].
+- The reader's head is `head_of`'s: it holds a registration to the digest its `certificate` object names and checks no signature. Lines 95 to 98 say so [read].
+- So a verdict under a head nobody signed does count today, where the registration names its own head's digest.
+- The one check of that signature in the tree is the network certifier's offline check of its own run, `warden_serve.py check`.
+- Two ways close it, on NET-403: the check writes `out/registrations.jsonl` only for what it verified, or the reader is handed the public key, the session and the schedule and verifies. I built neither.
+
+**2. The three reads, each in a line.**
+- **`out/registrations.jsonl`:** nothing wrote it. The store holds no run labelled for the stop verdicts' record [ran at 3:27 AM PST: the labels pulled, the harness's own finder; it lists 4 runs for the compute audit's record]. A writer would be that offline check: ours, a few lines.
+- **A serve with content classes:** none that I read. Wednesday's schedule holds neither lengths rows nor classes [read Thu]. What one needs is a table on the issue. Two mismatches are named there for the tie: the schedule may list two classes of one size where proofs' check wants exactly one index; and a stop class is (P, T) while the network certifier files by the first listed class that holds the release.
+- **The ledger:** the root matches a new field of the record. An opened root that no record names needs no class to be charged rightly: under the gate its class can have no later record with a session on the ledger, so it stays missing. List the two formats by the root on the ledger, not by a word in the record. The stop audit then waits for its own session on the ledger. Not built.
+
+**3. The mutations** [ran at `f4d2e20e290d`, ended 3:18 AM PST].
+- 253 entries: 4 controls pass, 245 caught, 4 not caught.
+- The 4 are E2, E3, E4 and E6 of the earlier set. Each loosens the comparison of the registered rate with `1/1` for a text that is not in lowest terms, has a prefix or has a blank. Since `1131425e42a8` the reader writes that text itself, K of the population in lowest terms, so none of the four changes what it does [read: `_registered`]. I dropped them from the set with that reason. The live cases beside them are caught.
+- **Of the set of 130:** its control passes, 125 caught, the 4 dropped. **The 76 new ones:** all caught.
+
+**4. #9501's body: finished for `f4d2e20e290d`, not set.**
+- You said its changes go in after the carry. The body on the pull request still describes `3ca375fa4336`: it says either field may be absent and that the withheld control is not built. Both are wrong for the pushed head.
+- **I set it now on your word; else at the carry, with the run's counts.**
+- It holds: what a file that doesn't read does and the tests that hold it, on the first screen; the paragraph on what `stopped` covers and what it does not; the line for proofs' writer from your 3:14 AM PST; the second stage's `rate` and the registration's `window` as open; that no run holds the reader's files and no command writes two of them.
+
+**5. One sentence I would add in the tree, on your word, with the carry:** in the runner's README and the reader's docstring, that no command in the tree writes `out/registrations.jsonl` or `out/serve-registrations.jsonl` yet. Today both read as if runs held them.
+
+**6. Runs:** none launched since `-2396`, and none in flight. No pool run at this head, as ordered.
+
+**Where it all is:** the branch `cursor/na-stop-verdicts-b4e6` at `f4d2e20e290d`; the lane's notes under `tools/net394/`, synced: the state, the body's file, the reads, the mutation set and its output.
+
+**Least sure:** read 2's first line, since I read one serve's schedule and the tree's launchers and not every run of the lane; and read 3's second answer, which stands on proofs' line about the root's function.
+
+TIMER: none. My turn ends here; I act on your line that the carry is open.
+
