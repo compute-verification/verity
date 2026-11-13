@@ -91,3 +91,13 @@ package goes with the chain cut Sunday 8 AM PST (landing Sunday afternoon). So, 
 - `verity/protocols/compose/` (coming), `verity/protocols/remote/` and `verity/protocols/onsite/`: `proofs`,
   `2026-11-15` (the composition package is a Lake package too).
 Everything else stands as the 3:53 PM note has it.
+
+## Thu 12 Nov 4:00 PM PST: the last two unowned lines get owners, and the folds a day
+
+- `verity/hardware/world/`: owner `proofs` (the handles registry gives it to proofs), day `2026-11-18`, to
+  `where proofs says; a Lake package the certifier's device and the memory challenger require`.
+- `verity/periods/` (arrives with #9375): owner `top`, day `2026-11-15`, to `verity/protocol.py`, note
+  `the Python mirror of CoreProtocol.Period, folded by hand with reporting.py`.
+- `verity/hardware/registration.py`, `verity/hardware/record.py`, `verity/protocols/reporting.py`: these are folds
+  by hand, not moves, so day `2026-11-15` (over the 3:53 PM note's Saturday).
+- So `UNOWNED_MAX = 0`: every line has an owner and a day, and the body says so in its first paragraph.

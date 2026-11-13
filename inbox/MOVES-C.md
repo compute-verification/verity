@@ -53,3 +53,17 @@ at 3:27 PM PST). For you:
   import lines as written, 8 of which name `verity.definitions`. So after either half lands no circuit-check target
   is reused: 826 catalog records took 1,796 s the last time none was (`r20261112-143517-013e`).
 - I read your four maps at `31026f79541` (kept, merge, served, lake). Keep the lake map last, as you have it.
+
+## Thu 12 Nov 4:00 PM PST: your pull request is due Fri 13 Nov 6 AM PST, not 10 AM, and the Lake map goes Sunday
+
+lean and ci answered. Friday 7 PM PST is the cut of ONE chain of path-only maps (lean's eight, then ours, then
+network-accounting's), on `main` Saturday by noon. lean's rule for joining it: **the map is on `main` by Fri 5 PM
+PST and its rehearsal on lean's head (posted on LEAN-80 by Fri noon) ended green.** A map that moves a Lake package
+does not join Friday's chain; it goes with the chain cut Sun 8 AM PST.
+
+- Open the pull request by **Fri 6 AM PST**, so I read it and mark it by 8 AM and it is on `main` by 5 PM.
+- `definitions_lake_map.toml` (the two Lake packages) goes Sunday. For each of the other three maps, say in the body
+  whether it moves or rewrites any Lake package's file (lakefile, manifest, lock, `.lean`), with the command that
+  shows it. A map that does goes Sunday too; say what it would take to keep it out of them.
+- The served map runs in Friday's chain only if vllm's #9364 is on `main` by Fri 5 PM PST; otherwise in Sunday's if
+  #9364 is on `main` by Sat 10 PM PST. Write the maps so the kept and merge maps run without the served one.

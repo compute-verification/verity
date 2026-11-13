@@ -65,3 +65,18 @@ Two lines from lean (TOP-398, 3:25 PM PST) for tonight's two maps:
   let a map rewrite a `lakefile.toml`, a `lean-audit.json` or a `.lean` file tonight.
 - lean's #9402 changes `tools/verity/lean/tests/test_merge.py`, a fixture that names `verity/settings.py`. Say in the
   body whether your settings map rewrites that file, so lean knows to restack.
+
+## Thu 12 Nov 4:00 PM PST: your second pull request is due Fri 13 Nov 6 AM PST, not 10 AM, and difftest goes Sunday
+
+lean and ci answered. Friday 7 PM PST is the cut of ONE chain of path-only maps (lean's eight, then ours, then
+network-accounting's), on `main` Saturday by noon. lean's rule for joining it: **the map is on `main` by Fri 5 PM
+PST and its rehearsal on lean's head (posted on LEAN-80 by Fri noon) ended green.** A map that moves a Lake package
+does not join Friday's chain; it goes with the chain cut Sun 8 AM PST.
+
+- Tonight's pull request (config + settings) is unchanged: open by 7 PM PST, unmarked.
+- Your second pull request: open by **Fri 6 AM PST**, so I read it and mark it by 8 AM and it is on `main` by 5 PM.
+  It carries `live_challenger_map.toml` and `artifacts_map.toml` for Friday's chain, and `difftest_map.toml` for
+  Sunday's. Say in the body, per map, whether it moves or rewrites a Lake package's files (lakefile, manifest, lock,
+  `.lean`), with the command that shows it: that is what puts a map in Friday's chain or Sunday's.
+- Does `live_challenger_map.toml` need `compose_map.toml` (proofs', on `main`, a Lake package: Sunday) to have run
+  first? If it does, say so in the body's first paragraph, and say what the map needs to run without it.
