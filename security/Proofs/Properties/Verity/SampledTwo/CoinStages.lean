@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
-public import Proofs.Properties.Verity.SampledTwo.CoinMapAgree
+public import Proofs.Properties.Verity.SampledTwo.CoinMapLaw
 public import Proofs.Properties.Verity.SampledDraw
 public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
@@ -102,8 +102,9 @@ def Leaves {β : Type} (P : β → Prop) : Game β → Prop
 
 theorem Leaves.reach {β : Type} {P : β → Prop} :
     ∀ (g : Game β) (s : Strategy g) {o : β}, Leaves P g → PlayReaches g s o → P o
-  | .ret _, _, _, h, ho => by
-    subst ho
+  | .ret a, _, o, h, ho => by
+    have e : o = a := ho
+    rw [e]
     exact h
   | .send _ k, s, _, h, ho => Leaves.reach (k s.1) s.2 (h s.1) ho
   | @Game.coin _ _ _ _ k, s, _, h, ho => by
@@ -138,7 +139,7 @@ theorem leaves_relK {β : Type} (P : β → Prop) :
         refine leaves_optGame h0 (fun fs' => ?_) _
         intro x
         exact leaves_relK P k fs' ts _ fun log hl =>
-          hf _ (FreshWide.cons (fun _ _ => List.length_ofFn) hl)
+          hf _ (FreshWide.cons (fun _ _ => by dsimp only; exact List.length_ofFn) hl)
       | hello spec =>
         show Leaves P (if _ then _ else _)
         split
@@ -184,10 +185,13 @@ theorem devBits_first (ℓ₁ ℓ₂ : String) (after : ByteArray) :
     | fresh l =>
       by_cases hl : l = ℓ₁
       · subst hl
-        have ha : ans = after := h _ (by simp) rfl
+        have ha : ans = after := h _ (List.mem_cons.2 (Or.inl rfl)) rfl
         subst ha
         simp [locAt, stageLocate]
-      · by_cases h2 : l = ℓ₂ <;> simp [locAt, stageLocate, hl, h2]
+      · by_cases h2 : l = ℓ₂
+        · subst h2
+          simp [locAt, stageLocate, hl]
+        · simp [locAt, stageLocate, hl, h2]
     | hello _ => simp [locAt]
     | opening _ _ _ => simp [locAt, stageLocate]
 
@@ -210,11 +214,11 @@ theorem devBits_second (ℓ₁ ℓ₂ : String) (hne : ℓ₁ ≠ ℓ₂) (after
     | fresh l =>
       by_cases h2 : l = ℓ₂
       · subst h2
-        have ha : ans = after := h _ (by simp) rfl
+        have ha : ans = after := h _ (List.mem_cons.2 (Or.inl rfl)) rfl
         subst ha
         have hc : List.countP (isFresh l) [⟨.fresh l, ans, cs⟩] = 1 := by simp [isFresh]
         rw [hc]
-        simp only [locAt, stageLocate, Ne.symm hne, if_false, if_true, eq_self_iff_true, and_self, ↓reduceIte]
+        simp only [locAt, stageLocate, Ne.symm hne, and_self, ↓reduceIte]
         generalize pre.countP (isFresh l) = n
         by_cases hA : n < 16384 * j
         · have hj : ¬ (1 + n / 16384 = j + 1) := by omega
@@ -261,7 +265,8 @@ theorem flatten_drop_const {β : Type} {m : ℕ} : ∀ (cs : List (List β)), (�
   | _, _, 0 => by simp
   | c :: cs, h, A + 1 => by
     rw [List.drop_succ_cons, flatten_drop_const cs (fun d hd => h d (List.mem_cons_of_mem _ hd)) A,
-      List.flatten_cons, show m * (A + 1) = c.length + m * A by rw [h c (by simp)]; ring, List.drop_append]
+      List.flatten_cons, show m * (A + 1) = c.length + m * A by rw [h c (by simp)]; ring, List.drop_append,
+      List.drop_of_length_le (Nat.le_add_right _ _), List.nil_append, Nat.add_sub_cancel_left]
 
 theorem getD_prefix {β : Type} {l₁ l₂ : List β} (h : l₁ <+: l₂) {t : ℕ} (ht : t < l₁.length) (d : β) :
     l₂.getD t d = l₁.getD t d := by
@@ -355,8 +360,8 @@ theorem toBytes_testBit (a : Flock.F128) {m q : ℕ} (hm : m < 16) (hq : q < 8) 
     (a.toBytes.data.toList.getD m 0).toNat.testBit q = a.bit (8 * m + q) := by
   have hd : a.toBytes.data.toList.getD m 0 =
       if m < 8 then (a.lo >>> (8 * m).toUInt64).toUInt8 else (a.hi >>> (8 * (m - 8)).toUInt64).toUInt8 := by
-    rw [List.getD_eq_getElem a.toBytes.data.toList 0 (by simpa [Flock.F128.toBytes] using hm)]
-    simp [Flock.F128.toBytes]
+    rw [List.getD_eq_getElem a.toBytes.data.toList 0 (by simpa [Flock.F128.toBytes] using hm), Array.getElem_toList]
+    exact Array.getElem_ofFn _
   rw [hd]
   unfold Flock.F128.bit
   by_cases h8 : m < 8
@@ -380,7 +385,8 @@ theorem coinByte_testBit (d : FlockDeploy.Coin) (k : Fin SpotFlock.L) {q : ℕ} 
       (List.getElem?_eq_some_iff.2 ⟨by simpa using (by omega : k.val / 16 < 65536), Fin.ext (by simp)⟩)
       (i := k.val % 16) (Nat.mod_lt _ (by norm_num))
     rwa [show 16 * (k.val / 16) + k.val % 16 = k.val by omega] at this
-  show (d.bytes.getD k.val 0).toNat.testBit q = _
+  unfold SpotFlock.coinByte
+  dsimp only
   rw [e, toBytes_testBit _ (Nat.mod_lt _ (by norm_num)) hq]
 
 /-- **Bit `q` of byte `k` of the coin `dev` reads is bit `8 k + q` of the bits it collected.** -/
@@ -397,7 +403,6 @@ theorem src_testBit {L : Locate} {log : List Verity.Release} {i : ℕ} {d : Floc
     dsimp only
     rw [bit_elemOfBits _ (by omega)]
     congr 1
-    (try simp only [Fin.val_mk])
     omega
 
 theorem byte_eq_of_testBit {x y : UInt8} (h : ∀ q < 8, x.toNat.testBit q = y.toNat.testBit q) : x = y := by
@@ -410,12 +415,22 @@ theorem byte_eq_of_testBit {x y : UInt8} (h : ∀ q < 8, x.toNat.testBit q = y.t
     rw [Nat.testBit_eq_false_of_lt (lt_of_lt_of_le (UInt8.toNat_lt x) hp),
       Nat.testBit_eq_false_of_lt (lt_of_lt_of_le (UInt8.toNat_lt y) hp)]
 
-theorem size_src (d : FlockDeploy.Coin) : (SpotFlock.src d).size = SpotFlock.L := by
-  simp [SpotFlock.src, Properties.Spot.bytesOf, ByteArray.size]
+theorem size_bytesOf {n : ℕ} (f : Fin n → Fin 256) : (Properties.Spot.bytesOf f).size = n := by
+  simp [Properties.Spot.bytesOf, ByteArray.size]
+
+/-- Byte `k` of a source's bytes is the source's `k`. -/
+-- Stated at every length `n`: at `SpotFlock.L` the kernel would unroll `Array.ofFn`'s 1048576 steps to check the
+-- index's bound.
+theorem bytesOf_getElem {n : ℕ} (f : Fin n → Fin 256) {k : ℕ} (hn : k < n) (hk : k < (Properties.Spot.bytesOf f).size) :
+    ((Properties.Spot.bytesOf f)[k]).toNat = (f ⟨k, hn⟩).val := by
+  simp [Properties.Spot.bytesOf, ByteArray.getElem_eq_getElem_data]
+
+theorem size_src (d : FlockDeploy.Coin) : (SpotFlock.src d).size = SpotFlock.L :=
+  size_bytesOf _
 
 theorem src_getElem (d : FlockDeploy.Coin) {k : ℕ} (hk : k < (SpotFlock.src d).size) :
-    ((SpotFlock.src d)[k]).toNat = (SpotFlock.coinByte d ⟨k, by rwa [size_src] at hk⟩).val := by
-  simp [SpotFlock.src, Properties.Spot.bytesOf, ByteArray.getElem_eq_getElem_data]
+    ((SpotFlock.src d)[k]).toNat = (SpotFlock.coinByte d ⟨k, by rwa [size_src] at hk⟩).val :=
+  bytesOf_getElem (SpotFlock.coinByte d) _ hk
 
 /-- **Bytes whose bits are the collected bits from `8 off` on, `w` of them, start the coin `dev` reads.** -/
 theorem src_extract {L : Locate} {log : List Verity.Release} {i : ℕ} {d : FlockDeploy.Coin}
@@ -431,7 +446,8 @@ theorem src_extract {L : Locate} {log : List Verity.Release} {i : ℕ} {d : Floc
     rw [ByteArray.getElem_extract, ByteArray.getElem_extract]
     apply byte_eq_of_testBit
     intro q hq
-    rw [src_getElem, src_testBit h _ hq, Nat.zero_add, hbits k (by omega) q hq, bitsOf_getD b (by omega) hq]
+    simp only [Nat.zero_add]
+    rw [src_getElem, src_testBit h _ hq, hbits k (by omega) q hq, bitsOf_getD b (by omega) hq]
 
 /-! ## The stages' coins -/
 

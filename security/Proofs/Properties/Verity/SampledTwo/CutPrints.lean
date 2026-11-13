@@ -262,7 +262,7 @@ theorem firstDraws_window {key : ChallengerKey} {p : VStar.Recursive.SampledTwo.
     cases hw : bp.verifier.windowRoot with
     | none => simp [hb, hw, Except.toOption] at h
     | some w =>
-      cases hl : firstLabel e with
+      cases hl : firstLabel p with
       | none => simp [hb, hw, hl, Except.toOption] at h
       | some lab =>
         have h' : some (⟨key, w, lab, c.digest⟩ : Draws) = some d := by

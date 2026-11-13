@@ -112,27 +112,27 @@ theorem keyOf_deployed (θ : ByteArray) : ∀ key ∈ keyOf θ, key.params = Lms
   intro key hk
   exact atDeployed_eq (Option.filter_eq_some_iff.1 (Option.mem_def.1 hk)).2
 
-/-- The first stage's coin evidence as `drawCoins` reads it: the form's `coins` without the key it carries. -/
+/-- The first stage's coin evidence as `drawCoins` reads it: the form's `coins`, as the run of record hands them to its
+coin check (`Spot.Run.coinsCode`). -/
 def firstCoins (e : VStar.Recursive.SampledTwo.Evidence) : Json :=
-  Json.mkObj ((Spot.entries e.coins).filter (·.1 != "key")).toList
+  e.coins
 
-/-- The family the first stage's coins are of, as its segment names it. -/
-def firstLabel (e : VStar.Recursive.SampledTwo.Evidence) : Option String :=
-  match Spot.getD (Spot.getD e.coins "segment") "label" with
-  | .str l => some l
-  | _ => none
+/-- The family the first stage's coins are of: the boundary registration's challenger's, as the run of record reads
+it (`inputOf`'s `family`). -/
+def firstLabel (p : VStar.Recursive.SampledTwo.Params) : Option String :=
+  p.boundary.challenger.map (·.2)
 
 /-- The boundary registration's parameters, as the form and the run of record read them. -/
 def boundaryOf (p : VStar.Recursive.SampledTwo.Params) : Flock.V Spot.OneStage.Params :=
   pure p.boundary
 
 /-- **What the first session's coins are read under**: the parameters' key (the interior audit's challenger's), the
-boundary registration's window, the family its segment names, after the boundary registration's digest. -/
+boundary registration's window and its challenger's family, after the boundary registration's digest. -/
 def firstDraws (key : ChallengerKey) (p : VStar.Recursive.SampledTwo.Params) (c : Spot.OneStage.Commitment)
     (e : VStar.Recursive.SampledTwo.Evidence) : Option Draws := do
   let bp ← (boundaryOf p).toOption
   let w ← bp.verifier.windowRoot
-  let label ← firstLabel e
+  let label ← firstLabel p
   pure ⟨key, w, label, c.digest⟩
 
 /-- The interior registration's commitment, as the form's check reads it from the evidence's record. -/

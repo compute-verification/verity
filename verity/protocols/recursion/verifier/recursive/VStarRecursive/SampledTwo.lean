@@ -5,7 +5,9 @@ over the sampled replay blocks' proof blocks sampled once more on a challenger s
 the second stage's sessions verified as one-stage v2's per-member form verifies its members' sessions, and the stream's
 run of record over both stages (`Spot.Run.run`), whose second stage holds the sessions' statements to the verdicts. It
 refuses last, behind one switch (`FORM`, which is `Spot.SecondStage.FORM`): every check runs, then a two-stage audit is
-refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). Nothing reads this module: `VStar.Recursive.Sampled` refuses the form by name.
+refused while the two-stage form is outside the soundness theorem (`checkBlobsAt_refuses`). No command of a party's
+dispatches to this module: `VStar.Recursive.Sampled` refuses the form by name. The package's root imports it, so the
+package's audit builds and reads it.
 
 * **params**: exactly `{"boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"}`, the
   auditor's, fixed before any coin:
@@ -61,7 +63,10 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
      than the second stage's session's `reserve` line (`STAGES_ORDER`); and on two windows no line of the first
      session's log is a coin tree's (`firstTreeless`, `FIRST_TREE`): the first stage's session only draws its
      sample, so every coin tree of the play is on the second stage's session, where the interior audit reads them
-     in order from its log's first;
+     in order from its log's first; and the second stage's session's log opens each coin tree's rounds stream by
+     stream, in the order the tree's spec lists its streams (`repStreamsOrdered`, `Challenger.REP_STREAM_ORDER`):
+     a session's link points, then each rep's rounds, rep 0's before rep 1's, so no round's challenges are opened
+     before the message of an earlier round is fixed;
   5. the interior audit's verdict at its coins under the second stage's law (`secondCheck`), which gives the public
      output and the integrity profile;
   6. last, the switch (`finish`): the run must accept, and the form is refused while `FORM` is off.
@@ -455,6 +460,25 @@ def firstTreeless (p : Params) (e : Evidence) : V Unit :=
       if treeShown ls then .error FIRST_TREE else .ok ()
   | none => .ok ()
 
+/-- Whether the release log opens each of the coin trees `ts`' rounds stream by stream
+(`Challenger.repStreamOrder`); the refusal `Challenger.REP_STREAM_ORDER` where it does not open one's so. -/
+def treesOrdered (ts : Array Challenger.LoggedTree) : V Unit :=
+  if ts.all Challenger.repStreamOrder then .ok () else .error Challenger.REP_STREAM_ORDER
+
+/-- **The second stage's session's log opens each coin tree's rounds stream by stream** (check, 4): of each coin tree
+the interior audit reads from its session's signed release log (`OneStageZk.treesOf`, the trees `membersRun` holds
+the second stage's sessions to), the log opens the rounds in the order `Challenger.repStreamOrder` holds it to: the
+tree's last opening aside, each round is of a stream the tree's spec lists after the stream of the round opened
+before it, or a later round of that same stream (`Challenger.REP_STREAM_ORDER`). `membersRun` holds each round to be
+its stream's next, the trees to be opened one after another and each tree's last opening to be its session's closing
+round, and each session's verdict holds its tree's spec to list the session's link stream, then each table's rep
+streams, rep 0's before rep 1's; none of them holds a rep 1 round to be opened after rep 0's last. With this, the
+log opens each second-stage session's link points, then rep 0's rounds, then rep 1's, then its closing round: the
+order the session's messages are read in, so no round's challenges are opened before the message of an earlier
+round is fixed. An honest challenger opens them so. -/
+def repStreamsOrdered (p : Params) (e : Evidence) : V Unit :=
+  OneStageZk.treesOf p.audit.base e.interior.base >>= treesOrdered
+
 /-- **The second stage's law** (check, 5), computed and never read: `Select.secondLaw` of the first stage's sample, the
 proved units of the draw the run of record `run` decided (its `draw`), over the cells the replay block's program has
 under the interior's query (`Select.replayCells`) at the rule's counts (`Select.Counts.over`), as the run of record's
@@ -513,7 +537,8 @@ def secondCheck (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.C
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
 statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
 `ξ`, the first session releasing none of the second stage's coins, the stages' sessions in order on one ledger, the
-first session's log holding no coin tree's line. -/
+first session's log holding no coin tree's line, the second session's log opening each coin tree's rounds stream by
+stream. -/
 def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
@@ -523,6 +548,7 @@ def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray
   interiorUnshown p e
   stagesOrdered p e
   firstTreeless p e
+  repStreamsOrdered p e
   let law ← secondLawOf p run
   pure (secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out }, run)
 
@@ -645,6 +671,19 @@ def protocol : Core.BlobProtocol where
 #guard treeShown ["{\"event\":\"tree-open\"}"]
 #guard !treeShown ["{\"event\":\"root\"}", "{\"event\":\"release\"}", "coin-tree"]
 #guard !treeShown []
+private def orderT (opened : Array Challenger.TreeOpening) : Challenger.LoggedTree :=
+  { key := "", nonce := "", root := "", opened,
+    spec := Json.mkObj [("streams", Json.arr #["session", "circuit/rep0", "circuit/rep1"])] }
+#guard (treesOrdered #[]).toOption.isSome
+#guard (treesOrdered #[orderT #[⟨"session", 0, 2, "", ""⟩, ⟨"circuit/rep0", 0, 1, "", ""⟩,
+  ⟨"circuit/rep0", 1, 1, "", ""⟩, ⟨"circuit/rep1", 0, 1, "", ""⟩, ⟨"circuit/rep1", 1, 1, "", ""⟩,
+  ⟨"session", 1, 0, "", ""⟩]]).toOption.isSome
+/-! A rep 1 challenge opened before rep 0's last message is fixed, on the second of two trees. -/
+#guard match treesOrdered #[orderT #[⟨"session", 0, 2, "", ""⟩, ⟨"session", 1, 0, "", ""⟩],
+    orderT #[⟨"session", 0, 2, "", ""⟩, ⟨"circuit/rep0", 0, 1, "", ""⟩, ⟨"circuit/rep1", 0, 1, "", ""⟩,
+      ⟨"circuit/rep0", 1, 1, "", ""⟩, ⟨"circuit/rep1", 1, 1, "", ""⟩, ⟨"session", 1, 0, "", ""⟩]] with
+  | .error why => why == Challenger.REP_STREAM_ORDER
+  | .ok _ => false
 #guard (readBack (Json.mkObj [("b", Json.arr #[Json.str "x"]), ("a", Json.null)])).toOption ==
   some (Json.mkObj [("a", Json.null), ("b", Json.arr #[Json.str "x"])])
 #guard (readBack (Json.num ⟨1, 1⟩)).toOption.isNone

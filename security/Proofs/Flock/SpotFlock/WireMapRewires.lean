@@ -408,15 +408,6 @@ variable (h : Held)
 
 /-! ## Each wire's writer's part is before its reader's -/
 
-/-- **A template name's place among round 2's parts**: the first template of the name (`heldWriter`), the members'
-count where none has it. -/
-def heldPos (name : String) : ℕ := (heldWriter h name).getD h.ms.length
-
-/-- **Each wire's writer's part is before its reader's**, decided: the first template of the writer's name comes
-before the first of the reader's. No unit is then wired to its own template or to a later one. -/
-def writersFirst : Bool :=
-  (h.wires.getD #[]).all fun w => decide (heldPos h w.writer < heldPos h w.template)
-
 /-- The first template of a name is at or before every template of that name. -/
 theorem heldWriter_le {name : String} {t : ℕ} (ht : t < h.ms.length) (hn : h.names.getD t "" = name) :
     ∃ t', heldWriter h name = some t' ∧ t' ≤ t := by
