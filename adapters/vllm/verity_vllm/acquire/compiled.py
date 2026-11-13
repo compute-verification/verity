@@ -1,35 +1,24 @@
-"""Required-value manifest of an `Execution=compiled` workload from P_compiled x query.
+"""The Inductor artifacts of an `Execution=compiled` workload, read: the launch program of a wrapper (`parse_wrapper`), the split
+graph's wiring (`split_graph_wiring`), the wrapper of each piece (`assign_wrappers`) and the workload's request schedule
+(`schedule_of_workload`, `tokens_at`), which the served Build (`acquire.served`) is derived from.  Nothing here reads a checkpoint.
 
-P_compiled is read from the PRODUCTION process's compiler artifacts: the Inductor output code of every piecewise piece (the wrapper's
-`call()` = the ordered kernel launches with their buffer arguments and shape constants).  Identities = one row per (step, piece, launch,
-non-weight argument role) in the vocabulary of required_manifest.py / binding.py (`op_path` = `c<piece>.<kernel>`, `output_member` = the
-role, element_range = the member's whole extent for the step's token count).  Nothing here reads a checkpoint: the manifest is the
-artifact x the workload's steps.  program_digest = sha256(kernel_set_sha256 || the composed launch table || widths).
+    verity-vllm compiled verify --manifest USED --rebuilt REBUILT --out verify.json
 
-    verity-vllm compiled build --inductor-dir <control process cache> --pieces 17 --steps 32 \
-        --prefill-tokens 256 --request r0 --out manifest.json
+holds the Build a treatment ran with to the Build that process rederived from its own compile artifact.
 """
 from __future__ import annotations
 
-import glob
-import hashlib
 import json
-import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.config import UsageError, option, workload_arg
+from verity_vllm.config import option
 from verity_vllm.engine.arrivals import realized_arrive_steps
-from verity_vllm.query.manifest.format import SCHEMA, manifest_digest as _manifest_digest
-from verity_vllm.program.compiled_relations import OUTPUT_ROLES, kernel_key, pointer_arity, roles_of
+from verity_vllm.query.manifest.format import manifest_digest as _manifest_digest
+from verity_vllm.program.compiled_relations import OUTPUT_ROLES, pointer_arity, roles_of
 
-# the consumer (binding.load_required_manifest) admits ONE manifest schema and recomputes `manifest_digest`
-# over the rows with required_manifest.manifest_digest: the compiled manifest is that schema (its P_compiled-specific content lives under
-# `program`, `identity_key` and the rows' `family`/`engine_step`/`kind`/`piece` annotations, which the digest formula ignores)
-KIND = "verity/compiled-required-manifest/v1"
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
-FAMILY = "compiled_kernel_buffers"
 _RUN = re.compile(r"^\s*(\w+)\.run\((.*),\s*stream=\w+\)\s*$")
 
 
@@ -230,18 +219,6 @@ def kernel_signatures(src: str) -> dict[str, list[str]]:
     return out
 
 
-def _roles(L: dict[str, Any]) -> dict[int, str]:
-    """The launch's resolved role map (parse_wrapper stored it with the signature's arity); integer keys (JSON round-trips make them str)."""
-    r = L.get("roles")
-    if r is None:
-        return roles_of(L["kernel"], L.get("signature"))[0]
-    return {int(k): v for k, v in r.items()}
-
-
-def launches_of_wrapper(path: str) -> list[dict[str, Any]]:
-    return parse_wrapper(path)["launches"]
-
-
 # ---------------------------------------------------------------------------------------------------------------- the split graph
 _CALL = re.compile(r"^\s*(submod_\d+) = self\.(submod_\d+)\((.*?)\);?")
 _GETITEM = re.compile(r"^\s*(getitem(?:_\d+)?) = (submod_\d+)\[(\d+)\]")
@@ -339,32 +316,6 @@ def _sig(launches: list[dict[str, Any]]) -> tuple:
     return tuple((L["kernel"], L["nargs"], tuple(L["widths"])) for L in launches)
 
 
-def widths_of(launches: list[dict[str, Any]], _max_tokens=None) -> dict[tuple[str, str], int]:
-    """Per (kernel, role) elements per token, from the wrapper's own buffer shapes (empty_strided_cuda / assert_size_stride /
-    reinterpret_tensor dims with the symbolic token dim leading)."""
-    w: dict[tuple[str, str], int] = {}
-    for L in launches:
-        roles = _roles(L)
-        for i, role in roles.items():
-            if i < len(L["widths"]) and L["widths"][i] is not None:
-                w[(L["kernel"], role)] = L["widths"][i]
-    return w
-
-
-def compose_pieces(wrappers: list[dict[str, Any]], pieces: int) -> list[list[dict[str, Any]]]:
-    """The wrapper set (one per DISTINCT piece code) -> the per-piece launch table for `pieces` pieces: first (embedding), middle x
-    (pieces-2) (all middle wrappers must have the same launch signature), last (final norm)."""
-    first = [w for w in wrappers if any("embedding" in L["kernel"] for L in w["launches"])]
-    last = [w for w in wrappers if any(L["kernel"].endswith("rms_norm_2") for L in w["launches"])]
-    middle = [w for w in wrappers if w not in first and w not in last and w["launches"]]
-    if len(first) != 1 or len(last) != 1 or not middle:
-        raise SystemExit(f"compiled_manifest: cannot classify the wrappers: first {len(first)} middle {len(middle)} last {len(last)}")
-    sigs = {_sig(w["launches"]) for w in middle}
-    if len(sigs) != 1:
-        raise SystemExit(f"compiled_manifest: middle pieces differ in their launch programs ({len(sigs)} signatures) -- not one P_compiled")
-    return [first[0]["launches"]] + [middle[0]["launches"]] * (pieces - 2) + [last[0]["launches"]]
-
-
 def schedule_of_workload(wl: dict[str, Any]) -> list[dict[str, Any]]:
     """[B>=2] the query's request schedule from the sweep workload: request `r<i>` (workload order, = commit_delta's ids) arrives at
     `arrive_step` under the engine's idle-gap rule (`engine.arrivals.realized_arrive_steps`) with its whole prompt (the eager
@@ -403,287 +354,49 @@ def assign_wrappers(wrappers: list[dict[str, Any]], graph: dict[str, Any]) -> li
     return out
 
 
-def resolve_dataflow(piece_wrappers: list[dict[str, Any]], graph: dict[str, Any] | None) -> tuple[list[list[dict[str, Any]]], list[dict[str, Any]]]:
-    """Every non-weight input of every launch of every piece -> where its VALUE comes from, in the manifest's vocabulary:
-    {kind: launch, piece, kernel, role, view?, view_ret?} (an earlier launch's committed output, same piece or across the eager attention
-    boundary through the split graph's wiring), {kind: attention_out, layer} (the eager splitting op wrote the buffer), input_ids,
-    positions, sym, weight, or undefined (named).  Also the attention ops' operands (q, k, v) resolved to launch outputs."""
-    attn_out_of: dict[tuple[int, int], int] = {}
-    if graph:
-        for a in graph["attention"]:
-            o = a.get("out")
-            if o and o.get("kind") == "piece_ret":
-                attn_out_of[(o["piece"], o["ret"])] = a["layer"]
-
-    def resolve_ret(q: int, m: int) -> dict[str, Any]:
-        rets = piece_wrappers[q]["returns"]
-        r = next((r for r in rets if r["pos"] == m), None)
-        if r is None:
-            return {"kind": "undefined", "why": f"piece {q} has no return {m}"}
-        if r["kind"] == "int":
-            return {"kind": "sym"}
-        if r["from"] == "handoff":
-            L = attn_out_of.get((q, m))
-            return {"kind": "attention_out", "layer": L} if L is not None else {"kind": "undefined", "why": f"piece {q} return {m} is a storage handoff no attention op writes"}
-        if r["from"] == "piece_input":
-            return {"kind": "undefined", "why": f"piece {q} returns its own input {r['pos']}"}
-        out = {"kind": "launch", "piece": q, "kernel": r["from"][0], "role": r["from"][1]}
-        if r.get("view"):
-            out["view_ret"] = r["view"]
-        return out
-
-    per_piece = []
-    for p, w in enumerate(piece_wrappers):
-        rows = []
-        for L in w["launches"]:
-            es = []
-            for e in L["edges"]:
-                if e.get("weight"):
-                    if e["from"] == "piece_input" and graph is not None and e["pos"] < len(graph["wiring"][p]["args"]):
-                        a = graph["wiring"][p]["args"][e["pos"]]
-                        wsrc = dict(a) if a.get("kind") == "weight" else {"kind": "undefined", "why": f"weight argument {e['arg']} is piece input {e['pos']} of kind {a.get('kind')}"}
-                    elif e["from"] == "piece_input":
-                        wsrc = {"kind": "piece_input", "pos": e["pos"], "wiring": "not declared"}
-                    else:
-                        wsrc = {"kind": "undefined", "why": f"weight argument {e['arg']} is not a piece input ({e['from']})"}
-                    es.append({"role": e["role"], "arg": e["arg"], "weight": True, "src": wsrc})
-                    continue
-                if e["from"] == "piece_input":
-                    if graph is None:
-                        src = {"kind": "piece_input", "pos": e["pos"], "wiring": "not declared"}
-                    else:
-                        a = graph["wiring"][p]["args"][e["pos"]] if e["pos"] < len(graph["wiring"][p]["args"]) else {"kind": "undefined"}
-                        src = resolve_ret(a["piece"], a["ret"]) if a["kind"] == "piece_ret" else dict(a)
-                elif e["from"] == "undefined":
-                    src = {"kind": "undefined", "base": e.get("base")}
-                else:
-                    src = {"kind": "launch", "piece": p, "kernel": e["from"][0], "role": e["from"][1]}
-                if e.get("view"):
-                    src["view"] = e["view"]
-                es.append({"role": e["role"], "arg": e["arg"], "src": src})
-            rows.append({"kernel": L["kernel"], "edges": es})
-        per_piece.append(rows)
-    attention = []
-    if graph:
-        for a in graph["attention"]:
-            ops = {}
-            for k in ("q", "k", "v", "out"):
-                sname = a.get(k)
-                ops[k] = resolve_ret(sname["piece"], sname["ret"]) if sname and sname.get("kind") == "piece_ret" else (sname or {"kind": "undefined"})
-            attention.append({"layer": a["layer"], **ops})
-    return per_piece, attention
-
-
-def build(inductor_dir: str, *, pieces: int, steps: int, prefill_tokens: int, request_id: str = "r0", rank: int = 0,
-          kernel_set_sha256: str | None = None, max_tokens: int | None = None, schedule: list[dict[str, Any]] | None = None,
-          split_graph: str | None = None, weights_program_digest: str | None = None, weights_in_dataflow: bool = True) -> dict[str, Any]:
-    """`weights_in_dataflow` False reproduces the v1 digest (records built before weight routing entered program_digest); the default
-    True is v2: every launch's weight argument -> the served parameter the split graph routes to it, in the digest."""
-    paths = sorted(glob.glob(os.path.join(inductor_dir, "*", "*.py")))
-    wrappers = []
-    unparsed = 0
-    for p in paths:
-        w = parse_wrapper(p)
-        if w["launches"] or w["unparsed_runs"]:
-            w["path"] = os.path.relpath(p, inductor_dir)
-            wrappers.append(w)
-            unparsed += w["unparsed_runs"]
-    if not wrappers:
-        raise SystemExit(f"compiled_manifest: no Inductor wrappers with a call() under {inductor_dir}")
-    if unparsed:
-        raise SystemExit(f"compiled_manifest: {unparsed} kernel launch line(s) the parser did not read (`*args` or an unknown form) -- an "
-                         f"undeclared part of the implementation; refusing")
-    graph = split_graph_wiring(split_graph) if split_graph else None
-    if graph is not None:
-        if graph["pieces"] != pieces:
-            raise SystemExit(f"compiled_manifest: the split graph has {graph['pieces']} compiled pieces, --pieces says {pieces}")
-        piece_wrappers = assign_wrappers(wrappers, graph)
-        table = [w["launches"] for w in piece_wrappers]
-        sigs_mid = {_sig(pl) for pl in table[1:-1]}
-        if len(sigs_mid) != 1:
-            raise SystemExit(f"compiled_manifest: middle pieces differ in their launch programs ({len(sigs_mid)} signatures) -- not one P_compiled")
-    else:
-        table = compose_pieces(wrappers, pieces)
-        first = next(w for w in wrappers if w["launches"] is table[0]); last = next(w for w in wrappers if w["launches"] is table[-1])
-        mid = next(w for w in wrappers if w["launches"] is table[1])
-        piece_wrappers = [first] + [mid] * (pieces - 2) + [last]
-    dataflow, attention = resolve_dataflow(piece_wrappers, graph)
-    if not weights_in_dataflow:
-        dataflow = [[{"kernel": r["kernel"], "edges": [e for e in r["edges"] if not e.get("weight")]} for r in rows] for rows in dataflow]
-    n_weight_edges = sum(1 for rows in dataflow for r in rows for e in r["edges"] if e.get("weight"))
-    mt = max_tokens
-    if mt is None:                                                              # the norm kernels' xnumel hint = the compile range's max tokens
-        for L in table[1]:
-            if "rms_norm" in L["kernel"]:
-                mt = L["ints"][0]
-                break
-    widths_by_piece = [widths_of(pl) for pl in table]                          # kernel NAMES repeat across piece kinds with other shapes
-    widths = {}
-    for kind, pl in (("first", table[0]), ("middle", table[1]), ("last", table[-1])):
-        widths.update({(kind + ":" + k, r): v for (k, r), v in widths_of(pl).items()})
-    if kernel_set_sha256 is None:
-        raise SystemExit("compiled_manifest: --kernel-set (the run's inductor_kernels.json kernel_set_sha256) is required: the Program's "
-                         "identity is the generated kernels' sources, not the wrapper bytes")
-    launch_table = [[{"kernel": L["kernel"], "roles": [r for i, r in sorted(_roles(L).items())]} for L in pl] for pl in table]
-    # the resolved role maps (arg index -> role, weight args, the generated kernel's pointer arity) per piece kind and
-    # launch site -- OUTSIDE the digest (the launch table above keeps its earlier form, so the recorded v1/v2 digests are reproduced); the replay
-    # (compiled_kernel_check) reads them so that a kernel name shared by two argument lists is never re-roled by name
-    role_maps = {kind: [{"kernel": L["kernel"], "roles": {str(i): r for i, r in sorted(_roles(L).items())}, "weight_args": L.get("wargs"),
-                         "pointer_arity": L.get("pointer_arity"), "signature": L.get("signature")} for L in pl]
-                 for kind, pl in (("first", table[0]), ("middle", table[1]), ("last", table[-1]))}
-    undefined = sum(1 for rows in dataflow for r in rows for e in r["edges"] if e["src"]["kind"] == "undefined")
-    # program identity = the kernel sources + every piece's launch program + the DATAFLOW (every input's producer, within a piece and
-    # across the attention boundary through the split graph) + the attention ops' operands; wrapper bytes/comments do not enter
-    pdig = hashlib.sha256(json.dumps({"kernel_set": kernel_set_sha256, "pieces": launch_table, "dataflow": dataflow, "attention": attention,
-                                      "wiring_declared": graph is not None, **({"weights_declared": True} if weights_in_dataflow else {}),
-                                      "widths": {f"{k[0]}/{k[1]}": v for k, v in sorted(widths.items())}}, sort_keys=True).encode()).hexdigest()
-    identities: list[dict[str, Any]] = []
-    unknown: dict[str, int] = {}
-    if schedule is None:                                        # single request: the whole prompt at step 0, one token per later step
-        schedule = [{"request_id": request_id, "arrive": 0, "prompt_tokens": prefill_tokens, "max_tokens": steps}]
-    arrive_of = {r["request_id"]: int(r["arrive"]) for r in schedule}
-    for step in range(steps):
-        # [B>=2] one identity per (request, launch, role): the request's token rows of the step's batched buffer (request-local element
-        # range [0, tokens x width); the binding map splits the committed step buffer by the engine's row order, binding.build_binding_map).
-        # `step` is REQUEST-RELATIVE (the gprog reading binding.load_required_manifest applies to every per-request manifest: engine step =
-        # manifest step + the request's arrival step); `engine_step` records the absolute step the row was derived for.
-        for rid, toks in tokens_at(schedule, step):
-            rel_step = step - arrive_of[rid]
-            for piece, pl in enumerate(table):
-                for L in pl:
-                    k = L["kernel"]
-                    roles = _roles(L)
-                    if not roles:
-                        unknown[k] = unknown.get(k, 0) + 1
-                        continue
-                    wargs_L = {int(i) for i in (L.get("wargs") or [])}
-                    for _i, role in sorted(roles.items()):
-                        if _i in wargs_L:
-                            continue        # a WEIGHT argument (registered input, weights-pinned) is never a VU identity: the hook skips it too (Qwen: 'bias')
-                        width = widths_by_piece[piece].get((k, role))
-                        numel = (toks * width) if width else None
-                        identities.append({"family": FAMILY, "program_digest": pdig, "request_id": rid, "step": rel_step, "invocation": 0,
-                                           "op_path": f"c{piece:02d}.{k}", "output_member": role, "element_range": [0, numel], "rank": rank,
-                                           "kind": "output" if role in OUTPUT_ROLES else "input", "piece": piece, "engine_step": step})
-    fam = {FAMILY: len(identities)}
-    n_edges = sum(len(r["edges"]) for rows in dataflow for r in rows)
-    n_launch_edges = sum(1 for rows in dataflow for r in rows for e in r["edges"] if e["src"]["kind"] == "launch")
-    # P_compiled has no weights struct of its own: its GEMM / norm / RoPE launches take the served module
-    # parameters as arguments (C2 replays every sampled launch with the LIVE parameter and matches the committed output bit-for-bit), and
-    # those parameters are the eager Program's fields.  The row's `bi-eager` counterpart Build of record is named here as the component
-    # whose weights-of-record applies; commit_delta reads components.*.program_digest as the Programs of record for the weights pin.
-    components = ({"weights_struct": {"program_digest": str(weights_program_digest),
-                                      "role": "served-parameter fields (weights-of-record record; the compiled kernels' weight arguments)",
-                                      "source": "the row's bi-eager counterpart Build of record"}} if weights_program_digest else {})
-    return {"schema": SCHEMA, "kind": KIND, "identity_key": list(IDENTITY_KEY), "program_digest": pdig, "kernel_set_sha256": kernel_set_sha256,
-            "components": components,
-            "program": {"kind": "P_compiled (Inductor kernel granularity)", "inductor_dir": inductor_dir, "wrappers": [w["path"] for w in wrappers],
-                        "piece_wrappers": [w["path"] for w in piece_wrappers],
-                        "pieces": pieces, "launch_table": {"first": launch_table[0], "middle": launch_table[1], "last": launch_table[-1]},
-                        "role_maps": role_maps,
-                        "widths_per_token": {f"{k[0]}/{k[1]}": v for k, v in sorted(widths.items())}, "max_tokens_hint": mt,
-                        "dataflow": {"edges": dataflow, "attention": attention, "split_graph": split_graph, "wiring_declared": graph is not None,
-                                     "weights_declared": weights_in_dataflow, "n_weight_edges": n_weight_edges, "digest_version": 2 if weights_in_dataflow else 1,
-                                     "n_edges": n_edges, "n_launch_edges": n_launch_edges, "n_undefined": undefined,
-                                     "why": "every non-weight input of every launch -> its producer (launch output, same piece or through the split "
-                                            "graph across the eager attention op); part of program_digest; checked bytes-equal per sampled step"}},
-            "query": {"profile": "compiled-kernel-buffers", "why": "every non-weight argument of every kernel launch of P_compiled is a VU boundary; "
-                                                                    "weights are registered inputs"},
-            "workload": {"request_id": request_id, "steps": steps, "prefill_tokens": prefill_tokens, "schedule": schedule,
-                         "step_basis": "request-relative (engine step = step + arrive; binding.load_required_manifest)"},
-            "requests": [r["request_id"] for r in schedule], "ranks": [rank], "steps": list(range(steps)),
-            "populations": {"identities": len(identities), "by_family": fam, "steps": steps, "per_step": len(identities) // max(steps, 1)},
-            "complete": not unknown and undefined == 0, "unmodelled": unknown, "manifest_digest": _manifest_digest(identities), "identities": identities}
-
-
-@dataclass(frozen=True, kw_only=True)
-class BuildOptions:
-    inductor_dir: str = option("--inductor-dir")
-    pieces: int = option("--pieces", type=int)
-    steps: int | None = option("--steps", type=int, default=None,
-                               help="engine steps (default: the workload's expected_engine_steps)")
-    prefill_tokens: int | None = option("--prefill-tokens", type=int, default=None,
-                                        help="single-request form (no --workload): the prompt length")
-    workload: str | None = option("--workload", type=workload_arg, default=None,
-                                  help="sweep workload json: the request schedule (B>=2: r<i> arrive_step / prompt / max_tokens)")
-    request: str = option("--request", default="r0")
-    kernel_set: str = option("--kernel-set",
-                             help="the run's inductor_kernels.json kernel_set_sha256 (the Program identity's kernel sources)")
-    split_graph: str | None = option("--split-graph", default=None,
-                                     help="vLLM's computation_graph.py (compilation_config.cache_dir/rank_0_0/backbone): the piece wiring")
-    weights_program_digest: str | None = option("--weights-program-digest", default=None,
-                                                help="the eager Program of record whose served-parameter fields the compiled kernels read (the workload's bi-eager counterpart's "
-                                                     "Build digest): named as components.weights_struct for the weights pin")
-    digest_v1: bool = option("--digest-v1", default=False, action="store_true",
-                             help="reproduce the v1 program_digest (weight routing NOT in the digest)")
-    out: str = option("--out")
-    cmd: str = field(default="build", init=False)
-
-
 @dataclass(frozen=True, kw_only=True)
 class VerifyOptions:
-    """The manifest a compiled workload's treatment USED (built from the control arm's Inductor output code) vs the
-    same derivation REBUILT from the treatment's own output code: digests of rows + Program"""
+    """The Build a compiled workload's treatment USED (the served Build of record) vs the same derivation REBUILT by the
+    treatment from its own compile artifact: digests of rows + Program + artifact"""
 
-    manifest: str = option("--manifest", help="the manifest the treatment ran with (compiled_manifest.json, control-derived)")
-    rebuilt: str = option("--rebuilt", help="compiled_manifest.json derived from the TREATMENT process's own output code")
+    manifest: str = option("--manifest", help="the Build the treatment ran with (the served Build of record)")
+    rebuilt: str = option("--rebuilt", help="the Build the TREATMENT process rederived from its own compile artifact (build_rebuilt.json)")
     out: str = option("--out")
-    cmd: str = field(default="verify", init=False)
 
 
-COMMANDS = {"build": BuildOptions, "verify": VerifyOptions}
+COMMANDS = {"verify": VerifyOptions}
 
 
-def main(a: BuildOptions | VerifyOptions) -> int:
-    if a.cmd == "verify":
-        used, rebuilt = json.load(open(a.manifest)), json.load(open(a.rebuilt))
-        rows_digest = _manifest_digest(used.get("identities") or [])
-        rec = {"schema": "verity-sweep/manifest-verify/v1", "manifest": a.manifest, "used_digest": used.get("manifest_digest"), "used_rows_digest": rows_digest,
-               "rebuilt_digest": rebuilt.get("manifest_digest"), "used_program_digest": used.get("program_digest"), "rebuilt_program_digest": rebuilt.get("program_digest"),
-               "used_identities": len(used.get("identities") or []), "rebuilt_identities": (rebuilt.get("populations") or {}).get("identities"),
-               "rebuilt_complete": rebuilt.get("complete"), "rebuilt_from": a.rebuilt,
-               "used_artifact": (used.get("artifact") or {}).get("digest"), "rebuilt_artifact": (rebuilt.get("artifact") or {}).get("digest"),
-               "method": "compiled rows (P_compiled): no derive_step Program dir exists; the rebuild is compiled_manifest.build over the TREATMENT "
-                         "process's own Inductor output code + split graph x the workload schedule (the manifest used was built the same way from "
-                         "the CONTROL process's) -- equal program_digest = the treatment executed the control's Program (kernel set x launch "
-                         "tables x dataflow), equal manifest_digest = the same required-value population; a served Build's compile artifact "
-                         "(served_artifact) equal = the treatment loaded the pinned kernels and autotune winners"}
-        rec["ok"] = bool(rec["used_digest"] == rows_digest == rec["rebuilt_digest"] and rec["used_program_digest"] == rec["rebuilt_program_digest"]
-                         and rebuilt.get("complete") is True and rec["used_artifact"] == rec["rebuilt_artifact"])
-        if not rec["ok"]:
-            why = []
-            if rec["used_digest"] != rows_digest:
-                why.append(f"manifest_digest {str(rec['used_digest'])[:16]} != digest of its rows {rows_digest[:16]} (edited after digesting)")
-            if rows_digest != rec["rebuilt_digest"]:
-                why.append(f"rows digest {rows_digest[:16]} != the treatment-derived manifest {str(rec['rebuilt_digest'])[:16]} "
-                           f"({rec['used_identities']} vs {rec['rebuilt_identities']} identities)")
-            if rec["used_program_digest"] != rec["rebuilt_program_digest"]:
-                why.append(f"program_digest used {str(rec['used_program_digest'])[:16]} != derived from the treatment's output code {str(rec['rebuilt_program_digest'])[:16]}")
-            if rebuilt.get("complete") is not True:
-                why.append(f"treatment-derived manifest not complete: unmodelled {rebuilt.get('unmodelled')}")
-            if rec["used_artifact"] != rec["rebuilt_artifact"]:
-                why.append(f"compile artifact used {str(rec['used_artifact'])[:16]} != the treatment's {str(rec['rebuilt_artifact'])[:16]}")
-            rec["why"] = "; ".join(why)
-        with open(a.out, "w") as f:
-            json.dump(rec, f, indent=1)
-        print(f"[compiled_manifest verify] ok={rec['ok']} used {str(rec['used_digest'])[:16]} rows {rows_digest[:16]} rebuilt {str(rec['rebuilt_digest'])[:16]} "
-              f"program {str(rec['used_program_digest'])[:16]} / {str(rec['rebuilt_program_digest'])[:16]}{(' -- ' + rec['why']) if not rec['ok'] else ''} -> {a.out}")
-        return 0 if rec["ok"] else 3
-    schedule = None
-    steps, prefill = a.steps, a.prefill_tokens
-    if a.workload:
-        wl = json.load(open(a.workload))
-        schedule = schedule_of_workload(wl)
-        steps = steps or int(wl["expected_engine_steps"])
-        prefill = prefill or schedule[0]["prompt_tokens"]
-    if steps is None or prefill is None:
-        raise UsageError("--steps and --prefill-tokens (or --workload) are required")
-    m = build(a.inductor_dir, pieces=a.pieces, steps=steps, prefill_tokens=prefill, request_id=a.request, kernel_set_sha256=a.kernel_set, schedule=schedule,
-              split_graph=a.split_graph, weights_program_digest=a.weights_program_digest, weights_in_dataflow=not a.digest_v1)
+def main(a: VerifyOptions) -> int:
+    used, rebuilt = json.load(open(a.manifest)), json.load(open(a.rebuilt))
+    rows_digest = _manifest_digest(used.get("identities") or [])
+    rec = {"schema": "verity-sweep/manifest-verify/v1", "manifest": a.manifest, "used_digest": used.get("manifest_digest"), "used_rows_digest": rows_digest,
+           "rebuilt_digest": rebuilt.get("manifest_digest"), "used_program_digest": used.get("program_digest"), "rebuilt_program_digest": rebuilt.get("program_digest"),
+           "used_identities": len(used.get("identities") or []), "rebuilt_identities": (rebuilt.get("populations") or {}).get("identities"),
+           "rebuilt_complete": rebuilt.get("complete"), "rebuilt_from": a.rebuilt,
+           "used_artifact": (used.get("artifact") or {}).get("digest"), "rebuilt_artifact": (rebuilt.get("artifact") or {}).get("digest"),
+           "method": "served-compiled rows: no derive_step Program dir exists; the rebuild is the served Build the TREATMENT process "
+                     "rederived from its own compile artifact x the workload schedule (pipeline.served_match) -- equal program_digest = the "
+                     "treatment executed the Program of record, equal manifest_digest = the same required-value population, equal compile "
+                     "artifact (served_artifact) = the treatment loaded the pinned kernels and autotune winners"}
+    rec["ok"] = bool(rec["used_digest"] == rows_digest == rec["rebuilt_digest"] and rec["used_program_digest"] == rec["rebuilt_program_digest"]
+                     and rebuilt.get("complete") is True and rec["used_artifact"] == rec["rebuilt_artifact"])
+    if not rec["ok"]:
+        why = []
+        if rec["used_digest"] != rows_digest:
+            why.append(f"manifest_digest {str(rec['used_digest'])[:16]} != digest of its rows {rows_digest[:16]} (edited after digesting)")
+        if rows_digest != rec["rebuilt_digest"]:
+            why.append(f"rows digest {rows_digest[:16]} != the treatment-derived manifest {str(rec['rebuilt_digest'])[:16]} "
+                       f"({rec['used_identities']} vs {rec['rebuilt_identities']} identities)")
+        if rec["used_program_digest"] != rec["rebuilt_program_digest"]:
+            why.append(f"program_digest used {str(rec['used_program_digest'])[:16]} != derived from the treatment's output code {str(rec['rebuilt_program_digest'])[:16]}")
+        if rebuilt.get("complete") is not True:
+            why.append(f"treatment-derived manifest not complete: unmodelled {rebuilt.get('unmodelled')}")
+        if rec["used_artifact"] != rec["rebuilt_artifact"]:
+            why.append(f"compile artifact used {str(rec['used_artifact'])[:16]} != the treatment's {str(rec['rebuilt_artifact'])[:16]}")
+        rec["why"] = "; ".join(why)
     with open(a.out, "w") as f:
-        json.dump(m, f, indent=1)
-    df = m["program"]["dataflow"]
-    print(f"[compiled_manifest] {m['populations']['identities']} identities ({m['populations']['per_step']}/step) complete={m['complete']} "
-          f"dataflow edges {df['n_edges']} (launch->launch {df['n_launch_edges']}, undefined {df['n_undefined']}, wiring "
-          f"{'declared' if df['wiring_declared'] else 'NOT declared'}) program {m['program_digest'][:16]} manifest {m['manifest_digest'][:16]} -> {a.out}")
-    return 0
+        json.dump(rec, f, indent=1)
+    print(f"[compiled_manifest verify] ok={rec['ok']} used {str(rec['used_digest'])[:16]} rows {rows_digest[:16]} rebuilt {str(rec['rebuilt_digest'])[:16]} "
+          f"program {str(rec['used_program_digest'])[:16]} / {str(rec['rebuilt_program_digest'])[:16]}{(' -- ' + rec['why']) if not rec['ok'] else ''} -> {a.out}")
+    return 0 if rec["ok"] else 3

@@ -11,11 +11,11 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.boolean import gemm as BG
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat, runs
 from verity.circuits.types import Array
+from verity.definitions.ops import gemm as G
+from verity.definitions.ops.boolean import gemm as BG
 from verity.protocols.pouw.prover.circuit import compile as C
 from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import seeds as SD
@@ -110,7 +110,7 @@ def test_noise_is_counter_mode():
 
 
 def test_fold_chains_start_from_sigma_r():
-    """Decision 121: the unit's one seed call is `PouwUnitSeeds` (seed_j, σ_R); each lane's fold chain starts from a block
+    """The unit's one seed call is `PouwUnitSeeds` (seed_j, σ_R); each lane's fold chain starts from a block
     of σ_R's stream, and every other noise block reads seed_j, so no fold key is a function of the noise seed."""
     grid = C.Tile(4, 16, tuple((i, j) for i in range(4) for j in range(16)))
     body = bind(H.PouwH1Tile, EXACT=_acc(64), R=4, C=16, PAIRS=grid.pairs).body

@@ -63,7 +63,9 @@
                     the FIFO <root>/requests/<run-id>/.launch-ack (`ack_launch`), found from the request path its --remote-json carries,
                     so no wrapper has to pass an fd or the environment through.  A runner (or a wrapper ahead of it) that exits first is
                     refused (RunnerFailed, refused.json with its rc and launcher.log's tail), so `research run --on` exits 3, never
-                    `launched`.  `disk-hold` or `cpu-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
+                    `launched`.  A runner whose process the machine could not start at all is refused as CannotStart: the machine's
+                    fault, whatever the job, which `research run --on auto` answers by placing the job on another machine.
+                    `disk-hold` or `cpu-hold` ahead of the runner acknowledges when it starts holding: the launch stays detached.  When
                     launch-request can't tell (job.json is there without an ack, the wrapper exited but its process group lives on, or the
                     wait itself failed), it answers started with `unconfirmed` and releases nothing: a live run is never called refused.
     exclusive       --exclusive takes <root>/runs/.exclusive.lock (O_EXCL) naming the run; a live holder refuses the launch with the reason.
@@ -89,6 +91,17 @@
     auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor host, vy-challenger-1) runs only the commands
                     that file lists, one a line, exactly: launch-request refuses any other before anything starts, and the host's
                     vy-auditor-only.timer (slot_only.py --auditor) stops one launched from a tree that predates the refusal.
+    tool rules      a shipped research package without a fix the machine requires (pods/nebius/tool_rules.py: one that predates #7656
+                    prints each process's command line in its stall dumps) is refused before anything starts: by launch-request, the
+                    machine's deployed tool_rules.py judging the package that answers, and by the launcher before it ships a --source
+                    tree's package.  A package that predates the consult and comes from a launcher that does too is not caught.
+    pool line       a command that names a pool and then the shipped tree's slot.py (`research run --pool`: slot_only.in_pool) is
+                    sent with the machine's own slot.py in the tree's place (slot_only.NODE_SLOT: `main`'s, as `research deploy
+                    install` placed it) where one test over ssh finds a copy there that takes the run (`node_slot_test`) and
+                    whatever reads a run's command there knows the copy (`node_slot_unruled`), so the waiters of a pool's line
+                    are held to one copy's rules whatever tree each ships.  Else the command stays and the launch says so in a
+                    line.  remote.json's `command` is the one sent and its `slot_copy` says which (machine, tree); the run's
+                    slot.json names the copy that ran, with its commit.
     observe/fetch   `research fetch <id>` copies the small records (or --all files) into the local run dir over one ssh+tar, extracted
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
@@ -178,10 +191,13 @@ RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only throu
 #: the machine's own slot_only.py (deploy.toml installs it beside the marker, and vy-slot-only.timer runs it): when present it, not
 #: the shipped tree's package, says which commands pass, so a lane's branch older than a rule change is judged by the deployed rule
 NODE_SLOT_ONLY_FILE = "/usr/local/lib/vy-monitoring/slot_only.py"
+#: the machine's own tool_rules.py (deploy.toml): what a shipped research package must do before it runs here, judged as above
+NODE_TOOL_RULES_FILE = "/usr/local/lib/vy-monitoring/tool_rules.py"
 AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which runs only the commands it lists (slot_only.auditor_allows)
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
+_TOLD_KEPT: set[str] = set()     # the pods this process has said it reaches at a kept address because RunPod can't be asked
 PREFLIGHT_TIMEOUT_S = 180
 PREFLIGHT_TAIL = 40              # lines of the preflight's stdout and stderr kept in its report
 
@@ -215,6 +231,30 @@ class PreflightFailed(Refused):
 class RunnerFailed(Refused):
     """The machine-side runner, or a wrapper ahead of it, exited before writing the run's first record (job.json): an argv it
     rejected, a store preparation that failed, a CPU scope that would not start.  No workload ran."""
+
+
+class CannotStart(Refused):
+    """The machine could start no run, whatever the job: it could not start the runner's process (NOT_STARTED) or make the
+    launch's log and FIFO, or it has no git (NO_GIT) for a run that needs a checkout.  Nothing started, so `research run --on
+    auto` places the job again without the machine.  A refusal that reads the job (its command, its source, its flags, its
+    keys) or the machine's rules and admission (a slot-only or auditor host, memory, an exclusive run, a preflight) is never
+    this one: the same job is refused wherever it goes, or the machine does start runs."""
+
+
+#: `_launch_request`'s words for a runner whose process could not be started
+NOT_STARTED = "the runner could not be started"
+#: in them, an argument list the kernel won't take: the job's own, on any machine
+ARGS_TOO_LONG = f"[Errno {errno.E2BIG}] "
+
+
+def cannot_start(answer: dict[str, Any]) -> str | None:
+    """The reason of a machine's answer to a launch (`_launch_request`'s) when it refused as one that can start no run
+    (CannotStart), None for any other answer.  A shipped research package that predates CannotStart answers RunnerFailed
+    for a runner whose process could not be started, in NOT_STARTED's words, which it says of nothing else: all of those
+    but ARGS_TOO_LONG are read as the machine's too."""
+    reason, fault = str(answer.get("refused") or ""), answer.get("fault")
+    older = fault == RunnerFailed.__name__ and reason.startswith(NOT_STARTED) and ARGS_TOO_LONG not in reason
+    return reason if reason and (fault == CannotStart.__name__ or older) else None
 
 
 # ---- machines ---------------------------------------------------------------------------------------------------------------------------
@@ -303,21 +343,39 @@ def ssh_host_target(machine: dict[str, Any]) -> dict[str, Any]:
 
 
 def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
-    """host/port/user/rate for a runpod machine (read-only API call; not RUNNING -> refused) or an ssh one (`ssh_host_target`)."""
+    """host/port/user/rate for a runpod machine or an ssh one (`ssh_host_target`).  A runpod machine's is the one last read from
+    RunPod (`runpod.kept_address`, with the rate and the time it was read, marked `kept`) while that read is under
+    `runpod.ADDRESS_TTL_S` old and the host there proves the host key recorded for the address (`runpod.kept_stands`: ssh to it is
+    then strict about that key); else RunPod is asked (read-only; not RUNNING -> refused) and its answer returned unmarked, to be
+    dialled as RunPod's word always was, and kept if the host there proves a key (`runpod.keep_address`).  When RunPod can't be
+    asked, the kept address stands on the same proof, said in one line, and without it the machine is refused."""
     if machine.get("provider") == "ssh":
         return ssh_host_target(machine)
     if machine.get("provider") != "runpod":
         raise Refused(f"provider {machine.get('provider')!r} not supported (runpod or ssh)")
     from .pods import runpod
 
-    who = f"pod {machine['pod_id']} (machine {machine.get('name') or '?'})"
+    pod_id = machine["pod_id"]
+    who = f"pod {pod_id} (machine {machine.get('name') or '?'})"
+    kept, age_s = runpod.kept_address(pod_id) or (None, 0.0)
+    asked = kept is not None and age_s < runpod.ADDRESS_TTL_S           # whether the host at the kept address was asked for its key
+    if asked and runpod.kept_stands(pod_id, kept):
+        return kept
     try:
-        pod = runpod.get(machine["pod_id"])
+        pod = runpod.get(pod_id)
     except runpod.PodError as e:                # a dead / terminated pod, no API config, no network: a refusal with the pod's name, not a SystemExit
         if e.code == 404:
+            runpod.forget_address(pod_id)
             raise Refused(f"{who} no longer exists on runpod (HTTP 404: terminated?); no implicit provisioning") from None
+        if kept and not asked and runpod.kept_stands(pod_id, kept):
+            if pod_id not in _TOLD_KEPT:
+                _TOLD_KEPT.add(pod_id)
+                print(f"research: {who}: runpod API unavailable ({str(e)[:200]}); using its address as read "
+                      f"{kept.get('rate_observed_utc') or '?'}, where the host holds the key recorded for it", file=sys.stderr)
+            return kept
         raise Refused(f"{who}: runpod API unavailable: {e}") from None
     if not pod or (pod.get("desiredStatus") or "").upper() != "RUNNING":
+        runpod.forget_address(pod_id)
         raise Refused(f"{who} is {pod.get('desiredStatus') if pod else 'not found'}; no implicit provisioning")
     tgt = runpod.ssh_target(pod)
     # The REST API intermittently answers a RUNNING pod's GET with publicIp="" / portMappings=None (alternating answers within
@@ -331,8 +389,10 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
         tgt = runpod.ssh_target(pod)
     if tgt is None:
         raise Refused(f"{who} has no ssh port mapped yet")
-    return {"host": tgt[0], "port": tgt[1], "user": "root", "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
-            "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
+    target = {"host": tgt[0], "port": tgt[1], "user": "root", "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
+              "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
+    runpod.keep_address(pod_id, target)
+    return target
 
 
 def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int = 15) -> list[str]:
@@ -500,21 +560,84 @@ def ssh_read(ssh: list[str], remote_argv: list[str], consume: Callable[[IO[bytes
 
 # ---- snapshots --------------------------------------------------------------------------------------------------------------------------
 
-def node_slot_only() -> Any:
-    """The check-slot rule this machine enforces: its deployed NODE_SLOT_ONLY_FILE (stdlib, one file) when it has one, else this
-    package's `pods.nebius.slot_only`."""
-    p = Path(os.environ.get("NODE_SLOT_ONLY_FILE") or NODE_SLOT_ONLY_FILE)
+def _node_module(var: str, default: str, name: str) -> Any | None:
+    """The machine's deployed copy of a rule (stdlib, one file) at $VAR, else `default`; None when it has none."""
+    p = Path(os.environ.get(var) or default)
     if p.is_file():
         import importlib.util
 
-        spec = importlib.util.spec_from_file_location("vy_node_slot_only", p)
+        spec = importlib.util.spec_from_file_location(name, p)
         if spec is not None and spec.loader is not None:
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             return mod
+    return None
+
+
+def node_slot_only() -> Any:
+    """The check-slot rule this machine enforces: its deployed NODE_SLOT_ONLY_FILE (stdlib, one file) when it has one, else this
+    package's `pods.nebius.slot_only`."""
+    if (mod := _node_module("NODE_SLOT_ONLY_FILE", NODE_SLOT_ONLY_FILE, "vy_node_slot_only")) is not None:
+        return mod
     from .pods.nebius import slot_only
 
     return slot_only
+
+
+def node_tool_rules() -> Any:
+    """What this machine requires of a shipped research package: its deployed NODE_TOOL_RULES_FILE when it has one, else this
+    package's `pods.nebius.tool_rules`."""
+    if (mod := _node_module("NODE_TOOL_RULES_FILE", NODE_TOOL_RULES_FILE, "vy_node_tool_rules")) is not None:
+        return mod
+    from .pods.nebius import tool_rules
+
+    return tool_rules
+
+
+def node_slot_test(command: list[str]) -> str:
+    """What the launch asks a machine about its own slot.py (slot_only.NODE_SLOT) before it names it in ``command``, a run that
+    names a pool (`slot_only.node_copy`), as one shell test. It exits 1 unless the copy is there and names every option the
+    command gives slot.py, since a copy installed before an option was added exits with its usage. Else it exits 0 and says
+    in two words who reads a run's command there (`node_slot_unruled`): `marked` where the machine starts a run only through
+    a check slot (RUNS_VIA_SLOT_FILE), else `open`; and of its own rule (NODE_SLOT_ONLY_FILE) `names` where it knows the
+    copy, `lacks` where it predates it, `none` where the machine has no rule. Any other exit is the ssh's own."""
+    from .pods.nebius import slot_only
+
+    q, copy = shlex.quote, slot_only.NODE_SLOT
+    opts = dict.fromkeys(a for a in command[4:command.index("--", 4)] if a.startswith("--"))
+    knows = "".join(f" && grep -qsF -e {q(o)} {q(copy)}" for o in opts)
+    return (f"{{ test -f {q(copy)}{knows}; }} || exit 1; m=open; test -e {q(RUNS_VIA_SLOT_FILE)} && m=marked; r=none; "
+            f"test -e {q(NODE_SLOT_ONLY_FILE)} && {{ grep -qsF -e {q(copy)} {q(NODE_SLOT_ONLY_FILE)} && r=names || r=lacks; }}; "
+            f"echo $m $r")
+
+
+def node_slot_unruled(answer: str, tool_pkg: Path | None) -> str | None:
+    """Why a machine that answered `node_slot_test` with ``answer`` would not let a run wait by its own slot.py, as words that
+    follow the machine's name; None where it would. Whatever reads a run's command there must know the copy, or it takes the
+    run for one outside a check slot. The machine's own rule, which its timer stops or renices such a run by, must not
+    predate the copy. And where the machine starts a run only through a check slot, the research package that runs there
+    (``tool_pkg``, the one the run ships, else this one) refuses what its rule doesn't know: its rule is the machine's own
+    where the machine has one and the package asks it (`node_slot_only`), else the package's."""
+    from .pods.nebius import slot_only
+
+    def names(file: str, word: str) -> bool:
+        if tool_pkg is None:
+            return True
+        try:
+            return word in (tool_pkg / file).read_text()
+        except (OSError, UnicodeDecodeError):
+            return False
+
+    marked, _, rule = answer.strip().partition(" ")
+    if marked not in ("marked", "open") or rule not in ("names", "lacks", "none"):
+        return f"answered {answer.strip()[:80]!r} when asked whether its own slot.py takes this run"
+    if rule == "lacks":
+        return "has a slot_only.py that predates its own slot.py, and would take this run for one outside a check slot"
+    if marked == "marked" and not (rule == "names" and names("remote.py", "def node_slot_only")) \
+            and not names("pods/nebius/slot_only.py", slot_only.NODE_SLOT):
+        return ("starts a run only through a check slot, and the research package this run ships predates the machine's own "
+                "slot.py: it would refuse this run")
+    return None
 
 
 def source_tool_package(source: Path | None) -> Path | None:
@@ -964,6 +1087,8 @@ def _write_ready(ssh: list[str], dest: str, doc: dict[str, Any]) -> None:
 SHIP_ENV = "RESEARCH_SHIP"                     # `stream` forces the archive stream (the pre-git transport)
 POD_GIT_REPO = "git/verity.git"                # <root>/git/verity.git: the machine's bare repository, fed by `git push`
 _RC_NO_GIT = 69                                # the machine has no git: the archive stream ships instead
+NO_GIT = "the machine has no git"              # `_push_commit`'s reason then: the machine's own answer, whatever the commit
+NO_CHECKOUT = "no_checkout"                    # in the READY doc `ship_source` returns, never the machine's: why git made the tree no checkout
 _RC_TREE = 76                                  # the pushed commit's tree on the machine is not the launcher's
 
 
@@ -1037,7 +1162,7 @@ def _push_commit(ssh: list[str], repo: str, git_dir: Path, sha: str, size: int) 
     r = ssh_run(ssh, ["sh", "-c", f"command -v git >/dev/null 2>&1 || exit {_RC_NO_GIT}; mkdir -p {shlex.quote(str(Path(repo).parent))} && "
                                   f"{{ [ -d {shlex.quote(repo)} ] || git init -q --bare {shlex.quote(repo)}; }}"], timeout=120)
     if r.returncode == _RC_NO_GIT:
-        return "the machine has no git"
+        return NO_GIT
     if r.returncode != 0:
         return f"could not create {repo}: {r.stderr.decode(errors='replace')[-200:].strip()}"
     try:
@@ -1128,10 +1253,10 @@ def _add_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | Non
 
 def _give_git(ssh: list[str], root: str, git_dir: Path, sha: str, tree: str | None, dest: str, doc: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     """`_add_git` on the READY tree `dest` whose READY.json is `doc`, then (state, doc) as `_probe_source` reads it; when git can't
-    be added, one line saying why and ("ready", `doc`)."""
+    be added, one line saying why and ("ready", `doc` with the reason under NO_CHECKOUT)."""
     if why := _add_git(ssh, root, git_dir, sha, tree, dest, doc):
         print(f"research: could not make {dest} a checkout ({why})", file=sys.stderr)
-        return "ready", doc
+        return "ready", {**doc, NO_CHECKOUT: why}
     return _probe_source(ssh, dest)
 
 
@@ -1207,10 +1332,11 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
             raise SourceNotReady(f"{dest}/{READY_FILE} names identity {doc.get('identity')!r}, not {sha}; inspect the machine before shipping over it")
         return sha, dest, doc
 
-    def checked_out(have: dict[str, Any], push: bool) -> tuple[str, str, dict[str, Any]]:
-        """The tree just marked READY (ours, or another launcher's that won the rename into place), made a checkout when `push`."""
+    def checked_out(have: dict[str, Any], push: bool, unpushed: str | None = None) -> tuple[str, str, dict[str, Any]]:
+        """The tree just marked READY (ours, or another launcher's that won the rename into place), made a checkout when `push`;
+        one left without .git because the commit never reached the machine says why (`unpushed`) under NO_CHECKOUT."""
         if have.get("checkout") or not push:
-            return sha, dest, have
+            return sha, dest, {**have, NO_CHECKOUT: unpushed} if unpushed and not have.get("checkout") else have
         state, have = _give_git(ssh, root, git_dir, sha, tree, dest, have)
         if state != "ready":
             raise SourceNotReady(f"{dest}'s tracked files are not {sha}'s ({', '.join(have.get('dirt', [])[:3])}): a run edited the "
@@ -1229,6 +1355,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
             _write_ready(ssh, dest, doc)
             return checked_out(doc, push)
         _quarantine(ssh, root, dest, sha, f"an unverified tree that did not match the archive ({len(bad)} file(s): {'; '.join(bad[:3])})")
+    unpushed = None
     if push:
         gpartial, why, push = _ship_git(ssh, root, git_dir, sha, tree, man, dest)
         if gpartial is not None:
@@ -1236,6 +1363,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
                    "pod_archive_sha256": man.get("pod_archive_sha256")}
             return checked_out(_mark_ready(ssh, gpartial, dest, sha, doc), push)
         print(f"research: git ship to {dest} not used ({why}); shipping the archive stream", file=sys.stderr)
+        unpushed = why
     partial = f"{dest}.partial-{secrets.token_hex(4)}"
     q = shlex.quote(partial)
     # the archive is staged as a file and hashed AS RECEIVED; a digest that is not the launcher's exits 75 before anything is extracted
@@ -1279,7 +1407,7 @@ def ship_source(ssh: list[str], root: str, git_dir: Path) -> tuple[str, str, dic
         raise SourceNotReady(f"source tree manifest mismatch after extraction: {len(missing)} missing, {len(extra)} extra "
                              f"(e.g. {(missing or extra)[:3]}); nothing is READY")
     doc = {**_ready_doc(sha, tree, man, "archive-sha256+file-manifest"), "transport": "stream"}
-    return checked_out(_mark_ready(ssh, partial, dest, sha, doc), push)
+    return checked_out(_mark_ready(ssh, partial, dest, sha, doc), push, unpushed)
 
 
 def stage_request(ssh: list[str], root: str, run_id: str, request: dict[str, Any], sends: list[Path],
@@ -1591,6 +1719,8 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
                 from .pods.nebius import slot_only as rule
             if not rule.auditor_allows(req["command"], marker):
                 raise Refused(rule.auditor_refusal(marker))
+        if why := node_tool_rules().refusal(Path(__file__).resolve().parent):
+            raise Refused(why)
         if remote.get("source_sha"):              # a shipped tree executes only from a directory verified READY for the requested identity
             src_dir = remote.get("source_dir") or str(runs_root.parent / "src" / str(remote["source_sha"]))
             require_ready_source(src_dir, str(remote["source_sha"]))
@@ -1640,7 +1770,7 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
             os.mkfifo(ack, 0o600)
             ack_fd = os.open(ack, os.O_RDONLY | os.O_NONBLOCK)      # before the runner starts, so its non-blocking open finds a reader
         except OSError as e:
-            raise Refused(f"could not prepare the launch ({type(e).__name__}: {e}); not starting {run_id}") from None
+            raise CannotStart(f"could not prepare the launch ({type(e).__name__}: {e}); not starting {run_id}") from None
     except Refused as e:
         _release_launch(req, request_path, mem_rec)
         pf = {"preflight": e.report} if isinstance(e, PreflightFailed) and e.report else {}
@@ -1690,9 +1820,10 @@ def _launch_request(request_path: Path) -> dict[str, Any]:
                                     start_new_session=True, preexec_fn=(lambda: os.sched_setaffinity(0, cpus)) if cpus else None)
         except OSError as e:
             _release_launch(req, request_path, mem_rec)
-            reason = f"the runner could not be started: {type(e).__name__}: {e}"
-            write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": RunnerFailed.__name__, "at_utc": utc_now_ms()})
-            return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": reason, "fault": RunnerFailed.__name__}
+            reason = f"{NOT_STARTED}: {type(e).__name__}: {e}"
+            fault = (RunnerFailed if e.errno == errno.E2BIG else CannotStart).__name__      # every other failure to start is the machine's
+            write_json_atomic(run_dir / "refused.json", {"run_id": run_id, "reason": reason, "fault": fault, "at_utc": utc_now_ms()})
+            return {"claimed": True, "run_id": run_id, "run_dir": str(run_dir), "started": False, "refused": reason, "fault": fault}
         started["runner_pid"] = proc.pid
         try:
             if mem_rec:
@@ -2013,18 +2144,21 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
-           gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = ()) -> dict[str, Any]:
+           gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = (),
+           auto: dict[str, Any] | None = None) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
     is held until the runner, custody included, exits.  `job_user` (--job-user): the machine runs the workload as that user
     (research.jobuser), and refuses the run when it can't; `job_namespaces` (--job-namespaces): the namespace types its unit
-    may make."""
+    may make.  `auto` (--on auto): where the launcher's placement sent the run and why, in the words it printed (the
+    machine, the pool or none for the queue, and `said`); kept in the launch record here and in the machine's request.json,
+    so the reason outlasts the launcher's terminal, and read by nothing that runs the job."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args,
-                           **({"queue": queue} if queue else {})}
+                           **({"queue": queue} if queue else {}), **({"auto": auto} if auto else {})}
     write_json_atomic(local_dir / "remote.json", rec)
     try:
         m = resolve_machine(machine_name, project)
@@ -2093,7 +2227,24 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         if cwd_clone and not knows_clone(tool_pkg):
             raise Refused(f"--cwd clone: the research package in {source} predates it (no research/clone.py), so the machine would look "
                           f"for a directory named clone in the shared tree.  Commit a tree that has it, or pass --cwd source")
+        from .pods.nebius import slot_only, tool_rules
+
+        if tool_pkg is not None and (why := tool_rules.refusal(tool_pkg)):
+            raise Refused(why)
         tool_dir = ship_tool(ssh, m["root"], tool_pkg)
+        if (own := slot_only.node_copy(command)) is not None:
+            # a run in a pool's line: by the machine's own slot.py where it has one, so the line's waiters share one copy's rules
+            asked = ssh_run(ssh, ["sh", "-c", node_slot_test(command)])
+            why = (node_slot_unruled(asked.stdout.decode(errors="replace"), tool_pkg) if asked.returncode == 0 else
+                   "has no slot.py of its own that takes this run" if asked.returncode == 1 else
+                   f"didn't say whether its own slot.py takes this run (exit {asked.returncode})")
+            if why is None:
+                command = own
+            else:
+                print(f"research: {machine_name} {why} ({slot_only.NODE_SLOT}): the run waits in its pool's line by its tree's "
+                      f"{slot_only.SLOT_PATHS[0]} (`research deploy drift --on {machine_name}` lists what the machine has)",
+                      file=sys.stderr)
+            rec.update(command=command, slot_copy="machine" if command is own else "tree")
         rec["tool_from"] = str(tool_pkg) if tool_pkg else "launcher"
         rec["tool_identity"] = tool_identity(tool_pkg)
         rec["tool_checked"] = knows_version_check(tool_pkg)
@@ -2109,15 +2260,18 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
         remote_cwd = cwd
         if source is not None:
             tree_sha, src_dir, ready = ship_source(ssh, m["root"], source)
+            # a tree without .git is the machine's doing where its own shell found no git; a push that failed, or the launcher's
+            # choice of the stream, may be anyone's
+            no_git = CannotStart if ready.get(NO_CHECKOUT) == NO_GIT else Refused
             if not ready.get("checkout") and (prog := needs_git(command)):
                 why = f"{SHIP_ENV}=stream" if _stream_forced() else "the line above says why"
-                raise Refused(f"{src_dir} has no .git, as git couldn't reach {machine_name} ({why}), and {prog} needs a git checkout: "
-                              f"the run would wait for its slot, then fail.  Relaunch once a git push reaches {machine_name} ({SHIP_ENV} "
-                              f"unset, git installed there): the launch then makes the shared tree a checkout in place, which --cwd "
-                              f"clone needs too")
+                raise no_git(f"{src_dir} has no .git, as git couldn't reach {machine_name} ({why}), and {prog} needs a git checkout: "
+                             f"the run would wait for its slot, then fail.  Relaunch once a git push reaches {machine_name} ({SHIP_ENV} "
+                             f"unset, git installed there): the launch then makes the shared tree a checkout in place, which --cwd "
+                             f"clone needs too")
             if cwd_clone and not ready.get("checkout"):
-                raise Refused(f"--cwd clone: {src_dir} was shipped without git (transport {ready.get('transport') or 'unrecorded'}), so it "
-                              f"has no .git to clone.  Pass --cwd source to run in it as it is, shared with other runs of the commit")
+                raise no_git(f"--cwd clone: {src_dir} was shipped without git (transport {ready.get('transport') or 'unrecorded'}), so it "
+                             f"has no .git to clone.  Pass --cwd source to run in it as it is, shared with other runs of the commit")
             remote_cwd = src_dir if cwd is None else str(Path(src_dir) / cwd)
             if "--tree-sha" not in harness_args:
                 harness_args = [*harness_args, "--tree-sha", tree_sha]
@@ -2135,6 +2289,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    **({"job_namespaces": list(job_namespaces)} if job_user and job_namespaces else {}),
                    **({"gpus": gpus} if gpus else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
+                   **({"auto": auto} if auto else {}),
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
                    "remote": {"machine": machine_name, "pod_id": m.get("pod_id"), "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],

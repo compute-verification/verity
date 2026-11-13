@@ -87,7 +87,7 @@ EXPECT = {
     "answer-commitment-type": "evidence: answer.commitment: not a string",
     "answer-shape": "evidence: answer: an accept has no reason", "answer-profile": "evidence: profile.levels: not a list",
     "answer-profile-delta": 'evidence: profile.delta: "2/4" is not in lowest terms',
-    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset or stratified draw",
+    "answer-profile-draw": "evidence: profile.levels[0].draw: not a bernoulli, subset, stratified or work draw",
     "answer-public": "evidence: public: keys are not draw",
     "answer-public-law": "evidence: public.draw: keys are not law, p, population, units",
     "answer-protocol": "outcome: protocol", "answer-other": "outcome: for registration",
@@ -107,7 +107,8 @@ EXPECT = {
     "answer-public-null": "evidence: answer: an accept has no reason",
     "answer-reject-public": "evidence: answer: a reject has a reason, and neither",
     "answer-profile-type": "evidence: profile: levels missing", "answer-public-bernoulli": "draw: bernoulli:1/2 over",
-    "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over", "answer-public-stratified": "draw: stratified:",
+    "answer-public-bernoulli-unreduced": "draw: bernoulli:2/4 over",
+    "answer-public-bernoulli-padded": "evidence: public.draw.p: not num/den", "answer-public-stratified": "draw: stratified:",
     "answer-public-work": "draw: work:", "answer-public-work-bare": "draw: work:",
     "answer-public-law-other": "evidence: public.draw.law: not subset, bernoulli, stratified or work",
     "answer-public-law-type": "evidence: public.draw.law: not a string",
@@ -237,6 +238,32 @@ def test_a_ratio_reads_a_number_of_any_length():
                    (f"{big}/1", "denominator 1"), (f"{big}/{odd}/3", "not a ratio")):
         with pytest.raises(CC.Refused, match=why):
             CC.ratio(s, "x")
+    assert sys.get_int_max_str_digits() == limit
+
+
+def test_a_ratio_is_written_at_any_length():
+    """`window.ratio_str` is `str` of a Fraction (`Core.Ratio.toString`) past `str`'s limit on digits, under the least
+    limit a process can set, and `core_check.ratio` reads back the text it writes; `_core_draw` and `integrity_json`
+    write a long ratio with it."""
+    rng = random.Random(7)
+    least = sys.int_info.str_digits_check_threshold
+    ns = [0, 7, 10**least - 1, 10**least, 10**(2 * least), 10**(2 * least) + 1, 10**(2 * least) - 1]
+    ns += [rng.randrange(10 ** rng.randrange(1, 4000)) for _ in range(60)]
+    qs = [Fraction(n) for n in ns] + [Fraction(n, d) for n, d in zip(ns, reversed(ns)) if d] + [Fraction(-3, 7)]
+    written = {q: str(q) for q in qs}
+    limit = sys.get_int_max_str_digits()
+    try:
+        sys.set_int_max_str_digits(least)
+        assert {q: Wd.ratio_str(q) for q in qs} == written
+    finally:
+        sys.set_int_max_str_digits(limit)
+    big, odd = "1" + "0" * 4300, "1" + "0" * 4999 + "1"
+    for s in (big, f"{big}/{odd}", f"7/{odd}", "0", "3/7"):
+        assert Wd.ratio_str(CC.ratio(s, "x")) == s
+    assert CC._core_draw({"bernoulli": f"{big}/{odd}"}, "d") == {"bernoulli": f"{big}/{odd}"}
+    p = {"programs": [], "prescribed": [], "linked": False, "covered": [], "levels": [], "drawn": [],
+         "delta": Fraction(7, 10**5000 + 1)}
+    assert CC.integrity_json(p)["delta"] == f"7/{odd}"
     assert sys.get_int_max_str_digits() == limit
 
 

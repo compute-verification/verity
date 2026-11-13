@@ -190,9 +190,9 @@
    {
     "config": "every_block",
     "status": "priced",
-    "tax": 5.706559288737918,
-    "low": 5.09522708062434,
-    "high": 7.889489743224344,
+    "tax": 4.267239155672466,
+    "low": 3.8105390214840913,
+    "high": 5.904439484101186,
     "lower_bound": true,
     "parts": [
      {
@@ -206,10 +206,10 @@
      {
       "part": "every proof block's outputs",
       "status": "modeled",
-      "share": 5.690299126136292,
-      "low": 5.078966918022713,
-      "high": 7.847823076557677,
-      "source": "293,301,924 B a token hashed at the commitment card's rate, the range at 446 and 289 GB/s; the workload card's every_block boundary"
+      "share": 4.25097899307084,
+      "low": 3.7942788588824654,
+      "high": 5.862772817434519,
+      "source": "219,113,317 B a token hashed at the commitment card's rate, the range at 446 and 289 GB/s; the workload card's every_block boundary"
      }
     ]
    }

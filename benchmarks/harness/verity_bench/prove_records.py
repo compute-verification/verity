@@ -41,10 +41,18 @@ every proof server report. A row
 whose staged Definition is no block type of the census under its cut is on no row and in no figure: it is listed
 under "Unread", with its own figure where it is a steady-state measurement.
 
+A row prices the census type it was staged for (`stage.word`), whatever Definition was staged (`stage.definition`).
+A type's row names the Definition its figure's statements are of (a row's `definition`): alone where it is the type's
+own, as "its Boolean version" where the tree registers it as the type's (`boolean_version`), and as "another
+Definition" where it doesn't, so a reader sees which form priced the type. A type priced from its family's row names
+that row's Definition the same way.
+
 The Lean verifier's seconds and the proof's bytes a served token are `not measured` with no `lean-verify` run of
-record. With one, a block type the Lean verifier was run on takes its record's figures and every other type is scaled
-from it (`prove`'s rules), and both totals print as `modeled`, each line naming what was measured (the block type, its
-share of the proving time, its statement, the run and its host) and what was scaled, with the scaling's basis. A run
+record. With one, a block type the Lean verifier was run on takes its record's figures and every other type is priced
+from them (`prove`'s rules: its Definition's measured types at its size, else the rate fitted over every measured
+statement), and both totals print as `modeled`, each line naming what was measured (the block type, its share of the
+proving time, its statement, the run and its host) and the share of the figure its own records, its family's and the
+fitted rate price, with the basis. A run
 whose record the Lean verifier refused, that holds no record or whose block type the census doesn't hold measures
 nothing and is listed under "Refused".
 
@@ -264,7 +272,9 @@ def row_cores(row: Mapping[str, Any], unstated: int = P.UNSTATED_CORES) -> int |
 def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES) -> P.Steady | str:
     """A `RATES` row as a staged type's measurement at its prover count and its cores: a statement's GPU-seconds are
     the GPUs its provers held over its statements a second, and its cores the CPU cores they held for its card
-    (`row_cores`; `unstated` on a row that states none). A row that names no staged Definition can't be put on a block
+    (`row_cores`; `unstated` on a row that states none). Its block type is the census type it was staged for
+    (`stage.word`), and the Definition staged (`stage.definition`) its `form` where that is another; a row with no
+    `stage.word` is its `stage.definition`'s. A row that names no staged Definition can't be put on a block
     type's row, and is its reason instead. `art`: the art that holds the row as its `ART_RATES`, where the run's files
     don't."""
 
@@ -276,17 +286,40 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
         return f"its row {name}: {why}"
     why = row_why(row)
     stage = row["stage"]
+    staged = definition
     if isinstance(stage.get("word"), str):
         definition = P.definition_id(stage["word"])
+    form = None if staged == definition else staged
     blocks, full, provers = (x if _count(x) else 0 for x in (stage.get("blocks"), stage.get("full"), row.get("provers")))
     k_log = stage["k_log"] if isinstance(stage.get("k_log"), int) else 0
     held = RATES if art is None else ART_RATES
     cores = row_cores(row, unstated) or unstated
     if why:
         return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, refused=why, provers=provers,
-                        art=art, cores=cores)
+                        art=art, cores=cores, form=form)
     return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, row["gpus"] / row["statements_per_s"],
-                    row.get("verify_s"), provers=provers, art=art, cores=cores)
+                    row.get("verify_s"), provers=provers, art=art, cores=cores, form=form)
+
+
+def boolean_version(block: str, definition: str) -> bool:
+    """Whether the tree registers `definition` (a Definition's id) as the Boolean version of the census type `block`
+    (its census name): the registry binds the type's Definition, and `verity.definitions.boolean.boolean_version` of
+    it, the newest registered Boolean Definition that names it as its word and no caller has to opt in to, has that
+    id. A type this tree's registry doesn't bind, or registers no Boolean version of, has none."""
+
+    from verity.circuits.defs import CompositeDefinition, bind
+
+    # registers `EmbeddingRead_v1`, a `READ` static's Definition, which `boolean.load` doesn't
+    from verity.commitments.gates import embedding  # noqa: F401
+    from verity.definitions import boolean
+    from verity.definitions.call_scope import spec_base, spec_statics, specialization
+
+    boolean.load()
+    try:
+        own = specialization(spec_base(block), spec_statics(block))
+        return boolean.boolean_version(bind(own) if isinstance(own, CompositeDefinition) else own).id == definition
+    except (LookupError, TypeError, ValueError):
+        return False
 
 
 def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
@@ -401,7 +434,8 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
             runs.append(target)
     aliases = sorted({(s.definition, s.type) for target in records(store).get(workload.record(STEADY), [])
                       if _superseded(store, target) for found, _ in steady_rows(store, target, True).values() for s in found})
-    prover = P.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases))
+    prover = P.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases),
+                     boolean=boolean_version)
     table = prover.table(census)
     measured = sum(r.cost.source == P.STEADY for r in table.rows)
     count = f"{provers} prover{'' if provers == 1 else 's'}"
@@ -483,7 +517,8 @@ def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanV
     types = len({v.definition for v in found})
     return found, [_input(LEAN, workload, [v.run for v in found],
                           f"the Lean verifier (its `verify`) on one statement of each of {types} block type(s); "
-                          "every other type's Lean verifier seconds and proof bytes are scaled from them" if found else
+                          "every other type's Lean verifier seconds and proof bytes are priced from them, its "
+                          "Definition's at its size, else at the rate fitted over them" if found else
                           "none that measures a block type: the Lean verifier's seconds and the proof's bytes are not "
                           "measured")], refused
 
@@ -641,9 +676,10 @@ def _planned_lines(planned: Mapping[str, Any]) -> list[str]:
 def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
     """The Lean verifier's seconds and the proof's bytes a served token, a line each: `not measured` with no statement
     measured, else the figure with its status, what was measured (the block type with its share of the proving time,
-    its statement, the verifier's seconds on it or its proof's bytes, the run and the host) and what was scaled (the
-    block types, their share of the figure, and the basis). The seconds' line says what the accept holds in the
-    record's own words (its `label`)."""
+    its statement, the verifier's seconds on it or its proof's bytes, the run and the host) and, where it is modeled,
+    how much of it each source prices (own, family, fitted: the block types, their share of the figure, and each
+    one's rate) with the basis. The seconds' line says what the accept holds in the record's own words (its
+    `label`)."""
 
     t = doc["totals"]
     seconds, size, measured = t["lean_verifier_seconds_per_token"], t["proof_bytes_per_token"], t["lean_verify"]
@@ -663,19 +699,26 @@ def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
         f"{x['run']})" for x in measured[1:])
     one = "one block type" if len(measured) == 1 else f"{len(measured)} block types, the most proving time first"
 
-    def line(name: str, v: Mapping[str, Any], what: str, unit: str) -> str:
+    def line(name: str, v: Mapping[str, Any], what: str, unit: str, per: str, size: str) -> str:
         status = "modeled, not measured" if v["status"] == "modeled" else v["status"]
-        rate = "the measured statement's" if len(measured) == 1 else "the measured statements' median"
-        scaled = (f" Scaled: the other {v['scaled_block_types']} block types, {1 - v['measured_share']:.1%} of this figure, "
-                  f"each at {rate} {unit} a witness bit times its 2^k_log bits: {v['basis']}." if v["scaled_block_types"] else "")
-        bare = (f" In neither: {v['unpriced_block_types']} block type(s) with no k_log." if v["unpriced_block_types"] else "")
-        return f"- {name} per token: {_n(v['value'])}, {status}. Measured: {one}, {what}{more}.{scaled}{bare}"
+        how = {P.LEAN_MEASURED: "its own statement's",
+               P.LEAN_FAMILY: f"its Definition's measured statements' {unit} {per} (the dearest where several are) "
+                              f"times its {size}",
+               P.LEAN_FITTED: f"{'—' if v['fitted_rate'] is None else _n(v['fitted_rate'])} {unit} {per} (every "
+                              f"measured statement's {unit} over their {size}) times its {size}"}
+        parts = [f"{P.LEAN_SOURCES[k]} {x['block_types']} block type(s), {x['share'] or 0.0:.1%}"
+                 + ("" if k == P.LEAN_MEASURED else f", each at {how[k]}") for k, x in v["sources"].items() if x["block_types"]]
+        shares = f" Of this figure: {'; '.join(parts)}: {v['basis']}." if v["status"] == "modeled" else ""
+        bare = (f" In none: {v['unpriced_block_types']} block type(s) with no {size}." if v["unpriced_block_types"] else "")
+        return f"- {name} per token: {_n(v['value'])}, {status}. Measured: {one}, {what}{more}.{shares}{bare}"
 
     return [line("Lean verifier seconds", seconds,
                  f"{block}: {m['label']}, by the Lean verifier's `verify` in {_n(m['statement_seconds'])} s ({runs}; a run is "
-                 f"one process, the statement read and set up in it), in run {m['run']} on {m['host']}", "seconds"),
+                 f"one process, the statement read and set up in it), in run {m['run']} on {m['host']}", "seconds",
+                 "an AND gate", "AND gates"),
             line("proof bytes", size,
-                 f"{block}, whose proof files are {_n(m['proof_bytes'])} bytes in all (run {m['run']})", "bytes")]
+                 f"{block}, whose proof files are {_n(m['proof_bytes'])} bytes in all (run {m['run']})", "bytes",
+                 "a witness bit", "2^k_log witness bits")]
 
 
 def _record(target: str | None) -> str:

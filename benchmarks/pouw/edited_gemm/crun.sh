@@ -50,7 +50,7 @@ cuobjdump -sass "$BIN/cgemm" > "$BIN/cgemm.sass" 2>/dev/null
 awk '/Function :/{f=$3} /[[:space:]](LDL|STL)[.[:space:]]/{n[f]++} END{for (f in n) print n[f], f}' "$BIN/cgemm.sass" | sort -k2 \
   > "$O/sass_local_mem_ops.txt" 2>&1
 gzip -c "$BIN/cgemm.sass" > "$O/cgemm.sass.gz"
-# small (m = 2 digits), small3 (k > 4096: m = 3), Llama-3.1-8B's linears at 2048 tokens, and 8192^3 (o, PROFILE's shape);
+# small (m = 2 digits), small3 (k > 4096: m = 3), Llama-3.1-8B's linears at 2048 tokens, and 8192^3 (o);
 # a shape at k = 128 is cohalf's QK^T (keys x queries x head dimension; h8k's 4,096 tiles are 16 heads at 2,048 tokens),
 # its arms CG_ARMS_H and NCU_H. CG_SET=half: cohalf's shapes, and c_l7qs_v's gate and profile beside c_l7qs at o2k, dn2k
 case "${CG_SET:-all}" in
@@ -130,6 +130,6 @@ for r in "$O"/ncu/*.ncu-rep; do
   ncu -i "$r" --page source --csv --print-source sass > "$b.sass.csv" 2> "$b.sass.err"
 done
 cat "$O/rc.txt"
-$PY $D/eps_profile.py "$O" --mm benchmarks/pouw/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
+$PY $D/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
   --toml-arms "${CG_TOML_ARMS:-c_l7qs,c_l7qs_o,c_l7qs_v,h_l7qs,e_l7qs,e_plains,plain}" > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" | tee -a "$O/rc.txt"

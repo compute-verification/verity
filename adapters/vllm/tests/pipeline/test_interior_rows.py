@@ -18,7 +18,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
@@ -244,6 +244,7 @@ def test_the_replay_samples_interior_registers_after_its_boundary_and_the_second
     assert ireg.record["population"] == Q * N_RHO and ireg.record["previous"] == reg.digest and stream.log[-1] == ireg.record
     assert ireg.record["window"] == {"kind": "served", "run": IR.interior_run(reg.digest, [0, 2]), "row": ROW,
                                      "interior": True, "replay_sample": [0, 2], "replay": "replay-test"}
+    assert IR.interior_run(reg.digest, first.units) == SS.interior_root(reg.digest, first.units)
     second = stream.select(ireg)
     assert second.replay_sample == first and [u // N_RHO for u in second.units] == [0, 1]
 
@@ -323,7 +324,8 @@ def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interio
     """The GPU replay's dry run: each request's capture, written from its CPU replay's token-select inputs (logits rows,
     ids, steps), reads back as the span `span` reads from its Program, member and words, and the replay sample's
     captured spans register as the interior of a two-stage stream over token selects. A capture whose ids are not the
-    ones served, or whose rows changed after it was written, is refused before any commitment."""
+    ones served, or whose rows changed after it was written, is refused before any commitment, in words that say how
+    many ids differ and carry none of them."""
     replayed = {rid: IR.span(world.inst, _replay(world, rid), TSEL) for rid in PROMPTS}
     served = _tokens(world)
     SC.write(tmp_path, TSEL, {rid: {"logits": s.data["rows"]["in0"], "tokens": served[rid], "steps": [e[3] for e in s.entries],
@@ -332,8 +334,13 @@ def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interio
     for rid, s in replayed.items():
         assert got[rid].member == s.member and got[rid].program == s.program
         assert all(np.array_equal(got[rid].data[k][p], a) for k in ("rows", "outs") for p, a in s.data[k].items())
-    with pytest.raises(ValueError, match="didn't reproduce the span"):
+    n = len(served["r1"])
+    with pytest.raises(ValueError, match=f"request r1: the replay selected {n} ids and serving emitted {n}, 1 of them "
+                                         "different: it didn't reproduce the span"):
         IR.captured(tmp_path, "r1", served["r1"][:-1] + [served["r1"][-1] + 1])
+    with pytest.raises(ValueError, match=f"selected {n} ids and serving emitted {n - 1}, 2 of them different") as e:
+        IR.captured(tmp_path, "r1", [served["r1"][0] + 100000, *served["r1"][1:-1]])
+    assert str(served["r1"][0] + 100000) not in str(e.value)
     unit = SRW.template(TSEL).fn
     block = _block(TSEL_RHO, unit, "InteriorRowsTestSelects")
     stream, reg, first = _first(world, got, unit, block, TSEL_RHO)
@@ -403,7 +410,7 @@ def test_a_token_selects_pieces_are_its_chunks_and_combine_by_their_definitions(
             r[0] for r in s.data["rows"]["in0"].tolist()]
     wrong = s.data["outs"][out].copy()
     wrong[0, 0] ^= 1
-    with pytest.raises(ValueError, match="its chunks and combine select"):
+    with pytest.raises(ValueError, match=f"its chunks and combine select other ids than its span's at 1 of its {s.n} tokens"):
         IR.pieces(replace(s, data={**s.data, "outs": {out: wrong}}), c)
     with pytest.raises(ValueError, match="are not whole chunks"):
         IR.pieces(s, 3)

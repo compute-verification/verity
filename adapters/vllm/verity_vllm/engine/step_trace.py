@@ -33,7 +33,7 @@ import atexit
 import json
 import queue
 import threading
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Collection, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -76,7 +76,10 @@ def scheduler_config(sched: Any) -> dict[str, Any]:
     scheduler config no longer holds it, as in vLLM 0.11 on), and what an engine at vLLM's defaults does not have: the
     KV cache's format where it is not ``auto`` (``kv_cache_dtype``, as the engine's arguments name it), and under
     speculative decoding its ``speculative`` settings (`SPECULATIVE`, those that are set): an engine built with them
-    as its ``kv_cache_dtype`` and ``speculative_config`` stores, drafts and accepts as this one does."""
+    as its ``kv_cache_dtype`` and ``speculative_config`` stores, drafts and accepts as this one does. Where the launch
+    left the context limit to vLLM (``max_model_len`` -1, the command line's ``auto``), ``max_model_len_auto`` says so:
+    vLLM then builds the model at the checkpoint's own limit and fits ``max_model_len`` to the KV pool afterwards, so
+    an engine launched at the fitted number is built at another length than this one."""
     sc = getattr(sched, "scheduler_config", None)
     cc = getattr(sched, "cache_config", None)
     pick = lambda o, names: {n: _plain(getattr(o, n)) for n in names if o is not None and hasattr(o, n)}   # noqa: E731
@@ -84,11 +87,13 @@ def scheduler_config(sched: Any) -> dict[str, Any]:
            **pick(sc, ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "enable_chunked_prefill", "long_prefill_token_threshold",
                        "max_num_partial_prefills", "policy", "async_scheduling")),
            **pick(cc, ("block_size", "enable_prefix_caching", "num_gpu_blocks"))}
+    mc = getattr(getattr(sched, "vllm_config", None), "model_config", None)
     if "max_model_len" not in out:
-        mc = getattr(getattr(sched, "vllm_config", None), "model_config", None)
         n = getattr(sched, "max_model_len", None) or getattr(mc, "max_model_len", None)
         if n is not None:
             out["max_model_len"] = int(n)
+    if getattr(mc, "original_max_model_len", None) == -1:
+        out["max_model_len_auto"] = True
     if getattr(cc, "cache_dtype", "auto") != "auto":
         out["kv_cache_dtype"] = _plain(cc.cache_dtype)
     spec = getattr(getattr(sched, "vllm_config", None), "speculative_config", None)
@@ -97,24 +102,29 @@ def scheduler_config(sched: Any) -> dict[str, Any]:
     return out
 
 
-def step_geometry(so: Any) -> tuple[dict[str, int], list[str], list[str], dict[str, int]]:
+def step_geometry(so: Any, preempted: Collection[str] = ()) -> tuple[dict[str, int], list[str], list[str], dict[str, int]]:
     """From a `SchedulerOutput`: each scheduled request's first position this step, the requests first scheduled, those resumed
-    from preemption, and the prefix-cache tokens each new request starts from (`num_computed_tokens` of a new request > 0)."""
+    from preemption, and the prefix-cache tokens each new request starts from (`num_computed_tokens` of a new request > 0).
+    A vLLM whose scheduler sends a resumed request again in full names it among the new requests and nowhere as resumed
+    (0.34): it is resumed where ``preempted``, the requests preempted and not scheduled since, holds it."""
     start: dict[str, int] = {}
     new: list[str] = []
+    resumed: list[str] = []
     hits: dict[str, int] = {}
     for r in getattr(so, "scheduled_new_reqs", None) or ():
         start[r.req_id] = int(r.num_computed_tokens)
+        if r.req_id in preempted:
+            resumed.append(r.req_id)
+            continue
         new.append(r.req_id)
         if int(r.num_computed_tokens):
             hits[r.req_id] = int(r.num_computed_tokens)
     cached = getattr(so, "scheduled_cached_reqs", None)
-    resumed: list[str] = []
     if cached is not None:
         for i, rid in enumerate(cached.req_ids):
             start[rid] = int(cached.num_computed_tokens[i])
-        resumed = sorted(getattr(cached, "resumed_req_ids", None) or ())
-    return start, new, resumed, hits
+        resumed += getattr(cached, "resumed_req_ids", None) or ()
+    return start, new, sorted(resumed), hits
 
 
 class StepTrace:
@@ -135,6 +145,7 @@ class StepTrace:
         self.empty = 0                          # schedules that scheduled nothing since the last such step
         self.executed = 0
         self._pending: dict[int, int] = {}      # id(SchedulerOutput) -> its step
+        self._preempted: set[str] = set()       # the requests preempted and not scheduled since
         self._fh = None
         self.sched: Any = None
         self.writer = writer
@@ -241,6 +252,7 @@ class StepTrace:
             def wrapped(request_ids, finished_status, *a, **kw):
                 done = orig(request_ids, finished_status, *a, **kw)
                 for r in done or ():
+                    me._preempted.discard(r.request_id)
                     reason = getattr(r, "get_finished_reason", lambda: None)()
                     me._emit({"kind": "finish", "request": me.request_id(r.request_id), "after_step": me.scheduled - 1,
                               "reason": FINISH.get(int(reason), str(reason)) if reason is not None else str(finished_status),
@@ -256,7 +268,9 @@ class StepTrace:
 
     def _record_step(self, step: int, so: Any, mro: Any, outs: Any) -> None:
         nst = dict(getattr(so, "num_scheduled_tokens", None) or {})
-        start, new, resumed, hits = step_geometry(so)
+        start, new, resumed, hits = step_geometry(so, self._preempted)
+        preempted = set(getattr(so, "preempted_req_ids", None) or ())
+        self._preempted = (self._preempted - set(resumed)) | preempted
         runner = [r for r in (getattr(mro, "req_ids", None) or ()) if nst.get(r)]
         order = "runner" if sorted(runner) == sorted(nst) else "scheduler"
         ids = runner if order == "runner" else list(nst)
@@ -273,7 +287,7 @@ class StepTrace:
         self._emit({"kind": "step", "step": step, "T": int(so.total_num_scheduled_tokens), "order": order,
                     "rows": [[rid(r), start.get(r), int(nst[r])] for r in ids],
                     "new": [rid(r) for r in new], "resumed": [rid(r) for r in resumed], "cache_hit": {rid(r): k for r, k in hits.items()},
-                    "preempted": sorted(rid(r) for r in (getattr(so, "preempted_req_ids", None) or ())),
+                    "preempted": sorted(rid(r) for r in preempted),
                     "emitted": emitted, "finished": finished})
         self.executed += 1
 

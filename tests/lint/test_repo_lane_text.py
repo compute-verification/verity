@@ -55,8 +55,8 @@ from pathlib import Path
 NAME = "repo_lane_text"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
-#: the archive isn't developed
-LEFT_OUT = ("archive/",)
+#: path prefixes this lint leaves to others (the ratchet gate reads it): none
+LEFT_OUT = ()
 #: prose that is data, by path prefix (or a whole path), each with its reason
 SKIP = {
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
@@ -342,7 +342,7 @@ def test_what_is_lane_text_and_what_is_not() -> None:
     for src in (py, Path(__file__).read_text(encoding="utf-8"), (ROOT / "adapters/vllm/tools/ratchet_gate.py").read_text()):
         assert found_in(python_prose(src)) == found_in(tokenized(src))
     assert sites("#5040 (12 Oct)", "data.json") == []
-    assert not holds("archive/x.md") and not holds("fixtures/a/README.md") and not holds("x/tests/fixtures/y.py")
+    assert not holds("fixtures/a/README.md") and not holds("x/tests/fixtures/y.py")
     assert holds("x/tests/test_y.py") and holds("security/A.lean") and not holds("x.csv")
 
 
