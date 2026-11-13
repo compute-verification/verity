@@ -179,7 +179,9 @@ def AuditorSeesSkeletonAt (dest : Ch → Parties.Dest) : Prop :=
 /-- Where the device's channels end as PoUS runs a session: its challenges with the prover, and its report in the
 clear. The device hands the report to the party that started its side and answers its challenges
 (`challenger_session.session`), and the session's verdict is checked in the clear on it (`run.check_at`), as evidence
-of the run's case: the report is public. -/
+of the run's case: the report is public. The report goes first to the prover's side, which in the run's case passes it
+on unchanged; reading that channel as ending with the auditor in the clear gives the auditor more than the path it
+takes, so the bound holds of what happens. -/
 def reportPublic : Ch → Parties.Dest
   | .challenge => .witness
   | .report => .clear
@@ -193,7 +195,9 @@ Not covered:
 * what a digest tells. `blockDigest` is SHA-512 over a public prefix and the answer, with no key and no salt, so
   whoever holds a candidate for the answer can test it. The statement bounds what reaches the auditor by the digest; it
   does not say the digest hides the answer;
-* what the prover sends the auditor: the rest of the run's case and setup's. The view is of the device alone;
+* what the prover sends the auditor. The run's case also carries a table of every block's `blockDigest`, and in the
+  public-encoder setup `C*` itself (`period.case`, `setup_case`). The view is of the device alone: the statement
+  bounds what the device adds to what the auditor holds, not all the auditor holds;
 * when a message is sent: the view holds the messages in order, and the clock's readings only as the report has them;
 * the device's host: what the device keeps (its state, its logs, the sessions it completed) is not in the view;
 * what else the device sends: the port it listens on before the session, another session's messages, the salt's
