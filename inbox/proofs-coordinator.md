@@ -115469,3 +115469,45 @@ In plain words: messages meant for you arrived in my conversation a few minutes 
 STOP RULE: not reached. NEEDS: nothing from you for my work; the delivery is yours or the platform's to look at. To post: nothing. Not established: whether the same 23 notifications reached you.
 
 **Pushed.** Unchanged since my 02:37Z entry: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `bdd91c5b7bcb617fa555d14036b992574882a6f3`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`. Both runs (`4995`, `5129`) are still out.
+
+## CUT, Fri 13 Nov 02:43Z: the cut with the read in its event is written whole, statement and proof, and is in a try (`r20261113-024011-f92d`, vy-nebius-2, at `0dc5993463`, waiting for a slot); none of the new file has compiled. The three earlier files stand compiled (40 theorems, three axioms). One finding for the form's owner: today's check reads the first stage's coins under the key the evidence carries.
+
+In plain words: the cut says the challenger's log that the evidence carries, for both stages' sessions, is the log the device released. Until now it said nothing of a play where my reading of the evidence found no log. The new file closes that: on an accepted play, either the check read a log for both sessions and each is the device's, or the play carries a forgery under the challenger's key or a SHA-512 collision. The bound is the same two terms as before. It costs one more premise: that the first stage's coin evidence (the coins that pick the outer blocks) reads under the registered key. That premise is not a formality today, because the check reads those coins under a key the evidence itself names (NEEDS 1). The second stage's coins (which pick the inner blocks) are read under the registered key already, and for them the new file needs no premise.
+
+Head pushed: `0dc5993463` on `cursor/proofs-cut-9323`. Nothing unpushed. It holds TWOLEG's `e0a4052b5f` (merged at `dbbe12ac7d`: `DevAgrees.lean`'s fix and `ClaimInner.lean`); no file of mine imports either [read].
+
+What is new, all in `SampledTwo/CutRead.lean` (its root is on its own line in `security/Proofs/lakefile.toml`) [read, not compiled]:
+- `LogRead o := readsLogs o.sent ≠ []` and `ReadIsDevice o := LogRead o ∧ LogIsDevice o`.
+- `FirstReads θ`, a named `Prop` taken as a hypothesis: on every accepted play after `θ` whose case reads as `(p, c, e)`, there are `key d ξ` with `keyOf θ = some key`, `firstDraws key p c e = some d` and `drawCoins d.key d.window d.label d.after (firstCoins e) = .ok ξ`.
+- `first_reads`: where `drawCoins` read the first stage's evidence and the runs on its window print a log (`PrintsOn`), `firstRead` returns a log, or the record carries a break. The form never reads the first session's log as coin trees; the device's run does, and `Drawn.drawn_log` says the lines are that run's or a break.
+- `members_records`: `membersTreesHeld` read every statement's session's record on the blobs (the two loops of `named_mem`, with a smaller invariant).
+- `second_reads`: the interior session's read exists on every accepted play, with no premise (`oneStageZk_reads`, `Sampled.drawCoins_ok` down to `sessionOf_ok`, `Binding.trees_of`, `Sampled.readLog_isSome`).
+- `reads_or_break`: under `FirstReads θ` and `PrintsTwo` at each play, an accepted play has `LogRead o`, or its first record carries a break under the parameters' key.
+- `cutBound_of`: `cutBound`'s proof at any event `Good`. `cutBound_read : Wired V k θ → FirstReads θ → (PrintsTwo at each play) → SignsPlay V dev θ F c → CutBound V k θ F c σ ReadIsDevice (terms V dev θ F c σ)`. Same `terms`, same finder and forger, at any history.
+- Not changed: `LogIsDevice`, `cutBound`, `Binds`, `PrintsOn`, `PrintsTwo`, `SignsPlay`, `terms`, `readFinder`, `forger`. HISTORY's compile against them stands.
+
+For STAGECOINS (its NEEDS 2, `CutReads C`): I can't give `∀ o, FormAccepts C o → readsLogs o.sent ≠ []` as a lemma; on today's base it is false of a play whose first stage read no coin, and of one whose evidence names its own key [read]. What I give instead: take `ReadIsDevice` for `Good`. Then on the good event `h.1 : readsLogs o.sent ≠ []` is the read and `h.2` is `LogIsDevice o`, and `CutReads` is no premise of yours any more; `FirstReads θ` takes its place, once, in `cutBound_read`.
+
+My word on both sessions (asked for 15:00Z): yes, both are in. `first_session`, `second_session` and `binds_of_accepts` compiled in tries 5 and 6 [run]; the device's log is held for the first stage's session and the interior's, on one window or two.
+
+Runs:
+- `r20261113-024011-f92d` [run]: try 7, vy-nebius-2, at `0dc5993463`, `--try SampledTwo/CutRead.lean --siblings`. Launched 02:40Z; waiting for a slot at 02:43Z. If it has not started by 02:51Z I cancel it and send it again. Verdict about 03:10Z [guess].
+- `r20261113-014528-6f45` [run]: try 6, done, rc 0: `CutHeld.lean` lean exit 0, 10 theorems, three axioms (as in my 02:23Z entry).
+
+### STOP RULE
+Nothing here changes a listed guarantee or a named assumption. No lock is touched and the form accepts nothing it refused.
+
+### NEEDS
+1. The form's owner (TWOLEG, and REDRAW for the key change of the 00:48Z ruling): `FirstReads`. [read] `Spot.Run.coinsHold` calls `Challenger.coinsReason`, which takes the challenger's key from the coin evidence (`ChallengerKey.ofJson (getD coins "key")`, `ChallengerCoins.lean` 105 to 118). Nothing in `Spot.Run.run` or in `VStarRecursive/SampledTwo.lean` compares that key with the parameters' (`ONE_KEY` compares the two registrations' keys in the parameters only; `interiorUnshown` reads under the evidence's key too). The second stage is different: the form reads its coins under the parameters' key (`OneStageZk.coinsOf p.audit`). So at today's base a first-stage coin evidence under a key of the prover's own passes the form's coin check, and `FirstReads` is false of that play. It becomes a lemma once the run reads the first stage's coins under the parameters' key and family; I then prove it from RUNCOINS's `CheckReadsDraw` where the first stage read a byte. This is RUNCOINS's `EvidenceKeyIs` seen from the cut.
+2. The form's owner: a first stage that reads no byte carries `null` coin evidence (`coinsHold`), so the cut reads no log and `FirstReads` fails. Either the form refuses such an audit or it is a case the guarantee names apart.
+3. TWOLEG (`Reading.lean` is its file): no lemma says the two-stage `paramsOfJson` yields a challenger key at the deployed LMS parameters (`Limits.paramsOfJson_deployed` is one-stage v2's; `membersParamsOfJson` has none). `FirstReads` carries it today as `keyOf θ = some key`. If nobody has it, I write it in a file of mine after the try; say if you do.
+4. HISTORY `bc-3e1bb2d6-7c79-5a00-8b4a-12f4945146a9`: unchanged, `PrintsTwo` and `SignsPlay` at the two-session history.
+
+### To post
+Nothing.
+
+### Not established
+- `CutRead.lean` has not compiled; try 7 is the first.
+- `FirstReads θ` is a premise, unproved, and false at today's base for the two plays of NEEDS 1 and 2.
+- The known hole stands: at a history holding one play's signatures, an earlier period's genuine signature in the evidence counts as the forger's, and the forger's term bounds nothing there. The docstrings say so; soundness's change of Tue 17 Nov closes it.
+- Nothing is wired into `Sampled.lean` or `Projection.lean`; ASSEMBLY takes `cutBound_read` or `cutBound` as it chooses.
