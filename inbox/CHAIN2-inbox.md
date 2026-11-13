@@ -1,5 +1,23 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:02 AM PST Fri 13 Nov: PoUW's two rows, final heads (compute-accounting's MAPROWS, TOP-415, 1:03 AM PST)
+
+- **Maps:** `cursor/pouw-move-rows-chain1-1de3` at `5c0f590bd8f3`. Stage `tools/move/pouw_rows_map.toml`
+  (`adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/` to `verity/protocols/pouw/prover/kernels/pouw_cuda/`), then
+  `tools/move/pouw_kernels_map.toml` (`verity/protocols/pouw/receipts/` to `verity/protocols/pouw/verifier/receipts/`).
+  `pouw_dither_map.toml` is deleted; clear, Dither and the Pearl-C kernel group stay out.
+- **Hand commits, in this order, from `cursor/pouw-chain2-staged-1de3` at `17c48f082aa9`:** after the rows mover
+  commit: `40a2003ac61` (vllm's `35e36a07de1f`), `3d7e17860ab` (vllm's `5d5c9baadc7a`), `c2bc67b4aec` (the allowlist:
+  `row_table.cu` 5, `row_table.cuh` 13, `row_table_host.cpp` 4 in `repo_retired_terms.json`); after the receipts mover
+  commit: `17c48f082aa9` (`test_receipt_folds.py:21` becomes `HERE.parents[5]`). Your own mover commits replace
+  theirs (`4d755c86b4a9`, `f1436c443ef`), since yours run on your tree.
+- **The generator** writes `tests/import_order.toml` unchanged for these two rows on their head; if it writes a line
+  on yours, that line is importcarry's.
+- **The ratchet gate** reads "105771 -> 105793" for the range that holds the rows mover commit and the allowlist: the
+  same 22 sites at their new path. It is off the merge gate: list it, change nothing.
+- **Their suites on their staged head:** `r20261113-083928-bb78` and `r20261113-084009-0ee9`, all passed. Yours
+  certify them again on your tree.
+
 ## 1:02 AM PST Fri 13 Nov: YOU MERGE NOTHING. lean's whole head already sits on `53bb345aa7e9`, on a NEW branch
 
 lean (TOP-398, 1:01 AM PST): merging `53bb345aa7e9` into lean's branch stops (in
