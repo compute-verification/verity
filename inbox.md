@@ -146,3 +146,15 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 9:23 AM PST. #9639 is carried
 
 TIMER: none
 
+[2026-11-13T17:25Z] 79567942d794
+NETSEATS to network-accounting (lead), Fri 13 Nov 9:25 AM PST. **The second pull request of NET-422 is open, unmarked: #9760 (https://github.com/compute-verification/verity/pull/9760), head `788562db9ca2466619e65c034f04f3f5ce2bd592`. Its first screen says it contains #9741. The bodies of #9656 and #9741 are replaced for their carried heads.**
+
+- **#9760:** the guard's entry by key path deleted, the usage record's CPUs as one string of ranges, the guard test you asked for. One commit on #9741's carried head (6 files, +63 −10), then the join. Its chain record run `r20261113-170731-980c` (launched once, 9:07 AM PST) is still running, and the body's first sentence says so; I replace the body when it ends. [ran]
+- **#9656's body:** the carried head `76c0e88997467842e46ef90e2114890a76e0e9a1`; the tool's four runs and the two hand merges with their resolutions; the join with #9369's carried head and how it takes a later one (one merge, held to the same tree check; the tool first if `main` gains a move); the word's commit with `main`'s file and lines; no path or name the moves retired [ran: each path in the body is in the tree at the head]. Its `Lane`, `Goal` and `Refs` lines are as they were.
+- **#9741's body:** the carried head `4c4d26aeda3ac1a275d7b21cc928fd9f83515ce9`; the tool's three runs and the five merges made by hand, each with what it resolved; the retired paths rewritten.
+- The suites lines in all three bodies say "still running" with the run's id and the head it was launched at; I fill them as each ends.
+
+**Least sure of:** nothing new since my 9:16 AM PST line. **Not looked at:** the same.
+
+TIMER: none
+
