@@ -7,9 +7,11 @@ and past 2^32 bytes, a hole and a missing SYN or FIN as bounds and never agreeme
 every capture format read to the same sums, and each thing the reader doesn't read refused by its name. Then a run of
 the network certifier on a `VirtualClock`, published as `serve` publishes one, with a capture of exactly the bytes its
 server's side saw: the two counts agree in each direction, the watermark stream's among them and the server's answer
-on it in no sum; a request's place in the release order is its `END` cell's in the ingress record, where a bucket's
-are not in their ordinals' order; the answer on a watermark connection in no pair makes its direction a bound; and a
-connection that failed is a bound."""
+on it in no sum; a run of two execution phases is counted across both phases' records; a run in the id egress form,
+at the id front's cell, agrees as one in the bytes form does, and its capture kept at 54 bytes a packet holds no
+content and is read as the one kept at 130 is; a request's place in the release order is its `END` cell's in the
+ingress record, where a bucket's are not in their ordinals' order; the answer on a watermark connection in no pair
+makes its direction a bound; and a connection that failed is a bound."""
 from __future__ import annotations
 
 import argparse
@@ -25,8 +27,9 @@ import pytest
 from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
 from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.active import VirtualClock
+from verity.protocols.certifier.verifier.io_tie import TRAILER
 from verity.protocols.certifier.verifier.release import WATERMARK_END, watermark_head, with_release
-from verity.protocols.certifier.verifier.warden import Warden, WardenParams, cells
+from verity.protocols.certifier.verifier.warden import Warden, WardenParams, audit, cells, read_cell
 
 HERE = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
@@ -450,6 +453,12 @@ def _packet(protocol: int, body: bytes = b"", **how) -> bytes:
     return fx.ip(CERTIFIER[0], SERVER[0], protocol, body, **how)
 
 
+def _with_ip_options(packet: bytes, n: int = 8) -> bytes:
+    """One of the fixture's IPv4 packets with `n` bytes of IP options, each the end of the list."""
+    return (bytes([0x40 | (5 + n // 4)]) + packet[1:2] + (int.from_bytes(packet[2:4], "big") + n).to_bytes(2, "big")
+            + packet[4:20] + bytes(n) + packet[20:])
+
+
 @pytest.mark.parametrize("name, frames, how, said", [
     ("an IP fragment", [fx.ethernet(_packet(fx.TCP, fx.tcp(40001, 8000, 1, fx.ACK, fx.data(64)), fragment=0x2000))],
      {}, r"capture\.pcap's packet 0 is an IP fragment of a flow with a given address: .* reassembles nothing"),
@@ -462,6 +471,11 @@ def _packet(protocol: int, body: bytes = b"", **how) -> bytes:
     ("MPLS", [fx.ethernet(bytes(4) + fx.first()[0], kind=0x8847)], {}, "is MPLS, an encapsulation"),
     ("cut inside its headers", [fx.ethernet(p) for p in fx.first()], {"snapshot": 40},
      r"packet 0 is kept too short for its headers: capture at least 130 bytes of each packet \(`-s 130`\)"),
+    ("IPv6 kept at 54 bytes a packet",
+     [fx.ethernet(fx.ip(fx.CERTIFIER6, fx.SERVER6[0], fx.TCP, fx.tcp(40001, 8000, 1, fx.SYN)))], {"snapshot": 54},
+     "packet 0 is kept too short for its headers: capture at least 130 bytes of each packet"),
+    ("eight bytes of IP options kept at 54 bytes a packet", [fx.ethernet(_with_ip_options(fx.first()[0]))],
+     {"snapshot": 54}, "packet 0 is kept too short for its headers: capture at least 130 bytes of each packet"),
     ("another link type", [fx.ethernet(p) for p in fx.first()], {"link": 105},
      r"capture\.pcap has link type 105: this reads Ethernet \(1\), raw IP \(101\) and Linux cooked \(113, 276\)"),
 ])
@@ -516,17 +530,20 @@ class _Uncommitted(ws.Publisher):
 
 
 def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, held: tuple[int, ...] = (),
-            watermark: bool = True, params: WardenParams = PARAMS,
-            order=None) -> tuple[Warden, list[_Writer], _Writer]:
-    """One window of the network certifier at `params` on a `VirtualClock`, published as `serve` publishes a run: its
-    records and certificates through `Publisher`, `deployment.json`, and `warden.json`'s connections and, with
-    `watermark`, its watermark. The server answers connection k (in connect order, from 0) `responses[k]` and ends,
-    or for k in `held` sends it and never ends. With `order`, the network certifier's connections are sorted by it
-    once they are admitted, so it cuts each bucket's cells, and releases its `END`s, in that order and not in their
-    ordinals'; its records are then kept and certified with no commitment to their rows, which refuses cells that
-    aren't where the schedule lays them. Returns the network certifier, the server's side of each connection in
-    connect order, and its side of the watermark stream."""
+            watermark: bool = True, params: WardenParams = PARAMS, order=None, phases: int = 1,
+            arrive: tuple[int, ...] = ()) -> tuple[Warden, list[_Writer], _Writer]:
+    """`phases` execution phases of the network certifier at `params` on a `VirtualClock`, one unless given, published
+    as `serve` publishes a run: its records and certificates through `Publisher`, `deployment.json`, and
+    `warden.json`'s connections and, with `watermark`, its watermark. Every request arrives before the first tick,
+    or with `arrive` request k before tick `arrive[k]`, none earlier than the one before it. The server answers
+    connection k (in connect order, from 0) `responses[k]` and ends, or for k in `held` sends it and never ends. With
+    `order`, the network certifier's connections are sorted by it once they are admitted, so it cuts each bucket's
+    cells, and releases its `END`s, in that order and not in their ordinals'; its records are then kept and certified
+    with no commitment to their rows, which refuses cells that aren't where the schedule lays them. Returns the
+    network certifier, the server's side of each connection in connect order, and its side of the watermark stream."""
     tau = params.bucket_ms / 1000
+    starts = arrive or (0,) * len(requests)
+    assert len(starts) == len(requests) and list(starts) == sorted(starts)
     signer = ws.cs.signer(key, 4)
     publisher = (ws.Publisher if order is None else _Uncommitted)(out, ws.Issuer(signer, SESSION), params, WR.Cells.of)
     servers: list[_Writer] = []
@@ -549,50 +566,50 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
 
     async def main() -> Warden:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
-                        withhold=publisher.withhold, watermark=open_watermark if watermark else None)
-        running = asyncio.create_task(warden.run())
+        relay = Warden(params, connect, origin=0.0, windows=phases, clock=clock, sleep=clock.sleep, publish=publisher,
+                       withhold=publisher.withhold, watermark=open_watermark if watermark else None)
+        running = asyncio.create_task(relay.run())
         tasks = []
-        for request in requests:
-            reader = asyncio.StreamReader()
-            reader.feed_data(cells(request, params.cell_bytes))
-            reader.feed_eof()
-            tasks.append(asyncio.create_task(warden.handle(reader, _Writer(warden))))
-        await warden.until(lambda w: w.ordinals + w.refused == len(requests))
-        for t in range(params.window):
-            await warden.until(settled)
+        for t in range(phases * params.window):
+            while len(tasks) < len(requests) and starts[len(tasks)] <= t:
+                reader = asyncio.StreamReader()
+                reader.feed_data(cells(requests[len(tasks)], params.cell_bytes))
+                reader.feed_eof()
+                tasks.append(asyncio.create_task(relay.handle(reader, _Writer(relay))))
+            await relay.until(lambda w: w.ordinals + w.refused == len(tasks))
+            await relay.until(settled)
             clock.advance(t * tau)
-            await warden.until(lambda w, t=t: w.ticks > t)
+            await relay.until(lambda w, t=t: w.ticks > t)
             if t == 0 and order is not None:
-                assert len(warden.active) == len(requests)
-                warden.active.sort(key=order)
+                assert len(relay.active) == len(requests)
+                relay.active.sort(key=order)
         await running
         await asyncio.gather(*tasks)
-        return warden
+        return relay
 
-    warden = asyncio.run(main())
+    relay = asyncio.run(main())
     publisher.close()
     (out / "deployment.json").write_text(json.dumps(ws.deployment_record(
-        params, signer.public_key(), SESSION, origin_unix=0.0, windows=1, listen=(CERTIFIER[0], 1), upstream=SERVER,
-        slack=warden.slack, run_id=warden.run_id)))
-    log: dict = {"connections": warden.log}
+        params, signer.public_key(), SESSION, origin_unix=0.0, windows=phases, listen=(CERTIFIER[0], 1),
+        upstream=SERVER, slack=relay.slack, run_id=relay.run_id)))
+    log: dict = {"connections": relay.log}
     if watermark:
-        log["watermark"] = {"last": warden.watermarked and list(warden.watermarked), "lost": warden.watermark_lost,
-                            "error": warden.watermark_error}
+        log["watermark"] = {"last": relay.watermarked and list(relay.watermarked), "lost": relay.watermark_lost,
+                            "error": relay.watermark_error}
     (out / "warden.json").write_text(json.dumps(log))
-    return warden, servers, mark
+    return relay, servers, mark
 
 
 def _sent(writer: _Writer) -> bytes:
     return b"".join(data for _, data in writer.writes)
 
 
-def _seen(tmp_path: Path, streams: list[tuple[bytes, bytes]]) -> Path:
+def _seen(tmp_path: Path, streams: list[tuple[bytes, bytes]], name: str = "seen.pcap", **how) -> Path:
     """A capture of one connection from the certifier to the server for each of `streams`, (the bytes the certifier
     sent, the bytes the server sent), their packets interleaved, some of their sequence numbers passing the wrap."""
     return _capture(tmp_path, fx.interleaved(*(
         fx.exchange((CERTIFIER[0], 40001 + k), SERVER, sent, answered, isn=(2 ** 32 - 97 * k, 1000 * k), mss=400)
-        for k, (sent, answered) in enumerate(streams))), name="seen.pcap")
+        for k, (sent, answered) in enumerate(streams))), name=name, **how)
 
 
 ANSWER = b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n"
@@ -603,8 +620,8 @@ def _three(tmp_path: Path):
     out.mkdir()
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
-    warden, servers, mark = _served(out, key, requests, responses)
-    return out, warden, requests, responses, servers, mark
+    relay, servers, mark = _served(out, key, requests, responses)
+    return out, relay, requests, responses, servers, mark
 
 
 def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each_direction(tmp_path, capsys):
@@ -612,11 +629,11 @@ def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each
     is what the server's side saw: the request with its release headers one way, the response's bytes the other, and
     the watermark stream's head, lines and end. A capture of those bytes agrees in each direction and pairs every
     connection, the watermark's by its bytes to the server; the server's answer on it is given and is in no sum."""
-    out, warden, requests, responses, servers, mark = _three(tmp_path)
-    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in warden.log}
-    assert [_sent(s) for s in servers] == [with_release(r, release[k + 1][0], warden.run_id, release[k + 1][1])
+    out, relay, requests, responses, servers, mark = _three(tmp_path)
+    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in relay.log}
+    assert [_sent(s) for s in servers] == [with_release(r, release[k + 1][0], relay.run_id, release[k + 1][1])
                                            for k, r in enumerate(requests)]
-    assert _sent(mark).startswith(watermark_head(warden.run_id)) and _sent(mark).endswith(WATERMARK_END)
+    assert _sent(mark).startswith(watermark_head(relay.run_id)) and _sent(mark).endswith(WATERMARK_END)
     record = cf.record_counts(out)
     assert record["phase_records"] == {"certified": 3, "of": 3}
     assert record["connections"] == [
@@ -654,6 +671,152 @@ def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each
     assert not any(a in text for a in ADDRESSES for text in ("\n".join(lines), path.read_text()))
 
 
+def test_a_run_of_two_execution_phases_is_counted_across_both_phases_records(tmp_path):
+    """Two execution phases of the network certifier, the watermark stream through both, and four requests: one
+    served whole in the first phase, one whose response starts in the first and ends in the second, one whose request
+    does, and one served whole in the second. Each phase's ingress record and egress record hold some of the bytes,
+    and the record's count in each direction is their sum over both: each connection's is what its server's side
+    saw, whichever phase's records hold its cells. All six records, three a phase, are counted as certified, and
+    five once one's certificate is gone. A capture of exactly the bytes the server's side saw agrees in each
+    direction and pairs every connection."""
+    out, key = tmp_path / "run", tmp_path / "key"
+    out.mkdir()
+    T = PARAMS.window
+    requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 20, 300, 30)]
+    responses = [_response([" a", " b"]), _response([" word"] * 40), _response([" c"]), _response([])]
+    relay, servers, mark = _served(out, key, requests, responses, phases=2, arrive=(0, T - 10, T - 3, T + 30))
+    # the phase of each connection's admission, of its request's `END` and of its last cell
+    assert [(e["admitted"] // T, e["ingress_end"] // T, e["ended"] // T)
+            for e in sorted(relay.log, key=lambda e: e["ordinal"])] == [(0, 0, 0), (0, 0, 1), (0, 1, 1), (1, 1, 1)]
+    logged = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in relay.log}
+    assert [_sent(s) for s in servers] == [with_release(r, logged[k + 1][0], relay.run_id, logged[k + 1][1])
+                                           for k, r in enumerate(requests)]
+    # the bytes each phase's record holds, in each direction: some in each, and the requests' and responses' in all
+    ingress, egress = ([sum(len(read_cell(frame, PARAMS.cell_bytes)[2]) for row in r.grid for frame in row if frame)
+                        for r in sorted(ws.read_records(out, PARAMS)[name], key=lambda r: r.window)]
+                       for name in (ws.INGRESS, ws.EGRESS))
+    assert len(ingress) == len(egress) == 2 and all(ingress) and all(egress)
+    assert (sum(ingress), sum(egress)) == (sum(map(len, requests)), sum(map(len, responses)))
+    record = cf.record_counts(out)
+    phases = json.loads((out / "deployment.json").read_text())["windows"]
+    assert phases == 2 and record["phase_records"] == {"certified": 6, "of": len(ws.CERTIFIED) * phases}
+    assert record["connections"] == [
+        *({"connection": k + 1, "release": logged[k + 1][0], "exact": True, "why": None, "to_server": len(_sent(s)),
+           "from_server": len(r)} for k, (s, r) in enumerate(zip(servers, responses))),
+        {"connection": "watermark", "release": None, "exact": True, "why": None, "to_server": len(_sent(mark)),
+         "from_server": None}]
+    seen = _seen(tmp_path, [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark), b"")])
+    result = cf.read([seen], *_given(), run=out)
+    got = result["compared"]
+    to_server, from_server = sum(len(_sent(s)) for s in servers) + len(_sent(mark)), sum(egress)
+    assert (got["to_server"]["record_bytes"], got["to_server"]["capture"]["stream_bytes"],
+            got["to_server"]["says"]) == (to_server, to_server, "agrees")
+    assert (got["from_server"]["record_bytes"], got["from_server"]["capture"]["stream_bytes"],
+            got["from_server"]["says"]) == (from_server, from_server, "agrees")
+    assert got["pairing"] == {"connections": 5, "flows": 5, "pairs": 5, "pairs_inside_bounds": 0,
+                              "unpaired_connections": 0, "unpaired_flows": 0, "partial_flows": 0, "says": "agrees"}
+    assert cf.table(result).splitlines()[1] == \
+        "record: 5 connection(s) to the server; 6 of its execution phases' 6 records certified"
+    # one record's certificate gone: the other five are counted, of the six
+    certificates = (out / "certified.jsonl").read_text().splitlines()
+    assert len(certificates) == 6
+    (out / "certified.jsonl").write_text("".join(line + "\n" for line in certificates[:-1]))
+    assert cf.record_counts(out) == record | {"phase_records": {"certified": 5, "of": 6}}
+
+
+def _three_ids(tmp_path: Path):
+    """Three id requests through the device in the id egress form at 4,096-byte cells and one slot, each answered an
+    event of exactly P bytes a token, its ids 0, 1, …, and then the trailer, and the watermark stream."""
+    out, key = tmp_path / "run", tmp_path / "key"
+    out.mkdir()
+    params = dataclasses.replace(PARAMS, cell_bytes=4096, slots=1, egress="id")
+    tokens, prompts = (1, 8, 3), ([7], list(range(1, 801)), [3, 4, 5])
+    requests = [ws.id_request(model="m", user=f"user-{k}", prompt=prompt, max_tokens=n, frame_bytes=params.cell_bytes,
+                              offset=0) for k, (prompt, n) in enumerate(zip(prompts, tokens))]
+    responses = [ws.id_response(list(range(n)), params.payload) for n in tokens]
+    relay, servers, mark = _served(out, key, requests, responses, params=params)
+    return out, params, tokens, requests, responses, relay, servers, mark
+
+
+def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direction(tmp_path):
+    """The id egress form at the id front's cell of 4,096 bytes (`ids.sh`'s): three id requests
+    (`active.id_request`), one whose prompt takes three cells, each answered in the id form, an event of exactly P
+    bytes a token and then the trailer, and the watermark stream. The device's own read accepts the run, so every
+    egress cell is one the id form reads. The schedule the reader rebuilds from the deployment is the id form's,
+    whose digest each record's head holds and the bytes form's is not, so all three records are counted as
+    certified. A connection's count to the server is its request with its release headers, and from it P bytes a
+    token and the trailer. A capture of exactly the bytes the server's side saw agrees in each direction and pairs
+    every connection, the server's answer on the watermark's in no sum."""
+    out, params, tokens, requests, responses, relay, servers, mark = _three_ids(tmp_path)
+    P = params.payload
+    assert 2 * P < len(requests[1]) <= 3 * P and [len(r) for r in responses] == [n * P + len(TRAILER) for n in tokens]
+    deployment = json.loads((out / "deployment.json").read_text())
+    assert deployment["params"]["egress"] == "id"
+    assert deployment["digest"] == params.digest.hex() != dataclasses.replace(params, egress="bytes").digest.hex()
+    records = ws.read_records(out, params)
+    device = audit(params, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
+    assert device["accepted"], device["windows"]
+    assert [c["egress_cells"] for c in device["connections"]] == [n + 1 for n in tokens]
+    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in relay.log}
+    assert [_sent(s) for s in servers] == [with_release(r, release[k + 1][0], relay.run_id, release[k + 1][1])
+                                           for k, r in enumerate(requests)]
+    record = cf.record_counts(out)
+    assert record["phase_records"] == {"certified": 3, "of": 3}
+    assert record["connections"] == [
+        *({"connection": k + 1, "release": release[k + 1][0], "exact": True, "why": None, "to_server": len(_sent(s)),
+           "from_server": n * P + len(TRAILER)} for k, (s, n) in enumerate(zip(servers, tokens))),
+        {"connection": "watermark", "release": None, "exact": True, "why": None, "to_server": len(_sent(mark)),
+         "from_server": None}]
+    seen = _seen(tmp_path, [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark), ANSWER)])
+    result = cf.read([seen], *_given(), run=out)
+    got = result["compared"]
+    to_server, from_server = sum(len(_sent(s)) for s in servers) + len(_sent(mark)), sum(map(len, responses))
+    assert (got["to_server"]["capture"]["stream_bytes"], got["to_server"]["record_bytes"],
+            got["to_server"]["difference"], got["to_server"]["says"]) == (to_server, to_server, [0, 0], "agrees")
+    assert (got["from_server"]["capture"]["stream_bytes"], got["from_server"]["record_bytes"],
+            got["from_server"]["difference"], got["from_server"]["says"]) == \
+        (from_server + len(ANSWER), from_server, [0, 0], "agrees")
+    assert got["pairing"] == {"connections": 4, "flows": 4, "pairs": 4, "pairs_inside_bounds": 0,
+                              "unpaired_connections": 0, "unpaired_flows": 0, "partial_flows": 0, "says": "agrees"}
+    assert got["watermark_answer_bytes"] == len(ANSWER) and got["bounded"] == got["unpaired"] == []
+    assert cf.table(result).splitlines()[1] == \
+        "record: 4 connection(s) to the server; 3 of its execution phases' 3 records certified"
+
+
+def _timestamped(packet: bytes) -> bytes:
+    """One of the fixture's IPv4 TCP packets with the twelve bytes of TCP options a Linux loopback's packets carry,
+    two no-ops and a timestamp: in an Ethernet frame its headers are 66 bytes."""
+    return (packet[:2] + (int.from_bytes(packet[2:4], "big") + 12).to_bytes(2, "big") + packet[4:32] + bytes([8 << 4])
+            + packet[33:40] + b"\x01\x01\x08\x0a" + bytes(8) + packet[40:])
+
+
+def test_a_capture_kept_at_54_bytes_a_packet_holds_no_content_and_is_read_as_one_kept_at_130_is(tmp_path):
+    """The id-form run's capture with a Linux loopback's headers, 66 bytes a packet (Ethernet, IPv4, TCP with its
+    timestamp), kept twice: at the reader's 130 bytes a packet and at 54, the least a TCP packet's headers are over
+    IPv4 in an Ethernet frame. The file kept at 130 holds the first 64 bytes of every segment, a request's start and
+    a token id among them; the file kept at 54 holds no byte past any packet's headers. The reader reads none of
+    TCP's options and takes every length from the headers and the length on the wire, so what it reads of the two is
+    equal field for field but for the snapshot length it reports: each direction agrees and every connection pairs."""
+    out, _, _, _, responses, _, servers, mark = _three_ids(tmp_path)
+    streams = [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark), ANSWER)]
+    files = {kept: _seen(tmp_path, streams, name=f"kept{kept}.pcap", frame=lambda p: fx.ethernet(_timestamped(p)),
+                         snapshot=kept) for kept in (cf.SNAPSHOT, 54)}
+    held = {kept: [data for _, _, data in cf.packets(path, {})] for kept, path in files.items()}
+    assert {len(data) for data in held[54]} == {54} and min(map(len, held[cf.SNAPSHOT])) == 66
+    start, token = _sent(servers[0])[:64], b'"token_id":%10d' % 4
+    assert start.startswith(b"POST ") and any(data[66:] == start for data in held[cf.SNAPSHOT])
+    assert any(token in data[66:] for data in held[cf.SNAPSHOT])
+    assert not any(word in files[54].read_bytes() for word in (b"POST", b"token_id", b"data:"))
+    results = {kept: cf.read([path], *_given(), run=out) for kept, path in files.items()}
+    assert [f["snapshot"] for f in results[54]["capture"]["files"]] == [54]
+    results[54]["capture"]["files"][0]["snapshot"] = cf.SNAPSHOT
+    assert results[54] == results[cf.SNAPSHOT]
+    got = results[54]["compared"]
+    assert got["to_server"]["says"] == got["from_server"]["says"] == got["pairing"]["says"] == "agrees"
+    assert got["to_server"]["difference"] == got["from_server"]["difference"] == [0, 0]
+    assert (got["pairing"]["connections"], got["pairing"]["flows"], got["pairing"]["pairs"]) == (4, 4, 4)
+
+
 def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ingress_record(tmp_path):
     """Twelve requests at once through a network certifier of twelve lanes, six that end their ingress in one bucket
     and six in the next. A request's place N in the release order is a decimal header of the request as the server
@@ -668,13 +831,13 @@ def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ing
     params = dataclasses.replace(PARAMS, lanes=12, queue=12)
     requests = [ws.http_request({"prompt": "x" * (10 + k if k % 2 == 0 else 100 + 5 * k)}, "h:1") for k in range(12)]
     responses = [_response([" w"] * (k + 1)) for k in range(12)]
-    warden, servers, mark = _served(out, key, requests, responses, params=params, order=lambda c: -c.ordinal)
-    logged = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in warden.log}
+    relay, servers, mark = _served(out, key, requests, responses, params=params, order=lambda c: -c.ordinal)
+    logged = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in relay.log}
     by_bucket: dict[int, list[int]] = {}
     for o in sorted(logged, key=lambda o: logged[o][0]):
         by_bucket.setdefault(logged[o][1], []).append(o)
     assert list(by_bucket.values()) == [[11, 9, 7, 5, 3, 1], [12, 10, 8, 6, 4, 2]]
-    assert [_sent(s) for s in servers] == [with_release(r, logged[k + 1][0], warden.run_id, logged[k + 1][1])
+    assert [_sent(s) for s in servers] == [with_release(r, logged[k + 1][0], relay.run_id, logged[k + 1][1])
                                            for k, r in enumerate(requests)]
     record = cf.record_counts(out)
     assert record["phase_records"] == {"certified": 3, "of": 3}
@@ -682,7 +845,7 @@ def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ing
     assert [c["to_server"] for c in record["connections"]] == [*(len(_sent(s)) for s in servers), len(_sent(mark))]
     assert all(c["exact"] for c in record["connections"])
     by_ordinal = {o: n for n, (_, o) in enumerate(sorted((a, o) for o, (_, a) in logged.items()))}
-    assert [o for o in sorted(logged) if len(with_release(requests[o - 1], by_ordinal[o], warden.run_id, logged[o][1]))
+    assert [o for o in sorted(logged) if len(with_release(requests[o - 1], by_ordinal[o], relay.run_id, logged[o][1]))
             != len(_sent(servers[o - 1]))] == [2, 4, 10, 12]
     seen = _seen(tmp_path, [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark), b"")])
     got = cf.read([seen], *_given(), run=out)["compared"]

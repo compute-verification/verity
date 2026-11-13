@@ -232,6 +232,33 @@ def test_async_scheduling_commits_and_admits_what_sync_scheduling_does(tmp_path,
         assert [s for v, s, _, _ in sync.rounds if v == w["window"]] == list(range(w["steps"])) == list(range(w["pouw_h1"]["rounds"]))
 
 
+def test_a_window_that_holds_no_step_serves_the_next_burst_rather_than_closing_empty_at_the_request_cap(tmp_path):
+    """Under async scheduling the call that only returns a burst's last outputs runs no forward, so when the window's bound
+    fell on the burst's last forward that call opens a window that holds no step, live with the finished burst's requests.
+    The next burst serves in it: a window that holds no step counts no request against ``--window-requests``, so no
+    window closes empty between bursts, and async scheduling leaves at most one, at the stop."""
+    com = SimpleNamespace(_step_index=0, install=lambda: None)
+    com.reset = lambda: setattr(com, "_step_index", 0)
+    w = sc.CommitWindows(com, tmp_path, run_id="t", window_steps=2, request_cap=2)
+    closed: list[tuple[int, int, list[str]]] = []
+
+    def close() -> None:
+        closed.append((w.window, com._step_index, sorted(w.in_window)))
+        w.is_open = False
+
+    w.close = close
+    for live, forward in ((["a", "b"], 1), (["a", "b"], 1), (["a", "b"], 0)):    # two forwards, then the outputs only
+        w.before_step(live)
+        com._step_index += forward
+    w.idle()
+    assert closed == [(0, 2, ["a", "b"])] and w.is_open and com._step_index == 0, "the window the last call opened is empty"
+    for live in (["c", "d"], ["c", "d"]):
+        w.before_step(live)
+        com._step_index += 1
+    w.idle()
+    assert closed == [(0, 2, ["a", "b"]), (1, 2, ["c", "d"])], "each burst's window holds its 2 steps, none is empty"
+
+
 def test_the_gpu_comparison_holds_every_async_window_committed_with_syncs_roots():
     """`serve_async_commit_gpu.compare`, the H200 A/B's verdict over the two arms' windows: PASS only when every window of
     each arm passed and committed bytes and the two committed the same steps under equal roots, in order; a window that

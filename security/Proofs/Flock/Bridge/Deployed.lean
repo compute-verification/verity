@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Bridge.Defs
 public import Proofs.Flock.Claims.Sampling.Deployed
+public import Flock.PortRoots
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -52,8 +53,10 @@ function of the session's files and the game's rows, none a free parameter:
 * `rowDep`: an opening's row message, its row's bits (`SamplingDeploy.rowBits`) in its port's format (`rowMsg`):
   `sha512/row-seg/v1`'s outer message `Q(ℓ) ‖ d₀ ‖ …` at a segmented port, `sha512/row/v2`'s `P(ℓ) ‖ bytes` at a bit
   row, `sha512/row/v1`'s `rowPrefix (ℓ / 16) ‖ bytes` otherwise, as Flock's hm96 slot hashes that port's rows.
-* `portsOf`: the circuit file's ports, each with its root among the statement's roots, `nl` leaves, its name as its
-  frame-v3 domain and its own leaf schema (`schemaOf`: `Registered.portSchema`, as Flock frames the port's rows).
+* `domOf c pub q`: port `q`'s frame-v3 domain, the public file's published one (`frame_v3.domain_ids` at the port's
+  name, `PortRoots.idOf`), under which the verifier checks the port's published root (`HmRow.checkPublic`).
+* `portsOf`: the circuit file's ports, each with its root among the statement's roots, `nl` leaves, its published
+  domain and its own leaf schema (`schemaOf`: `Registered.portSchema`, as Flock frames the port's rows).
 
 `RowsOk c`: every port of `c` is a row the verifier reads: all `sha512/row/v1` rows, or each a `sha512/row/v2`
 or `sha512/row-seg/v1` row, `16 · words` bits each (`Layout.v1Ports`, `Layout.bitRows`; Flock's scope check
@@ -124,19 +127,19 @@ def pathOf (d : ℕ) (o : Opening Bool) : Msg := (o.data.drop saltLen).take (64 
 /-- An opening's row bit `k`: the `k`th byte after the salt and the path is `1`. -/
 def bitsOf (d : ℕ) (data : Msg) (k : ℕ) : Bool := (data.drop (saltLen + 64 * d))[k]? == some 1
 
-/-- A port's frame-v3 domain: its name in the circuit file. -/
-def domOf (c : Flock.Circuit) (q : ℕ) : ByteArray := ((c.ports[q]?.map (·.name)).getD "").toUTF8
+/-- A port's frame-v3 domain: the public file's `frame_v3.domain_ids` entry at its name (`PortRoots.idOf`). -/
+def domOf (c : Flock.Circuit) (pub : Flock.Public) (q : ℕ) : ByteArray := Flock.PortRoots.idOf c pub q
 
 /-- A port's leaf schema: `Registered.portSchema`'s, as Flock frames the port's rows (`HmRow.checkPublic`). -/
 def schemaOf (c : Flock.Circuit) (q : ℕ) : String :=
   (c.ports[q]?.map Flock.Registered.portSchema).getD Flock.HmRow.ROW_SCHEMA_V2
 
-/-- **The registered ports**: the circuit file's, each at its root among `roots`, with `nl` leaves, its domain and its
-leaf schema. -/
-def portsOf (c : Flock.Circuit) (nl : ℕ) (roots : List Msg) : Array Flock.Registered.Port :=
+/-- **The registered ports**: the circuit file's, each at its root among `roots`, with `nl` leaves, its published
+domain and its leaf schema. -/
+def portsOf (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) (roots : List Msg) : Array Flock.Registered.Port :=
   (Array.range c.ports.size).map fun q =>
     { name := (c.ports[q]?.map (·.name)).getD "", value := "", root := bytes (roots.getD q []), leaves := nl,
-      words := none, wordBits := 0, domain := domOf c q, readsRel := #[], schema := schemaOf c q }
+      words := none, wordBits := 0, domain := domOf c pub q, readsRel := #[], schema := schemaOf c q }
 
 /-- **Every port of the circuit file is a row the verifier reads**: all unsegmented `sha512/row/v1` rows
 (`Layout.v1Ports`), or each an unsegmented `sha512/row/v2` row or a `sha512/row-seg/v1` row (`Layout.bitRows`), of
@@ -185,15 +188,15 @@ def regLeafOf (c : Flock.Circuit) (pub : Flock.Public) (q u : ℕ) : ByteArray :
 /-- **The registration's frame-v3 roots**: per port, the root over its `nl` rows' tree leaves at its schema. -/
 def rootsOf (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : List Msg :=
   (List.range c.ports.size).map fun q =>
-    bs (Flock.FV3.root (domOf c q) ((Array.range nl).map fun u =>
-      Flock.Registered.leafAs (schemaOf c q) (domOf c q) u (regLeafOf c pub q u)) Sha512.hash)
+    bs (Flock.FV3.root (domOf c pub q) ((Array.range nl).map fun u =>
+      Flock.Registered.leafAs (schemaOf c q) (domOf c pub q) u (regLeafOf c pub q u)) Sha512.hash)
 
 /-- **The deployed trace commitment at a session's rows**: `SamplingDeploy.commit`'s form, at the layout above, each
 row in its port's format (`rowDep`). -/
 noncomputable def commitDep (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
-    (nl : ℕ) (roots : List Msg) : CommitmentScheme Bool :=
+    (pub : Flock.Public) (nl : ℕ) (roots : List Msg) : CommitmentScheme Bool :=
   pathCommit (atOf C rows) (hm96Leaf (rowDep C rows c (placeOf C rows) (bitsOf (Flock.log2ceil nl))) saltOf)
-    (pathOf (Flock.log2ceil nl)) (regPath (portsOf c nl roots)) fun _ _ _ => []
+    (pathOf (Flock.log2ceil nl)) (regPath (portsOf c pub nl roots)) fun _ _ _ => []
 
 /-- **An unsegmented port's row message places the row**: rows of one length with one message are one row. -/
 theorem rowMsg_inj {p : Flock.Port} (hp : p.segs.isSome = false) {b b' : List Bool} (hl : b.length = b'.length)
@@ -233,17 +236,18 @@ theorem rowDep_places (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option Ro
 /-- **`commitDep` binds, at every `H`**, at a circuit file with no segmented port: the hm96 leaf of a placing row binds
 the value, and the registered path check the leaf. -/
 theorem commitDep_binds (H : Msg → Msg) (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt)
-    (c : Flock.Circuit) (hseg : c.ports.all (fun p => !p.segs.isSome) = true) (nl : ℕ) (roots : List Msg) :
-    (commitDep C rows c nl roots).Binds H :=
+    (c : Flock.Circuit) (hseg : c.ports.all (fun p => !p.segs.isSome) = true) (pub : Flock.Public) (nl : ℕ)
+    (roots : List Msg) : (commitDep C rows c pub nl roots).Binds H :=
   pathCommit_binds (hm96Leaf_binds H (rowDep_places C rows c hseg _ _) _) (regPath_binds H _)
 
 /-- **A sampled verifier's code whose commitment is `commitDep`'s layout**: at a circuit file whose ports are all
 unsegmented row/v2 rows (`RowsV2`), the rows `SamplingDeploy.commit` hashes, every position reading the registered
 ports at the registration's roots whatever roots it is opened under (`ownAt`). -/
-def LayoutIs (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ)
-    (roots : List Msg) (cd : SamplingDeploy.Code) : Prop :=
+def LayoutIs (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+    (pub : Flock.Public) (nl : ℕ) (roots : List Msg) (cd : SamplingDeploy.Code) : Prop :=
   RowsV2 c ∧ cd.at_ = atOf C rows ∧ cd.place = placeOf C rows ∧ cd.bits = bitsOf (Flock.log2ceil nl) ∧
-    cd.salt = saltOf ∧ cd.π = pathOf (Flock.log2ceil nl) ∧ cd.own = portsOf c nl roots ∧ cd.ownAt = fun _ _ => cd.own
+    cd.salt = saltOf ∧ cd.π = pathOf (Flock.log2ceil nl) ∧ cd.own = portsOf c pub nl roots ∧
+    cd.ownAt = fun _ _ => cd.own
 
 open Classical in
 /-- **The evaluation's values as claims openings**: at each wire, its value in `C`'s evaluation on `xv`'s inputs, with

@@ -18,6 +18,7 @@ import pytest
 from verity.protocols.certifier.verifier import active, io_tie as IT, pacer, warden as device_module
 from verity.protocols.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.protocols.certifier.verifier.grid import Reason
+from verity.protocols.certifier.verifier.pacer import Report
 from verity.protocols.certifier.verifier.release import read_watermark, release_of, watermark_head, with_release
 from verity.protocols.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, PARAMETERS_TAG, REASONS,
                                                     REFUSED, WRITE_BACKLOG, Shim, Warden, WardenParams, audit, cell,
@@ -457,8 +458,25 @@ def test_the_network_certifiers_clock_is_the_hosts_raw_one_and_its_wait_is_again
     """Unless a caller injects them, the clock is the host's raw clock and each wait is against that clock. Here the
     raw clock is a count the test moves and each wait ends half its length early, then on its time: every clock
     read is of `CLOCK_MONOTONIC_RAW`, every wait is handed the network certifier's own clock, and every tick runs at
-    its boundary or after it, inside the slack."""
-    now, asked, waits = [-0.35], [], []
+    its boundary or after it, inside the slack. On that clock it is paced, and its pacer, here a stand-in with no
+    process, is started on the raw clock too."""
+    now, asked, waits, started = [-0.35], [], [], []
+
+    class Paced:
+        @classmethod
+        async def start(cls, links=None, *, backlog=0, clock="monotonic"):
+            started.append(clock)
+            return cls()
+
+        async def reports(self):
+            return
+            yield
+
+        async def close(self):
+            return 0
+
+        async def kill(self):
+            pass
 
     def read(clock_id):
         asked.append(clock_id)
@@ -470,9 +488,11 @@ def test_the_network_certifiers_clock_is_the_hosts_raw_one_and_its_wait_is_again
 
     monkeypatch.setattr(pacer.time, "clock_gettime", read)
     monkeypatch.setattr(device_module, "precise_sleep", short)
-    device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1)
+    monkeypatch.setattr(device_module, "Pacer", Paced)
+    device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=0.05)
     assert device.clock is pacer.raw_clock
     asyncio.run(device.run())
+    assert started == ["raw"]
     assert set(asked) == {pacer.time.CLOCK_MONOTONIC_RAW} and all(clock is device.clock for clock in waits)
     assert device.ticks == PARAMS.window and len(waits) >= 2 * PARAMS.window
     assert 0 <= min(device.lateness) and max(device.lateness) < device.slack
@@ -526,6 +546,35 @@ def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_
     assert [r.t for r in paced.releases] == live and all(r.written for r in paced.releases)
     with pytest.raises(ValueError, match="past the slack"):
         Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
+
+
+def test_an_unpaced_network_certifier_on_a_clock_of_the_hosts_is_refused():
+    """The network certifier's own clock is the host's raw one, so the rule that a device on the host's clock is paced
+    holds on it: with no `paced`, the default clock, the raw clock and the steered clock are each refused, and only an
+    injected clock runs unpaced."""
+    for host in ({}, *({"clock": clock} for clock in pacer.CLOCKS.values())):
+        with pytest.raises(ValueError, match="host's clock is paced"):
+            Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, **host)
+    assert pacer.raw_clock in pacer.CLOCKS.values() and len(pacer.CLOCKS) == 2
+    clock = VirtualClock(0.0)
+    assert Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep).paced is None
+
+
+def test_a_warden_on_the_hosts_clock_is_paced_and_a_release_unwritten_faults_every_grid():
+    """Only a warden on an injected clock writes each bucket on its loop: on the host's clock it must have `paced`.
+    A release the pacer reports on time and written faults nothing; one it reports unwritten, a connection's socket
+    not yet the pacer's so that its cells are on no wire, faults the three grids' window `monitor-unavailable`, as a
+    bucket it got late does."""
+    with pytest.raises(ValueError, match="host's clock is paced"):
+        Warden(PARAMS, Server([]).connect, origin=0.0, windows=1)
+    clock = VirtualClock(0.0)
+    warden = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+    grids = (warden.ingress, warden.egress, warden.fails)
+    warden._unreleased[0] = 2
+    warden._report(Report(0, -0.04, 0.001, None, True))
+    assert [g.faulted for g in grids] == [None] * 3
+    warden._report(Report(1, -0.04, 0.001, None, False))
+    assert [g.faulted for g in grids] == [Reason.MONITOR_UNAVAILABLE] * 3 and not warden._unreleased[0]
 
 
 def test_the_audit_refuses_a_record_whose_cells_are_not_the_schedules():
