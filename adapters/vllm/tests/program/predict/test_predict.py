@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 from verity.definitions.registry.tp_allreduce import settings_of
 
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
 from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import build as BUILD
@@ -57,7 +57,7 @@ def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
 def _row_phi(row: str, case: str, hf_home: Path, rank: int = 0) -> Phi:
     """A row of record's φ at `rank` as `score.phi_of` makes it, the checkpoint's config.json the package's byte copy of it
     (`hf_configs/<case>.config.json`)."""
-    w = json.loads((WORKLOADS / f"{row}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{row}.json").read_text())
     cp = Path(S.hf_config_path(str(hf_home), w["model"], RowEngine.of(w).revision))
     cp.parent.mkdir(parents=True, exist_ok=True)
     cp.write_bytes((HF_CONFIG_DIR / f"{case}.config.json").read_bytes())
@@ -283,7 +283,7 @@ def test_a_request_states_its_prompt_length_one_of_three_ways_and_one_that_state
 def test_a_row_that_pins_no_revision_names_no_snapshot_dir(tmp_path):
     """`score.phi_of` finds a row's config.json under `hf_home` by its checkpoint's revision.  A row whose engine block pins none
     names no dir there, which is `os.path.join`'s TypeError; given a `config` it is that config's φ, with no revision."""
-    w = json.loads((WORKLOADS / f"{DSV4}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
     bare = {**w, "engine": {k: v for k, v in w["engine"].items() if k != "revision"}}
     with pytest.raises(TypeError, match="NoneType"):
         S.phi_of({"row": DSV4, "workload": bare}, hf_home=str(tmp_path))
@@ -294,7 +294,7 @@ def test_a_row_that_pins_no_revision_names_no_snapshot_dir(tmp_path):
 
 def test_phi_of_opens_the_config_by_the_name_given():
     """`score.phi_of` hands ``config`` to `open` as it is given: the file's name in bytes is read as the same name in a str is."""
-    w = json.loads((WORKLOADS / f"{DSV4}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
     config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
     in_bytes: Any = os.fsencode(config)
     assert S.phi_of({"row": DSV4, "workload": w}, config=in_bytes).to_json() == S.phi_of({"row": DSV4, "workload": w}, config=config).to_json()
@@ -303,7 +303,7 @@ def test_phi_of_opens_the_config_by_the_name_given():
 def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
     """`score.phi_of` on a row whose declared manifest states no `requests`: φ's workload holds none, and the rest of φ is the
     row's as with them."""
-    w = json.loads((WORKLOADS / f"{DSV4}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{DSV4}.json").read_text())
     config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
     full = S.phi_of({"row": DSV4, "workload": w}, config=config)
     bare = S.phi_of({"row": DSV4, "workload": {k: v for k, v in w.items() if k != "requests"}}, config=config)
@@ -462,7 +462,7 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
     `predict compare --predicted` holds it to the trace's): the traced manifest is pinned with the Programs its header names, and a moved
     one names the manifest it leaves behind.  About 2 min."""
     pin = H200_INT8[row]
-    w = json.loads((WORKLOADS / f"{row}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{row}.json").read_text())
     phi = S.phi_of({"row": row, "workload": w}, config=str(pinned_hf_config(w["model"], RowEngine.of(w).revision)))
     assert sorted(phi.request_shapes()) == sorted(pin["requests"]), "the workload's request shapes are not its Build's"
     M, step = pin["step"]
