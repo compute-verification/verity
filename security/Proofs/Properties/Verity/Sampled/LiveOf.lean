@@ -9,6 +9,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
+public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 public import Proofs.Flock.Claims.ZK.MaskedTables
 
@@ -436,33 +437,36 @@ theorem y₀_of_setup (n : ℕ) {I : FlockSoundness.Discharge.Exec.Inputs} {D : 
   exact ⟨∅, _, ⟨y⟩⟩
 
 open FlockSoundness.Discharge.Composed (inputsJ) in
-/-- **The session's public file with no input ports**: at a circuit naming no public input port, the setup `verify
---zk` makes loads the public file with none (`setupHidden_drawnP`, at the circuit `setupHidden_c_of_parse` parses), to
-the population the committed files' circuit reads (`loadPublic_inOut`), with no two ports of one published domain
+/-- **The session's circuit names no public input port, and its public file loads with none**: the setup `verify --zk`
+makes without the verifier's public inputs refuses a circuit naming one (`checkOwn_none`), so its ports are the empty
+`{}` (`parse_empty`, at the circuit `setupHidden_c_of_parse` parses), and it loads the public file with none, to the
+population the committed files' circuit reads (`loadPublic_inOut`), with no two ports of one published domain
 (`v5Files_of_checks`). -/
 theorem pub_of_setup {I : FlockSoundness.Discharge.Exec.Inputs} {D : Flock.Desc} {pubO : Flock.Public} {n : ℕ}
     {d : Json} {st : Flock.Stmt} (hc1 : I.count = 1)
     (hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D)
-    (hpi : Flock.HmIn.parse D.unroll = .ok {})
     (hst : Flock.Stmt.setupHidden (inputsJ I 0).tags (inputsJ I 0).circuitFile (inputsJ I 0).publicFile
       (inputsJ I 0).coins (inputsJ I 0).tables (some d) (inputsJ I 0).partition (inputsJ I 0).program none = .ok st)
     (hpubO : Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile = .ok pubO)
     (hnO : pubO.n = n)
     (hports : Flock.PortRoots.checkOf (.ok D.unroll) (FlockSoundness.Discharge.ZkExec.zkTags I) I.publicFile = .ok ()) :
-    ∃ pub, Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll {} I.publicFile = .ok pub ∧
-      Flock.PortRoots.dupId D.unroll pub = false ∧ pub.n = n := by
+    Flock.HmIn.parse D.unroll = .ok {} ∧
+      ∃ pub, Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll {} I.publicFile = .ok pub ∧
+        Flock.PortRoots.dupId D.unroll pub = false ∧ pub.n = n := by
   have htJ : (inputsJ I 0).tags = FlockSoundness.Discharge.ZkExec.zkTags I := by
     show FlockSoundness.Discharge.Exec.tagsAt _ I.count 0 = _
     unfold FlockSoundness.Discharge.Exec.tagsAt
     exact ite_eq_left (by omega)
   rw [htJ] at hst
   have hc := FlockSoundness.Discharge.HiddenExec.setupHidden_c_of_parse (Flock.Desc.parse_flat hD) hst
-  obtain ⟨pi, pop, hpp, hlp, -⟩ := FlockSoundness.Discharge.Hidden.setupHidden_drawnP hst
-  rw [hc, hpi] at hpp
-  have hpi' : pi = {} := (Except.ok.inj hpp).symm
-  rw [hc, hpi'] at hlp
+  obtain ⟨pi, s⟩ := FlockSoundness.Discharge.Hidden.setupHidden_specP hst
+  obtain ⟨pop, hlp, hown, -⟩ := s.pub
+  have hpi : pi = {} :=
+    FlockSoundness.Discharge.Hidden.parse_empty s.ports (FlockSoundness.Discharge.Hidden.checkOwn_none hown)
+  have hpp := s.ports
+  rw [hc, hpi] at hpp hlp
   have hn : pop.n = n := (Flock.Bridge.loadPublic_inOut hlp hpubO).1.symm.trans hnO
-  exact ⟨pop, hlp, (Flock.Bridge.v5Files_of_checks hlp hn hports).1, hn⟩
+  exact ⟨hpp, pop, hlp, (Flock.Bridge.v5Files_of_checks hlp hn hports).1, hn⟩
 
 /-! ## An accepted play's session -/
 
@@ -634,10 +638,6 @@ theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {o
 
 /-! ## The session at an accepted play -/
 
-/-- **The circuit file names no public input port**, under any tags and lookup tables it parses at. -/
-def NoPublicInputs (cf : ByteArray) : Prop :=
-  ∀ tags tables D, Flock.Desc.parse tags cf tables = .ok D → Flock.HmIn.parse D.unroll = .ok {}
-
 /-- **The registration samples by a subset design**: at v2's parameters in `θ`, every descriptor of the verifier's
 program reads a subset sampling design off the verifier's query, law and work table (`designAt`), at every
 population. -/
@@ -660,22 +660,21 @@ structure SessionBound.Ok (b : SessionBound) : Prop where
 open FlockSoundness.Discharge.Composed (inputsJ nTab) in
 /-- **Wherever v2 accepts a play, a session `LiveSpec` holds of exists**: on the committed files `F` at the parameters
 `θ` the sampled verdict accepts, the inputs, descriptor, public file and design v2's session reads (`session_parts`),
-the reference setup at the record's sample (`y₀_of_setup`), the public file with no input ports (`pub_of_setup`), the
-deployed sample's bytes (`Live.deployed`) and the bound's parameters make a `Live`, where the circuit names no public
-input port, the registration samples by a subset design and the bound's parameters are in range. -/
+the reference setup at the record's sample (`y₀_of_setup`), the circuit with no public input port and the public file
+with none (`pub_of_setup`), the deployed sample's bytes (`Live.deployed`) and the bound's parameters make a `Live`, where
+the registration samples by a subset design and the bound's parameters are in range. -/
 theorem liveSpec_of_accepted {V : Vocab d α} {b : SessionBound} (hb : b.Ok) {θ : ByteArray} (hD : DigestsAt V θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
-    (hread : V.read θ F = readOf θ F) (hpi : NoPublicInputs (V.circuitFile θ F)) (hsub : SubsetDesign θ)
+    (hread : V.read θ F = readOf θ F) (hsub : SubsetDesign θ)
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
     (ht : TablesSent o.sent) : ∃ A, LiveSpec V b θ F A := by
   obtain ⟨p, n, I, D, pubO, desc, hpa, htags, hcount, hwork, hstrat, hclos, hcirc, hpubf, htab, hpart, hprog, htyp,
     hTags, hDp, hU, hpubO, hscope, hports, hnO, hdesc, hpop, hlaw, recS, units, st, hrd, hsize, hst, hshape⟩ :=
     session_parts hD hP hreach hv ht
-  have hpiD : Flock.HmIn.parse D.unroll = .ok {} := hpi _ _ D (by rw [hcirc] at hDp; exact hDp)
   have hst2 := hst
   rw [(exec_recordDraw recS).trans hrd.2] at hst2
-  obtain ⟨pub, hpub, hdup, hn⟩ := pub_of_setup hcount hDp hpiD hst2 hpubO hnO hports
+  obtain ⟨hpiD, pub, hpub, hdup, hn⟩ := pub_of_setup hcount hDp hst2 hpubO hnO hports
   obtain ⟨S₀, d₀, hy⟩ := y₀_of_setup n hcount htyp hDp hrd hsize hst hshape
   have hn1 : nTab I = 1 := by
     unfold nTab
@@ -696,11 +695,11 @@ there, so SPOT's published δ there is the session's, not `⊤`. -/
 theorem liveOf_ne_none {V : Vocab d α} {b : SessionBound} (hb : b.Ok) {θ : ByteArray} (hD : DigestsAt V θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
-    (hread : V.read θ F = readOf θ F) (hpi : NoPublicInputs (V.circuitFile θ F)) (hsub : SubsetDesign θ)
+    (hread : V.read θ F = readOf θ F) (hsub : SubsetDesign θ)
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
     (ht : TablesSent o.sent) : liveOf V b θ F ≠ none := by
   unfold liveOf
-  rw [dif_pos (liveSpec_of_accepted hb hD hc hp hread hpi hsub hP hreach hv ht)]
+  rw [dif_pos (liveSpec_of_accepted hb hD hc hp hread hsub hP hreach hv ht)]
   exact Option.some_ne_none _
 
 end Verity.Sampled
