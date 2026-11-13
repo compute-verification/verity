@@ -8,7 +8,7 @@
 
 A word unit's body is primitive Calls and batches of them (`dead_free.live_replay`), so its σ (`boolean.sigma_lift`) is the same
 Calls over the bits, each of the Boolean version of its primitive. The MUFU operations among them are their gates
-(`MufuEx2Ftz_v2`, `DivFullRcp_v2`; `verity.definitions.ops.boolean.mufu`), where the word unit reads a pinned table: a unit on
+(`MufuEx2Ftz_v2`, `DivFullRcp_v2`; `verity.circuits.ops.boolean.mufu`), where the word unit reads a pinned table: a unit on
 bits reads none, so a statement holds it with no lookup slot and its unit returns its own outputs.
 
 Four of `topp_word_gates`' primitives get their Boolean versions here (`BitXor_v2`, `U32Xor_v2`, `SelectBit_v2`,
@@ -20,7 +20,7 @@ from __future__ import annotations
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, OR, ZERO, and_reduce, const_bits, mux, or_reduce, sub
 from verity.circuits.boolean.trace import definition
-from verity.definitions.silicon import fp
+from verity.circuits.silicon import fp
 from verity.circuits.types import Array
 from verity.definitions.boolean import sigma_lift
 from verity.definitions.registry import gumbel_boolean  # noqa: F401  (the log's and the lane's Boolean versions, which σ reads)

@@ -35,7 +35,7 @@ import pytest
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import bind
-from verity.definitions.private_circuits import universal as U
+from verity.circuits.private_circuits import universal as U
 
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
