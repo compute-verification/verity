@@ -8,7 +8,9 @@
 # store_private.agent_watch_status as AGENT_WATCH_PG_URL, the store indexer's URL, read from store-index.env with
 # store_index.sh's sed (its URL has `&`); without that file the watch publishes nothing.
 # Workers (Task subagents) come from the same notes clone's recent notes and $DIR/workers.d/*.json.
-# Pushes, for the silent rule, are read with `git ls-remote` over https with verity-drive's App token (gh_app_token.sh), as fixtures_export.sh fetches. The nodes
+# Pushes, for the silent rule, are read with `git ls-remote` over https with verity-drive's App token (gh_app_token.sh), as fixtures_export.sh fetches.
+# The remote's open PRs, whose bodies name the agents a push to their branch counts for, are read from GitHub with relay.env's
+# GH_TOKEN (--gh-env): the watch reads the file at each read, and the token never enters the loop's environment. The nodes
 # whose ended runs ring their sender are $DIR/nodes.json (a copy of agent_watch_nodes.json, read each sweep), their hosts the notes
 # clone's machines.d.
 # While $DIR/wake exists the watch starts a run on a coordinator ready to wake (--wake); remove the file to go back to recording.
@@ -38,7 +40,7 @@ while :; do
      exec python3.12 /data/infra/agent_watch.py loop --log "$DIR/events.jsonl" \
       --registry /data/infra/fixtures-export-repo/.agents/skills/using-slack/registry.json \
       --routes $NOTES/routes.d --notes $NOTES --git-remote git@github.com:compute-verification/verity.git \
-      --nodes "$DIR/nodes.json" $([ -f "$DIR/wake" ] && echo --wake)) >> "$LOG" 2>&1
+      --nodes "$DIR/nodes.json" --gh-env /root/.config/verity/relay.env $([ -f "$DIR/wake" ] && echo --wake)) >> "$LOG" 2>&1
     echo "$(date -u +%FT%TZ) watch exited rc=$?" >> "$LOG"
   elif [ -z "$said" ]; then
     echo "$(date -u +%FT%TZ) no $DIR/cursor.env yet: waiting" >> "$LOG"; said=1

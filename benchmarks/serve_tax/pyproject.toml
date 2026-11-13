@@ -8,13 +8,24 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace and release order, and
-# the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings
+# the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings;
+# an arm names another benchmark's vLLM plugin by its file in this tree, which the driver's test checks is there; the
+# serving cost is the benchmark kit's paired ratio, and its result.json the kit's writer's
 inputs = [
+    "benchmarks/dsa_topk/dsa_topk.py",
+    "benchmarks/harness/verity_bench/__init__.py",
+    "benchmarks/harness/verity_bench/nsys.py",
+    "benchmarks/harness/verity_bench/overhead.py",
+    # overhead.paired calls the kit's, which reads its settings
+    "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/settings.py",
+    "benchmarks/harness/verity_bench/overhead_node.py",
     "verity/configuration/config/verity_config",
     "verity/__init__.py",
     "verity/settings.py",
     "adapters/vllm/verity_vllm/__init__.py",
     "adapters/vllm/verity_vllm/engine/__init__.py",
+    "adapters/vllm/verity_vllm/engine/handle.py",
     "adapters/vllm/verity_vllm/engine/hooks.py",
     "adapters/vllm/verity_vllm/engine/step_trace.py",
     "adapters/vllm/verity_vllm/pipeline/__init__.py",

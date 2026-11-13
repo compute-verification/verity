@@ -16,7 +16,7 @@ from verity_vllm.pipeline import timeline as T
 from verity_vllm.pipeline.tp import phases as PH
 from verity_vllm.pipeline.tp import warmup as WU
 
-#: `commit.main`'s reason for a fresh engine outside a hot worker
+#: `commit.main`'s reason for a fresh engine
 FRESH = "fresh process (one commit_delta per Commit stage)"
 
 

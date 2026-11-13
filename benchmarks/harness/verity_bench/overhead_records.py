@@ -20,7 +20,6 @@ figure and says why; a reader of γ outside this package (the protocol table, th
 from __future__ import annotations
 
 import json
-import math
 import shlex
 import shutil
 import subprocess
@@ -30,7 +29,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_bench import jobs, settings
+from verity_bench import jobs, kit, settings
 from verity_bench import overhead as O
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, records
 
@@ -59,13 +58,6 @@ def _execute(argv: Sequence[str], root: Path) -> int:
     return subprocess.run(list(argv), cwd=root, check=False).returncode
 
 
-def gpu_lease(minutes: float) -> list[str]:
-    """The wait for one GPU of the node, held for the run's bound. The node job takes it itself, since `research run --gpus`
-    is refused on a node whose GPUs gpu-lease doesn't hand out (vy-dc-h200)."""
-
-    return ["gpu-lease", "1", "--wait", "--max-min", str(math.ceil(minutes)), "--"]
-
-
 def launch_argv(root: Path, node: str, minutes: float, job: Sequence[str], sends: Sequence[Path] = ()) -> list[str]:
     """The node side as a `research run` on one GPU of `node`, from this checkout."""
 
@@ -73,7 +65,7 @@ def launch_argv(root: Path, node: str, minutes: float, job: Sequence[str], sends
     return ["research", "run", "--on", node, "--project", "verity", "--campaign", "overhead",
             "--source", str(root), "--cwd", "source", "--timeout", f"{minutes:g}m", "--require-result",
             *[x for f in sends for x in ("--send", str(f))], *[x for e in env for x in ("--env", e)],
-            "--", *gpu_lease(minutes), "bash", NODE_JOB, *job]
+            "--", *kit.lease(1, minutes), "bash", NODE_JOB, *job]
 
 
 def launch_points(root: Path, node: str, card: str, model: str, precision: str, minutes: float | None = None,

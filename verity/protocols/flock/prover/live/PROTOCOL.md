@@ -865,7 +865,16 @@ auditor's sample (or `null`) is answered `ok N` and the `Hello`, or `refused WHY
 
 The session itself goes through Lean: one `flock-firewall session` process (`Flock.Firewall.Session`,
 `firewall::LeanSession`) per verifier address and table count, on the same statement arguments, listens on loopback and
-holds the auditor's connection for every session the prover opens to it. No byte the prover sends reaches the auditor:
+holds the auditor's connection for every session the prover opens to it. A `prove --stream` process, whose sessions are of
+different statements, starts its tap before its first sample, as `prove` does, and one loop for each session instead, on
+the circuit and the tables the session's line names: the loop starts at the session's turn, once the session before it
+has its verdict, and ends once its own verdict is emitted, so the stream proves one session at a time (it refuses
+`FC_VERIFY_AHEAD` above 0, and no session's front runs ahead). The statement's name and the `Hello` flags are the
+process's for every session, so one stream serves sessions of one partition and one program. The stream itself does not
+check that: a line has no field for them. A session whose circuit binds another partition or program is refused by its own
+Lean loop when its statement is set up (`HmRow.checkPartition`). A line the reader refuses ends the process at once, under
+the session then being proved, which gets no verdict. A session left without a verdict is failed and never proved again,
+since a second session for it has new coins. No byte the prover sends reaches the auditor:
 every frame that leaves is the loop's own encoding of what it decided (`Session.roundFrame`, `Session.commitFrame`,
 `Session.State.wire`). `Register` and `Finish` leave as their tags, a `Link` as zeros at the session's link points, an
 `Open` as its rep stream's at the stream's domain, a `Round` as the schedule's stream and count around the frame's release
@@ -1201,7 +1210,7 @@ connection). The auditor sees every stop:
   `firewall.json`, which `rec_live` writes beside each inner session's record, names the recursive session and nothing
   else.
 
-**A stop ends the recursive session** (`verity_flock.firewall`). `rec_live --firewall DIR --parts L0,…,alg` opens a
+**A stop ends the recursive session** (`verity_flock.firewall`). `rec_live --firewall DIR --parts L0,…,alg --budget b` opens a
 recursive session for each inner session it serves, with its V* statements in their order, public and fixed from K (L0–L6
 and the algebra at K = 4096), recorded in the `open` event (`firewall.json`, beside the session's record, names it), and
 records its finish or its stop. Every outer session reaches the challenger through the ZK server's relay (`python -m
@@ -1210,7 +1219,8 @@ verity_flock.firewall relay --state DIR --session ID --part NAME --to SERVE`, be
 and only for the recursive session's next statement not yet released, once. A request for any other statement (a later
 one, or a released one again) is the recursive session's stop at that next statement, never opened: a statement the worker
 skips ends the recursive session where it stands, and no statement is served twice. The first stop, inner or outer, is the
-recursive session's one failure (`stop`, recorded once). After it, and after the last statement's release, the relay
+recursive session's one failure (`stop`, recorded once, and only of a recursive session opened, so that each stop counts
+against its stream). After it, and after the last statement's release, the relay
 refuses every V* statement of that recursive session before anything reaches the challenger: the worker's requests are
 answered `FIREWALL-REFUSED: recursive session …`, its `Finish` with a verdict that does not accept, and the record shows
 `refused`, which is not a failure (the challenger sees nothing of it). So no outer proof of a stopped recursive session is
@@ -1242,7 +1252,7 @@ the proofs to (null on a stop) and `go` or `stop`, by which a run times its wind
 Python's record and to the cases frozen from the Rust release side the loop replaced (`tests/fixtures/`). Every stop the
 loop makes, and a fault of its own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own
 verdict; a prover killed while its session holds the slot is that session's stop, which the loop records, or, where the
-loop ended with it, the next session to take the slot. A session cut before its first request other than
+loop ended with it, the next session to take the slot, if its recursive session was opened. A session cut before its first request other than
 `Ping` records nothing, and the statement stays next: no message of it has reached the challenger. `flock-circuit` proves
 one session (`--warm 0 --runs 1`: each statement is served once), refuses `FC_VERIFY_AHEAD` (the slot is held until each
 session's verdict), and reports the outcome the loop recorded. `verity_flock.firewall` stays as the inner side
@@ -1279,7 +1289,7 @@ session at K = 4096 (2 reps a session): the inner session's 286 messages (139 ro
 | ends the recursive session, the statements and their order left to the worker (a ZK server that only ends it at its first stop) | `log₂((M_inner + 1) + 2ⁿ + 2ⁿ⁻¹ Σ_outer M_p)` for n outer statements, plus the order's `log₂ n!` | 18.00 bits (`log₂ 261663`), plus up to 15.30 (`log₂ 8!`) |
 | ends its own session only (each V* statement against its own `serve`, no relay) | `Σ_p log₂(s_p + 2)`, `s_p = M_p` stops inner and `2 M_p` outer | 80.1 bits (72.1 = `Σ_p log₂(M_p + 1)` without the outer's `Finish` bit and the never-opened sessions) |
 
-The first row holds wherever the inner phase runs `rec_live --firewall --parts` and the outer phase runs through the
+The first row holds wherever the inner phase runs `rec_live --firewall --parts --budget` and the outer phase runs through the
 ZK server (`flock-circuit prove --firewall-state`, or the tests' relay; `tests/test_firewall_release.py` and
 `verity/protocols/recursion/verifier/firewall/tests`, a rule a test). The rules as `admit` and `Decision.after` run them are proved
 properties (`Properties.Firewall`): only the next statement not yet released is admitted, and only before any stop; a
@@ -1294,22 +1304,38 @@ served. `85-rec-reprice.sh` runs neither ZK server: it proves each V* statement 
 the third row's.
 
 **A stream stops at its failure budget.** `rec_live --firewall DIR --budget b` opens each recursive session on its stream
-with the failure budget b, the same at every open of the stream (`firewall.open` refuses another). A failure is a recursive
+with the failure budget b, a public parameter of the deployment and at least 1 (`firewall.open` and Lean's `openSession`
+refuse a lesser one, at which every open would be refused), the same at every open of the stream (`firewall.open` refuses
+another). `rec_live` refuses a ZK server without a budget, or with one below 1, before it listens: a stream without a
+budget bounds none of its recursive sessions. A failure is a recursive
 session's stop (a missed time and a statement never opened included), a refusal of a recursive session that had
 neither stopped nor released its last statement, or a registration a statement of the stream passed over (rule 5, §10.2),
 on a stream that had not stopped; at the b-th, the ZK server refuses every
 outer session of the stream and every open, and `rec_live` closes the next connection before anything is served. A
-recursive session the worker abandons, asking for no statement after some release, ends where it stands for the
-challenger (its next proof never comes, `late`), but the ZK server records no stop until a request comes, so its own count
-misses it; the challenger's stream counts it. b is the challenger's stream's `budget` (`Stream(budget=...)`,
+recursive session is unended while it has neither stopped nor released its last statement, and the ZK server refuses an
+open while the stream's unended recursive sessions and its failures together reach b, so at most b of a stream's recursive
+sessions ever have a statement not released: each is unended, or stopped and so a failure, since a stop is recorded only
+of a recursive session opened (`card_unrel_le_budget`, `Proofs.Flock.Recursive.StopCountBudget`, at every order of the
+record's ops `openSession`, `finish`, `stop`, `release`, `slot`, `admit` and `wait`, and `card_unreleased_le_budget` at
+every run of `StopCount.run`; rule 5's `register` and `admitReads` are not yet among the ops the proof runs: they open
+nothing, and their stops and skips are failures like any other). A recursive session the worker
+abandons, asking for no statement after some release, ends where it stands for the challenger (its next proof never
+comes, `late`); the ZK server records no stop until a request comes, but the session stays unended and holds one of the
+b. b is the challenger's stream's `budget` (`Stream(budget=...)`,
 `verity/protocols/spot/verifier/service.py`, bound into the stream's digest), and the two must agree in three
 places: the same b, the same stream (one ZK server stream a challenger stream), and one recursive session a proof session
 of the challenger's: one registration's, or the consecutive registrations one `Stream.session` covers (at most the stream's
 `rounds`, at most 4). So each ZK server failure but a skip is a `reject` or `late` there for each round the session
 covers, and a skip, which the challenger never sees, only brings the ZK server's end sooner: the challenger's count is
 never below the ZK server's stops and refusals, and it holds at most `budget` minus its failures registrations open, so
-neither ends past b. A stop shows the challenger a cut or a missing proof, which is `late` or
-`reject`; a session the ZK server refuses after its stop sends nothing, and is no further failure on either side.
+neither ends past b. An honest stream, which passes over no registration, is never refused an open: each of its unended
+recursive sessions covers a registration still open, since the relay releases a session's last statement before the ZK
+server delivers the session and the challenger closes its rounds, so at an open fewer than min(`rounds`, b) are unended
+(`test_an_honest_stream_is_never_refused_an_open`, in Lean and Python, at `rounds` 1 to 4 and b 1 to 4). b is how many
+failures stop the stream and, at min(`rounds`, b), how many of an honest stream's recursive sessions are unended at once.
+A stop shows the challenger a cut or a missing
+proof, which is `late` or `reject`; a session the ZK server refuses after its stop sends nothing, and is no further failure
+on either side.
 
 **Proofs leave at public times.** `rec_live --parts L0,...,alg --release-windows-ms w0,...,w7` gives each recursive
 session a release schedule, recorded at its open: `start_ms`, the time its connection was accepted, and one public window
@@ -1343,12 +1369,12 @@ record. The registrations' part is
 `Verity.Guarantees.RegisteredStreamLeakage`'s; the rest is counted here. The figures below are a stream with no
 registrations (r = 0). A refusal of the outer send check is one symbol: it stops its session at
 the session's `Finish`, after every round of the schedule (§10.1), so a stream whose failures are all the ZK server's reveals
-`log₂ Σ_{i≤b} C(n, i)` bits (35.3 at n = 1000, b = 4), and each session one bit. Any other failure is not one symbol today:
-the challenger sees where its session was cut, inner or outer (a cut, crash or hang of the worker's, the inner phase's
-refusals, a missed time), so `q_j ≤ 1 + Σ_p (M_p + 1) = 2336` at K = 4096, the first row's 11.19 bits, and the bound that
-holds for those is `log₂ Σ_{i≤b} C(n, i) + 11.19 b` bits (for n = 1000 and b = 4: 35.3 + 44.8 = 80.0 bits). An outer
-session is interactive: the challenger answers each message with its coins, so every message before a cut has reached it,
-and so has where the cut fell; the ZK server takes the cut's place out only for the stops it makes itself, by releasing
+`log₂ Σ_{i≤b} C(n, i)` bits (at n = 1000: 9.97 at b = 1, 35.3 at b = 4), and each session one bit. Any other failure
+is not one symbol today: the challenger sees where its session was cut, inner or outer (a cut, crash or hang of the
+worker's, the inner phase's refusals, a missed time), so `q_j ≤ 1 + Σ_p (M_p + 1) = 2336` at K = 4096, the first row's
+11.19 bits, and the bound that holds for those is `log₂ Σ_{i≤b} C(n, i) + 11.19 b` bits (for n = 1000: 9.97 + 11.19 =
+21.2 bits at b = 1, 35.3 + 44.8 = 80.0 at b = 4). An outer session is interactive: the challenger answers each message
+with its coins, so every message before a cut has reached it, and so has where the cut fell; the ZK server takes the cut's place out only for the stops it makes itself, by releasing
 the schedule in their place. Not counted in the bound: timing
 inside a session. The release time fixes when each outer session's proofs and `Finish` leave, not the pace of its rounds
 before them, which reach `serve` as the prover makes them, nor when a stop's cut comes (a missed time's comes when the late
@@ -1370,5 +1396,5 @@ stopped recursive session. The Python relay reports such a fault as its connecti
 **Retries.** Every stop is recorded and counted, in both phases, so the auditor knows how many times a recursive session was
 run, and each run it allows reveals its own ending: `r` stopped runs before an accepted one reveal at most `r + 1` times the
 row's bound. The stream's budget bounds them: a stream has at most b failed recursive sessions before it stops, whoever
-asks for the next run, so the bound over the stream counts every retry. The auditor chooses b. With b = 1, a stream whose
-ZK server stops once runs nothing more.
+asks for the next run, so the bound over the stream counts every retry, and a stream whose ZK server stops b times runs
+nothing more. b is a public parameter of the deployment, so the bound is quoted at the deployed b.

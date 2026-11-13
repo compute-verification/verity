@@ -1,6 +1,7 @@
 # The interface every core protocol implements: its parameters, commitment and evidence read from canonical bytes, one
-# check, and an outcome (verdict, public outputs, profile) written as canonical JSON. Each protocol's package requires
-# this one and C-Flock's verifier (for its canonical JSON, bytes and hashes); none needs Mathlib.
+# check, and an outcome (verdict, public outputs, profile) written as canonical JSON. It requires the base package
+# (`core_base`: canonical JSON, bytes and hashes) and nothing else. Each protocol's package requires this one; none needs
+# Mathlib.
 name = "core_protocol"
 defaultTargets = ["CoreProtocol", "core-protocol-example", "core-registration"]
 
@@ -10,8 +11,8 @@ relaxedAutoImplicit = false
 backward.proofsInPublic = true
 
 [[require]]
-name = "flock_verifier"
-path = "../flock/verifier"
+name = "core_base"
+path = "../../circuits/base"
 
 [[lean_lib]]
 name = "CoreProtocol"

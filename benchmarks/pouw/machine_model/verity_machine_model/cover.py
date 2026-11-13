@@ -1,10 +1,10 @@
 """The coverage table (data/cover/): the evidence for the envelope's coverage premise, that every instruction a
-card executes is dominated by an envelope op (envelope.toml: `Accel.Op`, its pipes, formats and card numbers, and the
-entries it proposes) at no fewer units of the same resource, one row per opcode (rows.toml) on the H200
-(sm_90) and the RTX PRO 6000 (sm_120).
+card executes is dominated by an envelope op (envelope.toml: `Accel.Op`, its pipes and formats, and the entries it
+proposes; each card's numbers are its card file's, `verity/hardware/cards/`) at no fewer units of the same resource,
+one row per opcode (rows.toml) on the H200 (sm_90) and the RTX PRO 6000 (sm_120).
 
-An opcode a card lists is in NVIDIA's family table (CUDA Binary Utilities 12.9 §4.3/§4.4 and CUDA 13's, in
-benchmarks/pouw/sass_census/data/), in the SASS corpus of the CUDA 13 libraries (corpus.json), or both; a census kind is
+An opcode a card lists is in NVIDIA's family table (CUDA Binary Utilities 12.9 §4.3/§4.4, bu_12_9.json, and CUDA 13's,
+sass_isa_tables.json), in the SASS corpus of the CUDA 13 libraries (corpus.json), or both; a census kind is
 one the machine model's census measured (data/census/*.csv for sm_120, data/devices/sm_90/census*). `problems` lists
 every way the table fails that: an opcode, a form or a kind with no row; a row naming an op, pipe, format, store or θ key
 that doesn't exist; a lane or collective reading or writing more words than its op allows; and a covered or coarse row
@@ -21,12 +21,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from verity_machine_model import theta as T
-from verity_machine_model.model import DATA, device, kind_lists
+from verity_machine_model.model import DATA, card, device, kind_lists
 
 COVER = DATA / "cover"
-TABLES = Path(__file__).resolve().parents[2] / "sass_census" / "data"
-#: corpus.json and the ISA tables are in fixtures/artifacts.json and gitignored; this brings them into a checkout
-FETCH = "uv run research data fetch-fixtures benchmarks/pouw/machine_model/data/cover benchmarks/pouw/sass_census/data"
+#: corpus.json and the two family tables are in fixtures/artifacts.json and gitignored; this brings them into a checkout
+FETCH = "uv run research data fetch-fixtures benchmarks/pouw/machine_model/data/cover"
 DEVICES = ("sm_90", "sm_120")
 FAMILY = {"sm_90": "hopper", "sm_120": "blackwell"}
 MARKS = ("covered", "coarse", "hole", "absent")
@@ -108,13 +107,32 @@ def fetched(p: Path) -> dict:
     return json.loads(p.read_text())
 
 
-def load(cover: Path = COVER, tables: Path = TABLES) -> Cover:
+def _numbers(dev: str, proposed: dict) -> dict:
+    """A device's numbers: its card file's (the SMs, clock.sm, every rate, memory.bandwidth in words a second and every
+    format's weight), and the envelope's proposed rates and weights, none of which the card file may hold."""
+    from verity.hardware.cards import number, rate   # here: only a reader of the card needs verity
+
+    def plain(x):
+        return int(x) if x.denominator == 1 else float(x)
+
+    c = card(device(dev))
+    rho, weight = ({k: plain(number(e)) for k, e in c[t].items()} for t in ("rate", "weight"))
+    extra_rho, extra_weight = proposed.get("proposed_rho", {}), proposed.get("proposed_weight", {})
+    if held := sorted({*rho} & {*extra_rho} | {*weight} & {*extra_weight}):
+        raise SystemExit(f"envelope.toml [device.{dev}] proposes {', '.join(held)}, which {c['sku']}.toml now holds; "
+                         f"delete the proposed entry")
+    return {"sms": plain(number(c["sm"]["count"])), "clock_mhz": plain(number(c["clock"]["sm"])), "rho": rho,
+            "dram": float(rate(c, "dram")), "proposed_rho": extra_rho, "weight": weight | extra_weight}
+
+
+def load(cover: Path = COVER) -> Cover:
     env = tomllib.loads((cover / "envelope.toml").read_text())
+    env["device"] = {dev: _numbers(dev, env["device"][dev]) for dev in DEVICES}
     data = tomllib.loads((cover / "rows.toml").read_text())
     rows = [Row(i, tuple(r["ops"]), tuple(r.get("devices", DEVICES)), tuple(r.get("forms", ())), r["mark"],
                 r["envelope"], r) for i, r in enumerate(data["row"])]
-    bu = fetched(tables / "bu_12_9.json")["tables"]
-    c13 = fetched(tables / "sass_isa_tables.json")["tables"]
+    bu = fetched(cover / "bu_12_9.json")["tables"]
+    c13 = fetched(cover / "sass_isa_tables.json")["tables"]
     corpus = fetched(cover / "corpus.json")["opcodes"]
     opcodes: dict[str, dict[str, set[str]]] = {}
     for dev in DEVICES:

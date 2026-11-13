@@ -69,6 +69,7 @@ untraced = [
     "tests/test_ring_switch.py",
     "tests/test_sha512_leaves.py",
     "tests/test_stage_typed.py",
+    "tests/test_stream_zk_server.py",
     "tests/test_typed_statement.py",
     "tests/test_witness_host.py", "tests/test_zc_round1.py", "tests/test_zerocheck_fused.py",
 ]
@@ -102,8 +103,8 @@ inputs = [
     # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/protocols/flock/prover/live/PROTOCOL.md",
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
-    # lock (its Flock.Firewall.Honest is C-Flock's, which the flock-firewall artifact keys)
-    "verity/difftest/python/verity_difftest", "verity/difftest/lean",
+    # lock, the release side's (its Flock.Firewall.Honest is C-Flock's, which the flock-firewall artifact keys)
+    "verity/difftest/python/verity_difftest", "verity/difftest/lean", "verity/protocols/recursion/verifier/firewall",
           "verity/__init__.py", "verity/commitments/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py"]
 parallel = true
 # an xdist worker peaked at 15.6 GB (38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this
@@ -135,7 +136,25 @@ paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols
 tests = ["tests/test_challenger_audit.py"]
 # `lake build sampled-proofs-difftest`: its package and those it requires by path
 paths = [
+    "verity/circuits/base",
+    "verity/circuits/lean",
+    "verity/commitments/lean",
     "verity/commitments/lms/lean",
+    "verity/protocols/interface",
+    "verity/protocols/flock/verifier",
+    "verity/protocols/spot/verifier/lean",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_stream_zk_server.py"]
+# the challenger each verifier is on (`pod/challenger.sh` starts it), and `lake build` of its Lean and its audit's and
+# of the Lean verifier's two executables: their packages and those they require by path
+paths = [
+    "verity/circuits/base",
+    "verity/circuits/lean",
+    "verity/commitments/lean",
+    "verity/commitments/lms/lean",
+    "verity/composite/device/live_challenger",
     "verity/protocols/interface",
     "verity/protocols/flock/verifier",
     "verity/protocols/spot/verifier/lean",
@@ -244,7 +263,7 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_randomness_spec.py"]
-paths = ["verity/protocols/flock/verifier/Flock/Draw.lean", "verity/protocols/flock/verifier/Flock/Hash.lean"]
+paths = ["verity/commitments/lean/Commitments/Draw.lean", "verity/circuits/base/Base/Hash.lean"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_rec_circuits.py"]

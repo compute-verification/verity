@@ -1,7 +1,7 @@
 """`verity bench overhead`'s node side: the operating points' sweep and a scheme's timed run, each `bench.py` runs of the
 PoUW harness (`benchmarks/pouw/harness`) on the one GPU the run's lease holds. `overhead_node.sh` runs it in the node's
 Python with torch and vLLM, under the `research run` that `overhead_records` launches; this side writes `$OUT` and the run's
-`result.json`, and the store side reads them.
+`result.json` (its measurements through the kit's writer, under the kit's host stamp), and the store side reads them.
 
     python -m verity_bench.overhead_node points --card h200 --uuid GPU-... --out DIR --run-dir DIR --run-id RUN
     python -m verity_bench.overhead_node run --card h200 --scheme pearl-plus --points FILE --point C|L|all \\
@@ -36,7 +36,7 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from verity_bench import nsys
+from verity_bench import kit, nsys
 from verity_bench import overhead as O
 
 HARNESS = Path("benchmarks/pouw/harness")
@@ -53,7 +53,6 @@ POINTS_BENCH = ("--methods", "graph", "--decode-method", "independent")
 RUN_BENCH = ("--methods", "graph", "burst", "--decode-method", "independent", "--traced", "--twins")
 #: the cubin the run was sent (`run --cubin ART`), which the scheme's arm loads and lists in its build record's `binaries`
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
-RESULT_SCHEMA = "research/result/v0.1"
 
 Runner = Callable[[list[str], Path], int]
 
@@ -91,13 +90,21 @@ def _write(path: Path, doc: dict) -> None:
 
 
 def write_result(run_dir: Path, run_id: str, out: Path, record: str, ok: bool, detail: str, fingerprint: dict,
-                 measurements: Sequence[dict] = ()) -> None:
+                 measurements: Sequence[dict] = (), *, measured: Sequence[dict] = ()) -> None:
+    """The run's `result.json`: its validation, then each of `measured` (the kit writer's arguments) through the kit's
+    writer, which stamps it with the run, the commit and the host. `measurements` are entries a caller wrote whole, held
+    as given: serving cost's (`benchmarks/serve_tax`), until it writes them through the kit's writer."""
+
     rel = os.path.relpath(out / record, run_dir)
-    _write(run_dir / "result.json", {
-        "schema": RESULT_SCHEMA, "run_id": run_id, "workload_fingerprint": fingerprint,
+    _write(run_dir / kit.RESULT, {
+        "schema": kit.RESULT_SCHEMA, "run_id": run_id, "workload_fingerprint": fingerprint,
         "validation": {"status": "passed" if ok else "failed", "checker": "verity bench overhead", "detail": detail,
                        "evidence": [rel]},
         "measurements": list(measurements), "measurement_files": [rel], "artifacts": []})
+    if measured:
+        writer = kit.Writer(run_dir, run_id, kit.host_stamp())
+        for m in measured:
+            writer.measurement(**m, inputs=[rel])
 
 
 # ---- points ------------------------------------------------------------------------------------------------------------------
@@ -150,8 +157,8 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
     doc["error"] = why
     _write(out / "points.json", doc)
     said = why or f"C = {doc.get('c')}, L = {doc.get('l')}"
-    write_result(a.run_dir, a.run_id, out, "points.json", why is None, said, fingerprint,
-                 [] if why else [{"name": "C", "value": doc["c"], "unit": "m"}, {"name": "L", "value": doc["l"], "unit": "m"}])
+    write_result(a.run_dir, a.run_id, out, "points.json", why is None, said, fingerprint, measured=[] if why else [
+        {"name": "C", "value": doc["c"], "unit": "m"}, {"name": "L", "value": doc["l"], "unit": "m"}])
     print(f"points: {said}")
     return 0 if why is None else 1
 
@@ -294,8 +301,9 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
     write_result(a.run_dir, a.run_id, out, "overhead.json", ok,
                  "; ".join(f"γ at {n} {g:.4f}" if g is not None else f"no γ at {n}" for n, g in gammas.items())
                  or (whys[0] if whys else "nothing timed"),
-                 fingerprint, [{"name": f"gamma_{n}", "value": g, "unit": "ratio"} for n, g in gammas.items()
-                               if g is not None])
+                 fingerprint, measured=[{"name": f"gamma_{n}", "value": gammas[n], "unit": "ratio",
+                                         "interval": p["gamma"].get("ci95")}
+                                        for n, p in doc["points"].items() if gammas[n] is not None])
     for n, p in doc["points"].items():
         stands = "of record" if not (p["whys"] or whys) else "not of record: " + "; ".join(p["whys"] + whys)
         print(f"run: {sch.id} at {n} (m = {p['m']}): γ {gammas[n]}; {stands}")

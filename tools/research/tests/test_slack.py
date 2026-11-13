@@ -2,6 +2,7 @@
 way the real one returns them. No real token or workspace is involved (conftest clears SLACK_*)."""
 from __future__ import annotations
 
+import argparse
 import base64
 import email.message
 import http.client
@@ -13,6 +14,7 @@ import os
 import re
 import shutil
 import socketserver
+import subprocess
 import tempfile
 import threading
 import urllib.error
@@ -23,9 +25,10 @@ from typing import Callable
 
 import pytest
 
-from research import slack
+from research import queue, slack
 
 REAL_REGISTRY = Path(__file__).resolve().parents[3] / slack.REGISTRY_REL
+REGISTRY_HANDOVER = slack.registry_handover
 ACTING_AS = slack.acting_as
 TOKEN = "dummy-verity-bot"
 BOT = "B0VERITY"
@@ -173,6 +176,7 @@ def routes_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{remote}")
     monkeypatch.setenv("RESEARCH_SLACK_SEEN", str(tmp_path / "seen"))
     monkeypatch.setattr(slack, "acting_as", lambda ns, reg, name: slack.name_entry(ns, reg, name))  # tests post as any name
+    monkeypatch.setattr(slack, "registry_handover", lambda ns, name, route: None)               # it pushes and opens a PR
     return local, remote
 
 
@@ -392,6 +396,11 @@ def test_ask_without_a_group_id_uses_plain_text_and_the_body_can_come_from_a_fil
     assert fake.messages[COORD][0]["text"].startswith("@memory-accounting a frontend")
 
 
+def test_ask_tags_its_owner_once_when_the_body_already_leads_with_the_tag(fake, registry, capsys):
+    assert run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", "@infra: 4 GPUs by 20:00Z?")[0] == 0
+    assert fake.messages[COORD][0]["text"] == "<!subteam^SINFRA|@infra> 4 GPUs by 20:00Z?"
+
+
 def test_no_token_and_no_cursor_identity_is_an_error_and_dry_run_sends_nothing(fake, registry, capsys, monkeypatch):
     monkeypatch.delenv("SLACK_BOT_TOKEN")
     rc, _, err = run(capsys, "ask", "--as", "memory-accounting", "--to", "infra", "--text", "x")
@@ -555,6 +564,14 @@ def test_broker_failures_are_clear_exit_2_and_never_show_the_identity(broker, re
     assert waits == ([30.0] * slack.RATE_RETRIES if getattr(fail, "code", None) == 429 else [])
 
 
+def test_a_guarded_calls_refusal_says_who_may_make_it():
+    assert set(slack.GUARDED_WHO) == set(slack.BROKER_GUARDED)
+    says = slack.broker_error("chat.update", http_error(403, {"error": "forbidden_caller"}))
+    assert says.endswith("(HTTP 403 forbidden_caller): only an edit to a post made as a name this agent holds or posts as "
+                         "(its route's holder or posters)")
+    assert "@top's and @console's" in slack.broker_error("conversations.create", http_error(403, {"error": "forbidden_caller"}))
+
+
 def test_a_long_thread_is_paged_by_oldest_so_no_reply_at_a_page_boundary_is_lost():
     """Slack's cursor for conversations.replies skips the message at each page boundary, so paging by cursor would lose a
     doorbell in a long inbox read."""
@@ -655,13 +672,15 @@ def test_the_client_refuses_what_the_broker_would(broker, registry, capsys):
     assert not broker.requests
 
 
-def test_broker_methods_are_the_methods_this_module_calls_but_the_user_group_writes():
+def test_broker_methods_are_every_method_this_module_calls_with_the_guarded_writes_among_them():
+    """No agent needs the bot token: every call goes through the broker, which allows the guarded writes only by who asks."""
     src = Path(slack.__file__).read_text()
     called = set(re.findall(r"\.(?:call|paged)\(\s*\"([a-z]+\.[A-Za-z]+)\"", src))
-    assert set(slack.DIRECT_ONLY) == {"chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable", "usergroups.update",
-                                      *slack.CHAT_METHODS}
-    assert called == set(slack.BROKER_METHODS) | set(slack.DIRECT_ONLY) and not set(slack.BROKER_METHODS) & set(slack.DIRECT_ONLY)
+    assert set(slack.BROKER_GUARDED) == {"chat.update", "usergroups.create", "usergroups.disable", "usergroups.enable",
+                                         "usergroups.update", *slack.CHAT_METHODS}
+    assert called == set(slack.BROKER_METHODS) and set(slack.BROKER_GUARDED) <= set(slack.BROKER_METHODS)
     assert len(slack.BROKER_METHODS) == len(set(slack.BROKER_METHODS))
+    assert not hasattr(slack, "DIRECT_ONLY")
 
 
 REAL_MANIFEST = REAL_REGISTRY.with_name("slack-app.json")
@@ -862,13 +881,14 @@ def test_a_manifest_slack_rejects_names_where_and_is_not_applied(app_config, cap
     assert "apps.manifest.update" not in app_config.methods()
 
 
-def test_groups_sync_plans_through_the_broker_but_applies_only_with_the_token(broker, registry, capsys):
+def test_groups_sync_plans_and_applies_through_the_broker_with_no_token(broker, registry, capsys):
     rc, out, _ = run(capsys, "groups", "sync")
     assert rc == 0 and "plan only" in out and [r[1]["method"] for r in broker.requests] == ["auth.test", "usergroups.list"]
     broker.requests.clear()
     rc, _, err = run(capsys, "groups", "sync", "--apply")
-    assert rc == 2 and "groups sync --apply needs SLACK_BOT_TOKEN" in err and "a VM that has the token" in err
-    assert not broker.requests and not broker.state.groups
+    assert rc == 0, err
+    sent = [r[1]["method"] for r in broker.requests]
+    assert "usergroups.create" in sent and broker.state.groups                # the user-group writes go to the broker
 
 
 @pytest.fixture
@@ -2011,6 +2031,24 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
     assert rc == 2 and "only a card's own asker" in err
 
 
+def test_resolve_records_a_decision_outside_the_cards_options_as_daniels_and_where_he_said_it(route, registry, capsys):
+    """A page that decided something no option names: `otherwise` records it with the note and `page`, never as the
+    lane's own provisional decision."""
+    route.resolve = True
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", "--note", "both, in order", "--on-page")
+    assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve",
+                                  {"choice": "otherwise", "note": "both, in order", "page": True})
+    run(capsys, "ask-daniel", "resolve", "42", "--choice", "a", "--on-page")
+    assert route.requests[-1][2] == {"choice": "a", "page": True}
+    sent = len(route.requests)
+    for extra, why in ((["--note", " "], "needs --note"), (["--note", "x" * 1001], "1 to 1000"),
+                       (["--note", "both", "--provisional"], "never provisional"), ([], "needs --note"),
+                       (["--note", "both", "--on-page", "--provisional"], "one or the other")):
+        rc, _, err = run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", *extra)
+        assert rc == 2 and why in err, (extra, err)
+    assert len(route.requests) == sent
+
+
 def test_extend_moves_a_cards_deadline_and_withdraw_takes_it_back(route, registry, capsys):
     rc, out, _ = run(capsys, "ask-daniel", "extend", "42", "--deadline", "2026-09-30T23:00:00Z", "--note", "revising the page")
     assert rc == 0 and out == "pending 2026-09-30T23:00:00Z False\n"
@@ -2051,6 +2089,7 @@ class FakeNotion:
 
     def __init__(self):
         self.requests, self.results, self.comments, self.answer, self.pages = [], [], {}, None, {}
+        self.comments_refused = False
 
     def handle(self, method: str, path: str, body: dict | None, headers) -> tuple[int, dict]:
         self.requests.append((method, path, body, headers.get("Authorization"), headers.get("Notion-Version")))
@@ -2062,6 +2101,8 @@ class FakeNotion:
             return 200, {"object": "page", "id": "p-1"}
         if method == "POST" and path.endswith("/query"):
             return 200, {"results": self.results}
+        if method == "GET" and path.startswith("/v1/comments?block_id=") and self.comments_refused:
+            return 403, {"object": "error", "code": "restricted_resource", "message": "Insufficient permissions for this endpoint."}
         if method == "GET" and path.startswith("/v1/comments?block_id="):
             return 200, {"results": self.comments.get(path.split("=")[1].split("&")[0], [])}
         if method == "GET" and path.startswith("/v1/pages/") and path[len("/v1/pages/"):] in self.pages:
@@ -2146,6 +2187,17 @@ def test_page_makes_the_asks_page_then_the_card_linking_it_and_names_the_card_on
     assert "ntn-dummy-not-a-secret" not in out + err
 
 
+def test_page_uploads_a_one_line_display_equation_with_each_dollar_dollar_on_its_own_line(route, notion, fake, registry, tmp_path,
+                                                                                          capsys):
+    """Notion shows `$$ x $$` on one line as its literal text (INF-640); inline math and a block already split stay as written."""
+    page = tmp_path / "ask.md"
+    page.write_text(PAGE_MD.replace("$$\n\\gamma \\le 0.01\n$$", "Inline $`\\delta`$ stays.\n  $$ \\gamma \\le 0.01 $$"))
+    rc, out, err = run(capsys, *card_argv("--page", str(page), "--area", "Process", link=None))
+    made = notion.requests[0][2]
+    assert rc == 0 and "Inline $`\\delta`$ stays.\n  $$\n  \\gamma \\le 0.01\n  $$\n## The design" in made["markdown"]
+    assert slack.display_math(PAGE_MD) == PAGE_MD
+
+
 def test_the_reply_callout_sits_above_the_problem_once():
     ours = slack.with_reply(PAGE_MD)
     assert ours.index("**Your reply.**") < ours.index("## The problem") and ours.index("**Question.**") < ours.index("**Your reply.**")
@@ -2214,6 +2266,25 @@ def test_pages_lists_the_lanes_recent_asks_with_status_decision_and_newest_comme
                                       {"property": "Lane", "select": {"equals": "infra"}}]
     rc, out, _ = run(capsys, "ask-daniel", "pages", "--json")
     assert rc == 0 and json.loads(out)[0]["decision"] == "Option B, and restate gamma"
+
+
+def test_pages_still_lists_the_pages_when_the_connection_cannot_read_comments(notion, registry, capsys, monkeypatch):
+    """A connection without Notion's Read comments capability answers 403 on /comments, which failed the whole command:
+    the pages list with their status and decision, and one line says what to turn on."""
+    monkeypatch.setattr(slack, "_now", lambda: NOW)
+
+    def page(i: int) -> dict:
+        return {"id": f"p-{i}", "url": f"https://pages.example.invalid/p{i}", "last_edited_time": "2026-09-30T20:00:00Z",
+                "properties": {"Ask": {"type": "title", "title": [{"plain_text": f"Ask {i}?"}]},
+                               "Status": {"type": "status", "status": {"name": "Waiting on Daniel"}}}}
+
+    notion.results, notion.comments_refused = [page(1), page(2)], True
+    rc, out, err = run(capsys, "ask-daniel", "pages")
+    assert rc == 0 and "Ask 1?" in out and "Ask 2?" in out and "comment(s)" not in out
+    assert err.count("Read comments capability") == 1 and "HTTP 403" in err
+    assert sum(path.startswith("/v1/comments") for _, path, *_ in notion.requests) == 1
+    rc, out, _ = run(capsys, "ask-daniel", "pages", "--json")
+    assert rc == 0 and [r["comments"] for r in json.loads(out)] == [None, None]
 
 
 PAGE_ID = PAGE_URL.rsplit("/", 1)[1]
@@ -2658,17 +2729,71 @@ def test_a_reply_under_an_announcement_rings_only_the_names_it_starts_with(fake,
     assert run(capsys, "close", "--as", "proofs", "--thread", root["ts"], "--declined", "past the budget line")[0] == 0
     assert len(bells(fake, boxes["infra"])) == 1                                      # a decline wants the announcer
 
+def test_registry_with_route_gives_a_handle_its_routes_holder_and_suffixes_and_keeps_the_file_shape():
+    text = json.dumps({"handles": [{"handle": "circuits", "holder": "bc-11111111-2222-3333-4444-555555555555",
+                                    "branch_suffixes": ["5555"]}, {"handle": "ci", "holder": "bc-x"}]}, indent=2) + "\n"
+    route = {"holder": "bc-99999999-2222-3333-4444-666666666666", "branch_suffixes": ["5555", "6666"]}
+    new = json.loads(slack.registry_with_route(text, "circuits", route))
+    assert new["handles"][0] == {"handle": "circuits", "holder": route["holder"], "branch_suffixes": ["5555", "6666"]}
+    assert new["handles"][1] == {"handle": "ci", "holder": "bc-x"}
+    assert slack.registry_with_route(slack.registry_with_route(text, "circuits", route), "circuits", route) is None
+    assert slack.registry_with_route(text, "nobody", route) is None
+
+
+def test_a_succession_opens_the_registry_change_from_main_and_says_how_to_mark_it(tmp_path, monkeypatch, capsys):
+    """The route changes at once and the registry, which the queue reads owners and marks from, by its own PR: the handover
+    pushes that change from origin/main and opens it, so the successor's work stops resolving to its predecessor."""
+    origin, clone = tmp_path / "origin.git", tmp_path / "clone"
+    git = lambda cwd, *a: subprocess.run(["git", "-C", str(cwd), *a], check=True, capture_output=True, text=True).stdout  # noqa: E731
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True)
+    subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True, capture_output=True)
+    reg = clone / slack.REGISTRY_REL
+    reg.parent.mkdir(parents=True)
+    reg.write_text(json.dumps({"handles": [{"handle": "circuits", "holder": "bc-11111111-2222-3333-4444-555555555555"}]},
+                              indent=2) + "\n")
+    git(clone, "add", "-A")
+    git(clone, "commit", "-qm", "registry")
+    git(clone, "push", "-q", "origin", "HEAD:main")
+    opened = []
+    monkeypatch.setattr(queue, "open_pr",
+                        lambda top, repo, head, title, body, sha=None, **kw: opened.append((head, body, sha)) or
+                        "https://github.com/o/r/pull/77")
+    ns = argparse.Namespace(dry_run=False, registry=str(reg))
+    route = {"holder": "bc-99999999-2222-3333-4444-666666666666", "branch_suffixes": ["5555", "6666"]}
+    assert REGISTRY_HANDOVER(ns, "circuits", route) == "https://github.com/o/r/pull/77"
+    (head, body, sha), = opened
+    assert head == "cursor/registry-circuits-6666" and body.startswith("Lane circuits\n")
+    pushed = json.loads(git(origin, "show", f"{head}:{slack.REGISTRY_REL}"))
+    assert pushed["handles"][0]["holder"] == route["holder"] and pushed["handles"][0]["branch_suffixes"] == ["5555", "6666"]
+    assert git(origin, "rev-parse", head).strip() == sha
+    assert "`research queue ready 77 --mark --by circuits`" in capsys.readouterr().out
+    assert git(clone, "worktree", "list").count("\n") == 1                                 # its scratch worktree is gone
+
+    git(origin, "update-ref", "refs/heads/main", f"refs/heads/{head}")                    # the change landed
+    assert REGISTRY_HANDOVER(ns, "circuits", route) is None and "already names" in capsys.readouterr().out
+    loose = tmp_path / "loose" / "registry.json"
+    loose.parent.mkdir()
+    loose.write_text(reg.read_text())
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))                          # never an enclosing checkout
+    assert REGISTRY_HANDOVER(argparse.Namespace(dry_run=False, registry=str(loose)), "circuits", route) is None
+    assert "open the registry change by hand" in capsys.readouterr().err
+
+
 def test_names_open_succeeds_records_the_working_branch_and_keeps_the_predecessors_suffix(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
     notes_clone(tmp_path)
     monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
     box = inbox(fake, routes_dirs, "circuits")
     add_route(routes_dirs[0], "circuits", box, holder="bc-11111111-2222-3333-4444-555555555555", branch_suffixes=["ab12"])
     monkeypatch.setattr(slack, "_branch_suffix", lambda: "cd34")
+    handed = []
+    monkeypatch.setattr(slack, "registry_handover", lambda ns, name, route: handed.append((name, route["holder"])))
     assert run(capsys, "names", "open", "--as", "circuits", "--holder", "bc-99999999-2222-3333-4444-666666666666", "--succeeds")[0] == 0
     r = json.loads((routes_dirs[0] / "circuits.json").read_text())
     assert r["holder"].startswith("bc-99999999") and r["branch_suffixes"] == ["ab12", "5555", "cd34"]
+    assert handed == [("circuits", r["holder"])]                                     # the registry's half of the handover
     monkeypatch.setattr(slack, "_branch_suffix", lambda: "ef56")                      # the same holder, on a new branch
     assert run(capsys, "names", "open", "--as", "circuits", "--holder", "bc-99999999-2222-3333-4444-666666666666")[0] == 0
+    assert len(handed) == 1
     assert json.loads((routes_dirs[0] / "circuits.json").read_text())["branch_suffixes"] == ["ab12", "5555", "cd34", "ef56"]
 
 
@@ -2780,6 +2905,32 @@ def test_retract_blanks_only_the_names_own_post(fake, registry, capsys):
     assert rc == 2 and "was posted by @ci, not @infra" in err and other["text"] == "mine"
     rc, _, err = run(capsys, "retract", "--as", "infra", "--ts", "1700000999.000001")
     assert rc == 2 and "a reply needs --thread ROOT" in err
+
+
+def test_retract_goes_through_the_broker_and_its_refusal_says_who_may(broker, registry, capsys, monkeypatch):
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--text", "x")
+    ts = out.split()[0]
+    assert run(capsys, "retract", "--as", "infra", "--ts", ts)[0] == 0
+    assert {"method": "chat.update", "args": {"channel": COORD, "ts": ts, "text": "_retracted by @infra_"}} in [r for _, r, _ in broker.requests]
+    assert next(m for m in broker.state.messages[COORD] if m["ts"] == ts)["text"] == "_retracted by @infra_"
+
+    def refuse_edits(url, data, headers):
+        if json.loads(data)["method"] == "chat.update":
+            raise http_error(403, {"error": "forbidden_caller"})
+        return broker(url, data, headers)
+
+    monkeypatch.setattr(slack, "post", refuse_edits)
+    rc, _, err = run(capsys, "retract", "--as", "infra", "--ts", ts)
+    assert rc == 2 and "forbidden_caller): only an edit to a post made as a name this agent holds or posts as" in err
+
+
+def test_chat_open_goes_through_the_broker(broker, registry, people_d, capsys):
+    chat_users(broker.state)
+    rc, _, err = run(capsys, "chat", "open", "luke", "--user", LUKE)
+    assert rc == 0, err
+    sent = [r["method"] for _, r, _ in broker.requests]
+    assert {"conversations.create", "conversations.invite", "pins.add"} <= set(sent)
+    assert broker.identities == [slack.BROKER] and broker.state.channels
 
 
 def argparse_ns(**kw):
@@ -3177,6 +3328,91 @@ def test_a_cursor_agent_without_research_notes_token_reads_the_notes_with_the_ag
     monkeypatch.delenv(notes_sync.SOURCE_ENV)
     monkeypatch.setattr(notes_sync, "notes_token", lambda: "t0k")
     assert slack.notes_token() == "t0k" and slack.notes_token_source() == "env"
+
+
+class _NotesGitHub:
+    """GitHub's contents API on the notes refusing the bearer `t0k` with `status`, in `mod`'s urlopen, and the agents' GitHub
+    broker giving an hour's token to whoever asks it. Each request's bearer, and each asking of the broker."""
+
+    class Reply(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return None
+
+    def __init__(self, monkeypatch, mod, status: int):
+        self.status, self.seen, self.asked = status, [], 0
+        monkeypatch.setattr(mod.urllib.request, "urlopen", self.urlopen)
+        monkeypatch.setattr(mod.urllib.request, "build_opener", lambda *handlers: self)
+        monkeypatch.setattr(mod, "_notes_token", {})
+        monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
+        for k in ("RESEARCH_NOTES_TOKEN_SOURCE", "RESEARCH_NOTES_TOKEN_EXPIRES"):   # notes_sync sets them in os.environ: undone after
+            monkeypatch.setenv(k, "")
+            monkeypatch.delenv(k)
+        monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
+
+    def urlopen(self, req, timeout):
+        self.seen.append((req.get_method(), req.get_header("Authorization")))
+        if req.get_header("Authorization") == "Bearer t0k":
+            raise urllib.error.HTTPError(req.full_url, self.status, "x", {}, None)
+        return self.Reply(b'[{"name": "x.json"}]')
+
+    def open(self, req, timeout=None):
+        self.asked += 1
+        return self.Reply(json.dumps({"token": "agent-minted", "expires_at": "1970-01-01T01:00:00Z"}).encode())
+
+
+REFUSED_SAID = "notes: RESEARCH_NOTES_TOKEN was refused by GitHub: it is expired or revoked; "
+
+
+@pytest.mark.parametrize("method, status", [("GET", 401), ("PUT", 403)])
+def test_a_notes_api_call_whose_given_token_github_refuses_is_made_once_more_with_the_agents_brokers(monkeypatch, capsys, method, status):
+    """An agent without a notes clone lists and writes people.d through GitHub's API: when the token its VM injects has expired,
+    the call names the variable and still succeeds, by the agents' GitHub broker."""
+    from research import notes_sync
+
+    github = _NotesGitHub(monkeypatch, slack, status)
+    monkeypatch.setattr(slack, "oidc_token", lambda aud: "dummy-identity")
+    monkeypatch.setattr(notes_sync, "clock", lambda: 0.0)
+    monkeypatch.setattr(notes_sync, "_BROKER_REFUSED", [(0.0, "the broker answered HTTP 503")])     # out a moment ago: the variable
+    assert slack.notes_api(method, "people.d", {"message": "m"} if method == "PUT" else None) == [{"name": "x.json"}]
+    assert github.seen == [(method, "Bearer t0k"), (method, "Bearer agent-minted")] and github.asked == 1
+    assert capsys.readouterr().err == REFUSED_SAID + "going on with the GitHub broker's token\n"
+    assert slack.notes_token_source() == "agent-broker" and slack.notes_api("GET", "people.d") and github.asked == 1
+    assert capsys.readouterr().err == "", "said once"
+
+
+def test_a_notes_api_call_refused_with_no_agents_broker_to_go_on_with_fails_as_before(monkeypatch, capsys):
+    from research import notes_sync
+
+    github = _NotesGitHub(monkeypatch, slack, 401)                                # conftest: no Cursor identity here
+    with pytest.raises(slack.SlackError, match="^notes: GitHub GET people.d: HTTP 401$"):
+        slack.notes_api("GET", "people.d")
+    assert github.seen == [("GET", "Bearer t0k")] and github.asked == 0, "asked once, and no broker without an identity"
+    assert capsys.readouterr().err == REFUSED_SAID + "the GitHub broker gave no token to go on with (no Cursor identity here)\n"
+    os.environ.update({notes_sync.TOKEN_ENV: "t0k", notes_sync.SOURCE_ENV: "broker", notes_sync.EXPIRES_ENV: "7200"})
+    monkeypatch.setattr(notes_sync, "clock", lambda: 0.0)                           # the broker's own token, refused: not the variable
+    with pytest.raises(slack.SlackError, match="^notes: GitHub GET people.d: HTTP 401$"):
+        slack.notes_api("GET", "people.d")
+    assert len(github.seen) == 2 and github.asked == 0 and capsys.readouterr().err == ""
+
+
+def test_slack_py_deployed_alone_answers_a_refused_notes_token_as_before(monkeypatch, capsys):
+    """The Slack events service runs this file with no `notes_sync` beside it: there a refused $RESEARCH_NOTES_TOKEN stays the
+    HTTP error it was, asked once, with nothing said and no broker but the service's own."""
+    import importlib.util
+    import sys
+
+    spec = importlib.util.spec_from_file_location("research_slack_alone", slack.__file__)
+    alone = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, "research_slack_alone", alone)
+    spec.loader.exec_module(alone)
+    github = _NotesGitHub(monkeypatch, alone, 403)
+    assert alone.notes_token() == "t0k" and alone.notes_token_source() == "env"
+    with pytest.raises(alone.SlackError, match="^notes: GitHub PUT people.d/x.json: HTTP 403$"):
+        alone.notes_api("PUT", "people.d/x.json", {"message": "m"})
+    assert github.seen == [("PUT", "Bearer t0k")] and github.asked == 0 and capsys.readouterr().err == ""
 
 
 def notes_clone(tmp_path) -> Path:
@@ -4006,6 +4242,31 @@ def test_a_doorbell_quoting_a_cards_decided_mark_does_not_stop_the_decision_ring
     rc, _, err = run(capsys, "ask-daniel", "status", "42")
     assert rc == 0 and "route @top: rang with the decision" in err
     assert [m["text"].startswith("from ask-daniel, card `42` decided") for m in bells(fake, top)] == [False, True]
+
+
+def test_an_announcement_that_asks_for_comments_on_an_issue_is_answered_there_by_each_name_that_commented(
+        fake, registry, routes_dirs, capsys, monkeypatch):
+    """An announcement to several names that names one Linear issue, with no record line, was judged by its Slack thread, so
+    each lead that answered on the issue, as asked, still read as unanswered and was rung.  Each name that commented on the
+    issue has answered; the rest are still owed, and an issue Linear can't read leaves the announcement unchecked."""
+    from research import linear
+    text = "@proofs @comms @infra one comment each on TOP-9 (<https://linear.app/x/issue/TOP-9>) by Wed"
+    post = fake.add(COORD, text=text, username="top", bot_id=BOT, ts=f"{T0:.6f}")
+    by = lambda h: {"botActor": {"userDisplayName": h}, "user": None, "body": "here"}  # noqa: E731
+    issues = {"TOP-9": {"comments": {"nodes": [by("proofs"), by("comms"), by("top")]}}}
+    monkeypatch.setattr(linear, "_http", FakeLinearIssues(issues))
+    monkeypatch.setenv("LINEAR_API_KEY", "dummy-key")
+    now = f"{T0 + 86400:.0f}"
+    (un,) = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])["unanswered"]
+    assert un["ts"] == post["ts"] and un["to"] == ["infra"]
+    assert (un["record"], un["ref"], un["state"]) == ("linear", "TOP-9", "2 of its 3 names commented there")
+    issues["TOP-9"]["comments"]["nodes"].append(by("infra"))
+    rep = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])
+    assert not rep["unanswered"] and [x["ts"] for x in rep["answered"]] == [post["ts"]]
+    monkeypatch.delenv("LINEAR_API_KEY")
+    rep = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])
+    (unread,) = rep["unchecked"]
+    assert not rep["unanswered"] and unread["ts"] == post["ts"] and unread["state"].startswith("unreadable (")
 
 
 def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writes_as_a_person(monkeypatch):

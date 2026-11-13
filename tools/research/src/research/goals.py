@@ -10,13 +10,18 @@
   research goals remove ID
   research goals priority ID 1|2|3|clear     sets its priority (anyone may), or clears it back to the derived one
   research goals replace FILE.json           the whole page: exactly the goals in FILE (a JSON list)
+  research goals audit [--owner HANDLE ...] [--from FILE.json] [--now TIME] [--json]
+                                             # by lead: goals overdue, under no project, due before what they wait on
+                                             # or titled past eight words, and a lead with nothing due in 12 hours;
+                                             # each line names its fix; exit 1 when anything is found (goals_audit.py)
 
-The plan is one graph of goals. A goal is an outcome with one owner: a one-line title of at most eight words, a due
-date, a day meaning its end or a time with its offset such as 2026-11-05T10:00-08:00, a status (will it be true by then?), tags from the
-site's fixed list of projects, and a Markdown description of what exactly will be true and where it stands, which never
-restates the fields. A goal nothing waits on is tier 1, a project; a piece of one is tier 2 and any step below it tier
-3; --tier overrides that. What a goal waits on is links only: the narrowest goal that blocks it, due
-before it, or an open ask (--wait goal:ID, --wait ask:CARD). An off-track goal says why: what it waits on, or
+The plan is one graph of goals. A goal is an outcome with one owner: a headline for a title (three to six plain words,
+no number; the writing-goals skill has the rule), a due date, a day meaning its end or a time with its offset such as
+2026-11-05T10:00-08:00, a status (will it be true by then?), tags from the site's fixed list of areas, and a Markdown
+description of what exactly will be true and where it stands, which never restates the fields. A goal under another is
+its subgoal. The page derives how deep a goal sits from what waits on what: 1 when nothing waits on it, down to 3;
+--tier, which keeps its old name, overrides that. What a goal waits on is links only: the narrowest goal that blocks
+it, due before it, or an open ask (--wait goal:ID, --wait ask:CARD). An off-track goal says why: what it waits on, or
 --blockers. The site checks every write and answers which field is wrong. --url points the command at another server;
 the token's audience stays the route's.
 """
@@ -26,7 +31,7 @@ import argparse
 import json
 import sys
 import urllib.error
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -39,8 +44,11 @@ STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "priority", "prioritySet", "p
 
 
 class Route:
-    def __init__(self, url: str = GOALS) -> None:
-        self.base = url
+    """The page's route. ``key`` is a site key with `events:read`, for a machine that holds no Cursor identity: it only
+    reads. Without one every call carries this agent's identity."""
+
+    def __init__(self, url: str = GOALS, key: str | None = None) -> None:
+        self.base, self.key = url, key
         self._oidc = _Identity(GOALS)
 
     def call(self, body: dict | None = None) -> list[dict]:
@@ -48,9 +56,16 @@ class Route:
         data = None if body is None else json.dumps(body).encode()
         headers = {"Content-Type": "application/json"} if data else {}
         what = f"{method} {GOALS}"
+        if self.key and body is not None:
+            raise SlackError(f"{what}: a site key only reads the page; a write carries an agent's Cursor identity")
+
+        def send(token: str) -> dict:
+            return http_json(method, self.base, data, {"Authorization": f"Bearer {token}", **headers})
         try:
-            out = self._oidc.send(lambda t: http_json(method, self.base, data, {"Authorization": f"Bearer {t}", **headers}))
+            out = send(self.key) if self.key else self._oidc.send(send)
         except urllib.error.HTTPError as e:
+            if e.code == 401 and self.key:
+                raise RouteError(f"{what}: the route rejected the site key (HTTP 401): it takes a live one with events:read", 401) from None
             if e.code == 400:
                 try:
                     message = json.loads(e.read(65536)).get("message")
@@ -151,8 +166,10 @@ def main(argv: list[str], route: Route | None = None) -> int:
     s.add_argument("--tag", action="append")
     s.add_argument("--owner", help="the lead that keeps it true, by handle")
     level = s.add_mutually_exclusive_group()
-    level.add_argument("--tier", type=int, choices=range(1, 4), metavar="N", help="its tier, overriding the one the plan derives: 1 a project, 2 a piece of one, 3 a step")
-    level.add_argument("--no-tier", action="store_true", help="the tier the plan derives from what needs it")
+    level.add_argument("--tier", type=int, choices=range(1, 4), metavar="N",
+                       help="how deep the goal sits, overriding what the plan derives: 1 a goal nothing waits on, 2 its "
+                            "subgoal, 3 a subgoal of that")
+    level.add_argument("--no-tier", action="store_true", help="the depth the plan derives from what needs it")
     s.add_argument("--description", help="TEXT, or @FILE")
     why = s.add_mutually_exclusive_group()
     why.add_argument("--blockers", help="why it's off track, when what it waits on doesn't say: TEXT, or @FILE")
@@ -166,6 +183,12 @@ def main(argv: list[str], route: Route | None = None) -> int:
     pr.add_argument("id")
     pr.add_argument("level", choices=["1", "2", "3", "clear"])
     sub.add_parser("replace").add_argument("file")
+    au = sub.add_parser("audit", help="by lead, what keeps the plan from being read, each line with its fix (goals_audit.py)")
+    au.add_argument("--owner", action="append", default=[], metavar="HANDLE",
+                    help="only this lead's goals, and a line when it owns no open goal; repeat for more (default: every owner)")
+    au.add_argument("--from", dest="file", metavar="FILE.json", help="a saved `research goals show --json` instead of the page")
+    au.add_argument("--now", metavar="TIME", help="the time to audit at, with its offset (default: now)")
+    au.add_argument("--json", action="store_true")
     ns = p.parse_args(argv)
     route = route or Route(ns.url)
     try:
@@ -173,6 +196,20 @@ def main(argv: list[str], route: Route | None = None) -> int:
             goals = route.call()
             print(json.dumps(goals, indent=1, ensure_ascii=False) if ns.json else show(goals))
             return 0
+        if ns.cmd == "audit":
+            from . import goals_audit
+
+            goals = json.loads(Path(ns.file).read_text()) if ns.file else route.call()
+            if not isinstance(goals, list):
+                raise SlackError(f"{ns.file}: expected a JSON list of goals, as `research goals show --json` prints")
+            now = datetime.fromisoformat(ns.now) if ns.now else datetime.now(UTC)
+            if now.tzinfo is None:
+                raise SlackError(f"--now {ns.now}: give its offset, as in 2026-11-05T10:00-08:00")
+            leads = goals_audit.findings(goals, now, ns.owner)
+            leads = {o: v for o, v in leads.items() if not ns.owner or o in ns.owner}
+            print(json.dumps({"now": now.isoformat(), "leads": leads, "counts": goals_audit.tally(leads)}, indent=1, ensure_ascii=False)
+                  if ns.json else goals_audit.render(leads))
+            return 1 if goals_audit.tally(leads) else 0
         if ns.cmd == "replace":
             goals = json.loads(Path(ns.file).read_text())
             if not isinstance(goals, list):

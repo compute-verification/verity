@@ -23,8 +23,12 @@ other types on the line through its members (or through the fixed seconds at siz
 at the measured types' median, and the core-seconds that cost one GPU-second, which Figure 1 adds to each statement's
 fixed seconds.  A `headline` card holds the post's headline rows, each with its cells (S, verifier step, scope) and its
 `basis` (`BASES`): `served-measured`, `served-card-priced` or `design`, with what sets it; a `measured` headline card
-holds only `served-measured` rows, and Figure 5 names each row's basis.  A card reaches the figures by art id, a later
-one naming the earlier card it replaces:
+holds only `served-measured` rows, and Figure 5 names each row's basis.  A `serving_rate` card is the engine's sustained
+computed tokens, prompt and output, a GPU-second on the mix its `plan` names (the art id of the plan file or of the
+record that holds it, or the id of the run that does), measured; `saturated` only where a rate above it was served and
+computed no more, so a lower bound is `saturated` false on a `provisional` card, and `bound` says what held the rate
+(`BOUNDS`).  No figure reads it unless asked to (`figure1.SERVING`).  A card reaches the figures by art id, a later one
+naming the earlier card it replaces:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
     research data put --kind spot-card/v1 --file CARD.json --preserve --json
@@ -53,6 +57,10 @@ CUTS = ("tokens", "kv", "layer_of_token", "every_block")
 #: the server configurations that pay a serve tax of their own (`total_cost.CONFIGURATIONS`)
 CONFIGURATIONS = ("tokens", "tokens_bi", "layer_of_token", "every_block")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
+ART = re.compile(r"art:[0-9a-f]{64}")
+#: what holds a serving rate where it is: the GPUs' compute; the engine's step, where requests waited with room in the
+#: KV pool and the record does not tell the GPUs' arithmetic from a step's token budget; the KV pool's size; or not known
+BOUNDS = ("compute", "engine-step", "kv-pool", "unknown")
 NUM = (int, float)
 
 
@@ -88,7 +96,11 @@ SERIES = {"scope": F(str), "budget": F(NUM), "x": F(list), "y": F(list)}
 AXIS = {"label": F(str), "unit": F(str)}
 POINT = {"x": F(NUM), "y": F(NUM), "runs": _opt(list), "note": _opt(str)}
 CURVE = {"label": F(str), "model": _opt(str, nullable=True, choices=MODELS), "points": F(list, each=POINT)}
-TAX_PART = {"part": F(str), "share": F(NUM), "low": F(NUM), "high": F(NUM), "source": F(str)}
+#: how a serve tax's part got its share: priced from the code and a measured rate, simulated on served traces, or
+#: measured on the served engine
+PART_STATUS = ("modeled", "simulated", "measured")
+TAX_PART = {"part": F(str), "status": F(str, choices=PART_STATUS), "share": F(NUM), "low": F(NUM), "high": F(NUM),
+            "source": F(str)}
 TAX = {"config": F(str, choices=CONFIGURATIONS), "status": F(str, choices=("priced", "measured")), "tax": F(NUM),
        "low": F(NUM), "high": F(NUM), "lower_bound": F(bool), "parts": F(list, each=TAX_PART), "runs": _opt(list)}
 VERIFY_TYPE = {"block": F(str), "core_seconds": F(NUM), "peak_gb": F(NUM, nullable=True), "runs": _opt(list)}
@@ -124,6 +136,7 @@ SLOTS = {
                       "ratio_source": F(str), "fixed_seconds": F(NUM), "types": F(list, each=VERIFY_TYPE),
                       "families": F(list, each=VERIFY_FAMILY)},
     "headline": {"bases": F(list), "rows": F(list, each=HEADLINE_ROW), "quote": F(str)},
+    "serving_rate": {"tokens_per_gpu_second": F(NUM), "plan": F(str), "saturated": F(bool), "bound": F(str, choices=BOUNDS)},
 }
 
 
@@ -195,6 +208,15 @@ def check(card: dict) -> dict:
                    if names.count(n) > 1]
         errors += [f"serve_tax.value.configurations[{i}]: low <= tax <= high, but {t['low']}, {t['tax']}, {t['high']}"
                    for i, t in enumerate(value["configurations"]) if not 0 <= t["low"] <= t["tax"] <= t["high"]]
+        for i, t in enumerate(value["configurations"]):
+            parts = [p["part"] for p in t["parts"]]
+            errors += [f"serve_tax.value.configurations[{i}].parts: {n!r} given {parts.count(n)} times"
+                       for n in sorted(set(parts)) if parts.count(n) > 1]
+            errors += [f"serve_tax.value.configurations[{i}].{k}: {t[k]}, but its parts' {key}s add to {total}: a "
+                       "priced configuration is the sum of its named parts (regenerate it with total_cost.py "
+                       "priced-card)"
+                       for k, key in (("tax", "share"), ("low", "low"), ("high", "high")) if t["status"] == "priced"
+                       for total in [sum(p[key] for p in t["parts"])] if abs(t[k] - total) > 1e-12 * max(1.0, total)]
     if slot == "verifier_cost" and not errors:
         measured = {t["block"] for t in value["types"]}
         errors += [f"verifier_cost.value.families[{i}]: member {m!r} is none of the measured types' blocks"
@@ -215,6 +237,18 @@ def check(card: dict) -> dict:
         errors += [f"headline.value.rows[{i}]: basis {r['basis']!r} with an empty basis_from; name what sets it"
                    for i, r in enumerate(rows) if r["basis"] != "served-measured" and not r["basis_from"]]
         errors += [e for i, r in enumerate(rows) for e in _cells(r["cells"], f"headline.value.rows[{i}].cells")]
+    if slot == "serving_rate" and not errors:
+        if card["status"] != "measured":
+            errors.append(f"card.status: {card['status']!r}, but a serving rate is measured on a served run")
+        if value["tokens_per_gpu_second"] <= 0:
+            errors.append(f"serving_rate.value.tokens_per_gpu_second: {value['tokens_per_gpu_second']!r}, but it is a rate "
+                          "above 0")
+        if not (RUN.fullmatch(value["plan"]) or ART.fullmatch(value["plan"])):
+            errors.append(f"serving_rate.value.plan: {value['plan']!r}, but it is an art id (the plan file's, or the "
+                          "record's that holds it) or the id of the run that holds it")
+        if not value["saturated"] and not card["provisional"]:
+            errors.append("serving_rate.value.saturated: false on a card that is not provisional; a lower bound is "
+                          "provisional, so that a floor is never read as the rate")
     if slot == "workload" and not errors and value.get("served_macs_per_token") is not None:
         in_blocks = sum(s["per_token"] * s["macs"] for s in value["strata"])
         if value["served_macs_per_token"] < in_blocks * (1 - 1e-9):

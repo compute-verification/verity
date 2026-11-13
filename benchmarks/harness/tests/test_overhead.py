@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_bench import nsys, overhead_node
+from verity_bench import kit, nsys, overhead_node
 from verity_bench import overhead as O
 from verity_bench import overhead_records as R
 from verity_bench.cli import main
@@ -30,7 +30,18 @@ SHA = "c" * 40
 CUBIN = b"stand-in cubin"
 CUBIN_ART = "art:" + "a" * 64
 #: the gpu-lease wait the door puts before its node job, as the run's attempt records it
-LEASE = R.gpu_lease(60)
+LEASE = kit.lease(1, 60)
+#: the kit's stamp of the node the stand-in run holds its lease on
+STAMP = {"card": "NVIDIA H200", "gpus": [{"uuid": UUID, "sm_mhz": 1980, "mem_mhz": 3201}], "driver": "570.1", "cuda": "13.0",
+         "node": "node", "commit": SHA}
+
+
+@pytest.fixture(autouse=True)
+def stamped(monkeypatch):
+    """The node side's result is written under the kit's host stamp, which asks nvidia-smi and git: a stand-in host here."""
+
+    monkeypatch.setattr(kit, "host_stamp", lambda: dict(STAMP))
+
 
 # ---- stand-in timings ---------------------------------------------------------------------------------------------------------
 
@@ -316,17 +327,14 @@ def test_sweep_times_takes_each_linears_fastest_kernel_of_every_scaling_and_refu
 
 
 def test_the_interval_is_the_medians_95_percent_order_statistics():
-    assert O.interval(20) == (6, 15)
-    assert O.interval(6) == (1, 6)
-    assert O.interval(5) is None and O.interval(0) is None
-    assert O.paired([1.5] * 5, [1.0] * 5)["ci95"] is None
-    g = O.paired([1.5 + 0.001 * i for i in range(20)], [1.0] * 20)
+    assert kit.paired([1.5] * 5, [1.0] * 5)["ci95"] is None
+    g = kit.paired([1.5 + 0.001 * i for i in range(20)], [1.0] * 20)
     assert g["gamma"] == pytest.approx(0.5095) and g["ci95"] == pytest.approx([0.505, 0.514]) and g["n"] == 20
     assert O.of_record_why(g) is None
-    assert "fewer than 20" in O.of_record_why(O.paired([1.5] * 19, [1.0] * 19))
-    assert "wider than ±5%" in O.of_record_why(O.paired([1.0 + 0.1 * i for i in range(20)], [1.0] * 20))
+    assert "fewer than 20" in O.of_record_why(kit.paired([1.5] * 19, [1.0] * 19))
+    assert "wider than ±5%" in O.of_record_why(kit.paired([1.0 + 0.1 * i for i in range(20)], [1.0] * 20))
     with pytest.raises(ValueError, match="one for one"):
-        O.paired([1.0], [1.0, 2.0])
+        kit.paired([1.0], [1.0, 2.0])
 
 
 def test_a_calls_cost_is_its_traced_busy_sm_time_and_the_hosts_enqueue_at_the_cards_weight():
@@ -417,6 +425,9 @@ def test_the_node_sweeps_for_the_points_in_rounds_of_bench_py(tmp_path):
     result = json.loads((tmp_path / "r20261104-020000-0001" / "result.json").read_text())
     assert result["validation"]["status"] == "passed" and result["validation"]["evidence"] == ["out/points.json"]
     assert {m["name"]: m["value"] for m in result["measurements"]} == {"C": want.c, "L": want.l}
+    for m in result["measurements"]:
+        assert (m["unit"], m["run"], m["commit"], m["host"]) == ("m", "r20261104-020000-0001", SHA, STAMP)
+        assert m["inputs"] == ["out/points.json"] and m["ci95"] is None and m["verdict"] is None
 
 
 def test_the_node_refuses_a_sweep_without_every_library_the_card_chooses_among(tmp_path):
@@ -439,6 +450,22 @@ def test_the_node_refuses_a_sweep_on_another_card(tmp_path):
     doc = json.loads((out / "points.json").read_text())
     assert rc == 1 and "not the H200" in doc["error"] and doc.get("c") is None
     assert json.loads((tmp_path / "r" / "result.json").read_text())["validation"]["status"] == "failed"
+
+
+def test_the_result_holds_a_callers_whole_entries_as_given_and_its_own_through_the_kit(tmp_path):
+    """Serving cost's benchmark hands `write_result` entries it wrote whole, with fields the kit's writer has no argument
+    for: they are held as given, and only the entries given by `measured` are the kit's."""
+
+    run_dir, out = tmp_path / "r1", tmp_path / "r1" / "out"
+    out.mkdir(parents=True)
+    whole = {"name": "cost", "value": None, "unit": "tokens/s", "run": "another", "rung": 3, "inputs": ["a load"]}
+    overhead_node.write_result(run_dir, "r1", out, "record.json", True, "said", {"door": "cost"}, [whole])
+    assert json.loads((run_dir / "result.json").read_text())["measurements"] == [whole]
+    overhead_node.write_result(run_dir, "r1", out, "record.json", True, "said", {"door": "cost"}, [whole],
+                               measured=[{"name": "C", "value": 512, "unit": "m"}])
+    held, own = json.loads((run_dir / "result.json").read_text())["measurements"]
+    assert held == whole and (own["name"], own["value"], own["run"], own["host"]) == ("C", 512, "r1", STAMP)
+    assert own["inputs"] == ["out/record.json"]
 
 
 def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_with_its_controls(tmp_path, scheme):
@@ -488,7 +515,13 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     assert not list((run_dir / "out").glob("*.nsys-rep")) and not list((run_dir / "out").glob("*.sqlite"))
     result = json.loads((run_dir / "result.json").read_text())
     assert result["validation"]["status"] == "passed"
-    assert {m["name"] for m in result["measurements"]} == {"gamma_C", "gamma_L"}
+    written = {m["name"]: m for m in result["measurements"]}
+    assert set(written) == {"gamma_C", "gamma_L"}
+    for name, p in doc["points"].items():
+        m = written[f"gamma_{name}"]
+        assert (m["value"], m["ci95"], m["unit"]) == (p["gamma"]["gamma"], p["gamma"]["ci95"], "ratio")
+        assert (m["target"], m["verdict"], m["inputs"]) == (None, None, ["out/overhead.json"])
+        assert (m["run"], m["commit"], m["host"]) == (run_dir.name, SHA, STAMP)
 
 
 def test_stocks_gamma_is_the_aa_control_of_its_twinned_kernel_against_its_original(tmp_path):

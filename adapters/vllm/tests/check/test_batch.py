@@ -1,7 +1,7 @@
 """verity_vllm.check.batch: (a) an owner's outputs read only its own and shared leaves, (b) the launch doesn't pick the Definition.
 
 Each property has its negatives: a template whose row 0 reads row 1 (a cross-row mean), one that reads a batch-derived operand, and
-one whose Definition changes with the launch's row count (a split count read from the batch, the way SplitsFor_v1 picks S).
+one whose Definition changes with the launch's row count (a split count read from the batch, the way vLLM's unpinned top-p picks S).
 """
 from __future__ import annotations
 

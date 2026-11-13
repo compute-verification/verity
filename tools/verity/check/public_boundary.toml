@@ -31,10 +31,12 @@ spot = [
     "verity/protocols/spot/{candidates.py,costfit.py,device,optimize.py,plancheck.py}",
     "verity/protocols/spot/verifier/lean",
 ]
-# C-Flock: its prover, its Lean verifier and ZK server, and its security analysis
+# C-Flock: its prover, its Lean verifier and ZK server with the base packages it requires, and its security analysis
 flock = [
     "verity/protocols/flock",
     "verity/protocols/flock/verifier",
+    "verity/circuits/{base,lean}",
+    "verity/commitments/lean",
     "security/Proofs/Properties/Flock{,.lean}",
     "security/*/Flock{,.lean}",
     "security/Definitions/Assumptions/Flock.lean",
@@ -46,8 +48,7 @@ ml = [
     "verity/commitments/randomness/{__init__.py,pyproject.toml,tests}",
     "verity/commitments/{__init__.py,advice.py,coin_tree.py,crypto,domains.py,frame_v3,gates,history.py,hm96}",
     "verity/commitments/{identity.py,indexed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
-    "verity/commitments/{row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
-    "verity/protocols/poub/verifier/commitments/gates",
+    "verity/commitments/{pool_row.py,row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
     "verity/{circuits,definitions}",
 ]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
@@ -77,7 +78,7 @@ firewall = [
 ]
 # the vLLM integration, and its advice format (advice v0: vLLM's serving decisions as one canonical bit string), which the
 # certifier's package still holds
-vllm = ["adapters/vllm", "archive/integrations/vllm/tools/train_step_census.py", "verity/protocols/certifier/verifier/advice.py"]
+vllm = ["adapters/vllm", "verity/protocols/certifier/verifier/advice.py"]
 # what the public side shares: the one challenge derivation, the one signature scheme, the Python held to each Lean, the
 # deployment's configuration, and what public proofs import from private areas: two lemmas, and Bits' layout as the
 # claims' program, which the bridge reads
@@ -116,6 +117,18 @@ benchmarks = [
     "benchmarks/one_stage/{pyproject.toml,README.md}",
     # the CPU reference of the int8 attention's gate, which vLLM's int8 attention tests hold the served kernels to
     "benchmarks/pouw/edited_gemm/{fattn_ref.py,pyproject.toml}",
+    # Pearl-C's kernels, which the vLLM integration serves through: `verity_vllm.protocols.pouw.pearl_c.kernel` loads
+    # `run.py`, `fixture.py` and the cubin from the directory its `kernel` setting names (a path the run gives it, which no
+    # import shows: `tests/test_public_boundary.py` holds it), and `pearl_c.grouped` the `grouped.py` beside sm_90a's
+    # `run.py`. With them, what builds each cubin: `build.sh`, the sources it compiles and the gate it runs on the SASS
+    "benchmarks/pouw/pearl_c_sm120/{run.py,fixture.py,build.sh,sass_gate.py}",
+    "benchmarks/pouw/pearl_c_sm120/{pearl_c_sm120.cu,hash_fast.cuh,hash_decode.cuh,mainloop_sm120.cuh}",
+    "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,sass_gate.py}",
+    "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h}",
+    # the -h3 hashing both cubins include
+    "benchmarks/pouw/pearl_c/{hash_h3.cuh,sha512.cuh}",
+    # the PoUW harness's SASS gate, whose `mma_gate` each build's gate runs, and the pins it reads
+    "benchmarks/pouw/harness/{sass_gate.py,sass_pins.json}",
 ]
 # public files that no row above covers and no public file needs
 standalone = [
@@ -141,11 +154,10 @@ protocols = [
     "verity/protocols/inference_only/verifier/nci",
     "verity/protocols/certifier/verifier/network/tests/test_{inference_only_protocol,nci_*}.py",
     # the network certifier's period check, which reads a scan's layout with the inference-only policy's check
-    # (`NciCheck.Desc`): the check, the library root and the executables that import it (`network-period`, and
-    # `network-records` for its clock openings), its Python mirror, and the tests that run either executable
-    "verity/protocols/certifier/verifier/lean/NetworkCheck{.lean,/Period.lean,/PeriodMain.lean,/RecordsMain.lean}",
+    # (`NciCheck.Desc`): the check, the library root, which imports it, its executable (`network-period`), its Python
+    # mirror, and the tests that run that executable
+    "verity/protocols/certifier/verifier/lean/NetworkCheck{.lean,/Period.lean,/PeriodMain.lean}",
     "verity/protocols/certifier/verifier/network/tests/{period_case,test_network_period_protocol,test_slot_entry_pins}.py",
-    "verity/protocols/certifier/verifier/network/tests/test_{lean_audit,network_records_protocol}.py",
     "verity/protocols/certifier/verifier/network/tests/fixtures/slot_entry.json",
     "verity/protocols/pous/prover",
     "security/*/{Nci,NciDesc}{,.lean}",
@@ -154,18 +166,26 @@ protocols = [
     "verity/commitments/identity/Identity/Domains.lean",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
     # vLLM's PoUB session tests run PoUB's verifier side in process
-    "adapters/vllm/tests/protocols/remote_bandwidth/{test_remote_session,test_in_place_gpu}.py",
+    "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py",
     "adapters/vllm/tests/pipeline/test_registration_log.py",
     # the network certifier's advice code (advice v1), private with its protocol: the public compiler reads it only through
-    # a registration's `decode`, and its test of that is private with it
+    # a registration's `decode`, and its test of that is private with it, as is the difftest of its certified tick's step
     "adapters/vllm/verity_vllm/pipeline/advice_code",
     "adapters/vllm/tests/program/predict/test_steps_advice_code.py",
+    "adapters/vllm/tests/pipeline/test_tick_step.py",
     # vLLM's PoUS option test runs the memory challenger's party in process
     "adapters/vllm/tests/protocols/test_pous_option.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
     "security/Proofs/Pouw/PeriodJ10R/Binding.lean",
     # PoUB's opening unit's test, which holds it to PoUB's Python verifier
     "verity/commitments/tests/test_block_check.py",
+    # PoUB's plan unit and memory-map unit, with their test
+    "verity/definitions/circuits/requirement_units*",
+    "verity/circuits/tests/test_requirement_units.py",
+    # the population programs' circuit-check bindings, whose example templates are PoUB's plan units
+    "verity/circuits/population.circuit-check.py",
+    # the recorded population programs, some keyed by PoUB's plan and memory-map units, and the test that rebuilds each
+    "verity/circuits/tests/{population_recorded.json,test_population_recorded.py}",
 ]
 # vLLM's tests that read a private protocol (NCI, the bandwidth audit, PoUS)
 protocol_tests = [
@@ -174,7 +194,6 @@ protocol_tests = [
     "adapters/vllm/tests/commit/test_memory_map.py",
     "adapters/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
     "adapters/vllm/tests/pipeline/test_serve_remote.py",
-    "adapters/vllm/tests/engine/int8_store_gpu.py",
 ]
 # vLLM's test of GLM-5.3's served templates at TP 8, which reads the records `benchmarks/one_stage`'s served window wrote
 served_records = ["adapters/vllm/tests/pipeline/test_served_unit_rows.py"]
@@ -203,7 +222,7 @@ oracle_tests = [
 # vLLM's tests of the code identity and the code version, which read the run store's closure and code directories: the public
 # release refuses them by name (`config.run_store`), and `test_run_store_absent.py` holds it to that
 run_store_tests = [
-    "adapters/vllm/tests/pipeline/test_{boundary_plan,commit_tree_of_record,experiment_index,hot_commit}.py",
+    "adapters/vllm/tests/pipeline/test_{boundary_plan,commit_tree_of_record,experiment_index}.py",
 ]
 # vLLM's test of the vLLM demo's workload (`demos/vllm/workloads`), which the public tree doesn't hold
 demo_tests = ["adapters/vllm/tests/pipeline/test_demo_workload_file.py"]
@@ -227,8 +246,6 @@ records = [
 # `vllm-poc/bundles`, a host's archive), so the public tree could only skip them: each `*_of_record.py` beside the public test it
 # shares helpers with, or the whole file where none of it runs without them
 pod_records = [
-    "adapters/vllm/tests/acquire/test_compiled_manifest.py",
-    "adapters/vllm/tests/pipeline/test_compiled_merge_identity.py",
     "adapters/vllm/tests/check/test_stoch_draw_ledger_of_record.py",
     "adapters/vllm/tests/engine/test_gen_{dense2,ov_moe,ov_sampling}_of_record.py",
     "adapters/vllm/tests/pipeline/test_{admission_telemetry,coverage_workloads,run_config_dry_run}_of_record.py",
@@ -238,7 +255,6 @@ pod_records = [
 team = [
     "infra",
     "tools/{research,agent-guard}",
-    "archive/AGENTS.md",
     "benchmarks/census",
     ".agents",
     ".cursor",
@@ -325,6 +341,11 @@ why = "the identity hash's properties' proofs, which the network certifier's che
 paths = ["security/Proofs/Properties/Hash"]
 from = ["certifier"]
 
+[[needed]]
+why = "the ZK server's record as its Lean code runs it, stated and proved, which the recursive session's stop count is proved from"
+paths = ["security/{Properties,Proofs/Properties}/Firewall.lean"]
+from = ["flock"]
+
 # Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
 # (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
 # matches.
@@ -340,7 +361,6 @@ paths = [
     "security/*/Pouw",
     "security/Proofs/Properties/Pouw",
     "adapters/vllm",
-    "archive/integrations/vllm/tools/train_step_census.py",
     "benchmarks/one_stage",
 ]
 until = "PRF-285: the v3 ledger names a period's prover `prover`"

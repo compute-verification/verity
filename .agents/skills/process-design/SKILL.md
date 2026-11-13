@@ -26,7 +26,7 @@ integrations), not of commits: a retracted result costs it. A process costs **lo
 change it touches, and pays in **yield** (results that stay true) and **reuse** (results found, cited, built on) only
 where an error or a reuse happens. It earns its place when that benefit exceeds its cost on all of them.
 
-Price only the scarce resources: the human's attention (the bottleneck); the merge path (`next`, its reviewers, a Lean
+Price only the scarce resources: the human's attention (the bottleneck); the merge path (the verified queue, its reviewers, a Lean
 change's Lean check, the coordinator); files and queues many lanes pass through; the words every agent reads first (the
 root `AGENTS.md`, the lane contract, a subtree's `AGENTS.md`); pods and money. Machine and agent time are cheap. Agents
 follow rules literally and at scale and never push back, so a rule's cost multiplies by the agents and how often it

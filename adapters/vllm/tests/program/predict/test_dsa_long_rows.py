@@ -56,6 +56,8 @@ RELATION = ("DsaWaksmanOrder_v1", "DsaTopKLongRow_v1", "DsaWaksmanRows_v1")
 #: the mask class G's batched form calls, a row's own keys among its block's (`vllm_dsa.long_row_blocks`)
 COUNTED = "DsaTopKMaskCounted_v1"
 CTX131K = os.environ.get("VERITY_VLLM_CTX131K", "")
+#: the max_model_len of the launch that test serves at
+CTX = 131072
 
 
 def _short(hf: dict) -> dict:
@@ -236,6 +238,76 @@ def test_a_decode_row_at_the_served_index_topk_selects_its_top_k_at_its_class(se
     for _, m in _calls(r, "DsaTopKMask_v1"):
         lg, *pad = _logits_and_pad(nodes, m)
         assert nodes[lg].fn.id.startswith("DsaMqaLogits_") and nodes[lg].fn.bindings["N"] == n and len(pad) == (N > n)
+
+
+def _batched(phi: Phi, LP: int, T: int, table_reads: bool):
+    batch = [[[LP, 0]]] + [[[1, LP + t]] for t in range(T)]
+    return build_program(phi, "request", LP=LP, T=T, dead_free=True, batched=True, batch=batch, table_reads=table_reads)
+
+
+def _wiring(r, sel: str, rows: tuple[str, ...]) -> list[tuple[int, list[int]]]:
+    """Each read of a row's history in order: the keys it reads, and which of `sel`'s calls (by their order) its positions are."""
+    at = {i: j for j, (i, _) in enumerate(_calls(r, sel))}
+    reads = sorted(((i, n) for f in rows for i, n in _calls(r, f)), key=lambda x: x[0])
+
+    def keys(b):
+        return b["V"] if "V" in b else b.get("T", b.get("N"))   # the reads', the rows pad's, the rows'
+    return [(keys(n.fn.bindings), [at[k] for k in _reads(n, 0)]) for _, n in reads]
+
+
+def test_table_reads_move_only_a_request_with_rows_past_index_topk(phi):
+    """`table_reads` (`Registered.dsa_table_reads`): a request whose rows stay within INDEX_TOPK is the same Program either way,
+    digest for digest.  One past it (a prompt of 6 and two decodes) reads each such row's history by table: a `DsaTopKIndex` of
+    its counted mask in place of each settings, and a `DsaHistoryReads` at the block's keys in place of each read of the rows
+    network, at the same selection (the shared layer's at the last indexer layer's), without the rows' zero pad; everything
+    else, the counted masks and their logits' pad included, as before."""
+    assert _batched(phi, 3, 1, False).digest == _batched(phi, 3, 1, True).digest
+    off, on = _batched(phi, 6, 2, False), _batched(phi, 6, 2, True)
+    assert off.digest != on.digest
+    a, b = _families(off.program.fn.body.nodes), _families(on.program.fn.body.nodes)
+    net, table, zero = ("DsaButterflySettings_v1", "DsaButterflyRows_v1", "DsaButterflyRowsPad_v1"), ("DsaTopKIndex_v1", "DsaHistoryReads_v1"), "Const16[0x0000]_v1"
+    assert [b[f] for f in net] == [0, 0, 0] and a[COUNTED] == b[COUNTED] > 0
+    assert [b[f] for f in table] == [a[net[0]], a[net[1]] + a[net[2]]] and a[net[2]] > 0
+    assert {f: n for f, n in a.items() if f not in (*net, zero)} == {f: n for f, n in b.items() if f not in (*table, zero)}
+    assert _wiring(on, table[0], table[1:]) == _wiring(off, net[0], net[1:]), "each row read at the same keys and selection"
+
+    def zeros(r):
+        return [n.n for n in r.program.fn.body.nodes if n.form == "batch" and n.fn.id == zero]
+    assert len(zeros(off)) == len(zeros(on)) + 1, "the rows network's zero pad is gone"
+
+
+def test_table_reads_are_the_batched_forms(phi):
+    with pytest.raises(ValueError, match="table_reads is the batched form's"):
+        build_program(phi, "request", LP=6, T=1, table_reads=True)
+
+
+def test_a_registration_with_table_reads_builds_and_traces_its_request_programs_by_table(tmp_path):
+    """`Registered.dsa_table_reads`: class G's registration builds a request Program past INDEX_TOPK in the table form
+    (`request_program`) and traces it with `--dsa-table-reads` after `--batched`; off (the default), neither.  A registration
+    with no batched form (a batch-invariant target), or with the prefix cache on, refuses it by name."""
+    from verity_vllm.program.predict.steps import Registered, plan_steps, request_program, trace_commands
+    from tests.program.predict.test_steps import _registered
+    hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
+    reg = _class_g(tmp_path, model={"hf_config": hf})
+    off = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
+    on = Registered.of(off.phi, 7, dsa_table_reads=True)
+    assert not off.dsa_table_reads
+    advice, ingress = _session([(6, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 6)], [(0, 6, 1)]])
+    (u,) = plan_steps(on, advice, ingress).requests
+    a, b = (request_program(r, u).program.fn.body.nodes for r in (off, on))
+    assert _members(b, "DsaTopKIndex_v1") == _members(a, "DsaButterflySettings_v1") > 0
+    assert _members(a, "DsaTopKIndex_v1") == _members(b, "DsaButterflySettings_v1") == 0
+    summary = {"requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(), "chunks": list(u.chunks),
+                             "digest": "d", "stop": u.stop}]}
+    (x,), (y,) = trace_commands(summary, off, "/t"), trace_commands(summary, on, "/t")
+    assert x[-1] == "--batched" and y == [*x, "--dsa-table-reads"]
+    assert _registered().phi.target_profile().batch_invariant
+    with pytest.raises(ValueError, match="dsa_table_reads is class G's batched form's"):
+        Registered.of(_registered().phi, 7, dsa_table_reads=True)
+    cached = Phi.from_json({**off.phi.to_json(), "engine": {**off.phi.engine, "enable_prefix_caching": True}})
+    assert not Registered.of(cached, 7).dsa_table_reads
+    with pytest.raises(ValueError, match="dsa_table_reads takes the prefix cache off"):
+        Registered.of(cached, 7, dsa_table_reads=True)
 
 
 def test_run_bits_route_each_served_order():
@@ -430,12 +502,14 @@ def test_class_g_compiles_a_prompt_whose_prefill_spans_two_window_edges(tmp_path
 
 
 @pytest.mark.slow
-def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_program(tmp_path):
+@pytest.mark.parametrize("table_reads", [False, True], ids=["rows-network", "table-reads"])
+def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_program(tmp_path, table_reads):
     """The prompt above (10 tokens in chunks of 6 and 4 beside a short request, then two decodes; rows past INDEX_TOPK from
     position 4), compiled at rank 0 under the cut checkpoint, and its trace: the command `trace_commands` gives it, run on the
     pinned vLLM with the cut config.json in the hub and no CUDA device visible, as the row driver runs a Build.  `compare` finds the
-    two digests equal.  What no cheaper test can: that the Build's `vllm_dsa` rule, on vLLM's own graph, traces the mask form the
-    predictor writes past INDEX_TOPK.  It needs the pinned vLLM (a pod's venv), so it skips without it."""
+    two digests equal, by the rows network and under the registration's table reads (`--dsa-table-reads`).  What no cheaper test
+    can: that the Build's `vllm_dsa` rule, on vLLM's own graph, traces the mask form the predictor writes past INDEX_TOPK.  It
+    needs the pinned vLLM (a pod's venv), so it skips without it."""
     pytest.importorskip("vllm")
     from verity_vllm.program.predict.steps import Registered, compare, compile_steps, trace_commands
     hub = tmp_path / "hub"
@@ -444,7 +518,8 @@ def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_p
     cp = Path(S.hf_config_path(str(hub), reg.phi.model["repo"], reg.phi.model["revision"]))
     assert cp.is_file(), "the config.json `_class_g` wrote, which the trace loads"
     cp.write_text(json.dumps(hf))
-    reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
+    reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7,
+                        dsa_table_reads=table_reads)
     advice, ingress = _session([(10, 3, {**GREEDY, "max_tokens": 3, "ignore_eos": True}), (3, 2, {**GREEDY, "max_tokens": 2, "ignore_eos": True})],
                                [[(0, 0, 6)], [(0, 6, 4), (1, 0, 3)], [(0, 10, 1), (1, 3, 1)], [(0, 11, 1)]])
     c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
@@ -453,7 +528,8 @@ def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_p
     assert _members(c.programs[u.digest].fn.body.nodes, COUNTED) == 3 * 8
     s = c.summary()
     (cmd,) = trace_commands(s, reg, str(tmp_path / "traces"))
-    assert json.loads(cmd[cmd.index("--launch-context") + 1])["chunks"] == [6, 4]
+    assert json.loads(cmd[cmd.index("--launch-context") + 1])["chunks"] == [6, 4] and ("--dsa-table-reads" in cmd) == table_reads
+    assert _members(c.programs[u.digest].fn.body.nodes, "DsaTopKIndex_v1") == (3 * 8 if table_reads else 0)
     subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", *cmd[1:]], check=True,
                    env={**os.environ, "HF_HUB_CACHE": str(hub), "CUDA_VISIBLE_DEVICES": ""})
     got = compare(s, str(tmp_path / "traces"))
@@ -465,7 +541,8 @@ def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_p
                                         "compiles GLM-5.3's first LAYERS layers (at least its 3 dense ones) for one request of KEYS "
                                         "positions (default: the served max_model_len)")
 def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
-    """Class G at its served limits (`CLASS_G_SERVED`): one greedy request of KEYS prompt tokens (the served max_model_len unless
+    """Class G at its served limits (`CLASS_G_SERVED`) under a launch of 131,072 positions (`CTX`): one greedy request of KEYS
+    prompt tokens (the served max_model_len unless
     stated) and one output, which its prefill's last row samples (no decode position: T 0), its prompt prefilled alone in chunks
     of the long-prefill threshold, its last row of KEYS keys. The step compiler plans it and builds its request Program on the meta device, every row past
     INDEX_TOPK (2,048) in the mask form at its class: no `run` input, its one check its length rule, one DsaTopKMaskCounted per full indexer layer and row
@@ -473,10 +550,10 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     the real INDEX_TOPK; a run of it measures its time and memory. GLM-5.3's 78 layers don't fit one machine unrolled at 131,072
     positions, so LAYERS cuts the checkpoint (3: its dense full-indexer layers; 4: then a MoE layer sharing the third's top-k)."""
     layers, _, keys = CTX131K.partition(":")
-    KEYS, CH = int(keys or CLASS_G_SERVED["max_model_len"]), CLASS_G_SERVED["long_prefill_token_threshold"]
-    assert KEYS <= CLASS_G_SERVED["max_model_len"]
+    KEYS, CH = int(keys or CTX), CLASS_G_SERVED["long_prefill_token_threshold"]
+    assert KEYS <= CTX
     from verity_vllm.program.predict.steps import Registered, compile_steps
-    reg = _class_g(tmp_path, layers=int(layers), engine=dict(CLASS_G_SERVED))
+    reg = _class_g(tmp_path, layers=int(layers), engine={**CLASS_G_SERVED, "max_model_len": CTX})
     reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
     hf, LP = reg.phi.hf_config, KEYS
     topk, full = int(hf["index_topk"]), hf["indexer_types"][:int(layers)].count("full")

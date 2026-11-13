@@ -22,3 +22,9 @@ uv run benchmarks/bool_build_cost/run.py --workload qwen3-06b --jobs 16 --out DI
 ~~~
 
 `--t 1,52,65` keeps only the attention specializations of those key lengths. `--part descriptor` is light enough for a VM.
+
+## Interface
+
+- **Provides:** `run.py`, a command, and the result it writes under `--out`.
+- **Loaded by:** nothing.
+- **Loads:** `verity.circuits`, `verity.definitions`, and the vLLM integration's `verity_vllm.query.program_view`.

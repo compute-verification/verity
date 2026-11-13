@@ -571,7 +571,7 @@ class TpRow(Row):
         if ck.replay_deferred in ("1", "slim"):    # slim reaches a TP row only at a world where tp-commit replays in process (`run_row`)
             cmd.append("--replay-deferred")
         if ck.serving_rows:
-            cmd += ["--serving-rows", self.serving_rows_request(ck.serving_rows)]
+            cmd += ["--serving-rows", self.serving_rows_request(ck)]
         if ck.remote_verifier:
             raise SystemExit("REMOTE_VERIFIER: the PoUB session is a single-GPU Commit's (one store per node)")
         return cmd + R.tap_source_args(taps, self.env) + (ck.extra_commit_args or "").split()

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import gzip
 import json
+import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -64,6 +66,76 @@ def test_window_reads_the_plan_in_the_arm_when_meta_names_none(tmp_path: Path):
 def test_window_refuses_a_step_shared_with_another_load(tmp_path: Path):
     with pytest.raises(SystemExit, match="another load"):
         R.window(arm(tmp_path, foreign=True), "sat", 1)
+
+
+def test_the_replays_engine_takes_the_headers_cache_format_and_draft(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A serve with an FP8 cache or speculative decoding is replayed on an engine with them; a header without them builds
+    the engine it did."""
+    stub_vllm(monkeypatch)
+    cfg = {"max_model_len": 4096, "max_num_seqs": 8, "max_num_batched_tokens": 512, "enable_chunked_prefill": True,
+           "enable_prefix_caching": True, "async_scheduling": True, "block_size": 16, "num_gpu_blocks": 100}
+    plain = R.engine(tmp_path, {"config": cfg}, eager=True)
+    assert not {"long_prefill_token_threshold", "kv_cache_dtype", "speculative_config"} & set(plain)
+    draft = {"method": "mtp", "num_speculative_tokens": 5}
+    got = R.engine(tmp_path, {"config": {**cfg, "long_prefill_token_threshold": 256, "kv_cache_dtype": "fp8_ds_mla",
+                                         "speculative": draft}}, eager=True)
+    assert {k: v for k, v in got.items() if k not in plain} == {
+        "long_prefill_token_threshold": 256, "kv_cache_dtype": "fp8_ds_mla", "speculative_config": draft}
+    assert {k: got[k] for k in plain} == plain
+
+
+def stub_vllm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """vLLM's ``EngineArgs`` as its keyword arguments and ``LLMEngine.from_engine_args`` as the identity."""
+    vllm, llm_engine = types.ModuleType("vllm"), types.ModuleType("vllm.v1.engine.llm_engine")
+    vllm.EngineArgs = lambda **kw: kw
+    llm_engine.LLMEngine = types.SimpleNamespace(from_engine_args=lambda args: args)
+    for name, mod in (("vllm", vllm), ("vllm.v1", types.ModuleType("vllm.v1")),
+                      ("vllm.v1.engine", types.ModuleType("vllm.v1.engine")), ("vllm.v1.engine.llm_engine", llm_engine)):
+        monkeypatch.setitem(sys.modules, name, mod)
+
+
+#: a header's config of a served engine whose launch left the context limit to vLLM, which fitted 1,008 to 64 blocks of 16
+FITTED = {"max_model_len": 1008, "max_model_len_auto": True, "max_num_seqs": 8, "max_num_batched_tokens": 512,
+          "enable_chunked_prefill": True, "enable_prefix_caching": True, "async_scheduling": True, "block_size": 16,
+          "num_gpu_blocks": 64}
+
+
+def test_the_replays_engine_is_launched_as_the_served_one_where_vllm_fitted_the_context_limit(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """vLLM builds the model before it fits the limit to the KV pool, so an engine launched at the fitted number is built at
+    another length than the served one: the replay's is launched at -1 on the header's block count. A header of a launch that
+    stated its length builds the engine it did."""
+    stub_vllm(monkeypatch)
+    stated = {k: v for k, v in FITTED.items() if k != "max_model_len_auto"}
+    got, plain = R.engine(tmp_path, {"config": FITTED}, eager=True), R.engine(tmp_path, {"config": stated}, eager=True)
+    assert (got["max_model_len"], got["num_gpu_blocks_override"]) == (-1, 64)
+    assert (plain["max_model_len"], plain["num_gpu_blocks_override"]) == (1008, 64)
+    assert {k: v for k, v in got.items() if k != "max_model_len"} == {k: v for k, v in plain.items() if k != "max_model_len"}
+
+
+class Scheduler:
+    """A scheduler that holds a context limit and no request, in an engine the step trace finds it in."""
+
+    def __init__(self, max_model_len: int):
+        self.max_model_len, self.requests = max_model_len, {}
+        self.cache_config = types.SimpleNamespace(block_size=16, num_gpu_blocks=64)
+        for name in ("add_request", "schedule", "update_from_output", "finish_requests"):
+            setattr(self, name, lambda *a, **kw: None)
+
+    def engine(self) -> types.SimpleNamespace:
+        return types.SimpleNamespace(engine_core=types.SimpleNamespace(scheduler=self), has_unfinished_requests=lambda: False)
+
+
+def test_the_replay_refuses_an_engine_whose_context_limit_is_not_the_served_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Before it adds a request: an engine on the header's block count that vLLM fitted another limit to stops a request
+    at another length than the served engine did."""
+    monkeypatch.setitem(sys.modules, "verity_vllm.engine.sampler_capture", types.ModuleType("verity_vllm.engine.sampler_capture"))
+    w = {"header": {"config": FITTED}, "requests": []}
+    monkeypatch.setattr(R, "engine", lambda *a, **kw: Scheduler(1008).engine())
+    assert R.replay(w, tmp_path, eager=True)["steps"] == []
+    monkeypatch.setattr(R, "engine", lambda *a, **kw: Scheduler(992).engine())
+    with pytest.raises(SystemExit, match="context limit of 992, the served engine's was 1008"):
+        R.replay(w, tmp_path, eager=True)
 
 
 def test_compare_counts_steps_rows_and_tokens_that_differ(tmp_path: Path):

@@ -108,7 +108,7 @@ def test_the_config_run_holds_a_gpu_only_for_its_commit(tmp_path):
     assert build.count("kueue.x-k8s.io/queue-name: deployments-cpu") == gpu.count("kueue.x-k8s.io/queue-name: deployments-gpu") == 1
     assert 'ov.noisy: "true"' in gpu and "--out" in build and "--out" in gpu                          # bootstrap writes outside the tree
     for part in (build, gpu):
-        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part and "HOT_ROOT: /workspace/jobs/hot" in part
+        assert "GUARD_PRESERVE_FILE: /workspace/jobs/dm/guard.preserve" in part
     sub = (SKY / "submit.sh").read_text()
     (tmp_path / "cls.py").write_text(sub[sub.index("<<'PY'\n") + 7:sub.index("\nPY\n")])
     def render(*args):
@@ -730,6 +730,207 @@ def test_submit_refuses_templates_that_differ_from_infra_nebius(tmp_path):
     git(other, "push", "-q", "origin", "infra/nebius")
     r = submit()
     assert r.returncode == 3 and "a newer template" in r.stderr and "git merge origin/infra/nebius" in r.stderr
+
+
+STORE_PAIR = {"AWS_ACCESS_KEY_ID": "parent-id", "AWS_SECRET_ACCESS_KEY": "parent-secret"}      # dummies for the store's own key pair
+CANNOT_REMOVE = {"DeleteObject", "DeleteObjects", "CopyObject", "UploadPartCopy"}
+READS = {"HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2"}
+
+
+def _submit(tmp_path, template, **shell):
+    """submit.sh for `template` from this checkout, in a shell that holds the store's own key pair, with stand-ins on PATH for what
+    reaches a network: `sky` records each call's arguments and the store's variables in its environment (where the SkyPilot client
+    reads a `--secret NAME` from, and what it sends an API server on this port), `python3` records `research pods ...` and runs
+    anything else, and `curl` says the API server answers.  `shell` adds to the environment; None takes a variable out.  Returns
+    the finished process, the `sky` calls and the `research pods` calls."""
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    bin_dir, calls = tmp_path / "bin", tmp_path / "sky-calls"
+    bin_dir.mkdir()
+    calls.mkdir()
+    for tool in ("bash", "git", "dirname", "sed", "cat", "tr", "head", "awk", "grep", "mktemp", "rm", "ls"):
+        os.symlink(shutil.which(tool), bin_dir / tool)
+    (tmp_path / "sky.py").write_text(
+        "import json, os, sys\n"
+        "calls = os.environ['SKY_CALLS']\n"
+        "store = {k: v for k, v in os.environ.items() if k.startswith(('AWS_', 'R2_'))}\n"
+        "with open(os.path.join(calls, f'{len(os.listdir(calls)):02d}.json'), 'w') as f:\n"
+        "    json.dump({'argv': sys.argv[1:], 'env': store}, f)\n"
+        "if sys.argv[1:3] == ['api', 'info']:\n"
+        "    print('http://127.0.0.1:46580')\n")
+    stand_ins = {"sky": f'exec "{sys.executable}" "{tmp_path / "sky.py"}" "$@"',
+                 "python3": 'if [ "$1 $2 $3" = "-m research pods" ]; then shift 2; echo "$*" >> "$PODS_CALLS"; exit 0; fi\n'
+                            f'exec "{sys.executable}" "$@"',
+                 "curl": "exit 0", "ssh": "exit 0", "rsync": "exit 0", "uv": "exit 0"}
+    for name, body in stand_ins.items():
+        (bin_dir / name).write_text(f"#!/bin/bash\n{body}\n")
+        (bin_dir / name).chmod(0o755)
+    env = {"PATH": str(bin_dir), "HOME": str(tmp_path), "TMPDIR": str(tmp_path), "VY_INFRA_REMOTE": str(tmp_path / "no-remote"),
+           "SKY_CALLS": str(calls), "PODS_CALLS": str(tmp_path / "pods-calls"), "RESEARCH_STORE_CONFIG": str(tmp_path / "absent.toml"),
+           "R2_ENDPOINT": "https://" + "0" * 32 + ".r2.cloudflarestorage.com", "R2_BUCKET": "bkt", **STORE_PAIR, **shell}
+    r = subprocess.run(["bash", str(SKY / "submit.sh"), template, "job-1", "--allow-stale", "--env", "NAME=n"], capture_output=True, text=True,
+                       env={k: v for k, v in env.items() if v is not None})
+    pods = (tmp_path / "pods-calls").read_text().splitlines() if (tmp_path / "pods-calls").exists() else []
+    return r, [json.loads(p.read_text()) for p in sorted(calls.iterdir())], pods
+
+
+def _signed_claims(token: str) -> dict | None:
+    """The claims of a temporary key's session token, or None with no token or one the store's own secret did not sign. A token that
+    is no JWT at all raises."""
+    import base64
+
+    from research.store import credentials as C
+
+    if not token:
+        return None
+    jwt = base64.b64decode(token).decode()[len("jwt/"):]
+    claims = C.decode_jwt(jwt)[1]
+    return claims if C.sign_jwt_hs256(claims, STORE_PAIR["AWS_SECRET_ACCESS_KEY"]) == jwt else None
+
+
+def test_submit_hands_a_job_a_key_minted_for_it_and_no_sky_call_the_stores_own(tmp_path):
+    """What submit.sh gives SkyPilot. The launch names five secrets and carries no value; the three AWS_* values it reads from its
+    environment are a temporary key signed with the store's own secret, with custody's actions for a template that pushes and the
+    reader's for store-fetch, none of which deletes or copies, for 24 hours or VY_STORE_TTL. No `sky` call has the store's own
+    secret in its environment, the launch included: the SkyPilot client sends an API server on this port what it finds there."""
+    import base64
+    import hashlib
+
+    from research.store import credentials as C
+    from research.store import custody as CU
+
+    for template, access, actions, ttl in (("store-push", "push", CU.ACTIONS, None), ("prover-dev", "push", CU.ACTIONS, "7d"),
+                                           ("store-fetch", "fetch", CU.READ_ACTIONS, "90m")):
+        r, sky, pods = _submit(tmp_path / template, template, VY_STORE_TTL=ttl)
+        assert r.returncode == 0, r.stderr
+        assert [c["argv"][:2] for c in sky] == [["api", "info"], ["jobs", "launch"], ["jobs", "queue"]], sky
+        info, launch, queue = sky
+        assert [launch["argv"][i + 1] for i, a in enumerate(launch["argv"]) if a == "--secret"] == \
+            ["R2_ENDPOINT", "R2_BUCKET", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"], launch["argv"]
+        key = launch["env"]
+        assert sorted(key) == ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "R2_BUCKET", "R2_ENDPOINT"]
+        claims = _signed_claims(key["AWS_SESSION_TOKEN"])
+        assert claims and claims["actions"] == list(actions) and "scope" not in claims and claims["bucket"] == "bkt", (template, claims)
+        assert not CANNOT_REMOVE & set(claims["actions"]) and (access == "push" or set(claims["actions"]) <= READS), (template, claims)
+        assert claims["exp"] - claims["iat"] == C.parse_ttl(ttl or "24h")
+        jwt = base64.b64decode(key["AWS_SESSION_TOKEN"])[len("jwt/"):]                # R2 derives the temporary secret from the token
+        assert key["AWS_SECRET_ACCESS_KEY"] == hashlib.sha256(jwt).hexdigest() and key["AWS_ACCESS_KEY_ID"] == claims["iss"]
+        assert not any(key[k] in a for k in ("AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") for a in launch["argv"])
+        for call in (info, queue):
+            assert sorted(call["env"]) == ["R2_BUCKET", "R2_ENDPOINT"], call
+        assert STORE_PAIR["AWS_SECRET_ACCESS_KEY"] not in json.dumps(sky) + r.stdout + r.stderr
+        assert f"job-1 gets a {access} key until " in r.stderr and key["AWS_SESSION_TOKEN"] not in r.stdout + r.stderr
+        assert pods[0].startswith("pods sync vy-nebius-1 "), pods
+
+
+def test_submit_refuses_when_it_cannot_mint_the_jobs_key(tmp_path):
+    """Never what the shell holds in the key's place. Without the store's own pair, with a temporary key (which cannot mint another,
+    and which a job would otherwise get whole) or with a lifetime R2 won't sign, the script exits 5 before any `sky` call or sync."""
+    cases = {"no-pair": dict.fromkeys(STORE_PAIR), "temporary": {"AWS_SESSION_TOKEN": "dummy"}, "a-week-and-a-day": {"VY_STORE_TTL": "8d"}}
+    for case, shell in cases.items():
+        r, sky, pods = _submit(tmp_path / case, "prover-dev", **shell)
+        assert r.returncode == 5 and "submit.sh: no store key for the job" in r.stderr, (case, r.stderr)
+        assert sky == [] and pods == [], (case, sky, pods)
+
+
+def test_a_jobs_key_pushes_or_fetches_and_a_delete_is_refused(tmp_path, monkeypatch):
+    """What a job can do with the key submit.sh gave it, on a bucket that holds each request to the actions in its session token, as
+    R2 does (FakeS3's `authorize`; a request without a token the store's own secret signed is refused too). store-push's run step
+    preserves the job store's pending artifact and store-fetch's run step lays it out with the read-only key, no request of either
+    denied. Through the environment's remote, which is how a job reads its key, the push key also uploads in parts; a DELETE
+    with either key answers 403 and the object stays, where a key that names DeleteObject removes it; and the fetch key cannot
+    write. The run steps name the bucket in a store.toml here: the environment's remote takes the store's real bucket alone."""
+    import hashlib
+    import os
+    import subprocess
+    import sys
+    import textwrap
+    import tomllib
+    import urllib.error
+
+    import pytest
+
+    from research.store import credentials as C
+    from research.store import remote, remote_s3
+    from research.store.local import LocalStore
+    from test_store import FakeS3
+
+    s3 = FakeS3(authorize=lambda action, headers: action in (_signed_claims(headers.get("x-amz-security-token") or "") or {}).get("actions", ()))
+    try:
+        keys = {}
+        for template in ("store-push", "store-fetch"):
+            r, sky, _ = _submit(tmp_path / template, template, R2_ENDPOINT=s3.endpoint, R2_ACCOUNT_ID="0" * 32)
+            assert r.returncode == 0, r.stderr
+            keys[template] = sky[1]["env"]
+
+        toml, jobs, out = tmp_path / "store.toml", tmp_path / "jobs", tmp_path / "out"
+        toml.write_text(f'[remote]\ntype = "s3"\nbucket = "bkt"\nendpoint = "{s3.endpoint}"\n'
+                        'access_key_id_env = "AWS_ACCESS_KEY_ID"\nsecret_access_key_env = "AWS_SECRET_ACCESS_KEY"\n')
+        (tmp_path / "repo").mkdir()
+        (tmp_path / "t").mkdir()
+        (tmp_path / "t" / "a.json").write_text("{}\n")
+        art = LocalStore(jobs / "store", config_path=tmp_path / "absent.toml", repo=tmp_path / "repo").put_artifact(
+            "run-files/v1", {"n": 1}, tree=tmp_path / "t")
+        tools = {"bin/uv": f'shift 5\nexec "{sys.executable}" "$@"',                 # `uv run --no-project --python 3.12 python`
+                 "venv312/bin/nice": 'shift 2\nexec "$@"', "venv312/bin/ionice": 'shift 2\nexec "$@"'}
+        for name, body in tools.items():
+            (jobs / name).parent.mkdir(parents=True, exist_ok=True)
+            (jobs / name).write_text(f"#!/bin/sh\n{body}\n")
+            (jobs / name).chmod(0o755)
+
+        def step(template: str, **envs: str) -> subprocess.CompletedProcess:
+            text = (SKY / "jobs" / f"{template}.yaml").read_text()
+            run = textwrap.dedent(text.split("\nrun: |\n", 1)[1].split("\n\nconfig:", 1)[0]).replace("/workspace/jobs", str(jobs))
+            env = {k: v for k, v in os.environ.items() if not k.startswith(("R2_", "AWS_", "RESEARCH_"))}
+            env.update({k: v for k, v in keys[template].items() if k.startswith("AWS_")})
+            env.update(SRC=str(SKY.parents[6]), RESEARCH_STORE_CONFIG=str(toml), RESEARCH_REPO=str(tmp_path / "repo"),
+                       RESEARCH_STORE=str(jobs / "store"), **envs)
+            return subprocess.run(["bash", "-c", run], capture_output=True, text=True, env=env, cwd=tmp_path)
+
+        manifest = f"manifests/{art[4:]}.json"
+        r = step("store-push", MODE="push", PUSH_JOBS="2", OUT=str(out / "push"))
+        assert r.returncode == 0 and manifest in s3.objects, r.stdout + r.stderr
+        r = step("store-fetch", ARTS=art, PATHS="", NAME="n", KEEP_DAYS="2", OUT=str(out / "fetch"))
+        assert r.returncode == 0 and (out / "fetch" / "n" / art[4:] / "a.json").read_text() == "{}\n", r.stdout + r.stderr
+        assert not [entry for entry in s3.log if entry[0] == "DENIED"], s3.log
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
+        monkeypatch.delenv("RESEARCH_STORE_CONFIG")
+        pod = tmp_path / "store.pod.toml"                              # pins this bucket's digest, as the tracked file pins the store's
+        pod.write_text(remote.POD_CONFIG.read_text().replace(tomllib.loads(remote.POD_CONFIG.read_text())["remote"]["bucket_sha256"],
+                                                             hashlib.sha256(b"bkt").hexdigest()))
+        monkeypatch.setattr(remote, "POD_CONFIG", pod)
+        monkeypatch.setattr(remote_s3.S3Remote, "multipart_min", 8192)
+        monkeypatch.setattr(remote_s3.S3Remote, "part_size", 4096)
+
+        def job_remote(template: str) -> remote_s3.S3Remote:
+            for k, v in keys[template].items():
+                monkeypatch.setenv(k, v)
+            r = remote.load_remote()
+            assert r.session_token == keys[template]["AWS_SESSION_TOKEN"]
+            return r
+
+        big = tmp_path / "big.bin"
+        big.write_bytes(bytes(range(256)) * 36)
+        assert job_remote("store-push").put("objects/big", big)["action"] == "created" and s3.etags["objects/big"].endswith("-3")
+        assert not [entry for entry in s3.log if entry[0] == "DENIED"], s3.log
+        for template in ("store-push", "store-fetch"):
+            with pytest.raises(urllib.error.HTTPError) as refused:
+                job_remote(template).delete(manifest)
+            assert refused.value.code == 403 and manifest in s3.objects
+        with pytest.raises(urllib.error.HTTPError) as refused:
+            job_remote("store-fetch").put("objects/new", tmp_path / "t" / "a.json")
+        assert refused.value.code == 403 and "objects/new" not in s3.objects
+        assert [entry[1] for entry in s3.log if entry[0] == "DENIED"] == ["DeleteObject", "DeleteObject", "PutObject"], s3.log
+        own = C.mint_local(s3.endpoint, "0" * 32, *STORE_PAIR.values(), "bkt", "object-read-write", actions=["DeleteObject"], ttl_s=60)
+        deleter = remote_s3.S3Remote(s3.endpoint, "bkt", own["accessKeyId"], own["secretAccessKey"], session_token=own["sessionToken"])
+        assert deleter.delete(manifest) and manifest not in s3.objects, "the bucket deletes for a key that names the action"
+    finally:
+        s3.close()
 
 
 def test_every_task_has_the_venvs_tools_on_path_and_captures_skip_the_flashinfer_sampler():

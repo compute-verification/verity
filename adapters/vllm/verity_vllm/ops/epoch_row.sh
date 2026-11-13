@@ -79,7 +79,7 @@ run_stage() {  # run_stage STAGE LOG CMD...: CMD in the background under the sta
 
 small() {   # the workload's small files into evidence/ (idempotent; called after each step)
   mkdir -p "$EV/row"
-  for f in stages.txt row.log timeline.jsonl build_summary.json verdict.json target_family.json admission.json manifest.log \
+  for f in stages.txt row.log timeline.jsonl build_summary.json verdict.json target_family.json manifest.log \
            match_summary.json global_match.json commit/manifest_verify.json commit/verdict.json commit/summary.json commit/runs.jsonl; do
     [ -f "$D/$f" ] && [ "$(stat -c %s "$D/$f")" -lt 50000000 ] && { mkdir -p "$EV/row/$(dirname "$f")"; cp "$D/$f" "$EV/row/$f"; }
   done

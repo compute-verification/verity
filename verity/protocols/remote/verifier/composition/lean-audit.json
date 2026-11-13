@@ -2,7 +2,7 @@
  "roots": ["CoreComposition"],
  "layers": {
   "CoreComposition.Product": {
-   "imports": ["CoreProtocol.Protocol", "Flock.Hash"],
+   "imports": ["CoreProtocol.Protocol", "Base.Hash"],
    "except": [],
    "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security"
   },

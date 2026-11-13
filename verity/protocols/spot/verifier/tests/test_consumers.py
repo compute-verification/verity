@@ -7,16 +7,17 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from decimal import Decimal, localcontext
 from fractions import Fraction
-from math import log2
+from math import comb, log2
 from pathlib import Path
 
 import pytest
 
 from verity.circuits.partition import Level
 from verity.protocols.spot.verifier.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-from verity.protocols.spot.verifier.consumers import (UNCERTIFIED_COMPUTE, compute_bound, exfiltration_bound,
-                                                            infiltration_bound, location_bits)
+from verity.protocols.spot.verifier.consumers import (UNCERTIFIED_COMPUTE, compute_bound, entropy_bits,
+                                                            exfiltration_bound, infiltration_bound, location_bits)
 from verity.protocols.spot.verifier.service import REPLAY
 
 #: A4 P6's layer 0 (one-stage-e2e): six templates, 6,771,765 proof blocks, in canonical order.
@@ -76,6 +77,32 @@ def test_the_location_term_bounds_the_number_of_wrong_sets():
         assert exact <= location_bits(p) <= exact + log2(n) + 1
     assert location_bits(IntegrityProfile(("unit",), (8,), {"unit": Subset(8)}, 0.01)) == 0.0
     assert location_bits(IntegrityProfile(("unit",), (8,), {"unit": Subset(1)}, 0.01)) == 8.0
+
+
+@pytest.mark.parametrize("n, rate", [(512, Fraction(1, 2)), (10 ** 17, Fraction(1, 2)), (10 ** 18, Fraction(1, 2)),
+                                     (10 ** 21, Fraction(1, 3)), (3348 * 10 ** 18, Fraction(1, 5))])
+def test_the_location_term_bounds_the_wrong_sets_at_any_population(n, rate):
+    """Past 2^53 proof blocks a handful of incorrect ones is a share of them no float tells from none: the term is
+    still at least log2 of the number of sets, counted exactly, and within 1.5 bits a block of it."""
+    p = IntegrityProfile(("unit",), (n,), {"unit": Bernoulli(rate)}, 0.01)
+    K = p.bound()
+    with localcontext() as context:
+        context.prec = 50
+        exact = Decimal(sum(comb(n, j) for j in range(K + 1))).ln() / Decimal(2).ln()
+        assert 2 <= K <= 30 and exact <= Decimal(location_bits(p)) <= exact + Decimal("1.5") * K
+
+
+@pytest.mark.parametrize("n, k", [(512, 4), (10 ** 9, 10 ** 4), (10 ** 12, 1000), (17_784 * 10 ** 12, 1000),
+                                  (17_784 * 10 ** 12, 33 * 10 ** 6), (10 ** 17, 5), (10 ** 18, 10 ** 6),
+                                  (10 ** 18, 10 ** 12), (3348 * 10 ** 18, 10 ** 5), (3348 * 10 ** 18, 2 * 10 ** 9),
+                                  (3348 * 10 ** 18, 22 * 10 ** 14), (10 ** 21, 3)])
+def test_the_entropy_holds_its_digits_at_any_population(n, k):
+    """n H2(k / n) against its value in 50-digit decimals, to 2^-45 of it: far inside the margin `location_bits` raises
+    it by, at populations where the float 1 - k / n is 1."""
+    with localcontext() as context:
+        context.prec = 50
+        exact = (k * (Decimal(n) / k).ln() + (n - k) * (Decimal(n) / (n - k)).ln()) / Decimal(2).ln()
+        assert abs(Decimal(entropy_bits(n, k)) - exact) <= exact * Decimal(2) ** -45
 
 
 def test_the_bound_is_at_least_audit_exfiltration_evaluated_in_lean():

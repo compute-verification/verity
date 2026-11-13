@@ -47,15 +47,6 @@ WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
 RECORDS = MANIFESTS / "records.json"
-#: The PoUB session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
-REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
-#: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
-VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
-#: The directory holding ``p2_v1``, P2's encoded weights store (``p2_v1/store.py``) and its CUDA library's wrapper, which
-#: POUS encodes with (`protocols.pous`).
-P2_POUS = ROOT.parent.parent / "benchmarks" / "pous"
-#: The staging decode's directory (``stage.py``, loaded as the package ``p2_stage``), POUS's decode at use on the GPU.
-P2_STAGE = ROOT.parent.parent / "benchmarks" / "torch_gpu" / "p2_stage"
 
 
 def checkpoints_hf_home() -> str | None:
@@ -177,10 +168,6 @@ class RowId:
     def __str__(self) -> str:
         return "__".join((self.model, self.dtype, self.target, f"tp{self.world}", f"b{self.batch}", f"i{self.max_input}",
                           f"o{self.max_output}", self.arrivals, self.sampling, self.execution))
-
-
-#: A row id inside text (a workload path, a log line): ten ``__``-separated fields, the four integer ones by their prefix.
-ROW_ID_PATTERN = r"[\w\-]+__[\w\-]+__[\w\-]+__tp\d+__b\d+__i\d+__o\d+__\w+__\w+__[\w\-]+"
 
 
 def row_tokens(row: str) -> list[str]:
@@ -693,10 +680,6 @@ class CommitConfig:
                                      help="extra Commit flags appended after --program-digest, verbatim")
     replay_args: str | None = option("--replay-args", env="REPLAY_ARGS", default=None, help="extra replay flags, verbatim")
     replay_workers: int = option("--replay-workers", env="REPLAY_WORKERS", type=int, default=32, help="TP: replay workers")
-    hot_engine: str = option("--hot-engine", env="HOT_ENGINE", default="0", help="1 = run the Commit on the pod's hot worker")
-    group: str = option("--commit-group", env="COMMIT_GROUP", default="", metavar="MEMBERS_JSON",
-                        help="config run: the rows of one engine (this row included) committed in one process under one GPU lease, and "
-                             "replayed by this row's replay stage (verity_vllm.pipeline.row_group)")
     commit_timeout: int | None = option("--commit-timeout", env="COMMIT_TIMEOUT", type=int, default=None,
                                         help="seconds (default scales with B and the envelope; TP: 7200)")
     vu_export: str = option("--vu-export", env="VU_EXPORT", default="1",
@@ -707,6 +690,13 @@ class CommitConfig:
                                            "deferred Commit (REPLAY_DEFERRED=1; slim refused) commits them at its C2 site, before its "
                                            "bundle is sealed (c2_replay.serving_rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
+    serving_rows_tables: str | None = option("--serving-rows-tables", env="SERVING_ROWS_TABLES", default=None, metavar="REGISTRATION_JSON",
+                                             help="the per-expert cut's tables registration (verity-vllm tp-register-tables --out; {rank} "
+                                                  "in its path its rank's): the windows commit the tables their reads read under it, so "
+                                                  "their records declare them (verity_vllm.pipeline.expert_rows.of_request); needs "
+                                                  "SERVING_ROWS and SERVING_ROWS_TABLES_KEY")
+    serving_rows_tables_key: str | None = option("--serving-rows-tables-key", env="SERVING_ROWS_TABLES_KEY", default=None, metavar="KEY",
+                                                 help="the committer's key file SERVING_ROWS_TABLES is registered under (--new-key's)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the PoUB session's verifier: the Commit proves its store to it in lockstep "
                                               "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")
@@ -755,8 +745,6 @@ class RunEnv:
     hidden_so_fa3_guarded: str = option("--hidden-so-fa3-guarded", help="the guarded-max FA3 tap build (ops/pod_fa3_tap.sh, FA3_TAP_ROW_GUARD=1), used unless --guarded-max-tap 0")
     norm_tap_so: str = option("--norm-tap-so", help="the norm-scale tap op (ops/pod_norm_tap.sh), used unless --norm-tap 0")
     router_tap_so: str = option("--router-tap-so", help="the router-softmax tap op (ops/pod_router_tap.sh), used unless --router-tap 0")
-    hot_root: str = option("--hot-root", env="HOT_ROOT")
-    hot_idle: str = option("--hot-idle", env="HOT_IDLE", default="900")
     timeline: str | None = option("--timeline", env="VERITY_TIMELINE", default=None,
                                   help="stage telemetry file (default: <row dir>/timeline.jsonl)")
     verity_tree: str | None = option("--verity-tree", env="VERITY_TREE", default=None,

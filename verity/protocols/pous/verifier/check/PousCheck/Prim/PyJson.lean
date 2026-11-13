@@ -86,15 +86,15 @@ def go : Nat → List Char → Bool → Array Char → Bool → Array Char × Bo
       | [] => (out.push c, bad)
     else go n cs (c != '"') (out.push c) bad
   | n + 1, c :: cs, false, out, bad =>
-    let null := out ++ "null".toList.toArray
+    let null := "null".toList.toArray
     if c == '"' then go n cs true (out.push c) bad
-    else if c == 'N' && cs.take 2 == ['a', 'N'] then go n (cs.drop 2) false null true
-    else if c == 'I' && cs.take 7 == "nfinity".toList then go n (cs.drop 7) false null true
-    else if c == '-' && cs.take 8 == "Infinity".toList then go n (cs.drop 8) false null true
+    else if c == 'N' && cs.take 2 == ['a', 'N'] then go n (cs.drop 2) false (out ++ null) true
+    else if c == 'I' && cs.take 7 == "nfinity".toList then go n (cs.drop 7) false (out ++ null) true
+    else if c == '-' && cs.take 8 == "Infinity".toList then go n (cs.drop 8) false (out ++ null) true
     else if numberChar c then
       let (tok, rest) := (c :: cs).span numberChar
       match float? tok with
-      | some inf => go n rest false null (bad || inf)
+      | some inf => go n rest false (out ++ null) (bad || inf)
       | none => go n rest false (out ++ tok.toArray) bad
     else go n cs false (out.push c) bad
 

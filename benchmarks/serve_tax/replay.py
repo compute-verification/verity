@@ -6,7 +6,8 @@
 The window is the load's requests: its step trace's steps from the first one's arrival to the last one's finish, all of them
 the load's own (each load starts from an empty prefix cache and ends drained). The replay builds the served engine again
 in this process (``VLLM_ENABLE_V1_MULTIPROCESSING=0``) from the trace's header (its batch caps, chunked prefill, prefix
-caching, async scheduling, block size and block count), compiled unless ``--eager``, and adds each request, under its served
+caching, async scheduling, block size and block count, and where the header holds them the long-prefill threshold, the KV
+cache's format and the speculative decoding: `HEADER_ARGS`), compiled unless ``--eager``, and adds each request, under its served
 engine id with its served prompt and sampling, right before the scheduled step it arrived before in the trace (a wrapper of
 the scheduler's ``schedule``); the scheduler decides the rest as it did while serving. Its own step trace (`StepTrace`) is
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
@@ -76,17 +77,28 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
             "served_s": steps[-1]["t"] - arrive[0]["t"], "served_t0": arrive[0]["t"]}
 
 
+#: the engine argument for each entry of the header's config that is passed only where the header holds it: a header holds
+#: the KV cache's format and the speculative decoding only where the served engine left vLLM's defaults
+HEADER_ARGS = {"long_prefill_token_threshold": "long_prefill_token_threshold", "kv_cache_dtype": "kv_cache_dtype",
+               "speculative": "speculative_config"}
+
+
 def engine(checkpoint: Path, header: dict, eager: bool, tp: int = 1) -> Any:
+    """The served engine again, from the trace's header. Its context limit is the header's, launched as the served one was:
+    where that launch left the limit to vLLM (the header's ``max_model_len_auto``), at -1 on the header's block count, so
+    that vLLM builds the model at the checkpoint's own limit and fits the served limit to the pool, as it did while serving
+    (`replay` refuses an engine it fitted another to)."""
     from vllm import EngineArgs
     from vllm.v1.engine.llm_engine import LLMEngine
 
     cfg = header["config"]
     args = EngineArgs(model=str(checkpoint), dtype="bfloat16", seed=0, trust_remote_code=True, enforce_eager=eager,
                       **({"tensor_parallel_size": tp} if tp > 1 else {}),
-                      max_model_len=cfg["max_model_len"], max_num_seqs=cfg["max_num_seqs"],
+                      max_model_len=-1 if cfg.get("max_model_len_auto") else cfg["max_model_len"], max_num_seqs=cfg["max_num_seqs"],
                       max_num_batched_tokens=cfg["max_num_batched_tokens"], enable_chunked_prefill=cfg["enable_chunked_prefill"],
                       enable_prefix_caching=cfg["enable_prefix_caching"], async_scheduling=cfg["async_scheduling"],
-                      block_size=cfg["block_size"], num_gpu_blocks_override=cfg["num_gpu_blocks"], disable_log_stats=True)
+                      block_size=cfg["block_size"], num_gpu_blocks_override=cfg["num_gpu_blocks"], disable_log_stats=True,
+                      **{arg: cfg[key] for key, arg in HEADER_ARGS.items() if key in cfg})
     return LLMEngine.from_engine_args(args)
 
 
@@ -112,6 +124,10 @@ def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False, tp: i
         eng.collective_rpc(SC.install, args=(capture[0],))
     ready = time.monotonic() - t0
     trace = StepTrace().install(eng)
+    limit, served = trace.records[0]["config"].get("max_model_len"), w["header"]["config"].get("max_model_len")
+    if limit != served:
+        raise SystemExit(f"the replay's engine has a context limit of {limit}, the served engine's was {served}: not the "
+                         f"engine that served this window")
     pending = sorted(w["requests"], key=lambda r: r["before_step"])
     tokens: dict[str, list[int]] = {}
     lps: dict[str, list[float]] = {}

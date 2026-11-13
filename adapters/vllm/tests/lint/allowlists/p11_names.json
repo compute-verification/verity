@@ -1,9 +1,6 @@
 {
   "rule": "P11 (names say the job; versions only in hashed data)",
   "entries": [
-    {"file": "verity_vllm/commitments/vllm_v1", "kind": "package-name", "symbol": "<package>", "detail": "vllm_v1"},
-    {"file": "verity_vllm/commitments/vllm_v1/__init__.py", "kind": "class-name", "symbol": "<module>", "detail": "VllmV1"},
-    {"file": "verity_vllm/acquire/compiled.py", "kind": "flag-name", "symbol": "BuildOptions", "detail": "--digest-v1"},
     {"file": "verity_vllm/acquire/fa2_tap_src/apply_v8.py", "kind": "module-name", "symbol": "<module>", "detail": "apply_v8"},
     {"file": "verity_vllm/acquire/sources/hidden_source.py", "kind": "class-name", "symbol": "<module>", "detail": "HiddenM1Source"},
     {"file": "verity_vllm/acquire/sources/hidden_source.py", "kind": "class-name", "symbol": "<module>", "detail": "HiddenM1SourceFA3"},
@@ -38,7 +35,6 @@
     {"file": "verity/definitions/registry/b1_tp2.py", "kind": "def-name", "symbol": "<module>", "detail": "serve_tp2"},
     {"file": "verity/definitions/registry/b1_tp2.py", "kind": "module-name", "symbol": "<module>", "detail": "b1_tp2"},
     {"file": "verity/definitions/numerics/derived_rows.py", "kind": "def-name", "symbol": "<module>", "detail": "rmsnorm_fused_v2_rows"},
-    {"file": "verity/definitions/registry/lifted.py", "kind": "def-name", "symbol": "<module>", "detail": "_splits_for_v1"},
     {"file": "verity/definitions/registry/lifted.py", "kind": "def-name", "symbol": "<module>", "detail": "lifted_prim_v1"},
     {"file": "verity/definitions/numerics/rmsnorm_fused.py", "kind": "def-name", "symbol": "<module>", "detail": "variance_v1"},
     {"file": "verity/definitions/numerics/rmsnorm_fused.py", "kind": "def-name", "symbol": "<module>", "detail": "variance_v2"},
@@ -47,7 +43,6 @@
     {"file": "verity/definitions/registry/sampling_rows.py", "kind": "def-name", "symbol": "<module>", "detail": "add_rz_ftz_v1_model"},
     {"file": "verity/definitions/registry/sampling_rows.py", "kind": "def-name", "symbol": "<module>", "detail": "nv_log1pf_v1_model"},
     {"file": "verity/definitions/registry/serve3.py", "kind": "def-name", "symbol": "<module>", "detail": "serve_v3"},
-    {"file": "verity/definitions/registry/topp_geometry.py", "kind": "def-name", "symbol": "<module>", "detail": "splits_for_v1"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "class-name", "symbol": "<module>", "detail": "TP2CaptureWorkerExtension"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "_tp2_attribution"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "_tp2_binding"},
@@ -71,6 +66,8 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_probe"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_profiler_start"},
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_profiler_stop"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_repo_modules"}
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "def-name", "symbol": "TP2CaptureWorkerExtension", "detail": "tp2_repo_modules"},
+    {"file": "verity_vllm/commitments/vllm_v1", "kind": "package-name", "symbol": "<package>", "detail": "vllm_v1"},
+    {"file": "verity_vllm/commitments/vllm_v1/__init__.py", "kind": "class-name", "symbol": "<module>", "detail": "VllmV1"}
   ]
 }

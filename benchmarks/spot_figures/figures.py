@@ -6,7 +6,11 @@ Figure 4 (`figure4.py`) reads Figure 1's configurations and serve taxes.  `--wor
 points and run Lean's checks of their designs, each point one job, so the JSON is the same at any number of them.
 
     uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR [--points N] [--request workload]
-        [--workers N] [--no-lean]
+        [--workers N] [--no-lean] [--serving measured]
+
+`--serving measured` reads serving's rate from the model's `serving_rate` card (`figure1.SERVING`) and writes into
+DIR/measured, each JSON that read the rate naming it under `serving`; without it every figure is planned at rho's
+fleet utilization, whatever cards exist.
 """
 from __future__ import annotations
 
@@ -39,18 +43,22 @@ def main(argv=None) -> None:
                     help="processes planning Figure 1's points and running Lean's checks of them (default: every CPU)")
     ap.add_argument("--no-lean", dest="lean", action="store_false",
                     help="plan Figure 1 without Lean's check of its designs and without the break-even's certificate")
+    ap.add_argument("--serving", choices=figure1.SERVING, default=figure1.SERVING[0], help=total_cost.SERVING_HELP)
     args = ap.parse_args(argv)
+    args.out = figure1.outdir(args.out, args.serving)
     args.out.mkdir(parents=True, exist_ok=True)
     from render import render, render_appendix
 
-    one = total_cost.run(args.model, request=args.request, workers=args.workers, lean=args.lean)
+    one = total_cost.run(args.model, request=args.request, workers=args.workers, lean=args.lean, serving=args.serving)
     one["at_budgets"] = total_cost.at_budgets(one)
-    one["breakeven"] = total_cost.breakeven(args.model, request=args.request, workers=args.workers, lean=args.lean)
+    one["breakeven"] = total_cost.breakeven(args.model, request=args.request, workers=args.workers, lean=args.lean,
+                                            serving=args.serving)
     (args.out / "breakeven.txt").write_text(total_cost.breakeven_table(one["breakeven"]))
     write(one, args.out / "figure1.json")
     for name in one["scopes"]:
         total_cost.render(one, name, args.out)
-    over = figure1.run(args.model, args.points, request=args.request, workers=args.workers, lean=args.lean)
+    over = figure1.run(args.model, args.points, request=args.request, workers=args.workers, lean=args.lean,
+                       serving=args.serving)
     over["at_overhead"] = figure1.at_overhead(over)
     write(over, args.out / "figure1_overhead.json")
     for name in over["scopes"]:
@@ -59,7 +67,7 @@ def main(argv=None) -> None:
     two = figure2.run(args.model)
     write(two, args.out / "figure2.json")
     figure2.render(two, args.out)
-    three = figure3.run(args.model)
+    three = figure3.run(args.model, args.serving)
     write(three, args.out / "figure3.json")
     figure3.render(three, args.out)
     four = figure4.run(args.model, one)

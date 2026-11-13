@@ -1,6 +1,6 @@
 """Closure samples: the verification plan for `ncp-v2`'s partition (design note §12.2 (2′), §12.3).
 
-The strata are the verifier's own (`Flock/Draw.lean` `strataOf`): one per template of the
+The strata are the verifier's own (`Commitments/Draw.lean` `strataOf`): one per template of the
 call's partition, its units as ranges, in the order of their first unit. The sampling design samples each stratum; the plan then proves
 each sampled tile together with its **closure**: its X strip's unit, its strip's digest unit, the tree-node units on that
 strip's path to D_A and the call's key unit, each proved once, and its Y strip's unit in the weight's own Program
@@ -11,7 +11,7 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
 **The sampling design is a seam** (`TileLaw`), so the plan switches laws without changing:
 * `CountLaw` is one_stage's stratified sampling design: one stratum per template, a uniform k_s-subset
   inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the sampling design's budget over the strata it samples.
-* `WorkLaw` is the verifier's work sampling design with its floors (`Flock/Draw.lean` `workK`):
+* `WorkLaw` is the verifier's work sampling design with its floors (`Commitments/Draw.lean` `workK`):
   k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), with K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`) and f_s the
   verifier's floor. `work_table` is the verifier's `--work-table` and `design_object` the sampling design `verify` derives from it. K is
   a **execution phase's** budget: a call samples its share K_c = ⌈K·W_c/W_window⌉, capped at its units, and its y cells at the
@@ -138,7 +138,7 @@ RECORD_K = 27_713
 
 @dataclass(frozen=True)
 class WorkLaw:
-    """The work sampling design (`Flock/Draw.lean` `workK`): each stratum samples
+    """The work sampling design (`Commitments/Draw.lean` `workK`): each stratum samples
     k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), W_s its work, W the strata's total, 1 ≤ K ≤ N, and f_s ≥ 1 its floor from the
     verifier's own table (1 for every template it doesn't name). The floor binds for the strata that do no work
     (every template but the tile's). ``k`` is the budget K (`record_k`)."""

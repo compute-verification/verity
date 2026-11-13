@@ -42,9 +42,6 @@ namespace NetTiming
 
 open Claims Claims.Sampling
 
-/-- The observations of the runs before run `i`, in order. -/
-def runsBefore {m : ℕ} {α : Type} (o : Fin m → α) (i : Fin m) : List α := (List.ofFn o).take i.val
-
 /-- **The row run `i` opens under the record rule**: the row run `i - 1` left (`rout (i - 1)`) where run `i` carries the
 pool (`chains i`), and `genesis i` otherwise. Over roots it is `Registration.poolOpen`. -/
 def poolOpen {m : ℕ} {R : Type} (chains : Fin m → Bool) (genesis rout : Fin m → R) (i : Fin m) : R :=

@@ -7,7 +7,7 @@ import pytest
 
 from verity_machine_model import theta as T
 from verity_machine_model.cli import main
-from verity_machine_model.model import DATA, device
+from verity_machine_model.model import DATA, card, device
 
 SM120, SM90 = DATA, device("sm_90")
 
@@ -159,6 +159,38 @@ def test_the_rules_refuse_an_unsourced_or_wrong_rate(tmp_path):
         T.theta(tmp_path / "d")
     p.write_text(text.replace("figure = 1979\n", "figure = 1900\n", 1))
     assert not T.figures(T.theta(tmp_path / "d"))[0].holds
+
+
+def test_a_ceiling_is_read_from_the_card_file_and_from_nowhere_else(tmp_path):
+    for data in (SM120, SM90):
+        t, c = T.theta(data), card(data)
+        assert t.sms == c["sm"]["count"]["value"] and t.clocks["fmax"].mhz == c["clock"]["sm"]["value"]
+        assert t.rates["tensor.tf32.k8"].sheet == c["rate"]["tensor"]["value"] / c["weight"]["tf32"]["value"]
+        assert t.rates["smem.read"].sheet == 4 * c["rate"]["smem"]["value"]
+        assert t.capacities["hbm"].value == c["store"]["dram"]["value"]
+        assert f"{c['sku']}.toml, rate.tensor: " in t.rates[T.INT8].source
+        h, sha = card(data, "host"), t.rates["host.sha512"]
+        assert sha.sheet == pytest.approx(h["clock"]["turbo"]["value"] * 1e9 * 8 / 1036, rel=1e-12)
+        assert sha.source.startswith(f"verity/hardware/cards/{h['sku']}.toml, clock.turbo: ")
+    assert card(SM120, "host")["cpu"]["priority_cores"]["value"] == 8 and "(cpu.priority_cores, 8 a socket)" in \
+        T.theta(SM120).rates["host.sha512"].what
+    shutil.copytree(SM90, tmp_path / "d", ignore=shutil.ignore_patterns("census", "vectors", "designs"))
+    p = tmp_path / "d" / T.THETA
+    text = p.read_text()
+    p.write_text(text.replace('card = "rate.issue"\n', 'card = "rate.issue"\nsheet = 4\n', 1))
+    with pytest.raises(SystemExit, match="issue reads the card file \\(rate.issue\\) and also gives sheet"):
+        T.theta(tmp_path / "d")
+    p.write_text(text.replace('card = "rate.issue"\n', 'card = "rate.l2"\n', 1))
+    with pytest.raises(SystemExit, match="marks rate.l2 a placeholder, not a ceiling"):
+        T.theta(tmp_path / "d")
+    p.write_text(text.replace('card = "rate.issue"\n', 'card = "rate.warp"\n', 1))
+    with pytest.raises(SystemExit, match="h200-sxm-141gb.toml has no entry rate.warp"):
+        T.theta(tmp_path / "d")
+    p.write_text(text.replace('card = "rate.issue"\n', 'card = "host:rate.amx"\n', 1))
+    assert T.theta(tmp_path / "d").rates["issue"].source.startswith("verity/hardware/cards/xeon-platinum-8468-2s.toml")
+    p.write_text(text.replace('card = "rate.issue"\n', 'card = "nic:rate.issue"\n', 1))
+    with pytest.raises(SystemExit, match="nic:rate.issue names no card"):
+        T.theta(tmp_path / "d")
 
 
 def test_the_command_and_the_render(capsys):

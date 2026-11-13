@@ -8,12 +8,16 @@ public import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericKSAt
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericKSRegAt
 public import Proofs.Flock.Claims.Witnesses.SamplingTwo
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoKSAt
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoWork
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoCredit
 public import Proofs.Flock.Claims.Witnesses.SamplingGenericComplete
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoRankin
+public import Proofs.Flock.Claims.Witnesses.SamplingTwoReg
+public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegMiss
+public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegX
 public import Proofs.Flock.Claims.Witnesses.Encodings
 public import Proofs.Flock.Claims.Witnesses.EncodingsGeneric
 public import Proofs.Flock.Claims.Witnesses.ZKOutLeak
@@ -32,7 +36,8 @@ Every claim definition in `Definitions.Core.Interaction` and `Definitions.Claims
 concrete toy instance at which the claim is false, so its definition constrains something. `Shared` has the shared
 forms' witnesses and the toys they use, `Flock` Flock's, `Sampling` the sampling compiler's, `SamplingGeneric` the
 generic sampled compiler's (with their statements over the spec; `SamplingGenericCost` its cost claims',
-`SamplingGenericKSAt` its KS read at a time budget, with `CompilerKSAt`'s nontrivial lemma, and `SamplingGenericZK` its
+`SamplingGenericKSAt` its KS read at a time budget, with `CompilerKSAt`'s nontrivial lemma, `SamplingGenericKSRegAt`
+its committed form read at a time budget, with `CompilerKSRegAt`'s, and `SamplingGenericZK` its
 zero-knowledge claims' and `ZKOut`'s) and `Recursion` the ZK-recursion compiler's. A claim still met by a trivial
 instance has a theorem `<Claim>_vacuous` that exhibits it.
 
@@ -45,7 +50,9 @@ sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`). 
 under `claims.generic` with the guarantee that states it, which the lock's `witnesses` holds to an honest and a
 nontrivial lemma (`SamplingGenericCompiler`, `SamplingGenericComplete`, `SamplingTwo` for the two-stage compiler,
 `SamplingTwoKSAt` for its extractor's cost and its KS read at a time budget, `SamplingTwoRankin` for Rankin's bound on
-its count, `ZKOutLeak`, and the registered encodings' `EncodingsGeneric` at the toys of `Encodings`).
+its count, `SamplingTwoReg` for its committed form and headline, `SamplingTwoRegMiss` for its miss bound and the
+headline's honest lemma, `SamplingTwoRegX` for the three at the boundary trace read at the statement, `ZKOutLeak`, and
+the registered encodings' `EncodingsGeneric` at the toys of `Encodings`).
 -/
 
 @[expose] public section

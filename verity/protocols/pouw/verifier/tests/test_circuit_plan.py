@@ -34,7 +34,7 @@ def _by_role(lay):
 
 
 def test_the_strata_are_the_verifiers_own():
-    """One stratum per template, its units as merged ranges, in the order of their first unit (`Flock/Draw.lean` `strataOf`
+    """One stratum per template, its units as merged ranges, in the order of their first unit (`Commitments/Draw.lean` `strataOf`
     over core's evaluation of the partition query), covering the population exactly."""
     from verity.circuits import partition_object as PO
     from verity.protocols.pouw.prover.circuit import partition as P
@@ -70,7 +70,7 @@ def test_the_work_law_sizes_tiles_by_work_and_the_rest_at_its_floor():
 
 def test_the_work_law_is_roots_rule():
     """The work rule, k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)): T0 has 3 units of work 3 and T2 4 units of work 0, and `work:2`
-    samples 2 and 1; a floor of 3 on T2 samples 3. The rule's own example (`Flock/Draw.lean`) also gives work to a second template (T1, 3 units of
+    samples 2 and 1; a floor of 3 on T2 samples 3. The rule's own example (`Commitments/Draw.lean`) also gives work to a second template (T1, 3 units of
     work 1), which a call's table may not (`hone`, `check_work_strata`), so the verifier refuses it."""
     import pytest
 

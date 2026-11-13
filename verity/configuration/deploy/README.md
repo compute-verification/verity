@@ -7,29 +7,27 @@ ambient clock or randomness: its clock readings and coins are messages from sour
 party code runs live, simulated, replayed, or live against recorded counterparts, and a replay reproduces it exactly.
 Nothing is retried: every failure the runtime sees finishes the party refused by name, and a party that dies fails its run.
 
-## Top-level API
+## Interface
 
-- `party.Party` (`party.py`): a party as a sans-IO next-message machine, `start(params, identity)` and then
-  `on(received)`, each returning its actions (`Send`, `Timer`, `LogEntry`, `Finish`), as
-  `security/Definitions/Core/Interaction.lean` states a prover and a verifier.
-- `manifest.Manifest` and `manifest.place` (`manifest.py`): what a protocol declares (its parties as `Role`s, its
-  channels, its messages and what it needs of the workload), and the check of a placement of its parties on a site's
-  machines: owners, capabilities, coins never crossing a developer-owned machine, and latency bounds.
-- `config.check`, `config.digest` and `config.new` (`config.py`): the configuration, `verity/config/v0`, checked against
-  what each listed subprotocol and the workload declare, each refusal by name, and its hash, SHA-512 of its canonical JSON
-  without the transport-only fields.
-- `runtime.run` (`runtime.py`): the parties placed here, run in one of the modes `simulated`, `live`, `mixed` or `replay`.
-  `process.spawn`'s child, `demos/lifecycle` and the toy table of `verity run`'s step-0 test call it; the served
-  table of `verity run` runs `served_verdicts.sh` instead.
-- `transcript.PartyLog` and `transcript.record` (`transcript.py`): a party's append-only log of a run, each entry a wire
-  frame, and the run's record, the logs' entries of the public kinds.
+What code outside this directory may use. Everything else here is internal.
+
+| Entry point | What it is |
+|---|---|
+| `party.Party` (`party.py`) | A party as a sans-IO next-message machine: `start(self, params: Params, identity: Identity) -> list[Action]` and then `on(self, msg: Received) -> list[Action]`, each returning its actions (`Send`, `Timer`, `LogEntry`, `Finish`), as `security/Definitions/Core/Interaction.lean` states a prover and a verifier. `Identity` is who the party is and what its machine gives it, and `Received` a message that reached it. |
+| `manifest.Manifest`, with `Role` and `Channel`, and `manifest.place(manifest: Manifest, site: Topology, bindings: Mapping[str, str], *, simulated: bool = False) -> PlaceResult` (`manifest.py`) | What a protocol declares (its parties as `Role`s, its channels, its messages and what it needs of the workload), and the check of a placement of its parties on a site's machines: owners, capabilities, coins never crossing a developer-owned machine, and latency bounds. |
+| `config.check(cfg: Mapping[str, Any], components: Mapping[str, Component], workloads: Mapping[str, Workload]) -> dict[str, Any]`, `config.digest(cfg: Mapping[str, Any]) -> str` and `config.new(workload: str, protocols: Sequence[str], components: Mapping[str, Component], workloads: Mapping[str, Workload], commit: str, machine: str = LOCAL) -> dict[str, Any]` (`config.py`) | The configuration, `verity/config/v0`: checked against what each listed subprotocol and the workload declare (`Component`, `Workload`), each refusal by name; its hash, SHA-512 of its canonical JSON without the transport-only fields; and a new one that states only its choices. `parse` and `render` read and write its TOML, `declared` gives the parties and channels the declarations make between them, and `composite` the id of the configuration, onsite or remote, that the listed protocols make (`COMPOSITES`). |
+| `runtime.run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state_dir: str \| os.PathLike \| None, *, protocols: Mapping[str, ProtocolDef], ...) -> RunResult` (`runtime.py`) | The parties placed here, run in one of the modes `simulated`, `live`, `mixed` or `replay`. `runtime.ProtocolDef` is a protocol as the runtime runs it: its manifest and a factory for each of its parties. The result holds each party's outcome and its log, a `transcript.PartyLog` (`transcript.py`): a party's append-only log of a run, each entry a wire frame. `transcript.record` is the run's record, the logs' entries of the public kinds. |
+| `stream.run(party: Party, params: Params, identity: Identity, f: BinaryIO, codec: Codec, *, peer: str, clock: Callable[[], int] \| None = None, coins: Callable[[int], bytes] \| None = None, wait: Callable[[Callable[[], int], int], None] = sleep_until) -> tuple[Finish, list[LogEntry]]` and `stream.Side` (`stream.py`) | A party over a byte stream in its protocol's own codec, until it finishes: its finish and what it recorded. `stream.Side` is a party's side as another process or machine runs it. |
+
+Internal, reached only through `runtime.run`'s arguments:
+
 - `channels` (`channels.py`): the pipes, untrusted by both ends: in memory, over TCP, `Playback` (a recorded side),
   `Tee` (the log writer) and `Adversary` (drops, delays, reorders or corrupts frames).
 - `sources` (`sources.py`): clocks and coins as parties on the same machine: `VirtualClock` or `RealClock`,
   `SeededCoins` or `OsCoins`.
 - `process.spawn` (`process.py`): a party in a process of its own on this machine, over TCP to the run that spawned it.
-- `stream.run` and `stream.Side` (`stream.py`): a party over a byte stream in its protocol's own codec, and a party's side
-  as another process or machine runs it.
+
+The served table of `verity run` doesn't go through `runtime.run`: it runs `served_verdicts.sh`.
 
 ## Where to look
 

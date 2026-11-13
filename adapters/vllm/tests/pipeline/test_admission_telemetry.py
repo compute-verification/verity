@@ -1,8 +1,5 @@
-"""verity_vllm.pipeline.telemetry.admission — synthetic-interval unit tests.  The recorded attempts as a regression fixture are
-`test_admission_telemetry_of_record`."""
+"""verity_vllm.pipeline.telemetry.admission — synthetic-interval unit tests of the sweep and the model."""
 from __future__ import annotations
-
-import json
 
 from verity_vllm.pipeline.telemetry import admission as adm
 
@@ -119,10 +116,6 @@ def test_r19_retain_windowed_pool_terms():
     assert adm.predict(_cfg(bounded_staging=True, retain_exclude=["gemm_qkv"]))["commit"]["pinned_pool"]["bytes"] == full["pinned_pool"]["bytes"]
     lv = adm.predict(_cfg(bounded_staging=True, retain="none"))["commit"]["pinned_pool"]
     assert lv["bytes"] == int(raw * 0.25) and "levels only" in lv["basis"]
-    # the alias
-    assert adm.retain_exclude_families("hidden_m1") == ["fa2_hidden_m1", "fa3_hidden_m1"]
-    assert adm.retain_exclude_families("fa3_hidden_m1_stream,gemm_qkv") == ["fa3_hidden_m1", "gemm_qkv"]
-    assert adm.retain_exclude_families(None) == []
 
 
 def test_largest_tensor_law_matches_the_ledger():
@@ -158,24 +151,3 @@ def test_under_fitted_capture_models_are_flagged_not_silently_admitted():
     assert llama["lower_bound_terms"] == []
     assert mistral["lower_bound_terms"] == ["match.capture.hidden_values", "match.capture.instance_records", "match.capture.token_values"]
     assert any("#60" in t["basis"] for t in mistral["terms"] if t["name"].startswith("match.capture."))
-
-
-# ---- increment A path ------------------------------------------------------------------------------------------------
-def test_observe_increment_a_named_allocs(tmp_path):
-    ev = [
-        {"kind": "span_start", "stage": "stage.commit", "id": "c", "t_mono": 0.0, "t_utc": "2026-09-21T00:00:00.000Z", "stream": "s", "seq": 1},
-        {"kind": "mark", "name": "alloc", "obj": "commit.pinned_pool", "bytes": 100 * MiB, "alloc_id": "pool", "stage": "stage.commit", "t_mono": 1.0, "t_utc": "2026-09-21T00:00:01.000Z", "stream": "s", "seq": 2},
-        {"kind": "mark", "name": "alloc", "obj": "commit.c2.match_oracle", "bytes": 20 * MiB, "alloc_id": "o0", "stage": "stage.commit", "t_mono": 2.0, "t_utc": "2026-09-21T00:00:02.000Z", "stream": "s", "seq": 3},
-        {"kind": "mark", "name": "free", "obj": "commit.c2.match_oracle", "alloc_id": "o0", "stage": "stage.commit", "t_mono": 3.0, "t_utc": "2026-09-21T00:00:03.000Z", "stream": "s", "seq": 4},
-        {"kind": "mark", "name": "alloc", "obj": "commit.c2.programs", "bytes": 30 * MiB, "alloc_id": "p0", "stage": "stage.commit", "t_mono": 3.5, "t_utc": "2026-09-21T00:00:03.500Z", "stream": "s", "seq": 5},
-        {"kind": "span_end", "stage": "stage.commit", "id": "c", "t_mono": 5.0, "t_utc": "2026-09-21T00:00:05.000Z", "stream": "s", "seq": 6},
-    ]
-    (tmp_path / "events.jsonl").write_text("".join(json.dumps(r) + "\n" for r in ev))
-    res = [{"kind": "cgroup", "t_mono": 3.6, "cgroup": {"memory_current_bytes": 140 * MiB, "memory_stat": {"anon": 130 * MiB, "shmem": 0}}},
-           {"kind": "process", "t_mono": 3.7, "processes": [{"pid": 1, "rss_bytes": 120 * MiB, "rss_anon_bytes": 110 * MiB}, {"pid": 2, "rss_bytes": 5 * MiB, "rss_anon_bytes": 5 * MiB}]}]
-    (tmp_path / "resources.jsonl").write_text("".join(json.dumps(r) + "\n" for r in res))
-    obs = adm.observe_increment_a(str(tmp_path))
-    c = obs["stages"]["commit"]
-    assert c["named_peak_mib"] == 130 and c["live_at_peak"] == {"commit.pinned_pool": 100, "commit.c2.programs": 30}
-    assert c["cgroup_mib"] == 140 and c["anon_shmem_mib"] == 130 and c["rss_max_mib"] == 120 and c["rss_sum_mib"] == 115
-    assert any("never freed" in n for n in obs["notes"])

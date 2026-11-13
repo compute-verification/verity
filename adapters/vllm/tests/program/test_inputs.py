@@ -18,11 +18,10 @@ ROOT = Path(__file__).resolve().parents[4]
 FIX = "serve it canonically"
 
 #: the list only shrinks: lower the cap with the entry that goes
-ALLOWED_CAP = 2
+ALLOWED_CAP = 1
 
 #: where each `ALLOWED` entry is still made or read, so an entry nothing makes is stale
 MADE_AT = {
-    "splits": ("adapters/vllm/verity_vllm/program/predict/build.py", '("splits", '),
     "run.survey_hole": ("adapters/vllm/verity_vllm/program/frontend/rules/training_survey.py", '"survey_hole"'),
 }
 PACKAGE = ROOT / "adapters/vllm/verity_vllm"
@@ -35,11 +34,12 @@ def test_a_declared_parameter_has_its_kind(name, kind):
 
 
 def test_an_allowed_parameter_returns_its_reason_and_an_undeclared_one_is_refused_with_the_fix():
-    assert "SplitsFor_v1" in IN.parameter("rank0.splits")
+    assert "check_identity" in IN.parameter("run.survey_hole")
     with pytest.raises(IN.Free, match=FIX):
         IN.parameter("tile_choice")
-    with pytest.raises(IN.Free, match="'rank0.schedule'"):
-        IN.parameter("rank0.schedule")
+    for retired in ("rank0.schedule", "rank0.splits"):
+        with pytest.raises(IN.Free, match=repr(retired)):
+            IN.parameter(retired)
     with pytest.raises(IN.Free, match="'rank1.tile_choice'"):
         IN.check_params([("prompt", None), ("run", None), ("rank1.tile_choice", None), ("weights", None)])
     IN.check_params([("prompt", None), ("seed", None), ("run", None), ("peers_0", None), ("weights", None)])

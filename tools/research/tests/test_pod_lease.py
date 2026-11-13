@@ -193,6 +193,104 @@ def test_arming_over_ssh_writes_the_lease_starts_one_loop_and_the_idle_guard(tmp
         _kill(first["lease_pid"], first["guard_pid"])
 
 
+def _birth(pid: int) -> str:
+    """When `pid` was forked, as lease.sh's lease_birth writes it: field 22 of its stat, counted after the name's last `)`, and
+    the boot's id."""
+    ticks = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[19]
+    return f"{ticks}@{Path('/proc/sys/kernel/random/boot_id').read_text().strip()}"
+
+
+@pytest.fixture
+def bystander(tmp_path):
+    """A running process that is no lease loop and whose command line never names lease.sh: a shell waiting on a FIFO that
+    nothing writes, in its own session as a loop is."""
+    gate = Fifo(tmp_path / "gate")
+    proc = subprocess.Popen(["sh", "-c", f"read line < {gate.path}"], start_new_session=True)
+    try:
+        yield proc
+    finally:
+        proc.kill()
+        proc.wait()
+        gate.close()
+
+
+def _pid_file(tmp_path: Path, text: str) -> Path:
+    f = tmp_path / "lease" / "lease.pid"
+    f.parent.mkdir()
+    f.write_text(text)
+    return f
+
+
+def test_arming_keeps_the_process_the_pid_file_names_whatever_its_command_line_reads(tmp_path, reap, bystander):
+    """A loop is known by its pid and its birth.  Its command line says nothing: one just started reads empty while the process is
+    inside an execve, and this one never names lease.sh at all."""
+    assert b"lease.sh" not in Path(f"/proc/{bystander.pid}/cmdline").read_bytes()
+    record = f"{bystander.pid} {_birth(bystander.pid)}\n"
+    pid_file = _pid_file(tmp_path, record)
+    rep = _arm_locally(tmp_path)
+    try:
+        assert rep["lease_pid"] == bystander.pid and rep["lease_alive"], "the process the pid file names runs: no other loop is started"
+        assert pid_file.read_text() == record
+    finally:
+        _kill(rep["lease_pid"], rep["guard_pid"])
+
+
+@pytest.mark.parametrize("names", ["a later process given the pid", "a process of an earlier boot", "a pid alone"])
+def test_arming_starts_a_loop_when_the_pid_file_names_another_process_than_the_one_running(tmp_path, reap, bystander, names):
+    ticks, boot = _birth(bystander.pid).split("@")
+    record = {"a later process given the pid": f"{bystander.pid} {int(ticks) - 1}@{boot}\n",
+              "a process of an earlier boot": f"{bystander.pid} {ticks}@not-this-boot\n",
+              "a pid alone": f"{bystander.pid}\n"}[names]
+    pid_file = _pid_file(tmp_path, record)
+    rep = _arm_locally(tmp_path)
+    try:
+        loop = rep["lease_pid"]
+        assert loop != bystander.pid and rep["lease_alive"], f"the pid file named {names}, not a loop of this pod"
+        assert pid_file.read_text() == f"{loop} {_birth(loop)}\n", "the new loop is named, by its pid and its birth"
+    finally:
+        _kill(rep["lease_pid"], rep["guard_pid"])
+
+
+@pytest.mark.parametrize("names", ["a zombie", "a pid no process has"])
+def test_arming_starts_a_loop_when_the_process_the_pid_file_names_has_ended(tmp_path, reap, names):
+    ended = subprocess.Popen(["true"])
+    try:
+        os.waitid(os.P_PID, ended.pid, os.WEXITED | os.WNOWAIT)       # it has exited and nothing has reaped it: its stat still reads
+        record = f"{ended.pid} {_birth(ended.pid)}\n"
+        if names == "a pid no process has":
+            ended.wait()
+        pid_file = _pid_file(tmp_path, record)
+        rep = _arm_locally(tmp_path)
+        try:
+            named = pid_file.read_text()
+            assert rep["lease_alive"] and named != record, f"the pid file named {names}, not a running loop"
+            assert named == f"{rep['lease_pid']} {_birth(rep['lease_pid'])}\n"
+        finally:
+            _kill(rep["lease_pid"], rep["guard_pid"])
+    finally:
+        ended.wait()
+
+
+def test_a_second_loop_exits_beside_the_one_the_pid_file_names_and_takes_the_pod_once_that_names_none(tmp_path, bystander):
+    env = lease_env(tmp_path, LEASE_NOW=str(NOW), RESEARCH_LEASE_EXPIRES=str(NOW - 1000))
+    ticks, boot = _birth(bystander.pid).split("@")
+    pid_file = _pid_file(tmp_path, f"{bystander.pid} {ticks}@{boot}\n")
+    running = lease_sh(env, "pid")
+    assert (running.returncode, running.stdout) == (0, f"{bystander.pid}\n")
+    assert lease_sh(env, "loop").returncode == 0
+    assert not (tmp_path / "terminated").exists(), "it exited before a tick, though the lease is long past"
+    assert f"another lease loop ({bystander.pid}) holds this pod; exiting" in (tmp_path / "lease" / "lease.log").read_text()
+    assert pid_file.read_text() == f"{bystander.pid} {ticks}@{boot}\n"
+    pid_file.write_text(f"{bystander.pid} {int(ticks) - 1}@{boot}\n")
+    running = lease_sh(env, "pid")
+    assert (running.returncode, running.stdout) == (1, ""), "a later process given the pid is no loop"
+    loop = subprocess.Popen(["sh", str(L.LEASE_SH), "loop"], env=env)
+    assert loop.wait() == 0 and (tmp_path / "terminated").read_text().split() == [POD], "no loop is named: this one runs, and ends the pod"
+    named, birth = pid_file.read_text().split()
+    assert named == str(loop.pid) and birth.endswith(f"@{boot}")
+    assert lease_sh(env, "pid").returncode == 1, "a loop that has ended is none"
+
+
 def test_idle_min_zero_arms_the_lease_and_no_idle_guard(tmp_path, monkeypatch, reap):
     real = L.arm_script
     monkeypatch.setattr(L, "arm_script", lambda seconds, **kw: real(seconds, **{**kw, "idle_min": 0}))

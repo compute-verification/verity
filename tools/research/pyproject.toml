@@ -42,30 +42,18 @@ untraced = [
     "tests/test_dirty_capture.py",
     "tests/test_disk_hold.py",
     "tests/test_doctor.py",
-    "tests/test_drive_alarms.py",
-    "tests/test_drive_carry.py",
-    "tests/test_drive_checked.py",
-    "tests/test_drive_config.py",
-    "tests/test_drive_executor.py",
-    "tests/test_drive_hold_lift.py",
-    "tests/test_drive_locks.py",
-    "tests/test_drive_lowrisk.py",
-    "tests/test_drive_moves.py",
-    "tests/test_drive_policy.py",
-    "tests/test_drive_red_fixes.py",
-    "tests/test_drive_review.py",
-    "tests/test_drive_stale.py",
-    "tests/test_drive_unlandable.py",
     "tests/test_env_credentials.py",
     "tests/test_evict_src.py",
     "tests/test_evict_src_local.py",
+    "tests/test_executor.py",
     "tests/test_fixture_fetch.py",
     "tests/test_fleet.py",
     "tests/test_gates.py",
+    "tests/test_gpu_lease_cores.py",
     "tests/test_holds.py",
     "tests/test_jobs_dispatch.py",
     "tests/test_jobuser.py",
-    "tests/test_labelauth.py", "tests/test_lean_prune.py",
+    "tests/test_labelauth.py", "tests/test_lean_prune.py", "tests/test_landing.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_merge_shards.py",
@@ -87,12 +75,14 @@ untraced = [
     "tests/test_pod_lease.py",
     "tests/test_pods_connect.py",
     "tests/test_pods_registry.py",
+    "tests/test_policy.py",
     "tests/test_pyspy.py",
     "tests/test_pythonpath.py",
     "tests/test_queue.py",
-    "tests/test_queue_drive.py",
+    "tests/test_queue_moves_carry.py", "tests/test_queue_flags.py",
     "tests/test_queue_open.py",
     "tests/test_queue_ported.py",
+    "tests/test_queue_stale.py",
     "tests/test_record_driver.py",
     "tests/test_record_result.py",
     "tests/test_records_short_head.py",
@@ -108,6 +98,7 @@ untraced = [
     "tests/test_research_cancel.py",
     "tests/test_run_custody.py",
     "tests/test_run_cwd_clone.py",
+    "tests/test_run_env.py",
     "tests/test_run_launched.py",
     "tests/test_run_on_fixes.py",
     "tests/test_scopemem.py",
@@ -123,6 +114,7 @@ untraced = [
     "tests/test_undeclared_derivation.py",
     "tests/test_vqueue_compare.py",
     "tests/test_vqueue_loop.py",
+    "tests/test_vqueue_records.py",
     "tests/test_vqueue_slim.py",
 ]
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
@@ -141,13 +133,12 @@ untraced = [
 # and the settings it reads: test_queue commits them into its origin, so the preflight's tests select suites by its own `touched`.
 # tools/verity/check/gates/markdown_caps.py and tests/test_repository.py: test_queue commits them into its origin, so its sync
 # runs the Markdown caps' landing gate on the caps it reads. tools/verity/check/pins.py: test_queue commits it into its origin, so
-# the sync's pin rebuild (`repinned`) reads the real `PINS`. tools/move/rename.py, layout.py and restack.py and
-# tools/verity/check/move_check.py: test_drive_moves commits them into its origin, so the sync regenerates, certifies and
-# restacks a move with the scripts it runs from the tree. tools/verity/graph/tests/key_vectors.json: test_drive_executor holds
+# the sync's pin rebuild (`repinned`) reads the real `PINS`. tools/verity/graph/tests/key_vectors.json: test_executor holds
 # the executor client's graph/v2 key rule to the vectors both sides of the contract reproduce. tools/verity/lean/lean_changed.py
 # and the files its `--inputs-key` loads (lean_audit.py, settings.py, module_keys.py, headers.py, check.py, siblings.py, axiom_probe.py,
 # tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py): test_queue commits them
-# into its origin, so the records gate keys each commit's Lean inputs with its own code (`lean_keys`).
+# into its origin, so the records gate keys each commit's Lean inputs with its own code (`lean_keys`). tools/move/rename.py,
+# layout.py and restack.py: test_queue_moves_carry commits them into its origin and restacks a head across the moves they make.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/definitions/kernels",
           "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
           "pyproject.toml", "verity/configuration/config/pyproject.toml", "verity/protocols/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
@@ -157,7 +148,7 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra
           "infra/cluster", "tools/verity/lean/pyproject.toml", "tools/verity/lean/run_daily.py", "tools/verity/lean/merge.py",
           "tools/verity/lean/check.py", "tools/verity/check/suites.py", "tools/verity/check/gates/markdown_caps.py", "tests/test_repository.py", "tests/test_retired_terms.py", "tools/verity/check/pins.py", "benchmarks/native_peak/pyproject.toml",
           "benchmarks/tc_probe_fp4/pyproject.toml", "tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py",
-          "tools/verity/check/move_check.py", "tools/verity/graph/tests/key_vectors.json", "tools/verity/lean/lean_changed.py",
+          "tools/verity/graph/tests/key_vectors.json", "tools/verity/lean/lean_changed.py",
           "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/headers.py",
           "tools/verity/lean/siblings.py", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/check/common.py",
           "tools/verity/graph/verity_graph/contract.py",
@@ -177,11 +168,11 @@ exports = ["tools/research/src/research/__init__.py", "tools/research/src/resear
            "tools/research/src/research/pythonpath.py", "tools/research/src/research/queue.py",
            "tools/research/src/research/quick_tier.py", "tools/research/src/research/record.py",
            "tools/research/src/research/remote.py", "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
-           "tools/research/src/research/withdraw.py",
+           "tools/research/src/research/treelock.py", "tools/research/src/research/withdraw.py",
            "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
            "tools/research/src/research/waitcap.py",
            "tools/research/src/research/pods/__init__.py", "tools/research/src/research/pods/registry.py",
-           "tools/research/src/research/pods/runpod.py",
+           "tools/research/src/research/pods/runpod.py", "tools/research/src/research/pods/nebius/tool_rules.py",
            "tools/research/src/research/store/__init__.py", "tools/research/src/research/store/attempt.py",
            "tools/research/src/research/store/canon.py", "tools/research/src/research/store/cli.py",
            "tools/research/src/research/store/cli_prov.py", "tools/research/src/research/store/derivation.py",
@@ -200,18 +191,9 @@ exports = ["tools/research/src/research/__init__.py", "tools/research/src/resear
 [[tool.verity.tests.reads]]
 tests = [
     "tests/test_checked_guard.py",
-    "tests/test_drive_alarms.py",
-    "tests/test_drive_carry.py",
-    "tests/test_drive_checked.py",
-    "tests/test_drive_config.py",
-    "tests/test_drive_executor.py",
-    "tests/test_drive_hold_lift.py",
-    "tests/test_drive_lowrisk.py",
-    "tests/test_drive_moves.py",
-    "tests/test_drive_red_fixes.py",
-    "tests/test_drive_review.py",
-    "tests/test_drive_stale.py",
-    "tests/test_drive_unlandable.py",
+    "tests/test_executor.py",
+    "tests/test_queue_flags.py",
+    "tests/test_queue_stale.py",
 ]
 paths = ["tools/verity/check/gates"]
 
@@ -220,13 +202,14 @@ tests = ["tests/test_cli.py", "tests/test_usage_cli.py"]
 paths = ["infra/cluster/src/cluster"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_drive_policy.py", "tests/test_queue_ported.py"]
+tests = ["tests/test_policy.py", "tests/test_queue_ported.py"]
 paths = ["tools/verity/check/gates/markdown_caps.py"]
 
 [[tool.verity.tests.reads]]
 tests = [
     "tests/test_cores.py",
     "tests/test_jobuser.py",
+    "tests/test_landing.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
     "tests/test_remote_preflight.py",
