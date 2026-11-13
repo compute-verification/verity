@@ -1,10 +1,10 @@
-"""The streamed check beside `check` on one per-member case: v2's ``check`` (`case_files.run`), then the stream's
-``plan`` and ``check-stream`` (`Core.StreamProtocol.main` at `Spot.OneStageZk.Streamed.protocol`, built as STREAM_EXE),
-its blobs listed in the plan's order (the pinned tables the case holds first, in their order), and two feeds it must
-refuse: two planned blobs swapped, and one planned blob with a byte changed.
+"""The streamed check beside `check` on one per-member case: v2's ``check`` (`case_files.run`), then its ``plan`` and
+``check-stream`` (`Core.StreamProtocol.main` at `Spot.OneStageZk.Streamed.protocol`, two commands of the same
+executable), its blobs listed in the plan's order (the pinned tables the case holds first, in their order), and two
+feeds it must refuse: two planned blobs swapped, and one planned blob with a byte changed.
 
-    stream_case.py DIR --case CASE --stream-exe EXE
-    stream_case.py DIR --members M --bin FLOCK_CIRCUIT --lean-bin LEAN_BIN_DIR --stream-exe EXE
+    stream_case.py DIR --case CASE
+    stream_case.py DIR --members M --bin FLOCK_CIRCUIT --lean-bin LEAN_BIN_DIR
 
 With --members the case is `members_files.audited`'s stand-in window. Prints one JSON line a command: its exit, its
 last line, its seconds and peak RSS; the stream's rows say whether its line is ``check``'s.
@@ -56,7 +56,6 @@ def main() -> None:
     ap.add_argument("--members", type=int)
     ap.add_argument("--bin", type=Path)
     ap.add_argument("--lean-bin", type=Path)
-    ap.add_argument("--stream-exe", type=Path, required=True)
     a = ap.parse_args()
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
@@ -69,7 +68,8 @@ def main() -> None:
     print(json.dumps({"case": str(path), "audit_s": audit_s, "members": len(case["params"]["proofs"]["members"]),
                       "blobs": len(case["blobs"])}), flush=True)
 
-    check = CF.run(case, PF.v2_executable(), "check", a.dir / "check")
+    exe = PF.v2_executable()
+    check = CF.run(case, exe, "check", a.dir / "check")
     print(json.dumps({"command": "check"} | check), flush=True)
 
     d = a.dir / "stream"
@@ -78,7 +78,7 @@ def main() -> None:
     for name, b in (("p", params.encode()), ("c", bytes.fromhex(case["commitment"])),
                     ("e", bytes.fromhex(case["evidence"]))):
         (d / name).write_bytes(b)
-    exe = str(a.stream_exe)
+    exe = str(exe)
     plan = timed([exe, "plan", "p", "c", "e"], d, "plan")
     lines = (d / "plan.out").read_text().splitlines()
     tables = [x.split()[1] for x in lines if x.startswith("table ")]
