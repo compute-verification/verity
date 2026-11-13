@@ -212,8 +212,8 @@ def _held_to_reference(run, codes, weights, made_by, units_of):
     weight, each seeded from its unit's public row as the verifier builds it (`credit.public_table`: the run's salt, its
     Program position and the registered roots), whose table is the ``pub@<c>`` `Served` registered; returns the units
     checked, live and dead."""
-    from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity_vllm.protocols.pouw.h1 import served as SV
     served, pre, seen = run.served, run.served.program.fn.bindings["PREFIX"], {"live": 0, "dead": 0}
     assert not served.refused, served.refused
