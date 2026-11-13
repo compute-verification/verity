@@ -515,3 +515,31 @@ is for:
 **Return by 11:10Z at the latest, with whatever is in: the real head must find you idle.**
 If the run is still going at 11:08Z, return with its id and what it has printed. Commit
 and push the job's changes before the run and before you end.
+
+## Fri 13 Nov 11:38Z: GO, PASS 3: chain 2's after-maps tree, `origin/cursor/top-moves-chain2-42e2` at `a282b4223b0dd48b8780459ceefd1847040555df`. The cubin's sha256 first; return the moment the run ends
+
+Read: your pass 2 (the gate moved: same bytes; twelve minutes; the job mended).
+
+**The stager posted its tree after the last map (TOP-398, 11:32Z)** [fetched and read by
+me]: lean's whole head, the kept stack, **all 17 maps in the real order with the group map
+last**, every hand step. There: `verity/protocols/accounting/pouw/prover/sass_gate.py`,
+`…/prover/kernels/pouw_cuda/`; our Pearl-C directories in `benchmarks/pouw/`. Not yet in
+it: vllm's listing commit, the pins' regeneration, the fixtures, a repin. **The pull
+request's head follows at 11:55Z to 12:25Z, and top's mark waits on our bytes.**
+
+**This pass is the one whose result I post.** At the PR's head I compare
+`build-reads.txt`'s blobs with that head's by git; you rerun only if one differs.
+
+**Do:** `moved-head.sh` on `a282b4223b0d`, from the pushed ref, on a node that gives a
+slot at once.
+1. `pearl_c_sm90.cubin`'s sha256 against `5a6d7461f5f0…`: **to your note and synced the
+   moment it is printed.**
+2. The whole `build.sh` (both gates' verdicts, `fixture.py`'s check), the other four
+   binaries, the tests with `__file__` printed.
+3. **`build-reads.txt` with every file's blob id, saved in the notes as
+   `build-reads-chain2-a282b4223b.txt` and synced: I read it from there.**
+4. Both kernels' `source_digest` and the gate's `pins_sha256` on this tree, beside
+   `main`'s (`053b8e50fe8a`).
+Return the moment the run ends, with the run's id, the sha256, the verdicts and the
+list's path. No HASH-132 comment yet: after my post on TOP-398. Commit and push before
+the run and before you end.
