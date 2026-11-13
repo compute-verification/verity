@@ -4014,7 +4014,7 @@
     {"file": "adapters/vllm/verity_vllm/protocols/pouw/lead/feed.py", "count": 1},
     {"file": "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/host.py", "count": 2},
     {"file": "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py", "count": 1},
-    {"file": "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/ncp2_fused.cu", "count": 4},
+    {"file": "verity/protocols/pouw/prover/kernels/pouw_cuda/ncp2_fused.cu", "count": 4},
     {"file": "adapters/vllm/verity_vllm/protocols/remote_bandwidth/binder.py", "count": 7},
     {"file": "adapters/vllm/verity_vllm/protocols/remote_bandwidth/memory_map.py", "count": 9},
     {"file": "adapters/vllm/verity_vllm/protocols/remote_bandwidth/registry.py", "count": 8},
