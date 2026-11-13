@@ -18,7 +18,7 @@ on of its own tile's seed, so no noise block serves two purposes.
 """
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 from . import h1tile as H
 from . import seeds as SD
@@ -62,7 +62,7 @@ def banded_noise(salt: bytes, positions: Sequence[Sequence[int]], roots: tuple[b
     `h1tile.fold_keys` of its own σ_R. `positions[I][J]` is tile (I, J)'s unit position (`compile.Compiled.positions`) and
     `roots` the call's seed group's."""
     J0 = band_start(J, g)
-    if not 0 <= I < len(positions) or not J < len(positions[I]):
+    if not 0 <= I < len(positions) or len(positions[I]) <= J:
         raise ValueError(f"tile ({I}, {J}) is outside the call's grid of positions")
     own = positions[I][J]
     return (row_noise(SD.seed(salt, positions[I][J0], *roots), lay), col_noise(SD.seed(salt, own, *roots), lay),

@@ -859,7 +859,7 @@ def kept_read(trace: Trace, code: CV.Encoded) -> KP.Terms:
     if m.first_mismatch is not None:
         raise ValueError(f"the replay on the counts read diverges from the trace at step {m.first_mismatch} "
                          f"({m.matched}/{m.steps} steps match)")
-    return reader.end(KP.terms(emitted, outputs, [0] * len(emitted), 1))
+    return reader.end()
 
 
 def kept_bits(trace: Trace) -> dict[str, Any]:
