@@ -127374,3 +127374,48 @@ Clock: `date -u` read 07:23Z. Pen: `~/wt/.pen` is this loop's (07:09:54Z); the l
 **Not established.** `DrawRoots.lean` and the new `JoinsAt` fields compiled (`1d79`'s first try decides `DrawRoots`; `JoinsAt` waits on item 1). That `family₁` as stated survives item 1's settlement. Any records run at the join.
 
 Branch `cursor/proofs-join-42b8` at `c8d19ee874`, pushed; nothing unpushed. Timer: none held.
+
+## CUT, Fri 13 Nov 07:26Z: CORRECTION to my 07:22Z NEEDS 1: the digest comparison is a change to the form, so it is a proposal for you to take to soundness, NOT an ask of TWOLEG (I had not read your 07:07Z); TWOLEG, do nothing on it from me. Until soundness's word, `firstReads` on a head with `readBack` needs one named premise, which I write only when you say
+
+**Plain words.** I pushed the 07:22Z entry at 07:21:35Z and read your 07:07Z and both 07:22Z messages a minute later (mailbox at `7c92fae7cd`). Your 07:07Z says a change to the form goes to soundness through you and is not asked of TWOLEG. My NEEDS 1 asked TWOLEG for one. I take it back as an ask and leave it with you as a proposal. The finding itself stands as written.
+
+**1. Withdrawn:** 07:22Z NEEDS 1, as an ask of TWOLEG. TWOLEG has nothing to do for me.
+
+**2. The proposal, in the shape of the two refusals** [read; nothing compiled].
+- **Before** (TWOLEG's `c9e1f9dee0` to `1874fb25cc`, not named): the run of record holds the first stage's challenges to `Registration.digest j₁`, the digest of the boundary record as `readBack` returns it. No step of `checkBlobsAtWith` reads `c.digest`: `c` enters only `inputAt`, which reads `c.record` [read: `prepare`, `inputAt`, `inputOf`, `finishWith` at `1874fb25cc`]. So nothing holds the digest the run checked to the commitment's.
+- **After:** `inputAt` refuses unless `Registration.digest j₁` is `c.digest`, and `inputAt_ok` says so. It refuses more and accepts nothing new. An honest play passes it by reading (07:22Z item 4a); a run on Friday's evidence would show it.
+- Without it, on any head that has `readBack`, three things have no proof: `CutFirst.firstReads_of_shown`, and through it `CutAccept.firstReads` and `cutBound_accept`. STAGECOINS's first-stage statements are at `c.digest` too (07:22Z NEEDS 3).
+
+**3. If it is switched on only after Friday, as the two refusals are.** Then on a head with `readBack` the cut takes one named premise, and the join one more field beside `OtherRoots`:
+
+```lean
+/-- The boundary record as the check read it back has the commitment's digest, on every accepted play. -/
+def RecordDigest (θ : ByteArray) : Prop :=
+  ∀ s : Verity.Sent, s.params = θ → Accepts s → ∀ p c e, caseOf s = .ok (p, c, e) →
+    ∀ j₁, VStar.Recursive.SampledTwo.readBack c.record = .ok j₁ → Spot.Registration.digest j₁ = .ok c.digest
+```
+
+`firstReads θ` and `cutBound_accept` would take it as a hypothesis; no other statement of mine changes. It is true of every play the compiled check runs and is proved of none. Not written, not compiled: your 07:07Z says to mend `CutFirst.lean` when TWOLEG names a compiled head past `c9e1f9dee0`, and I keep to that. A head without `readBack` needs neither the comparison nor the premise.
+
+**4. Read and kept** [read: the mailbox].
+- `OtherRoots` is a field of `JoinsAt`; both refusals are soundness's, switched on after Friday's run. I write nothing for them.
+- No merge of `main` into my branch until you say; the join is carried by ASSEMBLY.
+- From this entry on my prose says "challenges" for what the challenger sends. Code names stay.
+
+**5. The try** [run]. `r20261113-071814-640b` on vy-nebius-cpu-2, at `4d24802945`: `CutRead.lean` passed ("lean exit 0 in 29 s"; "axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; siblings clean). `CutFirst` waits for that machine's one Lean slot, which another proofs try holds. `CutAccept` and `CutRoots` follow. I name `4d24802945` as compiled in a title when all four have passed, not before.
+
+### STOP RULE
+Kept. Nothing pushed to my branch since `4d24802945`.
+
+### NEEDS
+1. **Coordinator:** the proposal of item 2 to soundness, or your word that Friday's line takes `RecordDigest` as a field (item 3), or that TWOLEG's Friday head has no `readBack`. I write whichever you rule, on a named head.
+2. **Coordinator:** 07:22Z NEEDS 2(i) and 2(ii) stand: seven other workers' runs in vy-nebius-cpu-12's closed line, and where CUT's tries go until 18:00Z (`--on auto` unless you name a place).
+
+### To post
+Nothing.
+
+### Not established
+- `640b`'s verdict on `CutFirst`, `CutAccept` and `CutRoots`.
+- Everything listed at 07:22Z stands.
+
+Branch `cursor/proofs-cut-9323` at `4d24802945`, pushed; nothing unpushed. Run: `r20261113-071814-640b` running. A one-off timer wakes me at about 07:37Z to read it.
