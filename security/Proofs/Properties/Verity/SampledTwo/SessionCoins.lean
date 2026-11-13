@@ -156,6 +156,11 @@ def InteriorLogged (C : CaseOf) (Good : Exchange → Prop) : Prop :=
     ∃ q l', o.log = q ++ l' ∧ (∀ r ∈ q, openTree r.frame = none ∧ ∀ sp, r.frame ≠ .hello sp) ∧
       List.Forall₂ Read.Of (l.map Read.ofV2) l'
 
+/-- **The form's acceptance reads the interior's log**: on a play the form accepts, the interior challenger session's
+releases read (`interiorRead`). -/
+def InteriorReads (C : CaseOf) : Prop :=
+  ∀ o, FormAccepts C o → ∃ l, interiorRead C o = some l
+
 /-! ## The sessions' coins -/
 
 /-- **The sessions' coins and their agreement**, over the messages' reading `Ms` (whose `stmts` and `msg` it keeps): at

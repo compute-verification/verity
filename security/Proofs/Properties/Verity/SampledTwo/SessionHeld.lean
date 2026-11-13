@@ -1,0 +1,375 @@
+module
+
+public import Proofs.Properties.Verity.SampledTwo.SessionCoins
+public import Proofs.Properties.Verity.SampledTwo.Steps
+public import Proofs.Properties.Verity.SampledRead
+public import Proofs.Properties.Verity.Sampled.LinkFirst
+public import Std.Tactic.Do
+
+/-!
+# The form's acceptance holds the second stage's sessions to the interior's trees
+
+The sessions' coins take two facts about a play the two-stage form accepts as premises: the interior's log reads
+(`InteriorReads`, which `sessionsAgree` takes), and the members' check held of what it read (`MembersAccepted`, which
+`located_own` and `located_one` take). Both are proved here from the form's acceptance
+(`VStar.Recursive.SampledTwo.accepted_steps`, `inputAt_ok`), through what `Spot.OneStageZk.membersRun` ran.
+
+* **What `membersRun` ran** (`membersRun_held`): the statements' structure (`membersHeld`), the challenger's trees
+  (`treesOf`), the interior's release log's lines (`linesOf`) and `membersTreesHeld` on them.
+* **What `membersTreesHeld` named** (`Named`, `named_exact`): for the statements' sessions in order, each session's
+  record as `Verity.Sampled.recordOn` reads it and the SHA-512 of its evidence (`sessionEvidence`), in hex; and
+  `Spot.Challenger.membersTreeReason` accepted them. So the records it named are the sessions' records, in order
+  (`named_records`).
+* **The statements and their members** (`HeldSize`, `zip_sessions`): `membersTreesHeld` runs over the statements paired
+  with their members, which are all the statements where `membersHeld` returns a member for each. That it does is
+  `HeldSize`, a premise here: the cut's file proves it (`held_size`), and this file does not write it twice.
+* **The sample's source** (`source_some`): where the interior's sample read coins, its parameters name a challenger and
+  a window.
+* **The members' check on the log the check read** (`MembersNamed`, `membersNamed`, `membersAccepted`), with what was
+  named; and **the read** (`interiorReads`), the second stage's `Verity.Sampled.logRead_isSome`.
+* **Each session's tree closes after its evidence's SHA-512** (`closes_after`): in the log the check read, session
+  `t`'s tree has an opening of the stream named the session's, after one opening of that stream, answering the bytes of
+  the SHA-512 of session `t`'s evidence, with no opening of the tree after it; and before any opening of a session's
+  tree, each earlier session has an opening answering its evidence's SHA-512
+  (`Verity.Sampled.MemberForm.members_read`).
+
+**The earlier signature.** Nothing here reads a signature: the trees and the lines are the ones the check read under
+the parameters' challenger key, and a strategy replaying an earlier period's genuine signature shows in the cut's
+forger term, not here.
+-/
+
+@[expose] public section
+
+set_option mvcgen.warning false
+
+namespace Verity.SampledTwo.SessionCoins
+
+open Lean (Json)
+open Std.Do
+
+/-! ## What `membersRun` ran -/
+
+/-- **What an accepted `membersRun` ran before its sessions' verdicts**: the statements' members, the challenger's
+trees, the release log's lines, and `membersTreesHeld` on the statements paired with their members. -/
+theorem membersRun_held {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.Member}
+    {c : Spot.OneStage.Commitment} {e : Spot.OneStageZk.Evidence} {sts : Array Spot.OneStageZk.StatementFiles}
+    {bs : Core.Blobs} {r : Spot.OneStageZk.Run} (h : Spot.OneStageZk.membersRun p ms c e sts bs = .ok r) :
+    ∃ held ts L, Spot.OneStageZk.membersHeld ms sts = .ok held ∧ Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
+      Spot.OneStageZk.linesOf e = .ok L ∧ Spot.OneStageZk.membersTreesHeld ts L (sts.zip held) bs = .ok () := by
+  unfold Spot.OneStageZk.membersRun at h
+  simp only [Verity.Sampled.bind_ok] at h
+  obtain ⟨held, hheld, h⟩ := h
+  split at h
+  · simp only [Verity.Sampled.bind_ok] at h
+    obtain ⟨_, hthrow, -⟩ := h
+    cases hthrow
+  · simp only [Verity.Sampled.bind_ok] at h
+    obtain ⟨ts, hts, _, -, L, hL, _, hM, -⟩ := h
+    exact ⟨held, ts, L, hheld, hts, hL, hM⟩
+
+/-! ## What `membersTreesHeld` named -/
+
+/-- **A session as `membersTreesHeld` names it**: the entry's record is the session's on the blobs
+(`Verity.Sampled.recordOn`), and its digest is the SHA-512 of the session's evidence (`sessionEvidence`), in hex. -/
+def Named (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles)
+    (x : String × Array (String × Option ℕ) × Json × String) : Prop :=
+  Verity.Sampled.recordOn bs s = some x.2.2.1 ∧
+    ∃ ev, Spot.OneStageZk.sessionEvidence bs s = .ok ev ∧ x.2.2.2 = Spot.sha512Hex ev
+
+theorem sessionEvidence_spec (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles) :
+    ⦃⌜True⌝⦄ Spot.OneStageZk.sessionEvidence bs s ⦃⇓? r => ⌜Spot.OneStageZk.sessionEvidence bs s = .ok r⌝⦄ :=
+  Verity.Sampled.ok_spec _
+
+theorem named_step {bs : Core.Blobs} {l pre : List Spot.OneStageZk.RunFiles}
+    {acc : Array (String × Array (String × Option ℕ) × Json × String)} {s : Spot.OneStageZk.RunFiles}
+    {b ev : ByteArray} {t : String} {tabs : Array (String × Option ℕ)}
+    (hI : List.Forall₂ (Named bs) (l ++ pre) acc.toList)
+    (hu : String.fromUTF8? b = some t) (hg : bs.get s.record s!"session {s.name}'s record" = .ok b)
+    (hev : Spot.OneStageZk.sessionEvidence bs s = .ok ev) :
+    List.Forall₂ (Named bs) (l ++ (pre ++ [s]))
+      (acc.push (s.name, tabs, (Flock.JsonParse.parse t).toOption.getD Json.null, Spot.sha512Hex ev)).toList := by
+  rw [← List.append_assoc, Array.toList_push]
+  refine List.rel_append hI (List.Forall₂.cons ⟨?_, ev, hev, rfl⟩ .nil)
+  simp [Verity.Sampled.recordOn, hg, hu, Except.toOption]
+
+theorem reason_none {α : Type} {o x : Option α} (hx : o = x) (h : ∀ a, x = some a → False) : o = none := by
+  subst hx
+  cases o with
+  | none => rfl
+  | some a => exact (h a rfl).elim
+
+set_option maxHeartbeats 1000000 in
+/-- **What `membersTreesHeld` named and held**: an entry for each statement's session, in the statements' order, each
+the session's record and its evidence's SHA-512 (`Named`), which `Spot.Challenger.membersTreeReason` accepted against
+the trees and the lines. -/
+theorem named_exact {ts : Array Spot.Challenger.LoggedTree} {L : List String}
+    {sts : Array (Spot.OneStageZk.StatementFiles × Spot.OneStageZk.Member)} {bs : Core.Blobs}
+    (h : Spot.OneStageZk.membersTreesHeld ts L sts bs = .ok ()) :
+    ∃ named : Array (String × Array (String × Option ℕ) × Json × String),
+      Spot.Challenger.membersTreeReason ts L named = none ∧
+        List.Forall₂ (Named bs) (sts.toList.flatMap (·.1.sessions.toList)) named.toList := by
+  refine Verity.Sampled.of_triple
+    (Q := fun _ => ∃ named : Array (String × Array (String × Option ℕ) × Json × String),
+      Spot.Challenger.membersTreeReason ts L named = none ∧
+        List.Forall₂ (Named bs) (sts.toList.flatMap (·.1.sessions.toList)) named.toList) ?_ h
+  clear h
+  mvcgen [Spot.OneStageZk.membersTreesHeld, -Spec.throw_Except, Verity.Sampled.throw_spec,
+    Verity.Sampled.blobsGet_spec, sessionEvidence_spec] invariants
+  | inv1 => ⇓? ⟨cur, named⟩ => ⌜List.Forall₂ (Named bs) (cur.prefix.flatMap (·.1.sessions.toList)) named.toList⌝
+  | inv2 pref _ _ _ _ _ => ⇓? ⟨cur, named⟩ =>
+      ⌜List.Forall₂ (Named bs) (pref.flatMap (·.1.sessions.toList) ++ cur.prefix) named.toList⌝
+  all_goals first
+    | exact named_step ‹_› ‹_› ‹_› ‹_›
+    | exact ⟨_, reason_none ‹_› ‹_›, ‹_›⟩
+    | exact List.Forall₂.nil
+    | simpa [List.flatMap_append] using ‹List.Forall₂ _ _ _›
+
+/-- **The records `membersTreesHeld` named are the sessions' records, in order.** -/
+theorem named_records {bs : Core.Blobs} {ss : List Spot.OneStageZk.RunFiles}
+    {named : List (String × Array (String × Option ℕ) × Json × String)} (h : List.Forall₂ (Named bs) ss named) :
+    ss.mapM (Verity.Sampled.recordOn bs) = some (named.map (·.2.2.1)) := by
+  induction h with
+  | nil => rfl
+  | cons hx _ ih =>
+    rw [List.mapM_cons, hx.1, ih]
+    rfl
+
+theorem forall₂_getElem? {α β : Type} {R : α → β → Prop} :
+    ∀ {l₁ : List α} {l₂ : List β}, List.Forall₂ R l₁ l₂ → ∀ {i : ℕ} {a : α}, l₁[i]? = some a →
+      ∃ b, l₂[i]? = some b ∧ R a b
+  | _, _, .nil, _, _, ha => by simp at ha
+  | _, _, .cons h _, 0, _, ha => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at ha
+    subst ha
+    exact ⟨_, rfl, h⟩
+  | _, _, .cons _ t, i + 1, _, ha => by
+    simp only [List.getElem?_cons_succ] at ha ⊢
+    exact forall₂_getElem? t ha
+
+/-! ## The statements and their members -/
+
+/-- **`membersHeld` returns a member for each statement** (the cut's `held_size`). -/
+def HeldSize : Prop :=
+  ∀ (ms : Array Spot.OneStageZk.Member) (sts : Array Spot.OneStageZk.StatementFiles)
+    (held : Array Spot.OneStageZk.Member), Spot.OneStageZk.membersHeld ms sts = .ok held → held.size = sts.size
+
+/-- The sessions of the statements paired with as many members are the statements' sessions. -/
+theorem zip_sessions {sts : Array Spot.OneStageZk.StatementFiles} {held : Array Spot.OneStageZk.Member}
+    (h : held.size = sts.size) :
+    (sts.zip held).toList.flatMap (·.1.sessions.toList) = sts.toList.flatMap (·.sessions.toList) := by
+  have e : (sts.zip held).toList.map (·.1) = sts.toList := by
+    rw [Array.toList_zip]
+    exact List.map_fst_zip (by simp [h])
+  rw [← e, List.flatMap_map]
+
+/-! ## The sample's source -/
+
+/-- **Where the sample read coins, its parameters name what they are read under**: a challenger and a window. -/
+theorem source_some {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {e : Spot.OneStageZk.Evidence}
+    {ξ : ByteArray} (h : Spot.OneStageZk.coinsOf p c e = .ok ξ) :
+    ∃ d, Properties.Challenger.oneStageZkSource p c = some d := by
+  have hc : ∃ ξ', Spot.OneStage.coinsOf p.base c e.base = .ok (some ξ') := by
+    unfold Spot.OneStageZk.coinsOf at h
+    cases h1 : Spot.OneStage.coinsOf p.base c e.base with
+    | error r => simp [h1, bind, Except.bind] at h
+    | ok o =>
+      cases o with
+      | none => simp [h1, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+      | some ξ' => exact ⟨ξ', rfl⟩
+  obtain ⟨ξ', hc⟩ := hc
+  unfold Properties.Challenger.oneStageZkSource Properties.Challenger.oneStageSource
+  unfold Spot.OneStage.coinsOf at hc
+  rcases hch : p.base.challenger with _ | ⟨key, label⟩ <;> rcases hw : p.base.verifier.windowRoot with _ | w <;>
+    simp only [hch, hw] at hc ⊢
+  · split at hc <;> cases hc
+  · split at hc <;> cases hc
+  · cases hc
+  · exact ⟨_, rfl⟩
+
+/-! ## The read's steps -/
+
+theorem toOption_ok {ε α : Type} {x : Except ε α} {a : α} (h : x.toOption = some a) : x = .ok a := by
+  cases x with
+  | error _ => cases h
+  | ok b => exact congrArg Except.ok (Option.some.inj h)
+
+/-- **What the read's steps were, where it read** (`interiorRead`). -/
+theorem interiorRead_some {C : CaseOf} {o : Exchange} {l : List Release} (h : interiorRead C o = some l) :
+    ∃ k p e s c₂ d ξ₂ recs lines, C o = some k ∧
+      (Core.canonicalJson k.params >>= VStar.Recursive.SampledTwo.paramsOfJson) = .ok p ∧
+      VStar.Recursive.SampledTwo.evidenceOf k.evidence = .ok e ∧ Flock.canon e.record = .ok s ∧
+      Spot.OneStage.commitmentOf s.toUTF8 = .ok c₂ ∧ Properties.Challenger.oneStageZkSource p.audit c₂ = some d ∧
+      Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧
+      (e.statements.toList.flatMap (·.sessions.toList)).mapM (Verity.Sampled.recordOn k.blobs) = some recs ∧
+      Verity.Sampled.linesOf e.interior = .ok lines ∧
+      Verity.Sampled.readLog d.label d.after recs ξ₂ lines = some l := by
+  unfold interiorRead at h
+  obtain ⟨k, hk, h⟩ := Verity.Sampled.Binding.obind_some h
+  obtain ⟨p, hp, h⟩ := Verity.Sampled.Binding.obind_some h
+  obtain ⟨e, he, h⟩ := Verity.Sampled.Binding.obind_some h
+  obtain ⟨s, hs, h⟩ := Verity.Sampled.Binding.obind_some h
+  obtain ⟨c₂, hc₂, h⟩ := Verity.Sampled.Binding.obind_some h
+  obtain ⟨d, hd, h⟩ := Verity.Sampled.Binding.obind_some h
+  obtain ⟨ξ₂, hξ, h⟩ := Verity.Sampled.Binding.obind_some h
+  obtain ⟨recs, hrecs, h⟩ := Verity.Sampled.Binding.obind_some h
+  obtain ⟨lines, hlines, h⟩ := Verity.Sampled.Binding.obind_some h
+  exact ⟨k, p, e, s, c₂, d, ξ₂, recs, lines, hk, toOption_ok hp, toOption_ok he, toOption_ok hs, toOption_ok hc₂, hd,
+    toOption_ok hξ, hrecs, toOption_ok hlines, h⟩
+
+/-- **The read, from its steps.** -/
+theorem interiorRead_of {C : CaseOf} {o : Exchange} {l : List Release} {k : Case}
+    {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence} {s : String}
+    {c₂ : Spot.OneStage.Commitment} {d : Properties.Challenger.Draws} {ξ₂ : ByteArray} {recs : List Json}
+    {lines : List String} (hk : C o = some k)
+    (hp : (Core.canonicalJson k.params >>= VStar.Recursive.SampledTwo.paramsOfJson) = .ok p)
+    (he : VStar.Recursive.SampledTwo.evidenceOf k.evidence = .ok e) (hs : Flock.canon e.record = .ok s)
+    (hc₂ : Spot.OneStage.commitmentOf s.toUTF8 = .ok c₂)
+    (hd : Properties.Challenger.oneStageZkSource p.audit c₂ = some d)
+    (hξ : Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂)
+    (hrecs : (e.statements.toList.flatMap (·.sessions.toList)).mapM (Verity.Sampled.recordOn k.blobs) = some recs)
+    (hlines : Verity.Sampled.linesOf e.interior = .ok lines)
+    (h : Verity.Sampled.readLog d.label d.after recs ξ₂ lines = some l) : interiorRead C o = some l := by
+  unfold interiorRead
+  simp only [hk, hp, he, hs, hc₂, hd, hξ, hrecs, hlines, Option.bind_eq_bind, Option.bind_some, Except.toOption]
+  exact h
+
+theorem sessionRecords_of {C : CaseOf} {o : Exchange} {k : Case} {e : VStar.Recursive.SampledTwo.Evidence}
+    {recs : List Json} (hk : C o = some k) (he : VStar.Recursive.SampledTwo.evidenceOf k.evidence = .ok e)
+    (hrecs : (e.statements.toList.flatMap (·.sessions.toList)).mapM (Verity.Sampled.recordOn k.blobs) = some recs) :
+    sessionRecords C o = some recs := by
+  unfold sessionRecords
+  simp only [hk, he, hrecs, Option.bind_eq_bind, Option.bind_some, Except.toOption]
+
+/-! ## The members' check on the log the check read -/
+
+/-- **The members' check held of the log the check read, with what it named**: `MembersAccepted`, and each entry
+`membersTreeReason` accepted is its session's record and its evidence's SHA-512 (`Named`), for the statements'
+sessions in order. -/
+def MembersNamed (C : CaseOf) : Prop :=
+  ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l →
+    ∃ (k : Case) (e : VStar.Recursive.SampledTwo.Evidence) (label : String) (after : ByteArray) (ξ : ByteArray)
+      (lines : List String) (trees : Array Spot.Challenger.LoggedTree)
+      (records : Array (String × Array (String × Option ℕ) × Json × String)),
+      C o = some k ∧ VStar.Recursive.SampledTwo.evidenceOf k.evidence = .ok e ∧
+      Spot.Challenger.coinTreesOf lines = .ok trees ∧
+      Verity.Sampled.readLog label after (records.toList.map (·.2.2.1)) ξ lines = some l ∧
+      Spot.Challenger.membersTreeReason trees lines records = none ∧
+      List.Forall₂ (Named k.blobs) (e.statements.toList.flatMap (·.sessions.toList)) records.toList
+
+/-- **The form's acceptance gives the members' check on the log the check read** (`MembersNamed`): the accepted check
+ran `membersRun` on the interior's audit (`accepted_steps`, `inputAt_ok`), which read the trees and the lines the
+read reads and held the statements' sessions' records to them (`membersRun_held`, `named_exact`). -/
+theorem membersNamed (C : CaseOf) (hsz : HeldSize) : MembersNamed C := by
+  intro o hacc l hl
+  obtain ⟨k, p, e, s, c₂, d, ξ₂, recs, lines, hk, hp, he, hs, hc₂, hd, hξ, hrecs, hlines, hR⟩ := interiorRead_some hl
+  obtain ⟨k', hk', p', c', e', pub, prof, ⟨hp', -, he'⟩, hck⟩ := hacc
+  obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
+  obtain rfl : p = p' := Except.ok.inj (hp.symm.trans hp')
+  obtain rfl : e = e' := Except.ok.inj (he.symm.trans he')
+  obtain ⟨-, c₂', ξ₂', r, i, run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
+  obtain ⟨⟨s', hs', hc₂'⟩, hξ', hrun, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  obtain rfl : s = s' := Except.ok.inj (hs.symm.trans hs')
+  obtain rfl : c₂ = c₂' := Except.ok.inj (hc₂.symm.trans hc₂')
+  obtain rfl : ξ₂ = ξ₂' := Except.ok.inj (hξ.symm.trans hξ')
+  obtain ⟨held, ts, L, hheld, hts, hL, hM⟩ := membersRun_held hrun
+  rw [Verity.Sampled.linesOf_check, hlines] at hL
+  obtain rfl : lines = L := Except.ok.inj hL
+  obtain ⟨named, hnone, hN⟩ := named_exact hM
+  rw [zip_sessions (hsz _ _ _ hheld)] at hN
+  have hrecs' := named_records hN
+  rw [hrecs] at hrecs'
+  obtain rfl : recs = named.toList.map (·.2.2.1) := Option.some.inj hrecs'
+  obtain ⟨key, w, htt⟩ := Verity.Sampled.treesOf_ok hts
+  obtain ⟨ls, lines', hlog, hls, hct⟩ := Verity.Sampled.trustedTreesOf_ok htt
+  have hl' := Verity.Sampled.linesOf_of hlog hls
+  rw [hlines] at hl'
+  obtain rfl : lines = lines' := Except.ok.inj hl'
+  exact ⟨k, e, d.label, d.after, ξ₂, lines, ts, named, hk, he, hct, hR, hnone, hN⟩
+
+/-- **`MembersAccepted`**, the premise of `located_own` and `located_one`, from `MembersNamed`. -/
+theorem membersAccepted {C : CaseOf} (h : MembersNamed C) : MembersAccepted C := by
+  intro o hacc l hl
+  obtain ⟨k, e, label, after, ξ, lines, trees, records, hk, he, hT, hR, hM, hN⟩ := h o hacc l hl
+  exact ⟨label, after, ξ, lines, trees, records, hT, hR, hM, sessionRecords_of hk he (named_records hN)⟩
+
+/-! ## The read -/
+
+/-- **The form's acceptance reads the interior's log** (`InteriorReads`), as one-stage v2's acceptance reads its log
+(`Verity.Sampled.logRead_isSome`): the sample's source is the parameters' challenger and window (`source_some`); the
+sample's read went through the challenger session's log, a list of lines whose pairs are in order
+(`Verity.Sampled.sessionOf_ok`, `releasedRootsOf_pairsOk`); `treesOf` read the same lines as coin trees
+(`trustedTreesOf_ok`, `coinTreesOf_fold`); and a blob holds each statement's session's record (`named_exact`). -/
+theorem interiorReads (C : CaseOf) (hsz : HeldSize) : InteriorReads C := by
+  intro o hacc
+  obtain ⟨k, hk, p, c, e, pub, prof, ⟨hp, -, he⟩, hck⟩ := hacc
+  obtain ⟨-, c₂, ξ₂, r, i, run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
+  obtain ⟨⟨s, hs, hc₂⟩, hξ, hrun, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  obtain ⟨held, ts, L, hheld, hts, -, hM⟩ := membersRun_held hrun
+  obtain ⟨named, -, hN⟩ := named_exact hM
+  rw [zip_sessions (hsz _ _ _ hheld)] at hN
+  obtain ⟨d, hd⟩ := source_some hξ
+  obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p.audit c₂ d hd e.interior ξ₂ hξ
+  rw [hrξ] at hraw
+  obtain ⟨cm, roots, htsn, -⟩ := Verity.Sampled.drawCoins_ok hraw
+  obtain ⟨_, hsn⟩ := Verity.Sampled.trustedSessionOf_ok htsn
+  obtain ⟨_, hso⟩ := Verity.Sampled.sessionNamed_ok hsn
+  obtain ⟨ls, lines, hlog, hls, hrr⟩ := Verity.Sampled.sessionOf_ok hso
+  have hlines := Verity.Sampled.linesOf_of hlog hls
+  obtain ⟨key, w, htt⟩ := Verity.Sampled.treesOf_ok hts
+  obtain ⟨ls', lines', hlog', hls', hct⟩ := Verity.Sampled.trustedTreesOf_ok htt
+  have hl' := Verity.Sampled.linesOf_of hlog' hls'
+  rw [hlines] at hl'
+  obtain rfl : lines = lines' := Except.ok.inj hl'
+  have hsome : (Verity.Sampled.readLog d.label d.after (named.toList.map (·.2.2.1)) ξ₂ lines).isSome :=
+    Verity.Sampled.readLog_isSome d.label d.after (named.toList.map (·.2.2.1)) ξ₂
+      (by rw [Verity.Sampled.coinTreesOf_fold (named.toList.map (·.2.2.1)) hct]; rfl)
+      (Verity.Sampled.releasedRootsOf_pairsOk hrr)
+  obtain ⟨l, hl⟩ := Option.isSome_iff_exists.1 hsome
+  exact ⟨l, interiorRead_of hk hp he hs hc₂ hd hξ (named_records hN) hlines hl⟩
+
+/-! ## Each session's tree closes after its evidence's SHA-512 -/
+
+/-- **Each session's tree closes after its evidence's SHA-512, before the next session's tree opens**: on a play the
+form accepts, at a numbering `tree` of the sessions' trees as the read numbers trees, in the log the check read
+
+* session `t`'s tree has an opening of its stream named the session's (`Spot.Challenger.TREE_SESSION`), after one
+  opening of that stream, that answers the bytes of the SHA-512 of session `t`'s evidence
+  (`Spot.OneStageZk.sessionEvidence`), with no opening of the tree after it; and
+* before any opening of session `t`'s tree, each earlier session has an opening answering the bytes of its own
+  evidence's SHA-512.
+
+It is `Verity.Sampled.MemberForm.members_read` at what `membersTreesHeld` named. -/
+theorem closes_after {C : CaseOf} (h : MembersNamed C) :
+    ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l →
+      ∃ (k : Case) (e : VStar.Recursive.SampledTwo.Evidence) (tree : ℕ → ℕ), C o = some k ∧
+        VStar.Recursive.SampledTwo.evidenceOf k.evidence = .ok e ∧
+        (∀ t s, (e.statements.toList.flatMap (·.sessions.toList))[t]? = some s →
+          ∃ ev Lc c L₂ st n, Spot.OneStageZk.sessionEvidence k.blobs s = .ok ev ∧ l = Lc ++ c :: L₂ ∧
+            c.frame = .opening (tree t) st n ∧
+            ((Verity.Sampled.helloSpecs Lc)[tree t]?.bind fun sp => sp.streams[st]?) =
+              some Spot.Challenger.TREE_SESSION ∧
+            openedOf Lc (tree t) st = 1 ∧ Flock.unhex (Spot.sha512Hex ev) = .ok c.answers ∧
+            ∀ y ∈ L₂, ∀ s' n', y.frame ≠ .opening (tree t) s' n') ∧
+        ∀ pre r post, l = pre ++ r :: post → ∀ t s st n,
+          (e.statements.toList.flatMap (·.sessions.toList))[t]? = some s → r.frame = .opening (tree t) st n →
+            ∀ t' s', t' < t → (e.statements.toList.flatMap (·.sessions.toList))[t']? = some s' →
+              ∃ ev q, Spot.OneStageZk.sessionEvidence k.blobs s' = .ok ev ∧ q ∈ pre ∧
+                Flock.unhex (Spot.sha512Hex ev) = .ok q.answers := by
+  intro o hacc l hl
+  obtain ⟨k, e, label, after, ξ, lines, trees, records, hk, he, hT, hR, hM, hN⟩ := h o hacc l hl
+  obtain ⟨tree, h1, -, h3⟩ := Verity.Sampled.MemberForm.members_read hT hR hM
+  refine ⟨k, e, tree, hk, he, fun t s hs => ?_, fun pre r post hpre t s st n hs hr t' s' hlt hs' => ?_⟩
+  · obtain ⟨x, hx, -, ev, hev, hxe⟩ := forall₂_getElem? hN hs
+    rw [Array.getElem?_toList] at hx
+    obtain ⟨tr, -, -, -, -, Lc, c, L₂, st, n, hlog, hc, hname, hcount, hun, hlast⟩ := h1 t x hx
+    rw [hxe] at hun
+    exact ⟨ev, Lc, c, L₂, st, n, hev, hlog, hc, hname, hcount, hun, hlast⟩
+  · obtain ⟨x, hx, -⟩ := forall₂_getElem? hN hs
+    obtain ⟨x', hx', -, ev, hev, hxe⟩ := forall₂_getElem? hN hs'
+    rw [Array.getElem?_toList] at hx hx'
+    have ht : t < records.size := (Array.getElem?_eq_some_iff.1 hx).1
+    obtain ⟨q, hq, hun⟩ := h3 pre r post hpre t ht st n hr t' x' hlt hx'
+    rw [hxe] at hun
+    exact ⟨ev, q, hev, hq, hun⟩
+
+end Verity.SampledTwo.SessionCoins

@@ -11,7 +11,7 @@ the device's, at coins the coin map's agreement holds of, the device's release f
 a session's round's, and it agrees with the run's coin there as the sessions' reading says: on the elements the
 releases the session-round locator puts on the round carry, in the log the check read.
 
-* `InteriorReads`: the form's acceptance reads the interior's log (the two-stage steps').
+* `InteriorReads` (`SessionCoins.lean`): the form's acceptance reads the interior's log; `SessionHeld.lean` proves it.
 * `DevElems`: the coin map's agreement at the session-round locator, in the play's log.
 * `located_widths`: the elements a round's releases carry are the same in two logs of the same frames.
 * `slot_exists`: a round past the statements' and before the sessions' end is in one session's rounds.
@@ -21,11 +21,6 @@ releases the session-round locator puts on the round carry, in the log the check
 @[expose] public section
 
 namespace Verity.SampledTwo.SessionCoins
-
-/-- **The form's acceptance reads the interior's log** (the two-stage steps'): on a play the form accepts, the interior
-challenger session's releases read (`interiorRead`). -/
-def InteriorReads (C : CaseOf) : Prop :=
-  ∀ o, FormAccepts C o → ∃ l, interiorRead C o = some l
 
 /-- **The device's release at a session's round shares the run's coin's elements its releases carry** (the coin map's
 agreement, at the session-round locator): on an accepted play whose log is the device's, at coins the coin map's
