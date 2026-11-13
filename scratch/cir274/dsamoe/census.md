@@ -57,6 +57,25 @@ quantisers of that template) read `SiluMul` (from the run's `free_list`). No fam
 Unlowered: AllGather 2, AllReduceMnnvl 1, AllReduceMultimem 9, AllReduceRmsNormMnnvl 8, EmbeddingShard 2, Gemm 2,
 MoeSum 2, ResidualAdd 2, RoPEHeadGptJ 8, SiluMul 10, StopCheck 1, TokenSelect 2. None is this lane's.
 
+## At the work branch's head
+
+Run `r20261113-022031-b6f2` (vy-nebius-cpu-1, rc 0), source `34b868a7f23b75864d9a8f7fc850d6d479ed957e` (tests only since
+`8d7502ab19`): the same window digest `857e2863…`, 5,067,546 units, 88 templates, 13,082 wire patterns; window 17.5 s, peak
+0.692 GiB. The same run: `test_node_window_sparse.py` 12 tests, 0 failures. Run `r20261113-022032-8a53` (source
+`34b868a7f2`): `adapters/vllm/tests/lint` 90 tests, 0 failures, 0 errors, 1 skipped.
+
+## With DENSE's families (local, not pushed)
+
+A throwaway worktree of `34b868a7f2`'s lowering (`8d7502ab19`) merged with DENSE's `d6af67e8a6` (clean merge, its two
+frame commits included), families `{**NW.FAMILIES, **node_window_dense.FAMILIES, **node_window_sparse.FAMILIES}` (no key
+in both), LP = 32, on the VM:
+
+- 1 layer MoE: digest `554dde1473a2…`; unlowered EmbeddingShard, StopCheck, TokenSelect; free EmbeddingShard, peers,
+  weights. `MoeSum_v1{TOPK=8,H=192}` reads w2's block outputs through `AllGather_v1{WORLD=6,N=32}` (a 32-row block a
+  chunk); `SiluMul` reads w13's through `AllGather_v1{WORLD=64,N=1}`; `RoPEHeadGptJ_v2` writes the key blocks' `q_rope`.
+- 2 layers MoE: digest `24d9c20a9cf9…`; 1 layer dense: digest `a47ad8dac5fc…`; the same unlowered list.
+- In all three the only free input on this lane's templates is BatchedGemm's `w` (reads.md line 1).
+
 ## Earlier runs
 
 - `r20261113-014617-eb76` (source `bcdd17828d`, DSA families only): 4,541,702 units, 75 templates, 610 wire patterns.

@@ -14,3 +14,14 @@ registered read (rows of the port's width at public positions of one weight) tak
    `NodeWindow.weight` refuses it. Not a wire at all: the port is left a free input under `weights` (its label named),
    B·N units of K words per node. Cure (not taken): register the field in (B, N, K) order as a parameter of its own, or a
    strided read form; vllm's or the registration's call.
+
+## Frame: what FUSED would need (not a read; nothing lowered needs it)
+
+`Piece` places member m's rows at writer unit `row.unit + m·member + i·step`, affine in m. A pair row's members are
+m = t·TOPK + k, and a slot's key reads its own router output (`o<TOPK + k>`), so a template whose units are keyed reads
+has its slot-k units contiguous only in an order with k slower than t, such as `(b TOPK + k) T + t`. That order isn't
+affine in m once T > 1. The apart blocks avoid it: the reads are table-major, and the block GEMMs, which a reader of the
+node reads, are member-major. A FUSED block (`MoeExpertFp8ReadGemm(W)_v1`) is both keyed and read by the node's reader,
+so it would need either a `Piece` with two member digits, (TOPK, step_k) and (T, step_t), or a unit-by-unit pattern.
+The same two-digit `Piece` would also cut w2's routed-weight wires from one per member to one per slot. [inferred from
+`node_window.Piece` and `_slots`; not run]
