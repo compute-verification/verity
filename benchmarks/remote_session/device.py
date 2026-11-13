@@ -696,6 +696,16 @@ class DeviceStore:
                      SALT_DOMAIN + self.key + seed, self.blocks)
         lib.call("rb_sketch_set", rb.sketch_prefix(seed))
 
+    def host_pass(self, q: int, pk, slot: int) -> int:
+        """Host segment q's part of a pass under the packed signs pk, what it keeps into `slot`, queued on its GPU's
+        host streams (that GPU current): `rs_pass` as it reads a shard, with `host_ctas` receipt CTAs and
+        `host_consumers` consumer CTAs. The library's return code."""
+        gpu, x = self.gpus[self.seg_gpu[q]], self.seg_ring[q]
+        return self.lib.so.rs_pass(self.data_g[q].data_ptr(), self.n[q], self.base[q], pk.data_ptr(),
+                                   x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(), x["up"].data_ptr(),
+                                   x["kept"][slot].data_ptr(), self.h0, self.chunk, self.host_ctas, 0, 0, None, None,
+                                   gpu.host_main.cuda_stream, gpu.host_side.cuda_stream, self.host_consumers)
+
     def launch(self, i: int, after: Ticket | None, seed: bytes | None = None) -> Ticket:
         """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,
         each behind the leader's event for that root, or with `seed` an unchained pass under that seed's constants
@@ -734,12 +744,7 @@ class DeviceStore:
                     self.prepared[g][slot].record(s)
                     gpu.host_main.wait_event(self.prepared[g][slot])
                     for q in host:
-                        x = self.seg_ring[q]
-                        rc = rc or so.rs_pass(self.data_g[q].data_ptr(), self.n[q], self.base[q], pk.data_ptr(),
-                                              x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
-                                              x["up"].data_ptr(), x["kept"][slot].data_ptr(), self.h0, self.chunk,
-                                              self.host_ctas, 0, 0, None, None, gpu.host_main.cuda_stream,
-                                              gpu.host_side.cuda_stream, self.host_consumers)
+                        rc = rc or self.host_pass(q, pk, slot)
                     self.host_done[g][slot].record(gpu.host_main)
                 first, count = self.pads[g]
                 x = self.seg_ring[hbm]
