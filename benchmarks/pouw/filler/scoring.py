@@ -922,7 +922,7 @@ FOLD_UNCHECKED = (
     ("XOR-in's binding: its complement elements flip three words' low bits jointly, P2-FF's open question "
      "(note:20261016T1013Z-draft-pfill-fold §2.2); decision 43 reads it in full"),
     ("the r9 folds' premises (note:20261016T1117Z-draft-fullfloor-s-r9): key_ok_r9 on a0 and a1 (the receipts gate's "
-     "host reference draws the keys), (HO) for LOP3+IMAD (the filler's rows are SHA-512 output), DP_M ≈ 0 over Λ8 "
+     "host reference picks the keys), (HO) for LOP3+IMAD (the filler's rows are SHA-512 output), DP_M ≈ 0 over Λ8 "
      "(measured, pairwise); the SASS shows the rotations, not the keys"),
     ("which instantiation ran: a templated dfill_k<NC> or dfill_p<NC> is read at the arm's declared NC, the one its "
      "driver selects; a filler function no NC selects (a fused or TP filler's) is read in every clone"))
