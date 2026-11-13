@@ -21,7 +21,8 @@
 #                         it is a W the served compare takes); the harness's own policy step,
 #                         which fixes the limits and states what they prove; the policy's Lean check on the class's
 #                         own Program (`rehearsal_limits.py`), and the settings' ALPHA, GAMMA and DAY_PROGRAM held to
-#                         what it answers ($OUT/record.env.add has the lines where they differ); the day's declaration
+#                         what it answers, with HELD_ALPHA and HELD_GAMMA held to the record form's pair it states
+#                         ($OUT/record.env.add has the lines where they differ); the day's declaration
 #                         at that Program in a scratch log, checked as the follow-on checks it; the Lean the serve,
 #                         the audit and the compose run (Flock's verifier and ZK server, Pearl+'s check, remote's
 #                         composite); that verifier on a circuit file linked into its archive (`a0.lean_verify` under
@@ -82,7 +83,8 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
       v=${want%%=*}
       [ "${!v-}" = "${want#*=}" ] || no "$v is ${!v-unset}, and the rehearsal serves at $want"
     done
-    for v in ROW PP_CHALLENGER PP_PEER MAIN_FILE PP_CHALLENGER_KEY ALPHA GAMMA LIMITS_UNIT DAY DAY_PROGRAM DAY_LOG DAY_PARAMS; do
+    for v in ROW PP_CHALLENGER PP_PEER MAIN_FILE PP_CHALLENGER_KEY ALPHA GAMMA LIMITS_UNIT HELD_ALPHA HELD_GAMMA DAY \
+      DAY_PROGRAM DAY_LOG DAY_PARAMS; do
       [ -n "${!v-}" ] || no "$v is unset"
     done
     # the record states the class's own two numbers with what they prove
@@ -109,7 +111,8 @@ settings_ok() {  # $1, the settings file: what the rehearsal's serve is, held be
     [ -z "${WANT_CLASS-}" ] || [ "$WANT_CLASS" = "$cls" ] \
       || no "CLASS is $WANT_CLASS and the settings serve $cls: name the class in the settings (V3C_CLASS and CLASSES)"
     [ "$bad" != 0 ] || echo "SETTINGS held: Pearl+ tied to the window at class $cls, product remote, limits $ALPHA and" \
-      "$GAMMA with their unit and what they prove, day $DAY at program ${DAY_PROGRAM:0:16}…"
+      "$GAMMA with their unit and what they prove, the record form's pair $HELD_ALPHA and $HELD_GAMMA, day $DAY at" \
+      "program ${DAY_PROGRAM:0:16}…"
     exit "$bad"
   )
 }
@@ -410,21 +413,30 @@ print(json.dumps(doc, sort_keys=True))
 import json, os, subprocess, sys
 from fractions import Fraction
 prof, said, settings, add = json.load(open(sys.argv[1])), json.load(open(sys.argv[2])), sys.argv[3], sys.argv[4]
-p = prof["profile"]
+p, h = prof["profile"], prof.get("held")
 want = {"ALPHA": f"{p['alpha'][0]}/{p['alpha'][1]}", "GAMMA": str(p["gamma"]), "DAY_PROGRAM": prof["program"]}
+if h:
+    want |= {"HELD_ALPHA": f"{h['alpha'][0]}/{h['alpha'][1]}", "HELD_GAMMA": str(h["gamma"])}
 open(add, "w").write("".join(f"{k}={v}\n" for k, v in want.items()))
-got = subprocess.run(["bash", "-c", 'set -a; . "$0"; set +a; printf "%s\\n%s\\n%s\\n" "$ALPHA" "$GAMMA" "$DAY_PROGRAM"', settings],
-                     capture_output=True, text=True, check=True).stdout.split("\n")[:3]
+got = subprocess.run(["bash", "-c", 'set -a; . "$0"; set +a; printf "%s\\n" "$ALPHA" "$GAMMA" "$DAY_PROGRAM" "${HELD_ALPHA-}" "${HELD_GAMMA-}"',
+                      settings], capture_output=True, text=True, check=True).stdout.split("\n")[:5]
 bad = [f"{k} is {g or 'unset'}, and the class's own is {want[k]}" for k, g in zip(want, got)
-       if not g or (Fraction(g) != Fraction(want[k]) if k == "ALPHA" else g != want[k])]
+       if not g or (Fraction(g) != Fraction(want[k]) if k.endswith("ALPHA") else g != want[k])]
+sh = said.get("held") or {}
+if not h:
+    bad.append("limits.json states no held pair (the policy step wrote no policy file for it to read k from)")
+elif (Fraction(*sh.get("alpha", [0, 1])), sh.get("gamma")) != (Fraction(want["HELD_ALPHA"]), h["gamma"]) or not sh.get("theta"):
+    bad.append(f"the harness's limits file states the held pair {sh.get('alpha')}, {sh.get('gamma')}, theta {sh.get('theta')!r}")
 if prof.get("at_profile", {}).get("verdict") != "accept":
     bad.append(f"the policy's Lean check at the class's own numbers: {prof.get('at_profile')}")
 if (Fraction(*said["alpha"]), said["gamma"]) != (Fraction(want["ALPHA"]), p["gamma"]) or not said.get("proves"):
     bad.append(f"the harness's limits file states {said['alpha']}, {said['gamma']}, proves {said.get('proves')!r}")
 if bad:
-    sys.exit("LIMITS not held (record.env.add has the settings' three lines): " + "; ".join(bad))
+    sys.exit(f"LIMITS not held (record.env.add has the settings' {len(want)} lines): " + "; ".join(bad))
 print(f"LIMITS held: the settings' ALPHA, GAMMA and DAY_PROGRAM are the class's own ({prof['templates']} templates, "
-      f"program {prof['program'][:16]}…), the policy's Lean check accepts at them, and the limits file says: {said['proves']}")
+      f"program {prof['program'][:16]}…), the policy's Lean check accepts at them, and the limits file says: {said['proves']}; "
+      f"HELD_ALPHA and HELD_GAMMA are the record form's pair of the class, {want['HELD_ALPHA']} and {want['HELD_GAMMA']}, "
+      "which the limits file states with whose weights theta is")
 EOF
 
   # the day: serve-openai's own declaration of the settings' day at that Program in a scratch log, then the follow-on's

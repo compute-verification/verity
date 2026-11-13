@@ -1087,14 +1087,19 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
 # IO_LIMITS beside the policy, with the count rule's (c, k, n) and the policy file's SHA-512, and the deferral, the
 # compose hand-off and the composite take them as ALPHA and GAMMA (`fixed_limits`), so no later step reads them off the
 # served window's division. The developer writes them, and no auditor's device signs them.
+# Beside them, where the run sets both HELD_ALPHA and HELD_GAMMA, the file's `held` and one clause of the line state a
+# second pair, the record form's: a block a slot, θ the weights the serve's first registration record registers, so a
+# registered weight's bit is not fresh (the class's numbers alone: slots × k over Γ, and Γ a slot; `rehearsal.sh check`
+# holds the two settings to them). No verdict of the run reads that pair, and `fixed_limits` hands on v0's alone.
 IO_LIMITS=${IO_LIMITS:-$OUT/inference-only-limits.json}
 limits() {
   local out
   [ -s "$IO_POLICY" ] || return 0
-  out=$("$SAY_PY" - "$IO_POLICY" "$IO_LIMITS" "${ALPHA:-}" "${GAMMA:-}" "${LIMITS_UNIT:-}" "${LIMITS_PROVE:-}" <<'EOF' 2>&1
+  out=$("$SAY_PY" - "$IO_POLICY" "$IO_LIMITS" "${ALPHA:-}" "${GAMMA:-}" "${LIMITS_UNIT:-}" "${LIMITS_PROVE:-}" \
+    "${HELD_ALPHA:-}" "${HELD_GAMMA:-}" <<'EOF' 2>&1
 import hashlib, json, sys
 from fractions import Fraction
-policy, out, alpha, gamma, unit, proves = sys.argv[1:7]
+policy, out, alpha, gamma, unit, proves, held_alpha, held_gamma = sys.argv[1:9]
 body = open(policy, "rb").read()
 p = json.loads(body)
 given = bool(alpha and gamma)
@@ -1108,9 +1113,21 @@ doc = {"format": "verity-bench/inference-only-limits/v1", "alpha": [a.numerator,
        "policy_sha512": hashlib.sha512(body).hexdigest(), "written_by": "the developer"}
 if given and proves:
     doc["proves"] = proves
+held = ""
+if held_alpha and held_gamma:
+    ha, hg = Fraction(held_alpha), int(held_gamma)
+    if ha < 0 or hg < 1:
+        sys.exit(f"the held alpha {ha} and gamma {hg} are no limits")
+    doc["held"] = {"alpha": [ha.numerator, ha.denominator], "gamma": hg,
+                   "unit": "the record form's, a block a slot: alpha in fresh input bits a gate of a block, gamma in a "
+                           "block's gates",
+                   "theta": "the weights the serve's first registration record registers (deployment-registration.json)"}
+    held = (f"; held for the record form, a block a slot and theta the serve's first registration record's weights, "
+            f"alpha = {ha.numerator}/{ha.denominator} and gamma = {hg}, which no verdict of the run reads")
 with open(out, "w") as f:
     f.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}" + (f" ({proves})" if "proves" in doc else ""))
+print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}" + (f" ({proves})" if "proves" in doc else "")
+      + held)
 EOF
 ) || { say "INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case is at the run's ALPHA and" \
            "GAMMA, or at what it reads off the served window's division:" \

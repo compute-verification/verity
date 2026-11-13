@@ -12,6 +12,9 @@ built here, in a scope of its own as `served_cases.lean_answer` runs every check
   gamma is the largest block's gates and alpha the most input bits a gate of any block (`served_cases.division_policy`);
 - at those numbers: accept expected. They are the class's own two numbers: a window of the class is inside them by
   construction, so the slowdown they prove is 1, that is none;
+- where POLICY is given, the record form's pair beside them (``held``), from the class's numbers alone: a block a slot, so
+  gamma is the profile's over the class's slots, refused unless the slots divide it, and alpha is the policy's k fresh
+  input bits a block over that, slots × k over the profile's gamma. No Lean call makes it and no check here reads it;
 - with ``--rejects``, at POLICY's alpha = k/c and gamma = c (the count rule's numbers, in Boolean gates) and at alpha = k
   over the profile's gamma: the verdict and its reason at each.
 
@@ -93,6 +96,14 @@ def main(argv: list[str]) -> int:
             doc["profile"] = {"gamma": gamma, "alpha": [alpha.numerator, alpha.denominator],
                               "input_bits": str(alpha * gamma)}
             write()
+            if pol is not None:
+                slots = PP.window_class_of(cls_arg).slots
+                if gamma % slots:
+                    raise SC.Refused(f"the class's {slots} slots don't divide the profile's gamma {gamma}, so no block "
+                                     "a slot has gamma over the slots as its gates: no held pair")
+                held = Fraction(slots * pol["k"], gamma)
+                doc["held"] = {"alpha": [held.numerator, held.denominator], "gamma": gamma // slots}
+                write()
 
             def ask(a, g):
                 got, _ = SC.lean_answer(exe, SC.inference_only_case(v1, a, g), scratch)

@@ -2596,8 +2596,10 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
     lowest terms and Γ = c of the policy's own numbers, in the unit of its c, with the count rule's (c, k, n) and the
     policy file's SHA-512, or the run's ALPHA and GAMMA where both are set (in the unit LIMITS_UNIT states), and the
     line says which, and that the developer wrote them. What the run's own two numbers prove is in the file and the
-    line where LIMITS_PROVE says it, and nowhere for the policy's own. A policy that names no c writes none and says
-    so, and the policy step still passes."""
+    line where LIMITS_PROVE says it, and nowhere for the policy's own. Where the run sets both HELD_ALPHA and
+    HELD_GAMMA, the file's ``held`` and one clause of the line state the record form's pair beside them, in lowest
+    terms, with its unit and whose weights θ is, and v0's pair is as it was; half a pair states none, and a pair that
+    is no limits writes no file. A policy that names no c writes none and says so, and the policy step still passes."""
     policy = json.dumps({"c": 14, "k": 6, "n": 16})
     rc, lines, _ = _inference_only(tmp_path / "own", "inference-policy", IO_WRITE=policy)
     assert rc == 0 and lines[1:] == [
@@ -2625,6 +2627,28 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
     assert rc == 0 and lines[1] == (
         "INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14, the policy's c and k (alpha = k/c, gamma = c)" + LIMITS_SAID)
     assert "proves" not in json.loads((tmp_path / "half" / "out" / "inference-only-limits.json").read_text())
+    run = {"ALPHA": "2/4", "GAMMA": "100", "LIMITS_UNIT": "Program gates in a block", "LIMITS_PROVE": none}
+    rc, lines, _ = _inference_only(tmp_path / "held", "inference-policy", IO_WRITE=policy, HELD_ALPHA="6/8",
+                                   HELD_GAMMA="25", **run)
+    assert rc == 0 and lines[1:] == [
+        f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none}); held for the record "
+        "form, a block a slot and theta the serve's first registration record's weights, alpha = 3/4 and gamma = 25, "
+        "which no verdict of the run reads" + LIMITS_SAID]
+    held = json.loads((tmp_path / "held" / "out" / "inference-only-limits.json").read_text())
+    assert held.pop("held") == {
+        "alpha": [3, 4], "gamma": 25,
+        "unit": "the record form's, a block a slot: alpha in fresh input bits a gate of a block, gamma in a block's gates",
+        "theta": "the weights the serve's first registration record registers (deployment-registration.json)"}
+    assert held == json.loads((tmp_path / "proves" / "out" / "inference-only-limits.json").read_text())
+    rc, lines, _ = _inference_only(tmp_path / "half-held", "inference-policy", IO_WRITE=policy, HELD_ALPHA="6/8", **run)
+    assert rc == 0 and lines[1:] == [
+        f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none})" + LIMITS_SAID]
+    assert "held" not in json.loads((tmp_path / "half-held" / "out" / "inference-only-limits.json").read_text())
+    rc, lines, _ = _inference_only(tmp_path / "no-held", "inference-policy", IO_WRITE=policy, HELD_ALPHA="6/8",
+                                   HELD_GAMMA="0", **run)
+    assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, ")
+    assert lines[1].endswith(": the held alpha 3/4 and gamma 0 are no limits")
+    assert not (tmp_path / "no-held" / "out" / "inference-only-limits.json").exists()
     rc, lines, _ = _inference_only(tmp_path / "none", "inference-policy", IO_WRITE=json.dumps({"k": 6}))
     assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case "
                                            "is at the run's ALPHA and GAMMA, or at what it reads off the served "
