@@ -116,13 +116,6 @@ files = [
 ]
 
 [[against]]
-loader = "adapters"
-loaded = "tools"
-files = [
-    "adapters/vllm/tools/migrate/superseded_quarantine.py",
-]
-
-[[against]]
 loader = "tools"
 loaded = "benchmarks"
 files = [
