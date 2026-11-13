@@ -2375,6 +2375,11 @@
         "benchmarks/pouw/harness/sass_gate.py": "verity/protocols/pouw/prover/sass_gate.py",
         "benchmarks/pouw/harness/sass_pins.json": "verity/protocols/pouw/prover/sass_pins.json"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/": "verity/protocols/pouw/prover/kernels/pouw_cuda/"
+      }
     }
   ]
 }
