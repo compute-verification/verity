@@ -136296,3 +136296,47 @@ no day, because of the last two lines above.
 
 Unchanged, nothing pushed but this entry and the note: #9699 `725720f8a4a0`, #9624 `64364792ed70`, the cards
 branch `08b5d4b3c0a6`, #9458 `049c5875989c`. No run is out and no timer is set.
+
+## ASSEMBLY, Fri 13 Nov 10:47Z: THE TWO `escapes` LINES ARE ON THE JOIN, at `4a4d22b644`, with ADDRROW2's `7e52dfb8e2` and SESSIONOF2's `b49c6e4061`; IT COMPILES (`caba`, rc 0); THE RECORDS RUN AT THAT HEAD IS `r20261113-103758-9715`, out; `addressesConnected_of_firstK` REPLACES NO FIELD of the join: it gives a premise of `SpotKSTwo`, and the leg's session is not stated at the code `SpotKSTwo` concludes at
+
+**In plain words.** Your 10:31Z items 1 and 2 are done and the join compiles with them. The records run you asked for is out and named here; its verdict comes at 11:30Z. On item 3: the join has no field for the new lemma to replace. The lemma proves the addresses condition of SPOT[Flock]'s knowledge soundness, which the leg takes as a premise above the join. And there is a gap between the two: the leg's session is written over the members' programs side by side, while that knowledge soundness is proved over the connected program. I restated nothing.
+
+**1. The join: `4a4d22b644`, pushed, worktree clean** [run].
+- `65a6f23f42`: the two `escapes` lines in `security/Proofs/lean-audit.json`, `SpotFlock.RecordNames.jpBody` (the partial def of `jp_body` and `jp_close`) and `SpotFlock.RecordNames.walkGoal` (of `jp_walk`), each worded as the `Fwd.*` lines are: elaborator code under `compile_time`, no statement reads it, the kernel checks every proof it builds. `escapes` now holds 15 names.
+- `46512585d9`: ADDRROW2's `7e52dfb8e2` (three new files: `AddressFacts/RowSample.lean`, `RowPublished.lean`, `RowFirst.lean`). Not `caad17c097`.
+- `422f7a6463`: SESSIONOF2's `b49c6e4061` (`SampledTwo/ScopeTable.lean` new, `OneTable.lean` 44 lines shorter).
+- `4a4d22b644`: the pin's line.
+- Each merge: no conflict; every commit it brings is off `main` (the join's merge base with `main` is `a2c3831345` before and after).
+- After them: `lock_roots.py --check` adds nothing and finds nothing wrong; lakefile roots 317 (316 distinct), lock roots 320; `dup_names.py` the same 17 names, none in a merged file; `pins.py --stale` prints nothing; `pytest tests/test_lean_packages.py`, "35 passed, 3 warnings".
+- **No field of `JoinsAt` changed its statement** [derived: the import closures of `JoinsAt.lean`, `JoinedCoupling.lean` and `JoinedForm.lean` reach none of the five Lean files the two merges change]. The table of 10:26Z stands as written, 23 fields.
+
+**2. Runs** [run].
+- **`r20261113-103715-caba`, compile at `4a4d22b644`, rc 0**, vy-nebius-cpu-9, 10:37:46Z to 10:43:54Z. `AddressFacts/RowFirst.lean` lean exit 0 in 339 s, `SampledTwo/TableName.lean` in 28 s; the axiom probe finds nothing beyond the three on each one's 3 theorems. These two tries reach all five changed files and the three above them (`RowPlace.lean`, `RowTable.lean`, `TableName.lean`) [derived, by the import closure].
+- **`r20261113-103758-9715`, the records run at `4a4d22b644`, out**, vy-nebius-cpu-9, started 10:38Z, `--cwd clone`, 72 GB. Expected end between 11:15Z and 11:40Z [guess, from `adf2`: 23 minutes to its first package's verdict, 13 for its second].
+- **`r20261113-095636-adf2`, the records run at `0df461b1b2`, still running** (its third package). What it has said: `security/Proofs` FAIL on the two escapes and nothing else; `security` alone "PASS 27782 declarations in 731 modules ... 1138 guarantees", and its run as a requirer fails only because it reads `security/Proofs`, which fails on the same two lines. So the two lines are the only red that run has shown.
+
+**3. `addressesConnected_of_firstK`: what it replaces** [read, at `4a4d22b644`; I changed nothing for it].
+- **No field.** Neither `JoinsAt` (23 fields) nor `CouplesAt` (11) names `AddressesConnected`, and no file under `security/Proofs/Properties/Verity/` does.
+- **The premise it gives** is `SpotFlock.AddressesConnected h`, the second of the two premises of `Flock.Guarantees.SpotKSTwo` and `SpotExfilTwo` (`Flock/SamplingGeneric/Guarantees.lean`; the first is `BuiltWired`). In the leg, that guarantee's conclusion is what `TwoLeg` (`SampledTwo/Leg.lean`) takes as its first premise, `A.KS` at each session of record, beside the cover and the coupling. The join gives the coupling only. So the lemma works one level above the join, on a premise of the leg.
+- **By these five facts of the auditor's held copies `h`** (`RowFirst.lean`):
+  1. `RefReadsWf h`: every member's reference reads are well formed. It gives the wiring facts at each accepted run (`wiring_of_refReads`).
+  2. `∀ v, h.reg.always v = false`: no inner block is always checked.
+  3. `Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true` at some `n`: the run's population check.
+  4. `firstK h.reg.first = some K` at some `K`: at `h := A.h` this is the join's field `firstSized`, the same statement.
+  5. `AddressRow.wiresChecked h = true`: the condition on the auditor's copies of the wires.
+- **So one of the five is already a field of the join (`firstSized`), and the other four are new premises wherever the lemma is used.** If ACCEPTS's `firstK_of_formAccepts` takes `firstSized` out of `JoinsAt`, the lemma needs that fact from the same place.
+- **The gap, which is not mine to mend.** `Live₂.L` (`Leg.lean`) is the compiled two-stage verifier at `SpotFlock.code A.h`, `SpotFlock.two A.h` and `SpotFlock.rs A.h`: the members' programs side by side. `SpotKSTwo` concludes at `SpotFlock.codeConnected h`, `twoConnected h` and `rsConnected h`: the connected program, whose base is `baseWired` (`parseWired`, `partitionWired`), a different `Code`. `Live₂.KS`'s docstring calls it "`Flock.Guarantees.SpotKSTwo`'s conclusion at the held copies"; as the two are written, it is not that. I found no lemma that carries one to the other: only six files under `security/` name `codeConnected` or `codeWired`, all under `Proofs/Flock/`, and none states an equality of the two codes. At `SpotFlock.code` the theorem is `ksTwo_spot`, from `Built` and `Addresses`, of which `Guarantees.lean` says "No guarantee reads those".
+- **What that means for the lemma:** today `addressesConnected_of_firstK` discharges a premise of a theorem whose conclusion the leg does not read. Before it replaces anything the leg reads, either `Live₂.L` is stated at the connected program (every file of the join reads `A.L`; 41 files under `SampledTwo/` name `Live₂`), or a lemma carries `SpotKSTwo`'s conclusion to `A.L`. Which of the two, and whose it is, is yours or soundness's to rule. I have not tried either.
+
+**4. The edges: still eight on the join** [run: `public_boundary.py` at `4a4d22b644`, "8 edges, 8 new", the same eight lines as at 10:26Z]. `ScopeTable.lean` is now on the join and imports SPOT's analysis alone (`Accepting`, `RunsAs/SecondStageOf`, `HiddenExec/AcceptsP`); `RowTable.lean:26` still imports `OneTable`, so edge 1 and the certifier test stay red until ADDRROW2 names the head that changes that import. I wrote none of the other seven, as you ruled.
+
+## Not established
+
+- The records of `security/Proofs` at `4a4d22b644`: `9715` has no verdict yet. Whether the two lines are worded so the check takes them, and whether the four new roots bring a red of their own, is what it will say.
+- `security/Properties` at any head of the join: `adf2` has not reached its verdict.
+- The quick tier at `4a4d22b644`: not run. The two boundary tests are red there by the eight edges.
+- That `A.KS` holds at any session of record: nothing on the join proves it, and by section 3 `SpotKSTwo` as stated does not give it.
+- That any instance of `JoinsAt` exists: none is written; all 23 fields are premises.
+- A wired play of more than one member is not an accepted play today (TWOLEG's line of the 10:26Z entry, unchanged).
+
+**Runs out:** `r20261113-103758-9715` (records, vy-nebius-cpu-9, at `4a4d22b644`), expected end 11:15Z to 11:40Z; `r20261113-095636-adf2` (records, vy-nebius-cpu-1, at `0df461b1b2`), on its third package. **Timer:** one, for `9715`. **Next entry:** 11:30Z, with `9715`'s verdict.
