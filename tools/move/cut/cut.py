@@ -709,6 +709,14 @@ for dest, m in TABLE["modules"].items():
                         problems.append(f"{rel}: `{label}` goes to {dest} and reads `{name}`, its own file's: leave it")
                     continue
                 stmt, al, _ = hit
+                written = alias_target(stmt, al, rel)
+                defined = resolve(*written) if written is not None and written[1] is not None else None
+                if defined is not None and defined[1] is not None and defined[0] != written[0] \
+                        and defined[0].startswith("verity/") and (defined[0], defined[1]) not in where:
+                    # a name its source read through a module that only imports it: from the module that defines it,
+                    # so the new module loads no more than it reads
+                    wanted.append(import_of(defined[0], dest, defined[1], al.asname or al.name))
+                    continue
                 wanted.append(("" if isinstance(stmt, ast.Import) else stmt.module, al.name, al.asname))
     for line in m.get("imports", []):  # what the module's `tail` reads
         for n in ast.parse(line).body:
@@ -887,6 +895,78 @@ for rel, text in TABLE.get("files", {}).items():
     if rel in TEXT:
         problems.append(f"{rel}: the table gives it whole and it exists: name another file")
     new_modules[rel] = text
+
+# ---- what names a file by its path: a suite's declared inputs, a load by path, a document
+LISTS = "tests/lint/allowlists/"  # the counted lints' rows, which `allow.py` moves
+
+
+def text_after(rel: str) -> str | None:
+    """A tracked file's text as the cut leaves it."""
+    if rel in CHANGED or rel in TEXT:
+        return CHANGED.get(rel, TEXT.get(rel))
+    try:
+        return (ROOT / rel).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+for old, new in WHOLE.items():
+    named = subprocess.run(["git", "-C", str(ROOT), "grep", "-l", "-z", "-F", "-e", old, "--", "."], capture_output=True,
+                           text=True).stdout.split("\0")
+    for rel in sorted({r for r in named if r} | {r for r in CHANGED if old in CHANGED[r]}
+                      | {r for r in new_modules if old in new_modules[r]}):
+        text = new_modules.get(rel) or text_after(rel)
+        if rel.startswith(LISTS) or rel in WHOLE or text is None or old not in text:
+            continue
+        line = text[:text.index(old)].count("\n") + 1
+        problems.append(f"{rel}:{line}: names {old}, which moves whole to {new}: write what it should name after the cut "
+                        f"in an `edits` row of the table")
+
+
+MADE = set(new_modules) | set(WHOLE.values())
+
+
+def imported_files(rel: str, text: str, held: set[str]) -> set[str]:
+    """The files of `held` that the module `rel` imports directly, by any import its text has."""
+    try:
+        tree = ast.parse(text, filename=rel)
+    except SyntaxError:
+        return set()
+    out = set()
+    for stmt in ast.walk(tree):
+        if isinstance(stmt, ast.Import):
+            mods = [a.name for a in stmt.names]
+        elif isinstance(stmt, ast.ImportFrom) and stmt.module and not stmt.level:
+            mods = [stmt.module, *(f"{stmt.module}.{a.name}" for a in stmt.names)]
+        else:
+            continue
+        for mod in mods:
+            ways = [mod.replace(".", "/") + ".py"] if "." in mod else [str(Path(rel).parent / (mod + ".py")), f"{BARE}/{mod}.py"]
+            out |= {way for way in ways[:1 + (ways[0] not in held)] if way in held}
+    return out
+
+
+# a suite's pyproject.toml that names a file by its path names what its tests may read (`[tool.verity.tests] inputs`):
+# where such a file comes to import a file the cut makes, the suite reads that one too
+AFTER = (set(TEXT) - set(WHOLE)) | MADE
+for toml in sorted(subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z", "--", "*pyproject.toml"], capture_output=True,
+                                  text=True).stdout.split("\0")):
+    text = text_after(toml) if toml else None
+    if text is None:
+        continue
+    quoted = set(re.findall(r'"([A-Za-z0-9_./-]+)"', text))
+
+    def names(path: str) -> bool:
+        return any(path == q or path.startswith(q.rstrip("/") + "/") for q in quoted)
+
+    for rel in sorted(q for q in quoted if q in CHANGED and q.endswith(".py")):
+        before = imported_files(rel, TEXT[rel], set(TEXT))
+        for made in sorted((imported_files(rel, CHANGED[rel], AFTER) - before) & MADE):
+            beside = [b for b in before if Path(b).parent == Path(made).parent]
+            if names(made) or (beside and not any(names(b) for b in beside)):
+                continue  # named, or its directory reaches the suite some other way, as its neighbours there do
+            problems.append(f"{toml}: names {rel}, which comes to import {made}: name {made} there too, in an `edits` "
+                            f"row of the table (a suite fails on a file its tests read outside its inputs)")
 
 for stem, how in sorted(NAMED.items()):
     if len(how) == 2:

@@ -152,6 +152,12 @@
  },
  "edits": [
   {
+   "file": "benchmarks/prove_path/pyproject.toml",
+   "old": "\"benchmarks/network_traces/blob_files.py\", \"benchmarks/network_traces/certifier_key.py\",",
+   "new": "\"benchmarks/network_traces/runner_parts.py\", \"benchmarks/network_traces/certifier_key.py\",",
+   "why": "the suite's inputs name the runner's files one by one: the file that moves whole is under `verity`, which they hold, and the runner comes to import `runner_parts.py`"
+  },
+  {
    "file": "benchmarks/network_traces/load_relay.py",
    "old": "    python benchmarks/network_traces/load_relay.py bench --out DIR [--shape h200] [--bytes N] [--workers 1,16]\n",
    "new": ""
