@@ -9,14 +9,14 @@
 #      away and, on DEV=gpu, every card of CARDS free in `gpu-lease status` and holding no compute process, else exit 9
 #      having started nothing
 #   1. flock-read-tmpl built in the clone's Flock package (lake build), which stage.py runs for a table read's template
-#   2. window.py stage UNITS into FLOCK_WORK, a fresh directory under /workspace/tmp on disk: prove_time.sh's stage step
+#   2. window.py stage UNITS into FLOCK_WORK, a fresh directory under WORK_ROOT on disk: prove_time.sh's stage step
 #      builds flock-tmpl-unit under it and places each templated statement's unit with it, so the job refuses a FLOCK_WORK
-#      on a noexec mount; window.py builds the prover beside the stagings
+#      under /dev/shm or on a noexec mount; window.py builds the prover beside the stagings
 #   3. window.py prove: one group per card of CARDS (one group on the CPU), each group's `gpu-lease 1` taken only among CARDS
 #      (GPU_LEASE_ALLOWED_FILE) and ending by KILL_AT less 3 minutes, the whole step under `timeout` to KILL_AT less 90 s;
 #      every session kept in out/kept/NAME; FLOCK_WORK removed at its end
 # env: UNITS (a path, or a name sent with the run) DEV (gpu|cpu) CARDS (gpu) SM (gpu) NOT_BEFORE KILL_AT; MIN_LEFT_S=1800
-#      WARM=1 RUNS=4 VCPUS=2 LEASE_MIN=60 WIN_MEM_GB=64 WIN_DISK_GB=40 WIN_FREE_GB=20 WIN_DEV_GIB=135
+#      WORK_ROOT=/workspace/tmp WARM=1 RUNS=4 VCPUS=2 LEASE_MIN=60 WIN_MEM_GB=64 WIN_DISK_GB=40 WIN_FREE_GB=20 WIN_DEV_GIB=135
 set -uo pipefail
 IN=$RESEARCH_RUN_DIR/inputs; OUT=$RESEARCH_RUN_DIR/out; mkdir -p "$OUT"; L=$OUT/steps.txt
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$L"; }
@@ -60,7 +60,9 @@ t=$(date +%s)
 say "flock-read-tmpl built in $(( $(date +%s) - t )) s"
 
 # 2. stage, on disk
-mkdir -p /workspace/tmp && FW=$(mktemp -d /workspace/tmp/stage-prove.XXXXXX) || { say "no FLOCK_WORK under /workspace/tmp"; exit 4; }
+WR=${WORK_ROOT:-/workspace/tmp}
+case $WR in /dev/shm*) say "REFUSED: WORK_ROOT $WR is in RAM; flock-tmpl-unit is built and run under FLOCK_WORK, on disk"; exit 4 ;; esac
+mkdir -p "$WR" && FW=$(mktemp -d "$WR/stage-prove.XXXXXX") || { say "no FLOCK_WORK under $WR"; exit 4; }
 if findmnt -no OPTIONS -T "$FW" | tr ',' '\n' | grep -qx noexec; then
   say "REFUSED: FLOCK_WORK $FW is on a noexec mount, where flock-tmpl-unit can't run"; rm -rf "$FW"; exit 4
 fi

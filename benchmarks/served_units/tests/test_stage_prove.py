@@ -30,7 +30,8 @@ for i in $(tr ',' ' ' < "$GPU_LEASE_ALLOWED_FILE"); do
   case ",${HELD:-}," in *",$i,"*) echo "$i held 3m pid=1 who=other" ;; *) echo "$i free" ;; esac
 done
 '''
-LAKE = '#!/usr/bin/env bash\necho "lake $*" >> "$CALLS"\nexit 1\n'
+#: lake: fails, unless $LAKE_OK
+LAKE = '#!/usr/bin/env bash\necho "lake $*" >> "$CALLS"\n[ -n "${LAKE_OK:-}" ]\n'
 
 
 @pytest.fixture
@@ -41,6 +42,7 @@ def job(tmp_path):
         (bin_ / name).write_text(text)
         (bin_ / name).chmod(0o755)
     (tmp_path / "units").write_text("census:EmbeddingRead_v1{V=256,H=4}@full\t4.8\t1.5\t197\t30\n")
+    (tmp_path / "verity/protocols/flock/verifier").mkdir(parents=True)
     run_dir, calls = tmp_path / "run", tmp_path / "calls"
 
     def run(**extra: str) -> tuple[int, str, list[str]]:
@@ -78,6 +80,13 @@ def test_reads_the_leases_among_its_cards_alone_and_goes_on_when_they_are_free(j
     rc, steps, calls = job(APPS="GPU-6, 77, python\n", HELD="6")
     assert "start check passed: cards 4,5 free" in steps, steps
     assert calls[0] == "4,5" and rc == 4 and "flock-read-tmpl BUILD FAILED" in steps
+
+
+def test_stages_nowhere_in_ram(job):
+    """FLOCK_WORK holds flock-tmpl-unit, which a noexec /dev/shm can't run: a WORK_ROOT there is refused before staging."""
+    rc, steps, _ = job(LAKE_OK="1", WORK_ROOT="/dev/shm/stage-prove-test")
+    assert rc == 4 and "REFUSED: WORK_ROOT /dev/shm/stage-prove-test is in RAM" in steps, steps
+    assert "window.py stage" not in steps and not Path("/dev/shm/stage-prove-test").exists()
 
 
 def test_refuses_a_device_it_does_not_know(job):
