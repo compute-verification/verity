@@ -268,7 +268,7 @@ class Forge(NamedTuple):
     row: bytes
 
 
-#: an id request's prompt field (`active.ID_FIELD_BYTES`): `[` or `,`, then the id right-aligned in ten characters
+#: an id request's prompt field (`id_form.ID_FIELD_BYTES`): `[` or `,`, then the id right-aligned in ten characters
 PROMPT_FIELD = re.compile(rb"[\[,] *[0-9]+")
 
 

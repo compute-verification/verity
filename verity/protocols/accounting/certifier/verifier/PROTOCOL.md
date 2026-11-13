@@ -2070,7 +2070,7 @@ never rewrites. An honest id-form server writes one `io_tie.id_event` of exactly
 the cut gives one event a `DATA` cell and the `END` holds the trailer; any other byte stream fails at its first cell.
 
 **The response cap** (`WardenParams.max_tokens_cap`, id form only, none by default) bounds every response in tokens. The
-network certifier reads each request's `max_tokens` from its first request cell (`active.id_request_max_tokens`) before
+network certifier reads each request's `max_tokens` from its first request cell (`id_form.id_request_max_tokens`) before
 cutting it. A request whose field isn't a u32 at its place, or exceeds the cap, is refused (`cap`): none of its bytes is
 cut into a cell or reaches the server, and it fails at once. It is never clamped. Every other response is held to its
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each

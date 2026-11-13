@@ -59,7 +59,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
 * **The domain** is a parameter, by default the one the verifier derives (`transfer_rows.domain`: the reading program's
   digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
-* **The certifier's key** is ``--key``'s (`certifier_serve.load_key`'s layout), one LMS leaf a value (733 at H200), in
+* **The certifier's key** is ``--key``'s (`certifier_key.load_key`'s layout), one LMS leaf a value (733 at H200), in
   session ``--session``: the verifier pins a load and the windows' transfers under one key and session, so the load's
   session is the serving certifier's.
 
