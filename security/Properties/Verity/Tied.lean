@@ -11,21 +11,21 @@ circuit computes it: the registered file's circuit with each cell's y computed b
 proved, from the call's A row and the weight's row. This module is that circuit, its blocks and its untied gates, as one
 definition; that its gates compute Pearl+'s product at W's entries is `Verity.ValueTie.Tying.AtW`.
 
-* **The cut** (`Layout`): the registered file's cells and each one's y, input gates of the circuit, 32 bits a cell, one
+* **The cut** (`Cut`): the registered file's cells and each one's y, input gates of the circuit, 32 bits a cell, one
   cell a gate. It is the vocabulary's (`Verity.Vocab.cut`), whose registered inputs `θ` hold no y gate
   (`Verity.Vocab.theta_cut`): a served y is a prover value until the tie holds it.
 * **The circuit** (`Tying`): the registered file's circuit embedded gate for gate, every y gate computed, every other
   gate as served; the gates it adds are each cell's tie, reading only the cell's A row (served gates), the weights
   (added inputs, registered) and the cell's own tie gates.
 * **Its blocks** (`Tying.blocks`): the registered file's blocks, each cell's y gates and its tie's gates in the cell's
-  home block (`home`), the block holding the cell's linear output in the registered file (`Layout.Homes`): a block that
+  home block (`home`), the block holding the cell's linear output in the registered file (`Cut.Homes`): a block that
   reads the cell's y there, where one does.
 * **The untied gates** (`Tying.untiedGates`): the y gates of the cells whose y is not the tie's output, each cell's
   whole word; the placement from below (`Tying.place`, `Tying.FromBelow`) puts each cell at its home block and its y
   gates, so an untied cell's gates are untied gates and distinct cells sit at disjoint gates.
 * **The policy on it** (`Tying.CompliesBut`): `Γ` bounds each block's registered rows alone (the tie's gates are PoUW's
   credited work), and the untied y gates count as fresh input, 32 gates a word on a Boolean circuit.
-* **A monitoring period** (`Window`, `PeriodOutsideG`): the blocks outside each window's `G`, those holding more than
+* **A monitoring period** (`Charges`, `PeriodOutsideG`): the blocks outside each window's `G`, those holding more than
   `w` untied words, charged whole, summed over the period's windows.
 -/
 
@@ -41,7 +41,7 @@ abbrev Cell : Type := ℕ × ℕ × ℕ × ℕ
 /-- **The cut's layout of the committed circuit `C`**: its cells, and their y gates (`y`), input gates of `C`, each the
 y of one cell (`cellOf`) and each cell's taking 32 bits. `word` reads a cell's y off its gates as the 32-bit word its
 tree stores, and is one-to-one there. -/
-structure Layout (C : Verity.Circuit) where
+structure Cut (C : Verity.Circuit) where
   cells : Finset Cell
   y : Finset (Fin C.N)
   cellOf : Fin C.N → Cell
@@ -52,9 +52,9 @@ structure Layout (C : Verity.Circuit) where
   word_reads : ∀ c (X X' : C.Trace), (∀ g ∈ y, cellOf g = c → X g = X' g) → word c X = word c X'
   word_inj : ∀ c (X X' : C.Trace), word c X = word c X' → ∀ g ∈ y, cellOf g = c → X g = X' g
 
-namespace Layout
+namespace Cut
 
-variable {C : Verity.Circuit} (L : Layout C)
+variable {C : Verity.Circuit} (L : Cut C)
 
 /-- The y gates of the cell `c`: its word. -/
 def yAt (c : Cell) : Finset (Fin C.N) := L.y.filter fun g => L.cellOf g = c
@@ -68,7 +68,7 @@ def Homes {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) : Prop :=
   ∀ c ∈ L.cells, (∃ h, ∃ g ∈ L.yAt c, g ∈ C.reads h) → ∃ h, ∃ g ∈ L.yAt c, g ∈ C.reads h ∧ Q.unit h = some (home c)
 
 /-- The layout with no cells, of a circuit that is not cut. -/
-def empty (C : Verity.Circuit) : Layout C where
+def empty (C : Verity.Circuit) : Cut C where
   cells := ∅
   y := ∅
   cellOf _ := (0, 0, 0, 0)
@@ -79,7 +79,7 @@ def empty (C : Verity.Circuit) : Layout C where
   word_reads _ _ _ _ := rfl
   word_inj _ _ _ _ _ h := absurd h (Finset.notMem_empty _)
 
-end Layout
+end Cut
 
 /-- **The tied circuit of the committed circuit `C`, with registered inputs `θ`, at the cut `L`.** The served gates
 are gates of the tied circuit of the same width (`emb`); the y gates of the cells it ties (`cells`, the cut's cells
@@ -89,7 +89,7 @@ applies the same operation. The gates the tied circuit adds are each cell's tie 
 y gates read only the cell's A row (`row`, served gates), the weights' rows (added input gates, registered and holding
 `weights`) and the cell's own tie gates. `aRow` and `bRow` are the bytes of the cell's A row and of its weight's row as
 their trees store them, the A row read from the served values at `row` alone. -/
-structure Tying (C : Verity.Circuit) (θ : Finset (Fin C.N)) (L : Layout C) where
+structure Tying (C : Verity.Circuit) (θ : Finset (Fin C.N)) (L : Cut C) where
   /-- the cells it ties: the cut's cells that are the run's calls -/
   cells : Finset Cell
   cells_sub : cells ⊆ L.cells
@@ -127,7 +127,7 @@ structure Tying (C : Verity.Circuit) (θ : Finset (Fin C.N)) (L : Layout C) wher
 
 namespace Tying
 
-variable {C : Verity.Circuit} {θ : Finset (Fin C.N)} {L : Layout C} (T : Tying C θ L)
+variable {C : Verity.Circuit} {θ : Finset (Fin C.N)} {L : Cut C} (T : Tying C θ L)
 
 /-- The served gates' values in the tied circuit's transcript `X'`. -/
 def served (X' : T.tied.D.Trace) : C.Trace := fun g => (X' (T.emb g)).cast (T.emb_w g)
@@ -198,7 +198,7 @@ def FromBelow {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) (U : 
 
 /-- **The inference-only policy on the tied circuit, the untied y's of `U` counted as fresh input.** The registered
 file's circuit divides into blocks `Q` of at most `Γ` registered rows each, the cells at homes that hold their linear
-outputs (`Layout.Homes`), and each block of the tied circuit's (`blocks`) but its untied gates reads at most `α` bits
+outputs (`Cut.Homes`), and each block of the tied circuit's (`blocks`) but its untied gates reads at most `α` bits
 of fresh input a registered row, and the untied gates it holds, 32 bits a word. A block's tie gates count in no row,
 and their reads of the cell's A row count as fresh input wherever the block does not hold that row. -/
 def CompliesBut (Γ : ℕ) (α : ℝ) (U : Finset Cell) : Prop :=
@@ -213,15 +213,15 @@ end Tying
 
 /-- **One window's blocks and untied cells, as the period counts them**: its tied circuit's `m` blocks, each cell's
 home, its untied cells, and each block's charge when charged whole. -/
-structure Window where
+structure Charges where
   m : ℕ
   home : Cell → Fin m
   untied : Finset Cell
   charge : Fin m → ℕ
 
-namespace Window
+namespace Charges
 
-variable (W : Window)
+variable (W : Charges)
 
 /-- **The blocks outside the window's `G`**: those holding more than `w` untied words. -/
 def heavy (w : ℕ) : Finset (Fin W.m) := univ.filter fun u => w < (W.untied.filter fun c => W.home c = u).card
@@ -229,24 +229,24 @@ def heavy (w : ℕ) : Finset (Fin W.m) := univ.filter fun u => w < (W.untied.fil
 /-- **The window's blocks outside its `G`, charged whole**: their charges' sum. -/
 def outside (w : ℕ) : ℕ := ∑ u ∈ W.heavy w, W.charge u
 
-end Window
+end Charges
 
 /-- **A window of the tied circuit**, at the registered file's blocks `Q`, the homes `home` and the untied cells `U`:
 each block charged whole at its registered rows, which `Γ` bounds. -/
-def Tying.window {C : Verity.Circuit} {θ : Finset (Fin C.N)} {L : Layout C} (_ : Tying C θ L) {m : ℕ}
-    (Q : Verity.Partition C m) (home : Cell → Fin m) (U : Finset Cell) : Window :=
+def Tying.charges {C : Verity.Circuit} {θ : Finset (Fin C.N)} {L : Cut C} (_ : Tying C θ L) {m : ℕ}
+    (Q : Verity.Partition C m) (home : Cell → Fin m) (U : Finset Cell) : Charges :=
   ⟨m, home, U, fun u => C.size (Q.gates u)⟩
 
 /-- **The period's blocks outside each window's `G`**, charged whole and summed over the monitoring period's windows. -/
-def periodOutside {n : ℕ} (W : Fin n → Window) (w : ℕ) : ℕ := ∑ k, (W k).outside w
+def periodOutside {n : ℕ} (W : Fin n → Charges) (w : ℕ) : ℕ := ∑ k, (W k).outside w
 
 /-- **The blocks outside `G`, pooled over a monitoring period.** Over any period's windows, each block charged at most
 `c` when charged whole, and `G` in each window its blocks holding at most `w` untied words: `w + 1` times the period's
 charge for the blocks outside each window's `G` is at most `c` times the period's untied words. With each block
-charged at its registered rows (`Tying.window`), `c` is `Γ`, so the per-window clause's blocks charged whole pool to
+charged at its registered rows (`Tying.charges`), `c` is `Γ`, so the per-window clause's blocks charged whole pool to
 `Γ / (w + 1)` a period's untied word, whatever the number of windows. -/
 def PeriodOutsideG : Prop :=
-  ∀ {n : ℕ} (W : Fin n → Window) (w c : ℕ), (∀ k u, (W k).charge u ≤ c) →
+  ∀ {n : ℕ} (W : Fin n → Charges) (w c : ℕ), (∀ k u, (W k).charge u ≤ c) →
     (w + 1) * periodOutside W w ≤ c * ∑ k, (W k).untied.card
 
 end Verity.ValueTie

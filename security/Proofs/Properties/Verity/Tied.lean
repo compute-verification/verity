@@ -22,19 +22,19 @@ namespace Verity.ValueTie
 
 open Finset
 
-namespace Layout
+namespace Cut
 
-variable {C : Verity.Circuit} (L : Layout C)
+variable {C : Verity.Circuit} (L : Cut C)
 
 theorem mem_yAt {c : Cell} {g : Fin C.N} : g ∈ L.yAt c ↔ g ∈ L.y ∧ L.cellOf g = c := mem_filter
 
 theorem mem_yOf {U : Finset Cell} {g : Fin C.N} : g ∈ L.yOf U ↔ g ∈ L.y ∧ L.cellOf g ∈ U := mem_filter
 
-end Layout
+end Cut
 
 namespace Tying
 
-variable {C : Verity.Circuit} {θ : Finset (Fin C.N)} {L : Layout C} (T : Tying C θ L)
+variable {C : Verity.Circuit} {θ : Finset (Fin C.N)} {L : Cut C} (T : Tying C θ L)
 
 /-- **A tied cell's y gate is in its home block.** -/
 theorem blocks_unit_emb {m : ℕ} (Q : Verity.Partition C m) (home : Cell → Fin m) {g : Fin C.N}
@@ -130,15 +130,15 @@ theorem novelReads_asInputs_eq {m : ℕ} (d : Verity.RegisteredCircuit) (P : Ver
 
 /-- **One window's blocks outside its `G`, charged whole**: `w + 1` times their charge is at most `c` times the
 window's untied words, when no block is charged more than `c`. -/
-theorem Window.outside_le (W : Window) (w c : ℕ) (hc : ∀ u, W.charge u ≤ c) :
+theorem Charges.outside_le (W : Charges) (w c : ℕ) (hc : ∀ u, W.charge u ≤ c) :
     (w + 1) * W.outside w ≤ c * W.untied.card := by
   have h1 : W.outside w ≤ (W.heavy w).card * c := by
-    unfold Window.outside
+    unfold Charges.outside
     simpa using Finset.sum_le_card_nsmul (W.heavy w) W.charge c fun u _ => hc u
   have h2 : (W.heavy w).card * (w + 1) ≤ ∑ u ∈ W.heavy w, (W.untied.filter fun x => W.home x = u).card := by
     have := Finset.card_nsmul_le_sum (W.heavy w) (fun u => (W.untied.filter fun x => W.home x = u).card) (w + 1)
       fun u hu => by
-        unfold Window.heavy at hu
+        unfold Charges.heavy at hu
         exact (mem_filter.1 hu).2
     simpa using this
   have h3 : ∑ u ∈ W.heavy w, (W.untied.filter fun x => W.home x = u).card ≤ W.untied.card := by
@@ -148,11 +148,11 @@ theorem Window.outside_le (W : Window) (w c : ℕ) (hc : ∀ u, W.charge u ≤ c
     _ = c * ((W.heavy w).card * (w + 1)) := by ring
     _ ≤ c * W.untied.card := Nat.mul_le_mul_left _ (h2.trans h3)
 
-/-- **`PeriodOutsideG` holds**: the windows' bounds (`Window.outside_le`), summed over the period. -/
+/-- **`PeriodOutsideG` holds**: the windows' bounds (`Charges.outside_le`), summed over the period. -/
 theorem periodOutsideG : PeriodOutsideG := by
   intro n W w c hc
   unfold periodOutside
   rw [Finset.mul_sum, Finset.mul_sum]
-  exact Finset.sum_le_sum fun k _ => Window.outside_le (W k) w c (hc k)
+  exact Finset.sum_le_sum fun k _ => Charges.outside_le (W k) w c (hc k)
 
 end Verity.ValueTie

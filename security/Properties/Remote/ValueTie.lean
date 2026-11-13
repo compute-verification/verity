@@ -117,7 +117,7 @@ def OpensAt (e : Properties.Pouw.PearlPlus.RowAtW) (v : String) (d : PouwCommit.
 
 namespace Tying
 
-variable {C : Verity.Circuit} {θ : Finset (Fin C.N)} {L : Layout C} (T : Tying C θ L)
+variable {C : Verity.Circuit} {θ : Finset (Fin C.N)} {L : Cut C} (T : Tying C θ L)
 
 /-- **The tied circuit is the run's calls at W's entries: its gates compute the product Pearl+ proved.** Each cell it
 ties is a real cell of the run `R` at W's entries (`CellAt`), and in every transcript of the tied circuit whose added

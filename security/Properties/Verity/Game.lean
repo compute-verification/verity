@@ -741,7 +741,7 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   theta : (θ : ByteArray) → (F : Array ByteArray) → Finset (Fin (read θ F).circuit.N)
   theta_input : ∀ θ F, ∀ g ∈ theta θ F, (read θ F).circuit.isInput g = true
   /-- the cut's layout of the committed files' circuit: its cells, each one's y an input row of a cut linear -/
-  cut : (θ : ByteArray) → (F : Array ByteArray) → ValueTie.Layout (read θ F).circuit
+  cut : (θ : ByteArray) → (F : Array ByteArray) → ValueTie.Cut (read θ F).circuit
   /-- **y's gates are outside `θ`**: a served y is a prover value until the tie holds it, never registered -/
   theta_cut : ∀ θ F, Disjoint (cut θ F).y (theta θ F)
   /-- the inference-only policy's maximum inference block size `Γ`, in gates -/
