@@ -12,10 +12,10 @@ check the stream ran on it, in the stream's order.
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
 * `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
-  sampled audit's soundness statement); under a two-stage rule, a first stage whose family is not the one of the place
-  its record's window names, refused before any coin is read too (`place`, `placed`: the sample's family is its
-  record's, `Place.family`, never the caller's to choose; a run that names no family and a record whose window names
-  no place are held to none); the sample of record on the bytes of the challenger's coins (`Select.select`,
+  sampled audit's soundness statement); a family that is not the one of the place the record's window names, refused
+  before any coin is read too (`place`, `placed`: the sample's family is its record's, `Place.family`, never the
+  caller's to choose, under a one-stage rule as under a two-stage one; a run that names no family and a record whose
+  window names no place are held to none); the sample of record on the bytes of the challenger's coins (`Select.select`,
   under the rule over the program's population, `Select.resolve`); the verifier has no coins of its own, so a sample that
   read any byte carries evidence (`coins`) that the bytes are exactly the coins of the verifier's family (`family`, the
   run's own, never the evidence's) that the session the ledger opens for the
@@ -266,13 +266,13 @@ def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Arra
     return .error ("second", #[code])
   return .ok (it, receipt, draw, Select.secondLaw sample ns ks, read)
 
-/-- **A two-stage run's first stage reads the family its record names** (`place`): under a two-stage rule, where the
-run names a family and the record's window names a place, the family is that place's (`Place.family`). A one-stage
-run, a run that names no family and a record whose window names no place are held to none. -/
-def placed (rule : Select.Rule) (record : Json) (family : Option String) : Bool :=
-  match rule, family, Place.family (getD record "window") with
-  | .twoStage _ _ _, some named, some mine => named == mine
-  | _, _, _ => true
+/-- **A run reads the family its record names** (`place`): where the run names a family and the record's window names
+a place, the family is that place's (`Place.family`), whatever the rule. A run that names no family and a record whose
+window names no place are held to none. -/
+def placed (record : Json) (family : Option String) : Bool :=
+  match family, Place.family (getD record "window") with
+  | some named, some mine => named == mine
+  | _, _ => true
 
 /-- The second stage, under a two-stage rule, over the first stage's replay sample `sample`; none under a one-stage
 rule. -/
@@ -333,7 +333,7 @@ def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
   let receipt ← receipt i.record i.challenger i.received
   let derived ← Draw.derive v.program v.query law v.workTable
   if i.closure.isSome then return refused "select" #["closure"]
-  if !placed i.rule i.record i.family then return refused "select" #["place"]
+  if !placed i.record i.family then return refused "select" #["place"]
   let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
     i.closure i.source
   if let some code := coinsCode i.key i.main i.coins i.record v.windowRoot i.family (i.source.extract 0 read) then

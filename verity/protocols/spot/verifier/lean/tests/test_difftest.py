@@ -1488,11 +1488,10 @@ def _receipt(rec, challenger: str, received: str) -> dict:
     return {"format": R.RECEIPT, "registration": R.digest(rec), "verifier": challenger, "received": received}
 
 
-def _placed(rule, rec: dict, family) -> bool:
-    """`Run.placed`: under a two-stage rule, a family the run names is the one of the place its record's window names
-    (`window_place.family`); a one-stage run, a run that names no family and a window that names no place are held to
-    none."""
-    if not (isinstance(rule, service.TwoStage) and isinstance(family, str)):
+def _placed(rec: dict, family) -> bool:
+    """`Run.placed`: a family the run names is the one of the place its record's window names (`window_place.family`),
+    whatever the rule; a run that names no family and a window that names no place are held to none."""
+    if not isinstance(family, str):
         return True
     try:
         return family == WP.family(rec.get("window"))
@@ -1505,8 +1504,8 @@ def run(j):
     order. `register`: `check_public` on the values and declared items, the population, R1-R7 under
     `service.selection_law` over it (a rate law's count of none or more than N: `rate`), a bernoulli sampling design at
     any p (`service.bernoulli`: `bernoulli`), a program whose units read stratum by stratum are not its N in order
-    (`partition.in_order`: `population-order`), and the receipt; `select`: a closure map refused (`closure`), under a
-    two-stage rule a family other than the one of the place the record's window names (`place`, `_placed`), then the
+    (`partition.in_order`: `population-order`), and the receipt; `select`: a closure map refused (`closure`), a
+    family other than the one of the place the record's window names (`place`, `_placed`), then the
     sample from the source's bytes (`select`), the challenger's coins with their evidence when it read any, held to
     the run's `family`, its challenger key (`key`) and its copy of main's history (`main`) (`_coins_code`: code `coins`,
     or `family`; a `coin_source` other than the challenger is refused
@@ -1581,7 +1580,7 @@ def run(j):
         raise D.Reject(str(e)) from None
     if closure is not None:
         return {"codes": ["closure"], "step": "select"}
-    if not _placed(rule, rec, j.get("family")):
+    if not _placed(rec, j.get("family")):
         return {"codes": ["place"], "step": "select"}
     drawn = select({"closure": closure, "program": j["params"]["program"], "query": j["params"]["query"], "rule": j["rule"],
                     "source": j["source"], "work_table": p["work_table"]})
@@ -7038,13 +7037,12 @@ def test_a_two_stage_run_reaches_every_step(pieces):
             run(copy.deepcopy(refused))
 
 
-def test_a_two_stage_run_reads_the_family_of_its_records_place(pieces):
-    """Under a two-stage rule, a run whose record's window names a place (`window_place.of`) reads its first stage's
-    coins only as the family of that place (`window_place.family`), Lean's the Python's whole: another family is
-    refused at `select` before any coin is read (`place`), on a class's spans, a stop class's spans and its stop
-    blocks. The place's own family, a run that names no family, and a window that names no place (one with another
-    word in ``stopped`` among them) pass the hold, and the coin check judges them as it did. A one-stage run is held
-    to none."""
+def test_a_run_reads_the_family_of_its_records_place(pieces):
+    """A run whose record's window names a place (`window_place.of`) reads its coins only as the family of that place
+    (`window_place.family`), Lean's the Python's whole: another family is refused at `select` before any coin is read
+    (`place`), on a class's spans, a stop class's spans and its stop blocks, under a two-stage rule and under a
+    one-stage one. The place's own family, a run that names no family, and a window that names no place (one with
+    another word in ``stopped`` among them) pass the hold, and the coin check judges them as it did."""
     case = _two_stage_case()
 
     def at(c, **items):
@@ -7053,7 +7051,8 @@ def test_a_two_stage_run_reads_the_family_of_its_records_place(pieces):
     blocks = {**stopped, "population": "stop"}
     assert [WP.family(w) for w in (spans, stopped, blocks)] == ["draw/68719476752", "draw/68719476754",
                                                                  "draw/68719476755"]
-    one_stage = {**at(case, **spans), "rule": {"law": "rate:1/2", "rule": "law"}, "interior": None}
+    def one_stage(c):
+        return {**c, "rule": {"law": "rate:1/2", "rule": "law"}, "interior": None}
     steps = [
         *((at(case, **w), ["place"]) for w in (spans, stopped, blocks)),
         ({**at(case, **stopped), "family": WP.family(spans)}, ["place"]),
@@ -7069,8 +7068,16 @@ def test_a_two_stage_run_reads_the_family_of_its_records_place(pieces):
         got = run(copy.deepcopy(changed))
         assert D.replay(RUN, changed, pieces) == ("output", D.canonical(got)), (codes, got)
         assert (got.get("step"), got.get("codes")) == ("select", codes), (changed["record"]["window"], got)
-    got = run(copy.deepcopy(one_stage))
-    assert D.replay(RUN, one_stage, pieces) == ("output", D.canonical(got)) and got.get("codes") != ["place"], got
+    for changed, refused in [
+        *((one_stage(at(case, **w)), True) for w in (spans, stopped, blocks)),
+        *((one_stage({**at(case, **w), "family": WP.family(w)}), False) for w in (spans, stopped, blocks)),
+        (one_stage({**at(case, **spans), "family": None}), False),
+        (one_stage(at(case, prompt=4, outputs=4, stopped=None)), False),
+        (one_stage(case), False),
+    ]:
+        got = run(copy.deepcopy(changed))
+        assert D.replay(RUN, changed, pieces) == ("output", D.canonical(got)), (refused, got)
+        assert ((got.get("step"), got.get("codes")) == ("select", ["place"])) is refused, (changed["record"]["window"], got)
 
 
 def _second_with(c: dict, i: int, **fields) -> dict:
