@@ -45,6 +45,9 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   logging line's arithmetic) is no rule's: the entry of `of_record.toml` names it (`record_only`: the line, the
   count and MACs the record's step has of it over the config's, and why), and it is printed as named and taken out
   of the differences. A named line that the record's step does not have over the config's as named is a difference.
+- **The thread count.** A config's step is counted at the CPU thread count its record states (`threads`), set
+  before the count (`run.set_threads`): what a job trains on a CPU follows the count. A record that states none
+  is counted at a job's default (`run.THREADS`), and the output says the record names none.
 - **The encoding.** Each codec of the config's plan must be of the record's kind (`E_KINDS`: the record's `format`
   beside the codecs of that kind); E's size after the counted steps is printed beside the record's last
   checkpoint's, with how a codec packs the same encoding another way than the record's program did (`E_PACKING`).
@@ -67,7 +70,7 @@ from pathlib import Path
 
 import torch
 
-from . import as_math, config, library, run, starts
+from . import as_math, config, gates, library, run, starts
 from .model import LM
 
 HELD = Path(__file__).with_name("of_record.toml")
@@ -167,7 +170,9 @@ def per_row(struct: dict, shape: dict) -> dict:
     batched over rows x heads: a `bmm` whose every operand leads with rows x heads over a context and nothing but
     contexts and a head's width, and that leading dimension becomes the heads. An optimizer's entries have no such
     shape and stay whole. A `_foreach_` op's operands are sorted: their order is the order a program lists its
-    parameters in, which is no part of the step."""
+    parameters in, which is no part of the step. The dtype a row names for its op, where it names one, is not part
+    of an entry: a record's rows name none where a config's counted step names each, so rows of one op and shape in
+    several dtypes are one entry, their counts added. The bits a use reads its weight at are compared in `updated`."""
     ctx, heads = shape["ctx"], shape["n_head"]
     r = rows_a_forward(struct, ctx)
     a_head = {ctx, shape["d_model"] // heads}
@@ -180,7 +185,9 @@ def per_row(struct: dict, shape: dict) -> dict:
         return len(s) == 3 and s[0] == r * heads and ctx in s[1:] and set(s[1:]) <= a_head
 
     log: dict[tuple, list] = {}
-    for phase, kind, op, shapes, count, macs in struct["log"]:
+    for row in struct["log"]:
+        gates.row_dtype(row)
+        phase, kind, op, shapes, count, macs = row[:6]
         was = json.loads(shapes)
         now = ([[heads, *s[1:]] for s in was] if op == "bmm" and all(map(over_heads, was)) else
                [of_tokens(s) for s in was])
@@ -469,6 +476,10 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
         r["differences"].append(f"the batch: the config's {batch} rows are no whole number of the record's {rows} "
                                 "rows a forward")
         return r
+    threads = rec.get("threads")
+    r["facts"] = [("threads", f"{threads}, the record's" if threads is not None else
+                   f"{run.THREADS}, a job's default: the record names no count")]
+    run.set_threads(run.THREADS if threads is None else threads)
     mine = counted(cfg, rows, out)
     if why := refusal(mine):
         return r | {"refused": why, "expected": [], "differences": []}
@@ -485,7 +496,7 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     r["expected"] += found["expected"]
     r["named"] = found["named"]
     r["differences"] += found["differences"]
-    r["facts"] = [
+    r["facts"] += [
         ("start", f"{cfg.start.name} ({cfg.start.digest[:12]})"),
         ("steps", f"{cfg.budget['steps']}"),
         ("step", f"the config's step {STEPS}, {_plural(batch // rows, 'forward')} of one row, counted on a CPU, "
@@ -560,6 +571,8 @@ def main(argv=None) -> int:
     ap.add_argument("--starts", type=Path, default=starts.REGISTRY, help="the starts registry")
     ap.add_argument("--out", type=Path, default=None, help="where of_record.json and each entry's counted records go")
     a = ap.parse_args(argv)
+    run.limit_cpu("cpu")
+    run.set_threads(run.THREADS)
     runs, reg = held(a.held), starts.registry(a.starts)
     paths = library.entries(a.entry or sorted(runs))
     if unheld := [p.stem for p in paths if p.stem not in runs]:

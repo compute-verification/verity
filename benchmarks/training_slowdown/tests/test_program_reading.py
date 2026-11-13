@@ -397,6 +397,7 @@ def test_the_point_evaluates_each_iteration_it_runs_once(readings):
 
 def test_the_readings_constants_are_the_benchmarks():
     assert WK.ACC_BITS == products.ACC_BITS and WK.SHARED_PREFIX == TW.SHARED_PREFIX and WK.HEAD_K == TW.HEAD_K
+    assert TW.P_BATCH in " ".join(WK.__doc__.split())
     for w in (1.0, 16.0, 32.0):
         for rate in (0.5 * w, WK.PAID * w, w):
             assert WK.paid(rate, w) == TW.is_paid(rate, w)
