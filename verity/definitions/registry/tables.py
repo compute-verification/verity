@@ -33,8 +33,8 @@ from verity.circuits.evaluation import RegisteredTable
 from verity.circuits.codec import register_lazy_family
 from verity.circuits.defs import PrimitiveDefinition, composite
 from verity.circuits.types import Array, Value
-from verity.definitions.ops import scalar as SC
-from verity.definitions.ops.prims import const
+from verity.circuits.ops import scalar as SC
+from verity.circuits.ops.prims import const
 from verity.definitions.registry import dense
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.prims import BF16
