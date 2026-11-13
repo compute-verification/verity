@@ -46,11 +46,7 @@ def listed(monkeypatch):
 
 def schedule() -> WardenParams:
     """The lengths rows' cost runner's own schedule, with its content classes."""
-    args = CR.parser().parse_args(["cost", "--out", "x"])
-    return WardenParams(cell_bytes=args.cell_bytes, slots=args.slots, lanes=args.lanes, window=args.window,
-                        every=args.every, delay=args.delay, ingress_buckets=args.delay,
-                        ingress_cells=args.ingress_cells, egress_cells=args.egress_cells, lengths=1,
-                        content=tuple(args.classes))
+    return CR.costed(CR.parser().parse_args(["cost", "--out", "x"]))
 
 
 def head(window: int, *counts: int, parameters: bytes = ZEROS, domain: bytes = ZEROS) -> C.Head:
