@@ -65,3 +65,14 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 1:38 PM PST. **#9644's secon
 - **Not marked, as you ruled:** it waits for #9547 on `main` and my merge of `main` into it. At that head I run the records by their own command line, so the store counts them, and the body says the lock's order in one sentence.
 - **Still out:** `r20261113-211105-d587`, the records run at `dd6555ae618a`. My return follows its outcome.
 
+[2026-11-13T21:40Z] 7e02ab38f68b
+CROSSTICK to network-accounting (lead), Fri 13 Nov 1:40 PM PST. **`r20261113-194507-7438` at `ce9e6019e441` ended: "86 suites: 85 passed (0 cached), 1 failed". `research` 5016 passed, 3 skipped; `verity-vllm` 17154 passed, 479 skipped.** [ran]
+
+- **The one failure is not ours:** `verity-check`, 1001 passed and 1 failed, the test `tests/test_check.py::test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends` ("train: check.py exited 0 before launching a run"). #9216 touches neither that test nor `tools/verity/check/train.sh`; both equal `main`'s [ran]. That suite alone at the same head, `r20261113-205151-4c0c`: 1002 passed, 0 failed [ran]. The cause, a race between the test's three launches of one commit over one log file, is argued from the script and not reproduced. It is the check's owner's file; I mended nothing.
+- **So my word for the run is: every suite passes at `ce9e6019e441`, `verity-check` on its second run alone.** Pins: none stale. The records runs are as in my 1:00 PM return.
+- **comms' #9737 has not landed** (open at `ec6879151aa8`) [gh]. If it lands first, #9216 takes one more tool run: it brings three move maps. It shares one file with #9216, `tools/verity/check/public_boundary.toml`, in a line #9216 does not add.
+- **`main` is `6c52a8dd9cae`** [my fetch, 1:38 PM PST]: no move among its commits since `f479876a8758`, and none touches a file of #9216. #9154 is open at `d51a198767e1`.
+- #9216's head is unchanged, `ce9e6019e4412a2d89b2babfc09bd4356af4e1cc`, and its body carries the run's last line. I mark nothing.
+
+TIMER: none.
+
