@@ -161425,3 +161425,35 @@ Not established:
 - The read, the identity line and item 4 come from the other turn. If you ever get two entries from me on one thing, this is why.
 
 ## AUDITSUM, Fri 13 Nov 21:40Z: checkpoint: your 21:40Z go on PRF-604 is read and I have started; rows 13, 18 and 30 come as one entry by Sat 14 Nov 03:00Z; `main` is at `6c52a8dd9cae` and its AGENTS.md is reread; my mailbox `inbox/bc-322bacc1-4067-5940-a487-4be1b49c8de5.md` does not exist on `cursor/proofs-inbox` at `e1b789c5b8a3`, so I work from your message alone
+
+## STAGECOINS, Fri 13 Nov 21:40Z: #9815 has its Goal line, head unmoved; the cap is started; row 31 of PRF-604 is not the Flock session's hiding term, so the cap will not give its value
+
+Your 21:18Z and 21:32Z are both read.
+
+**#9815's Goal line: done** [run 21:34Z]
+
+- The body now has `Goal proofs/spot-checks-closed` on its own line after `Refs PRF-549`, before `Lane proofs`. I read the body back: it equals what I sent, and `queue.py`'s `GOAL_RE` finds `proofs/spot-checks-closed` in it.
+- The head did not move: `9e97e224f56b9117b382c0eef0a586256481f707`, by GitHub and by `git ls-remote`.
+
+**The cap: started, no result yet**
+
+- Scratch branch `cursor/proofs-prf549-leafcap-af4a`, off main `56f6c267563`, in a worktree of its own. No pull request, no lock edit.
+- [read] The cap looks much smaller than my 21:13Z guess of `2^66` a table. `zkSchedFacts_all` (`ZkHidden/Sched.lean`) already has, at every `m` in `[25, 35]`, level 0's `logLen ≤ 40` and `t_pad ≤ 2^logLen`, and `zk_schedOK'` proves inside itself that the pads code is at most `2^13` long (`len_le`). So a table's leaves are at most `2^40 + 2^14 + 2`, and the lemma is `nLeaves x ≤ jOf x · (2^40 + 2^14 + 2)`. Nothing is compiled yet.
+
+**Row 31 is a different term** [read]
+
+Your 21:32Z asks, with the cap in hand, for the value PRF-604 wants for row 31. The cap does not bear on row 31:
+
+- PRF-604 item 5 reads "Row 31: the second term of the keyed leaves' hiding (PRF-536). The first term is 2^-193; the second has no number."
+- The audit's row 31 cites CY, whose row 30 is: "Keyed leaves' hiding (`Pouw/Guarantees/KeyedLeaf.lean:43-52`, `Hash/Keyed.lean:36-58`) | two distinguishers' advantages | hm96's δ₁ + `prf/sha-512` | … | 2^-193 (row 3's premise) + a term with no number; guessing ks is 2^-432".
+- In Lean that is PoUW's keyed leaf, `Pouw.KeyedLeaf.advantage` (`security/Definitions/Pouw/KeyedLeaf.lean`): `|hideAdvantage …| + |prfAdvantage …|`. The first is one hm96 leaf, the window's key leaf. The second is the keyed digests of the window's `n` instances under one 64-byte key against a random function. Its bound is the claim `prf/sha-512` (`Hash.Assumptions.Sha512Prf`), whose advantage `ε t Q` is a parameter with no number.
+- So row 31's second term is SHA-512's PRF advantage at `Q` = the window's keyed leaves. It has no leaf count times `δ₁` in it. It needs the same missing thing as rows 21 and 30 of PRF-604: the PRF advantage as a function of the budget and the queries.
+
+What the cap does give is the hiding term of `Loop.anyErr`, `(8 + 8t)·n·δ₁` where the release stops and `(8 + 24t)·n·δ₁` where it goes on, with `n` the Flock session's leaf count. If a row of the audit wants that number, I think it is row 19 or row 24 (hm96 hiding at the pinned key, `L·2^-192`), not row 31.
+
+**Your choice**
+
+1. The cap as ordered, and with it the Flock session's hiding term at the sizes you name. I need the session's table count at the floor and at one request, and `t`. I do this by default.
+2. Row 31 itself, separately, by read: what `Q` is at the floor and at one request (the keyed leaves a window commits, from the workload card), and the term's form. A number needs a model of the PRF advantage, which is yours or lean's to pick; I would mark it [derived] under that model.
+
+**Next for me:** write the cap and elaborate it with `verity lean try --on auto`. Next entry when it compiles or will not, and a checkpoint by Sat 06:00Z.
