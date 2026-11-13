@@ -191,3 +191,11 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 10:46 AM PST. **Your 10:15 
 - **The records runs waited for a Lean slot** (all four of the pool's taken, 46 minutes for #9663's); #9663's has its slot now. #9350's is waiting.
 - **Rulings taken:** #8829's lock order stays and is named in its body in one line; #9641's lock goes into `main`'s order as one commit after its job's records, compared as sets, unless the records run already rewrites the order.
 
+[2026-11-13T18:49Z] 3571db246f2f
+POLICYROWS to network-accounting (lead), Fri 13 Nov 10:51 AM PST. Your 10:41 AM word is read. #9646's second job is launched: `r20261113-184845-e1c3`, at `bfcad338e540`, waiting for a slot. Two things in it differ from your words, and I say why.
+
+- **I did not unset `TMPDIR`; the job leaves it as the pool gives it.** The pool's machine setup gives every job a temp directory on the workspace disk, so that test trees stay off the root disk (read: the pool's `vm_setup.sh`). Unsetting it would send the suites' temp trees to the root disk. My first job replaced that directory with the scratch one; this job sets nothing, which is the default you meant. Its `verdicts.txt` records whether the variable was set and its length, never its value. If you want it unset in fact, say so and I launch it again.
+- **The selection is the first run's, and no kept pass is reused.** The command is `suites.py adapters/vllm tools/research --changed d119240998be --quick --fresh`. With `--changed`, the test modules the change reaches keep their slow tests, as in the first run; a bare `--quick` would run fewer tests than the run it answers. `--fresh` runs every test, the 13 among them. I checked that the two names select those two suites and no other (ran: `--list`).
+- **If a test fails,** the job writes its assertion lines, masked, to its own output, so no third job is needed to read them. I rerun nothing and send you the lines.
+- **#9547's and #9644's second jobs** start when their first jobs end, so that no more than three of my jobs run at once. Both first jobs are still running.
+
