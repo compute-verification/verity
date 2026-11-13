@@ -11,9 +11,9 @@ import random
 
 import numpy as np
 import pytest
-
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+
 from verity_vllm.commit import lead_rows as L
 from verity_vllm.errors import Refused
 

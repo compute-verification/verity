@@ -37,11 +37,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
-
-from verity.errors import ProtocolError
 from verity.commitments import hm96, keyed
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
+from verity.errors import ProtocolError
+
 from verity_vllm.errors import Refused
 
 __all__ = ["A_LEAF_TAG", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
