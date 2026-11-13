@@ -1,11 +1,11 @@
 """The operations: the composite Definitions whose own definition is gates, and the guard that a Program holds no data.
 
 An operation's own definition is gates (the floating-point formats' constants, the round
-constants of SHA-512 and Keccak-f, and every measured MUFU table in `verity.definitions.circuits.library`: exp2, rcp, sqrt, rsq, tanh and lg2), and
-everything a program or a request brings is a value, committed under a hiding leaf and always hidden (`verity.definitions.circuits.constants`).
+constants of SHA-512 and Keccak-f, and every measured MUFU table in `verity.circuits.library`: exp2, rcp, sqrt, rsq, tanh and lg2), and
+everything a program or a request brings is a value, committed under a hiding leaf and always hidden (`verity.circuits.constants`).
 `verity.circuits` names no operations, so the list is here and the guard passes it in:
 
-    program_data(root) = verity.definitions.circuits.constants.program_data(root, is_operation, is_library_table)
+    program_data(root) = verity.circuits.constants.program_data(root, is_operation, is_library_table)
 
 lists every constant held outside an operation and every table a primitive holds that is not a library table. No statement
 or table claims that a Program's values are always hidden until the guard returns {} for it, and
@@ -30,7 +30,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any, Iterator
 
-from verity.definitions.circuits import constants as K
+from verity.circuits import constants as K
 from verity.circuits.codec import canonical_json
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition, SpecializedDefinition
 
@@ -60,7 +60,7 @@ _LIBRARY_TABLES = frozenset(t.name for t in library.TABLES)
 
 
 def is_library_table(name: str) -> bool:
-    """A table on `verity.definitions.circuits.library`'s list, by its name."""
+    """A table on `verity.circuits.library`'s list, by its name."""
     return name in _LIBRARY_TABLES
 
 
@@ -105,7 +105,7 @@ def is_operation(fn: Any) -> bool:
 
 
 def program_data(root: Any) -> dict[str, list[tuple[int, str]]]:
-    """The guard: the data `root` (a Program's root Definition) still holds, as `verity.definitions.circuits.constants.program_data` lists it
+    """The guard: the data `root` (a Program's root Definition) still holds, as `verity.circuits.constants.program_data` lists it
     under this list and the library's tables. {} exactly when the Program holds no data."""
     return _Guard().data(root)
 
