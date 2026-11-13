@@ -101,7 +101,14 @@ with each path's first offending hunk, every change its docstring doesn't list a
   pin records;
 - a lock's records (`pins`, `guarantees`, `reads`) changed, or a pin rewritten to other than its file's digest at the
   head;
-- a file added or deleted that no rename pairs, other than a new Lake package's files copied from its source package.
+- a file added or deleted that no rename pairs, other than a new Lake package's files copied from its source package;
+- the `__init__.py` of a package the range emptied, deleted though it holds more than whitespace and comments at the
+  base (a docstring is content).
+
+`layout.py` deletes an `__init__.py` left in a package its move empties only when the file holds nothing but whitespace
+and comments (`only_comments`, which `move_check.py` reads it by too). One that holds more stops the whole move (exit 1),
+dry run or not, before anything is written, naming each file; the fix is a row in the map saying where it goes (on a
+branch, in its rows file, below), or a hand commit before the move that deletes it.
 
 A certificate says that nothing but paths, modules and words changed. It does not say that every path which had to
 change did: a path no pass of the rewrite reads stays as written, and its commit is still a pure move. For Lean the mover
@@ -117,7 +124,9 @@ Once the moves have landed, each open branch crosses all of them with one comman
 It finds each move `origin/main` (`--main`; fetch it first) has and the branch lacks by its move line, oldest first, reruns that move's
 script and map on the branch, its own additions included, and merges the moved `main` last. It changes no branch: the
 result is pushed to the new branch, never over one. It reports `clean`, or where it stopped: a conflict of the branch's
-own, files of the branch with no row (`no-row`, below), a script that failed, or pins or Lean locks to regenerate. Its
+own, files of the branch with no row (`no-row`, below), a script that failed (`script-failed`, with the last lines of its
+output: an `__init__.py` with content the move would delete names each file and the fix), or pins or Lean locks to
+regenerate. Its
 first step merges each move's base into the branch, so
 a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
 merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit
