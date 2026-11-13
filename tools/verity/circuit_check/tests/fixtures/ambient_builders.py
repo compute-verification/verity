@@ -8,7 +8,7 @@ import time
 
 from verity.circuits.boolean.forms import maj
 from verity.circuits.boolean.trace import definition
-from verity.definitions.ops.boolean import scalar as SB
+from verity.circuits.ops.boolean import scalar as SB
 
 P = (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT))
 _LOWERED = [0]

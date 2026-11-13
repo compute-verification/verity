@@ -76,7 +76,7 @@ from tests.properties import dsv4_flashmla_capture_gpu as D
 from tests.properties import dsv4_marlin_capture_gpu as M
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.kernels import tc as CK
+from verity.circuits.kernels import tc as CK
 from verity.definitions.numerics import derived_rows as DRW
 from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.numerics import flashmla_dsv32_twin as V

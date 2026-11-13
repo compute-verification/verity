@@ -13,7 +13,7 @@ one's word view is its `_v1` at the same statics.
     Fp8GroupQuantUe8m0_v2{K,G}, FlashInferFp8Quant1x128_v2{K}
     DeepGemmFp8Linear_v2{K,N}, FlashInferFp8Linear_v2{K,N}, ScaledMmFp8BlockGrouped_v2{H,K,N,G}
 
-The callees are core's Boolean FP32 pieces (`verity.definitions.ops.boolean`'s `scalar`, `attention`, `mufu`, `gemm`, `cast`,
+The callees are core's Boolean FP32 pieces (`verity.circuits.ops.boolean`'s `scalar`, `attention`, `mufu`, `gemm`, `cast`,
 `elementwise`), `boolean_dsa`'s `U32And_v2`, and `boolean_fp8`'s `Fp8GroupScale_v2` and `ScaledMmFp8BlockSharedScale_v2` (the GEMM, over
 `HopperE4m3QgmmaDot32_v2`); each is its word Definition on every word, NaN payloads included.  No table or lookup gate.
 """
@@ -23,12 +23,12 @@ from verity.circuits.defs import bind
 from verity.circuits.types import Array
 from verity.circuits.boolean.forms import NOT, and_reduce, or_reduce, sub
 from verity.circuits.boolean.trace import definition
-from verity.definitions.ops.boolean import attention as BA
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.boolean import mufu as BM
-from verity.definitions.ops.boolean import rolled as RO
-from verity.definitions.ops.boolean import scalar as SC
+from verity.circuits.ops.boolean import attention as BA
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import rolled as RO
+from verity.circuits.ops.boolean import scalar as SC
 from verity.definitions.registry import boolean_dsa as BD
 from verity.definitions.registry import boolean_fp8 as BF8
 from verity.definitions.registry import deepgemm as DG
