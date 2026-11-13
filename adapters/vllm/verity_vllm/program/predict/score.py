@@ -50,7 +50,8 @@ def phi_of(rec: dict, *, hf_home: str | None = None, config: str | None = None) 
     cp = config or hf_config_path(str(hf_home), repo, rev)
     if not os.path.exists(cp):
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
-    hf = json.loads(Path(cp).read_text())
+    with open(cp) as f:
+        hf = json.load(f)
     declared = w.get("requests")   # a manifest that states no requests declares none
     reqs = [{"request_id": q.get("request_id"), "index": q.get("index", i), "prompt_len": q.get("prompt_len") or q.get("prompt_token_ids"),
              "max_tokens": q.get("max_tokens"), "arrive_step": q.get("arrive_step", 0), "n": q.get("n"), "seed": q.get("seed")}

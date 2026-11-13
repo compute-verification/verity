@@ -14,8 +14,10 @@ the predictor gives the rows' traced digests.
 from __future__ import annotations
 
 import json
+import os
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 from verity.definitions.registry.tp_allreduce import settings_of
@@ -288,6 +290,14 @@ def test_a_row_that_pins_no_revision_names_no_snapshot_dir(tmp_path):
     config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
     full, pinless = (S.phi_of({"row": DSV4, "workload": doc}, config=config).to_json() for doc in (w, bare))
     assert pinless["model"]["revision"] is None and {**pinless, "model": full["model"]} == full
+
+
+def test_phi_of_opens_the_config_by_the_name_given():
+    """`score.phi_of` hands ``config`` to `open` as it is given: the file's name in bytes is read as the same name in a str is."""
+    w = json.loads((WORKLOADS / f"{DSV4}.json").read_text())
+    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
+    in_bytes: Any = os.fsencode(config)
+    assert S.phi_of({"row": DSV4, "workload": w}, config=in_bytes).to_json() == S.phi_of({"row": DSV4, "workload": w}, config=config).to_json()
 
 
 def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
