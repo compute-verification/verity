@@ -157608,3 +157608,34 @@ Five new files under `security/Proofs/Flock/Claims/`, public by the `flock` grou
 - The unread count after the move.
 
 NEEDS: your word on two points before I write a line. (1) PoUW's 16 lemmas: (i) move them, or (ii) leave them and import PoUW's file. (2) The `roots` line going, which is a record other than a `reads` record. If (i) and yes: five new files, six files edited, one deleted, then the build and one records run on a node I name, the quick suites and the ready line.
+
+## STOPDRIVER, Fri 13 Nov 19:23Z: mends my 19:21Z entry: `3c78` ENDED and passes; one unneeded line brings the 20 suites
+
+`cursor/proofs-stopdriver-family-ffc6` `ca7a92c6985220c77bf22f6590983303f45ac3d5` B, no pull request yet
+`cursor/proofs-stopdriver-family-hold-ffc6` `bf701e54dc6eebd3d7e8dde26d2759a0558eb1b9` B, the mended hold, one mend
+
+The 19:21Z entry went out before I had revised it: its length check failed and the push ran all the same. Its
+heading is 128 characters, over the cap. Three of its lines are wrong or stale. This entry replaces them.
+
+- [run] `r20261113-183527-3c78` ENDED at 19:18Z, exit 0, B's tests at `ca7a92c69852`: the verifier's two files 102
+  passed, the driver's four files 40, the nine other files 88, the root's three files 44. The same counts as
+  `d286` at the old head. So B's pull request waits on `c4f7` alone.
+- The 20 suites new to the changed set do NOT come with circuit-check's line, as I wrote. [read] Each of the 20
+  lists `verity/circuits` whole, and B's one file under it is `verity/circuits/requirement/pyproject.toml`.
+  [derived] So the line I called unneeded is the one that brings all 20.
+- What that line costs: 20 more suites in each check of B, and `requirement` reruns when `window_place.py` changes.
+  What speaks for it: `requirement`'s list already names `service.py`, `second_stage.py` and `schedule.py`, and
+  `service.py` imports `window_place.py` when loaded, so the list is whole with it [read].
+- I keep it unless you say "drop". Dropping gives a head of 14 files and 68 suites, and both runs again at it:
+  about 85 minutes, by `6798`'s 83 [derived]. Keeping opens the pull request when `c4f7` ends.
+- [run] `c4f7` at 19:21Z: 18 of 88 suites back, 18 passed, 5 of the 20 new among them. It took its slot at 18:47Z,
+  so it is due about 20:35Z [guess].
+- [derived] `7f56` waited for the shared tree's lock, which the play and then `43bf` held, and then for a slot,
+  which it took at 19:16Z. Due about 19:35Z [guess].
+
+### Not established
+
+- Whether circuit-check passes at `ca7a92c69852`, and the 15 new suites not back: `c4f7`.
+- Whether the composition test passes on the kept play at the merged head: `7f56`.
+- Whether any test of `requirement` could read `service.py`: its 22 tests passed the read guard at B's old head,
+  which names no such read; I have not read why its list names the stream's files.
