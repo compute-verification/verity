@@ -22,7 +22,7 @@ of the scan's statement:
   which the rows form charges to the sampling block (`tiedAudits`). If ``prog`` is an input only at its anchored
   entries, they are an entry's 33 + KO·IDB bits a request (`ingress_scan.entry_layout`);
 * no faulty proof block, every one being drawn;
-* Dj = 1, so the jitter term is 0 (assumed, `NetTiming.JitterBounded`).
+* the jitter term at D_j = `JITTER_BOUND`, ⌈log2 D_j^T⌉ = T bits a sampling block, one a bucket (`JITTER`).
 
 A link runs m = s / (T·τ) sampling blocks and certifies rate·s requests over a monitoring period of s seconds
 (`PERIODS`). ε = m·δ_scan is the rows form's `eps`: the union of the scans' δ, what K fails with at most beside the
@@ -105,6 +105,12 @@ DELTAS: tuple[Fraction, ...] = reporting.DELTAS
 TAU = Fraction(W.WardenParams().bucket_ms, 1000)
 #: a sampling block's scan's δ when a link names none: `scan_zk --delta`'s default
 SCAN_DELTA = Fraction(1, 2 ** 20)
+#: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
+#: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
+#: (`warden.Warden(paced=…)`, `active.Proxy(paced=…)`), yet the host's state after the server's writes for the next
+#: bucket still moves a bucket's arrival offset, so J isn't met at D_j = 1
+JITTER_BOUND = 2
+JITTER = "J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel)"
 ROOT = Path(__file__).resolve().parents[2]
 CENSUS = ROOT / "benchmarks" / "census"
 #: the files the scale is read from: the census's world, reference datacenter and GPU peak, rho's world fleet and its
@@ -278,6 +284,11 @@ class LinkLoad:
         return 2 * self.cell
 
     @property
+    def jitter(self) -> int:
+        """A sampling block's jitter term, over its scan's T steps (`jitter_bits`)."""
+        return jitter_bits(self.T)
+
+    @property
     def block_s(self) -> float | Fraction:
         """A sampling block's seconds."""
         return self.T * self.tau
@@ -301,10 +312,10 @@ class LinkLoad:
         return self.blocks(period) * self.scan_delta
 
     def terms(self, period: str | float | Fraction, reading: str) -> Terms:
-        """K's terms over ``period`` in ``reading`` (`terms`, at D_j = 1): a request is a connection, and the
-        entries are the free inputs of its sampling blocks and requests."""
+        """K's terms over ``period`` in ``reading`` (`terms`, at D_j = `JITTER_BOUND`): a request is a connection, and
+        the entries are the free inputs of its sampling blocks and requests."""
         blocks, requests, free = self.blocks(period), self.rate * seconds(period), self.free(reading)
-        return terms(requests, blocks, cells=self.egress_cells, steps=self.T,
+        return terms(requests, blocks, cells=self.egress_cells, steps=self.T, dj=JITTER_BOUND,
                      entries=blocks * free["block"] + requests * free["request"])
 
     def bits(self, period: str | float | Fraction, reading: str, delta: float | Fraction | None = None) -> float:
@@ -326,6 +337,11 @@ def seconds(period: str | float | Fraction) -> float | Fraction:
     if not period > 0:
         raise ValueError(f"a monitoring period's seconds are positive, not {period!r}")
     return period
+
+
+def jitter_bits(steps: int) -> int:
+    """K's jitter term over `steps` steps at `JITTER_BOUND`, ⌈log2 D_j^steps⌉ (`NetworkCheck.Period`'s)."""
+    return (JITTER_BOUND ** steps - 1).bit_length()
 
 
 def fmax(delta: float | Fraction) -> int:
@@ -445,7 +461,8 @@ _MARK = {"measured": "measured", "modeled": "modeled", "derived": "modeled", "da
 #: the jitter bounds each row is counted at: D_j = 1, where the jitter is 0, and D_j = 2, a bit a bucket
 JITTERS = (1, 2)
 #: the jitter bound of the term of record: two release schedules
-OF_RECORD = 2
+#: It and `JITTER_BOUND`, which K by links is charged at, are one bound, defined there
+OF_RECORD = JITTER_BOUND
 #: the label every figure that rests on a set-time card is printed under: a figure at D_j = 1, what a network
 #: certifier whose network card releases at a set time would be charged, and at either D_j a figure of a row whose
 #: release times are taken once (`CHANGES`' timing). No timing test has shown such a card
