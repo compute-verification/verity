@@ -143,22 +143,22 @@ def R8 (v : Registration.Verifier) : Prop :=
 
 /-- The record's window names the seed salt the verifier read from the challenger's log (`seedSalt`), and none when it
 read none. -/
-def WindowSeedSalt (rec : Json) (v : Registration.Verifier) : Prop :=
+def RunSeedSalt (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "seed_salt") (match v.seedSalt with | some s => .str s | none => .null)
 
 /-- The record's window names the reset serving chose for the verifier's pool (`Registration.Pool.reset`), and none for
 a verifier with no pool. -/
-def WindowPoolReset (rec : Json) (v : Registration.Verifier) : Prop :=
+def RunPoolReset (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "pool_reset") (match v.pool with | some p => .bool p.reset | none => .null)
 
 /-- The record's window names its week on the verifier's clock (`Registration.Pool.week`), and none for a verifier with
 no pool. -/
-def WindowPoolWeek (rec : Json) (v : Registration.Verifier) : Prop :=
+def RunPoolWeek (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "pool_week") (match v.pool with | some p => Lean.toJson p.week | none => .null)
 
 /-- The record's window names whether its week's one reset is spent at it: that it resets, or that the previous record,
 of its week, named it spent (`Registration.Pool.spentBefore`); none for a verifier with no pool. -/
-def WindowPoolSpent (rec : Json) (v : Registration.Verifier) : Prop :=
+def RunPoolSpent (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "pool_spent")
     (match v.pool with | some p => .bool (p.reset || p.spentBefore v.log) | none => .null)
 
@@ -169,8 +169,8 @@ def PoolResetOnce (v : Registration.Verifier) : Prop :=
 
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
 has no digest), no earlier record has its window, a verifier bound to a stream and a prover (`binding`) sees its
-window name both, and its window names the verifier's seed salt (`WindowSeedSalt`) and its pool's reset, week and
-spent mark (`WindowPoolReset`, `WindowPoolWeek`, `WindowPoolSpent`), at most one reset a week (`PoolResetOnce`). -/
+window name both, and its window names the verifier's seed salt (`RunSeedSalt`) and its pool's reset, week and
+spent mark (`RunPoolReset`, `RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`). -/
 def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "previous") (match v.log.back? with
     | some e => ((Registration.digestHex e).toOption.map Json.str).getD .null
@@ -178,7 +178,7 @@ def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) ∧
   (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
     jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
-  WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v
+  RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v
 
 /-- A v2 record's registered values: the string values, each once (`names`), as many as the list's entries and as the
 verifier's own entries, and each one of the verifier's. -/
