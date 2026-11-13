@@ -52,7 +52,7 @@ inputs = [
     "benchmarks/served_commit/arm.py",
     "benchmarks/served_commit/prof_arm.py",
     "benchmarks/served_commit/tp_decode.py",
-    "benchmarks/specs",
+    "benchmarks/harness/specs",
     "infra/cluster/kinds/benchmarks.toml",
     "adapters/vllm/verity_vllm/engine/hooks.py",
     "adapters/vllm/verity_vllm/protocols/__init__.py",
