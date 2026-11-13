@@ -488,7 +488,8 @@ def cli_commands(g: Graph) -> dict[str, str]:
         value = node.value if isinstance(node, (ast.AnnAssign, ast.Assign)) else None
         if isinstance(target, ast.Name) and target.id == "COMMANDS" and isinstance(value, ast.Dict):
             return {k.value: v.elts[0].value for k, v in zip(value.keys, value.values)
-                    if isinstance(k, ast.Constant) and isinstance(v, ast.Tuple) and isinstance(v.elts[0], ast.Constant)}
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str) and isinstance(v, ast.Tuple)
+                    and isinstance(v.elts[0], ast.Constant) and isinstance(v.elts[0].value, str)}
     raise SystemExit(f"{g.file_of[CLI_MODULE]}: no `COMMANDS = {{name: (module, help)}}` literal to read the commands from")
 
 

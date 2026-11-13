@@ -2,7 +2,8 @@
 
 The rule's import contract is "``check.replay`` may not import ``acquire`` or ``commit.committer``".  It applies to
 ``check/replay/`` and, until they are one determinism module, the determinism value checks
-(``_imports.VALUE_CHECK_MODULES``: ``check.replay``, ``check.value_check``, ``check.oracle_compare``), and it forbids ``verity_vllm.acquire`` and ``verity_vllm.commit.committer``.  Violations
+(``_imports.VALUE_CHECK_MODULES``: ``check.replay``, ``check.value_check``, ``check.oracle_compare``,
+``check.match_oracle``, ``check.producers``), and it forbids ``verity_vllm.acquire`` and ``verity_vllm.commit.committer``.  Violations
 are keyed by (importer, imported) module pair in ``allowlists/p02_value_checks.json``.
 
 A committer object passed in at run time (``committed_reader(com)``) is invisible to an import contract; a pod negative

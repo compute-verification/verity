@@ -23,7 +23,7 @@ VLLM_BENCH_POINT = Tool(
     command=["bash", "benchmarks/harness/run_point.sh"],
     closure=[
         "benchmarks/harness/**",
-        "benchmarks/specs/**",
+        "benchmarks/harness/specs/**",
         "adapters/vllm/**",
         "verity/configuration/config/**",
         "uv.lock",
@@ -42,7 +42,7 @@ STEADY_POINT = Tool(
     command=["bash", "benchmarks/harness/steady_point.sh"],
     closure=[
         "benchmarks/harness/**",
-        "benchmarks/specs/**",
+        "benchmarks/harness/specs/**",
         "benchmarks/one_stage/server_rate.py",
         "benchmarks/served_units/stage.py",
         "verity/configuration/config/**",

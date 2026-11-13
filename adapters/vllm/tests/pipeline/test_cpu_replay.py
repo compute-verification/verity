@@ -419,20 +419,20 @@ def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatc
                             weights_check=None, tl=None)
     drawn: dict[str, list] = {"picks": [tuple(p) for p in slim["picks"]]}
     monkeypatch.setattr(C2, "plan", lambda s: {"replay": drawn})
-    CPU.kept_draw(site, slim)
+    CPU.kept_sample(site, slim)
     drawn["picks"] = drawn["picks"][::-1]
     with pytest.raises(CPU.Refused, match=r"shares 2 of the keep's 2 picks \(2 drawn\); the record draws by 'uniform'"):
-        CPU.kept_draw(site, slim)
+        CPU.kept_sample(site, slim)
     drawn["picks"] = [["r0", 9, 9, "model.embed_tokens"], *slim["picks"][:1]]
     with pytest.raises(CPU.Refused, match=r"shares 1 of the keep's 2 picks"):
-        CPU.kept_draw(site, slim)
+        CPU.kept_sample(site, slim)
 
     def lacks(s):
         raise KeyError("tree node 1 of step 0 level 0 is not in the slim dumped store")
 
     monkeypatch.setattr(C2, "plan", lacks)
     with pytest.raises(CPU.Refused, match="reads what the keep does not hold .*tree node 1 of step 0"):
-        CPU.kept_draw(site, slim)
+        CPU.kept_sample(site, slim)
 
 
 def test_the_replay_s_engine_of_record_is_the_commit_engine_s(tmp_path):

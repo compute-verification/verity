@@ -649,6 +649,20 @@ def test_publish_holds_a_commit_that_states_no_manifest_to_no_build(manifest, tm
     assert circuit_db.index()[ROW]["record"] == art
 
 
+def test_publish_reads_the_record_s_build_before_what_its_commit_served(tmp_path, store, monkeypatch):
+    """A Build whose Programs are no mapping raises where its parts are read, also where the Commit's manifest is no mapping."""
+    d, real = _row_dir(tmp_path), CR.record
+
+    def record(*args, **kw) -> dict:
+        rec = real(*args, **kw)
+        return {**rec, "commit": {**rec["commit"], "manifest": "no mapping"}, "build": {"per_rank": {"0": {"programs": ["no mapping"]}}}}
+
+    build = _build_art(store, d, tmp_path / "run")
+    monkeypatch.setattr(CR, "record", record)
+    with pytest.raises(AttributeError, match="'list' object has no attribute 'items'"):
+        circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d))
+
+
 @pytest.mark.parametrize("unstated", [{}, {"conformance": None, "gaps": None}, {"conformance": {}, "gaps": {}}])
 def test_publish_reads_evidence_that_states_no_conformance_and_no_gap_as_citing_nothing(unstated, tmp_path, store):
     _map(tmp_path)

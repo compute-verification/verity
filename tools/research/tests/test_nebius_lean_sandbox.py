@@ -361,7 +361,8 @@ def test_a_run_holds_a_build_slot_that_lean_slot_sees_and_skips(host):
 
     assert S.main(args(host, "--by", "lean"), run=Systemd(during=during), now=lambda: NOW, **prep()) == S.OK
     assert seen["took"] == 1
-    assert seen["status"][0].startswith(f"build/0  held by pid {os.getpid()}") and "by lean, slot taken 2026-10-03T06:15Z" in seen["status"][0]
+    assert seen["status"][0].startswith(f"build/0  held by pid {os.getpid()} since 2026-10-03T06:15Z (0 min) (")
+    assert "by lean): " in seen["status"][0]
     who = json.loads((host.locks / "lean-build-0.who").read_text())
     assert who == {"pid": os.getpid(), "run": None, "tree": str(host.tree), "by": "lean", "took": "2026-10-03T06:15Z"}
     i, fd = LS.take(host.locks, "build", 2)

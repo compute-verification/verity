@@ -38,6 +38,16 @@ def test_shipped_mistral_config_is_the_manifest_bytes():
     assert hashlib.sha256(MISTRAL_CFG.read_bytes()).hexdigest() == entry["config_sha256"]
 
 
+@pytest.mark.parametrize("case", [None, {}, 0, "", False, [], {"repo": None}, {"repo": ""}, {"repo": "no/such-repo"}],
+                         ids=["null", "empty", "zero", "empty text", "false", "empty list", "null repo", "empty repo", "unpinned repo"])
+def test_a_role_whose_case_names_no_pinned_repo_has_no_entry(monkeypatch, case):
+    """`verity_vllm.engine.profiles.dense_generic.checkpoint_entry`: a role that is no entry's own is looked up by its case's
+    repo, and a case that names none (a null or an empty row, a null or an empty repo) has no entry."""
+    assert dg.MANIFEST.exists()
+    monkeypatch.setitem(dg.CASES, "ZZ_UNLISTED", case)
+    assert dg.checkpoint_entry("ZZ_UNLISTED") is None
+
+
 def test_shipped_dense_qwen3_config_derives_the_qk_norm_profile():
     """The DENSE Qwen3-4B (bf16, H100 panel workload `qwen3-4b h100 b1 1024/128`, whose Match once failed with 'dense_generic
     refuses model_type qwen3'): the checkpoint's config.json is shipped (manifest bytes) and derives the same qwen3 mechanism the FP8 twin uses

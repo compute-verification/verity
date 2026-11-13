@@ -88,10 +88,10 @@ from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
 NO_DRAW_GATE = (f"an off-node window's draw coin comes from its own draw session, which infra's gate reserves and opens "
-                f"withheld on the draw root once the prover's commitment is in (CMP-177); this run names no gate to "
+                f"withheld on the draw root once the prover's commitment is in; this run names no gate to "
                 f"open it at: set ${GATE_ENV} and ${PEER_ENV} (and ${SSH_KEY_ENV} for the lane's gate key)")
 DRAW_WITHHELD = ("a draw session is withheld: its challenger releases its coin commitment's root only at its close, after "
-                 "the prover's draw root (`reserve --withhold`, CMP-177)")
+                 "the prover's draw root (`reserve --withhold`)")
 IN_PROCESS = "in-process (not certified)"
 STAND_IN_TAG = b"verity/served-h1/stand-in-root/v1"
 STAND_IN = "a stand-in (coins.stand_in_root of the session), never a window's root"
@@ -161,13 +161,16 @@ def gate_call(gate: str, args: list[str], ssh: Sequence[str] = SSH, run: Callabl
     quotes the gate's reason, else ssh's stderr, else the answer without its long hex runs (`HEX`): an open's answer
     holds its session's secret."""
     p = run([*ssh, gate, shlex.join(args)], capture_output=True, text=True)
+
+    def refused(why: object = None) -> Ch.CoinError:
+        return Ch.CoinError(f"infra's gate refused {args[0]}: {why or p.stderr.strip() or HEX.sub(HEX_WITHHELD, p.stdout.strip()) or f'exit {p.returncode}'}")
+
     try:
         got = json.loads(p.stdout)
     except ValueError:
-        got = None
+        raise refused() from None
     if p.returncode or not isinstance(got, dict) or "refused" in got:
-        why = got.get("refused") if isinstance(got, dict) else None
-        raise Ch.CoinError(f"infra's gate refused {args[0]}: {why or p.stderr.strip() or HEX.sub(HEX_WITHHELD, p.stdout.strip()) or f'exit {p.returncode}'}")
+        raise refused(got.get("refused") if isinstance(got, dict) else None)
     return got
 
 
@@ -633,11 +636,11 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
         mine = Ch.LiveCommitment.from_json(coins.get("commitment"))
         salt = _openings([coins["salt_coin"]])
         openings = _openings([r["opening"] for r in coins.get("rounds", [])])
-        draw = _openings([coins["draw_coin"]]) if coins.get("draw_coin") else []
+        sample = _openings([coins["draw_coin"]]) if coins.get("draw_coin") else []
     except (KeyError, TypeError, Ch.CoinError) as e:
         return {**out, "reason": f"{type(e).__name__}: {e}"}
     got = roots[Wd.ROUND]
-    drawn = draw_reason(draw_out, heads, draw_after, draw, key, pins, main)
+    sample_reason = draw_reason(draw_out, heads, draw_after, sample, key, pins, main)
     bad_salts = sorted(r for r, s in (salts or {}).items()
                        if not (0 <= r < min(len(got), len(openings)))
                        or HT.live_salt(commitment, openings[r].coin, r, got[r]).hex() != s)
@@ -651,9 +654,9 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
                    f"the challenger received {len(got)} round roots, not the window's {len(rounds)} committed ones")
         or Wd.rounds_reason(commitment, got, openings),
         "salts": None if not bad_salts else f"rounds {bad_salts[:8]}'s unit salts are not their opened coins' live_salt",
-        "draw": drawn,
+        "draw": sample_reason,
     }
-    out.update(reasons=reasons, ledger=ledger_info(audited, entries), root=root.hex(), rounds=len(got), draws=len(draw),
+    out.update(reasons=reasons, ledger=ledger_info(audited, entries), root=root.hex(), rounds=len(got), draws=len(sample),
                commitment=commitment.root.hex())
     out["ok"] = all(v is None for v in reasons.values())
     out["coins"] = (f"off-node {host} (checked{'; ' + ', '.join(loose) + ' unanchored' if loose else ''})"

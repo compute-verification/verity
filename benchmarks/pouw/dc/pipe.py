@@ -8,7 +8,7 @@ TMEM stage alone, ε_tensor at L = 32 with the measured points, the fold's issue
 OUT is pipe.sh's output (rate.jsonl, gate/*/result.json and ref.json, sass/pgemm.sass). --census takes the B200 probe runs
 (run.sh sm100, fetched with `research fetch RUN --all`): their TMEM region and mma.sync points, with the kernel's measured
 points added, give ε_tensor at L = 32 by TENSOR's two-stage LP (analyze.tmem_model). Without it the census lines in
-`../machine_model/data/devices/sm_100/` give ρ_T5, the issue facet and the scalar rates, and ε is not computed.
+`../../machine_model/data/devices/sm_100/` give ρ_T5, the issue facet and the scalar rates, and ε is not computed.
 
 Arms (pgemm.cu's MODE): 0 the pipeline alone (loaders hand the barrier back), 1 the TMEM stage (every word loaded, not
 folded), 2 honest (loaded and folded by duo), 3 the MMA warp waiting on its own commit (no loaders). MI 1: one MMA warp a
@@ -26,11 +26,9 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CENSUS = Path(__file__).resolve().parents[1] / "machine_model" / "data" / "devices" / "sm_100" / "census.csv"
+CENSUS = Path(__file__).resolve().parents[2] / "machine_model" / "data" / "devices" / "sm_100" / "census.csv"
 ARMS = {0: "pipeline", 1: "TMEM stage", 2: "honest", 3: "MMA self-wait"}
 SLOTS_MMA, LANES, SMSPS = 128 * 256, 32, 4
-#: duo's lane instructions a word by pipe (dc.cuh): u = y ^ p ^ k (LOP3), y = u a + z (IMAD), z = rotl(u, r) + y (LEA.HI)
-DUO = {"ALU": 2, "IMAD": 1}
 
 
 def _module(name: str, path: Path):
@@ -125,11 +123,11 @@ def gate_build(out: Path) -> int:
         n_ld = sum(op == "LDTM.x32" for op in ops)
         local = sum(op.split(".")[0] in ("LDL", "STL") for op in ops)
         r = regs.get((nb, lw, mode, mi), 0)
-        cap = min(255, REGS_SMSP // (-(-(4 * lw + (nb if mi else 1)) // 4) * 32) // 8 * 8)
-        ok = n_mma > 0 and local == 0 and (mode in (0, 3) or n_ld > 0) and 0 < r <= cap
+        launchable = min(255, REGS_SMSP // (-(-(4 * lw + (nb if mi else 1)) // 4) * 32) // 8 * 8)
+        ok = n_mma > 0 and local == 0 and (mode in (0, 3) or n_ld > 0) and 0 < r <= launchable
         name = f"pg100<{nb},{lw},{mode},{mi}>"
         print(f"{'PASS' if ok else 'REFUSED'} {name}: UTCIMMA {n_mma}, LDTM.x32 {n_ld}, LDL/STL {local}, registers {r} "
-              f"(launchable {cap})")
+              f"(launchable {launchable})")
         if not ok:
             bad.append(name)
     for b in bad:
@@ -206,10 +204,10 @@ def eps_tensor_l32(census_dirs: list[Path], rates: list[dict], rho5: float) -> d
            "T1": 1 - w / rho5}
     rt = max((b for b in (best(rates, 0, 32), best(rates, 3, 32)) if b), key=lambda r: r["slots_per_clk"], default=None)
     out["honest_config"] = {k: honest.get(k) for k in ("nb", "lw", "mi")}
-    caps = {"bandwidth": h} | ({"round_trip": min(h, rt["slots_per_clk"] / rho5)} if rt else {})
+    bounds = {"bandwidth": h} | ({"round_trip": min(h, rt["slots_per_clk"] / rho5)} if rt else {})
     if rt:
         out["round_trip_config"] = {k: rt.get(k) for k in ("nb", "lw", "mi", "arm")}
-    for name, t in caps.items():
+    for name, t in bounds.items():
         extra = analyze.upper(base["sync_points"], t) * rho_sync
         out[name] = {"t": t, "tcgen05_words": t * rho5, "mma_sync_words": extra, "adversary_words": t * rho5 + extra,
                      "eps": 1 - w / (t * rho5 + extra)}
@@ -273,9 +271,9 @@ def text(res: dict) -> str:
         lines.append(line)
     e = res.get("eps_L32")
     if e:
-        lines += ["", f"eps_tensor at L = 32, honest's measured TMEM stage {e['honest_TMEM_stage']:.2f} words/SM/clk "
-                  f"({e['honest_fraction']:.4f} of rho_T5; the probes' LP assumed {e['region_balanced_probes']:.4f} and "
-                  f"gave {e['eps_probes_lp']:.4f}): T1 {e['T1']:.4f}"]
+        lines += ["", (f"eps_tensor at L = 32, honest's measured TMEM stage {e['honest_TMEM_stage']:.2f} words/SM/clk "
+                       f"({e['honest_fraction']:.4f} of rho_T5; the probes' LP assumed "
+                       f"{e['region_balanced_probes']:.4f} and gave {e['eps_probes_lp']:.4f}): T1 {e['T1']:.4f}")]
         for name in ("bandwidth", "round_trip"):
             c = e.get(name)
             if c:

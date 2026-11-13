@@ -49,3 +49,12 @@ def test_no_manifest_and_a_refused_one_carry_neither_and_say_which():
     refused = COV.query_population({"schema": SCHEMA, "guard": GUARD}, {}, set(), ranks=[])
     assert refused["scope"] == "Q(P) = 0 identities (manifest refused)" and refused["query_total"]["guard"] is None
     assert refused["query_checks"]["ok"] is False and refused["query_checks"]["manifest_refused"]["field"] == "program_digest"
+
+
+def test_an_identity_no_row_produces_that_states_no_step_is_not_read():
+    """No record refuses it by name: beside an executed prefix its step is read with `int`, which refuses None."""
+    man = _manifest(identities=[{"family": "input_token_ids", "request_id": "r0", "op_path": "x", "output_member": "out"}])
+    prefix = {"r0": {"n_exec": 2}}
+    with pytest.raises(TypeError, match="NoneType"):
+        COV.query_population(man, {}, set(), ranks=[0], executed_prefix=prefix)
+    assert COV.query_population(man, {}, set(), ranks=[0])["query_total"]["identities"] == 1      # no prefix: the step is not read

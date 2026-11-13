@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 
 DC = Path(__file__).resolve().parents[1] / "dc"
-MODEL_DATA = Path(__file__).resolve().parents[1] / "machine_model" / "data"
+MODEL_DATA = Path(__file__).resolve().parents[2] / "machine_model" / "data"
 
 
 def _load(name: str):

@@ -271,9 +271,9 @@ def _root64(h: Any) -> bool:
 
 def table_root(row: Mapping[str, Any], name: str) -> Any:
     """Manifest row `row`'s root of its call's table `name` (its ``tables``' ``a`` or ``z``, `pouw_h1.H1Run.manifest`);
-    None for a row that carries no ``tables`` object."""
+    None for a row whose ``tables`` is absent or empty."""
     tables = row.get("tables")
-    return tables.get(name) if isinstance(tables, Mapping) else None
+    return tables.get(name) if tables else None
 
 
 def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> str | None:
@@ -291,14 +291,15 @@ def tables_reason(salt: bytes, log: Sequence[Mapping[str, Any]], rows: Sequence[
             return (f"call {got[0].get('index')} is at step {s}, which no round of the log closes, so its A table is under "
                     "no round root")
     for x in log:
-        r, got = x.get("round"), steps.get(x.get("round"), [])
+        r: Any = x.get("round")    # the log's value as it is: `tagged` raises on one that is no part of a digest
+        got = steps.get(r, [])
         if not got:
             return f"round {r}'s step has no call, so its slot table names leaves of no committed A table"
         bare = next((m for m in got if not _root64(table_root(m, "a"))), None)
         if bare is not None:
             return (f"call {bare.get('index')} of step {r} has no A table root, so round {r}'s slot table names A-table "
                     "leaves that no round root commits")
-        if not isinstance(r, int) or step_digest(salt, r, got).hex() != x.get("calls"):
+        if step_digest(salt, r, got).hex() != x.get("calls"):
             return f"step {r}'s calls in the record (their tables' roots among them) are not the ones under round {r}'s root"
     return None
 

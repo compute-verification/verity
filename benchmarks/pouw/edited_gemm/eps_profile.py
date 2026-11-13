@@ -6,7 +6,7 @@ and the stall reasons; the fold-cost sweep's table; and the profiles as TOML for
 
     python3 eps_profile.py OUT_DIR --mm MACHINE_MODEL_DIR [--epoch VF3l-16] [--json PATH] [--toml PATH] [--toml-arms A,B]
 
-MACHINE_MODEL_DIR is `benchmarks/pouw/machine_model` (verity_machine_model and its data/). An opcode with no class is
+MACHINE_MODEL_DIR is `benchmarks/machine_model` (verity_machine_model and its data/). An opcode with no class is
 priced as NOROW (issue only), so the bound is never above what the model says, and is listed under `unpriced`.
 """
 from __future__ import annotations
@@ -19,6 +19,8 @@ import re
 import sys
 from collections import defaultdict
 from pathlib import Path
+
+__all__ = ["SCALE", "by_class", "first", "raw_metrics", "sass_counts"]
 
 HONEST = "e_l2q"
 SWEEP = [(0.0, "e_plain"), (1.0, "f10_l2q"), (1.5, "f15_l2q"), (2.0, "f20_l2q"), (2.5, "f25_l2q"), (3.0, "e_l2q"),
@@ -255,7 +257,8 @@ def run_shapes(o: Path, names: set[str]) -> dict[str, tuple[int, int, int]]:
     return out
 
 
-def f(x, d=3):
+def f(x: float | None, d: int = 3) -> str:
+    """x to d decimals; empty for a missing value or a NaN."""
     return "" if x is None or x != x else f"{x:.{d}f}"
 
 

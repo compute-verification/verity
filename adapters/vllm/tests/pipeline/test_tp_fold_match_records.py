@@ -19,17 +19,21 @@ SUMMARY: dict[str, Any] = {"errors": 0, "unresolved": 0, "n_instances": 9, "n_st
                            "fold": {"tp": {"rank": 1, "world": 2}, "collectives": [{"step": 0, "k": 0}, {"step": 0, "k": 1}], "collectives_by_kind": {"all_reduce": 2}}}
 
 
+#: a JSON document nested past the parser's depth
+NESTED = "[" * 100_000 + "]" * 100_000
+
+
 def _exits(monkeypatch, rc: int) -> None:
     monkeypatch.setattr(FM, "_run", lambda cmd, log, timeout=None: rc)
 
 
-def _fold(tmp_path: Path, monkeypatch, summary: dict | None, rc: int = 0) -> dict:
+def _fold(tmp_path: Path, monkeypatch, summary: dict | None, rc: int = 0, text: str | None = None) -> dict:
     out = tmp_path / "rank1"
     out.mkdir()
     for name in ("program.json", "instances.jsonl"):
         (out / name).write_text("")
-    if summary is not None:
-        (out / "fold_summary.json").write_text(json.dumps(summary))
+    if summary is not None or text is not None:
+        (out / "fold_summary.json").write_text(json.dumps(summary) if text is None else text)
     _exits(monkeypatch, rc)
     return FM.fold_rank("py", tmp_path / "log.rank1.jsonl.gz", "profile", out, None)
 
@@ -53,6 +57,12 @@ def test_a_fold_whose_summary_holds_no_statistics_states_no_rank_and_no_collecti
 def test_a_fold_that_failed_before_its_summary_is_not_ok(tmp_path, monkeypatch):
     fold = _fold(tmp_path, monkeypatch, None, rc=1)
     assert (fold["ok"], fold["rc"], fold["tp"], fold["collectives"], fold["error_examples"]) == (False, 1, None, 0, [])
+
+
+@pytest.mark.parametrize("text", ["{", NESTED], ids=["not JSON", "nested past the parser's depth"])
+def test_a_fold_summary_that_does_not_parse_reads_as_none_written(tmp_path, monkeypatch, text):
+    fold = _fold(tmp_path, monkeypatch, None, text=text)
+    assert (fold["tp"], fold["collectives"], fold["collectives_by_kind"], fold["error_examples"], fold["errors"]) == (None, 0, None, [], None)
 
 
 # the compare
@@ -142,6 +152,16 @@ def test_a_request_with_no_program_dir_or_no_links_file_leaves_the_rank_without_
 @pytest.mark.parametrize("compare", [{}, {"per_request": None}, {"per_request": []}], ids=["no list", "a null list", "an empty list"])
 def test_a_compare_record_that_lists_no_request_has_no_links_for_the_rank(tmp_path, compare):
     assert FM.links_for_rank(1, tmp_path / "build", compare, ["d1"]) is None
+
+
+@pytest.mark.parametrize("text", ["{", "[1]", NESTED, '{"world": Infinity, "links": []}', '{"rank": -Infinity, "links": []}',
+                                  '{"links": [{"k": 0, "peer_rank": Infinity}]}', '{"links": [{"k": Infinity}]}'],
+                         ids=["not JSON", "a list", "nested past the parser's depth", "an infinite world", "an infinite rank", "an infinite peer rank",
+                              "an infinite collective"])
+def test_a_links_file_that_is_not_one_leaves_the_rank_without_links(tmp_path, text):
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build" / "tp_links.json").write_text(text)
+    assert FM.links_for_rank(1, tmp_path / "build", {}, []) is None
 
 
 # the cross-rank check's record

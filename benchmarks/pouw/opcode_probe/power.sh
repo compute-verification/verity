@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The clock and power run (probes/power.cu): build and gate outside the lease, then under one gpu-lease sustain every
 # kernel at the node's clock lock, reset the leased GPU's clocks to the defaults (nvidia-smi -rgc: the application clocks
-# and the 600 W cap), sustain them again, and lock the GPU back to the node's clock on exit. From a pushed commit:
+# and the 600 W power limit), sustain them again, and lock the GPU back to the node's clock on exit. From a pushed commit:
 #
 #   research run --on MACHINE --project verity --source <tree> --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/power.sh

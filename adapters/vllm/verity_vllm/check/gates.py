@@ -67,8 +67,8 @@ malformed one `error`; a gate never raises.  `evaluate_gates(run_dir)` runs the 
 them into ACCEPTED / REJECTED / INCOMPLETE (G1..G7 as before; G8 / R1 contribute only `fail` -> REJECTED, `error` /
 `unsupported` / `unverified` -> INCOMPLETE; a record that predates them keeps the verdict of G1..G7).
 
-The fold summary the driver writes (`run_config --worker fold`) is defined here as `FOLD_SUMMARY_SCHEMA` /
-`FOLD_SUMMARY_FIELDS` (also reproduced in `out/gen/cards/SCHEMA.md`).
+The fold summary the driver writes (`run_config --worker fold`) is defined here: its fields are `FOLD_SUMMARY_FIELDS`, and
+its id is `FOLD_SUMMARY_SCHEMA`, which `records.schema_ids` states (also reproduced in `out/gen/cards/SCHEMA.md`).
 """
 
 from __future__ import annotations
@@ -102,6 +102,11 @@ from verity_vllm.check.verdict_names import (
     STRUCTURAL_GATES,
     VU_PARTITION,
 )
+from verity_vllm.records.schema_ids import (
+    FOLD_SUMMARY_SCHEMA,
+    GATES_SCHEMA,
+    QUERY_USE_SCHEMA,
+)
 
 # ---------------------------------------------------------------------------------------------------------
 # FROZEN CONSTANTS — part of the accepted invariant set; change only through an approved decision in
@@ -131,12 +136,8 @@ REF_INTEGRITY_RULE = {
 }
 #: Every gate `evaluate_gates` runs, in report order.
 ALL_GATES = GATES + STRUCTURAL_GATES + INTEGRITY_GATES
-#: G8 — the schema of the query-use document.
-QUERY_USE_SCHEMA = "verity-ir/query-use/v1"
+#: G8 — the use a query-use document (`QUERY_USE_SCHEMA`) declares.
 QUERY_USE_KIND = "vu-partition"
-
-GATES_SCHEMA = "verity-gen/gates/v1"
-FOLD_SUMMARY_SCHEMA = "verity-gen/fold-summary/v1"
 
 #: Default artifact locations relative to the run directory (`run.json["artifacts"]` may override any of them with an
 #: absolute path, e.g. an existing capture supplied to the driver with `--log/--snapshots`).
@@ -213,8 +214,9 @@ class GateResult:
 
     @classmethod
     def from_json(cls, d: dict) -> GateResult:
+        gid, name, status = d["id"], d.get("name", GATE_NAMES.get(d["id"], "")), d["status"]   # read first: an entry that is no object is refused here
         evidence, detail = d.get("evidence"), d.get("detail")   # a result written without either consulted no artifact and details nothing
-        return cls(id=d["id"], name=d.get("name", GATE_NAMES.get(d["id"], "")), status=d["status"],
+        return cls(id=gid, name=name, status=status,
                    evidence=list(evidence) if evidence else [], detail=dict(detail) if detail else {}, reason=d.get("reason"))
 
     def result(self) -> CheckResult:
@@ -660,7 +662,8 @@ def gate_semantic_closure(run: RunArtifacts) -> GateResult:
                     {"unsupported": unsupported, "fold_unresolved": fold_unresolved})
     if amb:
         problems.append(f"{amb} ambiguous pattern matches ({amb_src})")
-    totals = res["totals"]   # stated: the counts above were read from it
+    stated = res.get("totals")
+    totals = stated if stated else {}
     detail = {"unsupported": unsupported, "resolution_errors": res_errors, "fold_unsupported": fold_unsupported,
               "fold_unresolved": fold_unresolved, "fold_errors": fold_errors, "fold_error_classes": fs.get("error_classes"),
               "ambiguous": amb, "ambiguity_source": amb_src, "steps": steps, "expected_steps": exp,

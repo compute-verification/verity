@@ -25,6 +25,7 @@ from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay.linkage import linkage_horizon
 from verity_vllm.commit import binding as B
 from verity_vllm.commit import executed_prefix as EP
+from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 EOS = 50279
@@ -498,3 +499,18 @@ def test_a_padded_records_rows_past_the_stop_are_the_required_padding_and_paddin
     fb = EP.rows_past_the_stop(fallback, rsteps)
     assert not fb["ok"] and fb["requests"] == {} and fb["padding_inside_prefix"] == {"r1": [4]} and "inactive fallback" in fb["error"] and "r1" in fb["error"]
     assert fb["padding_entries_n"] == 3 and fb["padded_record"] is True
+
+
+def test_an_attention_rows_stratum_key_reads_its_statics_as_int_reads_them():
+    """`spec_statics` keeps a static that is not digits as its text.  The stratum key reads T and BN with `int`, which takes a sign,
+    spaces and underscores too, and the key is the spec itself where `int` refuses one."""
+    def key(bn: str) -> str:
+        spec = f"Attention_v3{{T=20,NH=32,KVH=8,D=64,BN={bn}}}"
+        return POP._stratum_spec("Attention_v3", spec, RM.spec_statics(spec))
+
+    for bn in ("16", "+16", " 16", "1_6"):
+        assert key(bn) == f"Attention_v3{{NB=2,last=partial,NH=32,KVH=8,D=64,BN={bn}}}"
+    for bn in ("x", "1.5", ""):
+        assert key(bn) == f"Attention_v3{{T=20,NH=32,KVH=8,D=64,BN={bn}}}"
+    for fam, spec in (("Gemm_v1", "Gemm_v1{K=4,N=8}"), ("Attention_v3", "Attention_v3{T=20,NH=32}"), ("Attention_v3", "Attention_v3{NH=32,BN=16}")):
+        assert POP._stratum_spec(fam, spec, RM.spec_statics(spec)) == spec          # no rows of blocks, or a spec that states no T or no BN

@@ -1,9 +1,10 @@
 """What the Match stage's readers make of a field their document leaves out, one case per reader: the Build's artifact and the
-declaration (`verity_vllm.check.match.declaration`), a fold's supplied parameters (`verity_vllm.check.match.supplied_inputs`), a
-derived directory's shape (`verity_vllm.check.match.derived_index`), the capture log (`verity_vllm.check.match.record`), the declared
-prefix-cache hit (`verity_vllm.check.match.prefix_reads`), the sampler's geometry (`verity_vllm.check.match.sampler_geometry`) and
-the cross-rank pass (`verity_vllm.check.match.xrank_collectives`).  An absent field reads as nothing stated, and where the check
-needs it the failure names it."""
+declaration (`verity_vllm.check.match.declaration`), a fold's supplied parameters (`verity_vllm.check.match.supplied_inputs`) and
+its instance rows (`verity_vllm.check.match.program_loaders`), a derived directory's shape
+(`verity_vllm.check.match.derived_index`), the capture log (`verity_vllm.check.match.record`), the declared prefix-cache hit
+(`verity_vllm.check.match.prefix_reads`), the sampler's geometry (`verity_vllm.check.match.sampler_geometry`) and the cross-rank
+pass (`verity_vllm.check.match.xrank_collectives`).  An absent field reads as nothing stated, and where the check needs it the
+failure names it."""
 from __future__ import annotations
 
 import json
@@ -14,6 +15,7 @@ import pytest
 from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match import prefix_reads as PX
+from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.check.match import record as REC
 from verity_vllm.check.match import sampler_geometry as SG
 from verity_vllm.check.match import supplied_inputs as SI
@@ -109,6 +111,38 @@ def test_the_registration_of_a_derived_program_is_read_from_its_report():
     assert SI.derived_registration({"supplied": {"registration": reg}}, 1, "derived") == reg
     with pytest.raises(ValueError, match="derived: derive-report puts `values` at parameter 1, after 2 user inputs it is 2"):
         SI.derived_registration({"supplied": {"registration": reg}}, 2, "derived")
+
+
+# --- a fold's instance rows ----------------------------------------------------------------------------------------------------------
+
+
+def _kept_rows(tmp_path, monkeypatch, line: str) -> list[dict]:
+    """The rows `load_oracle` keeps of a fold whose `instances.jsonl` is the one line, as it hands them on."""
+    (tmp_path / "program.json").write_text(json.dumps({"program": {}}))
+    (tmp_path / "instances.jsonl").write_text(line + "\n")
+    kept: list[dict] = []
+    monkeypatch.setattr(PL, "_finish_oracle", lambda d, label, pj, desc, rows, cls, compact: kept.extend(rows))
+    PL.load_oracle(str(tmp_path), "fold")
+    return kept
+
+
+@pytest.mark.parametrize("refs", [None, {}, [], 0, "", False])
+def test_an_instance_row_whose_operand_references_are_left_out_null_or_empty_retains_none(tmp_path, monkeypatch, refs):
+    assert _kept_rows(tmp_path, monkeypatch, json.dumps({"node": 4}))[0]["operand_refs"] == []
+    assert _kept_rows(tmp_path, monkeypatch, json.dumps({"node": 4, "operand_refs": refs}))[0]["operand_refs"] == []
+
+
+def test_an_instance_row_retains_the_parameter_space_runs_of_each_operand_and_its_arity(tmp_path, monkeypatch):
+    row = {"node": 4, "operand_refs": [[["p", 0, 8], ["n", 2, 3]], [["n", 5, 1]], [["P", 1, 2, 3]]]}
+    assert _kept_rows(tmp_path, monkeypatch, json.dumps(row))[0]["operand_refs"] == [[["p", 0, 8]], [], [["P", 1, 2, 3]]]
+
+
+@pytest.mark.parametrize("line, refusal", [('"node"', "string indices must be integers"), ('["node"]', "list indices must be integers")])
+def test_a_line_of_the_instance_rows_that_is_not_an_object_is_refused_at_its_node(tmp_path, monkeypatch, line: str, refusal: str):
+    """A JSON string or array that holds the word is taken for a row; the read of its node refuses it, before any field a row may
+    leave out is looked for."""
+    with pytest.raises(TypeError, match=refusal):
+        _kept_rows(tmp_path, monkeypatch, line)
 
 
 # --- a derived directory's shape -----------------------------------------------------------------------------------------------------
