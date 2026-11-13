@@ -75,6 +75,9 @@ from pathlib import Path
 
 from exact_kit.checks import Checks
 
+__all__ = ["add64", "fx_word", "key_mul", "key_xor", "lcg", "main", "mnmx64", "modinv", "new_word_sets", "rot_of",
+           "wide3_controls", "width_wide3"]
+
 M32 = 0xFFFFFFFF
 NPOS = 16
 
@@ -566,7 +569,7 @@ def _two_word_pairs(width: int, inputs):
     return out
 
 
-def _new_word_sets(width: int, inputs) -> int:
+def new_word_sets(width: int, inputs: dict[str, list[int]]) -> int:
     """How many distinct sets of new words one instruction over `inputs` adds (fold_wide3.c's first instructions)."""
     have = {tuple(v) for v in inputs.values()}
     sets = {frozenset([v]) for v in _single_values(width, inputs) if v not in have}
@@ -738,11 +741,11 @@ def main() -> int:
                     wit = [x for x in res["witnesses"] if x[0] == {"found": "F", "sel": "S", "le2": "L"}[key]]
                     checks.check(f"fold_wide3.c finds its control {lab} ({key})", res[key] > 0, wit[:1])
             checks.check("fold_wide3.c's first instructions are this file's (6 inputs)",
-                         ctl["fx1"]["firsts"] == _new_word_sets(w4, small),
-                         (ctl["fx1"]["firsts"], _new_word_sets(w4, small)))
+                         ctl["fx1"]["firsts"] == new_word_sets(w4, small),
+                         (ctl["fx1"]["firsts"], new_word_sets(w4, small)))
             big = width_wide3(exe, w4, wins, {"fx1": (y1w, z1w)})["fx1"]
             checks.check("fold_wide3.c's first instructions are this file's (10 inputs)",
-                         big["firsts"] == _new_word_sets(w4, wins), (big["firsts"], _new_word_sets(w4, wins)))
+                         big["firsts"] == new_word_sets(w4, wins), (big["firsts"], new_word_sets(w4, wins)))
             seen = {k: big[k] for k in ("found", "sel", "le2", "firsts", "prefixes", "witnesses")}
             checks.check("width-4 exhaustive: neither of fx1's outputs is a word of a program of at most 2 instructions, "
                          "IMAD.WIDE, IADD.64 and IMNMX.64 included", big["le2"] == 0 and ctl["fx1"]["le2"] == 0, seen)
