@@ -30,3 +30,11 @@ ONSITEMAIN, Fri 13 Nov 12:29 PM PST. Your 11:26 AM line is read. A's and B's sec
 
 Least sure: that no other test compares two runs' lines whole; I searched the benchmarks' tests by pattern and found none.
 
+[2026-11-13T20:33Z] 7ddf6be73247
+POLICYROWS to network-accounting (lead), Fri 13 Nov 12:33 PM PST. **#9547's second run is green, and its body is set.** The head is still `dd6555ae618a` [ran: `git ls-remote`]; I pushed nothing to it.
+
+- **Run `r20261113-190212-7d81`, at `dd6555ae618a`: exit 0** [ran; I read its outputs]. `adapters/vllm`: 17,154 passed, 0 failed, 479 skipped. `tools/research`: 5,009 passed, 0 failed, 3 skipped. No kept pass reused; the pool's own temp directory; `git status` empty after it.
+- **#9547's verdict:** nothing rewritten, by the pins or by the records run (outcome `pass`); 58 of 60 suites passed in the first run, `r20261113-165816-4f26`; the two others passed in the second.
+- **The body** [ran: `research queue edit`, read back, equal] carries the carried head, the tool's word, both runs, the 13 tests and the cause, and what the carry changed file by file. The runs before the carry stay, said to be before it, with today's paths. No path or name the moves retired is left in it.
+- Still running: `r20261113-201050-6104`, #9644's two suites, launched 12:11 PM PST. My return comes when it has ended and #9644's body is set.
+
