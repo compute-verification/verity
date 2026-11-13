@@ -10,7 +10,7 @@ import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
-# Each form's `K` bounds `PeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
+# Each form's `K` bounds `MonitoringPeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
 
 Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_clog2`), and `K`'s sums over the
 connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
@@ -141,7 +141,7 @@ theorem rowsProgWired : RowsProgWired := by
     · cases h0
 
 /-- A link-window's window record whose `prog` is at the root `r` and the domain `d`. -/
-def tiedWindow : Lean.Json :=
+def tiedExecutionPhase : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])]
 
 /-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
@@ -158,7 +158,7 @@ def slotReg : Lean.Json :=
 /-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the slot audit
 is tied to it, so its free inputs are in the link-window's term. -/
 theorem rowsProgWired_honest :
-    wired #[slotAudit] slotSchedule #[slotReg] tiedWindow = true ∧ tiedIn #[slotReg] #[tiedWindow] 0 = true := by
+    wired #[slotAudit] slotSchedule #[slotReg] tiedExecutionPhase = true ∧ tiedIn #[slotReg] #[tiedExecutionPhase] 0 = true := by
   decide +kernel
 
 /-- A compute audit whose Program has one `SelectEntry_v1` template of one member, a pinned Definition (its closure
@@ -173,10 +173,10 @@ def selectReg : Lean.Json :=
 /-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the audit is
 tied to it. -/
 theorem rowsProgWired_select :
-    wired #[selectAudit] slotSchedule #[selectReg] tiedWindow = true ∧ tiedIn #[selectReg] #[tiedWindow] 0 = true := by
+    wired #[selectAudit] slotSchedule #[selectReg] tiedExecutionPhase = true ∧ tiedIn #[selectReg] #[tiedExecutionPhase] 0 = true := by
   decide +kernel
 
-theorem tiedWindow_unwired : wired #[] slotSchedule #[] tiedWindow = false := by
+theorem tiedExecutionPhase_unwired : wired #[] slotSchedule #[] tiedExecutionPhase = false := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsProgWired`'s property** (its nontrivial lemma): such a check
@@ -185,9 +185,9 @@ theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params :=
     ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
-  have hw : wired #[] slotSchedule #[] tiedWindow = true :=
-    h p ⟨#[], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
-  rw [tiedWindow_unwired] at hw
+  have hw : wired #[] slotSchedule #[] tiedExecutionPhase = true :=
+    h p ⟨#[], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
+  rw [tiedExecutionPhase_unwired] at hw
   cases hw
 
 /-- `slotAudit` with its template's body another than every pinned one: a template under `SlotEntry_v1`'s name and
@@ -196,7 +196,7 @@ def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")]�
 
 /-- A renamed body is no slot entries: the link-window `slotAudit` wires is unwired when its audit's template has
 another body, with its port, root, domain and members unchanged. -/
-theorem renamedAudit_unwired : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = false := by
+theorem renamedAudit_unwired : wired #[renamedAudit] slotSchedule #[slotReg] tiedExecutionPhase = false := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsProgWired`'s property at a renamed body** (its nontrivial
@@ -206,8 +206,8 @@ theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
     .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
-  have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedWindow = true :=
-    h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedWindow rfl
+  have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedExecutionPhase = true :=
+    h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
   rw [renamedAudit_unwired] at hw
   cases hw
 
@@ -276,7 +276,7 @@ def stateRun (l lo hi : ℕ) : Lean.Json :=
 /-- A link-window whose scan's `prog` is at the slot audit's entries port's root and domain, whose state, the tree its
 units read and register their states in, is at the root `s` and the domain `e`, and whose registration states its
 units' `sin` reads as the run `sin` and their `o1` as `o1`. -/
-def stateWindowOf (sin o1 : Lean.Json) : Lean.Json :=
+def stateExecutionPhaseOf (sin o1 : Lean.Json) : Lean.Json :=
   Lean.Json.mkObj [
     ("roots", Lean.Json.arr #[
       Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")],
@@ -285,10 +285,10 @@ def stateWindowOf (sin o1 : Lean.Json) : Lean.Json :=
 
 /-- That link-window under the slot audit's schedule, T = 2: unit 1 reads `sin` at leaf 1, where unit 0 registers its
 `o1`. Its registration opens no row 0. -/
-def stateWindow : Lean.Json := stateWindowOf (stateRun 1 1 2) (stateRun 1 0 1)
+def stateExecutionPhase : Lean.Json := stateExecutionPhaseOf (stateRun 1 1 2) (stateRun 1 0 1)
 
 /-- Its honest side: a slot audit whose `SCAN_STATE` is the scan's state, at its root and domain, ties it. -/
-theorem rowsStateTied_honest : stateTied #[slotAudit] slotSchedule #[stateReg "s"] stateWindow = true := by
+theorem rowsStateTied_honest : stateTied #[slotAudit] slotSchedule #[stateReg "s"] stateExecutionPhase = true := by
   decide +kernel
 
 /-- The slot audit's registration holding its `SCAN_STATE` in its window's `activations.values` alone, as a window
@@ -304,22 +304,22 @@ def activationsReg (root : String) : Lean.Json :=
 /-- An audit's state entry in its window's activations alone ties it (`auditStateEntries`), at the scan's root and at
 no other. -/
 theorem rowsStateTied_activations :
-    stateTied #[slotAudit] slotSchedule #[activationsReg "s"] stateWindow = true ∧
-      stateTied #[slotAudit] slotSchedule #[activationsReg "t"] stateWindow = false := by
+    stateTied #[slotAudit] slotSchedule #[activationsReg "s"] stateExecutionPhase = true ∧
+      stateTied #[slotAudit] slotSchedule #[activationsReg "t"] stateExecutionPhase = false := by
   decide +kernel
 
 /-- A slot audit whose `SCAN_STATE` skips or alters one of the scan's transitions: a tree of other rows, at another
 root (`t`) than the scan's state's, so its Programs compute on states the scan never reached. -/
-theorem stateWindow_skipped : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = false := by
+theorem stateExecutionPhase_skipped : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateExecutionPhase = false := by
   decide +kernel
 
-/-- A link-window whose scan's `prog` is wired, but whose registration names no state (`tiedWindow`), is not tied. -/
-theorem tiedWindow_unstated : stateTied #[slotAudit] slotSchedule #[stateReg "s"] tiedWindow = false := by
+/-- A link-window whose scan's `prog` is wired, but whose registration names no state (`tiedExecutionPhase`), is not tied. -/
+theorem tiedExecutionPhase_unstated : stateTied #[slotAudit] slotSchedule #[stateReg "s"] tiedExecutionPhase = false := by
   decide +kernel
 
 /-- A registration whose units read their state off the chain: unit 1's `sin` at leaf 2, a leaf no unit registered,
 and unit 0's `o1` at leaf 0, the empty state's, at the state's root and domain all the same. -/
-def misindexedWindow : Lean.Json := stateWindowOf (stateRun 2 1 2) (stateRun 0 0 1)
+def misindexedWindow : Lean.Json := stateExecutionPhaseOf (stateRun 2 1 2) (stateRun 0 0 1)
 
 theorem misindexedWindow_untied : stateTied #[slotAudit] slotSchedule #[stateReg "s"] misindexedWindow = false := by
   decide +kernel
@@ -343,14 +343,14 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   intro h
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
-  have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = true :=
-    h p ⟨#[stateReg "t"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
-      stateWindow rfl
-  rw [stateWindow_skipped] at hs
+  have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateExecutionPhase = true :=
+    h p ⟨#[stateReg "t"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+      stateExecutionPhase rfl
+  rw [stateExecutionPhase_skipped] at hs
   cases hs
 
 /-- The honest link-window's registration opens no row 0: it states no `window.empty`. -/
-theorem stateWindow_unopened : stateEmpty slotSchedule stateWindow = false := by
+theorem stateExecutionPhase_unopened : stateEmpty slotSchedule stateExecutionPhase = false := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsStateEmpty`'s property** (its nontrivial lemma): such a check
@@ -360,10 +360,10 @@ theorem rowsStateEmpty_nontrivial : ¬ RowsStateEmptyOf acceptAllRows := by
   intro h
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
-  have hs : stateEmpty slotSchedule stateWindow = true :=
-    h p ⟨#[stateReg "s"], #[stateWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
-      stateWindow rfl
-  rw [stateWindow_unopened] at hs
+  have hs : stateEmpty slotSchedule stateExecutionPhase = true :=
+    h p ⟨#[stateReg "s"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+      stateExecutionPhase rfl
+  rw [stateExecutionPhase_unopened] at hs
   cases hs
 
 /-! ## The rows form's tied audits run the class circuit -/
@@ -397,17 +397,17 @@ theorem rowsCircuitHeld : RowsCircuitHeld := by
     · cases h0
 
 /-- The slot audit's registration under the Program `d`: its entries port at the root `r` and the domain `d`, so
-`tiedWindow`'s scan's `prog` is its output. -/
+`tiedExecutionPhase`'s scan's `prog` is its output. -/
 def heldReg (d : String) : Lean.Json :=
   Lean.Json.mkObj [("program", .str d), ("roots", Lean.Json.arr #[Lean.Json.mkObj
     [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
 /-- An execution phase whose tied audit is registered under the class circuit `c` is held to it. -/
-theorem tiedWindow_held : held (some "c") #[heldReg "c"] tiedWindow = true := by
+theorem tiedExecutionPhase_held : held (some "c") #[heldReg "c"] tiedExecutionPhase = true := by
   decide +kernel
 
 /-- An execution phase whose tied audit is registered under another Program than the class circuit `c` does not. -/
-theorem tiedWindow_swapped : held (some "c") #[heldReg "d"] tiedWindow = false := by
+theorem tiedExecutionPhase_swapped : held (some "c") #[heldReg "d"] tiedExecutionPhase = false := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsCircuitHeld`'s property** (its nontrivial lemma): such a
@@ -418,16 +418,16 @@ theorem rowsCircuitHeld_nontrivial : ¬ RowsCircuitHeldOf acceptAllRows := by
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1,
       some "c"⟩
-  have hh : held (some "c") #[heldReg "d"] tiedWindow = true :=
-    h p ⟨#[heldReg "d"], #[tiedWindow], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
-      tiedWindow rfl
-  rw [tiedWindow_swapped] at hh
+  have hh : held (some "c") #[heldReg "d"] tiedExecutionPhase = true :=
+    h p ⟨#[heldReg "d"], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+      tiedExecutionPhase rfl
+  rw [tiedExecutionPhase_swapped] at hh
   cases hh
 
 /-- **`RowsCircuitHeld`'s honest lemma**: the period check accepts a period in the rows form whose parameters name a
 class circuit, `heldPeriod` with nothing registered. A period with an execution phase needs the network certifier's
 LMS signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
-tied audit registered under the class circuit; `tiedWindow_held` is `held` of such a phase's registrations. -/
+tied audit registered under the class circuit; `tiedExecutionPhase_held` is `held` of such a phase's registrations. -/
 theorem rowsCircuitHeld_honest :
     ∃ (pub : Public) (prof : Profile), check heldPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
   have hb : (match check heldPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
@@ -477,7 +477,7 @@ theorem findingOf_none {α : Type} {y : Found α} (h : findingOf y = none) : ∃
 def rowsWindows (p : Params) (c : Commitment) (e : Evidence) (s : Schedule) (sd : ByteArray) :
     Array (Found (Option (Facts × ℕ))) :=
   (c.windows.zip e.windows).zipIdx.map fun ((reg, x), i) =>
-    some <$> rowsWindowCheck p s sd c.audits (p.first + i) reg x
+    some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + i) reg x
 
 /-- What acceptance in the rows form gives: the sizes, no finding of a link-window or an audit, and the public, the
 rows form's (`rowsPublic`) with the schedule's response cap. -/
@@ -609,7 +609,7 @@ theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedul
   obtain ⟨v, rfl⟩ := findingOf_none (hws y hy)
   unfold rowsWindows at hy
   obtain ⟨z, -, hz⟩ := Array.mem_map.mp hy
-  cases hr : rowsWindowCheck p s sd c.audits (p.first + z.2) z.1.1 z.1.2 with
+  cases hr : rowsExecutionPhaseCheck p s sd c.audits (p.first + z.2) z.1.1 z.1.2 with
   | error r => simp [hr, Functor.map, Except.map] at hz
   | ok u => exact ⟨u, by simpa [hr, Functor.map, Except.map] using hz.symm⟩
 
@@ -669,7 +669,7 @@ theorem rowsTiedCharged : RowsTiedCharged := by
       have hz : (c.windows.zip e.windows)[w]? = some (wreg, e.windows[w]'(by omega)) :=
         Array.getElem?_zip_eq_some.mpr ⟨hw, hxw⟩
       have hwget : (rowsWindows p c e s sd)[w]? =
-          some (some <$> rowsWindowCheck p s sd c.audits (p.first + w) wreg (e.windows[w]'(by omega))) := by
+          some (some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + w) wreg (e.windows[w]'(by omega))) := by
         simp [rowsWindows, Array.getElem?_zipIdx, hz]
       obtain ⟨u, hu⟩ := rowsWindows_ok hws _ (Array.mem_of_getElem? hwget)
       rw [hu] at hwget
@@ -699,16 +699,16 @@ def chargedParams : Params :=
   ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1, none⟩
 
 /-- Its commitment: the slot audit's registration and the link-window whose scan's `prog` is its entries port. -/
-def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedWindow], .empty⟩
+def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩
 
-/-- Its honest side, at the slot audit tied to `tiedWindow`: sampled 1 of its 2 units with a bound of one incorrect
+/-- Its honest side, at the slot audit tied to `tiedExecutionPhase`: sampled 1 of its 2 units with a bound of one incorrect
 proof block, the audit is charged and its link-window's `β_w` is the scan's every entry bit; sampled whole, it is not
 charged and `β_w` is 0. -/
 theorem rowsTiedCharged_honest :
     (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] 0).isSome = true ∧
-      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] ⟨0, 0, 0, 0, 7⟩ tiedWindow = 7 ∧
+      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] ⟨0, 0, 0, 0, 7⟩ tiedExecutionPhase = 7 ∧
       (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0⟩] 0).isNone = true ∧
-      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0⟩] ⟨0, 0, 0, 0, 7⟩ tiedWindow = 0 := by
+      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0⟩] ⟨0, 0, 0, 0, 7⟩ tiedExecutionPhase = 0 := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsTiedCharged`'s property** (its nontrivial lemma): such a check
@@ -718,7 +718,7 @@ theorem rowsTiedCharged_nontrivial : ¬ RowsTiedChargedOf acceptAllRows := by
   intro h
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
-  obtain ⟨-, h1⟩ := h p ⟨#[slotReg], #[tiedWindow], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl slotSchedule .empty
+  obtain ⟨-, h1⟩ := h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl slotSchedule .empty
     ⟨0, 0, 0, 0, 0⟩ rfl
   obtain ⟨x, f, -, -, hf, -⟩ := h1 0 slotReg rfl rowsProgWired_honest.2
   simp [rowsTerms] at hf
