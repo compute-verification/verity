@@ -155,18 +155,22 @@ theorem length_ends_unitGates_le (u : ℕ) :
           subst hgo
           have hj2 : jj = 2 := by omega
           exact ⟨List.contains_iff_mem.2 ho, by rw [hj2]⟩
-        · exact (row_gate_not_input (Spot.Bits.consts c n) hgs hab hjj' (decide_eq_true_eq.1 hqe)).elim
+        · exact (row_gate_not_input (Spot.Bits.consts c n) hgs hab hjj' (of_decide_eq_true hqe)).elim
       have hpu : (Spot.Bits.unitOf (Spot.Bits.keyProg c n) g == some u) = true := by simp [hgu]
       rw [if_pos hpu]
       by_cases hgo : (Spot.Bits.keyProg c n).outs.contains g = true
       · have hp1 : (Spot.Bits.unitOf (Spot.Bits.keyProg c n) g == some u &&
-            (Spot.Bits.keyProg c n).outs.contains g) = true := by simp [hgu, hgo]
+            (Spot.Bits.keyProg c n).outs.contains g) = true := by
+          rw [Bool.and_eq_true]
+          exact ⟨hpu, hgo⟩
         rw [if_pos hp1]
         exact length_le_of_window (a := Spot.Bits.off (Spot.Bits.keyProg c n) g + 2)
           ((List.nodup_range.map (fun _ _ h => Nat.add_left_cancel h)).filter _)
           fun q hq => by rw [(hpc q hq).2]; omega
       · have hp0 : ¬ (Spot.Bits.unitOf (Spot.Bits.keyProg c n) g == some u &&
-            (Spot.Bits.keyProg c n).outs.contains g) = true := by simp [hgo]
+            (Spot.Bits.keyProg c n).outs.contains g) = true := by
+          rw [Bool.and_eq_true]
+          exact fun hp => hgo hp.2
         rw [if_neg hp0, Nat.le_zero, List.length_eq_zero_iff, List.eq_nil_iff_forall_not_mem]
         exact fun q hq => hgo (hpc q hq).1
     · have hpu : ¬ (Spot.Bits.unitOf (Spot.Bits.keyProg c n) g == some u) = true := by simp [hgu]
