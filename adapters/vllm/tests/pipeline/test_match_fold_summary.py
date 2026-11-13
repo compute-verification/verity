@@ -184,8 +184,13 @@ def test_the_programs_options_reach_the_profile_and_a_pouw_run_folds_pouw_s_call
 @pytest.mark.parametrize("platform, peak", [("linux", 3 << 20), ("darwin", 3 << 30)])      # KiB on Linux, bytes on macOS
 def test_the_peak_resident_size_is_in_gib_on_either_platform(monkeypatch, platform, peak):
     asked = []
+
+    def getrusage(who):
+        asked.append(who)
+        return types.SimpleNamespace(ru_maxrss=peak)
+
     monkeypatch.setattr(sys, "platform", platform)
-    monkeypatch.setattr(resource, "getrusage", lambda who: asked.append(who) or types.SimpleNamespace(ru_maxrss=peak))
+    monkeypatch.setattr(resource, "getrusage", getrusage)
     assert MF._max_rss_gb() == 3.0 and asked == [resource.RUSAGE_SELF]
 
 
@@ -223,7 +228,12 @@ def test_the_instances_stored_form_is_runs_unless_the_environment_names_progress
 
 def test_a_result_with_no_encoding_of_its_own_whose_digest_is_not_its_program_s_is_refused_and_nothing_is_written(tmp_path, monkeypatch):
     program, encoded = object(), []
-    monkeypatch.setattr(codec, "encode_program", lambda given: encoded.append(given) or {"encoded": True})
+
+    def encode_program(given):
+        encoded.append(given)
+        return {"encoded": True}
+
+    monkeypatch.setattr(codec, "encode_program", encode_program)
     monkeypatch.setattr(codec, "program_digest", lambda descriptor: "ab" * 64 if descriptor == {"encoded": True} else "no")
     result = types.SimpleNamespace(program=program, digest="cd" * 64)
     with pytest.raises(SystemExit, match="^program.json digest abababababababab != fold digest cdcdcdcdcdcdcdcd$"):

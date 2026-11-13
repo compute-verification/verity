@@ -190,8 +190,8 @@ def test_a_compiled_label_without_every_component_s_compilation_facts_is_refused
 
 
 def test_a_compiled_label_models_the_agreed_facts_under_one_spelling_from_either_block():
-    for comps in ({"a": {"engine": FACTS}, "b": {"engine": dict(FACTS)}, "c": None},
-                  {"a": {"compilation": FACTS}, "b": {"compilation": NORMAL}}):
+    for block, comps in (("engine", {"a": {"engine": FACTS}, "b": {"engine": dict(FACTS)}, "c": None}),
+                         ("compilation", {"a": {"compilation": FACTS}, "b": {"compilation": NORMAL}})):
         engine, refusal = GP.modelled_engine(COMPILED, comps)
-        declared = FACTS if "engine" in comps["a"] else {}
+        declared = FACTS if block == "engine" else {}
         assert refusal is None and engine == {**declared, **MODELLED_ENGINE, "enforce_eager": False, "compilation": NORMAL}

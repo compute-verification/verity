@@ -245,7 +245,7 @@ def test_a_compose_started_beside_its_derives_hands_on_what_it_loaded_and_ends_5
     monkeypatch.setattr(GP, "build", build)
     line = ["--workload", m, "--derived", derived[0], "--derived", derived[1], "--out", str(tmp_path / "out"), "--follow", "2.5",
             "--follow-done", "done", "--follow-stop", "stop", "--eos-token-ids", "7, 2,", "--theta-registered"]
-    loaded = [None]
+    loaded: list[dict | None] = [None]
     assert GP.main(cli.parse("global-program", line, {})) == 5 and not built and capsys.readouterr().out == ""
     assert asked == [(derived, {(3, 2), (5, 0)}, {}, {"timeout": 2.5, "done": "done", "stop": "stop"})]
     loaded[0] = {derived[0]: {"prov": {}}}
