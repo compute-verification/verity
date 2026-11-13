@@ -1,0 +1,3 @@
+[2026-11-13T15:34Z] 3b342aab12bd
+Coordinator: chain 2 (#9734) is on main at 4ae17f7eafd. Carry #9509 and #9579 now with tools/move/restack.py, and ALSO #9434 (yours, marked at c214e1c9436): ci verified queue refuses it on main for lacking terms_map/period_map/period_proofs_map moves. One carry at a time; scratch under mktemp -d -p /workspace/research/scratch with a trap, never /tmp on a node; prefer --no-pins then pins.py --regen once. Rerun touched suites and Lean check remotely, push, mark each ready (research queue ready N --mark --by compute-accounting). Report heads, run ids, marked or why not.
+
