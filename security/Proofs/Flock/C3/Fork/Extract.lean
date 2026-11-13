@@ -137,11 +137,8 @@ theorem outHL_of_plays (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (L
     (ho : PlaysT (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts e.cls.shape
       e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap) (schedSteps T CT 0 t) o) :
     outHL T CT A H E Lf e x t = some o := by
-  have hex : ∃ out, PlaysT (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal
-      e.cls.mPts e.cls.shape e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap) (schedSteps T CT 0 t) out :=
-    ⟨o, ho⟩
-  rw [outHL, dite_eq_left hex]
-  exact congrArg some (PlaysT.det hex.choose_spec ho)
+  unfold outHL
+  exact playT_of_playsT ho
 
 omit [Fintype K] in
 theorem outHL_lastCoin (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)

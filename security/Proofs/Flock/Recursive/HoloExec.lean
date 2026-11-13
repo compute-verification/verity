@@ -3,6 +3,7 @@ module
 public import Flock.RecCoins
 public import Definitions.Flock.Recursive.Holo
 public import Proofs.Flock.Recursive.ExecClass
+public import Proofs.Flock.Recursive.Replay
 public import Definitions.Flock.HoloCompiled
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -347,15 +348,13 @@ theorem ClashRunHL.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf :
   · obtain ⟨c, hc, hp⟩ := h.cand
     exact ⟨c, List.mem_append_right _ hc, hp⟩
 
-open Classical in
 /-- **Candidate 3's table's outcome on an inner transcript**: the outcome the transcript's steps play `holoTableCL` to
-at the statement `x`, when they play it to one. -/
+at the statement `x`, when they play it to one. It is the replay of those steps (`Game.playT`): none is chosen. -/
 noncomputable def outHL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : HoloReg F D)
     (t : List (List (SMsg T) × ((k : Fin r) → CT k))) : Option (OutHL F D Sl) :=
-  if h : ∃ out, PlaysT (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts
-      e.cls.shape e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap) (schedSteps T CT 0 t) out
-  then some h.choose else none
+  playT (holoTableCL A H E Lf (e.cls.pubStatement e.regs) e.sch e.cls.hm e.cls.ptLocal e.cls.mPts
+    e.cls.shape e.cls.units (fun σ => (e.τ σ).val) e.rsch.sch x.cap) (schedSteps T CT 0 t)
 
 /-- **The inner fork's output at candidate 3's table**: on two inner transcripts whose steps play it to outcomes `o`
 and `o'`, the pair of the first of the two outcomes' candidates (`clashCandsHL`, at the statement's cap) whose test

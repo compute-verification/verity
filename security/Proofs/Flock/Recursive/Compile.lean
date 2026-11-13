@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Recursive.CompileRuns
 public import Proofs.Flock.Recursive.ForkInner
+public import Proofs.Flock.Recursive.Replay
 public import Proofs.Flock.Recursive.Target
 public import Proofs.Flock.Soundness.Assumptions.Recursive
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -119,14 +120,13 @@ theorem ClashCL.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Me
 
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
-open Classical in
 /-- **The compiled table's outcome on an inner transcript**: the outcome the transcript's steps on the schedule play
-`Model.tableCL` to on the hidden statement `M.toStatement regs`, when they play it to one. -/
+`Model.tableCL` to on the hidden statement `M.toStatement regs`, when they play it to one. It is the replay of those
+steps (`Game.playT`): the finder computes the outcome from its own transcript, and none is chosen. -/
 noncomputable def outCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
     (sch : Schedule) (M : Hidden cls) (t : List (List (SMsg T) × ((k : Fin r) → CT k))) : Option (OutCL F D Sl) :=
-  if h : ∃ out, PlaysT (tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
-      (schedSteps T CT 0 t) out then some h.choose else none
+  playT (tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts) (schedSteps T CT 0 t)
 
 /-- **The inner fork's output at the compiled table**: on two inner transcripts whose steps play the compiled table to
 outcomes `o` and `o'`, the pair of the first of the two outcomes' candidates (`clashCandsCL`) whose test passes, a
@@ -157,10 +157,8 @@ theorem flock_inner_sound_compiled (A : Arith F K) (hA : A.Correct) [Inhabited D
   have hout : ∀ {t o}, PlaysT (tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
       (schedSteps T CT 0 t) o → outCL T CT A H E Lf cls regs sch M t = some o := by
     intro t o ho
-    have hex : ∃ out, PlaysT (tableCL A H E Lf (M.toStatement regs) sch cls.hm cls.ptLocal cls.mPts)
-        (schedSteps T CT 0 t) out := ⟨o, ho⟩
-    rw [outCL, dif_pos hex]
-    exact congrArg some (PlaysT.det hex.choose_spec ho)
+    unfold outCL
+    exact playT_of_playsT ho
   rcases compiled_runs_sound T CT A hA H E Lf cls regs sch hsch hlay (ClashCL H E Lf sch)
       (fun _ _ h => Or.inl h) (fun _ _ p h => Or.inr (Or.inr (Or.inl ⟨p, h⟩)))
       (fun _ _ i hi ℓ hℓ cap hcap p h => Or.inr (Or.inr (Or.inr ⟨i, hi, ℓ, hℓ, cap, hcap, p, h⟩))) M hno G s with
