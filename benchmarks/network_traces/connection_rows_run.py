@@ -38,11 +38,12 @@ In a schedule with a head offset (`WardenParams.head_offset`) the publisher's pr
 salts, which are witness, as it did, and hands each execution phase's line back to the network certifier
 (`Keeper(back=…)`, `Warden.head_back`), whose tick writes it (`Lines`, the network certifier's `leave`) with the
 tick it left at under `tick`. That `tick` is the network certifier's own note of when the line left, beside the
-signed registration and not under its signature: no check and no verifier reads it, and the head's time is held on
-the auditor's side. A line that is not back by the last tick it could leave at is never written: that execution
-phase has no head, and the tick writes `{"missed": [link, direction, execution phase]}` in its place, the network
-certifier's own unsigned note of it, so that every execution phase still has one line and one blob. A late line
-may leave after the next execution phase's, so `read` takes the lines by execution phase.
+signed registration and not under its signature. No check and no verifier reads it. Nothing holds the head's time
+yet: that is the auditor's side, which is not built. A line that is not back by the last tick it could leave at is
+never written: that execution phase has no head, and the tick writes `{"missed": [link, direction, execution
+phase]}` in its place, the network certifier's own unsigned note of it, so that every execution phase still has one
+line and one blob. A late line may leave after the next execution phase's, so `read` takes the lines by execution
+phase.
 
 **The check** (`check`). Every execution phase that is handed, and no other, has a registration that
 `connection_rows.check_registration` accepts under the network certifier's key and session, and its head is the head
@@ -55,7 +56,8 @@ release's place in the release order from the run's `warden.json` where there is
 counting it at an execution phase that isn't complete. In a schedule with a head offset the check reads no line's
 `tick`. An execution phase whose line is `missed` has no head, which is no problem of the run, and the summary
 counts those (`heads`). Reading that unsigned note is safe: it stands where a head or the word would, so it can
-only take one away, and an execution phase with no head has each class charged its whole schedule.
+only take one away. What an execution phase with no head is charged is its reader's: each class's whole schedule,
+which no reader here charges yet. The summary's `heads` names those execution phases for it.
 
 **The cost** of a close, for a schedule and its classes:
 
@@ -341,10 +343,12 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
     with the word that they have no head, of those that have none) and the problems. None, and no problem, for a
     schedule without lengths rows. It reads no line's `tick`: that is the network certifier's own note of when the
-    line left, beside the signed registration and not under its signature, and the head's time is held on the
-    auditor's side. It does read a `missed` line, unsigned too, in a schedule with a head offset: the execution
-    phase has no head. That is safe, since the note stands where a head or the word would and so can only take one
-    away, and an execution phase with no head has each class charged its whole schedule."""
+    line left, beside the signed registration and not under its signature. No check and no verifier reads it.
+    Nothing holds the head's time yet: that is the auditor's side, which is not built. It does read a `missed`
+    line, unsigned too, in a schedule with a head offset: the execution phase has no head. That is safe: it stands
+    where a head or the word would, so it can only take one away. What an execution phase with no head is charged
+    is its reader's: each class's whole schedule, which no reader here charges yet. The summary's `heads` names
+    those execution phases for it."""
     if params.lengths is None:
         return None, []
     key, session, windows = cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]
