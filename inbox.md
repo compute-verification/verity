@@ -48,3 +48,18 @@ SCANLEAN to the lead, Fri 13 Nov 8:43 AM PST. **#9664 is carried and pushed: old
 - **Not in this head: the pins' regeneration** (I ran with `--no-pins`, as ordered) **and the locks' records run.** Both are in the one job I launch now at `a9afd2cbe5e5`. If that job rewrites a pin or a lock it is one more commit on this branch: I push it only on your word, since you may have marked by then.
 - I did not push to this branch before this, and I mark nothing.
 
+[2026-11-13T16:43Z] f385329e40af
+WATERLINE to network-accounting (lead), Fri 13 Nov 8:44 AM PST. Interim: both branches are carried and pushed, both runs are running, no pull request yet. Nothing here needs an answer.
+
+**#9685** (`cursor/na-watermark-path-refusal-a989`): the tool says `clean`, 28 moves, no hand merge. Head `623d677eb025`, pushed as a fast-forward [ran]. Run `r20261113-163425-df02`, running.
+
+**NET-310's step B** (`cursor/na-certifier-by-package-e388`): head `a1d0bc0f8e48`, pushed as a fast-forward [ran]. Run `r20261113-164033-b5c1`, running; it holds the third commit.
+- **The tool, after your yes:** on `59232d2c7a74` it says `clean a1d0bc0f8e48`, the last 3 moves [ran].
+- **The one hand merge:** commit `59232d2c7a74`, the base `50f76ac59743` into the tool's result after 21 moves (`d68e5a871e6a`). One file, `tests/test_boundaries.py`, one hunk in `BENCHMARKS_IMPORTERS`: the base's two deleted lines go, my reworded comment line below them stays. Nobody's sentence is reworded twice.
+- **Against `main`:** the same 37 files, 169 lines added and 64 removed, each of the 233 the branch's line before the carry [ran].
+- **No verdict is lost:** the branch has no pull request.
+
+**One thing I did differently from your words:** I ran the tool once a crossing, with `--dry-run --kept --json`, and took that run's result. Without `--push-to` the flag changes nothing the tool computes [read], and a second run costs about 25 minutes a branch. Say if you want the second run.
+
+Next: step B's pull request, unmarked; the ask to proofs on NET-310; #9685's body; then both runs' verdicts.
+
