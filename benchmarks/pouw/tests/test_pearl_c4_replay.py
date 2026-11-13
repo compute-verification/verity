@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 # the replay is imported by name so that its forkserver workers find it
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "verifier" / "clear"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "verifier" / "tests"))
 import pearl_c4_vectors as V
 import replay as R
