@@ -931,6 +931,22 @@ def test_product_names_only_the_composites():
     assert named([R.INFERENCE_ONLY.id, "verity/pouw/v1", R.SAMPLED_PROOFS.id])[0] == 64
 
 
+def test_product_checks_only_under_the_auditors_pins(tmp_path):
+    """`product IDS check|serve` runs only under a pins file that reads (`Core.Composites.atPins`, the check
+    `Verity.Accepts` is about): without `--pins`, or under pins that don't read, it is refused (exit 64)."""
+    exe = D.build(ONSITE_PACKAGE, "product")
+    onsite = ids(R.ONSITE)
+
+    def rc(*args: str) -> int:
+        return subprocess.run([exe, onsite, *args], input="", capture_output=True, text=True).returncode
+
+    bad = tmp_path / "pins.json"
+    bad.write_text('{"challenger":null}')
+    assert rc("serve") == 64 and rc("check", "p", "c", "e") == 64
+    assert rc("--pins", str(bad), "serve") == 64
+    assert rc("--pins", str(NO_PINS), "serve") == 0
+
+
 @pytest.mark.slow
 def test_product_over_onsites_subprotocols_is_onsite(product_onsite_server, recorded):
     """`product IDS serve` over onsite's subprotocols disagrees with onsite's reference nowhere, and rejects with a
