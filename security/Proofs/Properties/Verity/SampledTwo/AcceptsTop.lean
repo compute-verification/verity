@@ -145,6 +145,32 @@ def PortsDistinctAt (C : CaseOf) : Prop :=
   ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it →
     (i.params.verifier.ports.map (·.1)).toList.Nodup ∧ (it.params.verifier.ports.map (·.1)).toList.Nodup
 
+/-- **Every accepted play's registrations list each port once** (`PortsDistinctAt`), at every case map: the run's input
+carries the form's boundary and interior parameters (`Steps.inputAt_ok`), which the form reads with
+`OneStage.paramsParsed`, and that refuses ports whose keys are not strictly increasing
+(`RunsAs.paramsOfJson_portsNodup`). -/
+theorem portsDistinctAt (C : CaseOf) : PortsDistinctAt C := by
+  intro o i it hA hi hit
+  obtain ⟨k, hk, p, cm, e, pub, prof, ⟨h1, h2, h3⟩, hacc⟩ := hA
+  obtain ⟨-, c₂, ξ₂, r, i', run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
+  obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  have hik : inputOfCase k = some i' := by
+    unfold inputOfCase
+    rw [h1, h2, h3]
+    simp only [bind, Except.bind, hin]
+    rfl
+  have hi' : inputOn C o = some i' := by
+    unfold inputOn
+    rw [hk]
+    exact hik
+  have hii : i = i' := Option.some.inj (hi.symm.trans hi')
+  obtain ⟨jp, -, hjp⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h1
+  have hpb : i.params = p.boundary := by rw [hii, hieq]; rfl
+  rw [hii, hieq] at hit
+  have hpi : it.params = p.interior := (congrArg Spot.Run.Interior.params (Option.some.inj hit)).symm
+  rw [hpb, hpi]
+  exact SpotFlock.RunsAs.paramsOfJson_portsNodup hjp
+
 /-- **An accepted play's records name their registrations' names**: its run's registration checks have no code
 (`checks_of_accepted`), and each names its registration's names (`RecordNames.recordOk_of_check`), which
 are the held copies' (`HeldOf.namesHeld_of`). -/

@@ -7,7 +7,7 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `work-rate:NUM/DEN`, which names its sampling design and work table over the program's population (`design`); the
   protocol refuses `bernoulli` at every `p`, `paramsOfJson` and `drawnFrom`, as the sampled audit's soundness statement
   doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`,
-  what its layout derives), `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's
+  what its layout derives, its keys strictly increasing, `PORTS_ORDER`), `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's
   `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
   `registered` (null, or `{parameter: words}`, the values it expects registered: empty or null expects a v1 record) and
@@ -226,9 +226,8 @@ private def poolValues (pool : Option Registration.Pool) (program : String) (log
       (supplied, withField outputs p.pin reuse, schemas)
     else (withField supplied p.pin (.arr #[.arr #[Json.mkObj [("bytes", .str p.genesis)]]]), outputs, schemas)
 
-/-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
-refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). -/
-def paramsParsed (j : Json) : V Params := do
+/-- The parameters as read, before `paramsParsed`'s refusal of the ports' order. -/
+def paramsRead (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let tiedGiven := (field? j "tied").isSome
   let keys := if v2 || tiedGiven then PARAM_KEYS.push "parameters" else PARAM_KEYS
@@ -394,6 +393,18 @@ def paramsParsed (j : Json) : V Params := do
       "take now, and the verifier names no window root: a value registered afresh each window under a fixed name takes " ++
       "the window's open root (window_root, from the challenger's signed open of the window), and a value held across " ++
       "windows is named in held (or pinned)")
+  pure p
+
+def PORTS_ORDER : String :=
+  "the ports' keys are not strictly increasing: the ports object is not one its canonical text reads back to"
+
+/-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
+refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). Refused unless the ports' keys are strictly
+increasing (`PORTS_ORDER`), as in every object `Json.parse` builds: proofs can't see inside `Json.parse`, and this is
+what tells them each port is named once. -/
+def paramsParsed (j : Json) : V Params := do
+  let p ← paramsRead j
+  if !increasing (p.verifier.ports.toList.map (·.1)) then throw PORTS_ORDER
   pure p
 
 /-- The parameters (`paramsParsed`), with every `bernoulli` sampling design refused, at any `p` (`Draw.bernoulli`): the
