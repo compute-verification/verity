@@ -12,7 +12,7 @@ from training_slowdown import config, run, starts
 from training_slowdown.codecs import ScaledQuant, SparseTernary
 from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
-from training_slowdown.routes import ema, grow, qat, subset
+from training_slowdown.routes import ema, grow, qat, subset, topcode
 from training_slowdown.routes._optimizers import newton_schulz
 from training_slowdown.traced import trace_step
 
@@ -170,6 +170,39 @@ def test_an_origin_may_stack_its_copies_above_the_starts_blocks():
         assert torch.equal(model(rows), theta(rows))
     assert torch.equal(model.blocks[blocks].wq.weight, theta.blocks[0].wq.weight)
     assert not model.blocks[blocks].wo.weight.any() and not model.blocks[blocks + n - 1].w_down.weight.any()
+
+
+def test_topcodes_new_blocks_stack_copies_above_the_starts_with_their_output_projections_zero():
+    """8 blocks grown by 10 new top blocks: new block i, at 8 + i, copies the start's block ⌊8i/10⌋ with `wo` and
+    `w_down` zero, and the start's blocks and every tensor outside the blocks keep their own. No new block is refused
+    by name."""
+    dials = topcode.DIALS | {"grow": 10}
+    shape = SHAPE | {"n_layer": 8}
+    assert topcode.sources(shape, dials) == [0, 0, 1, 2, 3, 4, 4, 5, 6, 7]
+    origin = topcode.origin(shape, dials)
+    assert sorted({int(k.split(".")[1]) for k in origin}) == list(range(8, 18))
+    assert {k for k, v in origin.items() if v is None} == {f"blocks.{j}.{t}" for j in range(8, 18)
+                                                            for t in topcode.ZEROED}
+    assert origin["blocks.8.wq.weight"] == "blocks.0.wq.weight" and origin["blocks.17.w_up.weight"] == (
+        "blocks.7.w_up.weight") and origin["blocks.13.attn_norm"] == "blocks.4.attn_norm"
+    with pytest.raises(ValueError, match="grow is the new top blocks, at least 1"):
+        topcode.plan(topcode.DIALS)
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16])
+def test_topcodes_grown_model_gives_the_starts_logits_bit_for_bit_at_its_first_step(dtype):
+    """Each new block adds an exact zero to the residual stream, its two output projections being zero, so the grown
+    model's start, built from θ by `origin` as the harness builds it, gives θ's logits bit for bit, in float32 and
+    under bf16 autocast, at one new block and at more new blocks than the start has."""
+    torch.manual_seed(0)
+    theta = LM.of(SHAPE)
+    rows = torch.randint(0, SHAPE["vocab"], (2, 9), generator=torch.Generator().manual_seed(1))
+    for n in (1, 2 * SHAPE["n_layer"] + 1):
+        dials = topcode.DIALS | {"grow": n}
+        model = LM.of(SHAPE | {"n_layer": SHAPE["n_layer"] + n})
+        model.load_state_dict(run.start_state(theta.state_dict(), model.state_dict(), topcode.origin(SHAPE, dials)))
+        with torch.no_grad(), torch.autocast("cpu", dtype=torch.bfloat16, enabled=dtype == torch.bfloat16):
+            assert torch.equal(model(rows), theta(rows)), n
 
 
 def test_muon_takes_the_matrices_and_adamw_the_gains():

@@ -1,0 +1,23 @@
+# The start grown from 8 to 18 blocks by ten new top blocks, new block i a copy of the start's block ⌊8i/10⌋ with its
+# output projections zeroed, so the grown model is the start's function at its first step; every block and the final
+# gain trained, Muon on the blocks' matrices and AdamW on the gains, in three forwards of 64 rows a step, while the
+# final norm's input crosses as a 4-bit code each way; the rate rises over 40 steps and falls to 0 over the last
+# quarter. The output is the grown model, scored without the code; E is every tensor of it. The steps and the dials
+# are the run of record's (`of_record.toml`).
+start = "m-t20"
+route = "topcode"
+target = { gain = 2.0 }
+budget = { steps = 5389, batch = 192 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+grow = 10
+forward_bits = 4
+backward_bits = 4
+lr = 3e-3
+norm_lr = 3e-3
+weight_decay = 0.05
+warmup = 40
+decay = 0.25
+micro_batches = 3
