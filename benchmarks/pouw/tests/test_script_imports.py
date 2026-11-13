@@ -16,7 +16,7 @@ TESTS = Path(__file__).resolve().parent
 #: (directory, name): one script of the directory may still import NAME by name beside its own ``NAME.py``, though under
 #: the suite NAME is another directory's. Like a lint's list, an entry may stand before its script is in the tree, and
 #: it goes in the commit that makes the script load the file
-EXCUSED = frozenset({("pearl_c_sm90", "run")})
+EXCUSED: frozenset[tuple[str, str]] = frozenset()
 
 
 def imported(path: Path) -> set[str]:

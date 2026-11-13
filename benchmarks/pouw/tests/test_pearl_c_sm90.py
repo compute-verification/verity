@@ -24,6 +24,7 @@ from verity.protocols.accounting.pouw.verifier.audit import weights_root
 from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
 HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
+POUW = Path(__file__).resolve().parents[1]
 SM120_DIR = HERE.parent / "pearl_c_sm120"
 
 
@@ -35,7 +36,7 @@ def load(name: str, path: Path):
     return mod
 
 
-F = load("pearl_c_sm90_fixture", HERE / "fixture.py")
+F = load("pearl_c_sm90_fixture", POUW / "pearl_c_sm90" / "fixture.py")
 S = load("pearl_c_sm90_sass_gate", HERE / "sass_gate.py")
 RUN = load("pearl_c_sm90_run", HERE / "run.py")
 
@@ -194,7 +195,7 @@ def test_bf16_rows_are_off_unless_pearlc_bf16_rows_is_1(monkeypatch):
         else:
             monkeypatch.setenv("PEARLC_BF16_ROWS", raw)
         assert load("pearl_c_sm90_run_bf16_rows", HERE / "run.py").BF16_ROWS is on
-        assert of(HERE.parent / "settings.py").PEARLC_BF16_ROWS is on
+        assert of(POUW / "settings.py").PEARLC_BF16_ROWS is on
     sys.modules.pop("pearl_c_sm90_run_bf16_rows")
 
 
@@ -229,7 +230,7 @@ def test_the_resident_debit_body_is_words_launches_with_nothing_copied(monkeypat
     monkeypatch.setattr(sys, "path", list(sys.path))
     monkeypatch.setitem(sys.modules, "run", RUN)
     monkeypatch.setattr(RUN, "Dev", Dev)
-    deb = load("pearl_c_sm90_debit", HERE / "debit.py")
+    deb = load("pearl_c_sm90_debit", POUW / "pearl_c_sm90" / "debit.py")
     rng = np.random.default_rng(7)
     a, b, k = deb.codes(rng, 150, 256), deb.codes(rng, 40, 256), 256
     budget = 12 * 64 * (k // deb.WINDOW) * deb.BLOCK_ROWS
@@ -374,7 +375,7 @@ def test_the_whole_check_refuses_a_capture_forking_a_tree_and_a_scales_where_a_c
     races, so `e2e.whole_check` fails it before capturing anything (the stand-in run has nothing to capture with), naming
     the race and the setting that serves without it (`e2e.BF16_RACE`).  Without either option, hashing, the mark,
     BF16_ROWS or a kernel that has BF16 rows at all, nothing is refused."""
-    E2E = load("pearl_c_vllm_e2e_bf16_race", HERE.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e_bf16_race", POUW / "pearl_c_vllm" / "e2e.py")
     marked = SimpleNamespace(has=lambda name: name == RUN.BF16_ROWS_MARK)
     kernel = SimpleNamespace(run=RUN, dev=marked)
 
@@ -431,7 +432,7 @@ def test_a_programmatic_launch_waits_at_its_entry():
     assert RUN.PDL_KERNELS - set(form_kernels()) == {"gemm_words_win_d", "pa_w", "gemm_pearlc_d"}
     assert RUN.PDL_ENTRY_KERNELS == {"widen_a"} | {f"pd_commit_{v}" for v in (*RUN.PD_SERVED, *RUN.PD_STAMPED)}
     assert f'void {RUN.PDL_ENTRY_MARK}() {{}}' in SOURCE
-    assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/hash_decode.cuh"')
+    assert SOURCE.index("#define PD_PDL") < SOURCE.index('#include "../pearl_c_sm120/hash_decode.cuh"')
     pd = (SM120_DIR / "hash_decode.cuh").read_text()
     entry = pd[pd.index("DEV void pd_commit_t("):]
     entry = entry[:entry.index("#endif")]

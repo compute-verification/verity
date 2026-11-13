@@ -126,17 +126,11 @@ benchmarks = [
     "benchmarks/one_stage/{pyproject.toml,README.md}",
     # the CPU reference of the int8 attention's gate, which vLLM's int8 attention tests hold the served kernels to
     "benchmarks/pouw/edited_gemm/{fattn_ref.py,pyproject.toml}",
-    # Pearl-C's kernels, which the vLLM integration serves through: `verity_vllm.protocols.pouw.pearl_c.kernel` loads
-    # `run.py` and the cubin from the directory its `kernel` setting names (a path the run gives it, which no import
-    # shows: `tests/test_public_boundary.py` holds it), and `pearl_c.grouped` the `grouped.py` beside sm_90a's `run.py`.
-    # With them, what builds each cubin: `build.sh`, the sources it compiles and the gate it runs on the SASS, and
-    # `ship.sh` and `fixture.py`, the check the cubin is shipped with
-    "benchmarks/pouw/pearl_c_sm120/{run.py,fixture.py,build.sh,ship.sh,sass_gate.py}",
-    "benchmarks/pouw/pearl_c_sm120/{pearl_c_sm120.cu,hash_fast.cuh,hash_decode.cuh,mainloop_sm120.cuh}",
-    "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,ship.sh,sass_gate.py}",
-    "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h,debit_sm90.cu}",
-    # the -h3 hashing both cubins include, and the wide rows' that sm_90a's does
-    "benchmarks/pouw/pearl_c/{hash_h3.cuh,hash_wide.cuh,sha512.cuh}",
+    # Pearl-C's ship scripts and checks: the kernels the vLLM integration serves through are `pouw`'s
+    # (`verity/protocols/accounting/pouw/prover/kernels/`, which `tests/test_public_boundary.py` holds public), and with
+    # them `ship.sh` and `fixture.py`, the check each cubin is shipped with
+    "benchmarks/pouw/pearl_c_sm120/{fixture.py,ship.sh}",
+    "benchmarks/pouw/pearl_c_sm90/{fixture.py,ship.sh}",
     # the PoUW harness's SASS gate, whose `mma_gate` each build's gate runs, and the pins it reads
     "benchmarks/pouw/harness/{sass_gate.py,sass_pins.json}",
 ]
@@ -146,6 +140,14 @@ standalone = [
 ]
 
 [private]
+# of Pearl-C's kernels, what no public file needs: the READMEs, the CPU stand-ins for the driver, the host builds of the
+# hashing for byte tests and the SIMT twin; and the source of the SASS gate's numeric pin
+pearl_c_kernels = [
+    "verity/protocols/accounting/pouw/prover/kernels/pearl_c/{README.md,fake_cuda.c,hash_host.cpp,host_threads.h,simt_twin.py}",
+    "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/{README.md,fake_tma.c,hash_decode_host.cpp}",
+    "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/{README.md,hash_prefill_host.cpp}",
+    "verity/protocols/accounting/pouw/prover/ieee_pin.cu",
+]
 # PoUW's tests and difftest vectors that run the clear audit (`verity/protocols/accounting/pouw/clear`, a reference tool), H1's lanes
 # (`benchmarks/pouw/h1_lanes`) or the network certifier
 pouw_tests = [

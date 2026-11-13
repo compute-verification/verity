@@ -21,7 +21,8 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "verity", "protocols", "accounting",
+                                "pouw", "prover", "kernels", "pearl_c_sm90"))
 import run
 
 WINDOW, BLOCK_ROWS, BLOCK_COLS = 128, 64, 32

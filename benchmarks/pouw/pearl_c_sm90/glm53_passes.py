@@ -7,7 +7,7 @@ the default, one TP8 rank, or ``llama32_1b``'s, one card): the gate and three re
   python benchmarks/pouw/pearl_c_sm90/glm53_passes.py verify --out DIR [--jobs J] [--fast] [--draws T]  # on CPUs, after
   python benchmarks/pouw/pearl_c_sm90/glm53_passes.py full --out DIR [--jobs J] [--without-y] [--passes P ...]  # on CPUs, after
 
-``capture`` installs `pouw_pearl_c_device.PearlCDeviceRun` (``pearl-c-h100-v1-h3`` on this directory's kernels, the serial
+``capture`` installs `pouw_pearl_c_device.PearlCDeviceRun` (``pearl-c-h100-v1-h3`` on the kernel's, the serial
 schedule or ``--schedule``, its decode calls replayed as CUDA graphs with ``--graphs``) on synthetic BF16 weights, one a distinct in-domain (n, k), under an epoch whose salt coin a challenger opened after
 the weights' root (its coin commitment is published as ``coins.json``, where `verify_run` reads it), then:
 
@@ -46,6 +46,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+KERNEL = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 VLLM_DIR = HERE.parent / "pearl_c_vllm"
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(VLLM_DIR))
@@ -72,7 +73,7 @@ def capture(a) -> int:
               else sorted(importlib.import_module(a.model).in_domain(a.scheme)))
     gen = torch.Generator(device=dev).manual_seed(20261023)
     weights = {w: (0.05 * torch.randn(n, k, device=dev, generator=gen)).to(torch.bfloat16) for w, (n, k) in enumerate(shapes)}
-    kernel = PPD.Kernel.load(str(HERE), a.cubin)
+    kernel = PPD.Kernel.load(str(KERNEL), a.cubin)
     salt_key = PPD.new_salt_key(a.scheme)
     roots = PPD.weight_roots(kernel, weights, a.scheme, salt_key=salt_key)
     coins = BA._Coins(EPOCH)
@@ -301,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("mode", choices=("capture", "volunteer", "verify", "full"))
     p.add_argument("--out", required=True)
     p.add_argument("--scheme", default=glm53.SCHEME)
-    p.add_argument("--cubin", help="the build's cubin (default this directory's)")
+    p.add_argument("--cubin", help="the build's cubin (default the kernel's)")
     p.add_argument("--model", choices=("glm53", "llama32_1b"), default="glm53", help="capture: whose in-domain linears")
     p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear of --model)")
     p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.protocols.accounting.pouw.verifier.serving.SCHEDULES)")
