@@ -209,7 +209,9 @@ def pool_doc(pool, slots):
     # slot.py reads the machine's memory and every live reservation's process tree for each slot with mem=; once is the same answer
     m.memory_gb, m.reserved_gb = once(m.memory_gb), once(m.reserved_gb)
     d = m.status_doc(datetime.now(timezone.utc))
-    d["free_gb"] = m.memory_gb() - m.reserved_gb(priority=False)
+    # as the pool's own slots count the live reservations: whole, or by their peaks= (slot.py's `lane_peaks`)
+    crowd = m.lane_peaks(d.get("slots") or []) if hasattr(m, "lane_peaks") else {}
+    d["free_gb"] = m.memory_gb() - m.reserved_gb(priority=False, **crowd)
     return d
 
 

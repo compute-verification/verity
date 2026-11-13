@@ -6,7 +6,7 @@ import tomllib
 from pathlib import Path
 
 SPECS = Path(__file__).resolve().parents[1]
-SCHEMAS = ("verity-bench/vllm-spec/v0", "verity-bench/vllm-sweep/v0")
+SCHEMAS = ("verity-bench/vllm-spec/v0", "verity-bench/vllm-sweep/v0", "verity-bench/steady-spec/v0")
 
 
 def test_the_readme_has_a_line_for_every_spec_and_sweep() -> None:

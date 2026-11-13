@@ -14,9 +14,10 @@ width of least leakage-weighted proving cost (`width_pick`, the row's own width 
 with a slot that has none is a gap, with its finest option's reason. A row whose Definition has no gate (a gather) or no
 input (a constant) is no proof block.
 
-Per proof block: its output bits (its returned fields') and size class, its input bits, its estimated ANDs (an upper
-bound, `m1_families.estimate`), its served MACs and the bytes of the rows it opens (a row per parameter and per returned
-field). Beside them, every row's own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
+Per proof block: its output bits (its returned fields') and size class, its input bits, its estimated ANDs (its leaves'
+ANDs lowered alone, table reads counted apart: not a statement's ``ands`` with its reads inline, as `m1_families` says),
+its served MACs and the bytes of the rows it opens (a row per parameter and per returned field). Beside them, every row's
+own estimate unsplit (the circuit's ANDs and MACs, whatever the cut).
 
     python benchmarks/one_stage/block_census.py --sized sized-rank0.json [sized-rank1.json ...] --out DIR
 """

@@ -36,6 +36,8 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
     assert DriveFlags.parse("restack_jobs = 1\n").restack_jobs == 1
     assert DriveFlags.parse('warn_steps = ["ratchet-gate"]\n').warn_steps == ("ratchet-gate",)
+    assert DriveFlags.parse('lowrisk_excludes = ["*.lean", "verity/", "verity/__init__.py"]\n').lowrisk_excludes == (
+        "*.lean", "verity/", "verity/__init__.py")
     assert [DriveFlags.parse(f'after_landing_shards = "{v}"\n').after_landing_shards for v in ("auto", "auto:4")] == ["auto", "auto:4"]
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
@@ -72,6 +74,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('lowrisk_excludes = ["/verity/core/"]', "lowrisk_excludes = ['/verity/core/']: a non-empty list"),
                       ('lowrisk_excludes = ["../x/"]', "lowrisk_excludes = ['../x/']: a non-empty list"),
                       ('lowrisk_excludes = ["verity/*/x.py"]', "lowrisk_excludes = ['verity/*/x.py']: a non-empty list"),
+                      ('lowrisk_excludes = ["x/../y.py"]', "lowrisk_excludes = ['x/../y.py']: a non-empty list"),
                       ("bottom_ring = []", "bottom_ring = []: a non-empty list of handles, each `@` and its lower-case name, "
                                            "as [\"@ci\"]"),
                       ('bottom_ring = "@ci"', "bottom_ring = '@ci': a non-empty list of handles"),
@@ -167,13 +170,14 @@ def test_land_into_takes_checked_or_main_and_only_drives_app_pushes_checked(tmp_
 
 
 def test_the_low_risk_lane_excludes_what_runs_with_the_control_pods_or_every_agents_credentials():
-    """A change to infra, the research tool, the agent guard and its hooks, or the environment runs on the control pod or on
-    every agent once it is on main, so it lands only on a review, never on a ready mark alone."""
+    """A change to infra, the research tool, the move scripts and maps (which the loop runs, and certifies a move against), the
+    agent guard and its hooks, or the environment runs on the control pod or on every agent once it is on main, so it lands
+    only on a review, never on a ready mark alone."""
     import tomllib
 
     root = Path(__file__).resolve().parents[3]
     excludes = tomllib.loads((root / "tools/verity/check/drive.toml").read_text())["lowrisk_excludes"]
-    for path in ("infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"):
+    for path in ("infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"):
         assert path in excludes, f"drive.toml's lowrisk_excludes lacks {path}"
 
 
@@ -202,3 +206,13 @@ def test_the_class_is_no_file_drive_toml_excludes(files, low):
 
 def test_no_excludes_is_no_low_risk_change():
     assert not lowrisk(["README.md"], ())
+
+
+def test_an_entry_with_a_slash_before_its_end_keeps_that_one_file_off():
+    """A package's `__init__.py` runs on every import below it, so it is kept off by its path, without the rest of its
+    directory; such an entry names no other file of that name, and no path it only begins or ends."""
+    excludes = ("verity/protocols/__init__.py", "verity/hardware/record.py")
+    for f in excludes:
+        assert not lowrisk(["README.md", f], excludes), f
+    assert lowrisk(["verity/protocols/pouw/__init__.py", "verity/protocols/reporting.py", "adapters/vllm/record.py",
+                    "x/verity/hardware/record.py", "verity/hardware/record.pyc"], excludes)

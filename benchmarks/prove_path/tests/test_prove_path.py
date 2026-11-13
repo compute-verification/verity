@@ -881,6 +881,53 @@ def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_exec
     assert PP.phi_of_serve({**serve, "execution": "eager"}).execution == "eager"
 
 
+#: a served engine's record as ``serve.json`` holds it (`LLM.engine_record`'s): an engine serving below its model's length
+ENGINE = {"execution": "bi-eager", "env_flags": {},
+          "engine_kwargs": {"max_model_len": 512, "max_num_batched_tokens": 512, "max_num_seqs": 8, "enable_prefix_caching": False,
+                            "tensor_parallel_size": 1}}
+
+
+def _advice_compile() -> Any:
+    """vllm's ``tools/advice_compile.py``, which writes a served window's row dir's Builds, loaded by its file."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("advice_compile",
+                                                  HERE.parents[2] / "adapters" / "vllm" / "tools" / "advice_compile.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("label", ["serve.json's", "its engine record's"])
+def test_a_served_engines_phi_is_the_one_its_row_dirs_builds_are_compiled_under(tmp_path, label):
+    """`advice_compile` writes a served window's row dir's Builds and I2 reads each by the digest of the Program it compiles,
+    so the two read one φ of one ``serve.json`` (`predict.phi.served_phi`), its engine's args and world included, wherever
+    it states its execution: a request Program's length rule reads the engine's ``max_model_len``, so under a φ stating
+    none I2 compiles, for an engine serving below its model's length, a Program no Build holds. A launch that left the
+    length to vLLM states the length its engine fitted on both sides. The bodies the two compile are one too."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+
+    AC = _advice_compile()
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
+             "target": TARGET, "engine": ENGINE, **({"execution": "bi-eager"} if label == "serve.json's" else {})}
+    (tmp_path / "serve.json").write_text(json.dumps(serve))
+    (tmp_path / "advice" / "w0").mkdir(parents=True)
+    (tmp_path / "advice" / "w0" / "registration.json").write_text(json.dumps({"window": 0}))
+    reqs = [_serve_request(0, list(range(5)), 3, [0], "r0"), _serve_request(1, list(range(3)), 2, [0], "r1")]
+    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(q) + "\n" for q in reqs))
+    _advice, meta, bodies, _reg = AC.served_inputs(tmp_path, 0)
+    built = AC.phi_of(meta, json.loads(pinned_hf_config(serve["model"], serve["revision"]).read_text()), 0)
+    phi = PP.phi_of_serve(serve)
+    assert phi.to_json() == built.to_json()
+    assert phi.engine == {"max_model_len": 512, "max_num_batched_tokens": 512, "max_num_seqs": 8, "enable_prefix_caching": False,
+                          "env": {}}
+    assert (phi.tp, phi.execution) == ({"world": 1, "rank": 0}, "bi-eager")
+    assert PP.serve_ingress(PP.serve_requests(tmp_path, 0)) == bodies
+    fitted = {**ENGINE, "effective": {"max_model_len": 4032}, "engine_kwargs": {**ENGINE["engine_kwargs"], "max_model_len": -1}}
+    assert PP.phi_of_serve({**serve, "engine": fitted}).engine == {**phi.engine, "max_model_len": 4032}
+    assert AC.phi_of({**meta, "engine_record": fitted}, phi.hf_config, 0).engine == {**phi.engine, "max_model_len": 4032}
+
+
 def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
     """A pinned served model's φ reads the pin's config.json of record (`pinned_hf_config`, advice_compile's too), so an int8
     serve compiles on both sides with its quantization config beside the target's int8 scope, never the bf16 fixture's."""
@@ -899,8 +946,8 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
 
 def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):
     """The served I2 is named as the server names its compiler, and its digest is a single-GPU window's I2's (one
-    `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ, the default seed, ℓ and the served
-    model name move it as they move a single-GPU one's."""
+    `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ (the engine's args among its
+    fields), the default seed, ℓ and the served model name move it as they move a single-GPU one's."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
     reg = PP.registered_of_serve(serve, None, None, PP.CAP_BITS)
     one = PP.I2Compiler(reg, {}, "", name=SERVER[0], code=SERVER[1])
@@ -912,6 +959,8 @@ def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(mon
         ({**serve, "model": "m/y"}, PP.CAP_BITS), ({**serve, "revision": "s"}, PP.CAP_BITS),
         ({**serve, "execution": "eager"}, PP.CAP_BITS), ({**serve, "target": {**TARGET, "device_name": "other"}}, PP.CAP_BITS),
         (serve, 2 * PP.CAP_BITS))] + [replace(reg, default_seed=DEFAULT_SEED + 1), replace(reg, served_model="llama")]
+    others += [replace(reg, phi=PP.phi_of_serve({**serve, "engine": engine})) for engine in (
+        ENGINE, {**ENGINE, "engine_kwargs": {**ENGINE["engine_kwargs"], "max_model_len": 1024}})]
     digests = {PP.I2Compiler(r, {}, "", name=SERVER[0], code=SERVER[1]).digest for r in others}
     assert len(digests) == len(others) and one.digest not in digests
 
@@ -921,13 +970,14 @@ def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(mon
 SERVE_EDITS = {"model": {"model": "verity-int8/Llama-3.2-1B-INT8"}, "revision": {"revision": "0" * 40},
                "default_seed": {"default_seed": DEFAULT_SEED + 1}, "execution": {"execution": "eager"},
                "engine-execution": {"engine": {"execution": "eager", "pin": {"world": 1}}},
+               "engine-args": {"engine": {"execution": "bi-eager", "pin": {"world": 1}, "engine_kwargs": {"max_model_len": 512}}},
                "target": {"target": {**TARGET, "device_name": "other-gpu"}}, "hf_config": None}
 
 
 @pytest.mark.parametrize("field", list(SERVE_EDITS))
 def test_a_served_window_under_another_serve_json_than_its_advice_was_registered_under_is_refused(tmp_path, monkeypatch, field):
     """The served compiler's digest covers every field the compile reads of ``serve.json`` (`I2Compiler.digest`), so a window
-    whose ``serve.json`` says another model, revision, execution or target than the one `verity-vllm advice` registered its
+    whose ``serve.json`` says another model, revision, execution, target or engine args than the one `verity-vllm advice` registered its
     advice under (or whose verifier compiles under another config) is refused by name before any commit (`serve_check`'s
     ``compiler``, and ``advice``: its advice tree's domain is the registered compiler), and the records audit's compiler
     table (`compiler_doc`, ``prove_path.py compiler``) holds another digest; one recording another default seed is refused
