@@ -73,11 +73,11 @@ theorem serverBlocks_small {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed
     (Nat.cast_le.2 (stateIn_le_state A _ _ G)).trans (hR i k hk)
   have h2 : ((linkCapacity ends β (X i) * (min (((k : ℕ) + 1) * ω) t - k * ω) : ℕ) : ℝ) ≤ r * ω := by
     rw [Nat.cast_mul]
-    exact mul_le_mul (hr i) (Nat.cast_le.2 window_le) (Nat.cast_nonneg _) ((Nat.cast_nonneg _).trans (hr i))
+    exact mul_le_mul (hr i) (Nat.cast_le.2 serverBlock_le) (Nat.cast_nonneg _) ((Nat.cast_nonneg _).trans (hr i))
   refine ⟨hsize.trans ?_, (Nat.cast_le.2 hreads).trans ?_⟩
   · show Φ (X i) * (min (((k : ℕ) + 1) * ω) t - min ((k : ℕ) * ω) t) ≤ Γ
     rw [e]
-    exact (Nat.mul_le_mul_left _ window_le).trans (hΓ i)
+    exact (Nat.mul_le_mul_left _ serverBlock_le).trans (hΓ i)
   · show ((A.stateIn (X i) (min ((k : ℕ) * ω) t) G +
         linkCapacity ends β (X i) * (min (((k : ℕ) + 1) * ω) t - min ((k : ℕ) * ω) t) : ℕ) : ℝ) ≤ R + r * ω
     rw [e, Nat.cast_add]
