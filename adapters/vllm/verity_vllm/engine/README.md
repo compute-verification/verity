@@ -14,7 +14,8 @@ what it holds.
   executes (`build`), vLLM's own switches in the process environment (`env`), the engine's profile and run facts
   (`engine_profile`, `run_facts`), its served switches (`served`), a request's own id through the engine
   (`engine_driver`), the one owner of runtime patches (`hooks`), the int8 kernels and the exact-int8 parts of every
-  process that builds the model (`int8_exact`, `int8_ops`, `int8_attention`, `int8_experts`, `int8_ranks`), sparse
+  process that builds the model (`int8_exact`, `int8_ops`, `int8_attention`, `int8_experts`, `int8_ranks`), the
+  exact int8 linear's kernels on CUDA and its methods inside vLLM (`int8_fused`, `int8_vllm`), sparse
   MLA at one split and the top-p split at its registered count (`sparse_mla`, `topp_pin`), a served engine class's
   admission (`class_admission`), the collectives' sites and the fused norm as one collective
   (`collectives.collective_sites`, `collectives.fused_norm`), the static serving schedule (`static_schedule`), the
@@ -25,10 +26,9 @@ what it holds.
   models, cards and transports (`profiles.cases`, `profiles.coverage_roles`, `profiles.dense_generic`,
   `profiles.devices`, `profiles.engine_classes`, `profiles.family_facts`, `profiles.transport`,
   `profiles.admission_calibration`). Each of these lists in `__all__` the names that other packages, the
-  benchmarks and the command line read from it. Three more modules that other packages or the benchmarks read
-  state no `__all__` yet: `int8_fused`, `int8_vllm` and `profiles.layer_classes`; and
-  `observe.fold.profiles.generic` reads one private name that no `__all__` lists,
-  `profiles.dense_generic._sha256`.
+  benchmarks and the command line read from it. One more module that other packages read states no `__all__`
+  yet, `profiles.layer_classes`; and `observe.fold.profiles.generic` reads one private name that no `__all__`
+  lists, `profiles.dense_generic._sha256`.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `properties`, `check`
   and `commit` packages, its `llm` and `glue`; and the benchmarks that build, serve or time the engine
   (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`, `benchmarks/vllm_encoded`
