@@ -1,0 +1,5 @@
+#!/bin/bash
+# brief.sh RUN...: one or two lines a run: its slot, its state, the packages its records run has done, its exit lines
+for r in "$@"; do timeout 100 research fetch $r --all >/dev/null 2>&1; d=~/.research/runs/$r
+  echo "== $r slot=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('state'), d.get('slot'))" $d/slot.json 2>/dev/null) status=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('state'), d.get('rc'))" $d/status.json 2>/dev/null) | lean: $(rg -o "lean-records: \S+ check.py exit \d+ in \d+ s" $d/out/lean.log 2>/dev/null | sed 's|lean-records: ||; s|check.py ||' | tr '\n' ';') $(rg -o "LEAN_EXIT \d+" $d/out/lean.log 2>/dev/null | tail -1) | suites: passed $(rg -c "^passed " $d/out/suites.log 2>/dev/null) cached $(rg -c "^cached " $d/out/suites.log 2>/dev/null) not-passed [$(rg "^[a-zA-Z-]+  +\S" $d/out/suites.log 2>/dev/null | rg -v "^(passed|cached) " | cut -c1-90 | tr '\n' ';')] $(rg -o "SUITES_EXIT \d+" $d/out/suites.log 2>/dev/null | tail -1) | $(rg -o "SUITES_EXIT \d+ LEAN_EXIT \d+" $d/stdout.log 2>/dev/null | tail -1)"
+done
