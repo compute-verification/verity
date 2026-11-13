@@ -1923,7 +1923,7 @@ def test_a_descriptor_is_its_walk_of_every_body_node_however_often_a_body_calls_
     static, and two specializations that share a callee."""
     from verity.circuits import Array, bind
     from verity.circuits.defs import CompositeDefinition
-    from verity.definitions.ops.scalar import BIT, F32, F32Eq
+    from verity.circuits.ops.scalar import BIT, F32, F32Eq
     from verity.circuits.refs import tuple_of
     from verity.circuits.types import Tuple
 

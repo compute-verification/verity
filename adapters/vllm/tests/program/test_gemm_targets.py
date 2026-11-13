@@ -9,8 +9,8 @@ import types
 
 import pytest
 from verity.definitions.registry import b1
-from verity.definitions.silicon.instructions import INSTRUCTIONS
-from verity.definitions.silicon.models import (
+from verity.circuits.silicon.instructions import INSTRUCTIONS
+from verity.circuits.silicon.models import (
     HOPPER_BF16_M16N8K16,
     HOPPER_BF16_WGMMA_K16,
 )

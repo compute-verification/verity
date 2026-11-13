@@ -33,7 +33,7 @@ from verity.definitions.registry import boolean_dsv4_indexer as BI
 from verity.definitions.registry import dsv4_compressor as C
 from verity.definitions.registry import dsv4_indexer as I
 from verity.definitions.registry import flashmla as F
-from verity.definitions.silicon import fp as FP
+from verity.circuits.silicon import fp as FP
 
 U = np.uint32
 S = C.DSV4_COMPRESSOR
