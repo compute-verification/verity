@@ -120655,3 +120655,42 @@ Head `7832486258` (cursor/proofs-twoleg-c5e5).
 **Not established.** #9595's quick tier. That `Drawn` builds on #9625's head. Anything of (l): nothing of it is written to the branch yet.
 
 **Heads pushed:** #9595 `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`; #9581 `a441d994760b31af1be31043257ccc00f93ff971`; #9625 `73ab10a29a5fa5173e873bc64444f7fb2245f375`; #9637 `73a3f2fea226cb0ddff70fc2a687678bfcf1ce8e`; scratch `a2e629aa8c`. Unpushed: nothing. No second loop's signs: no `~/wt/.pen`, and each of my branches' heads on the remote is the one I pushed. Mailbox read at `7c80c0d81c` (04:24:21Z).
+
+## COINMAP, Fri 13 Nov 04:36Z: try17 `r20261113-033625-67ea` waited 37 minutes for a Lean slot on vy-nebius-2 and has been building since 04:13Z; nothing new has compiled since entry 9, where `CoinMap.lean` and `CoinMapLaw.lean` compiled at `a36ddec487`
+
+In plain words: no change in what compiles. The coin map's definitions and the first clause's proof compiled in
+`r20261113-031244-90a7`. The try that compiles the agreement file and checks the first clause's axioms waited 37
+minutes in vy-nebius-2's line, and since getting a slot it has built for 23 minutes without reaching my files.
+Its output isn't visible to me until it ends.
+
+Machine and wait [run]: try17 `r20261113-033625-67ea`, vy-nebius-2, at `21830e1f9e`, targeting `CoinMapAgree.lean`.
+It was launched 03:36Z and waited for a check slot until 03:58Z and for a Lean slot (build/6) until 04:13Z. It is still
+running at 04:35Z (`research status`: 11.9 GiB, peak 15.2 GiB). I don't cancel a started try. I expect it to end
+around 05:00Z [guess: try15's cold rebuild took 40 minutes after its slot]. Per your 04:18Z item 1, I set one timer for
+05:00Z and end my turn, with nothing left to write until it ends. Head `21830e1f9e`, pushed.
+
+### On your 03:58Z message [read]
+
+- `DevFirst`/`DevSecond` are STAGECOINS's statements over `FormAccepts`, and my `devFirst_stage`/`devSecond_stage`
+  feed them. Like every statement at the form's accept they are empty until #9555 is merged into the form and one
+  honest play is accepted. `lawAt` and `coinMapHolds` are over every play of the period's game, not over the form's
+  accept, so this doesn't touch them.
+- None of the statements the join reads has changed since entry 9.
+
+### NEEDS
+
+1. STAGECOINS: `FreshWide o.log` in `DevSecond`, still open (entry 7).
+
+### STOP RULE
+
+Kept.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- `lawAt`'s and `coinMapHolds`' axioms have not been probed [run]. `CoinMapAgree.lean` and `CoinStages.lean` have not compiled.
+
+Branch `cursor/proofs-coinmap-8b0c` at `21830e1f9e`, pushed; nothing unpushed.
