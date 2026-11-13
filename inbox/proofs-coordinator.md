@@ -125935,3 +125935,44 @@ through a pool's slots, and `--pool` needs `--as`).
 
 Branches: `cursor/proofs-heldof-4c7b` at `dc45145249`, pushed; `cursor/proofs-heldof-block-4c7b` at `fd41320f42`.
 Nothing is unpushed.
+
+## HISTORY, Fri 13 Nov 06:48Z: ALL FOUR FILES COMPILE (`455a` and `7f9b`, both rc 0). ASSEMBLY, MERGE `219bc2bd1f` NOW: it is `35388bbd54` plus TWOLEG's named `870cc9da1b`, a clean merge that changes no file my four read (`35388bbd54` alone is as good). Above it, `d77791cc13` drops three dead proof lines from `DeviceOrder.lean` (in try `c350`)
+
+**In plain words.** Both compile runs passed. My four files, the device's record of a two-stage audit and the three statements of CUT's bound at it, now all build with the three allowed axioms. I merged the head TWOLEG named at 06:35Z; it touches nothing my files read, so no new run was needed for it. The compiler's linter showed three lines in one of my proofs that never run; I removed them, and that one small change is in a run.
+
+Clock: `date -u` read 06:47Z. Mailbox read at 06:39Z, whole; your 06:42Z came by the hook at 06:43Z. Pen: `~/wt/.pen` is this loop's (made 06:28:57Z).
+
+**Your 06:42Z.** `Apart`'s wording stays as I wrote it: taken. The title names the head. On "build over `870cc9da1b` if your files read only the three that keep theirs": see section 3; my own text reads none of the four that change, CUT's files under mine read one.
+
+**Events not mine** (I did nothing on any): between 06:35Z and 06:38Z about thirty reached me. One Slack line from ci to proofs (the land verdict on #9593). And your own timers, hours late, fired between Thu 15:51Z and Fri 05:04Z: `proofs-1552Z-prf589-opened`, `proofs-1650Z-prf589-read`, `proofs-1905z-marks`, `proofs-1955z-runs`, `proofs-2015z-posts`, `proofs-2108z-daniel-answers`, `two-round-2-25pm-pst`, `proofs-2250z-board`, `board-3pm-pst`, `history-launch-retry`, `launch-retry-2355z`, `gather-five-facts-0030z`, eight of `proofs-sweep-30m-v42` (02:00Z to 05:30Z), `history-try-4d04`, `board-7pm-pst-0300z`, `servedcard-gonogo-0412z`, `sweep-840pm-pst-0440z`, `runs-ended-resumes-0505z`. If any of them did not also reach you, nobody did it.
+
+**1. The two runs** (vy-nebius-2) [run].
+- `r20261113-063038-455a` at `187f5fb312`: **done, rc 0**. "tries: Device rc=0 DeviceRead rc=0 DeviceOrder rc=0". "`Device.lean`: lean exit 0 in 286 s", "none of its 35 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; "`DeviceRead.lean`: lean exit 0 in 246 s", the same line over 1 theorem; "`DeviceOrder.lean`: lean exit 0 in 203 s", the same line over 5 theorems.
+- `r20261113-063309-7f9b` at `35388bbd54`: **done, rc 0**. "tries: DeviceAccept rc=0". "`DeviceAccept.lean`: lean exit 0 in 517 s", "none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Its build log shows "Built" for CUT's seven files and for `Device` and `DeviceOrder` at that head.
+- `r20261113-053555-2f67`: read again on its timer; as reported at 06:36Z (rc 0).
+
+**2. The merge of TWOLEG's `870cc9da1b`** [run: `git merge`, no conflict; pushed]. Head `219bc2bd1f`. It holds TWOLEG's `870cc9da1b` and CUT's compiled `8cf4d46672`.
+- It brings `Accepts.lean` (new), `Deployed.lean`, `Ordered.lean`, `Shown.lean`, TWOLEG's root for `Accepts` in the lakefile and the lock, `sampled_two_case.py` and `pous/lean/TRUSTED.sha256` [run: `git diff --stat 35388bbd54 219bc2bd1f`].
+- [derived: a script that follows the `import` lines under `security/Proofs`, and `git diff --name-only`] No `.lean` file that `Device.lean`, `DeviceRead.lean` or `DeviceOrder.lean` imports, directly or through others, differs between `187f5fb312` and `219bc2bd1f`; none that `DeviceAccept.lean` imports differs between `35388bbd54` and `219bc2bd1f`; no `.lean` file outside `security/Proofs` differs at all. So each run's verdict carries to `219bc2bd1f`, and I take back "my files will need one more try over it" (06:36Z).
+- The roots rule's two halves, by script at `219bc2bd1f` [run]: 21 two-stage names in the lock's `roots`, each a quoted name of the lakefile's roots; all 26 two-stage files have a lakefile root. Not in the lock's `roots`, as before: CUT's `Cut`, `CutPrints`, `CutHeld`, `CutRead`, `CutOrder` (ASSEMBLY's to add).
+- NOT merged: CUT's tip `b44ce4a759` (the base `3b05c3a3b1` merged in, and a linter change to `CutFirst` and `CutAccept`; "not compiled", named in no title). The base `3b05c3a3b1` itself: I have no order to merge it; say if I should.
+
+**3. TWOLEG's NEXT head and my files** [read: `rg` over the two-stage files; nothing run].
+- My four files name none of `inputAt_ok`, `accepted_secondLaw`, `accepts_of_steps`, `accepts_iff_steps`, and none of the three that keep their statements.
+- CUT's files, which all four of mine import, read `inputAt_ok` at four places: `CutHeld.lean` 207, `CutRead.lean` 200 and `CutOrder.lean` 437 take only its first conjuncts; `CutFirst.lean` 277 takes its LAST conjunct apart (`⟨-, -, -, -, vs, received₂, -, rfl⟩`), the one TWOLEG changes. [guess] `CutFirst.lean` breaks at the next head and the other three stand. `CutAccept.lean` reads `accepted_ordered`, which keeps its statement.
+- So at TWOLEG's next head: CUT mends `CutFirst.lean`, and I merge and send one try of my four over the head CUT then names. No text of mine should change. For CUT: this is the line to look at first.
+
+**4. One cleanup, `d77791cc13`** (pushed; NOT compiled) [read: the linter's lines in `455a` and `2f67`].
+- In `ledgerOpens_of_opensOn` (`DeviceOrder.lean`) the linter reported "this tactic is never executed" for two fallback alternatives I wrote before any run (`simp [hs]`, `simp only [strOf]`) and "`tac1 <;> tac2` where `(tac1; tac2)` would suffice". I dropped the two alternatives, the `<;>`, and the `open private strOf` line that only the second read. Nine lines less; no statement changed; the two `privateInPublic` options stay.
+- Left alone: the deprecation warnings for `if_pos` and `if_neg` (six in `Device.lean`, four in `DeviceOrder.lean`), which CUT's files have too.
+- `r20261113-064717-c350` on vy-nebius-2 at `d77791cc13`: `DeviceOrder.lean`, then `DeviceAccept.lean`, which imports it. Launched 06:47Z. [guess] Ends about 07:10Z. If it fails, `219bc2bd1f` stays the head and I revert the cleanup.
+
+**5. Pushed** [run]. `cursor/proofs-history-d2e7` at `d77791cc13`. Nothing unpushed.
+
+STOP RULE: not reached. Lock edits: none of mine since `35388bbd54` (TWOLEG's one root came with its merge). No listed guarantee, named assumption, accept switch, `RunSetup` or `History` changed; no device lines built.
+
+NEEDS: none. (The `Apart` wording is answered.)
+
+To post: nothing.
+
+Not established: that all four compile in ONE run at `219bc2bd1f`: no run did; three runs and the import check give it, and the join's build is that run. That `DeviceOrder.lean` compiles after the cleanup (`c350`). `LedgerInOrder` and `Apart` at any deployment (taken as hypotheses). My files over TWOLEG's next head. The known hole: on the play's own two windows the history holds exactly this play's runs.
