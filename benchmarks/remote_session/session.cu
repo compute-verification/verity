@@ -1402,8 +1402,11 @@ int rs_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, uns
 // without it ys may be null. A receipt CTA has its SM to itself, so the consumers beside the reads (on sb) are as many
 // as fit on the SMs the receipt grid leaves, an SM's worth at the least, and never more: a consumer CTA placed first
 // would hold a reading CTA's SM for the whole pass. The rest of a full device follows the receipt grid on sa, as
-// rs_pass's does. 5, with nothing queued: the shard does not fit the leaf pass (h0 over 8, 2^36 blocks or more, or
-// the kernels' shared memory on this device), and rs_pass is the caller's.
+// rs_pass's does. With ctas -1 there is no receipt grid and the whole device is the consumers', so every tile is a
+// consumer warp's own (`help_leaf_tile`), which a pass with a receipt grid reaches only where a consumer CTA is on an
+// SM before any reading CTA: what a gate of that path launches. 5, with nothing queued: the shard does not fit the
+// leaf pass (h0 over 8, 2^36 blocks or more, or the kernels' shared memory on this device), and rs_pass is the
+// caller's.
 int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk, unsigned *ctr, uint64_t *ys,
                  uint64_t *leaves, uint64_t *kept, int h0, uint64_t chunk, int ctas, uint64_t pad_r0, uint64_t pad_n,
                  uint64_t *pad, uint64_t *pad_out, cudaStream_t sa, cudaStream_t sb, int receipts) {
@@ -1411,8 +1414,9 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
   cudaEvent_t go, end;
   if (pass_events(&dev, &go, &end)) return 4;
   if (!data || !pk || !ctr || !leaves || !kept || (receipts && !ys) || !n || n % PER_LEAF || chunk % 32 ||
-      chunk % PER_LEAF || !chunk || n % chunk || base % chunk || ctas < 0)
+      chunk % PER_LEAF || !chunk || n % chunk || base % chunk || ctas < -1)
     return 1;
+  const bool reading = ctas >= 0;
   const uint64_t lc = chunk / PER_LEAF, chunks = n / chunk, base_leaf = base / PER_LEAF;
   const int hc = log2_exact(lc);
   if (hc < 0 || h0 < 1 || h0 > hc) return 1;
@@ -1433,7 +1437,10 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
     cudaGetLastError();
     return 5;
   }
-  if (!ctas) ctas = sms * occ_p;
+  if (!reading)
+    ctas = 0;   // the whole device is the consumers'
+  else if (!ctas)
+    ctas = sms * occ_p;
   // No more reading CTAs than the shard's claims of 16 tiles need, a warp a claim.
   const uint64_t claims = (n / 32 + PER_LEAF - 1) / PER_LEAF, need = (claims + LEAF_PASS_WARPS - 1) / LEAF_PASS_WARPS;
   const unsigned readers = (unsigned)(need < (uint64_t)ctas ? need : (uint64_t)ctas);
@@ -1449,8 +1456,9 @@ int rs_leaf_pass(const void *data, uint64_t n, uint64_t base, const uint32_t *pk
     return 4;
   const uint4 *d = (const uint4 *)data;
   uint64_t *out = receipts ? ys : nullptr;
-  leaf_pass_kernel<<<readers, 32 * LEAF_PASS_WARPS, LEAF_PASS_SHARED, sa>>>(d, n, base, pk, leaves, out, ctr,
-                                                                           (unsigned)(ready_blocks / 32), started);
+  if (reading)
+    leaf_pass_kernel<<<readers, 32 * LEAF_PASS_WARPS, LEAF_PASS_SHARED, sa>>>(d, n, base, pk, leaves, out, ctr,
+                                                                             (unsigned)(ready_blocks / 32), started);
   if (cudaGetLastError()) return 4;
   if (pad_n)
     if (const int rc = pass_pads(pad_r0, pad_n, pad, pad_out, hc, sb)) return rc;

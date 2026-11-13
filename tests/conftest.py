@@ -41,6 +41,7 @@ BOOKKEEPING = {
     "tests/test_refusal_remediations.py": ("test_every_command_a_refusal_names_is_remediated_or_known",
                                            "test_the_lists_are_current"),
     "tests/test_shell_verifier_env.py": ("test_allowed_names_only_scripts_that_keep_the_default",),
+    "tests/test_tree.py": ("test_every_not_yet_line_and_coming_entry_is_still_to_come", "test_no_line_is_still_arriving"),
     "tests/test_repository.py": ("test_tracked_markdown_is_maintained_documentation", "test_no_report_genre_basenames",
                                  "test_oversize_skills_only_shrink", "test_markdown_size_caps",
                                  "test_allowlists_name_tracked_files", "test_owned_paths_exist", "test_every_path_has_owner",
