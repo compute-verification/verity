@@ -161120,3 +161120,37 @@ Your 20:56Z and your 21:02Z (infra's rule) are read, the first confirmed in the 
 **Not established.** No play and no test ran at the merged tree; the join's eight commits change no Python and no file they read, and they ran green at `462ef981d91e` [run: `git diff --name-only`; my 19:59Z]. No lock record at either head [run]. No play through the compiled form [relayed: your 14:18Z]. If the join moves again before the merge, nothing here covers its new commits [derived].
 
 **Held to.** No pull request, no mark, nothing forced, no `main` merged by itself, nothing rebased, no build on my machine, no lock committed; Friday's two unmoved, `984cb027efa3` and `496aa183544b` [run: `git ls-remote` 21:22Z]. Copies: `/opt/cursor/artifacts/wired-audit/carried/tip/6aec.txt`, `carried/comment/9330.txt` [run].
+
+
+## CARRIER, Fri 13 Nov 21:24Z: #9576's two Python commits do not apply to #9817's head as they are (two docstring paragraphs conflict; the code applies); goal lines added to #9332 and #9346; four jobs running
+
+Clock read with `date -u` at 21:22Z. Mailbox read at 21:22Z: your 21:18Z message is there and nothing newer. [run]
+
+**Your 21:18Z message is read.** (1) Each top's ready line will carry the output of `git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD | sort | uniq -c` at the carried head; I add it to every ready line, not only the tops'. (2) Goals: done for #9332 and #9346, below; #9373's goes in with its carried line; #9496 and #9593 left as they are. (3) #9576 itself is not carried; job 3 still holds a dry run of it, whose result stays in the run's bundle and is published nowhere.
+
+**#9576's two commits on #9817's head `bbcaac1cf46e5b1a616fa22defae12eea5ed29fa`.** #9817's branch still stands at that head, and it holds the last move of chain 2 (`0932f6acd0a8`). [run: `git fetch`, `git merge-base --is-ancestor`] I applied each commit to it the way a cherry-pick does (`git merge-tree --write-tree --merge-base=COMMIT^ HEAD COMMIT`), which follows the files to their new paths under `verity/protocols/proofs/spot/`. Nothing of this is pushed.
+
+- `b0ce796e48e` does **not** apply as it is. Its code applies without conflict: `_sampled` and its call in `one_stage/members.py`, the new test in `tests/test_members_run.py`, and the rows of `lean/tests/test_members_twin.py`. Two paragraphs of prose conflict, one in each module docstring. [run; merged tree `0ba25fc6725646a0e5bf75460acb2a2d796ce6a3`]
+  - `one_stage/members.py`, the module docstring. #9817's head says the run "refuses with Lean's reason where Lean refuses, and is no verdict itself"; the commit was written on "and accepts nothing either" and adds "each statement's member one the sample holds a unit of (`_sampled`)". Both sides reworded the same sentences.
+  - `lean/tests/test_members_twin.py`, the module docstring. #9817's head says "an audit with nothing else wrong ends at its first member's circuit, which does not parse, on both sides and before any session" and "A case every session accepts, which Lean accepts"; the commit was written on "ends at its first session's verdict" and "which Lean refuses for its form alone (`members.ALL_PASSED`)", and adds the sentence about a sample that misses a member.
+  - The second one is more than wording [derived]: #9817's head describes a later state of the per-member run (Lean accepts a case every session accepts; the stand-in audit ends at a circuit that does not parse, before any session), and the commit's test rows were written against the earlier one. Whether its new row ("one row's sample misses a member") still reads the refusal it expects on #9817's head is not established: with conflicts in the file I ran no test.
+- `af8682dc824` applies without conflict on top of that result. [run; tree `2a972613a4200fc2cd87a65392d3c43c934ba173`]
+- #9817's head already has the Lean the Python follows (`sampledHeld`, `runMembers_sampled`, `membersRun_sampled` in `Spot/OneStageZk.lean`). [run: `git show HEAD:... | rg`]
+- So whoever owns #9817 can take the two commits with a cherry-pick and two docstring paragraphs to rewrite, then must run `tests/test_members_run.py` and `lean/tests/test_members_twin.py` there. That is a change to what the Python verifier refuses, so it is theirs or yours to place, not mine.
+
+**Goal lines.** #9332 and #9346 now carry `Goal proofs/spot-bind-term` on a line of its own after `Lane proofs`. [run: `research queue edit N --body-file F`, then `gh pr view N --json body` read back: each body differs from the one I saved by those two added lines and nothing else, and the queue's own pattern for a goal line matches once] Their heads are unchanged (`5a6be198a5ed`, `949c03c3a7a1`). [run]
+
+**Runs, all holding a slot at 21:22Z** [run: each run's `slot.json` and the tool's stderr under `out/`]:
+
+| run | node | holds | where it is |
+|---|---|---|---|
+| `r20261113-210538-72ec` | vy-nebius-cpu-12 | #9496, #9209, #9595 | about 19 of 30 moves crossed |
+| `r20261113-210538-d921` | vy-nebius-cpu-5 | #9549, #9584, #9253 | about 13 of 29 |
+| `r20261113-210540-425f` | vy-nebius-cpu-14 | #9513, #9373, #9576 (dry run) | about 10 of 29 |
+| `r20261113-211545-fcd9` | vy-nebius-cpu-10 | #9593 (dry run) | slot r4 since 21:19:38Z; the tool's checks of the moves |
+
+No carry has stopped or ended `clean-skipped` so far.
+
+**Not established:** any carry's result; whether `b0ce796e48e`'s new twin row holds on #9817's head.
+
+**Waiting on:** the four runs. Next I prepare the check jobs (the quick suites and the Lean fast path) so that each launches the minute its carry is published.
