@@ -55,29 +55,6 @@ open scoped ENNReal
 
 /-! ## The parameters' key -/
 
-/-- The per-member form's parameters name a challenger key at the deployed LMS parameters, as the one statement's
-do (`Limits.paramsOfJson_deployed`). -/
-theorem members_deployed {j : Json} {a : Spot.OneStageZk.Params}
-    (h : Spot.OneStageZk.membersParamsOfJson j = .ok a) :
-    ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
-  first
-    | (unfold Spot.OneStageZk.membersParamsOfJson at h
-       simp only [bind, Except.bind, pure, Except.pure] at h
-       repeat' split at h
-       all_goals first
-         | (cases h; done)
-         | (cases h; exact Limits.paramsOfJson_deployed (by assumption)))
-    | (unfold Spot.OneStageZk.membersParamsOfJson at h
-       split at h
-       · cases h
-       · obtain ⟨_, -, h⟩ := bind_ok h
-         obtain ⟨q, hq, h⟩ := bind_ok h
-         try dsimp only at h
-         obtain ⟨_, -, h⟩ := bind_ok h
-         simp only [pure, Except.pure, Except.ok.injEq] at h
-         subst h
-         exact Limits.paramsOfJson_deployed hq)
-
 section FormAudit
 
 open Std.Do
@@ -112,6 +89,42 @@ private theorem form_members_spec (j : Json) :
 
 private theorem form_values_spec (j : Json) (w : String) :
     ⦃⌜True⌝⦄ VStar.Recursive.SampledTwo.valuesOf j w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+open private exactly from Spot.OneStageZk
+
+private theorem members_exactly_spec (j : Json) (ks : Array String) (w : String) :
+    ⦃⌜True⌝⦄ exactly j ks w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+private theorem members_of_spec (o : Spot.OneStageZk.Own) (j : Json) :
+    ⦃⌜True⌝⦄ Spot.OneStageZk.membersOf o j ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+private theorem v2_deployed_spec (j : Json) :
+    ⦃⌜True⌝⦄ Spot.OneStageZk.paramsOfJson j
+      ⦃⇓? a => ⌜∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed⌝⦄ := by
+  cases hx : Spot.OneStageZk.paramsOfJson j
+  · exact fun _ => True.intro
+  · exact fun _ => Limits.paramsOfJson_deployed hx
+
+/-- The per-member form's parameters name a challenger key at the deployed LMS parameters, as the one statement's
+do (`Limits.paramsOfJson_deployed`). -/
+theorem members_deployed {j : Json} {a : Spot.OneStageZk.Params}
+    (h : Spot.OneStageZk.membersParamsOfJson j = .ok a) :
+    ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
+  first
+    | (unfold Spot.OneStageZk.membersParamsOfJson at h
+       simp only [bind, Except.bind, pure, Except.pure] at h
+       repeat' split at h
+       all_goals first
+         | (cases h; done)
+         | (cases h; exact Limits.paramsOfJson_deployed (by assumption)))
+    | (refine of_triple
+         (Q := fun a => ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed) ?_ h
+       clear h
+       mvcgen -trivial [Spot.OneStageZk.membersParamsOfJson, -Spec.throw_Except, throw_spec, members_exactly_spec,
+         members_of_spec, v2_deployed_spec]
+       all_goals first
+         | exact True.intro
+         | assumption)
 
 -- `paramsOfJson` unfolds to one `match` or `if` per decoded field, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
