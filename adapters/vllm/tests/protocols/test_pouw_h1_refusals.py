@@ -1,7 +1,7 @@
 """H1's checks refuse, by name, the forms its other tests never hand them: a request's first slot and a step's slots
 under tables a prover committed consistently (`pouw_h1_requests.request_reason`, `slot_reason`), a round's row and coin
-(`round_reason`, `rounds_reason`), a record's calls (`tables_reason`), a window's coins and its draw
-(`pouw_h1_challenger.trusted_rounds_reason`, `pouw_h1_draw`), and what H1's settings, its input ids, a static
+(`round_reason`, `rounds_reason`), a record's calls (`tables_reason`), a window's coins and its sample
+(`pouw_h1_challenger.trusted_rounds_reason` and its sample session's checks), and what H1's settings, its input ids, a static
 declaration and the gate's ``model-key`` answer are parsed from."""
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ from verity.protocols.spot.device.challenger import LiveRecord
 import verity_vllm.protocols.pouw.h1.challenger as PHC
 import verity_vllm.protocols.pouw.h1.commit as CT
 import verity_vllm.protocols.pouw.h1.draw as PHD
-import verity_vllm.protocols.pouw.h1.drawn as DRAWN
+import verity_vllm.protocols.pouw.h1.drawn as DN
 import verity_vllm.protocols.pouw.h1.drawn_rows as DR
 import verity_vllm.protocols.pouw.h1.hooks as PHK
 import verity_vllm.protocols.pouw.h1.live as LV
@@ -44,7 +44,6 @@ import verity_vllm.protocols.pouw.h1.static as ST
 import verity_vllm.protocols.pouw.h1.words as W
 from tests.protocols import challenger_host as CH
 from tests.protocols.test_pouw_h1 import (
-    DRAW_RESERVED,
     KEY,
     SALT,
     K,
@@ -246,8 +245,8 @@ def test_h1s_settings_refuse_a_steps_count_and_round_coins_that_are_not_a_live_e
         pouw.Settings.of({"rounds": LiveRecord(two_salts, Wd.ROUND)})
 
 
-def test_a_draw_session_or_a_period_without_what_it_goes_with_is_refused():
-    """``draw_session`` is the draw session of H1's window on its challenger, and ``period`` goes with a Pearl-C
+def test_a_sample_session_or_a_period_without_what_it_goes_with_is_refused():
+    """``draw_session`` is the sample session of H1's window on its challenger, and ``period`` goes with a Pearl-C
     install's ``challenger`` and ``session``: H1 without a challenger, and a scheme that is neither, are refused each by
     name."""
     def refused(entry, settings):
@@ -259,7 +258,7 @@ def test_a_draw_session_or_a_period_without_what_it_goes_with_is_refused():
         assert refused(entry, settings) == ()
         no_window = (f"{entry}: {scheme}: the pouw setting 'draw_session' is the draw session of H1's window "
                      f"({PH.SCHEME}) on the challenger at 'challenger'")
-        assert refused(entry, {"pouw": {**settings["pouw"], "draw_session": DRAW_RESERVED}}) == (no_window,)
+        assert refused(entry, {"pouw": {**settings["pouw"], "draw_session": {"session": CH.session_id(0xd)}}}) == (no_window,)
         no_install = (f"{entry}: {scheme}: the pouw setting 'period' is the lane's open period that a Pearl-C install's "
                       "reserved session joins, so it goes with 'challenger' and 'session', for pearl-c-sm120-v1-h3, "
                       "pearl-c-sm120-unpromoted-v1-h3, pearl-c-h100-v1-h3 only")
@@ -414,21 +413,21 @@ def test_a_window_whose_opener_refused_its_salt_opens_it_once(admission):
     assert len(asked) == 1 and "draw" not in run.commits and "calls_root" not in run.commits
 
 
-def test_a_draw_coin_its_session_refuses_is_the_draws_refusal_beside_its_root():
-    """`finish` records the draw root it asked the coin after, and the session's refusal in place of the coin."""
+def test_a_sampling_coin_its_session_refuses_is_the_samples_refusal_beside_its_root():
+    """`finish` records the sample root it asked the coin after, and the session's refusal in place of the coin."""
     asked = []
 
     class Shut:
         def record(self, root):
             asked.append(root)
-            raise LC.CoinError("the draw session is closed")
+            raise LC.CoinError("the session is closed")
     run = _driven(_so(("a", [1, 2, 3], 4)), _so(running={"a": 1}), _so(running={"a": 1}), draw=Shut())
     run.finish()
-    draw = run.commits["draw"]
-    root = RQ.draw_root(bytes.fromhex(run.commits["calls_root"]), bytes.fromhex(draw["receipts"]), run.round_log)
+    sample = run.commits["draw"]
+    root = RQ.draw_root(bytes.fromhex(run.commits["calls_root"]), bytes.fromhex(sample["receipts"]), run.round_log)
     assert asked == [root] and len(run.round_log) == 3
-    assert draw == {"root": root.hex(), "receipts": run.receipts_of(2).hex(), "coin": None,
-                    "refused": "the draw session is closed"}
+    assert sample == {"root": root.hex(), "receipts": run.receipts_of(2).hex(), "coin": None,
+                      "refused": "the session is closed"}
 
 
 def test_a_resumed_requests_ids_are_its_prompt_again_and_a_row_with_no_entry_has_none_to_be():
@@ -500,42 +499,42 @@ def test_a_statements_port_reads_one_registered_value_and_each_position_as_one_r
     """`statement_tables` gives a port that reads no registered value its instances' rows as they are, and one that
     does its distinct positions; it refuses a port whose instances read two values, or one position as two rows."""
     z = {"units": [0, 1], "w_x": np.zeros((2, 3), np.uint16), "s_x": [b"a", b"b"]}
-    plain = DRAWN.statement_tables(z, ["x"], [])
+    plain = DN.statement_tables(z, ["x"], [])
     assert plain["refs"] == {"x": [0, 1]} and plain["salts"] == {"x": [b"a", b"b"]} and plain["registered"] == {}
     assert plain["tables"]["x"].tolist() == [[0, 0, 0], [0, 0, 0]]
     shared = {**z, "s_x": [b"a", b"a"], "r_x": [4, 4], "v_x": ["v", "v"], "p_x": ["p", "p"]}
-    one = DRAWN.statement_tables(shared, ["x"], [])
+    one = DN.statement_tables(shared, ["x"], [])
     assert one["registered"] == {"x": {"value": "v", "positions": [4], "paths": ["p"]}} and one["refs"] == {"x": [0, 0]}
     assert one["tables"]["x"].tolist() == [[0, 0, 0]] and one["salts"] == {"x": [b"a"]}
     for edit in ({"s_x": [b"a", b"b"]}, {"p_x": ["p", "q"]}, {"w_x": np.array([[0, 0, 0], [0, 0, 1]], np.uint16)}):
         with pytest.raises(ValueError, match="^port x: instances 0 and 1 read position 4 as two rows$"):
-            DRAWN.statement_tables({**shared, **edit}, ["x"], [])
+            DN.statement_tables({**shared, **edit}, ["x"], [])
     with pytest.raises(ValueError) as refused:
-        DRAWN.statement_tables({**shared, "v_x": ["v", "u"]}, ["x"], [])
+        DN.statement_tables({**shared, "v_x": ["v", "u"]}, ["x"], [])
     assert str(refused.value) == ("port x: its instances read ['u', 'v'], and a port reads one registered value: one "
                                   "call's units a statement")
 
 
-def test_the_draws_k_is_the_one_given_or_the_serve_dirs_periods(tmp_path):
+def test_the_samples_k_is_the_one_given_or_the_serve_dirs_periods(tmp_path):
     """`draw_k` is ``--k`` when given, else the ``draw_k`` the serve dir's period file holds; with neither, a period
     file without one, or one that is no integer, it refuses and says where a K comes from."""
-    period = tmp_path / DRAWN.PERIOD
-    assert DRAWN.draw_k(tmp_path, 7) == 7
+    period = tmp_path / DN.PERIOD
+    assert DN.draw_k(tmp_path, 7) == 7
     for text, what in ((None, f"[Errno 2] No such file or directory: '{period}'"), ('{"other": 1}', "'draw_k'"),
                        ('{"draw_k": "k"}', "invalid literal for int() with base 10: 'k'")):
         if text is not None:
             period.write_text(text)
         with pytest.raises(Refused) as refused:
-            DRAWN.draw_k(tmp_path, None)
-        assert str(refused.value) == (f"no draw K: give --k, or a serve dir whose {DRAWN.PERIOD} has the open's draw_k "
+            DN.draw_k(tmp_path, None)
+        assert str(refused.value) == (f"no draw K: give --k, or a serve dir whose {DN.PERIOD} has the open's draw_k "
                                       f"({what})")
     period.write_text('{"draw_k": 9}')
-    assert DRAWN.draw_k(tmp_path, None) == 9 and DRAWN.draw_k(tmp_path, 7) == 7
+    assert DN.draw_k(tmp_path, None) == 9 and DN.draw_k(tmp_path, 7) == 7
 
 
 @pytest.fixture
 def served(tmp_path, monkeypatch):
-    """A window served under the auditor device's challenger (`test_pouw_h1._serve_window`), its session and its draw
+    """A window served under the auditor device's challenger (`test_pouw_h1._serve_window`), its session and its sample
     session ended: the harness's host, the window's commitment, and its record."""
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     host = _host(tmp_path, monkeypatch)
@@ -561,23 +560,23 @@ def test_a_windows_coins_that_are_no_commitment_and_rounds_out_of_order_are_refu
     assert _trusted(host, {**honest, "rounds": [second, first, third]}) == "the round log is not rounds 0, 1, ... in order"
 
 
-def test_a_windows_draw_is_held_to_its_root_its_parts_and_its_coin(served):
-    """The window's draw is refused by name when its root isn't 128 lowercase hex, when a part its root is over is
-    absent or isn't hex, when its coin is no opening, and when the challenger's log shows its draw coin following
+def test_a_windows_sample_is_held_to_its_root_its_parts_and_its_coin(served):
+    """The window's sample is refused by name when its root isn't 128 lowercase hex, when a part its root is over is
+    absent or isn't hex, when its coin is no opening, and when the challenger's log shows its sampling coin following
     another root, or more than the one."""
     host, honest, _record = served
-    draw = honest["draw"]
-    for root in ("zz", draw["root"].upper(), None):
-        assert _trusted(host, {**honest, "draw": {**draw, "root": root}}) == "the window's draw root is not 128 lowercase hex"
+    sample = honest["draw"]
+    for root in ("zz", sample["root"].upper(), None):
+        assert _trusted(host, {**honest, "draw": {**sample, "root": root}}) == "the window's draw root is not 128 lowercase hex"
     assert _trusted(host, {**honest, "draw": None}) == "the window's draw root is not 128 lowercase hex"
-    for edit, what in (({"draw": {k: v for k, v in draw.items() if k != "receipts"}}, "'receipts'"),
+    for edit, what in (({"draw": {k: v for k, v in sample.items() if k != "receipts"}}, "'receipts'"),
                        ({"calls_root": "zz"}, "non-hexadecimal number found in fromhex() arg at position 0"),
                        ({"calls_root": None}, "fromhex() argument must be str, not None")):
         assert _trusted(host, {**honest, **edit}) == f"the window's draw root is malformed ({what})"
     for coin in ({"bad": 1}, None):
-        assert _trusted(host, {**honest, "draw": {**draw, "coin": coin}}) == (
+        assert _trusted(host, {**honest, "draw": {**sample, "coin": coin}}) == (
             f"the window's draw coin is malformed ({NO_OPENING})")
-    signed, root = host.draw.challenger.commitment, bytes.fromhex(draw["root"])
+    signed, root = host.draw.challenger.commitment, bytes.fromhex(sample["root"])
     assert PHD.draw_reason(honest, signed, (root,)) is None
     for received in ((bytes(64),), (root, root), (bytes(64), root)):
         assert PHD.draw_reason(honest, signed, received) == (
@@ -585,11 +584,11 @@ def test_a_windows_draw_is_held_to_its_root_its_parts_and_its_coin(served):
             "opened before the window's rounds, or after another root")
 
 
-@pytest.mark.parametrize("families", [((Wd.DRAW, 2),), ((Wd.DRAW, 1), (Wd.SALT, 1))], ids=["two-draws", "draw-and-salt"])
-def test_a_draw_session_of_another_layout_is_refused(tmp_path, monkeypatch, families, served):
-    """A draw session holds its one draw coin and nothing else. One the gate opened withheld on the window's draw root,
-    whose draw coin 0 opened after that root and which its client closed, is still refused when its challenger signed
-    two draw coins, or a salt coin beside the draw."""
+@pytest.mark.parametrize("families", [((Wd.DRAW, 2),), ((Wd.DRAW, 1), (Wd.SALT, 1))], ids=["two-coins", "a-salt-beside"])
+def test_a_sample_session_of_another_layout_is_refused(tmp_path, monkeypatch, families, served):
+    """A sample session holds its one sampling coin and nothing else. One the gate opened withheld on the window's
+    sample root, whose coin 0 opened after that root and which its client closed, is still refused when its challenger
+    signed two sampling coins, or a salt coin beside the one."""
     _first, honest, _record = served
     seed = 2
     opens = PS.window_open_root(bytes.fromhex(honest["weights_root"]), bytes.fromhex(honest["requests_root"]),
@@ -607,8 +606,8 @@ def test_a_draw_session_of_another_layout_is_refused(tmp_path, monkeypatch, fami
                                        "live window's draw session's: its draw coin alone")
 
 
-def test_the_draw_sessions_files_are_none_where_the_ledger_pins_no_session_on_the_draw_root(served, tmp_path):
-    """`draw_files` fetches the session the ledger opens on the window's draw root, pinned; where the ledger opens none
+def test_the_sample_sessions_files_are_none_where_the_ledger_pins_no_session_on_its_root(served, tmp_path):
+    """`draw_files` fetches the session the ledger opens on the window's sample root, pinned; where the ledger opens none
     on that root, or holds no pins log, it fetches nothing and gives None, which `draw_session_reason` refuses."""
     host, honest, _record = served
     (tmp_path / "tree").mkdir()
