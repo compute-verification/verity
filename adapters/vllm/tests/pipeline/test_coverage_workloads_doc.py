@@ -1,8 +1,8 @@
 """The coverage campaign's generator (`verity_vllm.pipeline.coverage_workloads`): a cell's document, made here with a tokenizer of
-one id a character.  It states the cell's draws, each prompt as the corpus from its own paragraph on, the schedule if every
+one id a character.  It states the cell's lengths, each prompt as the corpus from its own paragraph on, the schedule if every
 request runs to its end and the engine arguments that keep a prefill in one step.  A replicate keeps the lengths and changes the
 prompts; the sampled column, the format column and the chunked column each add their own keys to the same requests.  The command
-prints a dry run's draws and reads no tokenizer for it, and writes each cell under its variant's name, for the model named or
+prints a dry run's lengths and reads no tokenizer for it, and writes each cell under its variant's name, for the model named or
 else the role's."""
 from __future__ import annotations
 
@@ -48,10 +48,15 @@ def _ids(tag):
     return [str(uuid.uuid5(uuid.NAMESPACE_URL, f"verity-coverage/B0/B8-mixed/C256/{tag}/{i}")) for i in range(8)]
 
 
-def test_a_cell_s_document_states_its_draws_its_schedule_and_the_arguments_that_keep_a_prefill_in_one_step():
-    doc, draws = _doc(), gw.draw_lengths("B8-mixed", "C256", 3)
-    sim = gw.simulate_schedule(draws)
-    assert _lengths(doc) == draws and [r["index"] for r in doc["requests"]] == list(range(8))
+#: The cell's eight requests, the one of seed 3: each prompt's length, the tokens it is to make and the step it arrives at.
+LENGTHS = [(98, 9, 0), (128, 12, 1), (108, 10, 1), (244, 24, 1), (108, 10, 9), (233, 23, 13), (138, 13, 13), (164, 16, 14)]
+
+
+def test_a_cell_s_document_states_its_lengths_its_schedule_and_the_arguments_that_keep_a_prefill_in_one_step():
+    doc = _doc()
+    lengths = _lengths(doc)
+    sim = gw.simulate_schedule(lengths)
+    assert [tuple(d.values()) for d in lengths] == LENGTHS and [r["index"] for r in doc["requests"]] == list(range(8))
     assert [r["request_id"] for r in doc["requests"]] == _ids("3")
     told = ("requests", "note", "tokenizer_note", "length_rule", "schedule_if_full_length", "prompt_lengths", "max_tokens")
     assert {k: v for k, v in doc.items() if k not in told} == {
@@ -60,7 +65,7 @@ def test_a_cell_s_document_states_its_draws_its_schedule_and_the_arguments_that_
         "serving_profile": "B8-mixed", "context_class": "C256", "length_seed": 3, "prompt_seed": 3, "replicate": 0,
         "expected_engine_steps": sim["expected_engine_steps"]}
     assert doc["schedule_if_full_length"] == sim
-    assert (doc["prompt_lengths"], doc["max_tokens"]) == (sorted({d["prompt_len"] for d in draws}), sorted({d["max_tokens"] for d in draws}))
+    assert (doc["prompt_lengths"], doc["max_tokens"]) == (sorted({n for n, _, _ in LENGTHS}), sorted({n for _, n, _ in LENGTHS}))
     rule = doc["length_rule"]
     assert (rule["prompt_len"], rule["max_tokens"], rule["depends_on"]) == ("U{32..256}", "max(2, prompt_len // 10)", "(profile, ctx, seed) only")
     assert doc["tokenizer_note"] == ("prompt_token_ids from tokenizer.json sha256 5a5a5a5a5a5a5a5a (tokenizers, add_special_tokens=False), "
@@ -78,7 +83,7 @@ def test_a_cell_s_document_states_its_draws_its_schedule_and_the_arguments_that_
         "The control run's realized step count is the gates' reference (EOS may end a request early).")
 
 
-def test_each_prompt_is_the_corpus_from_its_own_paragraph_on_cut_at_the_drawn_length():
+def test_each_prompt_is_the_corpus_from_its_own_paragraph_on_cut_at_its_length():
     paras = gw.corpus_paragraphs()
     at = {f"{p['source']} \N{PILCROW SIGN}{p['index']}": j for j, p in enumerate(paras)}
     reqs = _doc()["requests"]
@@ -175,21 +180,22 @@ def test_the_tokenizer_is_the_file_named_or_tokenizer_json_of_the_directory_name
     assert stand_in.asked == {("encode", False), ("decode", False)}
 
 
-def test_a_dry_run_prints_each_cell_s_draws_and_schedule_and_reads_no_tokenizer(tmp_path, monkeypatch, capsys):
+def test_a_dry_run_prints_each_cell_s_lengths_and_schedule_and_reads_no_tokenizer(tmp_path, monkeypatch, capsys):
     def no_tokenizer(path):
         raise AssertionError("a dry run reads no tokenizer")
 
     def line(profile, schedule):
-        draws = gw.draw_lengths(profile, "C256", 3)
-        return f"{profile} C256 {[(d['prompt_len'], d['max_tokens'], d['arrive_step']) for d in draws]} {schedule(draws)}"
+        return f"{profile} C256 {[tuple(d.values()) for d in cells[profile]]} {schedule(cells[profile])}"
 
+    cells = {profile: _lengths(_doc(profile)) for profile in ("B1", "B8-mixed")}         # the lengths each cell's document states
+    assert [tuple(d.values()) for d in cells["B8-mixed"]] == LENGTHS and len(cells["B1"]) == 1
     monkeypatch.setattr(gw, "Tok", no_tokenizer)
     given = {"case": "B0", "model": "m", "tokenizer": "t", "profiles": "B1,B8-mixed", "ctx": "C256", "seed": 3, "out_dir": str(tmp_path / "out"),
              "dry_run": True}
     assert gw.main(gw.Options(**given)) == 0
     assert capsys.readouterr().out.splitlines() == [line(profile, gw.simulate_schedule) for profile in ("B1", "B8-mixed")]
     assert gw.main(gw.Options(**given, variant=["t1", "chunked=64"])) == 0
-    assert capsys.readouterr().out.splitlines() == [line(profile, lambda draws: gw.simulate_schedule_chunked(draws, 64))
+    assert capsys.readouterr().out.splitlines() == [line(profile, lambda lengths: gw.simulate_schedule_chunked(lengths, 64))
                                                     for profile in ("B1", "B8-mixed")]
     assert not (tmp_path / "out").exists()
 
