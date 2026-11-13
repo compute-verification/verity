@@ -617,16 +617,25 @@ def test_spot_refuses_the_recursive_form(name, request):
     assert set(seen) == {"named", "unnamed"}, dict(seen)
 
 
+def _two_stage_params() -> dict:
+    """The form's params on the two-stage run (`TWO.base`) with one member, on the interior's first template circuit,
+    which the form's Lean reads in full: the base names no member, and the interior audit refuses that."""
+    p = TWO.base()
+    circuit = p["interior"]["params"]["proofs"]["templates"][0]["circuit"]
+    member = {"circuit": circuit, "public": "00" * 64, "registered": None, "units": [[0, 1]], "vus_per_block": 1}
+    return TWO._set(p, ("interior", "members"), {"m": member})
+
+
 def _two_stage_cases(a: dict) -> dict[str, dict]:
     """The two-stage form's cases on v2's audit `a`, its record and evidence: the form's params missing a key
     (``params-keys``, `TWO.CHANGES`); v2's params with the evidence under the two-stage form (``evidence-keys``); and the
-    form's params on the two-stage run (`TWO.base`) with v2's evidence (``evidence-other``)."""
+    form's params with a member (`_two_stage_params`) with v2's evidence (``evidence-other``)."""
     one = {**a["evidence"], "form": "one-stage"}
     return {"params-keys": OS._case({"params": TWO.CHANGES["a-key-missing"](TWO.base()), "record": a["record"],
                                      "evidence": one}),
             "evidence-keys": OS._case({"params": {**a["params"], "form": "one-stage"}, "record": a["record"],
                                        "evidence": {**a["evidence"], "form": "two-stage"}}),
-            "evidence-other": OS._case({"params": TWO.base(), "record": a["record"], "evidence": one})}
+            "evidence-other": OS._case({"params": _two_stage_params(), "record": a["record"], "evidence": one})}
 
 
 def test_spot_reads_the_two_stage_form(remote_server):
@@ -634,10 +643,10 @@ def test_spot_reads_the_two_stage_form(remote_server):
     and refuses evidence of another form than the params' by name (`VStar.Recursive.Sampled.MISMATCH`). Remote, every
     other subprotocol aimed at acceptance on the audit's record, rejects with SPOT's reason: the form's params missing a
     key and v2's params with evidence under the two-stage form missing its keys, each refused by the form's reading, in
-    Lean as in Python (`_two_stage_cases`); and the form's params on the two-stage run with v2's evidence, which the Lean
-    reads in full and refuses as a mismatch of forms, with the Python's words (`R.mismatch`): the Python reads the
-    form's params only up to the interior's template circuits (`sampled_two.py`), so it decides no case past them, and
-    an audit that passes every check is the form's own difftest's to build."""
+    Lean as in Python (`_two_stage_cases`); and the form's params on the two-stage run, with a member, and v2's
+    evidence, which the Lean reads in full and refuses as a mismatch of forms, with the Python's words (`R.mismatch`):
+    the Python reads the form's params only up to the interior's template circuits (`sampled_two.py`), so it decides no
+    case past them, and an audit that passes every check is the form's own difftest's to build."""
     product = R.REMOTE
     want = {"params-keys": "params: the keys of the parameters are not ",
             "evidence-keys": "evidence: the keys of the evidence are not ",
