@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.EntryRoots
 public import Proofs.Flock.SpotFlock.PortsMember
 public import Proofs.Flock.SpotFlock.AddressFactsGive
+public import Proofs.Flock.SpotFlock.InsideOf
 
 /-!
 # The addresses premise, from the facts of an accepted run
@@ -21,6 +22,8 @@ ask of the registered wiring is no premise: a run is accepted only where the des
 evaluates only where the registered wiring passes its check (`CheckedRun.wiring_of_ok`, `wiringOk`).
 
 Each of those facts is stated over accepted runs, so its own proof may read the design's conditions the same way.
+`Inside` is one of them proved (`inside_of`), from the members' proof blocks standing side by side (`SideBySide`) and
+each bit being a gate of its unit's proof block (`BitsInUnits`): `addressesConnected_of_blocks`.
 -/
 
 @[expose] public section
@@ -60,5 +63,15 @@ theorem addressesConnected_of_runs (hN : NeededBits h) (hI : Inside h) (hO : Wri
   have hT : OneTreeFact h (wireMap h) (returned h) (addressOf h) :=
     ⟨addressOf_shares h, fun r hr i hi => (oneTreeFact_of_wiring (hW' r hr)).2 r hr i hi⟩
   exact addressesConnected_of_facts h fun _ => ⟨addressOf h, hW, hC, hRow, hE, hT⟩
+
+variable (h) in
+/-- **The addresses premise, from the facts of the members' programs and of an accepted run**:
+`addressesConnected_of_runs`, with a needed gate staying inside its replay block (`Inside`) from the members' proof
+blocks standing side by side and each bit being a gate of its unit's proof block (`inside_of`). -/
+theorem addressesConnected_of_blocks (hN : NeededBits h) (hcl : SideBySide h) (hU : BitsInUnits h)
+    (hO : WrittenOnce h) (hR : RowsArePorts h) (hOwn : OwnReads h) (hW : WidthFact h (addressOf h))
+    (hC : CopyFact h (addressOf h)) (hRow : RowFact h (wireMap h) (returned h) (addressOf h)) :
+    AddressesConnected h :=
+  addressesConnected_of_runs h hN (inside_of hN hcl hU hO) hO hR hOwn hW hC hRow
 
 end SpotFlock
