@@ -398,7 +398,7 @@ theorem reads_ref_value (hW : RefReadsWf h) {r : CheckedRun h.stage} (hr : r.Ok 
   unfold stmtOkAt at hat
   rw [hx] at hat
   simp only [Bool.and_eq_true] at hat
-  obtain ⟨st, rec, draw, w, S, hst, hrec, hdraw, hw, hS, hc⟩ := readsOk_true h hat.2
+  obtain ⟨st, rec, smp, w, S, hst, hrec, hsmp, hw, hS, hc⟩ := readsOk_true h hat.2
   obtain ⟨bR, jR, hbR, hjR, hoj⟩ := registered_of_ins (ins_of_setupOf hw hset) hown
   obtain ⟨hSt, -, hSr, -⟩ := stmtJsonOf_fields h hS
   have hSj : S.registered = jR := by
@@ -408,7 +408,7 @@ theorem reads_ref_value (hW : RefReadsWf h) {r : CheckedRun h.stage} (hr : r.Ok 
   obtain ⟨kvs, hports, hent, -⟩ := portsOf_entries (portsOf_of_ofJson hoj)
   obtain ⟨ej, hm, -, -, -, -, hv⟩ := hent reg hreg
   obtain ⟨t', ht', hnt, hj⟩ := refReads_of_values (h := h)
-    (own := { ownOf h st rec draw _ with verified := S.checked.toArray }) rfl (values_of_codesOk hc)
+    (own := { ownOf h st rec smp _ with verified := S.checked.toArray }) rfl (values_of_codesOk hc)
   have hWS : Wf S.registered := by
     rw [hSj]
     exact wf_of_jsonOf hjR
