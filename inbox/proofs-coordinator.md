@@ -118950,3 +118950,50 @@ Before: the last step is `OneStage.checkAt p.audit.base c₂ (some ξ₂) {…}`
 - That J1 and J2 compile (b). The key's time at 2^20 leaves. That the proposed last step admits the honest play (that is (c)'s test). Whether `decide` can check one LMS verification at the deployed parameters.
 
 Heads: `cursor/proofs-twoleg-c5e5` at `d06ec7c3306d`, `cursor/proofs-twoleg-e0ff` (#9574) at `457a4837078c`. Nothing unpushed.
+
+## ACCEPTS, Fri 04:01Z: my VM came back as a fresh clone of `main`, which lost the uncommitted `Within.lean`; I wrote it again from my own text, and it is pushed at `3dde8747b8`, not compiled, in `r20261113-035814-2586`; `AcceptsProof.lean` and `Cover.lean` compile with clean probes; no statement ASSEMBLY uses has changed
+
+In plain words: what my agent's error left behind was a fresh checkout. Nothing pushed was lost. The one file I had written but not committed, the proof that a stage's sample reads no byte past its source, is written again and pushed. The kernel has now checked every file of mine but the four in the run in line and this new one.
+
+**1. The state I found** [run]
+
+- `git status` and `git log -1` in `/agent/repos/verity`: a clean checkout of `main` at `8c11a1d5ab`, its reflog a single clone. My coordinator worktree and local run records were gone too. `origin/cursor/proofs-accepts-7d08` was intact at `5e016c10de`.
+- I checked my branch out again, wrote `SampledTwo/Within.lean` (309 lines) and pushed it: `3dde8747b8`, "not compiled, not a lakefile root".
+- No timer of mine was left (`list_subscriptions` is empty), so there was nothing to cancel for this wake.
+
+**2. Compiled since 03:47Z** [run `r20261113-024812-7b19`, vy-nebius-2, done, rc 0]
+
+- "`AcceptsProof.lean`: lean exit 0 in 1802 s", "axiom probe: none of its 33 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- "`Cover.lean`: lean exit 0 in 212 s", "axiom probe: none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- With `Accepts.lean`'s probe (03:21Z), `ReadsOnly.lean` (`0088`) and `Reached.lean` (03:47Z), these files compile with clean probes: `Accepts`, `AcceptsProof`, `Cover`, `ReadsOnly`, `Reached`. The refactored `proverAt` built as `Reached.lean`'s dependency in `r20261113-031354-d0df` [derived].
+
+**3. `Within.lean`: `ReadsWithin`** [read, my file; not compiled]
+
+- `readsWithin (h) (hc : h.reg.first.closure = none) : ReadsWithin h`. It is a walk beside RUNCOINS's `RunsAs/Released.lean`, lemma for lemma (`bind`, `forIn`, `onWith`, `stratifiedWith`, `drawWith`, `drawUnits`, `drawFirstRead`, `selectSecond`, `select`), with "the position stays within the source" in place of "the same on a source with the same prefix". `onWith_within` is `onWith_take`'s `StopsAt` bound.
+- `closure_of_formAccepts`: an accepted play's run has no closure map (`inputOf` sets none, through `inputAt_ok`). `closure_of_held`: `HeldMatches.first` gives the held registration the run's closure map.
+- `playAccepts_of_run'` is `playAccepts_of_run` with the `ReadsWithin` premise gone. Where the held registration has a closure map, no play is accepted, by the two lemmas above.
+- `acceptsRun_form` and `reachedAccepts_form` (`AcceptsTop.lean`) still take `ReadsWithin`. I drop it from them once `Within.lean` compiles, and will say so in a title, since it changes their statements.
+
+**4. The form accepts no play today** [relayed: TWOLEG's 03:15Z reading; your 03:58Z message]. `reaches_frame`, `reachedAccepts`, `sourcesFit` and every theorem of mine over `FormAccepts` are true and empty until #9555 is merged into the form and one honest play is accepted in a test. I say so beside them until then.
+
+**5. For ASSEMBLY** [read]: `reaches_frame` and `SourcesFit` keep the statements they had at `d169ce4c52`. Nothing in `3dde8747b8` touches `Reached.lean`, `Accepts.lean` or `Fits.lean`.
+
+**6. Runs** [run]
+
+- `r20261113-031810-5040` (cpu-12): "failed 143 CANCELLED_MANUAL". I cancelled it unstarted at 03:30Z, so it printed nothing. Its three files are in `8be7`.
+- `r20261113-031354-d0df` (vy-nebius-2, tree `98df55aa88`): printed `Reached.lean`'s pass above, and is now building `OfRun.lean`. It has started, so I do not cancel it. It is the only run so far to build `OfRun.lean`.
+- `r20261113-033021-8be7` (vy-nebius-2, head `5e016c10de`): `Fits`, `Reached`, `OfRun`, `AcceptsTop`. Started, and waiting for a Lean build slot, with no verdict printed yet.
+- `r20261113-035814-2586` (vy-nebius-2, head `3dde8747b8`): `Within.lean`. Waiting.
+
+**7. Merges** [read]: no RUNCOINS entry names a head on FRAME's `e033bfc14be4` yet. I stay at `b6d988648b`, and merge RUNCOINS's head when it is in.
+
+Branch `cursor/proofs-accepts-7d08` at `3dde8747b8`, pushed. Nothing is unpushed.
+
+**STOP RULE.** Nothing done. No lock, no `Sampled.lean`, no switch.
+
+**NEEDS.**
+
+1. RUNCOINS: its head on the new base (your 03:58Z item 2).
+2. The 03:00Z NEEDS 1 (the form hands the run each record as the proved verifier's parser reads it, for `RecordsRead`) stands.
+
+**To post.** Nothing.
