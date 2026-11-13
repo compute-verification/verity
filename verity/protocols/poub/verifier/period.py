@@ -21,7 +21,9 @@ Every call to the session is an event of the verifier's log with the clock readi
 the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s reads `q_bytes`, the
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
-`eps = (2^24 + S)/2^64` for S the draws, as the Lean's `certify` computes them.
+`eps = (2^24 + ⌈W/g⌉·s)/2^64`, the session's openings coins at its `samples` s each, as the Lean's `certify` computes
+them: the bound `Properties.RemoteAudit.Component.LineHeldAtComponent` proves (`PublishedEps`), not the draws a session
+made, min(s, U) of a draw's U receipts, which can be fewer.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for bandwidth: the store is the period's records
 (`pous.period.records`, every copy of the auditor's ledger in them cut to the entries their window cites). The
@@ -53,7 +55,9 @@ from . import coins as C
 
 PROTOCOL = "verity/remote-bandwidth/v0"
 DELTA = WINDOW_DELTA
-"""`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`)."""
+"""`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`).  An accepted session's `eps` is this
+δ and its samples' rejected first words, and leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): it
+reads δ + Σ_t adv_t (`ledger.DELTA_FORM`)."""
 WORD_BYTES = 64
 DATA_BYTES = WORD_BYTES - 1
 """Each 64-byte little-endian piece of a block carries 63 bytes of the store under a zero top byte, so every word is below
@@ -69,17 +73,26 @@ def payloads(store: bytes) -> list[bytes]:
                      for u in range(codec.BLOCK_BYTES // WORD_BYTES)) for b in range(n)]
 
 
+def eps(windows: int, groups_per_coin: int, samples: int) -> Fraction:
+    """`RemoteAudit.Protocol.eps`: δ + ⌈W/g⌉·s/2^64 for a session of W `windows`, g `groups_per_coin` and s `samples`."""
+    return DELTA + Fraction(C.openings_coins(windows, groups_per_coin) * samples, 2 ** 64)
+
+
 def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
     """`RemoteAudit.Protocol.certify`: an accepted session's public outputs `{"eps", "q_bytes"}` and its profile."""
+    if record.samples is None:
+        raise ValueError("the record states no samples, at which eps charges each draw's rejection: certify a "
+                         "session's record (`Session.record`)")
     windows, _ = audit.pooled_windows(record)
-    us, ss = sum(u for u, _ in windows), sum(s for _, s in windows)
+    us = sum(u for u, _ in windows)
     base = {"delta": str(DELTA), "receipts": us, "windows": [[u, s] for u, s in windows]}
     try:
         b = pooled.bound(windows, DELTA)
     except pooled.Refused as e:
         return {"eps": "0", "q_bytes": 0}, base | {"gaps": [str(e)], "wrong": None}
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
-    return ({"eps": str(Fraction(2 ** 24 + ss, 2 ** 64)), "q_bytes": (us - wrong) * codec.BLOCK_BYTES},
+    return ({"eps": str(eps(len(record.windows), record.groups_per_coin, record.samples)),
+             "q_bytes": (us - wrong) * codec.BLOCK_BYTES},
             base | {"gaps": [], "wrong": str(b.wrong)})
 
 
@@ -297,8 +310,9 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     here. With `remote-audit-protocol` among the period's tools the Lean verifier answers and must agree
     with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
     ran each party, and whether `trusted-host`'s premise holds (`verifier_party.placement`), go in
-    `bandwidth.json` and in an accepted answer's profile (`placement`)."""
-    from . import verifier_party  # noqa: PLC0415  (it imports this module)
+    `bandwidth.json` and in an accepted answer's profile (`placement`); `bandwidth.json` names the term its `eps`
+    leaves out beside it (`ledger.NAMED_TERMS`)."""
+    from . import ledger, verifier_party  # here: the party imports this module, and this function alone reads the ledger
 
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools = doc.get("tools") or {}
@@ -319,6 +333,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     out.mkdir(parents=True, exist_ok=True)
     (out / "bandwidth.case.json").write_text(json.dumps(period.case, sort_keys=True))
     (out / "bandwidth.json").write_text(json.dumps({"answer": answer_, "eps": str(period.eps), "lean": lean,
+                                                    "named": ledger.NAMED_TERMS,
                                                     "placement": where | {"reported_host": side["host"]},
                                                     "q_bytes": period.public("q_bytes"), "seconds": seconds,
                                                     "store_bytes": len(store)}, sort_keys=True, indent=1))

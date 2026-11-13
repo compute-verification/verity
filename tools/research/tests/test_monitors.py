@@ -612,6 +612,18 @@ def test_drift_is_one_incident_per_node_and_kind_and_an_unreadable_node_fails_th
         M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps(stopped), "")))))
 
 
+def test_drift_pages_on_a_node_whose_null_device_is_broken_with_the_command_that_repairs_it():
+    fault = {"what": "/dev/null has mode 644, not 666: a redirect to it fails for every user but root", "fix": "sudo chmod 666 /dev/null"}
+    rep = {"vy-nebius-cpu-1": {"commit": "c", "strays": [], "entries": [{"path": "/a", "state": "stale", "restart": None}],
+                               "distrusted": [], "null_device": fault},
+           "vy-nebius-cpu-2": {"commit": "c", "strays": [], "entries": [], "distrusted": [], "null_device": None}}
+    null, stale = M.deploy_drift(M.Ctx(now=T0, run=Run((has("drift"), (1, json.dumps(rep), "")))))
+    assert (null.key, null.severity) == ("vy-nebius-cpu-1:null-device", "page") and stale.key == "vy-nebius-cpu-1:stale"
+    assert null.text == ("*vy-nebius-cpu-1: /dev/null has mode 644, not 666: a redirect to it fails for every user but root*. "
+                         "Repair it on the node: `sudo chmod 666 /dev/null`.")
+    assert null.cleared.startswith("*Cleared:* vy-nebius-cpu-1's null device")
+
+
 def test_a_retired_monitors_open_incident_is_cleared_once_with_why_it_retired(tmp_path):
     assert "unpreserved" in M.RETIRED and "unpreserved" not in {m.id for m in M.MONITORS}
     state = M.new_state()

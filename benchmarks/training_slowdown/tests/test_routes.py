@@ -1,3 +1,4 @@
+import contextlib
 import math
 from fnmatch import fnmatchcase
 
@@ -35,6 +36,29 @@ def test_subsets_schedule_after_the_ramp_is_linear_half_a_cosine_or_constant():
     assert [subset.schedule(constant, t, 4) for t in range(4)] == [0.5, 1.0, 1.0, 1.0]
     lora = config.route("lora").DIALS
     assert "schedule" not in lora and [subset.schedule(lora, t, 4) for t in range(4)] == [1.0, 0.75, 0.5, 0.25]
+
+
+def test_a_routes_forward_runs_under_bf16_autocast_on_a_cpu():
+    """An entry's program is its job's on every device: the step runs the model's forward under bf16 autocast on a
+    CPU as on a GPU, so its products are bf16 there too, and the weights stay float32."""
+    seen = []
+
+    class Probe(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.w = torch.nn.Parameter(torch.randn(8, 8, generator=torch.Generator().manual_seed(0)))
+
+        def forward(self, x):
+            out = self.w[x] @ self.w
+            seen.append((torch.is_autocast_enabled("cpu"), out.dtype))
+            return out
+
+    model = Probe()
+    rows = torch.randint(0, 8, (2, 5), generator=torch.Generator().manual_seed(1))
+    dials = subset.DIALS | {"lr": 1e-2, "micro_batches": 2}
+    subset.step(model, rows, [torch.optim.SGD(model.parameters(), lr=1e-2)], dials, 0, 4)
+    assert seen == [(True, torch.bfloat16)] * 2 and model.w.dtype == torch.float32
+    assert not torch.is_autocast_enabled("cpu")
 
 
 def test_every_module_of_routes_passes_the_screen_a_route_does():
@@ -193,9 +217,11 @@ def test_a_loaded_state_steps_at_its_groups_own_rates_and_one_from_before_them_a
     assert continued(dials | {"gain_lr": 0.002}, before_own_rates=False) == [0.01 * factor, 0.002 * factor]
 
 
-def test_three_rates_under_one_optimizer_are_torchs_three_groups():
+def test_three_rates_under_one_optimizer_are_torchs_three_groups(monkeypatch):
     """AdamW over the whole model with a rate for the gains and one for the embedding, on a cosine schedule, against
-    torch's AdamW over three groups stepped at those rates: the same weights."""
+    torch's AdamW over three groups stepped at those rates: the same weights. What is held is the update's rule, so
+    the route's forward runs in float32 as the reference's does: torch's autocast is a no-op while the test runs."""
+    monkeypatch.setattr(torch, "autocast", lambda *args, **kwargs: contextlib.nullcontext())
     dials = subset.DIALS | {"lr": 0.01, "gain_lr": 0.002, "embed_lr": 0.003, "weight_decay": 0.05, "warmup": 2,
                             "schedule": "cosine"}
     torch.manual_seed(0)
@@ -230,6 +256,20 @@ def ternary(v: torch.Tensor, keep: float) -> torch.Tensor:
     kept = (flat.abs() >= flat.abs().topk(math.ceil(keep * flat.numel())).values[-1]) & (flat != 0)
     scale = flat[kept].abs().mean().float().half().double() if kept.any() else 0.0
     return (flat.sign() * kept * scale).view_as(v).float()
+
+
+def test_qats_forward_runs_under_bf16_autocast_on_a_cpu():
+    """Route `qat` has a step of its own, and it casts as `subset`'s does: the model's forward runs under bf16
+    autocast on a CPU as on a GPU, and the latents and the start's copies stay float32."""
+    dials = qat.DIALS | {"targets": "blocks.0.wq.weight", "lr": 1e-2, "micro_batches": 2}
+    torch.manual_seed(0)
+    model, optimizers = qat.build(SHAPE, dials)
+    seen = []
+    model.register_forward_hook(lambda module, args, out: seen.append((torch.is_autocast_enabled("cpu"), out.dtype)))
+    rows = torch.randint(0, SHAPE["vocab"], (2, 9), generator=torch.Generator().manual_seed(1))
+    qat.step(model, rows, optimizers, dials, 0, 4)
+    assert seen == [(True, torch.bfloat16)] * 2 and not torch.is_autocast_enabled("cpu")
+    assert all(layer.v.dtype == layer.start.dtype == torch.float32 for layer in qat.coded(model, dials).values())
 
 
 def test_a_qat_step_reads_the_start_plus_its_codes_and_steps_the_latents_straight_through():

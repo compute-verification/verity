@@ -4,7 +4,7 @@
 # arm held 40 s for its steady clock, with nvidia-smi sampling clock and power every 200 ms. Clocks are read, never set.
 #
 #   research run --on MACHINE --project verity --source /workspace --cwd source \
-#     --env GPU_LEASE_WHO=ampere -- bash benchmarks/pouw/edited_gemm/run80.sh
+#     --env GPU_LEASE_WHO=NAME -- bash benchmarks/pouw/edited_gemm/run80.sh
 #
 # Every output is under $OUT: build.log, sass/, gate-sass.json, gate/ (the dump), gate.jsonl, ref.jsonl, bench.jsonl,
 # hold-<arm>.jsonl, smi-samples.csv, summary.json. EG80_NVCC adds nvcc flags (-DEG80_NST=3: a 3-stage ring).

@@ -1,0 +1,32 @@
+{
+ "definitions": {
+  "LinearARow_v2{K=2048,R=1,ROUND=0,CALL=0}": {
+   "and": 0,
+   "type": "90cb212f252f964ac3a9a8a5f28984d704badcff77ad2013d5840b2791c01a040e018d5eba87643e9ef4ab84fc0adf0caa51e1107ed561358e900a15cfec7ed8"
+  },
+  "LinearARow_v2{K=2048,R=32,ROUND=1,CALL=1}": {
+   "and": 0,
+   "type": "90cb212f252f964ac3a9a8a5f28984d704badcff77ad2013d5840b2791c01a040e018d5eba87643e9ef4ab84fc0adf0caa51e1107ed561358e900a15cfec7ed8"
+  },
+  "LinearARow_v2{K=64,R=1,ROUND=0,CALL=0}": {
+   "and": 0,
+   "type": "ad5171abda11c860b820736b0efcf1ff79503a87d97393d853b1b29e7809c768c110731efeeb78e5decef29787bdc83e9bd222fc548a56dbc2ad8ebc9209641f"
+  },
+  "LinearARow_v2{K=8192,R=1,ROUND=0,CALL=3}": {
+   "and": 0,
+   "type": "11ffb93052df6906e7b62fc077e9ed3c0ace4557c571a018dcd85849d983de6e0d3831f61ca3e7594b1ae40b58ad2d7c69a7ea3a7a3bf4b684f01cff60e72721"
+  },
+  "LinearOut_v2{N=16384,W=256,ROUND=0,CALL=2}": {
+   "and": 0,
+   "type": "59696ca13d6e87c745f99cfe2b2007343b5e97325cd71353e0cd11807acc340a15fbfc8d375f34cc4ab0b64dafb80d854c2965e233a83bb736048aeb2b6b3c07"
+  },
+  "LinearOut_v2{N=2048,W=64,ROUND=0,CALL=3}": {
+   "and": 0,
+   "type": "35d346e1b9aafbae27a05d5ac68e18a1fb57d52dc80a8df190e4cddfd7541c00763dee9172b921f6c48e340c81218c3d227be95263540670ce86c696f72b2e47"
+  },
+  "LinearOut_v2{N=3072,W=64,ROUND=0,CALL=0}": {
+   "and": 0,
+   "type": "407544ca598adcd584fffd0e0d0f63adccaa18a9708216668c0b7b41f2b0760df3fdc20b7f16bcc3e6b522e04ef91eac834d091b92305564c8316940797d6d53"
+  }
+ }
+}

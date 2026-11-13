@@ -551,7 +551,9 @@ def test_the_catalog_s_run_builds_every_record_into_a_fresh_cache_tars_it_and_gi
     assert (res["status"], res["detail"]) == (status, detail), res
     (c,) = calls
     assert c["argv"][3:9] == ["--all", "--records-only", "--cache", str(work / "cache"), "--slices", str(work / "slices")]
-    assert c["env"] == {**os.environ, **circuit_catalog.THREADS} and c["env"]["OMP_NUM_THREADS"] == "1", \
+    wanted = {**os.environ, **circuit_catalog.THREADS}
+    differ = sorted(k for k in c["env"].keys() | wanted.keys() if c["env"].get(k) != wanted.get(k))
+    assert differ == [] and c["env"]["OMP_NUM_THREADS"] == "1", \
         "each of its builds, one per core at once, has one-thread pools"
     assert not c["cache"] and not (work / "cache").exists() and not (work / "slices").exists(), "both are the task's scratch"
     if status == "pass":

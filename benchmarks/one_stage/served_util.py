@@ -21,8 +21,9 @@ that clock's mean over the window, and ``tensor_active_pct_at_ref`` the tensor-b
 hold at ``--ref-mhz`` (1,830): the mean over samples of Tensor Active times the sample's clock over the reference.
 
 ``served_stack`` is false for the arms that override serve-openai's engine options and drop the bench row (NOT_SERVED),
-and for a Commit arm served async (``<arm>-async``, whose bench row declares sync scheduling), and their UTIL lines say so,
-so a table can't file them as the served step.
+and for a Commit arm served async (``<arm>-async``) unless its bench row declares async scheduling (``serve.json``'s
+``row_scheduling``, which serve-openai's row check held the engine to), and their UTIL lines say so, so a table can't
+file them as the served step.
 """
 from __future__ import annotations
 
@@ -335,6 +336,16 @@ def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None, ref_
     return out
 
 
+def row_declares_async(serve_dir: Path | None) -> bool:
+    """Whether the bench row serve-openai checked its engine against declares async scheduling (``serve.json``'s
+    ``row_scheduling``); False without a serve dir, a serve.json or a row."""
+    try:
+        doc = json.loads((serve_dir / "serve.json").read_text()) if serve_dir is not None else {}
+    except (OSError, ValueError):
+        return False
+    return (doc.get("row_scheduling") or {}).get("async_scheduling") is True
+
+
 def windows(serve_dir: Path) -> dict[str, Any]:
     """windows.jsonl's sizes and timings (no roots, requests or rows), and summary.json's counts."""
     got: dict[str, Any] = {}
@@ -375,7 +386,7 @@ def main() -> int:
     ap.add_argument("--ref-mhz", type=float, default=1830.0)
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
-    served = a.arm not in NOT_SERVED and not str(a.arm).endswith("-async")
+    served = a.arm not in NOT_SERVED and (not str(a.arm).endswith("-async") or row_declares_async(a.serve_dir))
     doc: dict[str, Any] = {"arm": a.arm, "served_stack": served, "T": a.T, "N": a.N,
                            **analyse(a.sqlite, a.trace, a.T, last_send(a.timings), a.ref_mhz)}
     if a.serve_dir is not None:

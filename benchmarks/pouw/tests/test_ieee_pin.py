@@ -8,17 +8,15 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import ieee_pin as IP
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
-
-import ieee_pin as IP  # noqa: E402
-import sass_gate as SG  # noqa: E402
-
+SG = IP.SG
 UUID = "GPU-00112233-4455-6677-8899-aabbccddeeff"
 
 
@@ -64,6 +62,17 @@ def test_a_control_must_differ_somewhere():
     assert IP.judge_run(with_check(good_run(), "host_div", bad=9), control=True) == []
 
 
+def test_copied_out_of_the_tree_beside_the_gate_it_holds_that_copy(tmp_path):
+    """The script and the gate also run copied beside a build (`settings.STANDALONE`): there the gate is the file beside
+    the script, wherever the tree keeps it."""
+    for src in (IP.__file__, SG.__file__, SG.PINS):
+        shutil.copy(src, tmp_path / Path(src).name)
+    got = subprocess.run([sys.executable, "-c", "import ieee_pin as I; print(I.SG.__file__, I.SG.PINS)"], cwd=tmp_path,
+                         capture_output=True, text=True)
+    here = tmp_path.resolve()
+    assert got.stdout.split() == [str(here / "sass_gate.py"), str(here / "sass_pins.json")], got.stderr
+
+
 def test_every_shipped_toolkit_names_a_run_of_these_builds():
     """A repin that changes a body drops its toolkit's run (`sass_gate.update_pins`), and a toolkit without one exempts
     nothing; a change to the pinned builds needs a new run too."""
@@ -74,7 +83,8 @@ def test_every_shipped_toolkit_names_a_run_of_these_builds():
 
 
 def test_a_toolkit_names_its_target_and_a_run_has_one():
-    assert (IP.arch_of("13.0.1"), IP.arch_of("13.0.1-sm_90a")) == ("sm_120a", "sm_90a") and IP.nvcc_args("sm_120a") == IP.NVCC_ARGS
+    assert (IP.arch_of("13.0.1"), IP.arch_of("13.0.1-sm_90a")) == ("sm_120a", "sm_90a")
+    assert "arch=compute_120a,code=sm_120a" in IP.nvcc_args("sm_120a")
     assert "arch=compute_90a,code=sm_90a" in IP.nvcc_args("sm_90a")
     with pytest.raises(IP.PinFailed, match="no target sm_100a"):
         IP.arch_of("13.0.1-sm_100a")

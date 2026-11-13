@@ -1,4 +1,4 @@
-"""`machine-model capacity`: the certified share σ of a window's capacity, read on the pooled certified load."""
+"""`machine-model capacity`: the verified share σ of a window's capacity, read on the pooled certified load."""
 from __future__ import annotations
 
 import json
@@ -21,7 +21,7 @@ def pi():
 def test_the_empty_gpu_certifies_nothing_and_offers_a_full_tensor_pipe(pi):
     x = C.cell(pi, [(1.0, C.Work("empty", {}))])
     assert x.sigma() == pytest.approx(0.0) and x.credit() == 0.0
-    assert x.pooled.mix[C.MMA] == pytest.approx(1 / C.TENSOR_CYCLES)
+    assert x.pooled.mix[E.MMA] == pytest.approx(1 / C.TENSOR_CYCLES)
     assert x.empty > 1 / C.TENSOR_CYCLES  # the scalar pipes add useful work beside the tensor pipe
 
 
@@ -32,7 +32,7 @@ def test_every_devices_empty_gpu_offers_its_own_tensor_pipe(dev):
     data = device(dev)
     pi_d = E.machine("", data)
     cls = {E.honest(p, data).cls for p in E.profiles(data)}
-    assert C.MMA not in cls
+    assert E.MMA not in cls
     u = C.useful_of(data)
     x = C.cell(pi_d, [(1.0, C.Work("empty", {}))], u)
     tensor = sum(u[k] * v for k, v in x.pooled.mix.items() if k in cls)
@@ -46,7 +46,7 @@ def test_useful_of_sm120_is_useful():
 def test_the_tensor_pipe_alone_leaves_the_scalar_pipes_open(pi):
     full = C.cell(pi, [(1.0, C.tensor_filler(1.0, "none"))])
     assert full.tensor() == pytest.approx(1.0) and full.credit() == pytest.approx(1.0)
-    assert 0.7 < full.sigma() < 0.85 and C.MMA not in full.pooled.mix
+    assert 0.7 < full.sigma() < 0.85 and E.MMA not in full.pooled.mix
 
 
 def test_certified_lane_chains_that_saturate_issue_leave_nothing(pi):
@@ -81,11 +81,11 @@ def test_the_shares_of_the_cell_must_sum_to_one(pi):
 def test_parse_reads_each_term_as_its_constructor():
     w = C.parse("duo:0.6+lane:0.3+served:0.16:xin13+IMAD=0.01")
     m = 0.6 / 16
-    assert w.n[C.MMA] == pytest.approx(m + 0.01)
+    assert w.n[E.MMA] == pytest.approx(m + 0.01)
     assert w.n["ALU"] == pytest.approx(m * 8 + 0.15 + 0.01 * 4)
     assert w.n["IMAD"] == pytest.approx(m * 4 + 0.15 + 0.01 * 2 + 0.01)
     assert C.parse("xin13:0.8*2").n["ALU"] == pytest.approx(0.05 * 4 * 2)
-    assert C.parse("arx:0.8").n == pytest.approx({C.MMA: 0.05, "ALU": 0.05 * 4})
+    assert C.parse("arx:0.8").n == pytest.approx({E.MMA: 0.05, "ALU": 0.05 * 4})
     with pytest.raises(SystemExit, match="can't read"):
         C.parse("duo")
 
@@ -95,5 +95,7 @@ def test_the_cli_reports_the_pooled_sigma(capsys):
     d = json.loads(capsys.readouterr().out)
     assert d["vector"] == VEC and len(d["groups"]) == 2 and d["binding"] == ["JI3n_0"]
     assert d["sigma"] == pytest.approx(0.8679, abs=1e-4) and d["sigma"] <= d["sigma_placed"] + 1e-12
+    assert d["eps_capacity"] == pytest.approx(1 - d["sigma"])
     assert main(["capacity", "--vector", VEC, "duo:0.6"]) == 0
-    assert "σ 0.6411" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "σ 0.6411" in out and "ε_capacity 0.3589" in out

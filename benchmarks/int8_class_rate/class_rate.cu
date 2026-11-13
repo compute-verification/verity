@@ -326,7 +326,7 @@ static void run_wgmma(int cls, double secs, const std::vector<double>& ratios, c
     CK(cudaMemcpy(L.data(), logd, L.size() * 8, cudaMemcpyDeviceToHost));
     return std::make_pair(s, L);
   };
-  const int cap = LOGMAX * LOGN - LOGN;
+  const int max_iters = LOGMAX * LOGN - LOGN;
   launch(4096);
   launch(LOGN * 4);
   CK(cudaDeviceSynchronize());
@@ -335,7 +335,7 @@ static void run_wgmma(int cls, double secs, const std::vector<double>& ratios, c
   double alone = 0;
   for (double ratio : ratios) {
     if (ratio == 0) {
-      const int iters = std::min((double)cap, secs / t_iter);
+      const int iters = std::min((double)max_iters, secs / t_iter);
       launch(iters);
       CK(cudaDeviceSynchronize());
       auto [s, L] = get();
@@ -356,7 +356,7 @@ static void run_wgmma(int cls, double secs, const std::vector<double>& ratios, c
       const double rt = frac * ref;
       auto [reps, pace] = h.pace(ratio * 1e-6 * (base > 0 ? base : rt), secs);
       const u64 tpace = frac < 1 ? (u64)(TB * macs_per_iter / (rt / nsm) * 1e9) : 0;
-      const int iters = std::min((double)cap, (1.25 * secs + 1.0) * (frac < 1 ? rt / nsm / macs_per_iter : 1 / t_iter));
+      const int iters = std::min((double)max_iters, (1.25 * secs + 1.0) * (frac < 1 ? rt / nsm / macs_per_iter : 1 / t_iter));
       launch(iters, tpace);
       wait_k<<<1, 1, 0, sh>>>(started, nsm);
       h.launch(sh, reps, pace);

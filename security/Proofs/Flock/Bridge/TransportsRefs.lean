@@ -57,8 +57,9 @@ bytes up to `L.d` levels, and the value's bits. At the session's binding with or
 
 What the verifier checks, at every public file it accepts (`ref_lt_cnt`): a unit's ref is below its port's count
 (`HmRow.loadPublic`'s refs check, and its refusal of an empty table, `sharedRows_spec`, for a unit past the file's
-instances). Under `dupName` the ports' names, so their domains, differ, and `RootFixesDomainL` makes their roots differ
-(`rootsDistinctL_of_fixes`): the verifier opens a row at its own port, of its own leaf count.
+instances). At the public file's leaf map each port's domain is its published one (`LeafMap.ofPublic_dom`); at
+`dupId = false` those differ, and `RootFixesDomainL` makes their roots differ (`rootsDistinctL_of_fixes`): the verifier
+opens a row at its own port, of its own leaf count.
 
 `transportsLiveC_of_R`: at `pub.tables = none` the leaf map is `LeafMap.ident` and `TransportsLiveCR` is
 `TransportsLiveC`.
@@ -124,13 +125,13 @@ theorem leavesL_width (c : Flock.Circuit) (L : LeafMap) (q : ℕ) : ∀ x ∈ le
   exact Flock.Sha512.hash_size _
 
 theorem rootsOfL_getD (c : Flock.Circuit) (L : LeafMap) {q : ℕ} (hq : q < c.ports.size) :
-    (rootsOfL c L).getD q [] = bs (Flock.FV3.root (domOf c q) (leavesL c L q) Flock.Sha512.hash) := by
+    (rootsOfL c L).getD q [] = bs (Flock.FV3.root (L.dom q) (leavesL c L q) Flock.Sha512.hash) := by
   simp [rootsOfL, List.getD_eq_getElem?_getD, hq]
 
 /-- Port `q` as the verifier registers it at a leaf map (`portsOfL`'s `q`-th). -/
 def portAtL (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) (q : ℕ) : Flock.Registered.Port :=
   { name := (c.ports[q]?.map (·.name)).getD "", value := "", root := bytes (roots.getD q []), leaves := L.cnt q,
-    words := none, wordBits := 0, domain := domOf c q, readsRel := #[], schema := schemaOf c q }
+    words := none, wordBits := 0, domain := L.dom q, readsRel := #[], schema := schemaOf c q }
 
 theorem portsOfL_eq (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) :
     portsOfL c L roots = (Array.range c.ports.size).map (portAtL c L roots) := rfl
@@ -147,20 +148,15 @@ theorem find?_portsOfL (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) {q :
 theorem portIdxOf_eq {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r) : portIdxOf C rows i = r.port := by
   simp [portIdxOf, hr]
 
-/-- **Distinct roots at a leaf map**: under `dupName` each port has its own name, so its own domain, and
-`RootFixesDomainL` gives equal roots one domain. -/
-theorem rootsDistinctL_of_fixes {c : Flock.Circuit} {L : LeafMap}
-    (hn : Flock.Registered.dupName c = none) (hf : RootFixesDomainL c L) :
+/-- **Distinct roots at a leaf map**: under the published domains (`domOf`), which `dupId = false` makes pairwise
+distinct, and `RootFixesDomainL`, which gives equal roots one domain. -/
+theorem rootsDistinctL_of_fixes {c : Flock.Circuit} {pub : Flock.Public} {L : LeafMap} (hL : L.dom = domOf c pub)
+    (hn : Flock.PortRoots.dupId c pub = false) (hf : RootFixesDomainL c L) :
     ∀ q q' : ℕ, q' < q → q < c.ports.size → (rootsOfL c L).getD q' [] ≠ (rootsOfL c L).getD q [] := by
   intro q q' hlt hq he
   have hd := hf q q' hlt hq he
-  have hname : (c.ports[q']?.map (·.name)).getD "" = (c.ports[q]?.map (·.name)).getD "" :=
-    String.toByteArray_inj.1 hd
-  have h1 : c.ports[(⟨q', by omega⟩ : Fin c.ports.size)].name = c.ports[(⟨q, hq⟩ : Fin c.ports.size)].name := by
-    simpa [show q' < c.ports.size by omega, hq] using hname
-  have := congrArg Fin.val (FlockSoundness.Discharge.ZkReg.names_once_of_dupName hn _ _ h1)
-  simp at this
-  omega
+  rw [hL] at hd
+  exact Flock.PortRoots.idOf_ne_of_dupId_false hn hlt hq hd
 
 end Layout
 
@@ -179,21 +175,21 @@ theorem opens_commitDepL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option
     (hleaf : H512 (hm96Input (FlockSoundness.Discharge.HiddenExec.encPortH c.ports[r.port]! v) y) =
       H512 (K512.leafPrefix ++ (L.dig r.port r.leaf).data.toList)) :
     (commitDepL C rows c L (rootsOfL c L)).Opens sha512Msg (rootsOfL c L)
-      ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf)
+      ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf)
         (L.d - Flock.log2ceil (L.cnt r.port)) (List.ofFn fun k : Fin r.width => v.get k.val)⟩ = true := by
-  have hsz : ∀ z ∈ FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf, z.size = 64 :=
+  have hsz : ∀ z ∈ FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf, z.size = 64 :=
     FlockC3.RegLevels.sibsV_size _ _ (leavesL_width c L r.port) (by rw [leavesL_size]; exact hu)
-  have hsl : (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf).length =
+  have hsl : (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf).length =
       Flock.log2ceil (L.cnt r.port) := by
     rw [FlockC3.RegLevels.sibsV_length, leavesL_size]
-  have hdd : (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf).length +
+  have hdd : (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf).length +
       (L.d - Flock.log2ceil (L.cnt r.port)) = L.d := by
     rw [hsl]; omega
   have hpo : placeOf C rows i = ⟨r.width, ⟨r.place, hpl⟩⟩ := placeOf_eq hr hpl
   have hp1 : (placeOf C rows i).1 = r.width := by rw [hpo]
   have hp2 : (placeOf C rows i).2.val = r.place := by rw [hpo]
   have hval : SamplingDeploy.valOf (placeOf C rows) (bitsOf L.d)
-      ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf)
+      ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf)
         (L.d - Flock.log2ceil (L.cnt r.port)) (List.ofFn fun k : Fin r.width => v.get k.val)⟩ W = v := by
     refine SamplingDeploy.valOf_eq (by rw [hp1]; exact hW) hv (by rw [hp1]; exact hvw) fun j => ?_
     unfold SamplingDeploy.rowFn
@@ -205,17 +201,17 @@ theorem opens_commitDepL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option
       rw [bitsOf_dataOfL hy hsz hdd]
       simp [hj]
   have hrow : rowDep C rows c (placeOf C rows) (bitsOf L.d)
-      ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf)
+      ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf)
         (L.d - Flock.log2ceil (L.cnt r.port)) (List.ofFn fun k : Fin r.width => v.get k.val)⟩ =
       FlockSoundness.Discharge.HiddenExec.encPortH c.ports[r.port]! v := by
     rw [rowDep_eq (W := W)
-      ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf)
+      ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf)
         (L.d - Flock.log2ceil (L.cnt r.port)) (List.ofFn fun k : Fin r.width => v.get k.val)⟩ hr hq hb hpl h16 hW,
       hval]
   have hπ : pathOfL C rows L
-      ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf)
+      ⟨i, v.get r.place, dataOfL y (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf)
         (L.d - Flock.log2ceil (L.cnt r.port)) (List.ofFn fun k : Fin r.width => v.get k.val)⟩ =
-      SamplingDeploy.pathMsg (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf) := by
+      SamplingDeploy.pathMsg (FlockC3.RegLevels.sibsV (L.dom r.port) (leavesL c L r.port) r.leaf) := by
     unfold pathOfL
     dsimp only
     rw [portIdxOf_eq hr, ← hsl, pathOf_dataOfL hy hsz]
@@ -239,12 +235,12 @@ theorem opens_commitDepL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option
   · rw [leavesL_size]
     rfl
   · exact leavesL_width c L r.port
-  · show Flock.FV3.root (domOf c r.port) (leavesL c L r.port) Flock.Sha512.hash =
+  · show Flock.FV3.root (L.dom r.port) (leavesL c L r.port) Flock.Sha512.hash =
       bytes ((rootsOfL c L).getD r.port [])
     rw [rootsOfL_getD c L hq, Claims.Sampling.bytes_bs]
   · exact hu
   · show (leavesL c L r.port)[r.leaf]! =
-      Flock.Registered.leafAs (schemaOf c r.port) (domOf c r.port) r.leaf
+      Flock.Registered.leafAs (schemaOf c r.port) (L.dom r.port) r.leaf
         (Flock.Hm96.Default512.treeLeaf (L.dig r.port r.leaf))
     rw [getElem!_pos _ _ (by rw [leavesL_size]; exact hu)]
     simp [leavesL]
@@ -468,7 +464,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **`Bridge.TransportsLiveCR` holds** (`transports_shapedS`): `dupName` and `RootFixesDomainL` give distinct roots,
+/-- **`Bridge.TransportsLiveCR` holds** (`transports_shapedS`): `dupId` and `RootFixesDomainL` give distinct roots,
 and the verifier's public-file check every unit's ref below its port's count (`ref_lt_cnt`). -/
 theorem transportsLiveCR : Bridge.TransportsLiveCR := by
   intro n Reg I ht D hD hU pub hpub hscope hrows hdup hroots kd _ hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags hCust τ
@@ -476,7 +472,8 @@ theorem transportsLiveCR : Bridge.TransportsLiveCR := by
   obtain ⟨⟨r, hr, hv, hvw⟩, hy⟩ := hcan
   obtain ⟨p, v, y⟩ := o
   exact Bridge.transports_shapedS (dj := dj) (y₀ := y₀) (ht := ht) (hc := Flock.Desc.parse_flat hD)
-    (hscope := hscope) (hU := hU) (hpub := hpub) _ hrows (Bridge.rootsDistinctL_of_fixes hdup hroots)
+    (hscope := hscope) (hU := hU) (hpub := hpub) _ hrows
+    (Bridge.rootsDistinctL_of_fixes (Bridge.LeafMap.ofPublic_dom _ _ _) hdup hroots)
     (fun u q => Bridge.ref_lt_cnt hpub u.isLt q.isLt) hr p v y hv hvw hy he
 
 /-- **`TransportsLiveCR` is `TransportsLiveC` at one leaf per unit**: at `pub.tables = none` the public file's leaf map

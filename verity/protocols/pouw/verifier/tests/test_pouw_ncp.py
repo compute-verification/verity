@@ -11,8 +11,8 @@ import pytest
 
 import ncp_lean as NL
 import pouw_vectors as MV
-from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, PoUWScheme, Shape, Tile
 from verity.protocols.pouw.prover.schemes import get, ncp
+from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, PoUWScheme, Shape, Tile
 
 PINNED = json.loads((Path(__file__).with_name("vectors") / "ncp.json").read_text())
 
@@ -52,7 +52,7 @@ def test_route_u_is_the_shifted_unbiased_sums(kind):
     assert all(0 <= v + ncp.BETA <= 255 for row in ops.x for v in row) and all(-128 <= v <= 127 for row in ops.y for v in row)
 
 
-def test_production_p_is_the_research_stores():
+def test_word_p_at_4096_is_the_certified_one():
     """The word-granular P at k = 4096 is the certified one: SHA-256 24e68f30… of its entries as 2-byte little-endian integers."""
     assert PINNED["word_p_sha256"]["4096"] == "24e68f30edbe538e2842266ac6b917a8a0ccf3ee0b4f8bf2cb1d8fe5c5943854"
 
