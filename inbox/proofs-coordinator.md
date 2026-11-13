@@ -123285,3 +123285,93 @@ This turn began on a new machine (up for under a minute at 05:34Z). Nothing was 
 Next: the README of the SPOT verifier under its Markdown cap, in a pull request of its own, and its ready line.
 
 For the table: RELAX | second read of #9597 at `387823abea` | 2, 3, 4, 5 hold | 1: statement true and about the verifier's check; `H ≤ 2^16` is the proof's bound, not the check's; three phrases to reword | no Lean run; kernel replay not done
+
+
+## HELDOF, Fri 05:48Z: `488e6131f4` COMPILED (`28f4`, rc 0; "axiom probe: none of its 21 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"); STATEMENT CHANGE: the held names are the two registrations' BY CONSTRUCTION, `namesHeld_of`, head `02e64d44d7`, COMPILED (`e461`, rc 0, `'SpotFlock.HeldOf.namesHeld_of' depends on axioms: [propext, Classical.choice, Quot.sound]`), no new premise; my `popOk` hypothesis is the run's own check word for word; the partition answer: the second way holds, but it is not a two-line lemma
+
+In plain words: everything I owed at 05:40Z has compiled. `heldOf` builds the held state from the two registrations, and a new theorem says its two name lists are exactly those registrations' names. It holds because `held₀` sets them that way, so ACCEPTS needs no new hypothesis. My population hypothesis matches what the run checks. SESSIONOF's partition worry is real but closable without touching the verifier: every place Flock's setup reads the partition object already has a "same up to tree shape" lemma on the join. What is missing is one lemma that carries those through the setup's three calls.
+
+**Compiled** (both on vy-nebius-2, `--siblings`, siblings clean):
+
+| Run | Head | File | Result |
+|---|---|---|---|
+| `r20261113-050209-28f4` | `488e6131f4` | `HeldOfRun.lean` | rc 0; "axiom probe: none of its 21 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" [run]. Lines for `twoHolds_of`, `twoHolds_of_ok`, `twoHolds_of_files`, `two_held₀` and `xS₀_of_files` each read `[propext, Classical.choice, Quot.sound]` [run]. |
+| `r20261113-054143-e461` | `02e64d44d7` | `HeldOf.lean` | rc 0, lean exit 0 in 111 s; "axiom probe: none of its 18 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" [run]. `refHeaders_eq`, `refsAre_of`, `namesHeld_of`, `heldMatches_of` and `heldMatches_form` each read `depends on axioms: [propext, Classical.choice, Quot.sound]` [run]. |
+
+`28f4` built `HeldOf`, `HeldOfFiles` and `HeldOfCheck` as dependencies, so their theorems weren't probed there. `e461` probed `HeldOf`'s own theorems. `HeldOfFiles` and `HeldOfCheck` theorems are built, not probed [run].
+
+**STATEMENT CHANGE: the names field** (05:37Z ask). It's by construction, so there is no `HeldMatches` field:
+
+```lean
+theorem namesHeld_of (hh : heldOf i it u = some h) :
+    h.boundaryNames = namesOf i.params.verifier ∧ h.interiorNames = namesOf it.params.verifier
+```
+
+- **Before:** nothing said what `h.boundaryNames` and `h.interiorNames` are.
+- **After:** they are `namesOf` of the first and the second registration's verifier. The proof is `rfl` after `heldOf_spec`, since `held₀` sets both fields that way [read: `HeldOf.lean`].
+- It adds a theorem and changes no existing statement, no listed guarantee and nothing the verifier accepts. `namesOf v = ⟨(v.ports.map (·.1)).toList, (v.registered.map (·.1)).toList⟩` [read].
+- ACCEPTS: merge `02e64d44d7` (branch `cursor/proofs-heldof-4c7b`). `RecordsHeldAt` can use `(namesHeld_of hh).1` and `.2` with the run's `R3-ports` / `R7-values` checks.
+
+**The `popOk` hypothesis** (05:07Z item 3) [read: `Spot/Run.lean:287–301`]. `Run.run` binds `let v := i.params.verifier`. It reads `n` from `nat? (getD i.record "population")`, sets `v := { v with law, workTable }`, then refuses on `!Slots.popOk v.program v.query n`. The update leaves `program` and `query` alone, so the check is `Slots.popOk i.params.verifier.program i.params.verifier.query n`. That is `twoHolds_of`'s `hp` word for word, so the title carries no flag. RUNSAS: `HeldOfRun.lean` at `02e64d44d7` has the same `hp` as at `488e6131f4`.
+
+**Partition question** (SESSIONOF 04:24Z; the coordinator 05:07Z item 2). Can `SessionMatch.partition : si.read.I.partition = I.partition` be weakened to `Same`?
+- **The first way, as MESSAGES proposed at 04:5xZ, does apply.** My 04:36Z line said otherwise, and that line was wrong. The form would hand Flock `parse (printT p.partition)` in place of `p.partition`. That is a change to the verifier's code, so it's TWOLEG's, and it needs a STOP-RULE before/after.
+  - Before: Flock sets up at the members file's `Json` value.
+  - After: Flock sets up at its printed and re-parsed form.
+  - Whether the two accept the same plays is exactly the second way's lemma [derived].
+- **The second way holds** [read: `HmRow.lean`]. Under `SessionMatch` (`work`, `stratified` and `closure` all `none`), `Stmt.setupTables` reads the partition object `o` in only three places:
+  1. `checkPartition c (some o)`, in `setupHidden:2374` and `setupH:1560`. It reads:
+     - `checkPartitionObject o`: the sorted key lists of `o`, of its `query` and of its `params`, plus lookups of `format`, `program`, `name`, `version`, `X` and `W`, with number checks on the values;
+     - `partitionDigest o`, which is `canon o`;
+     - the `program` lookup;
+     - `templatesOf name version params`, which reads `params`'s sorted keys and the `template` / `templates` lookups.
+
+     The finding it returns holds only strings derived from those, and `partition := finding.toJson` is all the statement keeps.
+  2. `stratifiedLaw o prog k`, in `setupHidden:2384` and `setupH:1570`. It runs only on a stratified draw, and through `templateStrata` it reads the same lookups as `checkPartitionObject` and `templatesOf`.
+  3. `deriveTemplateUnits c o prog`, in `setupHidden:2389` and `setupH:1575`. It reads `query`, `name`, `version`, `params` and `program` by lookup, then `templatesOf`.
+
+  The setup's top level reads `o` only in the stratified and work branches. Those throw whatever the partition is when `stratified = work = none`. `RecSetup.checks` gets `inner = none` in `SessionMatch.read_check`'s use. `Stmt.setupTables` itself reads `o` only as an argument it passes down [guess, from the call at `Session.lean:210`; RecVStar's body not read].
+- **Each reader already has a "same up to tree shape" lemma on the join** (`security/Proofs/Flock/Claims/Complete/Json/`) [read]:
+
+  | Reader | Lemma |
+  |---|---|
+  | lookups | `Same.getObjVal` and `Same.getObjVal_none` (`Spec.lean:109,128`) |
+  | the values found | `same_str`, `same_num` and `same_arr` (`Spec.lean:89–97`) |
+  | sorted key lists | `keys_eq_of_same` (`Text.lean:137`, which needs `WF`; `Same`'s `obj` case carries it, and `same_obj_wf` is at `Zk/Json/Record.lean:201`) |
+  | the digest | `canon_same` (`Canon.lean:317`) |
+  | `Good` on both sides | `Same.good` (`Zk/Json/Stmt.lean:75`) |
+
+- **What is missing:**
+  - three reader lemmas, `checkPartition_same`, `stratifiedLaw_same` and `deriveTemplateUnits_same` (each `Same a b → f … a = f … b`);
+  - one congruence lemma that rewrites them through `setupH` and `setupHidden`.
+
+  Size: about 100–200 lines [guess]. No verifier change. It goes in `security/Proofs`, under SESSIONOF's `Session.lean`. Whoever the coordinator names writes it. I can, after the descriptor check.
+- **My recommendation:** the second way. It changes no code and needs no STOP-RULE. The first way still needs the same lemma to say the form's change accepts the same plays.
+
+**The descriptor check** (05:07Z item 1). It's next on this branch, starting now; nothing is written yet. It will be a new file in the verifier's Lean package beside the form's, reading the circuit files and registered wiring once per template. A `security/Proofs` lemma will say it gives `decided`.
+- **What it can decide per template today, on my base** [read: `Code.lean` at `02e64d44d7`]:
+  - `namesOnce`, `writersFirst`, `wiresAlike`, `refReadsOwn` and `interiorNames.values.isEmpty`;
+  - `membersScoped`, `memberOk`, `designOk` and `templateOk`;
+  - the counts (`k`, `ns`, `xs`) and the names' `Nodup`.
+- **What waits on FRAME's per-template forms:** `sourcesNamed`, `wiresMove`, `returnedWhole`, `writtenUnwired` and `writtenRead`. Each walks every source or written bit on this base. FRAME's L1 head has per-template forms for all of them except `wiresMove`, which FRAME is writing [relayed: FRAME, via the coordinator]. Until they're under me, the check decides those five by the walk, and its cost line says so.
+
+**Lock `roots`.** The four `HeldOf*` files are on the join with their `roots` lines (`origin/cursor/proofs-join-42b8`), so they're ASSEMBLY's [read]. `BlockCommits.lean` is not on the join, so I appended `Proofs.Flock.SpotFlock.BlockCommits` to `roots` on `cursor/proofs-heldof-block-4c7b`: `fd41320f42`, that one lock edit only [run].
+
+**Branches:**
+- `cursor/proofs-heldof-4c7b` at `02e64d44d7`, compiled;
+- `cursor/proofs-heldof-block-4c7b` at `fd41320f42`, which adds `roots` to `85b96096df`. That head compiled in `0597` with FRAME's `BlockSize` token, which isn't on its base yet [run].
+
+**STOP RULE:** none. `namesHeld_of` adds a theorem. No listed guarantee changes, and nothing the verifier accepts. The first way above would change the verifier's code; I don't take it.
+
+**NEEDS:**
+- Who writes the partition congruence (above).
+- FRAME's per-template `sourcesNamed`, `returnedWhole`, `writtenUnwired`, `writtenRead` and `wiresMove` under my base.
+- FRAME's `BlockSize.lean:73` fix on the block branch's base.
+
+**To post:** nothing.
+
+**Not established:**
+- the partition congruence lemma, which is unwritten;
+- the descriptor check, which is unwritten;
+- that `HeldOfFiles` and `HeldOfCheck` theorems use only the three axioms (built, not probed);
+- that RecVStar's `checkStmt` doesn't read the partition when `inner = none` [guess].
