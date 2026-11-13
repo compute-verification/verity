@@ -102,12 +102,12 @@ def test_a_memory_challenger_sharing_the_zk_servers_or_the_challengers_machine_i
 @pytest.mark.parametrize("tasks,why", [
     ({**QUIET, OWN: {**QUIET[OWN], "cpus": "0-191"}}, "this process may run on CPUs 0-191, not exactly the declared 124-127"),
     ({**QUIET, OWN: {**QUIET[OWN], "cpus": "124-126"}}, "may run on CPUs 124-126, not exactly the declared 124-127"),
-    ({**QUIET, "1": {**QUIET["1"], "cpus": "0-191"}}, "1 process(es) outside cgroup /pous-quiet.slice/run-u7.scope may run on the "
-                                                     "dedicated CPUs 124-127: systemd (pid 1, /init.scope) on 124-127"),
-    ({**QUIET, "901": _task("900", "vllm", "120-127", "/provers.slice/run-u3.scope")}, "vllm (pid 900, /provers.slice/run-u3.scope) "
-                                                                                      "on 124-127"),
-    ({**QUIET, "5000": _task("5000", "stress", "127", "/pous-quiet.slice/run-u8.scope")}, "stress (pid 5000, "
-                                                                                         "/pous-quiet.slice/run-u8.scope) on 127"),
+    ({**QUIET, "1": {**QUIET["1"], "cpus": "0-191"}}, ("1 process(es) outside cgroup /pous-quiet.slice/run-u7.scope may run on the "
+                                                      "dedicated CPUs 124-127: systemd (pid 1, /init.scope) on 124-127")),
+    ({**QUIET, "901": _task("900", "vllm", "120-127", "/provers.slice/run-u3.scope")}, ("vllm (pid 900, /provers.slice/run-u3.scope) "
+                                                                                       "on 124-127")),
+    ({**QUIET, "5000": _task("5000", "stress", "127", "/pous-quiet.slice/run-u8.scope")}, ("stress (pid 5000, "
+                                                                                          "/pous-quiet.slice/run-u8.scope) on 127")),
     ({**QUIET, "5001": _task("5001", "sibling", "0-191", SCOPE + "-other")}, "sibling (pid 5001"),       # a prefix, not a child
     ({**QUIET, "5002": _task("5002", "odd", None, "/user.slice")}, "odd (pid 5002, /user.slice) on 124-127"),   # unreadable affinity
     ({**QUIET, "5003": _task("5003", "odd", "x-y", "/user.slice")}, "odd (pid 5003, /user.slice) on 124-127"),

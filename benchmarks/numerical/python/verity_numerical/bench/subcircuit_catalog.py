@@ -36,8 +36,9 @@ import hashlib
 import itertools
 import json
 import sys
+from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any
 
 from . import census
 from verity.circuits.codec import descriptor_id

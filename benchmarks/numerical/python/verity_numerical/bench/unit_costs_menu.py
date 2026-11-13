@@ -50,8 +50,9 @@ import json
 import math
 import shutil
 import sys
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 from verity.commitments.windows.interface import K_MAX, PACK_LOG
 from verity_flock import rec_residuals as RR
@@ -377,8 +378,8 @@ def render(mn: Mapping[str, Any]) -> str:
     """``menu.md``: what the menu ``mn`` (:func:`menu`'s) was chosen on, then two tables: each model's totals per audit,
     and each of its entries."""
     L = [f"# F6 pinned menu: dp4t, slots per session per bucket, K = {mn['K']}", "",
-         f"Chosen on {mn['chosen_on']}; B from {mn['b_menu']}; a B runs if k_log ≤ {mn['k_log_max']}, inner and outer peak "
-         f"≤ {mn['node_gib']} GiB and D ≤ 2^{mn['d_fit_log']}. Hours per audit, mean / public.", "",
+         (f"Chosen on {mn['chosen_on']}; B from {mn['b_menu']}; a B runs if k_log ≤ {mn['k_log_max']}, inner and outer peak "
+          f"≤ {mn['node_gib']} GiB and D ≤ 2^{mn['d_fit_log']}. Hours per audit, mean / public."), "",
          "| model | limit | entries (body / rare / tail) | inner h | outer h | inner + outer h | refused entries |",
          "|---|---|---|---|---|---|---|"]
     for M in mn["models"]:
