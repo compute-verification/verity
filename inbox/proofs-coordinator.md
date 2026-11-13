@@ -118848,3 +118848,63 @@ With both, Monday 9 AM PST holds for the join without the controls. It does not 
 Next: I look at both runs every ten minutes or less. At 05:57Z I check `out/cards-at-end.txt`, `nvidia-smi` and the lease's status, and write that confirmation here by 06:00Z.
 
 For the table: overhead run GO at 91.08% of ranked proving time if every statement stages by 04:50Z; staging r20261113-035603-4c67, proving r20261113-035634-1c43; commit 0803d36697 unchanged; leases end 05:54Z, run killed by 05:57Z.
+
+## TWOLEG, Fri 13 Nov 03:59Z: TWO TWOLEG SESSIONS AGAIN, and this one stops; before stopping, two findings by reading for (c): the form holds the second stage's sample to the wrong law and so refuses every honest play, and today's driver runs the second stage's sessions on no challenger session, so no honest play in the form's shape exists yet
+
+Lean-slot waits over 10 minutes: `a018` waited from 02:56Z to 03:39Z on vy-nebius-cpu-12 (43 minutes) before it started; `de94` and `288d` (launched 03:39Z and 03:40Z on vy-nebius-2) were still waiting at 03:45Z.
+
+Two sessions are acting as TWOLEG at once again, on one VM and one set of worktrees, and both come from the same history: each holds the 03:06Z and 03:15Z entries, so your 03:12Z test no longer tells us apart. This session stops. It makes no commit, push or run on either branch from now on, and it changed no file since 03:40Z. The one writer is the session that pushed `d06ec7c3306d` and launched `5af6`. If you want it the other way, say so to both.
+
+What I found before stopping, in plain words, both by reading and both about (c). First, the form checks the second stage's sample against the wrong sampling rule. The second stage draws a few inner blocks inside each sampled outer block. The form instead asks that the sample be the one the interior registration's own parameters would draw, and an honest interior's parameters say "all of them". So an honest play is refused at that step, also after #9555 and (b). Second, the form reads every second-stage session's coins from the challenger's signed log, and today's two-stage driver does not run those sessions on the challenger's session at all. So no run of today's driver, Friday's included, can be an honest play in the form's shape, whatever its key.
+
+**The two sessions.**
+- [read: file times, `uptime`] This VM was replaced under my shell at 03:52Z (`/home/ubuntu/wt` and `/tmp/job` were gone, the machine 1 minute up).
+- [read: `git reflog` in the worktrees] At 03:52:52Z to 03:52:57Z the three worktrees were made again; at 03:53:01Z `origin/cursor/proofs-keyheld-3c9a` (`38b7c6df38ba`, #9555's newer head: its last head, `main` merged, and `benchmarks/one_stage/tests/test_a5_case_v2.py`) was merged into `cursor/proofs-twoleg-c5e5` and pushed as `d06ec7c3306d`. Not by me.
+- [read: `~/.research/runs`, `/tmp/job`] At 03:55:25Z run `r20261113-035525-5af6` was launched from a new `/tmp/job/j1.sh` (the form's build, the difftest and the key's timing again, at the new head). Not by me. Two more followed at 03:56:10Z and 03:56:41Z, `r20261113-035610-abb7` and `r20261113-035641-a2e6`; I did not read what they run.
+- This session used its own inbox worktree and its own scratch directory for this entry, so it touched nothing the other session writes.
+
+**1. The form's interior audit is at the wrong law.**
+- [read] The form's fifth step is `OneStage.checkAt p.audit.base c₂ (some ξ₂) {…}` (`VStarRecursive/SampledTwo.lean:334`), and `p.audit` is parsed from `interior.params`. `OneStage.check` and `coinsWhy` hold the evidence's draw to `Draw.derive v.program v.query v.law v.workTable` (`Spot/OneStage.lean:516` and `:546`). `Draw.checkDraw` refuses a draw whose law is not that law byte for byte (`Spot/Draw.lean:175`, code `law`), and `coinsReason` refuses units that are not the ones the coins give under it.
+- [read] The run of record samples the second stage under `Select.secondLaw sample ns ks` (`Run.interiorSteps`, `Select.selectSecond`): a work law at k = 1, one stratum a cell, named `r/t` for sampled outer block `r` and template `t`, with floor `k_t`. It does not read the interior parameters' law: it checks the interior registration under `subset:m` (`Spot/Run.lean:230`).
+- [read] `Draw.derive` leaves a subset law as it is, and re-derives a stratified or work law's strata from the program's templates (`Partition.strata`: "one stratum per template or Definition"). So no `law` key of the interior's parameters derives `secondLaw`.
+- [read] An honest interior's own law is `subset:m` (`adapters/vllm/verity_vllm/pipeline/interior_rows.py:357`; the stream's run request sends `{"law": "subset", "k": population}`, `service._audit_two`), and a5's second-stage case carries the stream's second draw, which is under `secondLaw`.
+- [derived] So on an honest play the form answers `two-stage: the interior's audit: draw: …` (the coins' units, or code `law`), whatever the key and the coin evidence's shape. With #9555 merged and (b) done, the form with its switch on still accepts no honest play. This is the second time tonight that reading shows it, and it is the reason (c) must be a run.
+- [guess] A play of one sampled outer block and one template, with `interior.params.law = subset:k`, might pass both checks. Not established, and not the form's use.
+- The mend is in the form and is the writer session's to make: the interior's audit at the second stage's law. `OneStage.coinsReason v law …` already takes the law and samples under it when `v.law` is a subset law (`drawnFrom`: `deriveLaw` gives none, so `flockLaw law n`). `OneStage.check` has its law fixed, so the form needs `check`'s steps at a given law: a variant in the form's file, or `OneStage.check` factored over its law in `OneStage.lean` (its owner's, a NEED). The law is the run of record's own second draw's (`run.interior.draw`, `Draw.lawOf`), or is recomputed from `Select.replayCells p.replay query`, the rule's counts and the first sample. Of the proofs, only `Steps.lean`'s lemma on the audit (line 83) and `SecondRead.lean` read `checkAt` at the interior.
+
+**2. The driver runs the second stage's sessions on no challenger session.**
+- [read] The form's interior is v2's per-member check under a challenger. `OneStageZk.paramsOfJson` refuses parameters that name none (`NO_CHALLENGER`, `Spot/OneStageZk.lean:253`), and `membersRun` reads each session's coin tree and closing round from the challenger's release log in the interior's coin evidence (`treesOf`, `orderHeld`, `membersTreesHeld`).
+- [read] `two_stage.second_stage` calls `a5.audit(…, drawn=second)` with `a.coins = None` (`benchmarks/one_stage/two_stage.py:812`). Under `drawn`, `a5.audit` keeps `trees = False` (`a5.py:896-898`): no relay to the stage's session, no closing rounds, and `write_case` gets no coins, key, family or window root (`a5.py:1104-1108`).
+- [relayed, GATHER 03:38Z by your 03:43Z] `240a`'s `second/audit/case-v2-members.json` has `params.challenger` null. That is this gap, seen from the kept file.
+- [derived] So `two_stage.py second` as it stands cannot produce the form's interior evidence. Friday's kept files are outside the form's scope on this count too, beside the two keys.
+- What an honest play needs, as I read it:
+  - one challenger host for both commands (`--challenger-host`, there already) with its key at the deployed parameters (`a5_coins.start(…, deployed=True)` is there; `two_stage.py` never passes it, so a flag on `first`);
+  - `two_stage._second` holding its session open through the proving (`draws.hold(0)` before the second sample, no `skip(0)` until the sessions have closed), and handing `a5.audit` the session and the sample's segment;
+  - in `a5.audit`, the window's trees under `drawn` too: `member_trees.Relay`, `closing_round`, `release`, `window_trees_held`, and `write_case`'s `coins`, `family`, `window_root`, `challenger_key` and `member_trees`. About 15 lines there and 10 in `two_stage.py`, behind a flag that is off by default;
+  - at least two members in the interior (`a5.window_trees` and `members_proof` both want two);
+  - a generator under `benchmarks/one_stage/` that assembles the form's case from the stream's run request (`verifier.run`'s `args` hold every field of the form's parameters and evidence but `interior.members` and v2's interior evidence) and from a5's per-member case.
+- [read] `benchmarks/one_stage/tests/test_audit_two_members.py` is the one-stage model for the test: `--deployed-key` and FLOCK_CHALLENGER=1, and its docstring gives its cost (about 150 to 210 s, about 5 GB).
+- `a5.py` and `two_stage.py` are not mine: NEEDS.
+
+**3. `StageDraws`, your 03:39Z question.** The family half (`label = ℓ`) is mine, and it follows from the form once (b) compiles. The second stage's is direct: the form reads `ξ₂` by `drawCoins` at the interior audit's family (`OneStageZk.coinsOf`). The first stage's goes through the run of record (`inputOf` sets `Run.Input.family`), so it needs a lemma that an accepted run's `coinsCode` is none, which is over `Run.run`'s private steps and is not written (RUNCOINS's kind of lemma). The other half, `OneRoot ℓ after o.log`, is not mine: `o.log` is the play's log, and the form shows one root only on the session the evidence's ledger opens (`Challenger.FAMILY_ROOT`). The step to the play's log is CUT's `PrintsTwo` with HISTORY's `dev₂`, joined by ASSEMBLY. One thing to check before anyone relies on it [derived]: on two windows the driver names both stages' family `draw/0` (`a5_coins.family(rank)`, rank 0 in each session), while COINMAP's `devSecond_stage` takes `ℓ₁ ≠ ℓ₂`, and `OneRoot ℓ after` over a log that holds both sessions is false on an honest play (two roots for `draw/0`).
+
+**Which of (b), (c), (d) has a run behind it: none.**
+- (b) is written at `4d19a7ad4f62` (`inputOf` sets the run's `key`, `main` and both families; `interiorUnshown` reads the first session under the parameters' key and the interior audit's family; `Steps.lean` restated). Its two runs had not started at 03:45Z.
+- (c): nothing is built but `sampled-two-on`. That executable is a decision to flag: a compiled binary in the recursive package that runs the form's check with its switch on, for the accept test only, under no default target and `exempt` in the lock. The verifier and `sampled-two` are untouched.
+- (d): nothing.
+- Done before 03:40Z and shared by both sessions: the lock's `exempt` entry for `SampledTwoMain` (both branches); (a) dropped and `161f` cancelled before it started; #9555 merged into the work branch only.
+
+Heads: `cursor/proofs-twoleg-c5e5` at `d06ec7c3306d` (the other session's push; mine was `4d19a7ad4f62`). #9574, `cursor/proofs-twoleg-e0ff`, at `457a4837078c`, which holds neither #9555 nor (b). This session left nothing unpushed.
+
+STOP RULE: finding 1's mend changes the form's check where its switch is on. Before: the interior's sample is held to the interior parameters' own law. After: to the second stage's law. The shipped check keeps its switch off, `checkBlobs_refuses` is untouched, and no listed guarantee reads the form's accept. I have not made it.
+
+NEEDS:
+- The coordinator: say which TWOLEG session writes. Until you do, it is the other one.
+- The owner of `a5.py` and `two_stage.py`: the second stage's sessions on the stage's challenger session (finding 2), or leave it to the writer session on its own branch behind a flag that is off by default.
+- The owner of `OneStage.lean`: `check` factored over its law, or the form carries a variant of its own.
+
+Runs: this session launched none since 03:40Z. [run, at 03:45Z] `r20261113-033911-de94` and `r20261113-034025-288d` waiting on vy-nebius-2; `r20261113-025634-a018` running on vy-nebius-cpu-12 since 03:39Z. `r20261113-035525-5af6`, `r20261113-035610-abb7` and `r20261113-035641-a2e6` are the other session's; I did not read their state.
+
+To post: nothing.
+
+Not established: that anything of (b) compiles; findings 1 and 2 by a run (both are by reading); whether the small class's interior has two members; whether `stamped` and the second-stage statement check pass on an honest play once 1 and 2 are mended; the one-block, one-template accept; the `draw/0` point in 3.
