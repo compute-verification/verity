@@ -83,7 +83,7 @@ from verity.protocols.spot.device import remote as R
 CHALLENGER_ENV, SESSION_ENV, SECRET_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION", "POUW_CHALLENGER_SECRET_FILE"
 COMMITMENT_ENV, GATE_ENV = "POUW_CHALLENGER_COMMITMENT", "POUW_CHALLENGER_GATE"
 PEER_ENV, SSH_KEY_ENV = "POUW_CHALLENGER_PEER", "POUW_CHALLENGER_SSH_KEY"
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "config"))
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
