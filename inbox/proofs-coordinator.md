@@ -118588,3 +118588,49 @@ Not established: that `DeviceOrder.lean` compiles (no run has read it). That `Cu
 **3. What I check when you resume me**, for each records run: exit 0; `lean-audit/audit.json` says pass for `security/Properties`, `security/Proofs` and `security`; the lock the run wrote equals the branch's, byte for byte (nothing regenerated); for `8504`, no `witnesses` failure on `familyOneCommitmentRead`. If the hash moved, I write the new one first and re-key only on your word.
 
 **4. Pushed, and nothing unpushed.** `cursor/proofs-redraw-cc71` `a2c3831345e0d15bbed424c321009c26b4a7500d`; `cursor/proofs-keyheld-3c9a` `38b7c6df38ba9ad5ccfd154ae316b76697157020`; `cursor/proofs-redraw-rate-5a71` `54d0d016ab7850e73ad933db5d7769dcf0c5811c`. All three merge with `main` at `8ef93f01963c` [run at 03:53Z: `main` unchanged; GitHub MERGEABLE at 03:39Z]. Bodies of #9237 and #9555 name the new heads since 03:42Z. Mailbox read at 03:53Z: nothing after your 03:12Z message [run]. #9373's ready line stands.
+
+## HELDOF, Fri 03:58Z: which of FRAME's clauses descCore decides; the heldof try waits in vy-nebius-2's line
+
+**What has compiled:** unchanged since 03:00Z.
+- The per-block bound compiled at `r20261113-022722-0597` [run], with FRAME's `BlockSize.lean:73` token applied locally (03:00Z NEEDS 1, still open).
+- On the heldof branch, `HeldOf` and `HeldOfFiles` now build at the merged head [run, `r20261113-025949-65d3`: "Built Proofs.Flock.SpotFlock.HeldOf", "Built … HeldOfFiles"].
+- `HeldOfCheck` failed on a layout error: a structure instance's continuation lines started left of its brace. It is fixed at `7cd9bf6320`, and two proof steps of `xS₀_of_files` are hardened at `98b170f1a9`.
+- `r20261113-034716-30d9` has `HeldOfRun` (and with it `twoHolds_of`, `twoHolds_of_files` and `xS₀_of_files`). It has waited 7 minutes so far, with 10 checks ahead [run].
+
+In plain words: today `descCore` decides everything in the `two` on my base (TWOLEG's, which doesn't have FRAME's L1) except the per-unit clauses, which the run's population check gives. FRAME's new clauses (`membersScoped` and `wiringOk`'s eleven conjuncts) are not in my base's `two`, so `descCore` decides none of them yet. On L1 all but `wiresMove` are already decided once per template, so `descCore` takes them as they are when L1 reaches my line. `wiresMove` still passes over every source bit and needs FRAME's per-template form first.
+
+**FRAME's clauses against `descCore`, today** [read: L1 `2e3d0198b2`, `Code.lean:573–676`; my base's `two`]
+- Decided today, in `decided`: `namesOnce`, the same `Nodup` over `names`; and `h.interiorNames.values.isEmpty`.
+- Not decided today (not in my base's `two`), and once per template on L1, so they go into `descCore` as written:
+  - `membersScoped`: `scopeOkH` per template;
+  - `writersFirst`;
+  - `sourceRowsNamed`;
+  - `wiresAlike`: per wire × template;
+  - `writtenRowsUnwired`;
+  - `writtenRowsRead`;
+  - `refReadsOwn`: per template × reference port;
+  - `portsOnce`;
+  - `outsOk`.
+- Not decided, and not once per template on L1: `wiresMove`. FRAME's docstring says it "still passes over every source bit". It needs a per-template form and a lemma from FRAME before `descCore` can decide it within the rule.
+- FRAME's warning about reading each member once: `descCoreAt` parses template `t`'s reference statement twice, in `templateOkAt`'s `readOf` and in `shapeOf`'s `setupOf`. On L1, each use of `memberCircuit h t` (`stmtOf (h.xS₀ t)`) parses it again. The decided form should parse each member once into an array and read that. That is a `descCoreAt` over the parsed circuits, with a lemma that it equals `descCore`. I write it after this try passes, in `HeldOfCheck` (mine) [guess at its size: about 40 lines].
+
+**STOP RULE:** none. Nothing here changes a definition `two` reads or what the verifier accepts.
+
+**NEEDS**
+1. FRAME: `BlockSize.lean:73` (03:00Z NEEDS 1).
+2. ASSEMBLY or RUNSAS: the `popOk` step lemma (03:00Z NEEDS 2).
+3. FRAME: a per-template `wiresMove` and its lemma, before `descCore` can take L1's `wiringOk` within the rule.
+
+**Merge:** per the 03:35Z ruling, I merge nothing until RUNCOINS's entry names its head. Then I merge RUNCOINS's head into `cursor/proofs-heldof-4c7b`.
+
+**Machines:** vy-nebius-2.
+- `ba03` waited 13 minutes, then failed on the layout error. The local client exited 79 at 20 minutes, while the remote run went on.
+- `3980` waited 1 minute and I cancelled it before it started, to resend with hardened steps.
+- `30d9` is waiting, with 7 minutes so far.
+
+**To post:** nothing.
+
+**Not established:**
+- That the heldof branch's new lemmas compile.
+- `wiresMove`'s per-template form.
+- The single-parse form's size.
