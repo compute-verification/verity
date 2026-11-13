@@ -112661,3 +112661,58 @@ All four waits are from the runs' `slot.json`. [read] No Lean slot made me wait:
 Pushed: `cursor/proofs-keyheld-3c9a` `9fd601fbb17760e2fa25a723abfb16ad275abb41`; `cursor/proofs-keyheld-rekey-5d1e` `ca9a951d175e16499ff4694013211217a3d9a8d7`; `cursor/proofs-redraw-cc71` `db228c8966f08b829659343e91f0a571c70192d9`; `cursor/proofs-redraw-9373-close-a41d` `92b97c953cbb3a02fe420e968a853bebb3f21b1e`. #9373's body now names the new close and its three runs. Unpushed: nothing.
 
 Waiting on: `d461` (about 01:50Z), `454d` (about 02:15Z), `0e0d` (about 02:30Z); your word on the `research` pair of #9373's close; lean's word on (A).
+
+## SESSIONCOINS, Fri 13 Nov 01:44Z: two agent loops are acting as this worker on one machine since 01:32Z; the other one holds the pen and this one stands by, so expect its entries, not mine
+
+### In plain words
+
+At 01:31:58Z my machine was replaced by a fresh one. Since then two loops with this worker's id (`bc-85e56ea3-57e1-5b92-87a2-c2a92e333887`) run on the new machine at once, with the same memory up to about 01:31Z, in the same checkout. I did not start the second and cannot tell which of us the platform counts as the worker. Both of us had begun to act, so for a few minutes there were two hands on one branch. Nothing was lost or overwritten. To stop double tries, double entries and racing pushes I have told the other loop, by a note in the checkout, that it holds the pen; I have stopped editing, pushing and launching. This is my only entry unless the other loop falls silent for 30 minutes, in which case I take over from the pushed head.
+
+### Branch
+
+`cursor/proofs-sessioncoins-e4a0`, pushed head `2fb787e408` at 01:35Z [read]. Mine up to `c80e551ec8` (01:31Z); `007d76a899` (TWOLEG's `99da2b9189` merged, 01:32:40Z) and `2fb787e408` are the other loop's. I have nothing unpushed: my scratch files (the stand-in checks, the scratch worktree with `Steps.lean` patched) went with the old machine, and TWOLEG's own fix of `Steps.lean` replaces the patch.
+
+### Mailbox
+
+Read at 01:33Z: nothing new since your 00:17Z word.
+
+### 1. What shows two loops
+
+- `uptime` on the machine said 0 minutes at 01:32:36Z, and the checkout was a fresh clone on `main`, reset at 01:31:58Z. [run]
+- The shell guard's log on this machine (`/tmp/agent-guard-events.jsonl`) holds 31 shell commands under my id between 01:31:42Z and 01:35:19Z. 16 are mine; the other 15 are at times I ran nothing (among them 01:32:40Z, the merge, and 01:33:39Z, a try's launch). [run]
+- The merge `007d76a899`, the try `r20261113-013339-d4a0` (tmux session `sc-try`, log `/tmp/try8.log`, which continues my own numbering after `/tmp/try7.log`), the commit `2fb787e408` and an untracked `SessionDev.lean` in the checkout are not mine. [read]
+- This run's transcript, fetched at 01:35:50Z, shows my commands up to that minute and none of the other loop's. [run]
+
+### 2. What I had done before the machine changed, which the other loop also knows
+
+- **The first real verdict**, `r20261112-234440-6c1f` on vy-nebius-2 (in line 70 minutes, ran 977 s): failed, 20 of `SessionCoins.lean`'s 32 theorems. One cause: inside `Verity.SampledTwo`, a bare `Frame` is the form's game frame (`Projection.lean`), not the device's `Verity.Frame`, so `openTree` and everything after it broke. Fixed in `8bb1f85380`. [run]
+- In that same run 12 theorems elaborated with no error, `stmtReadsNone` among them. A file with an error shows no axioms, so none of this counts as compiled yet. [run]
+- A second real error, in `MembersHeld.roots` and `MembersHeld.find` (a projection of a record's entry whose type Lean did not know yet), fixed in `c80e551ec8`. After both fixes `SessionCoins.lean` and `SessionAgrees.lean` elaborated whole in a one-file check on my VM against stand-ins of the names they read. Stand-ins, so not compiled. [run]
+
+### 3. Runs
+
+| Run | Machine | State | Whose |
+| --- | --- | --- | --- |
+| `r20261113-010629-d617` | vy-nebius-cpu-11 | in line 6 minutes, running since 01:13Z, building imports | mine, before the change |
+| `r20261113-013339-d4a0` | vy-nebius-cpu-12 | waiting for a slot at 01:42Z | the other loop's |
+
+`d617` was launched at a scratch commit that still has the bare `Frame`, so it can only repeat `6c1f`'s errors; it is running, so by your word I have not cancelled it. That makes two tries of this worker out at once, on two machines.
+
+### STOP RULE
+
+Nothing.
+
+### NEEDS
+
+- **You:** if you resumed or re-sent this worker around 01:31Z, that is probably what made the second loop while my turn was still open; other workers resumed mid-turn may be doubled the same way. If you can tell the two apart, say which should stop. I can reach the other only by a file on the machine.
+- **You:** say whether `d617` should be cancelled now that it cannot pass.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- What started the second loop, and which loop the platform will keep. [guess: a resume while a turn was open]
+- Whether the other loop has read my note. If it has not by its next commit, both of us may still write; I will not.
+- Nothing of piece E is compiled yet. The owed run (one session's coins by 07:00Z) is the other loop's `d4a0` or its successor.
