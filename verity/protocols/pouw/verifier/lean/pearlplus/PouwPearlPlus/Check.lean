@@ -13,22 +13,22 @@ public import PouwPearlPlus.Credit
 
 * **Input** (`Input`): the epoch's coin commitment (an in-process challenger's or a live session's, `EpochCoins`), the
   retained passes' manifests (their records, the voluntary rows among them, and what each published), the number of
-  draws, the verifier's coin: a source, or its record of the coin it drew on this run's commitment (`CoinRecord`), which
+  samples, the verifier's coin: a source, or its record of the coin it drew on this run's commitment (`CoinRecord`), which
   pins the source, the window record W the passes are tied to where there is one, with the passes' rounds and the
   dropped rounds (the coin record's), and whether the verdict is to be of record (`ofRecord`).
 * **The prover's openings** (`opener pass tile`): each opened tile's rows, leaf and y rows with their paths. The verifier
-  asks only for the tiles its draw names.
+  asks only for the tiles its sample names.
 * **The verdict**: every pass loads (`load`), all of one salt and, unless the input is a test instance's
   (`testInstance`), each at the served instance, `k_min` `K_MIN` and `TILE × TILE` tiles; the passes are W's (`tieOf`, refused as its `ValueError`), the run's
-  commitment is the coin record's where there is one (`after-coin`), the record's challenger draw is coin ``pouw/draw`` 0
-  opened after it (`drawReason`, refused as `draw`), a verdict of record takes only a challenger draw on live coins
-  (`ofRecordReason`, refused as `of-record`), the draw over every pass's tickets names the drawn tiles, each pass adds one
+  commitment is the coin record's where there is one (`after-coin`), the record's challenger sample is coin ``pouw/draw`` 0
+  opened after it (`drawReason`, refused as `draw`), a verdict of record takes only a challenger sample on live coins
+  (`ofRecordReason`, refused as `of-record`), the sample over every pass's tickets names the sampled tiles, each pass adds one
   tile per excluded row, and the run accepts iff every one of them passes `checkTile`, or is over its inert-work bound
   with every other check passed under `over_cap` `uncredited` (the default, and the run of record's, whose passes hold
   no voluntary row; `reject` rejects such a run). A rejected
   tile's reason is `pass i tile t: why`, joined by `; `.
 * **The work** an accepted run publishes: its credit at Pearl's assumption at δ = 1/100 (`creditAtAssumption`), at X_O,
-  the number of draws on tiles over their bound, which are credited nothing. A test instance's credits nothing
+  the number of samples on tiles over their bound, which are credited nothing. A test instance's credits nothing
   (`credited` 0), as `--recorded`'s salt claims nothing.
 
 Out of scope, refused by name in `load`: sm_120's schemes.
@@ -77,7 +77,7 @@ structure Input where
   dropped : List Nat := []
   ofRecord : Bool := false
 
-/-- The tiles a verdict opens, once its passes load and its coin is fixed: `picks` the draw's, in its order. -/
+/-- The tiles a verdict opens, once its passes load and its coin is fixed: `picks` the sample's, in its order. -/
 structure Plan where
   passes : List Pass
   root : ByteArray
@@ -105,7 +105,7 @@ def TileVerdict.ok (m : OverCap) (v : TileVerdict) : Bool :=
   | .overCap _ => m == .uncredited
   | .fail _ => false
 
-/-- X_O: how many of the plan's draws landed on a tile over its inert-work bound. -/
+/-- X_O: how many of the plan's samples landed on a tile over its inert-work bound. -/
 def overCapDraws (pl : Plan) (vs : List TileVerdict) : Nat :=
   pl.picks.countP fun (i, tid) => (vs.find? fun v => v.pass == i && v.tile == tid).any fun v =>
     match v.outcome with
@@ -122,7 +122,7 @@ structure RunAnswer where
   overCap : OverCap := .uncredited
   tie : Option Tied := none
 
-/-- `verify_passes` after the tie: the record, the source, the draw's holds and the tiles to open. -/
+/-- `verify_passes` after the tie: the record, the source, the sample's holds and the tiles to open. -/
 def afterTie (i : Input) (passes : List Pass) (tie : Option Tied) : Except Refusal Plan := do
   let root := runCommitment passes
   let source ← match i.held with
