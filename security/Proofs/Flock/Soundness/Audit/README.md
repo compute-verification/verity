@@ -85,17 +85,17 @@ neither: their sampling design is the verifier's own (`liveLaw`) and their bound
 `IO.getRandomBytes`, `drawOS_def`), extending a stream that runs out and rerunning, misses $B$ with probability at most
 the same miss probabilities, on a byte source that A3 makes uniform (`Assumptions.UniformRandomBytes`);
 `execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
-sampling design (`execOS`). `subsetOn_escape_le`, `drawOn_escape_le` and `keyedWindow_escape_le` (`KeyedDraw.lean`),
+sampling design (`execOS`). `subsetOn_escape_le`, `drawOn_escape_le` and `keyedExecutionPhase_escape_le` (`KeyedDraw.lean`),
 **the PoUW circuit's keyed samples**. `Key.subset`, which samples each swap from its own `verity.commitments.randomness` stream, has
 no higher miss probability than the uniform $k$-subset. The window's per-call samples under one key form one
-`Law.stratified` over its (call, template) strata. So the live window sample (`keyedWindow`) misses $B$ with probability
+`Law.stratified` over its (call, template) strata. So the live window sample (`keyedExecutionPhase`) misses $B$ with probability
 at most `Law.stratified`'s miss probability plus the $\eta$ of A4 (`Assumptions.KeyedStreamsUniform`), on a
-uniform window secret (A5). `keyedWindow_audit_of_record` and `keyedWindow_extraction_audit_of_record` put it through
+uniform window secret (A5). `keyedExecutionPhase_audit_of_record` and `keyedExecutionPhase_extraction_audit_of_record` put it through
 the window pins (`audit_window_split_of_record_of_le_slack`, and at the compiled layer
 `extraction_audit_window_split_of_record_of_le_slack`): the 0.1% event has probability at most
 $2^{-40} + \eta + \varepsilon_{ks} + \delta_{link}$. The key's context is the receipt digest, so the real game's sample
 depends on the registration: `auditReg` (`Audit/RegDraw.lean`), and `prob_auditReg` moves each of its strategies to the
-game whose sampling design is fixed at its registration, which `keyedWindowReg_extraction_audit_of_record` reads.
+game whose sampling design is fixed at its registration, which `keyedExecutionPhaseReg_extraction_audit_of_record` reads.
 
 **Theorems, the stratified sampling design** (`Audit/Stratified.lean`, the default sampling design;
 `docs/sampling-strategies.md` §4): `Law.stratified σ k`, an independent uniform $k_s$-subset inside each stratum of
