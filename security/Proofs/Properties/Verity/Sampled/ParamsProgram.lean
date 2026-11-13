@@ -106,11 +106,9 @@ theorem params_program {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (h :
     rw [VStar.Recursive.Sampled.paramsOfJson.eq_def]
     ret_walk [_root_.Spot.OneStageZk.paramsOfJson]
     all_goals
-      intros
       rename_i hq
-      first
-        | (cases hq; exact zkParams_program ‹_root_.Spot.OneStageZk.paramsOfJson _ = .ok _›)
-        | cases hq
+      cases hq
+      exact zkParams_program ‹_root_.Spot.OneStageZk.paramsOfJson _ = .ok _›
   exact key _ hj p rfl
 
 /-- **The parameters' own program is a descriptor of their verifier's program**, the one a session's statement reads
