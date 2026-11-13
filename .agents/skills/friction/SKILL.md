@@ -113,7 +113,7 @@ What an agent may change:
   transition names its end state. The admin audits for splits and tells Daniel when an abstraction fails or turns into
   red tape.
 - A protocol importing another protocol is the importing protocol's owner's call, told to the imported one's
-  owner, and the edges stay acyclic (`ALLOWED` in `tests/test_boundaries.py`).
+  owner, and the edges stay acyclic (`loads` in `tests/import_order.toml`).
 - The Lean lane changes `tools/verity/lean`, the lean-proofs skill, `check`'s Lean steps, shared Lean foundations
   and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. A changed record in another lane's
   package goes through that lane.
@@ -189,7 +189,7 @@ Protocols and claims:
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
-- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next (`verity/protocols/pouw/verifier/README.md`).
+- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next (`verity/protocols/accounting/pouw/verifier/README.md`).
 - PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.

@@ -5,9 +5,9 @@ public import Proofs.Properties.Verity.SampledTwo.Steps
 /-!
 # The last step's law is over the run of record's own second stage's cells and counts
 
-The two-stage form's last step holds the interior audit's draw to a law it computes from its parameters
+The two-stage form's last step holds the interior audit's sample to a sampling design it computes from its parameters
 (`secondLawOf`): the replay block's cells under the interior's query, at the rule's counts. The run of record's second
-stage draws over the cells and counts it computes from its input's interior. The check builds that input from the same
+stage samples over the cells and counts it computes from its input's interior. The check builds that input from the same
 parameters (`inputOf`), so the two are one:
 
 * `inputOf_first`: the input's rule, boundary parameters, record, closure and bytes are the form's rule, boundary
@@ -16,7 +16,7 @@ parameters (`inputOf`), so the two are one:
   parameters, its replay block, and the second stage's bytes.
 * `secondLawOf_ok`: `secondLawOf` returns `Select.secondLaw` of the proved units of the run's `draw`, over the cells
   the replay block's program has under the interior's query, at the rule's counts.
-* `accepted_law_run`: where the two-stage check accepts, the law of its last step is `Select.secondLaw` of the proved
+* `accepted_law_run`: where the two-stage check accepts, the sampling design of its last step is `Select.secondLaw` of the proved
   units of the run of record's `draw`, over the cells of that run's interior's replay block under its query, at the
   counts of that run's rule.
 
@@ -93,9 +93,9 @@ theorem secondLawOf_ok {p : Params} {run law : Json} (h : secondLawOf p run = .o
 
 /-- **The last step's law, at the run of record's own second stage**: where the two-stage check accepts, the run of
 record `run` of the input `i` names `accept`; `i` holds an interior `it` on the second stage's bytes `ξ₂` under a
-two-stage rule; and the law the last step holds the interior audit's draw to is `Select.secondLaw` of the proved
+two-stage rule; and the sampling design the last step holds the interior audit's sample to is `Select.secondLaw` of the proved
 units of `run`'s `draw`, over the cells of `it`'s replay block under `it`'s query, at the rule's counts over them:
-the cells and counts the run's own second stage draws over. -/
+the cells and counts the run's own second stage samples over. -/
 theorem accepted_law_run {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :

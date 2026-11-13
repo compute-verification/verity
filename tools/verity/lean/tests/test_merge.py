@@ -1091,7 +1091,7 @@ def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
     other moved its import: the merge drops the retired import, which would otherwise stop Security building."""
     sides = json.loads((FIXTURES / "accounting-retired-import-onto-next.json").read_text())
     text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
-    gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod\n"
+    gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod\n"
     assert left == 0 and gone in sides["base"] and gone in sides["ours"] and gone not in sides["theirs"]
     assert gone not in text
     assert M._import_names(text) == M._import_names(sides["theirs"]) | (M._import_names(sides["ours"]) - M._import_names(
@@ -1228,11 +1228,12 @@ dependencies = ["numpy>=1.26",
 
 [tool.verity.tests]
 paths = ["tests"]
-inputs = ["verity/__init__.py", "verity/settings.py",
+inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/circuits",
           # the H1 units read both.
-          "verity/protocols/pouw/verifier/core_check.py", "verity/protocols/pouw/verifier/leaf_lanes.py",
-          "verity/protocols/pous/prover/circuit.py"]
+          "verity/protocols/accounting/pouw/verifier/core_check.py",
+          "verity/protocols/accounting/pouw/verifier/leaf_lanes.py",
+          "verity/protocols/accounting/pous/prover/circuit.py"]
 untraced = ["fixtures"]
 '''
 
@@ -1247,20 +1248,20 @@ def test_a_pyproject_whose_sides_each_add_a_suite_input_merges_and_any_other_con
     """Two PRs that each add a file a suite reads, at the same place in `inputs`, conflict line by line; they
     merge as a list.  A value both sides changed, and a list outside `[tool.verity.tests]` both sides added to, stay git's."""
     import tomllib
-    tail = '"verity/protocols/pous/prover/circuit.py"]'
+    tail = '"verity/protocols/accounting/pous/prover/circuit.py"]'
     def add(*xs):
         return PYPROJECT.replace(tail, tail[:-1] + "".join(f',\n          "{x}"' for x in xs) + "]")
     text, left = _pyproject(tmp_path, PYPROJECT, add("verity/a.py"), add("verity/b.py"))
     assert left == 0, text
     doc = tomllib.loads(text)
-    assert doc["tool"]["verity"]["tests"]["inputs"][-3:] == ["verity/protocols/pous/prover/circuit.py", "verity/b.py",
+    assert doc["tool"]["verity"]["tests"]["inputs"][-3:] == ["verity/protocols/accounting/pous/prover/circuit.py", "verity/b.py",
                                                              "verity/a.py"]
     assert doc["project"] == tomllib.loads(PYPROJECT)["project"] and "# the H1 units read both." in text
     gone = PYPROJECT.replace(tail, '"verity/a.py"]')
     text, left = _pyproject(tmp_path, PYPROJECT, gone, add("verity/b.py"))
     assert left == 0, text
     assert set(tomllib.loads(text)["tool"]["verity"]["tests"]["inputs"][-3:]) == {
-        "verity/protocols/pouw/verifier/leaf_lanes.py", "verity/a.py", "verity/b.py"}, "what ours removed stays removed"
+        "verity/protocols/accounting/pouw/verifier/leaf_lanes.py", "verity/a.py", "verity/b.py"}, "what ours removed stays removed"
     def version(v):
         return add(f"verity/{v}.py").replace('version = "0.1.0"', f'version = "{v}"')
     text, left = _pyproject(tmp_path, PYPROJECT, version("1"), version("2"))
@@ -1271,15 +1272,15 @@ def test_a_pyproject_whose_sides_each_add_a_suite_input_merges_and_any_other_con
     assert left and "<<<<<<< ours" in text, "a dependency both sides added stays git's"
 
 
-TAIL = '          "verity/protocols/pous/prover/circuit.py"]\n'
+TAIL = '          "verity/protocols/accounting/pous/prover/circuit.py"]\n'
 #: what a branch adds at the end of a suite's `inputs`, under a comment of its own
-UNDER_A_COMMENT = ('          "verity/protocols/pous/prover/circuit.py",\n'
+UNDER_A_COMMENT = ('          "verity/protocols/accounting/pous/prover/circuit.py",\n'
                    "          # the nightly check's loop, tested here: it reads a run as the dispatcher reads a check's, writes the state the\n"
                    "          # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark\n"
                    '          "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",\n'
                    '          "tools/research/src/research/store/labels_sync.py"]\n')
 #: what the other side adds there, with no comment
-PLAIN = ('          "verity/protocols/pous/prover/circuit.py",\n'
+PLAIN = ('          "verity/protocols/accounting/pous/prover/circuit.py",\n'
          '          "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py"]\n')
 
 
@@ -1292,7 +1293,7 @@ def test_inputs_one_side_adds_under_a_comment_merge_with_the_other_sides_and_the
     assert ours != PYPROJECT != theirs
     text, left = _pyproject(tmp_path, PYPROJECT, ours, theirs)
     assert left == 0, text
-    want = ["verity/protocols/pous/prover/circuit.py", "tools/research/src/research/__init__.py",
+    want = ["verity/protocols/accounting/pous/prover/circuit.py", "tools/research/src/research/__init__.py",
             "tools/research/src/research/telemetry/__init__.py", "infra/control/nightly_check.py",
             "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",
             "tools/research/src/research/store/labels_sync.py"]
@@ -1317,7 +1318,7 @@ def test_a_comment_in_a_list_s_conflict_is_one_side_s_or_the_conflict_stays_gits
 
     def end(*rows):
         return PYPROJECT.replace(TAIL, "".join(f"          {r}\n" for r in rows))
-    circuit, a, b = '"verity/protocols/pous/prover/circuit.py",', '"verity/a.py"', '"verity/b.py"'
+    circuit, a, b = '"verity/protocols/accounting/pous/prover/circuit.py",', '"verity/a.py"', '"verity/b.py"'
     text, left = _pyproject(tmp_path, PYPROJECT, end(circuit, "# why a", a + "]"), end(circuit, "# why b", b + "]"))
     assert left == 0 and text.splitlines()[-6:-1] == ["          " + r for r in (circuit, "# why b", b + ",", "# why a", a + "]")]
     base = end("# old", circuit[:-1] + "]")
@@ -1356,7 +1357,7 @@ def test_git_merges_two_branches_that_each_add_a_suite_input_with_the_installed_
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
     (repo / ".gitattributes").write_text(f"pyproject.toml merge={M.PYPROJECT}\n")
     pp = repo / "pyproject.toml"
-    tail = '"verity/protocols/pous/prover/circuit.py"]'
+    tail = '"verity/protocols/accounting/pous/prover/circuit.py"]'
     git(repo, "init", "-q", "-b", "main")
     for name in ("main", "a", "b"):
         if name != "main":
@@ -1475,7 +1476,7 @@ def test_an_unwitnessed_entry_neither_side_has_at_its_merged_record_is_ours_name
             in capsys.readouterr().err)
 
 
-SEC, PROPS, FLOCK, POUS = "security", "security/Properties", "verity/protocols/flock/verifier", "verity/protocols/pous"
+SEC, PROPS, FLOCK, POUS = "security", "security/Properties", "verity/protocols/proofs/flock/verifier", "verity/protocols/accounting/pous"
 
 
 def packages(unwitnessed: dict[str, int], inline: dict[str, int], doc: str = "never grows",
@@ -1704,3 +1705,147 @@ def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_dr
     git(repo, "checkout", "-q", "a2")
     git(repo, "merge", "--no-edit", "b2")
     assert caps.read_text() == packages({SEC: 354}, inline, above="b2")
+
+
+_uspec = importlib.util.spec_from_file_location("unread_for_merge", HERE.parent / "unread.py")
+U = importlib.util.module_from_spec(_uspec)
+_uspec.loader.exec_module(U)
+UNREAD = f"{M.DIR}/{M.UNREAD_CAPS}"
+FL, PW, NCI, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/Nci", "Proofs/Hash"
+
+
+def unread(**areas: tuple[int, int]) -> str:
+    """`unread-caps.json` with ``areas`` (each `Proofs_Flock=(modules, declarations)`), as `unread.py` writes it."""
+    return U.caps_text({a.replace("_", "/"): {"modules": m, "declarations": d} for a, (m, d) in areas.items()})
+
+
+def _unread(tmp: Path, base: str, ours: str, theirs: str) -> tuple[int, str]:
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp / n).write_text(t)
+    return M.main(["--caps", *(str(tmp / n) for n in ("base", "ours", "theirs")), UNREAD]), (tmp / "ours").read_text()
+
+
+def test_the_driver_reads_and_writes_the_unread_caps_as_unread_py_does():
+    assert (M.UNREAD_SCHEMA, M.UNREAD_KEYS, M.UNREAD_CAPS) == (U.CAPS_SCHEMA, U.CAP_KEYS, U.CAPS.name)
+    caps = U.load_caps(U.CAPS)
+    assert M.unread_areas(U.CAPS.read_text(), "ours") == caps and U.CAPS.read_text() == U.caps_text(caps)
+
+
+def test_two_branches_that_each_raise_an_area_s_unread_cap_merge_as_counters(tmp_path, capsys):
+    """Every PR that adds proof modules no guarantee reads yet writes its area's cap as main's count plus its own, so any two
+    conflict on that line as text. Each area's `modules` and `declarations` merge as theirs' count plus ours' change against
+    the base, whichever side is which: two raises both count, a lowering (drive's lock run) and a raise both apply, and the
+    merged cap is never above one side's count plus the other's own change."""
+    base = U.CAPS.read_text()
+    caps = U.load_caps(U.CAPS)
+    flock, pouw = caps[FL], caps[PW]
+
+    def with_(**areas: dict[str, int]) -> str:
+        return U.caps_text(caps | {a.replace("_", "/"): v for a, v in areas.items()})
+    ours = with_(Proofs_Flock={"modules": flock["modules"] + 5, "declarations": flock["declarations"] + 142})
+    theirs = with_(Proofs_Flock={"modules": flock["modules"] + 2, "declarations": flock["declarations"] + 20},
+                   Proofs_Pouw={"modules": pouw["modules"] + 1, "declarations": pouw["declarations"] + 4})
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp_path / n).write_text(t)
+    plain = subprocess.run(["git", "merge-file", "-p", *(str(tmp_path / n) for n in ("ours", "base", "theirs"))],
+                           capture_output=True, text=True)
+    assert plain.returncode == 1, "git alone conflicts on the area both sides raised"
+    want = with_(Proofs_Flock={"modules": flock["modules"] + 7, "declarations": flock["declarations"] + 162},
+                 Proofs_Pouw={"modules": pouw["modules"] + 1, "declarations": pouw["declarations"] + 4})
+    assert _unread(tmp_path, base, ours, theirs) == _unread(tmp_path, base, theirs, ours) == (0, want)
+    assert capsys.readouterr().err == ""
+    lowered, raised = unread(Proofs_Flock=(270, 2290)), unread(Proofs_Flock=(278, 2400))
+    assert _unread(tmp_path, unread(Proofs_Flock=(273, 2309)), lowered, raised) == (0, unread(Proofs_Flock=(275, 2381)))
+    for o, a, b in ((base, ours, theirs), (unread(Proofs_Flock=(273, 2309)), lowered, raised)):
+        sides = [json.loads(t)["areas"] for t in (o, a, b)]
+        _, merged = _unread(tmp_path, o, a, b)
+        for area, cap in json.loads(merged)["areas"].items():
+            for k, n in cap.items():
+                assert n <= sides[2].get(area, {}).get(k, 0) + sides[1].get(area, {}).get(k, 0) - sides[0].get(area, {}).get(k, 0)
+
+
+def test_an_unread_area_one_side_adds_or_drops_and_a_count_below_zero(tmp_path):
+    """An area the base lacks counts 0 there: one side adds is that side's, and one both add holds both. An area a side
+    lacks counts 0 on that side: one the lock run dropped (its modules all read) while the other side raised it keeps only
+    that raise. No count goes below 0, and an area left with no modules is dropped, as `ratchet` drops it."""
+    base = unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4))) == (
+        0, unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(1, 3))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(3, 12)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(2, 7))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 3)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))) == (
+        0, unread(Proofs_Flock=(273, 2309)))
+    assert _unread(tmp_path, unread(Proofs_Nci=(3, 10)), unread(Proofs_Nci=(2, 2)), unread(Proofs_Nci=(3, 3))) == (
+        0, unread(Proofs_Nci=(2, 0)))
+    assert _unread(tmp_path, unread(Proofs_Nci=(2, 5)), unread(), unread(Proofs_Nci=(1, 2))) == (0, unread())
+    assert _unread(tmp_path, "", unread(Proofs_Nci=(1, 2)), unread(Proofs_Nci=(2, 3))) == (0, unread(Proofs_Nci=(3, 5)))
+
+
+def test_an_unread_caps_side_the_merge_can_t_vouch_for_is_left_to_git_s_conflict(tmp_path, capsys):
+    """Another schema on any side, a side that is not the JSON object `unread.py` writes, an area that isn't a map of its
+    two fields, or a field that isn't a count: git's conflict, saying why on stderr."""
+    good = json.loads(unread(Proofs_Flock=(273, 2309)))
+    flock = good["areas"][FL]
+    def area(**fields) -> str:
+        return json.dumps({**good, "areas": {FL: {**flock, **fields}}})
+    shape, fields = "is not a JSON object of `schema` and `areas`", "area 'Proofs/Flock' is not a map of modules, declarations"
+    cases = [("is schema 'lean-unread-caps/v2'", json.dumps({**good, "schema": "lean-unread-caps/v2"})),
+             ("is not JSON", "{\"schema\": "), (shape, "[]"), (shape, json.dumps({**good, "areas": []})),
+             (shape, json.dumps({**good, "owner": "@lean"})), (fields, json.dumps({**good, "areas": {FL: 273}})),
+             (fields, area(room=2)), ("Proofs/Flock.modules is '274', not a count", area(modules="274")),
+             ("Proofs/Flock.modules is True, not a count", area(modules=True)),
+             ("Proofs/Flock.declarations is -1, not a count", area(declarations=-1)),
+             ("Proofs/Flock.declarations is 2310.5, not a count", area(declarations=2310.5))]
+    sides = {"base": unread(Proofs_Flock=(273, 2309)), "ours": unread(Proofs_Flock=(275, 2320)),
+             "theirs": unread(Proofs_Flock=(274, 2312))}
+    for why, bad in cases:
+        for side in sides:
+            code, text = _unread(tmp_path, *(bad if s == side else t for s, t in sides.items()))
+            err = capsys.readouterr().err
+            said = (f"merge.py: {UNREAD}: {side} {why}", f"merge.py: {UNREAD}: {side}'s {why}")
+            assert code == 1 and any(s in err for s in said), (why, side, err)
+            assert err.rstrip().endswith("left to git's merge, as a conflict")
+            assert "<<<<<<< ours\n" in text or side == "base", (why, side, text)
+
+
+def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installed_driver(tmp_path, monkeypatch):
+    """The `lean-caps` driver `--install` registers, and every clone and the queue already set (`RECORD_DRIVER`), passes the
+    path (`%P`), so `.gitattributes` naming it for `unread-caps.json` is all a clone needs: `git merge` of two branches that
+    each raise an area's cap merges, and a side in another schema leaves git's conflict."""
+    from research.clone import RECORD_DRIVER
+
+    for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com", "PYTHONDONTWRITEBYTECODE": "1"}.items():
+        monkeypatch.setenv(k, v)
+    repo = tmp_path / "repo"
+    (repo / M.DIR).mkdir(parents=True)
+    for f in ("merge.py", "check.py", "modules.py"):
+        shutil.copy(HERE.parent / f, repo / M.DIR / f)
+    (repo / ".gitattributes").write_text(f"{UNREAD} merge={M.CAPS}\n")
+    caps = repo / UNREAD
+    git(repo, "init", "-q", "-b", "main")
+    for name, start, text in (("main", None, unread(Proofs_Flock=(273, 2309), Proofs_Pouw=(49, 412))),
+                              ("a", "main", unread(Proofs_Flock=(278, 2451), Proofs_Pouw=(49, 412))),
+                              ("b", "main", unread(Proofs_Flock=(275, 2329), Proofs_Pouw=(50, 416))),
+                              ("v2", "main", unread(Proofs_Flock=(275, 2329)).replace("caps/v1", "caps/v2"))):
+        if start:
+            git(repo, "checkout", "-q", "-b", name, start)
+        caps.write_text(text)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", name)
+    git(repo, "checkout", "-q", "a")
+    plain = git(repo, "merge", "--no-edit", "b", check=False)
+    assert plain.returncode and f"CONFLICT (content): Merge conflict in {UNREAD}" in plain.stdout
+    git(repo, "merge", "--abort")
+    subprocess.run([sys.executable, f"{M.DIR}/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
+    driver = git(repo, "config", f"merge.{M.CAPS}.driver").stdout.strip()
+    assert driver == RECORD_DRIVER[f"merge.{M.CAPS}.driver"] == M.driver("--caps ") and '"$f" --caps %O %A %B %P;' in driver
+    git(repo, "merge", "--no-edit", "b")
+    assert caps.read_text() == unread(Proofs_Flock=(280, 2471), Proofs_Pouw=(50, 416))
+    refused = git(repo, "merge", "--no-edit", "v2", check=False)
+    assert refused.returncode and f"CONFLICT (content): Merge conflict in {UNREAD}" in refused.stdout
+    assert "theirs is schema 'lean-unread-caps/v2'" in refused.stderr + refused.stdout

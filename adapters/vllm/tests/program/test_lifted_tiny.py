@@ -34,11 +34,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
-from verity.definitions.registry import b1, lifted as L, pad_prims as PP, prims as P, serve3
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.b1 import weights_type
-from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 from verity.circuits.types import Array, RecordType, Tuple, Value
+from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import b1, serve3
+from verity.definitions.registry import lifted as L
+from verity.definitions.registry import pad_prims as PP
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.b1 import weights_type
+
+from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 
 I32, BF16, F32 = Value(32), Value(16), Value(32)
 N_EVENTS = D_MAX + 1  # prefill event + D_MAX decode events (the Serve_v2 skeleton; SPEC R3 maps this to Workload_v1's T = cap−1)
@@ -137,7 +141,7 @@ def test_strict_payload_agreement_bot_and_inv(p):
     ws = _widths(p)
     assert lp.id == f"Lifted[{p.id}]_v1" and lp.ret == Value(p.ret.w + 1)
     assert [t for _, t in lp.params] == [L.lift_type(t) for _, t in p.params]
-    assert getattr(lp, "lift_class") == "strict" and lp.lifted_from is p
+    assert lp.lift_class == "strict" and lp.lifted_from is p
     bot_out, inv_out = L.enc_bot(p.ret.w), L.inv(p.ret.w)
     special = {16: [0x0000, 0x3F80, 0x7FFF, 0x7FC0, 0x8000, 0xFF80], 32: [0, 1, 0x3F800000, 0x7F800000, 0x7FC00000, 0x80000000, 0xFFFFFFFF, 7], 1: [0, 1]}
     for trial in range(12):
@@ -169,7 +173,7 @@ def test_enabled_lift_is_the_relation_at_enable_1_bot_at_enable_0_whatever_the_o
     ws = _widths(p)
     assert lp.id == f"Lifted[{p.id}]_v2" and lp.ret == Value(p.ret.w + 1) and lp is L.lifted_prim(p)
     assert lp.params[:-1] == lv1.params and lp.params[-1] == (L.ENABLE_PARAM, Value(2)) and L.has_enable(lp) and not L.has_enable(lv1)
-    assert getattr(lp, "lift_class") == "strict" and lp.lifted_from is p and lp.lifted_v1 is lv1
+    assert lp.lift_class == "strict" and lp.lifted_from is p and lp.lifted_v1 is lv1
     bot_out, inv_out = L.enc_bot(p.ret.w), L.inv(p.ret.w)
     for trial in range(8):
         ops = [_rand(w, 1)[0] for w in ws]
@@ -250,7 +254,7 @@ def test_lis_active_and_lbot():
     assert ia.evaluate(INV32) == 0b11 and ia.evaluate(_bad(32)) == 0b11  # negative: INV_1
     for w in (1, 16, 32):
         bp = L.l_bot(w)
-        assert bp.id == f"LBot{w}_v1" and bp.evaluate() == L.enc_bot(w) and bp.params == () and getattr(bp, "family") == "Const"
+        assert bp.id == f"LBot{w}_v1" and bp.evaluate() == L.enc_bot(w) and bp.params == () and bp.family == "Const"
     assert L.l_bot(32).evaluate() != b1.const(33, 0).evaluate()  # ⊥ is not Active(0)
 
 
@@ -494,7 +498,7 @@ def test_lifted_embedding_reads_through_an_inactive_table_row():
 # ---------------------------------------------------------------------------------------------------------
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _lserve(eos: tuple[int, ...]):
     prompt, w = _inputs()
     prog = Program(L.lserve(TINY, LP, D_MAX, eos, lag=0))
@@ -550,10 +554,6 @@ def test_lserve_prefix_property_gate_for_gate(n):
         covered += c1.hi - c1.lo
     assert covered == p1.gates - p1.input_gates
     assert [L.payload(32, x) for x in out[:n + 1]] == y1
-
-
-def fid_is_strict(prim) -> bool:
-    return getattr(prim, "lift_class", None) == "strict"
 
 
 def _is_const(prim) -> bool:
@@ -858,7 +858,9 @@ def test_stage1_reference_evaluator_exposes_the_complete_assignment_every_gate_w
     assert all(r["width"] is not None and r["width"] >= 2 for r in rs if r["class"] in ("strict", "specified"))  # lifted widths w+1
     assert all(r["word"] == t[r["gate"]] for r in rs)  # raw words, byte for byte the transcript's
     s2 = D.dump(prog, t, tmp_path / "dump.jsonl")
-    assert s2 == s and sum(1 for _ in open(tmp_path / "dump.jsonl")) == prog.gates
+    with open(tmp_path / "dump.jsonl") as fh:
+        n_lines = sum(1 for _ in fh)
+    assert s2 == s and n_lines == prog.gates
 
 
 def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_named_revb_3a_3c():
@@ -871,12 +873,12 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
         fs = L.l_fixed_select(E, w)
         assert fs.id == f"LFixedSelect{E}x{w}_v1" and fs is L.l_fixed_select(E, w) and fs.id in L.specified_ids()
         assert [t for _, t in fs.params] == [Value(33), Array(E, Value(w + 1))] and fs.ret == Value(w + 1)
-        assert getattr(fs, "lift_class") == "specified" and "named failure" in getattr(fs, "lift_reason")
+        assert fs.lift_class == "specified" and "named failure" in fs.lift_reason
         bot, inv_ = L.enc_bot(w), L.inv(w)
         z = _rand(w, E)
         for r in range(E):  # (b) every admitted route: z_r bit for bit; the SAME object (a)
             assert fs.evaluate(r, *z) == z[r]
-            assert fs.evaluate_lazy(lambda i, _r=r: _r if i == 0 else z[i - 1]) == z[r]
+            assert fs.evaluate_lazy(lambda i, _r=r, _z=z: _r if i == 0 else _z[i - 1]) == z[r]
             zb = list(z)
             zb[(r + 1) % E] = bot  # an UNSELECTED slot inactive: no effect on the read
             assert fs.evaluate(r, *zb) == z[r]
@@ -886,11 +888,12 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
         assert fs.evaluate(L.enc_bot(32), *z) == bot  # r bot (an inactive token): nothing selected
         assert fs.evaluate(L.enc_bot(32), *([bot] * E)) == bot
         for oor in (E, E + 1, 0xFFFFFFFF, 0x80000000, 0x7FFFFFFF):  # (c) out of range: NAMED, not z[oor % E], not a default
-            assert fs.evaluate(oor, *z) == inv_ and fs.evaluate_lazy(lambda i, _o=oor: _o if i == 0 else z[i - 1]) == inv_
-        assert not hasattr(fs, "oor_payload") and getattr(fs, "oor_named") == "INV"  # no registered extension VALUE (unlike LGatherRow)
+            assert fs.evaluate(oor, *z) == inv_ and fs.evaluate_lazy(lambda i, _o=oor, _z=z: _o if i == 0 else _z[i - 1]) == inv_
+        assert not hasattr(fs, "oor_payload") and fs.oor_named == "INV"  # no registered extension VALUE (unlike LGatherRow)
         # INV anywhere -> INV: the route, a selected row, an unselected row, a bot route beside an INV row
         assert fs.evaluate(L.inv(32), *z) == inv_ and fs.evaluate(_bad(32), *z) == inv_
-        zi = list(z); zi[1] = inv_
+        zi = list(z)
+        zi[1] = inv_
         assert fs.evaluate(1, *zi) == inv_ and fs.evaluate(0, *zi) == inv_ and fs.evaluate(L.enc_bot(32), *zi) == inv_
         zi[1] = _bad(w)
         assert fs.evaluate(3, *zi) == inv_
@@ -970,7 +973,6 @@ def test_b10_new_node_classes_of_the_padded_dense_request_are_named_with_counts(
     """v0.6 B10 (S-r17b-40 N3): every NEW node class of Lift(P) has a name and a count: guard (`guard_gate_count`, includes the one enable
     gate `enable/one` = `enable_gate_count`), controller (`continuation_gate_count - guard_gate_count = 3·cap`), state selects (0 for the
     dense chain).  Checked on the request component: the non-mapped nodes are exactly guard + controller."""
-    from tests.program.test_lifted_request import CAP as _CAP, component as _component_fixture  # noqa: F401
     for cap, n_eos, lag in ((3, 1, 0), (9, 2, 1), (5, 1, 0)):
         assert L.enable_gate_count(cap, n_eos, lag) == 1 and L.state_select_count(cap, n_eos, lag) == 0
         assert L.continuation_gate_count(cap, n_eos, lag) == L.guard_gate_count(cap, n_eos, lag) + 3 * cap
@@ -1062,7 +1064,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
 
 def test_every_lift_of_a_primitive_declares_its_tables():
     """The data guard sees a table only through its primitive's declaration, and a lift runs its base's evaluator."""
-    from verity.definitions.ops.mufu import MufuEx2Ftz
+    from verity.circuits.ops.mufu import MufuEx2Ftz
     lp = L.lifted_prim(MufuEx2Ftz)
     assert MufuEx2Ftz.tables == (("ex2", "library"),)
     assert L.lifted_prim_v1(MufuEx2Ftz).tables == lp.tables == L.with_ordinary(lp, 1).tables == MufuEx2Ftz.tables

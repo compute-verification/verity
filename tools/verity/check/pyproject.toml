@@ -61,13 +61,14 @@ untraced = [
 # load, the security proofs' manifest and record (a
 # shard's package), the Slack registry, whose handles are the owners `ci.toml` may name, and what of research the fixture
 # fetch and the run tooling import beyond its `exports` (with `research run --pool`'s placement, which `--record --pool`
-# reuses, the check view whose circuit-check reader the live record shares, and the executor's keys and labels, which
-# `tasks.py costs` reads), the move script whose word maps move_check applies, and the vLLM integration's ratchet gate,
+# reuses, the check view whose circuit-check reader the live record shares, the executor's keys and labels, which
+# `tasks.py costs` reads, and `jobuser`, which names the job unit `clone.not_over` asks for a run's processes before a
+# machine's clone is made), the move script whose word maps move_check applies, and the vLLM integration's ratchet gate,
 # which the ratchet-gate step runs on a toy train.
-inputs = [".agents/skills/using-slack/registry.json", "READY.json", "tools/move/rename.py", "tools/move/layout.py", "verity/protocols/flock/prover/check_build.sh", "verity/protocols/flock/prover/flock-glue-b684b12.patch",
-          "verity/protocols/flock/prover/flock-gpu-link-b684b12.patch", "verity/protocols/flock/prover/flock-link-b684b12.patch",
-          "verity/protocols/flock/prover/flock-sha512-b684b12.patch", "verity/protocols/flock/prover/flock-vtime-b684b12.patch",
-          "verity/protocols/flock/prover/flock-zk-b684b12.patch", "verity/protocols/flock/agreement", "verity/protocols/flock/verifier",
+inputs = [".agents/skills/using-slack/registry.json", "READY.json", "tools/move/rename.py", "tools/move/layout.py", "verity/protocols/proofs/flock/prover/check_build.sh", "verity/protocols/proofs/flock/prover/flock-glue-b684b12.patch",
+          "verity/protocols/proofs/flock/prover/flock-gpu-link-b684b12.patch", "verity/protocols/proofs/flock/prover/flock-link-b684b12.patch",
+          "verity/protocols/proofs/flock/prover/flock-sha512-b684b12.patch", "verity/protocols/proofs/flock/prover/flock-vtime-b684b12.patch",
+          "verity/protocols/proofs/flock/prover/flock-zk-b684b12.patch", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/verifier",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "tests/test_no_wall_clock.py", "tests/test_repository.py",
           "tools/verity/lean", "tools/verity/graph/verity_graph/contract.py", "security/Proofs/lake-manifest.json", "security/Proofs/lean-audit.json",
@@ -78,6 +79,7 @@ inputs = [".agents/skills/using-slack/registry.json", "READY.json", "tools/move/
           "tools/research/src/research/telemetry/classify.py", "tools/research/src/research/telemetry/procs.py",
           "tools/research/src/research/telemetry/pyspy.py", "tools/research/src/research/telemetry/run.py",
           "tools/research/src/research/telemetry/scope.py", "tools/research/src/research/auto.py",
+          "tools/research/src/research/jobuser.py",
           "tools/research/src/research/pods/nebius/slot_only.py", "adapters/vllm/tools/ratchet_gate.py",
           "tests/lint/test_repo_env_reads.py",
           "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py", "tools/research/src/research/telemetry/__init__.py",
@@ -92,7 +94,7 @@ paths = ["tools/verity/check"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_shard_plan.py"]
-paths = ["fixtures/artifacts.json"]
+paths = ["artifacts.json"]
 
 # `check.cc_manifests`, which every step list and check run reads: whether this tree's circuit-check lists its records
 [[tool.verity.tests.reads]]

@@ -16,18 +16,18 @@ import itertools
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import lookup_primitive
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.reference import statics_of
-from verity.definitions.ops.prims import F2fpBf16
-from verity_vllm.program.frontend.rules.vllm_marlin_moe import MARLIN_SERVED
 from verity.definitions.numerics import marlin_moe_rows as MR
 from verity.definitions.numerics import rows as RK
+from verity.circuits.ops.prims import F2fpBf16
 from verity.definitions.registry import flashmla as F
 from verity.definitions.registry import marlin_moe as MM
 from verity.definitions.registry.prims import Bf16MulBf16, F32Add
+
+from verity_vllm.program.frontend.rules.vllm_marlin_moe import MARLIN_SERVED
 
 DOT = MM.DOT
 E2M1_VALUES = [v for v in MM.E2M1_VALUES] + [-v for v in MM.E2M1_VALUES]
@@ -85,7 +85,7 @@ def _template_cuts(KT: int, NT: int, GRID: int, blk: int, par: int) -> np.ndarra
             j2, row = divmod(pos, KT)
             starts.add((j2, row))
             pos += min(end - pos, KT - row)
-    out = np.zeros((NT, KT - 1), dtype=bool)
+    out: np.ndarray = np.zeros((NT, KT - 1), dtype=bool)
     for J in range(NT):
         j2 = blk * NT + J - (G - p2)
         if j2 >= 0:
@@ -165,8 +165,8 @@ def test_align_bodies_are_cut_per_pair() -> None:
     """Both align Definitions are separable with no value two pair members compute, so the word check cuts one member however many
     pairs a batch routes (DeepSeek-V4-Pro's 256-token prefill: 1536 pairs, 42.5M gates in one body)."""
     from verity.circuits.cut import separable
-    from verity.definitions import word as W
-    from verity.definitions.cross_call import members_check
+    from verity.circuits import word as W
+    from verity.circuits.cross_call import members_check
     for fn in (bind(MM.MoeAlignRanks, E=384, P=64, BM=8), bind(MM.MoeAlignBlocks, P=64, BM=8)):
         assert separable(fn) is not None, fn.id
         assert not members_check(fn, {})["recomputes"], fn.id
@@ -246,7 +246,7 @@ def test_an_expert_row_unpacks_the_checkpoint_s_bytes() -> None:
     assert list(evaluate(row, [E], packed.ravel().tolist())) == [0] * K
     assert [evaluate(bind(MM.E2m1x2Codes), [b]) for b in (0x00, 0x8F, 0x1E)] == [(0, 0), (0xF, 0x8), (0xE, 0x1)]
     with pytest.raises(ValueError):
-        bind(MM.MoeExpertE2m1Row, E=E, K=63).body
+        _ = bind(MM.MoeExpertE2m1Row, E=E, K=63).body
 
 
 def test_a_cold_decode_resolves_the_expert_gathers_by_id() -> None:

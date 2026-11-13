@@ -11,14 +11,14 @@ import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
 /-!
-# A subset draw's JSON, as Flock parses it
+# A subset sample's JSON, as Flock parses it
 
-The second stage holds a session statement's draw to its own (`SecondStage.ownDraw`, `second-sample`) by `jeq`, and
-Flock's verifier finds the session's instances by parsing that draw (`Draw.UnitDraw.ofJson`). Both read a subset
-draw: the four keys `law` (`subset`), `population`, `k` (the units' count) and `units` (`subsetJson`). `subsetParses`
-proves that a printable draw `jeq` to `subsetJson pop us` that Flock parses proves exactly `us`. The second stage's
-own draw is one (`ownDraw_eq`), and so is a draw of every unit of a population of `m` (units `0..m-1`, no closure:
-`wholeJson_eq`). A draw the verifier rebuilt is well formed, and printable where its law is a subset's or a
+The second stage holds a session statement's sample to its own (`SecondStage.ownDraw`, `second-sample`) by `jeq`, and
+Flock's verifier finds the session's instances by parsing that sample (`Draw.UnitDraw.ofJson`). Both read a subset
+sample: the four keys `law` (`subset`), `population`, `k` (the units' count) and `units` (`subsetJson`). `subsetParses`
+proves that a printable sample `jeq` to `subsetJson pop us` that Flock parses proves exactly `us`. The second stage's
+own sample is one (`ownDraw_eq`), and so is a sample of every unit of a population of `m` (units `0..m-1`, no closure:
+`wholeJson_eq`). A sample the verifier rebuilt is well formed, and printable where its sampling design is a subset's or a
 stratified one, so `proved_of_wf` asks only that.
 
 The canonical text is read back by the verifier's parser (`FlockComplete.JsonRT.parse_canon`), so two printable values
@@ -35,20 +35,20 @@ open FlockComplete.JsonRT (Distinct)
 
 namespace AddressRow
 
-/-- A subset draw's fields. -/
+/-- A subset sample's fields. -/
 def subsetList (pop : ℕ) (us : Array ℕ) : List (String × Json) :=
   [("law", Json.str "subset"), ("population", Lean.toJson pop), ("k", Lean.toJson us.size),
     ("units", Spot.natsJson us)]
 
-/-- **A subset draw's JSON**: law `subset`, population `pop`, `k` the units' count, and the units `us`. -/
+/-- **A subset sample's JSON**: law `subset`, population `pop`, `k` the units' count, and the units `us`. -/
 def subsetJson (pop : ℕ) (us : Array ℕ) : Json := Json.mkObj (subsetList pop us)
 
-/-- **The second stage's own draw for part `p`'s session is a subset draw**: of its `q · n` slots, the second draw's
+/-- **The second stage's own sample for part `p`'s session is a subset sample**: of its `q · n` slots, the second sample's
 units among them, counted from the part's first. -/
 theorem ownDraw_eq (q : ℕ) (p : Spot.SecondStage.Part) (drawn : Array ℕ) :
     Spot.SecondStage.ownDraw q p drawn = subsetJson (q * p.n) ((drawn.filter (p.holds q)).map (· - p.lo)) := rfl
 
-/-- **A draw held to a subset draw parses to its units**: a printable draw that `jeq` holds to `subsetJson pop us`
+/-- **A sample held to a subset sample parses to its units**: a printable sample that `jeq` holds to `subsetJson pop us`
 and that Flock's verifier parses proves `us`, with no closure. -/
 def SubsetParses : Prop :=
   ∀ {j : Json} {pop : ℕ} {us : Array ℕ} {D : _root_.Flock.Draw.UnitDraw}, Good j →
@@ -117,8 +117,8 @@ theorem getObjVal_closure_none {m : Std.TreeMap.Raw String Json compare} (h : m.
   | none => rfl
   | some _ => rw [hg] at h; cases h
 
-/-- **A draw held to a subset draw parses to its units** (`SubsetParses`). The draw is an object, since its text is
-one's; its `units` are the subset draw's, entry by entry; and it has no `closure`, since the subset draw has none. -/
+/-- **A sample held to a subset sample parses to its units** (`SubsetParses`). The sample is an object, since its text is
+one's; its `units` are the subset sample's, entry by entry; and it has no `closure`, since the subset sample has none. -/
 theorem subsetParses : SubsetParses := by
   intro j pop us D hg hj hD
   have he := jsonEquiv_of_jeq hg (good_subsetJson pop us) hj
@@ -159,8 +159,8 @@ theorem subsetParses : SubsetParses := by
     rw [_root_.Flock.Draw.UnitDraw.proved, hc, ← Except.ok.inj hmap]
     rfl
 
-/-- **A well-formed draw held to a subset draw parses to its units**: `subsetParses` at a draw the verifier rebuilt
-(`Flock.norm`, well formed: `draw_wf`) whose law is one a soundness claim samples by (`law_of_lawWhy`). Such a draw
+/-- **A well-formed sample held to a subset sample parses to its units**: `subsetParses` at a sample the verifier rebuilt
+(`Flock.norm`, well formed: `draw_wf`) whose sampling design is one a soundness claim samples by (`law_of_lawWhy`). Such a sample
 that decodes is printable (`good_subset`, `good_stratified`). -/
 theorem proved_of_wf {j : Json} {pop : ℕ} {us : Array ℕ} {D : _root_.Flock.Draw.UnitDraw} (hw : Claims.Json.Wf j)
     (hD : _root_.Flock.Draw.UnitDraw.ofJson j = .ok D)
@@ -172,7 +172,7 @@ theorem proved_of_wf {j : Json} {pop : ℕ} {us : Array ℕ} {D : _root_.Flock.D
     · exact FlockComplete.JsonRT.good_subset hw hD hl
   exact subsetParses hg hj hD
 
-/-- **A draw of every unit of a population of `m`** (law `subset`, `k = m`, units `0..m-1`) is the subset draw of
+/-- **A sample of every unit of a population of `m`** (law `subset`, `k = m`, units `0..m-1`) is the subset sample of
 those units, so `subsetParses` reads it as it reads the second stage's own. -/
 theorem wholeJson_eq (m : ℕ) :
     Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson m), ("k", Lean.toJson m),

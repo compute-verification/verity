@@ -1,4 +1,4 @@
-"""`verity config` and `verity run` (`verity_cli.run`, `verity.configuration.deploy.config`): the configuration's refusals by name,
+"""`verity config` and `verity run` (`verity_cli.run`, `verity.config`): the configuration's refusals by name,
 a list of subprotocols that is neither composite's among them, its hash, the example reproduced by `config new`, and
 runs of a step-0 table (`step0.py`) for onsite and remote: its entries in this process, and core's sampled-proofs
 parties in the deployment layer's live run, on a machine with stand-in capabilities and a stand-in product executable,
@@ -14,12 +14,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.configuration.deploy import config as K
-from verity.configuration.deploy.manifest import Channel, Role
-from verity.protocols.certifier.verifier.warden import WardenParams
-from verity.protocols.spot.verifier import parties as SP
-from verity.protocols.spot.verifier.one_stage import registration as RG
-from verity.configuration.wire import Refused
+from verity import config as K
+from verity.protocol import Channel, Role
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity.channel import Refused
 from verity_cli import run as R
 
 EXAMPLE = Path(__file__).parent / "fixtures" / "config.toml"
@@ -201,13 +201,16 @@ def with_lengths(**schedule):
 
 def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_schedule_that_fits_them():
     fits = {"cell_bytes": 512, "ingress_buckets": 10, "egress_cells": 2048}
-    cfg = K.check(K.parse(K.render(with_lengths(**fits))), REG.components, REG.workloads)
-    table = cfg["params"]["verity/certifier/v0"]
-    assert table["lengths"] == 1 and "max_tokens_cap" not in table
-    assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == 1
-    assert K.check(cfg, REG.components, REG.workloads) == cfg
-    assert K.digest(cfg) != UNCAPPED_ONSITE
-    for schedule in ({}, fits | {"lengths": 2}, fits | {"egress": "bytes"}):
+    digests = {UNCAPPED_ONSITE}
+    for form in (1, 2):  # the lengths rows' two forms, each a configuration of its own digest
+        cfg = K.check(K.parse(K.render(with_lengths(**fits | {"lengths": form}))), REG.components, REG.workloads)
+        table = cfg["params"]["verity/certifier/v0"]
+        assert table["lengths"] == form and "max_tokens_cap" not in table
+        assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == form
+        assert K.check(cfg, REG.components, REG.workloads) == cfg
+        digests.add(K.digest(cfg))
+    assert len(digests) == 3
+    for schedule in ({}, fits | {"lengths": 3}, fits | {"egress": "bytes"}):
         with pytest.raises(Refused) as e:
             K.check(with_lengths(**schedule), REG.components, REG.workloads)
         assert e.value.name == "params" and "lengths" in e.value.detail

@@ -15,9 +15,10 @@ from pathlib import Path
 
 import pytest
 
-VLLM = Path(__file__).resolve().parents[2]
 PKG = "verity.definitions.registry"
-REGISTRY = Path(importlib.util.find_spec(PKG).origin).parent
+_SPEC = importlib.util.find_spec(PKG)
+assert _SPEC is not None and _SPEC.origin is not None, PKG
+REGISTRY = Path(_SPEC.origin).parent
 DEFINITION_MODULES = ["fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa",
                       "boolean_dsa", "sparse_mla", "boolean_sparse_mla"]
 VOCAB = "attention_vocab"
@@ -29,8 +30,8 @@ OTHER_FAMILIES = {
     "prims": (None, "the word primitives (F32MaxFtz, MufuEx2Ftz, F2fpBf16, ...) and their types (A16, BF16, F32, I32, bits_of)"),
     "b1": ({"ZERO16", "_lane", "scale_log2_bits", "AttnBlockV2", "AttnBlockV3", "AttentionHeadV2", "AttentionHeadV3", "AttentionV2",
             "AttentionV3"},
-           "Const16's zero, the mma accumulator's lane map and the softmax scale's word constant the bodies read, and the "
-           "accepted chains the Boolean versions lower"),
+           ("Const16's zero, the mma accumulator's lane map and the softmax scale's word constant the bodies read, and the "
+            "accepted chains the Boolean versions lower")),
     "dense": ({"softcap_mul_bits", "softcap_scale_log2_bits"}, "the softcap stage's word constants (`set_params_fprop`)"),
     "hopper": ({"Fa3InvSum", "HopperBF16WgmmaDot16"}, "FA3's reciprocal primitive and the Hopper BF16 dot (the B1 Hopper profile)"),
     "dead_free": ({"AttnBlockFirstV1", "AttnHeadEndV1"},
@@ -44,7 +45,7 @@ OTHER_FAMILIES = {
 }
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.definitions.ops", "verity.definitions.silicon")
+CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 
@@ -55,8 +56,8 @@ def _core(name: str) -> bool:
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
-    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.definitions.private_circuits", "verity.definitions.ops",
-                "verity.definitions.silicon", "verity.definitions.circuits.targets", "verity.definitions.kernels", "verity.ml.flock",
+    moved_in = ("verity.core", "verity.commitments.multiproof", "verity.circuits.private_circuits", "verity.circuits.ops",
+                "verity.circuits.silicon", "verity.circuits.targets", "verity.circuits.kernels", "verity.ml.flock",
                 "verity.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.claims"))))
@@ -103,7 +104,7 @@ def _violations(mod: str) -> list[str]:
                 elif not _verity(a.name) and top not in THIRD_PARTY and top not in sys.stdlib_module_names:
                     out.append(f"{mod}:{node.lineno}: imports {a.name}")
         elif isinstance(node, ast.ImportFrom):
-            base = (node.module if node.level == 0
+            base = ((node.module or "") if node.level == 0
                     else ".".join(package[:len(package) - node.level + 1] + ([node.module] if node.module else [])))
             top = base.split(".")[0]
             if base == PKG:

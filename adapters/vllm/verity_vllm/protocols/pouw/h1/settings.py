@@ -3,18 +3,20 @@ the refusals of a scheme that sets them wrongly (`refusals`), and the ones `veri
 (`fills`, `from_engine`)."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
-from verity.protocols.pouw.verifier import verifier
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.spot.device.challenger import LiveRecord
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
+from verity_vllm.engine import handle
 from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import window as PHW
-from verity_vllm.protocols.pouw import pearl_c as PPD
 
 #: The schemes whose coins the auditor host's challenger can sample (the setting ``challenger``): H1's salt and rounds,
 #: ncp-v2's and Pearl-C's salt
@@ -107,8 +109,7 @@ def from_engine(scheme: str, settings: Mapping[str, Any], llm: Any, epoch: int =
     keys = fills(scheme, settings)
     out: dict[str, Any] = {}
     if "runner" in keys:
-        from verity_vllm.engine.handle import model_runner
-        out["runner"] = model_runner(llm)
+        out["runner"] = handle.model_runner(llm)
     if "coins" in keys:
         out["coins"] = Challenger(epoch, verifier.coins)
     if "rounds" in keys:

@@ -28,15 +28,15 @@ the two pieces about it, `CallsLe` and `MessagesFixed`.
   the rounds the run reaches; with `RunsThrough` it gives `MessagesFixed`.
 * **The first difference** (`runHist`, `MissAt`, `reachedOfRounds`): on a play where the messages differ at a reached
   round, they differ first at some round `i`, where the run's history is the play's (`playHist_eq`).
-* **Forking** (`miss_le_sqrt`): on a finite space split into classes, with a uniform redraw within a class, a member
-  whose message is not its class's most likely one is at most as likely as the square root of a member and its redraw
+* **Forking** (`miss_le_sqrt`): on a finite space split into classes, with a uniform resample within a class, a member
+  whose message is not its class's most likely one is at most as likely as the square root of a member and its resample
   having two different messages.
 * **The miss at one round** (`MsgOpens`, `DigestBefore`, `RunShown`, `merge`, `msgFinder`, `missBound`): where the
   message the check reads opens the digest the play records (`MsgOpens`, the form's parse's), that digest is fixed by
   the coins the history shows (`DigestBefore`, the coin map's and the cut's), and the verifier's answers show the
   run's coins and depend on them only through what they show (`RunShown`, a fact about `SpotFlock.V`), the round's
   miss is at most the square root of a two-continuation finder's success. The classes are the frame's run's histories
-  before round `i`; the finder redraws the coins the history does not show (`merge`) and outputs the two messages the
+  before round `i`; the finder flips the coins again the history does not show (`merge`) and outputs the two messages the
   two plays read when they differ, a SHA-512 collision since both open one digest. The finder's cost is declared, as
   in the one-stage leg's.
 * **The messages' bound** (`MessagesBound`, `messagesBound`): `MessagesFixed` at the sum over the rounds of those
@@ -274,7 +274,7 @@ theorem reachedOfRounds (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray
 /-! ## Forking at one round
 
 On a finite space split into classes, where each member's message is a function of its class (`F`) and a sampler
-redraws a member of the same class uniformly (`res`), a member whose message is not its class's most likely one is at
+resamples a member of the same class uniformly (`res`), a member whose message is not its class's most likely one is at
 most as likely as the square root of two members of one class having two different messages. -/
 
 section Fork
@@ -508,7 +508,7 @@ theorem merge_of_shows {A : Live₂} {x : Msg} {hist : List (Msg × Msg)} {r : C
   · rfl
   · exact (h j c hs).symm
 
-/-- **Every coin the history shows fixes as many redraws**: the redraws that `merge` takes to two coins the history
+/-- **Every coin the history shows fixes as many resamples**: the resamples that `merge` takes to two coins the history
 shows are as many. -/
 theorem fiber_card {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) {r r' : Coins A x} (hr : Shows hist r)
     (hr' : Shows hist r') :
@@ -546,7 +546,7 @@ theorem fiber_card {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) {r r' : Co
       simp [hs, this]
     · simp [hs]
 
-/-- **`merge` redraws uniformly among the coins the history shows.** -/
+/-- **`merge` resamples uniformly among the coins the history shows.** -/
 theorem sum_merge {A : Live₂} {x : Msg} (hist : List (Msg × Msg)) (φ : Coins A x → ℝ) :
     (∑ y, φ (merge hist y)) * ((Finset.univ.filter fun r : Coins A x => Shows hist r).card : ℝ) =
       (Fintype.card (Coins A x) : ℝ) * ∑ r ∈ Finset.univ.filter (fun r => Shows hist r), φ r := by
@@ -730,7 +730,7 @@ variable (V : Vocab d α) {A : Live₂} {x : Msg} (θ : ByteArray) (F : Array By
 noncomputable def clsOf (s : TapeOf V θ F c σ × Coins A x) : TapeOf V θ F c σ × List (Msg × Msg) :=
   (s.1, histAt V θ F c σ place Rd Dg i s.1 s.2)
 
-/-- The redraw of a tape and run coins within their class. -/
+/-- The resample of a tape and run coins within their class. -/
 noncomputable def resOf (s : TapeOf V θ F c σ × Coins A x) (y : Coins A x) : TapeOf V θ F c σ × Coins A x :=
   (s.1, merge (histAt V θ F c σ place Rd Dg i s.1 s.2) y)
 

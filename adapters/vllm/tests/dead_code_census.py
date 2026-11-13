@@ -66,6 +66,8 @@ CENSUS_PACKAGES = PACKAGES
 DEFINITIONS = REPO / "verity" / "definitions"
 #: what of `DEFINITIONS` moved from the package: the modules at its top and these packages of it; any other package there is core's
 MOVED_OUT = frozenset({"numerics", "registry", "tests"})
+#: the modules at its top that stay with core when the served Definitions leave it: core's, as its other packages are
+CORE_TOPS = frozenset({"call_scope.py", "cross_call.py", "tiny.py", "word.py"})
 _TOPS = "|".join(PACKAGES + ("tests",))
 _DEFINITIONS_MODULE = re.escape(".".join(DEFINITIONS.relative_to(REPO).parts))
 TOP_MODULE_RE = re.compile(rf"^(?:{_TOPS}|{_DEFINITIONS_MODULE})(?:\.[A-Za-z_][A-Za-z0-9_]*)+$")
@@ -112,8 +114,8 @@ def py_files() -> list[Path]:
                 continue                                             # this tool names modules in string literals; it is not a consumer
             if p.name.endswith(SIDECAR) or p == DEFINITIONS / "__init__.py":
                 continue                                             # verity.definitions' own __init__ is verity.ml's, not a Definition's
-            if top == DEFINITIONS and len(parts := p.relative_to(top).parts) > 1 and parts[0] not in MOVED_OUT:
-                continue                                             # core's package: neither in the graph nor in the census
+            if top == DEFINITIONS and (parts := p.relative_to(top).parts)[0] not in MOVED_OUT and (len(parts) > 1 or parts[0] in CORE_TOPS):
+                continue                                             # core's: neither in the graph nor in the census
             out.append(p)
     return out
 
@@ -280,9 +282,10 @@ class Graph:
             m = q.popleft()
             if m == target:
                 path = []
-                while m is not None:
-                    path.append(m)
-                    m = prev[m]
+                at: str | None = m
+                while at is not None:
+                    path.append(at)
+                    at = prev[at]
                 return path[::-1]
             for n in self.edges.get(m, ()):
                 if n not in prev:
@@ -694,7 +697,7 @@ def build(imported: set[str] | None, with_dates: bool, with_artifacts: bool) -> 
     plan_totals: dict[str, dict] = defaultdict(lambda: {"files": 0, "loc": 0})
     for e in modules.values():
         if e.get("plan") == "delete":
-            for k in (e["package"], "all"):
+            for k in (str(e["package"]), "all"):
                 plan_totals[k]["files"] += 1
                 plan_totals[k]["loc"] += e["loc"]
     for rel in deleted_tests:

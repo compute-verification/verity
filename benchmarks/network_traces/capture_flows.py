@@ -9,10 +9,12 @@ address it was given on one side with its bytes. It is a measurement: it says "a
 gives no protocol's verdict.
 
 **The capture** is a file as `tcpdump -w` writes one (pcap: either byte order, microseconds or nanoseconds), of link
-type Ethernet (VLAN tags skipped), Linux cooked (v1, v2) or raw IP, holding IPv4 or IPv6. Lengths are read from the
-IP and TCP headers, never from how much of a packet was kept, so a capture that keeps only each packet's first bytes
-(`-s`) sums the same. Several files are one capture: an optical splitter's two directions, or a rotated capture's
-parts in order. A flow is the two addresses, the two ports and the protocol, and each direction of it has
+type Ethernet, Linux cooked (v1, v2) or raw IP, holding IPv4 or IPv6. A VLAN tag is skipped where the type before it
+names it: each tag of an Ethernet frame, and the tag a Linux cooked v1 capture holds after its header (a v2 capture
+holds nothing of a frame's first tag). Lengths are read from the IP and TCP headers, never from how much of a packet
+was kept, so a capture that keeps only each packet's first bytes (`-s`) sums the same. Several files are one capture:
+an optical splitter's two directions, or a rotated capture's parts in order. A flow is the two addresses, the two
+ports and the protocol, and each direction of it has
 - `packets` and `wire_bytes`: every frame, as long as it was on the wire (headers, ACKs, retransmissions; no preamble
   or checksum trailer);
 - `payload_bytes`: the bytes above the transport header, a retransmitted segment's each time it was sent;
@@ -27,7 +29,12 @@ parts in order. A flow is the two addresses, the two ports and the protocol, and
 outside the list above; an IP fragment of a flow it reads, whose ports and length one fragment doesn't hold (nothing
 is reassembled); an encapsulation, between any addresses, since the flows read here could be inside it (MPLS, PPPoE,
 MACsec, provider bridging; IP in IP, GRE, ESP, AH, EtherIP, L2TP; VXLAN, Geneve and GTP-U by their UDP ports); a
-packet kept too short for its headers; a file that ends inside a packet.
+packet kept too short for its headers, with how many of its bytes this reads (its frame header, its IP header and
+the first 14 of TCP's or 4 of UDP's), or, where the bytes kept end before the header that says so is whole, with that
+header; a packet shorter than the headers it states, one that was fewer bytes on the wire than this reads of it, which
+no capture length changes; a Linux cooked frame whose type says IP where no IP header starts, as a cooked capture can
+hold a frame under two VLAN tags, the second left before the IP header with no type naming it; a file that ends
+inside a packet.
 
 **Which bytes are compared.** The certifier opens one connection to the server for each client connection it admits,
 and one more for the watermark stream. Of each, the record gives two counts, both of the byte stream (what a `read`
@@ -111,7 +118,9 @@ TUNNEL_PROTOCOLS = {4: "IP in IP", 41: "IPv6 in IP", 47: "GRE", 50: "ESP", 51: "
 TUNNEL_PORTS = {4789: "VXLAN", 8472: "VXLAN", 6081: "Geneve", 2152: "GTP-U"}
 #: the least a capture keeps of each packet for every header here to be whole: Ethernet with two VLAN tags, IPv6 with
 #: a fragment header, TCP with every option. A packet whose headers are shorter keeps the first bytes of its content
-#: in the rest
+#: in the rest. A Linux cooked header is 2 or 6 bytes longer than Ethernet's: under one this length still holds all
+#: this reads of a packet, which of TCP's header is its first 14 bytes. The README's command for a link captures at
+#: it, and nothing here reads it: a packet is refused by what this reads of it, never by this length
 SNAPSHOT = 14 + 8 + 40 + 8 + 60
 
 
@@ -123,7 +132,44 @@ class _Unread(Exception):
     """A packet this doesn't read, with what it is."""
 
 
-SHORT = f"kept too short for its headers: capture at least {SNAPSHOT} bytes of each packet (`-s {SNAPSHOT}`)"
+#: how the refusal of a packet kept too short ends: it names no length for every capture
+LENGTHS = ("No one length suits every capture, since a length past a packet's headers keeps the first bytes of its "
+           "content: see benchmarks/network_traces/README.md")
+#: how the refusal of a packet shorter than the headers it states ends
+ITSELF = "No capture length changes that: the packet itself is that short"
+
+
+def _cut(wire: int, kept: int, need: int, header: str) -> _Unread:
+    """A packet whose `kept` bytes end before `header`, the header that says how many of its bytes this reads, is
+    whole at `need` bytes. Where its `wire` bytes on the wire end before that too, the packet is the short one and not
+    what is kept of it."""
+    if wire < need:
+        return _Unread(f"shorter than the headers it states: it was {wire} bytes on the wire, which end before its "
+                       f"{header} is whole. {ITSELF}")
+    return _Unread(f"kept too short for its headers: the {kept} bytes kept of it end before its {header} is whole, so "
+                   f"this can't tell how many it reads. Capture again keeping more of each packet. {LENGTHS}")
+
+
+def _needs(wire: int, kept: int, frame: int, at: int, transport: str, first: int) -> _Unread:
+    """A packet of which `kept` bytes are kept and this reads `at + first`: a frame header of `frame` bytes, its IP
+    header up to `at` and the first `first` bytes of `transport`'s. Where it was fewer than that on the wire (`wire`),
+    the packet is the short one and not what is kept of it."""
+    reads = (f"{at + first} bytes (" + (f"{frame} of its frame header, " if frame else "")
+             + f"{at - frame} of its IP header and {transport}'s first {first})")
+    if wire < at + first:
+        return _Unread(f"shorter than the headers it states: it was {wire} bytes on the wire, and this reads its "
+                       f"first {reads}. {ITSELF}")
+    return _Unread(f"kept too short for its headers: this reads its first {reads} and {kept} are kept. Capture again "
+                   f"keeping at least that many of each packet; a packet with longer headers needs more. {LENGTHS}")
+
+
+def _unnamed(ip: str) -> _Unread:
+    """A Linux cooked frame whose type says `ip` where the first byte is no `ip` header's."""
+    return _Unread(f"a Linux cooked frame whose type says {ip} where no {ip} header starts. A cooked capture can hold "
+                   f"a frame under two VLAN tags so: the second tag's bytes before the IP header, under the type of "
+                   f"what is under that tag. This reads no tag the type before it doesn't name. Capture each "
+                   f"interface by its name (`tcpdump -i IFACE`): its Ethernet frames keep every tag where this reads "
+                   f"it")
 
 
 def packets(path: Path, facts: dict) -> Iterator[tuple[int, int, bytes]]:
@@ -158,28 +204,35 @@ def read_packet(link: int, wire: int, data: bytes) -> tuple | None:
     """A packet as (source address, destination address, protocol, source port, destination port, payload bytes,
     sequence number, TCP flags, whether it is a fragment), the addresses packed; ports are None for a protocol
     without them and for a fragment, the sequence number None but for TCP. None for a frame that isn't IP; `_Unread`
-    for an encapsulation and a packet kept too short."""
+    for an encapsulation, a packet kept too short, a packet shorter than the headers it states and a Linux cooked
+    frame whose type says IP where no IP header starts."""
+    cooked = link in (LINUX_SLL, LINUX_SLL2)
     if link == ETHERNET:
         if len(data) < 14:
-            raise _Unread(SHORT)
-        at, kind = 14, int.from_bytes(data[12:14], "big")
-        while kind in VLAN:
-            if len(data) < at + 4:
-                raise _Unread(SHORT)
-            kind, at = int.from_bytes(data[at + 2:at + 4], "big"), at + 4
-    elif link in (LINUX_SLL, LINUX_SLL2):
-        at = 16 if link == LINUX_SLL else 20
+            raise _cut(wire, len(data), 14, "Ethernet header")
+        at, kind, header = 14, int.from_bytes(data[12:14], "big"), "Ethernet header"
+    elif cooked:
+        at, header = 16 if link == LINUX_SLL else 20, "Linux cooked header"
         if len(data) < at:
-            raise _Unread(SHORT)
+            raise _cut(wire, len(data), at, header)
         kind = int.from_bytes(data[14:16] if link == LINUX_SLL else data[0:2], "big")
     else:
-        at, kind = 0, {4: IPV4, 6: IPV6}.get(data[0] >> 4 if data else 0)
+        at, kind, header = 0, {4: IPV4, 6: IPV6}.get(data[0] >> 4 if data else 0), ""
+    while kind in VLAN:  # a tag the type before it names: its two bytes, then the type of what is under it
+        if len(data) < at + 4:
+            raise _cut(wire, len(data), at + 4, header)
+        kind, at = int.from_bytes(data[at + 2:at + 4], "big"), at + 4
     if kind in TUNNEL_FRAMES:
         raise _Unread(f"{TUNNEL_FRAMES[kind]}, an encapsulation this doesn't read")
-    fragment = 0
+    # an IPv4 header's first byte is its version and a length of five words or more, an IPv6 header's first four
+    # bits its version
+    if cooked and len(data) > at and (kind == IPV4 and not 0x45 <= data[at] <= 0x4F
+                                      or kind == IPV6 and data[at] >> 4 != 6):
+        raise _unnamed("IPv4" if kind == IPV4 else "IPv6")
+    frame, fragment = at, 0
     if kind == IPV4:
         if len(data) < at + 20:
-            raise _Unread(SHORT)
+            raise _cut(wire, len(data), at + 20, "IPv4 header")
         header = (data[at] & 15) * 4
         # a segment the sender's kernel had not yet cut for the wire can be kept with a total length of 0
         above = (int.from_bytes(data[at + 2:at + 4], "big") or wire - at) - header
@@ -187,12 +240,12 @@ def read_packet(link: int, wire: int, data: bytes) -> tuple | None:
         protocol, src, dst, at = data[at + 9], data[at + 12:at + 16], data[at + 16:at + 20], at + header
     elif kind == IPV6:
         if len(data) < at + 40:
-            raise _Unread(SHORT)
+            raise _cut(wire, len(data), at + 40, "IPv6 header")
         above = int.from_bytes(data[at + 4:at + 6], "big") or wire - at - 40
         protocol, src, dst, at = data[at + 6], data[at + 8:at + 24], data[at + 24:at + 40], at + 40
         while protocol in EXTENSIONS and not fragment:
             if len(data) < at + 8:
-                raise _Unread(SHORT)
+                raise _cut(wire, len(data), at + 8, "IPv6 extension header")
             size = 8 if protocol == FRAGMENT else (data[at + 1] + 1) * 8
             if protocol == FRAGMENT:
                 fragment = int.from_bytes(data[at + 2:at + 4], "big") & 0xFFF9
@@ -205,12 +258,12 @@ def read_packet(link: int, wire: int, data: bytes) -> tuple | None:
         return src, dst, protocol, None, None, max(above, 0), None, 0, True
     if protocol == TCP:
         if len(data) < at + 14:
-            raise _Unread(SHORT)
+            raise _needs(wire, len(data), frame, at, "TCP", 14)
         sport, dport, seq = struct.unpack_from("!HHI", data, at)
         return src, dst, protocol, sport, dport, max(above - (data[at + 12] >> 4) * 4, 0), seq, data[at + 13], False
     if protocol == UDP:
         if len(data) < at + 4:
-            raise _Unread(SHORT)
+            raise _needs(wire, len(data), frame, at, "UDP", 4)
         sport, dport = struct.unpack_from("!HH", data, at)
         tunnel = TUNNEL_PORTS.get(dport) or TUNNEL_PORTS.get(sport)
         if tunnel:
@@ -385,11 +438,11 @@ def record_counts(run: Path) -> dict:
     `warden.json` has one, its `release` and `from_server` None; and how many of the records it read, each execution
     phase's ingress, egress and reasons, are certified under the deployment's key."""
     import warden_serve as ws
-    from verity.protocols.certifier.verifier.active import DATA
-    from verity.protocols.certifier.verifier.certificate import record_head
-    from verity.protocols.certifier.verifier.grid import row_count
-    from verity.protocols.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-    from verity.protocols.certifier.verifier.warden import END, WardenParams, audit, read_cell
+    from verity.protocols.accounting.certifier.verifier.active import DATA
+    from verity.protocols.accounting.certifier.verifier.certificate import record_head
+    from verity.protocols.accounting.certifier.verifier.grid import row_count
+    from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
+    from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, audit, read_cell
 
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])

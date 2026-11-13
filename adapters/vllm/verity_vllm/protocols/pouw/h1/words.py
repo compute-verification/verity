@@ -3,7 +3,8 @@
 z/y records (`record_words`, `zy_words`)."""
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 

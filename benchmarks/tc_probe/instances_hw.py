@@ -27,7 +27,7 @@ to run the same words through another architecture's instruction of the same sha
                                                                        seed 20260922, HOPPER_E4M3_K32 accumulators, bare FP32 word
 
 ``bench-instances/v1`` is loaded from ``--root`` (the built arrays; ``python -m verity_numerical.bench.instances build``) after every
-array's sha256 is checked against the pinned ``--manifest`` (default the repository's ``fixtures/bench-instances/v1/manifest.json``);
+array's sha256 is checked against the pinned ``--manifest`` (default the repository's ``benchmarks/numerical/bench-instances/v1/manifest.json``);
 the manifest's own sha256 is the recorded ``manifest_sha256``.  The synthetic sets have no files: their ``manifest_sha256`` is
 ``instances_digest(n)`` (a digest of the recipe: relation, seed, n, K), as the chain benches record it.
 
@@ -35,7 +35,7 @@ One instance per tile at position ``(r % M, (r // M) % 8)`` with the rest of the
 other output word must come back ``+0`` (``other_positions_nonzero``).  Step ``s`` of every instance is one launch; the hardware's own
 D of step ``s`` is the C of step ``s + 1`` -- a mismatch propagates, as it would in a real chain, and is located at its first step.
 
-Domain check (``verity.definitions.circuits.targets.target``: finite operands and finite accumulators at every step; a saturation *inside the last*
+Domain check (``verity.circuits.targets.target``: finite operands and finite accumulators at every step; a saturation *inside the last*
 transition is a valid output, D8): instances with a non-finite operand word or a non-finite hardware accumulator before the last step
 are ``out of domain``.  Positive tiers must have none; the negative tier's ``reject`` rows must trip it (its ``wrong`` rows must
 have ``hardware != claimed`` and ``hardware == correct``).
@@ -70,9 +70,9 @@ from verity_config.settings import SHARED
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
-from verity.definitions.circuits.targets import target as T
-from verity.definitions.silicon import models as S
-from verity.definitions.silicon.cast import f32_to_bf16_word
+from verity.circuits.targets import target as T
+from verity.circuits.silicon import models as S
+from verity.circuits.silicon.cast import f32_to_bf16_word
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -244,7 +244,7 @@ class Synthetic:
     relation: str          # the digest prefix
     target: str
     instruction: str
-    model: object          # verity.definitions.silicon.models.GroupSum
+    model: object          # verity.circuits.silicon.models.GroupSum
     operands: object       # (rng, shape) -> int64 words
     dtype: object          # the operand word dtype
     epilogue: str | None
@@ -383,7 +383,7 @@ def load_instances(spec: str, args: argparse.Namespace) -> InstanceSet:
         lo, hi = int(lo_s), int(hi_s)
     only = [int(t) for t in args.only_ids.split(",") if t] if args.only_ids else None
     if dataset == BENCH_INSTANCES:
-        manifest = Path(args.manifest) if args.manifest else REPO / "fixtures" / "bench-instances" / "v1" / "manifest.json"
+        manifest = Path(args.manifest) if args.manifest else REPO / "benchmarks" / "numerical" / "bench-instances" / "v1" / "manifest.json"
         return load_bench_instances(tier, Path(args.root) if args.root else None, manifest, lo, hi, only)
     if spec in SYNTHETIC:
         return load_synthetic(SYNTHETIC[spec], lo, hi, only, procs=args.procs)
@@ -553,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--instruction", default=None, help="instruction id (default: the set's target's; see tc_probe.INSTRUCTIONS)")
     ap.add_argument("--arch", default=None, help="override the instruction's nvcc arch")
     ap.add_argument("--root", default=None, help="bench-instances/v1 directory holding the built arrays (default: the manifest's directory)")
-    ap.add_argument("--manifest", default=None, help="the pinned bench-instances/v1 manifest (default fixtures/bench-instances/v1/manifest.json)")
+    ap.add_argument("--manifest", default=None, help="the pinned bench-instances/v1 manifest (default benchmarks/numerical/bench-instances/v1/manifest.json)")
     ap.add_argument("--range", default=None, metavar="LO:HI", help="instance ids [LO, HI) (default: the whole tier)")
     ap.add_argument("--only-ids", default=None, metavar="ID,ID,...", help="re-run these instances alone")
     ap.add_argument("--repeat", type=int, default=1, help="run the replay this many times and count words that differ between repetitions")

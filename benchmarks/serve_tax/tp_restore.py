@@ -15,7 +15,7 @@ Model Runner V2. It drives the plan under Poisson arrivals, every request asking
 With ``--sampling own`` each request sends the sampling it carries (``--plan-file``, the replay ladder's production
 plan: ShareGPT, multi-turn and long prompts, each greedy or at temperature 0.7), the rest of it the server's
 generation-config defaults; ``--unseeded-share`` of the sampled requests go without a seed (`request_class`), so vLLM
-draws theirs, and the rest carry the public seed rule's. A named ``--sampling`` goes on every request instead, where
+samples theirs, and the rest carry the public seed rule's. A named ``--sampling`` goes on every request instead, where
 ``production`` sends no sampling fields: the generation config's defaults apply (GLM-5.3: temperature 1.0, top-p 0.95)
 and nothing is seeded, so with no greedy or seeded row in a batch vLLM samples with FlashInfer's sampler and the CUDA
 generator. Each edge writes under ``--scratch``, because its blocks are tens of GB and stay out of the run's record; the
@@ -62,7 +62,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-sys.path.insert(0, str(ROOT / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(ROOT / "tools" / "config"))
 sys.path.append(str(ROOT))
 import serve_tax as S  # noqa: E402 (beside this file)
 import tp_edge as E  # noqa: E402
@@ -176,7 +176,7 @@ def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, 
 
 
 def lengthen(plan: list[dict], share: float, lo: int, hi: int, seed: int) -> list[dict]:
-    """The plan with a ``share`` of its requests (drawn under ``seed``) given long prompts, of ``lo`` to ``hi`` tokens
+    """The plan with a ``share`` of its requests (sampled under ``seed``) given long prompts, of ``lo`` to ``hi`` tokens
     each: the prompts of the plan's requests from the next one on, joined in order. A long prompt's prefill spans steps
     of the scheduler's token budget, so an edge can find one part done."""
     rng = random.Random(seed)

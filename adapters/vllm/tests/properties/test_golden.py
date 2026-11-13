@@ -6,7 +6,6 @@ import json
 import subprocess
 from pathlib import Path
 
-
 from verity_vllm.properties import golden
 
 REPO = Path(__file__).resolve().parents[2]

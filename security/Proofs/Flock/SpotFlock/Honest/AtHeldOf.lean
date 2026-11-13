@@ -17,6 +17,8 @@ input rather than the copies:
 * `premises_of_heldOf`: the premises, from the population check at the run's own program and query
   (`Slots.popOk`, which `Run.run` refuses without), a first stage of a count `K` (`firstK`), the registered wiring's
   check (`AddressRow.wiresChecked`) and the reference reads being well formed (`RefReadsWf`);
+* `sampleSlots_of_heldOf`: the first stage samples slots that name themselves (`AddressRow.SampleSlots`), from the
+  population check and a first stage of a count `K`;
 * `inScope_of_heldOf`: the two-stage scope holds every statement that decodes, from the population check alone;
 * `honest_of_heldOf`: `HonestExists`, from those facts and one play the copy's verifier accepts.
 
@@ -69,6 +71,22 @@ theorem premises_of_heldOf {i : _root_.Spot.Run.Input} {it : _root_.Spot.Run.Int
     rw [hpr, hq]
     exact hp
   exact premises_of_checks (builtWired_heldOf hh) hWf (always_heldOf hh) hp' hK hwc
+
+/-- **The first stage samples slots that name themselves, at the copies `heldOf` builds**
+(`AddressRow.SampleSlots`), where the run's population check passes and the first stage is of a count `K`
+(`AddressRow.sampleSlots_of_firstK`): the copies' boundary program and query are the params'
+(`HeldOf.firstOf_program`). -/
+theorem sampleSlots_of_heldOf {i : _root_.Spot.Run.Input} {it : _root_.Spot.Run.Interior} {u : Unread} {h : Held}
+    (hh : heldOf i it u = some h) {n K : ℕ}
+    (hp : _root_.Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true)
+    (hK : firstK h.reg.first = some K) : AddressRow.SampleSlots h := by
+  have hp' : _root_.Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true := by
+    obtain ⟨first, ns, ks, l, hz, hf, -, -, rfl, -⟩ := heldOf_spec hh
+    obtain ⟨hpr, hq⟩ := firstOf_program hf
+    show _root_.Spot.Slots.popOk first.program first.query n = true
+    rw [hpr, hq]
+    exact hp
+  exact AddressRow.sampleSlots_of_firstK hp' hK
 
 /-- **The two-stage scope is inhabited at the copies `heldOf` builds**, by every statement that decodes, where the
 run's population check passes: the design evaluates there (`HeldOf.twoHolds_of_pop`). -/

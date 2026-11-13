@@ -12,7 +12,8 @@ cancel yet).  It calls `start` once a candidate, `judge` each tick, and saves th
 every `judge`: `judge` fills it in (the run ids once a detached launch printed them, the verdict once the run ended or was
 given up, which it returns from then on without reading the run again), and a launch read once is gone (`Landing._resolve`
 removes its directory).  On
-`vqueue.Retry` with this run's verdict infra, it calls `start` again and keeps the new record in place of the old.  It gives
+`vqueue.Retry` with this run's verdict infra, or a fail with an infra error (`vqueue._erred`: a failure the machine made), it
+calls `start` again, avoiding the machines its runs failed on (``erred_on``), and keeps the new record in place of the old.  It gives
 the `Landing` the `on` of drive.toml at its `main` (`MAIN`): `start` refuses a `Landing` without machines.  Under `--dry-run` it
 calls neither `start` nor `judge`.  The candidate's verdict for `vqueue.decide` is `combine` of graph2's and this one's.  The
 loop's `Landing` outlives its ticks, so `judge` reads the runs' states afresh each call.  Where the check gates, a candidate
@@ -78,13 +79,13 @@ from pathlib import Path
 from typing import NamedTuple
 
 from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, LAUNCH_LOST_S, LEAN_AUDIT_RE, LEAN_STEP,
-                      PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
-                      _suite_log, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps, step_named,
-                      step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root)
+                      NOT_STARTED, PLAN_WAIT_S, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, SUITE_STEPS, Landing, _epoch, _step_log,
+                      _suite_log, elsewhere, implicated, killed, lean_errors, not_run, shard_machines, shard_passed, shard_steps,
+                      step_named, step_paths, step_records, suite_named, suite_pyproject, suite_rows, tree_root)
 from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
-from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, PASS, PENDING, STATES, Failed, Verdict, meets
+from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, MACHINE_KINDS, PASS, PENDING, STATES, Failed, Verdict, meets
 from .vqueue_records import FAULT_RE
 
 #: a candidate's state from its two verdicts' (`combine`): the first of these either has
@@ -94,10 +95,6 @@ ORDER = (FAIL, INFRA, PENDING, LIST_FAILED, PASS)
 OWN_TRAIN = Path(__file__).resolve().parents[4] / "tools" / "verity" / "check" / "train.sh"
 #: a line of the loop's deselect list (`deselection`) that is a test's node id, its file's path from the repository's root
 DESELECT_RE = re.compile(r"(?!/|\.\./)[\w./-]+\.py::\S+")
-#: what a launch that registered no run says when it points at the machines, not the candidate's tree (`Failed.launch`):
-#: train.sh stopped its launcher, still running, at the end of its wait; no run ids within `LAUNCH_LOST_S`; the pod lost its
-#: process.  A launcher that exited without a run ran the candidate's own check.py, and says none of these
-LAUNCH_ONLY = ("no run launched in the wait", "min after its launch", "its process is gone with no exit written")
 #: what declares lean-agreement's reads: the graph build family, whose lean-agreement task reads `VERIFIER`'s files and
 #: `CHECK_READS` (check.py, the modules it loads as it starts, and what they read), and the lean-build of `LEAN`, read from its
 #: source at the commit keyed (`_declared`), never run
@@ -332,7 +329,8 @@ def _carrying(runs: Iterable[str]):
 
 
 def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
-          audit_from: str | None = None, after: dict[str, float] | None = None, heavy_on: str = "") -> dict | None:
+          audit_from: str | None = None, after: dict[str, float] | None = None, heavy_on: str = "",
+          avoid: Iterable[str] = ()) -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run
     of every step of ``sha`` above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's
     keywords (`Landing.beside_args`: ratchet-gate judges the merges above ``base``), on the queue's machines (`Landing.on`).
@@ -344,7 +342,9 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     candidate's own ci.toml declares as jobs (`declared_steps`).  With ``heavy_on`` (machines, a comma list) too, the check
     that gates sends the shard that audits `HEAVY_PART` (`heavy_shards`; the whole run, of one shard) to those machines
     alone, the others to theirs, and its record keeps them (``heavy_on``), so an auto plan's shards launched later do too, as
-    does a launch that waited for the records of the runs it replaces (``after``).
+    does a launch that waited for the records of the runs it replaces (``after``).  With ``avoid`` (machines: those the
+    runs of its record before failed on, ``erred_on``, as the loop launches it again after infra), each launch goes to its
+    machines but those (`landing.elsewhere`), all of them where that leaves none, and the record keeps them (``avoid``).
     The record to keep (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
     shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
     launched (``at``), the ``steps`` it runs and those it skips (``skip``), ``gate`` (`CHECK`) with ``shards``, and
@@ -382,7 +382,8 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
         return None
     rec = {"ids": [], "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
            **({"gate": CHECK} if n else {}), **({"lean_audit_from": audit_from} if audit_from else {}),
-           **({"carry": sorted(after)} if after else {}), **({"heavy_on": heavy_on} if heavy_on else {})}
+           **({"carry": sorted(after)} if after else {}), **({"heavy_on": heavy_on} if heavy_on else {}),
+           **({"avoid": sorted(set(avoid))} if avoid else {})}
     go = {"what": what, "sent": sent, "kw": kw, "n": n, "auto": auto}
     awaited, gone = _awaiting(driver, after or {})
     if awaited:
@@ -398,18 +399,18 @@ def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
     whole run, of one) on ``rec``'s ``heavy_on``; ``gone``, the runs it waited for in vain, kept as ``carry_without``.  None,
     logged, once launched; the tail of a launch that registered no run, logged."""
     sha, sent, kw, n, carry = rec["tip"], go["sent"], go["kw"], go["n"], rec.get("carry") or ()
-    heavy_on = rec.get("heavy_on") or ""
+    heavy_on, avoid = rec.get("heavy_on") or "", rec.get("avoid") or ()
     if go["auto"]:
         got, tail = {"ids": [], "plan": {**driver.plan_shards(driver.repo, sha, sent, n=n), "n": n, "deferred": sent,
                                          "kw": kw}}, ""
     elif n > 1:
-        got, tail = _launch(driver, sha, sent, kw, n, carry=carry, heavy_on=heavy_on)
+        got, tail = _launch(driver, sha, sent, kw, n, carry=carry, heavy_on=heavy_on, avoid=avoid)
         if got is not None and not any("launch" in r for r in got["shards"]):
             _grouped(got)
     else:
         with _carrying(carry):
-            got, tail = driver._started(driver.launch_postland(driver.repo, sha, heavy_on or driver.on, sent, **kw,
-                                                               train_from=OWN_TRAIN))
+            got, tail = driver._started(driver.launch_postland(driver.repo, sha, elsewhere(heavy_on or driver.on, avoid), sent,
+                                                               **kw, train_from=OWN_TRAIN))
     if got is None:
         driver.q.log(f"research queue vqueue: {go['what']} registered no run: {tail}")
         return tail
@@ -433,16 +434,18 @@ def _waited(driver: Landing, rec: dict) -> Verdict:
 
 
 def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | None = None,
-            carry: Iterable[str] = (), heavy_on: str = "", doc: dict | None = None) -> tuple[dict | None, str]:
+            carry: Iterable[str] = (), heavy_on: str = "", doc: dict | None = None,
+            avoid: Iterable[str] = ()) -> tuple[dict | None, str]:
     """Each of ``n`` shards of candidate ``sha``'s check launched on its machines (`shard_machines`): `--shard K/N` of ci.toml's
     plan, or of the auto plan ``doc`` whose file is ``plan``, `--shard auto:K/N` with it, each naming the runs ``carry``
-    (`_carrying`); with ``heavy_on``, the shards that audit `HEAVY_PART` (`heavy_shards`) on those machines instead.  The
-    record of every shard's launch (``shards``); None with the tail of one that registered no run, the others' runs
-    cancelled."""
+    (`_carrying`); with ``heavy_on``, the shards that audit `HEAVY_PART` (`heavy_shards`) on those machines instead; each
+    shard's machines but ``avoid``'s where another remains (`landing.elsewhere`).  The record of every shard's launch
+    (``shards``); None with the tail of one that registered no run, the others' runs cancelled."""
     ons = shard_machines(driver.on, n)
     if heavy_on:
         heavy = heavy_shards(driver, sha, n, doc)
         ons = [heavy_on if k in heavy else on for k, on in enumerate(ons, 1)]
+    ons = [elsewhere(on, avoid) for on in ons]
     with _carrying(carry):
         got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
                                                       **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
@@ -497,7 +500,7 @@ def _planned(driver: Landing, rec: dict, what: str) -> Verdict:
         why = f"has {doc['n']} shards, not {plan['n']}"
     got, tail = (None, f"its auto plan {why}") if why is not None else _launch(
         driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN), rec.get("carry") or (),
-        heavy_on=rec.get("heavy_on") or "", doc=doc)
+        heavy_on=rec.get("heavy_on") or "", doc=doc, avoid=rec.get("avoid") or ())
     if got is None:
         abandon(rec)
         return _keep(rec, _down(rec, f"registered no run: {tail}"))
@@ -520,14 +523,19 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     while it runs, fails once a shard has failed one of those steps (`_early`), and passes once each of them passed in every
     shard that holds it, whatever a step off the gate still does (`_passed_early`), its runs left to end.
     Infra when it registered no run (``rec`` None, its auto plan failed, or a detached launch that printed no run ids,
-    a shard's stopping the other shards; `Failed.launch` when it says one of `LAUNCH_ONLY`), never ran or was stopped, or was lost or killed before it passed each of those
-    steps; infra's one `Failed` says which.  Once it ended, pass when it passed each of them (the check that gates: in
+    a shard's stopping the other shards), never ran or was stopped, or was lost or killed before it passed each of those
+    steps; infra's one `Failed` says which, and is launch-only (`Failed.launch`: no candidate is split for it) when none of
+    the candidate's steps ran: it registered no run, whatever ended its launcher; it never ran; or it ended without passing
+    them and no run of it that failed (not a twin that never took a slot) recorded a step, as check.py refusing its own
+    plan does.  Once its runs ended, ``rec`` keeps the machines those that failed ran on (``erred_on``), which a launch
+    again avoids (`start`'s ``avoid``).  Once it ended, pass when it passed each of them (the check that gates: in
     every shard that holds it, `shard_passed`), a step that failed only on what an unexpired allowance of policy.toml at
     ``base`` covers counting as passed, so no candidate's allowance covers its own failure; fail with each of them it failed
     (a `Failed`: ``step NAME``, the step's content key at the candidate, the paths that failure names its culprit by,
     `step_paths`, its content key at ``base``, `key`, and the step's one test, `step_test`; the check that gates: the tests
-    and paths its failure names; each with what else its records say, `failing`: what it can have read and its class), and
-    infra when it failed none but passed fewer (one skipped, or absent from its steps.jsonl).  Each verdict but pending is
+    and paths its failure names; each with what else its records say, `failing`: what it can have read and its class, which
+    `vqueue.decide` reads as an infra error where it says the machine failed it, `vqueue.MACHINE_KINDS`), and infra when it
+    failed none but passed fewer (one skipped, or absent from its steps.jsonl).  Each verdict but pending is
     kept in ``rec`` (``verdict``, with the steps it passed) and read from there."""
     if rec is None:
         return _down(None, "registered no run")
@@ -573,9 +581,12 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
             return Verdict(PENDING)
         v = _early(driver, rec, states)
         return _passed_early(driver, rec, states) if v.state == PENDING else v
+    bad = {r: s for r, s in states.items() if s[1] not in (0, NOT_STARTED, SIGTERM_RC)}
+    if erred := driver._ran_on(bad):
+        rec["erred_on"] = erred
     why = "lost" if lost else ", ".join(f"{st} rc={rc}" for st, rc, *_ in states.values())
     if not lost and driver._never_ran(rec, states):
-        return _keep(rec, _down(rec, f"never ran or was stopped ({why})"))
+        return _keep(rec, _down(rec, f"never ran or was stopped ({why})", launch=True))
     base = rec.get("base")
     allow = base or tip
     if check:
@@ -611,8 +622,9 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     if got:
         return _keep(rec, Verdict(FAIL, tuple(_failure(s, keys[s], key(driver.repo, base, s) if base else None, got[s])
                                               for s in missed if s in got), ended=True), passed)
+    started = not bad or any(step_records(d) for d in dirs if d.name in bad)
     return _keep(rec, _down(rec, f"ended ({why}) without passing {', '.join(missed)}: each skipped, or absent from its "
-                                 "steps.jsonl"), passed)
+                                 "steps.jsonl", launch=not started), passed)
 
 
 def _gated(driver: Landing, rec: dict) -> set[str]:
@@ -632,8 +644,8 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     """The verdict of the check that gates (``rec``) while a shard of it runs: pending until one of its runs says it failed
     (one running names its failures so far, `landing.failing`; one ended exited 1), then fail with each step it is judged on
     (`_gate`) that such a run failed, not by a signal, or a suite of which it failed a named test, uncovered by an allowance
-    at its base, read as once every shard ended (`failing`), from their dirs fetched afresh (`landing.evidence`: the Landing's
-    own cache holds what the end's reading reads).  A suite failed beyond its tests alone, as a stop marks each suite it
+    at its base, read as once every shard ended (`failing`), from their dirs as this tick read them (`Landing.evidence`,
+    `landing.Reads`: the Landing's own cache holds what the end's reading reads).  A suite failed beyond its tests alone, as a stop marks each suite it
     cuts short, waits for the end.  Never kept, so not ``ended``: `vqueue.decide` reads a fail whose every failure is
     inherited as pending until the check ends.  ``rec`` holds it (``early``: its failures as `_keep` keeps a verdict's, with
     ``at``, when the first was written: a failed step's end, a failed suite's log's last write), which the check above reads
@@ -682,7 +694,8 @@ def _passed_early(driver: Landing, rec: dict, states: dict) -> Verdict:
     (`shard_steps`, `shard_passed`: a failure an allowance at its base covers counting as passed), whatever a step off the
     gate (policy.toml's `off_gate`, drive.toml's `warn_steps`) still does there; pending while a shard's plan isn't known, a
     shard's records can't be fetched, or one of those steps hasn't ended in a shard that holds it.  The records are each
-    shard's dirs fetched afresh (`landing.evidence`), never the Landing's cache, which the end's reading and `failures` read.
+    shard's dirs as this tick read them (`Landing.evidence`, `landing.Reads`), never the Landing's cache, which the end's
+    reading and `failures` read.
     ``rec`` says its runs still run (``still_running``) until a later `judge` finds each ended (`_settle`): `failures`
     reads nothing of them until then."""
     groups = rec.get("groups") or [rec["ids"]]
@@ -804,20 +817,22 @@ def read_step(step: str, st: dict, log: str, rest: str, root: str | None = None,
 def joined(parts: Iterable[Read], rest: str) -> Read:
     """One failure of ``parts`` (a step's, of several suites or shards): their tests, names and reads together (unbounded when
     one's are), and the first class of `KINDS` one has, its own work before the rest; of none, ``rest`` (`unnamed`) alone,
-    its reads unbounded."""
+    its reads unbounded.  Of its own work, it is named only by the parts of its own work: a part its machine failed blames
+    no member."""
     if not (parts := list(parts)):
         return Read(frozenset({rest}), frozenset(), None, None)
     kinds = {p.kind for p in parts}
-    return Read(frozenset().union(*(p.tests for p in parts)), frozenset().union(*(p.named for p in parts)),
-                None if any(p.reads is None for p in parts) else frozenset().union(*(p.reads for p in parts)),
-                next((k for k in KINDS if k in kinds), None))
+    kind = next((k for k in KINDS if k in kinds), None)
+    return Read(frozenset().union(*(p.tests for p in parts)),
+                frozenset().union(*(p.named for p in parts if kind != "own" or p.kind == "own")),
+                None if any(p.reads is None for p in parts) else frozenset().union(*(p.reads for p in parts)), kind)
 
 
 def suite_kind(row: dict, log: str) -> str:
     """What a failed suite's record and log say failed (`KINDS`): a timeout (its row's `timed_out`); a flake, each test it
     failed having passed under the same key (`nondeterministic`); the store or build state it shares (`STORE_SAYS`); its
-    machine (`vqueue_records.FAULT_RE`: a full disk, no memory; `MACHINE_SAYS`), in what its run printed, not in a test's code its
-    report quotes (`_printed`); else its own work."""
+    machine (`vqueue_records.FAULT_RE`: a full disk, no memory, a closed Lean pool; `MACHINE_SAYS`), in what its run printed,
+    not in a test's code its report quotes (`_printed`); else its own work."""
     failed = set(row.get("failed_tests") or ())
     if row.get("timed_out"):
         return "timeout"
@@ -1232,12 +1247,14 @@ def _failure(step: str, k: str, base_key: str | None, parts: list[Read]) -> Fail
     return Failed(f"step {step}", k, r.named, base_key, r.tests, reads=r.reads, named=r.named, kind=r.kind)
 
 
-def _down(rec: dict | None, why: str) -> Verdict:
-    """Infra: what became of the run ``rec`` records."""
+def _down(rec: dict | None, why: str, launch: bool = False) -> Verdict:
+    """Infra: what became of the run ``rec`` records; launch-only (`Failed.launch`) with ``launch`` or when it registered no
+    run, whatever stopped its launcher (a signal, a check.py that refused its own plan or settings): none of the candidate's
+    steps ran."""
     ids = " ".join(rec["ids"]) if rec and rec.get("ids") else ""
     return Verdict(INFRA, (), (Failed(f"the run beside its check{f' ({ids})' if ids else ''} {why}",
                                       f"{rec['tip'] if rec else ''}:{ids or 'no run'}", frozenset(),
-                                      launch=why.startswith("registered no run") and any(m in why for m in LAUNCH_ONLY)),))
+                                      launch=launch or why.startswith("registered no run")),))
 
 
 def _keep(rec: dict, v: Verdict, passed: list[str] | None = None) -> Verdict:
@@ -1276,20 +1293,23 @@ def based(v: Verdict, base: dict | None, so_far: bool = False) -> Verdict:
     and None while it runs, or when it ended without judging it, so `vqueue.decide` takes a failure the base has too as
     inherited.  With ``so_far`` (a base that is itself a candidate), one whose check hasn't ended answers with what it has
     failed so far (its ``early``, `_early`) where that holds every test failed of the step, and None otherwise, since it
-    may yet fail the rest: a candidate above another is failed on its own failures once its base's word on them is known."""
+    may yet fail the rest: a candidate above another is failed on its own failures once its base's word on them is known.  A
+    step its base's machine failed (`vqueue.MACHINE_KINDS`) answers None: the base never ran those tests to an end."""
     got = (base or {}).get("verdict")
     if early := so_far and base is not None and not isinstance(got, dict):
         got = base.get("early") or {}
     if not isinstance(got, dict) or not v.failed:
         return v
     failed = {f.get("task"): f.get("tests") for f in got.get("failed") or () if isinstance(f, dict)}
+    erred = {f.get("task") for f in got.get("failed") or () if isinstance(f, dict) and f.get("kind") in MACHINE_KINDS}
     passed = set(got.get("passed") or ())
 
     def of(f: Failed) -> Failed:
         s = f.task.removeprefix("step ")
         if s == f.task:
             return f
-        tests = frozenset(failed[f.task] or {step_test(s)}) if f.task in failed else frozenset() if s in passed else None
+        tests = (None if f.task in erred else frozenset(failed[f.task] or {step_test(s)}) if f.task in failed else
+                 frozenset() if s in passed else None)
         return replace(f, base_tests=None if early and tests is not None and not f.tests <= tests else tests)
 
     return replace(v, failed=tuple(of(f) for f in v.failed))

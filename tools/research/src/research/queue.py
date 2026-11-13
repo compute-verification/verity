@@ -116,6 +116,10 @@ candidate and those above it are built again without them in the same tick.
                                                    --until ends the windows at a past time, for a day that is over
     research queue stats --log FILE [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`)
+    research queue stranded [--json] [--moves] [--pool P] [--min MINUTES]
+                                                   the jobs waiting in one machine's line while a place that could run them
+                                                   stands free on another, read from every CPU machine at once; exit 1 with
+                                                   one (`research.stranded`)
     research queue checked-heads [--tip REV] [--json] [--out FILE]
                                                    the commits on REV's first-parent line (default origin/main) whose own `check`
                                                    passed and landed them, oldest first, one a line: each train's head, by drive's
@@ -352,7 +356,7 @@ PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
 #: the root modules of Security's `Definitions` library and Flock's `Flock`, which the port makes modules: a tree holding
 #: the codemod is on the module system when each is a module (`on_modules`)
-PORTED_ROOTS = ("security/Definitions.lean", "verity/protocols/flock/verifier/Flock.lean")
+PORTED_ROOTS = ("security/Definitions.lean", "verity/protocols/proofs/flock/verifier/Flock.lean")
 #: what the codemod's run over a tree reads besides the codemod and its header reader: a merge that changes none of these onto
 #: a tree on the module system leaves its porting as it was (`ported`'s ``base``); pathspecs, each `*` crossing directories
 PORT_INPUTS = ("*.lean", "*lakefile.toml", "*lakefile.lean", "*lake-manifest.json", "*lean-toolchain")
@@ -589,7 +593,7 @@ class PR:
 
 
 class GitHub:
-    """The open PRs of a repository, through `gh api` (the cloud VMs' authenticated GitHub CLI)."""
+    """A repository's PRs, through `gh api` (the cloud VMs' authenticated GitHub CLI)."""
 
     def __init__(self, repo: str):
         self.repo = repo
@@ -609,16 +613,24 @@ class GitHub:
                         return list(out.values())
                 first += GH_PAGES
 
+    def pr(self, number: int) -> PR:
+        """PR ``number``, open or not."""
+        return PR.from_api(self._api(f"pulls/{number}"))
+
     def _page(self, n: int) -> list[dict]:
-        try:
-            r = subprocess.run(["gh", "api", f"repos/{self.repo}/pulls?state=open&per_page={GH_PER_PAGE}&page={n}"],
-                               capture_output=True, text=True, timeout=GH_TIMEOUT_S)
-        except subprocess.TimeoutExpired:
-            raise QueueError(f"gh api repos/{self.repo}/pulls: no answer in {GH_TIMEOUT_S} s") from None
-        if r.returncode:
-            raise QueueError(f"gh api repos/{self.repo}/pulls: {(r.stderr or r.stdout).strip()[-300:]}")
-        page = json.loads(r.stdout)
+        page = self._api(f"pulls?state=open&per_page={GH_PER_PAGE}&page={n}")
         return page if isinstance(page, list) else [page]
+
+    def _api(self, path: str):
+        """`repos/<repo>/<path>`'s JSON."""
+        what = f"gh api repos/{self.repo}/{path.partition('?')[0]}"
+        try:
+            r = subprocess.run(["gh", "api", f"repos/{self.repo}/{path}"], capture_output=True, text=True, timeout=GH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            raise QueueError(f"{what}: no answer in {GH_TIMEOUT_S} s") from None
+        if r.returncode:
+            raise QueueError(f"{what}: {(r.stderr or r.stdout).strip()[-300:]}")
+        return json.loads(r.stdout)
 
     def branch_tip(self, branch: str) -> str | None:
         """``branch``'s commit as git has it now (the refs API, which a push moves at once; a PR's head lags it by seconds), or
@@ -643,18 +655,17 @@ class GitHub:
 
 
 class PublicGitHub(GitHub):
-    """`GitHub`'s listing of a public repository's open PRs, from its API without credentials: where `gh` isn't, as on a node."""
+    """`GitHub`'s reads of a public repository's PRs, from its API without credentials: where `gh` isn't, as on a node."""
 
-    def _page(self, n: int) -> list[dict]:
+    def _api(self, path: str):
         import urllib.request
-        url = f"https://api.github.com/repos/{self.repo}/pulls?state=open&per_page={GH_PER_PAGE}&page={n}"
+        url = f"https://api.github.com/repos/{self.repo}/{path}"
         try:
             with urllib.request.urlopen(urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"}),
                                         timeout=GH_TIMEOUT_S) as r:
-                page = json.load(r)
+                return json.load(r)
         except (OSError, ValueError) as e:
             raise QueueError(f"{url}: {e}") from None
-        return page if isinstance(page, list) else [page]
 
 
 def landing_waiter(repo: str | None = None, store_root: str | None = None) -> Callable[[list[int]], bool]:
@@ -1215,8 +1226,10 @@ def path_rows(text: str) -> list[tuple[str, str]]:
     """The rows of word map ``text`` that rename a path, its old and new words each holding a `/`, `[[words_in]]` rows
     included, in its order: `move_check.py` certifies a word's rename of a path only where the move itself moved it, so each
     goes to it as `--map OLD=NEW`, as `tools/move/stage.py --map` passes it.  A map that doesn't parse raises
-    `tomllib.TOMLDecodeError`."""
+    `tomllib.TOMLDecodeError`, and one whose `words_in` is no array `ValueError`."""
     data = tomllib.loads(text)
+    if not isinstance(got := data.get("words_in") or [], list):
+        raise ValueError(f"holds a words_in that is no array of tables ({type(got).__name__} {got!r:.60})")
     tables = [data.get("words"), *(s.get("words") for s in data.get("words_in") or [] if isinstance(s, dict))]
     rows = [(o, n) for t in tables if isinstance(t, dict) for o, n in t.items()]
     return list(dict.fromkeys((o, n) for o, n in rows if isinstance(n, str) and "/" in o and "/" in n))
@@ -2585,6 +2598,8 @@ class Queue:
             rows = path_rows(_out(self.workdir, "show", f"{tip}:{pr.move}"))
         except tomllib.TOMLDecodeError as e:
             return None, f"its map {pr.move} at {tip[:12]} doesn't parse ({e}): fix the map, then mark the move again", None
+        except ValueError as e:
+            return None, f"its map {pr.move} at {tip[:12]} {e}: fix the map, then mark the move again", None
         with scratch() as tmp:
             wt = Path(tmp, "wt")
             with worktrees_locked(self.workdir):
@@ -3172,11 +3187,11 @@ class Queue:
 #: library), the checker, the lock and the workspace's member list (installed distributions), a sidecar (the registries), and
 #: what every target's entry reads or the registries import (an entry can read tens of files of vLLM's `program/` and these
 #: packages, so a change only to `verity_vllm/pipeline/` and `config.py` reruns hundreds of targets)
-_COLD_PREFIXES = ("verity/circuits/", "verity/definitions/circuits/", "verity/definitions/ops/", "verity/definitions/silicon/",
-                  "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/flock/prover/python/",
-                  "verity/protocols/pouw/verifier/", "verity/protocols/pous/verifier/", "verity/protocols/pous/lean/",
-                  "verity/protocols/pous/device/challenger_session.py", "verity/protocols/pous/device/memory_challenger.py",
-                  "verity/definitions/commitments/", "verity/protocols/poub/verifier/commitments/",
+_COLD_PREFIXES = ("verity/circuits/", "verity/circuits/ops/", "verity/circuits/silicon/",
+                  "tools/verity/circuit_check/", "adapters/vllm/verity_vllm/", "verity/protocols/proofs/flock/prover/python/",
+                  "verity/protocols/accounting/pouw/verifier/", "verity/protocols/accounting/pous/verifier/", "tools/pous_grader/",
+                  "verity/protocols/accounting/pous/device/challenger_session.py", "verity/protocols/accounting/pous/device/memory_challenger.py",
+                  "verity/protocols/accounting/poub/verifier/commitments/",
                   "verity/commitments/frame_v3/", "verity/commitments/gates/", "verity/commitments/hm96/",
                   "verity/commitments/__init__.py", "verity/commitments/advice.py", "verity/commitments/coin_tree.py",
                   "verity/commitments/domains.py", "verity/commitments/history.py", "verity/commitments/identity.py",
@@ -3184,7 +3199,7 @@ _COLD_PREFIXES = ("verity/circuits/", "verity/definitions/circuits/", "verity/de
                   "verity/commitments/merkle.py", "verity/commitments/multiproof.py", "verity/commitments/pyproject.toml",
                   "verity/commitments/row_table.py", "verity/commitments/rowleaf.py", "verity/commitments/scheme.py",
                   "verity/commitments/window.py",
-                  "verity/definitions/private_circuits/", "benchmarks/numerical/python/")
+                  "verity/circuits/private_circuits/", "benchmarks/numerical/python/")
 
 
 def contained_first(entries: dict[int, Entry]) -> list[int]:
@@ -3745,7 +3760,7 @@ SUITES = quick_tier.SUITES
 QUICK_TIER = ["uv", "run", "--locked", "--all-packages", "--extra", "torch-cpu", "python", SUITES, "--quick"]
 #: the Lake packages whose builds the suites' tests run, built before `suites.py` as `check` builds them before those suites: each
 #: test worker runs `lake build` there, and workers building one from cold at once fail (`lake build` exit 1, a binary missing)
-LEAN_BUILDS = ("verity/protocols/flock/verifier",)
+LEAN_BUILDS = ("verity/protocols/proofs/flock/verifier",)
 #: the Lean audit on the merge, for a change that touches Lean (`lean_audit`): run from the root of the tier's checkout, after
 #: `LEAN_BUILDS` and before the suites, with `--base {main's tip} --out DIR` (`quick_tier.py --lean-audit`), it audits what the
 #: change reaches and publishes the modules it builds and its replay entries, which the audit of the candidate landing that merge
@@ -4249,15 +4264,20 @@ class Retired:
 
 def map_retires(repo: Path, at: str, path: str) -> Retired | None:
     """What the move map ``path`` retires, read at ``at`` (the move's base, where `tools/move/stage.py` ran it and
-    `move_check.py` reads it), or None when it is missing there or doesn't parse (said on stderr): a layout map's old paths
-    that a [paths] row sends elsewhere, its [retired] and [drop] paths and its dotted [modules] and [aliases] old names
-    (`layout.py` rewrites no one-word module); a word map's [words] and [[words_in]] old words."""
+    `move_check.py` reads it), or None when it is missing there, doesn't parse or holds a `words_in` that is no array (said
+    on stderr): a layout map's old paths that a [paths] row sends elsewhere, its [retired] and [drop] paths and its dotted
+    [modules] and [aliases] old names (`layout.py` rewrites no one-word module); a word map's [words] and [[words_in]] old
+    words."""
     r = _git(repo, "show", f"{at}:{path}", check=False)
     try:
         data = tomllib.loads(r.stdout) if not r.returncode else None
     except tomllib.TOMLDecodeError as e:
         print(f"research queue: the move map {path} at {at[:12]} doesn't parse ({e}), so a head that lacks its move "
               "stays out", file=sys.stderr)
+        data = None
+    if isinstance(data, dict) and not isinstance(data.get("words_in") or [], list):
+        print(f"research queue: the move map {path} at {at[:12]} holds a words_in that is no array of tables, so a head "
+              "that lacks its move stays out", file=sys.stderr)
         data = None
     if not isinstance(data, dict):
         return None
@@ -4283,9 +4303,7 @@ def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None =
     if not (moves := moves_between(repo, main, head)):
         return []
     maps = {} if maps is None else maps
-    files = own_files(repo, main, head) if files is None else files
-    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{main}...{head}")
-    text = "\n".join([*sorted(files), *(x for x in diff.splitlines() if x.startswith("+") and not x.startswith("+++"))])
+    text = own_text(repo, main, head, files)
     out = []
     for commit, parents in moves:
         if not (m := MOVE_LINE_RE.search(_out(repo, "log", "-1", "--format=%B", commit))):
@@ -4295,6 +4313,40 @@ def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None =
         if (got := maps[key]) is None or (names := got.named(text)):
             out.append((commit, m[1], None if got is None else names))
     return out
+
+
+def own_text(repo: Path, main: str, head: str, files: Iterable[str] | None = None) -> str:
+    """What `Retired.named` reads of ``head``'s own change, against its merge base with ``main``: its files (``files``, else
+    `own_files`) and its added lines."""
+    files = own_files(repo, main, head) if files is None else files
+    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{main}...{head}")
+    return "\n".join([*sorted(files), *(x for x in diff.splitlines() if x.startswith("+") and not x.startswith("+++"))])
+
+
+def crossed(repo: Path, main: str, head: str, moves: Iterable[tuple[str, str]], files: Iterable[str] | None = None,
+            maps: dict[tuple[str, str], Retired | None] | None = None) -> frozenset[str]:
+    """The heads of the move PRs of ``moves`` (each a head and its map's path) that ``head`` may be built above before they
+    land: those whose map retires nothing ``head``'s own change names (`own_text`), as `lacked_moves` judges a move `main`
+    landed.  A map is read at its PR's head and, where ``main`` has one at that path, there too, since a move regenerated on
+    its batch's tip runs the tip's (`map_retires`, kept in ``maps`` by where and path); a move whose map can't be read at its
+    head is crossed by nothing.  `QueueError` while ``head``'s own change can't be read."""
+    maps = {} if maps is None else maps
+    text = own_text(repo, main, head, files)
+
+    def read(at: str, path: str) -> Retired | None:
+        if (at, path) not in maps:
+            maps[at, path] = map_retires(repo, at, path)
+        return maps[at, path]
+
+    out = set()
+    for move, path in moves:
+        if (got := read(move, path)) is None:
+            continue
+        if (also := read(main, path)) is not None:
+            got = Retired(got.names | also.names, got.words | also.words)
+        if not got.named(text):
+            out.add(move)
+    return frozenset(out)
 
 
 def lacks_why(lacked: list[tuple[str, str, list[str] | None]]) -> str:
@@ -7158,10 +7210,14 @@ def main(argv: list[str]) -> int:
         from .vqueue_loop import main as vqueue_main
 
         return vqueue_main(argv[1:])
+    if argv[:1] == ["stranded"]:                # jobs in one line beside a free place in another (`stranded.main`)
+        from .stranded import main as stranded_main
+
+        return stranded_main(argv[1:])
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "open", "edit", "link", "stats",
                                             "checked-heads", "review", "delegate", "shadow-report", "vqueue", "map-moves",
-                                            "cross"])
+                                            "cross", "stranded"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; "
                     "delegate: the Cursor agent id to delegate --by's handle to; map-moves: the first old head, as N@HEAD")
     ap.add_argument("shard_run", nargs="*", metavar="N@HEAD", help="map-moves: the other old heads")

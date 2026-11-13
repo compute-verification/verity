@@ -31,13 +31,11 @@ them, what it never reached), the record's C2 population scope.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any
 
 import numpy as np
-
-from verity.definitions.ops.prims import AmpereBF16TcDot16
-from verity_vllm.commit import challenge as CH
 from verity.definitions.numerics import dense_rows as DRW
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import fa2_split_twins as FT
@@ -45,6 +43,7 @@ from verity.definitions.numerics import inductor_rows as TW
 from verity.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity.definitions.numerics.moe_router_rows import moe_router_topk
 from verity.definitions.numerics.rows import token_select_first_max
+from verity.circuits.ops.prims import AmpereBF16TcDot16
 from verity.definitions.registry import act, b1, cublas_bf16, cublas_gemv
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import fa2_check_inf as F2
@@ -52,9 +51,16 @@ from verity.definitions.registry import fa2_split as W2
 from verity.definitions.registry import fa3_check_inf as F3
 from verity.definitions.registry import inductor as IR
 from verity.definitions.registry import moe as MOE
+
+from verity_vllm.commit import challenge as CH
 from verity_vllm.query.manifest.bind import split_name
-from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
-from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
+from verity_vllm.query.manifest.format import SERVED_FAMILY
+from verity_vllm.query.manifest.format import SERVED_IDS as IDS
+from verity_vllm.query.manifest.format import SERVED_LOGITS as LOGITS
+from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
+from verity_vllm.query.manifest.format import SERVED_SAMPLED as SAMPLED
+
+__all__ = ["ROWS", "ServedCheck", "Step", "population"]
 
 #: the rows of a request a GEMM or an attention op is evaluated on: all of a request's rows up to this many, else its first, its
 #: last and evenly spread ones
@@ -277,7 +283,7 @@ class ServedCheck:
         e = ids.reshape(-1)
         if ((e < 0) | (e >= E)).any():
             raise _Unresolved(f"router ids {sorted(set(e[(e < 0) | (e >= E)].tolist()))[:4]} outside the {E} experts")
-        X = x.reshape(len(rows), -1, K)
+        X: np.ndarray = x.reshape(len(rows), -1, K)
         X = np.repeat(X, ids.shape[1], axis=1).reshape(-1, K) if X.shape[1] == 1 else X.reshape(-1, K)
         g = self._operand(c["reads"][2], V, rows).reshape(-1).astype(np.uint32) if routed else None
         dot = d["statics"].get("DOT", AmpereBF16TcDot16.id)
@@ -296,8 +302,8 @@ class ServedCheck:
         prompts), and a decode row's id is the id its request sampled at its previous step."""
         if POSITIONS in V:
             pos = V[POSITIONS][:, 0]
-            want = np.concatenate([np.arange(req[r]["klen"] - (hi - lo), req[r]["klen"]) for r, lo, hi in spans])
-            self._note(out, POSITIONS, _verdict(want, pos))
+            want_pos = np.concatenate([np.arange(req[r]["klen"] - (hi - lo), req[r]["klen"]) for r, lo, hi in spans])
+            self._note(out, POSITIONS, _verdict(want_pos, pos))
         if IDS in V:
             ids = V[IDS][:, 0].astype(np.int64)
             want, rows, why, checked = [], [], [], []
@@ -330,7 +336,9 @@ class ServedCheck:
             return
         got = V[name]
         bad = rows_n = 0
-        why, nonfinite, defs = [], 0, {}
+        why: list[str] = []
+        nonfinite = 0
+        defs: dict[str, int] = {}
         for r, lo, hi in spans:
             kh, vh = self.cache.setdefault((r, a["piece"]), ([], []))
             kh.append(k[lo:hi].reshape(-1, KVH, D))
@@ -396,7 +404,11 @@ def check(build: dict[str, Any], steps: Iterable[Step], weight: Callable[[str], 
     return c.report()
 
 
-def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int], first: int = 6) -> dict[str, Any]:
+#: how many findings of each kind `population` names
+NAMED = 6
+
+
+def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int]) -> dict[str, Any]:
     """The check's reach (`report`) reconciled against the Build's identities, its Q(P), identity by identity: an identity
     (engine step, request, value) is reached when the report notes its value at that step for that request (a request of the
     step's committed batch; the ids only of a request whose prompt or previous sampled id they were compared to).  A noted value
@@ -413,12 +425,13 @@ def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int], 
     reached: Counter = Counter()
     outside, disagree, seen = [], [], set()
     for s, notes in rep["steps"].items():
-        batch = (notes.get("batch") or {}).get("rows") or {}
+        noted = notes["batch"].get("rows")                                       # a step in no step plan of the Build notes none
+        batch = noted if noted else {}
         for name, v in notes.items():
             if name in ("batch", "coverage"):
                 continue
             op, member = split_name(name)
-            for r in ((v.get("requests") or []) if name == IDS else batch):
+            for r in (v["requests"] if name == IDS else batch):
                 at = {"request_id": r, "step": int(s), "op_path": op, "member": member}
                 i = want.get(key := (int(s), r, op, member))
                 if i is None:
@@ -433,13 +446,14 @@ def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int], 
     without = [{"request_id": k[1], "step": k[0], "op_path": k[2], "member": k[3]} for k in want if k not in seen]
     manifest_ranks = sorted({int(i["rank"]) for i in build["identities"]})
     total, n_reached = len(build["identities"]), sum(reached.values())
-    checks = {"vus_outside_query": {"n": len(outside), "first": outside[:first]},
-              "identities_without_rows": {"n": len(without), "first": without[:first]},
-              "rows_disagree": {"n": len(disagree), "first": disagree[:first]},
-              "ranks": {"replay": sorted(ranks), "manifest": manifest_ranks, "equal": manifest_ranks == sorted(ranks)},
+    ranks_equal = manifest_ranks == sorted(ranks)
+    checks = {"vus_outside_query": {"n": len(outside), "first": outside[:NAMED]},
+              "identities_without_rows": {"n": len(without), "first": without[:NAMED]},
+              "rows_disagree": {"n": len(disagree), "first": disagree[:NAMED]},
+              "ranks": {"replay": sorted(ranks), "manifest": manifest_ranks, "equal": ranks_equal},
               "accounted": n_reached + len(without) == total,
               "unstated_families": sorted(set(fam) - {SERVED_FAMILY})}
-    checks["ok"] = not (outside or without or disagree or checks["unstated_families"]) and checks["ranks"]["equal"] and checks["accounted"]
+    checks["ok"] = not (outside or without or disagree or checks["unstated_families"]) and ranks_equal and checks["accounted"]
     qid = build["kind"]
     sampled = "GEMM, fused-MoE router and expert GEMM" if any("moe" in c for c in prog["calls"]) else "GEMM"
     scope = (f"{qid}(P) = {total} identities ({', '.join(f'{k} {v}' for k, v in sorted(fam.items()))}): one per (engine step, request, "

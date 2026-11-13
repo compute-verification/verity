@@ -1,5 +1,5 @@
 """The device check's fixture for pearl_c4.cu: inputs and every buffer the kernels write, at a small shape, from the numpy
-twin (`twin.py`) and `verity.protocols.pouw.prover.schemes.pearl_c4`'s hashing.  dev.py's check compares each device buffer with these
+twin (`twin.py`) and `verity.protocols.accounting.pouw.prover.schemes.pearl_c4`'s hashing.  dev.py's check compares each device buffer with these
 byte for byte.
 
   uv run python benchmarks/pouw/pearl_c4/fixture.py OUT [--fmt nvfp4|mxfp4|both] [--shape MxNxK]
@@ -23,13 +23,13 @@ import numpy as np
 import twin as T
 
 from verity.commitments.crypto.turboshake import turboshake128
-from verity.definitions.kernels.tc import group_sum_total_batch
-from verity.definitions.silicon import fp32
-from verity.definitions.silicon.models import HOPPER_BF16_M16N8K16
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.pouw.verifier import audit as AU
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.circuits.kernels.tc import group_sum_total_batch
+from verity.circuits.silicon import fp32
+from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.verifier import audit as AU
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
 
 SHAPE = (128, 128, 1024)
 WEIGHT = 1

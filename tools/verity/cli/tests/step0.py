@@ -1,7 +1,7 @@
 """The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the eight
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
 entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`live`,
-`verity.protocols.spot.verifier.parties`) on a machine (`Machine`).
+`verity.protocols.proofs.spot.verifier.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
 stand-in gives them, and the network certifier's entry (`network_certifier`) and every other subprotocol's period check
@@ -20,13 +20,13 @@ from dataclasses import asdict, fields
 from pathlib import Path
 from typing import Any
 
-from verity.configuration.deploy import runtime
-from verity.configuration.deploy.config import Component, Workload
-from verity.configuration.deploy.manifest import Channel, Role
-from verity.protocols.certifier.verifier.warden import WardenParams
-from verity.protocols.spot.verifier import parties as SP
-from verity.protocols.spot.verifier.one_stage.draw import parse_design
-from verity.configuration.wire import Refused
+from verity.runtime import runner as runtime
+from verity.config import Component, Workload
+from verity.protocol import Channel, Role
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
+from verity.channel import Refused
 from verity.circuits.codec import canonical_json
 from verity.commitments.crypto import lms
 
@@ -249,7 +249,7 @@ def listening(cfg: Mapping[str, Any]) -> dict[str, str]:
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
          machine: Callable[[Mapping[str, Any], Path], Machine] = Machine) -> runtime.RunResult:
-    """The live run of sampled proofs' parties ``here`` (`verity.configuration.deploy.runtime.run`) on ``machine``: every one
+    """The live run of sampled proofs' parties ``here`` (`verity.runtime.runner.run`) on ``machine``: every one
     of them in this process when all four are here, else each listening one at its configured address (`listening`)
     and the verifier dialing those that run elsewhere; refused by name (``listen``) when one the verifier needs has
     none. Its transcripts and record are under ``STATE/runs/<local|here joined by +>/``."""

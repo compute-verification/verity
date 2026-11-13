@@ -12,7 +12,6 @@ import re
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
@@ -22,11 +21,12 @@ from verity.definitions import boolean as SW
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import boolean_sparse_mla_split as BX
-from verity_vllm.program import mla_capture as MC
 from verity.definitions.registry import sparse_mla as M
 from verity.definitions.registry import sparse_mla_split as W
+
 from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
+from verity_vllm.program import mla_capture as MC
 
 GLM = M.SPARSE_MLA_GLM53
 U32 = np.uint32
@@ -35,9 +35,10 @@ U32 = np.uint32
 def _digests() -> tuple[str, str, str]:
     """(mantissa outputs, sweep inputs, sweep outputs): the sha256s `mufu_lg2.json`'s provenance records."""
     m = W.lg2_table()["provenance"]["measured"]
-    mant = re.fullmatch(r".*sha256 of the outputs ([0-9a-f]{64})", m["mantissas"]).group(1)
+    mant = re.fullmatch(r".*sha256 of the outputs ([0-9a-f]{64})", m["mantissas"])
     sweep = re.fullmatch(r".*sha256 of the inputs ([0-9a-f]{64}), of the outputs ([0-9a-f]{64})", m["sweep"])
-    return mant, sweep.group(1), sweep.group(2)
+    assert mant is not None and sweep is not None, m
+    return mant.group(1), sweep.group(1), sweep.group(2)
 
 
 def _lg2_word(x: int) -> int:
@@ -86,7 +87,7 @@ def test_lg2_is_log2_within_its_accuracy() -> None:
 
 def _lg2_sample() -> np.ndarray:
     rng = np.random.default_rng(5)
-    E_ = np.arange(1, 255, dtype=U32)
+    E_: np.ndarray = np.arange(1, 255, dtype=U32)
     band = (rng.integers(126, 129, 3000, dtype=np.uint32) << 23) | rng.integers(0, 1 << 23, 3000, dtype=np.uint32)
     return np.concatenate([F32_SPECIALS.astype(U32), E_ << 23, (E_ << 23) | 1, (E_ << 23) | 0x7FFFFF, U32(1 << 31) | (E_ << 23),
                            band, rng.integers(0, 1 << 32, 3000, dtype=np.uint64).astype(U32),
@@ -149,7 +150,7 @@ def test_c0s_range_changes_no_word() -> None:
 
 
 def test_the_undetermined_words_are_the_powers_of_two_below_one() -> None:
-    E_ = np.arange(0, 256, dtype=U32)
+    E_: np.ndarray = np.arange(0, 256, dtype=U32)
     powers = E_ << 23
     assert np.flatnonzero(TW.undetermined_words(powers)).tolist() == list(range(1, 127))
     assert not TW.undetermined_words(U32(1 << 31) | powers).any()
@@ -238,10 +239,10 @@ def test_statics_are_checked() -> None:
         with pytest.raises(ValueError, match="selected keys in NS"):
             W.check_split_statics(T, NS)
         with pytest.raises(ValueError, match="selected keys in NS"):
-            bind(W.SparseMlaHeadSplit, T=T, NS=NS, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
+            _ = bind(W.SparseMlaHeadSplit, T=T, NS=NS, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
     for n in (0, W.LANES + 1):
         with pytest.raises(ValueError, match="the warp holds 1 to 32"):
-            bind(W.SparseMlaCombine, NSPLIT=n, DV=16, INV=FA3["INV"]).body
+            _ = bind(W.SparseMlaCombine, NSPLIT=n, DV=16, INV=FA3["INV"]).body
         with pytest.raises(ValueError, match="the warp holds 1 to 32"):
             TW.combine_rows(np.zeros((1, n), U32), np.zeros((1, n, 4), U32))
 
@@ -328,12 +329,12 @@ def _combine_word(NSPLIT: int, DV: int):
 @pytest.mark.parametrize("scale", [0.0625, 576 ** -0.5])
 def test_the_split_end_twin_is_the_word(scale: float) -> None:
     word = _end_word(16, scale)
-    m, l, o = _inputs(word, 400, 17)
+    m, l_sum, o = _inputs(word, 400, 17)
     rng = np.random.default_rng(18)
     m[:100] = (rng.standard_normal(100).astype(np.float32) * np.float32(40)).view(U32)    # the running max: any sign
-    l[:50] = 0                                                                              # an empty sum
-    part, lse = TW.split_end_rows(m, l, o, scale=scale)
-    want = _flat(E.evaluate_batch(word, m, l, o))[0]
+    l_sum[:50] = 0                                                                              # an empty sum
+    part, lse = TW.split_end_rows(m, l_sum, o, scale=scale)
+    want = _flat(E.evaluate_batch(word, m, l_sum, o))[0]
     assert np.array_equal(np.concatenate([part, lse[:, None]], axis=1).astype(np.uint64), want)
     assert (lse[:50] == W.NEG_INF).all()
 
@@ -410,7 +411,7 @@ def test_a_head_is_its_parts_at_the_served_statics() -> None:
 
 def test_a_part_has_keys() -> None:
     with pytest.raises(ValueError, match="T=0 keys"):
-        bind(W.SparseMlaSplitPart, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
+        _ = bind(W.SparseMlaSplitPart, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
 
 
 def test_one_split_combines_to_its_bf16() -> None:
@@ -467,7 +468,7 @@ def test_the_combine_lse_is_one_ffma_where_one_rounding_shows() -> None:
     NSPLIT, DV = 3, 8
     rng = np.random.default_rng(31)
     lse = (rng.standard_normal((4096, NSPLIT)).astype(np.float32) * np.float32(8)).view(U32)
-    o = np.zeros((4096, NSPLIT, DV), U32)
+    o: np.ndarray = np.zeros((4096, NSPLIT, DV), U32)
     _, fused = TW.combine_lse_rows(lse, o)
     _, mx, tot = TW._combine(lse, o, DR.fa3_inv_sum)
     unfused = DR.add_ftz(DR.mul_ftz(TW.mufu_lg2_words(tot), np.full(tot.shape, W.LN2, U32)), mx)

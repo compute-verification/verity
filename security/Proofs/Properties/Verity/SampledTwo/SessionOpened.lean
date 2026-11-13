@@ -11,17 +11,17 @@ record's coins for it. This module is the other way: on a play the two-stage for
 session whose record gives coins has its opening in the log the check read, on that session's round.
 
 * `roundOf_slotStream`: the stream and round `slotStream` gives a session's round are read back as that round
-  (`roundOf`).
+  (`roundOf`), at the link's round and the two reps' (`j ≤ 2 * R`): no opening is read as a round past them.
 * `mem_located_of`: a release the locator puts on a round is among the round's releases.
 * `opening_of_unclosed`: a round a tree shows opened without its closing round, it shows opened.
 * `MembersHeld.opened`: where the members' check accepts the sessions' records against the read, a round session
-  `t`'s record gives coins of (`Verity.Sampled.recordRound`) is one its tree shows opened
+  `t`'s record gives coins of (`Verity.Sampled.recordRound`), the link's or a rep's, is one its tree shows opened
   (`Verity.Sampled.Trees.round_held`), so the read opens that stream of that tree more often than the round's number
   (`Verity.Sampled.opening_lt_openedOf`), and the opening after exactly that many is the one the locator puts on
   session `t`'s round: the tree is the `t`-th first opened (`MembersHeld.place`) and the stream is named as the
   record names it in the `Hello`s before it (`Verity.Sampled.readLog_named`).
-* `located_opened`: on a play the form accepts, the releases on round `j` of session `t` in the log the check read are
-  exactly one opening, with the coins session `t`'s record gives the round.
+* `located_opened`: on a play the form accepts, the releases on round `j` of session `t` in the log the check read,
+  `j` the link's round or a rep's, are exactly one opening, with the coins session `t`'s record gives the round.
 -/
 
 @[expose] public section
@@ -31,8 +31,8 @@ namespace Verity.SampledTwo.SessionCoins
 open Lean (Json)
 open Verity.Sampled (helloSpecs repStreamName)
 
-/-- **A session's round's stream and round read back as the round.** -/
-theorem roundOf_slotStream (tab : String) (R j : ℕ) :
+/-- **A session's round's stream and round read back as the round**, at the link's round and the two reps'. -/
+theorem roundOf_slotStream (tab : String) (R j : ℕ) (hj : j ≤ 2 * R) :
     roundOf tab R (some (slotStream tab R j).1) (slotStream tab R j).2 = some j := by
   by_cases h0 : j = 0
   · subst h0
@@ -66,7 +66,7 @@ theorem roundOf_slotStream (tab : String) (R j : ℕ) :
           (Option.some.inj e)).2
         exact absurd h2 (by decide)
       unfold roundOf
-      rw [if_neg hne, if_neg hne', if_pos rfl]
+      rw [if_neg hne, if_neg hne', if_pos ⟨rfl, by omega⟩]
       congr 1
       omega
 
@@ -117,14 +117,14 @@ variable {label : String} {after : ByteArray} {recs : List Json} {ξ : ByteArray
 
 /-- **Every round a session's record gives coins of is opened in the read, on that session's round**: where the
 members' check accepts the sessions' records against the read, and session `t`'s record gives coins of the stream and
-round its round `j` is (`slotStream`), the read has a release the session-round locator puts on session `t`'s round
-`j`. -/
+round its round `j` is (`slotStream`), `j` the link's round or a rep's (`j ≤ 2 * repsOf (K t)`), the read has a
+release the session-round locator puts on session `t`'s round `j`. -/
 theorem MembersHeld.opened (H : MembersHeld lines trees log records tree)
     (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
     (hR : Verity.Sampled.readLog label after recs ξ lines = some log)
     (hM : Spot.Challenger.membersTreeReason trees lines records = none) {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String}
     {t j : ℕ} {x : String × Array (String × Option ℕ) × Json × String} (hx : records[t]? = some x) (htM : t < M)
-    (hj : j < K t) {cs : ByteArray}
+    (hj : j < K t) (hjR : j ≤ 2 * repsOf (K t)) {cs : ByteArray}
     (hcs : Verity.Sampled.recordRound x.2.2.1 (slotStream (tab t) (repsOf (K t)) j).1
       (slotStream (tab t) (repsOf (K t)) j).2 = some cs) :
     ∃ pre r post, log = pre ++ r :: post ∧ sessLoc off K M tab pre r.frame = some (off t + j) := by
@@ -162,18 +162,19 @@ theorem MembersHeld.opened (H : MembersHeld lines trees log records tree)
   refine ⟨pre, r, post, he, ?_⟩
   rw [hfr]
   simp only [sessLoc]
-  rw [hplace, hname, hcount', roundOf_slotStream]
+  rw [hplace, hname, hcount', roundOf_slotStream _ _ _ hjR]
   simp only [Option.bind_some, htM, hj, and_self, ↓reduceIte]
 
 end Opened
 
 /-- **The releases on a session's round are its record's round's opening**: on a play the form accepts, where
-session `t`'s record gives coins of the stream and round its round `j` is, the releases the session-round locator
-puts on that round in the log the check read are exactly one opening, with those coins' bits. -/
+session `t`'s record gives coins of the stream and round its round `j` is, `j` the link's round or a rep's, the
+releases the session-round locator puts on that round in the log the check read are exactly one opening, with those
+coins' bits. -/
 theorem located_opened (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : HeldSize) {o : Exchange}
     (hacc : FormAccepts C o) {l : List Release} (hl : interiorRead C o = some l) {recs : List Json}
     (hrecs : sessionRecords C o = some recs) {t j : ℕ} (ht : t < A.h.ms.length) (hj : j < SpotFlock.k₀ A.h t)
-    {rec : Json} (hrec : recs[t]? = some rec) {cs : ByteArray}
+    (hjR : j ≤ 2 * repsOf (SpotFlock.k₀ A.h t)) {rec : Json} (hrec : recs[t]? = some rec) {cs : ByteArray}
     (hcs : Verity.Sampled.recordRound rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
       (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2 = some cs) :
     ∃ i s n, located (locOf A tab) (SpotFlock.off A.h t + j) [] l =
@@ -189,7 +190,7 @@ theorem located_opened (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : 
     | some y => rw [hy] at hrec; exact ⟨y, rfl, Option.some.inj hrec⟩
   obtain ⟨tree, H⟩ := membersHeld_of hT hR hMR
   obtain ⟨pre, r, post, rfl, hloc⟩ := H.opened hT hR hMR (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h)
-    (M := A.h.ms.length) (tab := tab) hx ht hj hcs
+    (M := A.h.ms.length) (tab := tab) hx ht hj hjR hcs
   have hmem : (r.frame, r.coins) ∈ located (locOf A tab) (SpotFlock.off A.h t + j) [] (pre ++ r :: post) :=
     mem_located_of (loc := locOf A tab) hloc
   have hone := located_one_accepted A C tab hsz o hacc _ hl (SpotFlock.off A.h t + j)

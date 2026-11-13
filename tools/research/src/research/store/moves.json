@@ -2193,6 +2193,210 @@
       "paths": {
         "benchmarks/specs/": "benchmarks/harness/specs/"
       }
+    },
+    {
+      "paths": {
+        "verity/configuration/config/": "tools/config/"
+      }
+    },
+    {
+      "paths": {
+        "verity/settings.py": "tools/config/verity_config/verity_settings.py"
+      }
+    },
+    {
+      "paths": {
+        "fixtures/bench-instances/": "benchmarks/numerical/bench-instances/"
+      }
+    },
+    {
+      "paths": {
+        "verity/configuration/deploy/party.py": "verity/party.py",
+        "verity/configuration/deploy/manifest.py": "verity/protocol.py",
+        "verity/configuration/deploy/config.py": "verity/config.py",
+        "verity/configuration/deploy/runtime.py": "verity/runtime/runner.py",
+        "verity/configuration/deploy/": "verity/runtime/",
+        "verity/configuration/wire/__init__.py": "verity/channel.py",
+        "verity/configuration/wire/handshake.py": "verity/runtime/handshake.py",
+        "verity/configuration/wire/tests/test_wire.py": "verity/tests/tests/test_channel.py",
+        "verity/hardware/site/__init__.py": "verity/device.py",
+        "verity/hardware/site/pyproject.toml": "verity/tests/pyproject.toml",
+        "verity/hardware/site/tests/test_site.py": "verity/tests/tests/test_device.py"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/Accounting/Guarantees/JointBridge/CommOfPeriodLeakAccepted.lean": "security/Definitions/Accounting/Guarantees/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Definitions/Accounting/JointBridge/CommOfPeriodLeakAccepted.lean": "security/Definitions/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Proofs/Accounting/Actual/Windows.lean": "security/Proofs/Accounting/Actual/ServerBlocks.lean",
+        "security/Proofs/Accounting/JointBridge/CommOfPeriodLeakAccepted.lean": "security/Proofs/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean": "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityMonitoringPeriod.lean",
+        "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean": "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityMonitoringPeriod.lean",
+        "security/Proofs/Accounting/JointBridge/WorkOfH1CheckedCreditPeriod.lean": "security/Proofs/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean",
+        "security/Proofs/Accounting/RateAudit/Session.lean": "security/Proofs/Accounting/RateAudit/Run.lean",
+        "security/Proofs/Accounting/RegisteredCircuit/Session.lean": "security/Proofs/Accounting/RegisteredCircuit/Run.lean",
+        "security/Proofs/Properties/Accounting/Remote/Session.lean": "security/Proofs/Properties/Accounting/Remote/Run.lean",
+        "security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditPeriod.lean": "security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/NetworkCertifier/Guarantees/Period.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean",
+        "security/Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriodChecked.lean",
+        "security/Definitions/NetworkCertifier/Period.lean": "security/Definitions/NetworkCertifier/MonitoringPeriod.lean",
+        "security/Definitions/NetworkCertifier/PeriodChecked.lean": "security/Definitions/NetworkCertifier/MonitoringPeriodChecked.lean",
+        "security/Definitions/NetworkCertifier/PeriodConditions.lean": "security/Definitions/NetworkCertifier/MonitoringPeriodConditions.lean",
+        "security/Proofs/NetworkCertifier/Period.lean": "security/Proofs/NetworkCertifier/MonitoringPeriod.lean",
+        "security/Proofs/NetworkCertifier/PeriodCheckedChecks.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodCheckedChecks.lean",
+        "security/Proofs/NetworkCertifier/PeriodSum.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean",
+        "security/Proofs/NetworkCertifier/PeriodWitnesses.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodWitnesses.lean",
+        "security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "security/Proofs/Properties/Verity/SampledTwo/SessionFits.lean": "security/Proofs/Properties/Verity/SampledTwo/AttachmentFits.lean",
+        "security/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "verity/protocols/certifier/verifier/lean/NetworkCheck/LinkWindow.lean": "verity/protocols/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean"
+      }
+    },
+    {
+      "paths": {
+        "security/Proofs/Properties/Challenger/Session.lean": "security/Proofs/Properties/Challenger/ChallengePhase.lean"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/pous/lean/": "tools/pous_grader/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/inference_only/nci/": "benchmarks/nci/",
+        "verity/protocols/inference_only/rho/": "benchmarks/rho/"
+      }
+    },
+    {
+      "paths": {
+        "fixtures/artifacts.json": "artifacts.json"
+      }
+    },
+    {
+      "paths": {
+        "verity/composite/": "verity/protocols/compose/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/remote/verifier/composition/": "verity/protocols/compose/verifier/lean/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/remote/verifier/": "verity/protocols/compose/verifier/remote/",
+        "verity/protocols/onsite/verifier/": "verity/protocols/compose/verifier/onsite/"
+      }
+    },
+    {
+      "paths": {
+        "verity/hardware/world/": "verity/protocols/interface/world/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/flock/pod/": "verity/protocols/flock/prover/pod/",
+        "verity/protocols/flock/tool.py": "verity/protocols/flock/prover/tool.py",
+        "verity/protocols/flock/agreement/": "verity/protocols/flock/prover/agreement/",
+        "verity/protocols/spot/candidates.py": "verity/protocols/spot/prover/candidates.py",
+        "verity/protocols/spot/costfit.py": "verity/protocols/spot/prover/costfit.py",
+        "verity/protocols/spot/optimize.py": "verity/protocols/spot/prover/optimize.py",
+        "verity/protocols/spot/plancheck.py": "verity/protocols/spot/prover/plancheck.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/difftest/": "tools/difftest/",
+        "verity/difftest/lean/": "verity/circuits/difftest/"
+      }
+    },
+    {
+      "paths": {
+        "verity/definitions/ops/": "verity/circuits/ops/",
+        "verity/definitions/silicon/": "verity/circuits/silicon/",
+        "verity/definitions/kernels/": "verity/circuits/kernels/",
+        "verity/definitions/private_circuits/": "verity/circuits/private_circuits/",
+        "verity/definitions/word.py": "verity/circuits/word.py",
+        "verity/definitions/cross_call.py": "verity/circuits/cross_call.py",
+        "verity/definitions/call_scope.py": "verity/circuits/call_scope.py",
+        "verity/definitions/tiny.py": "verity/circuits/tiny.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/definitions/circuits/targets/": "verity/circuits/targets/",
+        "verity/definitions/circuits/boolean/memcheck.circuit-check.json": "verity/circuits/boolean/memcheck.circuit-check.json",
+        "verity/definitions/circuits/boolean/memcheck.circuit-check.py": "verity/circuits/boolean/memcheck.circuit-check.py",
+        "verity/definitions/circuits/boolean/memcheck.py": "verity/circuits/boolean/memcheck.py",
+        "verity/definitions/circuits/census.py": "verity/circuits/census.py",
+        "verity/definitions/circuits/constants.py": "verity/circuits/constants.py",
+        "verity/definitions/circuits/library.py": "verity/circuits/library.py",
+        "verity/definitions/circuits/operations.py": "verity/circuits/operations.py",
+        "verity/definitions/circuits/requirement.py": "verity/circuits/requirement.py",
+        "verity/definitions/circuits/requirement_units.circuit-check.json": "verity/circuits/requirement_units.circuit-check.json",
+        "verity/definitions/circuits/requirement_units.circuit-check.py": "verity/circuits/requirement_units.circuit-check.py",
+        "verity/definitions/circuits/requirement_units.py": "verity/circuits/requirement_units.py",
+        "verity/definitions/circuits/stacking.py": "verity/circuits/stacking.py",
+        "verity/definitions/commitments/gates/attest.circuit-check.py": "verity/commitments/gates/attest.circuit-check.py",
+        "verity/definitions/commitments/gates/attest.py": "verity/commitments/gates/attest.py",
+        "verity/definitions/commitments/gates/block_key.circuit-check.json": "verity/commitments/gates/block_key.circuit-check.json",
+        "verity/definitions/commitments/gates/block_key.circuit-check.py": "verity/commitments/gates/block_key.circuit-check.py",
+        "verity/definitions/commitments/gates/block_key.py": "verity/commitments/gates/block_key.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/definitions/evaluate/": "verity/circuits/evaluate/",
+        "verity/definitions/requirement/": "verity/circuits/requirement/"
+      }
+    },
+    {
+      "paths": {
+        "verity/hardware/cards/b200-sxm-180gb.toml": "hardware/cards/b200-sxm-180gb.toml",
+        "verity/hardware/cards/dgx-h200.toml": "hardware/cards/dgx-h200.toml",
+        "verity/hardware/cards/h200-sxm-141gb.toml": "hardware/cards/h200-sxm-141gb.toml",
+        "verity/hardware/cards/nebius-vm-monotonic-raw.toml": "hardware/cards/nebius-vm-monotonic-raw.toml",
+        "verity/hardware/cards/rtx-pro-6000-server.toml": "hardware/cards/rtx-pro-6000-server.toml",
+        "verity/hardware/cards/xeon-6776p-2s.toml": "hardware/cards/xeon-6776p-2s.toml",
+        "verity/hardware/cards/xeon-platinum-8468-2s.toml": "hardware/cards/xeon-platinum-8468-2s.toml",
+        "verity/hardware/nodes/h200-sxm-141gb-x1.toml": "hardware/nodes/h200-sxm-141gb-x1.toml",
+        "verity/hardware/nodes/rtx-pro-6000-server-x8.toml": "hardware/nodes/rtx-pro-6000-server-x8.toml",
+        "verity/hardware/cards/__init__.py": "verity/hardware/cards.py",
+        "verity/hardware/nodes/__init__.py": "verity/hardware/nodes.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/harness/sass_gate.py": "verity/protocols/pouw/prover/sass_gate.py",
+        "benchmarks/pouw/harness/sass_pins.json": "verity/protocols/pouw/prover/sass_pins.json"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/": "verity/protocols/pouw/prover/kernels/pouw_cuda/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/pouw/receipts/": "verity/protocols/pouw/verifier/receipts/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/flock/": "verity/protocols/proofs/flock/",
+        "verity/protocols/spot/": "verity/protocols/proofs/spot/",
+        "verity/protocols/recursion/": "verity/protocols/proofs/recursion/",
+        "verity/protocols/pouw/": "verity/protocols/accounting/pouw/",
+        "verity/protocols/pous/": "verity/protocols/accounting/pous/",
+        "verity/protocols/poub/": "verity/protocols/accounting/poub/",
+        "verity/protocols/certifier/": "verity/protocols/accounting/certifier/",
+        "verity/protocols/inference_only/": "verity/protocols/policy/inference_only/"
+      }
     }
   ]
 }

@@ -18,7 +18,7 @@ import all Lean.Data.Json.Basic
 
 `AddressRow.PublishedRows h` (`RowOf`) is the last of the row fact's premises: at an accepted run, at a port the
 checked inner block's template writes that no link names and no registered read of its session is named like, the
-session has one table, the port's published tree has one leaf an inner block, and the drawn inner block's row is its
+session has one table, the port's published tree has one leaf an inner block, and the sampled inner block's row is its
 own place. This file proves it, `publishedRows_of_runs`, from the wiring facts of each accepted run, of which it
 reads two: a written bit's row is a port of its member's circuit, and the session's first table has that circuit's
 ports.

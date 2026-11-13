@@ -51,7 +51,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
 from verity.commitments import history as HT
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
@@ -427,7 +427,7 @@ class Interior:
 @dataclass(frozen=True)
 class DeviceCommit:
     """An interior commitment made on the device the replayed rows are on (a GPU commit), by port of `interior_ports`: its
-    root, every row's b || c, and the salt each row was hashed under, drawn as `interior` draws them. The rows never reach
+    root, every row's b || c, and the salt each row was hashed under, sampled as `interior` samples them. The rows never reach
     the host."""
     roots: Mapping[str, bytes]
     bc: Mapping[str, bytes]

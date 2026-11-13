@@ -11,9 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 import pytest
-from research.vqueue import (BASE_DROPPED, FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build, Candidate, Commit,
-                             Drop, Eject, Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring,
-                             Snapshot, Verdict, Wait, decide, left_out, meets)
+from research.vqueue import (BASE_DROPPED, FAIL, INFRA, INFRA_SPLIT, LIST_FAILED, ON_MAIN, PASS, PENDING, Advance, Build,
+                             Candidate, Commit, Drop, Eject, Failed, Leave, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun,
+                             Retry, Ring, Snapshot, Verdict, Wait, decide, left_out, meets)
 from research.vqueue_slim import Read, joined, read_step, read_suite, unnamed
 
 MAIN = "m0"
@@ -36,8 +36,8 @@ def cand(sha: str, base: str, *members: int, state: str = PENDING, failed: tuple
                      reruns, enqueued)
 
 
-def task(name: str, *inputs: str) -> Failed:
-    return Failed(name, f"key:{name}", frozenset(inputs))
+def task(name: str, *inputs: str, kind: str | None = None) -> Failed:
+    return Failed(name, f"key:{name}", frozenset(inputs), kind=kind)
 
 
 def inherited(name: str, *inputs: str) -> Failed:
@@ -446,10 +446,11 @@ def test_with_tree_ejects_infra_and_list_failed_are_retried_at_every_reading_run
 
 
 @pytest.mark.parametrize("state", [INFRA, LIST_FAILED])
-def test_without_tree_ejects_infra_that_persists_is_bisected_on_its_inputs_ejecting_nobody(state):
-    """Without `tree_ejects`, a check that errs again once enqueued again (from `rings` readings, 2 at most) is bisected like
-    a fail, on the members whose files meet the erring tasks' inputs, else on every member, and nobody is ejected: the
-    members without the error land, and the one with it ends up alone.  A first reading is only retried."""
+def test_without_tree_ejects_infra_that_persists_is_split_on_its_inputs_as_infra_ejecting_nobody(state):
+    """Without `tree_ejects`, a check that errs again once enqueued again (from `rings` readings, 2 at most) is split like a
+    fail, on the members whose files meet the erring tasks' inputs, else on every member, and nobody is ejected: the
+    members without the error land, and the one with it ends up alone.  The split is recorded as infra (`INFRA_SPLIT`),
+    never as a fail.  A first reading is only retried."""
     err = (task("test-file:pkg2/tests/test_reads.py", "pkg2/tests/test_reads.py", "pkg2/mod.py"),) if state == INFRA else ()
     why = "c1's check ended in infra errors: test-file:pkg2/tests/test_reads.py" if state == INFRA else "c1's check failed to list"
     c = Candidate("c1", MAIN, (1, 2, 3), heads(1, 2, 3), Verdict(state, (), err))
@@ -458,8 +459,8 @@ def test_without_tree_ejects_infra_that_persists_is_bisected_on_its_inputs_eject
         acts = decide(snap(replace(c, tries=tries), cand("c2", "c1", 4), ready=prs(1, 2, 3, 4), rings=rings))
         suspects, rebuilt = ((2,), [Build((1, 3), MAIN, 2, replaces="c1"), Build((4,), "c1", 1, replaces="c2")]) if (
             state == INFRA) else ((1, 2, 3), [Build((4,), MAIN, 2, replaces="c2"), Build((1,), "c2", 1)])
-        assert acts == [Ring("c1", why), Drop("c1", f"{why}, again after it was enqueued again: bisected on them, ejecting nobody",
-                                              Outcome((1, 2, 3), heads(1, 2, 3), FAIL, suspects, MAIN)),
+        assert acts == [Ring("c1", why), Drop("c1", f"{why}, again after it was enqueued again: bisected on them as infra, "
+                                                    "ejecting nobody", Outcome((1, 2, 3), heads(1, 2, 3), INFRA_SPLIT, suspects, MAIN)),
                         Drop("c2", "its base failed"), *rebuilt], (tries, rings)
 
 
@@ -506,28 +507,71 @@ def test_a_lone_member_whose_check_errs_again_after_a_retry_is_rung_to_its_owner
     assert decide(snap(c, ready=())) == [infra, owner, Drop("c1", moved, aside)]
 
 
-def test_a_launch_that_outran_its_wait_is_retried_until_launch_tries_then_handled_as_any_other_infra():
-    """A launch that outran its wait or that the pod lost (`Failed.launch`) points at the machines: its candidate is enqueued
-    again and infra is rung from `rings` readings on, no member bisected out, set aside or rung, until `launch_tries`
-    readings.  Then, as at once for a launcher that exited without a run (it ran the candidate's own check.py, so the tree may
-    be why), the members are suspects: a batch is bisected, and a lone member set aside behind the PRs waiting."""
-    err = (Failed("the run beside its check registered no run: shard 2/3: no run launched in the wait", "c1:no run",
-                  frozenset(), launch=True),)
-    exited = (replace(err[0], task="the run beside its check registered no run: shard 2/3: Traceback ... no run launched",
-                      launch=False),)
-    infra = Ring("c1", "c1's check ended in infra errors: the run beside its check registered no run: shard 2/3: no run "
-                       "launched in the wait")
+def test_infra_from_launches_that_started_no_step_is_retried_never_split_and_sets_a_lone_member_aside_after_launch_tries():
+    """Infra from launches that started none of the candidate's steps (`Failed.launch`: no run registered, a launcher killed
+    by a signal, check.py refusing its own plan) points at the machines or the loop's configuration: its candidate is
+    enqueued again and infra is rung from `rings` readings on, however often, and a candidate of several is never split for
+    it; a lone member is set aside behind the PRs waiting only after `launch_tries` readings.  Infra from runs that started
+    the candidate's steps (no `launch`) splits a candidate of several at its second reading, as infra."""
+    err = (Failed("the run beside its check registered no run: shard 1/5: train: c1 on m1,m2 shard 1/5\nTerminated",
+                  "c1:no run", frozenset(), launch=True),)
+    ran = (replace(err[0], task="the run beside its check (r1) was killed (failed rc=137)", launch=False),)
+    infra = Ring("c1", f"c1's check ended in infra errors: {err[0].task}")
     pair = Candidate("c1", MAIN, (1, 2), heads(1, 2), Verdict(INFRA, (), err))
     lone = Candidate("c1", MAIN, (3,), heads(3), Verdict(INFRA, (), err))
     assert decide(snap(pair, cand("c2", "c1", 4), ready=prs(1, 2, 4))) == [Retry("c1")]
+    for tries in (2, 3, 10):
+        assert decide(snap(replace(pair, tries=tries), cand("c2", "c1", 4), ready=prs(1, 2, 4))) == [Retry("c1"), infra]
     for tries, on in ((2, {}), (4, {"launch_tries": 5})):
-        assert decide(snap(replace(pair, tries=tries), cand("c2", "c1", 4), ready=prs(1, 2, 4), **on)) == [Retry("c1"), infra]
         assert decide(snap(replace(lone, tries=tries), ready=prs(3, 4), **on)) == [Retry("c1"), infra, Build((4,), "c1", 1)]
-    for c in (replace(pair, tries=3), replace(pair, verdict=Verdict(INFRA, (), exited), tries=2)):
-        assert kinds(decide(snap(c, cand("c2", "c1", 4), ready=prs(1, 2, 4)))) == [Ring, Drop, Drop, Build, Build], c
-    for c in (replace(lone, tries=3), replace(lone, verdict=Verdict(INFRA, (), exited), tries=2)):
+    acts = decide(snap(replace(pair, verdict=Verdict(INFRA, (), ran), tries=2), cand("c2", "c1", 4), ready=prs(1, 2, 4)))
+    assert kinds(acts) == [Ring, Drop, Drop, Build, Build] and acts[1].outcome.state == INFRA_SPLIT, acts
+    assert not any(isinstance(a, Eject) for a in acts)
+    for c in (replace(lone, tries=3), replace(lone, verdict=Verdict(INFRA, (), ran), tries=2)):
         acts = decide(snap(c, ready=prs(3, 4)))
         assert kinds(acts) == [Ring, Ring, Drop, Build] and acts[2].outcome.state == INFRA, (c, acts)
+
+
+@pytest.mark.parametrize("kind", ["timeout", "killed", "infra", "store-state"])
+def test_a_failure_its_records_say_the_machine_made_is_infra_never_a_red(kind):
+    """A failed step whose records say a timeout, a kill, a full disk or no memory, or a shared state's fault
+    (`MACHINE_KINDS`) is an infra error: retried at once, rung from the second reading, then split on its inputs as infra,
+    ejecting nobody; a lone member is never ejected for it.  Beside a failure of the change's own, only that one blames; one
+    the base fails too is inherited, as any failure is; and while other tasks run it waits, never failing early."""
+    oom = task("step pytest", "pkg2/", kind=kind)
+    why = "c1's check ended in infra errors: step pytest"
+    c = cand("c1", MAIN, 1, 2, 3, state=FAIL, failed=(oom,))
+    assert decide(snap(c, ready=prs(1, 2, 3, 4))) == [Retry("c1"), Build((4,), "c1", 1)]
+    acts = decide(snap(replace(c, tries=2), ready=prs(1, 2, 3, 4)))
+    assert acts == [Ring("c1", why), Drop("c1", f"{why}, again after it was enqueued again: bisected on them as infra, ejecting "
+                                                "nobody", Outcome((1, 2, 3), heads(1, 2, 3), INFRA_SPLIT, (2,), MAIN)),
+                    Build((1, 3), MAIN, 2, replaces="c1"), Build((2,), "c1", 1)]
+    lone = cand("c1", MAIN, 2, state=FAIL, failed=(oom,), tries=2)
+    acts = decide(snap(lone, ready=prs(2, 4)))
+    assert kinds(acts) == [Ring, Ring, Drop, Build] and acts[2].outcome == Outcome((2,), heads(2), INFRA, (2,), MAIN), acts
+    own = task("step lean-build", "pkg1/")
+    acts = decide(snap(cand("c1", MAIN, 1, 2, 3, state=FAIL, failed=(own, oom)), ready=prs(1, 2, 3)))
+    assert acts[0] == Eject(1, "h1", "step lean-build failed, and its changed files meet their inputs, no other member's", (own,))
+    assert acts[1].outcome == Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (1,), MAIN)
+    red = replace(oom, base_key=oom.key)
+    assert kinds(decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(red,)), ready=prs(1, 2)))) == [Red, Advance, Drop]
+    assert decide(snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(oom,), ended=False), ready=prs(1, 2, 4))) == [
+        Build((4,), "c1", 1)]
+
+
+def test_a_flaky_or_own_failure_is_still_a_fail():
+    for kind in ("flaky", "own", None):
+        t = task("step pytest", "pkg2/", kind=kind)
+        acts = decide(snap(cand("c1", MAIN, 1, 2, 3, state=FAIL, failed=(t,)), ready=prs(1, 2, 3)))
+        assert kinds(acts) == [Eject, Drop, Build] and acts[1].outcome.state == FAIL, (kind, acts)
+
+
+def test_an_infra_split_caps_its_suspects_as_a_fail_does_and_sets_none_aside():
+    """An `infra-split` outcome bounds its suspects' batches at half its suspects, as a fail's does, and, unlike a PR set aside
+    (`infra`), puts none of them last or alone."""
+    split = Outcome((1, 2, 3, 4), heads(1, 2, 3, 4), INFRA_SPLIT, (1, 2, 3, 4), MAIN)
+    assert decide(snap(ready=prs(1, 2, 3, 4, 5), history=(split,))) == [Build((1, 2), MAIN, 2)]
+    assert decide(snap(ready=[pr(5, rank=0), pr(1, rank=1)], history=(split,))) == [Build((5, 1), MAIN, 2)]
 
 
 def test_a_pr_set_aside_is_batched_after_every_other_and_alone():
@@ -563,8 +607,9 @@ def test_without_tree_ejects_infra_errors_that_follow_the_tree_are_bisected_like
         assert decide(snap(c, cand("c2", "c1", 4), ready=prs(1, 2, 3, 4))) == [Retry("c1")]
         acts = decide(snap(replace(c, tries=2), cand("c2", "c1", 4), ready=prs(1, 2, 3, 4)))
         if len(members) > 1:
-            assert acts == [Ring("c1", why), Drop("c1", f"{why}, again after it was enqueued again: bisected on them, ejecting "
-                                                        "nobody", Outcome((1, 2, 3), heads(1, 2, 3), FAIL, (1, 2), MAIN)),
+            assert acts == [Ring("c1", why), Drop("c1", f"{why}, again after it was enqueued again: bisected on them as infra, "
+                                                        "ejecting nobody", Outcome((1, 2, 3), heads(1, 2, 3), INFRA_SPLIT, (1, 2),
+                                                                                   MAIN)),
                             Drop("c2", "its base failed"), Build((3,), MAIN, 2, replaces="c1"),
                             Build((4,), "c1", 1, replaces="c2")]
         else:
@@ -647,7 +692,7 @@ def test_a_fail_whose_failures_are_all_inherited_beside_infra_errors_reads_as_in
     assert acts == [Retry("c1"), Ring("c1", "c1's check ended in infra errors: runner"), Build((3,), "c1", 1)]
     acts = decide(again)
     assert kinds(acts) == [Ring, Red, Drop, Build] and acts[-1] == Build((1,), MAIN, 2)
-    assert acts[2].outcome == Outcome((1, 2), heads(1, 2), FAIL, (1, 2), MAIN, (t,))
+    assert acts[2].outcome == Outcome((1, 2), heads(1, 2), INFRA_SPLIT, (1, 2), MAIN, (t,))
     s = snap(cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,), infra=(replace(runner, tree=True),)), ready=prs(1, 2, 3))
     assert decide(s) == [Retry("c1"), Build((3,), "c1", 1)]
     acts = decide(replace(s, tree_ejects=True))
@@ -883,8 +928,9 @@ def test_left_out_names_the_lean_prs_and_the_lean_inputs_a_staged_batch_keeps_ou
 
 
 def test_left_out_names_what_stops_every_build_of_the_tick():
-    """While a failed candidate above the lowest waits for its base's word, or main's chain holds a move, nothing is built,
-    and every ready PR waiting says so."""
+    """While a failed candidate above the lowest waits for its base's word, nothing is built, and every ready PR waiting says
+    so; on a move on main's chain, or in the tick that advances to one, a PR that doesn't cross it (`Ready.crosses`) says
+    so, and one that crosses it is built."""
     f = by_tests("pytest", {"t"}, None, "pkg2/")
     s = snap(cand("c1", MAIN, 1), cand("c2", "c1", 2, state=FAIL, failed=(f,)), ready=prs(1, 2, 3), depth=4)
     assert decide(s) == []
@@ -893,8 +939,17 @@ def test_left_out_names_what_stops_every_build_of_the_tick():
     move = replace(pr(1), move=True)
     s = snap(cand("c1", MAIN, 1), ready=[move, pr(2)], depth=4)
     assert decide(s) == []
-    assert left_out(s) == [Leave(2, "h2", "move on chain", "a candidate on main's chain holds a move: nothing is built on it "
-                                                         "until it is on `main`")]
+    on_chain = Leave(2, "h2", "move on chain", "a candidate on main's chain holds a move it doesn't cross: it isn't built on "
+                                               "it until it is on `main`")
+    assert left_out(s) == [on_chain]
+    crossing = replace(s, ready=(move, replace(pr(2), crosses=frozenset({"h1"})), pr(3)))
+    assert decide(crossing) == [Build((2,), "c1", 3)]
+    assert left_out(crossing) == [replace(on_chain, number=3, head="h3")]
+    advanced = snap(cand("c1", MAIN, 1, state=PASS), ready=[move, pr(2)], depth=4)
+    assert kinds(decide(advanced)) == [Advance, Drop]
+    assert left_out(advanced) == [Leave(2, "h2", "move on chain", "the tick moved `main` to a candidate holding a move it "
+                                                                "doesn't cross: it waits for the next tick to read it on "
+                                                                "the moved `main`")]
 
 
 def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_second_lean_batch():
@@ -911,7 +966,7 @@ def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_s
     assert decide(s) == decide(replace(s, depth=2)) == []
 
 
-@pytest.mark.parametrize("files", [("tools/verity/check/check.py",), ("verity/protocols/pous/lean/scripts/gen.py",)],
+@pytest.mark.parametrize("files", [("tools/verity/check/check.py",), ("tools/pous_grader/scripts/gen.py",)],
                          ids=["check's code", "a Python file of a Lake package"])
 def test_a_pr_changing_a_lean_input_waits_while_a_batch_is_staged_and_is_built_once_that_batch_is_on_the_chain(files):
     """A PR with no Lean change whose files are Lean inputs (`Ready.lean_input`), built beside a staged batch, would change the
@@ -2170,9 +2225,7 @@ class World:
             elif isinstance(a, Drop) and a.outcome is not None and a.outcome.state == FAIL:
                 c = by[a.sha]
                 own = [f for f in c.verdict.failed if not inherits(f)]
-                persists = reads(c.verdict) == INFRA and c.tries >= min(s.rings, 2) and len(c.members) > 1
-                assert own or (reads(c.verdict) == INFRA and s.tree_ejects and any(f.tree for f in c.verdict.infra)) or (
-                    persists and not s.tree_ejects), where
+                assert own or (reads(c.verdict) == INFRA and s.tree_ejects and any(f.tree for f in c.verdict.infra)), where
                 if c.base != s.main:
                     under = [p for m in self.under(s, c) for p in built[m].files]
                     unsaid = [f for f in own if f.base_tests is None]
@@ -2181,8 +2234,15 @@ class World:
                     self.seen["a fail above decided at once on main's word"] += bool(unsaid)
                 self.seen["bisected"] += len(a.outcome.suspects) > 1
                 self.seen["bisected on infra errors"] += not own and len(a.outcome.suspects) > 1
-                self.seen["bisected on infra errors, ejecting nobody"] += not own and not s.tree_ejects
                 self.seen["a mixed failure"] += bool(own and a.outcome.inherited)
+            elif isinstance(a, Drop) and a.outcome is not None and a.outcome.state == INFRA_SPLIT:
+                c = by[a.sha]
+                assert reads(c.verdict) == INFRA and c.tries >= min(s.rings, 2) and len(c.members) > 1, where
+                assert not s.tree_ejects and not (c.verdict.infra and all(f.launch for f in c.verdict.infra)), where
+                assert not any(isinstance(e, Eject) and e.number in c.members for e in acts), f"{where}: an infra split ejects"
+                self.seen["bisected"] += len(a.outcome.suspects) > 1
+                self.seen["bisected on infra errors"] += len(a.outcome.suspects) > 1
+                self.seen["bisected on infra errors, ejecting nobody"] += 1
             elif isinstance(a, Drop) and a.outcome is not None and a.outcome.state == INFRA:
                 c = by[a.sha]
                 assert a.outcome == Outcome(c.members, c.heads, INFRA, c.members, c.base) and not s.tree_ejects, where

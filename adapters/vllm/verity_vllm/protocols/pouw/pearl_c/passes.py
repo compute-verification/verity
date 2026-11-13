@@ -16,7 +16,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pouw.verifier.protocol import CALL_RANGE
+from verity.protocols.accounting.pouw.verifier.protocol import CALL_RANGE
+
+from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
 
 #: vLLM's GPU model runner modules (V1's and Model Runner V2's), each with its ``GPUModelRunner`` (as `store.binder.RUNNERS`)
 MODEL_RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
@@ -67,7 +69,7 @@ def call_index(run: Any, calls: int = 1) -> int:
     return index
 
 
-class EpochCalls:
+class EpochCalls(_RunState):
     """A device run's call numbering across its epoch (`call_index`): where each pass's first call is numbered from."""
     _used = 0                         # one past the highest index `call_index` has given out
     repeat_at: int | None = None      # the next pass's first index, once (`pass_base`'s ``at``)

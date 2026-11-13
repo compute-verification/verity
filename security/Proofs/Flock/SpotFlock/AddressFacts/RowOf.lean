@@ -38,7 +38,7 @@ The premises. Each is a statement about an accepted run that this file takes and
   part is inside the part, in the cell of the inner block's outer block, at the inner block's place in that cell.
 * `OwnLeaves`: a registered read at a template's own written port has one leaf an inner block.
 * `PublishedRows`: `RowHolds`' last arm at a template's own written port with no registered read: the public file's
-  tree has one leaf an inner block, and the drawn inner block's row is its own place.
+  tree has one leaf an inner block, and the sampled inner block's row is its own place.
 
 That Flock's parse of a registered-reads file keeps each port's reads is `portsOf_reads` (`RowParse`), proved.
 -/
@@ -82,7 +82,7 @@ def OwnLeaves (h : Held) : Prop :=
 /-- **The published rows at a template's own written port with no registered read**: at an accepted run, at the row
 of a written bit of the inner block's template that no link names and no registered read is named like, the session
 has one table, and over any population its public file loads the port's published tree has one leaf an inner block
-and the drawn inner block's row is its own place. -/
+and the sampled inner block's row is its own place. -/
 def PublishedRows (h : Held) : Prop :=
   ∀ r : CheckedRun h.stage, r.Ok h → ∀ (y : ℕ) (rp : Spot.Bits.RowPos),
     (y, templateOf h.ms r.u, rp) ∈ writtenBits h.ms →
@@ -276,7 +276,7 @@ theorem readOk_own_rows {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.Se
     exact hok.2
 
 /-- **An accepted statement's first-stage record lists the sample in its order** (`second-interior-order`), with the
-run's statement, the first stage's record and the second stage's draw it was read at. -/
+run's statement, the first stage's record and the second stage's sample it was read at. -/
 theorem readsOk_order {t : ℕ} {x m₁ xS : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h}
     (hr : readsOk h t x m₁ xS c₀ c₁ = true) :
     ∃ st rec draw, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some draw ∧

@@ -81,6 +81,9 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
   k_log model gets no row: it is no measurement of that type.
 - **The totals per monitoring period over all compute:** with every block proved, the census's datacenter and the
   world's serving for a week, a month and a year; under a sampling plan, the compute and period the plan is sized for.
+- **Under `--system spot`, SPOT's resampling holes in the code that ran**, over the runs among its inputs (not its
+  arts): the label (`SPOT`, or `SPOT soundness` only when both holes are closed), each hole's status, and the theorem
+  with its open premises as the lock lists them (`verity_bench.spot_status`; `spot_holes` in the JSON).
 
 `--system flock` proves every block. `--system spot` takes the same costs at the blocks a sampling plan samples: a
 system is a `prove.ProofSystem`, a census in and a table out, and SPOT wraps one with a plan.
@@ -168,7 +171,7 @@ a steady-state measurement when the report wasn't stopped or timed out, every pr
 accepted and its cache was flat. A run that holds `rate.json` is read from it alone.
 
 The serving rate is not a record. It is a stated, modeled input: the census's MACs a served token at the fleet's assumed
-serving MFU (`verity/protocols/inference_only/rho/data/reference.toml`) of the card's data-sheet peak (`benchmarks/census/hardware.json`).
+serving MFU (`benchmarks/rho/data/reference.toml`) of the card's data-sheet peak (`benchmarks/census/hardware.json`).
 
 
 ## The Lean verifier's seconds and the proof's bytes
@@ -181,7 +184,7 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE [--repeat 3] [--out 
     [--session DIR] [--circuit F] [--public F] [--program F] [--partition F] [--registered F] [--tables DIR]
 ```
 
-VERIFIER is the Lean verifier's executable, as `lake build` leaves it under `verity/protocols/flock/verifier`. TREE
+VERIFIER is the Lean verifier's executable, as `lake build` leaves it under `verity/protocols/proofs/flock/verifier`. TREE
 holds one session directory (`session.json` and its proof files, `<table>.rep0.bin` and `<table>.rep1.bin`) and the
 statement it was proved on (`circuit.txt`, the public file, and the verifier's program (`program*.json`),
 `partition.json` and `registered.json` where the statement has them), each found by its name. A run is one process of the verifier's `verify` on the session,

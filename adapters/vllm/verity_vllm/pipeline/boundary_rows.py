@@ -97,8 +97,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.verifier import second_stage as SS
-from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.population import population

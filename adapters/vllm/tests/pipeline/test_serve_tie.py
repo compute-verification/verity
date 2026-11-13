@@ -10,25 +10,25 @@ from __future__ import annotations
 
 import json
 import shlex
+from collections.abc import Callable
 from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 import pytest
-
-from verity.protocols.spot.verifier.one_stage import registration as REG
 from verity.circuits.codec import canonical_json
-from verity_vllm.pipeline import serve_day as SD
-from verity_vllm.pipeline import serve_h1 as SH
-from verity_vllm.pipeline import serve_tie as TIE
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
 from tests.pipeline.test_serve_day import OTHER, _day, _opts
 from tests.pipeline.test_serve_h1 import PROMPTS, Later, _Server
 from tests.protocols.test_pouw_h1_commit import AUDITED, ROWS, STEPS, _reusing
 from tests.protocols.test_pouw_h1_served import _unit
+from verity_vllm.pipeline import serve_day as SD
+from verity_vllm.pipeline import serve_h1 as SH
+from verity_vllm.pipeline import serve_tie as TIE
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import commit as CT
 
 #: what the tie hears of a sealed window (`serve_commit.CommitWindows`' seal line)
 SEALED = {"run_id": "t/w", "run_root": "ab" * 64, "row_dir": "windows/w"}
@@ -36,12 +36,13 @@ SEALED = {"run_id": "t/w", "run_root": "ab" * 64, "row_dir": "windows/w"}
 
 class WindowCommit:
     """V3c's window-commit as the tie runs it (`serve_tie.run_command`'s place): each call's arguments and which of the
-    run's calls_root, draw and commit were bound when it ran, then R as `test_pouw_h1_commit._reusing` makes it of W
+    run's calls_root, sample and commit were bound when it ran, then R as `test_pouw_h1_commit._reusing` makes it of W
     (``edit`` the record; none with ``write`` False) and the exit code ``rc``."""
 
     def __init__(self, runs: dict[int, Any], *, edit: Callable[[dict], dict] = lambda r: r, rc: int = 0, write: bool = True,
                  then: Callable[[], Any] = lambda: None) -> None:
-        self.runs, self.edit, self.rc, self.write, self.then, self.calls = runs, edit, rc, write, then, []
+        self.runs, self.edit, self.rc, self.write, self.then = runs, edit, rc, write, then
+        self.calls: list[dict[str, Any]] = []
 
     def __call__(self, argv: list[str], log: Any) -> int:
         self.then()
@@ -54,7 +55,9 @@ class WindowCommit:
 
 
 def _tied(tmp_path, monkeypatch, closer: Any, **commit: Any) -> tuple[_Server, SH.H1Windows, WindowCommit, dict, list]:
-    srv, runs, flushed = _Server(monkeypatch), {}, []
+    srv = _Server(monkeypatch)
+    runs: dict[int, Any] = {}
+    flushed: list[str] = []
     wc = WindowCommit(runs, **commit)
     tie = TIE.WindowTie("v3c-window-commit", tmp_path / "serve", flush=lambda: flushed.append("flush"), runner=wc)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),
@@ -72,7 +75,7 @@ def test_a_tied_window_names_r_reusing_its_tables_from_w_as_its_commit_record_be
     log's last record (window 0's after none, window 1's after window 0's R), then runs the command, with the serve dir,
     the window, W's and R's files and the window's prover directory, once the advice trace is flushed and before calls_root,
     draw_root or the commit are bound. R is the window's Commit record: its canonical JSON is the commitment's ``commit``,
-    the draw coin opens after it, the outcome records both digests, and the log names W then R, so a tie over the same
+    the sampling coin opens after it, the outcome records both digests, and the log names W then R, so a tie over the same
     serve dir chains after the last R."""
     serve = tmp_path / "serve"
     srv, arm, wc, runs, flushed = _tied(tmp_path, monkeypatch, closer := Later())
@@ -145,7 +148,7 @@ def _seal(arm: SH.H1Windows) -> None:
 def test_a_tied_window_with_no_r_reusing_w_binds_no_record_and_opens_no_coin(tmp_path, monkeypatch, act, commit, why,
                                                                               logged):
     """No seal (it failed, or the server stopped first), a command that fails or writes no R, or an R that isn't chained
-    right after W: the window binds no Commit record and opens no draw coin, its outcome's error names why, and only a W
+    right after W: the window binds no Commit record and opens no sampling coin, its outcome's error names why, and only a W
     written goes into the log, so the next window chains after it. Nothing is retried."""
     serve = tmp_path / "serve"
     srv, arm, wc, runs, _flushed = _tied(tmp_path, monkeypatch, closer := Later(), **commit)

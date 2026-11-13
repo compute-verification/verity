@@ -17,11 +17,12 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops import gemm as G
+from verity.circuits.ops import gemm as G
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import interface as I
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows import wiring as WI
-from verity.protocols.spot.verifier.one_stage import registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a5
@@ -91,14 +92,17 @@ def test_a_shared_row_readers_flipped_wired_row_is_its_drawn_units_own():
 
 
 class Held:
-    """A registered value as the committer reads it: its rows of 16-bit leaves, one salt a row, a root and each row's path
-    (stand-ins)."""
+    """A registered value as the committer reads it: its rows of 16-bit leaves, one salt a row and each row's ``b || c``
+    under it in a ``row/v2`` row, a root and each row's path (stand-ins)."""
 
     def __init__(self, name: str, rows: np.ndarray) -> None:
         self.name = self.value = name
         self.rows, self.words, self.word_bits, self.leaves = rows, rows.shape[1], 16, len(rows)
         self.salts = [hashlib.shake_256(b"salt %d" % i).digest(WI.SALT_BYTES) for i in range(len(rows))]
         self.root = hashlib.sha512(b"root " + name.encode()).digest()
+        inner = CS._inner(V2, self.words)
+        self.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), s)
+                    for r, s in zip(rows, self.salts)]
 
     def path(self, position: int) -> bytes:
         return hashlib.sha512(b"path %d " % position + self.name.encode()).digest()

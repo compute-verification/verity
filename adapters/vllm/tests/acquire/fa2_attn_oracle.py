@@ -8,19 +8,25 @@ RNE bf16.  Emits every online-state version the kernel holds in registers (mappi
 
 Run:  cd adapters/vllm; PYTHONPATH=. python tests/acquire/fa2_attn_oracle.py --case p0b --out /tmp/p0b_ref.json
       PYTHONPATH=. python tests/acquire/fa2_attn_oracle.py --compare /tmp/p0b_ref.json /tmp/p0b_dump.json
-Needs the MUFU tables (core's, `verity.definitions.ops.mufu.TABLE_DIR`).
+Needs the MUFU tables (core's, `verity.circuits.ops.mufu.TABLE_DIR`).
 Deterministic: inputs come from numpy PCG64(seed); no torch, no GPU.  All words are hex in the JSON (f32: 8 digits,
 bf16: 4 digits); ints `n_block`, `nvis`, `M`, `T`, `D`, `BN` are decimal.
 """
 from __future__ import annotations
-import argparse, json, sys
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
 import numpy as np
 from verity.definitions.registry import prims as P  # PYTHONPATH=.
 
 NEG_INF = 0xFF800000
 BF16_KEYS = {"q", "k", "v", "pb", "out"}
 PLAIN = {"n_block", "nvis", "M", "T", "D", "BN", "case", "causal", "softmax_scale", "is_first", "lse_approx", "softcap", "window"}
-CASES = {  # 1 head; BN = fa2_kblock_n(D); every case has row-schedule == kernel tile-schedule (checked at run time)
+CASES: dict[str, dict[str, Any]] = {  # 1 head; BN = fa2_kblock_n(D); every case has row-schedule == kernel tile-schedule (checked at run time)
     "p0a": dict(M=16, T=128, D=64, causal=True, seed=11, spread=1.0),   # one block: Is_first only, prefix mask
     "p0b": dict(M=16, T=144, D=64, causal=True, seed=12, spread=1.0),   # two blocks: rescale path, mask, K/V zero pad
     "p0c": dict(M=3, T=160, D=64, causal=False, seed=13, spread=1.0),   # decode shape (3 rows = 3 heads of a KV group)
@@ -124,7 +130,7 @@ def attention_head(q, K, V, T, D, sl2, BN, limit, nb, softcap_bits=0, left=0):
     if (limit + BN - 1) // BN != nb:
         raise SystemExit("row-level schedule != kernel tile schedule (a row with no visible key in the tile's last "
                          "block): outside AttentionHead_v3's domain -- pick M, T so every row sees >= 1 key there")
-    m = l = o = None
+    m, lanes, o = 0, [0] * 4, [0] * D
     blocks = []
     for b in range(nb - 1, -1, -1):
         lo, nvis = b * BN, min(limit, (b + 1) * BN) - b * BN
@@ -132,10 +138,9 @@ def attention_head(q, K, V, T, D, sl2, BN, limit, nb, softcap_bits=0, left=0):
         vb = [V[j] if j < T else [0] * D for j in range(lo, lo + BN)]
         first = b == nb - 1
         rec = {"n_block": b, "nvis": nvis, "is_first": first}
-        m, l, o = attn_block(q, kb, vb, nvis, first, 0 if first else m, [0] * 4 if first else l, [0] * D if first else o, sl2, D, BN, rec,
-                             softcap_bits)
+        m, lanes, o = attn_block(q, kb, vb, nvis, first, m, lanes, o, sl2, D, BN, rec, softcap_bits)
         blocks.append(rec)
-    total = P.F32AddFtz.evaluate(P.F32AddFtz.evaluate(l[0], l[2]), P.F32AddFtz.evaluate(l[1], l[3]))
+    total = P.F32AddFtz.evaluate(P.F32AddFtz.evaluate(lanes[0], lanes[2]), P.F32AddFtz.evaluate(lanes[1], lanes[3]))
     inv = P.Fa2InvSum.evaluate(total)
     y = [P.F32MulFtz.evaluate(o[d], inv) for d in range(D)]
     out = [P.F2fpBf16.evaluate(x) for x in y]
@@ -146,7 +151,9 @@ def attention_head(q, K, V, T, D, sl2, BN, limit, nb, softcap_bits=0, left=0):
 
 def make_inputs(M, T, D, seed, spread):
     rng = np.random.default_rng(seed)
-    bf16 = lambda a: [int(w) for w in (np.asarray(a, np.float32).view(np.uint32) >> 16)]  # truncation: fine for inputs
+    def bf16(a):  # truncation: fine for inputs
+        return [int(w) for w in (np.asarray(a, np.float32).view(np.uint32) >> 16)]
+
     return ([bf16(rng.normal(0, spread, D)) for _ in range(M)], [bf16(rng.normal(0, spread, D)) for _ in range(T)],
             [bf16(rng.normal(0, 1.0, D)) for _ in range(T)])
 
@@ -169,7 +176,7 @@ def run_case(name):
 
 
 def hexify(x, bf=False):
-    if isinstance(x, bool) or isinstance(x, (float, str)):
+    if isinstance(x, (bool, float, str)):
         return x
     if isinstance(x, int):
         return f"{x:04x}" if bf else f"{x:08x}"
@@ -218,11 +225,11 @@ if __name__ == "__main__":
     ap.add_argument("--compare", nargs=2, metavar=("REF_JSON", "DUMP_JSON"))
     a = ap.parse_args()
     if a.compare:
-        ref, dump = (unhex(json.load(open(f))) for f in a.compare)
+        ref, dump = (unhex(json.loads(Path(f).read_text())) for f in a.compare)
         sys.exit(1 if compare(ref, dump) else 0)
     res = run_case(a.case)
     if a.out:
-        open(a.out, "w").write(json.dumps(hexify(res)))
+        Path(a.out).write_text(json.dumps(hexify(res)))
     r0 = res["rows"][-1]
     print(f"{a.case}: M={res['M']} T={res['T']} BN={res['BN']} sl2={res['scale_softmax_log2']:08x} blocks/row={len(r0['blocks'])}; "
           f"last row: m={r0['blocks'][-1]['m_new']:08x} sum={r0['sum']:08x} inv={r0['inv_sum']:08x} out[0..3]="

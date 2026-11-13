@@ -24,7 +24,7 @@ This module takes the order from the ledger the check read, in three steps.
 * **Each of those lines is the device's** (`line_device`, `entry_device`): a line of a ledger `drawCoins` accepted is
   signed under the key (`Window.verifyLedger_sig`), so the device's own ledger holds a line with the same text apart
   from its signature, or the finder outputs a break from that session's record. `Window.window_opens` is this for the
-  one open a draw reads. Two lines of one text apart from their signatures have one kind, one `seq`, one window root
+  one open a sample reads. Two lines of one text apart from their signatures have one kind, one `seq`, one window root
   and, an open, an end or a reserve, one session (`same_fields`; `entry_seq` reads an entry's `seq` and session off its
   JSON).
 * **The device's fact** (`PrintsInOrder`): where the device's own ledger opens the first window for `a` and the second
@@ -60,7 +60,7 @@ open FlockDeploy (JsonEquiv)
 open Properties.Pouw.LiveSalt.Coin (taggedBytes)
 open Properties.Pouw.LiveSalt.Ledger (of_triple of_triple_opt throw_spec none_spec failure_spec toOption_spec
   ledgerTag_spec nat_spec some_pure_spec)
-open Properties.Challenger.Session (ledgerBytes recordBytes)
+open Properties.Challenger.ChallengePhase (ledgerBytes recordBytes)
 open Properties.Challenger.CanonRead (getD_equiv sorted_getD equiv_str)
 open scoped ENNReal
 
@@ -119,7 +119,7 @@ theorem entry_seq {line : Json} {e : LedgerEntry} (h : ledgerEntry? line = some 
     (∃ n : Lean.JsonNumber, Spot.getD e.entry "seq" = .num n ∧ e.seq = n.mantissa.toNat) ∧
       (e.kind = "open" ∨ e.kind = "end" ∨ e.kind = "reserve" → Spot.getD e.entry "session" = .str e.session) := by
   obtain ⟨r, hr, hq, hses⟩ := ledgerEntry_more h
-  have hr' := Properties.Challenger.Session.toOption_some hr
+  have hr' := Properties.Challenger.ChallengePhase.toOption_some hr
   obtain ⟨n, hn, hrn⟩ := recordOfJson_seq hr'
   obtain ⟨-, -, h3⟩ := Properties.Challenger.Window.recordOfJson_fields hr'
   exact ⟨⟨n, hn, hq.symm.trans hrn⟩, fun hk => h3 _ (hses hk)⟩
@@ -174,7 +174,7 @@ section Lines
 
 variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 
-/-- **A signed line of the ledger a draw's coin evidence carries is a line of the device's own ledger, apart from its
+/-- **A signed line of the ledger a sample's coin evidence carries is a line of the device's own ledger, apart from its
 signature**, or the finder outputs a break: the device signed its message, or the signature is a forgery; what the
 device signs that hashes a ledger role is one of its own ledger lines' messages; and equal messages are equal texts
 without their signatures, or a collision of two strings the finder hashes. `Window.window_opens`' argument, for any
@@ -204,12 +204,12 @@ theorem line_device {ls : Array Json} {l : Json} {e : LedgerEntry} {m : ByteArra
           | ok m' =>
             rw [hrm] at hrec
             have hmm : m = m' := List.mem_singleton.1 hrec
-            obtain ⟨d', hd', hm''⟩ := Properties.Challenger.Session.recordMessage_ok hrm
+            obtain ⟨d', hd', hm''⟩ := Properties.Challenger.ChallengePhase.recordMessage_ok hrm
             have hV : recordBytes (ident key.pub) r.host d' ∈
                 readHashed key label coins ++ deviceHashed dev key.pub :=
-              List.mem_append_right _ (Properties.Challenger.Session.mem_deviceHashed_run hr hcs
-                (.inl (Properties.Challenger.Session.record_mem_closeHashed
-                  (Properties.Challenger.Session.record_mem_recordHashed hd'))))
+              List.mem_append_right _ (Properties.Challenger.ChallengePhase.mem_deviceHashed_run hr hcs
+                (.inl (Properties.Challenger.ChallengePhase.record_mem_closeHashed
+                  (Properties.Challenger.ChallengePhase.record_mem_recordHashed hd'))))
             rcases eq_or_break hU hV (hm1.symm.trans (hmm.trans hm'')) with hEq | b
             · exact absurd hEq.symm (Properties.Challenger.Window.recordBytes_ne_ledger _ _ _ _ _)
             · exact .inr b
@@ -218,26 +218,26 @@ theorem line_device {ls : Array Json} {l : Json} {e : LedgerEntry} {m : ByteArra
           | ok m' =>
             rw [hcm] at hcl
             have hmm : m = m' := List.mem_singleton.1 hcl
-            obtain ⟨rs, hrs, hm''⟩ := Properties.Challenger.Session.closeMessage_ok hcm
-            have hV : Properties.Challenger.Session.closeBytes (ident key.pub) rs r.id r.log.length
+            obtain ⟨rs, hrs, hm''⟩ := Properties.Challenger.ChallengePhase.closeMessage_ok hcm
+            have hV : Properties.Challenger.ChallengePhase.closeBytes (ident key.pub) rs r.id r.log.length
                 (logChain r.log) r.ended ∈ readHashed key label coins ++ deviceHashed dev key.pub :=
-              List.mem_append_right _ (Properties.Challenger.Session.mem_deviceHashed_run hr hcs
-                (.inl (Properties.Challenger.Session.close_mem_closeHashed hrs)))
+              List.mem_append_right _ (Properties.Challenger.ChallengePhase.mem_deviceHashed_run hr hcs
+                (.inl (Properties.Challenger.ChallengePhase.close_mem_closeHashed hrs)))
             rcases eq_or_break hU hV (hm1.symm.trans (hmm.trans hm'')) with hEq | b
-            · exact absurd hEq.symm (Properties.Challenger.Session.closeBytes_ne_ledger _ _ _ _ _ _ _ _)
+            · exact absurd hEq.symm (Properties.Challenger.ChallengePhase.closeBytes_ne_ledger _ _ _ _ _ _ _ _)
             · exact .inr b
     · obtain ⟨line, hline, hlm⟩ := List.mem_filterMap.1 hled
       obtain ⟨e', he', hem⟩ := Option.bind_eq_some_iff.1 hlm
       obtain ⟨tag', s2, ht2, hc2, hm2, hU2, hT2⟩ :=
-        Properties.Challenger.Window.ledger_hashed he' (Properties.Challenger.Session.toOption_some hem)
+        Properties.Challenger.Window.ledger_hashed he' (Properties.Challenger.ChallengePhase.toOption_some hem)
       have hV : ledgerBytes (ident key.pub) (Flock.Sha512.hash (taggedBytes tag' s2)) ∈
           readHashed key label coins ++ deviceHashed dev key.pub :=
-        List.mem_append_right _ (Properties.Challenger.Session.mem_deviceHashed_ledger hline hU2)
+        List.mem_append_right _ (Properties.Challenger.ChallengePhase.mem_deviceHashed_ledger hline hU2)
       rcases eq_or_break hU hV (hm1.symm.trans hm2) with hEq | b
       · have hTr : taggedBytes tag s1 ∈ readHashed key label coins ++ deviceHashed dev key.pub :=
           List.mem_append_left _ (Properties.Challenger.Window.mem_readHashed_ledger hc hl hT1)
         have hTd : taggedBytes tag' s2 ∈ readHashed key label coins ++ deviceHashed dev key.pub :=
-          List.mem_append_right _ (Properties.Challenger.Session.mem_deviceHashed_ledger hline hT2)
+          List.mem_append_right _ (Properties.Challenger.ChallengePhase.mem_deviceHashed_ledger hline hT2)
         rcases eq_or_break hTr hTd (Properties.Challenger.Window.ledgerBytes_inj hEq) with hEq2 | b
         · obtain ⟨rfl, rfl⟩ := Properties.Challenger.Window.taggedBytes_inj2
             (Properties.Challenger.Window.ledgerTag_size ht1 ht2) hEq2
@@ -253,9 +253,9 @@ theorem lines_signed {w : String} {after ξ : ByteArray} (h : drawCoins key w la
     {e : LedgerEntry} (he : e ∈ Properties.Pouw.LiveSalt.entries (Spot.getD coins "ledger")) :
     ∃ ls l m, Spot.getD coins "ledger" = .arr ls ∧ l ∈ ls.toList ∧ ledgerEntry? l = some e ∧
       ledgerMessage (ident key.pub) e.entry = .ok m ∧ LmsVerifies key m e.sig := by
-  obtain ⟨c, roots, ht, -⟩ := Properties.Challenger.Session.drawCoins_ok h
-  obtain ⟨a, hp, -⟩ := Properties.Challenger.Session.trustedSessionOf_ok ht
-  obtain ⟨ob, hao⟩ := Properties.Pouw.LiveSalt.Ledger.pinnedSession_ok hp
+  obtain ⟨c, roots, ht, -⟩ := Properties.Challenger.ChallengePhase.drawCoins_ok h
+  obtain ⟨a, hp, -⟩ := Properties.Challenger.ChallengePhase.trustedSessionOf_ok ht
+  obtain ⟨ob, hao⟩ := Properties.Pouw.LiveSalt.Ledger.pinnedChallengePhase_ok hp
   obtain ⟨wp, win, en, hch, -⟩ := Properties.Pouw.LiveSalt.Ledger.auditedOpen_ok hao
   obtain ⟨es, hes, hvl⟩ := Properties.Pouw.LiveSalt.Ledger.checked_ok hch
   have hmem : e ∈ es.toList := by
@@ -270,7 +270,7 @@ theorem lines_signed {w : String} {after ξ : ByteArray} (h : drawCoins key w la
       obtain ⟨l, hl, he⟩ := List.mem_filterMap.1 he
       exact ⟨ls, hc, l, hl, he⟩
     · simp at he
-  exact ⟨ls, l, m, hc, hl, hle, hm, Properties.Challenger.Session.lms_of_check hv⟩
+  exact ⟨ls, l, m, hc, hl, hle, hm, Properties.Challenger.ChallengePhase.lms_of_check hv⟩
 
 /-- **An entry of a ledger `drawCoins` accepted is one of the device's own ledger's**, with its kind, its `seq`, its
 window root and, an open, an end or a reserve, its session; or the finder outputs a break. -/

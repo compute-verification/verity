@@ -3,11 +3,13 @@
 #
 # `verity/protocols/remote/verifier/composition/`, the Lake package `core_composition` (`Core.Composition`), states how
 # protocols on one registration compose. It sat inside remote's package directory and is no part of remote: it requires
-# only the base package and the core interface, and remote and onsite require it. It becomes a protocol directory of its
-# own, `verity/protocols/compose/`.
+# only the base package and the core interface, and remote and onsite require it. It becomes the Lean check of a
+# protocol of its own, `verity/protocols/compose/`, in that protocol's `verifier/lean/`.
 #
 # - The directory moves whole and laid out as it was: the package's `.lean` files, lakefile, manifest, lock and
 #   toolchain, and the suite beside them (`pyproject.toml`, `tests/`), whose name stays.
+# - A protocol's directory holds its trusted code in `verifier/` (`tests/tree.toml`), so the package goes under it and
+#   not at the protocol's top.
 # - A Lean module is named from its package's root (`CoreComposition.Tie`), so no Lean module, declaration or lock
 #   record changes; what changes in a lakefile or a manifest is a path to this package.
 # - No directory is split, so the map has no [split] table and reads the same on any base.
@@ -15,11 +17,11 @@
 # after this map, on the commit it makes.
 
 [roots]
-old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
-new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
-"verity/protocols/remote/verifier/composition/" = "verity/protocols/compose/"
+"verity/protocols/remote/verifier/composition/" = "verity/protocols/compose/verifier/lean/"
 
 [retired]
 # the directory this map empties: `layout.py` refuses a tracked file under one that has no row, and its row is a
@@ -51,4 +53,4 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 [modules]
 # the rename [paths] implies (`layout.py --modules`): the directory as a dotted path. No module lives in it: the package
 # is Lean, and the suite's files run as files.
-"verity.protocols.remote.verifier.composition" = "verity.protocols.compose"
+"verity.protocols.remote.verifier.composition" = "verity.protocols.compose.verifier.lean"

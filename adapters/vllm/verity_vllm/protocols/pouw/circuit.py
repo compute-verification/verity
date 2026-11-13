@@ -1,7 +1,7 @@
 """PoUW's `ncp-v2` under sampled proofs: each weight's side as its own `NcpWeight_v1` Program call, once per run, and each
 executed linear call as its own `NcpLinear_v1` Program call reading it.
 
-`verity.protocols.pouw.prover.circuit` gives the circuit (`traced_as`: both Definitions, their `Q_template_instances` queries, the served
+`verity.protocols.accounting.pouw.prover.circuit` gives the circuit (`traced_as`: both Definitions, their `Q_template_instances` queries, the served
 count and the closure-sampling layout; P is the scheme's). Here is what the vLLM integration does with it:
 
 - **Build.** A model Program's row at a PoUW site is lowered to `ROW_FAMILY` (`lower`): the served output of one row of
@@ -24,22 +24,23 @@ two commit the same leaves, and the tests hold them to the same roots.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Protocol
 
 import numpy as np
-from verity.protocols.pouw.prover import circuit as C
-from verity.protocols.pouw.verifier.audit import commit_rows
-from verity.protocols.pouw.prover.circuit import partition as CP
-from verity.protocols.pouw.prover.circuit import reference as R
-from verity.protocols.pouw.prover.circuit.ncp2 import D, Shape
-from verity.protocols.pouw.verifier.protocol import tagged
-
 from verity.circuits import partition_object as PO
-from verity_vllm.query.manifest.format import spec_family
 from verity.circuits.evaluation.reference import evaluate_region
+from verity.protocols.accounting.pouw.prover import circuit as C
+from verity.protocols.accounting.pouw.prover.circuit import partition as CP
+from verity.protocols.accounting.pouw.prover.circuit import reference as R
+from verity.protocols.accounting.pouw.prover.circuit.ncp2 import D, Shape
+from verity.protocols.accounting.pouw.verifier.audit import commit_rows
+from verity.protocols.accounting.pouw.verifier.protocol import tagged
+
+from verity_vllm.query.manifest.format import spec_family
 
 #: The model Program's families for one row of a PoUW site: its served output, checked by the replay against the call; the
 #: second is a biased linear's row whose bias add was the pre-bias output's only reader (`program.registry.pouw_rows`)
@@ -53,22 +54,25 @@ INPUTS_TAG = b"verity/pouw/ncp-v2/inputs/v2\0"
 WEIGHT_INPUTS_TAG = b"verity/pouw/ncp-v2/weight-inputs/v1\0"
 UNIT_TAG = b"verity/pouw/ncp-v2/unit/v1\0"
 NODE_TAG = b"verity/pouw/ncp-v2/units-node/v1\0"
-CALLS_BINDING = "verity/pouw/ncp-v2/calls/v1"
+CALLS_DOMAIN_TAG = "verity/pouw/ncp-v2/calls/v1"
 M32 = 0xFFFFFFFF
 
 
 def kind_of(scheme: str) -> str:
-    """The permutation P that ``scheme`` pins (`verity.protocols.pouw.prover.circuit.SCHEMES`); ValueError for a scheme without a circuit."""
+    """The permutation P that ``scheme`` pins (`verity.protocols.accounting.pouw.prover.circuit.SCHEMES`); ValueError for a scheme without a circuit."""
     if scheme not in C.SCHEMES:
-        raise ValueError(f"{scheme}: no circuit (verity.protocols.pouw.prover.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
+        raise ValueError(f"{scheme}: no circuit (verity.protocols.accounting.pouw.prover.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
     return C.SCHEMES[scheme]
 
 
 class Rows(Protocol):
     """A weight's int7 rows (int8) and FP32 scale encodings (uint32), quantized when read."""
 
-    n: int
-    k: int
+    @property
+    def n(self) -> int: ...
+
+    @property
+    def k(self) -> int: ...
 
     def rows(self, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]: ...
 
@@ -144,7 +148,7 @@ class Group:
     def __init__(self, size: int, dtype: str) -> None:
         self.h, self.dtype = hashlib.sha256(size.to_bytes(8, "little")), dtype
 
-    def update(self, values: np.ndarray) -> "Group":
+    def update(self, values: np.ndarray) -> Group:
         self.h.update(np.ascontiguousarray(values, dtype=self.dtype).reshape(-1).tobytes())
         return self
 
@@ -302,7 +306,7 @@ def call_leaf(rec: CallRecord) -> bytes:
 
 def calls_root(salt: bytes, weights_root: bytes, records: Sequence[CallRecord]) -> bytes:
     """The root over every call's leaf, in call order: a plain tree, which the replay recomputes from the records."""
-    return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -1, [call_leaf(r) for r in records], "sha256",
+    return commit_rows(tagged(CALLS_DOMAIN_TAG, salt, weights_root), -1, [call_leaf(r) for r in records], "sha256",
                        public=True).commitment.root
 
 
@@ -318,7 +322,7 @@ def sides(records: Sequence[CallRecord]) -> list[WeightRecord]:
 
 @dataclass(frozen=True)
 class Compiled:
-    """One call shape's Programs, their template partitions and their trace (`verity.protocols.pouw.prover.circuit.traced_as`)."""
+    """One call shape's Programs, their template partitions and their trace (`verity.protocols.accounting.pouw.prover.circuit.traced_as`)."""
 
     traced: Any
     program: Any
@@ -337,7 +341,7 @@ def program(scheme: str, m: int, k: int, n: int) -> Compiled:
     ValueError for a scheme without one."""
     t = C.traced_as(scheme, m, k, n)
     if t is None:
-        raise ValueError(f"{scheme}: no circuit (verity.protocols.pouw.prover.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
+        raise ValueError(f"{scheme}: no circuit (verity.protocols.accounting.pouw.prover.circuit.SCHEMES = {', '.join(C.SCHEMES)})")
     prog, wprog = CP.program(t.shape, t.kind), CP.weight_program(t.shape, t.kind)
     return Compiled(t, prog, PO.TemplatePartition(prog, t.query), wprog, PO.TemplatePartition(wprog, t.weight_query))
 
@@ -416,7 +420,7 @@ CALLS_DATA_FILE = "pouw-ncp-v2-calls.npz"
 
 def save_calls(path: str | Path, records: Sequence[CallRecord]) -> None:
     """Every call's A, s, bias, row and column ids, salt and anchored fields, by index."""
-    arrays: dict[str, np.ndarray] = {}
+    arrays: dict[str, Any] = {}         # each an array; Any, since mypy offers ``**arrays`` to ``allow_pickle`` as well
     for r in records:
         c, p = r.call, f"c{r.index}_"
         arrays.update({p + "a": c.a, p + "s": c.s, p + "bias": c.bias, p + "rowids": c.rowids, p + "colids": c.colids,
@@ -464,8 +468,8 @@ def lower(inst: dict[str, Any], sites: Mapping[str, str]) -> dict[str, Any]:
     return dict(inst, rows=rows)
 
 
-__all__ = ["CALLS_BINDING", "CALLS_DATA_FILE", "CALLS_FILE", "Call", "CallRecord", "Compiled", "Group", "LOWERED", "Quantized",
-           "ROW_BIAS_FAMILY", "ROW_FAMILY", "Read", "Rows", "RowsDigest", "WeightRecord", "call_leaf", "calls_root", "commit_call_ir",
-           "commit_weight_ir", "evaluate_ir", "evaluate_weight_ir", "inputs_digest", "int7_bytes", "kind_of", "load_calls", "lower",
-           "program", "save_calls", "sides", "summary", "unit_leaf", "units_root", "weight_inputs_digest", "weight_leaf",
-           "weight_summary"]
+__all__ = ["C", "CALLS_DATA_FILE", "CALLS_DOMAIN_TAG", "CALLS_FILE", "Call", "CallRecord", "Compiled", "Group", "LOWERED",
+           "Quantized", "ROW_BIAS_FAMILY", "ROW_FAMILY", "Read", "Rows", "RowsDigest", "UNIT_TAG", "WeightRecord", "call_leaf",
+           "calls_root", "commit_call_ir", "commit_weight_ir", "evaluate_ir", "evaluate_weight_ir", "inputs_digest", "int7_bytes",
+           "kind_of", "load_calls", "lower", "program", "save_calls", "sides", "summary", "unit_leaf", "units_root",
+           "weight_inputs_digest", "weight_leaf", "weight_summary"]

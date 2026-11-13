@@ -25,8 +25,8 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           "benchmarks/census/deployments.json",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
-          "verity/protocols/flock/prover/python/verity_flock/input_sets.py",
-          "verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py",
+          "verity/protocols/proofs/flock/prover/python/verity_flock/input_sets.py",
+          "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
           # the network certifier's run the certifier piece kept, which window-commit's scan reads (`kept_scan`):
           # certifier_piece and warden_chain, what they import, and the site.json and host.json that served_session and
           # auditor read on import; and serve.py, which the challenger's ledgers test_records_audit signs with auditor read
@@ -36,13 +36,15 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           "benchmarks/network_traces/connection_rows_run.py",
           "benchmarks/network_traces/covert.py", "benchmarks/network_traces/replay.py",
           "benchmarks/network_traces/load_relay.py", "benchmarks/network_traces/stall_probe.py",
-          "benchmarks/network_traces/site.json", "verity/composite/device/live_challenger/auditor.py",
-          "verity/composite/device/live_challenger/host.json", "verity/composite/device/live_challenger/serve.py",
+          "benchmarks/network_traces/site.json", "verity/protocols/compose/device/live_challenger/auditor.py",
+          "verity/protocols/compose/device/live_challenger/host.json", "verity/protocols/compose/device/live_challenger/serve.py",
           # Pearl+'s verdict, whose W check (`verify_run.tie`) test_pearltie runs on its toy's passes: verify_run, what it
           # imports, and the settings registry it loads (`verity_config.settings.of`, which finds it beside pouw's pyproject)
           "benchmarks/pouw/pearl_c_vllm/verify_run.py", "benchmarks/pouw/pearl_c_vllm/fast_tile.py",
-          "verity/protocols/pouw/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
-          "verity/configuration/config/verity_config"]
+          "verity/protocols/accounting/pouw/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
+          "tools/config/verity_config",
+          # verity_difftest, which test_prove_path imports: under `verity` until the difftest map moved it
+          "tools/difftest"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -53,4 +55,4 @@ paths = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_records_audit.py"]
-paths = ["verity/definitions/ops"]
+paths = ["verity/circuits/ops"]

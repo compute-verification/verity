@@ -72,6 +72,11 @@ class FakeGitHub:
     def open_prs(self) -> list[PR]:
         return list(self.prs.values())
 
+    def pr(self, n: int) -> PR:
+        if n not in self.prs:
+            raise QueueError(f"gh api repos/{self.repo}/pulls/{n}: Not Found (HTTP 404)")
+        return self.prs[n]
+
 
 class World:
     def __init__(self, tmp: Path):
@@ -609,8 +614,8 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
     assert q.status()[2].why == "conflicts with `next` in a.txt (touched by #1) (at the last sync)"
 
 
-POUS = "verity/protocols/pous/lean"
-TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json"
+POUS = "tools/pous_grader"
+TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/protocols/proofs/spot/verifier/tests/fixtures/exfiltration_lean.json"
 UP = posixpath.relpath("security/Proofs/lakefile.toml", POUS)
 #: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
 MAIN_TRUSTED, MAIN_EXFIL = ["lean-toolchain", "lakefile.toml", "Old.lean", UP], ["security/Proofs/lakefile.toml", "x.lean"]
@@ -3012,7 +3017,7 @@ def _fixture_tree(world: World) -> tuple[dict[str, str], str]:
     (src / "other.json").write_bytes(b"{}\n")
     art = F.fixture_id(src / "big.json")
     files = {".gitignore": f"__pycache__/\n{BIG_PATH}\nother/data/other.json\n",
-             "fixtures/artifacts.json": json.dumps({art: BIG_PATH, F.fixture_id(src / "other.json"): "other/data/other.json"}),
+             "artifacts.json": json.dumps({art: BIG_PATH, F.fixture_id(src / "other.json"): "other/data/other.json"}),
              "pyproject.toml": PREFLIGHT_FILES["pyproject.toml"].replace('["pkg"]', '["pkg", "other"]'),
              "other/pyproject.toml": PREFLIGHT_FILES["pkg/pyproject.toml"].replace('"pkg"', '"other"'),
              "other/tests/test_other.py": "def test_other():\n    pass\n",
@@ -4702,7 +4707,7 @@ umask = os.umask(0)
 Path(os.environ["FAKE_SEEN"]).write_text(json.dumps({"argv": a, "files": sorted(p.name for p in Path.cwd().iterdir()),
                                                      "umask": umask, "cores": sorted(os.sched_getaffinity(0)),
                                                      "pythonpath": os.environ.get("PYTHONPATH"),
-                                                     "built": Path("verity/protocols/flock/verifier/.lake/built").is_file(),
+                                                     "built": Path("verity/protocols/proofs/flock/verifier/.lake/built").is_file(),
                                                      "lake": shutil.which("lake"),
                                                      "env": {k: os.environ.get(k) for k in ("VERITY_STORE_REQUIRED",
                                                              "CHECK_STORE_CUSTODY", "RESEARCH_RUN_ID", "GIT_AUTHOR_EMAIL",
@@ -4762,7 +4767,7 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
     from research import queue as Q
 
     world.with_store_remote()
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "verity/protocols/flock/verifier/lakefile.toml": "name = \"flock\"\n"})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "verity/protocols/proofs/flock/verifier/lakefile.toml": "name = \"flock\"\n"})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     h1 = world.change({"a.txt": "a1\n"})
     world.gh.put(1, h1, ready=False)
@@ -4781,12 +4786,12 @@ def test_the_quick_tier_builds_the_lean_verifier_before_its_tests_and_keeps_that
 
     assert tier(world.gh.prs[1]) is None and json.loads(seen.read_text())["built"]
     [wt] = [p for p in (world.tmp / "ready").iterdir() if p.is_dir() and p.name != "logs"]
-    lean = wt / "verity" / "protocols" / "flock" / "verifier"
+    lean = wt / "verity" / "protocols" / "proofs" / "flock" / "verifier"
     assert ran.read_text().split("\n") == [f"{lean} build", ""]
     (lean / ".lake" / "built").write_text("from the last PR\n")
     (lean / "stray.olean").write_text("left by the last PR\n")
     monkeypatch.setenv("FAKE_LAKE_FAIL", "1")
-    assert tier(world.gh.prs[1]) == "`lake build` in verity/protocols/flock/verifier exited 1 (its output is above)"
+    assert tier(world.gh.prs[1]) == "`lake build` in verity/protocols/proofs/flock/verifier exited 1 (its output is above)"
     assert (lean / ".lake" / "built").read_text() == "from the last PR\n" and not (lean / "stray.olean").exists()
 
 
@@ -4910,6 +4915,22 @@ def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map
     assert f"tools/move/bad_map.toml at {main[:12]} doesn't parse" in capsys.readouterr().err
     assert Q.map_retires(world.origin, main, "tools/move/none_map.toml") is None
     assert not capsys.readouterr().err
+
+
+def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
+    """`crossed` reads `lacked_moves`'s predicate against a move PR's map at its head, and `main`'s copy beside it: a head
+    whose files or added lines name neither copy's retired names crosses it, and none crosses a move whose map can't be read
+    at its head; it raises for a head whose own change can't be read, which `World.crossing` takes as crossing nothing."""
+    main = _move_main(world, {"tools/move/x_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'})
+    move = world.change({"tools/move/x_map.toml": '[paths]\n"d.txt" = "moved/d.txt"\n'})
+    bad = world.change({"tools/move/x_map.toml": "[paths\n"})
+    heads = {n: world.change(files) for n, files in ((1, {"b.txt": "1\n"}), (2, {"e.txt": "reads c.txt\n"}),
+                                                     (3, {"d.txt": "written\n"}))}
+    moves = [(move, "tools/move/x_map.toml"), (bad, "tools/move/x_map.toml")]
+    assert {n: Q.crossed(world.origin, main, h, moves) for n, h in heads.items()} == {
+        1: frozenset({move}), 2: frozenset(), 3: frozenset()}
+    with pytest.raises(Q.QueueError):
+        Q.crossed(world.origin, main, "f" * 40, moves, files=())
 
 
 def test_the_status_command_refuses_a_head_lacking_a_move_whose_change_names_what_it_retires_and_admits_the_rest(world):
@@ -5544,7 +5565,7 @@ def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_r
     built the verifier only with `lake` on the PATH would skip its Lean-dependent tests and label the PR ready.  It takes `lake` from ~/.elan/bin, first on the suites' PATH too, and with neither refuses."""
     from research import queue as Q
 
-    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT, "verity/protocols/flock/verifier/lakefile.toml": 'name = "flock"\n'})
+    main = world.change({"tools/verity/check/suites.py": FAKE_SUITES, "tools/verity/check/slot.py": FAKE_SLOT, "verity/protocols/proofs/flock/verifier/lakefile.toml": 'name = "flock"\n'})
     _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
     world.gh.put(1, world.change({"a.txt": "a1\n"}), ready=False)
     monkeypatch.setattr(Q, "QUICK_TIER", [sys.executable, "tools/verity/check/suites.py", "--quick"])
@@ -5556,7 +5577,7 @@ def test_a_quick_tier_with_no_lake_on_the_path_builds_with_elans_and_with_none_r
         (bare / t).symlink_to(shutil.which(t))
     monkeypatch.setenv("PATH", str(bare))
     monkeypatch.setenv("HOME", str(home := world.tmp / "home"))
-    lean = "verity/protocols/flock/verifier"
+    lean = "verity/protocols/proofs/flock/verifier"
     assert tier(world.gh.prs[1]) == f"no `lake` on the PATH or in {home}/.elan/bin to build {lean} with, and without that build its tests skip"
     (elan := home / ".elan" / "bin").mkdir(parents=True)
     (elan / "lake").write_text("#!/bin/sh\nmkdir -p .lake && echo built > .lake/built\n")
@@ -5624,7 +5645,7 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
     lake.chmod(0o755)
     log = tmp_path / "log"
     env = {"HOME": str(tmp_path / "home"), "PATH": os.environ["PATH"], "LOG": str(log), "CHECK_SLOT": "a"}
-    d = "verity/protocols/flock/verifier"
+    d = "verity/protocols/proofs/flock/verifier"
 
     def run(n, **extra):
         (pkg := tmp_path / f"t{n}" / d).mkdir(parents=True)
@@ -5678,6 +5699,26 @@ def test_the_open_prs_are_read_a_wave_of_pages_at_a_time_until_one_isnt_full(mon
     monkeypatch.setattr(Q, "GH_PAGES", 2)
     assert [p.number for p in Q.GitHub("o/r").open_prs()] == list(range(250, 0, -1))
     assert sorted(asked) == [1, 2, 3, 4]
+
+
+def test_one_pr_is_read_open_or_not_and_a_failed_read_names_it(monkeypatch):
+    """`GitHub.pr` reads `repos/<repo>/pulls/<n>`, which answers for a merged PR as for an open one."""
+    import research.queue as Q
+
+    asked: list[list[str]] = []
+
+    def gh(argv, **kw):
+        asked.append(argv)
+        if argv[-1].endswith("/9"):
+            return subprocess.CompletedProcess(argv, 1, "", "gh: Not Found (HTTP 404)")
+        return subprocess.CompletedProcess(argv, 0, json.dumps({"number": 7, "state": "closed", "merged": True, "body": "Lane `lean`.",
+                                                                "head": {"sha": "a" * 40, "ref": "b7"}}), "")
+
+    monkeypatch.setattr(subprocess, "run", gh)
+    p = Q.GitHub("o/r").pr(7)
+    assert (p.number, p.head, p.owner, asked) == (7, "a" * 40, "lean", [["gh", "api", "repos/o/r/pulls/7"]])
+    with pytest.raises(QueueError, match=r"^gh api repos/o/r/pulls/9: gh: Not Found \(HTTP 404\)$"):
+        Q.GitHub("o/r").pr(9)
 
 
 def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):

@@ -6,16 +6,23 @@ operands at its place (`operands`), its partials (`partials`), its call's receip
 statement's rows, salts and ``--registered`` reads on credit's own file (`leaf_statement`)."""
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
-
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import leaf_lanes as LL
-from verity.protocols.spot.verifier.one_stage import produced as PR
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
+from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
 from verity_vllm.errors import Refused
+from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import served as SV
+
+__all__ = ["LEAF_NAMES", "LEAF_OUT_ROWS", "LEAF_PROGRAM", "held", "leaf_rows", "leaf_statement", "operands", "partials",
+           "receipt_value", "receipt_words", "split_record", "split_row"]
 
 M32 = (1 << 32) - 1
 #: a lanes-form K's lane and combine statements' names, as `pouw_h1_circuits` lowers them
@@ -134,7 +141,6 @@ def lane_operands(x: dict, ln: int) -> tuple[list, list, list, list]:
 
 def partials(x: dict) -> np.ndarray:
     """The leaf's partials, a row a lane: `h1zy.lane_partial` of each lane's rows, its u16 words."""
-    from verity.protocols.pouw.prover.circuit import h1zy as Z
     out = []
     for ln in range(LL.lanes(*x["tile"])):
         a, b, _sa, _sw = lane_operands(x, ln)
@@ -146,9 +152,6 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
     """Call `call`'s ``receipt@<c>`` as `Served.commit` registers it with receipts: one row a unit of the call, its
     receipt's u16 words (`receipt_words`), here the word reference's (`h1zy.reference` of the unit's rows, salt, position
     and roots), at ``RECEIPT_NONCE`` + c under the prover's key, bound to the window's root."""
-    from verity.protocols.pouw.prover.circuit import h1zy as Z
-    from verity_vllm.protocols.pouw.h1 import registered as NR
-    from verity_vllm.protocols.pouw.h1 import served as SV
     sizes = [size for size, _w in CR.call_work(win["layout"])]
     rows = []
     for u in range(sum(sizes[:call]), sum(sizes[:call + 1])):
@@ -161,8 +164,9 @@ def receipt_value(win: dict, key: bytes, call: int, trees: dict[str, G.Registere
 
 def leaf_ok(kind: str, ln: int | None, x: dict, rows: dict[str, np.ndarray]) -> int:
     """The statement's ok on its rows, the word reference's (`h1zy.lane_reference`, `h1zy.combine_reference`)."""
-    from verity.protocols.pouw.prover.circuit import h1zy as Z
     if kind == LL.LANE:
+        if ln is None:
+            raise TypeError("a lane's statement names its lane")
         a, b, sa, sw = lane_operands(x, ln)
         return Z.lane_reference(a, b, sa, sw, x["admit"], x["zy"], u32_words(rows[LL.PARTIALS][0]), x["salt"],
                                 x["position"], x["roots"], ln, x["tile"])

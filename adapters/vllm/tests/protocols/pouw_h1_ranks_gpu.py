@@ -32,8 +32,11 @@ import re
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+
+from verity_vllm.engine.hooks import Hooks
 
 SCHEMA = "verity/pouw-h1-ranks-gpu/v1"
 KEY = hashlib.sha512(b"verity/pouw-h1-ranks-gpu/key/v1").digest()[:32]
@@ -42,7 +45,7 @@ SUMMARY = "ranks-summary.json"
 
 def entropy(label: str) -> Callable[[int], bytes]:
     """A fixed SHA-512 counter stream for `label`: the same coins in every run, so no verifier trusts them."""
-    state = {"i": 0, "buf": b""}
+    state: dict[str, Any] = {"i": 0, "buf": b""}
 
     def draw(n: int) -> bytes:
         while len(state["buf"]) < n:
@@ -54,9 +57,9 @@ def entropy(label: str) -> Callable[[int], bytes]:
 
 
 def coins(steps: int) -> tuple[Any, Any]:
-    from verity.protocols.pouw.verifier import window as Wd
-    from verity.protocols.pouw.verifier.coins import Challenger
-    from verity.protocols.spot.device.challenger import LiveRecord
+    from verity.protocols.accounting.pouw.verifier import window as Wd
+    from verity.protocols.accounting.pouw.verifier.coins import Challenger
+    from verity.protocols.proofs.spot.device.challenger import LiveRecord
     return Challenger(0, entropy("salt")), LiveRecord(Wd.live_challenger(0, steps, entropy("rounds")), Wd.ROUND)
 
 
@@ -100,7 +103,6 @@ def _w_edit(worker: Any, kind: str, tp: int) -> dict[str, Any] | None:
     ``observe`` handed `_edit_of(kind)` of the arm's codes (`EXPERT_NEGATIVE`: `pouw_h1_gpu.editor`'s), outside H1's own
     (`pouw_h1_ranks.wire_rank`), so the Commit acquires the arm's codes and the served y is the arm's."""
     from tests.protocols import pouw_h1_gpu as GPU
-    from verity_vllm.engine.hooks import Hooks
     if worker._h1rank_rank()[1] != tp:
         return None
     _model, layers = worker._h1rank_layers()
@@ -152,6 +154,7 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
     holder = PHR.install(llm, rows=decl.rows, steps=decl.steps, coins=salt_coins, rounds=rounds, admission=RQ.ROUND0,
                          transcript_dir=str(tdir), key=KEY, served=served,
                          commit={"cp": cp, "run_id": f"pouw-h1-ranks-{name}-{os.getpid()}"})
+    w: dict[str, Any]
     h1, w = holder.run, {"install_s": round(time.monotonic() - t0, 1)}
     if edit is not None:
         w["edit"] = {"kind": edit, "ranks": [x for x in holder.executor.collective_rpc(
@@ -192,8 +195,15 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
 
 def serve(a: argparse.Namespace) -> dict[str, Any]:
     import torch
+
     from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
-    from tests.protocols.pouw_h1_gpu import declared_of, fill_prompts, generate_static, static_check, tokens_digest
+    from tests.protocols.pouw_h1_gpu import (
+        declared_of,
+        fill_prompts,
+        generate_static,
+        static_check,
+        tokens_digest,
+    )
     from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import requests as RQ
@@ -219,6 +229,7 @@ def serve(a: argparse.Namespace) -> dict[str, Any]:
             llm = eng.llm
         else:
             from vllm import LLM
+
             from verity_vllm.engine.build import engine_kwargs_for
             from verity_vllm.protocols.pouw.h1 import ranks as PHR
             kw, _env, cp = engine_kwargs_for(cps, max_num_seqs=max_num_seqs, case=a.role, target=target, engine_args={

@@ -1,5 +1,5 @@
-"""The remote bandwidth audit run over the node's `NodeMemory` end to end on the CPU: `remote.prove` (the prover's side, the
-Commit's hook) connects over localhost TCP to PoUB's verifier (`verity/protocols/poub/verifier/session`),
+"""PoUB, run over the node's `NodeMemory` end to end on the CPU: `remote.prove` (the prover's side, the
+Commit's hook) connects over localhost TCP to PoUB's verifier (`verity/protocols/accounting/poub/verifier/session`),
 registers the store, records its memory map against the registration, and runs each pass after an engine step of a
 serving-like trace (pages written over two steps, held, freed and reused, and one long-lived page re-keyed under L = 2
 windows).  The honest audit run is
@@ -22,14 +22,18 @@ import sys
 import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 from xml.etree import ElementTree
 
 import numpy as np
 import pytest
+from verity.protocols.accounting.poub.verifier import audit, memory_map
+from verity.protocols.accounting.poub.verifier import codec as rcodec
+from verity.protocols.accounting.poub.verifier import receipts as rb
+from verity.protocols.accounting.poub.verifier.session import verifier, wire
 
-from verity.protocols.poub.verifier import audit, codec as rcodec, memory_map, receipts as rb
-from verity.protocols.poub.verifier.session import verifier, wire
-from verity_vllm.protocols.remote_bandwidth import memory_map as store_map, remote
+from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
+from verity_vllm.protocols.remote_bandwidth import remote
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
 
@@ -45,7 +49,8 @@ class PassClock:
     clock reaches its end; once the verifier has said the passes are done, time jumps to the wait's end."""
 
     def __init__(self) -> None:
-        self.t, self.done, self.inbox = 0, False, None
+        self.t, self.done = 0, False
+        self.inbox: queue.Queue | None = None
 
     def now(self) -> int:
         return self.t
@@ -72,6 +77,7 @@ class PassClock:
             return inbox._get()
 
     def idle(self) -> None:
+        assert self.inbox is not None, "idle before any wait"
         with self.inbox.mutex:
             self.done = True
             self.inbox.not_empty.notify_all()
@@ -117,7 +123,10 @@ def store() -> NodeMemory:
 class TickingBackend(remote.StoreBackend):
     def __init__(self, clock: PassClock, *args, **kw) -> None:
         super().__init__(*args, **kw)
-        self.clock, self.heads, self.coins, self.plans = clock, [], [], []
+        self.clock = clock
+        self.heads: list[bytes | None] = []
+        self.coins: list[tuple[int, bytes]] = []
+        self.plans: list[tuple[int | None, Any]] = []
 
     def launch(self, i: int, after, plan=None) -> dict:
         ticket = super().launch(i, after, plan)
@@ -317,14 +326,18 @@ class Device:
     moves every offset (a device that keys appends wrongly)."""
 
     def __init__(self, shift: int = 0) -> None:
-        self.shift, self.key, self.calls = shift, None, []
+        self.shift = shift
+        self.key: rcodec.Key | None = None
+        self.calls: list[tuple[int, int, bool]] = []
 
     def set_key(self, key: rcodec.Key) -> None:
         self.key = key
 
     def encode(self, payloads, first: int, offsets=None) -> list[bytes]:
         self.calls.append((first, len(payloads), offsets is not None))
-        k, f = self.key, self.key.codec.field
+        k = self.key
+        assert k is not None, "encode before set_key"
+        f = k.codec.field
         out = []
         for u, m in enumerate(payloads):
             i0, b = f.block_words * rcodec._index(first + u, k.codec), 0 if offsets is None else offsets[u] + self.shift
@@ -364,9 +377,10 @@ def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest
     for t in (None, type("T", (), {"async_scheduling": None})()):
         with pytest.raises(SystemExit, match="declare \"async_scheduling\": false"):
             cs.target(t)
-    for kw, err in [({"plan": "serve,serve"}, "one mode"), ({"kv_pages": 0}, "a page"), ({"plan": "nope"}, "a session's mode"),
-                    ({"plan": "servedrop:2"}, "appends nothing"), ({"filler_gib": -1}, "nonnegative"),
-                    ({"node": "n" * 65}, "node id")]:
+    refused: list[tuple[dict[str, Any], str]] = [
+        ({"plan": "serve,serve"}, "one mode"), ({"kv_pages": 0}, "a page"), ({"plan": "nope"}, "a session's mode"),
+        ({"plan": "servedrop:2"}, "appends nothing"), ({"filler_gib": -1}, "nonnegative"), ({"node": "n" * 65}, "node id")]
+    for kw, err in refused:
         with pytest.raises(Exception, match=err):
             remote.CommitSession("127.0.0.1:7781", **kw)
     assert 1 <= len(cs.node.encode()) <= audit.NODE_BYTES
@@ -437,7 +451,7 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
             return step(k)
 
         for k in range(run_steps):
-            lock.step(lambda: run(k))
+            lock.step(lambda k=k: run(k))
         rec = cs.end()
     except BaseException:
         # a run that fails ends its audit run, so the verifier's thread ends with it and reaps its process
@@ -473,11 +487,22 @@ def test_the_commits_session_arms_its_first_window_once_its_runs_first_step_has_
     """The run's work between `begin` and its first step, and that step, pass 0's, are in no window: the audit run is
     registered by then, and arms its first window (the verifier's first coin follows `armed`) once the step has run,
     so the window's clock starts at pass 0's appends and read."""
-    sent, at = [], {}
+    sent: list[str] = []
+    at: dict[object, list[str]] = {}
     send = wire.Conn.send
-    monkeypatch.setattr(wire.Conn, "send", lambda self, head, *a, **kw: sent.append(head["type"]) or send(self, head, *a, **kw))
-    rec, r, _, _ = lockstep(tmp_path, monkeypatch, 40, windows=3, setup=lambda: at.setdefault("setup", list(sent)),
-                            each=lambda k: at.setdefault(k, list(sent)))
+
+    def logged(self, head, *a, **kw):
+        sent.append(head["type"])
+        return send(self, head, *a, **kw)
+
+    def setup() -> None:
+        at.setdefault("setup", list(sent))
+
+    def each(k: int) -> None:
+        at.setdefault(k, list(sent))
+
+    monkeypatch.setattr(wire.Conn, "send", logged)
+    rec, r, _, _ = lockstep(tmp_path, monkeypatch, 40, windows=3, setup=setup, each=each)
     assert r["accepted"] and rec["accepted"]
     assert "ready" in at["setup"] and not {"armed", "coin"} & {*at["setup"], *at[0]}
     assert "root" in at[1] and sent.index("armed") < sent.index("coin") < sent.index("append") < sent.index("root")
@@ -527,7 +552,7 @@ def test_a_commits_session_that_fails_is_recorded_rejected_and_its_run_goes_on_u
     cs.store, cs.binder = store(), Stats()
     lock, steps = cs.begin(), []
     for k in range(4):
-        lock.step(lambda: steps.append(k))
+        lock.step(lambda k=k: steps.append(k))
     rec = cs.end()
     assert rec["accepted"] is False and rec["error"] == "ConnectionRefusedError: no verifier" and rec["memory_map"] is None
     assert steps == [0, 1, 2, 3] and rec["run"] == {"steps": 4, "audited": 0, "unaudited": 4}
@@ -552,7 +577,7 @@ def test_a_store_session_whose_prover_encodes_its_appends_under_another_coin_is_
 
 
 def test_a_store_session_whose_prover_re_sends_an_append_is_rejected_with_coin(monkeypatch):
-    sent = []
+    sent: list[dict] = []
 
     def resend(head: dict) -> list[dict]:
         if head["type"] != "append" or sent:
