@@ -343,7 +343,7 @@
   "Proofs.Properties.Verity.SampledTwo.MessagesOpen",
   "Proofs.Flock.SpotFlock.DoWalk",
   "Proofs.Flock.SpotFlock.ParamsWf",
-  "Proofs.Flock.SpotFlock.PortsOfParams"
+  "Proofs.Properties.Verity.SampledTwo.PortsOfParams"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
