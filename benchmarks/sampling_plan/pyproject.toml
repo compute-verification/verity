@@ -9,21 +9,26 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # transformer.py plans with the sampled-proofs planner and core's Stratified law over the primitive circuits'
-# Definitions and their circuit-check pins (verity.circuits, which reads verity.definitions.kernels); the large model's test
+# Definitions and their circuit-check pins (verity.circuits, which reads verity.circuits.kernels); the large model's test
 # reads the card's memory from the census; Demo A's tile stratum reads PoUW's `eps_at` (pouw/window.py, with the
 # commitments and randomness it imports); the reporting deltas and monitoring periods are core's reporting grid's
 # (`verity.protocols.reporting`); a statement's cap (`inputs.cap`) reads C-Flock's composer's sizes
 # (verity.commitments.windows.interface).
 inputs = ["verity/__init__.py", "verity/errors.py", 
           "verity/hardware/record.py",
-          "verity/protocols/spot/verifier/profile.py", "verity/protocols/spot", "verity/claims",
-          "verity/protocols/pouw/verifier/__init__.py", "verity/protocols/pouw/verifier/window.py",
+          "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot", "verity/claims",
+          "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/window.py",
           "verity/protocols/reporting.py", "verity/commitments/windows",
-          "verity/circuits", "verity/definitions/kernels", "verity/commitments", "verity/commitments/crypto",
+          "verity/circuits", "verity/circuits/kernels", "verity/commitments", "verity/commitments/crypto",
           "verity/commitments/randomness", "benchmarks/census/hardware.json",
           "verity/commitments/windows",  # inputs.cap reads C-Flock's composer's sizes (verity.commitments.windows.interface)
           # recursion.py's and served_window.py's datacenter (the census) and world fleet (rho's reference, its
           # locations' GPUs), and served_window.py's output cap (rho's reference)
-          "benchmarks/census/deployments.json", "verity/protocols/inference_only/rho/data/reference.toml",
-          "verity/protocols/inference_only/rho/data/hardware.toml",
-          "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/pouw/__init__.py"]
+          "benchmarks/census/deployments.json", "benchmarks/rho/data/reference.toml",
+          "benchmarks/rho/data/hardware.toml",
+          # glm53.py's stop class reads its two blocks' Definitions and their pins: the stop rule's Boolean lowering
+          # (verity.definitions.registry, whose package loads the numerics and the evidence table) and the response tie
+          # (verity.protocols.accounting.certifier.prover, which loads the certifier's verifier)
+          "verity/definitions/registry", "verity/definitions/numerics", "verity/definitions/evidence.py",
+          "verity/definitions/evidence.json", "verity/protocols/accounting/certifier",
+          "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py"]

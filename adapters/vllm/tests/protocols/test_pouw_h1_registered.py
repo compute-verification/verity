@@ -7,10 +7,13 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity.commitments.windows import interface as I
+from verity.commitments.windows import rows as CS
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import served as SV
 
 PROGRAM, WINDOW = "ab" * 64, "cd" * 64
 KEY = bytes(range(32))
@@ -69,8 +72,6 @@ def test_a_windows_reads_are_cores_statement_drawn_once(monkeypatch):
     """A window's registered reads (`interface._Drawn`, `rows.value_salts` and `value_rows`): for this value and core's, at
     rows in any order and repeated, the salts, rows and header entry core's ``statement`` gives, this value's salts sampled
     in one ChaCha20 pass, never one row at a time."""
-    from verity.commitments.windows import interface as I, rows as CS
-
     words = np.random.default_rng(4).integers(0, 1 << 16, (9, 40), dtype=np.uint16)
     ref, got = _core(PROGRAM, "h1/v", words, KEY, 3), NR.commit(PROGRAM, "h1/v", words, KEY, 3, True)
     calls = []
@@ -104,7 +105,7 @@ def test_a_row_seg_value_is_what_core_commits(n, w):
 def test_given_salts_are_the_rows_salts_and_one_reused_is_refused():
     """With ``row_salts`` (a public table's, `pouw_h1_served.Served._pubs`) the value is core's commit under those salts,
     not the key's; a salt short or reused is refused."""
-    words = np.arange(15, dtype=np.uint16).reshape(3, 5)
+    words: np.ndarray = np.arange(15, dtype=np.uint16).reshape(3, 5)
     ys = b"".join(bytes([j + 1]) * 192 for j in range(3))
     got = NR.commit(PROGRAM, "h1/pub@0", words, KEY, 0, True, ys, window=WINDOW)
     ref = G.Registered.commit(PROGRAM, "h1/pub@0", words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(3)],
@@ -118,7 +119,7 @@ def test_given_salts_are_the_rows_salts_and_one_reused_is_refused():
 
 def test_a_windows_rows_arent_kept_unless_asked():
     """Without ``keep_rows`` the tree is the same and a read of a row is refused; the salts are still sampled on read."""
-    words = np.arange(12, dtype=np.uint16).reshape(3, 4)
+    words: np.ndarray = np.arange(12, dtype=np.uint16).reshape(3, 4)
     got, ref = NR.commit(PROGRAM, "v", words, KEY, 9, window=WINDOW), _core(PROGRAM, "v", words, KEY, 9, window=WINDOW)
     assert got.entry() == ref.entry() and got.levels == ref.levels and len(got.rows) == 3
     with pytest.raises(LookupError, match="rebuilds"):
@@ -143,7 +144,6 @@ def test_a_served_window_registers_what_core_would(monkeypatch):
     same as with core's `Registered.commit` registering them."""
     torch = pytest.importorskip("torch")
     from tests.protocols import test_pouw_h1_served as T
-    from verity_vllm.protocols.pouw.h1 import served as SV
 
     def window():
         torch.manual_seed(0)

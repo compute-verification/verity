@@ -156,7 +156,7 @@ def check(cubin: bytes, shapes: list[tuple[int, int, int]], timed: list[tuple[in
 
     sys.path.insert(0, os.path.join(HERE, "..", "pearl_c_vllm"))
     import fast_tile as FT
-    from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
 
     d, rng, out = Debit(cubin), np.random.default_rng(seed), {"shapes": [], "timed": [], "resident": []}
     for rows, n, k in shapes:

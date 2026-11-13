@@ -8,15 +8,14 @@ import json
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.codec import decode_program, encode_program
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array
 from verity.definitions.registry import sampling as SM
-from verity.definitions.registry import topp_split as TS
 from verity.definitions.registry import topp_keep_builder as TKB
+from verity.definitions.registry import topp_split as TS
 from verity.definitions.registry import topp_word_gates as TWGates
 from verity.definitions.registry import topp_words as TWG
 from verity.definitions.registry.prims import BIT, F32
@@ -115,14 +114,16 @@ def test_the_codec_round_trips_it(fam, V, S):
 
 @pytest.mark.slow
 def test_q_word_cuts_it_into_word_units():
-    from verity.definitions import word as WQ
+    from verity.circuits import word as WQ
 
     r = WQ.unit_rule(bind(TWG.TopPKeepWord, V=300, S=8), 16, 32)
     assert not r["violations"] and r["max_out_bits"] <= 32 and r["units_per_call"] > 1000
 
 
 def test_the_new_word_gates():
-    f = lambda x: int(np.float32(x).view(np.uint32))
+    def f(x):
+        return int(np.float32(x).view(np.uint32))
+
     assert TWGates.TopPNumkeep.evaluate(10, f(3.7)) == 7 and TWGates.TopPNumkeep.evaluate(10, f(12.0)) == 1
     assert TWGates.TopPNumkeep.evaluate(0, f(3.0)) == 0 and TWGates.TopPNumkeep.evaluate(5, f(float("nan"))) == 5
     assert TWGates.TopPNumkeep.evaluate(5, f(-2.0)) == 5 and TWGates.TopPNumkeep.evaluate(5, f(float("inf"))) == 5

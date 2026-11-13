@@ -114,7 +114,7 @@ def test_a_session_on_its_callers_challenger_starts_none_of_its_own(run, monkeyp
 
 
 def test_a_session_proves_itself_unless_given_the_zk_server(run, monkeypatch):
-    """Without a firewall both sides run with the ZK server off and the witness where the prover builds it, a
+    """Without a ZK server both sides run with the ZK server off and the witness where the prover builds it, a
     FC_HOST_WITNESS the caller set removed (`a0.DIRECT`, zk_cost's `dev` arm); with one, the ZK server's send check is on
     and the caller's environment stands."""
     go, _, _ = run

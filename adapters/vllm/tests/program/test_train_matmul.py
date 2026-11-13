@@ -8,12 +8,12 @@ import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
-
-from tests.program.test_train_step import CC, _bits, _data, _meta, _program
 from verity.circuits.boolean.trace import word_of
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import cublas_bf16 as CB
+
+from tests.program.test_train_step import CC, _bits, _data, _meta, _program
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules.training import training_rules
@@ -152,7 +152,7 @@ def test_gpu_tf32_mm_is_cublas_tf32_gemm(monkeypatch) -> None:
     monkeypatch.setattr(CB, "TRAIN_TF32", CB.TRAIN_TF32 + ((3, 16, 4),))
     a, b = _data(3, 16, seed=8), _data(16, 4, seed=9)
     A, B = (np.asarray(_bits(t), np.uint32).reshape(t.shape) for t in (a, b))
-    acc = np.zeros(12, np.uint32)
+    acc: np.ndarray = np.zeros(12, np.uint32)
     for k in range(0, 16, 8):
         acc = MT.tf32_dot8(acc, np.repeat(A[:, k:k + 8], 4, axis=0), np.tile(B[k:k + 8].T, (3, 1)))
     for bm in (b, b.t().contiguous().t()):

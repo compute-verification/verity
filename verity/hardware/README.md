@@ -1,6 +1,6 @@
 # The card files (`verity.hardware.cards`)
 
-One TOML file per SKU in `cards/`, beside their loader (`cards/__init__.py`), the one source of that card's numbers. A
+One TOML file per SKU in `hardware/cards/`, read by `verity/hardware/cards.py`, the one source of that card's numbers. A
 card is a GPU's (`kind = "gpu"`), a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries,
 so the same GPU in another host needs no second card), a server's (`kind = "server"`: what a server model's own
 documents state of it apart from those, its network ports) or a time base's (`kind = "timebase"`: the clock an
@@ -15,13 +15,13 @@ auditor's device reads, apart from the host it runs in). Each number is an entry
 
 | SKU | kind | file | Lean table |
 |---|---|---|---|
-| RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `cards/rtx-pro-6000-server.toml` | `security/Definitions/Core/Accel/Sm120.lean` |
-| H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `cards/h200-sxm-141gb.toml` | `security/Definitions/Core/Accel/H200.lean` |
-| B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `cards/b200-sxm-180gb.toml` | none yet: `security/Definitions/Accounting/Sheets/B200.lean` is held to it |
-| Two Xeon 6776P, the RTX node's host | host | `cards/xeon-6776p-2s.toml` | none |
-| Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
-| NVIDIA DGX H200, a server none of our nodes is | server | `cards/dgx-h200.toml` | none |
-| `CLOCK_MONOTONIC_RAW` in a Nebius virtual machine, a KVM guest on `kvm-clock` or `tsc` | timebase | `cards/nebius-vm-monotonic-raw.toml` | none |
+| RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `hardware/cards/rtx-pro-6000-server.toml` | `security/Definitions/Core/Accel/Sm120.lean` |
+| H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `hardware/cards/h200-sxm-141gb.toml` | `security/Definitions/Core/Accel/H200.lean` |
+| B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `hardware/cards/b200-sxm-180gb.toml` | none yet: `security/Definitions/Accounting/Sheets/B200.lean` is held to it |
+| Two Xeon 6776P, the RTX node's host | host | `hardware/cards/xeon-6776p-2s.toml` | none |
+| Two Xeon Platinum 8468, the H200 nodes' host | host | `hardware/cards/xeon-platinum-8468-2s.toml` | none |
+| NVIDIA DGX H200, a server none of our nodes is | server | `hardware/cards/dgx-h200.toml` | none |
+| `CLOCK_MONOTONIC_RAW` in a Nebius virtual machine, a KVM guest on `kvm-clock` or `tsc` | timebase | `hardware/cards/nebius-vm-monotonic-raw.toml` | none |
 
 Every card of a kind has the same sections and entries, a host card's `disk.read` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
@@ -84,7 +84,7 @@ to, for another file that states numbers as entries), and the constants `KINDS` 
 kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit word) and `CARDS` (the
 directory the card files are in). The module imports the standard library and `verity.errors` only. The package file,
 `verity/hardware/__init__.py`, holds a docstring and nothing else: no import and no re-export. The record
-(`verity.hardware.record`), the registration log (`verity.hardware.registration`) and the Site (`verity.hardware.site`)
+(`verity.hardware.record`), the registration log (`verity.hardware.registration`) and the Site (`verity.device`)
 share the package, so importing one of them, in a verifier too, runs no card-loading code; `tests/test_package.py` holds
 both.
 
@@ -118,15 +118,15 @@ table.
 
 ## The node files (`verity.hardware.nodes`)
 
-One TOML file per kind of node in `nodes/`, beside their loader (`nodes/__init__.py`): what a node's registration
+One TOML file per kind of node in `hardware/nodes/`, read by `verity/hardware/nodes.py`: what a node's registration
 states that no card does. A node is a host and the GPUs it carries. Its kind is the GPU card and its count, and each
 number is an entry under the cards' rules above. A node file names no machine, no address and no provider: it is the
 kind's, read on one node of it, and its sources cite what read it by `art:` id.
 
 | Node | file | GPU card | host card | the host's own leaves | its ways out |
 |---|---|---|---|---|---|
-| An RTX PRO 6000 node, eight cards | `nodes/rtx-pro-6000-server-x8.toml` | `rtx-pro-6000-server` | `xeon-6776p-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0`, at its line rate, and the storage path |
-| An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0`, which reads no rate, and the storage path |
+| An RTX PRO 6000 node, eight cards | `hardware/nodes/rtx-pro-6000-server-x8.toml` | `rtx-pro-6000-server` | `xeon-6776p-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0`, at its line rate, and the storage path |
+| An H200 node, one card | `hardware/nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` | `eth0`, which reads no rate, and the storage path |
 
 A file has `device` (`sku`, the GPU card, and `count`, how many of it the node carries), `host` (`sku`, the host card)
 and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`), its
@@ -210,7 +210,7 @@ Each message says what to read or state.
 
 ~~~python
 from verity.hardware import cards, nodes
-from verity.hardware.site import Auditor, Registration, check
+from verity.device import Auditor, Registration, check
 node = nodes.load("rtx-pro-6000-server-x8")
 gpu = cards.load(node["device"]["sku"])
 log = Registration("remote")

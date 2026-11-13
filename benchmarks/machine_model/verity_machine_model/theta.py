@@ -207,7 +207,7 @@ def _reader(p: Path, cards: dict):
         if which not in cards:
             raise SystemExit(f"{p}: {tok} names no card; an entry is PATH, of the device's card, or host:PATH")
         e = cards[which]
-        file = f"verity/hardware/cards/{e['sku']}.toml"
+        file = f"hardware/cards/{e['sku']}.toml"
         for k in path.split("."):
             e = e.get(k) if isinstance(e, dict) else None
         if not isinstance(e, dict) or "value" not in e:

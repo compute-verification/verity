@@ -16,9 +16,9 @@ product, one Pearl+ epoch a Commit window, under the server's own Commit, whose 
 * **Coins.** ``coins(k)`` gives the pouw settings window k's salt coin comes from. With ``--challenger-gate``,
   ``--challenger-peer`` and ``--challenger-lane`` it is a live salt-only session of window k's own on the auditor host's
   challenger (`live`): reserved at the window's open under the lane (`pouw_h1_window.reserve_salt`, joining the lane's
-  open period), opened by the install on its salt epoch's root and its salt coin drawn from it
-  (`pouw_h1_window.salt_session`). Without them it is an in-process challenger of epoch k over the Lean verifier of
-  record's entropy (`verity.protocols.pouw.verifier.coins.Challenger`, `verifier.coins`), which credits nothing.
+  open period), opened by the install on its salt epoch's root and its salt coin flipped from it
+  (`pouw_h1_window.salt_session`). Without them it is an in-process challenger of epoch k over the Lean
+  verifier's entropy (`verity.protocols.accounting.pouw.verifier.coins.Challenger`, `verifier.coins`), which credits nothing.
 * **Its close**, on the engine loop: the hooks off, the option closed (the last pass's files waited for,
   `PearlCDeviceRun.finish`), then ``pearl/w<k>/coins.json``, the epoch's coin commitment (`verify_run.epoch_coins`), and
   ``served.json`` (`pearl_c.window.SERVED_SCHEMA`): the window's passes with calls, each timed, with its manifest's path,
@@ -40,8 +40,8 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes.pearl_c_device import H100
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import H100
 
 #: pearl_c_sm90's scheme, one of `pearl_c.SCHEMES`: v1 forming on the device record of an H100 or H200, -h3 hashing
 SCHEME = C.PearlC(forming="v1", device=H100, hashing="h3").name
@@ -52,7 +52,7 @@ PRECISION = "bfloat16"
 CONFIG = ("device", "kernel", "cubin", "schedule")
 #: where each window's epoch goes under ``--out``: ``pearl/w<k>/``
 DIR = "pearl"
-#: the subprotocol whose draw serve-openai's draw-gated release waits for (`serve_h1.DRAWER`), which Pearl+ never puts
+#: the subprotocol whose sample serve-openai's draw-gated release waits for (`serve_h1.DRAWER`), which Pearl+ never puts
 DRAWER = "pouw"
 #: serve-openai's gate options a live salt session takes, all three or none (`refusal`, `live`)
 GATE = ("challenger_gate", "challenger_peer", "challenger_lane")
@@ -125,10 +125,10 @@ def refusal(opts: Any) -> str | None:
 
 
 def in_process(window: int) -> dict[str, Any]:
-    """Window ``window``'s coins held in this process: epoch ``window``'s challenger over the Lean verifier of record's
+    """Window ``window``'s coins held in this process: epoch ``window``'s challenger over the Lean verifier's
     entropy, which credits nothing."""
-    from verity.protocols.pouw.verifier import verifier
-    from verity.protocols.pouw.verifier.coins import Challenger
+    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.accounting.pouw.verifier.coins import Challenger
 
     return {"coins": Challenger(window, verifier.coins)}
 
@@ -138,7 +138,7 @@ def live(gate: str, peer: str, lane: str, run: Any = None) -> Callable[[int], di
     ``gate`` (its command as one string, holding lane ``lane``'s gate key) as peer ``peer``: window k's reserved when it
     opens (``reserve --peer PEER``, Pearl-C's salt coin alone, epoch k: `pouw_h1_window.reserve_salt`, joining the lane's
     open period, refused before reserving while that period is H1's), which the install opens on its salt epoch's root and
-    draws the salt coin from (`pouw_h1_window.salt_session`), through the settings ``challenger`` (`AT`), ``session`` (the
+    samples the salt coin from (`pouw_h1_window.salt_session`), through the settings ``challenger`` (`AT`), ``session`` (the
     reserve answer), ``gate`` and ``period``. ``run`` replaces the gate's subprocess (tests). A refusal is `CoinError`
     (a ValueError), the window's failure."""
     from verity_vllm.pipeline.commit_coins import ChallengerGate
@@ -184,9 +184,9 @@ class PearlWindows:
 
     def ready(self) -> dict[str, Any]:
         """What window 0's open would otherwise do first, done before the server listens: the kernel loaded
-        (`pearl_c.Kernel.load`, once a process) and, for in-process coins, the Lean verifier of record built
+        (`pearl_c.Kernel.load`, once a process) and, for in-process coins, the Lean verifier built
         (`verifier.executable`, their entropy); ``readied``, with each part's time."""
-        from verity.protocols.pouw.verifier import verifier
+        from verity.protocols.accounting.pouw.verifier import verifier
         from verity_vllm.protocols.pouw import pearl_c as PPD
 
         pw, t0 = self.config["pouw"], self.clock()
@@ -286,8 +286,8 @@ class PearlWindows:
         return out if error is None else {**out, "error": error[:500]}
 
     def drawing(self, draws: Any) -> None:
-        """Pearl+ puts no draw into serve-openai's draw-gated release (`refusal` refuses ``--release-after pouw``): its
-        verifier's coin is drawn after W."""
+        """Pearl+ puts no sample into serve-openai's draw-gated release (`refusal` refuses ``--release-after pouw``): its
+        verifier's coin is flipped after W."""
 
     def drain(self) -> None:
         """Nothing to wait for: each window's release ran on the loop at its close."""

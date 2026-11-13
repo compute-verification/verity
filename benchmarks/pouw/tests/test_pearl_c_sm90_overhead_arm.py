@@ -20,9 +20,9 @@ import pytest
 from verity_bench import overhead as DOOR
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.protocol import Shape as Unit
-from verity.protocols.spot.verifier.profile import WINDOW_DELTA
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA
 
 POUW = Path(__file__).resolve().parents[1]
 ROOT = POUW.parents[1]
