@@ -1,7 +1,8 @@
 """circuit-check's sidecar of `verity_vllm` itself, in `circuit_check.targets`' forms (`circuit_check.sidecars`): what
 circuit-check needs of the integration, which it never imports.  It registers the package: circuit-check names no
 integration and finds the sidecars under a package that has this file.  It gives the reader of a served workload's request
-Program.  And it binds every kind of the frontend vocabularies (`verity_vllm.program.frontend.rules.vocab`), so the
+Program, and the replay's row families, which circuit-check holds to the partition invariant as word Call families without
+naming the served circuits' modules.  And it binds every kind of the frontend vocabularies (`verity_vllm.program.frontend.rules.vocab`), so the
 Definitions a served Program calls are the word Call families circuit-check holds to the partition invariant; they are bound
 here, not beside that module, so that the registries import no frontend module for it."""
 from __future__ import annotations
@@ -27,6 +28,13 @@ def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
     corr = Correspondence(P)
     Q = SimpleNamespace(required=population(P, corr).required, literals=literal_calls(P), program_path=corr.module_of)
     return P, Q, lambda: iter_instance_rows(inst)
+
+
+def row_families() -> set[str]:
+    """The replay's row families (`circuit_check.targets.ROW_FAMILIES`): the Definitions a served Program's rows call."""
+    from verity.definitions.numerics import rows
+
+    return set(rows.ROWS)
 
 
 def _served_kind_statics() -> dict[str, dict[str, Any]]:

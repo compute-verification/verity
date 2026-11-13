@@ -323,15 +323,23 @@ def kind_of(spec: str) -> str:
 ROW_READER = "request_program"
 #: the reader of a struct-slots split (`structural_slots`), which the sidecar of the module that writes one defines
 SPLIT_READER = "struct_slots_split"
+#: the replay's row families, word Call families (`word_call_families`), which the sidecar of the package that serves the
+#: catalog's kernels hands as a function of no arguments
+ROW_FAMILIES = "row_families"
+
+
+def _handed(name: str, what: str) -> Any:
+    """``name`` as the one binding file that defines it hands it; refused by name when none or several do."""
+    found = {prefix: ns[name] for prefix, ns in binding_files() if ns is not globals() and name in ns}
+    if len(found) != 1:
+        raise ValueError(f"{what} by the one sidecar that defines `{name}`, and {len(found)} that `sidecars.discover` "
+                         f"finds do: {', '.join(found) or 'none'}")
+    return next(iter(found.values()))
 
 
 def _read_by(reader: str, what: str, path: str) -> Any:
     """``path`` read by the one binding file that defines ``reader``; refused by name when none or several do."""
-    readers = {prefix: ns[reader] for prefix, ns in binding_files() if ns is not globals() and reader in ns}
-    if len(readers) != 1:
-        raise ValueError(f"{path}: {what} is read by the one sidecar that defines `{reader}`, and "
-                         f"{len(readers)} that `sidecars.discover` finds do: {', '.join(readers) or 'none'}")
-    return next(iter(readers.values()))(path)
+    return _handed(reader, f"{path}: {what} is read")(path)
 
 
 def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
@@ -625,14 +633,13 @@ def _kinds_and_templates() -> list[Any]:
 
 
 def word_call_families() -> set[str]:
-    """The word Call families of a served Program: the replay's row families (`verity.definitions.numerics.rows.ROWS`), every
-    frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
-    doesn't bind is refused by name: left out, its family's partition would be judged as no Call's.  So is a path no binding file
-    binds a vocabulary on (``_vocabulary_roots``, in a sidecar of the frontend's package): every kind would be left out."""
+    """The word Call families of a served Program: the replay's row families (`ROW_FAMILIES`, as the serving package's sidecar
+    hands them), every frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the
+    catalog.  A kind that doesn't bind is refused by name: left out, its family's partition would be judged as no Call's.  So is a
+    path no binding file binds a vocabulary on (``_vocabulary_roots``, in a sidecar of the frontend's package): every kind would
+    be left out."""
     if "words" not in _SHORT:
         load_registries()
-        from verity.definitions.numerics import rows
-
         made = _kinds_and_templates()
         if _BOUND["unbound"]:
             raise RuntimeError(f"the Call families are unknown while a vocabulary kind doesn't bind: {_BOUND['unbound']}")
@@ -640,7 +647,8 @@ def word_call_families() -> set[str]:
             raise RuntimeError("the Call families are unknown where no binding file binds a frontend vocabulary: none that "
                                "`sidecars.discover` finds defines `_vocabulary_roots` (the frontend's package, whose sidecar "
                                "binds it, isn't on this path)")
-        _SHORT["words"] = set(rows.ROWS) | {family(fn) for fn in made}
+        rows = _handed(ROW_FAMILIES, "the replay's row families are handed")()
+        _SHORT["words"] = set(rows) | {family(fn) for fn in made}
     return _SHORT["words"]
 
 
@@ -1067,7 +1075,7 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
 
 
 __all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "PINNED_KINDS", "REACHED", "REGISTERED", "ROOT_ERRORS",
-           "ROOT_FUNCTIONS", "ROW_READER", "SPLIT_READER", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
+           "ROOT_FUNCTIONS", "ROW_FAMILIES", "ROW_READER", "SPLIT_READER", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
            "boolean_call_families", "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units",
            "certified_boolean_calls", "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call",
            "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "request_program", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "struct_slots_split", "subcircuit", "suite",

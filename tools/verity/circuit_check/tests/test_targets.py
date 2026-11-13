@@ -3,7 +3,7 @@ directory and import name stays in `REGISTERED`, and one whose module can't be j
 every root function a binding file defines runs, the listed ones first.  `targets.definition`: a Definition-valued static in an
 id parses to the Definition it names, bound, recursively, a record static to the record a catalog root binds, and a composite's
 lift to the one a body calling it binds, without the catalog.  `targets.word_call_families`: a vocabulary kind that doesn't bind
-is refused by name."""
+is refused by name, and the row families are the serving package's sidecar's."""
 from __future__ import annotations
 
 import sys
@@ -271,3 +271,28 @@ def test_a_struct_slots_split_is_read_by_the_one_sidecar_that_defines_its_reader
     _binding_files(monkeypatch, a={TG.SPLIT_READER: reader}, b={TG.SPLIT_READER: reader})
     with pytest.raises(ValueError, match=r"2 that .* do: a.circuit-check#, b.circuit-check#"):
         TG.struct_slots_split("d")
+
+
+def test_the_row_families_are_the_ones_the_serving_packages_sidecar_hands(monkeypatch):
+    """circuit-check names no served module: the replay's row families, word Call families, are handed by the one sidecar
+    that defines `ROW_FAMILIES` (`verity_vllm`'s own), and a tree with none or two is refused by name, never read as none."""
+    import ast
+
+    from circuit_check import sidecars as SC
+
+    tree = ast.parse(SC.discover()["verity_vllm"]["py"].read_text())
+    assert TG.ROW_FAMILIES in {n.name for n in tree.body if isinstance(n, ast.FunctionDef)}
+    vocab = {"_vocabulary_roots": lambda: []}
+    for sidecars, want in (({"a": {**vocab, TG.ROW_FAMILIES: lambda: {"Row_v1"}}, "b": {}}, {"Row_v1"}),
+                           ({"a": vocab, "b": {}}, "0 that .* do: none"),
+                           ({"a": {**vocab, TG.ROW_FAMILIES: set}, "b": {TG.ROW_FAMILIES: set}},
+                            r"2 that .* do: a.circuit-check#, b.circuit-check#")):
+        monkeypatch.setattr(TG, "_SHORT", {})
+        monkeypatch.setattr(TG, "_BOUND", {})
+        monkeypatch.setattr(TG, "templates", lambda: [])
+        _binding_files(monkeypatch, **sidecars)
+        if isinstance(want, set):
+            assert TG.word_call_families() == want
+        else:
+            with pytest.raises(ValueError, match=f"the replay's row families are handed by the one sidecar .* {want}"):
+                TG.word_call_families()
