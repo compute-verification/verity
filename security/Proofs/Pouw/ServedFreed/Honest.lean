@@ -197,7 +197,7 @@ theorem servedFreed_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccept
       tileLuck Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t ≤ 7 / 8 ∧
         tileLuck0 Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t ≤ 1 / 2) ∧
     (play Unit (tileCount σ sT) (k sT) n).game =
-      periodGame (tileStage (circuit (tileCount σ sT)) (tileCount σ sT))
+      monitoringPeriodGame (tileStage (circuit (tileCount σ sT)) (tileCount σ sT))
         (liveCone Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)) 1 1 (k sT)
         (period (Ω1 σ sT) (tileCount σ sT) n) ∧
     (period (Ω1 σ sT) (tileCount σ sT) n).EveryWindow
@@ -216,7 +216,7 @@ theorem servedFreed_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccept
     UnitFixed (play Unit (tileCount σ sT) (k sT) n)
       (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
         (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
-      (periodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
+      (monitoringPeriodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
         (tileRun σ k hk sT unitOf (windows σ sT regOf evOf n) opened
           (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
       (fun _ t => (tileWords Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t : ℝ))
