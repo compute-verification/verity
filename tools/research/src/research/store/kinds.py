@@ -138,7 +138,7 @@ KINDS: dict[str, str] = {
                                     "adversary's choices in raw/adversary.*.jsonl), and compare/<sampling>/ (compare.json, "
                                     "COMPARE.md: whether every request's output ids match the honest trace's, bits per "
                                     "request, the first divergence)",
-    "challenger-ledger/v1": "the auditor host's challenger ledger (verity/composite/device/live_challenger/auditor.py, publish.sh): payload "
+    "challenger-ledger/v1": "the auditor host's challenger ledger (verity/protocols/compose/device/live_challenger/auditor.py, publish.sh): payload "
                             "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
                             "key_sha512}",
     "challenger-ledger/v2": "the auditor host's challenger ledger once it holds v2 entries (one window a Commit root, its prover "
