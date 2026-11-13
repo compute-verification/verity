@@ -125816,3 +125816,122 @@ Run `r20261113-063157-0a84` (vy-nebius-2, `--tree-sha e05417eec679dfd2a039e8f1e2
 - [run] The same buffering shows in 18 of the 34 statements: two session lines under 35 ms apart. So the utilization column is not read as a measurement for any statement until the stamps are taken where each session ends.
 
 For the table: `EmbeddingRead_v1` GO on time, conditional on the change and a CPU check by Fri 14:00Z; `RmsNormMnnvl` utilization: a timing-window artefact (proving seconds stand).
+
+## HELDOF, Fri 06:48Z: TWO HELDOF LOOPS ON TWO MACHINES; one of the five walks is left (`wiresMove`), not compiled; STATEMENT CHANGE: `twoHolds_of`, `twoHolds_of_ok` and `twoHolds_of_files` take the accepted run in place of `hp`; head `dc45145249`, in `e73b` and `5036`; HeldOfAt: mine, but not from the form's accept alone; ports: the auditor's parameters, distinct only where the parser builds a well-formed tree
+
+In plain words: two copies of me are running on two machines, and you need to say which one goes on. Your 06:27Z
+message found this copy on a fresh machine with no pen. The 06:33Z entry was written by the other copy, at 06:31:15Z,
+after this machine booted. I merged RUNSAS's population lemma and FRAME's four ready forms, so the descriptor check
+now leaves one walk, `wiresMove`, to a hypothesis. Both files are in tries. ACCEPTS's two questions are answered below.
+
+**1. Two loops** [run]. This machine booted at 06:27:27Z, and `~/wt` did not exist. I made `~/wt/.pen` at 06:27Z.
+The entry "HELDOF, Fri 06:33Z" is commit `6753b19bc1`, at 06:31:15Z. No command in this loop wrote it, so a second
+HELDOF loop was live on another machine after this one started. A pen on one machine can't decide between two. The
+other loop's last push to my branch is `1e14660f7d` (06:25Z). My pushes since, `3fed3cef43` and `dc45145249`, were
+fast-forwards. **Decide which loop continues.** Until you do, this loop only reads `e73b` and `5036` and starts nothing
+new. Your 06:43Z items (a) and (b), the executable and the refused case, are not started.
+
+**2. What I merged** [run]. Both merges onto `1e14660f7d` had no conflict:
+- RUNSAS `e019992865` (`PopulationOf.lean`);
+- FRAME `1ab2eea6de13` (the four per-template forms, with the `BlockSize.lean:73` fix).
+
+**3. STATEMENT CHANGE: `hp` is gone** (`3fed3cef43`, not compiled; in `5036`).
+- Before: `twoHolds_of (hh) (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true)`, and
+  the same `hp` in `twoHolds_of_ok` and `twoHolds_of_files`.
+- After: each takes `{j : Json} (ha : AcceptedTwo i it j)` in its place. The proof is
+  `population_of_accepted ha`'s second half.
+- The old form is kept as `twoHolds_of_pop`, with the same statement and proof as the compiled `twoHolds_of`.
+- No listed guarantee reads these three. No file on my branch calls them outside `HeldOfRun.lean` [read: `git grep`].
+
+**4. Walks left: one of five** (`dc45145249`, not compiled; in `e73b`). FRAME's head changed `wiringOk` under the
+check. It now holds `sourceRowsNamed`, `writtenRowsUnwired` and `writtenRowsRead` in place of three walks, drops
+`returnedWhole`, and adds `portsOnce` and `outsOk` [read: `Code.lean:669`].
+- `SampledTwoDesc.wiringOk` now decides all five, each once per template: `sourceRowsNamed`, `writtenRowsUnwired`,
+  `writtenRowsRead`, `portsOnce` and `outsOk`.
+  - It does so through copies of `sourceRows`, `writtenRows` and `outsComputed`, which read one unit's net.
+  - `HeldOfDesc` ties each to the held copies by `rfl` (`sourceRowsNamed_eq` and the rest).
+- `walksOk h` is now `wiresMove h` alone. It stays the hypothesis of `heldOkDesc_of_descOk` until FRAME's
+  `wiresMoveRows` is in `wiringOk` (FRAME: not before about 08:30Z).
+- Cost: `sourceRows` takes one step per input column of one unit, `nIn` of `stack c.upv`. That is a template's own
+  size, never `r · n_t` [derived].
+
+**5. Tries** (vy-nebius-2, `--pool proofs`, `--siblings`, at `dc45145249`):
+- `r20261113-064439-e73b`: `HeldOfDesc.lean`, which builds `SampledTwoDesc`;
+- `r20261113-064439-5036`: `HeldOfRun.lean`.
+
+Both launched at 06:44Z. I expect them by about 07:00Z, going by `38bb`'s 260 s, the build, and the index line at
+the end [guess]. Two earlier launches were refused before starting (`7633`, `f126`: the node now takes runs only
+through a pool's slots, and `--pool` needs `--as`).
+
+**6. ACCEPTS's (a): `HeldOfAt` is mine, but it does not follow from the form's accept alone.**
+- `heldOf` is `some` only where `decided` holds, which includes `descCore` [read: `HeldOf.lean:167–188`]. The form
+  decides none of `descCore` until it calls `descOk`, which you have not given. So an accepted play can have
+  `heldOf … = none`.
+- **What I can prove:** from the run's accept, `descOk p bs i it = true` and `wiresMove` at the copies, a held copy
+  exists: `∃ u h, heldOf i it u = some h` [derived].
+  - `heldOkDesc_of_descOk` (compiled in `38bb`) gives `heldOkDesc` given `walksOk`.
+  - `heldOkDesc` gives `heldOf … = some h` as in `twoHolds_of_files`.
+  - `firstOf`, `cellsOf` and the layout are `Run.run`'s own steps, as RUNSAS took the population.
+- **`HeldOfAt` asks more: one `A.h` at every accepted play.** `heldOf` reads the play's boundary record: its
+  population in `firstOf`, and `i.record` in `links` (`replayLinks … i.record`) [read]. So `= A.h` needs every
+  accepted play of `C` to give one population and the same links. I have not read whether `C`'s plays share one
+  record.
+- **My proposal:** I write `heldOfAt_of_desc`, with `descOk` and `wiresMove` as its named premises and `A.h` the copy
+  of the play. That is a statement change of ACCEPTS's, so it is ACCEPTS's to take.
+  - With `PartsAt`, `heldMatches_of` gives `HeldAt` from it, as ACCEPTS says.
+
+**7. ACCEPTS's (b): a port listed twice.**
+- **Does `heldOf` refuse it? No** [read]. `decided` checks the template names (`Nodup`) and that the interior registers
+  no value. No clause reads ports.
+- **Could it, at no cost to an honest play?** Yes: add `Nodup` of `(namesOf v).ports` for both registrations to
+  `decided`. An honest registration's ports are the keys of one JSON object. But the change only moves the fact: whoever
+  proves `HeldOfAt` would then owe it. So it is no better than the named premise, and I don't add it. Ruled
+  `PortsDistinctAt` stands.
+- **Where the ports come from:** the auditor's parameters, not the prover's files [read].
+  - The boundary's are at `params.boundary.ports`, and the interior's at `params.interior.params.ports`.
+  - `paramsAt` → `OneStage.paramsParsed` reads `entries (obj (getD j "ports"))` (`OneStage.lean:256`).
+  - `Registration.Verifier` calls them "the verifier's own copies". They are stated in the parameters, keyed by name,
+    and not derived from the program or the descriptor.
+- **Why they are distinct, and why no proof says so yet** [read]:
+  - Being one object's keys, they are distinct wherever the parser builds a well-formed tree:
+    `Std.TreeMap.Raw.distinct_keys_toList`.
+  - The parameters pass `Core.canonicalJson`, which calls `Lean.Json.parse`. That is a `partial def`, opaque to proofs.
+  - `Flock.canon` sorts fields and keeps a key that appears twice, so the canonical-text check doesn't refuse one
+    (`Base/Canon.lean:80`).
+  - `parse_wf` holds for `Flock.JsonParse.parse` only.
+- **So it is not decidable by evaluation today.** Evaluation can't reach the deployed path's parse.
+- **It becomes a theorem for every registration** if `Core.canonicalJson` calls `Flock.JsonParse.parse`, which
+  refuses nothing new: `parse_wf`, then `distinct_keys_toList`. That is a verifier change, so it waits until after
+  Friday.
+
+**8. Your item 4** [run on this VM]:
+- `pytest tests/test_lean_packages.py`: 34 passed, 1 failed.
+  - The failure is `test_no_import_all_of_an_in_tree_module`, on `RunsAs/Steps.lean` only: `import all` of
+    `Spot.Record` and of `Spot.Run`, from `264cd595d8`, RUNCOINS's line, which RUNSAS reported.
+  - None of my files has an `import all`.
+- My one new lock root, `Proofs.Flock.SpotFlock.HeldOfDesc`, is a quoted lakefile root.
+- One thing to know [read]: `VStarRecursive.SampledTwoDesc` is under no root of its own package.
+  - `VStarRecursive`'s library root and the package lock's `roots` (`["VStarRecursive"]`) don't reach it, and neither
+    does `SampledTwo`.
+  - It builds only as `HeldOfDesc`'s dependency.
+  - TWOLEG's call from `SampledTwo` would put it under the `sampled-two` executable only.
+
+**STOP RULE:** none.
+- `SampledTwoDesc.descOk` is still called by nothing, so what the verifier accepts doesn't change.
+- `twoHolds_of*` are no listed guarantee's.
+
+**NEEDS:**
+- Which HELDOF loop continues (item 1).
+- ACCEPTS: whether it takes `heldOfAt_of_desc` (item 6) in place of `HeldOfAt`.
+- Your word on items (a) and (b) for the loop that continues.
+
+**To post:** nothing.
+
+**Not established:**
+- `dc45145249` and `3fed3cef43` have not compiled (`e73b`, `5036` running).
+- `heldOfAt_of_desc` is unwritten.
+- Whether `C`'s accepted plays share one boundary record.
+- Whether the other loop is still alive.
+
+Branches: `cursor/proofs-heldof-4c7b` at `dc45145249`, pushed; `cursor/proofs-heldof-block-4c7b` at `fd41320f42`.
+Nothing is unpushed.
