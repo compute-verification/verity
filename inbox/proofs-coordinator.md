@@ -126654,3 +126654,47 @@ Nothing.
 - A records run of `security/Proofs` at my head; the join's is ASSEMBLY's.
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `49dbe8d36f5450cb24e0f6cb0bd323d95654a28f`, pushed; nothing unpushed. No `import all` in any file of mine [run].
+
+## HELDOF, Fri 13 Nov 07:08Z: both runs COMPILE (`e73b` HeldOfDesc, 44 theorems; `5036` HeldOfRun, 22), so the statement change stands, head `dc45145249`; one of the five walks is left (`wiresMove`); the descriptor-check executable's run is `r20261113-070605-593d`, expected about 07:35Z
+
+**Item 1: both runs pass at `dc45145249` on vy-nebius-2.** [run]
+- `r20261113-064439-e73b` (`HeldOfDesc.lean`):
+  - "lean-try: security/Proofs/Flock/SpotFlock/HeldOfDesc.lean: lean exit 0 in 348 s"
+  - "axiom probe: none of its 44 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"
+  - siblings: "no built module of its package that doesn't import Proofs.Flock.SpotFlock.HeldOfDesc declares a name it does (2953 imported in 8 s, peak 4999 MB)"
+  - `heldOkDesc_of_descOk`, `decided_of` and the five new `rfl` lemmas (`sourceRowsNamed_eq`, `writtenRowsUnwired_eq`, `writtenRowsRead_eq`, `portsOnce_eq`, `outsOk_eq`) each read "depends on axioms: [propext, Classical.choice, Quot.sound]".
+- `r20261113-064439-5036` (`HeldOfRun.lean`):
+  - "lean exit 0 in 376 s"
+  - "axiom probe: none of its 22 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"
+  - siblings clean (251 imported in 6 s, peak 4655 MB).
+  - `twoHolds_of`, `twoHolds_of_ok` and `twoHolds_of_files` now take the accepted run (`AcceptedTwo i it j`) in place of `hp`, through RUNSAS's `population_of_accepted`. `twoHolds_of_pop` keeps the old form. All four read "[propext, Classical.choice, Quot.sound]".
+- So the statement change stands. Walks left in `walksOk`: one of five, `wiresMove`, which waits on FRAME's `wiresMoveRows`.
+
+**Item 2 (a) and (b): the executable is written; its run is `r20261113-070605-593d` on vy-nebius-cpu-14.** [run, not yet read]
+- What it is: `sampled-two-desc check PARAMS COMMITMENT EVIDENCE BLOB...` (`SampledTwoDescMain.lean`, head `be198cefc6`, not compiled), a test's executable that no party runs.
+  - It decodes a play as the form's check does: `paramsOfJson` on `canonicalJson`, `commitmentOf`, `evidenceOf`, `Blobs.ofArray`, then `SampledTwo.inputAt`.
+  - It runs `descOk` on the play and prints `pass` or the first clause that fails (`why`, `descOk`'s clauses one by one in its order).
+  - Then (b): the same play with its second template given the first's name, which must be refused at `namesOnce`.
+  - Exit 0 only if the play passes, the renamed play is refused at `namesOnce`, and `why` agrees with `descOk` on both.
+- Why the run regenerates the play: `2556`'s kept `out/form` holds no `evidence.json` and no circuit blob (`000-`). The blobs directory changed at 06:33Z, so I read that as a prune of the large files.
+- How it runs: scratch branch `cursor/proofs-heldof-descrun-f684` (`ae14c73b55`). It is my head with TWOLEG's `b53983fdab`, the accepted play's commit, merged; the one conflict was the lakefile's two new executables, and I kept both. Its `sampled_two_small.sh` also builds and runs `sampled-two-desc` on the same files after `sampled-two-on` and `sampled-two`, and fails unless all three hold.
+- The command: `research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 --as proofs`, the script's own line (`2556` held 64 GB). No `ulimit -Sv`.
+- Risk [guess]: `SampledTwoDesc` hasn't been compiled against TWOLEG's `SampledTwo` and `Spot.Run`. If it doesn't build, the run exits 7 with `build-lean.log`'s tail.
+- My lock change: `SampledTwoDescMain` is added to the recursive package's `exempt`, as TWOLEG did for `SampledTwoOnMain`. Nothing else in that lock changed.
+
+**Item 3: I write nothing for `heldOfAt_of_desc`; ACCEPTS's 07:05Z entry asks you for the go.** [read]
+- Accepted plays of `C` share no boundary record by anything read. Each play's `record` is its own case's commitment's (`inputOf`: `record := c.record`). This is the same as ACCEPTS's reading.
+- At one statement `x` they share it: `stmt o = recordMsg i.record`, and with `RecordsRead` the record is `x`'s.
+- `heldOf` reads `i.record` only in `firstOf` (its `population`) and in `replayLinks … i.record`, so at one `x` those two agree.
+- Whether the rest of `heldOf`'s inputs (`i.params`, the interior) agree across plays at one `x`: not read.
+
+**Item 4: `PortsDistinctAt` stays the named premise; no clause goes into `decided`.**
+
+**Item 5: the root.** Once `SampledTwo` calls `descOk`, the package's lib root `VStarRecursive.lean` needs `public import VStarRecursive.SampledTwo` (or the lock's `roots` the module). Today the lib root imports only `Protocol` and `Sampled`, and only the `sampled-two` executable reaches `SampledTwo`, so the package's own check doesn't build or audit `SampledTwoDesc`. I changed nothing there.
+
+**After Friday**
+- `Core.canonicalJson` calls `Flock.JsonParse.parse`.
+
+**Tests:** `tests/test_lean_packages.py` gives 34 passed and 1 failed. The failure is `test_no_import_all_of_an_in_tree_module`, on `RunsAs/Steps.lean` only (`import all` of `Spot.Record` and `Spot.Run`), which isn't mine.
+
+**Waiting on:** `r20261113-070605-593d`, expected about 07:35Z; one timer.
