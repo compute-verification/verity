@@ -18,12 +18,13 @@ side by side; it is not a package.
 | `research.sh` | The `research` on an agent VM's PATH: it runs origin/main's `tools/research/src/research/at_main.py`, which runs the checkout's `research` or, when the checkout is only behind, origin/main's. | `install.sh`; `at_main.py` |
 
 The rest: `task_hook.py` (a coordinator never waits on a local worker in the foreground, and a cloud agent writes
-Linear through `research msg`), `stop_hook.py` (it offers a message still waiting when a turn ends to the runtime as a
-follow-up, which no delivery relies on: a message reaches an agent at its next shell command, and one its VM holds
-unshown when its turn ends may be gone by its next turn, so an agent whose turn has ended is resumed with the text
-itself), `worktree_guard.py` (one agent per checkout), `env_guard.py` and `git_guard.sh` (an `env` that redacts values
-and a `git` that keeps credentials out of remote URLs and gives every push `pre_push.py`, which `install.sh` puts ahead
-of the system's), and `settings.py` (every environment variable the hooks share, read once).
+Linear through `research msg`; each Task call's verdict, model and resume flag, never its prompt, go to
+`$AGENT_GUARD_TASK_LOG`, default `/tmp/agent-guard-task.jsonl`), `stop_hook.py` (it offers a message still waiting when a
+turn ends to the runtime as a follow-up, which no delivery relies on: a message reaches an agent at its next shell
+command, and one its VM holds unshown when its turn ends may be gone by its next turn, so an agent whose turn has ended
+is resumed with the text itself), `worktree_guard.py` (one agent per checkout), `env_guard.py` and `git_guard.sh` (an
+`env` that redacts values and a `git` that keeps credentials out of remote URLs and gives every push `pre_push.py`,
+which `install.sh` puts ahead of the system's), and `settings.py` (every environment variable the hooks share, read once).
 
 The push rules, typed (`worktree_guard.py`) or in `pre_push.py`, cover the queue's two repositories alone
 (`worktree_guard.queue_remote`: their GitHub URLs exactly, in https, ssh or scp form, with or without `.git` and a credential;
