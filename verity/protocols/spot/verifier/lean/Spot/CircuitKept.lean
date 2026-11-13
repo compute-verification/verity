@@ -13,13 +13,14 @@ public import Flock.KsScope
   (`Flock.PortRoots.rowsOk`, `Flock.Registered.dupName`), the unit's form (`Flock.KsScope.unitWhy`) and the public
   input ports (`Flock.HmIn.parse`);
 * checks of the public file, which read of the circuit its digest, its class, its ports, its units a proof block and
-  its META, and none of its rows (`publicOf_bare`, `loadPublic_bare`, `loadedWhy_bare`, `loadPublicIn_bare`,
-  `collidesT_bare`).
+  its META, and none of its rows (`publicOf_bare`, `loadPublic_bare`, `loadPublicRow_bare`, `loadedWhy_bare`,
+  `loadPublicIn_bare`, `collidesT_bare`).
 
 `Kept` is the first part beside the circuit without its rows (`bare`). It is a function of the parsed circuit and the
 statement's tags, so statements that name one circuit file share one, and nothing of it holds the circuit's rows.
-`checkOf_kept`, `portsOf_kept` and `filesOf_kept` say each of the three checks on the parse is `checkOf`, `portsOf`
-and `filesOf` here on its `Kept`.
+The three checks each load the public file as a statement with hidden outputs does (`Flock.HmOut.loadPublic`);
+`loadOf` is that load, made once for the three. `checkOf_kept`, `portsOf_kept` and `filesOf_kept` say each of the
+three checks on the parse is `checkOf`, `portsOf` and `filesOf` here on its `Kept` and that one load.
 -/
 
 @[expose] public section
@@ -39,6 +40,10 @@ theorem publicOf_bare (tags : Tags) (c : Circuit) (file : ByteArray) :
 
 theorem loadPublic_bare (tags : Tags) (c : Circuit) (file : ByteArray) :
     HmOut.loadPublic tags (bare c) file = HmOut.loadPublic tags c file :=
+  rfl
+
+theorem loadPublicRow_bare (tags : Tags) (c : Circuit) (file : ByteArray) :
+    HmRow.loadPublic tags (bare c) file = HmRow.loadPublic tags c file :=
   rfl
 
 theorem loadedWhy_bare (H : ByteArray → ByteArray) (c : Circuit) (pub : Public) :
@@ -101,25 +106,34 @@ theorem keptOf_g (parsed : V Circuit) (tags : Tags) (zk : Bool) (count : Nat) (o
     parsed.toOption.map (·.g) = (parsed.map (keptOf tags zk count own)).toOption.map (·.c.g) := by
   cases parsed <;> rfl
 
-/-- `Flock.ProvedScope.checkOf` on a circuit's `Kept` (`checkOf_kept`). -/
-def checkOf (k : V Kept) (tags : Tags) (zk : Bool) (publicFile : ByteArray) (count : Nat)
+/-- **The public file as a statement with hidden outputs loads it** (`Flock.HmOut.loadPublic`), on the circuit
+without its rows; the circuit's own refusal where it does not parse. A statement's three checks read this one load. -/
+def loadOf (k : V Kept) (tags : Tags) (publicFile : ByteArray) : V Public :=
+  match k with
+  | .error e => .error e
+  | .ok k => HmOut.loadPublic tags k.c publicFile
+
+/-- `Flock.ProvedScope.checkOf` on a circuit's `Kept` and the public file's load `pub` (`checkOf_kept`), which it
+reads where the statement's outputs are hidden; where they are not it loads the file as such a statement does. -/
+def checkOf (k : V Kept) (pub : V Public) (tags : Tags) (zk : Bool) (publicFile : ByteArray) (count : Nat)
     (publicInputs registered : Bool) : Except String Unit :=
   match ProvedScope.firstFailure (ProvedScope.statementRules tags zk count publicInputs) with
   | some why => .error (ProvedScope.refusal why)
   | none => match k with
     | .error e => .error (ProvedScope.refusal s!"a circuit that does not parse ({e})")
-    | .ok k => match ProvedScope.publicOf tags k.c publicFile with
+    | .ok k => match (if tags.hiddenOutputs then pub else HmRow.loadPublic tags k.c publicFile) with
       | .error e => .error (ProvedScope.refusal s!"a public file that does not load ({e})")
       | .ok pub =>
         if pub.tables.isSome && !ProvedScope.sharedRowsOk tags zk registered then
           .error (ProvedScope.refusal "a shared-row public file (header shared_rows)")
         else k.rules
 
-/-- **The scope check on the parse is the scope check on its `Kept`.** -/
+/-- **The scope check on the parse is the scope check on its `Kept` and the public file's one load.** -/
 theorem checkOf_kept (parsed : V Circuit) (tags : Tags) (zk : Bool) (publicFile : ByteArray) (count : Nat)
     (publicInputs registered : Bool) (own : Circuit → V Unit) :
     ProvedScope.checkOf parsed tags zk publicFile count publicInputs registered =
-      checkOf (parsed.map (keptOf tags zk count own)) tags zk publicFile count publicInputs registered := by
+      checkOf (parsed.map (keptOf tags zk count own)) (loadOf (parsed.map (keptOf tags zk count own)) tags publicFile)
+        tags zk publicFile count publicInputs registered := by
   unfold ProvedScope.checkOf checkOf
   cases ProvedScope.firstFailure (ProvedScope.statementRules tags zk count publicInputs) with
   | some why => rfl
@@ -127,30 +141,32 @@ theorem checkOf_kept (parsed : V Circuit) (tags : Tags) (zk : Bool) (publicFile 
     cases parsed with
     | error e => rfl
     | ok c =>
-      simp only [Except.map, keptOf, publicOf_bare, circuitRules_rulesOf] <;> rfl
+      simp only [Except.map, keptOf, loadOf, ProvedScope.publicOf, loadPublic_bare, loadPublicRow_bare,
+        circuitRules_rulesOf] <;> rfl
 
-/-- `Flock.PortRoots.checkOf` on a circuit's `Kept` (`portsOf_kept`). -/
-def portsOf (k : V Kept) (tags : Tags) (publicFile : ByteArray) : Except String Unit :=
+/-- `Flock.PortRoots.checkOf` on a circuit's `Kept` and the public file's load `pub` (`portsOf_kept`). -/
+def portsOf (k : V Kept) (pub : V Public) : Except String Unit :=
   match k with
   | .error e => .error (ProvedScope.refusal s!"a circuit that does not parse ({e})")
   | .ok k =>
     if !k.rows then .error (ProvedScope.refusal PortRoots.ROWS_WHY)
     else if k.named then .error (ProvedScope.refusal PortRoots.NAMES_WHY)
-    else match HmOut.loadPublic tags k.c publicFile with
+    else match pub with
       | .error e => .error (ProvedScope.refusal s!"a public file that does not load ({e})")
       | .ok pub => match PortRoots.loadedWhy Sha512.hash k.c pub with
         | some why => .error (ProvedScope.refusal why)
         | none => .ok ()
 
-/-- **The ports' and roots' check on the parse is that check on its `Kept`.** -/
+/-- **The ports' and roots' check on the parse is that check on its `Kept` and the public file's one load.** -/
 theorem portsOf_kept (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (zk : Bool) (count : Nat)
     (own : Circuit → V Unit) :
-    PortRoots.checkOf parsed tags publicFile = portsOf (parsed.map (keptOf tags zk count own)) tags publicFile := by
+    PortRoots.checkOf parsed tags publicFile =
+      portsOf (parsed.map (keptOf tags zk count own)) (loadOf (parsed.map (keptOf tags zk count own)) tags publicFile) := by
   unfold PortRoots.checkOf PortRoots.checkWith portsOf
   cases parsed with
   | error e => rfl
   | ok c =>
-    simp only [Except.map, keptOf, loadPublic_bare, loadedWhy_bare] <;> rfl
+    simp only [Except.map, keptOf, loadOf, loadPublic_bare, loadedWhy_bare] <;> rfl
 
 /-- `Flock.KsScope.sharedWhy` on a circuit's `Kept`: a shared-row public file's form, on the public input ports the
 circuit parsed with. -/
@@ -169,13 +185,13 @@ theorem sharedWhy_kept (tags : Tags) (zk : Bool) (count : Nat) (own : Circuit �
   unfold KsScope.sharedWhy sharedWhy
   simp only [keptOf, loadPublicIn_bare, collidesT_bare] <;> rfl
 
-/-- `Flock.KsScope.filesOf` on a circuit's `Kept` (`filesOf_kept`). -/
-def filesOf (k : V Kept) (tags : Tags) (publicFile : ByteArray) : Except String Unit :=
+/-- `Flock.KsScope.filesOf` on a circuit's `Kept` and the public file's load `pub` (`filesOf_kept`). -/
+def filesOf (k : V Kept) (pub : V Public) (tags : Tags) (publicFile : ByteArray) : Except String Unit :=
   match KsScope.tagsWhy tags with
   | some why => .error (ProvedScope.refusal why)
   | none => match k with
     | .error e => .error (ProvedScope.refusal s!"a circuit that does not parse ({e})")
-    | .ok k => match HmOut.loadPublic tags k.c publicFile with
+    | .ok k => match pub with
       | .error e => .error (ProvedScope.refusal s!"a public file that does not load ({e})")
       | .ok pub =>
         match (match k.unit with
@@ -184,11 +200,13 @@ def filesOf (k : V Kept) (tags : Tags) (publicFile : ByteArray) : Except String 
         | some why => .error (ProvedScope.refusal why)
         | none => .ok ()
 
-/-- **The knowledge soundness form's check on the parse is that check on its `Kept`**, at the `count` tables the
-`Kept` is at. -/
+/-- **The knowledge soundness form's check on the parse is that check on its `Kept` and the public file's one
+load**, at the `count` tables the `Kept` is at. -/
 theorem filesOf_kept (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (zk : Bool) (count : Nat)
     (own : Circuit → V Unit) :
-    KsScope.filesOf parsed tags publicFile count = filesOf (parsed.map (keptOf tags zk count own)) tags publicFile := by
+    KsScope.filesOf parsed tags publicFile count =
+      filesOf (parsed.map (keptOf tags zk count own)) (loadOf (parsed.map (keptOf tags zk count own)) tags publicFile)
+        tags publicFile := by
   unfold KsScope.filesOf filesOf
   cases KsScope.tagsWhy tags with
   | some why => rfl
@@ -196,7 +214,7 @@ theorem filesOf_kept (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray)
     cases parsed with
     | error e => rfl
     | ok c =>
-      simp only [Except.map, KsScope.filesWhy, sharedWhy_kept tags zk count own c publicFile]
+      simp only [Except.map, loadOf, KsScope.filesWhy, sharedWhy_kept tags zk count own c publicFile]
       simp only [keptOf, loadPublic_bare] <;> rfl
 
 end Spot.CircuitKept

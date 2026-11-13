@@ -90,7 +90,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   them (`StepAt.ofOwn`), and the statement keeps each check's result, never the parse. The compiled pass
   (`membersFilesKept`, equal to it) reads the blobs' lookup tables once and a circuit file once for the members that
   name it, and keeps of the file the circuit's own verdicts and the circuit without its rows (`Spot.CircuitKept`),
-  so its work on the rows is by the file and not by the member. Then each
+  so its work on the rows is by the file and not by the member; a member's public file it loads once for the three
+  checks that read it. Then each
   statement's session is verified as the one statement's is, on its member's own files as that pass read them
   (`runMembers`), after the statements before it, so no coin tree serves two statements: its circuit's units a proof
   block must be the ones the parameters name, and its verdict holds only where its strata are the registration's, each
@@ -1243,22 +1244,27 @@ def fileOf (tags0 : Flock.Tags) (tables : List (String × ByteArray)) (bs : Core
         (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk) }
 
 /-- `StepAt.ofOwn` on what is kept of the circuit file: the blobs' lookup tables `tables`, the tags its sessions run
-under `tags`, and what its checks read of the parse `k`. Every check that read the parse reads `k`. -/
+under `tags`, and what its checks read of the parse `k`. Every check that read the parse reads `k`, and the three
+that load the public file read one load of it (`Spot.CircuitKept.loadOf`). -/
 def StepAt.ofKept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (tables : List (String × ByteArray))
     (rd : Reads) (population : V Unit) (tags : Flock.Tags) (k : V CircuitKept.Kept) : StepAt :=
+  let pub := CircuitKept.loadOf k tags pubB
   { I := inputsAt tags0 p circuitB pubB tables, rd
-    scope := CircuitKept.checkOf k tags true pubB 1 false rd.registered.isSome >>= fun _ => k >>= fun k => k.own
-    ksFiles := CircuitKept.portsOf k tags pubB
-    ksForm := CircuitKept.filesOf k tags pubB
+    scope := CircuitKept.checkOf k pub tags true pubB 1 false rd.registered.isSome >>= fun _ => k >>= fun k => k.own
+    ksFiles := CircuitKept.portsOf k pub
+    ksForm := CircuitKept.filesOf k pub tags pubB
     g := k.toOption.map (·.c.g)
     population
     programSha := programDigest p.program
     want := getD p.partition "program" }
 
-/-- The scope check on the parse is the scope check on what is kept of it, then the kept verdict of `templateOk`. -/
+/-- The scope check on the parse is the scope check on what is kept of it and the public file's one load, then the
+kept verdict of `templateOk`. -/
 theorem scopeAt_kept (parsed : V Flock.Circuit) (I : Flock.Witness.Inputs) (rd : Reads) :
     scopeAt parsed I rd =
       (CircuitKept.checkOf (parsed.map (CircuitKept.keptOf (Flock.Witness.zkTags I) true I.count templateOk))
+          (CircuitKept.loadOf (parsed.map (CircuitKept.keptOf (Flock.Witness.zkTags I) true I.count templateOk))
+            (Flock.Witness.zkTags I) I.publicFile)
           (Flock.Witness.zkTags I) true I.publicFile I.count false rd.registered.isSome >>= fun _ =>
         parsed.map (CircuitKept.keptOf (Flock.Witness.zkTags I) true I.count templateOk) >>= fun k => k.own) := by
   unfold scopeAt
