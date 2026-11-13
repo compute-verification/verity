@@ -121068,3 +121068,26 @@ I wait on nothing. I have no piece left; I end my turn, and your next word resum
 **Not mine, for your knowledge:** between 04:04Z and 04:06Z about fifteen of your own notices were delivered to my conversation and not, as far as I can see, to yours: your timers `proofs-1552Z-prf589-opened`, `proofs-1650Z-prf589-read`, `proofs-1905z-marks`, `proofs-1955z-runs`, `proofs-2015z-posts`, `proofs-2108z-daniel-answers`, `two-round-2-25pm-pst`, `proofs-2250z-board`, `board-3pm-pst`, `history-launch-retry`, `launch-retry-2355z`, `gather-five-facts-0030z`, `history-try-4d04`, two firings of `proofs-sweep-30m-v42` (01:30Z, 02:00Z), and five Slack events of #agent-coordination from 02:05Z to 02:09Z. [read] I acted on none. All were hours old when they came.
 
 **Not established:** the properties half of the records run; the suites at `404624bc1b22`; the whole `check` and the kernel replay. Mailbox read at 04:59Z: 355 lines, nothing new.
+
+## RATING, Fri 13 Nov 04:59Z: launched; the rating scale of record has four grades and a dash (A, B, C, D, "not rateable"), not A to F; nothing is rated yet
+
+**In plain words.** I am the reviewer of the two requests from the compute-accounting lane. I have read the three brief files whole, the two sections of `COMMON.md` that bind me, and `origin/main`'s `AGENTS.md` at `fa0877afdc`. I have rated nothing yet. One thing differs from the brief: the scale the earlier rating used has no grades E or F, so each item will get A, B, C, D or a dash.
+
+- **Agent id:** `bc-5f3b228a-8552-57bb-9f4c-49ea0821911d` [run: the `cursor-cloud` tool `run-info`].
+- **Branch:** `cursor/proofs-rating-09fd`, created from `origin/cursor/ttout-restated-1de3` at `9ef197a2fca0c04321040c4ad2fbd7e97cac6de5` [run: `git worktree add -b`; `git log -1`]. Nothing is pushed to it yet.
+- **The pen:** `mkdir ~/wt/.pen` succeeded, so no other loop of me holds this machine [run].
+- **Mailbox:** `inbox/bc-5f3b228a-8552-57bb-9f4c-49ea0821911d.md` does not exist on `cursor/proofs-inbox` at `2d118c35f8` [run: `git show`].
+
+**The scale, in one line** [read: `~/.research/notes/campaigns/pouw/red-team/rating-scale.md`, the table at lines 12 to 18, notes commit `ebba7c7ae1`]: "A: standard, a property of a public primitive the field has studied for years at these parameters; B (effort): survived a targeted attack at its stated parameters on its stated device, the effort written in; C: conjecture with weak evidence, with a named falsifier; D: broken at the stated parameters, with a run id reproducing the break; —: not rateable, with the reason."
+
+- The file defines no E and no F, and no line of `ratings.md` beside it gives one [run: a search of the directory for a bold E or F rating found none]. The request's "A–F as before" and the brief's "A to F" are therefore wider than the scale of record. I will use the scale as the file states it, with its three rules: a rating never exceeds the weakest thing the statement depends on; a simulation on a bit-exact model supports B only for a claim about that model's function, while a claim about a device's speed needs the device; the reviewer does not rewrite a statement, and a mis-stated one gets a rating and a note on what it should say [read: the same file, lines 23 to 30].
+- The earlier rating of record is D for the first-promotion skip [read: `first-promotion-overcredit.md` and `first_promotion_skip.py` in the same directory].
+
+**Plan, in five lines.**
+1. Items 2 (zero prices) and 4 (the split) first, by reading the Lean at the pull request's head: the two named assumptions in `security/Definitions/Assumptions/PearlC.lean`, `W1Best.lean`, `S8H100Rev1Gap.lean` and the transfer `Pouw.ttOutTile_of_simulatedBy`, set against the old mixed premise as it stands on `main`. Rated under `To post` by 09:00Z.
+2. Item 1 next: run the request's test file once on this machine, read what each test really replays, then try each of the four named classes and any class the request does not list (a route through the device model's other fragment kinds, a second free add, a layout that makes a fragment's words share a skip set) as a script over the device model. A break is a failing test on my branch. Rated by 19:00Z.
+3. Item 3 after that: W1's price table against the vendor's published documents, cited by title and section, and whether the simulation premise can be true of a card at all. Memory is marked as a guess.
+4. The whole of review 1 under one `To post` by Sat 14 Nov 02:00Z, with what was not checked.
+5. Review 2 (the three statements of pull request #9568, in the form on `main` at the commit I name) only once review 1 is in.
+
+Not established: everything. No statement has been read yet, and no test has been run.
