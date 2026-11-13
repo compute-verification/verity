@@ -93,19 +93,20 @@ theorem stmtOk_split (h : Held) (x m₁ m₂ : Claims.Msg) (c₀ : FlockDeploy.C
 
 /-- **The registered wiring's clauses that read the registration's description alone**: every member's circuit is in
 the scope Flock's hidden-output proof covers (`membersScoped`), and of `wiringOk`: each name is one template's, each
-wire's writer's part is before its reader's, each wire's reader port is like its writer's output port, each reference
-read at a port no link or wire names reads a port of the interior registration, and the interior registration
-registers no value. Not the clauses that pass over every source bit or written bit of the members' programs
-(`sourcesNamed`, `wiresMove`, `returnedWhole`, `writtenUnwired`, `writtenRead`). -/
+wire's writer's part is before its reader's, every row a template's units read source bits at is a port a link or a
+wire names, each wire's reader port is like its writer's output port, no wire names a row a template's units write
+that no link names and some wire reads it, each reference read at a port no link or wire names reads a port of the
+interior registration, the interior registration registers no value, and each member's circuit names its ports once.
+Not the one clause that passes over every source bit of the members' programs (`wiresMove`). -/
 def wiringSizedOk (h : Held) : Bool :=
-  membersScoped h && namesOnce h && writersFirst h && wiresAlike h && refReadsOwn h &&
-    h.interiorNames.values.isEmpty
+  membersScoped h && namesOnce h && writersFirst h && sourceRowsNamed h && wiresAlike h && writtenRowsUnwired h &&
+    writtenRowsRead h && refReadsOwn h && h.interiorNames.values.isEmpty && portsOnce h
 
 /-- **`two`'s conjuncts on the members' files**, at the members `ms` (`h.ms`): the replay layout and the first stage's
 design exist, the layout fits the members' files (`filesOk`), each template's reference statement reads as a
 member's (`templateOk`), and the registered wiring passes the clauses that read the description alone
 (`wiringSizedOk`). Not `scopeOk`, whose program is the members' circuits unrolled (`bitsProgs`), and not the wiring's
-clauses over every bit. -/
+clause over every source bit (`wiresMove`). -/
 def twoFilesOk (h : Held) (ms : Spot.Bits.Members) : Bool :=
   match (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption, replayDesign h with
   | some l, some _ => filesOk h.reg ms l h.k && (List.range ms.length).all (templateOk h) && wiringSizedOk h
@@ -304,7 +305,11 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
     let _ ← timed s!"t{t} scopeOkH" (fun _ => _root_.Flock.ProvedScope.scopeOkH (memberCircuit h t)) b
   let _ ← timed "namesOnce" (fun _ => namesOnce h) b
   let _ ← timed "writersFirst" (fun _ => writersFirst h) b
+  let _ ← timed "sourceRowsNamed" (fun _ => sourceRowsNamed h) b
   let _ ← timed "wiresAlike" (fun _ => wiresAlike h) b
+  let _ ← timed "writtenRowsUnwired" (fun _ => writtenRowsUnwired h) b
+  let _ ← timed "writtenRowsRead" (fun _ => writtenRowsRead h) b
+  let _ ← timed "portsOnce" (fun _ => portsOnce h) b
   let _ ← timed "refReadsOwn" (fun _ => refReadsOwn h) b
   let _ ← timed "the interior registration registers no value" (fun _ => h.interiorNames.values.isEmpty) b
 
