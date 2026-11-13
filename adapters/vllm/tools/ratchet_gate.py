@@ -100,7 +100,10 @@ the change doesn't touch is never linted.
 
 Each counted lint's sites are counted the same way, when its base has the lint, loaded from the base and counting as it
 counts: each ``*.py`` file the change adds or modifies outside that lint's ``LEFT_OUT`` fails when its count grows, naming the
-new sites and the lint's fix.  Its direct environment reads (configuration is read in one place), unless the file is a
+new sites and the lint's fix.  Of a file's rise, the sites the other files it changes lose are no new text and not
+growth, where the change's list records the file's sites: each is known by what it is and the stripped line it stands
+on, as many as those files' counts fall by, so a class split out of a file takes its sites with it and pays for no new
+one.  Its direct environment reads (configuration is read in one place), unless the file is a
 settings registry at the change's base (a ``settings.py``, or a file the base's list marks, so a mark that comes with the
 reads it would exempt doesn't count): the fix is the area's settings registry.  Its except handlers that swallow what they
 catch (every outcome is recorded): the fix is to re-raise, record the outcome, or narrow the handler.
@@ -876,10 +879,12 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
     and after, per file as that lint counts (None when the base has no such lint): the files it ``read``; each site the change
     adds, ``file:line what`` (``new``); each file whose count ``grown``, with its counts; and each list entry a rename leaves
     behind (``unmoved``).  A file the lint exempts (``is_registry``: the environment-read lint's settings registries) is
-    exempt as the change's base marks it, so a mark that comes with the sites it would exempt doesn't.  Of a grown file's
-    sites, those on lines the change adds are named first.  A file that didn't grow fails when the change's list leaves more
-    of its sites uncovered than its base's list did (at a renamed file's old path, where an exemption or a path the lint left
-    out covers them all)."""
+    exempt as the change's base marks it, so a mark that comes with the sites it would exempt doesn't.  A file's rise is
+    growth less the sites the files whose counts fall lose (each by what it is and the stripped line it stands on, as
+    many as those files fall by), where the change's list allows the file its sites.  Of a grown file's sites, those on
+    lines the change adds are named first, one that came from another file after the rest.  A file that didn't grow fails when
+    the change's list leaves more of its sites uncovered than its base's list did (at a renamed file's old path, where an
+    exemption or a path the lint left out covers them all)."""
     lint = counted_lint_at(base, slug, sites, noun)
     if lint is None:
         return None
@@ -892,19 +897,41 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
         return out
     data = blobs({b for *_, lo, hi in sources for b in (lo, hi) if b})
     (listed_before, marked_before), (listed, marked) = counted_list(lint, slug, c.lo), counted_list(lint, slug, c.hi)
-    new = []
+
+    def rows(text: str, found: list) -> Counter:
+        """each of a file's sites as what it is and the stripped line it stands on, so one that moves is told from a new one"""
+        lines = text.split("\n")
+        return Counter((what, lines[line - 1].strip() if 0 < line <= len(lines) else "") for line, what in found)
+
+    read = []
     for f, o, lo, hi in sources:
-        if exempt(f, marked_before):
-            continue
-        was = count(data[lo].decode("utf-8", errors="replace"), o) if lo else []
-        now = count(data[hi].decode("utf-8", errors="replace"), f)
-        if len(now) > len(was):
-            fresh = added_rows(c.lo, c.hi, f)
-            found = sorted((line not in fresh, line, what) for line, what in now)
-            new += [(f, line, f"{f}:{line} {what}") for _, line, what in found[:len(now) - len(was)]]
-            out["grown"].append(f"{f} {len(was)} -> {len(now)}")
-            continue
+        if not exempt(f, marked_before):
+            before, after = (data[b].decode("utf-8", errors="replace") if b else "" for b in (lo, hi))
+            read.append((f, o, before, after, count(before, o) if lo else [], count(after, f)))
+    lost, room = Counter(), 0
+    for _, _, before, after, was, now in read:
+        if len(now) < len(was):
+            lost += rows(before, was) - rows(after, now)
+            room += len(was) - len(now)
+    new = []
+    for f, o, before, after, was, now in read:
         allows = math.inf if exempt(f, marked) else listed[f]
+        over, came, note = len(now) - len(was), Counter(), ""
+        if over > 0:
+            gained = rows(after, now) - rows(before, was)
+            came = Counter(sorted((gained & lost).elements())[:min(over, room)])
+            if moved := sum(came.values()):
+                note = f", {moved} of them moved here"
+                if len(now) <= allows:
+                    lost, room, over = lost - came, room - moved, over - moved
+                else:
+                    came, note = Counter(), f"{note}, which {listed_at} doesn't record: it allows {allows} of the file's"
+        if over > 0:
+            fresh, lines = added_rows(c.lo, c.hi, f), after.split("\n")
+            found = sorted((line not in fresh, came[what, lines[line - 1].strip()] > 0, line, what) for line, what in now)
+            new += [(f, line, f"{f}:{line} {what}") for *_, line, what in found[:over]]
+            out["grown"].append(f"{f} {len(was)} -> {len(now)}{note}")
+            continue
         allowed = (math.inf if o is None or o.startswith(tuple(lint.LEFT_OUT)) or exempt(o, marked_before)
                    else listed_before[o])
         if max(0, len(now) - allows) <= max(0, len(was) - allowed):

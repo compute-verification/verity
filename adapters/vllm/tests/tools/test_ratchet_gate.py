@@ -2035,3 +2035,63 @@ def test_a_renamed_file_s_ruff_finding_is_the_bases_at_its_new_path_and_a_second
     past = both_ruffed.commit("past it", {REPO_RUFF_JSON: _allowlist(TOOLS_F401, {**b401, "count": 2})})
     c = _queued(both_ruffed, 8, past)
     assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_RUFF_JSON}: {G.key(b401)} 0 -> 2"]), c["why"]
+
+
+TWO_TERMS = TOY_GLOSSARY + '| "samovar" | urn |\n'
+
+
+@pytest.fixture
+def terms_split(repo) -> Repo:
+    """``repo`` with the repository's real retired-terms lint, two retired terms, and docs/a.md's two uses of one, listed."""
+    repo.commit("retired terms", {REPO_TERMS_LINT: (SCRIPT.parents[3] / REPO_TERMS_LINT).read_text(), "GLOSSARY.md": TWO_TERMS,
+                                  "docs/a.md": A_USES, REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2})})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+def test_a_site_moved_between_two_files_of_one_change_is_not_new_where_the_list_carries_it(terms_split):
+    """A change that splits a file: one of docs/a.md's two uses goes, as it is, to a new docs/c.md, and the list's count
+    with it.  Over the two files no count grows and the use is no new text, so the change passes, and the repository's
+    lint with it; with the entry left where it was, the use is refused, naming what the list doesn't record."""
+    split = {"docs/a.md": "# A\n\nA teapot boils it.\n", "docs/c.md": "# C\n\nA teapot cools.\n"}
+    terms_split.commit("docs/c.md takes one of a.md's uses, and the list's count with it", {
+        **split, REPO_TERMS_JSON: _allowlist(DOCS_A, {"file": "docs/c.md", "count": 1})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_retired_terms")) == ("passed", ["docs/a.md", "docs/c.md"]), c["why"]
+    assert "no retired-term site is new in the 2 file(s) it changes" in c["why"], c["why"]
+    assert _terms_lint(terms_split) is None
+    terms_split.git("checkout", "-q", "-B", "pr", "main")
+    terms_split.commit("the same split, the list as it was", split)
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(
+        f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
+        f"(docs/c.md 0 -> 1, 1 of them moved here, which {REPO_TERMS_JSON} doesn't record: it allows 0 of the file's)"), c["why"]
+    assert c["fix"] == [C_SITE.format(3)]
+    assert "docs/c.md: 1 found, 0 allowed" in (_terms_lint(terms_split) or "")
+
+
+def test_a_moved_site_pays_for_no_new_one_and_only_a_file_whose_count_falls_gives_one(terms_split):
+    """With a list that already allows docs/c.md two, so no change below touches it: the split with a second use in
+    docs/c.md adds one site, the one the split doesn't bring; and a file that says another retired term where it said
+    the first keeps its count, so the first term's use in docs/c.md is new text over the two files."""
+    terms_split.git("checkout", "-q", "main")
+    terms_split.commit("a list ahead of its tree", {
+        REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, {"file": "docs/c.md", "count": 2})})
+    terms_split.git("checkout", "-q", "-B", "pr")
+    terms_split.commit("docs/c.md takes one of a.md's uses", {
+        "docs/a.md": "# A\n\nA teapot boils it.\n", "docs/c.md": "# C\n\nA teapot cools.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["why"]) == ("passed", "no retired-term site is new in the 2 file(s) it changes"), c["why"]
+    terms_split.commit("and uses the term again", {"docs/c.md": "# C\n\nA teapot cools.\n\nA teapot naps.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(
+        f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
+        f"(docs/c.md 0 -> 2, 1 of them moved here)"), c["why"]
+    assert c["fix"] == [C_SITE.format(5)]
+    terms_split.git("checkout", "-q", "-B", "pr", "main")
+    terms_split.commit("a.md says another retired term, and c.md the first", {
+        "docs/a.md": A_USES.replace("teapot boils", "samovar boils"), "docs/c.md": "# C\n\nA teapot boils it.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(
+        f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
+        f"(docs/c.md 0 -> 1)"), c["why"]
