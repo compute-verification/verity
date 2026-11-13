@@ -14,7 +14,7 @@ The graph (`Graph`):
 
 - **Nodes.** A node is a root Call of a Program (`from_program`), or a group of Calls (`coarsen`). Its work is its nonlinear
   units, the gate model's `nonlinear` (`security/Definitions/Accounting/Gates/Model.lean`): property/v1's budgeted
-  units (`verity.definitions.circuits.stacking`; only gates with an operand that depends on a run input count) plus its data
+  units (`verity.circuits.stacking`; only gates with an operand that depends on a run input count) plus its data
   products, each lane of an s8-family step whose two multiplicands both depend on a run input (attention's QKᵀ and PV;
   a MAC by a weight is a linear map, free), as `benchmarks/property_redteam/products_pass.py` counts them. E is in the
   same units. A node with a gate property/v1 refuses (unlisted, or a word read at another width) has unknown work and
@@ -361,8 +361,8 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
     run inputs that are fixed before the coins all the same (the census's 8B Build binds its weights so): their values
     carry no bits and no product reads them as data, so a weight's MACs stay linear maps."""
     from verity.circuits.program import RUN, input_id, is_input
-    from verity.definitions.circuits import stacking as P
-    from verity.definitions.circuits.census import census, step_of
+    from verity.circuits import stacking as P
+    from verity.circuits.census import census, step_of
 
     if str(REDTEAM) not in sys.path:
         sys.path.insert(0, str(REDTEAM))
@@ -651,7 +651,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         from units import load
 
-        from verity.definitions.circuits.census import census, step_ends
+        from verity.circuits.census import census, step_ends
 
         program = load(a.descriptor)
         ends = step_ends(program, [a.sample])
