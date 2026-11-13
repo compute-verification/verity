@@ -195,6 +195,7 @@
   "Proofs.Properties.Verity.SampledTwo.Shown",
   "Proofs.Properties.Verity.SampledTwo.FirstSample",
   "Proofs.Properties.Verity.SampledTwo.InputMap",
+  "Proofs.Properties.Verity.SampledTwo.Accepts",
   "Proofs.Properties.Verity.SampledTwo.Device",
   "Proofs.Properties.Verity.SampledTwo.DeviceRead",
   "Proofs.Properties.Verity.SampledTwo.DeviceOrder",
