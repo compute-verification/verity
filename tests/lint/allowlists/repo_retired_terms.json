@@ -3098,7 +3098,6 @@
     {"file": "benchmarks/pouw/filler/dcap.cu", "count": 2},
     {"file": "benchmarks/pouw/filler/flin.cuh", "count": 12},
     {"file": "benchmarks/pouw/filler/pfill.cuh", "count": 2},
-    {"file": "benchmarks/pouw/filler/scoring.py", "count": 1},
     {"file": "benchmarks/pouw/floored_gemm/fgemm.cu", "count": 3},
     {"file": "benchmarks/pouw/gpu_kit/bench.cuh", "count": 1},
     {"file": "benchmarks/pouw/h1_lanes/j10r.py", "count": 4},
