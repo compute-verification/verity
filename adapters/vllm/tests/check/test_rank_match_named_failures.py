@@ -110,6 +110,27 @@ def test_an_own_partial_the_lm_heads_class_does_not_admit_fails_links():
                         "the site class admits ('Gemm_v1', 'Gemm_v2', 'batch:Gemm') (wrong producer)")
 
 
+@pytest.mark.parametrize("module_path", ["lm_head", "lm_head (ParallelLMHead) of rank 0", "lm_head (ParallelLMHead]", "lm_head (SomeOtherHead)", None],
+                         ids=["the site alone", "a class not at the end", "a bracket that does not close", "a class with no rule", "no module path"])
+def test_a_link_whose_module_path_ends_in_no_class_with_a_rule_has_its_producer_asked_of_no_class(module_path):
+    """Today's answer, held as that: the class is what a link's `module_path` ends in, `<site> (<class>)`, and the producer rule is
+    the class's.  A link that states the site alone, a class elsewhere or in a bracket left open, a class no rule names, or no
+    `module_path`, names no class with a rule, so `links` asks nothing of its producer: the embedding shard that the LM head's class refuses passes, as the
+    partial producer it is in general."""
+    colls, _ = _world()
+    links: dict[int, list[dict] | dict[str, list[dict]]] = {}
+    for r in colls:
+        row, head = _links(r, 2, ("RowParallelLinear", "ParallelLMHead"))
+        if module_path is None:
+            del head["module_path"]
+        else:
+            head["module_path"] = module_path
+        links[r] = [row, head]
+    res = RM.cross_rank_check(colls, links=links, producers={r: {(0, 0): ["Gemm_v1{K=8}"], (0, 1): ["EmbeddingShard_v1{V=8}"]} for r in colls})
+    assert res["verdict"] == "PASS" and res["failed"] == [], res
+    assert "links" in [c["name"] for c in res["checks"]]
+
+
 def test_a_recorder_with_one_row_twice_fails_recorder():
     colls, recorder = _world()
     recorder[0].append(dict(recorder[0][0]))
