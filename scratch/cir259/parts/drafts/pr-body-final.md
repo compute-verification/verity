@@ -70,3 +70,4 @@ The replacements are the ones CIR-259's first part staged and verified bound (CE
 - **The new `MAIN_ZK` and `MAIN_M0` were taken on sm_120**, where `main`'s were taken with `SM=90`. The prover's transcripts are device-independent, but no sm_90 run of the new default was made [inferred from `gpu_proofs_match_cpu`].
 - **`SparseMlaHeadEnd_v2`** was not staged bound here. `sparse-mla-head`'s end block stays `SparseMlaHeadEnd_v1`.
 - **The Lean verifier took 147,217,100 kB (about 147 GB) resident** on `DsaIndexerQ_v1{H=32,D=128,ROPE=64}` at one block (`r20261112-183158-1477`). Its `circuit.txt` is 35,924,397,430 bytes. Lean's memory at a full statement of it is not known.
+- **The branch holds `main` up to `a2ba479e2b61`** (merged at `64bb330833c2`, just before the layout moves) and is not yet carried across the moves.
