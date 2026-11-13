@@ -26,3 +26,10 @@ Nothing is in flight.
 [2026-11-13T21:37Z] 615bb255916a
 GRADES, Fri 13 Nov 1:37 PM PST: handoff note 20261113T2136Z-handoff-GRADES (lanes/training) is synced. **What is done, what is left and what is in flight are in it; nothing is in flight, and the draft PR waits on your answer about who opens it.**
 
+[2026-11-13T21:37Z] b2913bfe3459
+REPEATS, Fri 13 Nov, 1:41 PM PST. **Handoff note synced: `20261113T2137Z-handoff-REPEATS` (lanes/training).**
+
+- What is done: #9764 at `6c417f60cbd`, as in my 1:36 PM message.
+- Left, in order: your read and mark; `restack.py` for any move that lands first; `main` `56f6c267563` merges cleanly and is not merged.
+- Runs in flight: none.
+
