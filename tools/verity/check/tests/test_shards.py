@@ -37,8 +37,8 @@ SUITES = CHECK._parts_of()["lean-suites"]
 COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
 POUW = tuple(f"lean-suites:verity-pouw-benchmarks:{k}/3" for k in (1, 2, 3))
 #: the lean-suites every plan runs beside the security analysis's audit, and beside lean-build; the rest go with the Rust build
-BESIDE_AUDIT = (*(f"lean-suites:{s}" for s in ("verity-vllm", "verity/protocols/recursion/verifier/vstar_cli",
-                                               "verity-core-evaluate", "pous-check", "verity/protocols/certifier/verifier",
+BESIDE_AUDIT = (*(f"lean-suites:{s}" for s in ("verity-vllm", "verity/protocols/proofs/recursion/verifier/vstar_cli",
+                                               "verity-core-evaluate", "pous-check", "verity/protocols/accounting/certifier/verifier",
                                                "verity-pouw-check-difftest")),
                 COMPOSITION[2], POUW[2])
 BESIDE_BUILD = ("lean-suites:verity-flock", COMPOSITION[0], POUW[1])
@@ -172,7 +172,7 @@ def test_a_package_the_plan_doesnt_name_goes_to_the_shard_with_the_rest():
     new = [*PACKAGES, "protocols/new/lean"]
     for n in D.plans():
         [holder] = [s for s in _resolved(n, new) if "lean-audit:protocols/new/lean" in s]
-        assert "lean-audit:verity/protocols/flock/verifier" in holder and not set(SECURITY) & set(holder)
+        assert "lean-audit:verity/protocols/proofs/flock/verifier" in holder and not set(SECURITY) & set(holder)
 
 
 def test_a_plan_naming_a_package_the_tree_lacks_stops_the_shard():
