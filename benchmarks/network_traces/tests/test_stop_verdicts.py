@@ -68,7 +68,8 @@ def registration(of: C.Head) -> dict:
 def four(of: C.Head, cls: int = 0, proved_by: object = None, **over: object) -> list[dict]:
     """The four verdicts' records on a class of a head, as their verifiers write them: each accepted, complete and
     naming the head, but for `over`, the verdict's fields."""
-    return [{CC.RUN: f"run of the {kind}", CC.VERIFIER: {"module": f"the {kind}'s verifier", "commit": "a commit"},
+    return [{CC.RUN: f"run of the {kind}", CC.SERVE: "the serve", CC.REGISTRATION: "its registration's digest",
+             CC.VERIFIER: {"module": f"the {kind}'s verifier", "commit": "a commit"},
              CC.VERDICT: {SV.FORMAT: FORMATS[kind], CC.LINK: of.link, CC.WINDOW: of.window, CC.CLASS: cls,
                           CC.HEAD: of.digest().hex(), "registration": "a digest", CC.ACCEPTED: True,
                           CC.COMPLETE: True, "codes": []} | over,
@@ -116,12 +117,13 @@ def test_an_execution_phase_is_held_only_with_the_verdicts_of_every_class_that_h
         f"the link {LINK}, execution phase 4, {CC.charge(second, 0, by_verdict(four(second))).why()}",
         f"the link {LINK}, execution phase 4, class 1: a count of 0, so no connection is charged and no verdict is owed")
     assert [v["verdict"] for v in got.verdicts] == list(CC.VERDICTS) * 2
-    assert all(v["mark"] == LB.RUN_NOT_PROVED == "run, not proved" and
-               set(v) == {"verdict", *CC.READ, CC.RUN, CC.VERIFIER, CC.PROVED_BY, "mark"} for v in got.verdicts)
+    assert all(v["mark"] == LB.RUN_NOT_PROVED == "run, not proved" and set(v) == {
+        "verdict", *CC.READ, CC.RUN, CC.SERVE, CC.REGISTRATION, CC.VERIFIER, CC.PROVED_BY, "mark"} for v in got.verdicts)
     tie = got.verdicts[1]
     assert (tie[CC.RUN], tie[CC.VERIFIER], tie[CC.HEAD], tie[CC.ACCEPTED], tie[CC.COMPLETE], tie[CC.WINDOW]) == (
         "run of the response tie", {"module": "the response tie's verifier", "commit": "a commit"},
         first.digest().hex(), True, True, 3)
+    assert (tie[CC.SERVE], tie[CC.REGISTRATION]) == ("the serve", "its registration's digest")
     # a proof named in a record changes no mark here
     proved = SV.stop(both[:1], four(first, proved_by="a theorem"))
     assert proved.held == 1 and {v["mark"] for v in proved.verdicts} == {LB.RUN_NOT_PROVED}
@@ -160,25 +162,62 @@ def test_an_execution_phase_is_held_only_with_the_verdicts_of_every_class_that_h
     assert SV.stop(both[:1], four(first), ["r9 is not read"]).why[-1] == "r9 is not read"
 
 
-def not_one(phases: int, differ: str) -> str:
+def not_one(phases: int, differ: str, how: str = "") -> str:
     """The answer's first line where each of the four verdicts was read and they are not one class's."""
     return (f"each connection is charged its whole schedule: not one class: unchecked: each of the 4 verdicts was "
             f"read, and no class that holds a row in the {phases} execution phase(s) read has all of them on its "
-            f"head: {differ}")
+            f"head{' ' + how if how else ''}: {differ}")
 
 
 NO_ONE = "they name no one class of one execution phase on one head"
 A_CLASS, A_PHASE = "the class (`class`)", "the execution phase (`link`, `window`)"
-A_HEAD = "the signed head (`head`), a serve's, which its registration is held to"
+A_HEAD = "the signed head (`head`) of the network certifier's rows"
+A_SERVE, A_REGISTRATION = "the serve (`serve`)", "the registration (`registration`)"
 LACK = ("each connection is charged its whole schedule: 1 of the 1 class(es) that hold a row in the 1 execution "
         "phase(s) read lack a verdict, one in each execution phase that holds a row")
 
 
+def test_four_verdicts_of_two_serves_or_under_two_registrations_hold_nothing_and_the_first_line_names_which():
+    """Four accepts on one head of one class, one of them of another serve or under another registration, are not
+    one class's: the answer holds nothing, its first line says so and names the field, the class's line names the
+    two, and the calculator's rows are the rows of no record at all."""
+    first, whole = head(3, 5, 0), LB.table(LB.inputs())
+    assert SV.stop([registration(first)], four(first)).held == 1
+    for key, what, other in ((CC.SERVE, A_SERVE, "another serve"),
+                             (CC.REGISTRATION, A_REGISTRATION, "another's digest")):
+        ours = four(first)[0][key]
+        for i in range(len(CC.VERDICTS)):
+            records = [r | {key: other} if j == i else r for j, r in enumerate(four(first))]
+            got = SV.stop([registration(first)], records)
+            assert got.held == 0 and len(got.verdicts) == 4 and got.why[:2] == (
+                not_one(1, f"they differ in {what}", "as one serve's under one registration"),
+                f"the link {LINK}, execution phase 3, class 0: charged its whole schedule on each of its 5 rows: its "
+                f"verdicts on this head name 2 `{key}`s, not one ({', '.join(sorted((ours, other)))})"), (key, i)
+            assert LB.table(LB.inputs(), got) == whole
+            assert {v[key] for v in got.verdicts} == {ours, other}
+        # all four of the other serve, or under the other registration, are one class's
+        assert SV.stop([registration(first)], [r | {key: other} for r in four(first)]).held == 1
+    # one of another serve and one under another registration: both are named
+    records = [r | change for r, change in zip(four(first), (
+        {CC.SERVE: "another serve"}, {CC.REGISTRATION: "another's digest"}, {}, {}))]
+    got = SV.stop([registration(first)], records)
+    assert got.held == 0 and got.why[0] == not_one(1, f"they differ in {A_SERVE} and in {A_REGISTRATION}",
+                                                   "as one serve's under one registration")
+    # two execution phases, each with its four of its own serve, are each held: the names are held to one a class
+    second = head(4, 2, 0)
+    theirs = [r | {CC.SERVE: "another serve", CC.REGISTRATION: "another's digest"} for r in four(second)]
+    assert SV.stop([registration(first), registration(second)], four(first) + theirs).held == 2
+    # and a held execution phase beside one whose four are of two serves is still held: the line is the count
+    mixed = [r | {CC.SERVE: "another serve"} if j == 0 else r for j, r in enumerate(four(second))]
+    got = SV.stop([registration(first), registration(second)], four(first) + mixed)
+    assert got.held == 1 and got.why[0].startswith("1 of the 2 execution phase(s) read are charged below")
+    assert got.why[3].endswith(": its verdicts on this head name 2 `serve`s, not one (another serve, the serve)")
+
+
 def test_four_verdicts_that_are_not_one_classs_hold_nothing_and_the_first_line_names_what_they_differ_in():
-    """The four verdicts count only as one class's: of one class, of one serve and under one registration, as far
-    as a record says where it is, which is its class, its execution phase and its signed head. Each of the three
-    ways four accepts can differ holds nothing, and the answer's first line says so and names the field. The
-    calculator's rows are then the rows of no record at all."""
+    """The four verdicts count only as one class's: of one class, in one execution phase, on one signed head. Each
+    way four accepts can be of no one class on one head holds nothing, and the answer's first line says so and
+    names the field. The calculator's rows are then the rows of no record at all."""
     assert SV.NOT_ONE_CLASS == "not one class: unchecked"
     whole = LB.table(LB.inputs())
     # another class: the stop record is of class 0 and the other three of class 1, on a head whose two classes
@@ -282,8 +321,9 @@ def test_a_verdict_whose_format_is_not_listed_reads_as_missing(monkeypatch):
         assert SV.stop([registration(first)], [tie]).verdicts == ()
 
 
-NO_RECORD = (f"a verdict record is an object with the fields {', '.join(CC.FIELDS)}, its verdict an object, its run "
-             "named and its verifier by its module and commit")
+NO_RECORD = ("a verdict record is an object with the fields run, serve, registration, verifier, verdict, proved_by, "
+             "its verdict an object, its run, serve, registration named, its verifier by its module and commit, and "
+             "its proved_by a name or null; of one read, ")
 
 
 def test_anything_less_is_the_whole_schedule_with_a_line_that_says_why():
@@ -299,23 +339,29 @@ def test_anything_less_is_the_whole_schedule_with_a_line_that_says_why():
              f"two heads are given for execution phase 3 of the link {LINK}"),
             ([{"format": C.REGISTRATION}], four(first), "a registration of connection rows doesn't read: "
                                                         "KeyError('word_bits')"),
-            ([registration(first)], [*four(first), "accept"], f"{NO_RECORD}, not 'accept'"),
+            ([registration(first)], [*four(first), "accept"], f"{NO_RECORD}it is no object: 'accept'"),
             ([registration(first)], [four(first)[0] | {CC.VERDICT: "accept"}],
-             f"{NO_RECORD}, not {four(first)[0] | {CC.VERDICT: 'accept'}!r}")):
+             f"{NO_RECORD}its `verdict` is no object: {four(first)[0] | {CC.VERDICT: 'accept'}!r}")):
         got = SV.stop(registrations, records)
         assert (got.held, got.verdicts, got.why[0]) == (0, (), whole + why), why
-    # four verdicts that each accept on the head hold it, and hold nothing once one of them names no run, or no
-    # verifier by its module and commit: a verdict nobody can trace to what produced it. So does one of a format
-    # listed for no verdict, which would otherwise count for nothing
+    # four verdicts that each accept on the head hold it, and hold nothing once one of them names no run, no serve,
+    # no registration, or no verifier by its module and commit: a verdict nobody can trace to what produced it and
+    # to what it is of, and the line names the field. So does one of a format listed for no verdict, which would
+    # otherwise count for nothing
     assert SV.stop([registration(first)], four(first)).held == 1
     tie, unlisted = four(first)[1], four(first)[1] | {CC.VERDICT: four(first)[1][CC.VERDICT] | {SV.FORMAT: "another's"}}
     for of in (tie, unlisted):
-        for off in ({k: v for k, v in of.items() if k != CC.RUN}, {k: v for k, v in of.items() if k != CC.VERIFIER},
-                    {k: v for k, v in of.items() if k != CC.PROVED_BY}, of | {CC.RUN: ""}, of | {CC.VERIFIER: None},
-                    of | {CC.VERIFIER: {"module": of[CC.VERIFIER]["module"]}},
-                    of | {CC.VERIFIER: of[CC.VERIFIER] | {"commit": ""}}, {CC.VERDICT: of[CC.VERDICT]}):
+        for off, lack in (
+                *(({k: v for k, v in of.items() if k != field}, f"it has no `{field}`")
+                  for field in (CC.RUN, CC.SERVE, CC.REGISTRATION, CC.VERIFIER, CC.PROVED_BY)),
+                (of | {CC.RUN: ""}, "its `run` is no name"), (of | {CC.SERVE: ""}, "its `serve` is no name"),
+                (of | {CC.REGISTRATION: None}, "its `registration` is no name"),
+                (of | {CC.VERIFIER: None}, "its `verifier` names no `module`, `commit`"),
+                (of | {CC.VERIFIER: {"module": of[CC.VERIFIER]["module"]}}, "its `verifier` names no `commit`"),
+                (of | {CC.VERIFIER: of[CC.VERIFIER] | {"commit": ""}}, "its `verifier` names no `commit`"),
+                ({CC.VERDICT: of[CC.VERDICT]}, "it has no `run`, `serve`, `registration`, `verifier`, `proved_by`")):
             got = SV.stop([registration(first)], [*four(first)[:1], off, *four(first)[2:]])
-            assert (got.held, got.verdicts, got.why[0]) == (0, (), f"{whole}{NO_RECORD}, not {off!r}"), off
+            assert (got.held, got.verdicts, got.why[0]) == (0, (), f"{whole}{NO_RECORD}{lack}: {off!r}"), off
     assert SV.stop([registration(first)], [*four(first), unlisted]).held == 1
     tampered = registration(first)
     tampered["tables"][2]["rows"] = 0
@@ -480,7 +526,7 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
     store = Store(tmp_path / "unread", {"old": held_files(first, [*four(first), "accept"]), "new": accepts})
     for superseded in ((), ["old"]):
         got = SV.of_runs(store, ["old", "new"], superseded)
-        assert got.held == 0 and got.why[0].endswith(f"{NO_RECORD}, not 'accept'")
+        assert got.held == 0 and got.why[0].endswith(f"{NO_RECORD}it is no object: 'accept'")
     # and the registration it kept is read as any run's: another head for the execution phase holds nothing
     other = head(3, 6, 0)
     store = Store(tmp_path / "heads", {"old": held_files(other, four(other)), "new": accepts})

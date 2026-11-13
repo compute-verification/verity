@@ -29,7 +29,8 @@ def record(kind: str, cls: int = 0, of: C.Head = HEAD, run: str | None = None, *
     `over`, the verdict's fields; one given as `...` is left out."""
     verdict = {"format": f"the {kind}'s", K.LINK: of.link, K.WINDOW: of.window, K.CLASS: cls,
                K.HEAD: of.digest().hex(), K.ACCEPTED: True, K.COMPLETE: True, "codes": []} | over
-    return {K.RUN: run or f"run of the {kind}", K.VERIFIER: {"module": "a.verifier", "commit": "a commit"},
+    return {K.RUN: run or f"run of the {kind}", K.SERVE: "the serve", K.REGISTRATION: "its registration's digest",
+            K.VERIFIER: {"module": "a.verifier", "commit": "a commit"},
             K.VERDICT: {k: v for k, v in verdict.items() if v is not ...}, K.PROVED_BY: None}
 
 
@@ -138,30 +139,85 @@ def test_a_head_without_the_class_and_records_that_do_not_read_are_refused():
     for records in ([record(K.RESPONSE_TIE)], four() | {"a fifth verdict": []}):
         with pytest.raises(ValueError, match="the records are given by verdict, each one of stop record, response tie"):
             K.charge(HEAD, 0, records)
-    for off in ("accept", {K.RUN: "a run"}, record(K.RESPONSE_TIE) | {K.VERDICT: "accept"}):
-        with pytest.raises(ValueError, match="a verdict record is an object with the fields run, verifier, verdict, "
-                                             "proved_by, its verdict an object with link, window, class, head"):
+    assert K.A_RECORD == (
+        "a verdict record is an object with the fields run, serve, registration, verifier, verdict, proved_by, its "
+        "verdict an object, its run, serve, registration named, its verifier by its module and commit, and its "
+        "proved_by a name or null")
+    for off, lack in (("accept", "it is no object"),
+                      ({K.RUN: "a run"}, "it has no `serve`, `registration`, `verifier`, `verdict`, `proved_by`"),
+                      (record(K.RESPONSE_TIE) | {K.VERDICT: "accept"}, "its `verdict` is no object")):
+        assert K.lacks(off) == lack
+        with pytest.raises(ValueError) as e:
             K.charge(HEAD, 0, but(K.RESPONSE_TIE, off))
+        assert str(e.value) == f"{K.A_RECORD}; of the response tie's, {lack}: {off!r}"
 
 
-def test_a_record_that_names_no_run_or_no_verifier_is_refused_though_its_verdict_accepts():
-    """Each record below holds an accepted, complete verdict on the head: what it lacks is who produced or judged it,
-    or the field that says what proves the verifier."""
+def test_a_record_that_names_no_run_serve_registration_or_verifier_is_refused_by_the_fields_name():
+    """Each record below holds an accepted, complete verdict on the head: what it lacks is who produced or judged
+    it, the serve its class came from, what that serve registered, or the field that says what proves the verifier.
+    Each is refused, and the refusal names the field."""
     tie = record(K.RESPONSE_TIE)
-    assert K.reads(tie) and K.reads(tie | {K.PROVED_BY: "A.Guarantee"}) and K.charge(HEAD, 0, but(K.RESPONSE_TIE, tie)).below
+    assert K.FIELDS == ("run", "serve", "registration", "verifier", "verdict", "proved_by")
+    assert K.lacks(tie) is None and K.reads(tie) and K.reads(tie | {K.PROVED_BY: "A.Guarantee"})
+    assert K.charge(HEAD, 0, but(K.RESPONSE_TIE, tie)).below
     verifier = tie[K.VERIFIER]
-    lacking = [{k: v for k, v in tie.items() if k != field} for field in K.FIELDS]
-    lacking += [tie | change for change in (
-        {K.RUN: None}, {K.RUN: ""}, {K.RUN: 7}, {K.VERIFIER: None}, {K.VERIFIER: "a.verifier"}, {K.VERIFIER: {}},
-        {K.VERIFIER: {K.MODULE: verifier[K.MODULE]}}, {K.VERIFIER: {K.COMMIT: verifier[K.COMMIT]}},
-        {K.VERIFIER: verifier | {K.MODULE: ""}}, {K.VERIFIER: verifier | {K.COMMIT: None}}, {K.PROVED_BY: ""},
-        {K.PROVED_BY: False}, {K.PROVED_BY: ["A.Guarantee"]})]
-    for off in lacking:
-        assert not K.reads(off), off
-        with pytest.raises(ValueError, match="its run named, its verifier by its module and commit, and its "
-                                             "proved_by a name or null; the response tie's is "):
+    lacking = [({k: v for k, v in tie.items() if k != field}, f"it has no `{field}`") for field in K.FIELDS]
+    lacking += [(tie | {field: value}, f"its `{field}` is no name")
+                for field in (K.RUN, K.SERVE, K.REGISTRATION) for value in (None, "", 7, ["a name"])]
+    lacking += [(tie | {K.VERIFIER: value}, f"its `verifier` names no `{names}`") for value, names in (
+        (None, "module`, `commit"), ("a.verifier", "module`, `commit"), ({}, "module`, `commit"),
+        ({K.MODULE: verifier[K.MODULE]}, "commit"), ({K.COMMIT: verifier[K.COMMIT]}, "module"),
+        (verifier | {K.MODULE: ""}, "module"), (verifier | {K.COMMIT: None}, "commit"))]
+    lacking += [(tie | {K.PROVED_BY: value}, "its `proved_by` is neither a name nor null")
+                for value in ("", False, ["A.Guarantee"])]
+    for off, lack in lacking:
+        assert K.lacks(off) == lack and not K.reads(off), off
+        with pytest.raises(ValueError) as e:
             K.charge(HEAD, 0, but(K.RESPONSE_TIE, off))
+        assert str(e.value) == f"{K.A_RECORD}; of the response tie's, {lack}: {off!r}"
         # beside a record that reads, and on a class that owes nothing, it is refused the same
         for at, cls, records in ((HEAD, 0, but(K.RESPONSE_TIE, tie, off)), (head(0, 5), 0, {K.RESPONSE_TIE: [off]})):
             with pytest.raises(ValueError, match="a verdict record is an object with the fields"):
                 K.charge(at, cls, records)
+
+
+def test_four_verdicts_of_two_serves_or_under_two_registrations_are_charged_the_whole_schedule():
+    """The four are one class's only where their records name one serve and one registration. The head holds the
+    network certifier's rows to a serve and says nothing of the values the stop record and the compute audit
+    judge, so four accepts on one head of one class, one of them of another serve's values or under another
+    registration, charge nothing less, and the line says which name differs."""
+    assert K.ONE == (K.SERVE, K.REGISTRATION) == ("serve", "registration")
+    assert K.charge(HEAD, 0, four()).differ == ()
+    for key, other in ((K.SERVE, "another serve"), (K.REGISTRATION, "another's digest")):
+        ours = record(K.COMPUTE_AUDIT)[key]
+        for kind in K.VERDICTS:
+            got = K.charge(HEAD, 0, but(kind, record(kind) | {key: other}))
+            assert (got.below, got.schedules, got.owed, len(got.read)) == (False, 5, (), 4), (key, kind)
+            assert got.differ == ((key, tuple(sorted((ours, other)))),)
+        assert got.why() == (f"class 0: charged its whole schedule on each of its 5 rows: its verdicts on this head "
+                             f"name 2 `{key}`s, not one ({', '.join(sorted((ours, other)))})")
+        # all four of the other serve, or under the other registration, are one class's
+        assert K.charge(HEAD, 0, {kind: [record(kind) | {key: other}] for kind in K.VERDICTS}).below
+        # a second record of a verdict that names another holds the class too, whether or not it accepts
+        for accepted in (True, False):
+            second = record(K.RESPONSE_TIE, accepted=accepted, run="a second") | {key: other}
+            got = K.charge(HEAD, 0, but(K.RESPONSE_TIE, record(K.RESPONSE_TIE), second))
+            assert not got.below and got.differ == ((key, tuple(sorted((ours, other)))),)
+        # another class's, another execution phase's and another head's records name what they will
+        wide = head(5, 2)
+        beside = {kind: [record(kind, of=wide), record(kind, 1, wide) | {key: other},
+                         record(kind, of=head(5, 2, window=WINDOW + 1)) | {key: other},
+                         record(kind, of=wide, head="another head's digest") | {key: other}] for kind in K.VERDICTS}
+        assert K.charge(wide, 0, beside).below and K.charge(wide, 1, beside).below
+    # both differ, and a verdict lacking beside them: each is named
+    both = but(K.STOP_RECORD, record(K.STOP_RECORD) | {K.SERVE: "another serve", K.REGISTRATION: "another's digest"})
+    got = K.charge(HEAD, 0, {k: v for k, v in both.items() if k != K.RESPONSE_TIE})
+    assert [key for key, _ in got.differ] == list(K.ONE) and got.owed == ((K.RESPONSE_TIE, K.MISSING, ()),)
+    assert got.why() == (
+        "class 0: charged its whole schedule on each of its 5 rows: the response tie is missing; its verdicts on "
+        "this head name 2 `serve`s, not one (another serve, the serve); its verdicts on this head name 2 "
+        "`registration`s, not one (another's digest, its registration's digest)")
+    # a class of no row owes nothing, whatever its records name
+    idle = head(0, 5)
+    assert K.charge(idle, 0, {K.STOP_RECORD: [record(K.STOP_RECORD, of=idle),
+                                              record(K.STOP_RECORD, of=idle) | {K.SERVE: "another serve"}]}).differ == ()

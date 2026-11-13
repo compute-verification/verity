@@ -14,16 +14,19 @@ length is no one's choice:
 - the compute audit: its second stage over the class's sample, that the committed ids are the outputs of the
   request's Program.
 
-**A verdict record** is an object with the four fields `FIELDS`: the run that produced the verdict (`run`, its id),
+**A verdict record** is an object with the six fields `FIELDS`: the run that produced the verdict (`run`, its id),
+the served run the class came from (`serve`, its id), the digest of what that serve registered (`registration`),
 the verifier that judged it (`verifier`: its `module` and the `commit` it ran at), the verdict (`verdict`) and what
-proves the verifier (`proved_by`: a guarantee's name, or null while none does). A record that names no run, or no
-verifier by its module and commit, is refused like one that is no object (`reads`): a verdict that can't be traced
-to what produced it holds nothing. The verdict is the verifier's own object, and whichever of the four it is it
-says what it is of and how it went, in the fields `READ`: the execution phase and the class (`link`, `window`,
-`class`, as the head and the schedule name them), the digest of the signed head it was decided under (`head`), and
-two bits, `accepted` and `complete`, the second saying that what was accepted is the whole of what the verdict is
-of. `charge` decides by those six alone: the names are held to be there and are not weighed, and `proved_by` moves
-no charge. Which of the four a record is is its caller's to say: `charge` takes the records by verdict.
+proves the verifier (`proved_by`: a guarantee's name, or null while none does). A record that names no run, no
+serve, no registration, or no verifier by its module and commit, is refused like one that is no object (`reads`;
+`lacks` says which it is): a verdict that can't be traced to what produced it and to what it is of holds nothing.
+The verdict is the verifier's own object, and whichever of the four it is it says what it is of and how it went,
+in the fields `READ`: the execution phase and the class (`link`, `window`, `class`, as the head and the schedule
+name them), the digest of the signed head it was decided under (`head`), and two bits, `accepted` and `complete`,
+the second saying that what was accepted is the whole of what the verdict is of. `charge` decides by those six
+and by the serve and the registration a record names: the run and the verifier are held to be named and are not
+weighed, and `proved_by` moves no charge. Which of the four a record is is its caller's to say: `charge` takes the
+records by verdict.
 
 **All four or none.** A verdict counts where a record of it is of the class, in the head's execution phase, names
 this head's digest, and every such record is accepted and complete. Naming the head is what holds a verdict to the
@@ -32,6 +35,12 @@ digest. `complete` is a field of the verdict and has no default: a verdict witho
 verdict that is missing, not on this head, refused or not complete leaves every connection of the class at its
 whole schedule, and `charge` names each such verdict with what it lacks. No verdict of one class or head counts for
 another.
+
+**One serve, one registration.** The four are one class's only where they are of one serve under what that serve
+registered: the class's records on this head, counted or not, name one serve and one registration (`ONE`). The head
+holds the network certifier's rows to a serve; it says nothing of the values the stop record and the compute audit
+judge, so two verdicts on one head can be of two serves' values, and these two names are what holds them to one.
+Where the records name two of either, the class is at its whole schedule and `charge` says which (`differ`).
 
 **The count.** A class's count is its three tables' rows as the head states them, one number. A class whose count is
 0 has no connection to charge and owes no verdict. Where the schedule fixes a class's rows whatever the load, the
@@ -53,9 +62,12 @@ from verity.protocols.certifier.verifier.connection_rows import Head
 STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT = "stop record", "response tie", "certified read", "compute audit"
 VERDICTS = (STOP_RECORD, RESPONSE_TIE, CERTIFIED_READ, COMPUTE_AUDIT)
 #: a verdict record's fields, and the fields of its verdict that `charge` reads
-RUN, VERIFIER, VERDICT, PROVED_BY = FIELDS = ("run", "verifier", "verdict", "proved_by")
+RUN, SERVE, REGISTRATION, VERIFIER, VERDICT, PROVED_BY = FIELDS = (
+    "run", "serve", "registration", "verifier", "verdict", "proved_by")
 #: how a record names its verifier
 MODULE, COMMIT = NAMES = ("module", "commit")
+#: what a class's records on a head name one of: the served run the class came from, and what that serve registered
+ONE = (SERVE, REGISTRATION)
 LINK, WINDOW, CLASS, HEAD, ACCEPTED, COMPLETE = READ = ("link", "window", "class", "head", "accepted", "complete")
 #: what a verdict that doesn't count lacks
 MISSING, ANOTHER_HEAD, REFUSED, NOT_COMPLETE = "missing", "not on this head", "refused", "not complete"
@@ -64,16 +76,18 @@ MISSING, ANOTHER_HEAD, REFUSED, NOT_COMPLETE = "missing", "not on this head", "r
 @dataclass(frozen=True, slots=True)
 class ClassCharge:
     """How an execution phase's class is charged. `count`: its count in the head. `below`: whether its connections
-    are charged below their schedule, which takes a count above 0 and all four verdicts. `owed`: each verdict that
-    doesn't count, in `VERDICTS`' order, as (the verdict, what it lacks, the runs of the records that lack it);
-    empty where `below` and where the count is 0. `read`: the class's records on this head, counted or not, each
-    with the verdict it is of, in `VERDICTS`' order."""
+    are charged below their schedule, which takes a count above 0, all four verdicts and one serve and one
+    registration named by them. `owed`: each verdict that doesn't count, in `VERDICTS`' order, as (the verdict,
+    what it lacks, the runs of the records that lack it); empty where `below` and where the count is 0. `read`: the
+    class's records on this head, counted or not, each with the verdict it is of, in `VERDICTS`' order. `differ`:
+    each of `ONE` that those records name more than one of, with the names; empty where `below`."""
 
     cls: int
     count: int
     below: bool
     owed: tuple[tuple[str, str, tuple[str, ...]], ...]
     read: tuple[tuple[str, Mapping[str, Any]], ...]
+    differ: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
     @property
     def schedules(self) -> int:
@@ -87,9 +101,10 @@ class ClassCharge:
                     f"({', '.join(VERDICTS)}) each accepted and complete on this head")
         if not self.count:
             return f"class {self.cls}: a count of 0, so no connection is charged and no verdict is owed"
-        lacks = "; ".join(f"the {kind} is {lack}" + (f" ({', '.join(runs)})" if runs else "")
-                          for kind, lack, runs in self.owed)
-        return f"class {self.cls}: charged its whole schedule on each of its {self.count} rows: {lacks}"
+        lacks = [f"the {kind} is {lack}" + (f" ({', '.join(runs)})" if runs else "") for kind, lack, runs in self.owed]
+        lacks += [f"its verdicts on this head name {len(names)} `{key}`s, not one ({', '.join(names)})"
+                  for key, names in self.differ]
+        return f"class {self.cls}: charged its whole schedule on each of its {self.count} rows: {'; '.join(lacks)}"
 
 
 def count(head: Head, cls: int) -> int:
@@ -118,14 +133,35 @@ def _named(x: object) -> bool:
     return type(x) is str and bool(x)
 
 
+def lacks(record: object) -> str | None:
+    """What keeps `record` from being a verdict record (the module docstring's "A verdict record"), by the field's
+    name, or None where it is one: an object with each of `FIELDS`, its run, its serve and its registration named,
+    its verifier named by each of `NAMES`, its verdict an object, and `proved_by` a name or null."""
+    if not isinstance(record, Mapping):
+        return "it is no object"
+    if missing := [k for k in FIELDS if k not in record]:
+        return f"it has no `{'`, `'.join(missing)}`"
+    for key in (RUN, SERVE, REGISTRATION):
+        if not _named(record[key]):
+            return f"its `{key}` is no name"
+    verifier = record[VERIFIER]
+    if unnamed := [k for k in NAMES if not (isinstance(verifier, Mapping) and _named(verifier.get(k)))]:
+        return f"its `{VERIFIER}` names no `{'`, `'.join(unnamed)}`"
+    if not isinstance(record[VERDICT], Mapping):
+        return f"its `{VERDICT}` is no object"
+    if not (record[PROVED_BY] is None or _named(record[PROVED_BY])):
+        return f"its `{PROVED_BY}` is neither a name nor null"
+    return None
+
+
 def reads(record: object) -> bool:
-    """Whether `record` is a verdict record (the module docstring's "A verdict record"): an object with each of
-    `FIELDS`, its run named, its verifier named by each of `NAMES`, its verdict an object, and `proved_by` a name
-    or null."""
-    return (isinstance(record, Mapping) and all(k in record for k in FIELDS) and _named(record[RUN])
-            and isinstance(record[VERIFIER], Mapping) and all(_named(record[VERIFIER].get(k)) for k in NAMES)
-            and isinstance(record[VERDICT], Mapping)
-            and (record[PROVED_BY] is None or _named(record[PROVED_BY])))
+    """Whether `record` is a verdict record: it lacks nothing (`lacks`)."""
+    return lacks(record) is None
+
+
+#: what a verdict record is, as a refusal of one that is none says it
+A_RECORD = (f"a verdict record is an object with the fields {', '.join(FIELDS)}, its verdict an object, its "
+            f"{', '.join(FIELDS[:3])} named, its verifier by its {' and '.join(NAMES)}, and its proved_by a name or null")
 
 
 def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any]]]) -> ClassCharge:
@@ -140,9 +176,7 @@ def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any
     given = {kind: list(records.get(kind, ())) for kind in VERDICTS}
     for kind, its in given.items():
         if off := [r for r in its if not reads(r)]:
-            raise ValueError(f"a verdict record is an object with the fields {', '.join(FIELDS)}, its verdict an "
-                             f"object with {', '.join(READ)}, its run named, its verifier by its "
-                             f"{' and '.join(NAMES)}, and its proved_by a name or null; the {kind}'s is {off[0]!r}")
+            raise ValueError(f"{A_RECORD}; of the {kind}'s, {lacks(off[0])}: {off[0]!r}")
     if not n:
         return ClassCharge(cls, 0, False, (), ())
     digest = head.digest().hex()
@@ -159,4 +193,5 @@ def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any
             owed.append((kind, REFUSED, _runs(refused)))
         elif partial := [r for r in ours if r[VERDICT].get(COMPLETE) is not True]:
             owed.append((kind, NOT_COMPLETE, _runs(partial)))
-    return ClassCharge(cls, n, not owed, tuple(owed), tuple(read))
+    differ = tuple((key, names) for key in ONE if len(names := tuple(sorted({r[key] for _, r in read}))) > 1)
+    return ClassCharge(cls, n, not owed and not differ, tuple(owed), tuple(read), differ)

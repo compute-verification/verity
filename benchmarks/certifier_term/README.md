@@ -154,15 +154,18 @@ from the signed head of an execution phase and the verdict records on a class of
   three words and the compute audit's second stage, each accepted, complete and naming that head's digest;
 - with one missing, refused, not complete or decided under another head, another serve's among them, the class is
   charged its whole schedule on every row; a verdict without `complete` reads as not complete;
+- so it is where the class's records on that head name two serves or two registrations: the head holds the network
+  certifier's rows to a serve, and these two names hold the values the verdicts judge to it;
 - a class with a count of 0 owes none.
 
 `benchmarks/network_traces/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
 The records are in the evidence store, in the run files of the runs that carry
 `run_of_record=exfiltration-glm53-stop-verdicts`, each file one JSON object a line:
 
-- `out/*-verdicts.jsonl`: a verdict record as the verdict's own verifier writes it, `run`, `verifier` (its `module`
-  and the `commit` it ran at), `verdict` and `proved_by`. A record that names no run or no verifier doesn't read,
-  and one that doesn't read holds no execution phase. Of its `verdict` the rule reads `link`, `window`, `class`,
+- `out/*-verdicts.jsonl`: a verdict record as the verdict's own verifier writes it, `run`, `serve` (the served run
+  its class came from), `registration` (the digest of what that serve registered), `verifier` (its `module` and
+  the `commit` it ran at), `verdict` and `proved_by`. A record that names no run, serve, registration or verifier
+  doesn't read, and one that doesn't read holds no execution phase. Of its `verdict` the rule reads `link`, `window`, `class`,
   `head`, `accepted` and `complete`. Which of the four verdicts it is, is its verdict's `format`; a verdict whose
   verifier's format the reader doesn't list reads as missing;
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
@@ -172,10 +175,10 @@ The reader is handed every run that carries the record, with those another run r
 accept and takes away no refusal: its records that are accepted and complete count for nothing, and everything else
 it holds is read as any run's, so superseding a run never raises what is held.
 
-The four verdicts count only as one class's: of one class, in one execution phase of a link, on one signed head.
-Where each of the four was read and no class that holds a row has all of them on its head, the answer holds nothing
-and its first line reads `not one class: unchecked`, with what the four differ in. A record names neither its serve
-nor the digest of what that serve registered, so past the head the reader holds the four to neither.
+The four verdicts count only as one class's: of one class, in one execution phase of a link, on one signed head,
+and of one serve under one registration, as their records name the two. Where each of the four was read and no
+class that holds a row has them so, the answer holds nothing and its first line reads `not one class: unchecked`,
+with what the four differ in: the class, the execution phase, the head, the serve or the registration.
 
 An execution phase is held where its head was read, some class of it holds a row and every class that holds one has
 its four verdicts. The answer is how many execution phases of a link are held (the document's `stop`'s

@@ -11,8 +11,9 @@ caller names, every one of them, with those another run replaces (`read`'s ``run
 readers are the harness's). A run holds, each one JSON object a line:
 
 - its verdict records, in every file named as `RECORDS_FILES`: an object with the fields `class_charge.FIELDS`, as
-  the verdict's own verifier writes it, naming its run and its verifier's module and commit (`class_charge.reads`;
-  a record that lacks one doesn't read, whatever its format). Which of the four verdicts a record is, is read from
+  the verdict's own verifier writes it, naming its run, the served run its class came from, the digest of what that
+  serve registered, and its verifier's module and commit (`class_charge.reads`; a record that lacks one doesn't
+  read, whatever its format, and the line says which it lacks). Which of the four verdicts a record is, is read from
   its verdict's ``format`` (`FORMATS`). A verdict whose verifier's format is not listed there reads as missing, and
   a record of such a format is counted in a line and charges nothing;
 - `REGISTRATIONS_FILE`: the registration of each execution phase's connection rows that its verdicts were decided
@@ -46,11 +47,11 @@ is handed on under the mark `leak_bounds.RUN_NOT_PROVED`, whatever its ``proved_
 what a record's ``proved_by`` is worth is its reader's to check.
 
 **Not one class.** The four verdicts count only as one class's: of one class, in one execution phase of a link, on
-one signed head, which is a serve's and is what the registration read is held to. Where each of the four was read
-and no class that holds a row has all of them on its head, the answer holds nothing and its first line says
-`NOT_ONE_CLASS` and what the four differ in (`DIFFER`), by the fields of a verdict that say where it is. A record
-names neither the serve it is of nor the digest of what that serve registered, so past the head the reader holds
-the four to neither."""
+one signed head, and of one serve under one registration, as their records name the two (`class_charge`'s "One
+serve, one registration"). Where each of the four was read and no class that holds a row has them so, the answer
+holds nothing and its first line says `NOT_ONE_CLASS` and what the four differ in: where no class has all four on
+its head, the fields of a verdict that say where it is (`DIFFER`); where one has, the serve or the registration its
+records name (`ONE`)."""
 from __future__ import annotations
 
 import json
@@ -72,11 +73,13 @@ FORMAT = "format"
 FORMATS = {"verity-network-certifier/response-tie-verdict/v1": CC.RESPONSE_TIE}
 #: what the answer's first line says where each of the four verdicts was read and they are not one class's
 NOT_ONE_CLASS = "not one class: unchecked"
-#: where a verdict says it is, and what four verdicts that are not one class's can differ in, each with its fields
+#: where a verdict says it is, and what four verdicts that are not one class's can differ in, each with its fields:
+#: of a verdict where no class has all four on its head, and of a record (`class_charge.ONE`) where one has
 PLACE = (CC.LINK, CC.WINDOW, CC.CLASS, CC.HEAD)
 DIFFER = (((CC.CLASS,), "the class (`class`)"),
           ((CC.LINK, CC.WINDOW), "the execution phase (`link`, `window`)"),
-          ((CC.HEAD,), "the signed head (`head`), a serve's, which its registration is held to"))
+          ((CC.HEAD,), "the signed head (`head`) of the network certifier's rows"))
+ONE = {CC.SERVE: "the serve (`serve`)", CC.REGISTRATION: "the registration (`registration`)"}
 
 
 def head_of(doc: Mapping[str, Any]) -> C.Head:
@@ -109,9 +112,9 @@ def _whole(why: str, *more: str) -> LB.Stop:
 
 def _handed(kind: str, record: Mapping[str, Any]) -> dict[str, Any]:
     """A verdict read as the calculator prints it: which of the four it is, what it is of and how it went, its run,
-    verifier and proof as its record names them, and the mark."""
-    return {"verdict": kind, **{k: record[CC.VERDICT].get(k) for k in CC.READ}, CC.RUN: record.get(CC.RUN),
-            CC.VERIFIER: record.get(CC.VERIFIER), CC.PROVED_BY: record.get(CC.PROVED_BY), "mark": LB.RUN_NOT_PROVED}
+    serve, registration, verifier and proof as its record names them, and the mark."""
+    return {"verdict": kind, **{k: record[CC.VERDICT].get(k) for k in CC.READ},
+            **{k: record.get(k) for k in CC.FIELDS if k != CC.VERDICT}, "mark": LB.RUN_NOT_PROVED}
 
 
 def _not_one(by_verdict: Mapping[str, Sequence[Mapping[str, Any]]]) -> str:
@@ -151,10 +154,8 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
     by_verdict: dict[str, list[Mapping[str, Any]]] = {}
     unlisted = 0
     for record in records:
-        if not CC.reads(record):
-            return _whole(f"a verdict record is an object with the fields {', '.join(CC.FIELDS)}, its verdict an "
-                          f"object, its run named and its verifier by its {' and '.join(CC.NAMES)}, not {record!r}",
-                          *left)
+        if lack := CC.lacks(record):
+            return _whole(f"{CC.A_RECORD}; of one read, {lack}: {record!r}", *left)
         verdict = record[CC.VERDICT]
         kind = FORMATS.get(verdict.get(FORMAT)) if isinstance(verdict.get(FORMAT), str) else None
         if kind is None:
@@ -171,15 +172,22 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
     # an execution phase is held where a class of it holds a row and each class that holds one is charged below
     held = sum(1 for _, its in phases if any(c.count for c in its) and all(c.below for c in its if c.count))
     with_rows = [c for _, c in charges if c.count]
+    # the classes that hold a row and have a record of each of the four verdicts on their head
+    all_four = [c for c in with_rows if {kind for kind, _ in c.read} >= set(CC.VERDICTS)]
     counted = [_handed(kind, record) for _, c in charges for kind, record in c.read]
     of = f"{len(heads)} execution phase(s) read"
     if not with_rows:
         first = f"each connection is charged its whole schedule: no class holds a row in the {of}"
-    elif all(by_verdict.get(kind) for kind in CC.VERDICTS) and not any(
-            {kind for kind, _ in c.read} >= set(CC.VERDICTS) for c in with_rows):
+    elif all(by_verdict.get(kind) for kind in CC.VERDICTS) and not any(not c.differ for c in all_four):
+        # each of the four was read, and no class has them as one class's: on its head, of one serve and registration
+        if all_four:
+            differ = [what for key, what in ONE.items() if any(key == k for c in all_four for k, _ in c.differ)]
+            how = (f"has all of them on its head as one serve's under one registration: they differ in "
+                   f"{' and in '.join(differ)}")
+        else:
+            how = f"has all of them on its head: {_not_one(by_verdict)}"
         first = (f"each connection is charged its whole schedule: {NOT_ONE_CLASS}: each of the {len(CC.VERDICTS)} "
-                 f"verdicts was read, and no class that holds a row in the {of} has all of them on its head: "
-                 f"{_not_one(by_verdict)}")
+                 f"verdicts was read, and no class that holds a row in the {of} {how}")
     elif not held:
         lacking = sum(1 for c in with_rows if not c.below)
         first = (f"each connection is charged its whole schedule: {lacking} of the {len(with_rows)} class(es) that "
