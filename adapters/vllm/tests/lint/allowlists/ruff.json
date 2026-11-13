@@ -92,7 +92,6 @@
     {"file": "tests/program/test_compact.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 5},
     {"file": "tests/program/test_compact.py", "kind": "F401", "symbol": "test_persist_program_progressions_form_gives_the_same_prog_and_document_and_converts_losslessly", "detail": "`shutil` imported but unused"},
     {"file": "tests/program/test_compact.py", "kind": "F401", "symbol": "test_tp_rank_compare_in_compact_form_is_the_records", "detail": "`os` imported but unused"},
-    {"file": "tests/program/test_composition.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file"},
     {"file": "tests/program/test_deepgemm.py", "kind": "E731", "symbol": "_guard_rows", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "tests/program/test_deepgemm.py", "kind": "E731", "symbol": "test_linears_match_their_twins", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "tests/program/test_derive.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.refs.Coll` imported but unused"},
@@ -202,7 +201,6 @@
     {"file": "tests/protocols/test_pouw_h1.py", "kind": "B008", "symbol": "_host", "detail": "Do not perform function call `CH.session_id` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable"},
     {"file": "tests/protocols/test_pouw_h1_commit.py", "kind": "B008", "symbol": "_window", "detail": "Do not perform function call `hashlib.sha512` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable"},
     {"file": "tests/protocols/test_pouw_h1_commit.py", "kind": "B008", "symbol": "_window", "detail": "Do not perform function call in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable"},
-    {"file": "tests/protocols/test_pouw_h1_live.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.protocols.pouw.prover.circuit.live` imported but unused"},
     {"file": "tests/query/test_contested_members.py", "kind": "E731", "symbol": "_program", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "tests/query/test_glm53_manifest_names.py", "kind": "F841", "symbol": "_Build.parts", "detail": "Local variable `k` is assigned to but never used"},
     {"file": "tests/query/test_module_body.py", "kind": "F541", "symbol": "test_module_bodies_and_boundary", "detail": "f-string without any placeholders"},
@@ -314,8 +312,6 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "F541", "symbol": "main", "detail": "f-string without any placeholders"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "F841", "symbol": "binding_record", "detail": "Local variable `max_new` is assigned to but never used"},
     {"file": "verity_vllm/pipeline/commit_attach.py", "kind": "F401", "symbol": "attach_of_record", "detail": "`verity_vllm.acquire.sources.hidden_source.HiddenM1Source` imported but unused"},
-    {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "F541", "symbol": "main", "detail": "f-string without any placeholders"},
-    {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "F821", "symbol": "main", "detail": "Undefined name `Any`"},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 2},
     {"file": "verity_vllm/pipeline/global_program.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.defs.REGISTRY` imported but unused"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 7},
@@ -369,7 +365,6 @@
     {"file": "tests/program/test_moe_pad_route_a3.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.definitions.numerics.serve3_reference` imported but unused"},
     {"file": "tests/program/test_moe_pad_stage2.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.definitions.registry.prims` imported but unused"},
     {"file": "tests/query/test_boundary_oracle.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.definitions.registry.prims.BF16` imported but unused"},
-    {"file": "verity_vllm/acquire/compiled.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.program.compiled_relations.kernel_key` imported but unused"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "F401", "symbol": "recompute_run", "detail": "`verity.definitions.registry.sampling_topp_difftest` imported but unused"},
     {"file": "verity_vllm/program/compiled_relations.py", "kind": "F821", "symbol": "_silu_mul_triton", "detail": "Undefined name `torch`"},
     {"file": "verity/definitions/numerics/cpu_model.py", "kind": "F401", "symbol": "<module>", "detail": "`dataclasses.field` imported but unused"},
@@ -427,6 +422,7 @@
     {"file": "verity/definitions/registry/topp_keep_builder.py", "kind": "E731", "symbol": "_folds", "detail": "Do not assign a `lambda` expression, use a `def`", "count": 2},
     {"file": "verity/definitions/registry/topp_keep_builder.py", "kind": "E731", "symbol": "_state", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "verity_vllm/observe/fold/profiles/gen_llama_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`dataclasses.field` imported but unused"},
-    {"file": "verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.fold.patterns.SCRATCH_TOKEN_SELECT` imported but unused"}
+    {"file": "verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.observe.fold.patterns.SCRATCH_TOKEN_SELECT` imported but unused"},
+    {"file": "tests/protocols/test_pouw_h1_live.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.protocols.pouw.prover.circuit.live` imported but unused"}
   ]
 }

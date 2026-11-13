@@ -14,16 +14,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+from pous_vectors import _bytes
 
-from pous_vectors import _bytes  # noqa: E402
-
-from verity.protocols.pous.verifier import band, dense, protocol, schemes  # noqa: E402
-from verity.protocols.pous.verifier.params import Params  # noqa: E402
-from verity.protocols.pous.verifier.schemes.p2 import CHACHA8, P2Params  # noqa: E402
+from verity.protocols.pous.verifier import band, dense, protocol, schemes
+from verity.protocols.pous.verifier.params import Params
+from verity.protocols.pous.verifier.schemes.p2 import CHACHA8, P2Params
 
 FIXTURES = Path(__file__).parent / "fixtures" / "schemes"
 SMALL = {"band-chain/d12/v1": band.BandParams(16, 64, 12, 2), "dense-chain/v1": dense.DenseParams(8, 64, 2),

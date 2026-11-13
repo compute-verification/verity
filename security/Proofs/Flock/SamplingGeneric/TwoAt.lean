@@ -26,8 +26,8 @@ At this code, four of `ksTwo_code`'s hypotheses are facts of the order and the b
   bytes independent of every earlier call's, so the second stage's bytes are uniform whatever the first stage drew.
 * `ksTwo_atOrder`: `CompiledTwo.KS` at Flock's masked record and SHA-512 from those two calls' A3 and seven facts of
   the code (`RegMatchesTwo`, `RefusesTwo`, `ReplayCap`, `InteriorFixed`, `SessionRunsTo`, `SessionsIn`,
-  `SessionOpensTwo`), its inner wait's count the replay cap. The verifier in public-coin form, its parser, partition,
-  sessions and reveals are `c`'s.
+  `SessionOpensTwo`), its inner wait's count the limit on the replay sample's proof blocks. The verifier in
+  public-coin form, its parser, partition, sessions and reveals are `c`'s.
 * `sessionsTwo_atOrder`: the two-stage contract at those premises (`sessionsTwo_code`).
 
 A second stage may read more bytes than one coin holds. `StageOrder k R` is a round order whose second stage reads
@@ -66,7 +66,7 @@ variable (c : Code) (reg : Msg → Option RegTwo) (two : AuditStatement → Opti
 
 /-! ## The bytes -/
 
-/-- **A uniform call's bytes have the uniform law**: A3 at a source of one stream. -/
+/-- **A uniform call's bytes are uniformly distributed**: A3 at a source of one stream. -/
 theorem pr_call {Ω : Type} [Fintype Ω] {L : ℕ} {b : Ω → Fin L → Fin 256}
     (h : FlockSoundness.Assumptions.UniformRandomBytes (fun _ : Fin 1 => L) fun ω _ => b ω)
     (q : (Fin L → Fin 256) → Prop) : Pr (fun ω => q (b ω)) = Pr q := by
@@ -122,10 +122,11 @@ theorem secondUniform_atOrder (h : CallsUniform L₂ b₂) : SecondUniform (c.at
 /-- **The two-stage compiler at the deployed record, at its round order**: `CompiledTwo.KS` at Flock's masked record
 and SHA-512 (`ksTwo_code`), with `BytesUniform` and `SecondUniform` from each call's A3 and `FirstFixed` and
 `BytesFixedTwo` from the order. -/
-theorem ksTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hA₁ : CallsUniform L₁ b₁)
+theorem ksTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (limit : Msg → ℕ) (hA₁ : CallsUniform L₁ b₁)
     (hA₂ : CallsUniform L₂ b₂) (hreg : RegMatchesTwo (c.atOrder j) reg two)
     (hr : (c.atOrder j).RefusesTwo FlockDeploy.sha512 two)
-    (hcap : (c.atOrder j).ReplayCap FlockDeploy.sha512 two (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁)) cap)
+    (hcap : (c.atOrder j).ReplayCap FlockDeploy.sha512 two
+      (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁)) limit)
     (hi : (c.atOrder j).InteriorFixed FlockDeploy.sha512 iroots)
     (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoAt c reg L₁ L₂ j b₁ b₂)))
@@ -133,17 +134,18 @@ theorem ksTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg �
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoAt c reg L₁ L₂ j b₁ b₂)) two iroots) :
     (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwoAt c reg L₁ L₂ j b₁ b₂) iroots two
-      (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁)) cap).KS FlockDeploy.sha512 :=
-  ksTwo_code (c.atOrder j) reg two L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂) iroots cap hreg
+      (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁)) limit).KS FlockDeploy.sha512 :=
+  ksTwo_code (c.atOrder j) reg two L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂) iroots limit hreg
     (bytesUniform_atOrder c L₁ j b₁ hA₁) (firstFixed_atOrder c L₁ j b₁) (secondUniform_atOrder c L₂ j b₂ hA₂)
     (bytesFixedTwo_atOrder c L₁ L₂ j b₁ b₂) hr hcap hi hruns hnum hopens
 
 /-- **The two-stage contract at the round order**: `sessionsTwo_code` with `ksTwo_atOrder`'s facts of the order and the
 byte maps. -/
-theorem sessionsTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hA₁ : CallsUniform L₁ b₁)
+theorem sessionsTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (limit : Msg → ℕ) (hA₁ : CallsUniform L₁ b₁)
     (hA₂ : CallsUniform L₂ b₂) (hreg : RegMatchesTwo (c.atOrder j) reg two)
     (hr : (c.atOrder j).RefusesTwo FlockDeploy.sha512 two)
-    (hcap : (c.atOrder j).ReplayCap FlockDeploy.sha512 two (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁)) cap)
+    (hcap : (c.atOrder j).ReplayCap FlockDeploy.sha512 two
+      (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁)) limit)
     (hi : (c.atOrder j).InteriorFixed FlockDeploy.sha512 iroots)
     (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoAt c reg L₁ L₂ j b₁ b₂)))
@@ -151,8 +153,8 @@ theorem sessionsTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (cap : 
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoAt c reg L₁ L₂ j b₁ b₂)) two iroots) :
     (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwoAt c reg L₁ L₂ j b₁ b₂) iroots two
-      (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁)) cap).Sessions FlockDeploy.sha512 :=
-  sessionsTwo_code (c.atOrder j) reg two L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂) iroots cap hreg
+      (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁)) limit).Sessions FlockDeploy.sha512 :=
+  sessionsTwo_code (c.atOrder j) reg two L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂) iroots limit hreg
     (bytesUniform_atOrder c L₁ j b₁ hA₁) (firstFixed_atOrder c L₁ j b₁) (secondUniform_atOrder c L₂ j b₂ hA₂)
     (bytesFixedTwo_atOrder c L₁ L₂ j b₁ b₂) hr hcap hi hruns hnum hopens
 
@@ -233,11 +235,11 @@ theorem secondUniform_stage (h : StageUniform R L₂ bs) :
 
 /-- **The two-stage compiler at the deployed record, at a stage order**: `ksTwo_atOrder` with a second stage of
 several rounds, `SecondUniform` from the stage's A3 (`StageUniform`) and `BytesFixedTwo` from the stage order. -/
-theorem ksTwo_stage (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hA₁ : CallsUniform L₁ b₁)
+theorem ksTwo_stage (iroots : Msg → Seen → ℕ → List Msg) (limit : Msg → ℕ) (hA₁ : CallsUniform L₁ b₁)
     (hA₂ : StageUniform R L₂ bs) (hreg : RegMatchesTwo (c.atOrder (orderOf s)) reg two)
     (hr : (c.atOrder (orderOf s)).RefusesTwo FlockDeploy.sha512 two)
     (hcap : (c.atOrder (orderOf s)).ReplayCap FlockDeploy.sha512 two
-      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) cap)
+      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) limit)
     (hi : (c.atOrder (orderOf s)).InteriorFixed FlockDeploy.sha512 iroots)
     (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoStage c reg L₁ L₂ b₁ R s bs)))
@@ -245,18 +247,18 @@ theorem ksTwo_stage (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → 
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoStage c reg L₁ L₂ b₁ R s bs)) two iroots) :
     (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwoStage c reg L₁ L₂ b₁ R s bs) iroots two
-      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) cap).KS FlockDeploy.sha512 :=
+      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) limit).KS FlockDeploy.sha512 :=
   ksTwo_code (c.atOrder (orderOf s)) reg two L₁ L₂ (bytesFirst c L₁ (orderOf s) b₁) (bytesStage c L₂ R s bs) iroots
-    cap hreg (bytesUniform_atOrder c L₁ (orderOf s) b₁ hA₁) (firstFixed_atOrder c L₁ (orderOf s) b₁)
+    limit hreg (bytesUniform_atOrder c L₁ (orderOf s) b₁ hA₁) (firstFixed_atOrder c L₁ (orderOf s) b₁)
     (secondUniform_stage c L₂ R s bs hA₂) (bytesFixedTwo_stage c L₁ L₂ b₁ R s bs) hr hcap hi hruns hnum hopens
 
 /-- **The two-stage contract at a stage order**: `sessionsTwo_code` with `ksTwo_stage`'s facts of the stage order and
 the byte maps. -/
-theorem sessionsTwo_stage (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hA₁ : CallsUniform L₁ b₁)
+theorem sessionsTwo_stage (iroots : Msg → Seen → ℕ → List Msg) (limit : Msg → ℕ) (hA₁ : CallsUniform L₁ b₁)
     (hA₂ : StageUniform R L₂ bs) (hreg : RegMatchesTwo (c.atOrder (orderOf s)) reg two)
     (hr : (c.atOrder (orderOf s)).RefusesTwo FlockDeploy.sha512 two)
     (hcap : (c.atOrder (orderOf s)).ReplayCap FlockDeploy.sha512 two
-      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) cap)
+      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) limit)
     (hi : (c.atOrder (orderOf s)).InteriorFixed FlockDeploy.sha512 iroots)
     (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoStage c reg L₁ L₂ b₁ R s bs)))
@@ -264,9 +266,9 @@ theorem sessionsTwo_stage (iroots : Msg → Seen → ℕ → List Msg) (cap : Ms
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoStage c reg L₁ L₂ b₁ R s bs)) two iroots) :
     (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwoStage c reg L₁ L₂ b₁ R s bs) iroots two
-      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) cap).Sessions FlockDeploy.sha512 :=
+      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) limit).Sessions FlockDeploy.sha512 :=
   sessionsTwo_code (c.atOrder (orderOf s)) reg two L₁ L₂ (bytesFirst c L₁ (orderOf s) b₁) (bytesStage c L₂ R s bs)
-    iroots cap hreg (bytesUniform_atOrder c L₁ (orderOf s) b₁ hA₁) (firstFixed_atOrder c L₁ (orderOf s) b₁)
+    iroots limit hreg (bytesUniform_atOrder c L₁ (orderOf s) b₁ hA₁) (firstFixed_atOrder c L₁ (orderOf s) b₁)
     (secondUniform_stage c L₂ R s bs hA₂) (bytesFixedTwo_stage c L₁ L₂ b₁ R s bs) hr hcap hi hruns hnum hopens
 
 end Stage

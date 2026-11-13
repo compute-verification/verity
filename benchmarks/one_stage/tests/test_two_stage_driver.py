@@ -47,6 +47,20 @@ WRAP = bind(CompositeDefinition("TwoStageDriverTestWrap", 0, (),
                                 lambda S_: ((("x", Array(2, Array(2, Bits(8)))),), Array(2, Bits(8))),
                                 lambda B, S_, x: coll_concat(Array(2, Bits(8)), [B.call(PAIR, x[0]), B.call(PAIR, x[1])]),
                                 register=False))
+SAME8 = PrimitiveDefinition("TwoStageDriverTestSame8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(1), lambda a, b: int(a == b),
+                            register=False)
+#: a check template that returns a verdict, one bit
+SAME = bind(CompositeDefinition("TwoStageDriverTestSame", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(1)),
+                                lambda B, S_, x: B.call(SAME8, x[0], x[1]), register=False))
+#: PAIR with its operands the other way round: a second template of PAIR's ports
+SWAP = bind(CompositeDefinition("TwoStageDriverTestSwap", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
+                                lambda B, S_, x: B.call(XOR8, x[1], x[0]), register=False))
+#: a check template whose body calls two templates, PAIR twice and SWAP once: inlined, its proof blocks are both's
+BOTH = bind(CompositeDefinition("TwoStageDriverTestBoth", 0, (),
+                                lambda S_: ((("x", Array(3, Array(2, Bits(8)))),), Array(3, Bits(8))),
+                                lambda B, S_, x: coll_concat(Array(3, Bits(8)), [B.call(PAIR, x[0]), B.call(PAIR, x[1]),
+                                                                                 B.call(SWAP, x[2])]),
+                                register=False))
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
 N, Q, K, N_RHO = 6, 2, 1, 4
@@ -59,11 +73,11 @@ def _class(check=PAIR, inline: bool = False) -> BR.Committed:
     return BR.commit(spans, BR.Layout(check, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), inline), 0)
 
 
-def _interior(layout: BR.Layout, previous: str) -> tuple[dict, dict]:
-    """The replay side's interior registration over the Q sampled spans' proof blocks (PAIR's instances), at stand-in
-    roots."""
+def _interior(layout: BR.Layout, previous: str, program: Program | None = None) -> tuple[dict, dict]:
+    """The replay side's interior registration over the Q sampled spans' proof blocks (PAIR's instances, or
+    ``program``'s, a window of templates'), at stand-in roots."""
     m = Q * P.units(Program(layout.replay), layout.query)
-    program, query = P.population_program(PAIR, m), P.template_instance_query(PAIR)
+    program, query = program or P.population_program(PAIR, m), layout.query
     part = P.partition(program, query)
     ports = {v: {"leaves": m, "domain": R.window_domain(part["program"], P.digest(part), v, s, m, layout.run)}
              for v, s in INTERIOR}
@@ -71,6 +85,11 @@ def _interior(layout: BR.Layout, previous: str) -> tuple[dict, dict]:
     rec = R.record(program, query, {"law": "subset", "k": m}, S.SCHEME, roots,
                    {"kind": "served", "run": layout.run, "row": 0, "interior": True}, previous=previous)
     return rec, ports
+
+
+def _samples_q(got: TS.First) -> bool:
+    """The first stage sampled Q of the class's spans, a subset."""
+    return got.sample.draw["law"] == "subset" and len(got.sample.units) == Q
 
 
 def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
@@ -81,14 +100,14 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"))
     assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
-    assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q and got.read
+    assert _samples_q(got) and got.read
     handoff = json.loads(json.dumps(got.stage1()))
-    assert handoff["units"] == list(got.draw.units) and handoff["spec"] == got.stream.spec.digest()
+    assert handoff["units"] == list(got.sample.units) and handoff["spec"] == got.stream.spec.digest()
     again = TS.resume(handoff, PAIR, FC.Challenger("second"))
-    assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
+    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
     ireg, second = again.second(*_interior(again.layout, again.registration.digest))
     assert ireg.order == again.registration.order and again.coins.live
-    assert second.replay_sample == again.draw and len(second.units) == Q * K
+    assert second.replay_sample == again.sample and len(second.units) == Q * K
     assert [u // N_RHO for u in second.units] == list(range(Q))
 
 
@@ -99,9 +118,88 @@ def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
     got = TS.first(_class(WRAP, inline=True).public(), WRAP, RULE, FC.Challenger("first"))
     assert got.layout.inline and got.stream.spec.check.query == P.template_instance_query(PAIR)
     again = TS.resume(json.loads(json.dumps(got.stage1())), WRAP, FC.Challenger("second"))
-    assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
+    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
     _, second = again.second(*_interior(again.layout, again.registration.digest))
     assert len(second.units) == Q * K and [u // (2 * N_RHO) for u in second.units] == list(range(Q))
+
+
+def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, monkeypatch, capsys):
+    """Counts by template (``--k COUNTS.json``, `Rule.k` a map): a class whose inlined check calls PAIR and SWAP samples
+    three of a sampled span's eight PAIR instances and one of its four SWAP instances, the rule carried through
+    the hand-off to the replay side's stream. A file is read alone or as a counts record's ``k``; one that names a
+    template twice, gives a count that is no whole number of at least one, misses one of the check's templates or names
+    another is refused by name, and the command refuses it, and a class that is not the check's, before it opens a
+    challenger session. The command lays each class out under the verifier's own stop rule (``--stop``) as it holds
+    the counts to it: a stop class's counts are held to its check's templates, and without the rule it is refused by
+    name."""
+    c, (pair, swap) = _class(BOTH, inline=True), (P.template_id(t) for t in (PAIR, SWAP))
+    ks = {pair: 3, swap: 1}
+
+    def file(text: str) -> str:
+        (tmp_path / "k.json").write_text(text)
+        return str(tmp_path / "k.json")
+    assert TS.counts("2") == 2 and TS.counts(file(json.dumps(ks))) == ks
+    assert TS.counts(file(json.dumps({"schema": TS.COUNTS, "sampled": Q, "k": ks}))) == ks
+    rule = TS.Rule(RULE.replay, TS.counts(file(json.dumps(ks))), INTERIOR, 60.0)
+    assert TS.Rule.from_json(json.loads(json.dumps(rule.to_json()))) == rule
+    assert TS.counts_refused(ks, c.layout.templates) is None and TS.counts_refused(2, c.layout.templates) is None
+
+    got = TS.first(c.public(), BOTH, rule, FC.Challenger("first"))
+    assert got.stream.cells == (2 * N_RHO, N_RHO) and got.stream.counts == (3, 1)
+    handoff = json.loads(json.dumps(got.stage1()))
+    assert handoff["rule"]["k"] == ks
+    again = TS.resume(handoff, BOTH, FC.Challenger("second"))
+    assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
+    _, second = again.second(*_interior(again.layout, again.registration.digest, again.stream.interior_program(Q)))
+    assert second.law == S.second_law(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
+    pairs = [u for u in second.units if u < Q * 2 * N_RHO]
+    assert sorted(u // (2 * N_RHO) for u in pairs) == [0, 0, 0, 1, 1, 1] and len(second.units) - len(pairs) == Q
+
+    for text, why in (('{"%s": 3, "%s": 1, "%s": 2}' % (pair, swap, pair), f"names {pair} twice"),
+                      (json.dumps({pair: 3, swap: 0}), "whole number of at least one"),
+                      (json.dumps({pair: 3, swap: 1.5}), "whole number of at least one"),
+                      (json.dumps({"schema": "other/v1", "k": ks}), "not a spot-two-stage-counts/v1 one"),
+                      (json.dumps([3, 1]), "no counts file")):
+        with pytest.raises(ValueError) as refused:
+            TS.counts(file(text))
+        assert why in str(refused.value)
+    assert TS.counts_refused({pair: 3}, c.layout.templates) == (
+        f"the counts name each of the check's templates once: missing {swap}")
+    assert TS.counts_refused({**ks, "Other_v0{}": 1}, c.layout.templates) == (
+        "the counts name each of the check's templates once: Other_v0{} is no template of the check")
+    with pytest.raises(ValueError, match="name each of the check's templates once"):
+        TS.first(c.public(), BOTH, TS.Rule(RULE.replay, {pair: 3}, INTERIOR, 60.0), FC.Challenger("first"))
+
+    (tmp_path / "p4-o4").mkdir()
+    (tmp_path / "p4-o4" / BR.COMMIT).write_text(json.dumps(c.public()))
+    monkeypatch.setattr(TS, "_first_all", lambda *a, **k: pytest.fail("a refused counts file reached the first stage"))
+    for check, text, why in (
+            (BOTH, json.dumps({pair: 3}), f"class p4-o4: the counts name each of the check's templates once: missing {swap}"),
+            (BOTH, '{"%s": 3, "%s": 1, "%s": 2}' % (pair, swap, swap), f"names {swap} twice"),
+            (PAIR, json.dumps(ks), f"class p4-o4: a {BR.FORMAT} commitment of check {P.template_id(BOTH)}, not {pair}")):
+        monkeypatch.setattr(TS, "template_fn", lambda t, check=check: check)
+        with pytest.raises(SystemExit):
+            TS.main(["first", "--boundary", str(tmp_path / "p4-o4"), "--check", P.template_id(BOTH), "--replay", RULE.replay,
+                     "--k", file(text), "--challenger", "local", "--main", str(tmp_path / "main"), "--out", str(tmp_path)])
+        assert why in capsys.readouterr().err
+
+    (tmp_path / "stopped").mkdir()
+    (tmp_path / "stopped" / BR.COMMIT).write_text(json.dumps(_stop_class().public()))
+    monkeypatch.setattr(TS, "template_fn", lambda t: PAIR)
+
+    def stopped(text: str, *given: str) -> int:
+        return TS.main(["first", "--boundary", str(tmp_path / "stopped"), "--check", pair, "--replay", RULE.replay, "--k",
+                        file(text), *given, "--challenger", "local", "--main", str(tmp_path / "main"), "--out", str(tmp_path)])
+    held = ("--stop", json.dumps(STOP.to_json()))
+    for given, why in ((held, f"class stopped: the counts name each of the check's templates once: {swap} is no template"),
+                       ((), f"class stopped: a {BR.FORMAT} commitment under the stop rule")):
+        with pytest.raises(SystemExit):
+            stopped(json.dumps(ks), *given)
+        assert why in capsys.readouterr().err
+    reached: list = []
+    monkeypatch.setattr(TS, "_first_all", lambda a, pubs, check, rule, window, stop: reached.append((a.k, stop)) or [
+        {"commit": pubs[0]}])
+    assert stopped(json.dumps({pair: 2}), *held) == 0 and reached == [({pair: 2}, STOP)]
 
 
 def test_resume_refuses_another_rule_registration_or_sample():
@@ -113,9 +211,22 @@ def test_resume_refuses_another_rule_registration_or_sample():
         TS.resume({**stage1, "rule": TS.Rule(RULE.replay, K + 1, INTERIOR, 60.0).to_json()}, PAIR)
     with pytest.raises(ValueError, match="registers to another digest"):
         TS.resume({**stage1, "registration": "00" * 64}, PAIR)
-    others = [u for u in range(N) if u not in got.draw.units][:Q]
+    others = [u for u in range(N) if u not in got.sample.units][:Q]
     with pytest.raises(ValueError, match="other spans"):
         TS.resume({**stage1, "units": others}, PAIR)
+
+
+def test_a_hand_off_that_names_no_window_root_resumes_under_its_commitments_run():
+    """The first stage registers under the window's open root, the commitment's ``run`` (`_first_all`), which the
+    outcome holds its session's evidence to. A hand-off that names the root resumes under it; one that names none
+    resumes under the commitment's ``run``, to the same registration and sample."""
+    pub = _class().public()
+    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"), window_root=pub["run"])
+    stage1 = json.loads(json.dumps(got.stage1()))
+    assert "window_root" not in stage1 and TS.first_root(stage1) == pub["run"]
+    assert TS.first_root({**stage1, "window_root": "ab" * 64}) == "ab" * 64
+    again = TS.resume(stage1, PAIR, window_root=TS.first_root(stage1))
+    assert again.registration.digest == got.registration.digest and again.sample.units == got.sample.units
 
 
 def test_the_second_stages_coins_follow_the_whole_first_stage():
@@ -149,7 +260,33 @@ def test_a_class_with_history_tables_declares_and_registers_them_beside_its_valu
     assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), *((t, HT.SCHEMA) for t in layout.tables)]
     assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
-    assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
+    assert _samples_q(got)
+
+
+@pytest.mark.parametrize("layers", [(), (0,)])
+def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
+    """A class that commits its replay block's return (`Layout.verdicts`): its Spec declares the return a served value
+    after ``b.ingress`` and ``b.egress``, named under its replay block and before the tables where the class has history
+    tables; its first stage registers its root, from ``commit.json`` alone, before the coins commit and samples; and the
+    replay side resumes from the first stage's hand-over alone."""
+    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
+    layout = BR.Layout(SAME, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), layers=layers, capacity=8, verdicts=True)
+    tables = {}
+    for t in layout.tables:
+        h = HT.HistoryTable(layout.partition["program"], t, BT.WORDS, layout.capacity)
+        h.append(np.zeros((6, BT.WORDS), dtype=np.uint16))
+        tables[t] = h.root
+    pub = json.loads(json.dumps(BR.commit(spans, layout, 0, tables=tables).public()))
+    name = f"{P.template_id(layout.replay)}/{BR.RETURN}" if layers else BR.RETURN
+    got = TS.first(pub, SAME, RULE, FC.Challenger("first"))
+    served = [(v.name, v.schema) for v in got.stream.spec.values if v.phase == "serve"]
+    assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), (name, BR.SCHEMA),
+                      *((t, HT.SCHEMA) for t in layout.tables)]
+    assert [(r["port"], r["leaves"]) for r in got.record["roots"]][:3] == [("b.ingress", N), ("b.egress", N), (name, N * N_RHO)]
+    assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
+    assert _samples_q(got)
+    again = TS.resume(json.loads(json.dumps(got.stage1())), SAME, FC.Challenger("second"))
+    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
 
 
 def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():
@@ -178,7 +315,7 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
         assert sig["root"] == sig["domain"] == Array(q, RG.DIGEST)
         assert [sig[x.value] for x in opening] == [Array(2 * q, Array(x.words, Bits(16))) for x in opening]
     assert not [v for v in TS.first(pub, PAIR, RULE, FC.Challenger("first")).stream.spec.values if v.registered]
-    names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.draw.units]
+    names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.sample.units]
     bodies = {"m0": b"the interior's public body"}
     hist = got.history(1, {n: [bc.hex() for bc in hs[n].bcs] for n in names}, bodies)
     assert [t["name"] for t in hist["tables"]] == names and c == 8
@@ -243,11 +380,11 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     assert {(x.template, x.port, SS._port_of(named, key, x.value), per, tuple(SS.row_at(rs, j) for j in range(cells)))
             for x, per, rs in runs} == {(x.template, x.port, x.value, x.per, x.at) for x in links}
 
-    names = [BT.name(layout.run, prompt, outputs, int(u), 0) for u in got.draw.units]
+    names = [BT.name(layout.run, prompt, outputs, int(u), 0) for u in got.sample.units]
     sampled = [hs[n] for n in names]
     toks = ((1, 5, 0, 2), (0, 4, 3, 2))
     it = IR.interior([IR.Span(f"s{k}", member, IR.table_reads(t, toks[k]), [[0, cells]], "p" * 64)
-                      for k, t in enumerate(sampled)], cells, got.registration.digest, got.draw.units,
+                      for k, t in enumerate(sampled)], cells, got.registration.digest, got.sample.units,
                      row="two-stage-driver-test", tables=sampled, served=got.record, positions=c, links=links)
     entries = {e["value"]: e for e in it.record["registered"]}
     assert list(entries) == [x.value for x in links]
@@ -264,7 +401,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
         assert {k: entries[v.value][k] for k in v.entry()} == v.entry()
 
     part = SS.Part(tid, 0, cells)
-    own = SS.Own(tuple(got.draw.units), (part,), it.record, got.record, (),
+    own = SS.Own(tuple(got.sample.units), (part,), it.record, got.record, (),
                  links=tuple(SS.Link(x.template, x.port, SS._port_of(named, key, x.value)) for x, _per, _rs in runs),
                  rows=tuple(SS.Rows(x.template, x.port, per, rs) for x, per, rs in runs))
     for x in table:
@@ -279,6 +416,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
 
 def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_interior_ones():
     assert TS.Rule.from_json(json.loads(json.dumps(RULE.to_json()))) == RULE
+    assert TS.Rule.from_json({k: v for k, v in RULE.to_json().items() if k != "span_values"}) == RULE
     with pytest.raises(ValueError, match="rate law"):
         TS.Rule(f"subset:{Q}", K, INTERIOR, 60.0)
     spec = TS.stream_of(_class().layout, RULE, FC.Challenger()).spec
@@ -298,7 +436,7 @@ def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_
     got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"), stop=stop)
     assert [v.name for v in got.stream.spec.values if v.phase == "serve"] == list(BR.PARTS)
     assert [r["port"] for r in got.registration.record["roots"]] == list(BR.PARTS)
-    assert got.registration.record["population"] == N and len(got.draw.units) == Q
+    assert got.registration.record["population"] == N and len(got.sample.units) == Q
 
 
 #: a serve's stop rule: one stop id, a model of 64 ids, responses of at most 4

@@ -6,31 +6,27 @@ probe with nvcc and gates it; it skips without nvcc and nvdisasm.
 from __future__ import annotations
 
 import csv
-import importlib.util
 import io
 import json
 import re
-import sys
 from pathlib import Path
 
+import clocks
+import collective_verdict
+import eps1
+import ji as ji89
+import pipes_verdict
+import probe
 import pytest
+from conftest import load
+from verity_machine_model import model
 
 POUW = Path(__file__).resolve().parents[1]
 FIX = Path(__file__).resolve().parent / "fixtures" / "gpu_kit"
-MACHINE_MODEL = Path(__file__).resolve().parents[1] / "machine_model"
+MACHINE_MODEL = Path(__file__).resolve().parents[2] / "machine_model"
 
-
-def _load(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-probe = _load("opcode_probe_probe", POUW / "opcode_probe" / "probe.py")
+#: `census` is also dc's script's name, so sm_89's comes from its file
+sm89 = load("opcode_probe/sm89/census.py")
 rows, G = probe.rows, probe.G
 RUN = "r20261016-183617-3914"
 
@@ -94,11 +90,6 @@ def test_schema_is_machine_models():
             r = csv.DictReader(f)
             assert tuple(r.fieldnames) == rows.CENSUS_COLUMNS, p.name
             lines += r
-    sys.path.insert(0, str(MACHINE_MODEL))
-    try:
-        from verity_machine_model import model
-    finally:
-        sys.path.remove(str(MACHINE_MODEL))
     for d in lines:
         assert rows.u_of(300.08, d["rate"], d["noise"], d["cycles"], d["u"]) == model.u_of(
             300.08, d["rate"], d["noise"], d["cycles"], d["u"])
@@ -175,8 +166,6 @@ def test_an_until_loop_counts_only_the_fixed_roles_time():
 
 # ---- the issue facets --------------------------------------------------------------------------------------------------
 
-eps1 = _load("opcode_probe_eps1", POUW / "opcode_probe" / "eps1.py")
-
 
 def test_facets_are_the_upper_hull_with_the_margin():
     pts = [(0.0, 0.5, "alone"), (0.05, 0.25, "mix"), (0.02, 0.2, "inside"), (0.0625, 0.0, "imma")]
@@ -210,13 +199,11 @@ def test_prior_points_give_back_the_published_facets(tmp_path):
     assert {(2.0, 1.96), (15.0, 0.4)} <= got
 
 
-sm89 = _load("opcode_probe_sm89_census", POUW / "opcode_probe" / "sm89" / "census.py")
-
-
 def test_sm89_pipe_rate_counts_the_loops_instructions_on_its_pipe():
     """An ALU probe's loop counter runs on the ALU pipe, so the pipe's rate counts it; SHFL's doesn't (SHF isn't SHFL)."""
-    loop = lambda pat, n: {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1,
-                                                                    "BRA": 1}}]}
+    def loop(pat: str, n: int) -> dict:
+        return {"loops": [{"counts": {pat: n}, "top": {pat.rstrip("*"): n, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}}]}
+
     assert sm89.pipe_rate({"rates": {"0:LOP3.LUT": 1.6}}, loop("LOP3.LUT", 16)) == pytest.approx(1.6 * 18 / 16)
     assert sm89.pipe_rate({"rates": {"0:SHFL.BFLY": 0.5}}, loop("SHFL.BFLY", 16)) == pytest.approx(0.5)
     assert sm89.pipe_rate({"rates": {"0:IMAD": 1.9}}, loop("IMAD", 16)) == pytest.approx(1.9)
@@ -340,6 +327,23 @@ def test_ceiling_reads_each_knob_and_names_the_highest_host_clock(tmp_path, caps
     assert "highest host-timed clock: 2429.9 MHz (p_light at lgc-max), -0.004% against NVML's max 2430" in got
 
 
+def test_lock_passes_megahertz_or_nvmls_id_for_tdp_and_unlimited():
+    """`clocks.py lock`: MIN and MAX reach nvmlDeviceSetGpuLockedClocks as MHz, or as NVML's limit id for `tdp` and
+    `unlimited`; the row says what was asked and the call's rc."""
+    nvml, calls = object.__new__(clocks.Nvml), []
+
+    def call(name: str, *args) -> tuple[int, str]:
+        calls.append((name, [a.value for a in args]))
+        return 3, "Not Supported"
+
+    nvml.call = call
+    assert nvml.lock("1830", "tdp") == {"op": "nvmlDeviceSetGpuLockedClocks", "min": "1830", "max": "tdp", "rc": 3,
+                                        "error": "Not Supported"}
+    nvml.lock("unlimited", "2430")
+    assert calls == [("nvmlDeviceSetGpuLockedClocks", [1830, 0xFFFFFF01]),
+                     ("nvmlDeviceSetGpuLockedClocks", [0xFFFFFF02, 2430])]
+
+
 def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
     """`eps1.py l2gather`: bytes a SM a clock (rate * words * 4) and TB/s (* nSM * clock) a gather path, the best alone
     and beside, the MMA kept beside the honest step, and whether any path beats QSTAR's 3.3 TB/s."""
@@ -364,9 +368,6 @@ def test_l2gather_reports_bytes_a_clock_and_mma_kept(tmp_path, capsys):
     assert "best alone:  gl_w32_fast 20.480 B/SM/clk = 4.096 TB/s" in got
     assert "best beside: gh_w32 8.192 B/SM/clk = 1.638 TB/s, MMA kept 0.5000" in got
     assert "fastest path 4.096 TB/s beats QSTAR's 3.3 TB/s table kernel" in got
-
-
-pipes_verdict = _load("opcode_probe_pipes_verdict", POUW / "opcode_probe" / "pipes_verdict.py")
 
 
 def _pipes_rows(**over: dict[str, float]) -> dict[str, dict]:
@@ -427,9 +428,6 @@ def test_pipes_verdict_holds_each_pipe_to_its_rho(tmp_path, capsys):
     rows.write_text("".join(json.dumps(r) + "\n" for n, r in _pipes_rows().items() if n != "mix_bar_or_lop3"))
     assert pipes_verdict.main([str(rows)]) == 0
     assert capsys.readouterr().out.startswith("verdict: hypothesis failed: no row for mix_bar_or_lop3; ")
-
-
-collective_verdict = _load("opcode_probe_collective_verdict", POUW / "opcode_probe" / "collective_verdict.py")
 
 
 def _collective_rows(**over: dict[str, float]) -> dict[str, dict]:
@@ -499,6 +497,22 @@ def test_jitter_reports_host_timing_spread_and_the_gap_to_the_chip(tmp_path, cap
 # ---- the probes themselves -------------------------------------------------------------------------------------------
 
 
+def test_nvcc_is_the_one_nvcc_names_then_cuda_homes(tmp_path, monkeypatch):
+    """The build's nvcc: the executable NVCC names, else CUDA_HOME's bin/nvcc; a name that is no executable is passed over."""
+    named, home = tmp_path / "named", tmp_path / "home" / "bin" / "nvcc"
+    home.parent.mkdir(parents=True)
+    for exe in (named, home):
+        exe.write_text("#!/bin/sh\n")
+        exe.chmod(0o755)
+    monkeypatch.setenv("NVCC", str(named))
+    monkeypatch.setenv("CUDA_HOME", str(home.parents[1]))
+    assert probe.nvcc() == str(named)
+    monkeypatch.setenv("NVCC", str(tmp_path / "absent"))
+    assert probe.nvcc() == str(home)
+    monkeypatch.delenv("NVCC")
+    assert probe.nvcc() == str(home)
+
+
 def _cuda_tools() -> bool:
     try:
         probe.nvcc()
@@ -520,9 +534,6 @@ def test_probes_build_and_gate(tmp_path):
                                                                  "dsm_red_add64_self"}
 
 
-ji89 = _load("opcode_probe_sm89_ji", POUW / "opcode_probe" / "sm89" / "ji.py")
-
-
 def test_sm89_ji_pins_only_the_schedule_its_name_says():
     top = {"FMUL": 112, "IMMA.16816.S8.S8": 8, "MOV": 1, "IADD3": 1, "ISETP.GE.AND": 1, "BRA": 1}
     assert ji89.exact("j16_fmuli_q112_a2u1_w2", top)
@@ -532,6 +543,27 @@ def test_sm89_ji_pins_only_the_schedule_its_name_says():
     assert ji89.exact("j16_iadd3_q64_a2u1_w2", {"IMAD.IADD": 32, "IADD3": 33, "IMMA.16816.S8.S8": 8, "ISETP.GE.AND": 1})
     names = [p[0] for p in ji89.grid(32)]
     assert "j32_fmuli_q112_a2u1_w2" in names and len(names) == len(set(names))
+
+
+@pytest.mark.parametrize("k, source", [(16, "ji16.cu"), (32, "ji32.cu")])
+def test_sm89_ji_grids_are_what_emit_writes_from_their_own_pins(tmp_path, k, source):
+    """`ji16.cu` and `ji32.cu` are generated files: `emit --pins`, given a gate whose loops are the counts the file
+    itself pins, writes the file back byte for byte. The grid points it leaves out are the unroll-4 programs at Q 64 and
+    112, whose loops are not the schedule their names say; unpinned, it writes every grid point."""
+    text = (POUW / "opcode_probe" / "sm89" / source).read_text()
+    pinned = re.findall(r'\.name = "(\w+)", .*?\.expect = "([^"]+)"', text)
+    tops = {name: {op: int(n) for op, n in (c.split("=") for c in expect.split(","))} for name, expect in pinned}
+    grid = [p[0] for p in ji89.grid(k)]
+    left_out = sorted(set(grid) - set(tops))
+    assert left_out == sorted(f"j{k}_fmuli_q{q}_a{na}u4_w2" for q in (64, 112) for na in (2, 3, 8))
+    split = {"FMUL": 256, f"IMMA.168{k}.S8.S8": 32, "CALL.REL.NOINC": 1, "BRA": 1}
+    verdicts = [{"probe": name, "verdict": {"loops": [{"top": top}]}} for name, top in tops.items()]
+    verdicts += [{"probe": name, "verdict": {"loops": [{"top": split}]}} for name in left_out[:4]]
+    verdicts += [{"probe": left_out[4], "verdict": None}, {"probe": left_out[5], "verdict": {"loops": []}}]
+    (tmp_path / "gate.json").write_text(json.dumps({"verdicts": verdicts}))
+    assert ji89.emit(k, tmp_path / "gate.json") == text
+    unpinned = ji89.emit(k, None)
+    assert unpinned.count("\nJM(") == unpinned.count(".expect = ") == len(grid) == len(tops) + 6
 
 
 def test_sm89_ji_refit_is_the_upper_hull_at_the_margin(tmp_path):

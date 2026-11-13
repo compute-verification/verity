@@ -1,7 +1,8 @@
-"""The r20 campaign's frozen evidence that code still reads, fetched from the evidence store instead of kept in the tree.
+"""The archived proof backends' frozen evidence that code still reads, fetched from the evidence store instead of kept in the
+tree.
 
-The overhead ledger (``backends/numerical/reports/ledger/*.jsonl``: frozen, every claim imported as labels by
-the r20 ledger import) and the run results the frozen backends' report scripts compare against (``backends/numerical/reports/*.json``,
+The overhead ledger (``backends/numerical/reports/ledger/*.jsonl``: frozen, every claim imported as a label) and the run
+results the frozen backends' report scripts compare against (``backends/numerical/reports/*.json``,
 ``backends/*/results*``) were tracked copies once.  They are one ``frozen-evidence/v1`` tree artifact laid out at
 their former repository paths, so a label ref ``backends/numerical/reports/ledger/<lane>.jsonl:<line>`` still names a file in it.
 

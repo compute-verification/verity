@@ -25,8 +25,8 @@ tokens and blocks before the cut, and ``a_O``, the outputs it emitted in the win
 request cut with n > e (the hold timed out) is listed in ``over``; its continuation carries n outputs, which the network
 certifier has not released. A request whose sampling reads its own outputs (frequency or presence penalties,
 ``min_tokens``, logits processors) is listed in ``reads_outputs``: vLLM's own preemption keeps its outputs as outputs,
-so it serves as uncut, but a Definition that reads the continuation as a prompt of P + e tokens doesn't compute its
-draws.
+so it serves as uncut, but a Definition that reads the continuation as a prompt of P + e tokens doesn't compute the
+tokens it samples.
 
 ``VERITY_CUT`` is a JSON object: ``every_s`` (an edge every so many seconds of the engine core's clock from its first
 step; one that falls while the engine is idle is taken at its next step) or ``every_steps`` (every so many scheduler
@@ -125,7 +125,7 @@ class SentFeed:
         key = next((v.decode("latin-1") for k, v in scope.get("headers") or () if k.lower() == b"x-request-id"), None)
         if not key:
             return await self.app(scope, receive, send)
-        sent, tail = 0, b""
+        sent, tail, fd = 0, b"", self.fd
 
         async def counted(message: dict[str, Any]) -> None:
             nonlocal sent, tail
@@ -139,7 +139,7 @@ class SentFeed:
             n = sum(len(m.group(1).split(b",")) for m in _TOKEN_IDS.finditer(events) if m.group(1).strip())
             if n:
                 sent += n
-                os.write(self.fd, (json.dumps({"key": key, "sent": sent}, separators=(",", ":")) + "\n").encode())
+                os.write(fd, (json.dumps({"key": key, "sent": sent}, separators=(",", ":")) + "\n").encode())
         return await self.app(scope, receive, counted)
 
 

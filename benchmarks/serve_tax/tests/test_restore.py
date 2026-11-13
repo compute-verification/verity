@@ -5,6 +5,8 @@ from __future__ import annotations
 import gzip
 import json
 import pickle
+import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace as NS
 
@@ -148,3 +150,27 @@ def test_warm_serves_its_requests_to_the_end_and_empties_the_batch_queue(monkeyp
     assert eng.added == ["restore-warm-0", "restore-warm-1"] and core.batch_queue == []
     sync = NS()
     assert R.warm(Eng(sync), sync, [{"prompt_ids": [1], "sampling": {}}]) == 2
+
+
+def test_the_restores_engine_takes_the_headers_cache_format_and_draft(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """A serve with an FP8 cache or speculative decoding is restored into an engine with them, as it is replayed
+    (`replay.HEADER_ARGS`); a header without them builds the engine it did."""
+    vllm, llm_engine = types.ModuleType("vllm"), types.ModuleType("vllm.v1.engine.llm_engine")
+    vllm.EngineArgs = lambda **kw: kw
+    llm_engine.LLMEngine = NS(from_engine_args=lambda args: args)
+    for name, mod in (("vllm", vllm), ("vllm.v1", types.ModuleType("vllm.v1")),
+                      ("vllm.v1.engine", types.ModuleType("vllm.v1.engine")), ("vllm.v1.engine.llm_engine", llm_engine)):
+        monkeypatch.setitem(sys.modules, name, mod)
+    cfg = {"max_model_len": 4096, "max_num_seqs": 8, "max_num_batched_tokens": 512, "enable_chunked_prefill": True,
+           "enable_prefix_caching": True, "async_scheduling": True, "block_size": 16, "num_gpu_blocks": 100}
+    plain = R.engine(tmp_path, {"config": cfg}, eager=True, log_stats=False)
+    assert plain["disable_log_stats"] and not {"long_prefill_token_threshold", "kv_cache_dtype", "speculative_config"} & set(plain)
+    draft = {"method": "mtp", "num_speculative_tokens": 5}
+    got = R.engine(tmp_path, {"config": {**cfg, "long_prefill_token_threshold": 256, "kv_cache_dtype": "fp8_ds_mla",
+                                         "speculative": draft}}, eager=True, log_stats=False)
+    assert {k: v for k, v in got.items() if k not in plain} == {
+        "long_prefill_token_threshold": 256, "kv_cache_dtype": "fp8_ds_mla", "speculative_config": draft}
+    assert {k: got[k] for k in plain} == plain
+    replayed = R.replay.engine(tmp_path, {"config": {**cfg, "kv_cache_dtype": "fp8_ds_mla"}}, eager=True)
+    assert replayed["kv_cache_dtype"] == R.engine(tmp_path, {"config": {**cfg, "kv_cache_dtype": "fp8_ds_mla"}}, True, True)[
+        "kv_cache_dtype"]

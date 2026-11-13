@@ -5,7 +5,7 @@
                                     that only its word reads, `Out`) and the gates they share (`Core`)
     rolled(name, version, ...)      `elementwise.specialized`'s Definition written as batches of each class's `In` and `Out`
                                     and one Call of `Core`, lowered (``fold_build``) as the whole circuit's gates in `emit`'s
-                                    order, so its netlist is `specialized`'s
+                                    order, so its lowered circuit's description is `specialized`'s
 
 A group quantiser decodes each of its words for its scale and for its quantised word, so most of its circuit is per word and
 alike; its description, and `verity_flock.struct_lower`'s template of it, are then a class's circuit once and the shared gates,

@@ -3,7 +3,7 @@
 until a deadline (`allow`):
 
     schema = "policy/v0"
-    off_gate = ["circuit-check", "lean-changed", "ratchet-gate"]
+    off_gate = ["circuit-check", "ratchet-gate"]
     [[allow]]
     id = "suite NAME::NODE ID"        # one test; "suite NAME", every failure of that suite; "circuit-check CHECK/CODE FAMILY"
     owner = "ci"                      # a handle of the Slack registry

@@ -42,13 +42,13 @@ import numpy as np
 
 from verity.commitments import hm96
 from verity.commitments import layout as L
+from verity.commitments.crypto.chacha20 import keystream
 from verity.commitments.identity import identity_digest_sha512, tagged_sha512, tagged_sha512_prefix
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.layout import UNIT_MAX_BITS, Group, Part, Row
 from verity.commitments.merkle import CommitmentDomain, MerkleTree, domain_message
 from verity.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
-from verity.commitments.crypto.chacha20 import keystream
 
 __all__ = ["UNIT_MAX_BITS", "Group", "CommitShape", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot",
            "edge_layout", "fixture", "fresh_salt_key", "h200_layout", "layout_digest", "load", "open_unit", "random_outputs",

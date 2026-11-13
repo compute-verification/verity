@@ -119,7 +119,7 @@ from verity.commitments import domains
 from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.commitments.crypto import lms
-from verity.protocols.certifier.verifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
+from verity.protocols.certifier.verifier.grid import Grid, GridParams, Reason, BlockGrid, Status, row_left_packed
 from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
 
 RECORD_TAG = "verity-network-certifier/record/v2"
@@ -773,7 +773,7 @@ class Issuer:
     clock_salts: set[bytes] = field(default_factory=set, repr=False)
     mark_salts: set[bytes] = field(default_factory=set, repr=False)
 
-    def certify(self, record: Record, direction: Direction, params: GridParams, parameters: bytes, *,
+    def certify(self, record: BlockGrid, direction: Direction, params: GridParams, parameters: bytes, *,
                 deadline: bool = True) -> CertifiedRecord | None:
         salt = self.coins(SALT_BYTES)
         if len(salt) != SALT_BYTES:

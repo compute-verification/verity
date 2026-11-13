@@ -56,6 +56,8 @@ RELATION = ("DsaWaksmanOrder_v1", "DsaTopKLongRow_v1", "DsaWaksmanRows_v1")
 #: the mask class G's batched form calls, a row's own keys among its block's (`vllm_dsa.long_row_blocks`)
 COUNTED = "DsaTopKMaskCounted_v1"
 CTX131K = os.environ.get("VERITY_VLLM_CTX131K", "")
+#: the max_model_len of the launch that test serves at
+CTX = 131072
 
 
 def _short(hf: dict) -> dict:
@@ -539,7 +541,8 @@ def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_p
                                         "compiles GLM-5.3's first LAYERS layers (at least its 3 dense ones) for one request of KEYS "
                                         "positions (default: the served max_model_len)")
 def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
-    """Class G at its served limits (`CLASS_G_SERVED`): one greedy request of KEYS prompt tokens (the served max_model_len unless
+    """Class G at its served limits (`CLASS_G_SERVED`) under a launch of 131,072 positions (`CTX`): one greedy request of KEYS
+    prompt tokens (the served max_model_len unless
     stated) and one output, which its prefill's last row samples (no decode position: T 0), its prompt prefilled alone in chunks
     of the long-prefill threshold, its last row of KEYS keys. The step compiler plans it and builds its request Program on the meta device, every row past
     INDEX_TOPK (2,048) in the mask form at its class: no `run` input, its one check its length rule, one DsaTopKMaskCounted per full indexer layer and row
@@ -547,10 +550,10 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     the real INDEX_TOPK; a run of it measures its time and memory. GLM-5.3's 78 layers don't fit one machine unrolled at 131,072
     positions, so LAYERS cuts the checkpoint (3: its dense full-indexer layers; 4: then a MoE layer sharing the third's top-k)."""
     layers, _, keys = CTX131K.partition(":")
-    KEYS, CH = int(keys or CLASS_G_SERVED["max_model_len"]), CLASS_G_SERVED["long_prefill_token_threshold"]
-    assert KEYS <= CLASS_G_SERVED["max_model_len"]
+    KEYS, CH = int(keys or CTX), CLASS_G_SERVED["long_prefill_token_threshold"]
+    assert KEYS <= CTX
     from verity_vllm.program.predict.steps import Registered, compile_steps
-    reg = _class_g(tmp_path, layers=int(layers), engine=dict(CLASS_G_SERVED))
+    reg = _class_g(tmp_path, layers=int(layers), engine={**CLASS_G_SERVED, "max_model_len": CTX})
     reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
     hf, LP = reg.phi.hf_config, KEYS
     topk, full = int(hf["index_topk"]), hf["indexer_types"][:int(layers)].count("full")

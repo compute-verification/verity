@@ -23,7 +23,7 @@ K, M, N = 64, 2, 2
 SOURCES = ("Definitions/Pouw/NCP/Defs.lean", "Definitions/Pouw/Basic/Mat.lean", "Definitions/Pouw/NCP/RouteU.lean")
 
 
-def draws(label: str, n: int, lo: int, span: int) -> list[int]:
+def samples(label: str, n: int, lo: int, span: int) -> list[int]:
     return [lo + b % span for b in hashlib.shake_256(f"verity/pouw/ncp-lean/v1\0{label}".encode()).digest(n)]
 
 
@@ -33,11 +33,11 @@ def perm_case(kind: str) -> tuple[list[int], list[int]]:
     elif kind == "shift24":
         pi, sg = ncp.shift_perm(K)
     else:                                                    # a random signed permutation (Fisher-Yates on SHAKE bytes)
-        pi, r = list(range(K)), draws("signed/perm", 4 * K, 0, 1 << 8)
+        pi, r = list(range(K)), samples("signed/perm", 4 * K, 0, 1 << 8)
         for i in range(K - 1, 0, -1):
             j = (r[i] * 256 + r[K + i]) % (i + 1)
             pi[i], pi[j] = pi[j], pi[i]
-        sg = [1 - 2 * (b & 1) for b in draws("signed/signs", K, 0, 256)]
+        sg = [1 - 2 * (b & 1) for b in samples("signed/signs", K, 0, 256)]
     return list(pi), list(sg)
 
 
@@ -45,8 +45,8 @@ CASES = ("word", "shift24", "signed")
 
 
 def inputs(kind: str) -> dict:
-    return {"a": [draws(f"{kind}/A/{i}", K, -64, 128) for i in range(M)], "b": [draws(f"{kind}/B/{j}", K, -64, 128) for j in range(N)],
-            "e1": [draws(f"{kind}/E1/{i}", K, -31, 64) for i in range(M)], "f1": [draws(f"{kind}/F1/{j}", K, -31, 64) for j in range(N)],
+    return {"a": [samples(f"{kind}/A/{i}", K, -64, 128) for i in range(M)], "b": [samples(f"{kind}/B/{j}", K, -64, 128) for j in range(N)],
+            "e1": [samples(f"{kind}/E1/{i}", K, -31, 64) for i in range(M)], "f1": [samples(f"{kind}/F1/{j}", K, -31, 64) for j in range(N)],
             "pi": perm_case(kind)[0], "sigma": perm_case(kind)[1]}
 
 
