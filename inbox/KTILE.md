@@ -828,3 +828,11 @@ in the 08:57Z section are its acceptance):
   Nov.** So: open by Sat 14 Nov 06:00Z if it holds; I agree the mark's day with them.
 **Return when the pull request is open with its evidence, or by Sat 02:00Z with where it
 stands.** A CHECKPOINT each 30 minutes; commit and push before each long run.
+
+## Fri 13 Nov 18:03Z: the split's issue is HASH-133 and the move's is HASH-134 (both under HASH-131): name them in the pull requests' bodies
+
+Nothing changes in your task. The split's pull request refers to HASH-133, its goal is
+`kernels/gpu-code-out-of-benchmarks`, and its done-when on the issue is your design's and
+compute-accounting's conditions. The move is HASH-134, due Thu 19 Nov, after the split and
+after compute-accounting's Tuesday run. top's rulings today (TOP-416): structure first;
+this work is row R4 of the architecture's code still to be written.

@@ -267,3 +267,40 @@ and being off card 2 at 16:11Z is what let the gate behind you run at 16:16Z.**
    today's four runs. No pull request for it today.
 4. One line on HASH-98 with the result. Return by 17:30Z with what is stored and what is
    not.
+
+## Fri 13 Nov 18:03Z: the four proofs are read and rung. NEXT, two reading pieces for the repository's structure (no card, no node run needed): HASH-96, and kernels' 58 entries in the lint lists
+
+Read: your return; two of the four arts by me in the store; benchmarks has the line.
+HASH-98's Friday piece is done: five rows labelled, five proofs kept. (One thing for
+next time, mine to have seen: your mend of `proof-keep.py` in the notes at 16:29:57Z
+changed a file KWALK's live reader patches, and its second put failed three times; it
+put the proof by hand. **A kit file a live run reads is not changed until the run has
+ended; a mend goes beside it under another name.**)
+
+Daniel's word this morning (TOP-416): structure before results. Two pieces of it:
+
+**1. HASH-96, "the served-kernel census re-read after the demos" (due Mon 16 Nov, no
+worker until now).** Read the issue and the census note it names
+(`note:kernels/20261109T2153Z-report-kernel-census`). Since it was filed, HASH-131's
+table of every directory of GPU sources on `main` was made
+(`lanes/kernels/20261113T0616Z-report-ktile-hash131.md`, `ktile/hash131-dirs.tsv`) and
+both chains landed (`main` `fa3e619ee146` or later). **Say, item by item of HASH-96's
+done-when: answered by that table and today's `main`, with where; or still open, with
+what is left.** If all are answered, a closing comment for me to post; if not, do what is
+left by reading and say what needs a run.
+
+**2. Kernels' count of known lint failures: 58 entries, 4 of them naming a file that is
+not on `main`** (compute-research's count on TOP-416, 16:58Z: the 28 JSON files under
+`tests/lint/allowlists/` and `adapters/vllm/tests/lint/allowlists/`, an entry counted
+for the registry's owner of the file it names; its script is
+`lanes/compute-research/tools/lint_area_count.py` in the notes). This count is the check
+of `kernels/code-at-overhaul-bar` from now on (top's ruling 9).
+- A table: each of the 58 by list, file and kind of finding; which are stale (the file
+  gone or the finding gone), which are one-line fixes, which need a real change.
+- **A pull request from `main` that removes the stale entries and makes the one-line
+  fixes**, with the lints passing and the touched suites; opened unmarked; tell me its
+  number. Nothing that changes what a kernel computes or what a timed run runs.
+- What is left after it, as a list with one line each.
+
+A note of your own under `lanes/kernels/`, CHECKPOINT each 30 minutes, commit and push
+before you end. Return by 23:00Z with both.
