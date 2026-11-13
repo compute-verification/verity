@@ -251,7 +251,7 @@ term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) wh
   least one incorrect proof block at `δ_i` (`faultyEntries`), else 0.
 * `eps` is the scans' δ summed, `m · δ`, and `δ_i` for each tied audit sampled in part (`chargedOf`), whose bound
   at `δ_i` `faulty_entries` reads: the δ part of the union over the monitoring period's windows that
-  `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
+  `CommOfMonitoringPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
 
 **Profile**: the link and `m`.
 
