@@ -13,7 +13,11 @@
 # GH_TOKEN (--gh-env): the watch reads the file at each read, and the token never enters the loop's environment. The nodes
 # whose ended runs ring their sender are $DIR/nodes.json (a copy of agent_watch_nodes.json, read each sweep), their hosts the notes
 # clone's machines.d.
+# From the same relay.env the watch reads the Linear app's LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET, for the comments of the
+# issues integrators take hand-ins on and for a shared team's issues' lane labels; its Linear token is kept in
+# $DIR/linear-token.json.
 # While $DIR/wake exists the watch starts a run on a coordinator ready to wake (--wake); remove the file to go back to recording.
+# While $DIR/cancel.off exists the watch cancels no held, stalled or held-unread run: it records each once, for a person; remove the file to have it cancel again.
 # While $DIR/launch.env exists (root, 0600, one CURSOR_API_KEY= line: Daniel's user key, which the GitHub broker trusts) the
 # watch relaunches a coordinator it can't resume (launch_coordinator.py from the registry's checkout) and a worker nobody
 # resumed; the watch reads it only to relaunch and passes it only in the launch's environment. Without it, relaunches are recorded.

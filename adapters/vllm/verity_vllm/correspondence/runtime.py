@@ -273,17 +273,14 @@ class RuntimeCorrespondence:
                 coll = CollectiveOccurrence(cj["kind"], int(cj["occurrence"]), tuple(int(x) for x in cj["operand_ranks"]),
                                             cj.get("own_operand"), cj.get("peer_operand"), cj.get("peer_input"),
                                             tuple(int(x) for x in cj.get("peer_operands") or ()), tuple(cj.get("peer_inputs") or ()))
-            lifetime = None if o is None else o.get("lifetime")
+            lifetime = o.get("lifetime") if o else None
             yield CallCorrespondence(k, (o or {}).get("module", ""), (o or {}).get("module_class"), (o or {}).get("node"), (o or {}).get("op"),
                                      (o or {}).get("rule"), c.get("member"), c.get("row"), c.get("hint"), tuple(rets), tuple(args),
-                                     {} if lifetime is None else dict(lifetime), rank, coll)
+                                     dict(lifetime) if lifetime else {}, rank, coll)
 
     # -- lookups ----------------------------------------------------------------------------------------------------------
     def __len__(self) -> int:
         return len(self._calls)
-
-    def __iter__(self) -> Iterator[CallCorrespondence]:
-        return iter(self._calls[k] for k in sorted(self._calls))
 
     def record(self, call_id: int) -> CallCorrespondence:
         return self._calls[int(call_id)]
@@ -324,9 +321,9 @@ class RuntimeCorrespondence:
 def occurrence_views(occurrence: Mapping[str, Any] | None, key: str) -> Sequence[Any]:
     """An occurrence's `outputs` or `inputs` (`key`), neither of which `JSON_SCHEMA` requires of it: no entries for a Call with no
     occurrence, and none where the occurrence records none (predict's naming writes `inputs` only for an op that writes an
-    argument in place)."""
-    views = None if occurrence is None else occurrence.get(key)
-    return () if views is None else views
+    argument in place).  A truth test, so every value reads as it did under `(occurrence or {}).get(key) or []`."""
+    views = occurrence.get(key) if occurrence else None
+    return views if views else []
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -374,15 +371,12 @@ class _Stream:
     """A JSON text read in chunks with a cursor: `raw_decode` at the cursor, refilling until the value is complete."""
 
     def __init__(self, fh) -> None:
-        self.f, self.buf, self.pos, self.eof = fh, "", 0, False
+        self.f, self.buf, self.pos = fh, "", 0
         self.dec = json.JSONDecoder()
 
     def _more(self) -> bool:
-        if self.eof:
-            return False
         chunk = self.f.read(_CHUNK)
         if not chunk:
-            self.eof = True
             return False
         if self.pos > _CHUNK:
             self.buf, self.pos = self.buf[self.pos:] + chunk, 0
@@ -499,9 +493,8 @@ def read_program_dir(program_dir: Any) -> tuple[RuntimeCorrespondence | None, st
     """The table of one Build output dir (`derive_step`: `result.json` + `descriptor.json[.gz]`), as (table, digest, problem).
     `result.json:program.correspondence_digest` is the cheap presence test (the frontend that emits the record records its digest there):
     a Build without it is a v1-frontend Build -> (None, None, None) without decoding the descriptor.  With it, the descriptor's record is
-    loaded and its digest checked against the recorded one (a mismatch is the `problem`; the table is still returned).  The ONE loader
-    every consumer (acquire, query, verdict) reads a Build's correspondence through; `read_program_document` is its document, for a
-    reader that holds no table (`RuntimeCorrespondence.records`)."""
+    loaded and its digest checked against the recorded one (a mismatch is the `problem`; the table is still returned).
+    `read_program_document` is its document, for a reader that holds no table (`RuntimeCorrespondence.records`): the query's reads that."""
     doc, digest, problem = read_program_document(program_dir)
     return (RuntimeCorrespondence.from_json(doc) if doc is not None else None), digest, problem
 
@@ -515,7 +508,7 @@ def read_program_document(program_dir: Any) -> tuple[dict | None, str | None, st
         try:
             with open(res_p) as f:
                 program = json.load(f).get("program")
-            recorded = program.get("correspondence_digest") if isinstance(program, dict) else None
+            recorded = program.get("correspondence_digest") if program else None
         except (OSError, ValueError) as e:
             return None, None, f"{res_p}: unreadable ({e})"
         if recorded is None:

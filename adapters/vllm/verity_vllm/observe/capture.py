@@ -149,7 +149,7 @@ class Capture:
     def install(self) -> None:
         if self.installed:
             return
-        runner, model, cfg = self.runner, self.model, self.cfg
+        model, cfg = self.model, self.cfg
         if self.header is not None:
             self._write(self.header)
         self._install_roots()

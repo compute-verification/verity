@@ -365,7 +365,7 @@ def build(rows: Sequence[CommitRun | Mapping[str, Any]], verdict_doc: dict | Non
         treatment = [(r, r.commit) for r in runs if r.arm != "control" and r.commit is not None]
     if min_openings is None:
         es = _d(execution.get("engine_settings"))
-        min_openings = min(64, int(es["openings"])) if es.get("openings") is not None else 64
+        min_openings = min(64, _int(es.get("openings"), 64)) if es.get("openings") is not None else 64
     ctx: dict[str, Any] = {"program_digest": program_digest, "manifest_digest": manifest_digest, "required_classes_source": vd.get("required_classes_source"),
                            "manifest_verify": manifest_verify, "file_digests": dict(file_digests or {}), "replay_cache": vd.get("replay_cache")}
     required_classes = vd.get("required_classes")

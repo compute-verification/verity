@@ -29,8 +29,8 @@ def test_tp_capture_without_a_workload_is_a_usage_error_that_names_the_option(tm
 
 @pytest.mark.parametrize("export, revision", [
     (b'{"commit": "c0ffee", "patch_sha256": null}', "c0ffee"), (b"{}", "unknown"), (None, "unknown"), (b"{", "unknown"),
-    (b"\xff", "unknown"), (b'["c0ffee"]', "unknown"), (b"null", "unknown"),
-], ids=["its commit", "no commit", "absent", "not JSON", "not text", "a list", "null"])
+    (b"\xff", "unknown"), (b'["c0ffee"]', "unknown"), (b"null", "unknown"), (b"[" * 100_000 + b"]" * 100_000, "unknown"),
+], ids=["its commit", "no commit", "absent", "not JSON", "not text", "a list", "null", "nested past the parser's depth"])
 def test_the_revision_is_the_exported_trees_commit_and_unknown_without_one(tmp_path, monkeypatch, stand_ins, export, revision):
     if export is not None:
         (tmp_path / "EXPORT.json").write_bytes(export)

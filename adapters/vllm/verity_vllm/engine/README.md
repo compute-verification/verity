@@ -20,14 +20,14 @@ what it holds.
   two checkpoint makers' commands (`fp8_checkpoint`, `int8_checkpoint`), a workload's load and its requests' run
   through a built engine, at once or at declared steps (`vllm_adapter`, `arrivals`), the generated kernels'
   identity (`kernel_identity`), a checkpoint's modules on the meta device and a serving rank's (`meta_inventory`),
-  and the facts of models, cards and transports (`profiles.cases`, `profiles.coverage_roles`,
-  `profiles.dense_generic`, `profiles.devices`, `profiles.engine_classes`, `profiles.family_facts`,
-  `profiles.transport`, `profiles.admission_calibration`). Each of these lists in `__all__` the names that other
-  packages, the benchmarks and the command line read from it. Six more modules that other packages or the
-  benchmarks read state no `__all__` yet: `build`, `env`, `runner_step` (the one wrap of the model runner's step,
-  and the parts that run around it), `int8_fused`, `int8_vllm` and `profiles.layer_classes`; `served_seed`'s does
-  not yet list `DERIVED`, `UNSEEDED`, `param_of` and `rule_of`, nor `step_trace`'s `SERVED` and `scheduler_config`,
-  which other packages read; and `observe.fold.profiles.generic` reads one private name that no `__all__` lists,
+  the one wrap of the model runner's step and the parts that run around it (`runner_step`), and the facts of
+  models, cards and transports (`profiles.cases`, `profiles.coverage_roles`, `profiles.dense_generic`,
+  `profiles.devices`, `profiles.engine_classes`, `profiles.family_facts`, `profiles.transport`,
+  `profiles.admission_calibration`). Each of these lists in `__all__` the names that other packages, the
+  benchmarks and the command line read from it. Five more modules that other packages or the benchmarks read
+  state no `__all__` yet: `build`, `env`, `int8_fused`, `int8_vllm` and `profiles.layer_classes`; `step_trace`'s
+  does not yet list `SERVED` and `scheduler_config`, which other packages read; and
+  `observe.fold.profiles.generic` reads one private name that no `__all__` lists,
   `profiles.dense_generic._sha256`.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `properties`, `check`
   and `commit` packages, its `llm` and `glue`; and the benchmarks that build, serve or time the engine

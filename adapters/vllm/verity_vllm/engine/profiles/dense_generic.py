@@ -69,8 +69,9 @@ def checkpoint_entry(role: str) -> dict[str, Any] | None:
     for e in entries:
         if e.get("role") == role:
             return e
-    if role in CASES:
-        repo = CASES[role]["repo"]
+    case = CASES.get(role)
+    repo = case.get("repo") if case else None
+    if repo:
         for e in entries:
             if e.get("repo") == repo:
                 return e

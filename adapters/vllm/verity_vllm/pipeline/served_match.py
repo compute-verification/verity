@@ -116,7 +116,9 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
         return {}
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
     from vllm.model_executor.layers.fused_moe.experts.triton_moe import TritonExperts
-    from vllm.model_executor.layers.fused_moe.router.fused_topk_router import FusedTopKRouter
+    from vllm.model_executor.layers.fused_moe.router.fused_topk_router import (
+        FusedTopKRouter,
+    )
 
     from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16
 
@@ -222,6 +224,10 @@ class ServedCommit:
     committed values, each request's rows a sample under the seed of a challenge sampled after the run root is fixed (the Commit is its
     run's own auditor), and the linkage that is the check's input rule (the prompt at a request's first step, then its previous
     step's sampled id)."""
+
+    #: empty and None until `engine` reads them off the engine that was built
+    facts: dict[str, Any]
+    weight: Callable[[str], Any] | None
 
     def __init__(self, build: dict[str, Any], fault: str | None) -> None:
         from verity_vllm.acquire.sources.served_compiled_source import ServedCompiledSource

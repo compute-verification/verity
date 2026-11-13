@@ -450,7 +450,8 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
     collective order, `model(B, W, peers)` the forward and the sampler."""
     family = str(phi.hf_config.get("model_type", "")).lower()
-    arch = FAMILY_FACTS[family]["arch"] if family in FAMILY_FACTS else None    # a family the table lacks is `model_shape`'s to refuse
+    entry = FAMILY_FACTS.get(family)
+    arch = entry.get("arch") if entry else None    # a family the table lacks, or one with no constructor, is `model_shape`'s to refuse
     Net: type[Any]
     if arch == "dsa-moe":
         from .dsa import Net
@@ -464,12 +465,12 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
 
 def request_shape(wrapper: str, LP: int | None, T: int | None) -> tuple[int, int]:
     """A wrapper's (LP, T): (0, 0) for a `step`, which reads neither; for any other the prompt rows and the decode steps its
-    Program is built for, a TypeError without them."""
+    Program is built for, `int`'s TypeError without them."""
     if wrapper == "step":
         return 0, 0
-    if LP is None or T is None:
-        raise TypeError(f"a {wrapper} wrapper's Program is built for a prompt of LP rows and T decode steps (LP={LP!r}, T={T!r})")
-    return int(LP), int(T)
+    lp: Any = LP   # None where a request is asked for with no shape (`predict emit` without --LP): `int`'s TypeError, LP's first
+    t: Any = T
+    return int(lp), int(t)
 
 
 class _Decoder:

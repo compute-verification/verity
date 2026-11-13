@@ -459,7 +459,8 @@ def _achieved_concurrency(c: NamedCheck, res: dict, gp: dict, steps: dict, prese
     expected_per_step: dict[int, int] = collections.defaultdict(int)
     for e in res["requests"]:
         rid = e["request_id"]
-        ps_r = present.get(rid, [])   # the steps with its rows; a request never scheduled has no entry
+        scheduled = present.get(rid)   # the steps with its rows; a request never scheduled has none
+        ps_r = scheduled if scheduled else []
         occ = set(ps_r)
         if e.get("finish") == "eos" and e.get("eos_verified") is not True and ps_r:
             short = int(e.get("max_tokens") or 0) - int(e.get("output_events") or 0)

@@ -84,8 +84,10 @@ def _where(d: dict) -> Any:
 
 def _compare_file(name: str, a: str, b: str) -> dict | None:
     if name in TELEMETRY:
-        with open(a) as fa, open(b) as fb:
-            x, y = json.load(fa), json.load(fb)
+        with open(a) as f:                                    # one side read whole before the other is opened
+            x = json.load(f)
+        with open(b) as f:
+            y = json.load(f)
         for p in TELEMETRY[name]:
             _drop(x, p)
             _drop(y, p)
@@ -216,7 +218,8 @@ def derive(row, todo: list[tuple[Any, ...]], jobs: int) -> None:
     for name, js in by_shape.items():
         rep = _emit_report(js[t][1]) if t in js else {}
         for r in doc["requests"][name]["relabel"]:
-            if r not in rep or not rep[r].get("ok"):
+            entry = rep.get(r)
+            if not entry or not entry.get("ok"):
                 doc["requests"][name]["emit_failed"][str(r)] = _emit_error(rep, r)
     can = doc["canary"]
     if can is not None:
@@ -255,7 +258,8 @@ def _emit_report(out: str) -> dict[int, dict]:
 def _emit_error(rep: dict[int, dict], r: int) -> str:
     """Why the template's report (`_emit_report`) says rank `r` was not relabeled: its `error`, or "no emit report" for a rank the
     report does not name and for one it names without an error."""
-    error = rep[r].get("error") if r in rep else None
+    entry = rep.get(r)
+    error = entry.get("error") if entry else None
     return error if error else "no emit report"
 
 

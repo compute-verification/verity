@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -100,6 +101,13 @@ def test_refuses_by_name_over_the_cap_and_a_non_host_retention_is_predicted_not_
     assert r3["admitted"] is True and "no container memory limit" in r3["why"] and r3["would_exceed_by_bytes"] is None
 
 
+def test_the_admission_record_and_its_scheduled_steps_carry_the_bounds_schema_id():
+    sizing, wl, _ = _fixture("b16")
+    rec = ADM.admission(sizing, wl["requests"], None, retain="host", max_num_batched_tokens=5348, lag=1)
+    assert ADM.SCHEMA == "verity-sweep/admission/f-da-15/v1"
+    assert rec["schema"] == ADM.SCHEMA and rec["scheduled"]["schema"] == ADM.SCHEMA
+
+
 def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
     """the RETAIN-windowed pool: under --bounded-staging --retain host --retain-exclude hidden_m1 the pool
     is (raw - hidden M1) + the levels over every leaf; the hidden stream is the bulk of the raw bytes at 1024/128; bounded + a non-host retention keeps the
@@ -145,6 +153,29 @@ def test_lag_rows_chunking_and_the_rope_correction_are_named_and_monotone():
         ADM.scheduled_step_bytes(sizing, [{"prompt_len": 0, "max_tokens": 1, "arrive_step": 0}])
 
 
+@pytest.mark.parametrize("absent", ["widths", "model"])
+def test_a_sizing_record_without_its_widths_or_its_model_gets_no_rope_correction(absent):
+    """A sizing record may leave out `widths` or `model`, or hold null there: no width or one layer is nothing to add."""
+    sizing, _, _ = _fixture("b16")
+    assert ADM.per_token_bytes_of(sizing)[0] > sizing["per_token_bytes"]
+    for short in ({k: v for k, v in sizing.items() if k != absent}, dict(sizing, **{absent: None}), dict(sizing, **{absent: {}})):
+        assert ADM.per_token_bytes_of(short) == (sizing["per_token_bytes"], None)
+
+
+def test_a_request_without_a_prompt_len_is_as_long_as_its_token_ids_and_one_with_neither_is_refused():
+    sizing, _, _ = _fixture("b16")
+    by_len = ADM.scheduled_step_bytes(sizing, [{"prompt_len": 7, "max_tokens": 2, "arrive_step": 0}])
+    seven_long: list[dict[str, Any]] = [{"prompt_token_ids": list(range(7))}, {"prompt_len": None, "prompt_token_ids": list(range(7))},
+                                        {"prompt_len": 7, "prompt_token_ids": list(range(3))}]
+    for request in seven_long:
+        assert ADM.scheduled_step_bytes(sizing, [dict(request, max_tokens=2, arrive_step=0)]) == by_len
+    assert by_len["prompt_tokens"] == 7
+    no_length: list[dict[str, Any]] = [{}, {"prompt_token_ids": []}, {"prompt_token_ids": None}, {"prompt_len": 0}]
+    for request in no_length:
+        with pytest.raises(ValueError, match=r"request 0: prompt_len=0 max_tokens=1 arrive_step=0"):
+            ADM.scheduled_step_bytes(sizing, [dict(request, max_tokens=1)])
+
+
 def test_the_commit_admission_counts_the_declared_lag():
     """The host admission's lag rows are the manifest target's declared LAG, never a fallback of 1 when an import misses."""
     pytest.importorskip("torch")
@@ -159,6 +190,18 @@ def test_the_commit_admission_counts_the_declared_lag():
     for declared, lag in ((False, 0), (True, 1)):
         assert C.admission_lag(dict(wl, target={**(wl["target"] or {}), "async_scheduling": declared})) == lag
     assert "lag=admission_lag(wl)" in inspect.getsource(C.main)
+
+
+def test_the_record_sorts_its_exclusions_before_it_scales_the_envelope_as_on_main():
+    """The record's fields are evaluated in their order, `staging` before the envelope's predicted bytes: of exclusions that do
+    not sort and an envelope bound that does not scale, the first is the one raised."""
+    sizing, wl, _ = _fixture("b16")
+    unsortable: Any = {1, "a"}
+    unbounded: Any = float("inf")
+    with pytest.raises(OverflowError):
+        ADM.admission(sizing, wl["requests"], None, envelope_bound_bytes=unbounded)
+    with pytest.raises(TypeError):
+        ADM.admission(sizing, wl["requests"], None, retain_exclude=unsortable, envelope_bound_bytes=unbounded)
 
 
 def test_the_resident_bytes_add_to_the_pool_and_can_refuse():

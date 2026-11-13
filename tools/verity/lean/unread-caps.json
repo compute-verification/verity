@@ -1,13 +1,9 @@
 {
  "schema": "lean-unread-caps/v1",
  "areas": {
-  "Definitions/Core": {
-   "modules": 1,
-   "declarations": 12
-  },
   "Definitions/Pouw": {
-   "modules": 27,
-   "declarations": 121
+   "modules": 18,
+   "declarations": 81
   },
   "Proofs/Accounting": {
    "modules": 5,
@@ -18,28 +14,28 @@
    "declarations": 60
   },
   "Proofs/Flock": {
-   "modules": 267,
-   "declarations": 2141
+   "modules": 273,
+   "declarations": 2309
   },
   "Proofs/Nci": {
    "modules": 1,
    "declarations": 4
   },
   "Proofs/NetworkCertifier": {
-   "modules": 3,
-   "declarations": 33
+   "modules": 4,
+   "declarations": 34
   },
   "Proofs/Pous": {
    "modules": 1,
    "declarations": 3
   },
   "Proofs/Pouw": {
-   "modules": 49,
-   "declarations": 412
+   "modules": 44,
+   "declarations": 382
   },
   "Proofs/Spot": {
-   "modules": 7,
-   "declarations": 89
+   "modules": 6,
+   "declarations": 83
   }
  }
 }

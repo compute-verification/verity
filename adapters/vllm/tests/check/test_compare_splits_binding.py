@@ -199,3 +199,12 @@ def test_a_fold_without_top_p_selects_binds_nothing():
     P2 = _prog("fold", splits_form="const", S=[8, 8, 8], weights=2)
     assert P2.n_splits_consts_bound == 3 and len(P2.inst) == 5 * 3 and all(P2.k2i[r["k"]] == i for i, r in enumerate(P2.inst))
     assert set(P2.splits_values) == {P2.inst[st[-1]]["k"] for st in P2.steps}   # keyed by the select's node id
+
+
+@pytest.mark.parametrize("operands", [None, {}, [], 0, "", False])
+def test_a_readers_row_whose_operands_are_left_out_null_or_empty_reads_S_from_its_spec(operands):
+    """A reader's row that carries no operands has no splits operand to follow: S is the static of the older form, or none."""
+    reader = _prog("greedy-like", splits_form="static", S=[1, 1, 1], weights=2)
+    for row in ({"k": -1}, {"k": -1, "args": operands}):
+        assert SG.top_p_split_count("GumbelTopPTokenSelect_v1{V=16,S=8}", reader, row) == 8
+        assert SG.top_p_split_count(SEL, reader, row) is None

@@ -48,13 +48,19 @@ DECISION = "hc"
 POST_PRE_PORTS = tuple(Port(frozenset({"MhcFusedPostPre_v1", "MhcPostPreTf32_v1"}), p, call_boundary=True) for p in "0231")
 
 
+def _commits(tap: Mapping[str, Any]) -> bool:
+    """Whether this source commits `tap`: its `commit` block names `BINDER` (a tap with no block, or an empty one, is committed nowhere)."""
+    block = tap.get("commit")
+    return bool(block and block.get("binder") == BINDER)
+
+
 def _taps(cmap: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """The map's taps this source commits: those whose `commit` block names `BINDER` (a tap with no block is committed nowhere)."""
-    return [t for t in cmap["taps"] if (c := t.get("commit")) is not None and c["binder"] == BINDER]
+    """The map's taps this source commits."""
+    return [t for t in cmap["taps"] if _commits(t)]
 
 
 def binds(cmap: Mapping[str, Any]) -> bool:
-    return bool(_taps(cmap))
+    return any(_commits(t) for t in cmap["taps"])
 
 
 def function_of(tap: Mapping[str, Any]) -> str:
@@ -65,7 +71,7 @@ def function_of(tap: Mapping[str, Any]) -> str:
 def ports_of(cmap: Mapping[str, Any]) -> dict[str, Port]:
     """`bind.Binder`'s declared labels: each post_pre tap's, its return's port of the fused post_pre (`POST_PRE_PORTS`)."""
     return {t["commit"]["name"].rsplit("/", 1)[1]: POST_PRE_PORTS[int(t["site"]["output"])]
-            for t in _taps(cmap) if function_of(t) == POST_PRE}
+            for t in cmap["taps"] if _commits(t) and function_of(t) == POST_PRE}
 
 
 class MhcSource:

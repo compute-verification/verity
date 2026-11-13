@@ -234,6 +234,35 @@ def test_a_phi_that_leaves_a_block_out_declares_nothing_in_it():
     assert Phi(workload={"requests": reqs}).request_shapes() == [(3, -1), (3, 4), (3, 6)]
 
 
+def test_a_request_states_its_prompt_length_one_of_three_ways_and_one_that_states_none_has_no_length():
+    """A request's prompt length is the count of its `prompt_token_ids`, else its `prompt_len`, else its `input_len`: an empty or
+    absent `prompt_len` gives way to `input_len`.  A request that states none of the three is `int`'s TypeError on None, and
+    names no field."""
+    def shapes(*requests: dict) -> list[tuple[int, int]]:
+        return Phi(workload={"requests": [{"max_tokens": 2, **r} for r in requests]}).request_shapes()
+
+    stated: list[dict] = [{"prompt_token_ids": [7, 8, 9], "prompt_len": 5, "input_len": 6}, {"prompt_len": 5, "input_len": 6}, {"input_len": 6}]
+    assert shapes(*stated) == [(3, 1), (5, 1), (6, 1)]
+    empties: list[object] = [None, 0, "", [], {}, False]
+    for empty in empties:
+        assert shapes({"prompt_len": empty, "input_len": 6}) == [(6, 1)], empty
+    for none in ({}, {"prompt_len": None}, {"prompt_len": 0, "input_len": None}, {"prompt_token_ids": None}):
+        with pytest.raises(TypeError, match="NoneType"):
+            shapes(none)
+
+
+def test_a_row_that_pins_no_revision_names_no_snapshot_dir(tmp_path):
+    """`score.phi_of` finds a row's config.json under `hf_home` by its checkpoint's revision.  A row whose engine block pins none
+    names no dir there, which is `os.path.join`'s TypeError; given a `config` it is that config's φ, with no revision."""
+    w = json.loads((WORKLOADS / f"{DSV4}.json").read_text())
+    bare = {**w, "engine": {k: v for k, v in w["engine"].items() if k != "revision"}}
+    with pytest.raises(TypeError, match="NoneType"):
+        S.phi_of({"row": DSV4, "workload": bare}, hf_home=str(tmp_path))
+    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
+    full, pinless = (S.phi_of({"row": DSV4, "workload": doc}, config=config).to_json() for doc in (w, bare))
+    assert pinless["model"]["revision"] is None and {**pinless, "model": full["model"]} == full
+
+
 def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
     """`score.phi_of` on a row whose declared manifest states no `requests`: φ's workload holds none, and the rest of φ is the
     row's as with them."""
@@ -451,6 +480,34 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
         build_program(_phi(cfg, **phi_kw), "step")
+
+
+@pytest.mark.parametrize("empty", ["absent", None, {}, 0, "", False, []])
+def test_a_family_that_states_no_rules_facts_or_constructor_is_read_as_one_with_none(monkeypatch, empty):
+    """A family's entry of the family facts table may leave `rules`, `facts` or `arch` out, or state it empty.  The predictor then
+    reads no rule (qwen2 without its rule has no q/k/v bias), no fact the vocabulary lacks, and no constructor, which
+    `model_shape` refuses by name."""
+    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
+    from verity_vllm.program.predict import model_shape as MS
+    cfg = {**TINY, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "use_sliding_window": False, "sliding_window": 32}
+    stated = FAMILY_FACTS["qwen2"]
+
+    def entry(block: str) -> dict:
+        rest = {k: v for k, v in stated.items() if k != block}
+        return rest if empty == "absent" else {**rest, block: empty}
+
+    as_stated = model_shape(cfg)
+    assert as_stated.qkv_bias
+    monkeypatch.setitem(FAMILY_FACTS, "qwen2", entry("rules"))
+    assert not model_shape(cfg).qkv_bias
+    monkeypatch.setitem(FAMILY_FACTS, "qwen2", entry("facts"))
+    with monkeypatch.context() as m:
+        m.setattr(MS, "resolve_facts", lambda hf, C: ({}, {}))    # the table's own reader of the block is not the predictor's
+        assert model_shape(cfg) == as_stated
+    monkeypatch.setitem(FAMILY_FACTS, "qwen2", entry("arch"))
+    named = None if empty == "absent" else empty
+    with pytest.raises(Unexpressible, match=re.escape(f"family 'qwen2' constructor {named!r} (the dense and MoE blocks only)")):
+        build_program(_phi(cfg), "step")
 
 
 def test_the_record_path_reaches_the_predictor_only_through_a_switched_rows_aot_build():

@@ -32,6 +32,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from verity_vllm.check.verdict_names import VU_PARTITION
 from verity_vllm.config import RowEngine
 from verity_vllm.pipeline import research_tools
 from verity_vllm.pipeline.row_json import field_of, load_json
@@ -54,10 +55,6 @@ def _sha256(p: Path) -> str:
 def digest_doc(doc) -> str:
     """The sha256 of ``doc`` as JSON with sorted keys: a spec's ``digest``."""
     return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).hexdigest()
-
-
-#: the older name of `digest_doc`, which `pipeline/match.py` reads
-_digest_doc = digest_doc
 
 
 def _ref(run: Path, rel: str, *, sha: bool = True) -> dict:
@@ -272,7 +269,7 @@ def vu_partition_index(qu: dict | None, gates: dict | None) -> dict:
     `{"schema", "binding_id", "use": {"kind", "w_max"}, "verdict": {partition{status,codes}, width{status,w_max,max_seen,violators,
     unsupported}, count, status}}`), plus G8's status from gates.json.  `present: false` when the run has no document."""
     by_id = gates.get("gates") if isinstance(gates, dict) else None   # a gates document that lists no gate has no G8
-    g8 = by_id.get("G8") if by_id else None
+    g8 = by_id.get(VU_PARTITION) if by_id else None
     gate = {"status": g8.get("status"), "reason": g8.get("reason")} if isinstance(g8, dict) else None
     if not isinstance(qu, dict):
         return {"present": False, "gate": gate}

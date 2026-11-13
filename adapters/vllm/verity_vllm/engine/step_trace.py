@@ -33,15 +33,17 @@ import atexit
 import json
 import queue
 import threading
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Collection, Iterable
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from verity_vllm.engine import handle
 from verity_vllm.engine.hooks import Hooks
 
 __all__ = ["SCHEMA", "StepTrace", "load", "step_geometry", "steps"]
 
+#: `records.schema_ids.STEP_TRACE_SCHEMA`'s string, written here: suites outside the adapter list the files this module
+#: imports one by one (`benchmarks/network_traces` and `benchmarks/serve_tax`, their `[tool.verity.tests] inputs`)
 SCHEMA = "verity-vllm/step-trace/v1"
 #: the trace's file in a `verity-vllm serve-openai` run, beside the committer's step_trace.jsonl
 SERVED = "advice_trace.jsonl"
@@ -81,7 +83,7 @@ def scheduler_config(sched: Any) -> dict[str, Any]:
     vLLM then builds the model at the checkpoint's own limit and fits ``max_model_len`` to the KV pool afterwards, so
     an engine launched at the fitted number is built at another length than this one."""
     sc = getattr(sched, "scheduler_config", None)
-    cc = getattr(sched, "cache_config", None)
+    cc: Any = getattr(sched, "cache_config", None)
     pick = lambda o, names: {n: _plain(getattr(o, n)) for n in names if o is not None and hasattr(o, n)}   # noqa: E731
     out = {"scheduler": type(sched).__name__,
            **pick(sc, ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "enable_chunked_prefill", "long_prefill_token_threshold",
@@ -102,24 +104,29 @@ def scheduler_config(sched: Any) -> dict[str, Any]:
     return out
 
 
-def step_geometry(so: Any) -> tuple[dict[str, int], list[str], list[str], dict[str, int]]:
+def step_geometry(so: Any, preempted: Collection[str] = ()) -> tuple[dict[str, int], list[str], list[str], dict[str, int]]:
     """From a `SchedulerOutput`: each scheduled request's first position this step, the requests first scheduled, those resumed
-    from preemption, and the prefix-cache tokens each new request starts from (`num_computed_tokens` of a new request > 0)."""
+    from preemption, and the prefix-cache tokens each new request starts from (`num_computed_tokens` of a new request > 0).
+    A vLLM whose scheduler sends a resumed request again in full names it among the new requests and nowhere as resumed
+    (0.34): it is resumed where ``preempted``, the requests preempted and not scheduled since, holds it."""
     start: dict[str, int] = {}
     new: list[str] = []
+    resumed: list[str] = []
     hits: dict[str, int] = {}
     for r in getattr(so, "scheduled_new_reqs", None) or ():
         start[r.req_id] = int(r.num_computed_tokens)
+        if r.req_id in preempted:
+            resumed.append(r.req_id)
+            continue
         new.append(r.req_id)
         if int(r.num_computed_tokens):
             hits[r.req_id] = int(r.num_computed_tokens)
     cached = getattr(so, "scheduled_cached_reqs", None)
-    resumed: list[str] = []
     if cached is not None:
         for i, rid in enumerate(cached.req_ids):
             start[rid] = int(cached.num_computed_tokens[i])
-        resumed = sorted(getattr(cached, "resumed_req_ids", None) or ())
-    return start, new, resumed, hits
+        resumed += getattr(cached, "resumed_req_ids", None) or ()
+    return start, new, sorted(resumed), hits
 
 
 class StepTrace:
@@ -140,7 +147,8 @@ class StepTrace:
         self.empty = 0                          # schedules that scheduled nothing since the last such step
         self.executed = 0
         self._pending: dict[int, int] = {}      # id(SchedulerOutput) -> its step
-        self._fh = None
+        self._preempted: set[str] = set()       # the requests preempted and not scheduled since
+        self._fh: IO[str] | None = None
         self.sched: Any = None
         self.writer = writer
         self._lines: queue.SimpleQueue | None = None        # the writer thread's: (line, flush), a drain's Event, None to stop
@@ -166,13 +174,15 @@ class StepTrace:
     def _write(self) -> None:
         """The writer thread: each line as `_emit` would write it, and a drain's event set once the lines before it are flushed.
         After a failed write it writes nothing more, but still sets every drain's event."""
-        while (item := self._lines.get()) is not None:
+        lines, fh = self._lines, self._fh
+        assert lines is not None and fh is not None     # `install` sets both before it starts this thread, and
+        while (item := lines.get()) is not None:        # `uninstall` joins it before it clears them
             line, flush = item if isinstance(item, tuple) else ("", True)
             if self._failed is None:
                 try:
-                    self._fh.write(line)
+                    fh.write(line)
                     if flush:
-                        self._fh.flush()
+                        fh.flush()
                 except (OSError, ValueError) as e:
                     self._failed = e
             if isinstance(item, threading.Event):
@@ -246,6 +256,7 @@ class StepTrace:
             def wrapped(request_ids, finished_status, *a, **kw):
                 done = orig(request_ids, finished_status, *a, **kw)
                 for r in done or ():
+                    me._preempted.discard(r.request_id)
                     reason = getattr(r, "get_finished_reason", lambda: None)()
                     me._emit({"kind": "finish", "request": me.request_id(r.request_id), "after_step": me.scheduled - 1,
                               "reason": FINISH.get(int(reason), str(reason)) if reason is not None else str(finished_status),
@@ -261,7 +272,9 @@ class StepTrace:
 
     def _record_step(self, step: int, so: Any, mro: Any, outs: Any) -> None:
         nst = dict(getattr(so, "num_scheduled_tokens", None) or {})
-        start, new, resumed, hits = step_geometry(so)
+        start, new, resumed, hits = step_geometry(so, self._preempted)
+        preempted = set(getattr(so, "preempted_req_ids", None) or ())
+        self._preempted = (self._preempted - set(resumed)) | preempted
         runner = [r for r in (getattr(mro, "req_ids", None) or ()) if nst.get(r)]
         order = "runner" if sorted(runner) == sorted(nst) else "scheduler"
         ids = runner if order == "runner" else list(nst)
@@ -274,11 +287,11 @@ class StepTrace:
                     emitted[rid] = len(o.new_token_ids)
                 if o.finish_reason is not None:
                     finished[rid] = {"reason": FINISH.get(int(o.finish_reason), str(o.finish_reason)), "stop_reason": _plain(o.stop_reason)}
-        rid = self.request_id
+        ext = self.request_id
         self._emit({"kind": "step", "step": step, "T": int(so.total_num_scheduled_tokens), "order": order,
-                    "rows": [[rid(r), start.get(r), int(nst[r])] for r in ids],
-                    "new": [rid(r) for r in new], "resumed": [rid(r) for r in resumed], "cache_hit": {rid(r): k for r, k in hits.items()},
-                    "preempted": sorted(rid(r) for r in (getattr(so, "preempted_req_ids", None) or ())),
+                    "rows": [[ext(r), start.get(r), int(nst[r])] for r in ids],
+                    "new": [ext(r) for r in new], "resumed": [ext(r) for r in resumed], "cache_hit": {ext(r): k for r, k in hits.items()},
+                    "preempted": sorted(ext(r) for r in preempted),
                     "emitted": emitted, "finished": finished})
         self.executed += 1
 
@@ -286,7 +299,9 @@ class StepTrace:
         self.hooks.uninstall()
         if self._lines is not None:
             self._lines.put(None)
-            self._thread.join()
+            thread = self._thread
+            assert thread is not None                       # `install` sets it with `_lines`
+            thread.join()
             self._lines = self._thread = None
             atexit.unregister(self.drain)
         if self._fh is not None:

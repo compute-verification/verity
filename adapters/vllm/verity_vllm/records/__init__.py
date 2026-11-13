@@ -34,10 +34,22 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `logits_capture` -- what a replay at the served step shapes took at the sampler (`verity-vllm/logits-capture/v1`): each
   sampled request's logits rows, tokens and steps, as `pipeline.interior_rows.captured` reads a token select's span; its
   `of` refuses an unknown field and `dump` writes it.
+* `pearl_served` -- a Pearl+ served run's document's schema id (`verity-pouw/pearl-c-served-passes/v1`, ``served.json``) and
+  nothing else: its readers read it as the dict it is.
 * `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
   ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
   unknown field and `dump` writes it back.
 * `boundary_commit` -- a served window's boundary commitment of one size class (`verity-vllm/boundary-rows/v1`,
   ``commit.json``): its layout, each value's root and the index's leaf, as the class's registration and a recommit from the
   prover's files read it (`pipeline.boundary_rows`); its `of` refuses an unknown field and `dump` writes it back.
+* `block_counts` -- a day's inference-block judgment (`verity-vllm/inference-block-judgment/v1`): whether the day's blocks
+  are at most n (c, k)-inference blocks against the day's declaration, each rule's outcome and each block class's shape,
+  as `program.predict.block_counts` writes it; its `of` refuses an unknown field.
+* `runtime_tree` -- the runtime's module tree (`verity-vllm/runtime-tree/v1`, ``runtime_tree.json``): the built model's
+  module paths with their class MRO names, its named buffers and the runner's facts, as the acquisition plan and its
+  reader of where a Call lives at runtime read it; `from_json` refuses a field its writer writes and the document lacks.
+  It alone is not frozen: the meta path states the runner's facts on a tree it has built.
+
+Beside the records: `fields`, the field readers they share, and `schema_ids`, the schema ids of the records that have no
+type here yet.
 """

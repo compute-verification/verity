@@ -30,6 +30,9 @@ def test_the_summary_counts_each_kernel_and_keeps_its_first_launch():
     # an event the profiler gave no `args`, or a null one, has no launch geometry to keep
     assert out["Memcpy HtoD"] == {"count": 1, "us": 0.5, "grid": None, "block": None, "first_index": 1, "cat": "gpu_memcpy"}
     assert out["Memset"] == {"count": 1, "us": 0.3, "grid": None, "block": None, "first_index": 3, "cat": "gpu_memset"}
+    empties: tuple[object, ...] = (0, "", [], {})
+    for empty in empties:                                          # and so has one whose `args` is empty, whatever its type
+        assert KT.summarize_kernels([_event("k", 0, args=empty)])["k"] == {"count": 1, "us": 1.0, "grid": None, "block": None, "first_index": 0, "cat": "kernel"}
 
 
 def test_a_trace_file_is_an_object_with_its_events_or_the_bare_list(tmp_path):
