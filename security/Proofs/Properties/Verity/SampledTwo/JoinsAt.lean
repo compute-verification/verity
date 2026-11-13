@@ -10,23 +10,26 @@ public import Proofs.Properties.Verity.SampledTwo.SessionDev
 public import Proofs.Properties.Verity.SampledTwo.Reached
 
 /-!
-# The two-stage leg's projection at the form's accept
+# The two-stage leg's projection at the form's accept, from the coin map's law
 
 `joined` (`Joined.lean`) is the projection's bound over any acceptance. This module is the one place the two-stage
 form's check comes in: the acceptance is the form's (`FormAccepts C`), the check read a log of both sessions, the log
 it read is the device's and every fresh coin carries its 512 bits (`JoinGood`), and the locator is the run's
 (`joinLocate`: the stages' families' fresh coins on rounds `0` to `stage`, the sessions' openings on theirs).
 
-**One premise.** `joinedForm` takes one hypothesis, `JoinsAt`, a structure whose fields are the pieces' remaining
-premises, each in its owner's words. A witness of the theorem at an accepted play is one term of that structure.
+**One premise at the form's accept.** `joinedOfLaw` takes `JoinsAt`, a structure whose fields are the pieces'
+remaining premises, each in its owner's words, and the coin map's law (`CoinMap.CoinMapHolds`), which speaks of the
+period's game and the coin map alone and reads no accept. `joinedForm` (`JoinedForm.lean`) is `joinedOfLaw` at
+COINMAP's proof of the law (`CoinMap.coinMapHolds`), so it takes `JoinsAt` and nothing else, and a witness of it at an
+accepted play is one term of that structure. The law is a hypothesis here only so that this module does not import
+its proof (`CoinMapAgree.lean`).
 
-**What `joinedForm` discharges** from the fields:
+**What `joinedOfLaw` discharges** from the fields:
 
 * the cut at the deployed two-session history, where the device's ledger orders the two sessions
   (`Sessions.cutOrder_dev₂`), with the composite's wiring in the cut's words (`Wired`, from `wiring` and `caseIsSent`:
   `accepts_of_form`), and `FreshWide` joined to its event at no cost, since every play of the game has it
   (`CoinMap.freshWide_play`, `cutBound_and`);
-* the coin map's law (`CoinMap.coinMapHolds`);
 * the stages' bytes within their releases (`firstFits_stage`, `secondFits_stage`, at the run's locator by
   `firstFits_congr`, `secondFits_congr`) and the first and the second stage's coins (`coinsAgree_first_of`,
   `coinsAgree_second_of`, with COINMAP's `devFirst_stage` and `devSecond_stage`);
@@ -41,7 +44,7 @@ there: the cut reads no log where a session's record carries a break, and a fami
 log the check read. At the kept case they speak of the accepted plays `JoinGood` holds of. There `CutReads` is
 `JoinGood`'s first part, the fresh coins' width `DevSecond` needs is its last, and `StageDraws` is asked only of those
 plays (`draws₁`, `draws₂`). What the pieces conclude comes back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase`
-and `secondFits_goodCase`. So `joinedForm` takes no `CutReads` and no coins' premise for either stage.
+and `secondFits_goodCase`. So `joinedOfLaw` takes no `CutReads` and no coins' premise for either stage.
 
 **Not established**, each a field of `JoinsAt`:
 
@@ -61,7 +64,7 @@ and `secondFits_goodCase`. So `joinedForm` takes no `CutReads` and no coins' pre
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
-play. `CoinMapAgree.lean` and `CoinStages.lean` are COINMAP's, read here at the head the join holds. At the deployed
+play. `CoinStages.lean` is COINMAP's, read here at the head the join holds. At the deployed
 history the cut meets the open hole `ProjectionOf.lean` names: a genuine challenger signature from an earlier period
 makes the forger's term `⊤`. The join neither closes nor widens it.
 -/
@@ -207,8 +210,8 @@ theorem secondFits_congr {A : Live₂} {C : CaseOf} {L L' : CoinMap.Locate} {Acc
 /-- **What the join takes at the form's accept**: the pieces' remaining premises, each in its owner's words, at the
 parameters `θ`, the files `F`, the commitment `c` and the strategy `σ`, the instance's case `C`, the messages' reading
 `Ms`, the stages' families `ℓ₁` and `ℓ₂`, the digests `Dg`, the deployment `P` with its layouts and cut, and the
-sessions' provers `P'`. `joinedForm` takes this and nothing else; the module docstring says what each field waits
-on. -/
+sessions' provers `P'`. `joinedForm` (`JoinedForm.lean`) takes this and nothing else; the module docstring says what
+each field waits on. -/
 structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
     (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg)
@@ -258,14 +261,15 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   /-- The vocabulary's signer is the deployment's. -/
   signer : V.signer θ = P.signer fs₁ fs₂ cut θ
 
-/-- **The projection's bound at the form's accept**: `joined` at the form's acceptance, `JoinGood` and the run's
-locator, at the cut's terms at the deployed two-session history, from the join's one premise (`JoinsAt`). The
-stages' pieces are taken at the case kept on the plays `JoinGood` holds of. -/
-theorem joinedForm (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
+/-- **The projection's bound at the form's accept, from the coin map's law**: `joined` at the form's acceptance,
+`JoinGood` and the run's locator, at the cut's terms at the deployed two-session history, from the coin map's law
+(`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case kept on the plays
+`JoinGood` holds of. -/
+theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
     (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
     (P : Sessions.Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Verity.Release → ℕ)
-    (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (hHolds : CoinMap.CoinMapHolds (d := d) (α := α))
     (h : JoinsAt V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg P fs₁ fs₂ cut P') :
     ProjectionBound V k A x θ F c σ
       (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
@@ -337,7 +341,7 @@ theorem joinedForm (V : Vocab d α) (k : Verity.Registration.Composite) (A : Liv
       (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw h.firstReads h.orderShown h.ledgerInOrder h.signer)
   exact joined V k A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q (FormAccepts C)
     JoinGood (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) h.wiring
-    ((CoinMap.coinMapHolds (d := d) (α := α)) V A x θ F c σ _ _ (readsAt A.h))
+    (hHolds V A x θ F c σ _ _ (readsAt A.h))
     hFit₁ hFit₂ hSess hFirst hSecond hSessions
     (SessionCoins.stmtReadsNone A C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
     h.msgOpens h.digestBefore hCut
