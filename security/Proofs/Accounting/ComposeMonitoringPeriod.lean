@@ -11,32 +11,32 @@ public import Proofs.Accounting.Lemmas.TS
 /-!
 # PoUW's work over a monitoring period: proofs
 
-`Accounting.Guarantees.ComposeMonitoringPeriod.PeriodBudget` is proved here: a window's `serviceGame` is one round
-`.round d pass (fun _ => .done)`, `periodGame` puts the next window's game in place of its end (`consGame`), and
+`Accounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodBudget` is proved here: a window's `serviceGame` is one round
+`.round d pass (fun _ => .done)`, `monitoringPeriodGame` puts the next window's game in place of its end (`consGame`), and
 `RoundGame.BudgetAt` of `.round d pass next` is the round's two conditions and `BudgetAt` of every `next ω`, so the
 period's budget is its windows', by induction on the period. The window's live tiles only pick its weights.
 
-`Accounting.Guarantees.ComposeMonitoringPeriod.PeriodTailMax` is proved here too, by induction on the game for every threshold
+`Accounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodTailMax` is proved here too, by induction on the game for every threshold
 `D` at once (`prob_prefix_le`): a prefix reaching `D > 0` passes its first round and has the rest reach `D − d`, so,
 conditioning on the first round's coins as `expect_weight_le` does, its probability is at most
 `E[1{pass}·e^{c·d}]·e^{−c·D} ≤ e^{−c·D}`. At `c = 1/Λ` the round bound is `BudgetAt`'s (`expBound_of_budgetAt`).
 
-`CircuitWorkMonitoringPeriod` is proved here from the period layer's covers (`PeriodCoversStmt`, which
-`circuitWorkMonitoringPeriod_of_covers` reads as a hypothesis and `ComposeMonitoringPeriod/Covers.lean` proves as `periodCovers`), and
-`CircuitCreditPeriod` from its assembly at `a, b > 0`. It is `CircuitWork`'s proof at `n` rounds, on the accepted
+`CircuitWorkMonitoringPeriod` is proved here from the period layer's covers (`MonitoringPeriodCoversStmt`, which
+`circuitWorkMonitoringPeriod_of_covers` reads as a hypothesis and `ComposeMonitoringPeriod/Covers.lean` proves as `monitoringPeriodCovers`), and
+`CircuitCreditMonitoringPeriod` from its assembly at `a, b > 0`. It is `CircuitWork`'s proof at `n` rounds, on the accepted
 prefix's live tiles:
 * per window, `ServiceBudget` at the detected live weights (`liveShare`: `0` on a tile of no live words, else
   `liveCone`), which are at most `shareCone`, so `CircuitWork`'s `ρ`, stage-share and luck premises hold of them, with
   its `LuckAt` from `PerLiveTile` (`luckAt_of_perLiveTile`: luck `1` on a dead tile, of weight `0`); then
-  `PeriodBudget` (`budget_period`);
-* `PeriodTailMax` once at `t = ln(1/δ_s)`, read at the prefix `j = prefixLen` (the credited windows are the first
+  `MonitoringPeriodBudget` (`budget_monitoringPeriod`);
+* `MonitoringPeriodTailMax` once at `t = ln(1/δ_s)`, read at the prefix `j = prefixLen` (the credited windows are the first
   `prefixLen`, `credited_iff`); `SampledRightOff` at `n` rounds (its event `n·(δ_bind + δ_ks)`), off which every sampled
   tile of a credited window is right at its committed values, so `PrefixOf` passes the play's first `j` rounds, and the
-  budget game's, whose checks are the play's (`acceptsUpTo_periodGame`);
-* per credited window, the covers, `UnitFixed`'s sums (a good tile is live in a credited window, `periodMode`'s
+  budget game's, whose checks are the play's (`acceptsUpTo_monitoringPeriodGame`);
+* per credited window, the covers, `UnitFixed`'s sums (a good tile is live in a credited window, `monitoringPeriodMode`'s
   not-whole tiles are its live tiles not skipped whole) and `liveCone = liveShare` plus the cones of tiles of no live
   words, at most `zeroCone` a window (`zeroS_le`: a dead tile with words reaches no live words); summed over the
-  prefix (`deficiencyUpTo_periodGame`), the shares in the cheaper of the two (`liveWork_of`).
+  prefix (`deficiencyUpTo_monitoringPeriodGame`), the shares in the cheaper of the two (`liveWork_of`).
 -/
 
 @[expose] public section
@@ -56,14 +56,14 @@ theorem budgetAt_consGame {Ω : Type} [Fintype Ω] {n : ℕ} {Λ : ℝ} (g : Rou
     simp only [consGame, RoundGame.BudgetAt] at hg ⊢
     exact ⟨hg.1, hg.2.1, hn⟩
 
-/-- `PeriodBudget`: by induction on the period, `budgetAt_consGame` at each window. -/
-theorem PeriodBudget : Accounting.Guarantees.ComposeMonitoringPeriod.PeriodBudget := by
+/-- `MonitoringPeriodBudget`: by induction on the period, `budgetAt_consGame` at each window. -/
+theorem MonitoringPeriodBudget : Accounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodBudget := by
   intro C Ξ _ _ N M n stg w a b K Λ Wp h
   induction Wp with
-  | done => simp only [periodGame, RoundGame.BudgetAt]
+  | done => simp only [monitoringPeriodGame, RoundGame.BudgetAt]
   | window live W next ih =>
-    simp only [WindowPlay.EveryWindow] at h
-    simp only [periodGame]
+    simp only [ExecutionPhasePlay.EveryWindow] at h
+    simp only [monitoringPeriodGame]
     exact budgetAt_consGame _ _ h.1 fun ω => ih ω (h.2 ω)
 
 /-- **The exponential round bound at every prefix**: for `c ≥ 0`, some prefix of the play passes with share at least
@@ -118,8 +118,8 @@ theorem prob_prefix_le {Ω : Type} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) :
         simp only [RoundGame.acceptsUpTo] at hj1
         exact hpa hj1.1
 
-/-- `PeriodTailMax`: `prob_prefix_le` at `c = 1/Λ`, whose round bound `BudgetAt` gives. -/
-theorem PeriodTailMax : Accounting.Guarantees.ComposeMonitoringPeriod.PeriodTailMax := by
+/-- `MonitoringPeriodTailMax`: `prob_prefix_le` at `c = 1/Λ`, whose round bound `BudgetAt` gives. -/
+theorem MonitoringPeriodTailMax : Accounting.Guarantees.ComposeMonitoringPeriod.MonitoringPeriodTailMax := by
   intro Ω _ n g Λ hΛ hB t
   have h := prob_prefix_le (c := 1 / Λ) (by positivity) g
     (Accounting.SecurityProofs.TS.Rounds.expBound_of_budgetAt g hB) (Λ * t)
@@ -283,7 +283,7 @@ theorem luckAt_of_perLiveTile {ι K C : Type} [Fintype C] (Sc : Scheme K) (Cd : 
 
 /-- **One window's budget at its live weights**: `ServiceBudget` at `liveShare`, whose premises `CircuitWork`'s at
 `shareCone` give. -/
-theorem budget_window {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : Declared ι) {Np Kd : ℕ}
+theorem budget_executionPhase {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : Declared ι) {Np Kd : ℕ}
     (hLP : Sc.LuckProved) (live : Fin Np → Bool) (W : SplitStages C (Fin Np) Cd.rounds) {ρ p p0 a b wmax Λ : ℝ}
     (hρ : 0 < ρ) (hρN : ∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1)
     (hwmax : ∀ j, stageShare (tileStage Cd Np) (shareCone Sc Cd Np) j ≤ wmax)
@@ -311,67 +311,67 @@ theorem budget_window {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K
     ρ p p0 a b wmax Λ (liveShare_nonneg Sc Cd Np live) hρ hρN' hwmax' hlk'
     (luckAt_of_perLiveTile Sc Cd hLP live W hMu hRB hGs) ha hb hSR
 
-/-- **The period's budget at its windows' live weights**: `budget_window` in every window, then `PeriodBudget`'s
+/-- **The period's budget at its windows' live weights**: `budget_executionPhase` in every window, then `MonitoringPeriodBudget`'s
 induction. -/
-theorem budget_period {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ}
+theorem budget_monitoringPeriod {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ}
     (hLP : Sc.LuckProved) {ρ p p0 a b wmax Λ : ℝ}
     (hρ : 0 < ρ) (hρN : ∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1)
     (hwmax : ∀ j, stageShare (tileStage Cd Np) (shareCone Sc Cd Np) j ≤ wmax)
     (hlk : ∀ t : Fin Np, 0 < shareCone Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0)
     (ha : 0 ≤ a) (hb : 0 ≤ b) (hSR : SplitRate Kd ρ p p0 a b wmax Λ)
-    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (hMu : Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)))
     (hRB : Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)))
     (hGs : Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0))) :
-    RoundGame.BudgetAt Λ (periodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) := by
+    RoundGame.BudgetAt Λ (monitoringPeriodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) := by
   induction Wp with
-  | done => simp only [periodGame, RoundGame.BudgetAt]
+  | done => simp only [monitoringPeriodGame, RoundGame.BudgetAt]
   | window live W next ih =>
-    simp only [WindowPlay.EveryWindow] at hMu hRB hGs
-    simp only [periodGame]
+    simp only [ExecutionPhasePlay.EveryWindow] at hMu hRB hGs
+    simp only [monitoringPeriodGame]
     exact budgetAt_consGame _ _
-      (budget_window Sc Cd hLP live W hρ hρN hwmax hlk ha hb hSR hMu.1 hRB.1 hGs.1)
+      (budget_executionPhase Sc Cd hLP live W hρ hρN hwmax hlk ha hb hSR hMu.1 hRB.1 hGs.1)
       fun ω => ih ω (hMu.2 ω) (hRB.2 ω) (hGs.2 ω)
 
 /-! ## The period's game, window by window -/
 
 /-- `P` of every window gives `P` of the window played at each window along every path. -/
-theorem everyWindow_at {C Ω V : Type} {M : ℕ} {P : (V → Bool) → SplitStages C V M → Prop} :
-    ∀ {n : ℕ} (Wp : WindowPlay C Ω V M n), Wp.EveryWindow P → ∀ x w, P (Wp.liveAt x w) (Wp.windowAt x w)
+theorem everyExecutionPhase_at {C Ω V : Type} {M : ℕ} {P : (V → Bool) → SplitStages C V M → Prop} :
+    ∀ {n : ℕ} (Wp : ExecutionPhasePlay C Ω V M n), Wp.EveryWindow P → ∀ x w, P (Wp.liveAt x w) (Wp.windowAt x w)
   | _, .done, _, _, w => w.elim0
   | _, .window _ _ next, hP, x, w => by
     refine Fin.cases ?_ (fun w' => ?_) w
     · exact hP.1
-    · exact everyWindow_at (next x.1) (hP.2 x.1) x.2 w'
+    · exact everyExecutionPhase_at (next x.1) (hP.2 x.1) x.2 w'
 
 /-- **Window `w`'s modes** along the period's coins: the run of the window played there, at its rounds' coins. -/
-def windowMode {C B : Type} {Np M n : ℕ} (stg : Fin Np → ℕ) (Wp : WindowPlay C (Paths C M × B) (Fin Np) M n)
+def executionPhaseMode {C B : Type} {Np M n : ℕ} (stg : Fin Np → ℕ) (Wp : ExecutionPhasePlay C (Paths C M × B) (Fin Np) M n)
     (x : Paths (Paths C M × B) n) (w : Fin n) (u : Fin Np) : Mode :=
   (Wp.windowAt x w).modeAt stg (coinAt x w).1 u
 
 /-- **The period game's checks don't read its weights or costs**: its first `j` rounds pass at one set of weights
 and costs when they pass at another. -/
-theorem acceptsUpTo_periodGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (wt wt' : (Fin N → Bool) → Fin N → ℝ)
+theorem acceptsUpTo_monitoringPeriodGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (wt wt' : (Fin N → Bool) → Fin N → ℝ)
     (a b a' b' : ℝ) (K : ℕ) :
-    ∀ {n : ℕ} (Wp : WindowPlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n) (j : ℕ)
+    ∀ {n : ℕ} (Wp : ExecutionPhasePlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n) (j : ℕ)
     (x : Paths (Paths C M × (Equiv.Perm (Fin N) × Ξ)) n),
-    RoundGame.acceptsUpTo (periodGame stg wt a b K Wp) j x → RoundGame.acceptsUpTo (periodGame stg wt' a' b' K Wp) j x
+    RoundGame.acceptsUpTo (monitoringPeriodGame stg wt a b K Wp) j x → RoundGame.acceptsUpTo (monitoringPeriodGame stg wt' a' b' K Wp) j x
   | _, .done, _, _, _ => trivial
   | _, .window _ _ _, 0, _, _ => trivial
   | _, .window _ _ next, j + 1, x, h =>
-    ⟨h.1, acceptsUpTo_periodGame stg wt wt' a b a' b' K (next x.1) j x.2 h.2⟩
+    ⟨h.1, acceptsUpTo_monitoringPeriodGame stg wt wt' a b a' b' K (next x.1) j x.2 h.2⟩
 
 open Classical in
 /-- **The period game's first `j` rounds' shares**: window `w`'s round's, `a` per unit of folded and `b` per unit of
 whole work of its run at its live weights, summed over the windows before `j`. -/
-theorem deficiencyUpTo_periodGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (wt : (Fin N → Bool) → Fin N → ℝ)
+theorem deficiencyUpTo_monitoringPeriodGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (wt : (Fin N → Bool) → Fin N → ℝ)
     (a b : ℝ) (K : ℕ) :
-    ∀ {n : ℕ} (Wp : WindowPlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n) (j : ℕ)
+    ∀ {n : ℕ} (Wp : ExecutionPhasePlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n) (j : ℕ)
     (x : Paths (Paths C M × (Equiv.Perm (Fin N) × Ξ)) n),
-    RoundGame.deficiencyUpTo (periodGame stg wt a b K Wp) j x =
+    RoundGame.deficiencyUpTo (monitoringPeriodGame stg wt a b K Wp) j x =
       ∑ w : Fin n, if w.val < j then
-        a * (∑ u, if windowMode stg Wp x w u = .folded then wt (Wp.liveAt x w) u else 0) +
-          b * (∑ u, if windowMode stg Wp x w u = .whole then wt (Wp.liveAt x w) u else 0)
+        a * (∑ u, if executionPhaseMode stg Wp x w u = .folded then wt (Wp.liveAt x w) u else 0) +
+          b * (∑ u, if executionPhaseMode stg Wp x w u = .whole then wt (Wp.liveAt x w) u else 0)
       else 0
   | _, .done, _, _ => by
     rw [Fin.sum_univ_zero]
@@ -381,8 +381,8 @@ theorem deficiencyUpTo_periodGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ
     rw [Fin.sum_univ_succ, Fin.val_zero, ite_eq_left (by omega : 0 < j + 1)]
     show (a * JointRun.share (W.joint stg) (wt live) x.1.1 .folded +
         b * JointRun.share (W.joint stg) (wt live) x.1.1 .whole) +
-      RoundGame.deficiencyUpTo (periodGame stg wt a b K (next x.1)) j x.2 = _
-    rw [deficiencyUpTo_periodGame stg wt a b K (next x.1) j x.2]
+      RoundGame.deficiencyUpTo (monitoringPeriodGame stg wt a b K (next x.1)) j x.2 = _
+    rw [deficiencyUpTo_monitoringPeriodGame stg wt a b K (next x.1) j x.2]
     refine congrArg₂ (· + ·) rfl (Finset.sum_congr rfl fun w' _ => ?_)
     by_cases hw : w'.val < j
     · rw [ite_eq_left hw, ite_eq_left (show (w'.succ : ℕ) < j + 1 by rw [Fin.val_succ]; omega)]
@@ -491,7 +491,7 @@ theorem zeroS_le (hDD : DeadConeDead Sc Cd Np live) : zeroS Sc Cd live md ≤ ze
 
 /-- **A credited window's fixed words**: its live words are its good tiles' words and the ones that aren't good, which
 the covers bound. -/
-theorem window_fixed (pm : Fin Np → Mode) (good : Fin Np → Prop) [DecidablePred good]
+theorem executionPhase_fixed (pm : Fin Np → Mode) (good : Fin Np → Prop) [DecidablePred good]
     (hgood : ∀ t, good t → pm t = .paid) (hpm : ∀ t, pm t = if live t then md t else .whole)
     (hcov : (∑ t, if good t then (0 : ℝ) else (liveWords Sc Cd Np live t : ℝ)) ≤
       (∑ u, if md u = .paid then 0 else liveCone Sc Cd Np live u) * (wordsOf Sc Cd : ℝ)) :
@@ -513,8 +513,8 @@ theorem window_fixed (pm : Fin Np → Mode) (good : Fin Np → Prop) [DecidableP
   linarith
 
 /-- **A credited window's folded words**: its live words skipped whole are at most `N_w` times its whole share, and
-the rest are `periodMode`'s not-whole tiles' words. -/
-theorem window_fold (pm : Fin Np → Mode) (hpm : ∀ t, pm t = if live t then md t else .whole) :
+the rest are `monitoringPeriodMode`'s not-whole tiles' words. -/
+theorem executionPhase_fold (pm : Fin Np → Mode) (hpm : ∀ t, pm t = if live t then md t else .whole) :
     (∑ t, (liveWords Sc Cd Np live t : ℝ)) ≤ (∑ t, if pm t = .whole then (0 : ℝ) else (tileWords Sc Cd Np t : ℝ)) +
       wholeS Sc Cd live md * (wordsOf Sc Cd : ℝ) := by
   unfold wholeS
@@ -571,28 +571,28 @@ open Classical in
 sums and the zero-word cones, summed over the accepted prefix, whose budget game's shares are below `Λl`. -/
 theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (hn : 0 < n)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
-    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
     (x : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n) {a b Λl fixed fd : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b)
     (hDD : ∀ w, DeadConeDead Sc Cd Np (Wp.liveAt x w))
     (hcov : ∀ w, pr.Credited x w →
-      (∑ t : Fin Np, if (Cd.periodLayer hr hK pr).Good (periodMode Cd Wp pr) x w t then (0 : ℝ)
+      (∑ t : Fin Np, if (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t then (0 : ℝ)
         else (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ)) ≤
-        (∑ u : Fin Np, if windowMode (tileStage Cd Np) Wp x w u = .paid then 0
+        (∑ u : Fin Np, if executionPhaseMode (tileStage Cd Np) Wp x w u = .paid then 0
           else liveCone Sc Cd Np (Wp.liveAt x w) u) * (wordsOf Sc Cd : ℝ))
-    (hfix : (∑ w : Fin n, ∑ t : Fin Np, if (Cd.periodLayer hr hK pr).Good (periodMode Cd Wp pr) x w t
+    (hfix : (∑ w : Fin n, ∑ t : Fin Np, if (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t
       then (tileWords Sc Cd Np t : ℝ) else 0) / n ≤ fixed)
-    (hfold : (∑ w : Fin n, ∑ t : Fin Np, if periodMode Cd Wp pr x (w, t) = .whole then (0 : ℝ)
+    (hfold : (∑ w : Fin n, ∑ t : Fin Np, if monitoringPeriodMode Cd Wp pr x (w, t) = .whole then (0 : ℝ)
       else (tileWords Sc Cd Np t : ℝ)) / n ≤ fd)
-    (hlt : RoundGame.deficiencyUpTo (periodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp)
+    (hlt : RoundGame.deficiencyUpTo (monitoringPeriodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp)
       (pr.prefixLen x) x < Λl) :
     LiveWorkAt (creditedLive Sc Cd Wp pr x) (wordsOf Sc Cd : ℝ) a b
       (Λl + (pr.prefixLen x : ℝ) * (min a b * zeroCone Sc Cd Np)) (n * fixed) (n * fd) := by
   have hn' : (0 : ℝ) < n := Nat.cast_pos.mpr hn
-  have hgood : ∀ w t, (Cd.periodLayer hr hK pr).Good (periodMode Cd Wp pr) x w t →
-      periodMode Cd Wp pr x (w, t) = .paid := fun w t hg => hg (w, t) Relation.ReflTransGen.refl
-  have hpm : ∀ w, pr.Credited x w → ∀ t, periodMode Cd Wp pr x (w, t) =
-      if Wp.liveAt x w t then windowMode (tileStage Cd Np) Wp x w t else .whole := by
+  have hgood : ∀ w t, (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t →
+      monitoringPeriodMode Cd Wp pr x (w, t) = .paid := fun w t hg => hg (w, t) Relation.ReflTransGen.refl
+  have hpm : ∀ w, pr.Credited x w → ∀ t, monitoringPeriodMode Cd Wp pr x (w, t) =
+      if Wp.liveAt x w t then executionPhaseMode (tileStage Cd Np) Wp x w t else .whole := by
     intro w hc t
     show (if pr.Credited x w ∧ Wp.liveAt x w t = true then
       ((Wp.windowAt x w).joint (tileStage Cd Np)).mode (coinAt x w).1 t else .whole) = _
@@ -600,87 +600,87 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
     · rw [ite_eq_left (And.intro hc hl), ite_eq_left hl]
       rfl
     · rw [ite_eq_right (fun h : pr.Credited x w ∧ Wp.liveAt x w t = true => hl h.2), ite_eq_right hl]
-  have hdead : ∀ w, ¬pr.Credited x w → ∀ t, periodMode Cd Wp pr x (w, t) = .whole := by
+  have hdead : ∀ w, ¬pr.Credited x w → ∀ t, monitoringPeriodMode Cd Wp pr x (w, t) = .whole := by
     intro w hc t
     show (if pr.Credited x w ∧ Wp.liveAt x w t = true then
       ((Wp.windowAt x w).joint (tileStage Cd Np)).mode (coinAt x w).1 t else .whole) = _
     rw [ite_eq_right (fun h : pr.Credited x w ∧ Wp.liveAt x w t = true => hc h.1)]
-  have hGnn : ∀ w, 0 ≤ ∑ t : Fin Np, if (Cd.periodLayer hr hK pr).Good (periodMode Cd Wp pr) x w t
+  have hGnn : ∀ w, 0 ≤ ∑ t : Fin Np, if (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t
       then (tileWords Sc Cd Np t : ℝ) else 0 := fun w =>
     Finset.sum_nonneg fun t _ => by split_ifs <;> positivity
-  have hNWnn : ∀ w, 0 ≤ ∑ t : Fin Np, if periodMode Cd Wp pr x (w, t) = .whole then (0 : ℝ)
+  have hNWnn : ∀ w, 0 ≤ ∑ t : Fin Np, if monitoringPeriodMode Cd Wp pr x (w, t) = .whole then (0 : ℝ)
       else (tileWords Sc Cd Np t : ℝ) := fun w =>
     Finset.sum_nonneg fun t _ => by split_ifs <;> positivity
   have hA : ∀ w : Fin n, (if pr.Credited x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0) ≤
-      (∑ t : Fin Np, if (Cd.periodLayer hr hK pr).Good (periodMode Cd Wp pr) x w t
+      (∑ t : Fin Np, if (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t
         then (tileWords Sc Cd Np t : ℝ) else 0) +
-      (if pr.Credited x w then foldS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) else 0) *
+      (if pr.Credited x w then foldS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) else 0) *
         (wordsOf Sc Cd : ℝ) +
-      (if pr.Credited x w then wholeS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) else 0) *
+      (if pr.Credited x w then wholeS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) else 0) *
         (wordsOf Sc Cd : ℝ) +
-      (if pr.Credited x w then zeroS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) else 0) *
+      (if pr.Credited x w then zeroS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) else 0) *
         (wordsOf Sc Cd : ℝ) := by
     intro w
     by_cases hc : pr.Credited x w
     · simp only [hc, ↓reduceIte]
-      have h := window_fixed Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)
-        (fun t => periodMode Cd Wp pr x (w, t)) (fun t => (Cd.periodLayer hr hK pr).Good (periodMode Cd Wp pr) x w t)
+      have h := executionPhase_fixed Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)
+        (fun t => monitoringPeriodMode Cd Wp pr x (w, t)) (fun t => (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t)
         (hgood w) (hpm w hc) (hcov w hc)
-      rw [unpaid_split Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)] at h
-      have e : (foldS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) +
-          wholeS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) +
-          zeroS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)) * (wordsOf Sc Cd : ℝ) =
-        foldS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) * (wordsOf Sc Cd : ℝ) +
-          wholeS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) * (wordsOf Sc Cd : ℝ) +
-          zeroS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) * (wordsOf Sc Cd : ℝ) := by ring
+      rw [unpaid_split Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)] at h
+      have e : (foldS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) +
+          wholeS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) +
+          zeroS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)) * (wordsOf Sc Cd : ℝ) =
+        foldS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) * (wordsOf Sc Cd : ℝ) +
+          wholeS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) * (wordsOf Sc Cd : ℝ) +
+          zeroS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) * (wordsOf Sc Cd : ℝ) := by ring
       linarith
     · simp only [hc, ↓reduceIte, zero_mul, add_zero]
       exact hGnn w
   have hB : ∀ w : Fin n, (if pr.Credited x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0) ≤
-      (∑ t : Fin Np, if periodMode Cd Wp pr x (w, t) = .whole then (0 : ℝ) else (tileWords Sc Cd Np t : ℝ)) +
-      (if pr.Credited x w then wholeS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) else 0) *
+      (∑ t : Fin Np, if monitoringPeriodMode Cd Wp pr x (w, t) = .whole then (0 : ℝ) else (tileWords Sc Cd Np t : ℝ)) +
+      (if pr.Credited x w then wholeS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) else 0) *
         (wordsOf Sc Cd : ℝ) := by
     intro w
     by_cases hc : pr.Credited x w
     · simp only [hc, ↓reduceIte]
-      exact window_fold Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)
-        (fun t => periodMode Cd Wp pr x (w, t)) (hpm w hc)
+      exact executionPhase_fold Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)
+        (fun t => monitoringPeriodMode Cd Wp pr x (w, t)) (hpm w hc)
     · simp only [hc, ↓reduceIte, zero_mul, add_zero]
       exact hNWnn w
   have hfixL : creditedLive Sc Cd Wp pr x ≤
-      (∑ w : Fin n, ∑ t : Fin Np, if (Cd.periodLayer hr hK pr).Good (periodMode Cd Wp pr) x w t
+      (∑ w : Fin n, ∑ t : Fin Np, if (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t
         then (tileWords Sc Cd Np t : ℝ) else 0) +
-      (∑ w : Fin n, if pr.Credited x w then foldS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)
+      (∑ w : Fin n, if pr.Credited x w then foldS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)
         else 0) * (wordsOf Sc Cd : ℝ) +
-      (∑ w : Fin n, if pr.Credited x w then wholeS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)
+      (∑ w : Fin n, if pr.Credited x w then wholeS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)
         else 0) * (wordsOf Sc Cd : ℝ) +
-      (∑ w : Fin n, if pr.Credited x w then zeroS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)
+      (∑ w : Fin n, if pr.Credited x w then zeroS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)
         else 0) * (wordsOf Sc Cd : ℝ) := by
     unfold creditedLive
     simp only [Finset.sum_mul, ← Finset.sum_add_distrib]
     exact Finset.sum_le_sum fun w _ => hA w
   have hfoldL : creditedLive Sc Cd Wp pr x ≤
-      (∑ w : Fin n, ∑ t : Fin Np, if periodMode Cd Wp pr x (w, t) = .whole then (0 : ℝ)
+      (∑ w : Fin n, ∑ t : Fin Np, if monitoringPeriodMode Cd Wp pr x (w, t) = .whole then (0 : ℝ)
         else (tileWords Sc Cd Np t : ℝ)) +
-      (∑ w : Fin n, if pr.Credited x w then wholeS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)
+      (∑ w : Fin n, if pr.Credited x w then wholeS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)
         else 0) * (wordsOf Sc Cd : ℝ) := by
     unfold creditedLive
     simp only [Finset.sum_mul, ← Finset.sum_add_distrib]
     exact Finset.sum_le_sum fun w _ => hB w
-  have hdef : RoundGame.deficiencyUpTo (periodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp)
+  have hdef : RoundGame.deficiencyUpTo (monitoringPeriodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp)
       (pr.prefixLen x) x =
-      a * (∑ w : Fin n, if pr.Credited x w then foldS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)
+      a * (∑ w : Fin n, if pr.Credited x w then foldS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)
         else 0) +
-      b * (∑ w : Fin n, if pr.Credited x w then wholeS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)
+      b * (∑ w : Fin n, if pr.Credited x w then wholeS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)
         else 0) := by
-    rw [deficiencyUpTo_periodGame, Finset.mul_sum, Finset.mul_sum, ← Finset.sum_add_distrib]
+    rw [deficiencyUpTo_monitoringPeriodGame, Finset.mul_sum, Finset.mul_sum, ← Finset.sum_add_distrib]
     refine Finset.sum_congr rfl fun w _ => ?_
     by_cases hc : pr.Credited x w
     · rw [ite_eq_left ((credited_iff pr x w).mp hc), ite_eq_left hc, ite_eq_left hc]
       rfl
     · rw [ite_eq_right (fun h => hc ((credited_iff pr x w).mpr h)), ite_eq_right hc, ite_eq_right hc, mul_zero,
         mul_zero, add_zero]
-  have hZD : (∑ w : Fin n, if pr.Credited x w then zeroS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w)
+  have hZD : (∑ w : Fin n, if pr.Credited x w then zeroS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w)
       else 0) ≤ (pr.prefixLen x : ℝ) * zeroCone Sc Cd Np := by
     calc _ ≤ ∑ w : Fin n, if pr.Credited x w then zeroCone Sc Cd Np else 0 :=
           Finset.sum_le_sum fun w _ => by
@@ -696,13 +696,13 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
       · exact hf w
       · exact le_rfl
   have hSF : 0 ≤ ∑ w : Fin n, if pr.Credited x w then
-      foldS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) else 0 :=
+      foldS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) else 0 :=
     hnnS _ fun w => foldS_nonneg Sc Cd _ _
   have hS0 : 0 ≤ ∑ w : Fin n, if pr.Credited x w then
-      wholeS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) else 0 :=
+      wholeS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) else 0 :=
     hnnS _ fun w => wholeS_nonneg Sc Cd _ _
   have hZ : 0 ≤ ∑ w : Fin n, if pr.Credited x w then
-      zeroS Sc Cd (Wp.liveAt x w) (windowMode (tileStage Cd Np) Wp x w) else 0 :=
+      zeroS Sc Cd (Wp.liveAt x w) (executionPhaseMode (tileStage Cd Np) Wp x w) else 0 :=
     hnnS _ fun w => zeroS_nonneg Sc Cd _ _
   have hG := ((div_le_iff₀ hn').mp hfix).trans_eq (mul_comm _ _)
   have hNW := ((div_le_iff₀ hn').mp hfold).trans_eq (mul_comm _ _)
@@ -711,32 +711,32 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
 
 /-! ## `CircuitWorkMonitoringPeriod` -/
 
-/-- **`CircuitWorkMonitoringPeriod` from the period layer's covers**: the assembly, reading `PeriodCoversStmt` as a hypothesis
-(`periodCovers` proves it). Off `SampledRightOff`'s event and the period budget's tail at its accepted prefix,
+/-- **`CircuitWorkMonitoringPeriod` from the period layer's covers**: the assembly, reading `MonitoringPeriodCoversStmt` as a hypothesis
+(`monitoringPeriodCovers` proves it). Off `SampledRightOff`'s event and the period budget's tail at its accepted prefix,
 `work_step`. -/
-theorem circuitWorkMonitoringPeriod_of_covers (hC : PeriodCoversStmt) :
+theorem circuitWorkMonitoringPeriod_of_covers (hC : MonitoringPeriodCoversStmt) :
     Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn _ hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
     hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
   obtain ⟨hwf, -, hδs, hLP, hlc⟩ := hS
   obtain ⟨hWR, hCov⟩ := hC Sc Cd hr hK Wp pr hwf hlc
   obtain ⟨E, hE, hEoff⟩ := Accounting.SecurityProofs.TS.SampledRightOff C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd
-    (Cd.periodLayer hr hK pr) δbind δks hMoved hJS hPins
-  have hBud : RoundGame.BudgetAt Λ (periodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) :=
-    budget_period Sc Cd hLP hρ hρN hwmax hlk ha hb hSR Wp hMu hRB hGs
-  have hTail := PeriodTailMax (periodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) Λ hΛ hBud
+    (Cd.monitoringPeriodLayer hr hK pr) δbind δks hMoved hJS hPins
+  have hBud : RoundGame.BudgetAt Λ (monitoringPeriodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) :=
+    budget_monitoringPeriod Sc Cd hLP hρ hρN hwmax hlk ha hb hSR Wp hMu hRB hGs
+  have hTail := MonitoringPeriodTailMax (monitoringPeriodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) Λ hΛ hBud
     (Real.log (1 / δs))
   have hexp : Real.exp (-Real.log (1 / δs)) = δs := by
     rw [Real.exp_neg, Real.exp_log (one_div_pos.mpr hδs), one_div, inv_inv]
   rw [hexp] at hTail
   have hFix := hUF hWR
-  have hDDx : ∀ x w, DeadConeDead Sc Cd Np (Wp.liveAt x w) := fun x w => everyWindow_at Wp hDD x w
+  have hDDx : ∀ x w, DeadConeDead Sc Cd Np (Wp.liveAt x w) := fun x w => everyExecutionPhase_at Wp hDD x w
   have hsub : ∀ x, (Pl.accepts x ∧
       ¬ LiveWorkAt (creditedLive Sc Cd Wp pr x) (wordsOf Sc Cd : ℝ) a b
         (rOfPrefix Sc Cd Np (pr.prefixLen x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x)) →
-      E x ∨ ∃ j : ℕ, RoundGame.acceptsUpTo (periodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) j x ∧
+      E x ∨ ∃ j : ℕ, RoundGame.acceptsUpTo (monitoringPeriodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) j x ∧
         Λ * Real.log (1 / δs) ≤
-          RoundGame.deficiencyUpTo (periodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) j x := by
+          RoundGame.deficiencyUpTo (monitoringPeriodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) j x := by
     rintro x ⟨hacc, hnw⟩
     by_cases hEx : E x
     · exact Or.inl hEx
@@ -744,13 +744,13 @@ theorem circuitWorkMonitoringPeriod_of_covers (hC : PeriodCoversStmt) :
     · have h1 := hPre x (pr.prefixLen x) fun w hw i =>
         hEoff x hEx w i (((credited_iff pr x w).mpr hw) w le_rfl i)
       rw [hG] at h1
-      exact acceptsUpTo_periodGame _ _ _ _ _ _ _ _ Wp _ x h1
+      exact acceptsUpTo_monitoringPeriodGame _ _ _ _ _ _ _ _ Wp _ x h1
     · exact work_step Sc Cd hn hr hK Wp pr x ha hb (hDDx x) (fun w hc => hCov x w hc (hDDx x w))
         (hFix x hacc).1 (hFix x hacc).2 hlt
   refine (prob_mono hsub).trans ((prob_or_le _ _).trans ?_)
   linarith
 
-/-! ## `CircuitCreditPeriod` -/
+/-! ## `CircuitCreditMonitoringPeriod` -/
 
 /-- **The credit is below the work**: under `LiveWorkAt` at `r(j)` with `a, b > 0`, the words not fixed right,
 `(d_F + d₀)·N_w`, are at most `r(j)·N_w/min(a, b) = ε(j)·N_live`, so `(1 − ε(j))₊·N_live` is at most the words fixed
@@ -781,10 +781,10 @@ theorem creditPrefix_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j :
   · rw [← hzero, mul_zero]
     exact hF
 
-/-- **`CircuitCreditPeriod` from the period layer's covers**: `circuitWorkMonitoringPeriod_of_covers` at `a, b > 0`; on an
+/-- **`CircuitCreditMonitoringPeriod` from the period layer's covers**: `circuitWorkMonitoringPeriod_of_covers` at `a, b > 0`; on an
 accepted run `UnitFixed`'s sums keep `fixed` nonnegative, so the credit is below the work (`creditPrefix_le`). -/
-theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
-    Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod := by
+theorem circuitCreditMonitoringPeriod_of_covers (hC : MonitoringPeriodCoversStmt) :
+    Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
     hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
   have hW := circuitWorkMonitoringPeriod_of_covers hC Sc Cd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
@@ -811,12 +811,12 @@ theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
     exact creditPrefix_le Sc Cd Np _ ha hb hNl (mul_nonneg (Nat.cast_nonneg _) (hfix0 x hacc)) hw
   exact (prob_mono hsub).trans hW
 
-/-- `CircuitWorkMonitoringPeriod`: the assembly at the period layer's covers (`periodCovers`). -/
+/-- `CircuitWorkMonitoringPeriod`: the assembly at the period layer's covers (`monitoringPeriodCovers`). -/
 theorem CircuitWorkMonitoringPeriod : Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod :=
-  circuitWorkMonitoringPeriod_of_covers periodCovers
+  circuitWorkMonitoringPeriod_of_covers monitoringPeriodCovers
 
-/-- `CircuitCreditPeriod`: the assembly at the period layer's covers (`periodCovers`). -/
-theorem CircuitCreditPeriod : Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod :=
-  circuitCreditPeriod_of_covers periodCovers
+/-- `CircuitCreditMonitoringPeriod`: the assembly at the period layer's covers (`monitoringPeriodCovers`). -/
+theorem CircuitCreditMonitoringPeriod : Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod :=
+  circuitCreditMonitoringPeriod_of_covers monitoringPeriodCovers
 
 end Accounting.SecurityProofs.ComposeMonitoringPeriod
