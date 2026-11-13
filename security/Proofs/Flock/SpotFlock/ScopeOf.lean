@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.Facts
 public import Proofs.Flock.Bridge.Members
 public import Proofs.Flock.Bridge.Slots
+public import Proofs.Flock.SpotFlock.BlockCommits
 
 /-!
 # The two-stage scope at the members
@@ -14,7 +15,7 @@ members' programs side by side (`bitsProgs`), their proof blocks (`membersPart`)
 * `partitions_blockOf`: a circuit's units' proof blocks (`blockOf`: a unit's lowered gates, then the inputs it owns)
   partition its lowering (`Partition.Partitions`), where every unit has a lowered gate, no output is an input and each
   block commits at most `unitClassMax` values; `partitions_keyProg` is a member's, its key program's units' blocks
-  (`Spot.Bits.blockOf`) partitioning its program (`memberProg`).
+  (`Spot.Bits.blockOf`) partitioning its program (`memberProg`) where a unit's inputs and returned output bits fit.
 * `SitsAt.unread`, `SitsAt.committed_map`, `SitsAt.unitClass_map`: a program sitting in another keeps its unread inputs,
   and its blocks commit as many values and have the same size class, `b` later.
 * `topological_bitsProgs`, `partitions_membersPart`: the members side by side are topologically ordered and partitioned
@@ -277,18 +278,38 @@ theorem unitGates_keyProg_ne_nil {c : _root_.Flock.Circuit} {n : ℕ} {hU : Buil
   simp at hmem
 
 /-- **A member's key program's units' blocks partition its program**, where its rows are built (`Built`), it has a
-computed row and its program has at most `unitClassMax` gates. -/
+computed row, and a unit's stacked rows' inputs and returned output bits are at most `unitClassMax`: each unit's block
+reads only its own gates and constants (`member_closed`), so it commits only its inputs and its returned gates
+(`BlockCommits.committed_le_ends`, `BlockCommits.length_ends_le`). -/
 theorem partitions_keyProg (c : _root_.Flock.Circuit) (n : ℕ) {hU : Built c.unit} (hu : c.unit.unitLog ≤ 32)
-    (hc : 0 < (bitsRows c).nComp) (hw : (Properties.Spot.memberProg c n).gates.length ≤ unitClassMax) :
+    (hc : 0 < (bitsRows c).nComp) (hw : (bitsRows c).nIn + BlockCommits.outBits c ≤ unitClassMax) :
     (⟨[[(List.range n).map fun u => Spot.Bits.blockOf (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) u]]⟩ :
       Claims.Sampling.Partition).Partitions (Properties.Spot.memberProg c n) := by
-  have hlen : (progOf ((Placed.keyProg c hU n).circuit (Layout.outsOf c hU n)) (constsOf c hU n)).gates.length ≤
-      unitClassMax := by
-    rw [progOf_keyProg hu]
-    exact hw
+  have hout := isInput_outputs_keyProg (n := n) (hU := hU) hu
+  have hcom : ∀ u, committed (progOf ((Placed.keyProg c hU n).circuit (Layout.outsOf c hU n)) (constsOf c hU n))
+      (blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (constsOf c hU n) u) ≤ unitClassMax := by
+    intro u
+    refine (BlockCommits.committed_le_ends (bs := (List.finRange n).map
+      (blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (constsOf c hU n)))
+      (List.mem_map.2 ⟨u, List.mem_finRange u, rfl⟩) ?_ ?_ ?_).trans ?_
+    · intro bv hbv g hg hgv
+      obtain ⟨v, -, rfl⟩ := List.mem_map.1 hbv
+      by_cases huv : u = v
+      · rw [huv]
+      · exact (disjoint_blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) huv hg hgv).elim
+    · intro i hi hc' hni
+      obtain ⟨v, hv⟩ := exists_blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) hout hi hc'
+        fun h => hni h.1
+      exact ⟨_, List.mem_map.2 ⟨v, List.mem_finRange v, rfl⟩, hv⟩
+    · intro bv hbv i hi x hx
+      obtain ⟨v, -, rfl⟩ := List.mem_map.1 hbv
+      rw [blockOf_bitsKeyProg hu] at hi ⊢
+      rw [progOf_keyProg hu] at hx ⊢
+      exact NeededBitsOf.member_closed c n hi hx
+    · rw [progOf_keyProg hu, blockOf_bitsKeyProg hu]
+      exact (BlockCommits.length_ends_le c n u.val).trans hw
   have hP := partitions_blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (constsOf c hU n)
-    (unitGates_keyProg_ne_nil hu hc) (isInput_outputs_keyProg hu)
-    fun u => (List.length_filter_le _ _).trans ((length_blockOf_le _ u).trans hlen)
+    (unitGates_keyProg_ne_nil hu hc) hout hcom
   have e : (List.finRange n).map (blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n))
       (constsOf c hU n)) = (List.range n).map fun u =>
         Spot.Bits.blockOf (Spot.Bits.keyProg c n) (Spot.Bits.consts c n) u := by
@@ -501,11 +522,11 @@ theorem partitions_membersPart (htop : ∀ ci ∈ ms, (memberProg ci.1 ci.2.size
     have hy' := hlt m hm y hy
     exact ⟨w, by rw [(hA m hm).unitClass_map hy']; exact hw1, by rw [(hA m hm).committed_map hy']; exact hw2⟩
 
-/-- **A member the scope covers**: its unit net built (`Built`) with `unitLog ≤ 32`, a computed row, and at most
-`unitClassMax` gates in its program. -/
+/-- **A member the scope covers**: its unit net built (`Built`) with `unitLog ≤ 32`, a computed row, and a unit's
+stacked rows' inputs and returned output bits at most `unitClassMax`, the most one unit's proof block commits. -/
 def MemberFits (ci : _root_.Flock.Circuit × Array ℕ) : Prop :=
   FlockSoundness.Built ci.1.unit ∧ ci.1.unit.unitLog ≤ 32 ∧ 0 < (bitsRows ci.1).nComp ∧
-    (memberProg ci.1 ci.2.size).gates.length ≤ unitClassMax
+    (bitsRows ci.1).nIn + Flock.Bridge.BlockCommits.outBits ci.1 ≤ unitClassMax
 
 /-- **The replay layout fills the members' files**: each unit `x` of each member `t` is in some request slot `ρ`'s run,
 `ρ·n_t` to `(ρ + 1)·n_t`. -/
