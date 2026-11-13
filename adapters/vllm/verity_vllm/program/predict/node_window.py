@@ -40,7 +40,7 @@ import hashlib
 import math
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.codec import descriptor_id
@@ -48,11 +48,21 @@ from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, runs
 from verity.commitments.windows import interface as IF
 from verity.definitions.registry import b1_tp2 as B1T
+
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base, spec_statics
 
 from .build import Unexpressible
-from .window_builder import WEIGHTS, Grain, Row, _Builder, _spans, _step, _word, inference
+from .window_builder import (
+    WEIGHTS,
+    Grain,
+    Row,
+    _Builder,
+    _spans,
+    _step,
+    _word,
+    inference,
+)
 
 NAME = "verity-vllm/node-window"
 PEERS = "peers_"
@@ -205,7 +215,7 @@ class NodeWindow:
         L = len(refs) // node.n
         return refs.slice(t * L, (t + 1) * L)
 
-    def segments(self, refs: Refs) -> list[tuple[str, Any, int, int]]:
+    def segments(self, refs: Refs) -> list[tuple[Any, ...]]:
         """``refs`` as word ranges: ``("n", j, lo, hi)`` of member-local words of one member of node ``j`` (its member in
         ``lo``'s place: ``("n", j, m, lo, hi)``), or ``("p", name, lo, hi)`` of an input, the weights record's in words."""
         out: list[Any] = []
@@ -416,7 +426,9 @@ class NodeWindow:
         by the family their rows are of (ports, unit ports and their words); the nodes left unlowered by family; and each
         ``peers_*`` input with the nodes that read it."""
         lay = {tid: dict(IF.layout(fn).rows) for tid, fn in self.b.fns.items()}
-        units, templates, wires = Counter(), Counter(), Counter()
+        units: Counter[str] = Counter()
+        templates: Counter[str] = Counter()
+        wires: Counter[str] = Counter()
         for tid, allocs in self.allocs.items():
             for _at, n, fam in allocs:
                 units[fam] += n
@@ -424,7 +436,7 @@ class NodeWindow:
                 templates[fam] += 1
         for w in self.b.wires:
             wires[self.family_of(w.reader, w.at)] += 1
-        free: dict[str, Counter] = {}
+        free: dict[str, Counter[str]] = {}
         for f in self.free:
             key = "peers" if f.kind == "peer" else f.family
             c = free.setdefault(key, Counter())
@@ -517,7 +529,7 @@ def block_fp8_linear(w: NodeWindow, j: int, node: Any) -> None:
 def _cols(N: int, most: int) -> int:
     """The widest halving N / 2^k of a norm's N of at most ``most`` columns (`serving_templates.COLS`)."""
     G = N
-    while G > most and G % 2 == 0:
+    while most < G and G % 2 == 0:
         G //= 2
     return G
 
@@ -549,10 +561,11 @@ def scale_norm(w: NodeWindow, j: int, node: Any) -> None:
     G = _cols(N, w.b.grain.norm)
     sumsq, apply = _part(spec, sfam), _part(spec, afam, G=G)
     A = N // G
-    cols = []
+    cols: list[list[tuple[Row, ...]] | _Free] = []
     for k in range(wk):
         blocks = [w.take(node, k, a * G, (a + 1) * G, most=w.b.grain.rows // 4) for a in range(A)]
-        cols.append(next((b for b in blocks if isinstance(b, _Free)), None) or [rows for b in blocks for rows in b])
+        free = [b for b in blocks if isinstance(b, _Free)]
+        cols.append(free[0] if free else [rows for b in blocks if not isinstance(b, _Free) for rows in b])
     ts, as_ = w.unit(fam, sumsq, M)
     for k, port in enumerate(ports):
         w.feed(ts, port, as_, xs[k], (M,))
