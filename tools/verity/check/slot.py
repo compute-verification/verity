@@ -111,10 +111,20 @@ before it only, each time its reason to wait changes, so its log says whom it wa
 (RESEARCH_RUN_DIR) it also keeps the run's RUN_SLOT: waiting (since when and why), held (which slot, since when it waited and
 when it took the slot, and the last `why` it waited for when it waited) or left (why), so `research status` shows a run
 whose check waits here as `waiting`, not running, and what a run waited behind outlasts its wait.
+
+A machine keeps one copy of this file of its own, NODE_COPY, which `research deploy install` places from `main`. A run that
+names a pool (`research run --pool`) takes its slot by that copy where the machine has one, so the waiters of a pool's line
+are held to one copy's rules whatever tree each run ships, and by its tree's copy where the machine has none, which that
+copy says in a line. RUN_SLOT says which copy ran (`copy`). The copy is this one file with nothing beside it (alone, it
+names the default check cache: `cache_disk`), and an install renames a new file over it: a waiter read its copy before it
+joined the line and reads it no more, so it waits on by the rules it started with, in the place its ticket's name gave
+it. A ticket is read whichever copy wrote it: a key a copy doesn't know is left alone, and a ticket without a key is one
+that names none (no `mem_gb`: it asks no memory, and always counts).
 """
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
@@ -167,6 +177,11 @@ RAMLOCK = Path(os.environ.get("RESEARCH_RAMLOCK_DIR", "/workspace/ramlock"))
 #: how often a waiting twin whose claims are on another machine looks there for its twin's claim
 TWIN_PEEK_S = 120
 TWIN_SSH_S = 30
+#: this machine's own copy of this file (deploy.toml's entry for it; research's slot_only.NODE_SLOT), and the record `research
+#: deploy install` keeps of what it places (each node's `record` in deploy.toml): a line per installed file, with its path, its
+#: bytes as git names a file's (`blob`) and the commit they were taken from
+NODE_COPY = Path("/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py")
+DEPLOY_RECORD = Path("/workspace/research/deploy/record.jsonl")
 
 
 def cpulist(s: str) -> set[int]:
@@ -786,6 +801,41 @@ def defer_run(waited_s: float, line: str, run_dir: str | None) -> str | None:
     return f"{line}: the run's timeout is now {t:g} s from its start: {now:g} s, plus the {waited_s:g} s it waited here"
 
 
+def copy(commit: str | None = None) -> dict:
+    """Which copy of this file runs, for the run's RUN_SLOT: the machine's own (`of`: machine, NODE_COPY) or the run's tree's
+    (`of`: tree); its bytes as git names a file's (`blob`, which `research deploy drift` compares); and its commit where one
+    is known. A tree's is the tree's ``commit`` (the asker's). The machine's is the commit DEPLOY_RECORD's newest line
+    for the copy took those bytes from, and where that names none, `no_commit` says why: the record can't be read, or its
+    newest line for the copy names other bytes or there is none (a copy changed by hand, or one whose install hasn't written
+    its line yet). A copy that can't be read back says only that (`unread`)."""
+    me = Path(__file__)
+    try:
+        data = me.read_bytes()
+    except OSError as e:
+        return {"unread": f"{type(e).__name__}: {e}"}
+    ran = {"of": "machine" if me.resolve() == NODE_COPY.resolve() else "tree",
+           "blob": hashlib.sha1(b"blob %d\0" % len(data) + data, usedforsecurity=False).hexdigest()}
+    if ran["of"] == "tree":
+        return {**ran, **({"commit": commit} if commit else {})}
+    try:
+        lines = [ln for ln in DEPLOY_RECORD.read_text().splitlines() if str(NODE_COPY) in ln]
+    except (OSError, UnicodeDecodeError) as e:
+        return {**ran, "no_commit": f"{DEPLOY_RECORD}: {type(e).__name__}: {e}"}
+    last, torn = {}, []
+    for ln in lines:
+        try:
+            d = json.loads(ln)
+        except ValueError as e:
+            torn.append(str(e))
+            continue
+        if isinstance(d, dict) and d.get("path") == str(NODE_COPY) and d.get("blob"):
+            last = d
+    if last.get("blob") == ran["blob"] and last.get("commit"):
+        return {**ran, "commit": last["commit"]}
+    why = f"names blob {last['blob']} last for this file" if last else "names no install of this file"
+    return {**ran, "no_commit": f"{DEPLOY_RECORD} {why}" + (f", and {len(torn)} of its lines for it can't be read" if torn else "")}
+
+
 def record_slot(run_dir: str | None, doc: dict) -> None:
     """``doc`` as the run's RUN_SLOT, replaced whole, so `research status` shows a check waiting in the line as waiting and not as
     running since its run began. Nothing outside a
@@ -1136,7 +1186,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     min_mem = min_mem_gb()
     if not cmd:
         sys.exit(USAGE)
-    if not SLOTS.exists() and os.environ.get("CHECK_SLOTS"):
+    named = os.environ.get("CHECK_SLOTS")           # a pool's slots, named in the machine's own check slots' place
+    if not SLOTS.exists() and named:
         pools = ", ".join(p.parent.name for p in lane_pools(SLOTS.parent.parent / "slots")) or "none"
         print(f"slot: not started: CHECK_SLOTS names {SLOTS}, which this machine doesn't have, and CMD would run on any core "
               f". Name one of its pools instead (CHECK_SLOTS={SLOTS.parent.parent}/NAME/slots, or `research run --pool "
@@ -1179,11 +1230,15 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
               file=sys.stderr, flush=True)
         return NOT_STARTED
     me = asker(by, pair)
+    ran = copy(me.get("commit"))
+    if ran.get("of") == "tree" and named and not NODE_COPY.exists():
+        print(f"slot: this machine has no slot.py of its own ({NODE_COPY}), so the run's tree's copy holds its place in the "
+              f"pool's line", file=sys.stderr, flush=True)
     ticket, tfd = join(SLOTS.parent, priority=priority, who=me, rank=rank)
     told, joined, peeked = None, now(), None
     run_dir = research_run_dir()
     since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {}),
-             **({"rank": rank} if rank is not None else {})}
+             **({"rank": rank} if rank is not None else {}), **({"copy": ran} if ran else {})}
     record_slot(run_dir, {"state": "waiting", **since})
 
     def gone(why: str) -> int:

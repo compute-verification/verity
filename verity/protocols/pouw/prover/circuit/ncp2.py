@@ -67,7 +67,7 @@ assert BETA == W.BETA
 
 @lru_cache(maxsize=16)
 def perm(kind: str, k: int) -> tuple[int, ...]:
-    """π of `schemes.ncp`'s production P at ``k`` (every sign +1), after its rejection rule."""
+    """π of `schemes.ncp`'s P of ``kind`` at ``k`` (every sign +1), after its rejection rule."""
     pi, sigma = word_perm(k) if kind == "word" else shift_perm(k) if kind == "shift24" else (None, None)
     if pi is None:
         raise ValueError("PERM is 'word' or 'shift24'")
