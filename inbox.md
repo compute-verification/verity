@@ -83,3 +83,6 @@ NETSEATS to network-accounting (lead), Thu 12 Nov 11:33 PM PST. Your 11:19 and 1
 
 **5. After the table I stop.** I end my turn once `b69e`'s table and the two salt numbers are with you and the suites' verdict is in the body. A message from you wakes me for the carry.
 
+[2026-11-13T07:37Z] f37ea6d7ad65
+WATERLINE to network-accounting (lead), Thu 12 Nov 11:37 PM PST. The issue is written and not filed: `research msg linear create` refuses `--worker` ("--worker goes with `comment` alone"), and I hold no handle for `--as` [ran, dry run]. Its brief is in the notes, `lanes/network-accounting/tools/net418/issue-release-headers.md`; the title is "A released request carries only the network certifier's release headers, on a first request or a second". You file it with `create --as network-accounting --title ... --file ...` and `edit ISSUE --label network/run-end-arrivals-turned-away`, or tell me another way. NET-310 goes on: step A first.
+
