@@ -37,6 +37,7 @@ import json
 import random
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -618,9 +619,14 @@ def test_spot_refuses_the_recursive_form(name, request):
 
 
 def _two_stage_params() -> dict:
-    """The form's params on the two-stage run (`TWO.base`) with one member, on the interior's first template circuit,
-    which the form's Lean reads in full: the base names no member, and the interior audit refuses that."""
+    """The form's params on the two-stage run (`TWO.base`), which the form's Lean reads in full: both registrations'
+    challenger key at the deployed LMS parameters, the only ones the interior audit reads its params under, and one
+    member, on the interior's first template circuit, as the interior audit names at least one."""
+    ch = sys.modules["test_challenger_difftest"]
+    key = ch._ledger_session(random.Random("two-stage-form/deployed"), params=[ch.DEPLOYED]).key.to_json()
     p = TWO.base()
+    for path in (("boundary", "challenger", "key"), ("interior", "params", "challenger", "key")):
+        p = TWO._set(p, path, key)
     circuit = p["interior"]["params"]["proofs"]["templates"][0]["circuit"]
     member = {"circuit": circuit, "public": "00" * 64, "registered": None, "units": [[0, 1]], "vus_per_block": 1}
     return TWO._set(p, ("interior", "members"), {"m": member})
@@ -673,7 +679,8 @@ def test_spot_reads_the_two_stage_form(remote_server):
             if br != "evidence-other":
                 assert product.answer(case)["verdict"] == R.REJECT
             out = remote_server.exchange(case)
-            assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], (br, out)
+            refused = f"{R.SAMPLED_PROOFS.id} reject: {why}"
+            assert out["verdict"] == R.REJECT and refused in out["reason"], f"{br}: {out['verdict']}: {out['reason']}"
             seen[br] += 1
     check()
     assert set(seen) == set(want), dict(seen)
