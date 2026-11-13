@@ -138,7 +138,7 @@ def binary() -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------------------------------------------------ mufu
 def mufu(work: Path, sm: str) -> dict[str, Any]:
-    from verity.definitions.circuits import library as L
+    from verity.circuits import library as L
     from verity.definitions.numerics import fa2_relation
 
     pinned = fa2_relation.tables()
