@@ -17,6 +17,10 @@ round, whatever challenges the device released in either:
   release after a prefix the same round where its frame is kept;
 * `locates_frames`, `locates_after`: so does any locator that agrees with it at the sessions' rounds
   (`LocatesSessions`, as the run's does: `locates_run`), at a session's round, whatever bytes the frame answers;
+* `same_append_frames`, `frames_of_read`, `locOf_logged`, `locates_logged`: the log the check read has the device's
+  frames after releases that neither sample nor open a coin tree (`InteriorLogged`), so a release of the device's log
+  is on the round its like in the read log is on, and what is shown of the read log's rounds holds of the rounds
+  `CoinMap`'s locator gives the device's releases;
 * `FramesOnly`, `framesOnly_run`, `locAt_frames`: the run's locator (`runLocate`) reads only the frames before a
   release at every round, where the stages' locator does.
 
@@ -32,6 +36,8 @@ frames before a release (`FramesOnly` at the two-stage audit's stages' locator, 
 @[expose] public section
 
 namespace Verity.SampledTwo.SessionCoins
+
+open Verity.Sampled.Binding (Read)
 
 /-! ## Releases of the same frames -/
 
@@ -103,6 +109,53 @@ theorem locates_after {A : Live₂} {tab : ℕ → String} {L : CoinMap.Locate}
     CoinMap.locAt L q rl.frame rl.answers = some n ↔ CoinMap.locAt L q' rl'.frame rl'.answers = some n := by
   rw [← hf]
   exact locates_frames hL hg hq rl.frame rl.answers rl'.answers
+
+/-! ## The log the check read and the device's -/
+
+/-- Releases of the same frames, after releases that are the same to the session-round locator, are the same to
+it. -/
+theorem same_append_frames {a a' : List Release} (ha : List.Forall₂ (fun x y => x.frame = y.frame) a a') :
+    ∀ {pre pre' : List Release}, Same pre pre' → Same (pre ++ a) (pre' ++ a') := by
+  induction ha with
+  | nil =>
+    intro pre pre' h
+    simpa using h
+  | @cons x y a a' hxy _ ih =>
+    intro pre pre' h
+    simpa using ih (h.snoc hxy)
+
+/-- The log the check read has the frames of the device's releases it reads, one for one. -/
+theorem frames_of_read {l l' : List Release} (hR : List.Forall₂ Read.Of (l.map Read.ofV2) l') :
+    List.Forall₂ (fun x y => x.frame = y.frame) l l' :=
+  (List.forall₂_map_left_iff.1 hR).imp fun _ _ h => (of_ofV2 h).1
+
+/-- **A release of the device's log is on the round its like in the log the check read is on**: where the device's
+log is releases `q` that neither sample nor open a coin tree and then releases of the read log's frames (as
+`InteriorLogged` gives of the interior read, with `frames_of_read`), the session-round locator puts the release `r`
+after the read releases `a` where it puts the device's `r'` after `q` and the device's `a'`. -/
+theorem locOf_logged (A : Live₂) (tab : ℕ → String) {q a a' : List Release} {r r' : Release}
+    (hq : ∀ x ∈ q, openTree x.frame = none ∧ ∀ sp, x.frame ≠ .hello sp)
+    (ha : List.Forall₂ (fun x y => x.frame = y.frame) a a') (hf : r.frame = r'.frame) :
+    locOf A tab a r.frame = locOf A tab (q ++ a') r'.frame := by
+  have hS : Same [] q := by simpa using same_append (pre := []) hq
+  have hS' : Same a (q ++ a') := by simpa using same_append_frames ha hS
+  rw [← hf]
+  unfold locOf
+  exact sessLoc_congr hS' r.frame
+
+/-- **A locator of `CoinMap` puts a release of the device's log on a session's round just where the session-round
+locator puts its like in the log the check read**: at a locator that agrees with the session-round locator at the
+sessions' rounds, and logs as in `locOf_logged`. So what is shown of the rounds of the read log's releases holds of
+the rounds `CoinMap` gives the device's. -/
+theorem locates_logged {A : Live₂} {tab : ℕ → String} {L : CoinMap.Locate}
+    (hL : LocatesSessions A tab (CoinMap.locAt L)) {n : ℕ} (hg : groupOf A n = .sessions)
+    {q a a' : List Release} {r r' : Release}
+    (hq : ∀ x ∈ q, openTree x.frame = none ∧ ∀ sp, x.frame ≠ .hello sp)
+    (ha : List.Forall₂ (fun x y => x.frame = y.frame) a a') (hf : r.frame = r'.frame) :
+    CoinMap.locAt L (q ++ a') r'.frame r'.answers = some n ↔ locOf A tab a r.frame = some n :=
+  have e := locOf_logged A tab hq ha hf
+  ⟨fun h => e.trans ((hL (q ++ a') r'.frame r'.answers n hg).1 h),
+    fun h => (hL (q ++ a') r'.frame r'.answers n hg).2 (e.symm.trans h)⟩
 
 /-! ## The run's locator -/
 
