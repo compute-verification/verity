@@ -1215,8 +1215,10 @@ def path_rows(text: str) -> list[tuple[str, str]]:
     """The rows of word map ``text`` that rename a path, its old and new words each holding a `/`, `[[words_in]]` rows
     included, in its order: `move_check.py` certifies a word's rename of a path only where the move itself moved it, so each
     goes to it as `--map OLD=NEW`, as `tools/move/stage.py --map` passes it.  A map that doesn't parse raises
-    `tomllib.TOMLDecodeError`."""
+    `tomllib.TOMLDecodeError`, and one whose `words_in` is no array `ValueError`."""
     data = tomllib.loads(text)
+    if not isinstance(got := data.get("words_in") or [], list):
+        raise ValueError(f"holds a words_in that is no array of tables ({type(got).__name__} {got!r:.60})")
     tables = [data.get("words"), *(s.get("words") for s in data.get("words_in") or [] if isinstance(s, dict))]
     rows = [(o, n) for t in tables if isinstance(t, dict) for o, n in t.items()]
     return list(dict.fromkeys((o, n) for o, n in rows if isinstance(n, str) and "/" in o and "/" in n))
@@ -2585,6 +2587,8 @@ class Queue:
             rows = path_rows(_out(self.workdir, "show", f"{tip}:{pr.move}"))
         except tomllib.TOMLDecodeError as e:
             return None, f"its map {pr.move} at {tip[:12]} doesn't parse ({e}): fix the map, then mark the move again", None
+        except ValueError as e:
+            return None, f"its map {pr.move} at {tip[:12]} {e}: fix the map, then mark the move again", None
         with scratch() as tmp:
             wt = Path(tmp, "wt")
             with worktrees_locked(self.workdir):
@@ -4249,15 +4253,20 @@ class Retired:
 
 def map_retires(repo: Path, at: str, path: str) -> Retired | None:
     """What the move map ``path`` retires, read at ``at`` (the move's base, where `tools/move/stage.py` ran it and
-    `move_check.py` reads it), or None when it is missing there or doesn't parse (said on stderr): a layout map's old paths
-    that a [paths] row sends elsewhere, its [retired] and [drop] paths and its dotted [modules] and [aliases] old names
-    (`layout.py` rewrites no one-word module); a word map's [words] and [[words_in]] old words."""
+    `move_check.py` reads it), or None when it is missing there, doesn't parse or holds a `words_in` that is no array (said
+    on stderr): a layout map's old paths that a [paths] row sends elsewhere, its [retired] and [drop] paths and its dotted
+    [modules] and [aliases] old names (`layout.py` rewrites no one-word module); a word map's [words] and [[words_in]] old
+    words."""
     r = _git(repo, "show", f"{at}:{path}", check=False)
     try:
         data = tomllib.loads(r.stdout) if not r.returncode else None
     except tomllib.TOMLDecodeError as e:
         print(f"research queue: the move map {path} at {at[:12]} doesn't parse ({e}), so a head that lacks its move "
               "stays out", file=sys.stderr)
+        data = None
+    if isinstance(data, dict) and not isinstance(data.get("words_in") or [], list):
+        print(f"research queue: the move map {path} at {at[:12]} holds a words_in that is no array of tables, so a head "
+              "that lacks its move stays out", file=sys.stderr)
         data = None
     if not isinstance(data, dict):
         return None
@@ -4283,9 +4292,7 @@ def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None =
     if not (moves := moves_between(repo, main, head)):
         return []
     maps = {} if maps is None else maps
-    files = own_files(repo, main, head) if files is None else files
-    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{main}...{head}")
-    text = "\n".join([*sorted(files), *(x for x in diff.splitlines() if x.startswith("+") and not x.startswith("+++"))])
+    text = own_text(repo, main, head, files)
     out = []
     for commit, parents in moves:
         if not (m := MOVE_LINE_RE.search(_out(repo, "log", "-1", "--format=%B", commit))):
@@ -4295,6 +4302,40 @@ def lacked_moves(repo: Path, main: str, head: str, files: Iterable[str] | None =
         if (got := maps[key]) is None or (names := got.named(text)):
             out.append((commit, m[1], None if got is None else names))
     return out
+
+
+def own_text(repo: Path, main: str, head: str, files: Iterable[str] | None = None) -> str:
+    """What `Retired.named` reads of ``head``'s own change, against its merge base with ``main``: its files (``files``, else
+    `own_files`) and its added lines."""
+    files = own_files(repo, main, head) if files is None else files
+    diff = _out(repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-renames", f"{main}...{head}")
+    return "\n".join([*sorted(files), *(x for x in diff.splitlines() if x.startswith("+") and not x.startswith("+++"))])
+
+
+def crossed(repo: Path, main: str, head: str, moves: Iterable[tuple[str, str]], files: Iterable[str] | None = None,
+            maps: dict[tuple[str, str], Retired | None] | None = None) -> frozenset[str]:
+    """The heads of the move PRs of ``moves`` (each a head and its map's path) that ``head`` may be built above before they
+    land: those whose map retires nothing ``head``'s own change names (`own_text`), as `lacked_moves` judges a move `main`
+    landed.  A map is read at its PR's head and, where ``main`` has one at that path, there too, since a move regenerated on
+    its batch's tip runs the tip's (`map_retires`, kept in ``maps`` by where and path); a move whose map can't be read at its
+    head is crossed by nothing.  `QueueError` while ``head``'s own change can't be read."""
+    maps = {} if maps is None else maps
+    text = own_text(repo, main, head, files)
+
+    def read(at: str, path: str) -> Retired | None:
+        if (at, path) not in maps:
+            maps[at, path] = map_retires(repo, at, path)
+        return maps[at, path]
+
+    out = set()
+    for move, path in moves:
+        if (got := read(move, path)) is None:
+            continue
+        if (also := read(main, path)) is not None:
+            got = Retired(got.names | also.names, got.words | also.words)
+        if not got.named(text):
+            out.add(move)
+    return frozenset(out)
 
 
 def lacks_why(lacked: list[tuple[str, str, list[str] | None]]) -> str:
