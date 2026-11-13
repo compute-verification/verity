@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -66,7 +67,8 @@ def off_main(repo: tuple[Path, str]) -> tuple[Path, str]:
 
 
 def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=None, busy=(), public=PUBLIC,
-          period="ma-remote-coins-8", circuit=None, dry=False) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
+          period="ma-remote-coins-8", circuit=None, dry=False,
+          path: Path | None = None) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
     """gate.sh probe against stub gates answering from these records; its result, $OUT and the calls ssh got."""
     r, head = repo
     g, out, bin_ = tmp_path / "gates", tmp_path / "out", tmp_path / "bin"
@@ -80,7 +82,8 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
     (bin_ / "ssh-keygen").write_text(f'#!/bin/sh\necho "# Host 192.0.2.7 found: line 1"\necho "192.0.2.7 ED25519 {FP}"\n')
     for f in bin_.iterdir():
         f.chmod(0o755)
-    env = {**os.environ, "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "COMMIT": head,
+    first = f"{path}{os.pathsep}" if path else ""
+    env = {**os.environ, "PATH": f"{first}{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "COMMIT": head,
            "PERIOD": period, "PIN": PIN, "GATE_KEY": str(tmp_path / "key"), "AUDITOR_FP": FP,
            "AUDITOR": "research@192.0.2.7", "CHALLENGER": "research@192.0.2.8"}
     if circuit:
@@ -145,6 +148,35 @@ def test_no_main_line_to_check_commit_on_refuses_before_any_request(tmp_path, re
     p, out, calls = probe(tmp_path, repo)
     assert p.returncode == 3 and "can't fetch main's first-parent history from (no origin)" in p.stdout
     assert calls == []
+
+
+def test_a_refused_fetch_prints_no_userinfo_of_origins_url_anywhere(tmp_path, repo):
+    """On an agent's VM origin's URL carries a credential as its userinfo: neither the refusal nor any file under $OUT
+    holds it, while the refusal still names the URL without it. A git on PATH ahead of the real one answers origin's URL
+    and fails the fetch from it naming the URL whole, as a git that doesn't redact it would: no git config holds the URL
+    (an agent's VM refuses a remote URL with a credential in it)."""
+    url = "https://user:tok@127.0.0.1:9/x.git"
+    stub = tmp_path / "git-stub"
+    stub.mkdir()
+    (stub / "git").write_text(
+        f'#!/bin/sh\n[ "$1 $2 $3" = "remote get-url origin" ] && {{ echo "{url}"; exit 0; }}\n'
+        f'for a; do [ "$a" = "{url}" ] && {{ echo "fatal: unable to access \'{url}/\': refused" >&2; exit 128; }}; done\n'
+        f'exec {shutil.which("git")} "$@"\n')
+    (stub / "git").chmod(0o755)
+    p, out, calls = probe(tmp_path, repo, path=stub)
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert "can't fetch main's first-parent history from https://127.0.0.1:9/x.git (fetch.probe.log)" in p.stdout
+    assert (out / "fetch.probe.log").exists() and calls == []
+    for text in (p.stdout, p.stderr, *(f.read_text(errors="replace") for f in out.rglob("*") if f.is_file())):
+        assert "user" not in text and "tok" not in text
+
+
+def test_unauth_takes_out_every_urls_userinfo_and_nothing_else(tmp_path):
+    """The log is stripped too, whatever git writes into it, for any git version that names the URL whole."""
+    lines = "fatal: unable to access 'https://user:tok@h/x.git/': no\nfrom ssh://git@h:22/x and /srv/git/verity.git\n"
+    p = subprocess.run(["bash", "-c", f'source <(sed -n "/^unauth() {{/,/^}}/p" {GATE}); unauth'], input=lines,
+                       capture_output=True, text=True, check=True)
+    assert p.stdout == "fatal: unable to access 'https://h/x.git/': no\nfrom ssh://h:22/x and /srv/git/verity.git\n"
 
 
 def run_clone(tmp_path: Path, repo: tuple[Path, str], *, at: str) -> tuple[Path, Path]:

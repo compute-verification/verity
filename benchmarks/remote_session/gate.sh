@@ -82,15 +82,25 @@ main_line() {
   # pushed to (GitHub, a bare repository), else, where origin is a checkout, that checkout's own origin. A run's clone
   # (--cwd clone) has its source root as origin, a checkout whose origin/main stood still when it was made; the node's
   # bare repository behind it holds main as the newest launch pushed it. Nothing falls back to a checkout's copy.
-  local unshallow=()
+  # MAIN_SHOWN is MAIN_FROM without a URL's userinfo, which holds a credential on an agent's VM: only the fetch reads
+  # MAIN_FROM, and every message and the fetch's log use MAIN_SHOWN.
+  local unshallow=() checkout
   [ "$(git rev-parse --is-shallow-repository)" = true ] && unshallow=(--unshallow)
-  MAIN_FROM=$(git remote get-url origin 2> /dev/null) || { MAIN_FROM="(no origin)"; return 3; }
+  MAIN_FROM=$(git remote get-url origin 2> /dev/null) || { MAIN_SHOWN="(no origin)"; return 3; }
   if [ "$(git -C "$MAIN_FROM" rev-parse --is-bare-repository 2> /dev/null)" = false ]; then
-    MAIN_FROM=$(git -C "$MAIN_FROM" remote get-url origin 2> /dev/null) \
-      || { MAIN_FROM="(the checkout $MAIN_FROM has no origin)"; return 3; }
+    checkout=$MAIN_FROM
+    MAIN_FROM=$(git -C "$checkout" remote get-url origin 2> /dev/null) \
+      || { MAIN_SHOWN="(the checkout $(unauth <<< "$checkout") has no origin)"; return 3; }
   fi
-  git fetch -q "${unshallow[@]}" "$MAIN_FROM" +refs/heads/main:refs/remotes/origin/main >> "$OUT/fetch.probe.log" 2>&1 \
-    && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.probe.txt"
+  MAIN_SHOWN=$(unauth <<< "$MAIN_FROM")
+  git fetch -q "${unshallow[@]}" "$MAIN_FROM" +refs/heads/main:refs/remotes/origin/main 2>&1 \
+    | unauth >> "$OUT/fetch.probe.log"
+  [ "${PIPESTATUS[0]}" = 0 ] && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.probe.txt"
+}
+
+unauth() {
+  # stdin with every URL's userinfo (`scheme://user:secret@`) taken out
+  sed 's#://[^/@]*@#://#g'
 }
 
 probe() {
@@ -100,12 +110,13 @@ probe() {
   [ -z "${CIRCUIT:-}" ] || [ "$CIRCUIT" = "$c" ] || { echo "CIRCUIT $CIRCUIT is not COMMIT's $c"; exit 3; }
   CIRCUIT=$c
   main_line || {
-    echo "can't fetch main's first-parent history from $MAIN_FROM (fetch.probe.log), so COMMIT can't be checked on it:" \
-      "nothing was sent. In a run's clone main is read from the node's bare repository behind the source root, never the" \
-      "source root's own copy: if the bare can't be reached or holds no main, relaunch from a checkout fetched just" \
-      "before (git fetch origin main), whose launch pushes its origin/main there, and tell infra if it still fails"
+    echo "can't fetch main's first-parent history from $MAIN_SHOWN (fetch.probe.log), so COMMIT can't be checked on" \
+      "it: nothing was sent. In a run's clone main is read from the node's bare repository behind the source root, never" \
+      "the source root's own copy: if the bare can't be reached or holds no main, relaunch from a checkout fetched just" \
+      "before (git fetch origin main), whose launch pushes its origin/main there; if it still fails, the bare named here" \
+      "is missing or holds no main on the gate's node, and no launch can probe until it does"
     exit 3; }
-  echo "main from $MAIN_FROM at $(head -n 1 "$OUT/main.probe.txt")"
+  echo "main from $MAIN_SHOWN at $(head -n 1 "$OUT/main.probe.txt")"
   grep -qxF "$COMMIT" "$OUT/main.probe.txt" || {
     echo "COMMIT $COMMIT is not on main's first-parent line, so no session would credit: pick a commit on it, or" \
       "relaunch from a checkout fetched just before (git fetch origin main) if main has moved past it since"; exit 3; }
