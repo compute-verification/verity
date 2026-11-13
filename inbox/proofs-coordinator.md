@@ -160528,3 +160528,69 @@ Your 20:53Z (`e356a12b2964`) and 21:02Z (`8b38b3d7f805`) read.
 - Whether `e22e` is stuck or slow in the Flock prover's suite. The head's run enters that suite now, so its next line says which.
 
 **To post:** nothing. **Runs going on:** `r20261113-171916-e22e`, `r20261113-185310-3a57`. **Next entry by 21:41Z** (the cancel at 21:30Z, or the head's run's end).
+
+## ADDRROW2, Fri 13 Nov 21:06Z: ready to mark #9824 at 071cba3fba4b97e934632b79d554c170c41fb578 (pull request 1, open against PRF-490); the sampled half compiles whole, 16 files of 16, and its records run and suites are out; the C-Flock base compiles, 8 files, with 7 finders on the search; my VM restarted again at 20:50Z and I lost 40 minutes of my own steps, not of the work
+
+Your 21:02Z rule on git identity is read. Item 4 showed: no commit of mine is unpushed; every commit on my five
+branches is authored and committed as the checkout's own identity; no `GIT_AUTHOR_*` or `GIT_COMMITTER_*` is set [run].
+
+**1. Pull request 1 is open: [#9824](https://github.com/compute-verification/verity/pull/9824).**
+ready to mark #9824 at 071cba3fba4b97e934632b79d554c170c41fb578
+- [run] Base `main`, head `071cba3fba4b97e934632b79d554c170c41fb578`, `Lane proofs` and `Refs PRF-490` in the body;
+  the queue's own reader gives owner `proofs` and issue `PRF-490`, and `research queue link` says it is linked to
+  PRF-490 through the Linear app.
+- [run] Records run `r20261113-185209-f829` (vy-nebius-cpu-8, `lean_changed.py --records security`, no `--update`):
+  outcome `pass` for `security`, `security/Proofs` and `security/Properties`. No record moved.
+- [run] Suites `r20261113-185337-0238` (vy-nebius-cpu-14): 6 of 6 passed. The two tries: `r20261113-185118-fedd`.
+- [run] It merges with `main` `f479876a8758` with no conflict, and `main`'s unread counts are still the ones the
+  raise starts from.
+- The body names the twin (`walkPairs`, `walkPairs_coll`, `findColl`), who reads it, and that nothing is deleted.
+- I opened it with Cursor's pull request tool, which my session requires, not with `research queue open`. I did not
+  mark it.
+
+**2. My VM restarted again at about 20:50Z** [read: the worktrees and `/tmp` were gone; the checkout moved]. This
+context came back from its 20:09Z state. It does not hold my own steps of 20:09Z to 20:50Z: the 20:21Z entry, the
+C-Flock base, the try `fedc`. I rebuilt them from this inbox, my mailbox (your 20:19Z, 20:28Z and 21:02Z are read),
+the pushed branches and my store.
+- What is lost: whatever I edited after the push of 20:28Z (`84b9df5ef49b`). Nothing pushed, no run, no entry.
+- If an execution that still holds those steps is running, it and I must not both work. I left a line for it in my
+  store, and I read the store before every push. I see no sign of one [run: no push, run or store line since 20:32Z].
+
+**3. The sampled half** (`cursor/proofs-addrrow2-sampled-files-681e` at `e44c1faf080bb31d7201d00be6b0f5fd147dbb8e`).
+- [run] Tries `r20261113-200449-7c75` (vy-nebius-cpu-11): all 16 files `lean exit 0`, every theorem on the three
+  axioms. With `--siblings`, no built module declares a name `Sampled.lean`, `Sampled/Instance.lean` or
+  `Sampled/OpensAt.lean` declares. The commit needed no mend.
+- [run] Out now, both on vy-nebius-cpu-9 at that head: the records run `r20261113-210310-60ae`
+  (`--records security --update`, launched 21:04Z) and the changed suites `r20261113-210211-518f` (launched 21:02Z).
+  [guess] the suites back by 22:00Z, the records by 22:45Z.
+- Then its body, and it opens against PRF-490, unmarked, for your read.
+
+**4. The C-Flock half** (`cursor/proofs-addrrow2-cflock-pairs-681e` at `84b9df5ef49b139d7baa9348fb270c4c76500507`,
+pushed 20:28Z, cut from `main` `f479876a8758` with pull request 1 merged in).
+- [run] Try `r20261113-202845-fedc` (vy-nebius-cpu-12): 8 files `lean exit 0`, the three axioms only:
+  `Definitions/Flock/Merkle.lean`, the two `MerklePair.lean`, `Soundness/Merkle.lean`, `ZK/CoinBinding.lean`,
+  `Refine/Paths.lean`, `CompiledSound.lean` (26 theorems) and `StrictCR.lean` (24 theorems).
+- [read] What that head holds: `Leaf` has `pair` and `pair_spec` in place of `bind`; `openPairL` reads the scheme;
+  `walk_binding`, `opening_binding` and `opening_bindingL` are deleted; `collOf`, `onePick` and `conflictPick` are a
+  search of a list, with no `choose`; `TreeRewind` has `pair` and `binds` at that pair. `Finder`, `Finder.CR` and
+  the cost at `:97` are untouched.
+- **The count** [read, compiled as above]: of the 14 by search, **5 are done**: `TreeRewind.finder`, `adv₀Finder`,
+  `selfFinder`, `adv₀SFinder`, `selfSFinder`. Of the seven, **2 take the new picker's two arguments** as you ruled
+  under (a), with their choosers and `default` untouched: `advRFinder`, `advRSFinder`.
+- Left: 9 of the 14 (the L family's four, `adv₀SFinderZ`, `selfSFinderZ`, `regFinder`, `saltFinder`, `topFinder`),
+  the 2 pickers of the played outcomes, the other 5 of the seven, the dead chain with `C3.lean:130`,
+  `topRoot_collision`, `Exec/Headline.lean:68`.
+- [run] The session finder's S try is back too (`r20261113-200728-983a`, `SessionS.lean`, `lean exit 0`, 3 theorems,
+  the three axioms). So "a search finds the witness" is run for all three kinds: picker, congruence, session finder.
+
+**5. The other execution's branch: I drop it, and take one thing from it.** `cursor/proofs-addrrow2-leafpair-681e`
+keeps the three bare lemmas as corollaries. Mine deletes them, so that no caller is left that can take a pair by
+choice, and mine is further on (the pickers and the compiled family). What I take: its proof of the leaf's pair by
+`by_cases`. Mine added `import Mathlib.Tactic.SplitIfs` to `Definitions/Flock/Merkle.lean`; that import goes, as
+your 20:28Z point 2 says. Its two other notes are kept: the leaf's names are `hm96LeafIn` and `hm96LeafPair`, and
+`Exec/Headline.lean:68` is on my list.
+
+**6. Timers**, as your 20:28Z point 3 rules: the old repeating timer `addrrow2-trial-runs` is removed, and I set one
+one-off timer for the two runs I owe a read of (`60ae`, `518f`).
+
+Monday holds as I see it [guess].
