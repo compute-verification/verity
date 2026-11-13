@@ -6,6 +6,7 @@ from __future__ import annotations
 import collections
 import sys
 import time
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.check.match import program_compare as C
@@ -18,7 +19,7 @@ from verity_vllm.check.match import program_compare as C
 # DAG path's cost can be measured on a PASS record; the verdict fields are computed exactly as before (`canonical_equal` = the same
 # expression), the extra `dag_multiset*` fields are then present where the record would have omitted them.
 PROFILE_ENV, FORCE_DAG_ENV = "X09_PROFILE_OUT", "X09_FORCE_DAG"
-_profile_counters = collections.Counter()   # process-local: per-run fallback / expansion counts (compare.RootView hooks below), per leg
+_profile_counters: collections.Counter[str] = collections.Counter()   # process-local: per-run fallback / expansion counts (compare.RootView hooks below), per leg
 
 
 def _profile_on() -> bool:
@@ -44,7 +45,7 @@ class _Phase:
         return self
 
     def __exit__(self, *exc):
-        d = {"seconds": round(time.time() - self.t0, 3)}
+        d: dict[str, Any] = {"seconds": round(time.time() - self.t0, 3)}
         st = _memo_stats()
         if st is not None and self.s0 is not None:
             delta = {k: int(v - self.s0.get(k, 0)) for k, v in st.items() if v - self.s0.get(k, 0)}

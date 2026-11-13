@@ -6,12 +6,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import http.client
 import itertools
 import json
 import re
 import socket
 import threading
-import urllib.request
 from typing import Any
 
 import pytest
@@ -76,6 +76,8 @@ def request_on(c: socket.socket) -> bytes:
 class Scripted(threading.Thread):
     """A server of scripted bytes: of each connection it keeps the request (`request_on`), sends ``answer`` and closes."""
 
+    requests: list[bytes]
+
     def __init__(self, answer: bytes, connections: int = 1) -> None:
         super().__init__(daemon=True)
         self.sock = socket.create_server(("127.0.0.1", 0))
@@ -137,6 +139,8 @@ class Fronted:
     """`ids_front.serve` on a thread's own loop, before the server at ``upstream``, its clock a counter (1, 2, 3, ...
     seconds a reading) and its records kept in ``log``, ``recorded`` released once a record."""
 
+    address: tuple[str, int]                 # where the front listens, known once `__enter__` returns
+
     def __init__(self, upstream: tuple[str, int], payload: int = P) -> None:
         ticks = itertools.count(1)
         self.log: list[dict] = []
@@ -147,7 +151,6 @@ class Fronted:
             self.recorded.release()
         self.front = F.Front(tuple(upstream), payload, log=log, clock=lambda: float(next(ticks)))
         self.ready = threading.Event()
-        self.address: tuple[str, int] | None = None
 
     def __enter__(self) -> Fronted:
         def announce(at: tuple[str, int]) -> None:
@@ -169,6 +172,18 @@ class Fronted:
 
     def send(self, request: bytes) -> bytes:
         return exchange(self.address, request)
+
+    def ask(self, method: str, path: str, body: bytes | None = None) -> Any:
+        """The JSON the front answers an HTTP client's request with, on a connection of its own that the client asks to
+        be closed; any status but 200 fails the test."""
+        conn = http.client.HTTPConnection(*self.address)
+        try:
+            conn.request(method, path, body, {"connection": "close"} | ({"content-type": "application/json"} if body else {}))
+            resp = conn.getresponse()
+            assert resp.status == 200, (path, resp.status, resp.reason)
+            return json.loads(resp.read())
+        finally:
+            conn.close()
 
 
 def test_an_id_request_is_its_fields_whatever_release_headers_it_came_with():
@@ -219,11 +234,8 @@ def test_every_other_connection_gets_the_servers_own_answer(tmp_path):
     comes back whole: ``/v1/models``, ``/tokenize``, the certifier's shim's streamed POST (vLLM's chunks, with their
     token ids), and an id request in other cells, which the server answers in HTTP. None is recorded."""
     with served.Serving(tmp_path, commit=False) as s, Fronted(s.http.address, proto.ID_PAYLOAD) as f:
-        url = f"http://{f.address[0]}:{f.address[1]}"
-        models = json.loads(urllib.request.urlopen(url + "/v1/models").read())  # noqa: S310 (the test's own 127.0.0.1 endpoint)
-        tokenize = json.dumps({"model": "m", "prompt": "a bb ccc"}).encode()
-        req = urllib.request.Request(url + "/tokenize", tokenize, {"content-type": "application/json"})  # noqa: S310 (as above)
-        tokens = json.loads(urllib.request.urlopen(req).read())  # noqa: S310 (the test's own 127.0.0.1 endpoint)
+        models = f.ask("GET", "/v1/models")
+        tokens = f.ask("POST", "/tokenize", json.dumps({"model": "m", "prompt": "a bb ccc"}).encode())
         shim = served.shims_request(s.http.address[1])
         through, direct = f.send(shim), s.send(shim)
         other = f.send(released(P))

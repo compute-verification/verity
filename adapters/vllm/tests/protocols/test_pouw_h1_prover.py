@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import records as ZR
 
@@ -64,7 +65,7 @@ def test_savez_writes_np_savezs_bytes_for_many_small_arrays_of_any_dtype(tmp_pat
     """`savez` of the live dump's kinds of arrays (one-row u16 words, u8 salts viewed out of one buffer, a value's and a
     path's strings, an i64 position, a 0-d unit) and of empty and Fortran-ordered ones is ``np.savez``'s file, byte for
     byte."""
-    salts = np.arange(4 * 192, dtype=np.uint64).astype(np.uint8).reshape(4, 1, 192)
+    salts: np.ndarray = np.arange(4 * 192, dtype=np.uint64).astype(np.uint8).reshape(4, 1, 192)
     arrays = {"units": np.array([3]), "zero": np.array(7, np.int32), "empty": np.zeros((0, 3), "<f4"),
               "fortran": np.asfortranarray(np.arange(12, dtype=np.int16).reshape(3, 4))}
     for i in range(400):
@@ -164,7 +165,8 @@ def test_an_unexpected_failure_stops_the_writer_and_no_window_waits_on_it(tmp_pa
     """A failure the writer doesn't expect (a ValueError, as a bug raises) is raised on the writer's thread, and fails its
     call's window: `wait` raises at once, naming it, for that call and each kept after it, one kept while the ring was
     full among them, and a window opened later fails the same way; `close` returns."""
-    savez, raised = PV._savez, []
+    savez = PV._savez
+    raised: list[threading.ExceptHookArgs] = []
 
     def broken(path, *arrays):
         if path.name == "1.npz":
