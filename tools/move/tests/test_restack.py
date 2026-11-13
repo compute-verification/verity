@@ -1138,3 +1138,105 @@ def test_a_branch_with_no_rows_file_crosses_as_before(real):
     assert paths(real, r["result"]) == paths(real, "main") | {"stays/extra.py"}
     assert show(real, r["result"], "new/lib/a.py") == "X = 2\n" and show(real, r["result"], "stays/extra.py") == "import new.lib.a\n"
     assert all(show(real, r["result"], p) == show(real, "main", p) for p in paths(real, "main") - {"new/lib/a.py"})
+
+
+WORDS_MAP = "tools/move/words_map.toml"
+WORDS = """[rewrite]
+exclude = ["tools/move/**"]
+
+[words]
+"windowIdx" = "executionPhaseIdx"
+
+[[words_in]]
+# another namespace's `trustedSessionOf` stands elsewhere, so the challenger's is renamed only in its files
+files = ["Spot/Challenger*.lean"]
+words = { "trustedSessionOf" = "trustedChallengePhaseOf" }
+"""
+CHALLENGER = "def trustedSessionOf := 1\ndef windowIdx := 2\n"
+USES = "-- Flock.trustedSessionOf is another's\ndef trustedSessionOf_ok := 3\n\ndef z := 4\n"
+
+
+@pytest.fixture
+def scoped(tmp_path, monkeypatch):
+    """main: `old` (Spot's challenger, and a file outside it that spells another namespace's `trustedSessionOf`), then `base`
+    (the real `rename.py` and a word map renaming `trustedSessionOf` only in `Spot/Challenger*.lean`, and `windowIdx`
+    everywhere), then the move, written by that script and named by its move line. A branch `pr` starts at `old`."""
+    for name in ("SCRIPT", "SCRIPT_ARGS", "KEEP"):          # `carry` and `main` set them: put back after the test
+        monkeypatch.setattr(RS, name, getattr(RS, name))
+    r = tmp_path / "scoped"
+    r.mkdir()
+    git(r, "init", "-q", "-b", "main")
+    commit(r, "old", {".gitignore": "__pycache__/\n", "Spot/Challenger.lean": CHALLENGER, "Other/Uses.lean": USES})
+    git(r, "branch", "pr")
+    commit(r, "base", {"tools/move/rename.py": (HERE.parent / "rename.py").read_text(),
+                       "tools/move/layout.py": (HERE.parent / "layout.py").read_text(), WORDS_MAP: WORDS})
+    subprocess.run([sys.executable, "tools/move/rename.py", "--map", WORDS_MAP], cwd=r, check=True, capture_output=True)
+    git(r, "tag", "move", commit(r, f"rename: the challenger's words\n\nMove: {WORDS_MAP}"))
+    monkeypatch.chdir(r)
+    return r
+
+
+def test_a_branch_adding_a_file_that_spells_a_word_its_map_renames_only_in_other_files_is_stale_words(scoped, tmp_path,
+                                                                                                    capsys):
+    """The map renames `trustedSessionOf` only in the files its `[[words_in]]` block names, and the branch adds a file no
+    block names that calls it qualified, so the move's script leaves the call and the result would not build. The crossing
+    is `stale-words`, never `clean`: it names the file, line and word, rewrites nothing, pushes nothing and exits 1. A longer
+    identifier that holds the word is another name, and the word the map renames everywhere is renamed in the file."""
+    added = ("def ok := trustedSessionOf_ok\n++ a line that reads like a diff's header\n-- windowIdx\n"
+             "theorem t : Challenger.trustedSessionOf = 1 := rfl\n")
+    head = on(scoped, "pr", ("a second stage", {"Spot2/SampledTwo.lean": added}))
+    r = cross(scoped)
+    assert r["status"] == "stale-words", r
+    assert [(w["file"], w["line"], w["word"], w["new"], w["map"], w["move"]) for w in r["words"]] == [
+        ("Spot2/SampledTwo.lean", 4, "trustedSessionOf", "trustedChallengePhaseOf", WORDS_MAP, RS.rev("move", str(scoped)))]
+    assert show(scoped, r["result"], "Spot2/SampledTwo.lean") == added.replace("windowIdx", "executionPhaseIdx")
+    assert r["error"].splitlines()[0].endswith(": Spot2/SampledTwo.lean:4 trustedSessionOf (-> trustedChallengePhaseOf)")
+    text = RS.line(r)
+    assert text.startswith(f"pr: stale-words {r['result'][:12]}  [plain merge ")
+    assert "\n      Spot2/SampledTwo.lean:4: trustedSessionOf -> trustedChallengePhaseOf (tools/move/words_map.toml, " in text
+    remote = _remote(scoped, tmp_path)
+    capsys.readouterr()
+    assert RS.main(["pr", "--main", "main", "--push-to", "pr-crossed", "--json"]) == 1
+    out = capsys.readouterr()
+    assert [x["status"] for x in json.loads(out.out)] == ["stale-words"]
+    assert "--push-to pr-crossed: pr is stale-words; nothing pushed" in out.err
+    assert "pr-crossed" not in git(remote, "branch") and git(scoped, "rev-parse", "pr") == head
+
+
+def test_a_branch_that_spells_the_new_name_or_the_old_one_in_a_file_its_block_names_is_clean(scoped):
+    """The new name is no stale word, and in a file the block names the script renames the old one, as it does main's."""
+    on(scoped, "pr", ("the new name, and a file of the block's", {
+        "Spot2/SampledTwo.lean": "theorem t : Challenger.trustedChallengePhaseOf = 1 := rfl\n",
+        "Spot/ChallengerTwo.lean": "def u := trustedSessionOf\n"}))
+    r = cross(scoped)
+    assert r["status"] == "clean" and "words" not in r, r
+    assert show(scoped, r["result"], "Spot/ChallengerTwo.lean") == "def u := trustedChallengePhaseOf\n"
+
+
+def test_only_the_branchs_own_lines_are_read_never_mains(scoped):
+    """`Other/Uses.lean` is main's, outside the block, and spells another namespace's `trustedSessionOf`, and main adds one more
+    such file after the move: a branch that edits another line of that file is clean. Where its own line spells the word,
+    that line alone is named."""
+    commit(scoped, "after the move", {"Other/Later.lean": "-- Flock.trustedSessionOf again\n"})
+    on(scoped, "pr", ("edit z", {"Other/Uses.lean": USES.replace("def z := 4", "def z := 5")}))
+    assert cross(scoped)["status"] == "clean"
+    on(scoped, "pr", ("spell it", {"Other/Uses.lean": USES.replace("def z := 4", "def z := Flock.trustedSessionOf")}))
+    r = cross(scoped)
+    assert r["status"] == "stale-words" and [(w["file"], w["line"]) for w in r["words"]] == [("Other/Uses.lean", 4)], r
+
+
+def test_a_layout_maps_scoped_names_are_its_quoted_names_and_a_prose_map_has_none(tmp_path):
+    """layout.py's `[rewrite] words_in` lists a moved directory whose name alone between quotes is the directory in the files
+    its glob matches, and renames it to the destination's name; a word map with `scope = "prose"` renames no code."""
+    repo = tmp_path / "maps"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    commit(repo, "maps", {RS.LAYOUT_MAP: '[paths]\n"bench/census/" = "verity/tables/"\n\n[rewrite]\n'
+                                         'words_in = { "tools/*.py" = ["census/"] }\n',
+                          WORDS_MAP: 'scope = "prose"\n\n[words]\n"a" = "b"\n\n[[words_in]]\nfiles = ["x"]\n'
+                                     'words = { "c" = "d" }\n'})
+    move = commit(repo, "the move")
+    (word,) = RS.scoped_words(move, RS.LINE_SCRIPT["Layout-move"], (), str(repo))
+    assert word[:3] == ("census", "tables", ["tools/*.py"])
+    assert word[3].search('ROOT / "census"') and not word[3].search("bench/census/x.py")
+    assert RS.scoped_words(move, RS.LINE_SCRIPT["Move"], ("--map", WORDS_MAP), str(repo)) == []
