@@ -53,7 +53,7 @@ uniform (`SketchHashRandom`), within the per-pass hash budget `qtot` (`KeyBudget
 `(Σ_j G_j)·(ε + N/2^h) + (Σ_j qtot_j)/2^(8r) + ε_ro`. -/
 def SketchBoundSession : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N m h S L q ks r : ℕ) (G qtot : Fin P → ℕ) (ε εro : ℝ)
-    (A : Session β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)),
+    (A : Remote.Sketch.Session β Hs P N m h S L q ks G) (T : Trace (Outcome β Hs N m)),
     r ≤ 32 → 0 ≤ ε → 0 ≤ εro → T.passes ≤ P →
     Accounting.Assumptions.SketchRank ks m r (ENNReal.ofReal ε) →
     Accounting.Assumptions.SketchHashRandom A εro → KeyBudget A qtot → Receipted A T → Present A T →
@@ -65,7 +65,7 @@ outside-compute factor `F`): at most `Q + P` candidate seeds and `Q` receipt-has
 at them within `(Q + P)²/2^257` of uniform. -/
 def SketchBoundDeployed : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
-    (A : Session β Hs P N 128 512 S L q 16 G) (T : Trace (Outcome β Hs N 128)),
+    (A : Remote.Sketch.Session β Hs P N 128 512 S L q 16 G) (T : Trace (Outcome β Hs N 128)),
     0 ≤ ε → T.passes ≤ P →
     Accounting.Assumptions.SketchRank 16 128 12 (ENNReal.ofReal ε) →
     ∑ j, G j ≤ Q + P → ∑ j, qtot j ≤ Q →

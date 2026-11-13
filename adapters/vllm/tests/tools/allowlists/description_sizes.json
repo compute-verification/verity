@@ -34,14 +34,11 @@
     {"template": "EmbeddingRead_v1{V=131072,H=576}",
      "why": "Calls, over a traced part (Sha512CompressFolded_v1)",
      "removed_by": "proofs (CIR-215)"},
-    {"template": "GreedyChunk_v1{N=16384,FIRST=false}",
+    {"template": "GreedyChunk_v2{N=7744,OFF=*}",
      "why": "Calls, written out lane by lane over its N lanes",
-     "removed_by": "no one yet (cut by #8426 under CIR-202, after the census; CIR-215)"},
-    {"template": "GreedyChunk_v1{N=16384,FIRST=true}",
-     "why": "Calls, written out lane by lane over its N lanes",
-     "removed_by": "no one yet (cut by #8426 under CIR-202, after the census; CIR-215)"},
-    {"template": "GreedyCombine_v1{V=154880,N=16384}",
+     "removed_by": "no one yet (the chunks as Calls of one body, CIR-215)"},
+    {"template": "GreedyCombine_v2{V=154880,N=7744}",
      "why": "Calls, written out lane by lane over the last chunk's lanes",
-     "removed_by": "no one yet (cut by #8426 under CIR-202, after the census; CIR-215)"}
+     "removed_by": "no one yet (CIR-215)"}
   ]
 }

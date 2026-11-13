@@ -2,6 +2,7 @@
 daemonic parent forks them too."""
 from __future__ import annotations
 
+import ctypes
 import multiprocessing as mp
 import os
 import select
@@ -11,6 +12,8 @@ import sys
 
 import pytest
 
+from verity_vllm.check.replay import driver as DR
+from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay.fork import die_with_parent, fork_pool
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="PR_SET_PDEATHSIG is Linux-only")
@@ -49,6 +52,7 @@ def _workers_after_parent_sigkill(kind: str) -> tuple[list[int], list[int]]:
     worker, is alive."""
     p = subprocess.Popen([sys.executable, "-c", PARENT, kind], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                          text=True)
+    assert p.stdin is not None and p.stdout is not None
     pids = [int(x) for x in p.stdout.readline().split()]
     assert len(pids) == 3
     fds = [os.pidfd_open(q) for q in pids]
@@ -88,7 +92,6 @@ def test_a_child_forked_after_its_parent_died_exits_at_once():
 
 
 def _pdeathsig(_=None) -> tuple[int, int]:
-    import ctypes
     sig = ctypes.c_int(0)
     assert ctypes.CDLL(None, use_errno=True).prctl(2, ctypes.byref(sig), 0, 0, 0) == 0   # PR_GET_PDEATHSIG
     return os.getpid(), sig.value
@@ -134,3 +137,36 @@ def test_a_replacement_worker_sets_no_signal_and_the_pool_terminates():
         pool.apply_async(_die)
         second, sig = pool.apply(_pdeathsig)
         assert second != first and sig == 0
+
+
+def test_oom_kills_is_the_cgroups_count_and_none_where_none_is_read(tmp_path, monkeypatch):
+    """None says no count of OOM kills is read here, so a dead worker is named without the OOM half: no cgroup counts them, or
+    its count is no integer or cannot be read."""
+    events = tmp_path / "memory.events"
+    monkeypatch.setattr(FK, "CGROUP_MEMORY_EVENTS", str(events))
+    assert FK.oom_kills() is None                                               # no cgroup v2 memory controller
+    events.write_text("low 0\nhigh 0\nmax 12\noom 3\noom_kill 2\noom_group_kill 0\n")
+    assert FK.oom_kills() == 2
+    events.write_text("low 0\nhigh 0\n")
+    assert FK.oom_kills() is None                                               # a controller that writes no such line
+    for text in ("oom_kill many\n", "oom_kill\n", "oom_kill many\noom_kill 2\n"):  # the first such line is the one read
+        events.write_text(text)
+        assert FK.oom_kills() is None
+    events.unlink()
+    events.mkdir()                                                              # there, and not a file that opens
+    assert FK.oom_kills() is None
+
+
+def test_the_cgroups_memory_is_none_where_it_states_no_limit_or_a_file_of_it_does_not_open(tmp_path, monkeypatch):
+    lim, cur = tmp_path / "memory.max", tmp_path / "memory.current"
+    monkeypatch.setattr(DR, "CGROUP_MEMORY", (str(lim), str(cur)))
+    assert DR._cgroup_memory() is None                                          # no cgroup v2 memory controller
+    lim.write_text("1000\n")
+    assert DR._cgroup_memory() is None                                          # one of the two files
+    cur.write_text("400\n")
+    assert DR._cgroup_memory() == (1000, 400)
+    lim.write_text("max\n")
+    assert DR._cgroup_memory() is None
+    cur.unlink()
+    cur.mkdir()                                                                 # there, and not a file that opens
+    assert DR._cgroup_memory() is None
