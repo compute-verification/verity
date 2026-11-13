@@ -16,7 +16,7 @@ def test_the_package_file_is_a_docstring_alone() -> None:
     body = ast.parse(PACKAGE.read_text(encoding="utf-8")).body
     assert len(body) == 1 and isinstance(body[0], ast.Expr) and isinstance(getattr(body[0].value, "value", None), str), (
         "verity/hardware/__init__.py holds more than its docstring; put the code in the module that owns it "
-        "(the cards' loader is verity/hardware/cards/__init__.py) and import it from there")
+        "(the cards' loader is verity/hardware/cards.py) and import it from there")
 
 
 def test_the_record_the_registration_and_the_site_import_no_cards() -> None:
