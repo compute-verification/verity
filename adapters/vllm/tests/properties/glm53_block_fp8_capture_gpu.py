@@ -79,11 +79,42 @@ import sys
 import tempfile
 import traceback
 from collections import Counter
+from collections.abc import Callable, Set
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.batch import type_shape
+from verity.circuits.kernels.tc import group_sum_total_batch
+from verity.definitions.numerics import derived_rows as D
+from verity.definitions.numerics.act_rows import silu_mul_expf_rows
+from verity.definitions.numerics.deepgemm_twins import (
+    ue8m0_group_quant_row,
+    ue8m0_group_quant_rows,
+)
+from verity.definitions.numerics.derived_rows import fma_rn, tc_dot32_e4m3
+from verity.definitions.numerics.fp8_moe_rows import (
+    E4M3_AS_BF16,
+    E4M3_NAN,
+    MMAV2_HALVES,
+    TWIN_DOT_OF,
+    moe_expert_fp8_block_row,
+)
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.definitions.registry import act as ACT
+from verity.definitions.registry import deepgemm as DG
+from verity.definitions.registry import fp8_moe as MO
+from verity.definitions.registry import fp8_moe_experts as MX
+from verity.definitions.registry import moe as MOE_R
+from verity.definitions.registry.fp8_moe import sm90_dot
+from verity.circuits.silicon.cast import e4m3_to_f32_word
+from verity.circuits.silicon.models import (
+    AMPERE_BF16_M16N8K16,
+    HOPPER_BF16_M16N8K16,
+)
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -155,15 +186,11 @@ def served() -> dict[str, Any]:
 def launch_dot(config: dict[str, Any], swap: bool):
     """The e4m3 k32 step a `fused_moe_kernel` launch's tile compiles to, the DOT its Programs bind (`fp8_moe.sm90_dot`; Triton's
     default 4 warps when the config names none)."""
-    from verity.definitions.registry.fp8_moe import sm90_dot
-
     return sm90_dot(config["BLOCK_SIZE_M"], config["BLOCK_SIZE_N"], config.get("num_warps", 4), swap)
 
 
 def dot_definition(dot_id: str):
     """The DOT a launch record names, by id."""
-    from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-
     return {d.id: d for d in (HopperE4m3QgmmaDot32, HopperE4m3MmaV2Dot32)}[dot_id]
 
 
@@ -272,9 +299,6 @@ def _chunks(n: int, cost: int):
 def _halves_step(model, halves) -> Callable:
     """A k32 e4m3 step of `fp8_moe_rows.TWIN_DOTS`' signature: the bytes widened to bf16, then `model`'s k16 step over each index
     set of `halves` in turn, each from the previous one's result."""
-    from verity.definitions.kernels.tc import group_sum_total_batch
-    from verity.definitions.numerics.fp8_moe_rows import E4M3_AS_BF16, E4M3_NAN
-
     def step(acc, a, b):
         acc = np.asarray(acc, dtype=np.uint32)
         a, b = np.asarray(a, dtype=np.uint8), np.asarray(b, dtype=np.uint8)
@@ -289,10 +313,6 @@ def _halves_step(model, halves) -> Callable:
 
 def _fma_chain(acc, a, b):
     """Thirty-two IEEE FMAs in k order, each product exact: a dot with no grouped adder."""
-    from verity.definitions.silicon.cast import e4m3_to_f32_word
-    from verity.definitions.numerics.derived_rows import fma_rn
-    from verity.definitions.numerics.fp8_moe_rows import E4M3_NAN
-
     f32 = np.array([e4m3_to_f32_word(e) for e in range(256)], dtype=np.uint32)
     acc = np.asarray(acc, dtype=np.uint32)
     a, b = np.asarray(a, dtype=np.uint8), np.asarray(b, dtype=np.uint8)
@@ -305,10 +325,6 @@ def _fma_chain(acc, a, b):
 def mmav2_alternatives() -> dict[str, Callable]:
     """The models of `HopperE4m3MmaV2Dot32_v1` the MMAv2 probe must refute, each a k32 step: the twin is core's
     `HOPPER_BF16_M16N8K16` (one group of 16, adder width 26) over `MMAV2_HALVES` (k mod 4 < 2, then >= 2)."""
-    from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16
-    from verity.definitions.numerics.derived_rows import tc_dot32_e4m3
-    from verity.definitions.numerics.fp8_moe_rows import MMAV2_HALVES
-
     natural = (np.arange(16), np.arange(16, 32))
     alts = {"natural_k": _halves_step(HOPPER_BF16_M16N8K16, natural),
             "halves_swapped": _halves_step(HOPPER_BF16_M16N8K16, MMAV2_HALVES[::-1])}
@@ -359,8 +375,6 @@ def moe_sum_probe(seed: int) -> tuple[np.ndarray, list[tuple[int, int]]]:
 def moe_sum_alternatives() -> dict[str, Callable]:
     """The models of `MoeSum_v1` (`bf16_rn` of the f32 sum from +0 over ascending k) the planted rows must refute, each y (..., TOPK,
     H) bf16 words -> (..., H) bf16 words."""
-    from verity.definitions.numerics import derived_rows as D
-
     def fold(order, start_first=False, step=None, final=None):
         def f(y):
             y = D.bf16_to_f32_words(np.asarray(y, dtype=np.uint16))
@@ -394,7 +408,10 @@ def moe_sum_alternatives() -> dict[str, Callable]:
 
 # ------------------------------------------------------------------------------------------------------------------- selection
 def _keys():
-    from vllm.model_executor.layers.quantization.utils.quant_utils import GroupShape, create_fp8_quant_key
+    from vllm.model_executor.layers.quantization.utils.quant_utils import (
+        GroupShape,
+        create_fp8_quant_key,
+    )
 
     return (create_fp8_quant_key(static=True, group_shape=GroupShape(GROUP, GROUP)),
             create_fp8_quant_key(static=False, group_shape=GroupShape(1, GROUP)))
@@ -404,7 +421,11 @@ def moe_config(inter: int):
     """`FusedMoEConfig` as GLM-5.3's `FusedMoE` layer makes it on one TP rank without EP, its intermediate size the rank's shard."""
     import torch
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
-    from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig, FusedMoEParallelConfig, RoutingMethodType
+    from vllm.model_executor.layers.fused_moe.config import (
+        FusedMoEConfig,
+        FusedMoEParallelConfig,
+        RoutingMethodType,
+    )
 
     return FusedMoEConfig(num_experts=NUM_EXPERTS, experts_per_token=TOP_K, hidden_dim=HIDDEN, intermediate_size=inter,
                           num_local_experts=NUM_EXPERTS, num_logical_experts=NUM_EXPERTS, activation=MoEActivation.SILU, device="cuda",
@@ -417,7 +438,7 @@ def selection() -> dict[str, Any]:
 
     wkey, akey = _keys()
     backend, cls = select_fp8_moe_backend(config=moe_config(256), weight_key=wkey, activation_key=akey, allow_vllm_cutlass=False)
-    rec = {"moe": {"backend": getattr(backend, "name", str(backend)), "experts": getattr(cls, "__name__", None)}}
+    rec: dict[str, Any] = {"moe": {"backend": getattr(backend, "name", str(backend)), "experts": getattr(cls, "__name__", None)}}
     rec["moe_ok"] = rec["moe"]["backend"] == "TRITON" and rec["moe"]["experts"] == "TritonExperts"
     return rec
 
@@ -425,8 +446,11 @@ def selection() -> dict[str, Any]:
 def served_kernel(inter: int, s1, s2):
     """The FusedMoEKernel `Fp8MoEMethod` builds for the layer: the selected backend's quant config over the block scales, then
     `make_fp8_moe_kernel`."""
-    from vllm.model_executor.layers.fused_moe.oracle.fp8 import (make_fp8_moe_kernel, make_fp8_moe_quant_config,
-                                                                  select_fp8_moe_backend)
+    from vllm.model_executor.layers.fused_moe.oracle.fp8 import (
+        make_fp8_moe_kernel,
+        make_fp8_moe_quant_config,
+        select_fp8_moe_backend,
+    )
 
     cfg = moe_config(inter)
     wkey, akey = _keys()
@@ -542,7 +566,7 @@ def _assignment_ok(L: dict[str, Any], ids_flat: np.ndarray) -> bool:
     if L["sorted_token_ids"] is None:
         return bool(np.array_equal(ex, ids_flat) and ntpp == n * bm)
     st = L["sorted_token_ids"].cpu().numpy()
-    seen = np.zeros(n, dtype=np.int64)
+    seen: np.ndarray = np.zeros(n, dtype=np.int64)
     for b in range(min(ex.size, cdiv(ntpp, bm))):
         p = st[b * bm:(b + 1) * bm]
         p = p[p < n]
@@ -612,7 +636,7 @@ def moe_launches(work: Path, phase: str, name: str, inter: int, M: int, hot: int
     ids_flat = ids.cpu().numpy().astype(np.int64).reshape(-1)
     tw_flat = _u32(tw).reshape(-1)
     used = np.unique(ids_flat)
-    umap = np.full(NUM_EXPERTS, -1, dtype=np.int64)
+    umap: np.ndarray = np.full(NUM_EXPERTS, -1, dtype=np.int64)
     umap[used] = np.arange(used.size)
     launches, jobs = [chain], []
     for kind, L, twin in (("w13", w13, w13b), ("w2", w2l, w2b)):
@@ -680,16 +704,7 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
     """Pairs [p0, p1) of one expert launch: the GEMM twin at the launch's statics and DOT against the kernel's words (and every
     competing MMAv2 model on a probe's w13 launch), the input quant (w13) or the activation and its quant (w2) on what the kernel
     read, and the reference on a sample."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
-    from verity.definitions.numerics.act_rows import silu_mul_expf_rows
-    from verity.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row, ue8m0_group_quant_rows
-    from verity.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
-    from verity.definitions.registry import act as ACT
-    from verity.definitions.registry import deepgemm as DG
-    from verity.definitions.registry import fp8_moe as MO
-
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
     out = {"phase": job["phase"], "case": job["case"], "launch": job["launch"], "pair_range": job["pair_range"]}
     a = _load(job["paths"])
     K, N, KB, SWAP, top_k = job["K"], job["N"], job["KB"], job["SWAP"], job["top_k"]
@@ -756,12 +771,9 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
 def compare_sum(job: dict[str, Any]) -> dict[str, Any]:
     """Tokens [r0, r1) of one `moe_sum`: `MoeSum_v1{TOPK,H}`'s twin against the kernel's words (and every competing sum on the
     planted rows), and `MoeSumCoordinate_v1` on a sample of the columns and every planted one."""
-    from verity.circuits.evaluation import evaluate
-    from verity.circuits.defs import bind
     from verity.definitions.numerics.rows import moe_sum
-    from verity.definitions.registry import moe as MOE_R
 
-    rec = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
+    rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
     a = _load(job["paths"])
     r0, r1 = job["rows"]
     H = job["H"]
@@ -806,12 +818,10 @@ def ptx_family(text: str) -> str | None:
     return None
 
 
-def ptx(triton_cache: Path, tiles: set[tuple[int, int, int, int]] = frozenset()) -> dict[str, Any]:
+def ptx(triton_cache: Path, tiles: Set[tuple[int, int, int, int]] = frozenset()) -> dict[str, Any]:
     """Every `fused_moe_kernel` the run compiled (one Triton cache entry per specialization): its e4m3 `tt.dot` (M, N, K) from the
     TTIR, its warps from the entry's metadata, the DOT family `fp8_moe.sm90_dot` gives that tile, and the family its PTX runs
     (`ptx_family`); ok when every kernel's two agree and every launch's tile (`launch_tile`) is among the kernels."""
-    from verity.definitions.registry.fp8_moe import sm90_dot
-
     kernels: dict[str, Any] = {}
     for f in sorted(glob.glob(str(triton_cache / "**" / "fused_moe_kernel*.ptx"), recursive=True)):
         p = Path(f)
@@ -819,6 +829,7 @@ def ptx(triton_cache: Path, tiles: set[tuple[int, int, int, int]] = frozenset())
         ttir, meta = p.with_suffix(".ttir"), p.with_suffix(".json")
         dots = TT_DOT.findall(ttir.read_text(errors="replace")) if ttir.exists() else []
         warps = json.loads(meta.read_text()).get("num_warps") if meta.exists() else None
+        k: dict[str, Any]
         k = {"wgmma": dict(Counter(WGMMA.findall(text))), "mma_sync": dict(Counter(MMA_SYNC.findall(text))),
              "cvt_e4m3": len(CVT_E4M3.findall(text)), "tt_dot": sorted({tuple(map(int, d)) for d in dots}), "num_warps": warps}
         shapes = {(int(m), int(n), int(kk)) for m, kk, _, n, _, _ in dots}
@@ -838,14 +849,6 @@ def bind_check(statics: set[tuple[int, int, int, bool, str]]) -> dict[str, Any]:
     """The Programs bind at every GLM-5.3 shape: each expert launch the run made, (K, N, KB, SWAP, DOT id), as
     `MoeExpertFp8BlockGemm(W)_v3` (w13 when K is the hidden size, else w2) and as `fp8_moe_experts`' `MoeExpertFp8Gemm(W)_v1{E=256}`
     with the weight-scale rows each reads; each quant, activation and the sum at the run's sizes."""
-    from verity.circuits.evaluation.batch import type_shape
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import act as ACT
-    from verity.definitions.registry import deepgemm as DG
-    from verity.definitions.registry import fp8_moe as MO
-    from verity.definitions.registry import fp8_moe_experts as MX
-    from verity.definitions.registry import moe as MOE_R
-
     out: dict[str, Any] = {}
     inters = sorted({c[1] for c in MOE + MMAV2_PROBE})
     for K in [HIDDEN] + inters:
@@ -909,6 +912,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Each case's own verdict (a MoE case or a probe with its chain and two launches, or the planted sum): its launches' checks,
     its words, the competing models it refuted and the expert tiles, so a NO-GO names what failed."""
     out: dict[str, dict[str, Any]] = {}
+    c: dict[str, Any] | None
     for x in doc["launches"]:
         c = out.setdefault(_case(x), {"launches_ok": True, "totals": {k: 0 for k in TOTALS}, "refuted": {}, "tiles": [], "dots": {}})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)
@@ -981,7 +985,10 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
             doc["errors"]["served"] = _error(e)
         print(f"[glm53-block-fp8] served {json.dumps(doc['served'])} cleared={sorted(cleared)}", flush=True)
         try:
-            from vllm.v1.worker.workspace import init_workspace_manager, is_workspace_manager_initialized
+            from vllm.v1.worker.workspace import (
+                init_workspace_manager,
+                is_workspace_manager_initialized,
+            )
 
             if not is_workspace_manager_initialized():
                 init_workspace_manager(torch.device("cuda"))

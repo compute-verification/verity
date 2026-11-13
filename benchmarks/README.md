@@ -139,6 +139,8 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `prod_repro/` | one command over the serving cost benchmark's serve, load and replay: what the serve turned on (prefix caching, speculative decoding, the context limit), whether the replayed window's tokens are the served ones, what our changes cost over stock with its interval, and the advice a request, each measured or said not to be | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
 | `inference_only/` | the inference-only policy of Llama 3.2 1B as served, stated, and of the class this tree builds, with the Lean count's verdict on it, and each one's number: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound | maintained |
+| `rho/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
+| `nci/` | the sources, parameters and policies the inference-only policy's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
 | `training_slowdown/` | the grader (`grader/`): a training step's matrix products, their multiply-adds and output wires, and the circuit's size, read off the Boolean circuit a lane hands over, beside training's slowdown code's trace of the same step; `verity bench training-slowdown CONFIG`, an attack config's jobs, each found by its label and run where it is missing | maintained |
 
 ### Kernels
@@ -196,7 +198,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `compute/` | `verity bench compute`, the front door for the compute audit's number: the share of a served model's MACs (its linears', attention's and LM head's) that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record | maintained |
-| `served_errors/` | error terms of the quoted guarantees that had no value, evaluated at the served sizes: PoUW's δ_ks, δ_bind and p, the Sm120 headlines' n_π·δ_ZK, Pearl+'s ε_a and δ_a, Dither's κ_S, the integrity leg's ks_t and the remote product's joint error, each with its formula and premises (a model, not a measurement) | maintained |
+| `served_errors/` | error terms of the quoted guarantees that had no value, evaluated at the served sizes: PoUW's δ_ks, δ_bind and p, the Sm120 headlines' n_π·δ_ZK, Pearl+'s ε_a and δ_a, Dither's κ_S, the integrity subprotocol's ks_t and the remote product's joint error, each with its formula and premises (a model, not a measurement) | maintained |
 | `machine_model/` | the ACCEL model of each measured card: its rows, census, attack families and designs as data, and a design's ε from them (`machine-model`) | maintained |
 
 ### Network

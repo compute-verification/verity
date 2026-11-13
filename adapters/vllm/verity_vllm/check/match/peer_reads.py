@@ -7,13 +7,17 @@ boundaries first (`_split_peer`), so a WORLD > 2 fold compares with the rank Pro
 """
 from __future__ import annotations
 
+import bisect
+from collections.abc import Callable
+
 
 class PeerReads:
     """`RootView`'s reads of peers Input nodes (`instance_sequence.RootView`, and through it `batch_decomp.Projection`)."""
 
+    _per_run: Callable[[tuple, bool], list[tuple]]   # the view's own (`RootView._per_run`), declared and nothing more
+
     def _peer_src(self, idx: int, lo: int, hi: int):
         """("PEER", k, lo', hi') for a read of leaf range [lo, hi) of peers Input node `idx`; None when the range is not inside one field."""
-        import bisect
         flds = getattr(self, "peer_fields", {}).get(idx)
         if not flds:
             return None
@@ -36,7 +40,6 @@ class PeerReads:
         flds = getattr(self, "peer_fields", {}).get(idx) if space == "n" else None
         if not flds or len(flds) < 2:
             return [run]
-        import bisect
         j = bisect.bisect_right(flds, (lo, float("inf"))) - 1
         if j < 0 or j + 1 >= len(flds) or hi <= flds[j + 1][0]:
             return [run]
@@ -52,7 +55,6 @@ class PeerReads:
         """`_peer_src` over a progression of reads of one peers Input node: uniform ("PEER", k, (lo', hi'), (dL, dH), c)
         iff every run's [lo, hi) lies inside the SAME field (the whole span does: fields are disjoint and sorted), else the record's
         per-run answer (a run outside every field or spanning two is ("PEER?", ..) run by run)."""
-        import bisect
         _space, (idx0, lo0, hi0), (_dI, dL, dH), c = p
         flds = getattr(self, "peer_fields", {}).get(idx0)
         if flds and c > 1:

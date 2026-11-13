@@ -22,7 +22,7 @@ import egemm_ref as R
 import numpy as np
 import pytest
 
-from verity.protocols.pouw.receipts import receipt_folds as F
+from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as F
 
 T, K, INV_S = R.T, 128, 31.75
 #: a seed whose first key candidate the plain key rule admits and r9 refuses: XIN's keys are candidates 0 and 1, XIN13's

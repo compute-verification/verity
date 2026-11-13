@@ -12,15 +12,20 @@ from pathlib import Path
 import pytest
 import torch
 
+from verity_vllm import gc_tuning
 from verity_vllm import target_family as tf
-from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import hooks
 from verity_vllm.engine.profiles import devices
 from verity_vllm.pipeline import build as B
-from verity_vllm.pipeline import gc_tuning
+from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row import fa_version
+from verity_vllm.program.frontend.export_compat import select_cuda_platform
 from verity_vllm.program.frontend.target_profile import TargetProfile, parse_target_arg
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.predict.steps import trace_commands
 
 ROW_120 = "smollm2-135m__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 ROW_89 = "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
@@ -148,7 +153,7 @@ def vllm_without_nvml(tmp_path, monkeypatch):
     yield
     for p in hooks.live():
         o = getattr(p, "owner", None)
-        if (getattr(o, "__module__", None) or getattr(o, "__name__", "")).startswith("vllm"):
+        if (getattr(o, "__module__", "") or getattr(o, "__name__", "")).startswith("vllm"):
             p.uninstall()
     for name in [m for m in sys.modules if m == "vllm" or m.startswith("vllm.")]:
         del sys.modules[name]
@@ -191,7 +196,6 @@ def test_a_build_without_a_declared_target_resolves_the_platform_as_before(tmp_p
 
 
 def test_the_selection_answers_an_imported_but_unresolved_vllm_keeps_a_cuda_platform_and_refuses_a_non_cuda_one(vllm_without_nvml):
-    from verity_vllm.program.frontend.export_compat import select_cuda_platform
     import vllm.platforms as P
     P._current_platform = None
     assert select_cuda_platform() == "NonNvmlCudaPlatform"
@@ -243,9 +247,6 @@ def test_a_traced_request_build_answers_the_device_name_its_target_states_on_a_g
     """A request Build `predict.steps.trace_commands` lists has no --workload to name its GPU; the command passes φ's target's
     `device_name` (`--device-name`), so a host with no visible GPU answers vLLM's `get_device_name` (GLM-5.3's fused-MoE config
     lookup) with it, and a target stating none traces as before."""
-    from verity_vllm.pipeline import cli
-    from verity_vllm.program.predict.phi import Phi
-    from verity_vllm.program.predict.steps import trace_commands
     target = {"compute_capability": [9, 0], "num_sms": 132, **({"device_name": name} if name else {})}
     phi = Phi(model={"repo": "zai-org/GLM-5.3", "revision": "r"}, target=target, tp={"world": 8, "rank": 3}, execution="eager")
     [cmd] = trace_commands({"requests": [{"LP": 8, "T": 4, "policy": {"kind": "greedy"}}]}, types.SimpleNamespace(phi=phi, dsa_table_reads=False),

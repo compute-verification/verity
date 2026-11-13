@@ -1,5 +1,5 @@
-"""`test_artifact_applicability_independent`'s static check on the reference construction hosts' recorded manifests (`out/gen`,
-written on GPU hosts, which no tracked file holds). Skipped where they are absent.
+"""`test_artifact_applicability_independent`'s static check on the manifests the GPU hosts recorded (`out/gen`,
+which no tracked file holds). Skipped where they are absent.
 """
 from __future__ import annotations
 
@@ -7,7 +7,11 @@ import json
 
 import pytest
 
-from tests.program.test_artifact_applicability_independent import B0_REQUEST_8_4_DIGEST, R9_REFERENCE_MANIFESTS, REPO
+from tests.program.test_artifact_applicability_independent import (
+    B0_REQUEST_8_4_DIGEST,
+    R9_REFERENCE_MANIFESTS,
+    REPO,
+)
 
 
 def test_static_reference_hosts_share_the_program_digest():

@@ -2,9 +2,9 @@
 
 import numpy as np
 import pytest
-
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.commitments import hm96
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+
 from verity_vllm.commit import registered_rows as RR
 
 PROGRAM = "ab" * 64
@@ -33,7 +33,7 @@ def test_commit_is_registered_commit_on_its_rows(monkeypatch, bits, dtype, word_
 
 
 def test_default_rows_and_fresh_salts():
-    leaves = np.arange(4096 * 3, dtype=np.uint16)
+    leaves: np.ndarray = np.arange(4096 * 3, dtype=np.uint16)
     a, b = RR.commit(PROGRAM, "v", leaves, 16), RR.commit(PROGRAM, "v", leaves, 16)
     assert a.entry["words"] == 4096 and a.entry["leaves"] == 3 and len(a.salts) == 3 * N
     assert a.salts != b.salts and a.root != b.root          # hiding: fresh salts, another root

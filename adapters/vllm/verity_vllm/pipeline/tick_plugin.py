@@ -7,7 +7,7 @@ The trace corpus serves so (`benchmarks/network_e2e/traces/corpus.py`, ``--admit
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
 stdlib, `verity_vllm.settings`, `verity_vllm.engine.hooks` and `serve_admit`, and `register` imports vLLM only once
 ``VERITY_TICK`` is set. `serve_admit` reads a watermark line with the network certifier's own reader
-(`verity.protocols.certifier.verifier.release`, which imports only the stdlib), and imports it when the first line
+(`verity.protocols.accounting.certifier.verifier.release`, which imports only the stdlib), and imports it when the first line
 comes, so only the API server's process does, and it needs ``verity``, this package's dependency, on its path.
 """
 from __future__ import annotations
@@ -69,7 +69,7 @@ class FeedReader:
 
 def unseeded(body: bytes) -> str | None:
     """Why `TickFeed` refuses a completions or chat request ``body``, None where it passes. A stochastic request must carry
-    an integer ``seed``: vLLM gives one without a seed a seed it draws from ``np.random``, which nobody can recompute.
+    an integer ``seed``: vLLM gives one without a seed a seed it samples from ``np.random``, which nobody can recompute.
     Only a numeric ``temperature`` of 0 is greedy; without one the server's default applies (the model's generation
     config's, else 1.0), so it needs a seed too. A body that isn't a JSON object passes, for the server to answer."""
     try:

@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import threading
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -37,7 +38,7 @@ def test_no_release_before_the_last_protocols_draw():
     _host, _rc, dev = committed()
     draws = SL.Draws(PROTOCOLS)
     draws._cv = _Waits()
-    got = {}
+    got: dict[str, Any] = {}
     t = threading.Thread(target=lambda: got.update(rec=draws.release(0, dev)))
     t.start()
     draws._cv.entered.acquire()
@@ -82,7 +83,7 @@ def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_agai
 def test_the_seal_reads_the_port_positions_of_a_step_no_draw_named(tmp_path):
     """The seal holds the step-input port's committed positions to the rows the window ran, at every step
     (`serve_seal.port_positions`, and `seal_process`'s handoff): they are read just before the release, which still keeps
-    only the draw's leaves."""
+    only the sample's leaves."""
     from verity_vllm.commit.served_record import PORT_NAMES, committed_raw
 
     pos = bytes(range(40, 48)) * 8
@@ -181,7 +182,7 @@ def test_the_draws_dir_puts_each_file_once_and_a_bad_one_refuses_its_window_by_n
 def test_a_failed_run_ends_every_waiting_release():
     draws = SL.Draws(PROTOCOLS)
     draws._cv = _Waits()
-    got = {}
+    got: dict[str, Any] = {}
     t = threading.Thread(target=lambda: got.update(e=pytest.raises(SL.Refused, draws.wait, 3)))
     t.start()
     draws._cv.entered.acquire()
