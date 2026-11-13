@@ -1,4 +1,4 @@
-"""The annotation check's port: `Flock.Annot` (`Circuits.Annot`) behind `Difftest.serve` (`lean/AnnotDifftest.lean`, the Lake
+"""The annotation check's port: `Flock.Annot` (`Circuits.Annot`) behind `Difftest.serve` (`../../verity/circuits/difftest/AnnotDifftest.lean`, the Lake
 executable `annot-difftest` of this distribution's `lean/` package), for the tests that hold the Python mirror
 (`verity.circuits.query_ast` and `query_codec`) to it.
 
@@ -24,10 +24,10 @@ from . import Port, Server, build
 if TYPE_CHECKING:
     from hypothesis.strategies import SearchStrategy
 
-LEAN = Path(__file__).resolve().parents[2] / "lean"
+LEAN = Path(__file__).resolve().parents[4] / "verity" / "circuits" / "difftest"
 EXE = "annot-difftest"
 FNS = ("annot.term", "annot.check", "annot.reference", "annot.sets")
-INPUTS = ("verity/difftest/lean", "verity/circuits/base", "verity/circuits/lean")
+INPUTS = ("verity/circuits/difftest", "verity/circuits/base", "verity/circuits/lean")
 
 
 def server() -> Server:
