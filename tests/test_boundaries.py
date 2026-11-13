@@ -71,6 +71,9 @@ ALLOWED = {
     # commits in a `verity.commitments` scheme and registers before any coin, and the sampled proof blocks' openings; core's
     # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
     "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
+    # Ticks, spans and the monitoring period, stdlib only: the mirror of the code's `CoreProtocol.Period`, which a
+    # protocol's periods read rather than define.
+    "core.periods": set(),
     "core.claims": set(),
     # An auditor party's signed period roots and liveness records,
     # stdlib only (its frame-v3-sha512 tree held to `ml.commitments.merkle` by its test), the signer injected.
@@ -94,8 +97,8 @@ ALLOWED = {
     "core.protocols.spot": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # The wipe's memory challenger and prover are parties of the
-    # deployment layer (`wipe_parties`), their messages the wire's.
-    "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
+    # deployment layer (`wipe_parties`), their messages the wire's. The wipe's monitoring periods are the core's.
+    "core.protocols.pous": {"core.periods", "core.claims", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
                             "ml.randomness", "core.protocols.reporting"},
     # The memory challenger, an auditor-trusted device, over PoUS's protocol and verifier; its party is a party of the
     # deployment layer, its messages the wire's.
@@ -135,6 +138,7 @@ PLACE: dict[str, tuple[str, ...]] = {
     "core.attest": ("commitments/attest",),
     "core.claims": ("claims",),
     "core.deploy": ("configuration/deploy",),
+    "core.periods": ("periods",),
     "core.devices.memory_challenger": ("protocols/pous/device",),
     "core.protocols.certifier": ("protocols/certifier/verifier",),
     "core.protocols.pous": ("protocols/pous/verifier", "protocols/pous/device/challenger_session.py",
