@@ -1667,7 +1667,7 @@ def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_
     1 where the rate's denominator is no smaller than the largest stratum. A fixed count, which no stream takes, is
     refused by name."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as G
+    from verity.circuits.ops import gemm as G
     from verity.protocols.spot.verifier import service as S
 
     small, large = (bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in (64, 128))
