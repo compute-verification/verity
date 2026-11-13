@@ -195,7 +195,7 @@ import os
 import shutil
 import sys
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from fractions import Fraction
@@ -351,11 +351,14 @@ def output_units(a: argparse.Namespace) -> list[int]:
     return sorted({u for lo, hi in getattr(a, "outputs", None) or () for u in range(lo, hi)})
 
 
-def output_refusal(a: argparse.Namespace) -> dict | None:
+def output_refusal(a: argparse.Namespace, design: Mapping[str, Any] | None = None) -> dict | None:
     """Why the window can't be audited with its output class (`output_units`), or None without one: proving the class
     whole beside the sample takes a closure map on a work sample, which the stream refuses (`closure`: a sample it widens
-    proves a set whose size varies with the sample, outside the sampled audit's soundness statement)."""
-    outs = output_units(a)
+    proves a set whose size varies with the sample, outside the sampled audit's soundness statement). A unit of a stratum
+    the verifier's ``design`` (`D.derive`'s) samples whole is in every sample, nothing widened, so it needs none."""
+    whole = {u for s in (design or {}).get("strata") or () if s["k"] == sum(hi - lo for lo, hi in s["units"])
+             for lo, hi in s["units"] for u in range(lo, hi)}
+    outs = [u for u in output_units(a) if u not in whole]
     return {"output-class-needs-a-closure-map": {"units": len(outs)}} if outs else None
 
 
@@ -767,8 +770,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         raise SystemExit(f"a5 draws by the subset law with Lean on a development challenger's coins; the partition "
                          f"file's is {law}: draw it through a rank's service.Stream (--challenger or --coins verifier, "
                          "a TP Commit)")
-    drawn_law = D.derive(program, query, law, table)
-    if (why := output_refusal(a)) is not None:
+    if (why := output_refusal(a, drawn_law := D.derive(program, query, law, table))) is not None:
         summary["refused"] = why
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         print("A5 " + json.dumps(why))
@@ -1528,7 +1530,7 @@ FIREWALL_HELP = ("the core protocols' path, Lean's flock-firewall: every session
                  "(FC_FIREWALL=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
 #: AGENTS.md's live-coins rule, which keeps an audit's sampled members' sessions one after another
-ONE_AT_A_TIME = "outer proofs go through the firewall one at a time (AGENTS.md, \"Live coins only\")"
+ONE_AT_A_TIME = "outer proofs go through the ZK server one at a time (AGENTS.md, \"Live coins only\")"
 
 
 def one_session(s: str) -> int:

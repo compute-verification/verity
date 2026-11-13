@@ -1,11 +1,11 @@
 """The Site in code (`Core.Site`, `CoreProtocol/Site.lean`, served by `site-difftest`) held to its Python mirror,
-`verity.hardware.site`: an entry's refusal against the log before it (`site_refusal`, `Registration.Entry.refusal`), a whole
+`verity.device`: an entry's refusal against the log before it (`site_refusal`, `Registration.Entry.refusal`), a whole
 log's check and fold (`site_check`, `Registration.check`), and the views of a log's site, unchecked (`site_views`), its
 devices' models read against an auditor at a tick. Both sides take the digests that are deployed, so every head, digest
 and refusal is compared.
 
 The inputs are logs that start from each composite's first entry, the lifecycle example's site, followed by its 15 later
-entries (`verity/hardware/site/tests/test_site.py`'s `ENTRIES`, copied here: every refusal and an accepted entry). Each entry
+entries (`verity/tests/tests/test_device.py`'s `ENTRIES`, copied here: every refusal and an accepted entry). Each entry
 is changed at random a few times (a field of a location, link or sheet, an element dropped, repeated or added, the
 head it follows), and checked against auditors whose sheets and tolerances vary. They also come as malformed JSON: a
 node replaced or deleted, or a key added.
@@ -22,7 +22,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.hardware.site import (COMPOSITES, KINDS, OPERAND_CLASSES, OUTSIDE, OWNERS, TICK, TIERS, Auditor, DeviceFigures,
+from verity.device import (COMPOSITES, KINDS, OPERAND_CLASSES, OUTSIDE, OWNERS, TICK, TIERS, Auditor, DeviceFigures,
                               Entry, Link, Loc, Malformed, Refused, Registration, Sheet, Site, _rat_json, check, genesis,
                               refusal)
 

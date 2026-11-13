@@ -143,7 +143,6 @@
         "verity/hardware/world/",
         "verity/hardware/record.py",
         "verity/hardware/registration.py",
-        "verity/hardware/site/",
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
         "benchmarks/definitions/numerics/cuda/",
@@ -265,7 +264,7 @@
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
-        "fixtures/bench-instances/",
+        "benchmarks/numerical/bench-instances/",
         "benchmarks/census/",
         "security/Definitions/Accounting/CoinFlow.lean",
         "security/Definitions/Accounting/Filler.lean",
@@ -346,7 +345,7 @@
       ],
       "linear": "MEM",
       "owns": [
-        "verity/configuration/deploy/",
+        "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime/README.md", "verity/runtime/__init__.py", "verity/runtime/channels.py", "verity/runtime/process.py", "verity/runtime/pyproject.toml", "verity/runtime/runner.py", "verity/runtime/sources.py", "verity/runtime/stream.py", "verity/runtime/tests/", "verity/runtime/transcript.py",
         "security/Definitions/Pous/",
         "security/Proofs/Pous/",
         "benchmarks/bandwidth/",
@@ -521,7 +520,7 @@
         "review-*"
       ],
       "owns": [
-        "verity/configuration/config/",
+        "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",

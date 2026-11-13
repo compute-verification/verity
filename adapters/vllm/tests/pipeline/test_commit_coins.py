@@ -16,17 +16,17 @@ import shlex
 import socket
 import threading
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
-
+from verity.commitments.crypto import lms
 from verity.protocols.spot.device import challenger as LC
 from verity.protocols.spot.device import remote as R
 from verity.protocols.spot.device.challenger import CoinError
-from verity.commitments.crypto import lms
-from verity_vllm.commit.challenge import challenge_positions
-from verity_vllm.pipeline import commit_coins as CC
 
 from tests.protocols import challenger_host as CH
+from verity_vllm.commit.challenge import challenge_positions
+from verity_vllm.pipeline import commit_coins as CC
 
 PRIVATE, KEY = CH.challenger_key(3, H=5)
 GATE = "ssh -i KEY -o IdentitiesOnly=yes research@auditor"
@@ -46,7 +46,8 @@ class _Auditor:
     writes the ledger (or the lines given) where a verifier reads it."""
 
     def __init__(self, tmp_path, monkeypatch) -> None:
-        self.gate, self.tmp, self.argv, self._heads = CH.Gate(PRIVATE, KEY), tmp_path, [], 0
+        self.gate, self.tmp, self._heads = CH.Gate(PRIVATE, KEY), tmp_path, 0
+        self.argv: list[list[str]] = []
         self.sessions: dict[str, dict] = {}
         self.client = None
         monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self.client))
@@ -58,7 +59,7 @@ class _Auditor:
         if words[0] == "reserve":
             sid = f"s20261021T1200{len(self.sessions):02d}Z-{len(self.sessions):04x}"
             families = json.loads(opts["--families"])
-            withheld = {"withheld": True} if "--withhold" in words else {}
+            withheld: dict[str, Any] = {"withheld": True} if "--withhold" in words else {}
             e = self.gate.reserve(sid, families, scheme=opts["--scheme"], peer=opts["--peer"], **withheld)
             self.sessions[sid] = {"families": families, "scheme": opts["--scheme"], "withhold": bool(withheld)}
             return 0, json.dumps({"session": sid, "seq": e["seq"], "peer": opts["--peer"], "by": "vllm",
@@ -117,7 +118,8 @@ def _commit(auditor: _Auditor, names: list[str]) -> tuple[list[dict], list[bytes
     """A Commit of one run per name, each run's root that name's, its coins from its own challenge phase: the runs' coins
     records, their roots and the challenge phase's id, the challenge phase closed and ended in the ledger."""
     coins = CC.of_options(_options(), len(names), gate_run=auditor.run)
-    records, roots = [], []
+    records: list[dict] = []
+    roots: list[bytes] = []
     for name in names:
         rc = SimpleNamespace(run_root=_root(name), extra={})
         kw = CC.positions(rc, coins)
@@ -196,6 +198,45 @@ def test_a_session_opened_on_another_commits_root_is_refused(tmp_path, monkeypat
                                                      "ledger opens no challenger session for this window")
 
 
+ABSENT = object()
+#: what a record may hold where a block is left out: no field, a null, an empty block, or another value that is no block
+NO_BLOCK: tuple[object, ...] = (ABSENT, None, {}, "", 0, [])
+
+
+def _with(record: dict, field: str, value: object) -> dict:
+    """`record` with `field` left out (`ABSENT`) or holding `value`."""
+    rest = {k: v for k, v in record.items() if k != field}
+    return rest if value is ABSENT else {**rest, field: value}
+
+
+def test_a_coins_record_with_no_session_no_openings_or_no_keys_is_refused_by_name(tmp_path, monkeypatch):
+    """A run's coins record is the Commit's own claim. One that leaves out its session, its openings or its keys is refused
+    with the reason a record naming another session, opening or key gets, whatever stands in the block's place."""
+    auditor = _Auditor(tmp_path, monkeypatch)
+    records, roots, sid = _commit(auditor, ["run 0", "run 1"])
+    for value in NO_BLOCK:
+        why = {field: _reason(auditor, [records[0], _with(records[1], field, value)], roots, sid)
+               for field in ("session", "openings", "keys")}
+        assert why == {
+            "session": (f"run 1's coins are session None's, opened for root None, not {sid}, the one the auditor's ledger opened for "
+                        f"the Commit's root {roots[0].hex()[:16]}"),
+            "openings": f"run 1's {CC.FAMILIES[0]} coin: {LC.OPENING_FORM}",
+            "keys": f"run 1's {CC.FAMILIES[0]} key is not the coin the challenger opened"}, value
+    one_family = {"openings": {CC.FAMILIES[0]: records[1]["openings"][CC.FAMILIES[0]]}, "keys": {CC.FAMILIES[0]: records[1]["keys"][CC.FAMILIES[0]]}}
+    assert _reason(auditor, [records[0], records[1] | {"openings": one_family["openings"]}], roots, sid) == (
+        f"run 1's {CC.FAMILIES[1]} coin: {LC.OPENING_FORM}")
+    assert _reason(auditor, [records[0], records[1] | {"keys": one_family["keys"]}], roots, sid) == (
+        f"run 1's {CC.FAMILIES[1]} key is not the coin the challenger opened")
+
+
+@pytest.mark.parametrize("extra", [ABSENT, None, {}, {"coins": None}, {"coins": {}}, {"coins": ""}])
+def test_a_run_with_no_coins_record_has_no_key(extra):
+    rc = SimpleNamespace(run_root=_root("run 1"), **({} if extra is ABSENT else {"extra": extra}))
+    for keywords in (CC.positions, CC.identities):
+        with pytest.raises(ValueError, match=f"run root {_root('run 1').hex()[:16]}: no coins"):
+            keywords(rc)
+
+
 def test_a_second_session_for_the_commits_root_is_refused(tmp_path, monkeypatch):
     """The gate refuses a second open for a root, and so does the verifier, whichever challenge phase the Commit carries, when a
     ledger shows one."""
@@ -271,8 +312,14 @@ def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
         CC.of_options(_options(), 1, gate_run=lambda argv: (3, json.dumps({"refused": "busy"})))
     with pytest.raises(CoinError, match="refused status \\(exit 255\\): ssh: connect"):
         CC.ChallengerGate(GATE, lambda argv: (255, "ssh: connect to host auditor")).call("status", "s")
-    lines, asked = ['{"kind":"period-open"}', '{"kind":"reserve"}'], []
-    assert CC.ChallengerGate(GATE, lambda argv: asked.append(argv) or (0, "".join(f"{x}\n" for x in lines))).ledger() == lines
+    lines = ['{"kind":"period-open"}', '{"kind":"reserve"}']
+    asked: list[list[str]] = []
+
+    def gate(argv: list[str]) -> tuple[int, str]:
+        asked.append(argv)
+        return 0, "".join(f"{x}\n" for x in lines)
+
+    assert CC.ChallengerGate(GATE, gate).ledger() == lines
     assert asked[0][-1] == "ledger"
     with pytest.raises(CoinError, match="refused ledger \\(exit 3\\)"):
         CC.ChallengerGate(GATE, lambda argv: (3, json.dumps({"refused": "no such verb"}))).ledger()
@@ -287,3 +334,39 @@ def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
     rc = SimpleNamespace(run_root=_root("run 1"), extra={"coins": {"root": _root("run 0").hex(), "keys": {}}})
     with pytest.raises(ValueError, match="no coins drawn after it"):
         CC.positions(rc)
+
+
+def test_a_tp_pair_takes_its_coins_after_the_root_over_its_ranks(tmp_path, monkeypatch):
+    """A TP pair has one root, over its ranks' roots, and its coins follow that root: this process's own bytes without a
+    gate, a key of each family, and the challenger's with one, which the verifier takes as it takes a run's. `tp_keys`
+    reads the two sources of the pair's samples from either record."""
+    root = _root("pair 0")
+    own = CC.tp_draw(None, root)
+    assert (own["source"], own["root"], sorted(own["keys"])) == (CC.IN_PROCESS, root.hex(), sorted(CC.FAMILIES))
+    assert CC.tp_keys(own) == (bytes.fromhex(own["keys"][CC.POSITIONS]), bytes.fromhex(own["keys"][CC.IDENTITIES]))
+    auditor = _Auditor(tmp_path, monkeypatch)
+    coins = CC.of_options(_options(), 1, gate_run=auditor.run)
+    theirs = CC.tp_draw(coins, root)
+    assert (theirs["source"], theirs["index"], theirs["root"]) == (CC.CHALLENGER, 0, root.hex())
+    assert CC.tp_keys(theirs) == (bytes.fromhex(theirs["keys"][CC.POSITIONS]), bytes.fromhex(theirs["keys"][CC.IDENTITIES]))
+    assert coins.close() is None
+    auditor.end(coins.reserved["session"])
+    assert _reason(auditor, [theirs], [root], coins.reserved["session"]) is None
+
+
+@pytest.mark.parametrize(("change", "theirs"), [
+    ({"scheme": "another-scheme"}, "another-scheme "),
+    ({"families": [["positions", 1]]}, f"{CC.SCHEME_TAG} \\[\\('positions', 1\\)\\]"),
+])
+def test_a_challenger_whose_coins_are_not_the_ones_reserved_is_refused_by_name(tmp_path, monkeypatch, change, theirs):
+    """The Commit reads the challenger's commitment when it opens its challenge phase, before any coin: one of another
+    scheme, or of other families than a coin of each a run, is refused with both sides named, and the phase is closed."""
+    auditor = _Auditor(tmp_path, monkeypatch)
+    coins = CC.of_options(_options(), 1, gate_run=auditor.run)
+    session = auditor.sessions[coins.reserved["session"]]
+    session.update(change)
+    with pytest.raises(CoinError, match=f"the challenger's coins are {theirs}.*, not the Commit's {CC.SCHEME_TAG} "):
+        CC.positions(SimpleNamespace(run_root=_root("run 0"), extra={}), coins)
+    assert coins.client is None and coins.close() is None
+    session["thread"].join()
+    assert session["reason"] is None

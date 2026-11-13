@@ -11,21 +11,24 @@ import re
 import pytest
 import torch
 from torch import nn
-
 from verity.circuits.defs import bind
+from verity.definitions.registry import b1
+
+from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.resolver import StepContext, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.program.predict.build import Unexpressible, build_program
-from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.frontend import derive_examples as ex
+from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.derive import derive_report
-from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_target_profile
+from verity_vllm.program.frontend.rules.vllm_bindings import (
+    clear_observations,
+    observe_target_profile,
+)
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
-from verity.definitions.registry import b1
-from verity_vllm.program.frontend import targets as T
-from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
+from verity_vllm.program.predict.build import Unexpressible, build_program
+from verity_vllm.program.predict.phi import Phi
 
 NON_BI = DEFAULT_TARGET.with_overrides(batch_invariant=False)
 GENERIC, EPS_INPUT = "RMSNormFusedCuda_v2{N=%d,EPS=1e-05}", "RMSNormFusedCuda_v4{N=%d}"
@@ -77,7 +80,7 @@ def _fold(target, registered: bool = False):
 def _predict(**target):
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target={"compute_capability": [8, 9], "num_sms": 128, **target},
               workload={"requests": []})
-    return {re.match(r"\w+", k).group() for k in build_program(phi, "step").desc["definitions"]}
+    return {re.findall(r"^\w+", k)[0] for k in build_program(phi, "step").desc["definitions"]}
 
 
 def test_the_selector_binds_the_kernel_the_target_serves():
