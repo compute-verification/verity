@@ -29,6 +29,14 @@ gather unit, so two levels in all). A gather is made once for the rows it reads,
 K-word rows stand for those writer rows in any later read (``most``), so a column block of a gathered row reads its chunks
 rather than its coordinates. An `AllGather_v1` moves words and computes nothing, and has no rank static.
 
+With ``stand_ins`` (`NodeWindow`), the frame lowers the same window and also keeps, for each port it leaves free, the
+rows that port stands for as its lowering placed them (`NodeWindow.stood`), so a check on values can feed it the Program's
+own words (`node_window_values`): where a take would be free it hands the lowering stand-in rows (`STAND_IN`: an unlowered
+node's member's words, an input's words), a whole read of rows any of which stands in is their concatenation
+(`NodeWindow.cats`) and no gather, and a feed of a stand-in row leaves its port free as a free take does. A lowering that
+branches on a free take otherwise than by passing it to `NodeWindow.feed` may lower differently there, which the check
+refuses by comparing the two windows' digests.
+
 The window is completeness only: that it computes what serving ran is held by the units' proofs on their committed rows.
 Refused by name (`Unexpressible`): a Program with no weights record, an input that is neither the prompt, the weights nor a
 ``peers_*`` partial, a lowered family's argument batched on an axis other than 0 or None, a read that cuts a writer's row,
@@ -76,6 +84,9 @@ SELECTS = frozenset(f.rsplit("_v", 1)[0] for f in ST.STAGES)
 #: a gather unit's rows in and out at most: `pipeline.tp.grain.CHUNK_MAX` writer rows and the gathered row
 GATHER_ROWS = 128
 GATHER = "gather"
+#: a stand-in row's template prefix (`NodeWindow` with ``stand_ins``): ``@n:<node>`` unit m out ``lo:hi``, words [lo, hi) of
+#: member m of an unlowered node; ``@p:<input>`` out ``lo:hi``, an input's words; ``@cat`` unit i, `NodeWindow.cats`' i-th
+STAND_IN = "@"
 _GRAIN = Grain()
 
 
@@ -138,13 +149,15 @@ Lowering = Callable[["NodeWindow", int, Any], None]
 class NodeWindow:
     """Program ``fn`` (one rank's request Program in the registered rank form) lowered into ``b``'s units by ``families``
     (module docstring): ``lower()`` walks its nodes, ``circuit()`` settles and emits the window, ``census()`` reports it.
-    ``coord`` is the width of a ``COORDS`` GEMM's coordinates (1: the serving rows' coordinate, `serving_templates.coordinate`)."""
+    ``coord`` is the width of a ``COORDS`` GEMM's coordinates (1: the serving rows' coordinate, `serving_templates.coordinate`);
+    ``stand_ins``, the module docstring's."""
 
     def __init__(self, fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN, name: str = NAME,
-                 coord: int = 1, provable: bool = True) -> None:
-        self.fn, self.name, self.coord = fn, name, coord
+                 coord: int = 1, provable: bool = True, stand_ins: bool = False) -> None:
+        self.fn, self.name, self.coord, self.stand_ins = fn, name, coord, stand_ins
         self.families = dict(FAMILIES if families is None else families)
         self.params = [p for p, _ in fn.signature()[0]]
+        self._bits = {p: next(iter(t.width_set())) for p, t in fn.signature()[0] if p != WEIGHTS and len(t.width_set()) == 1}
         bad = [p for p in self.params if p not in (PROMPT, WEIGHTS) and not p.startswith(PEERS)]
         if WEIGHTS not in self.params or bad:
             raise Unexpressible(f"{name}: inputs {bad or self.params}; the node window takes the prompt, the weights record and "
@@ -170,6 +183,13 @@ class NodeWindow:
         self.chunks: dict[Row, tuple[tuple[Row, ...], Row]] = {}
         #: each port `feed_rows` fed, by template and port: its cut and the rows it fed, ``(row, first unit, end unit, how)``
         self.row_fed: dict[tuple[str, str], tuple[int, list[tuple[int, int, int, str]]]] = {}
+        #: each allocation's node, by template and first unit
+        self.node_of: dict[tuple[str, int], int] = {}
+        #: with ``stand_ins``: each port left free over a stand-in row, ``(tid, port, at, count, (first, rows, of), grid)``, its
+        #: rows as `Free.rows` and ``grid`` one entry a unit; and each concatenation a stand-in ``@cat`` row is
+        self.stood: list[tuple[str, str, int, int, tuple[int, int, int], list[tuple[Row, ...]]]] = []
+        self.cats: list[tuple[Row, ...]] = []
+        self._j = -1
         self.lowered = False
 
     # ---- walking the Program
@@ -189,6 +209,7 @@ class NodeWindow:
                 self.outs[j] = fam
                 continue
             self.b.label = (0, self._step_of[j])
+            self._j = j
             lower(self, j, node)
             if j not in self.outs:
                 raise Unexpressible(f"{self.name}: node {j} ({node.fn.id}): its lowering states no output (`NodeWindow.out`)")
@@ -254,21 +275,32 @@ class NodeWindow:
         """The writer rows ``refs`` read, whole and in order; `_Free` naming what's free where any of them is."""
         out: list[Row] = []
         free: list[tuple[str, str, str]] = []
+        standing = self.stand_ins
         for seg in self.segments(refs):
             if seg[0] == "p":
                 name = seg[1]
                 if name == WEIGHTS:
                     raise Unexpressible(f"{self.name}: a unit reads the weights record where a wire is due")
                 free.append(("peer", PEERS.rstrip("_"), name) if name.startswith(PEERS) else ("param", name, name))
+                bits = self._bits.get(name, 0)
+                if standing and (seg[3] - seg[2]) * bits % 16 == 0 and seg[2] * bits % 16 == 0:
+                    lo, hi = seg[2] * bits // 16, seg[3] * bits // 16
+                    out.append(Row(f"{STAND_IN}p:{name}", 0, f"{lo}:{hi}", hi - lo))
+                else:
+                    standing = False
                 continue
             _, j, m, lo, hi = seg
             o = self.outs[j]
             if isinstance(o, str):
                 free.append(("node", o, str(j)))
+                if standing and lo >= 0:
+                    out.append(Row(f"{STAND_IN}n:{j}", m, f"{lo}:{hi}", hi - lo))
+                else:
+                    standing = False
                 continue
             for p in o.pieces:
                 out += p.rows(m, lo, hi, f"{self.name}: node {j}")
-        if free:
+        if free and not standing:
             raise _Free(free)
         return tuple(out)
 
@@ -314,6 +346,9 @@ class NodeWindow:
             for kind, fam, name in grid.sources:
                 self.free.append(Free(tid, port, at, count, kind, fam, name))
             return
+        if self.stand_ins and any(_stands(rows) for rows in grid):
+            self._stand(tid, port, at, count, (0, 1, 1), grid)
+            return
         if len(grid) != count:
             raise ValueError(f"{tid} {port}: {len(grid)} entries for units of shape {tuple(shape)}")
         lead = _lead(grid, shape)
@@ -342,10 +377,14 @@ class NodeWindow:
             raise Unexpressible(f"{tid} {port}: row-fed cut {k} ways, and {cut} ways before; a port is cut one way")
         self.b.cuts.setdefault(tid, {})[port] = k
         for i, grid in enumerate(grids):
-            fed.append((i, at, at + count, "free" if isinstance(grid, _Free) else "wired"))
+            stood = self.stand_ins and not isinstance(grid, _Free) and any(_stands(rows) for rows in grid)
+            fed.append((i, at, at + count, "free" if isinstance(grid, _Free) or stood else "wired"))
             if isinstance(grid, _Free):
                 for kind, fam, name in grid.sources:
                     self.free.append(Free(tid, port, at, count, kind, fam, name, (i, 1, k)))
+                continue
+            if stood:
+                self._stand(tid, port, at, count, (i, 1, k), grid)
                 continue
             if len(grid) != count or any(len(r) != 1 or r[0].words != words // k for r in grid):
                 raise Unexpressible(f"{tid} {port}: row {i} of {k} is {words // k} words, one writer row a unit")
@@ -374,7 +413,36 @@ class NodeWindow:
     def unit(self, family: str, fn: Any, count: int) -> tuple[str, int]:
         tid, at = self.b.unit(fn, count)
         self.allocs.setdefault(tid, []).append((at, count, family))
+        self.node_of[(tid, at)] = self._j
         return tid, at
+
+    def _cat(self, rows: tuple[Row, ...]) -> Row:
+        """A stand-in for one row holding ``rows`` in turn (`STAND_IN`)."""
+        self.cats.append(rows)
+        return Row(f"{STAND_IN}cat", len(self.cats) - 1, "o0", sum(r.words for r in rows))
+
+    def _stand(self, tid: str, port: str, at: int, count: int, rows: tuple[int, int, int],
+               grid: Sequence[tuple[Row, ...]]) -> None:
+        """Leave a port free over ``grid``'s stand-in rows, as `feed` leaves one free over a free take, and keep the grid."""
+        if len(grid) != count:
+            raise ValueError(f"{tid} {port}: {len(grid)} entries for {count} units")
+        for kind, fam, name in dict.fromkeys(s for rs in grid for s in self._sources(rs)):
+            self.free.append(Free(tid, port, at, count, kind, fam, name, rows))
+        self.stood.append((tid, port, at, count, rows, list(grid)))
+
+    def _sources(self, rows: Sequence[Row]) -> list[tuple[str, str, str]]:
+        """The free sources stand-in ``rows`` read, as `rows` names them."""
+        out: list[tuple[str, str, str]] = []
+        for r in rows:
+            if r.tid == f"{STAND_IN}cat":
+                out += self._sources(self.cats[r.unit])
+            elif r.tid.startswith(f"{STAND_IN}n:"):
+                j = int(r.tid[len(STAND_IN) + 2:])
+                out.append(("node", str(self.outs[j]), str(j)))
+            elif r.tid.startswith(f"{STAND_IN}p:"):
+                name = r.tid[len(STAND_IN) + 2:]
+                out.append(("peer", PEERS.rstrip("_"), name) if name.startswith(PEERS) else ("param", name, name))
+        return out
 
     def family_of(self, tid: str, unit: int) -> str:
         """The family whose allocation holds unit ``unit`` of template ``tid``."""
@@ -402,6 +470,8 @@ class NodeWindow:
         shifted (`_step`), else a member at a time."""
         if all(len(r) == 1 for r in rowss):
             return [r[0] for r in rowss]
+        if self.stand_ins and any(_stands(rs) for rs in rowss):
+            return [rs[0] if len(rs) == 1 else self._cat(rs) for rs in rowss]
         if all(r in self.wholes for r in rowss):
             return [self.wholes[r] for r in rowss]
         if _step(rowss) is None:
@@ -452,6 +522,9 @@ class NodeWindow:
         if not b.fns:
             raise Unexpressible(f"{self.name}: no family of the Program's has a lowering, so the window has no unit")
         self._check_rows()
+        if self.stand_ins and (bad := sorted({f"{f.tid} {f.port}" for f in b.feeds if _stands(f.rows)})):
+            raise Unexpressible(f"{self.name}: stand-in rows reached `_Builder.feed` for {bad}: a lowering fed a take to the "
+                                "builder itself, which ``stand_ins`` can't follow")
         b.settle()
         if bad := [f"{tid} {port} {k}" for (tid, port), (k, _) in self.row_fed.items() if b.cuts.get(tid, {}).get(port) != k]:
             raise Unexpressible(f"{self.name}: {len(bad)} row-fed ports' cuts changed after `feed_rows`: " + "; ".join(bad))
@@ -514,6 +587,10 @@ class NodeWindow:
 
 def _family(node: Any) -> str:
     return getattr(node.fn, "name", None) or node.fn.id.split("{")[0]
+
+
+def _stands(rows: Sequence[Row]) -> bool:
+    return any(r.tid.startswith(STAND_IN) for r in rows)
 
 
 def _peer(name: str) -> int:
@@ -650,11 +727,11 @@ FAMILIES: dict[str, Lowering] = {
 
 
 def node_window(fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN, name: str = NAME,
-                coord: int = 1, provable: bool = True) -> tuple[IF.Circuit, NodeWindow]:
+                coord: int = 1, provable: bool = True, stand_ins: bool = False) -> tuple[IF.Circuit, NodeWindow]:
     """Program ``fn``'s window (module docstring) and the frame that lowered it."""
-    w = NodeWindow(fn, families, grain, name, coord, provable).lower()
+    w = NodeWindow(fn, families, grain, name, coord, provable, stand_ins).lower()
     return w.circuit(), w
 
 
-__all__ = ["FAMILIES", "Free", "GATHER_ROWS", "NAME", "NodeWindow", "Piece", "SELECTS", "block_fp8_linear", "node_window",
-           "scale_norm"]
+__all__ = ["FAMILIES", "Free", "GATHER_ROWS", "NAME", "NodeWindow", "Piece", "SELECTS", "STAND_IN", "block_fp8_linear",
+           "node_window", "scale_norm"]
