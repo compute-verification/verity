@@ -1,0 +1,63 @@
+{
+ "kind": "vllm-ratchet-gate/v2",
+ "base": "1e4d5c993c08a3ceee881d8c8563246b42243ea1",
+ "top": "05dc68622765922ee340657e0fad2d206f6fc80e",
+ "changes": [
+  {
+   "name": "1e4d5c993c08..05dc68622765",
+   "commit": "05dc68622765922ee340657e0fad2d206f6fc80e",
+   "base": "1e4d5c993c08a3ceee881d8c8563246b42243ea1",
+   "pr": null,
+   "verdict": "passed",
+   "why": "14952 -> 14946 ratchet exceptions; no direct environment read is new in the 5 Python file(s) it changes; no silent except handler is new in the 5 Python file(s) it changes; no lane-text site is new in the 8 file(s) it changes; no retired-term site is new in the 8 file(s) it changes",
+   "before": 14952,
+   "after": 14946,
+   "touched": [
+    "adapters/vllm/tests/tools/allowlists/description_sizes.json"
+   ],
+   "lints": [],
+   "fix": [],
+   "noqa_added": 0,
+   "noqa_removed": 0,
+   "pooled": [],
+   "linted": [],
+   "counted": {
+    "repo_env_reads": [
+     "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.py",
+     "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_reads.py",
+     "verity/definitions/tests/test_dsa_topk_reads.py"
+    ],
+    "repo_silent_excepts": [
+     "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.py",
+     "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_reads.py",
+     "verity/definitions/tests/test_dsa_topk_reads.py"
+    ],
+    "repo_lane_text": [
+     "adapters/vllm/tests/pipeline/test_long_row.py",
+     "adapters/vllm/tests/pipeline/test_serving_rows_bits.py",
+     "adapters/vllm/verity_vllm/pipeline/long_row.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.py",
+     "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_reads.py",
+     "verity/definitions/tests/test_dsa_topk_reads.py"
+    ],
+    "repo_retired_terms": [
+     "adapters/vllm/tests/pipeline/test_long_row.py",
+     "adapters/vllm/tests/pipeline/test_serving_rows_bits.py",
+     "adapters/vllm/verity_vllm/pipeline/long_row.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.py",
+     "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_reads.py",
+     "verity/definitions/tests/test_dsa_topk_reads.py"
+    ]
+   }
+  }
+ ],
+ "failures": []
+}

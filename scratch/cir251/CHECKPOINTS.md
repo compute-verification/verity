@@ -9,3 +9,4 @@
 - 2026-11-13T00:05Z A 0e1df5b61417da4d057b9e1282d7948eb820fab0 and B 3da6c052b557a041b04d48b9fe69a511e386876b pushed (gate failures [] both); head suites 75ca (A) and dae3 (B) running.
 - 2026-11-13T00:46Z suites 75ca (A) and dae3 (B): 23/23 each, verity-vllm 0 failed; bodies of #9318 and #9371 updated; CIR-251 commented; the -rA long-row step of 75ca and dae3 still running.
 - 2026-11-13T03:33Z second merge: A 05dc68622765922ee340657e0fad2d206f6fc80e (main 1e4d5c993c08) pushed, region closed; B merge a62164a32a74 local, held until the region test; region+record 49da (A, clone), pin check 1bc5 (A).
+- 2026-11-13T03:58Z region test 40 passed 1 skipped, record unchanged by its tool, STATEMENTS passes (49da at A). B a62164a32a747cae49c7fc46222994c685ccb9f6 pushed; gate failures [] at both (A 14952->14946, B 14952->14943). Running: A suites e466, A pins 4471; B record 8758, B suites a369, shards af3d b2c7 a1cf 058a.

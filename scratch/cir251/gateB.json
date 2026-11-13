@@ -1,0 +1,83 @@
+{
+ "kind": "vllm-ratchet-gate/v2",
+ "base": "1e4d5c993c08a3ceee881d8c8563246b42243ea1",
+ "top": "a62164a32a747cae49c7fc46222994c685ccb9f6",
+ "changes": [
+  {
+   "name": "1e4d5c993c08..a62164a32a74",
+   "commit": "a62164a32a747cae49c7fc46222994c685ccb9f6",
+   "base": "1e4d5c993c08a3ceee881d8c8563246b42243ea1",
+   "pr": null,
+   "verdict": "passed",
+   "why": "14952 -> 14943 ratchet exceptions; ruff finds nothing new in the 1 Python file(s) it changes; no direct environment read is new in the 7 Python file(s) it changes; no silent except handler is new in the 7 Python file(s) it changes; no lane-text site is new in the 15 file(s) it changes; no retired-term site is new in the 15 file(s) it changes",
+   "before": 14952,
+   "after": 14943,
+   "touched": [
+    "adapters/vllm/tests/tools/allowlists/description_sizes.json"
+   ],
+   "lints": [],
+   "fix": [],
+   "noqa_added": 0,
+   "noqa_removed": 0,
+   "pooled": [],
+   "linted": [
+    "tools/verity/circuit_check/src/circuit_check/targets.py"
+   ],
+   "counted": {
+    "repo_env_reads": [
+     "tools/verity/circuit_check/src/circuit_check/targets.py",
+     "verity/definitions/registry/boolean_dsa_norm.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.py",
+     "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_reads.py",
+     "verity/definitions/tests/test_dsa_topk_reads.py"
+    ],
+    "repo_silent_excepts": [
+     "tools/verity/circuit_check/src/circuit_check/targets.py",
+     "verity/definitions/registry/boolean_dsa_norm.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.py",
+     "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_reads.py",
+     "verity/definitions/tests/test_dsa_topk_reads.py"
+    ],
+    "repo_lane_text": [
+     "adapters/vllm/tests/pipeline/test_long_row.py",
+     "adapters/vllm/tests/pipeline/test_served_unit_rows.py",
+     "adapters/vllm/tests/pipeline/test_serving_rows_bits.py",
+     "adapters/vllm/tests/pipeline/test_serving_rows_norm_split.py",
+     "adapters/vllm/tests/program/test_dsa_norm.py",
+     "adapters/vllm/tests/program/test_dsa_norm_calls.py",
+     "adapters/vllm/tests/properties/glm53_fused_rmsnorm_capture_gpu.py",
+     "adapters/vllm/verity_vllm/pipeline/long_row.py",
+     "tools/verity/circuit_check/src/circuit_check/targets.py",
+     "verity/definitions/registry/boolean_dsa_norm.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.py",
+     "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_reads.py",
+     "verity/definitions/tests/test_dsa_topk_reads.py"
+    ],
+    "repo_retired_terms": [
+     "adapters/vllm/tests/pipeline/test_long_row.py",
+     "adapters/vllm/tests/pipeline/test_served_unit_rows.py",
+     "adapters/vllm/tests/pipeline/test_serving_rows_bits.py",
+     "adapters/vllm/tests/pipeline/test_serving_rows_norm_split.py",
+     "adapters/vllm/tests/program/test_dsa_norm.py",
+     "adapters/vllm/tests/program/test_dsa_norm_calls.py",
+     "adapters/vllm/tests/properties/glm53_fused_rmsnorm_capture_gpu.py",
+     "adapters/vllm/verity_vllm/pipeline/long_row.py",
+     "tools/verity/circuit_check/src/circuit_check/targets.py",
+     "verity/definitions/registry/boolean_dsa_norm.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_mask_cut.py",
+     "verity/definitions/registry/dsa_topk_reads.circuit-check.py",
+     "verity/definitions/registry/dsa_topk_reads.py",
+     "verity/definitions/tests/test_dsa_topk_reads.py"
+    ]
+   }
+  }
+ ],
+ "failures": []
+}
