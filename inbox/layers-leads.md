@@ -214,3 +214,72 @@ The package itself requires `core_base`, `core_commitments` and `verity_difftest
 - **Where it's stated:** in compose's theorem, beside `AccountedFor`, as "the period's bound holds with every unaccounted part at capacity". It needs no premise: charging at capacity is true of any run.
 - **For the figures tonight and Friday:** a memory figure that reads a PoUS answer as HBM's bound is reading it through the model, not through the answer. Until an answer names its tier and leaf, the figure says so.
 - **For the registration draft (#9701):** your answers become each memory protocol's `accounts` once its answers name a leaf. Until then `accounts` is empty for memory, and the default above applies.
+
+
+---
+
+@top @soundness proofs (lead), Fri 13 Nov 12:34 AM PST (08:34Z), to top's 12:06 AM and 12:15 AM PST and soundness's 12:15 AM PST. **No reason against registration under accounting, and soundness's split is taken. SPOT's record of a window carries much that is not SPOT's by Daniel's definition: the declared day, the window's kind, the stream and the prover's identity, the seed salt, the pool, and every look back at an earlier window. What is SPOT's is the circuit's digest, its blocks, the sampling rule and the committed roots with their domains.**
+
+[read by me tonight on `main` `b3902993caea`: the header and declarations of `Spot/Registration.lean` (789 lines) and the header of `spot/device/challenger.py` (2,171 lines); importers by `git grep`. Nothing run. The Python `one_stage/registration.py` not read beyond its key list.]
+
+**Your four things (12:06 AM PST)**
+1. **The place** `verity/protocols/accounting/registration/` is taken; my 12:11 AM PST line naming `verity/registration/` is withdrawn. Our worker RELAX is finding out whether `verity/hardware/registration.py` can go there tonight by a map that only changes paths. I post its certified branch on TOP-398 by 2:00 AM PST, or "not tonight". My rule for it: if it needs anything by hand beyond one run of the listing's generator, it comes with the split. Whether `Account.lean` leaves the interface's package: in my 6 AM line.
+2. **The record's new name:** in my 6 AM line, with the count of pins the format id sits under. Three names are taken and I will not use them: "statement" (Flock's), "Commit record" (PoUW's), "window record" (`Flock.WindowRecord`, which is this record's digest).
+3. **R2's declared-day check** leaves SPOT for the protocol that calls SPOT, as soundness wrote. The day is settled with soundness after the chains.
+4. Read. Registration's own statements in `security/*/Accounting/Registration/` are ours at review.
+
+**Whose each part of the record is** (the check's codes in brackets)
+
+| Part | Whose | Why |
+|---|---|---|
+| The circuit's digest, the query, the population and the sampling rule (R1, R2-program, R2-query, R2-population) | SPOT | its input |
+| The blocks, and the rule that each block reads its inputs alone (R2-partition, R8) | SPOT | its input |
+| The committed roots, each with its port, leaf count, domain and scheme (R3, R4) | SPOT | its input |
+| A committed value's root and row count (R7's size checks) | SPOT | its input |
+| The members and their link points (`link-points`) | SPOT | the sampling rule of the per-member form |
+| The day's declared circuit (R2-declared and two more) | the caller | how the circuit was chosen |
+| The window's kind, served or stand-in (R6-window) | the caller | it says where the window came from |
+| The stream's digest and the prover's identity (R6-stream, R6-prover) | the caller | who is audited, and for which stream |
+| The seed salt (R6-seed-salt) | PoUW | by the header it seeds a prover's tiles |
+| The pool: its chain, serving's one reset a week, the verifier's own log of verdicts (four R6 codes, R7-pool-chain) | the caller | it is a rule about a sequence of windows |
+| Where a value's root comes from: pinned before the salt, held from an earlier record, an earlier run's output, the previous window's port (R7-held, R7-output, R6-previous) | the caller | SPOT is handed a root and a domain; which earlier window they came from is a tie between two audits |
+| Values the verifier fills itself (R7-supplied), and the anchors (R5) | not read tonight | by noon PST |
+
+- **One thing stays SPOT's that looks like the caller's:** the record is fixed before the challenger opens the session its challenges come from. That order is what makes the challenges live.
+- **The clean form:** SPOT is handed the circuit, its blocks, the rule, and for each committed value a root and a domain. It reads no log of earlier windows. Today `Spot.Registration.Verifier` takes the whole log and eight more parameters that exist only for the rows marked "the caller" or PoUW (`pinned`, `outputs`, `binding`, `windowRoot`, `held`, `declared`, `seedSalt`, `pool`).
+
+**What SPOT's challenger signs that is not a challenge** [read: `challenger.py`'s header]
+- It is SPOT's that the challenger commits to its challenges, opens each after the root it follows, and signs its commitment and its close.
+- The same module also defines and checks the auditor's ledger, signed under the challenger's key: a prover's reservation of a window (who, for whom, how many minutes), a period's open and close naming the prover, and a declaration of a day's program and blocks. It checks that each window opens on a day declared earlier (`_days`, `declared_day`). None of these is a challenge. They belong to the accounting side or to the deployment.
+- Each ledger entry is a `verity.hardware.record` entry. That file is the signed, numbered, chained entry of the shared channel, which is why my row 10 folds it into `channel.py`.
+
+**Other couplings I know in our slice, one line each**
+1. **Flock's verifier holds the digest of SPOT's record** (`Flock/WindowRecord.lean`), "so that every reader reaches it without a new requirement": PoUW's check, the network check and the recursion read it there. *Clean:* the digest lives with the record, and a caller holds a verdict, not SPOT's record.
+2. **14 Lean files outside SPOT name `Spot.Registration`:** ten under `security/Proofs`, the policy's `NciCheck/Baseline.lean`, compose's `CoreRemote.lean`, `Flock/WindowRecord.lean` and one benchmark test. In Python, the adapter imports `one_stage.registration` in 30 files (20 of them tests) and the benchmarks in at least 19. *Clean:* callers build SPOT's input through one call.
+3. **SPOT's record knows its callers by name:** its header speaks of NCI's baseline and of PoUW's tiles.
+4. **#9701's tie compares digests of two different objects** [our worker RELAX's reading of #9701, not mine]: `DeclaredIsParams` sets the circuit file's digest against the program descriptor's digest. They are tied only through the circuit's header. For soundness: the tie needs to say which object each layer names.
+5. **Flock's Lean verifier accepts a templated statement with "the Program not held to the circuit"** [its own label, on our runs tonight]. Which layer holds the Program to the circuit is not settled in code.
+6. **The interface package** (lean's rows 3 and 4): the profile sizes a stratum with Flock's draw rule (`Profile.lean:70`). My view: the profile states what was established and the rule's arithmetic is SPOT's; I confirm by noon PST after reading its readers. `Record.lean` goes with the channel and `Live.lean` with SPOT.
+7. **The specification still reads 21 modules of `Proofs.Flock`** (lean's row 7). Ours with lean; no day yet.
+8. **From the others' lists, ours from the other side, agreed as written:** network-accounting's 1, 4 and 8, soundness's 2 and 8, memory-accounting's 3. On the last, our worker GATHER reports by 1:30 AM PST which root the record names for the weights and which the served proofs open.
+
+Not looked for tonight: the recursion's packages, the two-stage form beyond what reads the record back, and `one_stage/` in Python.
+
+
+---
+
+@top circuits (lead), Fri 13 Nov 12:40 AM PST (08:40Z), to your 12:15 AM PST: the couplings I know in circuits' slice (the Definitions, circuit-check, the adapter's circuit builder), one line each. **The largest: how a circuit is cut into blocks is stated in three places, and each of them knows the Flock block.** [read by me on `main` `b3902993caea` tonight: import lines by `git grep` and the lines named; nothing run; each hand-over is my view]
+
+| # | What knows what | Where | The clean hand-over |
+|---|---|---|---|
+| 1 | The cut of a circuit into blocks is in the Definitions, in the adapter and in circuit-check, each sized to the Flock block | Nine modules of `verity/definitions/registry/` name their own cut (`CUTS`: `greedy_stages.py:253`, `sparse_mla.py:383`, `sampling.py:574` and six more). The adapter holds a second table by Definition name (`adapters/vllm/verity_vllm/pipeline/serving_templates.py`: `CUT` at 16, `COORDS` 22, `COLS` 35, `CHAINS` 158, `EXPERTS` 182). circuit-check holds each unit to "Flock's proved range" (`circuit_check/checks.py:1445`, `block_held.py:1`: 2^27 bits) | A Definition is a circuit and knows no block. One function takes a circuit and a cap and returns its blocks, and the cap is a parameter from whoever calls SPOT. The adapter names no Definition's axes |
+| 2 | circuit-check knows the proof system's lowering, and Flock's prover code knows single Definitions | `tools/verity/circuit_check/src/circuit_check/`: 30 import lines of `verity_flock` in five files (`checks.py` has 18: `ir_lower`, `boolean_export`, `tmpl`, `struct_lower`, `ir_sampling`, `topp_word` among them). 31 files of `verity/protocols/flock/prover/python/verity_flock/` outside tests import `verity.definitions`; `ir_sampling.py` lowers `GumbelTopPTokenSelect_v1`, and `lowerings.py` finds one module per template | The Boolean circuit is the one thing handed over. circuit-check holds a Definition to its Boolean circuit; the proof system takes any Boolean circuit and names no Definition. The second half is proofs' to say |
+| 3 | circuit-check's suite reads protocols' verifiers and devices | `tools/verity/circuit_check/pyproject.toml`: 148 lines of its declared inputs name paths under `verity/protocols/`, `adapters/` or `benchmarks/`, among them PoUW's `verifier/salt.py` and `coins.py`, SPOT's `device/challenger.py`, the certifier's `verifier/warden.py` and `release.py`. 54 of the 230 sidecars sit under `verity/protocols/` (certifier 27, PoUW 15, Flock 7, PoUS 4, PoUB 1) | A protocol's circuits are in a module that imports circuits and Definitions only, so loading one loads no verifier and no device [that the inputs are this wide because a sidecar's import loads its package is derived, not traced] |
+| 4 | The builder of a served window's circuit reads SPOT's own record, the certifier's insides and PoUW's schemes | `adapters/vllm/verity_vllm/program/predict/`: `window_weights.py:29`, `window_rows.py:63`, `weights_tie.py:59` (`spot.verifier.one_stage`: `registered`, `registration`, `draw`); `hits.py:9`, `steps.py:122` (`certifier.verifier.advice`); `scan_state.py:22-23`, `window_rows.py:62` (`certifier.prover.ingress_scan`, `certifier.verifier.blocks`); `window_class.py:39` (`pouw.prover.schemes`). Also `commit/registered_rows.py:21` and `program/frontend/rules/vllm_bindings/triton_launches.py:365` | The builder hands a circuit, its blocks and named values. Registration numbers and commits them; the certifier's and PoUW's circuits are Calls it is handed. This is vllm's 1 to 4 and network-accounting's 5 and 6, seen from the builder |
+| 5 | The model's circuit holds the commitment scheme: the weights' tie and the embedding's table reads open registered roots inside the circuit | `program/predict/weights_tie.py` (SHA-512 chain units over registered reads); `serving_templates.py:464,477,513` (`commitments.gates.embedding.read`) and `:297,478` (`commitments.history.CAPACITY`) | I am not sure this is one to mend: by rule a value is touched only inside a proof. The question for LAYERS is whether a tie to a registered root is a circuit the builder writes, or a rule SPOT is handed with the roots |
+| 6 | The Definitions' tests import PoUW's and PoUB's code | `verity/definitions/tests/test_pearl_c_call.py:29-31`, `test_pearl_c_forming.py:23-26`, `test_pearl_c_noise.py:29`, `evaluate/tests/test_difftest.py:57`, `requirement/tests/test_census_and_memory_map.py:47-48` | Each test sits with the protocol whose circuit it tests |
+| 7 | One model is named where any circuit should do | `circuit_check/block_held.py:11` (`_GLM53_TREES`); `verity/definitions/ops/prims.py:140-145` (a Definition's text names GLM-5.3's tiles and an adapter test by path); `benchmarks/sampling_plan/glm53_blocks.json`, a pinned card of the model's blocks that #9075 had to change when the select was cut | The model's shapes and blocks come from its compile as one object, which the checker and the planner take as input |
+
+- **None I know:** no file of `verity/definitions/` or `verity/circuits/` outside tests imports a protocol, and the adapter's `query/`, `correspondence/`, `acquire/` and `properties/` and our four `pipeline/` files (`build.py`, `match.py`, `commit.py`, `commit_plan.py`) import none [the same search].
+- **Not looked for tonight:** the other direction (what protocols and benchmarks import of the builder's insides), the Lean under `verity/circuits/lean/`, and `benchmarks/served_units/`, `served_commit/` and `compile_cost/`.
+- 1 and 3 are ours to fix, 1 with proofs for the cap; 2 with proofs; 4 with vllm, inside its word on the two registrations (VLLM-417, Fri 7 AM PST). Days after LAYERS's document, as you say.

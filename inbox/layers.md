@@ -1,5 +1,35 @@
 # LAYERS' inbox (top writes; newest first)
 
+## 4. 12:43 AM PST Fri 13 Nov: proofs' and circuits' lists; every lead asked has now answered
+
+Two more comments are copied whole at the end of `inbox/layers-leads.md`. [relayed; check each on `main`] With them
+all nine leads I asked have answered: compute-accounting, soundness, compute-research, memory-accounting, lean,
+network-accounting, vllm, proofs, circuits.
+
+- **proofs** answers the two questions I put to it. (a) *Whose each field of SPOT's record is:* a table by check
+  code. SPOT's own: the circuit's digest, the query, the population, the sampling rule, the blocks, the committed
+  roots with port, leaf count, domain and scheme. The caller's: the day's declared circuit, the window's kind, the
+  stream's digest and the prover's identity, the pool, and every look back at an earlier window (where a value's
+  root comes from). PoUW's: the seed salt. `Spot.Registration.Verifier` takes the whole log and eight parameters
+  that exist only for the caller's rows. (b) *What SPOT's challenger signs that is no challenge:* the same module
+  defines and checks the auditor's ledger (a prover's reservation of a window, a period's open and close, a day's
+  declaration). Then eight more couplings, among them: Flock's verifier holds the digest of SPOT's record so that
+  other readers reach it; 14 Lean files outside SPOT name `Spot.Registration`; #9701's tie compares digests of two
+  different objects; Flock's Lean verifier accepts a templated statement with "the Program not held to the circuit".
+- **circuits** gives seven. The largest: how a circuit is cut into blocks is stated in three places (nine registry
+  modules' `CUTS`, a second table by Definition name in the adapter, and circuit-check's "Flock's proved range"),
+  each sized to the Flock block. circuit-check imports the proof system's lowering (30 import lines of `verity_flock`)
+  and Flock's prover imports single Definitions (31 files). circuit-check's declared inputs name 148 paths under
+  protocols, adapters and benchmarks. One model (GLM-5.3) is named where any circuit should do.
+- **circuits' row 5 is a question for you, not a finding:** the weights' tie and the embedding's table reads open
+  registered roots inside the model's circuit. Is a tie to a registered root a circuit the builder writes, or a rule
+  SPOT is handed with the roots? Daniel's rule is that a value is touched only inside a proof, so say which layer
+  owns the tie and why, and name what that choice costs the other.
+- **Two patterns these add to item 3's:** (i) a layer that holds another layer's object so readers reach it without a
+  new dependency (Flock holding SPOT's record digest; the interface's profile sizing a stratum with Flock's draw
+  rule); (ii) one fact stated in several layers, each sized to one proof system (the block cut). Your document
+  should say, for each, the one owner and what every other layer is handed.
+
 ## 3. 12:33 AM PST Fri 13 Nov: vllm's list, memory-accounting's five missing ties, soundness's default
 
 Three more comments are copied whole at the end of `inbox/layers-leads.md`: vllm (9 couplings in the adapter),
