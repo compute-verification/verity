@@ -1,8 +1,8 @@
 # CIR-260: the capture's second try, at PR #9316's head ffaacd91c9dd0d6baf4494143fe5ec4ad2e40c44
 
-Row: node A (`vy-spot-glm53`), Fri 13 Nov 03:00Z–04:25Z, card 2, cores 20-29 (provisional). Worker FP8WRITE, GPU_LEASE_WHO=circuits-fp8write.
+Row: node A (`vy-spot-glm53`), Fri 13 Nov 03:15Z–04:25Z, card 2, cores 20-29 (provisional; cards 0-3 and cores 0-39 are vllm's 03:00Z–03:15Z for VLLM-339's serve, so no lease on card 2 before 03:15Z). Worker FP8WRITE, GPU_LEASE_WHO=circuits-fp8write.
 
-1. `date -u` in its own call. `uv run -q --project tools/research research notes sync`, then read the circuits row of Fri 03:00Z
+1. `date -u` in its own call. `uv run -q --project tools/research research notes sync`, then read the circuits row of Fri 03:15Z
    in `~/.research/notes/calendars/node-a.md`. If card 2 is no longer circuits' in it, launch nothing and tell the coordinator;
    if its hours or cores changed, follow the row.
 2. Check that PR #9316's head is still ffaacd91c9dd (`gh pr view 9316 --json headRefOid`) and check that commit out in a clean
@@ -14,8 +14,11 @@ Row: node A (`vy-spot-glm53`), Fri 13 Nov 03:00Z–04:25Z, card 2, cores 20-29 (
        cp <scratch worktree>/scratch/cir260/ds_mla_capture.sh /home/ubuntu/ds_mla_capture.sh
        uv run -q --project tools/research research run --on vy-spot-glm53 --project verity --source /agent/repos/verity \
          --cwd source --timeout 50m --mem-gb 32 --send /home/ubuntu/ds_mla_capture.sh \
-         --env CARD=2 --env CORES=20-29 --env NOT_BEFORE=2026-11-13T03:00:00Z --env END_UTC=2026-11-13T04:25:00Z \
+         --env CARD=2 --env CORES=20-29 --env NOT_BEFORE=2026-11-13T03:15:00Z --env END_UTC=2026-11-13T04:25:00Z \
          -- bash -c 'bash $RESEARCH_RUN_DIR/inputs/ds_mla_capture.sh'
+
+   If the launcher exits 76 (card 2 or its lease busy), vllm's serve overran: wait (the tool that waits, never a shell sleep)
+   and launch again; the last start is 03:50Z.
 
 4. `research fetch RUN --all`; read `stdout.log` (the GO/NO-GO line, the lease's hold in stderr.log) and
    `out/glm53_ds_mla_write_capture.json` (`ok`, `summary.<case>.{tokens,slotted,differ,corners}`). Cache rows compared =
