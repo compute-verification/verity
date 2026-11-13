@@ -142,6 +142,38 @@ def test_a_patch_put_on_the_schedulers_class_later_is_called_where_no_part_acts(
     remove()
 
 
+@pytest.mark.parametrize("patched_before", [True, False], ids=["patched-before-the-wrap", "unpatched-before-the-wrap"])
+def test_a_part_added_after_another_components_wrap_is_inside_it_only_where_the_patch_was_on_before(patched_before: bool) -> None:
+    """A part joins its method's patch where that patch is.  With a part at ``add_request`` on before another component
+    wraps it, a part added afterwards runs inside that component's wrapper, at its own rank among the parts; with none
+    on, the patch goes on with the part, outside the wrapper, as a wrap made at that moment would."""
+    log: list[str] = []
+    sched, before = FakeScheduler(), hooks.live()
+    removals = [scheduler_step.add(sched, Recorder("observe", Rank.OBSERVE, log))] if patched_before else []
+
+    def on_add(inner: Callable[..., Any]) -> Callable[..., Any]:
+        def add_request(request: Any, *a: Any, **kw: Any) -> Any:
+            log.append("other enter add_request")
+            out = inner(request, *a, **kw)
+            log.append("other leave add_request")
+            return out
+        return add_request
+
+    other = hooks.wrap(sched, "add_request", on_add)
+    removals.append(scheduler_step.add(sched, Adds(log)))
+    sched.add_request(_req("a"))
+    if patched_before:
+        assert log == ["other enter add_request", "adds a", "observe enter add_request", "observe leave add_request",
+                       "other leave add_request"]
+        other.uninstall()                                             # newest first: the wrap covers the registry's patch
+        scheduler_step.remove(*removals)
+    else:
+        assert log == ["adds a", "other enter add_request", "other leave add_request"]
+        scheduler_step.remove(*removals)                              # newest first: the registry's patch covers the wrap
+        other.uninstall()
+    assert hooks.live() == before and list(sched.requests) == ["a"]
+
+
 def test_a_part_may_hand_the_call_other_arguments_and_they_reach_the_parts_inside_and_vllm() -> None:
     seen: list[Any] = []
 

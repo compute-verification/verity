@@ -15,9 +15,10 @@ ADMIT outermost, parts of one rank in the order they were added.  Each is handed
 ``call`` runs the parts inside it and then vLLM's method, and what the ``around_`` returns is what its caller gets.  A
 part may hand ``call`` other arguments, call it later, or not call it (an admission that refuses raises instead).
 
-**Among other components' patches.**  A part joins its method's patch where that patch is.  A part added after another
-component wrapped the same method on the same scheduler therefore runs inside that component's wrapper, where a wrap
-made at that moment would run outside it.
+**Among other components' patches.**  A part joins its method's patch where that patch is.  Where the patch was on
+before another component wrapped the same method on the same scheduler, a part added after that wrap therefore runs
+inside that component's wrapper, where a wrap made at that moment would run outside it.  Where no part acted at the
+method before that wrap, the patch goes on with the part, outside the wrapper.
 
 **Parts come and go on a built engine.**  `add` at any time, removal in any order.  A call's parts are the ones that
 were on when it began: a part added during a call joins at the next one, and a part removed during a call is not
