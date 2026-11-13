@@ -5,7 +5,7 @@
 // One CTA an SM. Each period (SM-cycles of clock64, counted from the CTA's start) issues a burst of whole batches of
 // tensor operations, BURST cycles of work at the rate the arm sustains continuously (its calibration, MACs a SM-cycle),
 // drains them, and fills the rest of the period, whose length makes the burst DUTY percent of it; DUTY 100 issues back
-// to back with no drain or fill. Periods run until SECS seconds of %globaltimer have passed, checked about every
+// to back with no drain or fill. Bursts repeat until SECS seconds of %globaltimer have passed, checked about every
 // 65,536 cycles.
 // Arms:    wg_s8    wgmma m64n256k32 s8.s8 -> s32, one warpgroup with A and B resident in shared memory (KS k-slices,
 //                   cycled), as int8_class_rate's wgmma kernel;

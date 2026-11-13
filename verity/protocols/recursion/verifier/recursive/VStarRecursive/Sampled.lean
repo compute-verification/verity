@@ -94,6 +94,12 @@ def protocol : Core.BlobProtocol where
   profileJson := Core.Integrity.toJson
   checkBlobs := checkBlobs
 
+/-- `vstar-recursive`'s command line: `sampled ...` this protocol's (`Core.BlobProtocol.main`), anything else the
+recursive audit's (`Recursive.main`). -/
+def main : List String → IO UInt32
+  | "sampled" :: args => protocol.main args
+  | args => Recursive.main args
+
 #guard (paramsOfJson (Json.mkObj [("form", "two-stage")])).toOption.isNone
 #guard (evidenceOf "{\"form\":\"recursive\"}".toUTF8).toOption.isNone
 #guard match paramsOfJson (Json.mkObj [("form", ONE_STAGE), ("law", Json.mkObj [])]) with

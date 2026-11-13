@@ -78,12 +78,11 @@ structure Deployment where
 /-- `R = M_s − 512·n`: every bit of the deployment's capacity outside the fill. -/
 def Deployment.R (d : Deployment) : ℕ := d.Ms - 512 * d.n
 
-/-- **One H200 on vy-dc-h200-2, as measured.** An honest wipe accepted on the whole card
-(`benchmarks/pous/streamed_wipe/demo.sh`) measured both numbers. The card (NVIDIA H200, GPU-7d104033) holds
-143,771 MiB, its `gpu.txt`: `M_s = 143,771 · 2^20 · 8 = 1,206,038,560,768` bits. The fill was 4,425 segments of
-32 MiB, `n = 2,319,974,400` labels (148,478,361,600 bytes, its streamer's `labels`). So `R` is
-18,211,667,968 bits (2.276 GB), the driver's reserve and every context included. The read count is the deployed
-`k = 5500`, the `wipe_party --reads 5500` pinned for this card on vy-auditor-2 (that wipe read 2152), at its published
+/-- **One H200 on vy-dc-h200-2, as measured.** An honest wipe accepted on the whole card measured both numbers. The
+card (NVIDIA H200, GPU-7d104033) holds 143,771 MiB: `M_s = 143,771 · 2^20 · 8 = 1,206,038,560,768` bits. The fill
+was 4,425 segments of 32 MiB, `n = 2,319,974,400` labels (148,478,361,600 bytes). So `R` is 18,211,667,968 bits
+(2.276 GB), the driver's reserve and every context included. The read count is the deployed `k = 5500`, the
+`wipe_party --reads 5500` pinned for this card on vy-auditor-2 (the measuring wipe read 2152), at its published
 ratio `r = 62`, the largest `r` with `(r − 1)^k · 2^129 ≤ r^k`. -/
 def h200 : Deployment where
   n := 2319974400

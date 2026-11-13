@@ -15,6 +15,7 @@ didn't reject.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import struct
 import sys
@@ -22,9 +23,12 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "floored_gemm"))
-from derive import NCT, tile_receipts  # noqa: E402
+# floored_gemm's derive.py from its file, under a name no other directory's script has: nothing goes on `sys.path`
+_spec = importlib.util.spec_from_file_location(
+    "floored_gemm_derive", Path(__file__).resolve().parent.parent / "floored_gemm" / "derive.py")
+_derive = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_derive)
+NCT, tile_receipts = _derive.NCT, _derive.tile_receipts
 
 T = 128
 TOP = 126
@@ -71,10 +75,16 @@ def check(d: Path) -> dict:
     out = {"dir": str(d), "mode": mode, "m": m, "n": n, "k": k, "design": "dither-2s", "device_ok": meta["device_ok"],
            "control_rejected": meta["control_rejected"], "device": meta["device"], "tiles": {}}
     ok = bool(meta["device_ok"]) and bool(meta["control_rejected"]) and set(kinds.values()) == {"duo32"}
-    bf16 = lambda a: (a.astype(np.uint32) << 16).view(np.float32).reshape(T, k)  # noqa: E731
+
+    def bf16(a: np.ndarray) -> np.ndarray:
+        return (a.astype(np.uint32) << 16).view(np.float32).reshape(T, k)
+
     for tm, tn in meta["tiles"]:
         sfx = f"_{tm}_{tn}.bin"
-        rd = lambda name, dt: np.fromfile(d / (name + sfx), dt)  # noqa: E731
+
+        def rd(name: str, dt, sfx=sfx) -> np.ndarray:
+            return np.fromfile(d / (name + sfx), dt)
+
         x = bf16(rd("x", np.uint16))
         if mode == "qk":   # Q' rows h T + t (tile tm's), K'_h rows h T + 128 tn .., K0 = floor(k inv_s) clamped
             W0, wrow = floor_q(bf16(rd("xk", np.uint16)), inv_s), (tm // tiles_n) * meta["T"] + tn * T

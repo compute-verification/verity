@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.Bandwidth
+public import Definitions.Accounting.Guarantees.RemotePass
 public import Proofs.Accounting.Bandwidth.Chip
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -40,7 +41,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob
 
 /-!
-# The bandwidth audit v0 in the random-oracle model: the proof
+# PoUB's per-pass lemma, the bandwidth audit v0 in the random-oracle model: the proof
 
 An accepted run with low ingress falls in one of three events, by whether the device queried the oracle at the
 contents of at least `k` blocks (`queried`):
@@ -234,8 +235,9 @@ open Pous (Bits pr)
 open scoped ENNReal
 open Bandwidth.AuditRO
 
-/-- **The bandwidth audit v0 in the random-oracle model** (`Bandwidth.Guarantees.AuditRO`). -/
-theorem AuditRO : Bandwidth.Guarantees.AuditRO := by
+/-- **PoUB's per-pass lemma, the bandwidth audit v0 in the random-oracle model**
+(`Accounting.Guarantees.Remote.AuditRO`). -/
+theorem _root_.Accounting.SecurityProofs.Remote.AuditRO : Accounting.Guarantees.Remote.AuditRO := by
   classical
   intro N b h S c G q s k lam A
   have hsplit : ∀ x : Store N b × Oracle N b h × (Fin s → Fin N),

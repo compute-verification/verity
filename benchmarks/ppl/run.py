@@ -31,8 +31,6 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 import methodology
 import models
 import report
@@ -43,6 +41,9 @@ import windows
 
 if TYPE_CHECKING:
     import numpy as np
+
+__all__ = ["BASELINE", "LOCAL_DATA", "NODE", "README", "arms_for", "load_plugins", "main", "merge", "parse_seeds",
+           "submit_command", "visible_gpus"]
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]

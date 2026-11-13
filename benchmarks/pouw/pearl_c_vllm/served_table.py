@@ -126,8 +126,8 @@ def markdown(table: dict) -> str:
     for r in table["models"]:
         if "forming" in r:
             f = r["forming"]
-            lines += ["", f"{r['model']}: the served debit leaves out Lean's forming term fs·(|C|/n)·elems "
-                      f"(`pearl_c_debit.forming_elements` is a stub). On its {f['tiles']} recorded tiles, at Prices.sm120Loop, a "
+            lines += ["", f"{r['model']}: its tiles were recorded before the served replay charged Lean's forming term "
+                      f"fs·(|C|/n)·elems (`pearl_c_debit.forming_elements`). On its {f['tiles']} recorded tiles, at Prices.sm120Loop, a "
                       f"verdict flips only if at least {f['dead_to_flip_min']:.2%} of a tile's |R|·k elements are salt-dead "
                       f"(forming_headroom.py; the unneeded ones are bounded by the recorded atoms). Lean's ρ_D = 1/64 "
                       f"({1 / 64:.2%}) of a unit's elements (`FormingP.saltDeadP_card_le`, under its domain conditions) "

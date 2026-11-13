@@ -351,11 +351,17 @@ def taxes(card: dict, names: tuple[str, ...] = tuple(CONFIGURATIONS)) -> dict[st
     return {n: out[CONFIGURATIONS[n].serve or n] for n in names}
 
 
+def cut_strata(strata: list[dict], card: dict) -> list[dict]:
+    """`strata` with a `partition` card's strata in place of theirs of the kinds it replaces."""
+    v = card["value"]
+    return [x for x in strata if x.get("kind") not in v["replaces"]] + v["strata"]
+
+
 def cut(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     """The inputs with the circuit cut by a `partition` card: its strata in place of the `workload` card's of the kinds
     it replaces."""
     v, part = card["value"], c["partition"]
-    strata = [x for x in part.value["strata"] if x.get("kind") not in v["replaces"]] + v["strata"]
+    strata = cut_strata(part.value["strata"], card)
     art = f" ({card['art']})" if card.get("art") else ""
     return c | {"partition": replace(part, value=part.value | {"strata": strata},
                                      source=f"{part.source}; cut by the partition card {v['name']}{art}")}

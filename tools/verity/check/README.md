@@ -38,7 +38,9 @@ packages it depends on, what it resolves to in `uv.lock`, the paths it lists und
 the environment (Python, the platform, the base image, the `VERITY_*` and `FLOCK_*` variables but those `settings.py` declares
 `where`), and the runner itself.
 Markdown is left out unless a suite lists it. The read guard (`guard/verity_suite_guard.py`) fails a test that opens a
-repository file outside its suite's inputs, so a reused pass never hides a change to something a test read. In a
+repository file outside its suite's inputs, so a reused pass never hides a change to something a test read. It also keeps
+the environment's values out of a failure's text, since a run's log is published: `os.environ` prints as its names, and a
+failing comparison that holds the environment or a copy of it names the variables that differ and prints neither side. In a
 `parallel = true` suite each passing test is also kept on its own, under its module's key.
 
 A long suite runs in parts by test file: `suites.py SUITE --files K/M` (or `SUITE:K/M`, `SUITE:1,3/M`) runs part K of M,
@@ -89,6 +91,7 @@ follows.
 | `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
 | `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
+| `import_order.py` | writes the generated tables of `tests/import_order.toml`, which folder may import which, from the tree |
 | `mutants.py` | deletes each check a verifier source runs, one at a time, and names each deletion its tests miss |
 
 ## Running it

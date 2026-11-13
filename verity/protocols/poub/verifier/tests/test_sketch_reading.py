@@ -4,6 +4,7 @@ thresholds the protocol states, and a grinding try's compressions against the re
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import inspect
 import itertools
@@ -13,9 +14,9 @@ from fractions import Fraction
 
 import pytest
 
-from verity.protocols.poub.verifier import audit, ledger, receipts, timing
 from verity.commitments import MerkleTree, scheme
 from verity.commitments.randomness import derive
+from verity.protocols.poub.verifier import audit, ledger, receipts, timing
 
 PRIME = 1_000_003
 
@@ -72,8 +73,8 @@ def test_the_bound_is_exact_at_two_rows(cols: int) -> None:
 
 def test_seeded_sampling_does_not_falsify_the_rank_tail() -> None:
     """Seeded sampling at small parameters against the formulas behind `Accounting.Assumptions.SketchRank`
-    (the deployed 16 × 4096 number is out of any sampler's reach): 10,000 draws a check at seed
-    20261014.  The F2 law is exact, so the empirical CDF matches it two-sided; the ±1 bound and the union bound over
+    (the deployed 16 × 4096 number is out of any sampler's reach): 10,000 samples a check at seed
+    20261014.  The F2 formula is exact, so the empirical CDF matches it two-sided; the ±1 bound and the union bound over
     sectors (the assumption's `∃ u` event) are upper bounds that sampling sits below, up to noise, and they are tight
     here (at 4 × 5 the bound on rank ≤ 2 is exactly 0.02588 by enumeration), so a wrong formula shows as systematic
     excess.  The margins come from a sweep of seeds 0..19 at this size: worst |emp − exact| 0.0025 (F2 at rank ≤ 6)
@@ -259,7 +260,7 @@ def test_a_grinding_try_costs_what_the_reference_hashes(monkeypatch: pytest.Monk
     def root(n: int) -> bytes:
         return MerkleTree(domains[n], {c: bytes(64) for c in range(n)}, lambda _c: receipts.SCHEMA).commitment.root
 
-    tree = {n: counted(lambda: root(n)) for n in domains}
+    tree = {n: counted(functools.partial(root, n)) for n in domains}
     leaf, node = tree[1], 3
     assert all(tree[n] == leaf * n + node * (n - 1) for n in tree)
     next_seed = counted(lambda: receipts.seed(bytes(receipts.CHALLENGE_BYTES), 1, seed))

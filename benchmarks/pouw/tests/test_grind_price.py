@@ -3,17 +3,10 @@ ln(T/δ)/θ, H1's per-head floor is attn_noise's, and the shapes are eps_budget'
 
 from __future__ import annotations
 
-import importlib.util
 import math
-import sys
-from pathlib import Path
 
+import grind_price as G
 import pytest
-
-spec = importlib.util.spec_from_file_location("pouw_grind_price", Path(__file__).parents[1] / "grind_price.py")
-G = importlib.util.module_from_spec(spec)
-sys.modules["pouw_grind_price"] = G
-spec.loader.exec_module(G)
 
 C = G.TILE[1]
 W = range(1, G.SEG + 1)
