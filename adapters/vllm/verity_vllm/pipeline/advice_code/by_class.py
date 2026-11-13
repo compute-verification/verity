@@ -1,7 +1,7 @@
 """Advice v1's charge by class: each window's bits (`codec.bits_by_window`) split by the field that put them there.
 
 A reader beside the codec. It parses a string as `codec.bits_by_window` does, codes its windows again
-(`window_code.code_window`) through an encoder that notes what each symbol adds to its window's segment, and refuses
+(`window_code.code_executionPhase`) through an encoder that notes what each symbol adds to its window's segment, and refuses
 unless the string it wrote is the one it read. It changes no string, no codebook and no registration.
 
 **The parts** (`FIELDS`) are integers and sum to the window's charge exactly.
@@ -56,7 +56,7 @@ __all__ = ["bits_by_class", "CLASSES", "closed", "FIELDS", "NO_FIELD", "no_field
 #: a window's parts: its segment's symbols by field, what ends the segment, and its tail's two kinds of term
 FIELDS = ("decisions", "order", "hits", "resumes", "lag", "segment_end", "output_len", "finish")
 
-#: the field of each symbol `window_code.code_window` codes
+#: the field of each symbol `window_code.code_executionPhase` codes
 SYMBOLS = {"n_arrived": "decisions", "arrived": "decisions", "n_hits": "hits", "hit": "hits", "n_resumes": "resumes",
            "resume_gap": "resumes", "n_order": "order", "order_gap": "order", "order_len": "order",
            "order_index": "order", "n_lag": "lag", "lag": "lag"}
@@ -159,7 +159,7 @@ def closed(reg: Registered) -> dict[str, tuple[str, ...]]:
 
 
 class _Meter:
-    """`window_code.Encoder` behind `code_window`, noting per field the bits each symbol adds to the open segment: the
+    """`window_code.Encoder` behind `code_executionPhase`, noting per field the bits each symbol adds to the open segment: the
     coder's shifts while it codes the symbol, each one bit written or pending."""
 
     def __init__(self, book: CV.Book) -> None:
@@ -326,7 +326,7 @@ def bits_by_class(data: bytes, record: Record, reg: Registered) -> dict[int, dic
         for win, values, widths in zip(wins, tails, V.length_widths(record, reg)):
             m.e.window()
             m.by = dict.fromkeys(FIELDS, 0)
-            CV.code_window(m, win, st)
+            CV.code_executionPhase(m, win, st)
             for j, (v, n) in enumerate(zip(values, widths)):
                 m.e.raw(v, n)
                 m.by["finish" if j % 2 else "output_len"] += n

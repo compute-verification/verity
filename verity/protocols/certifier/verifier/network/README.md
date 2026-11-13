@@ -6,7 +6,7 @@ the suite that holds each check to its Python reference in `verity/protocols/cer
 A network certifier is an auditor-trusted device on a node's uplink. For each sampling block of transfer blocks it
 carries on a link (the code's *link-window*, over one sampling period) it signs a network certificate. A certification
 period is m consecutive link-windows on one link under one signed root (`NetworkCheck.Period`). The identifiers keep the
-names `window` and `LinkWindow` until a format version (the Glossary's older names).
+names `window` and `TransferBlocks` until a format version (the Glossary's older names).
 
 - `verity/protocols/certifier/`: the network certifier itself (its relay, records, certificates and the Python
   audit), and in its README the protocol.
@@ -42,7 +42,7 @@ The other modules:
 - `NetworkCheck.RecordsGrid` and `NetworkCheck.RecordsBytes`: the package's guarantees (`lean-audit.json`).
   `RecordsGrid` proves that the records check's linear Program grid is `NetworkCheck.Check`'s. `RecordsBytes` proves
   that its evidence, with payloads kept as bytes, is v4's evidence read as bits.
-- `NetworkCheck.LinkWindow`: the verdict of record on one link-window from its proof (`service.LinkWindows.verify`).
+- `NetworkCheck.TransferBlocks`: the verdict of record on one link-window from its proof (`service.LinkWindows.verify`).
 
 `network-records verdicts` serves three functions on the difftest harness's protocol (`Difftest.serve`): `verdicts`
 (every link-window's verdict, with the grid compared), `verdicts-no-grid`, and `link-window`.
@@ -58,7 +58,7 @@ one-stage, one answer per registered sampling block of the workload). Its parame
 
 It accepts when every link-window passes its form's check and every compute audit accepted. It then publishes `K`, the
 bits a covert sender in the server can move through the network certifier in the period, as
-`NetTiming.Guarantees.PeriodLeakAccepted` counts them (`security/Proofs/NetworkCertifier/README.md`).
+`NetTiming.Guarantees.MonitoringPeriodLeakAccepted` counts them (`security/Proofs/NetworkCertifier/README.md`).
 
 ## Who runs it
 
