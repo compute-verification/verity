@@ -19,7 +19,8 @@ public import Proofs.Core.Site
   θ value by its name; and `Registration.Valid.declarations_nodup`: the log declares each day once
   (`Registration.Valid.days_nodup`).
 
-`RegistrationSound_honest`: the onsite example's log, with day 0 declared, is valid, at a Site with a device.
+`RegistrationSound_honest`: the onsite example's log, with day 0 declared, is valid, at a Site with a device and a
+boundary link.
 `RegistrationSound_nontrivial`: the view of a log with a device naming no sheet holds no registered facts, so the
 conclusion fails for a check that accepts every log.
 -/
@@ -151,11 +152,13 @@ theorem RegistrationSound : Guarantees.RegistrationSound := by
   exact ⟨h.devices, h.onsite, h.theta_nodup, h.declarations_nodup⟩
 
 /-- **`RegistrationSound`'s honest lemma: a valid log at a nonempty Site.** The onsite example's log, with day 0
-declared, passes the check, and its Site has a device. -/
+declared, passes the check; its Site has a device, and a boundary link, the node's uplink to its certifier. -/
 theorem RegistrationSound_honest :
     Valid Example.digests Example.auditor .onsite Example.declaredLog ∧
-      Example.device "gpu0" "node0" Example.sheetA ∈ (Site.ofLog Example.declaredLog).locs :=
-  ⟨Example.declaredLog_valid.1, by simp [Example.declaredLog, Example.onsite, Example.node, Site.ofLog, Entry.added]⟩
+      Example.device "gpu0" "node0" Example.sheetA ∈ (Site.ofLog Example.declaredLog).locs ∧
+      (Site.ofLog Example.declaredLog).Boundary ⟨"uplink0", ("node0", "cert0"), 100000, 100000⟩ :=
+  ⟨Example.declaredLog_valid.1, by simp [Example.declaredLog, Example.onsite, Example.node, Site.ofLog, Entry.added],
+    by decide +kernel⟩
 
 /-- **`RegistrationSound`'s nontrivial lemma: its conclusion fails at a check that accepts everything.** A log whose
 device names no sheet: the device's sheet lookup finds none, so its view holds no registered facts. -/

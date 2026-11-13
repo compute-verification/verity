@@ -439,6 +439,10 @@
    "owner": "@soundness",
    "why": "A scope: the log passed registration's check, entry by entry, before any challenge."
   },
+  "Verity.Site.Boundary": {
+   "owner": "@soundness",
+   "why": "A scope inside the conclusion: the links onsite coverage is about, a host's link to the outside or to its certifier."
+  },
   "Verity.MemCheck.Checked": {
    "owner": "@proofs",
    "digest": "59c9fbd9e8827097c111a5a48fff2bc26389d88352bc98f1b264086b27006aff",
@@ -26659,6 +26663,12 @@
   "Verity.SecurityProofs.RegistrationSound": {
    "owner": "@soundness"
   },
+  "Verity.SecurityProofs.RegistrationSound_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.SecurityProofs.RegistrationSound_nontrivial": {
+   "owner": "@soundness"
+  },
   "Verity.SecurityProofs.MemoryChecked": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.MemoryChecked : Verity.Guarantees.MemoryChecked"],
@@ -27972,6 +27982,10 @@
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
+    "outcome": "accept"
+   },
+   "Verity.SecurityProofs.RegistrationSound": {
+    "function": "Verity.Registration.Valid",
     "outcome": "accept"
    },
    "Hash.SecurityProofs.HistoryReadBinding": {
