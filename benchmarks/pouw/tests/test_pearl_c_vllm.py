@@ -1585,25 +1585,17 @@ def test_uncredited_calls_split_each_calls_macs_by_cause_and_sum_to_the_runs_cre
                                                                 "kept_width": 0}
 
 
-def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_passes_recomputes_it(tmp_path, monkeypatch, capsys):
-    """An accepted verdict that credits carries `uncredited_calls` in its document (not in its answer); a test instance's
-    credits nothing and carries none.  ``served_passes.py uncredited`` recomputes it from the passes in DIR, found by the
-    document's SHA-256s, without drawing, and refuses a document that didn't accept, a DIR without its passes, passes of
-    another commitment and a credit the calls don't sum to."""
+def _uncredited_case(tmp_path: Path, monkeypatch, capsys):
+    """An accepted verdict over one proved pass in ``tmp_path/w0``, a test instance's verdict over it, and ``run(doc,
+    passes)``: ``served_passes.py uncredited`` on that document, its exit code and what it printed."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     path = proved_pass(tmp_path / "w0" / "pass-00000", PROMOTED[0])[0]
     shutil.copy(path.parent / "coins.json", tmp_path / "w0" / "coins.json")
     coins, source = published(path), b"verifier" * 4
     test = VR.verify_passes([path], 3, 1, "test", coins, source, test_instance=True)
-    assert test["answer"]["verdict"] == "accept" and "uncredited" not in test
     monkeypatch.setattr(VR, "K_MIN", 32)
     monkeypatch.setattr(VR, "TILE", 16)
     doc = VR.verify_passes([path], 3, 1, "test", coins, source)
-    work = doc["answer"]["public"]["work"]
-    assert doc["answer"]["verdict"] == "accept" and work["credited"] > 0, doc["line"]
-    assert doc["uncredited"] == VR.uncredited_calls([VR.load(path, coins)], 3, VR.DELTA, work["over_cap_draws"])
-    assert "uncredited" not in doc["answer"] and "calls" not in json.dumps(doc["answer"])
-    _split(doc["uncredited"])
     verify, out = tmp_path / "verify.json", tmp_path / "uncredited.json"
 
     def run(d: dict, passes: Path = tmp_path / "w0") -> tuple[int, str]:
@@ -1611,6 +1603,21 @@ def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_
         rc = SP.main(["uncredited", "--passes", str(passes), "--verify", str(verify), "--out", str(out)])
         return rc, capsys.readouterr().out
 
+    return doc, test, VR.load(path, coins), out, run
+
+
+def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_passes_recomputes_it(tmp_path, monkeypatch, capsys):
+    """An accepted verdict that credits carries `uncredited_calls` in its document (not in its answer); a test instance's
+    credits nothing and carries none.  ``served_passes.py uncredited`` recomputes it from the passes in DIR, found by the
+    document's SHA-256s, without drawing, and refuses a document that didn't accept, a DIR without its passes, passes of
+    another commitment and a credit the calls don't sum to."""
+    doc, test, held, out, run = _uncredited_case(tmp_path, monkeypatch, capsys)
+    assert test["answer"]["verdict"] == "accept" and "uncredited" not in test
+    work = doc["answer"]["public"]["work"]
+    assert doc["answer"]["verdict"] == "accept" and work["credited"] > 0, doc["line"]
+    assert doc["uncredited"] == VR.uncredited_calls([held], 3, VR.DELTA, work["over_cap_draws"])
+    assert "uncredited" not in doc["answer"] and "calls" not in json.dumps(doc["answer"])
+    _split(doc["uncredited"])
     rc, said = run(doc)
     got = json.loads(out.read_text())
     assert rc == 0 and got["uncredited"] == doc["uncredited"] and got["commitment"] == doc["commitment"], said
@@ -1628,6 +1635,33 @@ def test_an_accepted_run_verdict_says_where_its_macs_went_uncredited_and_served_
         assert rc == 1 and why in said and not out.exists(), (why, said)
     rc, said = run(doc, tmp_path)
     assert rc == 1 and "no pass in" in said and not out.exists()
+
+
+def test_served_passes_uncredited_reads_the_grid_form_of_a_fixed_load_run(tmp_path, monkeypatch, capsys):
+    """A run held to its class's fixed load (`verify_run.grid_work`) publishes the passes' whole MACs (the checked MACs
+    and the excluded and voluntary cells') and their credit less the give-up padded up to the window grid.
+    ``uncredited`` accepts it where the calls' credit lies between the published credit and that plus the give-up, the
+    padding past the calls' credit being the cause ``grid``, and refuses calls whose credit is past the give-up's room
+    or whose whole MACs are not the published ones."""
+    doc, _, _, out, run = _uncredited_case(tmp_path, monkeypatch, capsys)
+    t = doc["uncredited"]["totals"]
+    whole = t["checked_macs"] + t["excluded_a"] + t["excluded_b"] + t["voluntary"]
+    assert whole > t["checked_macs"] and t["credited"] > 3
+    credited = t["credited"] - 3
+
+    def held(give_up: int = 8, macs: int = whole) -> dict:
+        work = {**doc["answer"]["public"]["work"], "macs": macs, "credited": credited, "give_up": give_up}
+        return {**doc, "answer": {**doc["answer"], "public": {**doc["answer"]["public"], "work": work}}}
+
+    rc, said = run(held())
+    assert rc == 0 and json.loads(out.read_text())["uncredited"] == doc["uncredited"], said
+    assert "the verdict's grid form, 3 past its credit (grid)" in said
+    assert run(held(give_up=3))[0] == 0
+    for give_up, macs in ((2, whole), (8, whole + 1), (8, t["checked_macs"])):
+        rc, said = run(held(give_up, macs))
+        assert rc == 1 and not out.exists(), said
+        assert (f"the calls credit {t['credited']:,} of {whole:,} whole MACs, and the verdict's grid form "
+                f"{credited:,} of {macs:,} less a give-up of {give_up:,}") in said
 
 
 def test_verify_run_refuses_a_call_index_at_2_to_the_32_and_one_held_twice(tmp_path):
