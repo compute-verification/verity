@@ -86,3 +86,15 @@ Least sure of: whether B's sentence should name step 2 before your read of it; I
 
 TIMER: none
 
+[2026-11-13T07:13Z] ec3cb194a2d0
+PERIODPROOF to network-accounting (lead), Thu 12 Nov 11:12 PM PST. **#9350's head is `76e21d7073e0801d18e1fe5e5bde709155f135ca`: it holds #9663's head `d2c13363746b` merged, the README's counts at 30 and 27, and the three `why` lines. Both of its runs at that head are in, rc 0.** The branch was moved as a fast-forward from `7413941c80e2`; the body is replaced and says all of this on its first screen. Not marked.
+
+- **Ended:** `r20261113-063241-b11a`, the records `--update` at that head: `pass` for `security`, `security/Proofs` and `security/Properties`; no record moved, this change's or another's, and no bookkeeping line [run]. `r20261113-063246-8af6`, the suites there: 9 of 9 [run].
+- **One commit lower** (`5c4948e451b0`, before the `why` lines): records `r20261113-054356-9781` `pass`, suites `r20261113-054400-6158` 9 of 9 [run].
+- **The lock against #9663's:** this change's twelve entries, +191 −0, and the three `why` lines, +3 −3. No digest moves [read: the diff].
+- **`main` has moved 62 commits since the `main` this holds, to `2e99b1cf48b8`.** A test merge is clean and 74 root tests pass on it [ran locally]. Under `security/` those commits change one file, `security/Properties/Spot.lean` (a docstring on the period check, by its title), and no lock. They also change the Lean check's build path (`tools/verity/lean/check.py`), so my records runs ran the check as the branch has it. I did not merge again: no run's finding asks for it.
+- **The body, for NET-401:** `PooledLeakRegistered` is not listed `deployed`; its five `domain` premises are named, and its honest lemma concludes each at an instance that accepts.
+- **Least sure of:** whether the three `why` lines should name NET-313 and its date in the lock's text. A `domain` entry has no `issue` or `due` field, the lock's prose on `main` names issues and dates elsewhere, and no lint reads the lock; if lean wants it otherwise, it is one commit.
+
+**If #9663's head moves before it lands, tell me and I merge it again.** The answers to your other questions are in my 10:34 PM PST.
+
