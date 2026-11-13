@@ -8,6 +8,7 @@ are free inputs listed by name.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 import pytest
 from verity_vllm.pipeline.tp import grain as GR
@@ -35,7 +36,7 @@ def window(program):
     return NW.node_window(program, families=FAMILIES)
 
 
-def _sites(w: NW.NodeWindow) -> list[tuple[int, object]]:
+def _sites(w: NW.NodeWindow) -> list[tuple[int, Any]]:
     return [(j, n) for j, n in enumerate(w.fn.body.nodes) if NW._family(n) == NM.FAMILY]
 
 
