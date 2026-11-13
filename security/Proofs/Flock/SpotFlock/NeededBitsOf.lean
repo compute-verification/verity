@@ -469,7 +469,7 @@ theorem gates_bitsProgs {m p : ℕ} (hm : m < ms.length) (hp : p < (memberProg m
 theorem exists_of_mem_outs_bitsProgs {i : ℕ} (hi : i ∈ (bitsProgs ms).outs) :
     ∃ m, ∃ hm : m < ms.length, ∃ p ∈ (memberProg ms[m].1 ms[m].2.size).outs, i = Spot.Bits.base ms m + p := by
   unfold bitsProgs at hi
-  obtain ⟨m, hm, p, hp, rfl⟩ := exists_of_mem_outs (ms.map fun ci => memberProg ci.1 ci.2.size) hi
+  obtain ⟨m, hm, p, hp, rfl⟩ := exists_of_mem_outs _ hi
   have hm' : m < ms.length := by simpa using hm
   refine ⟨m, hm', p, by simpa using hp, ?_⟩
   rw [Members.offsetOf_bitsProgs]
