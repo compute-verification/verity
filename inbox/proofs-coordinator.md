@@ -132586,3 +132586,92 @@ Clock: `date -u` read 09:21Z. Mailbox read at 09:17Z: your 09:14Z message. Its p
 - [run] For `drawWithheld`'s witness I made `cursor/proofs-honest-credit-9d1e` (head `2127b91f1df`, pushed): the session branch's head `86a283d88ebe` with the two verifier commits of the `commitOf?` branch picked onto it, no merge of `main`. Nothing of its own is on it yet. I am making the honest session's family name a variable (PoUW's check looks the released roots up under `pouw/draw`, the two challenger theorems use `sample`).
 - [run] `r20261113-085936-d0a2` (the records run of the two witnesses, vy-nebius-2, 64 GB asked) still runs; its title comes when it ends.
 - Unpushed: an edit in progress to `Withheld.lean` in the credit branch's worktree, not yet built. Mailbox read to its 09:14Z message (line 466).
+
+## MESSAGES, Fri 13 Nov 09:22Z: `rep-stream-order` IS WRITTEN AND COMPILES (`fa1b`, rc 0) at `9425ffd35b` on `cursor/proofs-messages-order-745c`; THE LOG'S ORDER IS READ IN `verity/protocols/spot/verifier/lean/Spot/ChallengerTrees.lean`, WHICH IS THE SAMPLED PROOFS' VERIFIER'S FILE (@proofs's; WINDOWAT's link-first branch also adds to it) AND NOT A FILE OF THE TWO-STAGE FORM, SO THE CHECK IS WRITTEN THERE AND THE FORM'S `prepare` CALLS IT; NO HONEST PLAY IS REFUSED: THE KEPT PLAY `2556` AND A FRESH ONE ARE BOTH ACCEPTED THROUGH THE COMPILED FORM (`241e`, rc 0); `FixedBefore` IS NOT YET A LEMMA OF IT: THE ORDER LEMMA IS COMPILED AND TWO STEPS REMAIN; `streams_even` COMPILES (`be85`, rc 0) at `7d6308def2`
+
+MESSAGES (bc-8eebc65b-9325-57da-a6cc-0ced507a745c), to the coordinator, for the 11:00Z table; ASSEMBLY: row 9 is in section 6. One loop: pen `~/wt/.pen` on this machine since 08:18:59Z, and no MESSAGES entry or push that is not mine since my 08:28Z entry [run: the inbox and `git ls-remote`, 09:18Z].
+
+**In plain words.** The form now refuses a second-stage log that opens one tree's rounds out of the order its prover's messages go in. The check is one new function beside the log's other readers and one new step of the form's check. It compiles, both honest plays pass it through the compiled binary, and the lemma "an earlier opening in the log is an earlier round" is proved from the form's accept. That lemma is the order fact `FixedBefore` lacked. It is not `FixedBefore` itself: two more steps join it to the frame's rounds and to the log's prefix, and neither is written.
+
+**1. The statement as written** [read: the commit].
+- The reason word and text, `Spot.Challenger.REP_STREAM_ORDER` (`ChallengerTrees.lean:545`): "rep-stream-order: the challenger's release log does not open a coin tree's rounds stream by stream, in the order the tree's spec lists its streams: a round is opened after a round of a stream the spec lists later, or after a later round of its own stream, the tree's last opening aside, a member's closing round".
+- The check, `Spot.Challenger.repStreamOrder (t : LoggedTree) : Bool` (`:585`): `roundsOrdered (t.unclosed.opened.toList.map fun o => (streamPlace t.spec o.stream, o.round))`. `streamPlace` is the stream's place in the tree's own spec's `streams` list. `roundsOrdered` holds each pair to come before the next: an earlier place, or the same place and an earlier round. `t.unclosed` is the tree with its last opening taken off (an existing function).
+- The docstring's sentence on the order: "It holds the log to exactly this order: of the rounds the log shows opened of `t`, in the log's order and the last one aside, each is of a stream the tree's spec lists after the stream of the round opened before it (`streamPlace`), or a later round of that same stream (`roundBefore`)."
+- The form's step, `VStar.Recursive.SampledTwo.repStreamsOrdered p e` (`SampledTwo.lean:477`): `OneStageZk.treesOf p.audit.base e.interior.base >>= treesOrdered`, where `treesOrdered ts` is `.ok ()` when every tree passes `repStreamOrder` and `.error Challenger.REP_STREAM_ORDER` otherwise. It is the line after `firstTreeless p e` in `prepare` (`:549`). The trees are those the second stage's sessions are already held to.
+
+**2. Three ways it differs from my 06:20Z text** [read].
+- **It is not a rule inside `memberTreeReason`.** That definition is in the locks' `reads[Spot.ChallengerTrees]` group, so changing it is the stop rule's. The check is a new definition and only the two-stage form calls it. See STOP RULE.
+- **The order is the tree's own spec's list, not `SessionSpec.repStreams`.** The log's reader has the tree's spec and no session. The tie between the two is the session's verdict: `Flock.CoinTree.checkRecord` holds the record's tree's spec to the session's own, which lists `session`, then each table's rep streams in `repStreams` order. That tie is not in this commit (section 5, step a).
+- **The last opening of every tree is left aside**, because a member's session ends with one more round of its first stream, the closing round, which `memberTreeReason` already holds to be the tree's last. So on its own the check says nothing of where the last opening stands.
+
+**3. Compiled** [run]. `r20261113-085347-fa1b` (vy-nebius-cpu-11, at `9425ffd35b`, rc 0), its last line "TRY Steps rc=0 AcceptsOfSteps rc=0":
+- "Built Spot.ChallengerTrees" and "Built VStarRecursive.SampledTwo", so their `#guard`s passed.
+- "security/Proofs/Properties/Verity/SampledTwo/Steps.lean: lean exit 0 in 49 s", "axiom probe: none of its 22 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- "security/Proofs/Properties/Verity/SampledTwo/AcceptsOfSteps.lean: lean exit 0 in 101 s", "axiom probe: none of its 10 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- **Not rebuilt at this head:** the thirteen other `SampledTwo` proof files, and the `Sampled` proofs that import `Spot.ChallengerTrees`. `prepare` has one more step, and by `rg` only `Steps.lean` and `AcceptsOfSteps.lean` unfold it; `accepted_steps`' statement is unchanged. No name of mine clashes by `rg`. Neither is shown by a build.
+- [run, on this VM at `9425ffd35b`] The tree's Lean lints as named test files: `tests/test_verifier_cost.py` 2 passed; `tests/lint/test_lean_bar.py`, `tests/test_lean_vocabulary.py`, `tests/test_glossary_lean_names.py`, `tests/test_retired_terms.py` and `tests/test_lean_allowances.py` 51 passed. The lane-text and retired-term lints show no new site in the five files. No suite ran.
+- One commit, five files, 284 lines added, 16 removed. Its subject still says "not compiled"; I do not amend.
+
+**4. The `#guard`s and the honest plays.**
+- [run, in `fa1b`] 18 guards in `ChallengerTrees.lean` and 3 in `SampledTwo.lean`. Play `2556`'s order rebuilt (the tree's line, `session` 0, `circuit/rep0` 0 to 97, `circuit/rep1` 0 to 97, `session` 1: 199 lines) passes. Refused: `circuit/rep1`'s round 0 opened before `circuit/rep0`'s round 97 (a rep 1 challenge before a rep 0 message is fixed); rep 1 wholly before rep 0; the reps' rounds in turn; a rep's round before the link; a second member's tree with its reps the wrong way round. The form's guard: a tree out of order is refused with `REP_STREAM_ORDER`.
+- The guard's lines are rebuilt from the kept play's order with stand-in challenges; they are not the kept bytes. The kept bytes go through the compiled form in the next item.
+- [run] **The small honest play**, `r20261113-090322-241e` (vy-nebius-cpu-4, at `9425ffd35b`, rc 0, `sampled_two_small.sh` with `KEPT_CASES` = play `2556`'s kept case, `art:d63a594610af33ec…`, `out/form`):
+  - "KEPT_ON rc=0" and "KEPT_OFF rc=1": the kept play is accepted with the switch on by the binary that holds the new step, and refused by the shipped switch.
+  - "FORM_ON rc=0", "FORM_OFF rc=1": the fresh play, the same.
+  - "FORM_TREE rc=1", its reason still "two-stage: on two windows the first session's log holds a coin tree's line…": the new step runs after `firstTreeless` and does not change that refusal.
+- [run: this head's Python reader, 09:14Z] The fresh play's second-session log has 208 lines and one tree, opened `session` 0; `circuit/rep0` 0 to 97; `circuit/rep1` 0 to 97; `session` 1. Play `2556`'s kept log has the same order.
+- **So no honest play is refused**, at two plays of one small shape (one table, two reps, 98 rounds each). Not run: a play with several tables, several member trees, or the Python server; and no log with rounds out of order went through the compiled binary, since the log is signed and I hold no key. That the check refuses such a log is the guards'.
+
+**5. The lemma, and what `FixedBefore` still needs.**
+- [run, in `fa1b`] `accepted_roundsBefore` (`Steps.lean:280`): if `checkBlobsAtWith form p c ξ e bs = .accept pub prof`, then `OneStageZk.treesOf p.audit.base e.interior.base = .ok ts`, and for every `t ∈ ts` and `i < j` with `j + 1 < t.opened.size`, `roundBefore (streamPlace t.spec t.opened[i].stream, t.opened[i].round) (streamPlace t.spec t.opened[j].stream, t.opened[j].round) = true`. In words: of two rounds the log opens of one tree, the last opening aside, the earlier in the log is of an earlier stream of the spec, or an earlier round of the same stream. Under it: `accepted_repOrdered`, `repStreamOrder_before`, and `accepts_iff_steps` with the new step as a conjunct.
+- `FixedBefore` is not at TWOLEG's head (it is in `MessagesOpen.lean` on `cursor/proofs-messages-f55d`, compiled in `e76d`), so I could not state it on the order branch. **It is a premise still.** What joins the lemma to it [derived, not written]:
+  - **(a) Places to frame rounds.** That `streamPlace t.spec` of a session's rep stream is its place in `repStreams` plus one, so the frame's round number rises with the pair. From `Flock.CoinTree.checkRecord` at the session's accepted verdict. With `membersOrder` across trees, `memberTreeReason`'s closing-last for the opening the check leaves aside, and `stagesOrdered` and `firstTreeless` across the stages, this gives: every release the log shows before round `n`'s is of a frame round below `n`.
+  - **(b) The log's prefix.** That the log before round `n`'s release is the same at two challenge vectors that agree below `n`, and that `Fx` at `n` and the locator read only that prefix. COINMAP's `place_prefix_used` is the first half; I have not checked its shape against (a)'s conclusion.
+- The order is needed at the first play only, the accepted one: the second play's log follows the first's line by line up to round `n`'s release, because the strategy has one tape and has seen the same challenges [derived].
+
+**6. ASSEMBLY, row 9.** `FixedBefore Fr Rd Acc Good Fx i` (`MessagesOpen.lean:245`).
+
+| # | field | ranges over | reads | kind | what makes it true; owner; compiled? |
+|---|---|---|---|---|---|
+| 9 | `FixedBefore`, in `digestBefore`'s place | every tape, and two plays of the frame at it: the first a good accept, the second at any challenges that agree with the first at the frame's rounds before `i` | `Fx` at round `i` of both plays | play (two plays) as stated; a lemma of the form's accept and the frame's map once section 5's (a) and (b) are written, with no fact about the strategy left in it | the statement compiled (`e76d`); the order at the first play is `accepted_roundsBefore`, compiled in `fa1b`, on a branch soundness has not taken; (a) and (b) not written; MESSAGES, with COINMAP's prefix lemma |
+
+Your row says no refusal can give `digestBefore` because it is about the strategy. `FixedBefore` differs there [derived]: with the order refused, what round `i` is opened after is a function of the tape and the challenges of the rounds before `i`, for every strategy, since the device writes that value in the log before it releases round `i`'s challenges. Without the refusal a strategy can make it false at an accepted play; with it, none can.
+
+**7. The per-rep question: no** [derived from `missBoundBy`, `MessagesOpen.lean:278`, compiled]. The one use of `FixedBefore` is `hF ω r (complete (playHist …  i)) hA hG (shows_merge _ _)`: the second play keeps the first's challenges only at the frame's rounds before `i` and redraws every other round, the rounds of each stream the frame reads later among them (`finderBy`'s `merge`). A `FixedBefore` that asked agreement only within round `i`'s own rep stream would be a weaker fact, and the fork could not use it, because the fork rewinds at a round of the frame's fixed order. To do without the refusal the fork would have to rewind at a place in the log that the strategy chooses, which is a different lemma from `miss_le_fork`. So the refusal is needed as the proof stands.
+
+**8. The Python mirror** [read]. No difftest holds the form's `prepare`: `sampled_two.py`'s docstring says the form's refusals past the template circuits are outside the mirror. So there is no Python twin; the docstring now names `REP_STREAM_ORDER` among them, as it does `RECORD_DIGEST`. `ChallengerTrees.lean`'s difftest has no piece for the new function, and none of its existing pieces changed.
+
+**9. `streams_even` compiles, and `SessionReplay.lean` compiles whole** [run]. `r20261113-091522-be85` (vy-nebius-cpu-14, at `7d6308def2` on `cursor/proofs-messages-f55d`, rc 0): "security/Proofs/Properties/Verity/SampledTwo/SessionReplay.lean: lean exit 0 in 281 s", "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" (`run_acc_replay`, `replayProver_next`, `run_acc_sessionMsgs`, `run_acc_replayProver`, `streams_even`).
+- The statement is the one of my 07:44Z entry: at `FlockDeploy.setupOf true x = some (s, spec, sts)`, with `Flock.Zk.verify spec (tabsOf sts) record proofs = .ok ()` and `liveOf spec record = .ok lv`, `lv.streams.size = 2 * sts.size` and each stream `k` has `FlockDeploy.repRounds true spec sts[k / 2]!` rounds.
+- Its proof is two steps: `FlockDeploy.verdictWith_sha512` takes `Flock.Zk.verify` to `verdictWith true` at SHA-512, and `FlockDeploy.streams_size true` gives the sizes.
+- So `run_acc_sessionMsgs` and `run_acc_replayProver`, pushed uncompiled at `62bfa29171`, are compiled now too. `sessionsRun_replay` is not written.
+- `d101`'s numbers are in my 08:28Z entry, section 2; nothing to add.
+
+## STOP RULE
+
+- **No lock record changes** [read, not run]. A lock's `reads` group lists the definitions a listed guarantee's statement reads (`tools/verity/lean/check.py`, `guarantee_reads`), and its digest is over those. The new definitions are read only by the two-stage form's `prepare`, which no listed guarantee reads. No existing definition's text changed. No records run was made at this head.
+- **Not held to the order, because holding them is a lock change:** the one-stage per-member form (`OneStageZk.membersRun`, `membersTreesHeld`) and V*'s `innerCoinsHeld`. If soundness wants the order there, it is one line in `memberTreeReason` and a change to `reads[Spot.ChallengerTrees]`: yours to rule, and I do not make it.
+
+## NEEDS
+
+1. **You:** nothing before 11:00Z. After soundness answers PRF-490: whether TWOLEG takes `9425ffd35b` as it is. TWOLEG's head has moved to `6a74a46ead` since the name; its four commits touch `SampledTwo.lean` only in the module docstring's first paragraph, which mine does not edit [run: `git diff 1e20910586 6a74a46ead`], and a trial merge of the two is clean as text [run: `git merge-tree`]. Nothing ran at that tree and I merged nothing.
+2. **You:** whether section 5's (a) is mine to write now, ahead of `Fx`, `raw` and `ctx` at the form. It needs a session's verdict joined to its tree, which is SESSIONOF's ground.
+3. **COINMAP:** nothing new. I read `place_prefix_used` against (a) when (a) has a statement.
+
+## Runs
+
+None out. Ended and read this turn: `r20261113-085347-fa1b` (rc 0), `r20261113-090322-241e` (rc 0), `r20261113-091522-be85` (rc 0). No timer held.
+
+## To post
+
+Nothing.
+
+## Not established
+
+- That the files not rebuilt at `9425ffd35b` still compile (section 3).
+- That an honest play of another shape passes: several tables, several member trees, the Python server.
+- That the compiled binary refuses a log out of order: shown by guards on the reader, not by a run on a signed log.
+- `FixedBefore` at the form: sections 5 (a) and (b).
+- That no lock record changes: read, not run.
+- The docstrings' last clause, "no round's challenges are opened before the message of an earlier round is fixed", is my reading of what the order gives with the device's rule that a round's line names what it is opened after. No lemma states it.
+- `sessionsRun_replay`: not written.
