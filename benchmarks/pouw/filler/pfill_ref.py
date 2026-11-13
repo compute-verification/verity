@@ -22,7 +22,7 @@ import numpy as np
 # the receipts reference: the folds' steps, key rules and pfill's lane starts
 from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as RF
 
-if "dfill_ref" not in sys.modules:  # another suite's test loads this file by path, its directory not on the path
+if "dfill_ref" not in sys.modules:  # the reference's --adopter loads this file by path, its directory not on the path
     _spec = importlib.util.spec_from_file_location("dfill_ref", Path(__file__).with_name("dfill_ref.py"))
     sys.modules["dfill_ref"] = importlib.util.module_from_spec(_spec)
     _spec.loader.exec_module(sys.modules["dfill_ref"])

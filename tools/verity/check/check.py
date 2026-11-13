@@ -1752,6 +1752,13 @@ OPT_IN = {
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
         "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
+    # the whole recursive session: the kept run's data, fetched from the evidence store with the run's custody key
+    "verity/protocols/proofs/recursion/verifier/vstar_cli": {"VERITY_VSTAR_RECURSIVE_DATA": (
+        "tests/test_vstar_recursive.py::test_the_honest_recursive_session_is_accepted_part_for_part",
+        "tests/test_vstar_recursive.py::test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size",
+        "tests/test_vstar_recursive.py::test_a_flipped_inner_coin_is_refused_where_flock_verify_refuses_it",
+        "tests/test_vstar_recursive.py::test_a_rep_file_one_bit_off_is_refused_at_its_part",
+        "tests/test_vstar_recursive.py::test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both")},
     "adapters/vllm": {
         "VERITY_VLLM_INTERIOR_TABLE": (
             "tests/pipeline/test_interior_table.py::test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them",
