@@ -3,7 +3,7 @@
 DOT=HopperBF16WgmmaDot16_v1, INV=Fa3InvSum_v1, MASKED_FROM}`, the row the target binds (`targets.attention_spec`), and on a sequence the
 plan splits against `AttentionSplit_v1{..., MASKED_FROM, PER}` (`registry.fa3_split`: the Split mainloop and FlashAttnFwdCombine).
 
-One GPU process writes `<out>/glm53_fa3_prefill_capture.json`, the property record `glm53_fa3_prefill_capture` (`properties.record`).
+One GPU process writes `<out>/glm53_fa3_prefill_capture.json`, the property record `glm53_fa3_prefill_capture` (`records.property_record`).
 The device gate runs first and nothing else runs when it fails (exit 3):
 
   gate     `fa2_target_capture_gpu.gate`: driver, compute capability 9.0, 132 SMs.
@@ -60,7 +60,7 @@ from verity.definitions.registry import fa3_split as FS
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fa3-prefill-capture/v3"
 RECORD = "glm53_fa3_prefill_capture.json"

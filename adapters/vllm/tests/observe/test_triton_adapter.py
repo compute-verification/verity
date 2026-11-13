@@ -6,7 +6,9 @@ of every parameter by name, its grid as ints and its warps and stages; a warm-up
 noted and recorded by position, and one that cannot be recorded is noted and still returns its kernel."""
 from __future__ import annotations
 
+import hashlib
 import sys
+import weakref
 from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
@@ -106,19 +108,23 @@ def _binder(*args, **kwargs):
     return MappingProxyType(bound), ("the specialization",), {k: v for k, v in kwargs.items() if k not in PARAMS}
 
 
+class _Jit(SimpleNamespace):
+    """A namespace that takes a weak reference, which a bare `SimpleNamespace` does not."""
+
+
 def _jit(binder: Any = _binder, **fields: Any) -> Any:
     """A `JITFunction`, as far as the wrapper reads one: its function, source and parameters, and for the driver's device the
     binder, last of that device's caches."""
     params = [SimpleNamespace(name=name, is_constexpr=name == "BLOCK") for name in PARAMS]
     caches = {DEVICE: ("kernels", "keys", "target", "backend", binder)}
-    return SimpleNamespace(**{"fn": _Kernels.kernel, "src": SRC, "params": params, "device_caches": caches, **fields})
+    return _Jit(**{"fn": _Kernels.kernel, "src": SRC, "params": params, "device_caches": caches, **fields})
 
 
 @pytest.fixture
 def recording(patched, monkeypatch) -> tuple[Recorder, list, _Patch]:
     """A recorder that records, bound to the wrapper, with Triton's driver stood in on device 7: the recorder, what it has
-    emitted and the engine's patch. No source digest or constexpr names are kept from another test's function: the adapter
-    keeps both by a function's `id`, which a later stand-in can have again."""
+    emitted and the engine's patch. No source digest or constexpr names are kept from another test's function, and none of
+    its functions is held: the adapter keeps both by a function's `id`, each with the function."""
     patch, _ = patched
     monkeypatch.setattr(T, "_SRC_SHA", {})
     monkeypatch.setattr(T, "_CONSTEXPR_NAMES", {})
@@ -283,6 +289,22 @@ def test_a_functions_source_digest_and_constexpr_names_are_read_once(recording) 
     other = _jit(src="another source", params=[SimpleNamespace(name=name, is_constexpr=name != "BLOCK") for name in PARAMS])
     assert T.src_sha(other) not in (SRC_DIGEST, EMPTY_DIGEST) and len(T.src_sha(other)) == 64
     assert T.constexpr_names(other) == frozenset({"x", "n"})
+
+
+def test_a_function_made_once_another_is_dropped_has_its_own_source_digest_and_constexpr_names(recording) -> None:
+    """What the adapter read of a function it keeps by the function's `id`, with the function: one the caller drops stays
+    alive, so no later function is made at its address and answered for by it."""
+    params = [SimpleNamespace(name=name, is_constexpr=name != "BLOCK") for name in PARAMS]
+    for k in range(64):
+        first = _jit()
+        assert T.src_sha(first) == SRC_DIGEST and T.constexpr_names(first) == frozenset({"BLOCK"})
+        alive = weakref.ref(first)
+        del first
+        assert alive() is not None
+        second = _jit(src=f"the source of kernel {k}", params=params)
+        assert T.src_sha(second) == hashlib.sha256(f"the source of kernel {k}".encode()).hexdigest()
+        assert T.constexpr_names(second) == frozenset({"x", "n"})
+    assert len(T._SRC_SHA) == len(T._CONSTEXPR_NAMES) == 128
 
 
 def test_a_function_with_no_source_has_the_empty_texts_digest_and_one_with_no_parameters_to_read_no_constexpr(recording) -> None:

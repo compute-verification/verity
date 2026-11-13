@@ -122,6 +122,15 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
     wcheck = oracle.workload_check(workload)
     if wcheck.get("ok") is False:
         return _foreign_oracle(oracle, bmap, wcheck)
+    return _report(oracle, wcheck, max_report, query_families,
+                   **_walk(oracle, bmap, committed, producers, inv_alias, own, runtime_rows))
+
+
+def _walk(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None],
+          producers: dict[tuple[str, str], dict[str, Any]] | None, inv_alias: dict[tuple[str, int], str], own: frozenset[str],
+          runtime_rows: dict[tuple, tuple[int, int]] | None) -> dict[str, Any]:
+    """`oracle_compare`'s pass over the binding map's entries: what it compared, found equal, found different and did not compare,
+    each tally under the name `_report` takes it by."""
     compared = equal = 0
     mism: list[dict] = []
     not_cmp: Counter = Counter()
@@ -247,6 +256,17 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             first = next((i for i in range(0, len(ob), isz) if ob[i:i + isz] != got[i:i + isz]), None)
             mism.append({"identity": ident, "family": fam, "name": e.get("name"), "why": f"bytes differ (first element {first // isz if first is not None else None} of {len(ob) // isz})",
                          "committed_sha256": hashlib.sha256(got).hexdigest()[:16], "oracle_sha256": hashlib.sha256(ob).hexdigest()[:16]})
+    return {"compared": compared, "equal": equal, "mism": mism, "not_cmp": not_cmp, "not_cmp_fam": not_cmp_fam,
+            "by_fam_cmp": by_fam_cmp, "not_cmp_qfam": not_cmp_qfam, "shared_inv": shared_inv, "steps_cmp": steps_cmp,
+            "steps_seen": steps_seen, "attrib": attrib, "pairs_seen": pairs_seen, "padding_not_cmp": padding_not_cmp,
+            "padding_pairs": padding_pairs}
+
+
+def _report(oracle: MatchOracle, wcheck: dict[str, Any], max_report: int, query_families: dict[str, int] | None, *, compared: int,
+            equal: int, mism: list[dict], not_cmp: Counter, not_cmp_fam: Counter, by_fam_cmp: Counter, not_cmp_qfam: Counter,
+            shared_inv: Counter, steps_cmp: set[int], steps_seen: set[int], attrib: dict[tuple[int, str], dict[str, Any]],
+            pairs_seen: set[tuple[int, str]], padding_not_cmp: Counter, padding_pairs: set[tuple[int, str]]) -> dict[str, Any]:
+    """The oracle-compare document from `_walk`'s tallies: the result, its grade and why, and every count."""
     steps_not_snap = sorted(s for s in steps_seen if s not in oracle.snapshot_steps)
     complete = compared > 0 and not mism and not steps_not_snap and sum(v for k, v in not_cmp.items() if not k.startswith("no oracle family")) == 0
     result: bool | None = False if mism else (True if complete else None)

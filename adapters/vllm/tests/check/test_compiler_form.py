@@ -82,7 +82,7 @@ def test_a_changed_views_positions_are_its_new_sequences(descriptors, compact):
     B.to_compiler_form()
     fresh.to_compiler_form()
     want = seqs(fresh)
-    spare = [[] for _ in range(256)]
+    spare: list[list] = [[] for _ in range(256)]
     del first
     again = seqs(B)
     assert again == want and len(spare) == 256
