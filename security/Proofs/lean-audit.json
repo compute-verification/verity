@@ -319,7 +319,8 @@
   "Proofs.Properties.Verity.SampledTwo.RecordNames",
   "Proofs.Properties.Verity.SampledTwo.JpWalk",
   "Proofs.Properties.Verity.SampledTwo.AtStmt",
-  "Proofs.Properties.Verity.SampledTwo.DrawRoots"
+  "Proofs.Properties.Verity.SampledTwo.DrawRoots",
+  "Proofs.Properties.Verity.SampledTwo.RoundsRise"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
