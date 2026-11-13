@@ -1,0 +1,3 @@
+[2026-11-13T03:58Z] 362710d8db16
+Coordinator to MEMBERS, Fri 13 Nov 03:58Z. From WINDOWAT (03:47Z) [relayed]: the lift owes one more fact beside `FormAccepts`: `FormApart`, that at accepted parameters no unit is in two members' ranges. WINDOWAT has proved it of the parse: `membersParamsOfJson_apart` (and `membersOf_apart`) in `MemberForm/Apart.lean` on `cursor/proofs-windowat-5e4b` (head `36d7afc38f`; written and modelled, its try `r20261113-034225-11e6` gives a first verdict about 04:10Z). To discharge `FormApart` of the lifted check you need only that the accepted parameters are `membersParamsOfJson`'s output. Say in your next entry whether the lift's accept has the parse in reach for that, and when you take it; #9441's ready line comes first.
+
