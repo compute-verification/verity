@@ -70,7 +70,7 @@ def firstsOf : List ℕ → List ℕ → List ℕ
   | acc, i :: is => firstsOf (if i ∈ acc then acc else acc ++ [i]) is
 
 /-- The tree a frame opens. -/
-def openTree : Frame → Option ℕ
+def openTree : Verity.Frame → Option ℕ
   | .opening i _ _ => some i
   | _ => none
 
@@ -93,7 +93,7 @@ which is the run's round `off t + j`, where `t` is the tree's place among the tr
 opened (a tree not yet opened the next), and `j` is the stream's round of the session (`roundOf`) at the count of its
 openings in `pre`; none past the sessions or a session's rounds, and none at a frame that is no opening. It reads only
 the frames of `pre`. -/
-def sessLoc (off K : ℕ → ℕ) (M : ℕ) (tab : ℕ → String) (pre : List Release) : Frame → Option ℕ
+def sessLoc (off K : ℕ → ℕ) (M : ℕ) (tab : ℕ → String) (pre : List Release) : Verity.Frame → Option ℕ
   | .opening i s _ =>
     let t := (treesOpened pre).idxOf i
     (roundOf (tab t) ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) (openedOf pre i s)).bind fun j =>
@@ -102,30 +102,31 @@ def sessLoc (off K : ℕ → ℕ) (M : ℕ) (tab : ℕ → String) (pre : List R
 
 /-- The session-round locator at the session of record `A`: its sessions' first rounds, round counts and number,
 `SpotFlock.off`, `SpotFlock.k₀` and the templates' count, at the tables `tab`. -/
-def locOf (A : Live₂) (tab : ℕ → String) : List Release → Frame → Option ℕ :=
+def locOf (A : Live₂) (tab : ℕ → String) : List Release → Verity.Frame → Option ℕ :=
   sessLoc (SpotFlock.off A.h) (SpotFlock.k₀ A.h) A.h.ms.length tab
 
 /-- **The coin map's locator agrees with the session-round locator at the sessions' rounds** (the coin map's; its
 locator `L` takes the bytes the prover sent too). -/
-def LocatesSessions (A : Live₂) (tab : ℕ → String) (L : List Release → Frame → ByteArray → Option ℕ) : Prop :=
+def LocatesSessions (A : Live₂) (tab : ℕ → String) (L : List Release → Verity.Frame → ByteArray → Option ℕ) : Prop :=
   ∀ pre fr b n, groupOf A n = .sessions → (L pre fr b = some n ↔ locOf A tab pre fr = some n)
 
 /-! ## What a round's releases are -/
 
 /-- **The releases the locator `loc` puts on round `n`**, after the releases `pre`: each one's frame and coins, in log
 order. -/
-def located (loc : List Release → Frame → Option ℕ) (n : ℕ) : List Release → List Release → List (Frame × List Bool)
+def located (loc : List Release → Verity.Frame → Option ℕ) (n : ℕ) :
+    List Release → List Release → List (Verity.Frame × List Bool)
   | _, [] => []
   | pre, r :: log => (if loc pre r.frame = some n then [(r.frame, r.coins)] else []) ++ located loc n (pre ++ [r]) log
 
 /-- **`dev` at a session's round is a function of the releases the locator puts there** (the coin map's): two logs
 whose releases put on a session's round `n` are the same frames and coins give `dev` the same coin there. -/
-def DevLocal (A : Live₂) (loc : List Release → Frame → Option ℕ) (dev : List Release → ℕ → Option FlockDeploy.Coin) :
-    Prop :=
+def DevLocal (A : Live₂) (loc : List Release → Verity.Frame → Option ℕ)
+    (dev : List Release → ℕ → Option FlockDeploy.Coin) : Prop :=
   ∀ n, groupOf A n = .sessions → ∀ log log', located loc n [] log = located loc n [] log' → dev log n = dev log' n
 
 /-- The coins an opening of `n` coins carries: `n` elements of GF(2^128). -/
-def widthOf : Frame → ℕ
+def widthOf : Verity.Frame → ℕ
   | .opening _ _ n => n
   | _ => 0
 
@@ -227,7 +228,7 @@ def Same (pre pre' : List Release) : Prop :=
     ∀ i s, openedOf pre i s = openedOf pre' i s
 
 theorem sessLoc_congr {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String} {pre pre' : List Release} (h : Same pre pre')
-    (fr : Frame) : sessLoc off K M tab pre fr = sessLoc off K M tab pre' fr := by
+    (fr : Verity.Frame) : sessLoc off K M tab pre fr = sessLoc off K M tab pre' fr := by
   obtain ⟨h1, h2, h3⟩ := h
   cases fr with
   | fresh _ => rfl
@@ -272,13 +273,13 @@ theorem same_append {pre q : List Release} (hq : ∀ r ∈ q, openTree r.frame =
       intro r hr
       obtain ⟨h1, -⟩ := hq r hr
       cases hf : r.frame with
-      | fresh _ => simp [Frame.opensAt]
-      | hello _ => simp [Frame.opensAt]
+      | fresh _ => simp [Verity.Frame.opensAt]
+      | hello _ => simp [Verity.Frame.opensAt]
       | opening _ _ _ => rw [hf] at h1; cases h1
     unfold openedOf at hz ⊢
     rw [List.countP_append, hz, Nat.add_zero]
 
-theorem located_append (loc : List Release → Frame → Option ℕ) (n : ℕ) :
+theorem located_append (loc : List Release → Verity.Frame → Option ℕ) (n : ℕ) :
     ∀ (pre a b : List Release), located loc n pre (a ++ b) = located loc n pre a ++ located loc n (pre ++ a) b
   | pre, [], b => by simp [located]
   | pre, r :: a, b => by
@@ -516,8 +517,8 @@ theorem find?_of_first {α : Type} {p : α → Bool} : ∀ {l : List α} {t : �
     rw [List.find?_cons, hx]
     exact find?_of_first (by simpa using h) hp fun u b hu hub => hb (u + 1) b (by omega) (by simpa using hub)
 
-theorem mem_located {loc : List Release → Frame → Option ℕ} {n : ℕ} :
-    ∀ {pre l : List Release} {x : Frame × List Bool}, x ∈ located loc n pre l →
+theorem mem_located {loc : List Release → Verity.Frame → Option ℕ} {n : ℕ} :
+    ∀ {pre l : List Release} {x : Verity.Frame × List Bool}, x ∈ located loc n pre l →
       ∃ a r b, l = a ++ r :: b ∧ loc (pre ++ a) r.frame = some n ∧ x = (r.frame, r.coins)
   | _, [], _, h => by simp [located] at h
   | pre, r :: l, x, h => by
@@ -529,7 +530,7 @@ theorem mem_located {loc : List Release → Frame → Option ℕ} {n : ℕ} :
     · obtain ⟨a, r', b, rfl, hl, rfl⟩ := mem_located h
       exact ⟨r :: a, r', b, rfl, by simpa using hl, rfl⟩
 
-theorem located_two {loc : List Release → Frame → Option ℕ} {n : ℕ} :
+theorem located_two {loc : List Release → Verity.Frame → Option ℕ} {n : ℕ} :
     ∀ {pre l : List Release}, 2 ≤ (located loc n pre l).length →
       ∃ a r b r' c, l = a ++ r :: (b ++ r' :: c) ∧ loc (pre ++ a) r.frame = some n ∧
         loc (pre ++ a ++ r :: b) r'.frame = some n

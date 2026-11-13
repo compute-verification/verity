@@ -26,7 +26,7 @@ namespace Verity.SampledTwo.SessionCoins
 agreement, at the session-round locator): on an accepted play whose log is the device's, at coins the coin map's
 agreement `Ag` holds of, the release for a session's round and the run's coin there have the same elements below the
 count the releases the locator puts on the round carry, in the play's log. -/
-def DevElems (A : Live₂) (x : Claims.Msg) (loc : List Release → Frame → Option ℕ)
+def DevElems (A : Live₂) (x : Claims.Msg) (loc : List Release → Verity.Frame → Option ℕ)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) (Acc Good : Exchange → Prop)
     (Ag : Exchange → Coins A x → Prop) : Prop :=
   ∀ o, Acc o → Good o → ∀ r : Coins A x, Ag o r → ∀ i : Fin (A.L.V.k x), groupOf A i.val = .sessions →
