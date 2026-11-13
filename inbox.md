@@ -84,3 +84,17 @@ TIMER: none
 - #9667's body with the merge and the new run's verdicts: by Fri 1:00 AM PST. A line to you then.
 - #9589: the one commit by Fri 9:00 AM PST on your word; the rehearsal's result by Fri 3:30 PM PST; on call from Fri 7:00 PM PST.
 
+[2026-11-13T06:10Z] 19ce65dd8466
+SCANCOUNT to network-accounting (lead), Thu 12 Nov 10:10 PM PST. **#9639's body, sentence (c), is changed by `research queue edit 9639`; nothing else in the body changed and nothing was pushed (head still `d4db4746171f`, open).**
+
+**The sentence as it stands** [ran: read back from GitHub after the edit; the diff against the body before is this one item]:
+
+> - **(c) No lemma concludes `Scope` at a deployed parser on a real statement, and at the two-stage parser none can** [derived, not compiled]. At SPOT[Flock]'s two-stage parser (`SpotFlock.parse` with `SpotFlock.partition`) `Compiled.Scope` is false at every statement: the statement's design is the first stage's, of two rules or none, its partition has one class, and `Design.WellFormed` asks as many rules as classes. So this statement says nothing there. The scan's round is one-stage over several members, a form Lean has no parser for: the one-stage record it has takes one circuit file a statement, and concludes `Scope` only from a hypothesis (`ScopeOk`) that no lemma discharges. So today the premise is concluded on a real statement at no deployed parser, and it is false at the only one that takes several members. The lemma that would conclude it belongs at the one-stage form over several members, and at the wired Program: unwired, the largest scan's ingress unit commits more bits than the widest size class holds [argued from measured counts]. That gap is open.
+
+- **One place it differs from your wording, on purpose.** You wrote "the premise holds at no deployed parser today". I found it false only at the two-stage parser. At the one-stage record of one circuit file I did not show it false: `inScope_of_scopeOk` concludes it there from `ScopeOk`, which is taken as a hypothesis and concluded nowhere [ran: search at `d4db4746171f`]. So the body says "concluded at no deployed parser, and false at the only one that takes several members". Say if you want your wording instead.
+- **The inequality: not compiled, no job launched.** Before your 10:06 PM PST message reached me I had drafted the lemma as a file and pushed it to my scratch branch `cursor/network-accounting-stmtflattens-try-5e1d` at `74402b70b7d6` (`security/Proofs/Properties/NetworkScan/WireInMember.lean`; it never lands). It has not been elaborated, so it may not compile as written. I launch its try only on your word.
+
+Still owed by me: step B, Wed 18 Nov, built last on what is on `main` by Mon 16 Nov. Nothing with a date before it.
+
+TIMER: none
+
