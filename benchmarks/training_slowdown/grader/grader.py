@@ -754,7 +754,7 @@ def totals(rows: list[dict], attention: list[dict]) -> dict:
 
 
 def read(h: Handover, code) -> dict:
-    """What the grader reads of hand-over `h` (the module's "What it reads", "grader-products/v1"), with the hand-over and
+    """What the grader reads of hand-over `h` (the module's "What it reads", "grader-products/v2"), with the hand-over and
     the slowdown code (`load_slowdown_code`) it read beside. Refuses a structure Program of another step and a step whose
     matrix products it doesn't read whole."""
     step, structure = _Program(h.step, "step"), _Program(h.structure, "structure")
