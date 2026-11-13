@@ -119,7 +119,9 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 - **A suite over a few minutes declares `parallel = true`** under `[tool.verity.tests]`, once it passes `suites.py SUITE
   --fresh` a few times, and its tests then spread over pytest-xdist workers: they must run in any order and process, and
   session and module fixtures are built once per worker, so keep them cheap. A suite whose workers hold more than
-  `suites.py`'s `TEST_PROCESS_GB` declares `worker_gb`, one worker's peak.
+  `suites.py`'s `TEST_PROCESS_GB` declares `worker_gb`, one worker's peak. One whose workers' count bounds its run (a
+  session fixture each worker builds first) declares `workers`, the count it runs on at least, up to half its run's
+  processes and memory (`suites.py`'s `held_workers`).
 - **A suite that alone makes a check's shard long declares `parts = P`** under `[tool.verity.tests]`: it runs as P parts
   by test id (`suites.py SUITE:K/P`, each collecting every file and running the tests whose node id hashes to K), the
   shard planner spreads them over shards (a lean suite's, `lean-suites:SUITE:K/P`, are named in `ci.toml`'s plans), and
@@ -141,6 +143,10 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   script run outside both sets it itself, before torch's first primitive, which is when oneDNN reads it.
 - **Isolated:** write only under `tmp_path`, and change the environment, `sys.path` or a module only through
   `monkeypatch`; the runner fails a run whose tests changed a repository file, naming it.
+- **Environment by name:** compare an environment by the names that differ, taken before the assert, never the whole
+  mapping inside an `assert` (`differ = sorted(k for k in got.keys() | want.keys() if got.get(k) != want.get(k))`,
+  then `assert differ == []`): a failing assert prints its sub-expressions' values into the run's published log, the
+  caller's credentials among them (`tests/test_no_environment_in_asserts.py`).
 - **Exact:** compare bit-exact code's words, digests and pinned vectors, not approximations; a negative checks that the
   code rejects by name, not merely that it raises.
 - **Statistical floors from a sweep:** a bound on a sampled quantity (a rate, a spread, a count over random samples) comes
