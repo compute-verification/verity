@@ -1,7 +1,7 @@
 """The audit from a window's records alone (`records_audit`), without proving, on a window written through the interface
 (`verity.commitments.windows.interface`) under core's registration:
 
-* the verifier's window is the circuit record's, each template resolved in Verity's catalog, and the record must be the one
+* the verifier's window is the circuit record's, each template a Definition a catalog registers, and the record must be the one
   the registration binds; a window with row tables is refused until its records carry their segment roots;
 * the compile check runs the registered compiler as the verifier's table names it, on advice that opens the registered root,
   and refuses by name a compiler it doesn't hold, an opening of another root, a compiler that refuses the advice, one whose
@@ -1220,9 +1220,9 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
 def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry_definition(tmp_path):
     """``records_audit.py period`` as V3c runs it, in a process of its own, on a window whose circuit holds an io
     shell's `ScanSlots_v2` beside the coordinates that read its scan state. `ScanSlots_v2` is a registry Definition,
-    which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates in Verity's
-    whole catalog (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
-    `interface.resolve` alone refuses the window ("names no Definition in Verity's catalog")."""
+    which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates with the
+    registry loaded (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
+    `interface.resolve` alone refuses the window ("names no Definition a catalog registers")."""
     got = _io_shell_window(tmp_path / "w")
     audit = _audited(got.dir, tmp_path / "a")
     p = subprocess.run([sys.executable, str(HERE.parent / "records_audit.py"), "period", "--window", str(got.dir),

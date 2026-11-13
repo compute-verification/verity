@@ -10,7 +10,8 @@ The records, every one in the window's directory but the advice's opening:
 * **the values**, committed before any coin: the registration (``registration.json``) and the files `rows.write` writes;
 * **on a sample, the sampled proof blocks' openings** (``m<k>-private.bin``), which reach only the prover behind the ZK server.
 
-The verifier's window is `interface.of_records`'s, each template resolved in Verity's catalog (`catalog_resolve`), or, for a
+The verifier's window is `interface.of_records`'s, each template resolved among the Definitions a catalog registers
+(`catalog_resolve`), or, for a
 template the verifier lowers from its own input set (``--template-sets``), that set's Definition; a window with row tables
 is refused until its records carry their segment roots. Before the sample the audit holds the registration to that circuit,
 to the run root the run published (``--run``) and, for a compiled circuit, to the compiler and advice it was compiled from
@@ -192,7 +193,7 @@ REFUSED = 2
 
 
 def catalog_resolve(tid: str) -> Any:
-    """`interface.resolve` over the whole of Verity's catalog, the registry's Definitions loaded too (a window's io shell and
+    """`interface.resolve` over every catalog's Definitions, the registry's loaded too (a window's io shell and
     its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
     from verity.definitions.registry.catalog import load
 
@@ -802,7 +803,7 @@ def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]
 def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Path | None) -> tuple[Any, dict, dict]:
     """The verifier's window and circuit record from the records (`interface.of_records`), and a5's template sets: each
     statement's template composed from its Definition (`composer`), every other template lowered from the verifier's own
-    input set, whose Definition it resolves to; any other template from Verity's catalog (`catalog_resolve`). A window
+    input set, whose Definition it resolves to; any other template from a catalog (`catalog_resolve`). A window
     with row tables is refused: a5 checks their segment roots against the ones recorded before each coin (``step_roots``),
     which the records don't carry yet."""
     import a5 as A5
