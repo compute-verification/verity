@@ -82,7 +82,8 @@ class TemplateCounts(StepNeeds):
         return self._memo[key]
 
     def _named(self, role: str, f) -> Need:
-        if (v := dead_free_versions().get(getattr(f, "base_id", None))) is not None:
+        versions: Any = dead_free_versions()   # as given: a Definition that has no base id is looked up under None
+        if (v := versions.get(getattr(f, "base_id", None))) is not None:
             f = bind(v, **f.bindings)
         self._fns.setdefault(tid := descriptor_id(f), f)
         return Need(role, tid)
@@ -239,17 +240,19 @@ class TemplateCounts(StepNeeds):
         out = [(self._fp8_linear(plan.rows, (L, "kv_b_w")), P.m * live), *[(plan.heads[i], NH) for i in X]]
         if plan.merge is not None:
             out.append((plan.merge, len(X)))
+            consts: Any = plan.empty   # a merge with no context has them; as given, any other plan is None's TypeError
             out += ([(plan.context, NH * len(X)), (self._fp8_linear(plan.held, (L, "kv_b_w")), P.p * live)] if P.p else
-                    [(e, live) for e in plan.empty])
+                    [(e, live) for e in consts])
         return out
 
     def _select(self, policy: Mapping[str, Any] | None, V: int, pos: int) -> list[tuple[Need, int]]:
         """A sample's select (`common.select_token`): greedy TokenSelect, or the seeded top-p select and its per-row consts."""
-        if (policy or {}).get("kind", "greedy") != "stochastic":
+        stated: Mapping[str, Any] = policy or {}
+        if stated.get("kind", "greedy") != "stochastic":
             return [(self.kind("token_select", V=V), 1)]
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
-        S = policy["splits"]
+        S = stated["splits"]
         fn = (self.kind("token_select_stochastic", V=V, CONSTRUCTION=self.tp.effective_sampler_construction()) if S == "derived"
               else self.kind("token_select_stochastic_split", V=V, S=int(S)))
-        words = [(32, f32_bits(policy.get("top_p", 1.0))), (64, int(pos) & 0xFFFFFFFFFFFFFFFF), (32, f32_bits(policy["temperature"]))]
+        words = [(32, f32_bits(stated.get("top_p", 1.0))), (64, int(pos) & 0xFFFFFFFFFFFFFFFF), (32, f32_bits(stated["temperature"]))]
         return [(fn, 1), *[(self.kind("const", W=w, BITS=b), 1) for w, b in words + ([] if S == "derived" else [(32, int(S))])]]

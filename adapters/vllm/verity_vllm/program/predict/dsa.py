@@ -43,7 +43,7 @@ chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the
 from __future__ import annotations
 
 import re
-from typing import Mapping, NamedTuple, Sequence
+from typing import Any, Mapping, NamedTuple, NoReturn, Sequence
 
 from verity.circuits.defs import Builder
 from verity.circuits.refs import Coll, Concat, PartLog, Refs, concat, strided_view
@@ -54,7 +54,7 @@ from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, 
 from .phi import Phi
 
 
-def _refuse(fact: str):
+def _refuse(fact: str) -> NoReturn:
     raise Unexpressible(f"vocabulary cannot express: {fact}")
 
 
@@ -480,7 +480,7 @@ class _Model:
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
         cs = [self.w["cos_sin"].refs.slice((pos0 + i) * R, (pos0 + i + 1) * R) for i in range(M)]
         qkv = self.fp8_linear(x, w("qkv_a_w"), w("qkv_a_ws"))
-        wkp = self.cublas(x, w("wk_w")) if indexer else None
+        wkp: Any = self.cublas(x, w("wk_w")) if indexer else None
         qn = self.k("dsa_rmsnorm", N=QL, EPS=self.EPS)
         qc = [self.call(qn, q.slice(0, QL), w("q_a_ln").refs).refs for q in qkv]
         if self.batched:
@@ -496,7 +496,7 @@ class _Model:
             slots = [self.call(fn, k.slice(0, ID), w("k_norm_w").refs, w("k_norm_b").refs, c) for k, c in zip(wkp, cs)]
         qb = self.fp8_linear(qc, w("q_b_w"), w("q_b_ws"))
         ql = self.absorb([concat([q.slice(h * D, h * D + NOPE) for h in range(NH)]) for q in qb], w("w_uk_t"), NH, NOPE, KVL)
-        iqb = self.fp8_linear(qc, w("wq_b_w"), w("wq_b_ws")) if indexer else None
+        iqb: Any = self.fp8_linear(qc, w("wq_b_w"), w("wq_b_ws")) if indexer else None
         qr = self.k("dsa_q_rope", D=R)
         qpe = [concat([self.call(qr, q.slice(h * D + NOPE, (h + 1) * D), c).refs for h in range(NH)]) for q, c in zip(qb, cs)]
         context = len(logs["latent"])
@@ -617,7 +617,8 @@ class _Model:
             ckvb = self.fp8_linear([r.slice(0, KVL) for r in hist], w("kv_b_w"), w("kv_b_ws"), rows=plan.held)
             pre = head_logs(ckvb, [r.slice(KVL, KVL + R) for r in hist])
         else:
-            zero, ninf = (self.call(fn).refs for fn in plan.empty)
+            consts: Any = plan.empty   # a merge with no context has them; as given, any other plan is None's TypeError
+            zero, ninf = (self.call(fn).refs for fn in consts)
             empty = (concat([zero] * (NH * D)), concat([ninf] * NH))
         out = []
         for i, fn in enumerate(plan.heads):
@@ -649,7 +650,8 @@ class _Model:
         rt = self.k("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=float(C["ROUTED_SCALING_FACTOR"]), KERNEL=kernel)
         top = [self.call(rt, lg, w("gate_bias").refs) for lg in logits]
         xq = [self.call(self.k("fp8_group_quant_ue8m0", K=H, G=G), r) for r in x]
-        cfg = fused_moe_config(E, I, self.net.device, "fp8_w8a8", (G, G), self.launch.tokens(M))
+        device: Any = self.net.device   # as given: a net that names no device is None's AttributeError
+        cfg = fused_moe_config(E, I, device, "fp8_w8a8", (G, G), self.launch.tokens(M))
         if cfg is None:
             _refuse(f"no tuned fused-MoE config for E={E}, N={I} on {self.net.device!r} (engine.profiles.devices.FUSED_MOE_CONFIGS)")
         BM, BN, KB, warps = cfg["BLOCK_SIZE_M"], cfg["BLOCK_SIZE_N"], min(cfg["BLOCK_SIZE_K"], G), cfg["num_warps"]
