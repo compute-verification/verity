@@ -88,6 +88,8 @@ EXPERIMENTAL = (
     "egress certified by the network certifier, no side channel")
 OTHER = "the wipe's commitment is not of the period's server and session"
 UNSIGNED = "the memory challenger has not signed the wipe: its reads are incomplete or not yet verified"
+NO_JUDGE = ("no wipe-protocol among the period's tools: the Lean decides the wipe, and the Python's accept decides "
+            "nothing alone")
 
 
 def params_for(segments: int = SEGMENTS, *, k: int = READS, limit_ns: int = LIMIT_NS, tier: str = TIER,
@@ -550,7 +552,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     key `wipe.trusted_sha512` pins and no other; a challenger on its own host with none pinned is refused (ValueError)
     before its session. A `wipe_store` prover gates its store before the session.
     With `wipe-protocol` among the period's tools, the Lean answers (the
-    verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`,
+    verifier) and must agree with the Python; without it the Python may only refuse: its reject or undecided stands,
+    and its accept is undecided (`NO_JUDGE`). It writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`,
     which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
     Which host ran each party, whether `trusted-host`'s premise holds, the memory the prover kept the fill in,
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
@@ -620,6 +623,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
             raise RuntimeError(f"wipe-protocol answered {lean}, the Python {answer}")
         answer = lean
+    elif answer["verdict"] == "accept":
+        answer = answer | {"profile": None, "public": None, "reason": NO_JUDGE, "verdict": "undecided"}
     if answer["profile"] is not None:
         answer = answer | {"profile": answer["profile"] | {"placement": where}}
     out.mkdir(parents=True, exist_ok=True)

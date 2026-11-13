@@ -20,7 +20,7 @@
 #                    no key is pinned and the piece refuses
 #   WIPE_READS       the reads the gate's verb runs, which the leg holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
-# Further arguments go to demo.sh (e.g. --no-lean). The Lean judge (wipe-protocol) is built before the card is checked, in a
+# Further arguments go to demo.sh (e.g. --no-lean, which leaves the wipe undecided at best). The Lean judge (wipe-protocol) is built before the card is checked, in a
 # scratch copy of verity/, which holds every package it requires (WIPE_PROTOCOL_EXE names one built already), never in
 # this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
 # summary.json, which names the program that decided and its host under `decided_by`, the SHA-512 of the challenger key

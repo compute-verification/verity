@@ -59,7 +59,8 @@
 #   --gpu NAME           refuse a GPU whose name lacks NAME (default H200; any: take any)
 #   --node NAME          the developer's node, the wiped server's id (default: hostname)
 #   --limit-ns N         the deadline a read (default 20 ms)
-#   --no-lean            judge in Python alone; judge out/wipe.case.json with wipe-protocol later on a CPU node
+#   --no-lean            no Lean judge: the Python may only refuse, so the wipe is at best undecided; judge
+#                        out/wipe.case.json with wipe-protocol later on a CPU node
 #   --wipe-protocol EXE  the Lean judge built elsewhere (served_wipe.sh builds it outside this tree's .lake, which
 #                        served_verdicts.sh's own Lean builds write meanwhile), in place of building it here
 #

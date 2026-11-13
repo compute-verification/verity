@@ -24,6 +24,7 @@ import pytest
 
 from pous_fakes import Clock
 import pous_test_signer as ts
+import wipe_judge
 import wipe_side
 from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import memory_challenger as mc
@@ -230,7 +231,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     the two links leaving the node (period.json's control link, and the challenger's as the prover connected), and
     carries the session's window on the challenger's clock."""
     period = _side(tmp_path, monkeypatch, {"links": [CONTROL]})
-    out = tmp_path / "out"
+    out, given = tmp_path / "out", wipe_judge.judge(period, monkeypatch)
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
@@ -238,7 +239,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
     record = json.loads((out / "wipe.json").read_text())
-    assert record["lean"] is None and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
+    assert [record["lean"]] == given and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
     assert record["prover"] is None and record["session"]["reads"]["n"] == W.READS
     assert record["wipe"] == W.CONFIG | {"foreign_labels": 0, "k": W.READS, "links": [CONTROL], "memory_bits": M,
                                          "outside_bits": 0, "segments": W.SEGMENTS, "tier": W.TIER,
@@ -262,7 +263,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     s = W.summary(record)
     assert (s["t0"], s["t1"]) == (window["t0"], window["t1"]) and s["uncertified"] == gaps and s["k"] == W.READS
     key, = case["params"]["trusted"]
-    assert s["decided_by"] == record["decided_by"] == {"program": "python", "host": socket.gethostname()}
+    assert s["decided_by"] == record["decided_by"] == {"program": "wipe-protocol", "host": socket.gethostname()}
     assert s["key_sha512"] == record["report"]["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest()
     assert s["key_sha512"] == wipe_side.key_sha512() and s["key_pinned"] is record["report"]["key_pinned"] is True
 
@@ -275,6 +276,18 @@ def test_who_decided_is_the_leans_file_name_or_python_on_this_host(tmp_path) -> 
         "program": "wipe-protocol", "host": host}
     assert W.decided_by("pous-run-protocol") == {"program": "pous-run-protocol", "host": host}
     assert W.decided_by(None) == {"program": "python", "host": host}
+
+
+def test_with_no_wipe_protocol_the_pythons_accept_is_undecided(tmp_path, monkeypatch, capsys) -> None:
+    """The leg with no `wipe-protocol` among the period's tools: the Python accepts the honest session, and that decides
+    nothing. The answer is undecided, with no public outputs and no profile, and `main` exits 1."""
+    period = _side(tmp_path, monkeypatch, {})
+    out = tmp_path / "out"
+    assert W.main(["--period", str(period), "--out", str(out), "--node", "n0"]) == 1
+    s = json.loads(capsys.readouterr().out)
+    assert (s["verdict"], s["reason"], s["public"]) == ("undecided", W.NO_JUDGE, None)
+    record = json.loads((out / "wipe.json").read_text())
+    assert record["answer"]["profile"] is None and record["lean"] is None and record["report"]["ended"] == sw.COMPLETE
 
 
 def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None:

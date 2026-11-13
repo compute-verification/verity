@@ -32,8 +32,8 @@ DEMO = WRAPPER.parent / "demo.sh"
 FAKE_DEMO = Path(__file__).resolve().parent / "served_wipe_demo.py"
 ANSWER_KEYS = ["commitment", "profile", "protocol", "public", "reason", "verdict"]
 CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
-#: who decided, as the summary and the headline name it: the stand-in demo.sh's Python, on this host
-DECIDED = {"program": "python", "host": socket.gethostname()}
+#: who decided, as the summary and the headline name it: the stand-in demo.sh's judge, on this host
+DECIDED = {"program": "wipe-protocol", "host": socket.gethostname()}
 #: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
 PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "wipe_side.py"))["key_sha512"]()
 #: the SHA-512 of the public key of vy-auditor-2's wipe party: the pin of a run that sets none of its own
@@ -136,7 +136,8 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     piece's last line its `WIPE` headline. The case, which holds the signed session, is the serve dir's, private, with the
     composite's piece beside it (served_case.py's `CASE` line before the headline), and DIR keeps none of it."""
     d = tmp_path / "pieces" / "wipe"
-    r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other"}, d, "--no-lean")
+    judge = _exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n")
+    r = _wipe(node | {"GPU_LEASE_UUID": f"{CARD},GPU-other", "WIPE_PROTOCOL_EXE": str(judge)}, d)
     assert r.returncode == 0, r.stdout + r.stderr
     answer = json.loads((d / "answer.json").read_text())
     _is_core_answer(answer)
@@ -167,10 +168,10 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     key, = case["params"]["trusted"]
     assert summary["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest() == PINNED and summary["key_pinned"]
     demo = json.loads((d / "demo-argv.json").read_text())
-    assert demo["lease"] == f"{CARD},GPU-other" and "--wipe-protocol" not in demo["argv"]
+    assert demo["lease"] == f"{CARD},GPU-other"
     assert demo["argv"] == ["--node", "vy-dc-h200", "--challenger", "vy-auditor-2", "--challenger-address",
                             "10.96.0.36:47611", "--challenger-command", node["WIPE_COMMAND"], "--trusted-sha512", PINNED,
-                            "--reads", str(W.READS), "--no-lean"]
+                            "--reads", str(W.READS), "--wipe-protocol", str(judge)]
     *_, built, last = r.stdout.strip().splitlines()
     assert json.loads(built.removeprefix("CASE ")) == {"piece": str(private), "protocol": W.PROTOCOL, "verdict": "accept"}
     assert last.startswith("WIPE {")
@@ -248,6 +249,18 @@ def test_a_gate_key_not_on_the_node_is_refused(node, tmp_path) -> None:
     refused = (d / "refused.txt").read_text()
     assert refused.startswith(f"WIPE REFUSED: no wipe gate key {missing} on vy-dc-h200 (") and "infra installs it" in refused
     assert not (tmp_path / "lease.log").exists() and not (d / "demo-argv.json").exists()
+
+
+def test_with_no_lean_judge_an_honest_wipe_is_undecided(node, tmp_path) -> None:
+    """`--no-lean`: no `wipe-protocol` among the period's tools, so the Python's accept of the honest session decides
+    nothing. The answer is undecided (exit 1), with no public outputs, and the headline says so."""
+    d = tmp_path / "pieces" / "wipe"
+    r = _wipe(node | {"GPU_LEASE_UUID": CARD}, d, "--no-lean")
+    assert r.returncode == 1, r.stdout + r.stderr
+    _is_core_answer(answer := json.loads((d / "answer.json").read_text()))
+    assert (answer["verdict"], answer["reason"]) == ("undecided", W.NO_JUDGE)
+    headline = json.loads(r.stdout.strip().splitlines()[-1].removeprefix("WIPE "))
+    assert (headline["verdict"], headline["decided_by"]["program"], headline["exit"]) == ("undecided", "python", 1)
 
 
 def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(node, tmp_path) -> None:
