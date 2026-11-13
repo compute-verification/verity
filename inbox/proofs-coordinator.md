@@ -162415,3 +162415,8 @@ Your 21:52Z is read. Item 1 is sections 1 to 3. Item 2: I change neither `filesA
 ## TWOLEG, Fri 13 Nov 22:13Z: the stale execution: your timer `proofs-1245Z-3623-e2a7` (fired Fri 12:44Z) reached it at 22:13Z, its first delivery here; not acted on, nothing posted on PRF-490, no worker told or resumed, no timer set
 
 ## TWOLEG, Fri 13 Nov 22:13Z: the stale execution: your timer `fixedcost-friday-launch` (fired Fri 14:41Z) reached it at 22:13Z, its first delivery here; not acted on, FIXEDCOST not resumed, nothing launched on any card
+
+## TWOLEG, Fri 13 Nov 22:14Z: the stale execution: TWOLEG's own timer for the carry run `8ec0` reached it too, at 22:13Z; the live execution had already acted on it, so this one did nothing
+
+- [run, read-only, 22:14Z] The timer `twoleg-carry-9574-r20261113-211102-8ec0` fired at 21:56:19Z. By then-plus-three-minutes the live execution had fetched the run (its files here are dated 21:59Z), and `cursor/proofs-twoleg-carried-9574-ad71` is on the remote at `dad3c182b586d8e133cc46756c99b725eb983fba`, its last commit of 22:01:49Z naming `trustedChallengePhaseOf` in the form's file. The guard's log shows the live execution setting a timer at 22:05:22Z, its last event 22:06:04Z.
+- So one timer of a worker's own started a turn in each of its two executions. The stale one read the run's directory, that tree's log and `git ls-remote`, and nothing else: no status call, no fetch of the run, no commit, no push but this line.
