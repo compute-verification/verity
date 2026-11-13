@@ -252,7 +252,7 @@ def _replica_repo(tmp_path: Path) -> Path:
     (d / "fixtures" / "small.bin").write_bytes(b"tracked\n")
     (d / ".gitignore").write_text("/fixtures/big.bin\n")
     reg = {fixture_id(d / "fixtures" / "small.bin"): "fixtures/small.bin", "art:" + "b" * 64: "fixtures/big.bin"}
-    (d / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    (d / "artifacts.json").write_text(json.dumps(reg))
     _git(d, "init", "-q")
     _git(d, "add", ".")
     _git(d, "commit", "-q", "-m", "replicas")
