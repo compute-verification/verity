@@ -436,8 +436,9 @@ def test_every_measurement_carries_its_mark_as_a_field_and_first_among_its_input
     assert [m["mark"] for m in doc["measurements"]] == ["measured", "modeled", "partial", "modeled"]
     assert research_result.check_doc(tmp_path, doc, RUN).valid
     before = (tmp_path / kit.RESULT).read_bytes()
-    with pytest.raises(TypeError, match="missing 1 required keyword-only argument: 'mark'"):
-        w.measurement("gate", 1.0, "s")
+    for given in ({}, {"why": "no value to give"}):
+        with pytest.raises(ValueError, match=r"gate's mark is one of .*, not None: pass mark="):
+            w.measurement("gate", None, "s", **given)
     for mark in (None, "", "Measured", "modelled", "estimated", "measured: a timed run", 1, True, ("measured",)):
         with pytest.raises(ValueError, match="gate's mark is one of 'measured', 'modeled', 'partial', how its value was "
                                              r"had \(a value of None takes the one it would have had\), not .*: pass mark="):

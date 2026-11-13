@@ -370,7 +370,7 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   of the reps' ratios, `gamma` (the ratio less one), `n`, and the overhead's interval from the ratios' order statistics,
   exact sign-test bounds on the median, under its level's key (`ci95`; None when `n` reps can't bound the median: under
   six at 0.95), with its `half_width` as a share of the ratio (None where the ratio is 0).
-- **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=(), why=None, *, mark)`:**
+- **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=(), why=None, *, mark=None)`:**
   appends one measurement to the run's result, a `research/result/v0.1` result: `value`, `unit`, `commit` and `run`, with
   its `mark`, its 95% interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was
   computed from, by name, and the `host` stamp; one with no value (`value` None) may say `why`, in words, which the entry

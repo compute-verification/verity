@@ -262,7 +262,7 @@ class Writer:
 
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
-                    why: str | None = None, *, mark: str) -> dict:
+                    why: str | None = None, *, mark: str | None = None) -> dict:
         """Appends one measurement to `out/result.json` and returns it: `value` in `unit` (None where the benchmark has no
         finite value to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high), which the
         result holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check against that
