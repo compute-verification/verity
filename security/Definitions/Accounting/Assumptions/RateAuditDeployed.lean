@@ -40,7 +40,8 @@ rank is `r = 12`, where `ε = 128 · Pr[rank_ℚ(16 × 32 block) ≤ 11] ≤ 2^(
 reading `2^(-96) + ε = 2^(-95.12)`, by a standalone seeded script (exact rational arithmetic through
 the F2 rank law, with exhaustive and seeded self-checks; the script and its output are an evidence artifact, and
 `verity/core/protocols/remote_bandwidth/tests/test_sketch_reading.py` holds the in-suite falsification tests). At 64
-rows it is `r = 27`. -/
+rows, the remote receipts' deployed count (`Accounting.Guarantees.Remote.SketchBoundDeployed`), it is `r = 27`, where
+`ε = 128 · Pr[rank_ℚ(64 × 32 block) ≤ 26] ≤ 2^(-219.23)` and the reading is `2^(-216) + ε = 2^(-215.85)`. -/
 def SketchRank (ks m r : ℕ) (ε : ℝ≥0∞) : Prop :=
   pr (fun σ : SketchSigns ks m =>
     ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r) ≤ ε
