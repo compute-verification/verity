@@ -343,7 +343,13 @@
   "Proofs.Properties.Verity.SampledTwo.MessagesOpen",
   "Proofs.Flock.SpotFlock.DoWalk",
   "Proofs.Flock.SpotFlock.ParamsWf",
-  "Proofs.Properties.Verity.SampledTwo.PortsOfParams"
+  "Proofs.Properties.Verity.SampledTwo.PortsOfParams",
+  "Proofs.Properties.Verity.SampledTwo.BlobFinder",
+  "Proofs.Properties.Verity.SampledTwo.CouplesWired",
+  "Proofs.Properties.Verity.SampledTwo.Undecodable",
+  "Proofs.Properties.Verity.SampledTwo.WiredParse",
+  "Proofs.Properties.Verity.SampledTwo.WiredScope",
+  "Proofs.Properties.Verity.SampledTwo.WiredUnits"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
