@@ -23,7 +23,7 @@ import epoch_coins as E
 
 import pearl_c4_vectors as V
 from verity.errors import InvalidArtifact
-from verity.definitions.silicon import fp32
+from verity.circuits.silicon import fp32
 from verity.protocols.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
 from verity.protocols.pouw.prover.schemes import get
@@ -929,7 +929,7 @@ def test_nan_accumulator_specials_read_their_scales_as_the_hardware(row):
     (low 7 bits: `hw_scales`, and the pinned model's own decode), the bytes
     are valid scales, so the vector is outside the model only through its accumulator (the step raises, Lean's `none`;
     the card writes 0x7FFFFFFF).  D-SB keeps such bytes off every formed side."""
-    from verity.definitions.silicon.models import BLACKWELL_SM120_NVF4 as atom
+    from verity.circuits.silicon.models import BLACKWELL_SM120_NVF4 as atom
     acc, a, b, sa, sb = row
     codes_a, codes_b = [(a >> 4 * i) & 15 for i in range(64)], [(b >> 4 * i) & 15 for i in range(64)]
     sa, sb = [(sa >> 8 * i) & 255 for i in range(4)], [(sb >> 8 * i) & 255 for i in range(4)]

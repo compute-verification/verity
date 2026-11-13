@@ -11,7 +11,7 @@ from research.store.tool import Tool
 
 TREE = workspace_root(__file__)
 #: core and the catalog, the kernels and the verifiers beside it, wherever the tree keeps them
-CORE = [p for n in ("verity", "verity.circuits", "verity.definitions.kernels") for p in package_paths(TREE, n, "**")]
+CORE = [p for n in ("verity", "verity.circuits", "verity.circuits.kernels") for p in package_paths(TREE, n, "**")]
 
 KEYS = ("REL", "MODE", "SELF_VUS", "START", "MAX", "RUNS", "VERIFIER", "SERVE_VUS")
 

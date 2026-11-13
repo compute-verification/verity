@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
 from verity.circuits.types import Array
-from verity.definitions.ops.gemm import GemmCoordinate as GemmCoordinateV2
+from verity.circuits.ops.gemm import GemmCoordinate as GemmCoordinateV2
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.prims import BF16
