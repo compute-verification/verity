@@ -71,15 +71,14 @@ theorem tables_of_pin {h : SpotFlock.Held} {m₂ : Claims.Msg} (hS : ScopeHeld h
     rw [e1] at htag
     rw [refTable_eq hw₀ htag]
     have hT : s.read.tags = ZkExec.zkTags s.read.I := by
-      first
-        | (unfold Flock.Readable.Read.tags; rw [if_pos hz])
-        | simp only [Flock.Readable.Read.tags, hz, ↓reduceIte]
+      unfold Flock.Readable.Read.tags
+      rw [ite_eq_left hz]
     have hrs := FlockDeploy.Ins.setup_read hsu
     unfold Flock.Readable.Read.setup at hrs
     rcases HiddenExec.setupTables_okHP hh hrs with ⟨-, st', hst, rfl, -⟩ | ⟨h1, hsz, -⟩
     · show #[st'.tags.table] = #[s.read.I.tags.table]
       rw [Hidden.setupHidden_tagsP hst, hT, Verity.Sampled.zkTags_table]
-    · have h2 : (#[st] : Array Flock.Stmt).size = 1 := by first | rfl | simp
+    · have h2 : (#[st] : Array Flock.Stmt).size = 1 := rfl
       omega
 
 /-- **A member session is one table of its template's name, each of whose two reps has `SessionCoins.repsOf` of the
