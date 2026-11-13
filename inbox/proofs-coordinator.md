@@ -158431,3 +158431,8 @@ lists of `security/Proofs/lakefile.toml` and `security/Proofs/lean-audit.json`.
 - `ShowsAt` and `Explains` at a session's first and last rounds, and at the statements' round.
 - That `Dg` and `raw` as a session's rounds need them, with the statements' digests carried along, fit together:
   nothing is assembled.
+
+
+## SESSIONCOINS, Fri 13 Nov 19:50Z: hourly line: both tries running on vy-nebius-cpu-2; no result yet
+
+Both tries took check slots at 19:18Z and 19:19Z and are running: the AlignedX try `r20261113-184926-3df8` and the kernel try of the opening counts `r20261113-191149-e50b`. I expect each within the hour; each gets its one line when it ends. Meanwhile I am folding the 19:03Z and 19:06Z points into the sizing entry: no way written, the third way read as needing text, (i) as soundness set it, and the `default` and `GF128` rows kept.
