@@ -20,7 +20,9 @@ alone, and
 
 **With a draft** the replay takes one more input, the drafts each row kept, and `draft_table` reports a trace's two
 classes of advice: the arrivals (the residual advice above) and the kept count (`kept_bits`: charged at the bits of
-advice v1's own code for it, `kept_code`, or 0 where the audited block derives it).
+advice v1's own code for it, `kept_code`, or 0 where the audited block derives it). The kept counts are advice, so
+neither `encode` nor `decode` hands the replay `RequestIO.kept`: each asks a row's count as the row emits (`replay`'s
+``kept``), and a fork, which asks nothing, keeps none of the drafts its rows carry.
 """
 
 from __future__ import annotations
@@ -37,7 +39,7 @@ from typing import Any, NamedTuple
 from verity_vllm.pipeline.advice_code import kept as KP, window_code as CV
 from verity_vllm.pipeline.advice_code.pool import BlockPool as BlockPool
 from verity_vllm.pipeline.advice_code.replay import (
-    compare, drive as drive, Emitted, Match as Match, Open, Queue as Queue, Replay, replay,
+    compare, drive as drive, Emitted, Kept, Match as Match, Open, Queue as Queue, Replay, replay,
     Scheduler as Scheduler,
 )
 from verity_vllm.pipeline.advice_code.schedule import (
@@ -127,11 +129,13 @@ class Trace:
         return min(bucket(t, bucket_s) for t in self.ingress_t) if self.clocked() else 0  # type: ignore[arg-type]
 
     def certified(self, bucket_s: float = 0.1) -> Certified:
-        """What the verifier holds of this run without advice (`Certified`)."""
+        """What the verifier holds of this run without advice (`Certified`): with a draft, its requests without the
+        drafts their rows kept, which are advice."""
+        requests = _asked(self.engine, self.requests)[0]
         if not self.clocked():
-            return Certified(self.engine, list(self.requests), bucket_s, None, None)
+            return Certified(self.engine, requests, bucket_s, None, None)
         o = self.origin(bucket_s)
-        return Certified(self.engine, list(self.requests), bucket_s,
+        return Certified(self.engine, requests, bucket_s,
                          [bucket(t, bucket_s) - o for t in self.ingress_t],                              # type: ignore[arg-type]
                          [[bucket(t, bucket_s) - o for t in ts] for ts in self.output_times()])
 
@@ -140,7 +144,8 @@ class Trace:
 class Certified:
     """What the verifier holds without advice: the registered engine, each request's certified I/O in the order it reached
     the engine, and, with a clock, each request's ingress bucket and the bucket each of its kept outputs left in, counted
-    from the session's first (`Trace.origin`). The decoder reads nothing else."""
+    from the session's first (`Trace.origin`). The decoder reads nothing else. The drafts a request's rows kept
+    (`RequestIO.kept`) are advice and not of it: `decode` refuses a record that carries them."""
 
     engine: Engine
     requests: list[RequestIO]
@@ -151,6 +156,26 @@ class Certified:
     def windows(self, window_buckets: int) -> list[int]:
         """Each request's certifier window (its ingress bucket's); one window without a clock."""
         return [0] * len(self.requests) if self.ingress is None else [b // window_buckets for b in self.ingress]
+
+
+def _asked(engine: Engine, requests: Sequence[RequestIO]) -> tuple[list[RequestIO], Kept | None]:
+    """The requests and `replay`'s ``kept`` for a replay that is asked each emitting row's kept count as the row emits,
+    the way a decoder that reads the counts off a string has them. With a draft: the requests without `RequestIO.kept`,
+    and their lists' entries as the answers, each given only to the row that emits it. A fork (`Open.whatif`) asks
+    nothing and finds no list, so it keeps none. Without a draft: the requests as they are, and nothing to ask. A row
+    the lists have no count for is refused by name (ValueError) when it emits."""
+    if not engine.num_speculative_tokens:
+        return list(requests), None
+    lists = [q.kept for q in requests]
+
+    def kept(i: int, row: int) -> int:
+        ks = lists[i]
+        if ks is None or row >= len(ks):
+            raise ValueError(f"request {i}: the engine drafts {engine.num_speculative_tokens} tokens a row, and the "
+                             f"request has no kept count for its emitting row {row}")
+        return ks[row]
+
+    return [replace(q, kept=None) for q in requests], kept
 
 
 def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequence[int]] | None = None,
@@ -472,7 +497,9 @@ class _Egress:
     them. So under the true hypothesis each of i's outputs leaves in the bucket of an earlier request's output from the
     same step, which the certified egress shows; of any of them, since a frontend streams one step's outputs over some
     milliseconds. They are compared up to i's first change of bucket, where some earlier request's must change too (2: no
-    earlier request's output to compare with)."""
+    earlier request's output to compare with). With a draft the fork keeps none of the drafts its rows carry (`_asked`),
+    so each of its rows emits one token: it is the served run only up to the first row that kept a draft, and past
+    that row this context tells less."""
 
     def __init__(self, cert: Certified) -> None:
         _, self.out = _clocked(cert)
@@ -647,12 +674,14 @@ def _coder(cert: Certified, contexts: str) -> Callable[[int, int, Open], tuple[i
 
 
 def encode(trace: Trace, *, contexts: str = "egress", bucket_s: float = 0.1, window_buckets: int = 600) -> Code:
-    """Code each decision, as the replay asks it, with the adaptive binary code in `contexts`. Refuses a trace the replay
-    doesn't reproduce."""
+    """Code each decision, as the replay asks it, with the adaptive binary code in `contexts`. With a draft the replay
+    is asked each row's kept count as the row emits (`_asked`), as `decode`'s is. Refuses a trace the replay doesn't
+    reproduce."""
     first = trace.first_scheduled()
     if any(f < 0 for f in first):
         raise ValueError(f"requests never scheduled: {[trace.ids[i] for i, f in enumerate(first) if f < 0][:8]}")
     cert = trace.certified(bucket_s)
+    requests, kept = _asked(trace.engine, trace.requests)
     context = _coder(cert, contexts)
     rw = cert.windows(window_buckets)
     model, enc, ideal = _model(contexts), {}, {}
@@ -669,16 +698,26 @@ def encode(trace: Trace, *, contexts: str = "egress", bucket_s: float = 0.1, win
         passed[i] += 1
         return bit
 
-    m = compare(replay(trace.engine, trace.requests, decide=decide).steps, trace.steps)
+    m = compare(replay(trace.engine, requests, decide=decide, kept=kept).steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
     return Code(contexts, bucket_s, window_buckets, {w: e.finish() for w, e in enc.items()}, ideal)
 
 
-def decode(cert: Certified, code: Code) -> Replay:
-    """Replay from the residual advice and what the verifier holds without it (`Certified`, at the code's bucket)."""
+def decode(cert: Certified, code: Code, kept: Kept | None = None) -> Replay:
+    """Replay from the residual advice and what the verifier holds without it (`Certified`, at the code's bucket). With
+    a draft the drafts each row kept are advice too: `kept` answers each emitting row's count as the replay asks for
+    it (`replay`'s ``kept``; `kept_read` hands it advice v1's reader). A record that carries the counts
+    (`RequestIO.kept`) is refused (ValueError): a fork would read from them what rows that have not emitted kept, which
+    no decoder holds, so the contexts would not be the ones `encode` coded under."""
     if cert.bucket_s != code.bucket_s:
         raise ValueError(f"the code is in {code.bucket_s} s buckets, the certified record in {cert.bucket_s} s")
+    if cert.engine.num_speculative_tokens:
+        held = [i for i, q in enumerate(cert.requests) if q.kept is not None]
+        if held:
+            raise ValueError(f"the engine drafts {cert.engine.num_speculative_tokens} tokens a row, and the certified "
+                             f"record carries what {len(held)} requests' rows kept (`RequestIO.kept`; request {held[0]} "
+                             f"the first): a kept count is advice, asked as its row emits (`kept`)")
     context = _coder(cert, code.contexts)
     rw = cert.windows(code.window_buckets)
     model, dec = _model(code.contexts), {}
@@ -695,7 +734,7 @@ def decode(cert: Certified, code: Code) -> Replay:
         passed[i] += 1
         return bit
 
-    return replay(cert.engine, cert.requests, decide=decide)
+    return replay(cert.engine, cert.requests, decide=decide, kept=kept)
 
 
 # --- bits per certifier window ----------------------------------------------------------------------------------------
@@ -842,19 +881,23 @@ class _Outputs(NamedTuple):
     release: tuple[int, ...]
 
 
-def kept_read(trace: Trace, code: CV.Encoded) -> KP.Terms:
-    """`kept_code`'s string of one window, read as advice v1 reads it (`kept.Reader`): the replay of the trace's
-    requests, added as the trace has them, asks each emitting row's count off the string in place of
-    `RequestIO.kept`. Beside the string it reads K and each request's output count. Returns the terms read. Refuses
-    (ValueError) a string that isn't the code's own, a count no row can have, and a replay that isn't the trace's
-    steps."""
+def kept_read(trace: Trace, code: CV.Encoded, arrivals: Code | None = None) -> KP.Terms:
+    """`kept_code`'s string of one window, read as advice v1 reads it (`kept.Reader`): the replay asks each emitting
+    row's count off the string in place of `RequestIO.kept`. The replay is of the trace's requests added as the trace
+    has them, or, given the trace's residual advice `arrivals` (`encode`), the one that advice decodes to (`decode`),
+    so that the steps come from the two strings and the certified record alone. Beside the string it reads K and each
+    request's output count. Returns the terms read. Refuses (ValueError) a string that isn't the code's own, a count
+    no row can have, and a replay that isn't the trace's steps."""
     K, outputs = trace.engine.num_speculative_tokens, [q.output_len for q in trace.requests]
     d = CV.Decoder(code.bits, code.nbits, CV.Book.uniform())
     d.window()
     with KP.emitting() as emitted:
         reader = KP.Reader(d, K, [_Outputs(range(n), (0,) * n) for n in outputs], 1, 1, emitted)
-        rp = replay(trace.engine, [replace(q, kept=None) for q in trace.requests], admit=trace.before_step,
-                    passed=trace.passed, kept=reader)
+        if arrivals is None:
+            rp = replay(trace.engine, [replace(q, kept=None) for q in trace.requests], admit=trace.before_step,
+                        passed=trace.passed, kept=reader)
+        else:
+            rp = decode(trace.certified(arrivals.bucket_s), arrivals, reader)
     m = compare(rp.steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay on the counts read diverges from the trace at step {m.first_mismatch} "
@@ -862,11 +905,12 @@ def kept_read(trace: Trace, code: CV.Encoded) -> KP.Terms:
     return reader.end()
 
 
-def kept_bits(trace: Trace) -> dict[str, Any]:
+def kept_bits(trace: Trace, arrivals: Iterable[Code] = ()) -> dict[str, Any]:
     """With a draft, what the drafts each row kept (`RequestIO.kept`) cost as advice, both ways. `charged`: the bits of
     advice v1's code for them (`kept_code`; `ideal`, what an ideal coder would spend), each emitting row's count in
     the order the replay reads them, as one window's kept segment; the replay, asked each count off that string
-    (`kept_read`), gives the trace's steps and counts back. Advice v1's string over several windows ends each
+    (`kept_read`), gives the trace's steps and counts back, and so does the replay each of `arrivals` decodes to (the
+    trace's residual advice, `encode`). Advice v1's string over several windows ends each
     window's kept segment apart, each with its own 2 bits of termination, so its kept bits are a few more than this.
     `derived`: 0, where the audited block computes the count from committed values and nothing is sent.
     Beside them, and not sent: `counts[k]`, the rows that verified drafts, emitted and kept k; `entropy`, theirs in bits
@@ -892,7 +936,7 @@ def kept_bits(trace: Trace) -> dict[str, Any]:
     entropy = -sum(c / rows * math.log2(c / rows) for c in counts if c) if rows else 0.0
     kept = KP.terms(emitted, [q.output_len for q in trace.requests], [0] * len(emitted), 1)
     code, ideal = kept_code(K, kept)
-    if kept_read(trace, code) != kept:
+    if any(kept_read(trace, code, a) != kept for a in (None, *arrivals)):
         raise ValueError("the kept count's code decodes to other counts than the trace's")
     return {"K": K, "rows": rows, "counts": counts, "entropy": entropy, "max": math.log2(K + 1), "alone": rows * entropy,
             "charged": code.nbits, "ideal": ideal, "derived": 0}
@@ -901,20 +945,15 @@ def kept_bits(trace: Trace) -> dict[str, Any]:
 def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s: float = 0.1,
                 window_buckets: int = 600) -> dict[str, Any]:
     """A trace served with a draft, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
-    the residual advice under each of `contexts` (`encode`, each decoded back to the trace's steps), which a serve under
-    the certified tick does not send; and `kept_count` (`kept_bits`). `output_tokens` is what the requests emitted,
-    for the bits a token. Refuses a trace the replay doesn't reproduce."""
-    kept = kept_bits(trace)
-    cert = trace.certified(bucket_s)
-    arrivals = {}
-    for c in contexts:
-        code = encode(trace, contexts=c, bucket_s=bucket_s, window_buckets=window_buckets)
-        back = compare(decode(cert, code).steps, trace.steps)
-        if back.first_mismatch is not None:
-            raise ValueError(f"the residual advice ({c}) decodes to another schedule from step {back.first_mismatch}")
-        arrivals[c] = sum(len(b) for b in code.bits.values())
+    the residual advice under each of `contexts` (`encode`, the replay asked each row's kept count as the row emits),
+    which a serve under the certified tick does not send; and `kept_count` (`kept_bits`). Each context's arrivals and
+    the kept count's string, with the certified record and nothing else, decode back to the trace's steps and counts.
+    `output_tokens` is what the requests emitted, for the bits a token. Refuses a trace the replay doesn't reproduce."""
+    codes = {c: encode(trace, contexts=c, bucket_s=bucket_s, window_buckets=window_buckets) for c in contexts}
     return {"requests": len(trace.requests), "steps": len(trace.steps), "tick": trace.releases is not None,
-            "output_tokens": sum(q.output_len for q in trace.requests), "arrivals": arrivals, "kept_count": kept}
+            "output_tokens": sum(q.output_len for q in trace.requests),
+            "arrivals": {c: sum(len(b) for b in code.bits.values()) for c, code in codes.items()},
+            "kept_count": kept_bits(trace, codes.values())}
 
 
 #: advice v0's module (`verity.protocols.certifier.verifier.advice`)
@@ -1024,7 +1063,8 @@ def main(argv: Sequence[str] | None = None) -> None:
           "| residual framed |\n|---|---|---|---|---|---|---|---|---|---|")
     print("\n".join(per_window))
     if drafted:
-        print("\n| trace, served with a draft | requests | steps | K | arrivals: bits (" + " / ".join(CONTEXTS) + ") "
+        print("\n| trace, served with a draft | requests | steps | K "
+              "| arrivals, each kept count asked as its row emits: bits (" + " / ".join(CONTEXTS) + ") "
               "| rows that verified drafts | kept count: each alone, bits a row (not sent) | at most "
               "| charged (advice v1's code), bits | a request | an output token | derived, bits |\n"
               "|---|---|---|---|---|---|---|---|---|---|---|---|")

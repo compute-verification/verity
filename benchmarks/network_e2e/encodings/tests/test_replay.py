@@ -388,23 +388,43 @@ def test_kept_outputs_with_a_draft_are_the_traces_emissions(name):
     assert [len(r.kept) + sum(r.kept) for r in t.requests] == [r.output_len for r in t.requests]
 
 
-@pytest.mark.parametrize("name", DRAFT_CASES)
-@pytest.mark.parametrize("contexts", R.CONTEXTS)
-def test_residual_decodes_to_the_trace_with_a_draft(name, contexts):
-    """Where the arrivals are not certified, the residual advice is still each request's admission alone: with the
-    drafts each row kept beside the certified I/O, it decodes back to the trace's steps."""
-    t = trace(name, DRAFT)
-    code = R.encode(t, contexts=contexts)
-    back = R.decode(t.certified(code.bucket_s), code)
-    assert [(s.rows, s.drafts) for s in back.steps] == [(s.rows, s.drafts) for s in t.steps]
-    assert all(len(b) <= code.ideal[w] + 2 for w, b in code.bits.items())
-
-
 def _own_terms(t) -> KP.Terms:
     """Every emitting row's count as the trace itself records it, in one window: its steps in order, a step's rows as
     it lists them, each row's `emitted` less its own token."""
     return KP.Terms(tuple(q.output_len for q in t.requests),
                     (tuple((i, em[i] - 1) for st, em in zip(t.steps, t.emitted) for i, _, _ in st.rows if em.get(i)),))
+
+
+@pytest.mark.parametrize("name", DRAFT_CASES)
+@pytest.mark.parametrize("contexts", R.CONTEXTS)
+def test_residual_decodes_to_the_trace_with_a_draft(name, contexts):
+    """Where the arrivals are not certified, the residual advice is still each request's admission alone, and the
+    drafts each row kept are advice beside it: the certified record carries none of them, and the residual decodes
+    back to the trace's steps with each count asked once, by the row that emits it, in the trace's order, so no fork
+    is given one. A decoder handed the counts as lists (`RequestIO.kept`) is refused by name, and so is one handed
+    no counts."""
+    t = trace(name, DRAFT)
+    code = R.encode(t, contexts=contexts)
+    cert = t.certified(code.bucket_s)
+    assert all(q.kept is None for q in cert.requests) and all(q.kept is not None for q in t.requests)
+    asked = []
+
+    def kept(i: int, row: int) -> int:
+        asked.append((i, row))
+        return t.requests[i].kept[row]
+
+    back = R.decode(cert, code, kept)
+    assert [(s.rows, s.drafts) for s in back.steps] == [(s.rows, s.drafts) for s in t.steps]
+    assert [i for i, _ in asked] == [i for i, _ in _own_terms(t).windows[0]]
+    assert all([row for j, row in asked if j == i] == list(range(len(q.kept))) for i, q in enumerate(t.requests))
+    assert all(len(b) <= code.ideal[w] + 2 for w, b in code.bits.items())
+    K, n = t.engine.num_speculative_tokens, len(t.requests)
+    with pytest.raises(ValueError, match=f"^the engine drafts {K} tokens a row, and the certified record carries what {n} "
+                                         "requests' rows kept \\(`RequestIO.kept`; request 0 the first\\): a kept count "
+                                         "is advice, asked as its row emits \\(`kept`\\)$"):
+        R.decode(dataclasses.replace(cert, requests=t.requests), code, kept)
+    with pytest.raises(ValueError, match=f"^request 0: the engine drafts {K} tokens a row, so the replay needs the drafts"):
+        R.decode(cert, code)
 
 
 @pytest.mark.parametrize("name", DRAFT_CASES)
@@ -427,6 +447,8 @@ def test_kept_count_is_charged_at_advice_v1s_code_or_derived(name):
     code, ideal = R.kept_code(K, own)
     assert b["charged"] == code.nbits == code.lens[0] and b["ideal"] == ideal and ideal <= code.nbits <= ideal + 2
     assert R.kept_read(t, code) == own
+    # from the two strings and the certified record alone: the arrivals' advice decodes on the counts read off the kept string
+    assert all(R.kept_read(t, code, R.encode(t, contexts=c)) == own for c in R.CONTEXTS)
     d = R.draft_table(t, contexts=R.CONTEXTS)
     assert d["kept_count"] == b and not d["tick"] and (d["requests"], d["steps"]) == (len(t.requests), len(t.steps))
     assert d["output_tokens"] == sum(q.output_len for q in t.requests)
@@ -585,6 +607,11 @@ def test_a_draft_needs_what_each_row_kept():
     moved = (1, *io.kept[1:-1], *((io.kept[-1] - 1,) if io.kept[-1] else ()))     # one output from its last row to its first
     with pytest.raises(ValueError, match=f"request {i}: emitting row 0 kept 1 drafts, but the row the replay schedules"):
         R.replay(t.engine, with_kept(moved), **how)
+    # `encode` asks each count as its row emits, and refuses the row a request has none for
+    for bad, row in ((None, 0), (io.kept[:-1], len(io.kept) - 1)):
+        with pytest.raises(ValueError, match=f"^request {i}: the engine drafts {K} tokens a row, and the request has no kept "
+                                             f"count for its emitting row {row}$"):
+            R.encode(dataclasses.replace(t, requests=with_kept(bad)))
 
 
 def test_refuses_the_drafts_it_does_not_model():
