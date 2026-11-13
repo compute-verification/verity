@@ -465,7 +465,7 @@ def test_a_whole_tree_is_a_new_directory_at_each_change_and_its_link_is_renamed_
     seen = tmp_path / "at-the-rename.json"
     behind = deploy.drift(n, "origin/main", local, repo)["entries"]       # drift marks the tree's entries, and no other entry
     assert {(Path(e["path"]).name, e["state"], e.get("whole")) for e in behind if e.get("tree") == str(path)} == {
-        ("a.py", "ok", True), ("b.py", "stale", True), ("new.py", "missing", True), ("run.sh", "ok", True)}
+        ("a.py", "ok", True), ("b.py", "stale", True), ("gone.py", "dropped", True), ("new.py", "missing", True), ("run.sh", "ok", True)}
     assert {e.get("copy") for e in behind if e.get("tree") == str(path)} == {first.name}, "and names the directory the link names"
     assert [e for e in behind if e.get("tree") not in (None, str(path))] and not [e for e in behind if e.get("tree") != str(path) and "whole" in e]
     dry = deploy.install(n, "origin/main", "lane-x", [str(path)], local, repo=repo)
@@ -548,6 +548,79 @@ def test_a_commit_that_only_drops_a_file_of_a_whole_tree_moves_its_link_to_a_dir
                        manifest=world["manifest"], repo=repo) == 0
     assert f"dropped (origin/main lacks it) {path}/left.py  <- src/w/left.py" in capsys.readouterr().out.splitlines()
     assert Path(os.readlink(path)) != second and _files(Path(os.readlink(path))) == {"a.py": "a1\n", "sub/b.py": "b1\n"}
+
+
+def _behind(world):
+    """The fixture's node with everything installed and a whole tree whose copy main has since moved on from: main dropped
+    sub/gone.py. The node, the tree's path, the directory its link names and the commit that directory holds."""
+    n, path = _whole(world, {"a.py": "a1\n", "sub/gone.py": "g1\n"})
+    v1 = _git(world["repo"], "rev-parse", "origin/main")
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
+    (world["node"] / "bin" / "unit.service").write_text("[Unit]\n")
+    assert deploy.clean(deploy.drift(n, "origin/main", local, world["repo"]))
+    _push(world["repo"], {"sub/gone.py": None})
+    return n, path, Path(os.readlink(path)), v1
+
+
+def test_a_file_a_whole_trees_directory_holds_and_main_lacks_is_an_entry_of_the_tree_and_never_a_stray(world, capsys):
+    """Between installs a whole tree's directory is an older commit's tree, so a file main has dropped since is the copy being
+    behind main, where a plain tree's is a stray: drift calls it `dropped` and says the next install drops it. One no commit
+    has is `unknown` and one a branch has is `ahead`, each an entry of the tree whichever tree the manifest lists first."""
+    repo = world["repo"]
+    n, path, first, v1 = _behind(world)
+    _git(repo, "checkout", "-q", "-b", "pr")
+    _commit(repo, {"src/w/pr.py": "a PR adds it\n"}, "a PR's new file")
+    _git(repo, "push", "-q", "origin", "pr")
+    _git(repo, "checkout", "-q", "main")
+    (first / "pr.py").write_text("a PR adds it\n")
+    (first / "hand.py").write_text("made by hand\n")
+    text = world["manifest"].read_text()
+    entry, plain = text[text.rindex("\n[[tree]]"):], text.index("\n[[tree]]")
+    listed_first = deploy.load(text=text[:plain] + entry + text[plain:len(text) - len(entry)])["n"]
+    assert [e.path for e in listed_first.entries if e.tree] == [str(path), str(world["node"] / "tree")]
+    for nd in (n, listed_first):
+        rep = deploy.drift(nd, "origin/main", local, repo)
+        assert not rep["strays"] and not deploy.clean(rep)
+        assert {(e["path"], e["src"], e["state"], e["whole"], e["copy"]) for e in rep["entries"] if e.get("tree") == str(path)} == {
+            (str(path / "a.py"), "src/w/a.py", "ok", True, first.name),
+            (str(path / "hand.py"), "src/w/hand.py", "unknown", True, first.name),
+            (str(path / "pr.py"), "src/w/pr.py", "ahead", True, first.name),
+            (str(path / "sub/gone.py"), "src/w/sub/gone.py", "dropped", True, first.name)}
+    when = _git(repo, "log", "-1", "--format=%cs", v1).strip()
+    lines = [f"  dropped  {path}/sub/gone.py  (origin/main's version of {v1[:12]} ({when}); origin/main no longer has it: the next "
+             "install of the tree drops it)",
+             f"  unknown  {path}/hand.py  (no commit holds it: put there by hand or never committed; the next install of the tree "
+             "drops it)"]
+    assert deploy.main(["drift", "--on", "n", "--no-fetch"], run=local, manifest=world["manifest"], repo=repo) == 1
+    out = capsys.readouterr().out.splitlines()
+    assert set(lines) < set(out) and not [ln for ln in out if "stray" in ln]
+
+    deploy.install(n, "origin/main", "lane-x", [str(path)], local, apply=True, repo=repo)
+    assert _files(Path(os.readlink(path))) == {"a.py": "a1\n"} and deploy.clean(deploy.drift(n, "origin/main", local, repo))
+
+
+def test_attic_refuses_every_path_inside_a_whole_tree_and_moves_nothing(world, capsys):
+    """What runs from a whole tree's directory finds it as it was installed: a file there is never moved out, by the link's
+    path or by the directory's own, named or picked as a backup. The refusal names the install that drops what main lacks."""
+    repo = world["repo"]
+    n, path, first, _ = _behind(world)
+    (first / "a.py.bak-20261001T0611Z").write_text("a0\n")
+    bak = world["node"] / "bin" / "a.py.bak-20261001T0611Z"       # a stray outside the tree, which `--backups` still picks
+    bak.write_text("a0\n")
+    record = world["node"] / "research/deploy/record.jsonl"
+    before, held = record.read_text(), _files(first)
+    cure = f"goes at the tree's next install: `research deploy install n --by WHO --apply {path}`"
+    for inside in (path / "sub/gone.py", first / "sub/gone.py", path / "a.py", path / "a.py.bak-20261001T0611Z", path, first.parent, first):
+        with pytest.raises(deploy.Refused, match=f"inside the whole tree {path} of n") as refused:
+            deploy.attic(n, "origin/main", "lane-x", [str(bak), str(inside)], False, local, apply=True, repo=repo)
+        assert str(inside) in str(refused.value) and str(bak) not in str(refused.value) and cure in str(refused.value)
+    assert deploy.main(["attic", "n", "--by", "lane-x", "--apply", "--no-fetch", str(path / "sub/gone.py")], run=local,
+                       manifest=world["manifest"], repo=repo) == 3
+    assert cure in capsys.readouterr().err
+    assert _files(first) == held and record.read_text() == before and bak.exists() and Path(os.readlink(path)) == first
+    assert not (record.parent / "attic").exists(), "nothing was moved"
+    assert [p for p, _ in deploy.attic(n, "origin/main", "lane-x", [], True, local, apply=True, repo=repo)] == [str(bak)]
+    assert _files(first) == held and not bak.exists()
 
 
 @pytest.mark.parametrize("names", ["cwd", "environ", "cmdline"])
