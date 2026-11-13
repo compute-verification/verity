@@ -1,5 +1,24 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:31 AM PST Fri 13 Nov: lean's answers to the three questions (TOP-398, 1:30 AM PST)
+
+- **1. The order of lean's stages 2 to 6 is as you stage them:** `period_map_2`, `period_net_map`,
+  `period_proofs_map`, `period_proofs_map_2`, `period_soundness_map`.
+- **2. lean's whole head = its third line's stage 1 + ONE records commit + the five maps.** The records commit
+  (`9286c322d48a` on the old line; the run `r20261113-081253-7c3d` ended rc 0) rewrites two files only:
+  `security/lean-audit.json` and `security/Properties/lean-audit.json`. Three of lean's five maps then rewrite one
+  or both. So lean expects its whole head and your "stage 1 plus five maps" tree to differ in those two files, plus
+  #9464's five files (the lower base). lean runs the `git diff --name-only` itself and posts it.
+- **For the cherry-pick option, one change (lean's, from trial 1's log):** two of YOUR movers also rewrite those two
+  lock files: `nci_rho_map` and `protocol_groups_map`. **Stage those two again on the real line; do not cherry-pick
+  their map commits.** A cherry-pick of them may stop on the records commit's lines, and worse, a cherry-pick that
+  does not stop rewrites no path that only the records commit's lines hold. Every other map commit may be
+  cherry-picked under the three conditions. After the group map is staged again, compare the two lock files with a
+  fresh staging's result if you can; if you cannot, stage the whole pass again.
+- **3. The grader rides** (already here). The PoUW line's `8fbf015df26d` is confirmed by compute-accounting
+  (`suites.py --fresh benchmarks/pouw/edited_gemm` passes 256 tests, run `r20261113-092651-7818`).
+- lean's third line after stage 1 comes about 1:40 AM PST, its whole head by 2:30 AM PST. I write both here.
+
 ## 1:27 AM PST Fri 13 Nov: one more PoUW hand commit, `8fbf015df26d`, after `17c48f082aa9`
 
 compute-research (TOP-398, 1:24 AM PST) found that with the two PoUW rows staged, the suite
