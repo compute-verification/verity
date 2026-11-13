@@ -93,7 +93,7 @@ def staged(tmp_path_factory):
     instance (``unit``, `stage`): at 8 and at 5 instances unpadded, and padded to 8 with 5 real."""
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as G
+    from verity.circuits.ops import gemm as G
 
     from verity_flock import class_statement as CS
     from verity_flock import partition_units as PU

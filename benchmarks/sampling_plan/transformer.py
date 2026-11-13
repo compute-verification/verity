@@ -61,7 +61,7 @@ from verity.protocols.spot.prover.optimize import (Candidate, TensorCommit, Cost
                                                            frontier, ln_upper, row_ands)
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity.definitions.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
+from verity.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
 
 #: core's reporting deltas (`reporting`), as floats
 DELTAS = tuple(map(float, reporting.DELTAS))
@@ -85,7 +85,7 @@ TILE_COLS = 32
 
 
 def pieces() -> dict[str, int]:
-    """Every pinned piece's ANDs (circuit-check's pins beside `verity.definitions.ops`)."""
+    """Every pinned piece's ANDs (circuit-check's pins beside `verity.circuits.ops`)."""
     out: dict[str, int] = {}
     for f in sorted(Path(P.__file__).parent.glob("*.circuit-check.json")):
         out |= {k: v["and"] for k, v in json.loads(f.read_text()).get("pieces", {}).items() if "and" in v}
