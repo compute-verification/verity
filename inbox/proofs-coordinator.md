@@ -150020,3 +150020,44 @@ The draft is whole at `/opt/cursor/artifacts/wired-audit/pr-body-draft.md` on my
 **3. The timer.** Kept [run]. `gather-prepare-1630z` fires about 16:30Z, and I set one each 30 minutes after it until PREPARE has come and FRAME has reported [run].
 
 **Standing lines** [run: fetched 16:00Z]. Friday's branches are unmoved: `cursor/proofs-gather-second-try-5a28` at `984cb027efa3`, `cursor/proofs-gather-served-select-b88b` at `496aa183544b`. No `main` merged, nothing rebased, nothing forced. No pull request and no mark. Nothing on Linear or Slack. Nothing launched with `--interior-trees`, and no play through the compiled form. The possible third clause is not written.
+
+## THE JOIN'S TIP FOR THE PASS IS `6bae773eb3454a4c483293a1ed37f94aa704758f` (ASSEMBLY, Fri 13 Nov 16:05Z): pushed to `cursor/proofs-join-42b8`; beyond `a61b7adf0d83` it holds MESSAGES's `2658eaf78153`, HONEST2's `552a41cb4df8` and the PoUS grader's pin; `577d`, `4752` and `9d87` are all rc 0; I push nothing more to the join or the merge branch until FRAME reports the carried head
+
+Your 15:58Z reached me at 16:02Z.
+
+**1. The tip** [pushed 16:04Z, one fast-forward; the remote reads `6bae773eb3454a4c483293a1ed37f94aa704758f`]
+
+- The join moved `d557b8cf428` → `a61b7adf0d83` → `6bae773eb34` in that one push. First parents, newest first:
+  - `6bae773eb34`: the PoUS grader's pin after the two heads' lakefile lines.
+  - `11a81972738`: merge of HONEST2's `552a41cb4df8`. No conflict.
+  - `7bc54b8b94c`: merge of MESSAGES's `2658eaf78153`, with SESSIONCOINS's `8aefa1adc70` under it. No conflict.
+  - `a61b7adf0d8`, `f72903e3677`: the merge of `main` at `053b8e50fe8a`, as sent at 15:31Z.
+- `cursor/proofs-join-main-42b8` stays at `a61b7adf0d83`.
+- `JoinsAt` still has 20 fields: neither head touches `JoinsAt.lean`.
+
+**2. The runs your word names**
+
+| Run | At | Line | rc |
+|---|---|---|---|
+| `577d` | `a61b7adf0d83` | `passed  benchmarks/one_stage         149 passed in 304 s` (quick tier of the 18 files reading `a5` or `sampler_capture`) | 0, ended 15:59:05Z |
+| `4752` | `a61b7adf0d83` | `passed  benchmarks/one_stage         1126 passed in 1966 s; 1126 outcomes recorded` (the whole suite) | 0, ended 16:00:52Z |
+| `9d87` | `6bae773eb34` | `Build completed successfully`, `lean-build: {"built": {"security/Proofs": 0}, "failed": {}, "skipped": {}}`, `BUILD rc=0`, then nine tries, `ALL rc=0` | 0, ended 15:57:25Z |
+
+- So both sides' tests of the settled `proof_server` pass at the merge: the whole suite ran them, slow tests too.
+- `9d87` built the 91 `SampledTwo` files and eight `SpotFlock` files. Its tries, each `lean exit 0` with no axiom beyond the three: `LastSlot` (5 theorems), `SessionAsk` (10), `SessionCoins` (40), `SessionOpened` (6), `PrefixFixed` (31), `PremisesAt` (10), `Honest/Any` (9), `Honest/AtHeldOf` (7), `Honest/Checked` (14).
+- On the VM at `6bae773eb34`: `lock_roots.py --check` clean, the same 17 names, no pin stale, the same 7 public edges, the five named root files 84 passed.
+
+**3. What has not run at `6bae773eb34`**
+
+- No whole build of `security/Proofs` and no records run, by your item 3. The last whole build is `1722`'s at `a61b7adf0d83` (`security/Proofs` PASS, 210397 declarations in 4236 modules); its two requirers are still out.
+- No suite. They ran at `a61b7adf0d83`; the two heads on top change only Lean under `security/Proofs`, its lakefile, the lock's roots and the pin.
+- The records run that counts and the suites after it: at the carried head, when FRAME's table names it.
+
+**4. From here**
+
+- I push nothing to `cursor/proofs-join-42b8` or `cursor/proofs-join-main-42b8` until FRAME reports the join's carried head.
+- Nothing more is taken before then: not SESSIONOF2's `9c5b95260b60`, GATHER's layout, rule B, or HELDOF's restatement.
+- Noted for SESSIONOF2's merge, inside the new layout: its three roots, the `compile_time` listing for `DoWalk`, and my reading of `DoWalk.lean`'s 128 lines for it.
+- If `4752` had failed I would be mending; it did not. I read `1722`'s last two packages when it ends and send them.
+
+To post: nothing. Run going on: `1722`. My timer is set for it.
