@@ -95,10 +95,10 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote
 /-- **The openings' pooled bound.** On a session whose windows' sizes and correct receipts are fixed before their
 openings coins (`Live`), whose accepted outcomes found every opened receipt correct or moved off the row its root holds
 (`Refused`, at the receipts `R`) and count the trace's wrong receipts among the windows' (`Counted`), with every
-window's draw on the first blocks `prf t` its coin gives and `m < 2^64` receipts a window at most, the probability that
-the session is accepted with more wrong receipts than the record's pooled bound at `δ` is at most `δ + Σ_t s_t / 2^256`,
-plus the windows' distinguishers' advantages on `prf`, plus the receipts' binding term (`R.binding`: some opened receipt
-moved off the row its root holds). -/
+window's draw on the first blocks `prf t` its coin gives and `m < 18446744073709551616` (2^64) receipts a window at
+most, the probability that the session is accepted with more wrong receipts than the record's pooled bound at `δ` is at
+most `δ + Σ_t s_t / 2^256`, plus the windows' distinguishers' advantages on `prf`, plus the receipts' binding term
+(`R.binding`: some opened receipt moved off the row its root holds). -/
 def PooledSample : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
@@ -109,8 +109,9 @@ def PooledSample : Prop :=
         (R.binding D prf rest).toReal) fun ω =>
       (T.incorrect ω : ℝ) ≤ D.pooled δ ω
 
-/-- **Live coins, derived.** On a session meeting `PooledSample`'s premises, `LiveCoins W` at `PooledSample`'s error holds
-for every `W` at least the record's pooled bound at `δ` on every accepted outcome. -/
+/-- **Live coins, derived.** On a session meeting `PooledSample`'s premises, `m < 18446744073709551616` (2^64) among
+them, `LiveCoins W` at `PooledSample`'s error holds for every `W` at least the record's pooled bound at `δ` on every
+accepted outcome. -/
 def LiveCoinsSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
@@ -123,7 +124,7 @@ def LiveCoinsSampled : Prop :=
 
 /-- **The snapshot held at the record's pooled bound, under Identity.** `Held` on a trace over a session's coins, with
 `LiveCoins` replaced by the draw's premises (`Live`, `Refused`, `Counted`) and `W` by the record's pooled bound at
-`δc`. -/
+`δc`, on windows of `m < 18446744073709551616` (2^64) receipts. -/
 def HeldSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
@@ -137,7 +138,8 @@ def HeldSampled : Prop :=
       (T.planned ω : ℝ) - D.pooled δc ω - ((s / E + β) * ((e : ℝ) - s₀) + (Br + Bd)) - T.passes * S ≤ T.held ω
 
 /-- **Held over time at the record's pooled bound, under Identity.** `HeldOverTime` with `LiveCoins` replaced by the
-draw's premises and `W` by the record's pooled bound at `δc`. -/
+draw's premises and `W` by the record's pooled bound at `δc`, on windows of `m < 18446744073709551616` (2^64)
+receipts. -/
 def HeldOverTimeSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)
@@ -155,7 +157,8 @@ def HeldOverTimeSampled : Prop :=
         ≤ T.heldOver ω (K.start ω) (K.stop ω)
 
 /-- **Held over time with the links charged, at the record's pooled bound** (no Identity). `HeldOverTimeLinks` with
-`LiveCoins` replaced by the draw's premises and `W` by the record's pooled bound at `δc`. -/
+`LiveCoins` replaced by the draw's premises and `W` by the record's pooled bound at `δc`, on windows of
+`m < 18446744073709551616` (2^64) receipts. -/
 def HeldOverTimeLinksSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (D : Remote.Draw.Run n m k κ X)

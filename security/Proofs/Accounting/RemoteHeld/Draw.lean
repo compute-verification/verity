@@ -1442,16 +1442,19 @@ end Draw
 /-- **The openings' pooled bound** (`Accounting.Guarantees.Remote.PooledSample`). -/
 theorem PooledSample : Accounting.Guarantees.Remote.PooledSample := by
   intro n m k κ X _ prf rest D T R δ hδ hm hL hR hC
+  replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
   exact Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC
 
 /-- **Live coins, derived** (`Accounting.Guarantees.Remote.LiveCoinsSampled`). -/
 theorem LiveCoinsSampled : Accounting.Guarantees.Remote.LiveCoinsSampled := by
   intro n m k κ X _ prf rest D T R W δ hδ hm hL hR hC hW
+  replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
   exact holdsMono (fun ω ha h => h.trans (hW ω ha)) (Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC)
 
 /-- **The snapshot held at the record's pooled bound** (`Accounting.Guarantees.Remote.HeldSampled`). -/
 theorem HeldSampled : Accounting.Guarantees.Remote.HeldSampled := by
   intro n m k κ X _ prf rest D T R S s₀ e s E β Br Bd δs δc hE hs hβ hδ hm hI hsq hd hS hr hc hk hL hR hC
+  replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
   refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC))
   obtain ⟨hm', h0, hP⟩ := hc ω ha
   exact held_of ω hE hs hβ hI hsq hd hS hr hm' h0 hP h.1 h.2
@@ -1460,6 +1463,7 @@ theorem HeldSampled : Accounting.Guarantees.Remote.HeldSampled := by
 (`Accounting.Guarantees.Remote.HeldOverTimeLinksSampled`). -/
 theorem HeldOverTimeLinksSampled : Accounting.Guarantees.Remote.HeldOverTimeLinksSampled := by
   intro n m k κ X _ prf rest D T R K S s E β βl Br Bd Bl δs δc hE hs hβ hβl hδ hm hl hsq hd hS hr hp hcov hk hL hR hC
+  replace hm : m < 2 ^ 64 := hm.trans_eq (by norm_num)
   refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC))
   exact heldOverLinks_of K ω hE hs hβ hβl hl hsq hd hS hr hp hcov ha h.1 h.2
 
