@@ -19,10 +19,10 @@ import json
 import struct
 from pathlib import Path
 
-from verity.protocols.pouw.verifier.audit import ROW_SCHEMA, activation_binding, commit_rows, hm96_salt
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.pouw.verifier.audit import ROW_SCHEMA, activation_binding, commit_rows, hm96_salt
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c.json"
 #: (case, shape, tile rows, tile cols, unit index, weight id, test instance, forming[, hashing])

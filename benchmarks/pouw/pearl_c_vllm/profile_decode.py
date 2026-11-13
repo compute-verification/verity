@@ -215,7 +215,7 @@ def run(args) -> dict:
         prof.forward(int(ids.shape[0]) if ids is not None else -1)
     model.register_forward_pre_hook(hook, with_kwargs=True)
     tok = llm.get_tokenizer()
-    chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in e2e.PROMPTS]
+    chat = e2e.chat(tok, e2e.PROMPTS)
     sp = SamplingParams(temperature=0.0, max_tokens=48)
     walls = {}
 

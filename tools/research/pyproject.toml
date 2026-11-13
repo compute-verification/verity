@@ -127,8 +127,9 @@ untraced = [
 # catalog, kernels, core);
 # test_store_prov loads the tc_probe declaration (benchmarks/tc_probe), content-resolves a golden
 # fixture (verity/definitions/ops/tests/fixtures) and git-archives benchmarks/tc_probe and verity/definitions/silicon;
-# test_repo_replicas hashes every tracked fixture fixtures/artifacts.json registers (today under fixtures, adapters/vllm
-# and verity/definitions/ops/tests/fixtures). test_pythonpath and test_notes derive every workspace member's import root from the
+# test_repo_replicas hashes every tracked fixture fixtures/artifacts.json registers (today under fixtures, adapters/vllm,
+# verity/definitions/ops/tests/fixtures and fixtures/bench-instances, named on its own so it stays an input wherever it
+# sits). test_pythonpath and test_notes derive every workspace member's import root from the
 # workspace's pyproject.toml files (research/pythonpath.py) and find each package in an untraced child, so those files are
 # listed: moving a member's root selects this suite. tools/verity/check/tool.py stays: the train gate parses it on main, and
 # test_jobs_vectors checks that it still can. infra/cluster: the console computes its usage rows with cluster.usage, and
@@ -144,7 +145,7 @@ untraced = [
 # tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py): test_queue commits them
 # into its origin, so the records gate keys each commit's Lean inputs with its own code (`lean_keys`). tools/move/rename.py,
 # layout.py and restack.py: test_queue_moves_carry commits them into its origin and restacks a head across the moves they make.
-inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/definitions/kernels",
+inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "fixtures/bench-instances", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/definitions/kernels",
           "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
           "pyproject.toml", "verity/configuration/config/pyproject.toml", "verity/protocols/flock/prover/pyproject.toml", "benchmarks/numerical/pyproject.toml",
           "benchmarks/harness/pyproject.toml", "benchmarks/commitments/pyproject.toml", "benchmarks/network_traces/pyproject.toml",

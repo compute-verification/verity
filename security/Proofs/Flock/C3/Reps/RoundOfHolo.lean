@@ -1,6 +1,5 @@
 module
 
-public import Proofs.Flock.C3.Reps.RoundReads
 public import Proofs.Flock.C3.Compose.HoloStreamSizes
 public import Proofs.Flock.C3.Sparse.MsgsRead
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -18,6 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Recursive.HoloRepCoins
+public import Proofs.Flock.C3.Reps.RoundReads
 
 /-!
 # A rep's message rounds along `holoRepShape`

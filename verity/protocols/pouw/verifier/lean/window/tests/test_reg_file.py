@@ -1,7 +1,7 @@
 """`PouwWindow.RegFile`, a sampled H1 leaf's ``--registered`` files from the accepted registration and produced record, held
 to the Python on the shared harness (`verity_difftest`): `leaf_lanes.registered_file` at `leaf_lanes.reads` and at
 `leaf_lanes.verifier_entries`' entries and roots and at the unit's placement (each value its own table from row 0, or
-placed in an execution phase table from a base row), the files h1_lanes' statements read (`benchmarks/pouw/h1_lanes/run.py`),
+placed in an execution phase table from a base row), the files h1_lanes' statements read (`benchmarks/pouw/h1_lanes/leaf.py`),
 and `pouw-leaf-own`'s check (`leafOwn?`), which accepts each such file and refuses one whose data port is not the
 layout's read at the records' root and the unit's placement or one of whose ports has two reads, and its sample policy
 (`checkFull`), which accepts a session record that samples every unit and refuses one that doesn't.

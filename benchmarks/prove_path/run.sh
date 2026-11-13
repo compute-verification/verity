@@ -31,6 +31,15 @@
 #   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its
 #     own Build of each Program I2 compiles from its compile, with no vLLM, since the rows' names, the parameters' names and
 #     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
+#   PP_WEIGHTS_TIE=1: the checkpoint tie of vLLM's weights registration at TINY (verity_vllm.program.predict.weights_tie;
+#     its inputs tests/program/predict/weights_tie_fixture): the committer registers checkpoint X's weights and records
+#     its tie window, one SHA-512 chain a shard over the registered rows (the embedding table's row-seg rows a chain of
+#     their own), ending at the verifier's own digest; the verifier makes its tie of X from X's public bytes (the circuit's
+#     SHA-512, the run root, the registered entries and its supplied values, every unit as the output class), audits the
+#     window against it under PP_LAW (default work:1) in
+#     members of PP_TIE_CAP units (default 16), and pins the roots only on an accepting audit. Two refused arms: a
+#     committer serving checkpoint Y's words as X's (its last units' digest reads open no root), and the same with those
+#     digests forged to X's (those units aren't their Definition's); each must be refused, and pin nothing.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256},
 #     8 units a rank: honest rate:1/2 (4 of them sampled), forged rate:1/1 (every unit sampled); with PP_PLAIN=1,
 #     stratified-rate:1/2 and stratified-rate:1/1.
@@ -132,6 +141,15 @@ keep() {  # NAME: $W/NAME's records into $O/NAME, among them the circuit each dr
   (cd $W/$1 && find . -type f \( ! -name circuit.txt -o -path './window/m*/circuit.txt' \) ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
     ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' ! -path './proof-edits/*/member/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
+  # a case's blobs name its files in $W, which the EXIT trap removes: name the kept copies instead
+  (cd $O/$1 && find . -name '*.json' -print0 | xargs -0 -r grep -lZ '"blobs"' \
+    | xargs -0 -r $PY -c 'import json,sys
+w, o = sys.argv[1:3]
+for f in sys.argv[3:]:
+    c = json.load(open(f))
+    if isinstance(c, dict) and isinstance(c.get("blobs"), list):
+        c["blobs"] = [o + b[len(w):] if isinstance(b, str) and b.startswith(w) else b for b in c["blobs"]]
+        open(f, "w").write(json.dumps(c, sort_keys=True))' "$W/$1/" "$(cd $O/$1 && pwd)/")
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed
          # run's arguments (--tp-commit DIR --build-root DIR, --bundle DIR --row-dir DIR --workload F, or --serve-run DIR
@@ -225,6 +243,47 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi
   fi
+elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
+  TLAW=${PP_LAW:-work:1} TCAP=${PP_TIE_CAP:-16} F=$W/tie-fixture
+  (cd adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $O/tie-fixture.err \
+    || { tail -20 $O/tie-fixture.err; exit 8; }
+  WT="$PY -m verity_vllm.pipeline.cli weights-tie"
+  tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
+           # as X's; --forge-digest: its ends' digests forged to X's), the verifier's tie of X, the records audit of the window
+           # against it, and the pins, which only an accepting audit writes. Each arm is a run (and a root) of its own
+    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 commit=() c run rc pinned; shift
+    for x in "$@"; do
+      case $x in
+        --served) forged=--forged; commit+=(--served-dir $F/y/snap --served-manifest $F/y/checkpoints.json);;
+        --forge-digest) commit+=(--forge-digest);;
+      esac
+    done
+    local common=(--phi $F/phi.json --checkpoint-dir $F/x/snap --manifest $F/x/checkpoints.json
+                  --grain $($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["grain"])' $O/tie-fixture.json)
+                  --law $TLAW --cap $TCAP --run-id $id)
+    mkdir -p $O/$name
+    $WT commit "${common[@]}" --key-file $W/$name-key --registration-out $O/$name/registration.json --out $W/$name-window \
+      "${commit[@]}" | tee $O/$name/commit.json || return 1
+    $WT verify "${common[@]}" --registration $O/$name/registration.json --out $O/$name/verifier | tee $O/$name/verify.json || return 1
+    c=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["circuit"])' $O/$name/verifier/tie.json) || return 1
+    run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/verifier/tie.json) || return 1
+    mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
+    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law $TLAW --circuit $c --run $run \
+      --registered $O/$name/verifier/registered.json --outputs $O/$name/verifier/outputs.json \
+      ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    rc=$?
+    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
+    keep $name
+    $WT pins "${common[@]}" --registration $O/$name/registration.json --summary $W/$name/summary.json --out $O/$name/pins.json \
+      | tee $O/$name/pins-verdict.json
+    pinned=$?
+    if [ -n "$forged" ]; then [ $pinned != 0 ] && [ ! -e $O/$name/pins.json ] || rc=1; else [ $pinned = 0 ] || rc=1; fi
+    return $rc
+  }
+  tie weights-tie || rc=1
+  [ "${PP_ONLY:-}" = honest ] || tie weights-tie-other --served || rc=1
+  [ "${PP_ONLY:-}" = honest ] || tie weights-tie-forged --served --forge-digest || rc=1
 else
   S=$W/served
   (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:1/2 --deferred) \

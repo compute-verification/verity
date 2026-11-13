@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 import math
 
-import pytest
-
 import figures as F
+import pytest
 
 PARTS = ["L0", "L1", "alg-p0", "cap"]
 

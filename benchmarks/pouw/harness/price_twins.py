@@ -49,6 +49,12 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
+#: what `ledger.py` and the tests read
+__all__ = [
+    "CAST_VALUES", "LEAN_STORE", "REPO_AUDIT", "REPO_SOURCE", "SCHEMA", "STAGED", "TABLE", "TwinError", "build",
+    "extract", "guarantees", "lifted_definitions", "load", "lookup", "parse", "refresh", "statement",
+]
+
 HERE = Path(__file__).resolve().parent
 TABLE = HERE / "price_twins.json"
 SCHEMA = "pouw-price-twins/v1"
@@ -295,6 +301,8 @@ def load(path: Path = TABLE) -> list[dict]:
     doc = json.loads(path.read_text())
     if doc.get("schema") != SCHEMA:
         raise TwinError(f"{path} is {doc.get('schema')!r}, not {SCHEMA}")
+    if not isinstance(doc.get("twins"), list):
+        raise TwinError(f"{path} has no twins list")
     return doc["twins"]
 
 

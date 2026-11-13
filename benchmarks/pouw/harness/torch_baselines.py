@@ -14,6 +14,9 @@ import importlib
 import importlib.util
 from dataclasses import dataclass, field
 
+#: what `bench.py` and the tests read
+__all__ = ["Bridge", "deep_gemm", "exempt"]
+
 #: each family the bridge serves, and its sources: vLLM's CUTLASS for every FP8 scaling, DeepGEMM for 128-block only
 SOURCES = {"fp8-e4m3": ("cutlass-vllm",), "fp8-e4m3-rowwise": ("cutlass-vllm",), "fp8-blk128": ("cutlass-vllm", "deepgemm")}
 BLOCK = 128

@@ -2,8 +2,10 @@
 replay block is the one stated at each design the options are compared at, with every run at 2^80 calls of SHA-512,
 in calls and converted to compressions, and every line the command prints says what it covers."""
 import json
+import re
 from dataclasses import replace
 from fractions import Fraction
+from pathlib import Path
 
 import binding as b
 import cards
@@ -554,3 +556,89 @@ def test_the_command_refuses_a_count_it_cannot_place(argv, message, capsys):
     with pytest.raises(SystemExit):
         b.main(argv)
     assert message in capsys.readouterr().err
+
+
+LEAN_FILE = (Path(__file__).resolve().parents[3] / "security" / "Proofs" / "Flock" / "SamplingGeneric"
+             / "TwoFirstHitClassNumbers.lean")
+#: a verification phase of 41 sampled replay blocks: its sessions, and its classes at 4,130 a proof block
+PHASE_SESSIONS, PHASE_CLASSES = 617836, 4130 * 41 * 5382327
+
+
+def part_over_hash(i: b.Instance) -> Fraction:
+    """The conflict finder's cost twice and the first-hit finders' four times, over 2^256, at an instance's numerals."""
+    run = i.T * (1 + i.e * i.Ns) + i.c
+    first = i.T * (1 + i.e * i.Ns + i.Ks + i.e * i.Km) + (1 + i.Ks) * i.c
+    return Fraction(2 * run + 4 * first, b.HASH)
+
+
+def test_leans_instances_are_its_theorems_statements():
+    """Each instance's numerals are the hypotheses of the theorem it names, read from the Lean file, and its bits
+    the theorem's conclusion; at those numerals the part over 2^256 is within the bits by exact arithmetic."""
+    text = LEAN_FILE.read_text()
+    fields = {"T": r"hT : T ≤ ([^)]+)\)", "e": r"he : L\.toCompiled\.es x ≤ ([^)]+)\)", "Ns": r"hNs : Ns ≤ ([^)]+)\)",
+              "Ks": r"hKs : Ks ≤ ([^)]+)\)", "Km": r"hKm : Km ≤ ([^)]+)\)",
+              "c": r"hown : L\.toCompiled\.nPU x \* L\.toCompiled\.openCalls x ≤ ([^)]+)\)"}
+    assert len({i.theorem for i in b.LEAN}) == len(b.LEAN) == 4
+    for i in b.LEAN:
+        statement = re.search(rf"^theorem {re.escape(i.theorem)} (.*?):= by$", text, re.S | re.M).group(1)
+        said = {name: b.natural(re.search(pattern, statement).group(1).replace(" ", ""))
+                for name, pattern in fields.items()}
+        assert said == {name: getattr(i, name) for name in fields}, i.theorem
+        assert int(re.search(r"\+ 2 \^ \(-\((\d+) : ℝ\)\)", statement).group(1)) == i.bits, i.theorem
+        assert part_over_hash(i) <= Fraction(1, 2 ** i.bits), i.theorem
+    assert b.ONE_TABLE == 1 + 210 * b.queries(2 ** 23) == 2592237061
+
+
+def test_what_lean_proves_of_a_run_is_the_instance_its_numbers_are_within():
+    """A run by classes at one table a session is within the instance at 2^80 calls up to 2^42 classes; counted in
+    compressions it is within one of the instances at 513 times that, of fewer bits as its classes grow; past every
+    one's numerals nothing is proved, and the nearest instance is named with each numeral the run is past."""
+    one = b.Design(K=2 ** 42, k=TABLE, sessions=2 ** 30, units=1, open_calls=b.BUDGET, by_class=True)
+    assert b.proved(one) == {"theorem": "εclsAt_le_table1", "bits": 100}
+    assert b.proved(replace(one, K=2 ** 42 + 1)) == {
+        "theorem": None, "nearest": "εclsAt_le_table1", "bits": 100,
+        "past": {"Ks": {"design": 2 ** 42 + 1, "instance": 2 ** 42}, "Km": {"design": 2 ** 42 + 1, "instance": 2 ** 42}}}
+    in_compressions = [b.proved(b.converted(replace(one, K=K, sessions=n)))
+                       for K, n in ((2 ** 33, 2 ** 30), (14 * 10 ** 9, 2 ** 27), (2 ** 35, 2 ** 30))]
+    assert [(p["theorem"], p["bits"]) for p in in_compressions] == [
+        ("εclsAt_le_table1_513", 100), ("εclsAt_le_table1_513_narrow", 100), ("εclsAt_le_table1_513_k35", 98)]
+    past = b.proved(b.converted(replace(one, K=2 ** 36)))
+    assert (past["theorem"], past["nearest"], past["bits"], list(past["past"])) == (
+        None, "εclsAt_le_table1_513_k35", 98, ["Ks", "Km"])
+    # a session of four tables is past every instance's e_s, whatever else it is within
+    four = b.Design(K=PHASE_CLASSES, k=b.queries(4 * 2 ** 23), sessions=PHASE_SESSIONS, by_class=True)
+    assert b.proved(four) == {"theorem": None, "nearest": "εclsAt_le_table1", "bits": 100,
+                              "past": {"e": {"design": 10368948031, "instance": 2592237061}}}
+    assert b.proved(replace(four, k=TABLE)) == {"theorem": "εclsAt_le_table1", "bits": 100}
+    assert list(b.proved(b.converted(four))["past"]) == ["e", "Ks", "Km"]
+    with pytest.raises(ValueError, match="by classes"):
+        b.proved(replace(one, by_class=False))
+    with pytest.raises(ValueError, match="state its sessions"):
+        b.sizes(b.Design(K=GATES, k=TABLE))
+
+
+def test_a_verification_phase_and_a_period_of_them_in_calls_and_in_compressions():
+    """One verification phase is one run: its bound by classes is the report's per run at the same sessions and
+    classes, in calls and in compressions, and a period's is the sum over its phases. Each counting carries what Lean
+    proves of one phase, and nothing of the sum."""
+    sessions, classes, stage = 15070, 4130 * 5382327, 41
+    out = b.over_phases(stage * sessions, stage * classes, TABLE, 197078976)
+    run = b.report(b.Design(K=classes, k=TABLE, sessions=sessions), first_stage=stage, classes=classes)["run"][-1]
+    assert run["at_B"] == "StrictBirthday"
+    for counted in b.COUNTED:
+        cell = out["counted"][counted]
+        assert cell["phase"] == {k: run["columns"][f"classes, {counted}"][k] for k in ("bound", "centibits")}
+        assert cell["phase"]["centibits"] - cell["phases"]["centibits"] in (2755, 2756)    # log₂ 197,078,976 = 27.55
+    assert [out["counted"][c]["phase"]["bound"] for c in b.COUNTED] == ["2^-102.99", "2^-93.99"]
+    assert [out["counted"][c]["phases"]["bound"] for c in b.COUNTED] == ["2^-75.44", "2^-66.44"]
+    assert out["counted"]["calls"]["lean"] == {"theorem": "εclsAt_le_table1", "bits": 100}
+    assert out["counted"]["compressions"]["lean"]["theorem"] is None
+    assert out["design"] == {"sessions": 617870, "classes": 911389430910, "k": TABLE, "reruns": 2592237061,
+                             "calls_a_run": "2^80.00", "rounds": 4 + 4402 * 617870, "phases": 197078976,
+                             "longest_call": {"bytes": 65536, "compressions": 513}}
+    four = b.over_phases(PHASE_SESSIONS, PHASE_CLASSES, b.queries(4 * 2 ** 23), 197078976)["counted"]
+    assert [four[c]["phase"]["bound"] for c in b.COUNTED] == ["2^-100.99", "2^-91.99"]
+    assert [four[c]["phases"]["bound"] for c in b.COUNTED] == ["2^-73.44", "2^-64.44"]
+    assert four["calls"]["lean"]["theorem"] is None and list(four["calls"]["lean"]["past"]) == ["e"]
+    with pytest.raises(ValueError, match="at least one verification phase"):
+        b.over_phases(1, 1, TABLE, 0)

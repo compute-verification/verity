@@ -11,6 +11,7 @@ MAC of the model's forward matmuls, `Shape.outputs / Shape.macs`, and `b` a bf16
 `stated` reads a policy's public numbers from a file (`served.toml`, whose keys README.md lists) and says what its `k`
 is made of; `built.py` builds a class's policy from this tree. `periods` sets a block's limit beside the blocks a fleet
 holds over a monitoring period, on the slowdown calculator's fleets and periods (`verity/protocols/inference_only/rho`).
+`tied` reads the served class under the value tie (`tied.toml`), which `tied.py` prices over those periods.
 """
 from __future__ import annotations
 
@@ -31,6 +32,8 @@ from rho.params import Registry  # noqa: E402
 
 #: the served policy's public numbers
 SERVED = HERE / "served.toml"
+#: the served class under the value tie: its public numbers and the bound on what the tie leaves untied
+TIED = HERE / "tied.toml"
 #: a block's work by kind, and its total in the policy's unit: the linears are priced at the card's dense int8 rate and
 #: the rest at its BF16 rate, half of it, so a linear's MAC counts one and a BF16 MAC two
 WORK = ("linears", "attention", "lm_head")
@@ -39,6 +42,11 @@ TOTAL = "total"
 #: table (`definitions.boolean.gate_table`): not the block's gates at their widths (`Definition.gates`), which
 #: `inference_blocks.budgets` sums into a number also called c
 UNITS = {"c": "Boolean gates a block", "k": "fresh input bits a block", "n": "blocks"}
+#: the work every figure is for, which the bound's premises are taken of (`min_cut`'s docstring has why): a registered
+#: weight has no path from a fresh input, and a registered table's row is a function of θ and a few fresh gates
+WORK_IS = ("training in bf16 words on the model's own matmul shapes, every weight of it and its embedding table outside "
+           "the registered weights θ: (H) is false of a work that reads a registered weight or a registered table's row, "
+           "so no figure here covers one")
 
 
 @dataclass(frozen=True)
@@ -62,7 +70,7 @@ class Shape:
 class Policy:
     """A policy's public numbers on one class, with what its `k` is made of and what checked it."""
 
-    #: `served`, `stated` or `built`
+    #: `served`, `tied`, `stated` or `built`
     label: str
     model: str
     #: the class: slots, prompt ids, outputs
@@ -131,7 +139,8 @@ def scan_state_bits(cls: tuple[int, int, int]) -> int:
 
 def stated(path: Path = SERVED) -> Policy:
     """The policy ``path`` states (`served.toml`'s keys), with its `k` by kind as the model's shape and the class give
-    it: the outputs of the linears the class leaves outside the circuit, and the class's scan state row."""
+    it: the outputs of the linears the class leaves outside the circuit, the class's scan state row, and what the file
+    names beside them (`[fresh]`, each key what it is and its value the bits)."""
     doc = tomllib.loads(Path(path).read_text())
     try:
         cls, work = tuple(doc["class"]), {x: doc["work"][x] for x in (*WORK, TOTAL)}
@@ -151,12 +160,56 @@ def stated(path: Path = SERVED) -> Policy:
         parts += [(f"{name}'s outputs", sh.layers * positions * n_out * bits,
                    f"{sh.layers} layers × {positions} positions × {n_out:,} values × {bits} bits")
                   for name, n_out, _ in sh.linears]
+    outside = sum(bits for _, bits, _ in parts)
     state = scan_state_bits(cls)
     parts.append(("the scan state row", state, f"{state // 16:,} words × 16 bits, the class's"))
-    label = "served" if Path(path).resolve() == SERVED else "stated"
+    fresh = doc.get("fresh") or {}
+    if not all(type(bits) is int and bits > 0 for bits in fresh.values()):
+        raise ValueError(f"{path}: [fresh] names what a block reads beside its scan state row, each a positive integer "
+                         "of bits")
+    parts += [(name, bits, "") for name, bits in fresh.items()]
+    label = {SERVED: "served", TIED: "tied"}.get(Path(path).resolve(), "stated")
     why = "this tree builds no circuit of the stated class, so no check ran on it here"
-    outside = sum(bits for _, bits, _ in parts[:-1])
     return Policy(label, model, cls, c, k, n, work, tuple(parts), outside, source, {"verdict": "not run", "why": why})
+
+
+@dataclass(frozen=True)
+class Tied:
+    """The served class under the value tie (`tied.toml`): its policy, and the bound on the words the tie leaves
+    untied, a premise of every figure priced from it."""
+
+    policy: Policy
+    #: a node's bound on the untied words of its accepted execution phases, for a phase of `blocks` blocks
+    words: int
+    blocks: int
+    #: an execution phase's seconds
+    phase_seconds: int
+    #: the MACs that feed one untied word, at most
+    macs_a_word: int
+    #: an untied word's fresh bits in the one block that reads it, at most
+    word_bits: int
+
+    def untied(self, blocks: float, seconds: float) -> float:
+        """The bound on the untied words of ``blocks`` blocks served over ``seconds``, every node at its bound and
+        every phase accepted. A node's bound is a share of one phase's ticket weight whatever the period's length, so
+        a node has `words / blocks` of them for each block of one of its phases, and so have any number of nodes
+        together: the untied words a block grow with nothing but the period's shortness."""
+        return self.words / self.blocks * blocks / (seconds / self.phase_seconds)
+
+
+def tied(path: Path = TIED) -> Tied:
+    """The policy ``path`` states under the value tie (`stated`), with its `[untied]` table: a node's bound on the
+    untied words (`words` for each `blocks` blocks of one execution phase of `phase_seconds`), the MACs that feed one
+    at most (`macs_a_word`) and its bits (`word_bits`)."""
+    p, keys = stated(path), ("words", "blocks", "phase_seconds", "macs_a_word", "word_bits")
+    table = tomllib.loads(Path(path).read_text()).get("untied") or {}
+    if set(table) != set(keys) or not all(type(table[x]) is int and table[x] > 0 for x in keys):
+        raise ValueError(f"{path}: [untied] states {', '.join(keys)}, each a positive integer, and nothing else")
+    if p.unexplained or p.outside:
+        raise ValueError(f"{path}: a tied policy's k is its scan state row and what [fresh] names, with no linear left "
+                         f"outside the circuit; {p.unexplained:,} of its k = {p.k:,} bits are unexplained and "
+                         f"{p.outside:,} are outputs of linears outside the circuit")
+    return Tied(p, *(table[x] for x in keys))
 
 
 def bound(p: Policy, sh: Shape, blocks: float = 1.0) -> min_cut.Bound:
@@ -166,11 +219,10 @@ def bound(p: Policy, sh: Shape, blocks: float = 1.0) -> min_cut.Bound:
     return min_cut.bound(p.c, p.k, p.n, N=N, O=N * sh.outputs * min_cut.BF16 / sh.macs, size=p.c)
 
 
-def periods(work: float, limit: float) -> list[dict[str, Any]]:
+def fleet_periods(work: float) -> list[dict[str, Any]]:
     """For each of the slowdown calculator's fleets and monitoring periods (rho's `periods.FLEETS` and `PERIODS`): the
-    policy's blocks the fleet holds at capacity, each of ``work`` MACs, the training MACs they hold at most at ``limit``
-    a block, and that as a share of the fleet's compute. A fleet's rate is its locations' data-sheet dense rate
-    (`location.<name>.flops`, two FLOPs a MAC)."""
+    period's seconds and the policy's blocks the fleet holds at capacity, each of ``work`` MACs. A fleet's rate is its
+    locations' data-sheet dense rate (`location.<name>.flops`, two FLOPs a MAC)."""
     import periods as rho_periods
 
     reg, rows = Registry.load(), []
@@ -178,7 +230,14 @@ def periods(work: float, limit: float) -> list[dict[str, Any]]:
         f = hardware.fleet(reg, fleet)
         rate = f.count * reg[f"location.{f.location}.flops"] / 2
         for name in rho_periods.PERIODS:
-            blocks = rate * hardware.monitoring_period(reg, name).seconds / work
+            seconds = hardware.monitoring_period(reg, name).seconds
             rows.append({"where": label, "fleet": fleet, "location": f.location, "locations": f.count, "period": name,
-                         "blocks": blocks, "training_macs": blocks * min(limit, work), "share": min(1.0, limit / work)})
+                         "seconds": seconds, "blocks": rate * seconds / work})
     return rows
+
+
+def periods(work: float, limit: float) -> list[dict[str, Any]]:
+    """`fleet_periods` with the training MACs the fleet's blocks hold at most at ``limit`` a block, and that as a share
+    of the fleet's compute."""
+    return [{**{x: v for x, v in r.items() if x != "seconds"}, "training_macs": r["blocks"] * min(limit, work),
+             "share": min(1.0, limit / work)} for r in fleet_periods(work)]

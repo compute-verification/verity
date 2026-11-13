@@ -42,6 +42,8 @@ class Engine:
     target: Any = None   # the declared `TargetProfile` the engine was built under (None = none declared: vLLM's own selection)
     execution: str | None = None   # the workload's declared execution label the engine was built FOR (bi-eager / bi-compiled / ...), None = undeclared
     effective: dict | None = None  # the execution the built engine actually realises (effective_execution_doc), None before LLM()
+    rope_cache: dict | None = None  # the fused rope and KV-cache write installed at the build (`rope_cache`), None when none
+    fused_producers: dict | None = None  # the int8 linears' fused producers installed at the build (`int8_producers`), None when none
 
 
 # the workload's execution label decides `enforce_eager`; it is never a literal of the harness.  Labels are the
@@ -245,6 +247,16 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
         bad = target_mismatches(eng)
         if bad:
             raise RuntimeError("engine does not realise the declared TargetProfile: " + "; ".join(bad))
+    if model is not None:  # the fused rope patches the in-process model's layers; a tensor-parallel world's are in its ranks
+        from verity_vllm.engine import rope_cache
+        eng.rope_cache = rope_cache.install(model)
+        if eng.rope_cache is not None:
+            print(f"[engine] {rope_cache.ENV}: {json.dumps(eng.rope_cache)}", flush=True)
+    if model is not None:  # as the fused rope: the producers are patched on the in-process model's layers
+        from verity_vllm.engine import int8_producers
+        eng.fused_producers = int8_producers.install(model)
+        if eng.fused_producers is not None:
+            print(f"[engine] {int8_producers.ENV}: {json.dumps(eng.fused_producers)}", flush=True)
     return eng
 
 
