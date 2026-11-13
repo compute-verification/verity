@@ -168,11 +168,16 @@ class Design:
     """What `export` reads of a run's design, each fixed before the run: the boundary window (its program the replay
     Definition's, its query and work table the first stage's), the reference interior window of the sampled replay
     blocks with no run in it (its members in template order, its partition and program the sessions'), the replay
-    Definition, and each template's units a replay block."""
+    Definition, each template's units a replay block, the boundary registration's ports where ``boundary`` is no
+    window that derives them (``ports``), and the values the boundary and interior registrations register
+    (``boundary_values``, ``values``: none in the toy)."""
     boundary: Any
     reference: Any
     replay: Any
     cells: tuple[int, ...]
+    ports: tuple[str, ...] | None = None
+    boundary_values: tuple[str, ...] = ()
+    values: tuple[str, ...] = ()
 
 
 def toy_design(n: int, q: int) -> Design:
@@ -181,11 +186,11 @@ def toy_design(n: int, q: int) -> Design:
     return Design(T.boundary_window(n, q), T.interior_window("00" * 64, range(q)), T.REPLAY, tuple(T.N_T))
 
 
-def export_registration(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int,
+def export_registration(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int | Sequence[int],
                         design: Design | None = None) -> dict:
     """The auditor's copies for a run on ``stream`` (its boundary registration at ``order``) with ``n`` spans, ``q``
-    replay blocks sampled and ``k`` proof blocks a cell, at ``design`` (the toy's where none is given), each fixed
-    before the run: ``held.json`` and, from the params under ``run_out`` (``proofs.json``, ``references/``), each
+    replay blocks sampled and ``k`` proof blocks a cell (one count, or each template's), at ``design`` (the toy's
+    where none is given), each fixed before the run: ``held.json`` and, from the params under ``run_out`` (``proofs.json``, ``references/``), each
     template's ``ref-<t>.bin`` and ``ref-<t>.reads.json``, written to ``out``. It reads no record, session or coin of
     the run: `tests/TwoGuard.lean`'s ``files`` reads these alone. -> ``held.json``'s object."""
     from verity.protocols.spot.verifier import second_stage as SS
@@ -203,13 +208,15 @@ def export_registration(out: Path, run_out: Path, stream, order: int, n: int, q:
     if canonical_json(first) != canonical_json(ran):
         raise ValueError("the boundary window's select input is not the one the run's first stage read")
     replay, key = bw.program, descriptor_id(design.replay)
-    links = SS.replay_links(replay, key, {"roots": [{"port": p} for p in expected_ports(bw)]})
+    ports = list(expected_ports(bw)) if design.ports is None else list(design.ports)
+    links = SS.replay_links(replay, key, {"roots": [{"port": p} for p in ports]})
     wires = SS.replay_wires(replay, key)
     if wires is None:
         raise ValueError("the design's wires don't derive from the replay Definition, which round 2's design check refuses")
     rows = SS.replay_rows(replay, key)
-    names_of = {which: {"ports": list(expected_ports(w)), "values": []}
-                for which, w in (("boundary_names", bw), ("interior_names", ref))}
+    names_of = {"boundary_names": {"ports": ports, "values": list(design.boundary_values)},
+                "interior_names": {"ports": list(expected_ports(ref)), "values": list(design.values)}}
+    ks = [k] * len(design.cells) if isinstance(k, int) else [int(x) for x in k]
     part, prog = json.dumps(ref.partition, sort_keys=True).encode(), canonical_json(encode_program(ref.program))
     names, base = [m.template for m in ref.members], 0
     vus = []
@@ -233,7 +240,7 @@ def export_registration(out: Path, run_out: Path, stream, order: int, n: int, q:
         (out / f"ref-{t}.bin").write_bytes(raw(
             "verity/flock-circuit", (d / "circuit.txt").read_bytes(), (d / "pub.bin").read_bytes(),
             [(f.stem, f.read_bytes()) for f in sorted(tables, key=lambda f: order_of.index(f.stem))], zk=True,
-            draw=compact(ref_sample(q, n_t, k)), partition=part, program=prog))
+            draw=compact(ref_sample(q, n_t, ks[t])), partition=part, program=prog))
         (out / f"ref-{t}.reads.json").write_bytes(canonical_json(reads))
     (out / "held.json").write_text(json.dumps(held, indent=1, sort_keys=True))
     return held
