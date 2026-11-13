@@ -142,4 +142,60 @@ theorem pinnedTables_eq {s : Verity.Sent} {circuitB : ByteArray}
       rw [dif_pos hx]
     rw [hpf, ht t htm a hx.choose hf hpf]
 
+/-! ## An accepted play's session -/
+
+variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
+
+open FlockSoundness.Discharge.Recursion.Witness (toExec) in
+/-- **What v2's acceptance of a play gives of its session**: where the sampled verdict accepts a play on the committed
+files `F` at the parameters `θ`, v2's parameters `p` in `θ` set its session up at the statement's tags on `F`'s
+circuit and public files (`checkBlobsAt_event`, `get_named`), whose lookup tables are the ones the circuit file
+registers where the blobs hold each at its registered file (`pinnedTables_eq`), and a descriptor of the verifier's
+program reads the session's sampling design off `designAt` (`lawAt_designAt`). -/
+theorem accepted_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k : Verity.Registration.Composite}
+    {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange} (hP : ∃ p, ParamsAt θ p)
+    (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o) (ht : TablesSent o.sent) :
+    ∃ p tags0 pubB record proofs n desc, ParamsAt θ p ∧
+      Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      pubB = V.publicFile θ F ∧
+      Accepted (toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own (V.circuitFile θ F) pubB
+        (_root_.Core.Blobs.ofArray o.sent.blobs))) { record := record, proofs := proofs } p.base.verifier n ∧
+      _root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray o.sent.blobs) = pinnedTables (V.circuitFile θ F) ∧
+      _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program ∧
+      lawAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
+        p.base.verifier.workTable n) := by
+  obtain ⟨hθ, hFo, -⟩ := Binding.play_reaches hreach
+  have hreg : V.Registered θ F := by
+    have h1 := hv.1
+    rw [hθ, hFo] at h1
+    exact h1
+  obtain ⟨p₀, hp₀⟩ := hP
+  have hp₀' : ParamsAt o.sent.params p₀ := by
+    rw [show o.sent.params = θ from hθ]
+    exact hp₀
+  obtain ⟨a, b, e, p, cm, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp₀' (verdict_case hv)
+  have hpp : p₀ = p := paramsAt_case hv.2.1 hcase hacc hp₀'
+  subst hpp
+  obtain ⟨-, -, -, -, -, pub, prof, hck⟩ := hacc
+  obtain ⟨tags0, circuitB, pubB, record, proofs, n, ht0, hc, hpb, -, -, hn, hAc⟩ := checkBlobsAt_event hck
+  have hs : o.sent.blobs = F ++ o.blobs := by
+    show o.files ++ o.blobs = _
+    rw [hFo]
+  have hcf : circuitB = V.circuitFile θ F := by
+    rw [hs] at hc
+    exact get_named (hD.circuit p₀ hp₀) hreg.1 hc
+  have hpf : pubB = V.publicFile θ F := by
+    rw [hs] at hpb
+    exact get_named (hD.publicFile p₀ hp₀) hreg.2 hpb
+  obtain ⟨circuitB', hg, hl⟩ := tables_registered hp₀' hv
+  obtain rfl : circuitB' = circuitB := Except.ok.inj (hg.symm.trans hc)
+  have htab := (pinnedTables_eq hl ht).symm
+  obtain ⟨desc, hdesc⟩ := program_of_paramsAt hp₀
+  obtain ⟨out, pub', prof', hat⟩ := checkBlobsAt_checkAt hck
+  obtain ⟨lo, n', read, hlo, hn', hdf⟩ := checkAt_drew hat
+  obtain rfl : n' = n := Option.some.inj (hn'.symm.trans hn)
+  subst hcf
+  exact ⟨p₀, tags0, pubB, record, proofs, n, desc, hp₀, ht0, hpf, hAc, htab, hdesc,
+    lawAt_designAt hdesc hlo hdf⟩
+
 end Verity.Sampled
