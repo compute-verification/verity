@@ -68,15 +68,11 @@ def branches(lines: list[str]) -> list[str]:
     return out
 
 
-def git(*args: str, env: dict[str, str]) -> str | None:
-    """What `git ARGS` prints where the push runs (git starts the hook there, with its repository in `env`), or None when it
-    fails or takes more than GIT_S."""
-    try:
-        p = subprocess.run(["git", *args], capture_output=True, check=False, timeout=GIT_S,
-                           env={**env, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"})
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return p.stdout.decode("utf-8", "replace") if p.returncode == 0 else None
+def git(*args: str, env: dict[str, str], check: bool = True) -> str:
+    """What `git ARGS` prints where the push runs (git starts the hook there, with its repository in `env`). Where git can't
+    start, takes more than GIT_S or, under `check`, fails, this raises what `subprocess.run` does."""
+    return subprocess.run(["git", *args], capture_output=True, check=check, timeout=GIT_S,
+                          env={**env, "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"}).stdout.decode("utf-8", "replace")
 
 
 def identity(env: dict[str, str]) -> str | None:
@@ -85,7 +81,7 @@ def identity(env: dict[str, str]) -> str | None:
     command's (a `-c` of the push's own command line, a `GIT_CONFIG_COUNT` in its environment) is not the checkout's."""
     found = []
     for key in ("user.name", "user.email"):
-        rows = (git("config", "--show-scope", "--get-all", key, env=env) or "").split("\n")
+        rows = git("config", "--show-scope", "--get-all", key, env=env, check=False).split("\n")   # an unset key: it exits 1
         files = [value.strip() for scope, _, value in (row.partition("\t") for row in rows) if scope not in ("", "command")]
         found.append(files[-1] if files else "")
     name, address = found
@@ -100,21 +96,23 @@ def authors_reason(remote: str, lines: list[str], env: dict[str, str]) -> str | 
     there = "<remote>" if not named else remote
     held = [*([f"--remotes={remote}"] if named else []), *(old for *_, old in updates if set(old) != {"0"})]
     added: dict[str, tuple[str, str, str]] = {}
-    for _, new, _, _ in updates:
-        if set(new) == {"0"}:
-            continue
-        listed = git("rev-list", "--ignore-missing", "--format=%H%x00%an <%ae>%x00%cn <%ce>", new, "--not", *held, env=env)
-        if listed is None:
-            return (f"git could not list the commits this push adds (it failed, or took more than {GIT_S} s), so they can't "
-                    f"be held to this checkout's identity. Push again; after `git fetch {there}` it has fewer to list.")
-        for row in listed.split("\n"):
-            sha, _, names = row.partition("\0")                                       # rev-list's own `commit SHA` lines have none
-            if names:
-                author, _, committer = names.partition("\0")
-                added.setdefault(sha, (author, committer, new))
+    try:
+        for _, new, _, _ in updates:
+            if set(new) == {"0"}:
+                continue
+            listed = git("rev-list", "--ignore-missing", "--format=%H%x00%an <%ae>%x00%cn <%ce>", new, "--not", *held, env=env)
+            for row in listed.split("\n"):
+                sha, _, names = row.partition("\0")                                   # rev-list's own `commit SHA` lines have none
+                if names:
+                    author, _, committer = names.partition("\0")
+                    added.setdefault(sha, (author, committer, new))
+        me = identity(env) if added else None
+    except (OSError, subprocess.SubprocessError) as e:
+        return (f"git could not list the commits this push adds ({type(e).__name__}: it failed, could not start or took more "
+                f"than {GIT_S} s), so they can't be held to this checkout's identity. Push again; after `git fetch {there}` "
+                "it has fewer to list.")
     if not added:
         return None
-    me = identity(env)
     if me is None:
         return ("this push adds commits, and this checkout has no identity to hold them to: `git config user.name` or `git "
                 "config user.email` prints nothing here. The machine's identity is in its global configuration: push where "
