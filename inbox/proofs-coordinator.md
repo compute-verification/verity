@@ -116688,3 +116688,26 @@ Nothing.
 - `CoinMapLaw.lean`, `CoinMapAgree.lean` and `CoinStages.lean` have not compiled [run].
 
 Branch `cursor/proofs-coinmap-8b0c` at `28d9babc1b`, pushed; nothing unpushed.
+
+## TWOLEG, Fri 13 Nov 03:06Z: `DevAgrees.lean` COMPILES: merge `059a9408fe59` of `cursor/proofs-twoleg-c5e5`, where every proofs root of mine has compiled; `aed4` on vy-nebius-2 says "lean exit 0 in 1809 s" and "none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"
+
+In plain words: the file that blocked MAJORITY's records run, COINMAP's import and SESSIONCOINS's try now compiles on a node, with no extra axiom. The three can merge.
+
+- [run: `r20261113-022527-aed4`, vy-nebius-2, at `e0a4052b5f`, which holds the fix `c0216f674d07`] `security/Proofs/Properties/Verity/SampledTwo/DevAgrees.lean`: "lean exit 0 in 1809 s"; "axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The run waited 3 minutes for a Lean place; 11,404 imports built first, which is where the 1809 s went.
+- **Which head to merge.** `059a9408fe59`: its proofs roots are `Leg`, `Projection`, `Claim`, `Reading`, `Refused`, `Steps` and `DevAgrees`, and each has compiled on a node (`9f0c`, `d936`, `aed4`) [run]. `ClaimInner` and `SecondRead` are files there but not roots, so a records run does not build them.
+- **Not yet the tip.** `b6d988648b2a` adds the form's two refusals of your 02:48Z (`stagesFit`) and `Steps`'s `accepted_fits`. Neither has compiled on a node; `a018` (cpu-12) tries them and has waited for a place since 02:56Z. A worker who needs `accepted_fits` waits for my next entry; the others take `059a9408fe59`.
+- The same run's second step, `ClaimInner.lean`, has started; no verdict yet.
+- This machine is new since 03:04Z (the old one went with its worktrees). Nothing was lost: both branches and the 03:00Z entry were pushed before it went [run: `git ls-remote`].
+- Read, not yet acted on: your 03:00Z (the order refusal, the named refusal of `null` first-stage coin evidence, #9555 at REDRAW's ready line, CUT's key lemma). #9375 is on `main` at `66dce017d8` [run], so I merge `main` into both branches next, then #9555's head `962bc1a88b4e`, then read the ledger for the order refusal. On reading so far [read: `Spot/ChallengerSession.lean`, `verifyLedger`]: one ledger holds every window's open and end, each with its place in the chain (`seq`), so the ledger does order the two sessions wherever both are on the copy the check reads. Whether the evidence's two copies are one ledger I say in the next entry, before I build.
+
+**STOP RULE.** Not reached.
+
+**NEEDS.** None new.
+
+**Runs.** `aed4`: `DevAgrees` done, rc 0; `ClaimInner` running. `a018` (cpu-12): in line since 02:56Z. `3d06` (vy-nebius-2, records at `e2971a1dafaa`): in line since 03:00Z; I cancel it if unstarted when `main` is merged, since the head moves.
+
+**Pushed.** `cursor/proofs-twoleg-c5e5` at `b6d988648b2a`; `cursor/proofs-twoleg-e0ff` (#9574) at `e2971a1dafaa`. Nothing unpushed.
+
+**To post.** Nothing.
+
+**Not established.** That `ClaimInner`, `SecondRead`, the form with `stagesFit`, and `Steps` with `accepted_fits` compile on a node.
