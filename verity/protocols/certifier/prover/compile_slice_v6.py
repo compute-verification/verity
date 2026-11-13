@@ -118,7 +118,7 @@ from verity.definitions.commitments.gates import block_key as BK
 from verity.commitments.gates import rowleaf as RG
 from verity.protocols.certifier.verifier import cache_step as CST, compile_slice as CS, replay_chain as RC
 from verity.protocols.certifier.verifier import replay_step as RS
-from verity.protocols.certifier.prover import cache_step_v2 as C2, cache_step_v3 as V3S, compile_slice_v4 as V4
+from verity.protocols.certifier.prover import cache_step_v3 as V3S, compile_slice_v4 as V4
 from verity.protocols.certifier.prover import compile_slice_v5 as V5
 from verity.protocols.certifier.verifier.head_check import BIT, _coll, _Consts, _part, _refs, ands
 
@@ -269,7 +269,7 @@ def _edge(C, S, state, slots, erets, valid, ids, a_O, a_cut):
 
     def held_to(sel, on, out):
         """`on` refuses unless the arrival `sel` picks is cut and its a_O is `out`."""
-        c, o = C2._pick(C, sel, cuts)[0], C2._pick(C, sel, outs)
+        c, o = V4._pick(C, sel, cuts)[0], V4._pick(C, sel, outs)
         bad.append(C.AND(on, C.AND(c, RC._eq(C, list(out), o)).inv()))
 
     for j in range(R):

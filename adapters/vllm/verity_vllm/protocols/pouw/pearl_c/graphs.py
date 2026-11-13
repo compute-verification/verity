@@ -25,6 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
 from verity_vllm.protocols.pouw.pearl_c.host import _event, _Lane, _zeros, torch_uint8
 from verity_vllm.protocols.pouw.pearl_c.screen import scatter_into
 from verity_vllm.protocols.pouw.pearl_c.whole_calls import WholeCall, WholeCalls
@@ -78,7 +79,7 @@ class _Graph:
     poisoned: int | None = None
 
 
-class GraphCalls(WholeCalls):
+class GraphCalls(WholeCalls, _RunState):
     """`PearlCDeviceRun`'s graph path, as its base class: the run's ``graphs``, ``driver``, ``fork``, ``order``, ``nb`` (its
     trees' node bytes), ``key_slots``, ``offs``, ``_host_keys``, ``_host_offs``, ``_slots_copied``, ``_predicted`` and
     ``_graphs``, ``shapes``, its `_call_steps` and `_call_cuts`, and its pass and the pass's buffers (``roots_buf``, ``flag_buf``, whose
@@ -196,6 +197,7 @@ class GraphCalls(WholeCalls):
         if self.fork is None:
             self.fork = _Lane(self.device, "greatest", -2)
         D, dev, fork = self.driver, self.kernel.dev, self.fork
+        assert D is not None
         start, first, end = _event(), _event(), _event()
 
         def go():
@@ -246,7 +248,7 @@ class GraphCalls(WholeCalls):
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
         """Call `index`'s byte offsets in the pass's buffers: its leaves, its flags, its A root (at its position in the pass,
         the index past the pass's base)."""
-        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.base)
+        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.first)
 
     def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
         """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every

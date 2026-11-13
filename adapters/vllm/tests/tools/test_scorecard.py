@@ -17,6 +17,7 @@ TOY = "verity_vllm"
 TOOLS = Path(__file__).resolve().parents[2] / "tools"
 SCRIPT = TOOLS / "scorecard.py"
 _spec = importlib.util.spec_from_file_location("scorecard", SCRIPT)
+assert _spec is not None and _spec.loader is not None
 SC = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("scorecard", SC)
 _spec.loader.exec_module(SC)
@@ -99,6 +100,7 @@ def _p07_env_owners() -> frozenset[str]:
     tree = ast.parse((LIMITS.parent / "test_p07_declared_inputs.py").read_text(encoding="utf-8"))
     for node in tree.body:
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == "ENV_OWNERS":
+            assert isinstance(node.value, ast.Call), "ENV_OWNERS is no longer a call on one literal"
             return frozenset(ast.literal_eval(node.value.args[0]))
     raise AssertionError("tests/lint/test_p07_declared_inputs.py states no ENV_OWNERS")
 

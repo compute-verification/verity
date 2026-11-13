@@ -6,17 +6,21 @@ from __future__ import annotations
 import gzip
 import json
 
-from verity_vllm.correspondence import runtime as RC
+from tests.acquire.test_plan import TABLES, base_rows, manifest, tree
 from verity_vllm.acquire import gate as G
 from verity_vllm.acquire import plan as P
-from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence, AnnotationCorrespondence, read_program_correspondence
-
-from tests.acquire.test_plan import TABLES, base_rows, manifest, tree
+from verity_vllm.correspondence import runtime as RC
+from verity_vllm.correspondence.reader_for_acquire import (
+    AcquireCorrespondence,
+    AnnotationCorrespondence,
+    read_program_correspondence,
+)
 
 
 def _record(modules_of_calls: list[str], *, prefix: str = "model.") -> dict:
     """A `runtime-correspondence/v1` document: Call k lowered from an occurrence whose owning module (Program vocabulary = prefix + collector path)."""
-    occs, calls, seen = [], [], {}
+    occs: list[dict] = []
+    calls, seen = [], {}
     for k, m in enumerate(modules_of_calls):
         pm = (prefix + m) if m else ""
         if pm not in seen:

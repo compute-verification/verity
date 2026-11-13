@@ -13,12 +13,13 @@ import torch
 import torch.nn.functional as F
 from synthetic import JOBS, LORA, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from training_slowdown import VERSION, config, flops, formalism, gates, grade, policy, run, starts, work
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, SparseTernary, derive_seed
 from training_slowdown.counterexample import check
-from training_slowdown.data import Stream
+from training_slowdown.data import Data, Stream
 from training_slowdown.evaluate import Evaluator
 from training_slowdown.flops import gather_macs
 from training_slowdown.model import LM
@@ -620,16 +621,16 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
 
     In gates, attention's ops excepted by name (`ATTENTION`): the counted step's, each op at the price of the dtype
     its row names with no assumption made (`gates.of_log`), against the traced circuit's, whose nodes are priced by
-    the same rule. A job runs attention under a fused kernel, in its operands' bf16, and the trace under the math
-    kernel, which casts them to float32, so the rows the counter writes for the kernel name bf16 where the circuit
-    holds float32: the counted step is under the circuit by those rows' MACs at the two dtypes' prices and by nothing
-    else, and with those rows named float32 it is the circuit, to the last digit: both are compared as they are,
-    with no tolerance, since at this shape every sum of gates is a whole number of eighths a float holds exactly. An
-    optimizer's products are in the dtype it ran them in, whatever the forward's: Muon's in bf16, Shampoo's in f32,
+    the same rule. A job on a GPU runs attention under a fused kernel, in its operands' bf16, and the trace under the
+    math kernel, which casts them to float32, so the rows the counter writes for the kernel name bf16 where the
+    circuit holds float32: the counted step is under the circuit by those rows' MACs at the two dtypes' prices and by
+    nothing else, and with those rows named float32 it is the circuit, to the last digit: both are compared as they
+    are, with no tolerance, since at this shape every sum of gates is a whole number of eighths a float holds exactly.
+    An optimizer's products are in the dtype it ran them in, whatever the forward's: Muon's in bf16, Shampoo's in f32,
     with its roots.
 
-    As a job runs: under torch's fused attention kernel, which the counter counts as the ops the math kernel computes
-    attention by (`flops.Counter._attention`), the ones the trace holds.
+    As a job runs on a GPU: under torch's fused attention kernel, which the counter counts as the ops the math kernel
+    computes attention by (`flops.Counter._attention`), the ones the trace holds.
 
     The step's `updated` rows are not compared: the trace's are by update dependence and the counter's by use. No
     cheaper test holds the trace to the counter: each of the two has its own tests, on its own count."""
@@ -670,12 +671,13 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
 
 @pytest.mark.parametrize("job", JOBS)
 def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job):
-    """A job's steps under the fused attention kernel it runs against the same job's under the math kernel, the one
-    its trace is taken under: every step's counts, its op log, its updated nodes and the weights it read, the setup's
-    and the tail's too, but for the dtype the log names for attention's ops (`ATTENTION`). The fused kernel computes
-    them in its operands' bf16, and the math kernel casts those operands to float32 first, so each record names what
-    its kernel ran: the rows the counter writes for the fused kernel, named float32, are the math kernel's rows. The
-    fused kernel does run: the model's attention reaches the counter as one op."""
+    """A job's steps under the fused attention kernel it runs on a GPU against the same job's under the math kernel,
+    the one its trace is taken under and a job runs on a CPU (`run.cpu_attention`): every step's counts, its op log,
+    its updated nodes and the weights it read, the setup's and the tail's too, but for the dtype the log names for
+    attention's ops (`ATTENTION`). The fused kernel computes them in its operands' bf16, and the math kernel casts
+    those operands to float32 first, so each record names what its kernel ran: the rows the counter writes for the
+    fused kernel, named float32, are the math kernel's rows. The fused kernel does run: the model's attention
+    reaches the counter as one op."""
     seen = []
     inner = flops.Counter._attention
 
@@ -930,6 +932,61 @@ def test_each_of_a_jobs_processes_holds_its_thread_count_before_inside_or_outsid
     monkeypatch.setattr(run.torch, "set_num_threads", lambda n: None)
     with pytest.raises(SystemExit, match="this process is to hold 3 CPU threads, and torch holds 2"):
         run.set_threads(3)
+
+
+def attention_kernels() -> tuple[bool, ...]:
+    """Which of torch's attention kernels this process may run: flash, memory-efficient, math and cuDNN."""
+    b = torch.backends.cuda
+    return b.flash_sdp_enabled(), b.mem_efficient_sdp_enabled(), b.math_sdp_enabled(), b.cudnn_sdp_enabled()
+
+
+def test_a_job_on_a_cpu_holds_attention_at_the_math_kernel_in_each_of_its_processes(ran, tmp_path, monkeypatch):
+    """The record of a job on a CPU names the attention kernel its route's process held, the math kernel. Each of
+    the job's processes holds it before `inside` or `outside` is entered, and lets it go when they return; on a GPU
+    neither holds anything, and the record's field is null."""
+    assert ran[0]["cpu_attention"] == run.CPU_ATTENTION == "math"
+    entered, before = [], attention_kernels()
+    monkeypatch.setattr(run, "inside", lambda a: entered.append((a.cpu_attention, attention_kernels())) or 0)
+    monkeypatch.setattr(run, "outside", lambda a, argv: entered.append((a.cpu_attention, attention_kernels())) or 0)
+    job = ["--config", tmp_path / "a.toml", "--seed", 0, "--split", "search", "--out", tmp_path / "out"]
+    for device in ("cpu", "cuda"):
+        for process in ([], ["--inside", tmp_path]):
+            assert run.main([*job, "--device", device, *process]) == 0
+            assert entered.pop() == (("math", (False, False, True, False)) if device == "cpu" else (None, before))
+            assert attention_kernels() == before
+
+
+def test_a_route_that_runs_the_fused_cpu_attention_kernel_at_two_threads_is_invalid(tmp_path, monkeypatch):
+    """A job on a CPU at two threads whose route's step turns the fused attention kernel back on, inside the job's
+    hold on the math kernel, is invalid, and the reason names the fix; the same job left to the job's kernel is
+    valid. The job's steps run through the harness's own loop (`run.train` under `run.Harness`)."""
+    reg = tiny_registry(tmp_path / "reg")
+    registry = starts.registry(reg)
+    cfg = config.load(write_config(tmp_path / "a.toml", budget={"steps": 2, "batch": 2}), registry)
+    route = config.route(cfg.route)
+    own = route.step
+
+    def fused(*args, **kwargs):
+        with sdpa_kernel([SDPBackend.FLASH_ATTENTION]):
+            return own(*args, **kwargs)
+
+    def invalid(out: Path) -> list[str]:
+        te = run.Harness(starts.load(cfg.start, reg.parent / "starts"), out, start=cfg.start.entry(),
+                         clock=lambda: 0.0)
+        torch.manual_seed(0)
+        with run.cpu_attention("cpu"), te.counter:
+            model, optimizers = route.build(cfg.start.shape, cfg.dials)
+            stream = Stream(Data.of(cfg.start.data, registry), 0, ctx=int(cfg.start.shape["ctx"]))
+            run.train(te, cfg, route, stream, model, optimizers)
+        return te.finish({})["invalid"]
+
+    torch.set_num_threads(2)
+    assert invalid(tmp_path / "math") == []
+    monkeypatch.setattr(route, "step", fused)
+    [why] = invalid(tmp_path / "fused")
+    assert why.startswith("torch's fused CPU attention kernel ran at more than one thread, where a call can return "
+                          "a wrong tile: ['aten._scaled_dot_product_flash_attention_for_cpu.default at 2 threads'")
+    assert why.endswith("(no `sdpa_kernel` in the route), or run the job at `--threads 1`")
 
 
 #: the route's process's interpreter: the job's own, started without the limit and with oneDNN's log on

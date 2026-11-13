@@ -19,20 +19,24 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions import word as W
+from verity.definitions.numerics import rows as RK
+from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import b1, gemm_bias, hopper
+
+from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm_ruleset
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.numerics import rows as RK
-from verity.definitions.registry import b1, gemm_bias, hopper
-from verity_vllm.program.frontend import targets as TG
-from verity.definitions.numerics.serve3_reference import materialize
 from verity_vllm.query import required as RQ
-from verity.definitions import word as W
+from verity_vllm.query.manifest import format as RM
+from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
+from verity_vllm.query.units import ValueRef as R
 
 BF = torch.bfloat16
 M, K, N = 3, 32, 8
@@ -94,7 +98,6 @@ def test_gemm_bias_v2_is_bit_equal_to_gemm_v2_then_bias_add_on_edge_and_random_v
                          ids=lambda s: s.id.split("{")[0])
 def test_the_replay_evaluates_a_one_call_biased_linear_from_a_committed_row_and_two_weight_slices(spec):
     from verity_vllm.check.replay.evaluate import evaluate as replay_evaluate
-    from verity_vllm.query.manifest import format as RM
     x, w, b = _vectors(1, 5)[-1]
     out = replay_evaluate(spec.id.split("{")[0], RM.spec_statics(spec.id), [[np.array(x, np.uint16)], [], []],
                           [None, np.array(w, np.uint16), np.array(b, np.uint16)])["0"]
@@ -293,8 +296,6 @@ def test_a_family_whose_record_lacks_gemm_bias_dot_keeps_gemm_v2_then_bias_add(o
 def _qwen2_qkv_program(one_call: bool, rows: int = 2, layers: int = 2):
     """Qwen2's biased `qkv_proj` per layer and token row, named as a cc 12.0 Build names it, read by `o_proj`: one `GemmBias_v2`
     Call (`qkv_proj/add[r]`), or `Gemm_v2` (`qkv_proj/triton_launch_1[r]`) then `BiasAdd_v1` (`qkv_proj/add[r]/bias`) in one body."""
-    from verity_vllm.query.units import ValueRef as R
-    from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
     pre = "model.model.layers"
     names = [f"{pre}.{i}.self_attn.{p}" for i in range(layers) for p in ("qkv_proj.weight", "qkv_proj.bias", "o_proj.weight")]
     weights = InputView(-1, "weights", "{...}", tuple(Port(n, 64 * k, 64 * k + 64, 64, 16) for k, n in enumerate(names)))
@@ -326,7 +327,6 @@ def test_a_one_call_biased_qkv_commits_one_member_and_no_call_boundary():
     `call_boundaries` row per (step, layer) at the pre-bias word `qkv_proj/triton_launch_1/out`, host-evaluated at Commit.  Under
     `Q_word` the one-Call form has none, and the module's one member `out` binds the Linear's committed slot `0`."""
     from verity_vllm.query.manifest.bind import Binder
-    from verity_vllm.correspondence.reader_for_query import Correspondence
     res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {},
            "target": {"declared": {"compute_capability": [12, 0]}}}
     man = {}
