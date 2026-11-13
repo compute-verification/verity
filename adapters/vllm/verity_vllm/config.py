@@ -40,6 +40,15 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.records import workload as workload_record
 
+#: The names the library's other modules read here.
+__all__ = [
+    "CHECKPOINTS", "DEFAULT_ROW_PROTOCOLS", "DTYPES", "MANIFESTS", "RECORDS", "ROOT", "TARGETS", "TARGET_NUM_SMS", "VLLM",
+    "WORKLOADS", "WORKLOAD_SCHEMA", "BuildConfig", "CommitConfig", "EnginePin", "MatchConfig", "RowConfig", "RowEngine",
+    "RowId", "RunEnv", "UsageError", "checkpoint_dir", "checkpoint_entries", "checkpoints_hf_home", "done_source_refusal",
+    "group", "option", "parse_protocols", "row_batch", "row_execution", "row_file", "row_path", "row_target", "row_tokens",
+    "row_world", "rows_of_record", "run_store", "vllm_revision", "workload_arg", "workload_file", "workload_files",
+]
+
 #: The source tree holding the ``verity_vllm`` package, ``manifests/`` and ``workloads/``.
 ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
