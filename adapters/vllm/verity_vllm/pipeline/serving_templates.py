@@ -169,7 +169,7 @@ CHAIN_OF = {f: CHAIN_ROLES[i] for fs in CHAINS.values() for i, f in enumerate(fs
 #: in the row's place
 _TOPP_STAGES = ("TopPStatsHead_v1", "TopPStatsExp_v1", "TopPProbs_v1", "TopPStep_v1", "GumbelTopPSelect_v1")
 STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES,
-          "TokenSelect_v1": ("GreedyChunk_v1", "GreedyCombine_v1")}
+          "TokenSelect_v1": ("GreedyChunk_v2", "GreedyCombine_v2")}
 STAGE_OF = {f: tuple(row for row, fs in STAGES.items() if f in fs) for fs in STAGES.values() for f in fs}
 _TOPP_PLAN = "verity.definitions.registry.topp_stages"
 #: the module whose ``plan`` and ``cut`` a ``STAGES`` row family's units are

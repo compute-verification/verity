@@ -5,6 +5,7 @@ requires, and a request whose rows and batches don't tile each other binds nothi
 from __future__ import annotations
 
 from verity.definitions.registry.dsa_topk import waksman_switches
+
 from verity_vllm.pipeline.match import run_input_bindings
 from verity_vllm.program.predict import dsa as D
 from verity_vllm.query.manifest.format import RUN_FAMILY, canonical_identity
@@ -53,8 +54,8 @@ def test_rows_that_do_not_tile_the_batches_bind_nothing():
     out = run_input_bindings(short, [a, b])
     assert out["bindings"] == [] and len(out["refused"]) == 1 and out["refused"][0].startswith("r0: its run values' leaves")
     out = run_input_bindings({"requests": [_request(0, "wl-a", [("run", 10, 10 + na)])]}, [])
-    assert out["bindings"] == [] and out["refused"] == [f"r0: its run values' leaves [] don't tile its `run` Input batches [(0, {na})] "
-                                                        "(field k, one gate a leaf)"]
+    assert out["bindings"] == [] and out["refused"] == [(f"r0: its run values' leaves [] don't tile its `run` Input batches [(0, {na})] "
+                                                         "(field k, one gate a leaf)")]
     out = run_input_bindings({"requests": [_request(0, "wl-a", [("prompt", 0, 4)])]}, [a])
     assert out["bindings"] == [] and out["refused"] == ["r0: 1 run values and no `run` Input in the address map"]
     assert run_input_bindings({"requests": [_request(0, "wl-a", [("prompt", 0, 4)])]}, []) == {"bindings": [], "refused": []}

@@ -32,7 +32,7 @@ tensor (format v1 leaves, and the range opening of a v2 tensor).
   ``sampling_params``, ``seed``, ``finish_reason`` (without ``t``).
 
 **Tree order** is the code-point order of the id string (equal to UTF-8 byte order), i.e.
-Python's ``sorted(ids)``; :func:`sort_key` returns that key.
+Python's ``sorted(ids)``.
 """
 
 from __future__ import annotations
@@ -123,24 +123,6 @@ def value_id(
         expert=expert,
         coordinate=coordinate,
         speculative=speculative,
-    )
-    validate(cid)
-    return cid
-
-
-def weight_id(
-    param: str, shard: int | None = None, coordinate: int | str | None = None
-) -> CanonicalId:
-    if isinstance(coordinate, int) and not isinstance(coordinate, bool):
-        coordinate = str(coordinate)
-    cid = CanonicalId(kind="weight", param=param, shard=shard, coordinate=coordinate)
-    validate(cid)
-    return cid
-
-
-def boundary_id(profile_id: str, request_id: str, field: str, t: int | None = None) -> CanonicalId:
-    cid = CanonicalId(
-        kind="boundary", profile_id=profile_id, request_id=request_id, field=field, t=t
     )
     validate(cid)
     return cid
@@ -341,19 +323,3 @@ def parse(text: str) -> CanonicalId:
     if format_id(cid) != text:
         raise IdentityError(f"{text!r} is not in canonical form (expected {format_id(cid)!r})")
     return cid
-
-
-def kind_of(text: str) -> Kind:
-    return parse(text).kind
-
-
-# --- ordering ------------------------------------------------------------------------------------
-
-
-def sort_key(canonical_id: str) -> str:
-    """The tree order: code-point order of the id string (``sorted(ids)``)."""
-    return canonical_id
-
-
-def tree_sorted(ids: list[str] | tuple[str, ...] | set[str]) -> list[str]:
-    return sorted(ids, key=sort_key)

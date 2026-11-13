@@ -14,21 +14,21 @@ import zlib
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import evaluation as E
 from verity.circuits import partition_object as PO
-from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
-from verity.definitions.numerics import twins  # registers RoPE_v1's kernel, which the served shapes' word side runs
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.definitions.numerics import (
+    twins,  # registers RoPE_v1's kernel, which the served shapes' word side runs
+)
 from verity.definitions.numerics.twins import rand_bf16, tie_pairs_mul
-from verity.definitions.registry import b1
+from verity.definitions.registry import b1, ref_prims
 from verity.definitions.registry import boolean_rope as R
-from verity.definitions.registry import ref_prims
 
 U16 = np.uint16
 HALVES = [R.RopeOut, R.RopeOutAdd]
@@ -47,7 +47,6 @@ SERVED = {
 }
 ROPES = sorted({bind(R.RoPE, NHEADS=n, D=d) for shapes in SERVED.values() for n, d in shapes}, key=lambda t: t.id)
 HEADS = {d: bind(R.RoPEHead, D=d) for d in sorted({t.bindings["D"] for t in ROPES})}
-HEAD = HEADS[64]
 K = bind(R.RoPE, NHEADS=3, D=64)
 #: one served binding per head width, run on 16k heads: SmolLM2's q and k, Phi-3's, Qwen3's q, Gemma-2's q
 LARGE = [bind(R.RoPE, NHEADS=n, D=d) for n, d in ((9, 64), (3, 64), (32, 96), (32, 128), (8, 256))]
@@ -128,7 +127,7 @@ def _agree(target, inputs, chunk: int = 1 << 20) -> None:
     """Instances in slices of about `chunk` words of the first input: the bit-sliced evaluator holds ~700 bytes per word."""
     word = TR.word_of(target)
     n, step = len(inputs[0]), max(1, chunk // inputs[0][0].size)
-    bad = []
+    bad: list = []
     for i in range(0, n, step):
         part = [a[i:i + step] for a in inputs]
         got = BS.evaluate_words(target, *part).astype(np.uint64)

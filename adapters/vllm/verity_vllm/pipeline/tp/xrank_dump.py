@@ -18,6 +18,7 @@ from typing import Any
 
 from verity_vllm.acquire.sources.allreduce_norm import FUSED, REDUCED_MEMBER
 from verity_vllm.check.match import xrank_collectives as XC
+from verity_vllm.records.schema_ids import XRANK_PICKS_SCHEMA
 
 ROUTED_WORLD = 8
 
@@ -42,7 +43,7 @@ def route_of(settings: dict[str, Any], M: int, N: int, world: int, norm: Any = N
         return {"why": f"all-reduce switches {settings!r} name no captured setting"} if world == ROUTED_WORLD else None
     facts = {"world": world, "device": device, "transport": settings.get("nccl_transport")}
     fused = None
-    if norm is not None and settings.get("flashinfer") and M <= T.fused_max_tokens(N, world):
+    if norm is not None and settings.get("flashinfer") and T.fused_max_tokens(N, world) >= M:
         fused = T.covered(setting, N, "fused", M, **facts)
     if fused is not None:
         defn, statics = T.AllReduceRmsNormMnnvl, {"WORLD": world, "N": N, "SHOT": T.mnnvl_shot(M, N, world), "CLUSTER": T.mnnvl_grid(M, N)[1],
@@ -214,7 +215,7 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
         recv = tensor_of(step, rm) if rm is not None else None
         why = None
         if part is None or recv is None:
-            def _gone(meta) -> str:
+            def _gone(meta, step=step) -> str:
                 return unverified.get((step, meta.name), "bytes not retained")
             why = ("partial " + ("not in this step's layout" if pm is None else _gone(pm)) if part is None else "") + \
                   ("; " if part is None and recv is None else "") + \
@@ -238,7 +239,7 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
             pk["w"] = w_.detach().to("cpu").clone() if w_ is not None else None
         emb = embedding_leg(pk, metas, step, rows, part, mods, tensor_of, unverified) if pk["kind"] == "all_reduce" and XC.is_embedding_site(pk["site"]) else None
         picks.append(dict(pk, part=part, recv=recv, recv_member=rname, why=why, emb=emb))
-    rec = {"schema": "verity/tp2/xrank-picks/v1", "rank": rank, "pair": int(pair), "seed": seed_hex, "strata": plan["strata"], "picks": picks,
+    rec = {"schema": XRANK_PICKS_SCHEMA, "rank": rank, "pair": int(pair), "seed": seed_hex, "strata": plan["strata"], "picks": picks,
            "per_stratum": int(per_stratum), "max_rows": int(max_rows), "steps_in_layout": len(layouts)}
     fn = Path(out_dir) / f"xrank_pair{int(pair)}_rank{rank}.pt"
     torch.save(rec, fn)

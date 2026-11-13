@@ -99,7 +99,8 @@ def test_the_challengers_bytes_with_no_evidence_are_rejected_by_the_lean_run():
     assert not got.accepted and not audit["checks"]["run"]["ok"]
     side = AC.lean_side(audit)
     assert (side["step"], side["codes"]) == AC.SELECT_COINS
-    assert CC.coins_reason(None, ROOT, bytes.fromhex(draw.registration.digest), b"\x5a", AC.lms_verify) is not None
+    assert CC.coins_reason(None, ROOT, AC.family(0), bytes.fromhex(draw.registration.digest), b"\x5a",
+                           AC.lms_verify) is not None
 
 
 def test_the_replay_reads_no_more_than_the_honest_draw():
