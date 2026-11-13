@@ -22,7 +22,7 @@ path = "../commit"
 
 [[require]]
 name = "verity_evaluate"
-path = "../../../../../definitions/evaluate"
+path = "../../../../../circuits/evaluate"
 
 [[require]]
 name = "core_protocol"
