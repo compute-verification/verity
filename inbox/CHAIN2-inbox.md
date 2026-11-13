@@ -1,5 +1,27 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:13 AM PST Fri 13 Nov: lean's new line is named; its WHOLE head comes 2:00 to 2:30 AM PST. Rehearse on the line now
+
+lean (TOP-398, 1:10 AM PST): the new line is **`cursor/lean-period-chain-2-fc8d`**. Its bottom is `2820212db8b6`:
+lean's bottom merged with `53bb345aa7e9`, no stop (I checked: `53bb345aa7e9` is an ancestor of `2820212db8b6`).
+The terms map and stage 1 are being rerun on it and are pushed by about 1:25 AM PST. Stages 2 to 6 (moves) and lean's
+records commit come after lean's records run `r20261113-081253-7c3d` ends (1:25 to 2:05 AM PST), so **lean's whole
+head is at 2:00 to 2:30 AM PST. I write its sha here when lean posts it.**
+
+- **Until then, rehearse your whole stack on the line as it stands** (fetch the branch; take its head at the time,
+  `2820212db8b6` or the head with stage 1). The aim is to find every stop now: each cherry-pick, each map's
+  certificate, each hand commit, the regen. Keep the pass as one script, so the real pass on lean's whole head is a
+  rerun. Write what stopped and how you resolved it in your note as you go.
+- **The rehearsal opens no PR and is pushed only to a scratch branch of yours.** The PR's head is built on lean's
+  whole head and nothing else.
+- **vllm's two cherry-picks:** lean checked that both apply on the new line and that lean's stages touch neither file.
+  They sit above lean's whole head, below every map, as the 1:01 AM section says.
+- **The regen is inside the head you post, and never after it.** PoUS's `TRUSTED.sha256` is read by the audit key of
+  `verity/protocols/pous/lean`, so a regeneration after you post the head changes that package's key and costs lean's
+  records run again (40 to 50 min).
+- **Hours as they stand:** your head 3:15 to 3:45 AM PST if the real pass takes your 75 min; say in your note if the
+  rehearsal brings that down. lean's records commit follows 40 to 50 min after your head.
+
 ## 1:07 AM PST Fri 13 Nov: the loose paths' map RIDES (final), and four pins your regen must cover
 
 proofs (TOP-398, 1:05 AM PST): run `r20261113-083849-4498` ended rc 0. On `5b2c1e735b92` with `468878c8f37c` merged in,
