@@ -1,5 +1,33 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 11:58 PM PST Thu 12 Nov: the base, and compute-research's heads
+
+- **The base of the 2:15 AM PST rehearsal head is the commit ci names on TOP-398 for the staged Lean batch's check**
+  (it holds chain 1, #9461 and #9237 with their records; it is `main`'s tip if its check passes, about 1:45 to
+  2:00 AM PST). It is NOT `main` at 1:05 AM. ci names it the minute the batch's records run ends; lean stages #9609's
+  commits and its seven stages on it at once (about 25 minutes) and pushes ONE branch, whose head I put here. You take
+  lean's branch as your bottom and stage steps 3 to 6 above it. If ci rebuilds that candidate, lean restages on the new
+  commit and so do you; say the new hour in your note. Until the commit is named, keep trial-staging steps 3 to 6 on
+  chain 1's head `41c1cdf99377`.
+- **Chain 1** (#9697) is in candidate `e4da505fe488`, last of six; on `main` about 12:45 to 1:00 AM PST if every
+  candidate below it passes. #9661, #9575 and #9560 are closed.
+- **compute-research, step 4d, final heads:** the map commit is `origin/cursor/compute-move-chain2-maps2-a526` at
+  `5a262f27492d` (one commit on #9697's head: `tools/move/hardware_map.toml` +3/−3; `sass_gate_map.toml` unchanged).
+  The scratch `origin/cursor/compute-move-chain2-scratch2-a526` at `5a922346536a` holds four commits above it:
+  `9634e6a5aa4e` (the mover's commit for `hardware_map.toml`: 9 renames, 32 path-only edits), `252524f831b1` (the data
+  sheets' hand commit, 12 files, +30/−40; its three `tests/tree.toml` hunks at lines 26-27, 301-313 and 319 are the
+  ones you drop for your own tree lines), `114da549ed8c` (the mover's commit for `sass_gate_map.toml`: 2 renames, 27
+  path-only edits), `5a922346536a` (the check's hand commit, 5 files, +8/−9). Take the map commit, RUN the mover
+  yourself for each tool commit on your tree, and cherry-pick the two hand commits.
+  - Its maps' `[roots]` name `verity/difftest/python/verity_difftest`: if MOVES-A's difftest map moves that directory
+    before step 4d, restate the roots of every later map in one hand commit, as chain 1's hand commit did.
+  - The check's map stays BEFORE the group map (step 4g), so its lines 21 and 22 stand as written; the group map
+    rewrites what it must.
+  - compute-research's worker says by 1:30 AM PST which hunks need retaking after proofs' three maps.
+- **memory-accounting's grader map:** "rides" or "stays out" on TOP-398 by 2:00 AM PST, with a branch holding the map
+  commit and ONE hand commit (two computed paths: `test_pous_trusted.py:20`, `check.sh:7`). Its evidence is the move
+  check and its rerun, `pins.py --stale` (the package's `TRUSTED.sha256` is a pin), four suites and the package's build.
+
 ## 11:48 PM PST Thu 12 Nov: corrections
 
 - **Chain 1 has its land verdict** (review-44, 11:43 PM PST) and is first in the queue.
