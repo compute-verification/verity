@@ -1,29 +1,26 @@
 # compute-accounting's path-only rows toward the architecture's tree: what `tools/move/layout.py --map
 # tools/move/pouw_rows_map.toml` moves and rewrites. Its paths are chain 1's: it runs before the protocol group move,
-# which then carries `verity/protocols/pouw/` on as it is after it. `pouw_kernels_map.toml` and `pouw_dither_map.toml`
-# run after it, in that order.
+# which then carries `verity/protocols/pouw/` on as it is after it. `pouw_kernels_map.toml` runs after it.
 #
-# - `verity/protocols/pouw/clear/` becomes `verity/protocols/pouw/verifier/clear/`: the clear audit is PoUW's verifier's.
-# - The adapter's PoUW kernels, `adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/`, become PoUW's prover's
-#   `verity/protocols/pouw/prover/kernels/pouw_cuda/`. Their sources include only each other and what their build puts
-#   on the include path, so no source changes.
+# The adapter's PoUW kernels, `adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/`, become PoUW's prover's
+# `verity/protocols/pouw/prover/kernels/pouw_cuda/`. Their sources include only each other and what their build puts on
+# the include path, so no source changes.
 #
-# No kernel source's bytes change: every `.cu`, `.cuh`, `.cpp`, `.h` and `.c` is excluded from the rewrite. Two readers
-# build these paths from parts no rewrite reaches, and a hand commit after the move mends them: the PoUW Lean difftest's
-# `difftest_vectors.py` (excluded below), and the adapter's `protocols/pouw/device.py` and `commit/row_tables_device.py`.
-# No file is split or deleted. The format is `layout_map.toml`'s.
+# No kernel source's bytes change: every `.cu`, `.cuh`, `.cpp`, `.h` and `.c` is excluded from the rewrite. The adapter's
+# `protocols/pouw/device.py` and `commit/row_tables_device.py` build the path from parts no rewrite reaches, and the
+# adapter's commit after the move takes it from the `prover` package. No file is split or deleted. The format is
+# `layout_map.toml`'s.
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
-"verity/protocols/pouw/clear/" = "verity/protocols/pouw/verifier/clear/"
 "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/" = "verity/protocols/pouw/prover/kernels/pouw_cuda/"
 
 [retired]
 # the directories this map empties: `layout.py` refuses a tracked file under one that has no row
-paths = ["verity/protocols/pouw/clear/", "adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/"]
+paths = ["adapters/vllm/verity_vllm/protocols/pouw/pouw_cuda/"]
 
 [drop]
 paths = []
@@ -43,9 +40,7 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
            "adapters/vllm/tools/migrate/superseded_quarantine.py",
            "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "tests/tree.toml",
-           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c",
-           # puts the clear audit on sys.path by a parent of the verifier's `audit.py`, a path no rewrite reaches
-           "verity/protocols/pouw/verifier/lean/commit/tests/difftest_vectors.py"]
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json", "verity/protocols/flock/prover/tests/lean/RandomnessVectors.lean",
            "verity/protocols/spot/verifier/tests/lean/ExfiltrationVectors.lean",
@@ -53,5 +48,4 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`)
-"verity.protocols.pouw.clear" = "verity.protocols.pouw.verifier.clear"
 "verity_vllm.protocols.pouw.pouw_cuda" = "verity.protocols.pouw.prover.kernels.pouw_cuda"
