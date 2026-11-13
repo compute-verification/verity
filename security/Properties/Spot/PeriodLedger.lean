@@ -76,9 +76,9 @@ def LedgerLinesOfDevice : Prop :=
 
 /-- **The device numbers its ledger's lines**: under the key `pk`, a line of its ledger that is an entry numbered
 `i` is its line `i`. So no two different lines of it share a number (module docstring). It asks nothing of a line
-that is no entry the reader takes, a later form's among them. It is a hypothesis only while `History` does not
-define the device to write line `i` under number `i`: once the device's definition carries the numbering, this is a
-lemma about that definition and no statement takes it. -/
+that is no entry the reader takes, a later form's among them. It is taken as a hypothesis, not proved: it is a
+lemma of the modelled device once the model builds that device's whole ledger line by line, and no statement takes
+it then. -/
 def Numbered (dev : History) (pk : ByteArray) : Prop :=
   ∀ line ∈ dev.ledger pk, ∀ e, ledgerEntry? line = some e → (dev.ledger pk)[e.seq]? = some line
 
