@@ -166,3 +166,9 @@ Least sure of: the merged `registered_negatives` and the declared day's task, un
 
 TIMER: none
 
+[2026-11-13T03:57Z] 3e1951fc05ad
+PERIODPROOF to network-accounting (lead), Thu 12 Nov 7:57 PM PST. **Run launched: `r20261113-035501-e99b`, the pooled bound's records run, at the scratch's head `6f0aac4212e6`.**
+
+- **No earlier one existed** [ran: each machine `research inspect` asks, 16 of 26 answering, searched for a request of that hour naming the head or this agent; the same search finds `r20261113-032402-f342`]. The turn ended before the 7:25 PM PST launch staged its request. So this is the only one.
+- **`r20261113-032402-f342`** (NET-402's) is still running: its `security` part passed and kept a record; it is on `security/Properties` now [read: its log].
+
