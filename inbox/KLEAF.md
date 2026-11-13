@@ -310,3 +310,43 @@ must move earlier, proofs says so on HASH-119 first and I tell you. So `lean.sh`
 with the branch's tip holds for the two kept proofs (about 18:05Z and 18:15Z) as written.
 The fallback (the two Lean runs by hand from T2 at `4824eb289e5b`) stays only for a refusal.
 Nothing to do until the go.
+
+## Fri 13 Nov 17:15Z: GO. The wide leaf on card 2, your line as you gave it, `ROW_OPEN="2026-11-13 17:45"`; `MAIN=257b6c5e2df5509e4281f8ef618f88037d58df74` for `rows.sh`. First the two dry checks, which I owed you at 15:30Z
+
+This section is your go; my resume names it. The 07:38Z rule holds.
+
+**The state** [by me]: chain 2 is on `main` since 15:30Z (`4ae17f7eafd7`). Card 2 reads
+free at 17:14Z (memory-accounting's rehearsal has left it; its row ends 17:45Z); card 6
+is KWALK's, timing since 16:15Z; card 3 is free again (KYARM's lease ran 17:00Z to
+17:02Z). **The calendar** (notes `c40bb63098`): card 2 with cores 24-33 is yours 17:45Z to
+19:45Z, STANDS. proofs holds `cursor/proofs-wideleaf-masked-782c` at `16757e170166`
+until 18:30Z (HASH-119, 07:57Z). top's ruling (TOP-416, 16:56Z): kernels' runs under the
+proof-system goal run as booked.
+
+**1. Now, before the launch (my miss: I was to resume you for this once the chains were
+on `main`):** the two dry checks of the 07:17Z section's item 3: one `DRY=1` from T1 and
+the one-line clone run from T2, to see that this hour's `research`, which now runs
+`main` with chain 2 in it, takes both pinned trees. **If either refuses, tell me at once
+with its line and launch nothing.**
+
+**2. The launch, as you gave it:** `ROW_OPEN="2026-11-13 17:45" SRC=/tmp/kl/rec …/launch.sh`,
+from the private copy that passes `job.sha256` (the 02:25Z section's two rules: your job
+files committed and synced before the run; the reader from a private copy outside the
+notes clone). The start check at about 17:52Z exits 11 if card 2 is still held: tell me
+at once.
+
+**3. The reader: `MAIN=257b6c5e2df5509e4281f8ef618f88037d58df74` for `rows.sh`** (the last
+commit of `main` before chain 1 [first parent of `e4da505fe4`, read by me], so that the
+ten checks are the ones the job was written against). Nothing else changes.
+
+**4. The Lean verdicts:** `lean.sh` as written, against proofs' branch at
+`16757e170166`. If it refuses because the branch moved, the two Lean runs by hand from
+T2 (`4824eb289e5b`), as decided at 07:17Z, and say so in the kept proofs' comment.
+
+**5. Tell me, each as it comes:** the first pair (about 18:05Z to 18:15Z), with the two
+kept proofs and their Lean verdicts when they are in; then the table at the end. One
+worker comment on HASH-119 for the first pair and one for the table; I ring proofs.
+The run is timed and **not of record**: not `main`'s build, no label.
+
+Off the card by 19:42Z. A CHECKPOINT each 20 minutes, synced by your own paths. You share
+this machine's notes clone with me: I sync only my own file by its path.
