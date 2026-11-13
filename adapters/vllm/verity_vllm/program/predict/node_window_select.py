@@ -126,7 +126,7 @@ def token_select(w: NodeWindow, j: int, node: Any) -> None:
         for i in range(k):
             got = [_row(w, ls.slice(lo + i * R, lo + (i + 1) * R)) for ls in logits]
             free = next((g for g in got if isinstance(g, _Free)), None)
-            grids.append(free if free is not None else got)
+            grids.append(free if free is not None else [g for g in got if not isinstance(g, _Free)])
         w.feed_rows(t, "logits", a, grids, (M,))
         for param, key, _field in u.wires:
             wt, wa = at[key]
