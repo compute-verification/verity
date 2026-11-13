@@ -49,7 +49,7 @@ the auditor's.
 
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
   descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
-  `git rev-parse COMMIT:verity/protocols/poub/verifier` of the run's recorded commit (`--commit`), so it counts
+  `git rev-parse COMMIT:verity/protocols/accounting/poub/verifier` of the run's recorded commit (`--commit`), so it counts
   only toward a period that committed that verifier; and that commit is on the auditor's first-parent list
   of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
   run's request.json beside OUT records the commit its verifier ran at (`pinned`), and a `--commit` other than it is
@@ -150,17 +150,17 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.poub.verifier.session import lean_verifier as lv  # noqa: E402
-from verity.protocols.poub.verifier.session import verifier as V  # noqa: E402
-from verity.protocols.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
-from verity.protocols.poub.verifier.session import wire  # noqa: E402
-from verity.protocols.certifier.verifier import audit as caudit  # noqa: E402
-from verity.protocols.certifier.verifier import certificate as cert  # noqa: E402
-from verity.protocols.certifier.verifier.grid import GridParams, Reason, Status  # noqa: E402
-from verity.protocols.poub.verifier import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
-from verity.protocols.poub.verifier import store as rstore  # noqa: E402
-from verity.protocols.spot.device import challenger as Ch  # noqa: E402
-from verity.protocols.spot.device import remote  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import verifier as V  # noqa: E402
+from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import audit as caudit  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import certificate as cert  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.grid import GridParams, Reason, Status  # noqa: E402
+from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
+from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
+from verity.protocols.proofs.spot.device import remote  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
 
 RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
@@ -172,7 +172,7 @@ BURSTS = ("stated", "none")
 (`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces at the S_chip
 they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate down to one nanosecond)."""
 LANE = "memory-accounting"
-VERIFIER_TREE = "verity/protocols/poub/verifier"
+VERIFIER_TREE = "verity/protocols/accounting/poub/verifier"
 LEAN_VERDICTS = ("lean", "both")
 CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
 """What a session's credit needs, each reported per session in this order."""
