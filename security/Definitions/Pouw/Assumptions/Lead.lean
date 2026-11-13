@@ -177,13 +177,13 @@ with `coinsOf` of the entropy, a fixed one-to-one decoding of the entropy alone.
 def certCode {Ent : Type} (coinsOf : Ent ≃ Coins L) : Hash.Digest × Ent → Hash.Digest × Coins L :=
   fun x => (x.1, coinsOf x.2)
 
-/-- `pouw-certifier-coins` (proposed; `trusted-host` at the network certifier). **The certifier draws the coins after
+/-- `pouw-certifier-coins` (proposed; `trusted-host` at the network certifier). **The certifier flips the coins after
 it reads `A`'s root**: the auditor-trusted certifier `cert` runs `certCode coinsOf`, reading the root a strategy
 registered and the device's own entropy and releasing `coinsOf` of the entropy. `coinsOf` is an equivalence, so
 uniform entropy gives uniform coins, independent of `A` and of a strategy's pre-coin tables: a short seed with a fixed
 expansion doesn't meet it. The device releases the coins only to the node, over the link it counts, and to no one
 else until the call's words root registers; `G`'s model reads that as the coins entering only the node's execution
-(`Strategy.exec`). Not a property of `NetworkCertifier`: that program draws and releases no coins.
+(`Strategy.exec`). Not a property of `NetworkCertifier`: that program samples and releases no coins.
 
 Rationale: `trusted-host`; the certifier is the auditor's hardware on a machine the prover doesn't control. -/
 def CertifierCoins {Device Ent : Type} (cert : Device) (coinsOf : Ent ≃ Coins L)

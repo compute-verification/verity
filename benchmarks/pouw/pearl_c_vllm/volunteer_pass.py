@@ -5,7 +5,7 @@ replayed word by word from the pass's own files, the rows that leave a tile or a
   python benchmarks/pouw/pearl_c_vllm/volunteer_pass.py DIR/manifest.json --coins COINS.json [--jobs J]
                                                          [--device DEBIT_CUBIN [--cross-check N]]
 
-- **When it runs.** Exactly while the verdict rejects a run on a drawn tile whose credited debit, or a credited row's, is
+- **When it runs.** Exactly while the verdict rejects a run on a sampled tile whose credited debit, or a credited row's, is
   over its cap, its over-cap rule ``reject`` (`served_passes.over_cap_rule`): the pipelines ask ``served_passes.py
   volunteer-needed`` before they serve and refuse to skip the give-up then.  Under ``uncredited``, where the verdict
   credits such a row nothing instead, the give-up is off the prover's path, and this module stays for whoever runs it by
