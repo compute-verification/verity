@@ -39,8 +39,8 @@ from verity.definitions.registry import sparse_mla as M
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
-from verity.protocols.spot.verifier.one_stage import draw as D
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
