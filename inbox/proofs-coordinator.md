@@ -151675,3 +151675,27 @@ Nothing here runs on the served engine. Today's run is one prover on a staged st
 - **One line for its section 5, if network asks.** On the fused embedding-read and MoE expert GEMM block the fixed part is 0.318 s a statement, where the head block's was 1.93 s, and the packing call (`units_pack`) grows with the blocks sampled: 0.49 s at 256 blocks, 1.11 s at 1,024. So today gives no new reason to look at the packing call for a gap that is the same at 1 block as at 32. [run: my 16:28Z entry of today; derived]
 - **Why this entry.** Your message of Thu 18:10Z asked for the reading "after Friday's rows", with my entry by Sat 14 Nov 02:00Z. I gave it early, on Thu 22:25Z, and you took it at 22:41Z. This closes the part that waited on today's run. Nothing more is owed on it unless you say so.
 - **Two timers of yours reached me at 16:30Z today, and I acted on neither**: `proofs-2108z-daniel-answers` (fired Thu 21:08Z) and `two-round-2-25pm-pst` (fired Thu 22:25Z). Both name `due.md` in your store and steps that are yours: posts on NET-390 and VLLM-339, the answer to Daniel, resuming workers. If either did not run on your side on Thursday, its steps may still be owed. I have not checked those issues.
+
+## FRAME, Fri 13 Nov 16:32Z: THE JOIN'S JOB IS LAUNCHED: `r20261113-162933-74e0` on vy-nebius-cpu-14 carries the join at `6bae773eb345`, #9735 at `4d4950f1bb99` and B's draft against `main` `4ae17f7eafd7`, back about 17:05Z; the two dry runs are back: the late carry passes its test on two lines never carried before, and the join at `a61b7adf0d83` crossed the 24 moves `clean`; batches 1 and 2 are still carrying
+
+**Every carry names `4ae17f7eafd7`, never the `main` of the day.**
+
+- **The join's job.** [the launch line; ASSEMBLY's 16:24Z heading; git] Through auto. vy-nebius-cpu-14 ran nothing of mine by then (`c64b` had ended), and all 28 checks are kept there. The tip is `6bae773eb3454a4c483293a1ed37f94aa704758f`, read from the remote at 16:28Z, and it holds `a61b7adf0d83`. #9735's head is `4d4950f1bb99`, 16 commits over its fork `9182900fb94e`. My own free line waits for a free node.
+- **`main` since the pass's head.** [git, 16:31Z] It is `5eb1231b2558`, 21 commits over `4ae17f7eafd7`, none a move. They change `tools/research/`, `tools/agent-guard/`, `infra/ops/`, `tests/tree.toml` and `tests/test_tree.py`: nothing under `tools/move/`, `tools/verity/`, `security/` or `verity/`. A job's clone is at `4ae17f7eafd7`'s tree, so none of it touches what the jobs run.
+
+**The two dry runs, back.** Neither is a carry of the pass; nothing of them is published.
+
+| Run | Line | Head | Against | Result | What it shows |
+|---|---|---|---|---|---|
+| `c64b` | REDRAW's credit | `1370c60b7e75` | the chain at `942e1ef43899` | `clean-skipped`, crossed 24, skipped the four on `main` | merged with a `main` holding the dry run's carried #9555: no conflict, and the merged tree is its own carried tree. No added line names an old path of the four skipped maps |
+| `c64b` | FIRSTACCEPT's files | `8d3f64ed16aa` | the same | `clean`, crossed 28 | merged with a `main` holding the dry run's carried #9441: no conflict, and the merged tree is its own carried tree |
+| `c64b` | MEMBERS's switch | `2fe933688cb9` | the same | `conflicted` at step `base`, at the move `e62cf7cbc22c` | `benchmarks/one_stage/tests/test_audit_two_members.py`, as your point 4 of 15:53Z settles |
+| `d83f` | the join | `a61b7adf0d83` | the chain's head `031af1f38001` | `clean`, crossed 24, skipped 0 | ASSEMBLY's merge settles the join's two files: the carry no longer stops. The tip has moved since, so this result is not the pass's |
+| `d83f` | B's draft | `46811047714e` | the same | `clean`, crossed 24 | carried again in the join's job against `4ae17f7eafd7` |
+| `d83f` | mine, jsoncmp | `2cbb3c6e2805` | the same | `clean`, crossed 24 | the same |
+
+- **The cure is now shown on lines that were never carried** (your condition's test, [local] on `c64b`'s results): two of two pass.
+- **Whether `d83f`'s results can stand as real ones:** as to content, yes. [local] Each holds both parents of `4ae17f7eafd7` (`053b8e50fe8a` and `031af1f38001`) but not that commit; merging `4ae17f7eafd7` into each shows no conflict and changes no file. I do not use them: the join's tip moved, and the job now out names `4ae17f7eafd7` for the join and B's draft.
+- **Times.** [run] `c64b`: 1,772 seconds with all checks kept, two carries to the end. `d83f`: 2,002 seconds in all, 24 checks made first.
+
+**Not established.** Batches 1 and 2 (`6e94`, `5920`): both finished their checks at 16:05Z and are in the carries. The join at `6bae773eb345`: not carried yet.
