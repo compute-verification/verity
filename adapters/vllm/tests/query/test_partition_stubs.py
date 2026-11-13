@@ -12,20 +12,20 @@
 Nothing here is copied from the other owners' modules; the real modules replace these stubs at merge."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Iterator
+from collections.abc import Iterator
+from dataclasses import dataclass
+from typing import Any
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.layout import Scope
-from verity.circuits.query_ast import GateSet, oracle_out
 from verity.circuits.parts import Part, Unsupported, n_members
 from verity.circuits.program import Program
+from verity.circuits.query_ast import GateSet, oracle_out
 from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
 from verity.definitions.registry.prims import BF16, F32
-from verity.circuits.types import Array, Tuple, Value
-
 
 # ---------------------------------------------------------------------------------------------------------
 # GateSet / Family stubs
@@ -178,6 +178,7 @@ def _count_of(spec, entries: tuple[NodeTiling, ...], bodies: dict[str, BodyTilin
         elif e.kind == "zip":
             zips[e.group] = max(zips.get(e.group, 0), n)
         elif e.kind == "descend":
+            assert e.child is not None
             total += sum(b - a for a, b in e.members) * bodies[e.child].count
     return total + sum(zips.values())
 
@@ -249,6 +250,7 @@ def materialise(program: Program, t: Tiling) -> list[StubGateSet]:
             elif e.kind == "zip":
                 groups.setdefault(e.group, []).append(j)
             elif e.kind == "descend":
+                assert e.child is not None
                 for a, b in e.members:
                     for m in range(a, b):
                         body(sc.child(j, m), t.bodies[e.child])

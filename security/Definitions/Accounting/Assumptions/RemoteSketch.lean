@@ -58,7 +58,7 @@ is within the collision's probability of uniform: over at most `Q + P` candidate
 `ε` `SketchBoundDeployed` reads and `timing.sketch_failure`'s last term. The premise fails for a run that tries one seed
 under two candidates (their keys are equal, not independent): the model gives each candidate its own key, and
 `timing.sketch_failure` charges each candidate a compression of its own. -/
-def SketchHashRandom [Fintype Hs] (A : Session β Hs P N m h S L q ks G) (ε : ℝ) : Prop :=
+def SketchHashRandom [Fintype Hs] (A : Remote.Sketch.Session β Hs P N m h S L q ks G) (ε : ℝ) : Prop :=
   ∀ (b : β) (D : Accounting.RateSketch.Data N m 0 Accounting.RateSketch.Sector)
     (E : Keys P N m h ks G → Prop),
     Pous.pr (fun x : Hs => E (A.keys b D x)) ≤ Pous.pr E + ENNReal.ofReal ε
