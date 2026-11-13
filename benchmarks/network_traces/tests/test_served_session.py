@@ -121,7 +121,9 @@ def test_a_plan_at_another_scan_class_asks_the_gate_for_it_and_its_session_runs_
     assert doc["request"] == (f"warden-rehearse --peer {SS.PEER} --port 18782 --minutes {a.minutes} --requests 4 "
                               "--height 10 --scan --prompts --tokens 4 --scan-class w63k4")
     session = SS.parser().parse_args(shlex.split(shlex.split(doc["runs"]["session"])[-1])[2:])
-    assert {k: v for k, v in vars(session).items() if k in vars(a)} == {**vars(a), "cmd": "session"}
+    # every key of the plan but ``auditor``, which says where the plan's runs are launched: a session is one of them
+    asked = {k: v for k, v in vars(a).items() if k != "auditor"}
+    assert {k: v for k, v in vars(session).items() if k in asked} == {**asked, "cmd": "session"}
     assert "--scan-class" not in SS.plan(SS.parser().parse_args(["plan", "--minutes", "10"]), b"[[1]]")["request"]
 
 
@@ -133,6 +135,9 @@ def test_the_plans_runs_are_on_the_nodes_it_is_given_and_its_commands_name_no_ot
         "session": SOME_AUDITOR, "io": SOME_AUDITOR, "endpoint": SOME_PEER, "chain": SOME_AUDITOR}
     text = json.dumps(doc)
     assert text.count("--on ") == len(runs)
+    # the session's own parser takes the command the plan writes for it, so the command carries no --auditor
+    session = SS.parser().parse_args(shlex.split(runs["session"][-1])[2:])
+    assert (session.cmd, session.peer) == ("session", SOME_PEER) and not hasattr(session, "auditor")
     # the chain samples on the gate's coins where it runs
     assert SS.parser().parse_args(shlex.split(runs["chain"][-1])[2:]).coin_peer == SOME_AUDITOR
     # nothing of site.json is written into the plan but the lane, which is each run's --as
