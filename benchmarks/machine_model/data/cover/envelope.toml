@@ -163,7 +163,7 @@ proposed = "MODEL-MIN item 1, corrected: block-scaled E4M3/E5M2, UE8M0 a 32 (QMM
 key = "mxf6"
 proposed = "MODEL-MIN item 1, corrected: block-scaled E3M2/E2M3, UE8M0 a 32 (QMMA.SF, sm_120)"
 
-# Each card's numbers are its card file's (verity/hardware/cards/, the SKU its model.toml names; `cover.load` reads
+# Each card's numbers are its card file's (hardware/cards/, the SKU its model.toml names; `cover.load` reads
 # them): the SMs, clock.sm, every rate a SM-clock (tensor in s8 MACs, issue in warp instructions, the pipes in lanes,
 # smem and l2 in words), memory.bandwidth in words a second, and the formats' weights. Here are the proposed
 # resources' rates and the proposed formats' weights alone, which no card file holds.
