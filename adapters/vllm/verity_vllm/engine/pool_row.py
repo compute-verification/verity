@@ -30,7 +30,7 @@ reset a run starts its chain from, and the one after a failed window.
 
 **The keys** (`install_keys`) replace ``vllm.v1.core.kv_cache_utils.hash_block_tokens``, which the engine core's request
 block hasher looks up at each call, with BlockKey_v1. A block's key is SHA-512(parent ‖ its tokens), each token TOK bits
-(`verity.definitions.commitments.gates.block_key.block_key`), with `ROOT` as the parent of a request's first block. vLLM then
+(`verity.commitments.gates.block_key.block_key`), with `ROOT` as the parent of a request's first block. vLLM then
 caches and hits under the circuit's keys. A block with extra keys is refused, since BlockKey_v1 keys tokens alone:
 LoRA, multimodal inputs, a cache salt and prompt embeddings all bring extra keys.
 """
@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.commitments import pool_row as R
-from verity.definitions.commitments.gates import block_key as BK
+from verity.commitments.gates import block_key as BK
 
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.errors import Refused
