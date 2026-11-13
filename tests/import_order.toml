@@ -88,17 +88,17 @@ owner = "compute-accounting"
 loader = "verity/protocols/flock"
 loaded = "tools"
 files = [
-    "verity/protocols/flock/agreement/tool.py",
-    "verity/protocols/flock/pod/catalog.py",
-    "verity/protocols/flock/tool.py",
+    "verity/protocols/flock/prover/agreement/tool.py",
+    "verity/protocols/flock/prover/pod/catalog.py",
+    "verity/protocols/flock/prover/tool.py",
 ]
 
 [[against]]
 loader = "verity/protocols/flock"
 loaded = "benchmarks"
 files = [
-    "verity/protocols/flock/pod/gemm_hill.py",
-    "verity/protocols/flock/pod/read_gadget.py",
+    "verity/protocols/flock/prover/pod/gemm_hill.py",
+    "verity/protocols/flock/prover/pod/read_gadget.py",
     "verity/protocols/flock/prover/python/verity_flock/bench.py",
     "verity/protocols/flock/prover/python/verity_flock/circuit_bench.py",
     "verity/protocols/flock/prover/python/verity_flock/instances.py",
@@ -636,13 +636,13 @@ trusted = true
 [[place]]
 paths = [
     "verity/protocols/spot/verifier",
-    "verity/protocols/spot/candidates.py",
-    "verity/protocols/spot/costfit.py",
+    "verity/protocols/spot/prover/candidates.py",
+    "verity/protocols/spot/prover/costfit.py",
     "verity/protocols/spot/device/challenger.py",
     "verity/protocols/spot/device/coins.py",
     "verity/protocols/spot/device/remote.py",
-    "verity/protocols/spot/optimize.py",
-    "verity/protocols/spot/plancheck.py",
+    "verity/protocols/spot/prover/optimize.py",
+    "verity/protocols/spot/prover/plancheck.py",
 ]
 loads = [
     "verity/channel.py",
