@@ -695,8 +695,8 @@ def references(d: Design, q: int, out: Path, counts: Sequence[int] | None = None
     of sampled proof blocks in a cell, by member (`Stream.counts`). A member the second stage samples short of whole
     then has its reference staged at its ``q·counts[k]`` sampled proof blocks alone, its first slots, one zero row a
     table: placed at any such slots (`second_stage.at_sampled`) its header is the whole one's but for the run's fields
-    and the bindings, which round 2 computes itself (`at_run`), so the auditor stages nothing of the member's size. A
-    member sampled whole keeps the whole reference, which round 2 holds its statement to as today."""
+    and the bindings, which the second stage computes itself (`at_run`), so the auditor stages nothing of the member's
+    size. A member sampled whole keeps the whole reference, which the second stage holds its statement to as today."""
     from verity_flock.class_statement import member_stager
 
     window = d.window("00" * 64, range(q))
