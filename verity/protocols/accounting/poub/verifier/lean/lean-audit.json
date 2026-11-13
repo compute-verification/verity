@@ -15,7 +15,17 @@
  },
  "layers": {
   "RemoteAudit": {
-   "imports": ["Std", "Flock", "Randomness", "CoreProtocol", "PousCheck.Merkle", "MemoryChallenger.Verdict", "MemoryChallenger.StreamedWipe", "Lms.Sign", "RemoteAudit"],
+   "imports": [
+    "Std",
+    "Flock",
+    "Randomness",
+    "CoreProtocol",
+    "PousCheck.Merkle",
+    "MemoryChallenger.Verdict",
+    "MemoryChallenger.StreamedWipe",
+    "Lms.Sign",
+    "RemoteAudit"
+   ],
    "except": ["RemoteAudit.Difftest"],
    "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, the core protocol interface its session is a component through (RemoteAudit.Protocol), and PoUS's leaf and path check (PousCheck.Merkle, on which a P2 store's openings are checked, RemoteAudit.P2), the memory challenger's LMS check (MemoryChallenger.Verdict, on which P2's close is checked, RemoteAudit.P2Protocol), the wipe's record (MemoryChallenger.StreamedWipe, which P2's close record is never, RemoteAudit.P2Close) and LMS signing (Lms.Sign, which only P2Protocol's guards run); no Mathlib and nothing of Security. The difftest's table (RemoteAudit.Difftest) also imports the difftest server"
   }
