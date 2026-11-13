@@ -3,7 +3,7 @@ past FlashInfer's 42 tokens) lowered into GLM-5.3's node window at TP8 rank 0, a
 layer, beside the frame's and the dense families. At coordinate grain its units are `pipeline.tp.grain.lower`'s for the
 site; the norms read its 192-column blocks through one more gather level. Rank 0's partial is row 0 of each combine's
 ``parts`` cut 8 ways and is wired (free where its producer, the embedding shard, has no lowering); the other ranks' rows
-are free inputs listed by name.
+are free inputs listed by name (each site's own ``peers_*``, as the Program names them).
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from verity_vllm.program.predict import node_window_multimem as NM
 from tests.program.predict.test_node_window import glm_request
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
+from verity.circuits.refs import runs
 from verity.commitments.windows import interface as IF
 from verity.definitions.registry import b1_tp2 as B1T
 
@@ -38,6 +39,20 @@ def window(program):
 
 def _sites(w: NW.NodeWindow) -> list[tuple[int, Any]]:
     return [(j, n) for j, n in enumerate(w.fn.body.nodes) if NW._family(n) == NM.FAMILY]
+
+
+def _peers(w: NW.NodeWindow, tid: str) -> set[tuple[int, str, tuple[int, int, int]]]:
+    """Each of ``tid``'s allocations' rows r > 0 of ``parts``, as the Program names the input it reads: ``(first unit,
+    input, (r, 1, WORLD))``."""
+    out: set[tuple[int, str, tuple[int, int, int]]] = set()
+    for at, _n, _f in w.allocs[tid]:
+        node = w.fn.body.nodes[w.node_of[(tid, at)]]
+        size = int(node.fn.bindings["SIZE"])
+        for r in range(1, WORLD):
+            ((space, idx, _lo, _hi),) = runs(node.args[0].refs.slice(r * size, (r + 1) * size))
+            assert space != "n"
+            out.add((at, w.params[idx], (r, 1, WORLD)))
+    return out
 
 
 def _pairs(circuit: IF.Circuit) -> set[tuple[str, str, str]]:
@@ -71,15 +86,16 @@ def test_units_are_grain_lowers(window):
 
 
 def test_peers_free_by_name(window):
-    """The 7 other ranks' rows of each combine's ``parts`` are free inputs named ``peers_r``, at their rows of the 8-way cut;
+    """The 7 other ranks' rows of each combine's ``parts`` are free inputs named as the Program names the site's partials
+    (``peers_*``), at their rows of the 8-way cut;
     rank 0's row is free only at the embedding's site, under the embedding shard (no lowering yet); nothing is free under
     the all-reduce, and it is lowered."""
     circuit, w = window
     tc = next(t for t in circuit.units if t.startswith("AllReduceMultimem_v1"))
     assert circuit.cuts[tc] == {"parts": WORLD}
     free = [f for f in w.free if f.tid == tc]
-    peers = {(f.name, f.rows) for f in free if f.kind == "peer"}
-    assert peers == {(f"peers_{r}", (r, 1, WORLD)) for r in range(1, WORLD)}
+    peers = {(f.at, f.name, f.rows) for f in free if f.kind == "peer"}
+    assert peers == _peers(w, tc) and all(name.startswith(NW.PEERS) for _a, name, _r in peers)
     assert {(f.family, f.rows) for f in free if f.kind != "peer"} == {("EmbeddingShard", (0, 1, WORLD))}
     census = w.census(circuit)
     assert NM.FAMILY not in census["unlowered"] and NM.FAMILY not in census["free"]
@@ -103,7 +119,7 @@ def test_moe_row_grain():
     (tr,) = [t for t in circuit.units if re.fullmatch(r"AllReduceMultimem_v1\{WORLD=8,SIZE=192,.*\}", t)]
     assert circuit.units[tr] == LP * WIDTH // COLS
     assert [(x.writer, x.cut) for x in circuit.wires if x.reader == tr] == [(add, (0, 1))]
-    assert {(f.name, f.rows) for f in w.free if f.tid == tr} == {(f"peers_{r}", (r, 1, WORLD)) for r in range(1, WORLD)}
+    assert {(f.at, f.name, f.rows) for f in w.free if f.tid == tr} == _peers(w, tr)
     census = w.census(circuit)
     assert NM.FAMILY not in census["unlowered"] and NM.FAMILY not in census["free"]
     for tid, fn in w.b.fns.items():
