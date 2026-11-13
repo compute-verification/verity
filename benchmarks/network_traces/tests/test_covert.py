@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.protocols.certifier.verifier import calibration
+from verity.protocols.accounting.certifier.verifier import calibration
 
 HERE = Path(__file__).resolve().parents[1]
 T = 60
