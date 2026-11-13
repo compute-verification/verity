@@ -65,12 +65,12 @@ owner = "memory-accounting"
 reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside `benchmarks/pous`: its difftest generator, which its `lean-audit.json` runs, and `interop.py`, which holds it to the wire's Python reference through `verity_difftest`"
 
 [[distribution]]
-directory = "verity/protocols/inference_only/rho"
+directory = "benchmarks/rho"
 owner = "training"
 date = "2026-11-16"
 
 [[distribution]]
-directory = "verity/protocols/inference_only/nci"
+directory = "benchmarks/nci"
 owner = "compute-accounting"
 
 [[distribution]]
@@ -649,9 +649,9 @@ paths = [
 ]
 trusted = true
 loaded_by = [
-    "verity/protocols/inference_only/rho/rho/params.py",
-    "verity/protocols/inference_only/rho/tests/test_operating.py",
-    "verity/protocols/inference_only/rho/tests/test_params.py",
+    "benchmarks/rho/rho/params.py",
+    "benchmarks/rho/tests/test_operating.py",
+    "benchmarks/rho/tests/test_params.py",
 ]
 
 [[place]]
@@ -751,10 +751,10 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/flock/prover/tests/test_audit_profile.py",
-    "verity/protocols/inference_only/rho/rho/params.py",
-    "verity/protocols/inference_only/rho/tests/test_envelopes.py",
-    "verity/protocols/inference_only/rho/tests/test_held_to_core.py",
-    "verity/protocols/inference_only/rho/tests/test_params.py",
+    "benchmarks/rho/rho/params.py",
+    "benchmarks/rho/tests/test_envelopes.py",
+    "benchmarks/rho/tests/test_held_to_core.py",
+    "benchmarks/rho/tests/test_params.py",
     "verity/protocols/pouw/prover/circuit/plan.py",
 ]
 
