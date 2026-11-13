@@ -7,12 +7,12 @@ public import Definitions.Flock.Merkle
 
 Two openings of one position that verify against one tree top from different leaves go up through a node where the two
 walks first agree, and the two inputs hashed at that node (`upIn`) differ. `walkPair` returns those two inputs.
-`openPair` and `openPairL` return the pair for two openings to different columns: the leaf's own pair when the
+`openCollPair` and `openCollPairL` return the pair for two openings to different columns: the leaf's own pair when the
 two leaves agree, the walk's pair otherwise. Each is a function of the two openings alone, so a collision finder can
 output it.
 
 That each pair is a collision of `H` is proved in `Proofs.Flock.Soundness.MerklePair` (`walkPair_spec`,
-`openPair_spec`, `openPairL_spec`).
+`openCollPair_spec`, `openCollPairL_spec`).
 
 Two digests are compared by their bytes (`Enc.dig`, which is injective), so no function here needs equality on the
 digest type to be decidable.
@@ -36,7 +36,7 @@ def walkPair : List D → List D → ℕ → D → D → List UInt8 × List UInt
 
 /-- **The pair of two openings of position `pos` to the columns `c` and `c'`**, under the leaf `H (encode column)`: the
 two columns' encodings when their leaves agree, the walk's pair from the two leaves otherwise. -/
-def openPair (pos : ℕ) (c c' : Col) (sibs sibs' : List D) : List UInt8 × List UInt8 :=
+def openCollPair (pos : ℕ) (c c' : Col) (sibs sibs' : List D) : List UInt8 × List UInt8 :=
   if E.dig (H (E.col c)) = E.dig (H (E.col c')) then (E.col c, E.col c')
   else walkPair H E sibs sibs' pos (H (E.col c)) (H (E.col c'))
 
@@ -45,7 +45,7 @@ variable {S : Type}
 /-- **The pair of two openings under a leaf scheme.** `leaf` is the scheme's leaf of a column under a salt, and `pair`
 is the scheme's own pair for two columns with one leaf. The pair of the two openings is `pair`'s when the two leaves
 agree, and the walk's pair from the two leaves otherwise. -/
-def openPairL (leaf : Col → S → D) (pair : Col → S → Col → S → List UInt8 × List UInt8) (pos : ℕ) (c c' : Col)
+def openCollPairL (leaf : Col → S → D) (pair : Col → S → Col → S → List UInt8 × List UInt8) (pos : ℕ) (c c' : Col)
     (s s' : S) (sibs sibs' : List D) : List UInt8 × List UInt8 :=
   if E.dig (leaf c s) = E.dig (leaf c' s') then pair c s c' s'
   else walkPair H E sibs sibs' pos (leaf c s) (leaf c' s')

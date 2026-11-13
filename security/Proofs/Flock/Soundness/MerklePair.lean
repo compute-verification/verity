@@ -13,8 +13,8 @@ import Mathlib.Tactic.SplitIfs
 `H` whenever the two openings verify against one tree top and carry different columns:
 
 * `walkPair_spec`: two walks of one length from different digests to one digest;
-* `openPair_spec`: two verifying openings of one position to different columns, under the leaf `H (encode column)`;
-* `openPairL_spec`: the same under a leaf scheme, given that the scheme's own pair is a collision whenever two
+* `openCollPair_spec`: two verifying openings of one position to different columns, under the leaf `H (encode column)`;
+* `openCollPairL_spec`: the same under a leaf scheme, given that the scheme's own pair is a collision whenever two
   different columns have one leaf.
 
 Each names its pair, where `walk_binding`, `opening_binding` and `opening_bindingL` (`Proofs.Flock.Soundness.Merkle`)
@@ -48,35 +48,35 @@ theorem walkPair_spec : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
       · simp only [walkPair, ite_eq_right hup]
         exact walkPair_spec rest rest' (idx / 2) _ _ (by simpa using hlen) (fun h => hup (congrArg E.dig h)) heq
 
-/-- **`openPair` is a collision**: two openings of one position that verify against one tree top and carry different
+/-- **`openCollPair` is a collision**: two openings of one position that verify against one tree top and carry different
 columns. -/
-theorem openPair_spec (top : ℕ → D) (depth pos : ℕ) (c c' : Col) (sibs sibs' : List D) (hc : c ≠ c')
+theorem openCollPair_spec (top : ℕ → D) (depth pos : ℕ) (c c' : Col) (sibs sibs' : List D) (hc : c ≠ c')
     (h : Verifies H E top depth pos c sibs) (h' : Verifies H E top depth pos c' sibs') :
-    Hash.Collision H (openPair H E pos c c' sibs sibs').1 (openPair H E pos c c' sibs sibs').2 := by
+    Hash.Collision H (openCollPair H E pos c c' sibs sibs').1 (openCollPair H E pos c c' sibs sibs').2 := by
   obtain ⟨hl, hr⟩ := h
   obtain ⟨hl', hr'⟩ := h'
   have heq : reach H E pos c sibs = reach H E pos c' sibs' := hr.trans hr'.symm
-  unfold openPair
+  unfold openCollPair
   split_ifs with hleaf
   · exact ⟨fun e => hc (E.col_inj e), E.dig_inj hleaf⟩
   · exact walkPair_spec H E sibs sibs' pos _ _ (hl.trans hl'.symm) (fun e => hleaf (congrArg E.dig e)) heq
 
 variable {S : Type}
 
-/-- **`openPairL` is a collision**: two openings of one position that verify against one tree top under the leaf
+/-- **`openCollPairL` is a collision**: two openings of one position that verify against one tree top under the leaf
 scheme `Lf` and carry different columns, for a `pair` that is a collision whenever two different columns have one
 leaf. -/
-theorem openPairL_spec (Lf : Leaf Col S D H) (pair : Col → S → Col → S → List UInt8 × List UInt8)
+theorem openCollPairL_spec (Lf : Leaf Col S D H) (pair : Col → S → Col → S → List UInt8 × List UInt8)
     (hpair : ∀ c c' s s', c ≠ c' → Lf.leaf c s = Lf.leaf c' s' →
       Hash.Collision H (pair c s c' s').1 (pair c s c' s').2)
     (top : ℕ → D) (depth pos : ℕ) (c c' : Col) (s s' : S) (sibs sibs' : List D) (hc : c ≠ c')
     (h : VerifiesL H E Lf top depth pos c s sibs) (h' : VerifiesL H E Lf top depth pos c' s' sibs') :
-    Hash.Collision H (openPairL H E Lf.leaf pair pos c c' s s' sibs sibs').1
-      (openPairL H E Lf.leaf pair pos c c' s s' sibs sibs').2 := by
+    Hash.Collision H (openCollPairL H E Lf.leaf pair pos c c' s s' sibs sibs').1
+      (openCollPairL H E Lf.leaf pair pos c c' s s' sibs sibs').2 := by
   obtain ⟨hl, hr⟩ := h
   obtain ⟨hl', hr'⟩ := h'
   have heq : reachL H E Lf pos c s sibs = reachL H E Lf pos c' s' sibs' := hr.trans hr'.symm
-  unfold openPairL
+  unfold openCollPairL
   split_ifs with hleaf
   · exact hpair c c' s s' hc (E.dig_inj hleaf)
   · exact walkPair_spec H E sibs sibs' pos _ _ (hl.trans hl'.symm) (fun e => hleaf (congrArg E.dig e)) heq
