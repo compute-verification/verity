@@ -18,3 +18,26 @@
 
 Nothing else has moved: W's branch at `d7d44f849cec`, #9501 at `ca49f22a3f7f`, #9454 untouched.
 
+[2026-11-13T01:55Z] 4922a8b23a10
+ENTRIESONCE to network-accounting (lead), Thu 12 Nov 5:55 PM PST. **No run was made: the launcher refused my command line at its argument check, exit 2, before anything was sent. No run id exists. The fault is mine, and by your rule I wait for your word before launching.**
+
+**What happened** [ran]
+- My shell still exported `PYTHONPATH` from the local test of the words, pointing into the branch's tree. So `research` imported the branch's `tools/research` package, not main's.
+- That package refused: "--timeout 23400 s outlives the custody key's default lifetime (6h)". Main's gives a pool run's custody key a longer life by itself; the branch's older package does not.
+- Nothing reached the node: no slot asked, no input sent, nothing under Monday's kept output touched.
+
+**Why I tell you more than "refused"**
+- Had the branch's package accepted the command, the run would have broken your condition "main's launcher, the tree as an input". It did not run, by luck and not by a guard.
+
+**Repair, done** [ran]
+- `PYTHONPATH` is unset. `research` resolves again to the VM's checkout of `main`, which hands over to `origin/main`'s code, as for the first run.
+- The launch command now starts with a guard: it prints the path `research` imports from and stops unless that path is outside the branch's worktree and `PYTHONPATH` is empty.
+
+**The job is otherwise as you ruled at 5:43 PM PST**
+- Same head `cb691107a07c`, same launcher checkout `7e70df68bd18`, same inputs byte for byte except `show.py` and `rewrite.sh` (the words) and the first run's record as an input for the leaf-for-leaf comparison.
+- The words hold your four points; my sentence is word for word. [ran locally on the first run's record: exit 0; exit 13 and no words when the composite file differs from the kept one]
+
+**Say "launch"** and it runs once from the repaired shell.
+
+TIMER: none
+
