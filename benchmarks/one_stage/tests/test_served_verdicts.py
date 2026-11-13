@@ -3621,9 +3621,14 @@ def test_the_preflight_refuses_pearlplus_tie_under_a_live_gate_without_main_file
 
 #: `df` on a toy filesystem: its arguments in $ORDER.df, the line under its header DF_LINE
 FAKE_DF = 'echo "$@" > "$ORDER.df"\necho "Inodes IFree Mounted on"\necho "$DF_LINE"'
-SHORT_INODES = ("PREFLIGHT: the serve dir's filesystem /workspace has 100 inodes free, 772288 short of PEARLPLUS_INODES "
-                "(772388), two commits of the tied window at three files a member: delete earlier runs' Pearl+ windows "
-                "with `research retention rm`, or set SERVE_ROOT on another filesystem")
+#: the preflight's refusal of a serve dir short of inodes: ``{short}`` short of ``{inodes}``, ``{held}`` what holds them
+SHORT_OF_INODES = ("PREFLIGHT: the serve dir's filesystem /workspace has 100 inodes free, {short} short of PEARLPLUS_INODES "
+                   "({inodes}), two commits of the tied window at three files a member. {held}. Remove enough, each with "
+                   "its retention record's owner's yes and none that a deferred V3c audit still reads: `research "
+                   "retention rm DIR --approved-by @OWNER --ref WHERE-THEY-SAID-YES` is the dry run, and `--apply` "
+                   "deletes; or set SERVE_ROOT on another filesystem")
+NONE_KEPT = "No other serve dir under {at}/root keeps a tied window (v3c-w*/window), so what holds them is elsewhere on /workspace"
+SHORT_INODES = SHORT_OF_INODES.format(short=772288, inodes=772388, held=NONE_KEPT)
 
 
 @pytest.mark.parametrize("env, df, refusal", [
@@ -3652,6 +3657,34 @@ def test_the_preflight_refuses_a_pearlplus_tie_where_the_serve_dirs_filesystem_h
         assert (rc, order) == (0, []) and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
     else:
         assert (rc, lines, order) == (3, [refusal.format(at=tmp_path)], [])
+
+
+@pytest.mark.parametrize("inodes, held", [
+    ("104", "{root}/r0/v3c-w*/window (5 entries)"),
+    ("106", "{root}/r0/v3c-w*/window (5 entries), {root}/r2/v3c-w*/window (2 entries)"),
+    ("772388", "{root}/r0/v3c-w*/window (5 entries), {root}/r2/v3c-w*/window (2 entries); together they hold 7, so 772281 "
+               "more are elsewhere on /workspace"),
+])
+def test_a_preflight_short_of_inodes_names_the_kept_tied_windows_that_hold_them_and_the_command(tmp_path, inodes, held):
+    """What fills the serve dir's filesystem is the tied windows earlier runs' serve dirs keep, three files a member.
+    So the refusal names them: each other serve dir under the serve root that keeps one, the largest first with its
+    entries, until they cover the shortfall (and how much is elsewhere when they don't), and the command that removes
+    one with its owner's yes, dry run first. The run's own serve dir and a serve dir with no tied window aren't named;
+    the window's number isn't either, which no public line says."""
+    root = tmp_path / "root"
+    for run, window, files in (("r0", "v3c-w3-4-32-4", ("a", "b", "c", "members/d")), ("r2", "v3c-w9-4-32-4", ("a", "b")),
+                               ("r1", "v3c-w7-4-32-4", ("a", "b", "c", "d", "e", "f", "g", "h"))):
+        for f in files:
+            (root / run / window / "window" / f).parent.mkdir(parents=True, exist_ok=True)
+            (root / run / window / "window" / f).write_text("")
+    (root / "r3" / "pearlplus").mkdir(parents=True)
+    _script(tmp_path / "bin" / "df", FAKE_DF)
+    rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", D=str(root / "r1"),
+                                     DF_LINE="2000000 100 /workspace", PEARLPLUS_INODES=inodes, **PEARL_TIED)
+    said = SHORT_OF_INODES.format(short=int(inodes) - 100, inodes=inodes, held=(
+        f"Other serve dirs' tied windows under {root} hold them, the largest first: " + held.format(root=root)))
+    assert (rc, lines, order) == (3, [said], [])
 
 
 TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}

@@ -295,7 +295,8 @@
 # --prefix-caching: a hit leaves rows of a prompt uncomputed where the cut circuit reads Pearl+'s tables), a
 # certifier front (its group closes into a window of its own), and a serve dir whose filesystem has fewer than
 # PEARLPLUS_INODES inodes free (default 772388, two commits of the tied window at the class of record, three files a
-# member; 0 checks none), naming the shortfall; earlier runs' Pearl+ windows are deleted with `research retention rm`. Step
+# member; 0 checks none), naming the shortfall, the tied windows the serve root's other serve dirs keep that hold it
+# (the largest first, with their entries) and the command that removes one (`research retention rm`). Step
 # 3's window circuit at each class is the one cut at Pearl+'s linears (`window-circuit --pearl-tables`), the verifier's
 # own record of the circuit the window is committed as. The same record at V3C_CLASS is built before serve-openai starts,
 # under the lease, from what its serve.json will record of φ on this card (`prove_path.py serve-phi`, then `class-circuit`,
@@ -522,6 +523,20 @@ NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/
 short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
   [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
   echo "this node has $NODE_MEM_GB GB, under the $V3C_AUDIT_MEM_GB GB V3c's audit needs (V3C_AUDIT_MEM_GB)"
+}
+kept_windows() {  # the tied windows the serve root's other serve dirs keep, the largest first, until they hold $1 entries:
+  # KEPT names each (its serve dir's v3c-w*/window, with its entries) and KEPT_N is their entries; empty and 0 for none
+  local need=$1 n r
+  KEPT='' KEPT_N=0
+  while read -r n r; do
+    KEPT+=${KEPT:+, }"$r/v3c-w*/window ($n entries)" KEPT_N=$((KEPT_N + n))
+    [ "$KEPT_N" -lt "$need" ] || break
+  done < <(for r in "$ROOT"/*/; do
+    r=${r%/}
+    [ "$r" != "$D" ] || continue
+    n=$(find "$r"/v3c-w*/window -mindepth 1 2> /dev/null | wc -l)
+    [ "$n" = 0 ] || echo "$n $r"
+  done | sort -rn)
 }
 # V3c's audit's coins (`v3c_audit`, records_audit's --challenger): V3C_CHALLENGER, by default sampled proofs' PP_CHALLENGER,
 # on the gate with its peer V3C_PEER (default PP_PEER: the node the audit runs on, as the gate's /etc/vy/peers names it,
@@ -1486,8 +1501,17 @@ else
     [[ ${itotal:-} =~ ^[0-9]+$ && ${ifree:-} =~ ^[0-9]+$ && $PEARLPLUS_INODES =~ ^[0-9]+$ ]] \
       || { say "PREFLIGHT: the serve dir's free inodes can't be held to PEARLPLUS_INODES ($PEARLPLUS_INODES): df says ${ifree:-nothing} free of ${itotal:-nothing} on $at"; exit 3; }
     # a filesystem with no inode table (none in all) makes its inodes as it needs them
-    [ "$itotal" = 0 ] || [ "$ifree" -ge "$PEARLPLUS_INODES" ] \
-      || { say "PREFLIGHT: the serve dir's filesystem $fs has $ifree inodes free, $((PEARLPLUS_INODES - ifree)) short of PEARLPLUS_INODES ($PEARLPLUS_INODES), two commits of the tied window at three files a member: delete earlier runs' Pearl+ windows with \`research retention rm\`, or set SERVE_ROOT on another filesystem"; exit 3; }
+    if [ "$itotal" != 0 ] && [ "$ifree" -lt "$PEARLPLUS_INODES" ]; then
+      short=$((PEARLPLUS_INODES - ifree))
+      kept_windows "$short"
+      if [ -z "$KEPT" ]; then held="No other serve dir under $ROOT keeps a tied window (v3c-w*/window), so what holds them is elsewhere on $fs"
+      else
+        held="Other serve dirs' tied windows under $ROOT hold them, the largest first: $KEPT"
+        [ "$KEPT_N" -ge "$short" ] || held+="; together they hold $KEPT_N, so $((short - KEPT_N)) more are elsewhere on $fs"
+      fi
+      say "PREFLIGHT: the serve dir's filesystem $fs has $ifree inodes free, $short short of PEARLPLUS_INODES ($PEARLPLUS_INODES), two commits of the tied window at three files a member. $held. Remove enough, each with its retention record's owner's yes and none that a deferred V3c audit still reads: \`research retention rm DIR --approved-by @OWNER --ref WHERE-THEY-SAID-YES\` is the dry run, and \`--apply\` deletes; or set SERVE_ROOT on another filesystem"
+      exit 3
+    fi
   fi
   [ "$COMPOSE_OFF_NODE" = 0 ] || [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
     || { say "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, or COMPOSE_OFF_NODE=0 for a development composite here"; exit 3; }
