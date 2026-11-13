@@ -32,7 +32,7 @@ theorem bitsOf_extract_prefix (b : ByteArray) (n : ℕ) :
     rw [Verity.Sampled.bitsOf_append]
     exact List.prefix_append _ _
   · rw [extract_of_size_le (by omega)]
-    exact List.prefix_refl _
+    all_goals exact List.prefix_refl _
 
 /-- **A draw's read holds its coins**: where `drawCoins` reads coins `ξ` from coin evidence `coins` under a key, a
 window, family `label` after `after`, and the read of its session's log lines places them (`readLog`), the read's

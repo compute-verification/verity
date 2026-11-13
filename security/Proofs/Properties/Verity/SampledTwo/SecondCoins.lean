@@ -143,25 +143,29 @@ theorem stageCoinsOf_src {h : SpotFlock.Held} {b : ByteArray} {cs : SpotFlock.St
 theorem groupOf_second {A : Live₂} {n : ℕ} (h : groupOf A n = .second) : ∃ j, n = j + 1 ∧ j < A.h.stage := by
   unfold groupOf at h
   split_ifs at h with h0 h1
-  · cases h
-  · exact ⟨n - 1, by omega, by omega⟩
-  all_goals cases h
+  all_goals first
+    | exact ⟨n - 1, by omega, by omega⟩
+    | cases h
 
 theorem formReading_coin_second {A : Live₂} {C : CaseOf} {S : SessionReading}
     {dev : List Verity.Release → ℕ → Option FlockDeploy.Coin} {o : Verity.Exchange} {j : ℕ} (hj : j < A.h.stage) :
     (formReading A C S dev).coin o (j + 1) = (inputOn C o).bind fun i => i.interior.bind fun it =>
       (stageCoinsOf A.h it.source).map fun cs => cs ⟨j, hj⟩ := by
-  show (if j + 1 = 0 then _ else if hn : j + 1 - 1 < A.h.stage then _ else _) = _
-  rw [if_neg (Nat.succ_ne_zero j), dif_pos (show j + 1 - 1 < A.h.stage from hj)]
-  try rfl
+  have h0 : j + 1 ≠ 0 := Nat.succ_ne_zero j
+  first
+    | (simp only [formReading, if_neg h0, Nat.add_sub_cancel, dif_pos hj]; done)
+    | (simp [formReading, hj]; done)
 
 theorem formReading_agree_second {A : Live₂} {C : CaseOf} {S : SessionReading}
     {dev : List Verity.Release → ℕ → Option FlockDeploy.Coin} {o : Verity.Exchange} {j : ℕ} (hj : j < A.h.stage)
     (c c' : FlockDeploy.Coin) :
     (formReading A C S dev).agree o (j + 1) c c' ↔
       ∃ i it, inputOn C o = some i ∧ i.interior = some it ∧ prefixAgree (stageWidth it.source j) c c' := by
-  show (if j + 1 = 0 then _ else if j + 1 ≤ A.h.stage then _ else _) ↔ _
-  rw [if_neg (Nat.succ_ne_zero j), if_pos (show j + 1 ≤ A.h.stage from hj), Nat.add_sub_cancel]
+  have h0 : j + 1 ≠ 0 := Nat.succ_ne_zero j
+  have h1 : j + 1 ≤ A.h.stage := hj
+  first
+    | (simp only [formReading, if_neg h0, if_pos h1, Nat.add_sub_cancel]; done)
+    | (simp [formReading, h1]; done)
 
 /-- **The second stage's coins are the device's**: on a play the form accepts whose log is the device's, the reading's
 coin for each round of the second stage agrees, on the second stage's bytes of it, with every coin the device's release
