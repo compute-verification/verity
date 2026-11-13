@@ -158000,3 +158000,36 @@ I give the count of finders done and the day in the entry after the search picke
   played outcome taken by `choose`, since no function plays a transcript whose steps carry their types).
 - On PRF-490, for the other worker: `plurSL`, `plurCL`, `plurS` and `plurC` are `plurSZ`'s definition at four more
   finders; `plurSL` is read by the two `flock_verify_sound` statements.
+
+## ADDRWC, Fri 13 Nov 19:32Z: `gatesRefine_check` IS A THEOREM AND ITS PULL REQUEST IS OPEN, UNMARKED: #9803, head `da88e9dd2ccfa998e3fe169ddfe922fadc9de831`, on `cursor/proofs-addrwc-gatesrefine-163f`. It elaborates with the three axioms only. It has NO RECORD, because it is not a listed guarantee. Two things for network's tie below. L1's #9792 is unchanged at `7daf00f8e7d2`, its two suites runs still going, none red
+
+Started after #9792 was open (18:58Z), as ordered. Body: `Lane proofs`, `Refs PRF-616`.
+
+### Established
+
+- **The theorem** [run: `verity lean try` on vy-nebius-2, `Deployed.lean` run `r20261113-190704-e50f`, `Binding.lean` at the head run `r20261113-192602-d2e9`; each lean exit 0]: `Accounting.ReadUnit.gatesRefine_check` in `security/Proofs/Accounting/ReadUnit/Binding.lean`. From `parseTmpl … = .ok ct`, `ct.tmpl = some tu`, `Flock.ReadNet.check V H tu.t = true`, `ct.outNet = ct.unitNet`, any `hB`, any `n`, `consts` with unit `u`'s constant `some true`, and a copy `j`: `GatesRefine Verity.sha512 Verity.sha512 Flock.Hm96.Default512.key.data.toList consts (partsOf (.tmpl ct) hB n) u (portsAt (.tmpl ct) hB n u hj V H)`. Two differences from the statement in my 16:25Z entry, both making it stronger: `hB` is any proof of `Built`, not `unrolled_built hparse`; `hone` is asked at the one unit `u`, not at every unit.
+- **Axioms** [run: the probe's lines]: `gatesRefine_check` and its helper `Gates.gatesRefine_layout` each `[propext, Classical.choice, Quot.sound]`.
+- **No name clash** [run: `verity lean try --siblings`, `r20261113-191158-d76f`]: 3217 built modules of the package imported beside it, none declares a name it does; 832 unchecked for want of a build. [script: `rg` over every `.lean`] no other declaration of either name.
+- **One helper, not zero**: `gatesRefine_layout` in `Deployed.lean`, `gatesRefine_partsOf` with its two layout premises discharged for one copy. The first try (`r20261113-190137-192c`) failed: at `.tmpl ct`, `omega` sees the unit's `nIn` and `nComp` as two atoms each. Over any descriptor it closes, as in `readUnitDrawn_layout`.
+- **The Lean tree's invariants** [run, on my machine: `tests/test_lean_packages.py`, `tests/lint/test_lean_bar.py`, `tests/test_lean_vocabulary.py`]: 58 passed; no warning names these files.
+- **A red team of the statement, by a subagent I launched, reading only** (not an agent of another lane): no attack on the statement held. Four docstring corrections, all made (second commit). The rest is the next section.
+
+### Two things network's tie needs to know
+
+1. **The theorem is at a templated statement only, and the committed files' circuit never is one** [read]. It is at `.tmpl ct`, read by `parseTmpl`, as `TableReadBinding` is. `circuitOfFile` and `partsOfFile` (`security/Properties/Flock/Circuit/CircuitOf.lean:133-172`) read through `Flock.Bridge.parsedOf`, which calls `Flock.Desc.parse`, which gives only `.single c` (`Flock/Desc.lean:41-44`). [script: `rg` for `Desc.parseStmt|\.tmpl` in `security/Properties` and `security/Definitions`: no hit.] So a tie stated at the committed files' circuit cannot take this theorem, or `TableReadBinding`, as they stand. Clause (i) of the tie in my 16:25Z entry ("units of one parsed circuit file `ct`") has to say `parseTmpl`, and a bridge from `circuitOfFile` to a templated statement's circuit is in no file I found. The V5 statements take `Desc.parseStmt` (`security/Proofs/Flock/Bridge/V5/Statement.lean:79`) and can be at `.tmpl` [read by the red team; I read line 79 only].
+2. **At these ports `GatesRefine` asks only the verdict's gate committed** [read: `gatesRefine_partsOf`'s proof, `copyGate_input`]. The root's and the domain id's gates are the copy's inputs, outside the unit, so `root_committed` and `domain_committed` hold with nothing to show. That is the definition's own reading (`localEval` needs nothing of gates outside the unit), and the docstring now says it.
+
+### A correction to my 16:25Z entry
+
+- I said a listed form needs both witnesses and a day more. **Not established.** `witness_scope` (`tools/verity/lean/check.py:2012`) holds a guarantee to witnesses when it is a listed property of an acceptance, reads a `Claims` module or `Properties.Verity`, or reads a function whose name starts with `accept` or `verify` (`VERIFIER_PREFIXES`). `Flock.ReadNet.check` starts with neither, so my reason was wrong. `BindsAt` reads `Verity.Game.draw` of `Properties.Verity.Game`, which is in that rule's `SCOPE_MODULES`, and that may be why `TableReadBinding` has witnesses [derived, not traced]. Whether a listed gates statement is held to them depends on which modules its statement reads, and I have not run it. If it is not, the listed form is a named `Prop` in the spec, its one-line proof and one record.
+
+### Not established
+
+- **"Its record"**: there is none. The lock's `guarantees` holds guarantees and their witnesses, "never another lemma" (`tools/verity/lean/README.md`). You ruled at 17:19Z that without network's word it is the theorem; if you want a record, say so and I list it in a second pull request.
+- No records run and no full `check.py`: check 3 of "proved" does not hold. That no record moves is by reading: the change adds two theorems and no definition.
+- Whether some file satisfies the four hypotheses together: no Lean witness exists; `test_a_served_read_holds_the_read_template` exercises them outside Lean [the red team's reading; I did not run it].
+- L1, #9792: that the changed suites pass at its head. First run (`r20261113-171916-e22e`, before the row): 67 of 76 passed, none failed; the nine left are `research`, `circuit-check`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity-core-evaluate`, `verity/definitions`, `verity-flock`, `verity-numerical`. Second run (`r20261113-185310-3a57`, at the head, 78 suites): 16 passed, none failed.
+
+`main`'s tip at 19:31Z: `f479876a8758` [run: `git ls-remote`]; what it added since each branch's base touches no file of either [script].
+
+To post: nothing. Runs going on: L1's two suites runs; the changed suites for #9803 (`r20261113-193050-3c00`, 4 suites). Next entry by 20:32Z, sooner when a suites run ends.
