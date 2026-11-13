@@ -26,3 +26,20 @@ units, 108 templates, as REQBLOCK's).
 - B1 `r20261113-091616-0dbd`: census at 4 and 5 sets, 43 ids, 4 layers; the join test with `--runxfail`; the three
   test files with the hunk.
 - B2 `r20261113-091646-4d44`: `values_run_join.py --ids 43 --layers 4`, with the read's plant.
+
+## Results
+
+- A: 33 passed, 1 xfailed (the join test, strict, on the chunk refusal), at 95784be3 without the hunk.
+- B1, 4 sets: digest `3ee9420daaf7545f...`, 5,191,393 units, 108 templates (REQBLOCK's window, unchanged by the hunk).
+- B1, 5 sets, 43 ids, 4 layers: digest `544b577a749a2da7...`, 5,190,049 units, 109 templates, 13,268 wire patterns,
+  unlowered StopCheck 1, TokenSelect 2; free words TokenSelect 64, peers 17,302,208, prompt 2,752, weights 322,961,408;
+  EmbeddingShard free 0. Against the 4-set window: +1,408 reads, combine at the site 2,752 SIZE=96 units -> 1,376
+  SIZE=192 (-1,376), gathers -1,376 (AllGather{WORLD=2,N=96} -1,376 and {WORLD=64,N=96} -43 at multimem sites, +43
+  elsewhere). The lead's 5,192,801 assumed the combine unchanged: 5,192,801 - 5,190,049 = 2,752.
+- B1: join test passed with `--runxfail`; embed, multimem and sparse files 33 passed with the hunk.
+- B2: window 544b577a both ways; 42,745 checked, 0 mismatches, unchecked_unevaluated []; the read 1,024 checked of
+  1,408, 0 mismatches, 32 vocab tables committed; the combine SIZE=192 1,024 checked of 2,752, 0 mismatches. Plant
+  (prefill block 1, units [43, 86), over block 0's table): 30 sampled planted units, 30 mismatches.
+- C, 78 layers, 5 sets: digest `250d8e5dd1e77b75...`, 124,207,357 units, 109 templates, 946,128 wire patterns, unlowered
+  StopCheck 1, TokenSelect 2; free words TokenSelect 64, peers 297,370,304, prompt 2,752, weights 6,297,747,456; 725 s,
+  13.9 GiB.
