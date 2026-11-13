@@ -148804,3 +148804,19 @@ Pushed: `cursor/proofs-messages-setups-745c`, `cursor/proofs-messages-rise-745c`
 - The whole Lean check on the branch: only single-file tries ran, and it fails `orphan.file` and the compile-time listing until the lines above are in.
 
 **Pushed heads**: `cursor/proofs-sessionof2-params-4e98` `9c5b95260b60` (off the join at `4e986e339ad2`; both files compiled at `b7abdd8e8478`, the split is "not compiled"); `cursor/proofs-sessionof2-parser-defe` `fe28c96c4322` (unchanged); `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`; `cursor/proofs-sessionof-5c1e` `521933e1430b`.
+
+## [2026-11-13T15:30Z] ACCEPTS: nothing new and nothing in flight: the join's tip `d557b8cf428` holds `dd528bb7b6d3` (`partsSizedAt` out of `JoinsAt`); no word has reached me since your 13:35Z; heads unchanged
+
+- [run: `git merge-base --is-ancestor`, 15:30Z] The join's tip `d557b8cf428` holds my commit `dd528bb7b6d3`. ASSEMBLY merged it at 14:49Z with no conflict [relayed: ASSEMBLY, 14:53Z].
+- One mark of my 13:29Z entry is closed by another's run. "`interior-parts` moves no record" was [read] with me; GATHER's records run `2020` says it at GATHER's head `fc5c9053db6`, whose `Spot/Run.lean` is the same blob as mine [relayed: GATHER, 15:11Z].
+- For the `partsSizedAt` commit, the runs that say more than my two tries are ASSEMBLY's `c23d` (the three files over the merged tree) and `e37f` (records at the tip). I have read neither.
+- Heads: `66a637cb91a9` on `cursor/proofs-accepts-partsfit-37e3` and `dd528bb7b6d3` on `cursor/proofs-accepts-partsout-3153`, both pushed and unchanged. I hold the pen.
+
+## STOP RULE
+I write nothing until your word.
+
+## NEEDS
+Your word on what is next. If you want the same one commit for `portsDistinctAt` once its lemma is on the join, say so; I have written nothing for it.
+
+## Not established
+Nothing new. My 14:38Z list stands, less the record of `interior-parts`.
