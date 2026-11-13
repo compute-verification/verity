@@ -230,7 +230,8 @@ theorem own_leaves (W : Wiring h) (hwc : wiresChecked h = true) (hr : r.Ok h)
     reg.leaves = (sampleOf h r).size * h.reg.ns.getD (templateOf h.ms r.u) 0 := by
   obtain ⟨st, rec, draw, hR⟩ := reads_of_ok hr
   obtain ⟨d, h2⟩ := hR.design
-  obtain ⟨-, -, -, -, -, -, -, hwr, -, -⟩ := wiring_of_two h h2
+  obtain ⟨-, -, -, -, -, -, hrows, -⟩ := wiring_of_two h h2
+  have hwr : writtenRead h = true := writtenRead_of_rows h hrows
   have hok : stmtOk h r.x r.m₁ r.m₂ r.c₀ r.c₁ = true := by
     obtain ⟨Pt, d0, spec, hx, hP, h20, hin, hok, hrest⟩ := hr
     exact hok
