@@ -141370,3 +141370,34 @@ With step 3 left out the tile takes 5 mends a planted group-word, its dead pairs
 - Whether the same two moves reopen the dead-pair class of review 1 (entries off-centre on B there too). Not run.
 
 Mailbox read at 12:33Z.
+
+## FIRSTACCEPT, Fri 12:44Z: no word of your 14:00Z line is wrong; the tables are fed before any planned blob, so they are settled before the first session; the interface's stream compiles with `run_accept` proved, and SPOT's stream's definitions compile
+
+Nothing here says a listed guarantee is false or empty.
+
+**Your 14:00Z line.** "About 155 GB and about 8 to 16 hours for the streamed main on Thursday's window, derived from rates measured on stand-ins, nothing compiled": no word is wrong [read, my 12:17Z entry]. "Nothing compiled" is still true of the streamed main: the interface's part compiles now (below), and SPOT's stream has no proof yet.
+
+**The base.** The draft is on `ad3efc0ca19`, MEMBERS's switch head at 12:25Z, which holds `10948fd9d3a` [run: `git merge-base --is-ancestor`]. I move to the head MEMBERS names next.
+
+**The pinned tables, before the first session** [read, derived]. They are settled by feeding them first, not from the plan's digests. The plan cannot know them: which of the four tables a caller feeds is a fact of the feed. Three things fix it:
+- `Stream.Fed` puts every table before the first planned blob, and `Stream.feed` refuses a table that comes after one.
+- SPOT's plan refuses a pinned table's digest (`distinctFrom`), so no planned blob is a table.
+- So from the first circuit file on, the tables the stream holds are every table the feed holds. `tablesOf` on the blobs the stream holds equals `tablesOf` on all the blobs fed, at every step.
+
+MEMBERS's new check runs `tablesHeld` at each template's member. In the stream it runs on the blobs held, and `tablesHeld` reads only `tablesOf` and the member's circuit file, which is open. So it decides there what it decides on all the blobs. `run_accept` goes through unchanged: it is the interface's, proved once for every stream, and reads only `Sound`. The new check adds one more equal call to what SPOT's `Sound` proof shows, of the same lemma.
+
+**Your rulings, as I take them.** `plan` and `check-stream` go into the mains as the draft's last commit, after SPOT's `Sound` is proved: `run_accept` at SPOT's protocol takes `Sound` as its hypothesis. `run_accept` at `VStarRecursive.Sampled`'s protocol is stated in `security/Properties` in the draft.
+
+**The draft** (`cursor/proofs-firstaccept-streamed-5a1e`) [run]:
+- `CoreProtocol/Stream.lean`, new, compiles (run `r20261113-122510-e417` and later). `Stream`, `Fed`, `feed`, `close`, `run`, `files` (the IO loop, one blob in memory), `StreamProtocol`, `Sound`, `decode`, `main` (`plan`, `check-stream`, else `BlobProtocol.main`). Proved: `run_fed`, `run_eq` (refused, or `checkBlobs`' outcome on the blobs fed), `run_accept`, and `whole_finish` (a stream that keeps every blob is its check on them). Axioms: `propext` and `Quot.sound` only.
+- `Spot/OneStageZkStream.lean`, new, about 390 lines; its definitions compile (run `r20261113-123616-f792`). `planOf`, `State`, `step`, `finish`, `StepKept` (a session's verdict split at the coin-tree key's freshness), `SessionKept`, `keepAll`, `stream`, `protocol`, and `StreamSound := protocol.Sound`, stated and not proved. Proved: `keepAll_sound`, `Sound` for every form but the per-member one. Axioms: `propext`, `Classical.choice`, `Quot.sound`.
+- One design change since 12:17Z. The step computes each member's files and each session on a `Core.Blobs` of the blobs it holds at that moment, calling the existing `fileOf`, `Member.filesOn`, `rootBTables`, `sessionEvidence` and `StepAt.step` unchanged. So there are no bytes-taking copies of them. The proof needs one lemma instead: `Blobs.get` on the blobs held equals `Blobs.get` on all the blobs fed, for every digest the plan puts in the group. The planned digests are distinct, so this holds. That should take SPOT's part from about 700 lines to about 500.
+- `planOf` is rewritten as plain functions, without `for` loops, so the proof can follow it group by group. It compiles (run `r20261113-124036-2684`).
+
+**Not established**
+- `StreamSound` is not proved. Nothing yet shows that SPOT's stream decides what `checkBlobs` decides.
+- The `plan` and `check-stream` commands have never run on a case.
+- The plan refuses parameters that name one file twice in two roles, for example two members with byte-identical public files. I have not checked whether Thursday's window has any.
+- Everything in my 12:17Z entry's list.
+
+Next: the proof of `StreamSound`, starting with the blobs-held lemma, then the group fold. After that, the `security/Properties` statement, and the mains last.
