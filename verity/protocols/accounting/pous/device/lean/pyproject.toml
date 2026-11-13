@@ -32,5 +32,5 @@ inputs = ["verity/protocols/proofs/flock/verifier/Flock", "verity/protocols/proo
           "verity/commitments/randomness", "verity/commitments/lms/lean", "verity/commitments/attest/lean",
           "verity/protocols/interface",
           "verity/circuits/difftest", "verity/protocols/accounting/pous/verifier/tests/pous_test_signer.py",
-          "verity/__init__.py", "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/commitments/attest/__init__.py",
+          "verity/__init__.py", "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/commitments/attest/__init__.py",
           "verity/protocols/accounting/pous/__init__.py", "verity/protocols/accounting/pous/device/__init__.py"]

@@ -18,7 +18,7 @@ from verity.protocols.accounting.pouw.verifier.receipts import receipt_folds as 
 
 HERE = Path(__file__).resolve().parent
 #: the repository's root, the one path entry a reader in the workspace has
-REPO = HERE.parents[5]
+REPO = HERE.parents[6]
 
 #: the sha256 of the r9 folds' reference twin, receipt_folds_r9.py
 P2FF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"
