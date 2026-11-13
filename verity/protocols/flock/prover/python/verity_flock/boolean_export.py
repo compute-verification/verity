@@ -172,7 +172,7 @@ def table_gates(table: str) -> dict:
     (they are its constant); a program table's every bit does. The table is constants in the XOR sums."""
     if table not in _TABLE_GATES:
         import numpy as np
-        from verity.definitions.circuits import library
+        from verity.circuits import library
 
         n, width = TP.TABLE_BITS[table], TP.TABLE_VALUE_BITS.get(table, TP.VALUE_BITS)
         words = np.asarray(gf2.table(table), dtype=np.uint32)
@@ -240,7 +240,7 @@ class CircuitTypeTable:
     def type_of(self, build, name: str, kind: str, label: str | None = None, circuit: Circuit | None = None) -> str:
         """The type of the circuit ``build()`` makes, and every type below it: validated, the root evaluated against the flat
         circuit (``circuit``, one ``build()`` made already, else built here). Returns the root's digest."""
-        from verity.definitions.circuits import library
+        from verity.circuits import library
 
         _patch()
         types, root, names = TT.trace_types(build, label or library.PROGRAM)
@@ -485,7 +485,7 @@ class Walker:
                     acc = C.input("in32", 32)
                     C.output("out0", fp.tc_dot16(C, acc, a, b, groups=groups, W=W, F=F))
                     return C
-            from verity.definitions.circuits import library
+            from verity.circuits import library
 
             self.cache[key] = self.reg.type_of(build, f"tensor-core k-step unit ({pid}, total)", "tc-step", library.definition_label(pid))
             gc.collect()
@@ -1536,7 +1536,7 @@ def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> d
 
 
 def _library_digest() -> str:
-    from verity.definitions.circuits import library
+    from verity.circuits import library
 
     return library.digest()
 
