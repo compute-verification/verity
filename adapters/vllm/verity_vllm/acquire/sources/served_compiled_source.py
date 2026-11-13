@@ -625,7 +625,7 @@ def _committed(committer: Any, step: int, name: str) -> torch.Tensor | None:
     return raw.cpu().clone().view(dtype).reshape(meta.shape)
 
 
-def linkage(committer: Any, ids_name: str = "c00.input/ids", sampled_name: str = "runner.sampler/sampled_token_ids") -> dict[str, Any]:
+def linkage(committer: Any) -> dict[str, Any]:
     """For every request that decodes at two consecutive engine steps, the token id committed as step s+1's input equals the token
     committed as step s's sample.  Read from the committed bytes (a stale or misplaced slot read fails here)."""
     rows = getattr(committer, "step_rows", {}) or {}
@@ -634,7 +634,7 @@ def linkage(committer: Any, ids_name: str = "c00.input/ids", sampled_name: str =
         nxt = rows.get(s + 1)
         if not nxt:
             continue
-        sampled, ids = _committed(committer, s, sampled_name), _committed(committer, s + 1, ids_name)
+        sampled, ids = _committed(committer, s, "runner.sampler/sampled_token_ids"), _committed(committer, s + 1, "c00.input/ids")
         if sampled is None or ids is None:
             continue
         sampled = sampled.reshape(-1)

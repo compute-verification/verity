@@ -8,14 +8,14 @@ the circuit back.
     - the unit circuit is a `compact_stage.CompactCircuit`: its ANDs' operands go to a spool under ``scratch`` as int32, and
       `compact_stage.layout` lays it out from there (a circuit it does not take gets the library's lists back, and the
       layout below). `compact_stage.lower` lowers into it, dropping each IR wire after its last read
-    - a stager with ``circuit`` has `circuit.compose_to` stream the netlist into its file (`ir_lower.netlist_pieces`, a
+    - a stager with ``circuit`` has `circuit.compose_to` stream the unit's description into its file (`ir_lower.netlist_pieces`, a
       spooled unit's rendered from its spool as below); one without it (`stage_unit`'s):
-      the unit's netlist (`ir_lower.netlist`'s text) is rendered once for its hash and once into circuit.txt: `compose`
+      the unit's description (`ir_lower.netlist`'s text) is rendered once for its hash and once into circuit.txt: `compose`
       builds it as one string, which `Lowering.sha256_of` hashes with the LEAVES and CUT lines. `compose` gets in its
-      place a string of as many newlines (and `sha256_of` the netlist's hash), and the circuit text it returns stands for
-      that text with the netlist in the newlines' place: its digests (`circuit.digest`, `circuit.class_digest`) and
+      place a string of as many newlines (and `sha256_of` the description's hash), and the circuit text it returns stands for
+      that text with the description in the newlines' place: its digests (`circuit.digest`, `circuit.class_digest`) and
       circuit.txt are streamed from the parts, both digests in the pass that writes the file, which checks that the
-      netlist it renders has the hash `compose` took. A unit not laid out from a spool has its netlist written to a file
+      description it renders has the hash `compose` took. A unit not laid out from a spool has its description written to a file
       under ``scratch`` instead, hashed as it is written
     - any other text's SHA-512 / SHA-256 goes in pieces of 64 Mi characters, each computed once
     - such a unit's layout (`ands_layout`) sorts each form's columns in one call, and `ir_lower.evaluate_layout` XORs a
@@ -52,10 +52,9 @@ _lowering: list = []
 _composed: list = []
 
 
-def _update(h, text: str, start: int = 0, stop: int | None = None):
-    stop = len(text) if stop is None else stop
-    for i in range(start, stop, CHUNK):
-        h.update(text[i:min(i + CHUNK, stop)].encode())
+def _update(h, text: str, start: int = 0):
+    for i in range(start, len(text), CHUNK):
+        h.update(text[i:i + CHUNK].encode())
     return h
 
 
@@ -93,7 +92,7 @@ def _stream(text: str, out=None) -> dict:
             for b in s["pieces"]():
                 put(b, net=True)
             if h_net.hexdigest() != s["sha256"].hexdigest():
-                raise AssertionError("fast_stage: the unit's netlist rendered for circuit.txt is not the one compose hashed")
+                raise AssertionError("fast_stage: the unit's description rendered for circuit.txt is not the one compose hashed")
         else:
             with open(s["path"], "rb") as f:
                 while b := f.read(CHUNK):
@@ -130,7 +129,7 @@ def sha256(text: str) -> str:
     return _update(hashlib.sha256(), text).hexdigest()
 
 
-def _netlist(lay, name: str):
+def _description(lay, name: str):
     """`ir_lower.netlist(lay, name)`'s text in pieces."""
     head = [IL.FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
@@ -149,7 +148,7 @@ def _netlist(lay, name: str):
 
 
 def _unit(lay, name: str) -> dict:
-    """The unit's expanded netlist, written once to a scratch file (a `compact_stage.CompactLayout`'s: rendered, and
+    """The unit's expanded description, written once to a scratch file (a `compact_stage.CompactLayout`'s: rendered, and
     rendered again for circuit.txt): its path (or pieces), newlines, bytes and sha256 state."""
     e = _units.get((id(lay), name))
     if (e is None or e["lay"] is not lay) and isinstance(lay, CST.CompactLayout):
@@ -160,10 +159,10 @@ def _unit(lay, name: str) -> dict:
         e = _units[(id(lay), name)] = {"lay": lay, "path": None, "pieces": lambda: lay.pieces(name), "newlines": lay.n_rows + 1,
                                        "bytes": size, "sha256": h}
     elif e is None or e["lay"] is not lay:
-        path = _scratch[0] / f".unit-{len(_units)}.netlist"
+        path = _scratch[0] / f".unit-{len(_units)}.description"
         h, n, size = hashlib.sha256(), 0, 0
         with open(path, "wb") as f:
-            for piece in _netlist(lay, name):
+            for piece in _description(lay, name):
                 b = piece.encode()
                 h.update(b)
                 f.write(b)
@@ -190,7 +189,7 @@ def _lowering_sha256(self) -> str:
 
 
 def _lowering_sha256_of(self, expanded: str) -> str:
-    """`ir_lower.Lowering.sha256_of`, whose ``expanded`` is the newlines `compose` got in the unit netlist's place."""
+    """`ir_lower.Lowering.sha256_of`, whose ``expanded`` is the newlines `compose` got in the unit description's place."""
     return self.sha256
 
 
@@ -295,7 +294,7 @@ def evaluate_layout(lay, ports, T, flip=None):
 
 
 def install(scratch: Path) -> None:
-    """Patch the library for this process; the unit's netlist goes under ``scratch`` until `release`. The slot circuits'
+    """Patch the library for this process; the unit's description goes under ``scratch`` until `release`. The slot circuits'
     caches (`cache_slot_circuits`) go first, so these wrap them."""
     gc.disable()
     scratch.mkdir(parents=True, exist_ok=True)
@@ -303,11 +302,11 @@ def install(scratch: Path) -> None:
     CST.set_root(scratch)
     CS.cache_slot_circuits()
     new, lower, layout, expanded = forms.Circuit._new, IL.lower, IL.layout, FC._expanded
-    unit_lowering, compose, write_text, netlist_pieces = CS.unit_lowering, FC.compose, Path.write_text, IL.netlist_pieces
+    unit_lowering, compose, write_text, library_pieces = CS.unit_lowering, FC.compose, Path.write_text, IL.netlist_pieces
 
-    def netlist_pieces_(lay, name, cut=None, leaves=None):
+    def pieces_(lay, name, cut=None, leaves=None):
         if not isinstance(lay, CST.CompactLayout):
-            return netlist_pieces(lay, name, cut, leaves)
+            return library_pieces(lay, name, cut, leaves)
         return itertools.chain((bytes(b).decode() for b in lay.pieces(name)), [IL.netlist_pins(cut, leaves)])
 
     def new_(self, kind, data):
@@ -360,7 +359,7 @@ def install(scratch: Path) -> None:
             mark = f"CIRCUIT unit {e['newlines']}\n"
             at = j + len(mark)
             if text[j:at] != mark or text[at:at + e["newlines"]] != "\n" * e["newlines"] or not text.startswith("CIRCUIT ", at + e["newlines"]):
-                raise AssertionError("compose: the unit's netlist is not where fast_stage put it")
+                raise AssertionError("compose: the unit's description is not where fast_stage put it")
             _streams[id(text)] = {"text": text, "at": at, "newlines": e["newlines"], "path": e["path"], "pieces": e.get("pieces"),
                                   "sha256": e["sha256"], "bytes": len(text) - e["newlines"] + e["bytes"]}
         _composed[:] = [text]
@@ -383,10 +382,10 @@ def install(scratch: Path) -> None:
     forms.Circuit._new = new_
     CS._UnitCircuit = CST.CompactCircuit
     CS.unit_lowering, IL.lower, IL.layout, FC._expanded, FC.compose = unit_lowering_, lower_, layout_, expanded_, compose_
-    IL.netlist_pieces = netlist_pieces_
+    IL.netlist_pieces = pieces_
     Path.write_text = write_text_
     IL.digest, FC.digest, FC.class_digest = sha256, digest, class_digest
-    # a structural unit (`class_statement.TmplLowering`) has no netlist: its unit_sha256 stays the library's, over its template
+    # a structural unit (`class_statement.TmplLowering`) has no description: its unit_sha256 stays the library's, over its template
     CS.TmplLowering.sha256_of = IL.Lowering.sha256_of
     IL.Lowering.sha256, IL.Lowering.sha256_of = property(_lowering_sha256), _lowering_sha256_of
     IL.evaluate_layout = evaluate_layout
@@ -404,7 +403,7 @@ def size(text: str) -> int:
 
 
 def release() -> None:
-    """Drop the composed text, its digests and the unit's scratch netlist and spool."""
+    """Drop the composed text, its digests and the unit's scratch description and spool."""
     for e in _units.values():
         if e["path"] is not None:
             e["path"].unlink(missing_ok=True)

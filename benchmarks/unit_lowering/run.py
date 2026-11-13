@@ -119,7 +119,7 @@ def _is_assert(line: bytes, row: int, const: int) -> bool:
     return t[la + 1:] == [b"1", b"%d" % const] and b"%d" % row in t[1:la + 1]
 
 
-def _netlist(f, lines: int) -> dict:
+def _section(f, lines: int) -> dict:
     """A ``flock-ir-unit/v2`` section's rows and AND rows: the rows between its input groups and its output groups (`ir_lower.layout`:
     the ANDs and table reads, the assertions, then forced-zero rows up to the first output group), less forced-zero rows and
     assertions."""
@@ -133,7 +133,7 @@ def _netlist(f, lines: int) -> dict:
             at += 3 + int(head[at + 2])
         spans.append(cols)
     if lines != useful + 1:
-        raise ValueError(f"a section of {lines} lines holds a netlist of {useful} rows")
+        raise ValueError(f"a section of {lines} lines, whose first line counts {useful} rows")
     lo = (spans[0][-1][0] + spans[0][-1][1]) * WORD if spans[0] else 0
     hi = spans[1][0][0] * WORD if spans[1] else const
     tail, pads, asserts = b" 1 %d\n" % const, 0, 0
@@ -151,7 +151,7 @@ def _netlist(f, lines: int) -> dict:
 
 def scan(path: Path) -> dict:
     """A circuit file's SHA-512, bytes, META's ``k_log`` (an instance's block, 2^k_log bits) and each ``CIRCUIT`` section's rows
-    and AND rows (`_netlist`); ``ands`` the unit section's, None for a templated file, whose unit is its template section
+    and AND rows (`_section`); ``ands`` the unit section's, None for a templated file, whose unit is its template section
     (``TEMPLATE n``, passed over here) and no ``CIRCUIT`` section."""
     with ThreadPoolExecutor(1) as pool:
         digest = pool.submit(_sha512, path)
@@ -170,7 +170,7 @@ def scan(path: Path) -> dict:
                 tag, name, lines = line.split()
                 if tag != b"CIRCUIT":
                     raise ValueError(f"{path}: {line[:80]!r} where a CIRCUIT section starts")
-                sections[name.decode()] = _netlist(f, int(lines))
+                sections[name.decode()] = _section(f, int(lines))
         sha512, size = digest.result()
     unit = sections.get("unit")
     return {"sha512": sha512, "bytes": size, "format": first.split()[0].decode(), "k_log": k_log,
@@ -264,7 +264,7 @@ def main(argv: list[str] | None = None) -> int:
         (a.out / "unit_lowering.json").write_text(json.dumps(doc, indent=1) + "\n")
         print(line(doc), flush=True)
         if doc["k_log"] is not None and doc["k_log"] > K_MAX:
-            print(f"unit_lowering: k_log {doc['k_log']} is past C-Flock's 2^{K_MAX} block: no proof of this file", file=sys.stderr)
+            print(f"unit_lowering: k_log {doc['k_log']} is past Flock's 2^{K_MAX} block: no proof of this file", file=sys.stderr)
             rc = 1
     return rc
 

@@ -53,6 +53,17 @@ def test_launch_seqlen_q_is_the_launch_max_never_below_own_rows():
         TG.launch_seqlen_q(8, 0, TG.parse_launch_context("conflict"))
 
 
+NO_TABLE = object()
+
+
+@pytest.mark.parametrize("table", [NO_TABLE, None, {}, [], 0, ""], ids=["left out", "null", "no step", "an empty list", "zero", "an empty string"])
+def test_a_declared_context_whose_step_table_is_left_out_or_empty_names_no_step(table):
+    # a table left out, null or empty is a table of no steps: the refusal of a step the context does not name, which lists the steps it has
+    ctx = {"declared": True} if table is NO_TABLE else {"declared": True, "max_seqlen_q_by_step": table}
+    with pytest.raises(TG.LaunchContextInvalid, match=r"names steps \[\] but the request runs step 3"):
+        TG.launch_seqlen_q(8, 3, ctx)
+
+
 def test_fa3_tile_flips_with_the_launch_context_fa2_does_not():
     h100 = _prof((9, 0))
     assert h100.effective_flash_attn_version() == 3
