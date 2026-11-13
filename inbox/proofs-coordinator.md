@@ -118186,3 +118186,33 @@ To post (PRF-608): Item 4 was not run. Tonight's serve under the stop rule did n
 Not established: that `main`'s `stop_audit.py` resumes a hand-off written at `1536ba03d343`; that a served class's `stage1.json` has its `stop` section (read from the tool's lines, not from a file); the verdict of any suites run still out.
 
 Heads: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `c7b2df24848b18d0715f7df2bb77f45672d13521`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d` (#9458, marked).
+
+## REDRAW, Fri 13 Nov 03:41Z: `main` moved again and stopped #9237 and #9555 in one test file; both are merged again and pushed (#9237 `a2c3831345e0`, #9555 `38b7c6df38ba`); the four runs in flight are at the heads before, and section 5 asks which Lean run each mark needs
+
+**First lines, as the rules ask.** Machine: vy-nebius-2 for all four runs. Waits for a slot: `59c7` 7 min 32 s, `1057` 11 min 7 s, `2558` 13 min 54 s, `8504` 14 min 57 s; none reached 15 minutes, so none was moved [read: each run's `slot.json`, `since` and `took`]. Two Lean runs of mine run there at once (`59c7`, `8504`); both have started, so I cancel neither [run: `research status` at 03:39Z, all four `running`].
+
+**1. What happened.**
+- [run] At 03:34Z `main` was `8ef93f01963c`, 37 files past the `4a7291116e11` that my 03:17Z heads hold. `git merge-tree` of it against each branch: #9237 and #9555 stop in `benchmarks/one_stage/tests/test_a5_case_v2.py`; #9373 merges clean.
+- [read] The commit of `main` that meets it (`ee245a981c`) names the challenger's label in that file by a5's constant (`a5.AC.FAMILY`) where it was a literal, and SPOT by its name, so that the file's count in the retired-terms list falls from 11 to 6.
+- [derived] A mark at `459f5e2dd560` or at `df901c234fa4` would have been refused on that file.
+
+**2. #9237 is at `a2c3831345e0d15bbed424c321009c26b4a7500d`, pushed.**
+- [run] Resolution: `main`'s lines, with `family=a5.AC.FAMILY` at the three calls of the case's writer (this branch gives the writer the family; the constant is the same string). The file differs from `main`'s in those three lines only.
+- [run] At this head on my machine: the 41 driver tests that need no Lean build pass, `test_a5_case_v2.py` among them; `python tests/test_tree.py HEAD` (`main`'s new layout test) exits 0; ruff reports nothing on the file; the file holds the retired word as many times as `main`'s copy. `9d4aec0111fb` is an ancestor; GitHub says MERGEABLE.
+- [read] The runs in flight are at `459f5e2dd560`. `r20261113-030616-59c7` (records) started 03:14Z in a tree another run left mid-way, which it checks before building; ETA 04:20Z, later if that tree needs much building [guess]. `r20261113-030646-1057` part one so far: `verity/protocols/spot/verifier` 912 passed, `verity-network-traces` 678 passed; `benchmarks/one_stage` and `verity-core-sampled-proofs` to come, about 04:00Z [guess]; then the whole tier, about 05:30Z [guess].
+- [run, read] What differs between `459f5e2dd560` and this head: `main`'s 37 files and the resolution. One of the 37 is Lean, `security/Proofs/Properties/Nci/LeafWidthsPart.lean`: a bound name (`cap` to `bound`) in one theorem and its proof. No lock, no lakefile and no digest list is among them.
+
+**3. #9555 is at `38b7c6df38ba9ad5ccfd154ae316b76697157020`, pushed: #9237's new head merged in.**
+- [run] The same file stopped in six places, because this branch's tests give the writer the challenger's key and keep it out of the evidence. Resolution: this branch's tests, with the label read from `a5.AC.FAMILY` and SPOT named as `main` names it.
+- [run] At this head on my machine: 42 driver tests pass; the layout test exits 0; ruff reports nothing on the file; the retired word's count equals `main`'s; GitHub says MERGEABLE.
+- [read] The runs in flight are at `df901c234fa4`: `r20261113-031530-8504` (records, no `--allow`) started 03:30:45Z, ETA about 04:40Z [guess]; `r20261113-031427-2558` (five suites) started 03:28:43Z, ETA about 04:15Z [guess].
+- [derived] The Lean inputs at this head differ from `df901c234fa4`'s by that one file of `main`'s, so a records run at this head is a full run, not a reuse.
+
+**4. #9373 is unchanged at `54d0d016ab78`** and merges clean with `main` at `8ef93f01963c` [run: `git merge-tree`; GitHub MERGEABLE]. Its ready line stands.
+
+**5. What I ask you to rule.** A merge of `main` that brings a Lean file costs a records run of over an hour, and tonight `main` moves faster than that.
+- (a) #9237: when `59c7` and part one of `1057` pass, I write the ready line at `a2c3831345e0` on them and on the local run of section 2, with the difference stated as above, and make no new records run. That is what you did for #9373 at 01:44Z.
+- (b) #9555: lean's condition is "a passing records run at the head I mark". `8504` is at the head before. Either you and lean take `8504` with the one-file difference stated, or I make a run at `38b7c6df38ba`. My default: I launch that run the minute one of my two Lean places frees (about 04:20Z) and do not cancel `8504`, which says first whether the restated statement's hash moved when the remote branch landed. If you want it sooner, write "cancel `8504`": I replace it with the run at the head in the same minute, which brings that verdict about 40 minutes earlier [guess] and breaks the rule against cancelling a running try.
+- (c) I merge `main` again into either branch only if it stops them again; I look before each entry.
+
+**6. Pushed, and nothing unpushed.** `cursor/proofs-redraw-cc71` `a2c3831345e0d15bbed424c321009c26b4a7500d`; `cursor/proofs-keyheld-3c9a` `38b7c6df38ba9ad5ccfd154ae316b76697157020`; `cursor/proofs-redraw-rate-5a71` `54d0d016ab7850e73ad933db5d7769dcf0c5811c`. The bodies of #9237 and #9555 still name the heads before; I change them with the ready lines. Mailbox read at 03:39Z: nothing after your 03:12Z message [run].
