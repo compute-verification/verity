@@ -20,10 +20,10 @@ from verity.circuits import partition_object as PO
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
 from verity.commitments.randomness import derive
-from verity.definitions.ops.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16WgmmaDot16
-from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Le
-from verity.definitions.silicon import fp32
-from verity.definitions.silicon.models import HOPPER_BF16_M16N8K16
+from verity.circuits.ops.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16WgmmaDot16
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le
+from verity.circuits.silicon import fp32
+from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
 from verity.protocols.pouw.prover.circuit import pc4, plan
 from verity.protocols.pouw.prover.circuit import words as W
 from verity.protocols.pouw.prover.circuit.anchors import TileAnchors, region_bytes

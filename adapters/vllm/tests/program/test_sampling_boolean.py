@@ -21,7 +21,7 @@ from verity.circuits.cut import separable
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
-from verity.definitions import word as W
+from verity.circuits import word as W
 from verity.definitions.numerics import rows
 from verity.definitions.registry import b1
 from verity.definitions.registry import sampling as SM

@@ -6,12 +6,12 @@ from typing import Any, Callable
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """This module's Definitions in tiny whole-model configurations (`verity.definitions.tiny`, the vLLM tests'), and the
+    """This module's Definitions in tiny whole-model configurations (`verity.circuits.tiny`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32
+    from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
     from verity.definitions.registry import fp8
-    from verity.definitions.tiny import TINY_FP8
+    from verity.circuits.tiny import TINY_FP8
 
     return [
         ("ServeFp8_v1", lambda: bind(fp8.ServeFp8, C=TINY_FP8, LP=2, STEPS=1)),
