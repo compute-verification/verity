@@ -230,9 +230,9 @@ example : PUBLIC_ROW_SALT_DOMAIN = Domains.POUW_PUBLIC_ROW_SALT.toUTF8.push 0 :=
 end PouwCheck
 
 /-!
-# The lead's window (`circuit/lead.py`, "the window")
+# The lead's execution phase (`circuit/lead.py`, "the execution phase")
 
-The lead (`verity/pouw/v2`) registers before its window's salt: its 64-byte record in the certifier's `commit_weights`
+The lead (`verity/pouw/v2`) registers before its execution phase's salt: its 64-byte record in the certifier's `commit_weights`
 slot, in `pouwRecord`'s place, is `leadRecord?`, SHA-512 of `RECORD_TAG ‖ root(weights) ‖ stream ‖ prover ‖ keyLeaf ‖
 u64be(calls)`, `calls` its calls a forward.
 Each call's A and each forward's words are an instance at a position of their own: A_j of forward f at f · calls + j
@@ -244,8 +244,8 @@ tiles in (row tile, column tile, step, column, row) order (`Shape.tile`), every 
 skipped, and a tile's 128 words in wgmma's fragment order (`fragment`). So a unit's opening (`unitOpening`) is a leaf and
 an offset for each step the unit reads, and an A run for each of its rows.
 
-`windowRefusal` reads the certifier's record of the window. The record opens to the window's weights' root, stream,
-prover, keyLeaf and call count. salt_w is drawn once, before any A root. Forwards are serial: a forward opens at its
+`windowRefusal` reads the certifier's record of the execution phase. The record opens to the execution phase's weights' root, stream,
+prover, keyLeaf and call count. salt_w is sampled once, before any A root. Forwards are serial: a forward opens at its
 first A root, and its words root closes it under the certifier's verdict on its egress (`egressRefused`, its count kept
 under the certifier's boundary hold, `forwardCount`). Each call has one position and a shape the verifier admits
 (`Shape.refuse`).
@@ -294,7 +294,7 @@ def leadRecord? (weightsRoot stream prover keyLeaf : ByteArray) (calls : Int) : 
     throw "a record binds a 64-byte weights root, stream, prover and keyLeaf and 1 .. 2^63 - 1 calls a forward"
   else pure (Flock.Sha512.hash (parts.foldl (· ++ ·) RECORD_TAG ++ PouwCommit.be8 calls.toNat))
 
-/-- `position_refusal`: why call `call` of forward `forward` has no position in a window of `calls` calls a forward. -/
+/-- `position_refusal`: why call `call` of forward `forward` has no position in an execution phase of `calls` calls a forward. -/
 def positionRefusal (forward calls call : Int) : Option String :=
   if 0 ≤ call && call < calls && 0 ≤ forward && forward * calls + call < (WORDS_POSITION : Int) then none
   else some s!"call {call} of forward {forward} has no A position in a window of {calls} calls a forward"
@@ -438,9 +438,9 @@ r = 0, so a held bucket counts nothing), and the release at the boundary, at all
 def forwardCount (buckets : List (Nat × List Nat)) (release : Nat) : Nat :=
   (buckets.map fun (r, frames) => bitLength r + frames.sum).sum + bitLength release
 
-/-- `window_refusal`: why the verifier refuses the lead's window from the certifier's record, else none. `record` is the
-window's signed `commit_weights` record, which must be `leadRecord?` of its weights' root, stream, prover, keyLeaf and
-call count, and `events` the certifier's record in its order: `{"kind": "salt"}` (salt_w drawn, once), `{"kind":
+/-- `window_refusal`: why the verifier refuses the lead's execution phase from the certifier's record, else none. `record` is the
+execution phase's signed `commit_weights` record, which must be `leadRecord?` of its weights' root, stream, prover, keyLeaf and
+call count, and `events` the certifier's record in its order: `{"kind": "salt"}` (salt_w sampled, once), `{"kind":
 "a_root", "forward", "call", "rows", "cols", "K", "bn"}` (a call's A root and shape, which opens its forward), or
 `{"kind": "words_root", "forward", "verdict"}` (the forward's words root, which closes it, and the certifier's verdict
 on its egress). -/
