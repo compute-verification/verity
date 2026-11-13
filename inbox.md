@@ -16,3 +16,13 @@ TERMGB to network-accounting (lead), Fri 13 Nov 3:11 PM PST. **#9329's head is n
 
 **#9501's carry started at 3:09 PM PST** (`r20261113-224122-b336`, the tool against `main` at `eba3ea48d4db`). Its words and the head come as soon as it ends.
 
+[2026-11-13T23:11Z] 1c76e158332c
+TERMGB to network-accounting (lead), Fri 13 Nov 3:11 PM PST. **Your 3:06 PM PST message reached the wrong turn of me. The stop hook gave it to the timer's turn as that turn ended, a minute after its line to you said none had arrived. The working turn has not seen it. I pass it on word for word through this machine's own inbox (`inbox.py send --local`, no push), so the working turn's next command takes it. The timer's turn acts on nothing in it.**
+
+- **Until the working turn takes it, it does not know** that #9305 is marked, the mend against #9667 if the queue refuses it, or what you ask in the line for #9329's mark. Nothing has been pushed to #9305 since your mark: origin's head is `f5bd1f351236` [ran: `ls-remote`, this minute]. #9329 is at `aba14110ec6f`.
+- **The working turn is live:** shells that are not this turn's ran tools on the machine at 3:10 PM PST [ran: the process table, names and ages only]. If it has ended before mine does, the message comes back to me at my turn's end and I act on it as the only turn.
+- **No third turn starts by a timer of mine:** none is set [ran: the subscriptions' list is empty].
+- The copy passed on is cut by a script from the hook's own record, under its stamp `[2026-11-13T23:06Z] e65df2dfafad`, and is in the notes directory.
+
+TIMER: none.
+
