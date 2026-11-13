@@ -33,12 +33,12 @@ the mask's tables are too large for it to build.
 `YIsTheUnscale`, `RefusedBeforeTheCoin`, `TileKeepsTheCap`, `LoadedGivesUp`, `PlanMeans`, `AcceptMeans`,
 `TileAcceptMeans` and `WorkIsTheCredit` have both witnesses. `LoadedGivesUp`'s, `PlanMeans`' and `AcceptMeans`' `honest`
 ones are at one honest pass of the deployed scheme (`honestPass`, loaded from `honestManifest`): `load` reads it, `plan`
-draws its one tile, and `check` accepts its run at no draws, since a drawn tile of the deployed scheme is replayed on the
-noise `check` derives itself (`fixedNoise` at k = 1,024), past what the kernel reaches. A drawn tile's are at a test
-instance (`testPass`, k = 128, 1 × 1 tiles, its run `testRun`): `check` loads the pass, draws its tile, derives its noise
+samples its one tile, and `check` accepts its run at no samples, since a sampled tile of the deployed scheme is replayed on the
+noise `check` derives itself (`fixedNoise` at k = 1,024), past what the kernel reaches. A sampled tile's are at a test
+instance (`testPass`, k = 128, 1 × 1 tiles, its run `testRun`): `check` loads the pass, samples its tile, derives its noise
 (`testNoise`) and passes the tile on it (`acceptMeans_drawn`). `TileAcceptMeans`' `honest` ones are that tile on the test
 noise and on the noise `check` derives for it (`tileAcceptMeans_derived`). `WorkIsTheCredit`'s are the credit both runs
-publish: the honest pass's at no draws, and the test pass's at one, a test instance's, crediting nothing.
+publish: the honest pass's at no samples, and the test pass's at one, a test instance's, crediting nothing.
 -/
 
 @[expose] public section
@@ -357,10 +357,10 @@ theorem refusedBeforeTheCoin_nontrivial :
 /-! ## `LoadedGivesUp`, `PlanMeans` and `AcceptMeans`
 
 The honest pass loads in the kernel once `load` is unfolded down to the salt coin's hm96 leaf, whose mask at its zero salt
-is given (`maskOr`) and whose leaf prefix is a literal (`Witness.leafPrefix_eq`), to the salt's and the draw's `derive`,
+is given (`maskOr`) and whose leaf prefix is a literal (`Witness.leafPrefix_eq`), to the salt's and the sample's `derive`,
 whose sorted contexts are given (`qsort_salt`, `qsort_run`), and to the weight ids' `String.toNat?`, whose value on digits
 is given (`toNatOr`): the kernel computes the rest, the coin's opening, the salt, the weights' and records' roots, and
-`plan`'s commitment and draw on that pass. -/
+`plan`'s commitment and sample on that pass. -/
 
 namespace Witness
 
@@ -394,7 +394,7 @@ theorem toNat?_eq_toNatOr (s : String) : s.toNat? = toNatOr s := by
   · rfl
 
 /-! `derive` sorts its context by key with `Array.qsort`, whose recursion the kernel can't unfold: `cbv` sorts the two
-contexts the witnesses derive under, the epoch salt's and the run draw's. -/
+contexts the witnesses derive under, the epoch salt's and the run sample's. -/
 
 theorem qsort_salt (x y z : Part) :
     ([("epoch", x), ("coins", y), ("weights", z)].toArray.qsort fun a b => decide (a.1 < b.1)) =
@@ -425,7 +425,7 @@ theorem loadedGivesUp_nontrivial :
     ¬ (acceptAllRecord.voluntaryA.length ≤ voluntaryCap acceptAllRecord.matmul.m) := by
   decide
 
-/-- `plan` takes the honest pass's run at one draw: the draw names its one tile. -/
+/-- `plan` takes the honest pass's run at one sample: the sample names its one tile. -/
 theorem planMeans_honest :
     plan (honestRun 1) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [(0, 0)], 1, [(0, 0)], none⟩ := by
   apply eq_ok_of_toOption
@@ -441,16 +441,16 @@ theorem planMeans_nontrivial : ¬ (acceptAllPlan.root = runCommitment acceptAllP
   rw [runCommitment, Commit.taggedSize] at this
   exact absurd this (by decide)
 
-/-- `plan` takes the honest pass's run at no draws: no tile to open. -/
+/-- `plan` takes the honest pass's run at no samples: no tile to open. -/
 theorem Witness.plan_honestRun0 :
     plan (honestRun 0) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [], 0, [], none⟩ := by
   apply eq_ok_of_toOption
   simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest]
   decide +kernel
 
-/-- `check` accepts the honest pass's run at no draws: its pass loads, and it excludes no row, so no tile is opened. A
-drawn tile of the deployed scheme is replayed on the fixed operand's noise that `check` derives itself (`fixedNoise`: 2k
-noise lines and R² FP32 chains of k = 1,024), past what the kernel reaches; `acceptMeans_drawn` is a drawn tile's, of a
+/-- `check` accepts the honest pass's run at no samples: its pass loads, and it excludes no row, so no tile is opened. A
+sampled tile of the deployed scheme is replayed on the fixed operand's noise that `check` derives itself (`fixedNoise`: 2k
+noise lines and R² FP32 chains of k = 1,024), past what the kernel reaches; `acceptMeans_drawn` is a sampled tile's, of a
 test instance at k = 128. -/
 theorem acceptMeans_honest : (check (honestRun 0) noOpening).accept = true := by
   simp only [check, plan_honestRun0]
@@ -829,10 +829,10 @@ example (h : TileKeepsTheCap) (hc : Rule.checkOpened capScheme capRecord [0] [0]
   tileKeepsTheCap_nontrivial (h capScheme capRecord [0] [0] shortOps hc)
 
 
-/-! ## A drawn tile: `AcceptMeans` and `WorkIsTheCredit` at a test instance
+/-! ## A sampled tile: `AcceptMeans` and `WorkIsTheCredit` at a test instance
 
-`check` accepts `testRun`, the test pass's run at one draw read as a test instance's: `load` reads the test pass from its
-manifest, `plan` draws its one tile, and the replay derives the fixed operand's noise itself (`fixedNoise`), which is the
+`check` accepts `testRun`, the test pass's run at one sample read as a test instance's: `load` reads the test pass from its
+manifest, `plan` samples its one tile, and the replay derives the fixed operand's noise itself (`fixedNoise`), which is the
 test noise (`Witness.test_noise`), and passes the tile on it (`tileAcceptMeans_honest`). The noise is 2k = 256 noise lines
 and 32 × 32 FP32 chains of k = 128: each 16 lines and each 4 rows of G are one kernel computation, in modules of their
 own, one per kind (`Proofs.Properties.Pouw.PearlPlus.Noise`), and the replay and the noise are proved over their steps
@@ -1032,18 +1032,18 @@ theorem tileAcceptMeans_derived : checkTile testPass (noiseOf testPass 0) 0 test
   rw [test_noiseOf]
   exact tileAcceptMeans_honest
 
-/-- `check` accepts the test pass's run at one draw, read as a test instance's: the pass loads, the draw names its one tile,
+/-- `check` accepts the test pass's run at one sample, read as a test instance's: the pass loads, the sample names its one tile,
 the prover opens it, and it passes on the noise the replay derives. -/
 theorem acceptMeans_drawn : (check testRun testOpener).accept = true := by
   simp only [check, test_plan, test_replay] <;> rfl
 
-/-- The honest pass's run at no draws publishes its credit at Pearl's assumption at t = 0 and X_O = 0. -/
+/-- The honest pass's run at no samples publishes its credit at Pearl's assumption at t = 0 and X_O = 0. -/
 theorem workIsTheCredit_honest : (check (honestRun 0) noOpening).accept = true ∧
     (check (honestRun 0) noOpening).work = some (testCredit false (creditAtAssumption [honestPass] 0 0 DELTA)) := by
   refine ⟨acceptMeans_honest, ?_⟩
   simp only [check, plan_honestRun0] <;> rfl
 
-/-- The test pass's run at one draw publishes its credit at t = 1 and X_O = 0, which, a test instance's, credits
+/-- The test pass's run at one sample publishes its credit at t = 1 and X_O = 0, which, a test instance's, credits
 nothing. -/
 theorem workIsTheCredit_drawn : (check testRun testOpener).accept = true ∧
     (check testRun testOpener).work = some (testCredit true (creditAtAssumption [testPass] 1 0 DELTA)) := by

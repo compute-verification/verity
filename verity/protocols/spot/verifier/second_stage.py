@@ -1,6 +1,6 @@
 """Round 2's statement check, as the verifier's `Spot.SecondStage` defines it, which the difftest's
 `second_statements` holds this to: a two-stage run's second-stage sessions held, each by its statement, to the interior
-registration and to the second draw's cells. `service.Stream` adds it to the interior registration's audit record as
+registration and to the second sample's cells. `service.Stream` adds it to the interior registration's audit record as
 `checks.statements` (`attach`). The parts and their cells, a statement, its codes and the form's switch are the Lean's
 (its module docstring).
 
@@ -48,7 +48,7 @@ A header that shares rows (``shared_rows``: tables whose rows its instances read
 shares them only at ports its statement reads registered (``second-refs``, `_refs_ok`): there the session's verifier
 holds each instance's ref to the row at the position the read gives its unit (`Flock.Registered.check`), and
 ``second-read`` holds the read to the slot's own rows or its cell's replay block's; elsewhere it only bounds a ref by its
-table, so a ref could point a drawn unit at another unit's rows.
+table, so a ref could point a sampled proof block at another unit's rows.
 
 Each statement's registered reads are its template's reference statement's (`Own.ref_reads`, the registered reads the
 auditor's params give beside its header, fixed before the run and taken as given: round 2 never verifies the reference
@@ -310,8 +310,8 @@ def rows_of(j: Any) -> tuple[Rows, ...] | None:
 @dataclass(frozen=True)
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
-    registrations' records, the second draw's units, the design's links (`replay_links`, None when the replay block's
-    Definition makes none), the ``{value: root}`` the verifiers of record report the sessions read
+    registrations' records, the second sample's units, the design's links (`replay_links`, None when the replay block's
+    Definition makes none), the ``{value: root}`` the verifiers report the sessions read
     (`audit.session_registered`), what they name of each session they accepted (`verified_of`), the reference header
     of each template's statement, ``(template, header)``, and the registered reads it reads,
     ``(template, registered)``, None for none (`ref_reads`), as the auditor's params give them
@@ -978,7 +978,7 @@ def _roots_ok(named: bool, rec: Any, t: str, h: Any, reads: Sequence[str]) -> bo
 
 
 def own_draw(q: int, p: Part, drawn: Sequence[int]) -> dict[str, Any]:
-    """The verifier's own sample for part `p`'s session: the second draw's units among its slots, counted from its first,
+    """The verifier's own sample for part `p`'s session: the second sample's units among its slots, counted from its first,
     as ``unit_draw`` writes a subset of its population."""
     units = [u - p.lo for u in drawn if p.holds(q, u)]
     return {"law": "subset", "population": q * p.n, "k": len(units), "units": units}
@@ -1438,7 +1438,7 @@ def attach(rec: Mapping[str, Any], v: Verdict, reads: Sequence[Mapping[str, str]
     """The interior registration's audit record `rec` with round 2's check `v` as ``checks.statements``, and the reads
     `reads` that rest on the interior's own values (`interior_reads`) as ``interior_reads`` where there are any. It
     fails where `v` does, as a failed check of its own fails it: not accepted, and no profile, integrity profile or
-    wrong units."""
+    incorrect proof blocks."""
     out = {**rec, "checks": {**rec["checks"], "statements": v.to_json()},
            **({"interior_reads": [dict(r) for r in reads]} if reads else {})}
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
