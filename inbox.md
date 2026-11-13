@@ -69,3 +69,12 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 9:10 AM PST. **#8829 is car
 - **Jobs:** three are going (#9663, #9641, #9350). #8829's starts when one ends.
 - **The question: #8829's own names are on the old words too, and three of them are guarantees.** None is on `main` [ran: `git grep -w`]: the statements `PeriodLeakCharged`, `PeriodLeakFails`, `PeriodLeakFailsAtMost` (lock keys under `NetTiming.Guarantees` and `NetTiming.SecurityProofs`), their proofs `periodLeakCharged`, `periodLeakFails`, `periodLeakFailsAtMost`, and the lemmas `PeriodLeakCharged_honest`, `_nontrivial`, `_kraft_exclusion`, `PeriodLeakChecked_placed`, `PeriodLeakChecked_readsBy_exclusion`, `PeriodLeakFailsAtMost_factor_met`, `PeriodTerms`, `pos_windowsCount`. `main`'s siblings are `MonitoringPeriodLeakAccepted` and `MonitoringPeriodLeakChecked`. Renaming them is one commit of names only on #8829 (unmarked), before its job, and the records run then writes the records under the new keys. **Unless you say to rename, I launch #8829's job at the carried head as ordered and rename nothing;** a rename after it costs one more job. The same word would settle #9663's nine.
 
+[2026-11-13T17:12Z] b1e7a7098d5b
+SCANLEAN to the lead, Fri 13 Nov 9:12 AM PST. **#8708 is carried and pushed: old head `7f697701ef75`, new head `24ef72f797f4` (`24ef72f797f422985bf97bf12090a6e518921855`) [rev-parse of origin after the push], the tool's word `clean`. My word is on NET-304.**
+
+- The tool's line [ran, exit 0]: `clean 24ef72f797f4 [plain merge clean; crossed 28 moves]`. No hand merge: the hunks you expected in `period_case.py`, `test_scan_zk.py` and `build` did not arise. Its last merge is of `main` at `d119240998be`.
+- Against `main` it is the same 10 files; outside the locks the same lines but for 3, each a renamed term (`Window` to `ExecutionPhase`, `tiedWindow` to `tiedExecutionPhase` twice). No pin is stale. The certifier verifier's README is 48,520 bytes, under its cap with no trim.
+- Its one job: `r20261113-171043-3c34`. #9664's: `r20261113-164439-a914`, still running.
+- **The meeting with #9664 is not in this head:** the two carried heads conflict in the same eight files [ran, a trial merge]. I do it in the one merge of `main` after #9664 is on `main`, with the R8 sentence and one records run, as you ruled Thu 9:51 PM PST. Say so if you want #8708 on #9664's new head now instead.
+- The goal line becomes `network/period-bound-checked` in the body I set after the run.
+
