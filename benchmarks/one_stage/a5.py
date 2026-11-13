@@ -1113,7 +1113,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 kept = a0.VerifyMembers(a.lean, out / "lean-verify" / "archive",
                                         keys.get(Path(statements[0]["mm"]["st"]["program_file"]), ""),
                                         out / "lean-verify" / "verify-members.log")
-        with LeanPool(getattr(a, "lean_workers", LEAN_WORKERS) if server is None and kept is None else 1,
+        with LeanPool(checks_at_once(getattr(a, "lean_workers", LEAN_WORKERS), server is not None, kept is not None),
                       audit_memory(a, available_memory), available_memory) as lean:
             for i, s in enumerate(statements):
                 if server is None:
@@ -1596,6 +1596,17 @@ LEAN_BYTES_PER_CIRCUIT_BYTE = 5
 #: their peak), which the Lean checks beside it leave it (`LeanPool.session`). A node the audit shares still runs one check
 #: at a time (served_verdicts.sh)
 SESSION_BYTES_PER_CIRCUIT_BYTE = 20
+
+
+def checks_at_once(asked: int, proof_server: bool, kept: bool) -> int:
+    """`LeanPool`'s workers: ``asked`` (``--lean-workers``), but one on a proof server, whose checks each wait for
+    their session, and one behind the ZK server, where one kept verifier process takes one member at a time
+    (``kept``). Behind the ZK server a flag above 1 changes nothing, and the audit prints a line that says so."""
+    if kept and asked > 1:
+        print("A5 " + json.dumps({"lean_workers": {"asked": asked, "at_once": 1, "why": (
+            "behind the ZK server the kept verifier process takes one member at a time, so the Lean checks run one at "
+            f"a time and --lean-workers {asked} changes nothing")}}), flush=True)
+    return 1 if proof_server or kept else asked
 
 
 class LeanPool:

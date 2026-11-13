@@ -7,6 +7,7 @@ shared archive (`a0.archiving`), under which one circuit is put once."""
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import threading
 from collections.abc import Iterator
@@ -189,6 +190,18 @@ def test_the_flags_reach_the_audit():
         "lean_workers": 2, "audit_mem_gb": 290.0, "negative_workers": 1}
     with pytest.raises(SystemExit):
         ap.parse_args(["--lean-workers", "0"])
+
+
+def test_behind_the_zk_server_the_checks_run_one_at_a_time_and_a_flag_above_one_says_it_changes_nothing(capsys):
+    """`a5.checks_at_once`: the flag's own number outside the ZK server; one on a proof server, as before; one behind
+    the ZK server, with one printed line where the flag asked for more, and none where it asked for one."""
+    assert a5.checks_at_once(3, False, False) == 3 and a5.checks_at_once(3, True, False) == 1
+    assert a5.checks_at_once(1, False, True) == 1 and capsys.readouterr().out == ""
+    assert a5.checks_at_once(3, False, True) == 1 and a5.checks_at_once(2, True, True) == 1
+    said = [json.loads(x[3:])["lean_workers"] for x in capsys.readouterr().out.splitlines()]
+    assert [(x["asked"], x["at_once"]) for x in said] == [(3, 1), (2, 1)]
+    assert said[0]["why"] == ("behind the ZK server the kept verifier process takes one member at a time, so the Lean "
+                              "checks run one at a time and --lean-workers 3 changes nothing")
 
 
 def test_a_runs_checks_archive_one_circuit_under_one_lock():
