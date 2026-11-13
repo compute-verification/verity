@@ -20,3 +20,4 @@
 - 18:14Z b6c3 (84 suites) 36 passed, 0 failed so far; backups 32c8 (verity-vllm, commitments) and j-rest (45 remaining)
 - 18:40Z b6c3 74/84 passed, c8b6 38/45 passed, 32c8 running; no failure
 - 19:12Z suites runs still going
+- 19:24Z gate b25b failures []; b6c3 timed out 74/84 passed; 32c8 cancelled by me on a shared-scope reading (own PSS 14.3 GiB); relaunched 694b (verity-vllm) e5ca (commitments); c8b6 running
