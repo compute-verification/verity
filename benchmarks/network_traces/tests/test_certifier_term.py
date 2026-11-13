@@ -346,6 +346,17 @@ def test_a_stop_class_is_charged_its_whole_schedule_but_where_verdict_records_sa
         verdict | {"complete": None, "accepted": "accept", "verifier": "a verifier", "proved_by": "a theorem"},))))
     assert ("- response tie, run, not proved: refused, not complete, on class 0 in execution phase 3 of the link "
             "responses, by run r1 under the verifier a verifier, proved by a theorem") in partial
+    # a verdict that is not accepted and states what its verifier held its accept back for is printed withheld for
+    # that word, and refused where it states null or nothing; an accept is printed accepted
+    by = "on class 0 in execution phase 3 of the link responses, by run r1 under the verifier a.verifier at commit c0ffee"
+    for over, how in (({"accepted": False, "withheld": "two-stage-form", "codes": ["two-stage-form"]},
+                       "withheld for `two-stage-form`, complete"),
+                      ({"accepted": None, "withheld": "a word", "complete": False}, "withheld for `a word`, not complete"),
+                      ({"accepted": False, "withheld": None, "codes": ["roots"]}, "refused, complete"),
+                      ({"accepted": False}, "refused, complete"),
+                      ({"accepted": True, "withheld": None, "codes": []}, "accepted, complete")):
+        lines = LB.render(LB.document(small(), stop=LB.Stop(0, ("a line",), (verdict | over,)))).splitlines()
+        assert f"- response tie, run, not proved: {how}, {by}, proved by nothing" in lines, over
 
 
 def test_a_row_is_below_its_schedule_only_on_the_execution_phases_held():

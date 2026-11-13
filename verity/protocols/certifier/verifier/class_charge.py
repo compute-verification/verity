@@ -28,6 +28,15 @@ and by the serve and the registration a record names: the run and the verifier a
 weighed, and `proved_by` moves no charge. Which of the four a record is is its caller's to say: `charge` takes the
 records by verdict.
 
+**Withheld, and the codes.** A verdict may state two fields more, each its verifier's own (`SAID`): `withheld`,
+null or the one word for what the verifier held its accept back for, and `codes`, a list of the verifier's own code
+words, empty on an accept. Neither moves a charge: a verdict counts only where `accepted` is exactly true, and a
+withheld one leaves its class at its whole schedule as a refused one does. Of a verdict that is not accepted the
+line says "withheld" with the word where it states one, and "refused" where `withheld` is null or absent
+(`not_accepted`). Either field may be absent. A record doesn't read where its verdict's `withheld` is neither null
+nor a word, where its `codes` is no list of words, and where its verdict is accepted and states a `withheld` word
+or a code: an accept that also says why it was held back says two things.
+
 **All four or none.** A verdict counts where a record of it is of the class, in the head's execution phase, names
 this head's digest, and every such record is accepted and complete. Naming the head is what holds a verdict to the
 serve the head was signed on: a verdict decided under another head, another run's or another serve's, names another
@@ -69,7 +78,11 @@ MODULE, COMMIT = NAMES = ("module", "commit")
 #: what a class's records on a head name one of: the served run the class came from, and what that serve registered
 ONE = (SERVE, REGISTRATION)
 LINK, WINDOW, CLASS, HEAD, ACCEPTED, COMPLETE = READ = ("link", "window", "class", "head", "accepted", "complete")
-#: what a verdict that doesn't count lacks
+#: two fields more a verdict may state, which move no charge: what its verifier held its accept back for, null or a
+#: word, and the verifier's own code words, a list
+WITHHELD, CODES = SAID = ("withheld", "codes")
+#: what a verdict that doesn't count lacks; one that is not accepted and states a `withheld` word is `WITHHELD` for
+#: that word (`not_accepted`)
 MISSING, ANOTHER_HEAD, REFUSED, NOT_COMPLETE = "missing", "not on this head", "refused", "not complete"
 
 
@@ -78,9 +91,10 @@ class ClassCharge:
     """How an execution phase's class is charged. `count`: its count in the head. `below`: whether its connections
     are charged below their schedule, which takes a count above 0, all four verdicts and one serve and one
     registration named by them. `owed`: each verdict that doesn't count, in `VERDICTS`' order, as (the verdict,
-    what it lacks, the runs of the records that lack it); empty where `below` and where the count is 0. `read`: the
-    class's records on this head, counted or not, each with the verdict it is of, in `VERDICTS`' order. `differ`:
-    each of `ONE` that those records name more than one of, with the names; empty where `below`."""
+    what it lacks, the runs of the records that lack it), a verdict some records refused and others withheld once
+    for each; empty where `below` and where the count is 0. `read`: the class's records on this head, counted or
+    not, each with the verdict it is of, in `VERDICTS`' order. `differ`: each of `ONE` that those records name more
+    than one of, with the names; empty where `below`."""
 
     cls: int
     count: int
@@ -151,12 +165,27 @@ def lacks(record: object) -> str | None:
         return f"its `{VERDICT}` is no object"
     if not (record[PROVED_BY] is None or _named(record[PROVED_BY])):
         return f"its `{PROVED_BY}` is neither a name nor null"
+    verdict = record[VERDICT]
+    if not (verdict.get(WITHHELD) is None or _named(verdict[WITHHELD])):
+        return f"its verdict's `{WITHHELD}` is neither a word nor null"
+    if CODES in verdict and not (isinstance(verdict[CODES], list) and all(type(c) is str for c in verdict[CODES])):
+        return f"its verdict's `{CODES}` is no list of words"
+    if verdict.get(ACCEPTED) is True and (said := [k for k in SAID if verdict.get(k)]):
+        return (f"its verdict is accepted and states `{'` and `'.join(said)}`: an accept that also says why it was "
+                "held back says two things")
     return None
 
 
 def reads(record: object) -> bool:
     """Whether `record` is a verdict record: it lacks nothing (`lacks`)."""
     return lacks(record) is None
+
+
+def not_accepted(verdict: Mapping[str, Any]) -> str:
+    """How a line says a verdict that is not accepted went (the module docstring's "Withheld, and the codes"):
+    `WITHHELD` for the word it states, or `REFUSED` where its `withheld` is null or absent."""
+    word = verdict.get(WITHHELD)
+    return f"{WITHHELD} for `{word}`" if _named(word) else REFUSED
 
 
 #: what a verdict record is, as a refusal of one that is none says it
@@ -190,7 +219,9 @@ def charge(head: Head, cls: int, records: Mapping[str, Iterable[Mapping[str, Any
         if not ours:
             owed.append((kind, ANOTHER_HEAD if here else MISSING, _runs(here)))
         elif refused := [r for r in ours if r[VERDICT].get(ACCEPTED) is not True]:
-            owed.append((kind, REFUSED, _runs(refused)))
+            # refused first, then each word a verdict was withheld for: the charge is the same, the line says which
+            went = sorted({not_accepted(r[VERDICT]) for r in refused}, key=lambda how: (how != REFUSED, how))
+            owed += [(kind, how, _runs(r for r in refused if not_accepted(r[VERDICT]) == how)) for how in went]
         elif partial := [r for r in ours if r[VERDICT].get(COMPLETE) is not True]:
             owed.append((kind, NOT_COMPLETE, _runs(partial)))
     differ = tuple((key, names) for key in ONE if len(names := tuple(sorted({r[key] for _, r in read}))) > 1)

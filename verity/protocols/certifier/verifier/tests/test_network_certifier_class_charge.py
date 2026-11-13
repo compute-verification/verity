@@ -98,6 +98,65 @@ def test_a_tie_accepted_and_not_complete_is_charged_its_whole_schedule():
         (K.COMPUTE_AUDIT, K.NOT_COMPLETE)]
 
 
+def test_a_verdict_withheld_is_charged_as_one_refused_and_named_withheld_for_its_word():
+    """A verdict may state what its verifier held its accept back for (`withheld`, null or a word) and the
+    verifier's own code words (`codes`, a list). Neither moves a charge: a verdict that is not accepted leaves its
+    class at its whole schedule whatever the two say, and the line says "withheld" with the word where it states
+    one and "refused" where `withheld` is null or absent. A `withheld` that is neither null nor a word, `codes`
+    that are no list of words, and an accept that states a word or a code are each a record that doesn't read."""
+    assert K.SAID == (K.WITHHELD, K.CODES) == ("withheld", "codes")
+    refused = K.charge(HEAD, 0, but(K.COMPUTE_AUDIT, record(K.COMPUTE_AUDIT, accepted=False)))
+    assert refused.owed == ((K.COMPUTE_AUDIT, K.REFUSED, ("run of the compute audit",)),)
+    for word in ("two-stage-form", "another word"):
+        for accepted in (False, ..., None, 1, "accept"):
+            audit = record(K.COMPUTE_AUDIT, accepted=accepted, withheld=word, codes=[word])
+            got = K.charge(HEAD, 0, but(K.COMPUTE_AUDIT, audit))
+            assert (got.below, got.count, got.schedules, got.differ) == (False, 5, 5, ()), (word, accepted)
+            assert got.owed == ((K.COMPUTE_AUDIT, f"withheld for `{word}`", ("run of the compute audit",)),)
+            assert (K.COMPUTE_AUDIT, audit) in got.read and K.not_accepted(audit[K.VERDICT]) == f"withheld for `{word}`"
+    assert got.why() == ("class 0: charged its whole schedule on each of its 5 rows: the compute audit is withheld "
+                         "for `another word` (run of the compute audit)")
+    # null or absent, with codes or without, it is refused, as it was
+    for over in ({K.WITHHELD: None}, {K.CODES: ...}, {K.WITHHELD: None, K.CODES: ["roots", "registered"]}):
+        audit = record(K.COMPUTE_AUDIT, accepted=False, **over)
+        assert K.charge(HEAD, 0, but(K.COMPUTE_AUDIT, audit)).owed == refused.owed, over
+        assert K.not_accepted(audit[K.VERDICT]) == K.REFUSED
+    # a verdict some records refused and others withheld is named once for each, refused first and the words in
+    # order, and an accept beside them undoes none
+    several = [record(K.COMPUTE_AUDIT, accepted=False, withheld="two-stage-form", run="a third"),
+               record(K.COMPUTE_AUDIT), record(K.COMPUTE_AUDIT, accepted=False, withheld="another word", run="a second"),
+               record(K.COMPUTE_AUDIT, accepted=None, run="a first"),
+               record(K.COMPUTE_AUDIT, accepted=False, withheld="two-stage-form", run="a fourth")]
+    got = K.charge(HEAD, 0, but(K.COMPUTE_AUDIT, *several))
+    assert (got.below, got.schedules) == (False, 5) and got.owed == (
+        (K.COMPUTE_AUDIT, K.REFUSED, ("a first",)), (K.COMPUTE_AUDIT, "withheld for `another word`", ("a second",)),
+        (K.COMPUTE_AUDIT, "withheld for `two-stage-form`", ("a fourth", "a third")))
+    # all four accepted charge the class below whether they state the two fields or not
+    for over in ({K.WITHHELD: None}, {K.CODES: ...}, {K.WITHHELD: None, K.CODES: []}):
+        assert K.charge(HEAD, 0, four(**over)).below, over
+    # what doesn't read: a `withheld` that is no word, `codes` that are no list of words, on any verdict
+    tie = record(K.RESPONSE_TIE)
+    off = [(accepted, {K.WITHHELD: value}, "its verdict's `withheld` is neither a word nor null")
+           for accepted in (True, False) for value in ("", 0, False, True, ["two-stage-form"], {})]
+    off += [(accepted, {K.CODES: value}, "its verdict's `codes` is no list of words")
+            for accepted in (True, False) for value in (None, "roots", {}, [1], [None], ["roots", 2], ("roots",))]
+    # and an accept, complete or not, that states a word or a code
+    two = "an accept that also says why it was held back says two things"
+    off += [(True, over | more, f"its verdict is accepted and states {said}: {two}")
+            for more in ({}, {K.COMPLETE: False})
+            for over, said in (({K.WITHHELD: "two-stage-form"}, "`withheld`"), ({K.CODES: ["roots"]}, "`codes`"),
+                               ({K.WITHHELD: "two-stage-form", K.CODES: ["roots"]}, "`withheld` and `codes`"))]
+    for accepted, over, lack in off:
+        bad = record(K.RESPONSE_TIE, accepted=accepted, **over)
+        assert K.lacks(bad) == lack and not K.reads(bad), (accepted, over)
+        for records in (but(K.RESPONSE_TIE, bad), but(K.RESPONSE_TIE, tie, bad)):
+            with pytest.raises(ValueError) as e:
+                K.charge(HEAD, 0, records)
+            assert str(e.value) == f"{K.A_RECORD}; of the response tie's, {lack}: {bad!r}"
+    # a record that names no run is refused for that before its verdict is read
+    assert K.lacks(record(K.RESPONSE_TIE, withheld=0) | {K.RUN: ""}) == "its `run` is no name"
+
+
 def test_a_verdict_from_a_run_on_another_serve_is_charged_its_whole_schedule():
     """A verdict is held to the serve by the signed head it names: another serve's head of the same link, execution
     phase and class, or no head, is another digest."""

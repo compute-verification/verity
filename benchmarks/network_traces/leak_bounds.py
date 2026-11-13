@@ -592,7 +592,8 @@ class Stop(NamedTuple):
     row has its verdicts. Every other execution phase of a scope's monitoring period is charged its whole schedule,
     one no registration was read for among them. ``why``: one line a class and execution phase read, and what was
     read. ``verdicts``: each verdict read that is on a signed head read, with the mark it is printed under
-    (`RUN_NOT_PROVED`)."""
+    (`RUN_NOT_PROVED`), its ``withheld`` word or null, and its ``codes`` where it states them; one that is not
+    accepted is printed withheld for its word, or refused where it states none."""
     held: int
     why: tuple[str, ...]
     verdicts: tuple[Mapping[str, Any], ...] = ()
@@ -1239,7 +1240,7 @@ def render(doc: dict) -> str:
           "phases are its monitoring period's, not the ones a run kept. No option of this command changes that "
           "charge.",
         *(f"- {line}" for line in st["why"]),
-        *(f"- {v['verdict']}, {v['mark']}: {'accepted' if v['accepted'] is True else 'refused'}, "
+        *(f"- {v['verdict']}, {v['mark']}: {'accepted' if v['accepted'] is True else CC.not_accepted(v)}, "
           f"{'complete' if v['complete'] is True else 'not complete'}, on class {v['class']} in execution phase "
           f"{v['window']} of the link {v['link']}, by run {v['run']} under the verifier {verifier(v['verifier'])}, "
           f"proved by {_n(v['proved_by'], 'nothing')}" for v in st["verdicts"]),

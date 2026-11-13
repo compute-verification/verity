@@ -67,6 +67,16 @@ would be a second try at a verdict. It holds every class and not the one it name
 an execution phase's rows into the same classes, so a refusal on one class under the other head can speak for
 rows the head read puts in another. Under the head read a verdict stays its class's, as the rule has it.
 
+**Withheld, and the codes.** A verdict may state two fields more, and both names are its verifier's own
+(`class_charge.SAID`): ``withheld``, null or the one word for what the verifier held its accept back for, and
+``codes``, a list of the verifier's own code words, empty on an accept. The charge reads neither: a verdict counts
+only where ``accepted`` is exactly true, and a withheld one leaves its class at its whole schedule as a refused one
+does, under the head read and under another. A line says "withheld" with the word of a verdict that is not accepted
+and states one, and "refused" where ``withheld`` is null or absent; ``codes`` is handed on as written with each
+verdict read. Either may be absent, and a record whose verdict states one wrongly doesn't read
+(`class_charge.lacks`): a ``withheld`` that is neither null nor a word, a ``codes`` that is no list of words, and
+an accept that states a ``withheld`` word or a code.
+
 **A head** (`head_of`) is the registration's own: its link, execution phase, parameters digest and tables as listed,
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
 certifier's key and session, which a calculator doesn't hold, so a head read here is as good as the run that kept it.
@@ -384,9 +394,12 @@ def _elsewhere(failed: Read, serves: Sequence[str], head: C.Head, digest: str) -
 
 
 def _handed(kind: str, record: Mapping[str, Any]) -> dict[str, Any]:
-    """A verdict read as the calculator prints it: which of the four it is, what it is of and how it went, its run,
-    serve, registration, verifier and proof as its record names them, the rate it says it ran at, and the mark."""
-    return {"verdict": kind, **{k: record[CC.VERDICT].get(k) for k in CC.READ},
+    """A verdict read as the calculator prints it: which of the four it is, what it is of and how it went, what it
+    was withheld for (null where it states none) and its codes as written, where it states them, its run, serve,
+    registration, verifier and proof as its record names them, the rate it says it ran at, and the mark."""
+    verdict = record[CC.VERDICT]
+    return {"verdict": kind, **{k: verdict.get(k) for k in CC.READ}, CC.WITHHELD: verdict.get(CC.WITHHELD),
+            **({CC.CODES: verdict[CC.CODES]} if CC.CODES in verdict else {}),
             **{k: record.get(k) for k in CC.FIELDS if k != CC.VERDICT}, RATE: record.get(RATE),
             "mark": LB.RUN_NOT_PROVED}
 
@@ -504,8 +517,9 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
         lines += [f"{at}, {c.why()}{_refused(read, owed) if c.below else ''}" for c, read in its]
         rows = [(c, read) for c, read in its if c.count]
         named = sorted(serves[digest])
-        tried = [f"the {kind} is {CC.NOT_COMPLETE if r[CC.VERDICT].get(CC.ACCEPTED) is True else CC.REFUSED} on "
-                 f"class {r[CC.VERDICT].get(CC.CLASS)} ({r[CC.RUN]})"
+        tried = [f"the {kind} is "
+                 f"{CC.NOT_COMPLETE if r[CC.VERDICT].get(CC.ACCEPTED) is True else CC.not_accepted(r[CC.VERDICT])} "
+                 f"on class {r[CC.VERDICT].get(CC.CLASS)} ({r[CC.RUN]})"
                  for kind, r in _elsewhere(failed, named, head, digest)]
         again = [f"{at}: held to its whole schedule, every class of it, by a verdict under another head: "
                  f"{'; '.join(tried)}"] * bool(tried)
