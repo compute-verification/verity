@@ -22,7 +22,7 @@ gives its stream (`recordRounds`, `EXTRA_OPENING`), so the tree opens its `sessi
 names exactly its `rounds`, and no other stream. `sessionsTreeReason` holds an audit's sessions on one
 statement's tables to them (`sessions_tree_reason`): each session's record so, at its own tables' lengths, no tree two
 sessions', and every tree a session's, so no statement's coins are flipped twice. `trustedTreesOf` reads the trees from
-the one session the auditor's ledger opens on the verifier's window (`trustedSessionOf`), the session the sample's coins
+the one session the auditor's ledger opens on the verifier's window (`trustedChallengePhaseOf`), the session the sample's coins
 come from. `sampleLinkFirst` holds the log's order (`sample_link_first`): the sample, then the link, then the other
 rounds; no coin of the sample released after a round is opened, and the first round opened a tree's `session` stream,
 the link points.
@@ -279,10 +279,10 @@ def sessionsTreeReason (trees : Array LoggedTree) (records : Array (String × Ar
 
 /-- The coin trees the one session the auditor's ledger opens on `window` under `key` shows the challenger sampled and
 opened (`coinTreesOf`), from the sample's coin evidence `{ledger, main, pins, segment, session}` (`drawCoins`'s, read
-through `trustedSessionOf`). -/
+through `trustedChallengePhaseOf`). -/
 def trustedTreesOf (key : ChallengerKey) (window : String) (coins : Json) : V (Array LoggedTree) := do
   unless keys? coins == some #["ledger", "main", "pins", "segment", "session"] do throw DRAW_FORM
-  let _ ← trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key (getD coins "pins")
+  let _ ← trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key (getD coins "pins")
     (getD coins "main") (getD coins "session")
   let .arr ls := getD (getD coins "session") "log" | throw LOG_FORM
   coinTreesOf (← ls.toList.mapM fun | .str s => pure s | _ => throw LOG_FORM)
