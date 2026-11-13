@@ -7,16 +7,15 @@ public import Proofs.Flock.SpotFlock.AddressFacts.RowOf
 /-!
 # The row at the instance
 
-`rowFact_of_runs` proves the row at the address map from the wiring facts of each accepted run and four premises. Two
-of them speak of a written bit at a port no link names (`AddressRow.OwnLeaves`, `AddressRow.PublishedRows`). At the
+`rowFact_of_runs` proves the row at the address map from the wiring facts of each accepted run and three premises.
+Two of them speak of a written bit at a port no link names (`AddressRow.OwnLeaves`, `AddressRow.PublishedRows`). At the
 instance every port of `R` is linked, and where the design evaluates every row the member's units write is one of
 `R`'s ports (`written_of_two`), so no written bit is at such a port (`linked_of_two`) and both hold with nothing to
 check (`ownLeaves_held`, `publishedRows_held`).
 
-So the row at the instance's address map takes `R`'s reference reads being well formed, where the second stage puts
-a checked proof block (`AddressRow.Sits`) and that Flock's parse keeps each port's reads (`AddressRow.PortReads`):
-`rowFact_of_sits`. The address premise, the design premises and `HonestExists` follow from the same three
-(`addressesConnected_of_sits`, `premises_of_sits`, `honest_of_sits`).
+So the row at the instance's address map takes `R`'s reference reads being well formed and where the second stage
+puts a checked proof block (`AddressRow.Sits`): `rowFact_of_sits`. The address premise, the design premises and
+`HonestExists` follow from the same two (`addressesConnected_of_sits`, `premises_of_sits`, `honest_of_sits`).
 -/
 
 @[expose] public section
@@ -54,28 +53,27 @@ theorem publishedRows_held : AddressRow.PublishedRows (held R B desc q c₀) := 
   obtain ⟨d, h2⟩ := CheckedRun.design_of_ok hr
   exact absurd hl (linked_of_two R B desc q c₀ h2 hy)
 
-/-- **The row at the instance's address map**, from `R`'s reference reads being well formed, where the second stage
-puts a checked proof block and Flock's parse of a registered-reads file. -/
-theorem rowFact_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (held R B desc q c₀))
-    (hPR : AddressRow.PortReads) :
+/-- **The row at the instance's address map**, from `R`'s reference reads being well formed and where the second
+stage puts a checked proof block. -/
+theorem rowFact_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (held R B desc q c₀)) :
     RowFact (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
       (addressOf (held R B desc q c₀)) :=
-  rowFact_of_runs (fun _ hr => wiring_of_refReads (refReadsWf_held R B desc q c₀ hWf) hr) hS hPR
+  rowFact_of_runs (fun _ hr => wiring_of_refReads (refReadsWf_held R B desc q c₀ hWf) hr) hS
     (ownLeaves_held R B desc q c₀) (publishedRows_held R B desc q c₀)
 
-/-- **The address premise at the instance**, from the same three. -/
-theorem addressesConnected_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (held R B desc q c₀))
-    (hPR : AddressRow.PortReads) : AddressesConnected (held R B desc q c₀) :=
-  addressesConnected_of_row (refReadsWf_held R B desc q c₀ hWf) (rowFact_of_sits R B desc q c₀ hWf hS hPR)
+/-- **The address premise at the instance**, from the same two. -/
+theorem addressesConnected_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (held R B desc q c₀)) :
+    AddressesConnected (held R B desc q c₀) :=
+  addressesConnected_of_row (refReadsWf_held R B desc q c₀ hWf) (rowFact_of_sits R B desc q c₀ hWf hS)
 
-/-- **The design premises at the instance**, from the same three. -/
-theorem premises_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (held R B desc q c₀))
-    (hPR : AddressRow.PortReads) : Premises (held R B desc q c₀) :=
-  premises_of_row R B desc q c₀ hWf (rowFact_of_sits R B desc q c₀ hWf hS hPR)
+/-- **The design premises at the instance**, from the same two. -/
+theorem premises_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (held R B desc q c₀)) :
+    Premises (held R B desc q c₀) :=
+  premises_of_row R B desc q c₀ hWf (rowFact_of_sits R B desc q c₀ hWf hS)
 
-/-- **`HonestExists`**, from the same three and a run the instance accepts. -/
+/-- **`HonestExists`**, from the same two and a run the instance accepts. -/
 theorem honest_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (held R B desc q c₀))
-    (hPR : AddressRow.PortReads) (hA : Accepts (held R B desc q c₀)) : HonestExists :=
-  honest_of_row R B desc q c₀ hWf (rowFact_of_sits R B desc q c₀ hWf hS hPR) hA
+    (hA : Accepts (held R B desc q c₀)) : HonestExists :=
+  honest_of_row R B desc q c₀ hWf (rowFact_of_sits R B desc q c₀ hWf hS) hA
 
 end SpotFlock.Honest
