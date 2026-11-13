@@ -120118,3 +120118,33 @@ So of A28: `WindowAt` (row's first half) and `WindowReads` (second half) are bot
 **Not established:** that `Reads.lean`, `Sent.lean`, `windowAt_form`, `Registered`, `Apart`, `Laid`, `WindowPasses`, `Sample`, `Passes` (after the merge) and `States` compile in the tree: none has a verdict yet. That my files still compile after `ae80f367e6` (not merged). That soundness's instance discharges `RegisteredHolds` in the guarded form (your 04:09Z relays a yes for the instance; I have not read its field). That `7408`'s machine holds a tree as warm as it reports for the second file.
 
 **To post:** to soundness (PRF-490): "WINDOWAT: `windowReads_members (hF : FormAccepts) (hR : RegisteredHolds I.base) : I.WindowReads k sentEvidenceAt (statementFiles statementTable)` and `windowAt_form (hW : I.WindowRegistered) (hF) (hA : FormApart) (hR) : I.WindowAt k` are written on `cursor/proofs-windowat-5e4b` at `a1f0768d9e`, not compiled yet. `RegisteredHolds` is guarded (only digests that are some file's SHA-512), as `registeredOf` is: with registered files chosen by digest it needs no registration check, since an accepted run's blobs hold every member's file (`Spot/OneStageZk.lean:1150`, `membersFiles`)."
+
+## ACCEPTS, Fri 04:27Z: MERGED HEAD `2d2bf8a4d3` (RUNCOINS's accepted line at `f079d353a5` = `71ebf98c65` plus `RunsAs/Parsed.lean` only); `ReadsWithin`: neither copy has compiled yet, mine is building now in `r20261113-042027-7fb2`; the two `_form` statements still have no `ReadsWithin` premise (unchanged since 04:18Z); none of my files reads `OneStage.checkAt`
+
+**Merged head.** [read] My branch `cursor/proofs-accepts-7d08` merged `f079d353a5` as `2d2bf8a4d3` at 04:11Z, before your 04:24Z text said `71ebf98c65`. [read] `git diff 71ebf98c65 f079d353a5` is `RunsAs/Parsed.lean` (48 lines) and its one lakefile line, nothing else. [derived] I do not revert it: a revert on my line would delete `Parsed.lean` wherever ASSEMBLY's join takes both my line and RUNCOINS's. No file of mine that the join reads imports it; only the new `RuleTwo.lean` below does. ASSEMBLY can take my line at `2d2bf8a4d3`, or at today's head `66e1ede150`, which adds two lakefile roots and `RuleTwo.lean`.
+
+**Compiled since 04:18Z.** Nothing. [run] `r20261113-033021-8be7` (vy-nebius-2, tree `5e016c10de`) holds a Lean slot and is still building `Fits.lean`'s dependencies ("775 files changed there"), with no `lean exit` line yet. [derived] Its `AcceptsTop` part cannot pass: at that tree `AcceptsTop` is not a lakefile root. [run] `r20261113-035814-2586` ended rc 143 (signal 15) at 04:09:06Z, cancelled by me, before its check started. [read] Its status names tree `8929a60680`, not `3dde8747b8` as I said at 04:18Z. Neither tree had `Within` as a root, so it could not have passed either.
+
+**Why tries were sent again.** [run] `r20261113-041601-d3dd` (Within, at `2d2bf8a4d3`) failed in 18 s: "error: unknown module `Proofs.Properties.Verity.SampledTwo.Within`". A try refuses a file that is not a lakefile root. [read] `93b2445716` makes `Within` and `AcceptsTop` roots. [run] I cancelled `r20261113-035902-2a24` and `r20261113-041240-7f9e`: both sat at trees without those roots and neither had started ("its check never started").
+
+**`ReadsWithin`.** [run] Mine: `r20261113-042027-7fb2` (`Within`, then `AcceptsTop`, at `93b2445716`, on vy-nebius-cpu-3) holds Lean slot build/4 and is replaying dependencies; it has not reached `Within.lean` yet. [run] RUNCOINS's: `r20261113-035548-49aa` was still waiting for a Lean slot at 04:21Z. Whichever compiles first stays, named in a title. If RUNCOINS's stays, I delete `Within.lean`'s walk and keep `playAccepts_of_run'` over `reads_within`.
+
+**The statement change (from 04:18Z, still true).** [read] `acceptsRun_form` and `reachedAccepts_form` (`AcceptsTop.lean`, `8929a60680`) take no `ReadsWithin`. They go through `playAccepts_of_run'` (`Within.lean`). Not compiled.
+
+**Next piece, written.** [read] `RuleTwo.lean` (`66e1ede150`, root, pushed) holds `ruleIsTwo (C) : RuleIsTwo C`, from `RunsAs.paramsOfJson_twoStage` through `Decoded`'s first conjunct. [run] It is in `r20261113-042540-6f86` (vy-nebius-cpu-12), which builds `Parsed.lean` as a dependency, so it also tells RUNCOINS whether `Parsed.lean` compiles. When it passes, `RuleIsTwo` leaves the two `_form` statements, a statement change I will name in a title. Until then `AcceptsTop.lean` keeps taking it.
+
+**The form's last step.** [read] None of `Accepts`, `AcceptsProof`, `Cover`, `ReadsOnly`, `Reached`, `OfRun`, `Fits`, `Within`, `AcceptsTop` or `RuleTwo` names `checkAt`, `OneStage.checkAt`, `SecondRead` or `interiorUnshown`. [derived] They open `accepted_steps` only as far as `inputAt` (and `accepted_fits` in `Fits.lean`). Since `accepted_steps` keeps its statement, TWOLEG's change reaches them only if `accepted_fits`' or `inputAt_ok`'s statement moves. I will recompile on TWOLEG's head when the order reaches my line.
+
+**True and empty.** [derived] `reaches_frame`, `reachedAccepts`, `sourcesFit`, `acceptsRun_of_run`, `acceptsRun_form` and `reachedAccepts_form` are true and empty until TWOLEG's honest play is accepted by a run.
+
+**One session.** [read] No `~/wt/.pen` existed at 04:23Z: this VM was replaced again (fresh `main`, no worktree). I wrote `~/wt/.pen` for this session and restored the branch from `origin`; nothing was lost, since everything was pushed.
+
+**Runs.**
+- `r20261113-033021-8be7`: running (vy-nebius-2), `Fits` still building.
+- `r20261113-042027-7fb2`: running (cpu-3), `Within` and `AcceptsTop`; expected by about 05:15Z.
+- `r20261113-042055-897c`: in line (cpu-14), `Fits`, `Reached` and `OfRun` at `93b2445716`.
+- `r20261113-042540-6f86`: launched (cpu-12), `RuleTwo`.
+- `r20261113-041601-d3dd`: failed (not a root).
+- `r20261113-035902-2a24`, `r20261113-041240-7f9e`, `r20261113-035814-2586`: cancelled.
+
+STOP RULE: nothing done (no lock, no `Sampled.lean`, no switch).
