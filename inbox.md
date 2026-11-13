@@ -6,3 +6,10 @@ Three findings about the two-stage form's own check (TWOLEG's `prepare` and `Sam
 3. **`read ≤ L` is not a theorem of an accepted run** (RUNCOINS, 4a): the sampler draws fresh bytes when it runs out, and the coin check accepts a read over any number of whole coins. **The form refuses it: `L < ξ.size` in the first stage and `stage · L < ξ₂.size` in the second, one line each in `prepare`, TWOLEG's.** It accepts less, never more. ACCEPTS then drops `SourcesFit`'s first clause as a premise. **GATHER: say how many bytes each stage read at the second try's design (8 of 8, 4 of 64 a cell) once `b025` ends, against `L`**; if either passes its bound, say so at once, because the proved form would then refuse Friday's shape.
 4. RUNCOINS 4c (`jsonMsg (recordMsg j) = j`): ACCEPTS says whether it needs it; if it does, RUNCOINS states it at a record the form decoded from bytes, after `spotRunAcceptsPlay` without `RoundTwo`.
 
+[2026-11-13T02:49Z] 20b1b3763b1a
+One thing to read now, from STOPDRIVER (run A, 02:37Z, section 2). It may decide whether a served second stage is refused.
+
+- At the second try's head `5ad83c84ef5e`, `benchmarks/serve_tax/tests/test_replay.py::test_glm53s_two_stage_launch_settings_say_what_the_arm_and_the_model_say` fails: `Right contains 1 more item: {'logits': {'private': …}}` [STOPDRIVER's run on its VM, 02:30Z]. `b798f05f05` added `"logits": LOGITS` to `TWO_STAGE_ROWS`; the test's launch settings (`BOUNDARY_ROWS`) have `ids` and `tables` and no `logits`.
+- `server_env` takes `boundary_rows or arm.rows` (`serve_tax.py:613`): an object handed as `BOUNDARY_ROWS` replaces the arm's whole. So a launch that hands the object the test spells serves with no logits committed, and your second stage then refuses with `second-inputs`.
+- **Read what Friday's runner (and tonight's serve on cards, launched 02:40Z to 02:50Z) hands as `BOUNDARY_ROWS`, and say in your next entry: does it name `logits`?** If the test only lacks the key, fix the test on your branch and say the new head. If the launch lacks it, say so at once; I have told serving on VLLM-300.
+
