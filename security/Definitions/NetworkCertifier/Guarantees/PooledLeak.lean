@@ -60,7 +60,7 @@ period's proof blocks and `b` each proof block's committed bits: `(ln(1/δ)/q + 
 incorrect proof blocks, plus the advice and timing terms and the schedule terms. A proof block's outputs are at most 16
 bits, so `b = 16`.
 
-The network certifier is one device on the server's uplink, as in `PeriodLeakAccepted`
+The network certifier is one device on the server's uplink, as in `MonitoringPeriodLeakAccepted`
 (`Definitions.NetworkCertifier.Tap`): one run of its code gives the cells the client receives (it functions as an
 active network certifier) and its record of them, the observations the audits read, so on every schedule its record
 format holds the client's cells read back from the record. Its one named assumption is `trusted-host`.
