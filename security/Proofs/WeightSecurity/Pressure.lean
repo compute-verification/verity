@@ -130,7 +130,7 @@ probability at most the windows' knowledge and binding terms plus `(1 − num/de
 registers. -/
 theorem TheftServedDeployedRate {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv]
     [Inhabited Adv] [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
-    (W : ℕ → JointAuditV5) (T L E M num den : ℕ) (hd : 0 < den) (hq : num ≤ den)
+    (W : ℕ → JointAuditV5) [∀ t, Nonempty (W t).EndΩ] (T L E M num den : ℕ) (hd : 0 < den) (hq : num ≤ den)
     (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (A : Set (Outsider R (Q × Adv) (O → V) Θ'))
     (p : ℝ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (s : Θ → R → Strategy (periodG (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T))

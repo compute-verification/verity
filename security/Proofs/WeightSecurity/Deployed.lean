@@ -35,7 +35,7 @@ abbrev Release (O V Tick Adv : Type) := (O → V) × Tick × Adv
 /-- **A window served at the deployed audit**: the datacenter commits the window's release, then the window's audit
 runs. -/
 noncomputable def servedGame (w : JointAuditV5) (Rel : Type) :
-    Game (Rel × (w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) :=
+    Game (Rel × ((w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) :=
   .send Rel fun m => w.game.map fun o => (m, o)
 
 /-- The audit's strategy that a served window's strategy plays. -/
@@ -44,18 +44,20 @@ noncomputable def servedAudit (w : JointAuditV5) {Rel : Type} (τ : Strategy (se
 
 /-- A served window's record: its verdict, whether its sample holds an incorrect proof block, how many it has, and its
 release. -/
-noncomputable def servedRec (w : JointAuditV5) (τ : Strategy (servedGame w (Release O V Tick Adv)))
-    (b : Release O V Tick Adv × (w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) : Served O V Tick Adv :=
+noncomputable def servedRec (w : JointAuditV5) [Nonempty w.EndΩ] (τ : Strategy (servedGame w (Release O V Tick Adv)))
+    (b : Release O V Tick Adv × ((w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) :
+    Served O V Tick Adv :=
   ⟨w.Accepts b.2, ∃ u ∈ b.2.2.1, u ∈ w.wrongSet (servedAudit w τ), (w.wrongSet (servedAudit w τ)).card,
     b.1.1, b.1.2.1, b.1.2.2⟩
 
 /-- The deployment's run over `T` windows at the datacenter's strategy `s`. -/
-noncomputable def servedRun (W : ℕ → JointAuditV5) (T : ℕ)
+noncomputable def servedRun (W : ℕ → JointAuditV5) [∀ t, Nonempty (W t).EndΩ] (T : ℕ)
     (s : Strategy (periodG (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T)) :
     Game (List (Served O V Tick Adv)) :=
   periodRun (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t => servedRec (W t)) 0 T s
 
-theorem servedRec_accepted_le (w : JointAuditV5) (τ : Strategy (servedGame w (Release O V Tick Adv)))
+theorem servedRec_accepted_le (w : JointAuditV5) [Nonempty w.EndΩ]
+    (τ : Strategy (servedGame w (Release O V Tick Adv)))
     (hCR : ∀ k ω j, Assumptions.TableCRZAt execArith hs512
       (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw (servedAudit w τ) k).draw ω)
         (reg (w.memberSim (servedAudit w τ) k))) j
@@ -70,7 +72,8 @@ theorem servedRec_accepted_le (w : JointAuditV5) (τ : Strategy (servedGame w (R
   rw [prob_map]
   exact w.accepted_drawnWrong_le (servedAudit w τ) hCR hA2
 
-theorem servedRec_miss_le (w : JointAuditV5) (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (x : ℝ) (hx : 0 ≤ x)
+theorem servedRec_miss_le (w : JointAuditV5) [Nonempty w.EndΩ] (hA3 : Assumptions.UniformRandomBytes w.Lb w.src)
+    (x : ℝ) (hx : 0 ≤ x)
     (hpa : ∀ B, w.pa B ≤ x ^ B.card) (τ : Strategy (servedGame w (Release O V Tick Adv))) :
     prob (fun b => ¬ (servedRec w τ b).sampledIncorrect) (servedGame w _) τ ≤
       ENNReal.ofReal x ^ (w.wrongSet (servedAudit w τ)).card := by
@@ -83,7 +86,7 @@ blocks undetected bounded by the windows' knowledge and binding terms plus `x^M`
 under `JointHorizonV5`'s named assumptions at every window and weight security's `HonestUseHard` and `Simulable`. -/
 theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv]
     [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
-    (W : ℕ → JointAuditV5) (T L E M : ℕ) (x : ℝ) (hx0 : 0 ≤ x) (hx1 : x ≤ 1)
+    (W : ℕ → JointAuditV5) [∀ t, Nonempty (W t).EndΩ] (T L E M : ℕ) (x : ℝ) (hx0 : 0 ≤ x) (hx1 : x ≤ 1)
     (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (A : Set (Outsider R (Q × Adv) (O → V) Θ'))
     (p : ℝ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (s : Θ → R → Strategy (periodG (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T))
