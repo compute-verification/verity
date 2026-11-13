@@ -85,13 +85,13 @@ NUMPY_USERS += ("verity/definitions/cross_call.py", "verity/definitions/kernels"
                 "verity/definitions/word.py")
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
-NO_DATE_OR_REASON = ("verity/composite/device/live_challenger", "verity/protocols/poub/device/live_verifier",
+NO_DATE_OR_REASON = ("verity/protocols/compose/device/live_challenger", "verity/protocols/poub/device/live_verifier",
                      "verity/protocols/pouw/clear", "verity/protocols/pouw/receipts")
 #: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
 #: file's text: it reads no other distribution at run time and names no path of the census, and each of its
 #: directories is a package.  The code that came from ``benchmarks/``, and the Lean check of σ beside Flock's prover.
 #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
-HELD_AS_VERITY = ("verity/composite/device/live_challenger", "verity/protocols/flock/sigma",
+HELD_AS_VERITY = ("verity/protocols/compose/device/live_challenger", "verity/protocols/flock/sigma",
                   "verity/protocols/poub/device/live_verifier", "verity/protocols/pouw/clear",
                   "verity/protocols/pouw/receipts")
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
@@ -158,13 +158,13 @@ BENCHMARKS_IMPORTERS = {
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
-                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/composite/device/live_challenger`)"),
+                    "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
     **dict.fromkeys(("adapters/vllm/tests/engine/ppl_oracle.py", "adapters/vllm/tests/engine/fattn_oracle.py"),
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`)"),
     "adapters/vllm/tests/engine/int8_attention_sass.py": "kernels: the PoUW kernels' SASS gate "
                                                              "(`benchmarks/pouw/harness/sass_gate.py`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
-    "verity/composite/device/live_challenger/auditor.py":
+    "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
         "loaded by path since before the move; goes when the session's code moves under `verity/`",
     "verity/protocols/poub/device/live_verifier/tests/stub_verifier.py":
