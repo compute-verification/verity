@@ -12,9 +12,18 @@ prover -> memory-challenger   per frame Block, the whole block (private)
 ~~~
 
 `Frames` is their codec over the session's stream, `u64be index` for `Warmup` and `Index`, `u64be 2^64 − 1` for `End`
-and the whole block for a `Block`, which the deployment layer's byte-stream adapter (`verity.configuration.deploy.stream`) drives
-them on: `answer` is the prover's party run there. Each side reads its connection through `Polled`, which polls for up
-to `SPIN_NS` before it blocks, so neither host's CPU sleeps through a round.
+and the whole block for a `Block`, which `run` steps them on: `answer` is the prover's party run there. Each side reads
+its connection through `Polled`, which polls for up to `SPIN_NS` before it blocks, so neither host's CPU sleeps through
+a round.
+
+The loop. `run(party, params, identity, f, codec, peer=...)` drives one party (`party.Party`) against its one peer over
+the stream `f`. Each message it sends `peer` is written by `codec.write`, and each that reaches it is read by
+`codec.read`. Its sources are answered here once the step that asked is done, in the order it asked: a read of its clock
+with a reading of `clock`, a request for `n` bytes of coins with `coins(n)`, and a `Timer` with `ClockTimer` once
+`wait(clock, at)` returns. Nothing is framed, signed or kept on the way, so the stream carries the codec's bytes alone
+and no handshake. A frame reaches the party unstamped (`Received.at` is None), so a party that times a frame asks its
+clock, and reads nothing it didn't ask for. An exception out of the party, the codec or the stream is the caller's:
+nothing is retried, and nothing becomes a refusal. `run` returns the party's `Finish` and what it recorded, in order.
 
 A request that names no audit runs under the id the auditor designates from its coins, the node and the setup's root
 (`coin_session_id`, under `period.SESSION_DOMAIN`). One that names its audit (`request_of` with `audit`) runs under
@@ -38,14 +47,14 @@ import socket
 import subprocess
 import sys
 import time
+from collections import deque
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Protocol
 
 from verity.commitments.randomness import derive
-from verity.configuration.deploy import stream
 from verity.configuration.deploy.manifest import Channel, Manifest, Role
-from verity.configuration.deploy.party import Finish, Identity, Received, Send
+from verity.configuration.deploy.party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
 from verity.configuration.deploy.stream import Side
 from verity.configuration.wire import Body, Int, Message, Schema
 from verity.protocols.pous.verifier import run as R
@@ -111,6 +120,64 @@ class Polled:
 
     def flush(self) -> None:
         pass
+
+
+class Codec(Protocol):
+    def write(self, f: BinaryIO, message: Message) -> None:
+        """`message` on the stream, as its protocol's bytes, flushed."""
+
+    def read(self, f: BinaryIO) -> Message:
+        """The next message off the stream; ConnectionError when it ends first."""
+
+
+def sleep_until(clock: Callable[[], int], at: int) -> None:
+    """Return once `clock` reads `at` or later, sleeping on the machine's clock meanwhile."""
+    while (now := clock()) < at:
+        time.sleep((at - now) / 1e9)
+
+
+def run(party: Party, params: Params, identity: Identity, f: BinaryIO, codec: Codec, *, peer: str,
+        clock: Callable[[], int] | None = None, coins: Callable[[int], bytes] | None = None,
+        wait: Callable[[Callable[[], int], int], None] = sleep_until) -> tuple[Finish, list[LogEntry]]:
+    """`party` against `peer` over `f` until it finishes (module docstring): its finish, and what it recorded."""
+    records: list[LogEntry] = []
+    asked: deque[tuple[str, int]] = deque()
+
+    def act(actions: list[Any]) -> Finish | None:
+        for a in actions:
+            if isinstance(a, Finish):
+                return a
+            if isinstance(a, LogEntry):
+                records.append(a)
+            elif isinstance(a, Timer):
+                asked.append(("ClockAlarm", a.at))
+            elif isinstance(a, Send) and a.channel == peer:
+                codec.write(f, a.message)
+            elif isinstance(a, Send) and a.channel == "clock" and a.message.type in ("ClockRead", "ClockAlarm"):
+                asked.append((a.message.type, a.message.fields.get("at", 0)))
+            elif isinstance(a, Send) and a.channel == "coins" and a.message.type == "CoinsDraw":
+                asked.append(("CoinsDraw", a.message.fields["n"]))
+            else:
+                raise ValueError(f"{identity.party} took {a!r}, which a stream to {peer} doesn't carry")
+        return None
+
+    def answer(ask: str, arg: int) -> Received:
+        if ask == "CoinsDraw":
+            if coins is None:
+                raise ValueError(f"{identity.party} draws coins, and its stream has none")
+            return Received("coins", Message("Coins", body=coins(arg)))
+        if clock is None:
+            raise ValueError(f"{identity.party} reads its clock, and its stream has none")
+        if ask == "ClockRead":
+            return Received("clock", Message("ClockReading", {"ns": clock()}))
+        wait(clock, arg)
+        return Received("clock", Message("ClockTimer", {"at": arg, "ns": clock()}))
+
+    done = act(party.start(params, identity))
+    while done is None:
+        r = answer(*asked.popleft()) if asked else Received(peer, codec.read(f))
+        done = act(party.on(r))
+    return done, records
 
 
 def _read(f: BinaryIO, n: int) -> bytes:
@@ -186,8 +253,7 @@ def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes]) -> in
     challenger ends the session, the collector paused as on the challenger's side; the frames answered, the warm-ups
     among them."""
     with mc.collector_paused():
-        done, _ = stream.run(Prover(respond), {"block_bytes": block_bytes}, Identity(PROVER), f, Frames(),
-                             peer=CHALLENGER)
+        done, _ = run(Prover(respond), {"block_bytes": block_bytes}, Identity(PROVER), f, Frames(), peer=CHALLENGER)
     return done.outcome
 
 
@@ -282,5 +348,6 @@ def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 __all__ = ["CHALLENGER", "END", "ID", "MANIFEST", "MODULE", "PARAMS", "PREMISE", "PROVER",
-           "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Frames", "Polled", "Prover", "answer",
-           "coin_session_id", "command", "placement", "request_of", "salt", "session", "session_id", "setup_of", "side_of"]
+           "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Codec", "Frames", "Polled", "Prover", "answer",
+           "coin_session_id", "command", "placement", "request_of", "run", "salt", "session", "session_id", "setup_of",
+           "side_of", "sleep_until"]
