@@ -5,7 +5,7 @@ the scheduler replay (`replay`) and the derived rules (`derived`) leave, in a pr
 
 `encode(advice, record, registered) -> bytes` and `decode(bytes, record, registered) -> I1.Advice`, with
 `decode(encode(a)) == a`. `decode` is total: any byte string decodes to one I1 v0 or is refused by name (`AdviceCodeError`),
-deterministically, and a string longer than the cap ℓ (`Registered.cap_bits`) is refused unread.
+deterministically. A string longer than ℓ (`Registered.cap_bits`) is refused unread, and `encode` writes none.
 
 **Certified, 0 bits** (`Record`, from the network certifier's signed records; the compile unit holds them as witness):
 - the network certifier's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
@@ -336,6 +336,10 @@ class Registered:
         if type(record) is not Record:
             raise AdviceCodeError(f"v1 decodes against a certified Record, not a {type(record).__name__}")
         return decode(data, record, self if cap_bits is None else replace(self, cap_bits=cap_bits))
+
+    def packed(self, bits: Sequence[int], lens: Sequence[int]) -> bytes:
+        """A string's bytes, its windows charged `lens`; refuses one over ℓ, which no reader reads (`window_code.capped`)."""
+        return _total(lambda: CV.capped(bits, lens, self.cap_bits))
 
     def config(self, engine: Any) -> Any:
         """The derived rules' `Config` for `engine`."""
@@ -698,9 +702,9 @@ def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
 def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = True) -> bytes:
     """The advice's v1 string under the record; refuses an advice v1 can't carry (one whose schedule isn't the
     replay's under its arrival order, whose rows aren't in the registered order, or whose sources aren't the canonical
-    ones). `check` decodes the string back and holds it to the advice."""
+    ones) and a string over ℓ (`Registered.packed`). `check` decodes the string back and holds it to the advice."""
     wins, rp, order = _residual_of(advice, record, reg)
-    data = CV.pack(string_of(wins, reg, length_tails(record, reg))[0])[0]
+    data = reg.packed(*string_of(wins, reg, length_tails(record, reg)))
     if check:
         index = {record.requests[k].id: e for e, k in enumerate(order)}
         theirs = [[(index[advice.requests[x.request].id], x.start, x.n) for x in st.rows] for st in advice.steps]
@@ -782,7 +786,7 @@ def _replayed(wins: Sequence[Any], tails: Sequence[Sequence[int]], d: Any, recor
         raise AdviceCodeError(f"the replay asks {used} of the string's {len(arrived)} decisions")
     if _residual(record, reg, order, rp, decisions, looks, len(wins), emitted) != list(wins):
         raise AdviceCodeError("the windows aren't the replay's residual: a value charged to another window than A5's")
-    return cfg, order, rp, None if reader is None else reader.end(kept_terms(record, reg, order, rp, emitted))
+    return cfg, order, rp, None if reader is None else reader.end()
 
 
 def _decode(wins: Sequence[Any], tails: Sequence[Sequence[int]], d: Any, record: Record, reg: Registered) -> Decoded:
