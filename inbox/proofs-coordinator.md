@@ -131959,3 +131959,54 @@ artifacts as `idents.py` (sha256 `f7de49deab56555f…`) and `locks.py` (`a6ba75b
 `git grep` on `257b6c5e2df5`: `git grep -n "verity/registration/v[12]"` for the 101 lines, `git grep -c "WindowRecord\."
 -- '*.lean'` for the digest's Lean readers. No count changes. The checkpoint note of this turn cannot be synced for the
 same reason; the state is in my entries.
+
+## LOOSEMAP, Fri 13 Nov 09:10Z: NEW, a suite fails because of the move: two tests of `verity-check` fail on the moved tree, and a second hand patch of one test file is needed with the map (written, its suite is running). For lean: the group map alone changes 24 of 36 Lean packages' keys, the loose map's four among them, and rewrites the same two lines of the helper
+
+**In plain words.** The certificate, the four root tests and the listing's check all pass, as my last entries say. The suites, which take longer, have now found two tests that fail once the map has run. Both are tests of the check's own tooling that hold the agreement's directory beside the prover's directory, and the map puts it inside. Neither is a fault in the moved code: one test builds the old path in a way no mover can see, and the other expects a list that is now one entry longer. Without a second hand patch the suite `verity-check` is red on the moved tree, so the map must not be staged with the README's patch alone. I have written that patch and its suite is running; I title again when it ends. Separately, your question for lean is answered by a run.
+
+Clock: `date -u` read 09:10Z. Mailbox read at 09:10Z: nothing after your 08:55Z message.
+
+**1. The suite that fails** [run `r20261113-082338-f6dc`, cpu-7, on the pushed `edea1506d5a7`, chain 1's moved tree with the README's hand commit, `--cwd source`; running; at 09:06Z 82 of its 96 suites had ended: 81 passed, 1 failed]
+- "failed  verity-check  999 passed, 2 failed in 391 s".
+- `tools/verity/check/tests/test_check.py::test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolchain_only`: `FileNotFoundError`. The test makes its files under a temporary root from path strings, which the mover rewrote to `verity/protocols/flock/prover/agreement/ci.py`, and later writes the same file as `flock.parent / "agreement" / "ci.py"`, the old place built from the prover's parent, which the mover cannot see [read: `test_check.py:55-57,79` on `edea1506d5a7`].
+- `…::test_the_agreement_is_not_required_for_docs_alone`: "At index 0 diff: 'verity/protocols/flock/prover/' != 'verity/protocols/flock/prover/agreement/'", "Left contains one more item". The rule that says which changes need `lean-agreement` lists `verity/protocols/flock/prover/` and, after the move, `verity/protocols/flock/prover/agreement/` inside it, so a change to the agreement now touches two entries where the test expects one [read: `tools/verity/check/tool.py:24`, `test_check.py:1062-1063`].
+- **The rule itself asks for the same thing after the move as before** [derived]: before, a file under the prover's directory, `pod/`, `agreement/` or `tool.py` needed `lean-agreement`; after, all four are under the prover's entry, and `!README.md` and `!PROTOCOL.md` still leave the docs out. Its three inner entries are now redundant; I leave them, since removing them is a change to the rule and not a move.
+- **The same suite fails the same way on the first rehearsal's tree** ("999 passed, 2 failed in 359 s") [run `r20261113-081210-6735`, running; at 09:06Z 117 suites passed and this one failed]. No other suite has failed in either run so far.
+
+**2. The second hand patch** (not yet on the patch branch: I add it when its suite passes)
+- **What:** `tools/verity/check/tests/test_check.py`, 4 lines in and 3 out. Line 79 reads `(flock / "agreement" / "ci.py")` for `(flock.parent / "agreement" / "ci.py")`. Lines 1062-1063 expect `["verity/protocols/flock/prover/", "verity/protocols/flock/prover/agreement/"]` where they expected the second alone.
+- **Where:** commit `3f774f731771` on `cursor/proofs-loosemap-0917-on-chain2`, on top of the map's commit and the README's patch on chain 2's base.
+- **Its check:** `suites.py --changed 546575e05f79 --quick` on that pushed commit, `--cwd source` [run `r20261113-090849-cd23`, cpu-9, running; it runs `verity-check`, about seven minutes].
+- It goes where the README's patch goes: right after the map's commit, before the group map.
+
+**3. For lean: the group map alone** [run `r20261113-090013-dac7`, cpu-14, rc 0; base `a21f150fcce8`, top's branch as it is, without this map; I ran it on a node because the tree with the group map staged was not on my VM]
+- The group map staged alone: "move-check: certified a21f150fcce8..0c7190869888 is a pure move (1263 renames, 1949 path-only edits)".
+- **`lean_changed.py --inputs-key` for all 36 packages, at the base and at the staged commit: 24 differ, 12 are the same.** `lean_audit.py`'s `key` gives the same two sets.
+- **The four this map changes are among the 24:** `core_firewall`, `security`, `security_proofs`, `security_properties`.
+- **The other 20:** `certifier_device`, `certifier_program`, `core_composition`, `core_memory_challenger`, `core_onsite`, `core_remote`, `core_sigma`, `core_spot`, `core_vstar`, `core_vstar_recursive`, `flock_verifier`, `nci_check`, `network_check`, `pous_check`, `pous_grader`, `pouw_check`, `pouw_commit`, `pouw_pearlplus`, `pouw_window`, `remote_audit`.
+- **The 12 it leaves:** `core_attest`, `core_base`, `core_circuits`, `core_commitments`, `core_identity`, `core_protocol`, `core_randomness`, `core_requirement`, `core_world`, `lms`, `verity_difftest`, `verity_evaluate`.
+- **Why so many:** it moves 18 Lake packages, and of the Lean inputs (sources, lakefiles, manifests, locks) it rewrites 11 in place and 38 as it moves them; 609 more move with their bytes unchanged.
+- **The helper:** it rewrites six lines of `verity/protocols/recursion/verifier/firewall/tests/_release.py`, and the two this map rewrites (the docstring and the line that loads `firewall_agree.py`, lines 95-96) are among them. So what you told lean holds, now by a run: with the group map in the chain, the four are checked again whether or not this map rides.
+
+**4. The same certificate on top's trial branch, with its tests** [run `r20261113-084801-7460`, cpu-8, rc 0; base `72ee881a5b3f`, `f14ded183a6` and the map's file]
+- After the three there: "certified 20557c70c74f..69dfb9dab840 is a pure move (34 renames, 217 path-only edits)", "0 issue(s)", the README's patch applied by `git am`.
+- Before this map and after it, `PYTHONPATH` cleared: `import_order.py --check` "the same" both times; the four root tests "69 passed" both times (77.66 s, 77.40 s).
+- The root tests do not run `tools/verity/check/tests/`, so they did not see the failure of section 1.
+
+**NEEDS**
+1. **Do not let the map be staged with one patch.** If top has taken `0d456883ef9d` as the whole hand step, it needs the second file too; I give its branch and head in my next entry, by 09:35Z.
+
+**To post** (as it is, once the suite of section 2 has passed; I say so in my next title):
+
+> Proofs' loose paths map needs two hand patches after it, not one. The move leaves two tests of `tools/verity/check/tests/test_check.py` failing (suite `verity-check`: 999 passed, 2 failed), because they hold the agreement beside the prover's directory and the map puts it inside. The second patch changes three lines of that one test file. Both patches go right after the map's commit and before the group map.
+
+**Not established**
+- That `verity-check` passes with the second patch (`r20261113-090849-cd23`, running).
+- The other suites: 14 of 96 not ended on chain 1's moved tree (`r20261113-082338-f6dc`); on chain 2's (`r20261113-084411-37ea`) most have not. Another suite may fail.
+- Whether any other file builds a moved path from a parent directory, as the first test did: the suites are the check, and I have not searched beyond them.
+
+**Pushed heads**
+- `cursor/proofs-loosemap-0917` `56561c89bb4a` (the map alone; unchanged).
+- `cursor/proofs-loosemap-0917-hand-patch` `0d456883ef9d` (the README's patch only, so far).
+- `cursor/proofs-loosemap-0917-on-chain2` `3f774f731771` (chain 2's base, the map, its move, the README's patch, the tests' patch).
+- `cursor/proofs-loosemap-0917-on-chain2-after-three` `1cefb506b2ae`; `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7`; `cursor/proofs-loosemap-0917-moved` `3fa6c6c82dc6` (superseded).
