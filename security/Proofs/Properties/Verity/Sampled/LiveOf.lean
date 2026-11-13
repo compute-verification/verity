@@ -262,8 +262,9 @@ theorem desc_of_ports {I : FlockSoundness.Discharge.Exec.Inputs}
       (FlockSoundness.Discharge.ZkExec.zkTags I) I.publicFile = .ok ()) :
     ∃ D pubO, Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D ∧
       FlockSoundness.Built D.unroll.unit ∧
-      Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile = .ok pubO := by
-  rw [circuitOf_parse hflat.1 hflat.2] at h
+      Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile = .ok pubO ∧
+      Flock.ProvedScope.circuitOf (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D.unroll := by
+  rw [circuitOf_parse hflat.1 hflat.2] at h ⊢
   unfold Flock.PortRoots.checkOf Flock.PortRoots.checkWith at h
   split at h
   · cases h
@@ -278,11 +279,36 @@ theorem desc_of_ports {I : FlockSoundness.Discharge.Exec.Inputs}
   have hD : Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok (.single c) := by
     unfold Flock.Desc.parse
     rw [hp]
-  refine ⟨.single c, pubO, hD, ?_, hl⟩
+  refine ⟨.single c, pubO, hD, ?_, hl, hp⟩
   refine FlockSoundness.Discharge.Hidden.built_of_parseStmt (D := .single c) ?_ ht
   unfold Flock.Desc.parseStmt
   rw [if_neg (by simp [hflat.2])]
   exact hD
+
+/-- **Where `verify --zk`'s form check passes at an untemplated statement, the circuit it parses is in
+`Layout.scopeOkH`**: `KsScope.unitWhy` refuses any other (`FailClosed.scopeOkH_eq`). -/
+theorem scopeH_of_form {t : Flock.Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
+    {draw : Option Json} {c : Flock.Circuit} (hc : Flock.ProvedScope.circuitOf t cf tables = .ok c)
+    (hi : t.isTmpl = false) (h : Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf t cf tables) t pf count draw = .ok ()) :
+    FlockSoundness.Discharge.Layout.scopeOkH c = true := by
+  rw [hc] at h
+  unfold Flock.KsScope.checkOf at h
+  cases htw : Flock.KsScope.tagsWhy t with
+  | some _ => simp [htw] at h
+  | none =>
+    cases hl : Flock.HmOut.loadPublic t c pf with
+    | error _ => simp [htw, hl] at h
+    | ok pub =>
+      cases hfw : Flock.KsScope.filesWhy t count c pub pf with
+      | some _ => simp [htw, hl, hfw] at h
+      | none =>
+        unfold Flock.KsScope.filesWhy at hfw
+        cases hu : Flock.KsScope.unitWhy t count c with
+        | some _ => simp [hu] at hfw
+        | none =>
+          unfold Flock.KsScope.unitWhy at hu
+          rw [← FlockSoundness.Discharge.FailClosed.scopeOkH_eq]
+          cases hs : Flock.ProvedScope.scopeOkH c <;> simp [hi, hs] at hu ⊢
 
 /-! ## An accepted play's session -/
 
@@ -353,7 +379,7 @@ open FlockSoundness.Discharge.Recursion.Witness (toExec) in
 /-- **The session's inputs, descriptor, public file and population on an accepted play** (`accepted_parts`): the inputs
 v2 hands `flock-verify` on the committed files, whose tags are untyped and hidden-output with retained rounds and
 `hm96-sha512/v1` leaves (`FailClosed.check_ok` at v2's statement check under `--zk`), the descriptor and public file
-its ports check reads (`desc_of_ports`), with the record's population, which the program's proof blocks under the
+its ports check reads (`desc_of_ports`), in `Layout.scopeOkH` (`scopeH_of_form`), with the record's population, which the program's proof blocks under the
 verifier's query are in order (`popMatches_of_popOk`). -/
 theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k : Verity.Registration.Composite}
     {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange} (hP : ∃ p, ParamsAt θ p)
@@ -367,6 +393,8 @@ theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k
       Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables = .ok D ∧
       FlockSoundness.Built D.unroll.unit ∧
       Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile = .ok pubO ∧
+      FlockSoundness.Discharge.Layout.scopeOkH D.unroll = true ∧
+      Flock.PortRoots.checkOf (.ok D.unroll) (FlockSoundness.Discharge.ZkExec.zkTags I) I.publicFile = .ok () ∧
       pubO.n = n ∧ _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p.base.verifier.program ∧
       Flock.Bridge.PopMatches desc p.base.verifier.query n ∧
       lawAt p.base.verifier n = .ok (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law
@@ -375,10 +403,13 @@ theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k
     accepted_parts hD hP hreach hv ht
   subst hpf
   obtain ⟨⟨-, htyp, hret, hleaf, -⟩, -⟩ := FlockSoundness.Discharge.FailClosed.check_ok hsc
-  obtain ⟨D, pubO, hDp, hU, hpubO⟩ := desc_of_ports hAc.flat htyp hAc.ports
+  obtain ⟨D, pubO, hDp, hU, hpubO, hcD⟩ := desc_of_ports hAc.flat htyp hAc.ports
+  have hports := hAc.ports
+  rw [hcD] at hports
   exact ⟨p, n, toExec (_root_.Spot.OneStageZk.inputsOf tags0 p.own (V.circuitFile θ F) (V.publicFile θ F)
       (_root_.Core.Blobs.ofArray o.sent.blobs)), D, pubO, desc, hp, ht0, rfl, rfl, rfl, rfl, rfl, rfl, htab, rfl, rfl,
-    htyp, ⟨hAc.flat.1, hret, hleaf.resolve_right fun h => absurd h.1 (by decide)⟩, hDp, hU, hpubO, hAc.loads hpubO,
+    htyp, ⟨hAc.flat.1, hret, hleaf.resolve_right fun h => absurd h.1 (by decide)⟩, hDp, hU, hpubO,
+    scopeH_of_form hcD hAc.flat.2 hAc.form, hports, hAc.loads hpubO,
     hdesc, Flock.Bridge.popMatches_of_popOk hdesc hAc.pop, hlaw⟩
 
 end Verity.Sampled
