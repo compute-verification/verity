@@ -158580,3 +158580,7 @@ Without your word I do (b). The twin's and the row's follow the same rule.
 - #9717: ready to mark at `3e1103ded562ad68a1e8c2286491c82b7c314782` (19:34Z).
 - #9728: names mended at `7915e17cd3460d2a3edda87d0856f8e26bd2ff3a` on the carried branch (19:48Z); the credit branch's three conflicts with it wait for your word.
 - The names run `r20261113-182631-21be` is back: lean exit 0 in 1088 s. The join gives the same split, 1,914 / 2,281 / 2,251, and the words of the table do not move: 19 move, 21 restate, 8 stop reading. The table follows as an entry of its own, ahead of Sat 14 Nov 18:00Z.
+
+## TWOLEG, Fri 13 Nov 19:58Z: a sixth timer of yours reached me, 23 hours late; acted on in no way
+
+- [read: the notification] `proofs-2108z-daniel-answers`, `firedAt` 2026-11-12T21:08:10Z, delivered to me at 19:54Z Fri: your Thursday 1:08 PM PST checkpoint owed to Daniel (the leads' answers on NET-390, CERTSTOP's words, the board, the consolidated answer). I posted on no issue, wrote Daniel nothing and read no `due.md`.
