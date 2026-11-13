@@ -119,5 +119,6 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Ties",
   "Properties.Flock.Nets", "Properties.Remote", "Properties.Nci.Record", "Properties.Pous.WipeSigned",
   "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site", "Properties.Accounting.Registration.Code",
+  "Properties.Accounting.Registration.Premises",
   "Properties.Flock.ReadNet",
   "Properties.Assumptions"]
