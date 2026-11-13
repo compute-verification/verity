@@ -312,7 +312,7 @@ omit [Field F] [Fintype F] [DecidableEq F] in
 theorem rowTau_tauTab (v : Unit → F) : rowTau (tauTab v) = v := funext fun _ => rfl
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **Every pair a `τ` commitment's collision finder counts is a collision** (`Leaf.bind`). -/
+/-- **Every pair a `τ` commitment's collision finder counts is a collision** (`Leaf.pair_spec`). -/
 theorem opTauZ_conflict_collision {Hs : Hashes F D Sl} {r : ℕ} {c : Cap D} {x : OutZC F D Sl × OutZC F D Sl}
     {p : Unit} (h : Rewinding.ConflictAt (opTauZ Hs r c) x p) : Merkle.Collision Hs.H := by
   classical
@@ -320,7 +320,7 @@ theorem opTauZ_conflict_collision {Hs : Hashes F D Sl} {r : ℕ} {c : Cap D} {x 
   by_cases ha : x.1.accepted = true ∧ Hs.Lτ.leaf (x.1.opens.inner r).tau.1 (x.1.opens.inner r).tau.2 = c 0
   · by_cases hb : x.2.accepted = true ∧ Hs.Lτ.leaf (x.2.opens.inner r).tau.1 (x.2.opens.inner r).tau.2 = c 0
     · rw [opTauZ, opTauZ, ite_eq_left ha, ite_eq_left hb, ne_eq, Option.some.injEq] at hne
-      exact Hs.Lτ.bind _ _ _ _ hne (ha.2.trans hb.2.symm)
+      exact ⟨_, _, Hs.Lτ.pair_spec _ _ _ _ hne (ha.2.trans hb.2.symm)⟩
     · rw [opTauZ, ite_eq_right hb] at h2
       simp at h2
   · rw [opTauZ, ite_eq_right ha] at h1

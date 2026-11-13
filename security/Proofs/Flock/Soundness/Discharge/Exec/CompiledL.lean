@@ -15,8 +15,8 @@ is the `hm96-sha512/v1` table flock-verify checks (`accepts_tables_hm96`).
 
 The argument is `CompiledSound`'s, and only the openings change. A salted opening is `(position, row, salt, path)`. A
 clash is two verifying openings of one position to different rows, under any salts, and it is a collision of `H` by
-`Merkle.opening_bindingL`: the leaf scheme's binding (`Leaf.bind`) does what the encoding's injectivity does for the
-unsalted leaf. The lockstep with the oracle table (`lockTableL`) is `lockTable` with the salts in the openings'
+`Merkle.opening_bindingL`: the leaf scheme's binding (`Leaf.pair_spec`) does what the encoding's injectivity does for
+the unsalted leaf. The lockstep with the oracle table (`lockTableL`) is `lockTable` with the salts in the openings'
 message; the reps' locksteps (`lockRep`) are unchanged.
 
 * `table_sound_compiledL`: `Pr[accepted ∧ T*(P*) uncommitted] ≤ tableError + √(N₀·Q₀·Adv₀) + Σ √(N_ℓ·Q_ℓ·Adv_{r,ℓ})

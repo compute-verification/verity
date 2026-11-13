@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Flock.MerklePair
-public import Proofs.Flock.Soundness.Merkle
 public import Mathlib.Tactic.Basic
 import Mathlib.Tactic.Push
 import Mathlib.Tactic.SplitIfs
@@ -17,8 +16,8 @@ import Mathlib.Tactic.SplitIfs
 * `openPairL_spec`: the same under a leaf scheme, given that the scheme's own pair is a collision whenever two
   different columns have one leaf.
 
-Each names its pair, where `walk_binding`, `opening_binding` and `opening_bindingL` (`Proofs.Flock.Soundness.Merkle`)
-conclude only that `H` has a collision.
+Each names its pair. `walk_binding`, `opening_binding` and `opening_bindingL` (`Proofs.Flock.Soundness.Merkle`), which
+conclude only that `H` has a collision, are their corollaries.
 -/
 
 @[expose] public section
@@ -27,6 +26,13 @@ namespace FlockSoundness.Merkle
 
 variable {Col D : Type}
 variable (H : List UInt8 → D) (E : Enc Col D)
+
+/-- A node's input determines its two children: the digests' encodings are injective and of one length. -/
+theorem append_inj {a b a' b' : D} (h : E.dig a ++ E.dig b = E.dig a' ++ E.dig b') :
+    a = a' ∧ b = b' := by
+  have hl : (E.dig a).length = (E.dig a').length := E.dig_len a a'
+  obtain ⟨h1, h2⟩ := List.append_inj h hl
+  exact ⟨E.dig_inj h1, E.dig_inj h2⟩
 
 /-- **`walkPair` is a collision**: two walks of one length that start from different digests and end at one digest
 hash two different inputs to one digest at the step where they first agree. -/
@@ -66,7 +72,7 @@ variable {S : Type}
 
 /-- **`openPairL` is a collision**: two openings of one position that verify against one tree top under the leaf
 scheme `Lf` and carry different columns, for a `pair` that is a collision whenever two different columns have one
-leaf. -/
+leaf (`Lf.pair`, by `Lf.pair_spec`). -/
 theorem openPairL_spec (Lf : Leaf Col S D H) (pair : Col → S → Col → S → List UInt8 × List UInt8)
     (hpair : ∀ c c' s s', c ≠ c' → Lf.leaf c s = Lf.leaf c' s' →
       Hash.Collision H (pair c s c' s').1 (pair c s c' s').2)

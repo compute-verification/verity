@@ -71,8 +71,8 @@ theorem hL512 (d : Dig) : (enc512.dig d).length = K512.L := by
 abbrev leaf512 : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512 := Merkle.Leaf.hm96 H512 enc512 K512 hL512
 
 /-- **The model's leaf of a leaf-scheme id**: `leafPlain` for plain SHA-512 leaves (`flock-leaf/sha512-unsalted`), else
-`leaf512` (`hm96-sha512/v1`). Either binds its column (`Merkle.Leaf.bind`): two columns under one leaf are a collision
-of `H512`. -/
+`leaf512` (`hm96-sha512/v1`). Either binds its column (`Merkle.Leaf.pair_spec`): for two columns under one leaf, its
+pair is a collision of `H512`. -/
 def leafOfId (id : String) : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512 :=
   if id = "flock-leaf/sha512-unsalted" then leafPlain else leaf512
 
