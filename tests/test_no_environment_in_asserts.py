@@ -39,10 +39,6 @@ ALLOWED: dict[str, str] = {
         "holds the settings' copy to the whole environment with one variable set; it goes when the comparison is by name",
     "adapters/vllm/tests/test_settings_records.py::test_the_commit_stages_as_before":
         "digests the whole environment inside the assert; it goes when the digest is taken before it",
-    "benchmarks/one_stage/tests/test_verifier_env.py::test_a0s_lean_verify_runs_under_the_allocator_setting_unless_the_caller_sets_its_own":
-        "holds the child's environment to the caller's whole one with the allocator's setting; it goes when the comparison is by name",
-    "benchmarks/one_stage/tests/test_verifier_env.py::test_server_rates_lean_runs_under_the_allocator_setting_unless_the_caller_sets_its_own":
-        "holds the child's environment to the caller's whole one with the allocator's setting; it goes when the comparison is by name",
 }
 
 
