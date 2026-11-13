@@ -62,9 +62,10 @@ from __future__ import annotations
 import bisect
 import re
 from collections import Counter
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from functools import cached_property, lru_cache
-from typing import Any, Callable, Iterator, Mapping, Sequence
+from functools import cache, cached_property, lru_cache
+from typing import Any
 
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
@@ -177,7 +178,7 @@ def _registered(fn: Any) -> Matmul | None:
     return e
 
 
-@lru_cache(maxsize=None)
+@cache
 def _dot(fn: Any) -> Dot:
     e = MATMULS[fn.base_id]
     params, ret = fn.signature()
@@ -283,7 +284,7 @@ class Scheme:
                                          f"it covers {', '.join(sorted(self.units))}")
         return f(dot, tile)
 
-    def plug(self, kind: str, unit: Callable[[Dot, Tile], Any], name: str, rows: RowNoise | None = None) -> "Scheme":
+    def plug(self, kind: str, unit: Callable[[Dot, Tile], Any], name: str, rows: RowNoise | None = None) -> Scheme:
         """This scheme with `unit` as kind's factory (its noise form), under its own name (register it); `rows`, the form's
         `RowNoise` (`PV_ROWS` for P·V), where a matched row is visible."""
         return Scheme(name, self.tile, {**self.units, kind: unit}, self.cover,
@@ -377,7 +378,7 @@ def _node_runs(owner: Any, k: int, nd: Any, nested: bool) -> tuple[tuple[Dot, in
     return tuple(_merge([], list(inner) * _members(nd)))
 
 
-@lru_cache(maxsize=None)
+@cache
 def _runs(G: Any) -> tuple[tuple[Dot, int], ...]:
     out: list = []
     for k, nd in enumerate(G.body.nodes):
@@ -385,7 +386,7 @@ def _runs(G: Any) -> tuple[tuple[Dot, int], ...]:
     return tuple(out)
 
 
-@lru_cache(maxsize=None)
+@cache
 def _dot_params(G: Any) -> frozenset[int]:
     """G's parameters a dot inside G reads as an operand."""
     out: set[int] = set()
@@ -401,7 +402,7 @@ def _holds(nd: Any) -> bool:
     return not isinstance(nd.fn, PrimitiveDefinition) and _entry(nd.fn) is None and bool(_runs(nd.fn))
 
 
-@lru_cache(maxsize=None)
+@cache
 def _zt(G: Any) -> TupleT:
     """`pouw.z`'s type in `PouwRest_v1{FN=G}`: per node of G holding dots, its z leaves (an Array over its dots, or its members)."""
     fields = []
@@ -498,7 +499,7 @@ class _Rest:
     kept: tuple[int, ...]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _rest(G: Any) -> _Rest:
     used: set[int] = set()
 
@@ -1250,7 +1251,7 @@ def _reads(r: Refs, space: str, idx: int) -> bool:
     return any(s == space and i == idx for s, i, _lo, _hi in runs(r))
 
 
-@lru_cache(maxsize=None)
+@cache
 def _check_unit(U: Any, boolean: bool, stream: tuple[Any, ...] = ()) -> None:
     """One unit Definition: one seed, on its salt, position and roots parameters whole; the salt read by nothing else; and its
     z reached from no node the seed reaches, or for a one-stream scheme (`stream`) recombined from words its receipt folds
