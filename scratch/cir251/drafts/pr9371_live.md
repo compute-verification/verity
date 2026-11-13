@@ -53,6 +53,8 @@ What was checked at this head in `r20261113-035011-8758` (cpu-9, 16 cores; a `--
 - **`STATEMENTS`:** `test_served_unit_rows.py` passed with this branch's pin unchanged.
 - **Pins:** none moved, and `--update-pins` was not run. `circuit-check --all` at this head (below) found no pin mismatch.
 
+Merged again since: the head is now `f25da2a9ca`, holding `main` at `2e99b1cf48b8` through #9318's `2107a279c7`. `STATEMENTS` is the test's own count and SHA-512 at the merged tree (55 statements), the record is `description_sizes.py update`'s (3 written: the norm's `_v3`), and the two `glm53_*` cards are main's with this branch's norm renames (`r20261113-074603-b62e`).
+
 ## `circuit-check --all`, at this head
 
 `circuit-check --all` ran at `a62164a32a` (each shard's `head.txt`), in the four shards and with the same command as before: 64 GB asked, timeout 21,600 s. All four ended rc 0, and all were read: 17,340 targets, 0 failures. Each shard built 871 catalog bindings and reused none.

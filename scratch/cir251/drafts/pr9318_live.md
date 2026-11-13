@@ -93,6 +93,8 @@ What was checked at this head in `r20261113-033216-49da` (cpu-10, 16 cores; a `-
 
 **What the template commit rests on.** None of the five long-row files changed on main between `15662e7c40` and `1e4d5c993c`: `long_row.py`, `long_row.circuit-check.py`, `long_row.circuit-check.json`, `test_long_row.py` and `test_serving_rows_bits.py`. Nor did `dsa_topk_reads.py` or `dsa_topk_mask_cut.py`, which hold the `_v2` Definitions it binds. #9375 renames `Registry`, `Node`, `interface.Opening`, `interface.rows_k_log` and `interface.server_ends`; no Python file this change touches names them.
 
+Merged again since: the head is now `2107a279c7`, holding `main` at `2e99b1cf48b8` (#9075's 20 greedy units). Its one conflict, the size record, was written by `description_sizes.py update` at the merged tree (main's record with the 24 long-row `_v1` entries out and 24 `_v2` in), and `test_dsa_topk_reads.py` passes there (40 passed, 1 skipped, `r20261113-071924-3f1c`).
+
 ## Runs at this head
 
 - `r20261113-033454-e466` (cpu-1, 12 cores, 64 GB asked; took its slot at 03:41Z), source `05dc686227` (its `head.txt`). It runs `scratch`'s `headsuites2.sh`, in three steps:
