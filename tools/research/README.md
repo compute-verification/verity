@@ -224,11 +224,8 @@ or running file changed, once the node is `quiet`. A `hold` entry is reported, n
 `missing`), every process running a file replaced since it started (`restart`, unless its entry says `no_restart`),
 and every file in a managed directory that no entry lists (`stray`); the hourly preflight probe posts its findings
 whenever they change (`ops deploy`). A new loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
-`.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A tree marked `whole` is a link that `install` renames
-onto a new directory holding the tree at the commit, so what resolves the link when it starts runs one commit's files; the
-directory it replaced stays under `.deploy-tree/` beside the link, and an older one goes once no process names it.
-A stray leaves through `research deploy attic NODE PATH ... --by WHO --apply` (`--backups` for every backup), which moves it
-under the record's directory, recorded, so `sudo mv` restores it.
+`.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
+--by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
 A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
 Monitors (`research monitors list|check|run|relay`, `research/monitors.py`) wake their owners: node 1's `vy-monitors.timer`
@@ -378,8 +375,8 @@ tests. Only `research` imports the package.
 The disk floor: `research run` and `research fetch --all` refuse (exit 3) while the runs root's filesystem has less than
 `$RESEARCH_DISK_FLOOR_GB` free (default 1.5; `0` turns it off), naming the eviction that frees it. `research data custody RUN
 --publish` removes the run's files of 1 MiB and more once custody holds (`--keep-local` keeps them); `run-files.evicted.json`
-names the fetch that restores them. `research data evict --src-dir DIR` (node 1's hourly unit) also deletes each
-shipped source tree that is exactly a commit on a ref of the node's `git/verity.git`, unused and unchanged for 2 h; any doubt
+names the fetch that restores them. `research data evict --src-dir DIR` (every node's unit) also deletes each
+shipped source tree that is exactly a commit on a ref of the node's `git/verity.git`, unused and unchanged for 1 h; any doubt
 keeps them all (`store/evict.py`). Its other passes: `store/leftovers.py`.
 
 ### research data
