@@ -16,9 +16,9 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array, Value
 from verity.commitments.windows import interface as IF
-from verity.protocols.pouw.prover.schemes import SCHEMES
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as CR
+from verity.protocols.accounting.pouw.prover.schemes import SCHEMES
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (
@@ -189,7 +189,7 @@ def test_each_cut_linear_reads_its_row_of_its_calls_a_rows_and_y(low):
 
 
 def test_each_tables_readers_are_templates_of_their_own(low):
-    """A sample stratified by template draws a unit from every template, so each value has a drawn reader: each template
+    """A sample stratified by template samples a unit from every template, so each value has a sampled reader: each template
     that reads one reads it on every unit and reads no other, and every value has readers."""
     c = low.circuit
     units = {IF.descriptor_id(fn): n for fn, n in c.templates}

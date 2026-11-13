@@ -12,7 +12,7 @@ registration, by the advice's length and the wrong blocks' bits. That holds wher
 - ``advice``: a field of the committed advice, charged in its length, whether or not y fixes it.
 
 **A stochastic request's seed** is certified: its body's ``seed``, else derived from its certified id and the window's seed salt
-(``window.seed_salt``, `engine.served_seed.derived`), never one the server draws or fills in. The seed salt is the challenger's
+(``window.seed_salt``, `engine.served_seed.derived`), never one the server samples or fills in. The seed salt is the challenger's
 coin released at the window's open and held in the window record as certified input, 128 lowercase hex characters, which the
 compile takes as their bytes (``bytes.fromhex(window["seed_salt"])``). `seed_of` refuses by name any other: a request with no
 seed in its body where the compile has no seed salt, and one the window carries in, whose seed is its admitting window's. The

@@ -15,7 +15,7 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Tuple, Value
-from verity.protocols.certifier.verifier import advice as I1
+from verity.protocols.accounting.certifier.verifier import advice as I1
 
 from verity_vllm.check.batch import BATCH, SHARED, check, own, report
 from verity_vllm.program.frontend.seed_rule import rid_of
@@ -433,7 +433,7 @@ def test_compile_steps_passes_its_own_rule():
 
     from verity_vllm.engine.served_seed import derived
     steps = pytest.importorskip("verity_vllm.program.predict.steps")
-    I1 = pytest.importorskip("verity.protocols.certifier.verifier.advice")
+    I1 = pytest.importorskip("verity.protocols.accounting.certifier.verifier.advice")
     cfg = {**TINY, "max_position_embeddings": 64}
     reg = steps.Registered.of(Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg}, target=dict(RTX)), default_seed=7)
     greedy = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3}

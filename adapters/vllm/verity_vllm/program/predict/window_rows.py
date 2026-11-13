@@ -59,8 +59,8 @@ from verity.commitments.windows import interface as IF
 from verity.definitions.numerics.rows import ROWS
 from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.definitions.registry import io_shell as IO
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.protocols.pouw.h1 import registered as H1R

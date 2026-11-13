@@ -39,9 +39,9 @@ from __future__ import annotations
 from typing import Any
 
 from verity.circuits.defs import bind, composite
-from verity.definitions.ops.fp32 import F32AddV2
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity.circuits.ops.fp32 import F32AddV2
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
 from verity.circuits.refs import Coll, Strided, array_of, broadcast, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.evidence import EVIDENCE
@@ -66,7 +66,7 @@ _CAPTURE = EVIDENCE["cc12_embedding_backward_capture"]
 _CONF = ("exact-model-tested: up to FEATURE_MAX ids (embedding_backward_feature_kernel), every captured word of an f32 table's "
          "gradient on cc 12.0 with 188 SMs (torch 2.14.0+cu130), 2,048 ids into V = 32,000 at H 512, 768, 1,024 and 1,536 (each "
          "entry's first 256 features), uniform and Zipf ids, deterministic or not, is numerics.torch_kernels' feature model's "
-         f"(capture {_CAPTURE['run_record']}, fit {_CAPTURE['fit']}), and tests/test_torch_embedding_f32.py holds these "
+         f"(capture {_CAPTURE['run_record']}, fit {_CAPTURE['fit']}), and verity/definitions/tests/test_torch_embedding_f32.py holds these "
          "Definitions to that model on f32 words; above FEATURE_MAX (the sort kernels) only the model holds them, no capture")
 
 

@@ -56,8 +56,8 @@ Their nontrivial lemmas:
   bound reads `1 ≤ 0`.
 
 `PooledLeakCarried`'s honest lemma is open: it needs a deployed check that pins its closing row (`CheckedClosing`) and the
-roots it opens and leaves (`CarriedRoots`), and its period's inputs (`PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes`,
-`PeriodLeaksCarried`).
+roots it opens and leaves (`CarriedRoots`), and its period's inputs (`MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodEscapes`,
+`MonitoringPeriodLeaksCarried`).
 -/
 
 @[expose] public section
