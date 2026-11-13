@@ -382,10 +382,19 @@ def unbound(cfg: Mapping[str, Any], bindings: Mapping[str, Any]) -> list[str]:
             for k in p.unbound(bindings)]
 
 
+def composite(env: Mapping[str, str]) -> dict[str, str]:
+    """The runner's ``COMPOSITE``, set empty: it composes off the served node unless told otherwise, where onsite's
+    composite, which reads PoUS's and the wipe's cases that only the node's card writes, can't be made, and it refuses
+    to start. A caller whose environment ``env`` names ``COMPOSITE`` or ``COMPOSE_OFF_NODE=0`` (a development composite
+    on the node) keeps what it named."""
+    return {} if "COMPOSITE" in env or env.get("COMPOSE_OFF_NODE") == "0" else {"COMPOSITE": ""}
+
+
 def served_window(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any]) -> int:
-    """The served window's runner with every listed piece's hooks, its public record in ``state/out``; its serve dir
-    stays where the runner keeps it on the node (its ``D`` and ``SERVE_ROOT``, from the environment)."""
-    env = {**os.environ, **variables(cfg, bindings), "OUT": str(state / "out")}
+    """The served window's runner with every listed piece's hooks and no composite unless the caller asks for one
+    (`composite`), its public record in ``state/out``; its serve dir stays where the runner keeps it on the node (its
+    ``D`` and ``SERVE_ROOT``, from the environment)."""
+    env = {**os.environ, **variables(cfg, bindings), **composite(os.environ), "OUT": str(state / "out")}
     (state / "logs").mkdir(parents=True, exist_ok=True)
     with open(state / "logs" / "served-window.log", "w") as log:
         return subprocess.run(["bash", str(ROOT / RUNNER)], cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT,

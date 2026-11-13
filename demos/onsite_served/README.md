@@ -59,6 +59,7 @@ deploy bindings:
 | `SERVE_ARGS` (`--remote-verifier`) | PoUB | `bandwidth-verifier.bandwidth`: `address` |
 | `SERVE_ARGS` (`--protocol ids --id-payload 503`), `CERTIFIER_FRONT`, `CERTIFIER_CMD` | the network certifier | `network-certifier.certifier`: `gate` (`USER@HOST`); the front sends its requests in the id form, which serve-openai answers only under those flags, every other request as before |
 | `WIPE_CMD`, `WIPE_CHALLENGER`, `WIPE_ADDRESS`, `WIPE_COMMAND`, `WIPE_KEY_SHA512` | the wipe | `memory-challenger.wipe`: `host`, `address`, `command`, `key-sha512` |
+| `COMPOSITE` (empty) | the run | set unless the caller's environment names `COMPOSITE` or `COMPOSE_OFF_NODE=0`: the runner composes off the node, where onsite's composite can't be made, so the run asks for none (`served_table.composite`) |
 | `OUT` | the run | `STATE/out`, the served window's public record |
 
 `SERVE_ARGS` holds serve-openai's flags, so it is every listed piece's joined, in the pieces' order

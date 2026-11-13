@@ -224,6 +224,36 @@ def test_serve_openais_flags_are_every_listed_pieces():
     assert " --protocol ids " in f" {T.variables(cfg, BINDINGS)['SERVE_ARGS']} "
 
 
+COMPOSITE = """mkdir -p "$OUT"
+echo "${COMPOSITE-unset}|${COMPOSE_OFF_NODE-unset}" > "$OUT/composite.txt"
+"""
+
+
+@pytest.mark.parametrize("named, sets, got", [
+    ({}, {"COMPOSITE": ""}, "|unset"),
+    ({"COMPOSE_OFF_NODE": "1"}, {"COMPOSITE": ""}, "|1"),
+    ({"COMPOSITE": "1"}, {}, "1|unset"),
+    ({"COMPOSITE": ""}, {}, "|unset"),
+    ({"COMPOSE_OFF_NODE": "0"}, {}, "unset|0"),
+])
+def test_the_served_window_asks_for_no_composite_unless_its_caller_names_one(tmp_path, capsys, monkeypatch, named,
+                                                                             sets, got):
+    """The runner composes off the node by default and refuses onsite's composite there, so the table hands it
+    ``COMPOSITE`` empty; a caller that names ``COMPOSITE``, or ``COMPOSE_OFF_NODE=0`` for a development composite on
+    the node, gets the runner what it named and nothing more."""
+    for name in ("COMPOSITE", "COMPOSE_OFF_NODE"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in named.items():
+        monkeypatch.setenv(name, value)
+    assert T.composite(named) == sets
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", COMPOSITE))
+    state = tmp_path / "state"
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path), "--state", str(state)],
+                    REG)
+    assert rc == 0, capsys.readouterr().err
+    assert (state / "out" / "composite.txt").read_text().strip() == got
+
+
 def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys, monkeypatch):
     monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", "touch \"$OUT.started\"\n"))
     state = tmp_path / "state"
