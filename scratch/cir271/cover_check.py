@@ -1,6 +1,6 @@
 """Every count in CIR-271's cover comments, from cover.json's rows and blocks lists alone: per column, templates and instances
 in each state; per block-type column, block types and the card's blocks in each state (and that `block_totals` agrees)."""
-import json, sys
+import json, re, sys
 from collections import Counter
 c = json.load(open(sys.argv[1] if len(sys.argv) > 1 else __file__.replace("cover_check.py", "cover.json")))
 rows = [r for r in c["rows"] if r["in_list"]]
@@ -62,6 +62,16 @@ if "bound_totals" in c:
         held = bool(h and h["exit"] == 0 and h["accepted"] is True)
         ctl = held and all(x and x["exit"] == 1 and x["accepted"] is False for x in (np_, od))
         assert (r["outcome"] == "accepted") == ctl and (r["outcome"] == "held-control-off") == (held and not ctl), t
+    if "fifth_pass" in c:
+        bx = c["beside_extras"]
+        left = sorted(t for t, r in ty.items() if r["outcome"] == "not-run" and not r["extra"])
+        assert sorted(r["earlier_form"]["tag"] for r in bx.values()) == left and len(left) == 74, "one beside extra for each type not run"
+        fam: dict = {}
+        for r in bx.values():
+            f = fam.setdefault(re.match(r"(\w+?)_v\d+\{", r["earlier_form"]["block"])[1], Counter())
+            f[f"{r['outcome']}{'/' + r['why'] if r.get('why') else ''}"] += 1
+        assert {k: dict(v) for k, v in fam.items()} == {k: v["outcomes"] for k, v in c["fifth_pass"]["by_family"].items()}, fam
+        out["fifth"] = {k: v["outcomes"] for k, v in c["fifth_pass"]["by_family"].items()}
     out["bound"] = {"types": len(on), "blocks": total, "by_outcome": bt,
                     "shares": {g: [n, k, round(100 * k / total, 4)] for g, (n, k) in shares.items()},
                     "tags": dict(Counter(f"{r['outcome']}{'/' + r['why'] if r.get('why') else ''}" for r in ty.values())),

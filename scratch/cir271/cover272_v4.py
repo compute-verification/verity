@@ -1,5 +1,5 @@
-"""cover272_v4.py [--v5|--v6] COVER.json PLAN.json RUNS_DIR RUN:LIST:NODE:MEM_GB[:running]... (in launch order): CIR-272's second pass,
-(with --v5 and scratch/cir272/p3-plan.json, the third pass's lists i and j too, as `circuits/request-cover/v5`; with --v6 and p4-plan.json, list k's extras too, under `beside_extras`, as v6), `circuits/request-cover/v4`,
+"""cover272_v4.py [--v5|--v6|--v7] COVER.json PLAN.json RUNS_DIR RUN:LIST:NODE:MEM_GB[:running]... (in launch order): CIR-272's second pass,
+(with --v5 and scratch/cir272/p3-plan.json, the third pass's lists i and j too, as `circuits/request-cover/v5`; with --v6 and p4-plan.json, list k's extras too, under `beside_extras`, as v6; with --v7 and p5-plan.json, the fifth pass's Boolean versions of the 74 types not run, beside them, with `fifth_pass.by_family`, as v7), `circuits/request-cover/v4`,
 written over COVER.json, which must be v3 (`art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888`, the record
 NET-390 quoted; `git show 9a0d813ec490:scratch/cir271/cover.json`).
 
@@ -50,8 +50,9 @@ LISTS = {
 }
 
 V4 = "art:fd2160d5541b057b59c6fb8fc1a105ff2c3f9939cd6a078352cd988c55eee67e"
-V6 = sys.argv[1] == "--v6"
-V5 = sys.argv[1] in ("--v5", "--v6")
+V7 = sys.argv[1] == "--v7"
+V6 = sys.argv[1] in ("--v6", "--v7")
+V5 = sys.argv[1] in ("--v5", "--v6", "--v7")
 if V5:
     sys.argv.pop(1)
 if V6:
@@ -64,9 +65,13 @@ cover, plan = json.loads(cover_path.read_text()), json.loads(plan_path.read_text
 split = plan.pop("_split", None)
 third = plan.pop("_third", None)
 fourth = plan.pop("_fourth", None)
+fifth = plan.pop("_fifth", None)
 assert V5 == (third is not None), "--v5 takes scratch/cir272/p3-plan.json, and only it"
 assert V6 == (fourth is not None), "--v6 takes scratch/cir272/p4-plan.json, and only it"
-BESIDE = (fourth or {}).get("beside", {})
+assert V7 == (fifth is not None), "--v7 takes scratch/cir272/p5-plan.json, and only it"
+BESIDE = {**(fourth or {}).get("beside", {}), **(fifth or {}).get("beside", {})}
+if V7:
+    LISTS.update(fifth["lists"])
 assert cover["schema"] == "circuits/request-cover/v3", cover["schema"]
 RUNS = []
 for a in sys.argv[4:]:
@@ -183,11 +188,42 @@ for tag, p in plan.items():
         k: p.get(k) for k in ("run", "order", "list", "limit_s", "mem_gb")}, "v3": {k: old.get(k) for k in ("run", "outcome", "why", "text", "state",
                                                                                            "verdicts", "stage", "needs", "zk_refusal")}}
 
+def beside(tag: str) -> dict | None:
+    if tag in seen:
+        return seen[tag]
+    if not V7:
+        return None
+    if tag in (nr5 := fifth.get("not_run", {})):
+        return {"outcome": "not-run", **nr5[tag]}
+    return {"outcome": "queued", "text": "in no fifth-pass run yet"}
+
+
 if V6:
     cover["beside_extras"] = {
-        tag: {"tag": tag, "extra": "beside", **seen[tag],
+        tag: {"tag": tag, "extra": "beside", **r, **({"staged_unit_named": f"census:{fifth['boolean_version'][tag]}"} if V7 else {}),
+              **({"estimate": fifth["estimates"][tag]} if V7 and tag in fifth.get("estimates", {}) else {}),
               "earlier_form": {k: T[of].get(k) for k in ("tag", "block", "blocks", "k_log", "staged_unit", "outcome", "why")}}
-        for tag, of in BESIDE.items() if tag in seen}
+        for tag, of in BESIDE.items() if (r := beside(tag)) is not None}
+
+
+def by_family(bx: dict) -> dict:
+    """The fifth pass's table: per family of the earlier forms, its types' Boolean versions by outcome, with their sizes."""
+    fam: dict[str, dict] = {}
+    for r in bx.values():
+        f = fam.setdefault(re.match(r"(\w+?)_v\d+\{", r["earlier_form"]["block"])[1], {"types": 0, "blocks": 0, "outcomes": Counter(), "rows": []})
+        f["types"] += 1
+        f["blocks"] += r["earlier_form"]["blocks"]
+        f["outcomes"][f"{r['outcome']}{'/' + r['why'] if r.get('why') else ''}"] += 1
+        f["rows"].append(r)
+    out = {}
+    for name, f in sorted(fam.items(), key=lambda x: -x[1]["blocks"]):
+        st = [r["stage"] for r in f["rows"] if (r.get("stage") or {}).get("ands")]
+        rng = lambda k: [min(s[k] for s in st), max(s[k] for s in st)] if st else None  # noqa: E731
+        pk = max((r for r in f["rows"] if r.get("peak_gb") is not None), key=lambda r: r["peak_gb"], default=None)
+        out[name] = {"types": f["types"], "blocks": f["blocks"], "outcomes": dict(sorted(f["outcomes"].items())), "staged": len(st),
+                     "ands": rng("ands"), "k_log": rng("k_log"), "circuit_bytes": rng("circuit_bytes"),
+                     "largest_peak_gb": pk and [pk["peak_gb"], pk["tag"]]}
+    return out
 
 for b in cover["blocks"]:
     r = next((x for x in T.values() if x["block"] == b["block"]), None)
@@ -200,7 +236,13 @@ for b in cover["blocks"]:
 on = [b for b in cover["blocks"] if b["on_card"]]
 total = sum(b["blocks"] for b in on)
 cnt = Counter(b["bound_outcome"] for b in on)
-cover["schema"] = "circuits/request-cover/v6" if V6 else "circuits/request-cover/v5" if V5 else "circuits/request-cover/v4"
+cover["schema"] = ("circuits/request-cover/v7" if V7 else "circuits/request-cover/v6" if V6 else "circuits/request-cover/v5" if V5
+                   else "circuits/request-cover/v4")
+if V7:
+    cover["fifth_pass"] = {**{k: v for k, v in fifth.items() if k not in ("beside", "boolean_version")}, "plan": "scratch/cir272/p5-plan.json",
+                           "runs": [r for r in RUNS if r["list"].startswith("p5")], "tree": "4be1de7019db (bound.sh as at 33d7c7dfd8c2)",
+                           "supersedes": "art:546ff3480ca9dd2abe6e019e1cd89e3a9bb2b908570a0d7a1f527915556b8fbb",
+                           "by_family": by_family(cover["beside_extras"])}
 if V6:
     cover["fourth_pass"] = {**fourth, "plan": "scratch/cir272/p4-plan.json", "runs": [r for r in RUNS if r["list"] == "k"],
                             "mem_gb": 64, "budget_s": {"k": 6600}, "tree": "5427f12eabf1 (bound.sh as at 33d7c7dfd8c2)",
