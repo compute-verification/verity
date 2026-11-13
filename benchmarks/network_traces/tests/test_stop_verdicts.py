@@ -976,6 +976,13 @@ def test_a_superseded_run_adds_no_accept(tmp_path):
                                         "new": held_files(first, records, controls=copied)})
     assert SV.of_runs(alone, ["old", "new"]).held == 1
     assert SV.of_runs(alone, ["old", "new"], ["old"]).held == 0
+    # a control its verifier doesn't owe counts for nothing in any run: a superseded run's is handed on as such
+    stray = [c | {SV.CONTROL: "max_tokens"} if i == 1 else c for i, c in enumerate(the_controls())]
+    alone = Store(tmp_path / "stray", {"old": held_files(first, [], controls=stray),
+                                       "new": held_files(first, records, controls=[])})
+    assert SV.of_runs(alone, ["old", "new"], ["old"]).why[-2:] == (
+        "1 control record(s) read are of a format listed for none of the 4 verdicts, or are not the control their "
+        "verdict's verifier owes, and count for nothing", uncounted(3, "old"))
     # a control names no serve: one that carries a `serve` naming a superseded run is not that run's
     carried = [c | {CC.SERVE: "old"} for c in the_controls()]
     alone = Store(tmp_path / "carried", {"old": held_files(first, [], controls=[]),

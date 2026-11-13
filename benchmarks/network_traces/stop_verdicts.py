@@ -312,14 +312,13 @@ def _counts(kind: str, record: Mapping[str, Any]) -> bool:
 
 
 def _refused(read: Read, owed: Mapping[tuple[str, str, str], Sequence[Mapping[str, Any]]]) -> str:
-    """What a class's line says of the negative controls the verifiers of its records refused: each verifier's own
-    word for why (`REASON`), as its control records give it. Nothing for a verifier that lacks its control."""
+    """What a class's line says of the negative controls the verifiers of its records refused: the reason each
+    gave (`REASON`), which is its control's word. Nothing for a verifier that lacks its control."""
     said = []
     for kind, record in read:
         its = owed.get((kind, *(record[CC.VERIFIER][k] for k in CC.NAMES)), ())
         if its and all(_counts(kind, r) for r in its):
-            said.append(f"the {kind}'s `{CONTROLS[kind][0]}` for "
-                        + ", ".join(json.dumps(reason) for reason in sorted({r[REASON] for r in its})))
+            said.append(f"the {kind}'s `{CONTROLS[kind][0]}` for {json.dumps(its[0][REASON])}")
     return f"; its verifiers refused their negative controls: {'; '.join(dict.fromkeys(said))}" if said else ""
 
 
