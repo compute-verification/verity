@@ -266,7 +266,9 @@ plan of the case, is left out and listed under "Refused".
   row's λ, the requests its rows are priced over, and each part of the total there. A β outside the pinned budgets is
   marked extrapolated. Under it, for each scope whose plan is read, its proving time by how its block families are
   priced, with the plan and its budget.
-- **The network certifier's part over the world's year**: each of its rows' schedules, cells, term at D_j = 2 with
+- **The network certifier's part over the world's year**: a legend line a row, with its standing and, where the
+  calculator gives the row one, its mark beside it (the `scan` row's accept, `run, not proved`); a row's mark the
+  command has no name for is refused. Then each of its rows' schedules, cells, term at D_j = 2 with
   its multiple of the weights, term at D_j = 1 in a column whose header carries the label, and the entries, then the
   δ of its scans and its ε. A row whose release times are taken once carries the label in its name. A row whose ε is
   1 or more has "no bound at this period" in place of each amount.
@@ -289,3 +291,25 @@ plan of the case, is left out and listed under "Refused".
 
 With `--json` the document holds the same: a scope's monitoring period has its `eps`, its `error` (the two together's,
 null for a scope no run of record holds) and its `phases`, and an amount that has no bound is null.
+
+## Under a research run
+
+`run.py`'s `METRICS` are the rows of `benchmarks/metrics.toml` this benchmark is held to. Under a research run
+(`RESEARCH_RUN_DIR` set) the command writes them into the run's `result.json` through the harness kit, each over the
+world's year at the share, in GB a world year at 10% of compute:
+
+- `benchmarks/exfiltration-gb-world-year`: the headline figure, the document's `value` (today the compute audit's
+  part, λ times the bound where row `(ii) honest`'s total is 10% of compute).
+- `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over the world's year.
+- `benchmarks/exfiltration-network-certifier-gb`: the network certifier's part of record, the `scan` row at D_j = 2,
+  with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
+
+Each measurement's first input opens with its mark (`modeled`, and the network certifier's with the mark its
+calculator gives the `scan` row beside it), its second is its error over the world's year (the compute audit's δ, or
+the network certifier's ε at its scans' δ), and the rest are the runs of record it read. The document is kept as
+`out/exfiltration.json`, the run's measurement file and its validation's evidence, and the fingerprint holds what
+ran. The print is the same in a run as outside one.
+
+```text
+research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/exfiltration/run.py
+```
