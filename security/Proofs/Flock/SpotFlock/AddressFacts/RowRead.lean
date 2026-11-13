@@ -22,11 +22,12 @@ namespace AddressRow
 
 open Lean (Json)
 
-/-- **A read `placedOk` passes is its row**: where `placedOk` passes entry `e` against rows `row`, the read of slot `u`
-(`readsAt`) is the row `row u` names. -/
-theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : ℕ} {row : ℕ → Option ℕ}
-    {u pos r : ℕ} (hok : Spot.SecondStage.placedOk q p e leaves row = true) (hrd : readsAt e u = some pos)
-    (hrow : row u = some r) : pos = r := by
+/-- **An entry `placedOk` passes has the leaf count it names, and each read of it is a row it names**: where `placedOk`
+passes entry `e` of `leaves` leaves against rows `row`, the entry's leaf count is `leaves`, and the read of slot `u`
+(`readsAt`) is the row `row` names for `u`, which names one. -/
+theorem placedOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : ℕ} {row : ℕ → Option ℕ}
+    {u pos : ℕ} (hok : Spot.SecondStage.placedOk q p e leaves row = true) (hrd : readsAt e u = some pos) :
+    Spot.nat? (Spot.getD e "leaves") = some leaves ∧ row u = some pos := by
   obtain ⟨F, hF⟩ : ∃ F, Spot.getD e "reads_from" = F := ⟨_, rfl⟩
   obtain ⟨R, hR⟩ : ∃ R, Spot.getD e "reads" = R := ⟨_, rfl⟩
   obtain ⟨L, hL⟩ : ∃ L, Spot.nat? (Spot.getD e "leaves") = L := ⟨_, rfl⟩
@@ -51,7 +52,8 @@ theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves :
         simp only at hrd hok
         generalize (0 : ℕ) = f at hrd hok
         simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
-        obtain ⟨-, hall⟩ := hok
+        obtain ⟨hlv, hall⟩ := hok
+        have hle : l = leaves := by simpa using hlv
         by_cases hfu : f ≤ u
         · simp only [hfu, ↓reduceIte] at hrd
           cases hx : rs[u - f]? with
@@ -63,13 +65,9 @@ theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves :
               · exact hc
               · simp [hc] at hx
             have hgx : rs.getD (u - f) Json.null = x := by
-              first
-                | simp [Array.getD_eq_getD_getElem?, hx]
-                | simp [Array.getD, hk, hx]
-                | (have hx' : rs[u - f] = x := by simpa [hk] using hx
-                   simp [Array.getD, hk, hx'])
+              simp [Array.getD_eq_getD_getElem?, hx]
             have h1 := hall (u - f) hk
-            rw [hgx, show f + (u - f) = u by omega, hrow] at h1
+            rw [hgx, show f + (u - f) = u by omega] at h1
             cases x with
             | null => simp [Spot.nat?, Spot.int?] at hrd
             | bool _ => simp [Spot.nat?, Spot.int?] at hrd
@@ -77,8 +75,14 @@ theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves :
             | arr _ => simp [Spot.nat?, Spot.int?] at hrd
             | obj _ => simp [Spot.nat?, Spot.int?] at hrd
             | num _ =>
-              simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
-              exact h1.2
+              cases hru : row u with
+              | none =>
+                rw [hru] at h1
+                simp [hrd] at h1
+              | some r =>
+                rw [hru] at h1
+                simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
+                exact ⟨hL.trans (congrArg some hle), congrArg some h1.2.symm⟩
         · simp [hfu] at hrd
       | num n =>
         simp only at hrd hok
@@ -88,7 +92,8 @@ theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves :
         | some f =>
           simp only at hrd hok
           simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
-          obtain ⟨-, hall⟩ := hok
+          obtain ⟨hlv, hall⟩ := hok
+          have hle : l = leaves := by simpa using hlv
           by_cases hfu : f ≤ u
           · simp only [hfu, ↓reduceIte] at hrd
             cases hx : rs[u - f]? with
@@ -100,13 +105,9 @@ theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves :
                 · exact hc
                 · simp [hc] at hx
               have hgx : rs.getD (u - f) Json.null = x := by
-                first
-                  | simp [Array.getD_eq_getD_getElem?, hx]
-                  | simp [Array.getD, hk, hx]
-                  | (have hx' : rs[u - f] = x := by simpa [hk] using hx
-                     simp [Array.getD, hk, hx'])
+                simp [Array.getD_eq_getD_getElem?, hx]
               have h1 := hall (u - f) hk
-              rw [hgx, show f + (u - f) = u by omega, hrow] at h1
+              rw [hgx, show f + (u - f) = u by omega] at h1
               cases x with
               | null => simp [Spot.nat?, Spot.int?] at hrd
               | bool _ => simp [Spot.nat?, Spot.int?] at hrd
@@ -114,17 +115,64 @@ theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves :
               | arr _ => simp [Spot.nat?, Spot.int?] at hrd
               | obj _ => simp [Spot.nat?, Spot.int?] at hrd
               | num _ =>
-                simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
-                exact h1.2
+                cases hru : row u with
+                | none =>
+                  rw [hru] at h1
+                  simp [hrd] at h1
+                | some r =>
+                  rw [hru] at h1
+                  simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
+                  exact ⟨hL.trans (congrArg some hle), congrArg some h1.2.symm⟩
           · simp [hfu] at hrd
 
-/-- **A read `rowsOk` passes is its unit's first row**: where `rowsOk` passes entry `e` of `l` leaves over `units` units
-against the units `unit` names, the read of slot `u` (`readsAt`) is unit `unit u`'s first row, `l / units` rows a
-unit. -/
-theorem rowsOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ} {unit : ℕ → Option ℕ}
+/-- **An entry `placedOk` passes has the leaf count it names**, whether or not a slot reads it: `placedOk` compares the
+entry's leaf count before it looks at a read. -/
+theorem placedOk_leaves {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : ℕ} {row : ℕ → Option ℕ}
+    (hok : Spot.SecondStage.placedOk q p e leaves row = true) :
+    Spot.nat? (Spot.getD e "leaves") = some leaves := by
+  obtain ⟨F, hF⟩ : ∃ F, Spot.getD e "reads_from" = F := ⟨_, rfl⟩
+  obtain ⟨R, hR⟩ : ∃ R, Spot.getD e "reads" = R := ⟨_, rfl⟩
+  obtain ⟨L, hL⟩ : ∃ L, Spot.nat? (Spot.getD e "leaves") = L := ⟨_, rfl⟩
+  simp only [Spot.SecondStage.placedOk, hF, hR, hL] at hok
+  cases R with
+  | null => cases L <;> simp at hok
+  | bool _ => cases L <;> simp at hok
+  | num _ => cases L <;> simp at hok
+  | str _ => cases L <;> simp at hok
+  | obj _ => cases L <;> simp at hok
+  | arr rs =>
+    cases L with
+    | none => simp at hok
+    | some l =>
+      cases F with
+      | bool _ => simp [Spot.nat?, Spot.int?] at hok
+      | str _ => simp [Spot.nat?, Spot.int?] at hok
+      | arr _ => simp [Spot.nat?, Spot.int?] at hok
+      | obj _ => simp [Spot.nat?, Spot.int?] at hok
+      | null =>
+        simp only [Bool.and_eq_true] at hok
+        exact hL.trans (congrArg some (by simpa using hok.1))
+      | num n =>
+        cases hfst : Spot.nat? (Json.num n) with
+        | none => simp [hfst] at hok
+        | some f =>
+          simp only [hfst, Bool.and_eq_true] at hok
+          exact hL.trans (congrArg some (by simpa using hok.1))
+
+/-- **A read `placedOk` passes is its row**: where `placedOk` passes entry `e` against rows `row`, the read of slot `u`
+(`readsAt`) is the row `row u` names. -/
+theorem placedOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {leaves : ℕ} {row : ℕ → Option ℕ}
+    {u pos r : ℕ} (hok : Spot.SecondStage.placedOk q p e leaves row = true) (hrd : readsAt e u = some pos)
+    (hrow : row u = some r) : pos = r :=
+  Option.some.inj ((placedOk_at hok hrd).2.symm.trans hrow)
+
+/-- **An entry `rowsOk` passes is over some units, and each read of it is its unit's first row**: where `rowsOk`
+passes entry `e` of `l` leaves over `units` units against the units `unit` names, there are units, and the read of slot
+`u` (`readsAt`) is unit `unit u`'s first row, `l / units` rows a unit. -/
+theorem rowsOk_at {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ} {unit : ℕ → Option ℕ}
     {u pos b l : ℕ} (hok : Spot.SecondStage.rowsOk q p e units unit = true)
     (hl : Spot.nat? (Spot.getD e "leaves") = some l) (hrd : readsAt e u = some pos) (hb : unit u = some b) :
-    pos = b * (l / units) := by
+    0 < units ∧ pos = b * (l / units) := by
   obtain ⟨F, hF⟩ : ∃ F, Spot.getD e "reads_from" = F := ⟨_, rfl⟩
   obtain ⟨R, hR⟩ : ∃ R, Spot.getD e "reads" = R := ⟨_, rfl⟩
   simp only [readsAt, hF, hR] at hrd
@@ -143,6 +191,10 @@ theorem rowsOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : �
     | obj _ => simp [Spot.nat?, Spot.int?] at hrd
     | null =>
       simp only at hrd hok
+      have hpos : 0 < units := by
+        simp only [Bool.and_eq_true] at hok
+        simpa using hok.1.1
+      refine ⟨hpos, ?_⟩
       generalize (0 : ℕ) = f at hrd hok
       simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
       obtain ⟨-, hall⟩ := hok
@@ -157,11 +209,7 @@ theorem rowsOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : �
             · exact hc
             · simp [hc] at hx
           have hgx : rs.getD (u - f) Json.null = x := by
-            first
-              | simp [Array.getD_eq_getD_getElem?, hx]
-              | simp [Array.getD, hk, hx]
-              | (have hx' : rs[u - f] = x := by simpa [hk] using hx
-                 simp [Array.getD, hk, hx'])
+            simp [Array.getD_eq_getD_getElem?, hx]
           have h1 := hall (u - f) hk
           rw [hgx, show f + (u - f) = u by omega, hb] at h1
           cases x with
@@ -182,7 +230,8 @@ theorem rowsOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : �
       | some f =>
         simp only at hrd hok
         simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
-        obtain ⟨-, hall⟩ := hok
+        obtain ⟨⟨hpu, -⟩, hall⟩ := hok
+        have hpos : 0 < units := by simpa using hpu
         by_cases hfu : f ≤ u
         · simp only [hfu, ↓reduceIte] at hrd
           cases hx : rs[u - f]? with
@@ -194,11 +243,7 @@ theorem rowsOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : �
               · exact hc
               · simp [hc] at hx
             have hgx : rs.getD (u - f) Json.null = x := by
-              first
-                | simp [Array.getD_eq_getD_getElem?, hx]
-                | simp [Array.getD, hk, hx]
-                | (have hx' : rs[u - f] = x := by simpa [hk] using hx
-                   simp [Array.getD, hk, hx'])
+              simp [Array.getD_eq_getD_getElem?, hx]
             have h1 := hall (u - f) hk
             rw [hgx, show f + (u - f) = u by omega, hb] at h1
             cases x with
@@ -209,8 +254,17 @@ theorem rowsOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : �
             | obj _ => simp [Spot.nat?, Spot.int?] at hrd
             | num _ =>
               simp only [hrd, Bool.and_eq_true, beq_iff_eq] at h1
-              exact h1.2
+              exact ⟨hpos, h1.2⟩
         · simp [hfu] at hrd
+
+/-- **A read `rowsOk` passes is its unit's first row**: where `rowsOk` passes entry `e` of `l` leaves over `units` units
+against the units `unit` names, the read of slot `u` (`readsAt`) is unit `unit u`'s first row, `l / units` rows a
+unit. -/
+theorem rowsOk_read {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ} {unit : ℕ → Option ℕ}
+    {u pos b l : ℕ} (hok : Spot.SecondStage.rowsOk q p e units unit = true)
+    (hl : Spot.nat? (Spot.getD e "leaves") = some l) (hrd : readsAt e u = some pos) (hb : unit u = some b) :
+    pos = b * (l / units) :=
+  (rowsOk_at hok hl hrd hb).2
 
 /-- **Round 2's row is the read's** (`ReadFact`): at each kind of read `placedRow` names a row for, `second-read`'s
 case for it (`readOk`) passes the entry through `placedOk` or `rowsOk` at that row. -/
