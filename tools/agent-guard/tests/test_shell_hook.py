@@ -1365,7 +1365,7 @@ def test_the_identity_rule_follows_a_cd_written_out_and_passes_what_a_cd_leaves_
     passed = [(form, clone) for form, clone in CD_INTO_A_CHECKOUT
               if (out := clones(typed(form), clone))["permission"] != "deny" or IDENTITY_FIX not in out["agent_message"]]
     refused = [(form, clone) for form, clone in CD_OUT_OF_A_CHECKOUT + CD_IN_DOUBT if clones(typed(form), clone) != {"permission": "allow"}]
-    assert not passed and not refused, {"passed": passed, "refused": refused}
+    assert not passed and not refused, json.dumps({"passed": passed, "refused": refused})
     for form, _ in CD_INTO_A_CHECKOUT + CD_OUT_OF_A_CHECKOUT + CD_IN_DOUBT:      # one directory for each command `flattened` gives
         assert len(hook.cd_dirs(typed(form), str(tmp_path))[0]) == len(hook.flattened(typed(form))), form
 
@@ -1376,7 +1376,7 @@ GLOBAL_IDENTITY = [
     "git config --global committer.email a@a", "git config set --global user.email a@a", "git config --global User.Email a@a",
     "git config --global user.name 'A B'", "/usr/bin/git config --global user.email a@a", "git -C {N} config --global user.name a",
     "cd /tmp && git config --global user.name a", "bash -lc 'git config --global user.email a@a'",
-    "GIT_DIR=/nowhere git config --global user.name a",
+    "GIT_DIR=/nowhere git config --global user.name a", "XDG_CONFIG_HOME=/tmp/x git config --global user.name a",
 ]
 GLOBAL_FIX = "the machine's identity is already configured"
 

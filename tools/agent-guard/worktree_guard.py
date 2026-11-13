@@ -425,8 +425,9 @@ IDENTITY_KEYS = {f"{who}.{what}" for who in ("user", "author", "committer") for 
 IDENTITY_VARIABLES = {f"GIT_{who}_{what}" for who in ("AUTHOR", "COMMITTER") for what in ("NAME", "EMAIL")}
 #: the words of a `git config` beside which `KEY VALUE` writes the checkout's own configuration, or the machine's
 CONFIG_SCOPE = {"set", "--local", "--worktree", "--global"}
-#: the variables that name another file as the global configuration a `git config --global` writes
-GLOBAL_FILE = {"HOME", "XDG_CONFIG_HOME", "GIT_CONFIG_GLOBAL"}
+#: the variables that name another file as the global configuration a `git config --global` writes (not XDG_CONFIG_HOME:
+#: git writes `~/.gitconfig` unless that file is missing and the one under it exists)
+GLOBAL_FILE = {"HOME", "GIT_CONFIG_GLOBAL"}
 
 
 def after_cd(commands: list[list[str]], indexed: list[Git], envs: list[dict[str, str]], dirs: list[str]) -> list[Git]:
