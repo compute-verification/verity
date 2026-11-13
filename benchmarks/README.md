@@ -103,6 +103,10 @@ exist. Its keys:
 - `every`: how often it is measured (`7d`, `12h`); a value older than that is stale.
 - Optional: `floor`, the number it must not cross; `goal`, the plan's goal it serves; `tags`, a list of words.
 
+Each value carries its mark, how it was had, which the tab shows beside it: the measurement's `mark`, which the kit's
+writer requires (`measured`, `modeled` or `partial`, `kit.MARKS`; a value of None takes the one it would have had)
+and also writes as the first of its `inputs`, where the tab reads it until it reads `mark`.
+
 `tests/test_metrics_registry.py` refuses a repeated id, an unknown owner, an id outside its owner's prefix, a `better`
 other than `lower` or `higher`, and a command whose script is missing or whose directory never names the id.
 
