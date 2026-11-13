@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.AddressFacts.CopySrc
+public import Proofs.Flock.SpotFlock.AddressFacts.WidthOf
 public import Proofs.Flock.SpotFlock.Facts
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
@@ -317,5 +318,26 @@ theorem copiesRef_out {s : AuditStatement} {d : Design.Two} (hd : two h s = some
   rw [← hpos, hpick, hccx, hpn]
   exact Or.inr ⟨hon, hU, kk, j, b, jo, k', hoc.1, hoc.2.1, hoc.2.2.1, hoc.2.2.2.1, hoc.2.2.2.2.1, hoc.2.2.2.2.2,
     hjo, hk', hsum, rfl, rfl⟩
+
+/-- **`CopiesAt` where the design evaluates and each member names its ports once**: a unit's bit is a source bit
+(`copiesRef_src`) or a written bit (`copiesRef_out`). -/
+theorem copiesAt_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (hO : PortsOnce h) :
+    CopiesAt h := by
+  rintro t k i rp ⟨hleaf, ⟨hf, -⟩ | ⟨-, hf, -, -⟩⟩
+  · exact copiesRef_src hd hO (List.mem_of_find?_eq_some hf) hleaf
+  · exact copiesRef_out hd hO (List.mem_of_find?_eq_some hf) hleaf
+
+/-- **The width at the address map** where the design evaluates, each member names its ports once and the wiring
+holds. -/
+theorem widthFact_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) (hO : PortsOnce h)
+    (W : Wiring h) : WidthFact h (addressOf h) :=
+  widthFact_of_wiring W (bitsInPorts_of_once hd hO)
+
+/-- **The copy at the address map** where the design evaluates, each member names its ports once, the wiring holds
+and each counted gate's row is the address map's. -/
+theorem copyFact_of_two {s : AuditStatement} {d : Design.Two} {ω : ℕ → ℕ} {keep : ℕ → Bool}
+    (hd : two h s = some d) (hO : PortsOnce h) (W : Wiring h) (hrow : RowFact h ω keep (addressOf h)) :
+    CopyFact h (addressOf h) :=
+  copyFact_of_wiring W (bitsInPorts_of_once hd hO) hrow (copiesAt_of_two hd hO)
 
 end SpotFlock
