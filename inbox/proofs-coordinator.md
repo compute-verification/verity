@@ -146196,3 +146196,54 @@ The Python side moves in step: PoUW's `core_check._core_draw` (`core_check.py:41
 ## STAGECOINS, Fri 14:30Z: first run ended: the two-template play at the wired scratch gets past rule A (both sessions accepted) and is refused by the compiled form at rule B, "two-stage: the interior's audit: the audit's checks failed: registered"; twenty not run
 
 [run: `r20261113-141754-1f67`, vy-nebius-cpu-11, scratch `ce5c28d0ad2` on `cursor/proofs-stagecoins-wiredplay-af4a`; 475 s, peak 3.53 GB] The same reason as GATHER's trial head `70ca0eda5df` (`9a9e`). GATHER's head `fc5c9053db63` holds no rule B. The entry follows by 15:45Z.
+
+## SESSIONOF2, Fri 13 Nov 14:32Z: order F is written: the ports, the partition object and the registered reads follow from a well-formed parameters tree, and with them `PortsDistinctAt`; the first node try accepted 16 of its 22 theorems and refused 6 for one misread name, which is mended and being tried again
+
+The two-stage proofs take three things about an audit's parameters as premises: no port is named twice, the partition object is a proper tree, and each template's registered reads are proper trees. All three are now derived from one fact, that the tree the parameters were parsed from is well formed (every object in it a proper map), which is what the parser switch gives. The derivation is two new files on a branch of mine off the join. It is checked on my VM against a copy of the three parsers. On a node, which is the check that counts, the first try accepted the lemmas about the registered reads and refused the ones about the ports and the partition object, all for one name that meant something else there; the mended file is being tried now.
+
+**What each lemma states** `[read]` (`security/Proofs/Flock/SpotFlock/ParamsWf.lean`, namespace `SpotFlock.ParamsWf`; `Wf` is `Claims.Json.Wf`)
+
+1. The partition object. `partition_wf (hj : Wf j) (h : Spot.OneStage.paramsParsed j = .ok p) (ho : p.verifier.partition = some o) : Wf o`. For the form: `partition_wf_form hcj (h : paramsOfJson j = .ok p) : (∀ o, p.boundary.verifier.partition = some o → Wf o) ∧ ∀ o, p.interior.verifier.partition = some o → Wf o`.
+2. The registered reads. `readsWf_of_params (hj : Wf j) (h : paramsOfJson j = .ok p) : ReadsWf p.circuits`, and at a case's bytes `readsWf_of_bytes hcj (h : (Core.canonicalJson a >>= paramsOfJson) = .ok p) : ReadsWf p.circuits`, which is the shape `FormAccepts` holds the parse in.
+3. The ports. `ports_nodup (hj : Wf j) (h : paramsParsed j = .ok p) : (p.verifier.ports.map (·.1)).toList.Nodup`; for the form `ports_nodup_form hcj (h : paramsOfJson j = .ok p)`, the boundary's and the interior's. And the premise itself, in `security/Proofs/Properties/Verity/SampledTwo/PortsOfParams.lean`: `portsDistinctAt_of hcj (C : CaseOf) : PortsDistinctAt C`.
+
+Under them, one lemma says what the reader returns: `paramsParsed_reads (h : paramsParsed j = .ok p) : p.verifier.ports = entries (getD j "ports") ∧ ∀ o, p.verifier.partition = some o → o = getD j "partition"`. So the ports are the entries of the tree's `ports` object and the partition object is its `partition` field, with no hypothesis on the tree. `[read]`
+
+**The one hypothesis** `[derived]`. `hcj : ∀ b j, Core.canonicalJson b = .ok j → Wf j`. On the join it cannot be proved: `canonicalJson` there parses with `Lean.Json.parse`, which no proof reads through. On the switch's branch (`cursor/proofs-sessionof2-parser-defe` at `fe28c96c43`) it is two lemmas: `Verity.CanonicalJson.canonicalJson_ok` gives `Flock.JsonParse.parse s = .ok j`, and `FlockComplete.JsonRT.parse_wf s j` gives `Wf j`. No branch holds both the join and the switch, and I merged neither into the other, so `hcj` stays a hypothesis of five theorems until they meet. The lemmas need `Wf` only, not `Good`: whole numbers are not used. Where a consumer wants `Good` of the partition object, `good_of_canon` (on the join, in `PartReadsBack.lean`) gives it from `Wf` where `canon` prints the object.
+
+**What each premise's holder would cite** `[read]`
+
+- `SpotFlock.HeldOf.ReadsWf p.circuits` (`refReadsWf_form`, `ownReads_form`): `readsWf_of_bytes hcj h1`, with `h1` the parse `FormAccepts` holds.
+- `Verity.SampledTwo.PortsDistinctAt C` (a field of the joined premises, and `hports` of six theorems in `AcceptsTop.lean`): `portsDistinctAt_of hcj C`. It holds at every play whose case has an input, accepted or not.
+- `Claims.Json.Wf o` of the partition object (`partition_readsBack_of_setup`, mine): `partition_wf` at the stream's parameters, `partition_wf_form` at the form's.
+
+**How the readers are walked** `[run]` `[derived]`. `paramsParsed` is one `do` block of about 170 lines with about 20 join points. The walk the join uses elsewhere (`cases`, `bind_eq_ok`, `split`, `dsimp only`, repeated) copies the rest of the block into every arm at every join point, and on `paramsParsed` it ends in `(deterministic) timeout at whnf` at 400,000 heartbeats. No theorem on the join walks `paramsParsed`. The new walk names each join point, walks its arms with the rest of the block folded behind the name, and concludes that the join point returned at a value, with what the arms show of the value. It is linear in the block: the whole of `paramsParsed` in 8 s on the copy. The join has another join-point walk (`SampledTwo/JpWalk.lean`), for a registration check's code lists in `Id`; this one is for `Except` blocks, and the two could be made one later. Two `match`es on array literals (`#["templates"]`, an entry's four keys) are ones `split` refuses ("failed to generate equality theorems"); two lemmas take their cases by hand, stated over any arms.
+
+**Evidence**
+
+- `[run]` The copy: the text of `paramsParsed`, `templateCircuits`, `paramsOfJson`, `paramsAt`, `split`, `without`, `obj` in a core-only module with their callees stubbed and the five cited lemmas as axioms, compiled as its own module; the file's body elaborated against it with plain `lean` on the VM: exit 0 in 10 s, 22 theorems, and `#print axioms` of each of the 22 shows no `sorryAx`.
+- `[run]` `tests/test_lean_vocabulary.py` on the branch: 15 passed; its one bookkeeping warning does not name the new file.
+- `[run]` The first node try: `r20261113-141241-c7f7` on vy-nebius-cpu-1, `lean_changed.py --try security/Proofs/Flock/SpotFlock/ParamsWf.lean --siblings`, `--mem-gb 24` (its slot held a 24.7 GB reservation), on commit `df746bc8b5c`: failed, `lean exit 1 in 963 s`, almost all of it building the 11,235 modules under the file. "axiom probe: 6 of its 22 theorems failed": `wf_entries`, `entries_nodup`, `wf_without`, `paramsParsed_reads`, `ports_nodup`, `partition_wf`. Every error is one cause or follows from it: inside `namespace SpotFlock.ParamsWf` the name `entries` is `SpotFlock.entries` (`FrameAt.lean:80`, a list of frame entries), not `Spot.entries`, which my copy does not have. The other 16 raised no error in the tree: the walk of `templateCircuits` and of `paramsOfJson`, the two match lemmas against the readers' own matchers, `obj_ok` through `open private`, and the three theorems at the form (two of them, and `split_wf`, over lemmas among the six). The probe shows no axioms for a file Lean refuses, so none of the 16 has its axioms yet.
+- `[run]` What that try did not reach: the walk of the real `paramsParsed`. Its statement names `entries`, so its proof was never elaborated in the tree. It is the part the copy can least stand for.
+- `[run]` The mend, commit `e0eb889df17a`: `Spot.entries` by its full name; `obj_ok` and `wf_without` private, as `CutFirst.lean` does for a statement that names a private helper (the try warned of it); no literal `done` (the tree's linter flags it). The copy passes again, 22 theorems, no `sorryAx`. The second try is `r20261113-143202-0854` on vy-nebius-cpu-7, same command and `--mem-gb 24`, launched 14:32:02Z. With the modules to build again there it ends by about 14:50Z, and by 15:17Z at its limit. The two tries did not overlap.
+- `PortsOfParams.lean` has compiled nowhere. Only its two steps that need no tree (the `Option.bind` step, the tuple pattern of `inputOfCase`'s last line) ran, in core Lean on the VM. `[run]` It is tried on a node after `ParamsWf.lean` passes, one try at a time.
+
+**STOP RULE**: nothing. No listed guarantee's statement or premise changes: the two files are new, no lock lists them, and no verifier code is touched. No verifier accepts anything new.
+
+**NEEDS**
+
+- The join's owner: one root line so the two modules are reached, in `security/Proofs/lakefile.toml` (lib `Proofs`, `roots`) and in `security/Proofs/lean-audit.json` (`roots`): `"Proofs.Properties.Verity.SampledTwo.PortsOfParams"` (it imports `Proofs.Flock.SpotFlock.ParamsWf`). Without it the Lean check fails `orphan.file` on both. Not before a node try passes.
+- My branch is off the join at `4e986e339ad2`; the join is now at `ff6ea109e06f`. Between the two, `AcceptsTop.lean` changed (+242 lines, `PortsDistinctAt` unchanged), and `Spot/Run.lean` changed in `interiorSteps` only; `templateCircuits`, `paramsParsed` and `paramsOfJson` did not change. `[run]` I merged nothing.
+- When the switch and the join are on one branch, each premise's holder drops it with the line above. HELDOF's `HeldOfReads.lean` then states the old way in its docstring ("`ReadsWf` is the premise that stays"): its owner's line, not mine.
+- The earlier NEEDS stand (the PoUS token at `Component.lean:98`, the interface lock's three lines, the proofs package's root lines for `Proofs.Core.CanonicalJson`).
+
+**To post**: nothing before the node try's verdict.
+
+**Not established**
+
+- That either file compiles in the tree. Open after the first try: the walk of the real `paramsParsed` (never elaborated there), `wf_without`'s `show` through the private `without`, and `simp` with the tree's simp set in the three lemmas that failed first on the name.
+- `hcj` on the join. It holds only after the switch.
+- That the consumers' premises are dropped: I changed no file that takes one.
+- `ScopeTable.lean`: not touched by me since `b49c6e4061`.
+
+**Pushed heads**: `cursor/proofs-sessionof2-params-4e98` `e0eb889df17a` (new, off the join at `4e986e339ad2`; `df746bc8b5c` is `ParamsWf.lean`, `9053c218bbac` adds `PortsOfParams.lean`, `e0eb889df17a` is the mend, all "not compiled"); `cursor/proofs-sessionof2-parser-defe` `fe28c96c4322` (unchanged); `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`; `cursor/proofs-sessionof-5c1e` `521933e1430b`.
