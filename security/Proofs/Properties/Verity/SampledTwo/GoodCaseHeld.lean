@@ -13,7 +13,7 @@ the held copies only at the accepted plays whose blobs don't collide with the fi
 `goodCase C (NoCollide F₀)`, the case kept on those plays, where `HeldOfAt` holds outright (`heldOfAt_goodCase`).
 
 Each premise the two read reads the case through `FormAccepts` and `inputOn` alone, so it passes from `C` to any kept
-case (`partsSizedAt_goodCase` to `sessionMsgs_goodCase`). The form's reading reads the case through `inputOn` alone,
+case (`portsDistinctAt_goodCase` to `sessionMsgs_goodCase`). The form's reading reads the case through `inputOn` alone,
 so on a kept play the two readings are one, and `ReachedAccepts` at the kept case is `ReachedAccepts` at `C` on the
 plays it keeps (`reachedAccepts_goodCase`).
 -/
@@ -33,13 +33,6 @@ theorem heldOfAt_goodCase {A : Live₂} {C : CaseOf} {F₀ : Array ByteArray} (h
   obtain ⟨hA, hG⟩ := formAccepts_goodCase.1 hA
   rw [inputOn_goodCase hG] at hi
   exact (h o i it hA hi hit).resolve_right hG
-
-theorem partsSizedAt_goodCase {A : Live₂} {C : CaseOf} {G : Verity.Exchange → Prop} {K : ℕ}
-    (h : PartsSizedAt A C K) : PartsSizedAt A (goodCase C G) K := by
-  intro o i it strata hA hi hit hs
-  obtain ⟨hA, hG⟩ := formAccepts_goodCase.1 hA
-  rw [inputOn_goodCase hG] at hi
-  exact h o i it strata hA hi hit hs
 
 theorem portsDistinctAt_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (h : PortsDistinctAt C) :
     PortsDistinctAt (goodCase C G) := by
