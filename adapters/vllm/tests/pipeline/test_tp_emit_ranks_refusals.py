@@ -1,7 +1,7 @@
 """`verity_vllm.pipeline.tp.emit_ranks` where a rank gets no directory: a template whose derivation kept no session, a rank
-whose report is a refusal (the relabel's own, or the lowering's of it), and a rank whose files cannot be finished.  Each is
-derived for real by the row, so the rank's record says why and no directory of it is left, written or half written.  The
-relabel's report is a stand-in: no derivation runs."""
+whose report is a refusal (the relabel's own, or the lowering's of it), a rank whose files cannot be finished, and a template
+whose derive failed.  Each is derived for real by the row, so the rank's record says why and no directory of it is left: written,
+half written, or left by an earlier relabel into the same root.  The relabel's report is a stand-in: no derivation runs."""
 from __future__ import annotations
 
 import contextlib
@@ -184,3 +184,38 @@ def test_a_rank_finished_over_an_earlier_directory_of_its_own_replaces_it_whole(
     doc = _finish(tmp_path, monkeypatch)[2]
     assert doc["ranks"][1]["ok"] is True and Path(stale, "program.json").read_text() == "{}"
     assert sorted(os.listdir(stale)) == ["construction_manifest.json", "inputs.json", "program.json", "result.json"]
+
+
+# a second relabel into one root: a rank it does not write keeps no directory of the first
+
+def _earlier(tmp_path: Path, *ranks: int) -> list[Path]:
+    """Each of `ranks`' directories as an earlier relabel into `staged` finished it."""
+    dirs = [tmp_path / "staged" / f"rank{r}" / "build_step" for r in ranks]
+    for d in dirs:
+        d.mkdir(parents=True)
+        (d / "program.json").write_text("an earlier relabel's")
+    return dirs
+
+
+@pytest.mark.parametrize("session,reports", [(None, None), (SESSION, {0: _refusal(0, "aten::roll")})], ids=["no session kept", "a report that is a refusal"])
+def test_a_rank_refused_in_emit_keeps_no_directory_of_an_earlier_relabel(tmp_path, monkeypatch, session, reports):
+    earlier, = _earlier(tmp_path, 0)
+    e = _emit(tmp_path, monkeypatch, session=session, reports=reports)[0]
+    assert (e.report[0]["rank"], e.report[0]["ok"]) == (0, False) and not earlier.exists()
+
+
+def test_a_rank_that_fails_in_finish_keeps_no_directory_of_an_earlier_relabel(tmp_path, monkeypatch):
+    earlier = _earlier(tmp_path, 0, 2)
+    doc = _finish(tmp_path, monkeypatch, inputs=False)[2]
+    assert [(rec["rank"], rec["ok"]) for rec in doc["ranks"]] == [(0, False), (2, False)] and not any(d.exists() for d in earlier)
+
+
+def test_a_template_whose_derive_failed_relabels_no_rank_and_no_rank_keeps_a_directory_of_an_earlier_relabel(tmp_path):
+    earlier = _earlier(tmp_path, 0, 2)
+    e, out = ER.Emit((0, 2), str(tmp_path / "staged")), str(tmp_path / f"rank{TEMPLATE}" / "build_step")
+    os.makedirs(out)
+    ER.finish(e, out, dict(copy.deepcopy(PRE), ok=False), lambda d, res_r: pytest.fail("no rank was written, so none has a manifest"))
+    doc = json.loads(Path(f"{out}.relabel.json").read_text())
+    assert doc["template"] == {"dir": out, "world": WORLD, "rank": TEMPLATE, "ok": False}
+    assert doc["ranks"] == [{"rank": r, "dir": str(d), "ok": False, "error": "the template's derive failed: no relabel ran"} for r, d in zip((0, 2), earlier)]
+    assert not any(d.exists() for d in earlier)
