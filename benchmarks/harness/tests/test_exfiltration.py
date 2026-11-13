@@ -1020,6 +1020,43 @@ def test_the_figure_is_the_plan_of_records_row_and_row_i_is_only_under_its_label
         E.build(store=s.store, root=REPO)
 
 
+def test_a_note_the_figure_s_rows_carry_is_printed_beside_it_where_it_has_no_label(tmp_path):
+    """The planner's driver writes on a row what a reader must know beside its figure (`note`): the figure's line
+    prints the note of the row at the pinned budget nearest its β, and the document holds it on the scope. Row (i)'s
+    label is its rows' note, read itself or beside the figure; else the share the table's rows price; else, for rows
+    that record no table's row, "at the planner's assumed prices". Rows that carry none print as they did."""
+
+    said = "row `(ii) honest` with the Lean verifier's seconds scaled x0.25 and nothing else"
+    s = Store(tmp_path)
+    s.label(s.ran(ROWS, [r | {"note": said} for r in mine()]))
+    doc = E.build(store=s.store, root=REPO)
+    head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
+    assert head["note"] == said and doc["value"] == pytest.approx(YEAR_GB)
+    assert f"- **the compute audit's part, {said}: 14,240 GB** (modeled)" in E.render(doc)
+
+    s = Store(tmp_path / "labelled")
+    planner = "at the planner's prices, not the table's"
+    s.label(s.ran(ROWS, [as_assumed(r) | {"note": planner} for r in mine()]))
+    own = E.build(store=s.store, root=REPO, row=E.ASSUMED_ROW)
+    assert own["label"] == planner and f"- **the compute audit's part, {planner}: 17,800 GB** (modeled)" in E.render(own)
+
+    # row (i)'s label is what its own rows say of their pricing, beside the figure as when read itself
+    under = "under half priced by the table's rows, 43.2% of its proving (by source: planner's price 44%, own row 43%)"
+    files = record()
+    s = Store(tmp_path / "under")
+    s.label(s.ran(ROWS, {f: [r | {"note": under} if r["row"] == E.ASSUMED_ROW else r for r in rs]
+                         for f, rs in files.items()}))
+    doc = E.build(store=s.store, root=REPO)
+    assert doc["at_assumed_prices"]["label"] == under and f"- row `(i) honest`, {under}: 17,800 GB" in E.render(doc)
+    priced = {"priced": {"sources": {"by": {"own row": 0.3, "family row": 0.1, "planner's price": 0.6}}}}
+    assert E._row_label(priced) == "40% of its proving priced by the table's rows"
+    assert E._row_label({"priced": None}) == E._row_label({}) == E.ASSUMED_LABEL
+
+    bare = E.build(store=recorded(tmp_path / "bare").fresh(), root=REPO)
+    assert not any("note" in p for p in bare["compute_audit"])
+    assert "- **the compute audit's part: 14,240 GB** (modeled)" in E.render(bare)
+
+
 def test_what_prices_the_rows_proving_is_printed_by_source_or_not_recorded(tmp_path):
     """Beside each row printed, the share of its proving each source prices, as its own plan records it: its `sources`,
     else its `basis` by source, each of own row, family row and the planner's price at 0 where it prices none, and the
