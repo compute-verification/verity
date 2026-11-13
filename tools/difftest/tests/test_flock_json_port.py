@@ -1,4 +1,4 @@
-"""C-Flock's JSON parser (`Flock.JsonParse.parse`, `lean/FlockJsonDifftest.lean`) and Lean core's `Lean.Json.parse`, which
+"""C-Flock's JSON parser (`Flock.JsonParse.parse`, `../../verity/circuits/difftest/FlockJsonDifftest.lean`) and Lean core's `Lean.Json.parse`, which
 it reads as, against `parse`, their Python mirror: the same value, or the same refusal (`offset N: why`, at the same
 UTF-8 byte offset). Both Lean functions are held to the one mirror, so the run also shows the two agree on every text
 sampled. A refusal is an output (`["error", why]`), so its text is compared, not only the fact of it."""
@@ -17,7 +17,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 
-LEAN = Path(__file__).resolve().parents[1] / "lean"
+LEAN = Path(__file__).resolve().parents[3] / "verity" / "circuits" / "difftest"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 EOF = "unexpected end of input"
@@ -348,7 +348,7 @@ def test_parse_core(server):
 
 #: The public files Flock's producers wrote, recorded in `verity/protocols/flock/prover/tests`' fetched fixtures
 #: (`artifacts.json`), whose header line the sampled proofs verifier reads (`Spot.FilePart.header`).
-RECORDED = Path(__file__).resolve().parents[2] / "protocols" / "flock" / "prover" / "tests" / "fixtures"
+RECORDED = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "flock" / "prover" / "tests" / "fixtures"
 RECORDED_FIXTURES = ("forged-proofs", "public-inputs", "public-inputs-blocks", "rec-coins", "rec-links", "zk-sessions")
 
 
