@@ -65,15 +65,15 @@ theorem EncardAccSeqsLeConstantRate_nontrivial :
     ¬ (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 2)) 4 1).encard ≤ ((2 ^ (2 * 1) * 1 ^ 4 : ℕ) : ℕ∞) :=
   accSeqsAt_acceptAll_not_le (by norm_num) (by norm_num) _
 
-/-- **`EncardAccSeqsLeConstantRateWindows`'s bound fails at the verifier that accepts everything**, at `fxRate`'s
+/-- **`EncardAccSeqsLeConstantRateExecutionPhases`'s bound fails at the verifier that accepts everything**, at `fxRate`'s
 parameters with four steps within its first `m = 2` execution blocks. -/
-theorem EncardAccSeqsLeConstantRateWindows_nontrivial :
+theorem EncardAccSeqsLeConstantRateExecutionPhases_nontrivial :
     ¬ (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 2)) 4 1).encard ≤ ((2 ^ (min 2 2 * 1) * 1 ^ 4 : ℕ) : ℕ∞) :=
   accSeqsAt_acceptAll_not_le (by norm_num) (by norm_num) _
 
-/-- **`EncardAccSeqsLeConstantRatePerWindow`'s bound fails at the verifier that accepts everything**, at `fxRate`'s
+/-- **`EncardAccSeqsLeConstantRatePerExecutionPhase`'s bound fails at the verifier that accepts everything**, at `fxRate`'s
 parameters from the first execution block's start (`e₀ = 0`, the prefix `[]`) over its `m = 2` blocks. -/
-theorem EncardAccSeqsLeConstantRatePerWindow_nontrivial :
+theorem EncardAccSeqsLeConstantRatePerExecutionPhase_nontrivial :
     ¬ {o | o ∈ AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 2)) ((0 + 2) * (1 * 2)) 1 ∧
         o.take (0 * (1 * 2)) = []}.encard ≤ (((2 ^ 1 * 1 ^ (1 * 2)) ^ 2 : ℕ) : ℕ∞) := by
   have h : {o | o ∈ AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 2)) ((0 + 2) * (1 * 2)) 1 ∧
@@ -132,10 +132,10 @@ theorem EncardDecodableLeConstantRate_nontrivial :
       ((2 ^ (min 2 2 * 1) * 1 ^ 4 : ℕ) : ℕ∞) :=
   fxLeak_not_le (by norm_num) _ (ENat.coe_ne_top _)
 
-/-- **`EncardDecodableLeConstantRatePerWindow`'s bound fails at the verifier that accepts everything**, at `fxRate`'s
+/-- **`EncardDecodableLeConstantRatePerExecutionPhase`'s bound fails at the verifier that accepts everything**, at `fxRate`'s
 parameters from the first execution block's start (`e₀ = 0`, where every secret's prefix is `[]`) over its `m = 2`
 blocks. -/
-theorem EncardDecodableLeConstantRatePerWindow_nontrivial :
+theorem EncardDecodableLeConstantRatePerExecutionPhase_nontrivial :
     ¬ {z : ℕ | fxLeakI.obsRun z (0 * (1 * 2)) = [] ∧ acceptAll (fxLeakI.obsRun z ((0 + 2) * (1 * 2))) ∧
         fxLeakDec (fxLeakI.wireRun z ((0 + 2) * (1 * 2))) = z}.encard ≤ (((2 ^ 1 * 1 ^ (1 * 2)) ^ 2 : ℕ) : ℕ∞) := by
   have h : {z : ℕ | fxLeakI.obsRun z (0 * (1 * 2)) = [] ∧ acceptAll (fxLeakI.obsRun z ((0 + 2) * (1 * 2))) ∧
@@ -188,16 +188,16 @@ theorem EncardIngressDecodableLeContents_nontrivial :
   rw [twoContents_encard]
   exact fxLeak_not_le (by norm_num) _ (two_mul_ne_top _)
 
-/-- **`EncardIngressObsDecodableLePerWindow`'s bound fails at the verifier that accepts everything**, over two windows
+/-- **`EncardIngressObsDecodableLePerExecutionPhase`'s bound fails at the verifier that accepts everything**, over two windows
 of two buckets. -/
-theorem EncardIngressObsDecodableLePerWindow_nontrivial :
+theorem EncardIngressObsDecodableLePerExecutionPhase_nontrivial :
     ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z (2 * 2)) ∧ fxLeakDec (fxLeakI.obsRun z (2 * 2)) = z}.encard ≤
       ((((∏ _ℓ : Fin 1, (1 + 1) ^ 2) * 1 ^ 2) ^ 2 : ℕ) : ℕ∞) :=
   fxLeakObs_not_le (by norm_num) _ (ENat.coe_ne_top _)
 
-/-- **`EncardIngressObsDecodableLeContentsPerWindow`'s bound fails at the verifier that accepts everything**, over two
+/-- **`EncardIngressObsDecodableLeContentsPerExecutionPhase`'s bound fails at the verifier that accepts everything**, over two
 windows of two buckets at two content assignments. -/
-theorem EncardIngressObsDecodableLeContentsPerWindow_nontrivial :
+theorem EncardIngressObsDecodableLeContentsPerExecutionPhase_nontrivial :
     ¬ {z : ℕ | acceptAll (fxLeakI.obsRun z (2 * 2)) ∧ fxLeakDec (fxLeakI.obsRun z (2 * 2)) = z}.encard ≤
       ({fun _ => [[true]], fun _ => [[false]]} : Set (Fin 1 → List (List Bool))).encard *
         ((((∏ _ℓ : Fin 1, (1 + 1) ^ 2) * 1 ^ 2) ^ 2 : ℕ) : ℕ∞) := by
