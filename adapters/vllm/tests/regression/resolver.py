@@ -76,7 +76,7 @@ def registered(p: Path) -> str | None:
     """The `art:` id `artifacts.json` registers for `p` (a fixture git does not track), else None."""
     try:
         reg = json.loads(REGISTRY.read_text())
-        rel = str(p.resolve().relative_to(REGISTRY.parents[1]))
+        rel = str(p.resolve().relative_to(REGISTRY.parent))
     except (OSError, ValueError):
         return None
     return next((art for art, path in reg.items() if path == rel), None)
