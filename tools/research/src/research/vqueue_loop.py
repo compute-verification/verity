@@ -945,6 +945,8 @@ class World:
         #: under drive.toml's `signed_verdicts = "shadow"`, the labels' `StoreLabels.unauthenticated`, filled as they are read
         self.unauthenticated: dict[tuple, str] = {}
         self._prs: dict[int, PR] | None = None
+        #: each PR `handle` read from GitHub as it isn't open (a landed member's), else None when it can't be read
+        self._closed: dict[int, PR | None] = {}
         self._driver: Landing | None = None
         self._slim: Landing | None = None
         self._main: str | None = None
@@ -977,7 +979,7 @@ class World:
 
     def fetch(self) -> str:
         """origin's `main`, fetched with origin's `queue/*` branches into `NS`."""
-        self._prs, self.q._registry = None, None
+        self._prs, self._closed, self.q._registry = None, {}, None
         self.q._remote(self.repo, *QUIET, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "--prune", "origin",
                        f"+refs/heads/main:{MAIN}", f"+refs/heads/queue/*:{NS}/queue/*")
         if self.q._remote(self.repo, *QUIET, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "origin",
@@ -1978,7 +1980,16 @@ class World:
             lock.close()
 
     def handle(self, number: int) -> str | None:
-        p = self.prs.get(number) or self.open().get(number)
+        """The handle of PR ``number``'s lane (`Queue.handle`): of an open PR, or of one GitHub has closed, as a member is once
+        its candidate lands, read once a tick; None when none is known."""
+        if (p := self.prs.get(number) or self.open().get(number)) is None:
+            if number not in self._closed:
+                try:
+                    self._closed[number] = self.q.github.pr(number)
+                except (QueueError, ValueError, KeyError, TypeError) as e:
+                    self._closed[number] = None
+                    self.log(f"research queue vqueue: #{number} isn't open and its PR can't be read, so it names no lane: {e}")
+            p = self._closed[number]
         return self.q.handle(p) if p is not None else None
 
     def _tasks(self, sha: str) -> dict[str, dict]:
