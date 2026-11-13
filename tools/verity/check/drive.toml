@@ -54,28 +54,31 @@ verdict_carry = "on"
 bottom_ring = ["@ci"]
 bottom_wait_min = 30
 restack_jobs = 3
-# the low-risk lane: the verified queue takes a ready PR on its ready mark alone (no land verdict) when it is no move's PR,
-# isn't held and its change, against its merge base with `main`, touches nothing `lowrisk_excludes` names (`World.ready`).
-# false: no PR is taken without a land verdict, its own or one the verdict carry carries. `lowrisk_per_tick` is parsed
+# the low-risk lane: the verified queue takes a ready PR on its ready mark alone (no land verdict) when it isn't held and
+# its change, against its merge base with `main`, touches nothing `lowrisk_excludes` names, or it is a move's PR, whatever
+# it touches, whose map, from `main`, is certified rerun on its batch's tip; under `signed_verdicts`, no move changing
+# `SIGNED_GUARDS` (`World.ready`). false: no PR is taken without a land verdict, its own or one the verdict carry carries. `lowrisk_per_tick` is parsed
 # (`DriveFlags`) and read by no other code
 lowrisk_lane = true
 lowrisk_per_tick = 20
-# what keeps a change off the low-risk lane: a directory from the root (ending in `/`), or a file name glob (any directory).
+# what keeps a change off the low-risk lane: a directory from the root (ending in `/`), one file by its path from the root (a
+# `/` before its end), or a file name glob (no `/`: any directory).
 # Lean, its locks and Lake files, the trusted hashes, the verifiers, and the soundness-path Python (AGENTS.md's SOUNDNESS_PATH
 # under verity/ml/); and the guards that hold everything else to those rules: the Lean check (tools/verity/lean/), the
 # whole-tree invariants (root tests/: the import boundaries, SOUNDNESS_PATH, verifier cost), the check and this file
 # (tools/verity/check/), the graph lister that lists the executor's gating tasks (tools/verity/graph/), the merge drivers
 # (.gitattributes), and the landing rules themselves (queue.py; drive.py matches no file); and what
 # runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
-# the agent guard and its hooks (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
+# the move scripts and maps the loop runs and certifies a move against (tools/move/), the agent guard and its hooks
+# (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
                     "verity/ml/circuits/", "verity/ml/kernels/", "verity/ml/commitments/", "verity/ml/crypto/", "verity/ml/randomness/",  # as a branch based below the layout names them: the verified queue reads a PR's own diff
-                    "verity/core/", "verity/claims/", "verity/configuration/deploy/", "verity/configuration/wire/", "verity/definitions/evaluate/", "verity/definitions/requirement/", "verity/difftest/", "verity/hardware/site/", "verity/hardware/world/", "record.py", "registration.py", "verity/protocols/certifier/device/", "verity/protocols/certifier/verifier/", "verity/protocols/flock/sigma/", "verity/protocols/flock/verifier/", "verity/protocols/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/onsite/verifier/", "verity/protocols/poub/verifier/", "verity/protocols/pous/device/", "verity/protocols/pous/lean/", "verity/protocols/pous/verifier/", "verity/protocols/pouw/verifier/", "verity/protocols/recursion/verifier/", "verity/protocols/remote/verifier/", "verity/protocols/spot/", "verity/protocols/tests/", "reporting.py",
+                    "verity/core/", "verity/claims/", "verity/configuration/deploy/", "verity/configuration/wire/", "verity/definitions/evaluate/", "verity/definitions/requirement/", "verity/difftest/", "verity/hardware/site/", "verity/hardware/world/", "record.py", "registration.py", "verity/protocols/certifier/device/", "verity/protocols/certifier/verifier/", "verity/protocols/flock/sigma/", "verity/protocols/flock/verifier/", "verity/protocols/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/onsite/verifier/", "verity/protocols/poub/verifier/", "verity/protocols/pous/device/", "verity/protocols/pous/lean/", "verity/protocols/pous/verifier/", "verity/protocols/pouw/verifier/", "verity/protocols/recursion/verifier/", "verity/protocols/remote/verifier/", "verity/protocols/remote/verifier/composition/", "verity/protocols/spot/", "verity/protocols/tests/", "reporting.py",
                     "__init__.py",
                     "verity/circuits/", "verity/definitions/circuits/", "verity/definitions/ops/", "verity/definitions/silicon/", "verity/definitions/kernels/", "verity/commitments/", "verity/definitions/commitments/", "adapters/vllm/verity_vllm/commitments/", "adapters/vllm/tests/commitments/", "verity/commitments/crypto/", "verity/commitments/randomness/",
                     "tools/verity/lean/", "tests/", "tools/verity/check/", "tools/verity/graph/", ".gitattributes", "drive.py",
                     "queue.py",
-                    "infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
+                    "infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
 # count a ready mark or land verdict only when its `label_auth` label authenticates it as its author's, a Cursor identity token
 # minted by the agent holding that handle in the registry or by a worker it delegated to (`research queue delegate`); ejections
 # and holds count unsigned (`research.labelauth`). `ready`, `judge` and `review` sign what they can either way, and refuse

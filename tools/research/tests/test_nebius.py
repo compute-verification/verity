@@ -858,6 +858,24 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
     assert "# data disk vy-nebius-1-data: attached as it is if it exists, else created (5022 GiB" in ud
 
 
+def test_the_first_boot_writes_and_applies_the_user_namespace_setting_on_the_nodes_deploy_gives_it():
+    """A node deploy.toml gives /etc/sysctl.d/61-vy-userns.conf has it from its first boot, from the same source, so a check
+    or a training job sandboxed there doesn't fail before the first install; a node it doesn't name gets none."""
+    manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
+    entry = next(f for f in manifest["file"] if f["path"] == "/etc/sysctl.d/61-vy-userns.conf")
+    src = (NEBIUS / "../../../../../.." / entry["src"]).read_bytes()
+    for name in ("vy-nebius-cpu-14", "vy-nebius-2", "vy-nebius-1", "vy-auditor-1"):
+        r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME=name)
+        assert r.returncode == 0, r.stderr
+        ud = r.stdout.split("# instance create request (ids are placeholders)\n")[0]
+        assert len(ud.split("\n", 1)[1].rstrip("\n")) <= 32768, name
+        embedded = {m[0]: gzip.decompress(base64.b64decode(m[1]))
+                    for m in re.findall(r"  - path: (\S+)\n    permissions: '0644'\n    encoding: gz\+b64\n    content: (\S+)", ud)}
+        assert embedded.get(entry["path"]) == (src if name in entry["nodes"] else None), name
+    assert name not in entry["nodes"] and "vy-nebius-cpu-14" in entry["nodes"]
+    assert "sysctl -q -e -p /etc/sysctl.d/61-vy-userns.conf" in (NEBIUS / "vm_setup.sh").read_text()
+
+
 def test_a_vm_can_boot_on_another_ones_kept_data_disk():
     """n1's replacement may boot on vy-nebius-1-data: launch.sh and teardown.sh look the data disk up by this name."""
     r = launch("--dry-run", NEBIUS_SSH_PUBKEY="ssh-ed25519 dummy", NEBIUS_VM_NAME="vy-nebius-cpu-4", NEBIUS_PLATFORM_PREFIX="cpu-d3",

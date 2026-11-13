@@ -1,7 +1,7 @@
 # Two Intel Xeon Platinum 8468 sockets, the H200 nodes' host: the one source of its numbers (verity/hardware/README.md).
-# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host and firmware exceeds it, what
-# the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this host exceeds it, whatever firmware
+# it runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
+# "placeholder" (neither, open). A host card is the server's CPUs and DRAM; the GPUs it carries are their own cards.
 
 kind = "host"
 sku = "xeon-platinum-8468-2s"
@@ -34,6 +34,11 @@ bus = { value = 64, unit = "bit/channel", mark = "ceiling", source = "a DDR5 cha
 bandwidth = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "cpu.sockets x memory.channels x memory.speed x memory.bus / 8 (307.2e9 a socket)" }
 read = { value = 6.144e11, unit = "B/s", mark = "placeholder", source = "no read measured on the H200 nodes: memory.bandwidth until a measured read (the RTX node's mix of pinned H2D and CPU readers) replaces it" }
 write = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "memory.bandwidth: the channels' rate bounds writes as it does reads; no write measured on the H200 nodes" }
+# The part's own ceiling, a second reading of speed, bandwidth and write: the channels at the fastest memory the
+# processor takes, whatever DIMMs the server has. This part takes none faster than memory.speed, so the two agree.
+speed_max = { value = 4800, unit = "MT/s", mark = "ceiling", source = "the fastest memory the part takes: Intel ARK 231735, 'Memory Types Up to DDR5 4800 MT/s 1DPC, Up to DDR5 4400 MT/s 2DPC', which is memory.speed" }
+bandwidth_max = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "cpu.sockets x memory.channels x memory.speed_max x memory.bus / 8 (307.2e9 a socket), which is memory.bandwidth" }
+write_max = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "memory.bandwidth_max: the channels' rate bounds writes as it does reads" }
 
 # The host's on-chip storage at most, for the whole server whatever share of it a VM gets.
 [store]

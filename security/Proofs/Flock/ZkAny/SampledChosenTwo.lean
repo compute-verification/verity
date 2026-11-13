@@ -28,12 +28,13 @@ and the sessions' simulator given both records, the coins and the outcome. The t
 
 Each PRF gap is at fixed values under a key its test does not depend on: the boundary's at the values it registered
 before any coin, and the interior's under a key independent of the boundary record and the auditor's coins. So the
-auditor's choice is no adaptive query of either key. The value service's interior commits draw the interior's salts
-from the operating system and tag each interior session under a key of its own, `SHA-512(k ‖ L' ‖ s)`
-(`Flock.Firewall.Salts.interiorKey`), from the boundary's key at the session's fresh sample `s`. Once one PRF term at
-the fresh input `s` is paid, those keys and salts are uniform and independent of the boundary and of the auditor's
-coins: they are `k₁` here. `Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed` is this view at the deployed
-session loop, through the held relay, with `k₁` uniform: that term is not in its bound.
+auditor's choice is no adaptive query of either key. The value service's interior commits sample from the operating
+system the interior's salts and each interior session's own key `ks`, which its tags are under
+(`Flock.Firewall.Values.answer`'s `interior`, `Flock.Firewall.Salts.interiorAnswer`); the boundary's key only tags `ks`
+on the ZK server's record (`Salts.keyTagOf`). So those keys and salts are the operating system's bytes, no function of
+the boundary's key, uniform and independent of the boundary and of the auditor's coins: they are `k₁` here.
+`Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed` is this view at the deployed session loop, through the held
+relay, with `k₁` uniform.
 
 `Flock.SecurityProofs.SampledAuditTwoChosenAny` proves it with the two-stage swap (`prCoin_admits_perOutcome_two`), at
 both streams' randomness, with the auditor's coins as the first-stage sample. At each value of the boundary's

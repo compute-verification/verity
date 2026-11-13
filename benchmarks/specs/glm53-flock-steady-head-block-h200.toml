@@ -1,0 +1,49 @@
+schema = "verity-bench/steady-spec/v0"
+id = "glm53-flock-steady-head-block-h200"
+# The proof server's rate at steady state on GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms
+# (`FIRST=false`, `FIRST=true`): each one's full statement of 256 blocks at one, two and four provers on one H200 with
+# ten cores. Launch with `verity-bench run SPEC --direct NODE`, NODE an H200 node of `verity_bench.jobs.DIRECT_NODES`
+# whose GPU slots each give a run ten cores.
+workload = "glm53"
+card = "h200"
+# The cores of the GPU slot a point is launched through, which pins the run to them. A point's lease declares no cores
+# to gpu-lease (no `--cores`): gpu-lease counts a lease that declares none by the CPUs its processes may run on, the
+# slot's, and whether the machine throttled them while a row ran is its check `no_throttling`.
+cores = 10
+sessions = 120
+ahead = 2
+# The node's own, as its nvidia-smi and its nvcc give them: the node side refuses a node whose driver or toolkit is another.
+driver = "595.91.07"
+cuda_toolkit = "13.3"
+setup = "benchmarks/harness/setup/flock_prover.sh"
+
+[env]
+RUST_MIN_STACK = "67108864"
+
+# The prover's build where the node keeps none, the statement's fetch, the wait for a card and the timed step. The
+# lease's host memory is for four provers and their verifiers.
+[admission]
+max_minutes = 90
+mem_gb = 300
+
+# Staging either statement costs far more than timing it, so each row names the one staged once and kept in the store:
+# the node side fetches it into its scratch and holds it to `pin` and `n`. The rows' sessions file in pairs a prover,
+# so `period` sizes a point's timed sessions to whole pairs.
+
+[[row]]
+type = 'census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}'
+n = 256
+pin = "4b31e7caba0113987350c49cb19e8a5d18558a517aa3297986cd5f9732e4f3f9eb589b79c47a3da24870ba151250eee25fef7a2872acebc14c0e2185acb6b0b5"
+provers = [1, 2, 4]
+warm = 3
+period = 2
+staged = "art:860142a5a87de2cbc17b60c00781de6f4648ef78f0d85530010965400cfd0430/out/row1"
+
+[[row]]
+type = 'census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}'
+n = 256
+pin = "be5bca5c30515dc443efd8889063517410e610d334806931acd7d6348e10ae9cda1b7091e5b6385bc7d403d01fcf511fa1d389ddd486e63f4688e86395ca646a"
+provers = [1, 2, 4]
+warm = 3
+period = 2
+staged = "art:860142a5a87de2cbc17b60c00781de6f4648ef78f0d85530010965400cfd0430/out/row2"

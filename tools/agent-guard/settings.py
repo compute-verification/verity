@@ -19,6 +19,8 @@ EVENT_LOG = os.environ.get("AGENT_GUARD_EVENT_LOG", "/tmp/agent-guard-events.jso
 EVENT_LOG_MAX_BYTES = 1 << 20
 #: this agent's conversation id where Cursor's shell sets it: the agent `inbox.py selftest` checks when none is named
 CONVERSATION_ID = os.environ.get("CURSOR_CONVERSATION_ID", "")
+#: a regex for the push URLs the push rules judge, in place of verity's and infra's on GitHub (`worktree_guard.QUEUE_URL`)
+PUSH_REMOTES = os.environ.get("AGENT_GUARD_PUSH_REMOTES", "")
 
 
 def record_event(hook: str, event: object) -> None:

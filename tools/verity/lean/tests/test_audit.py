@@ -1526,7 +1526,8 @@ def test_facts_from_judges_from_a_stored_document_as_a_full_audit_does(tmp_path)
     stored facts document alone, with no build: the control fixture passes both, each lock violation fails both the same,
     and an `--update` writes the same lock byte for byte. The document is schema-versioned and position-free, so no file's
     bytes, a declaration's line or a module's build path leaks into what the graph's early cutoff compares."""
-    noop = lambda *_: None
+    def noop(*_):
+        return None
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
@@ -1587,7 +1588,8 @@ def test_facts_from_applies_the_reflexive_witness_exemption_as_the_full_audit_do
     guarantee (the claims tuples' `claims = claims`) is held to no witnesses in stage B exactly as in a full audit, and a
     non-reflexive `Eq` that stays in scope fails both the same. Stage B reads the reflexivity from the stored facts
     (`body`), never from a build."""
-    noop = lambda *_: None
+    def noop(*_):
+        return None
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     (pkg / "Control" / "Claims.lean").write_text(REFLEXIVE)
@@ -1616,7 +1618,8 @@ def test_facts_only_writes_the_document_facts_from_judges_under_its_build_s_key(
     build the facts were read from: a second read of the same `.olean` files writes the identical document under the same
     key, and a change to the lock slice `Facts.lean` reads moves it. A lock failure does not fail stage A, which has
     still written the document for `--facts-from` to judge."""
-    noop = lambda *_: None
+    def noop(*_):
+        return None
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
@@ -1668,7 +1671,8 @@ def test_facts_key_folds_source_digests_so_a_scanned_source_edit_with_the_same_o
     maxHeartbeats`, which `heartbeats` reads into a finding the document carries: without the fold the key would match and
     the stored finding would be reused against a source it no longer describes. The edit here is not rebuilt, so the facts
     (the `.olean` files) are identical and only the source digest moves, giving a different key and a cache miss."""
-    noop = lambda *_: None
+    def noop(*_):
+        return None
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
@@ -2059,7 +2063,8 @@ def test_facts_cache_stores_the_sealed_document_under_its_build_s_key_and_judges
     same tree recomputes that key and reads the document back as a hit. `--facts-only` (the graph's stage A) still writes
     the document alone, so its output stays the bytes the graph's cutoff compares, and the two flags exclude each other. A
     node whose builds aren't sandboxed stores nothing: any build there could have written the cache."""
-    noop = lambda *_: None
+    def noop(*_):
+        return None
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
@@ -2870,8 +2875,10 @@ def test_a_lift_writes_the_four_name_form_and_the_update_certifies_it(tmp_path):
                                                                         "Control.Sub.pick")},
                        "layers": pol["layers"] | {"Control.Guarantees": {"imports": ["Control.Defs"]}},
                        "shape": (pol.get("shape") or {}) | {"inline": {"Control.Sub.twice": why}}})
-    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    audit = lambda **kw: A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    def audit(**kw):
+        return A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None, **kw)
     build()
     assert unshaped(audit(update=True)) == []
     rep = audit(lifts={"Control.Sub.twice": {"as": "Control.Guarantees.Twice", "into": "Control.Guarantees"},

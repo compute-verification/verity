@@ -35,7 +35,6 @@ open Pous Pous.ColumnGame
 
 variable {n : ℕ}
 
-set_option maxHeartbeats 1600000 in
 /-- **The band schedule bound.** -/
 theorem band_scheduleBound (n k d X p q : ℕ) (hk : 1 ≤ k) (hq : 1 ≤ q)
     (hA : ∑ i ∈ Finset.range d, (q * i - p) ≤ p * k) (hX : p * (n + k) ≤ q * X * n)

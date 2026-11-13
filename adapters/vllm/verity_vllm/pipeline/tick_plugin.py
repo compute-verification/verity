@@ -6,7 +6,9 @@ The trace corpus serves so (`benchmarks/network_e2e/traces/corpus.py`, ``--admit
 
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
 stdlib, `verity_vllm.settings`, `verity_vllm.engine.hooks` and `serve_admit`, and `register` imports vLLM only once
-``VERITY_TICK`` is set.
+``VERITY_TICK`` is set. `serve_admit` reads a watermark line with the network certifier's own reader
+(`verity.protocols.certifier.verifier.release`, which imports only the stdlib), and imports it when the first line
+comes, so only the API server's process does, and it needs ``verity``, this package's dependency, on its path.
 """
 from __future__ import annotations
 

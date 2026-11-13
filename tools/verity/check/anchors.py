@@ -5,16 +5,22 @@
 A layout move renames files and rewrites names, and `Path(__file__).resolve().parents[3] / "data"` is neither: a file renamed
 to another depth, or away from the files beside it, reaches somewhere else, and only a test that reads that path notices.
 For each Python file at BASE that HEAD still has (where git's rename detection put it, or in place), whatever a join anchored
-on `__file__` reached at BASE, some join of the file at HEAD reaches where it went: the tracked part of the path (its
+on the file's place reached at BASE, some join of the file at HEAD reaches where it went: the tracked part of the path (its
 longest prefix that is a tracked file or a directory holding one) where those files went, the rest (a build output, a
 fetched fixture) unchanged below it. A join that left the tree or reached nothing tracked at BASE is not judged, and a
 change that drops a reference on purpose is listed too, so run it on the move commit alone. Exit 0 when every target is
 still reached, 1 listing those that aren't, 2 on a git error.
 
-Anchored means, in Python, a chain on `Path(__file__)`: `.resolve()`, `.absolute()`, `.parent`, `.parents[N]`, `/ "lit"`,
-`.joinpath("lit", ...)`, `.with_name("lit")`, and names bound to one (`os.path` arithmetic on `__file__` isn't read); in a
-`*.sh`, `$(dirname "$0")/path` or `${BASH_SOURCE[0]}`'s, and `"$VAR/path"` for a `VAR=$(cd "<one of those>/.." && pwd)`
-(a relative path after a bare `cd "$(dirname "$0")"` isn't read).
+Anchored means, in Python, a chain on `__file__` or on `importlib.resources.files(X)` (written `resources.files`,
+`importlib.resources.files`, or `files` where the file imports it from `importlib.resources`): `Path(...)` or `str(...)` of
+one, `.resolve()`, `.absolute()`, `.parent`, `.parents[N]`, `/ "lit"`, `.joinpath("lit", ...)`, `.with_name("lit")`, and names
+bound to one (`os.path` arithmetic on `__file__` isn't read). `files(X)` is the directory of the package X names, or the one
+holding the module it names. `files(__package__)`, `files(__name__)` and `files()` name the file itself, so they are its
+own directory and the move check reads them. A literal name follows its package, not the file, and resolving it takes the
+import roots: `joins` reads one only through a resolver its caller passes (`public_boundary.py`'s), and the move check
+passes none, so it reads no literal name. In a `*.sh`, anchored means `$(dirname "$0")/path` or `${BASH_SOURCE[0]}`'s, and
+`"$VAR/path"` for a `VAR=$(cd "<one of those>/.." && pwd)` (a relative path after a bare `cd "$(dirname "$0")"` isn't
+read).
 """
 from __future__ import annotations
 
@@ -58,67 +64,110 @@ def _join(path: str, *parts: str) -> str:
     return "/".join(out)
 
 
-def anchor(node: ast.AST, here: str, names: dict[str, str]) -> str | None:
-    """The repository path (relative to the root, `""` for the root, `OUTSIDE` above it) the expression reaches when
-    ``here`` is the file's path; None when it isn't anchored on `__file__`."""
-    if isinstance(node, ast.Call):
-        f = node.func
-        if isinstance(f, ast.Name) and f.id == "Path" and len(node.args) == 1 and isinstance(node.args[0], ast.Name) \
-                and node.args[0].id == "__file__":
-            return here
-        if isinstance(f, ast.Attribute) and f.attr in ("resolve", "absolute") and not node.args:
-            return anchor(f.value, here, names)
-        lits = [a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
-        if isinstance(f, ast.Attribute) and f.attr == "joinpath" and node.args and len(lits) == len(node.args):
-            a = anchor(f.value, here, names)
-            return None if a is None else _join(a, *lits)
-        if isinstance(f, ast.Attribute) and f.attr == "with_name" and len(node.args) == 1 and lits:
-            a = anchor(f.value, here, names)
-            return None if a is None else _join(_up(a), lits[0])
+def _files(node: ast.Call, here: str, package) -> str | None:
+    """The directory `importlib.resources.files(X)` is, as Python 3.12 reads X: a package's own, the one holding a module,
+    and the caller's without X. `__package__` and `__name__` name the file at ``here``; a literal is ``package``'s to resolve."""
+    if node.keywords or len(node.args) > 1:
         return None
-    if isinstance(node, ast.Attribute) and node.attr == "parent":
-        a = anchor(node.value, here, names)
-        return None if a is None else _up(a)
-    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute) and node.value.attr == "parents" \
-            and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
-        a = anchor(node.value.value, here, names)
-        return None if a is None else _up(a, node.slice.value + 1)
-    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div) and isinstance(node.right, ast.Constant) \
-            and isinstance(node.right.value, str):
-        a = anchor(node.left, here, names)
-        return None if a is None else _join(a, node.right.value)
-    if isinstance(node, ast.Name):
-        return names.get(node.id)
+    if not node.args:
+        return _up(here)
+    x = node.args[0]
+    if isinstance(x, ast.Name) and x.id in ("__package__", "__name__"):
+        return _up(here)
+    if package is not None and isinstance(x, ast.Constant) and isinstance(x.value, str):
+        return package(x.value)
     return None
 
 
-def bindings(tree: ast.AST, here: str) -> dict[str, str]:
+def _wrapped(node: ast.AST) -> ast.AST | None:
+    """``x`` of `Path(x)`, `pathlib.Path(x)` or `str(x)`, which reaches what ``x`` reaches; None for any other expression."""
+    if isinstance(node, ast.Call) and len(node.args) == 1 and not node.keywords:
+        f = node.func
+        if isinstance(f, ast.Name) and f.id in ("Path", "str") or isinstance(f, ast.Attribute) and f.attr == "Path" \
+                and isinstance(f.value, ast.Name) and f.value.id == "pathlib":
+            return node.args[0]
+    return None
+
+
+def anchor(node: ast.AST, here: str, names: dict[str, str], package=None, bare: frozenset[str] = frozenset()) -> str | None:
+    """The repository path (relative to the root, `""` for the root, `OUTSIDE` above it) the expression reaches when
+    ``here`` is the file's path; None when it isn't anchored on `__file__` or `importlib.resources.files`. ``package`` maps a
+    dotted name to the repository directory `files` gives for it, or None for a name the tree doesn't hold; without it a
+    literal name isn't read. ``bare`` holds the names the file imports `files` under."""
+    if isinstance(node, ast.Call):
+        f = node.func
+        if isinstance(f, ast.Name) and f.id in bare or isinstance(f, ast.Attribute) and f.attr == "files" \
+                and ast.unparse(f.value) in ("resources", "importlib.resources"):
+            return _files(node, here, package)
+        if (x := _wrapped(node)) is not None:
+            return anchor(x, here, names, package, bare)
+        if isinstance(f, ast.Attribute) and f.attr in ("resolve", "absolute") and not node.args:
+            return anchor(f.value, here, names, package, bare)
+        lits = [a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
+        if isinstance(f, ast.Attribute) and f.attr == "joinpath" and node.args and len(lits) == len(node.args):
+            a = anchor(f.value, here, names, package, bare)
+            return None if a is None else _join(a, *lits)
+        if isinstance(f, ast.Attribute) and f.attr == "with_name" and len(node.args) == 1 and lits:
+            a = anchor(f.value, here, names, package, bare)
+            return None if a is None else _join(_up(a), lits[0])
+        return None
+    if isinstance(node, ast.Attribute) and node.attr == "parent":
+        a = anchor(node.value, here, names, package, bare)
+        return None if a is None else _up(a)
+    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute) and node.value.attr == "parents" \
+            and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, int):
+        a = anchor(node.value.value, here, names, package, bare)
+        return None if a is None else _up(a, node.slice.value + 1)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div) and isinstance(node.right, ast.Constant) \
+            and isinstance(node.right.value, str):
+        a = anchor(node.left, here, names, package, bare)
+        return None if a is None else _join(a, node.right.value)
+    if isinstance(node, ast.Name):
+        return here if node.id == "__file__" else names.get(node.id)
+    return None
+
+
+def _bare(tree: ast.AST) -> frozenset[str]:
+    """The names the file imports `importlib.resources.files` under."""
+    return frozenset(a.asname or a.name for n in ast.walk(tree)
+                     if isinstance(n, ast.ImportFrom) and n.module == "importlib.resources" and not n.level
+                     for a in n.names if a.name == "files")
+
+
+def bindings(tree: ast.AST, here: str, package=None, bare: frozenset[str] = frozenset()) -> dict[str, str]:
     """Each name some assignment in the file binds to an anchored path (the last one wins; a name rebound to two paths in
     different scopes is read as one, which a move's pairing keeps the same before and after)."""
     names: dict[str, str] = {}
     assigns = [n for n in ast.walk(tree) if isinstance(n, (ast.Assign, ast.AnnAssign)) and n.value is not None]
     for _ in range(3):
         for node in assigns:
-            if (a := anchor(node.value, here, names)) is not None:
+            if (a := anchor(node.value, here, names, package, bare)) is not None:
                 for t in (node.targets if isinstance(node, ast.Assign) else [node.target]):
                     if isinstance(t, ast.Name):
                         names[t.id] = a
     return names
 
 
-def joins(here: str, text: str) -> list[tuple[int, str]]:
-    """(line, reached path) for each outermost anchored expression of the file other than a bare name, in source order."""
-    if "__file__" not in text:
+def joins(here: str, text: str, package=None) -> list[tuple[int, str]]:
+    """(line, reached path) for each outermost anchored expression of the file, in source order, other than a use of a name
+    an assignment binds: the name bare, or in `Path(...)` or `str(...)`. ``package`` resolves a literal name
+    `importlib.resources.files` takes (`anchor`)."""
+    if "__file__" not in text and "files(" not in text:
         return []
     try:
         tree = ast.parse(text)
     except SyntaxError:
         return []
-    names, out = bindings(tree, here), []
+    bare = _bare(tree) if "importlib.resources" in text else frozenset()
+    names, out = bindings(tree, here, package, bare), []
 
     def visit(node: ast.AST) -> None:
-        if not isinstance(node, ast.Name) and (a := anchor(node, here, names)) is not None:
-            out.append((node.lineno, node.col_offset, a))
+        if not isinstance(node, ast.Name) and (a := anchor(node, here, names, package, bare)) is not None:
+            x = node
+            while (inner := _wrapped(x)) is not None:
+                x = inner
+            if not isinstance(x, ast.Name) or x.id == "__file__":
+                out.append((node.lineno, node.col_offset, a))
             return
         for child in ast.iter_child_nodes(node):
             visit(child)

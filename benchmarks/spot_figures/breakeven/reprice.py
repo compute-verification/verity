@@ -167,8 +167,8 @@ FUSED_PROVE_SHARE = 1.101 * 0.570
 FUSED_SERVER = {e: (f * k, m * k, FUSED_PROVE_SHARE, 1 << (35 - FUSED_K_LOG))
                 for e, (f, m), k in (("w13", (1.24, 2.77e-3), 1 / FUSED_SESSIONS_S / (1.24 + 1024 * 2.77e-3)),
                                      ("w2", (1.30, 2.93e-3), 1 / FUSED_SESSIONS_S / (1.24 + 1024 * 2.77e-3)))}
-#: the types kept at one prover an H200: the split part's host memory is unmeasured
-ONE_PROVER = ("SparseMlaSplitPart_v1",)
+#: the types kept at one prover an H200: the sparse-MLA head block's host memory is unmeasured
+ONE_PROVER = ("SparseMlaHeadBlock_v1",)
 #: K provers on one H200, sessions a second over one prover's, measured on M1 (the fused w13 at full statements) on
 #: node A; four under MPS; the dense types fit two provers a GPU in host memory today (`dense_k`)
 K_GAIN = {2: 0.768 / 0.570, 4: 0.903 / 0.570}
@@ -441,7 +441,8 @@ def price_fused(strata, how="h200"):
     for x in strata:
         e = expert(x) if x.get("kind") == "fused" else None
         if e:
-            x = x | {"k_log": FUSED_K_LOG, "statement_blocks": max(1, tc.STATEMENT_BITS >> FUSED_K_LOG)}
+            x = x | {"k_log": FUSED_K_LOG, "statement_blocks": max(1, tc.STATEMENT_BITS >> FUSED_K_LOG),
+                     "table_blocks": tc.table_blocks(FUSED_K_LOG)}
             if how == "cpu":
                 r = FUSED_CPU[e]
                 x |= {"fixed_seconds": x["fixed_seconds"] * r, "seconds_per_block": x["seconds_per_block"] * r,

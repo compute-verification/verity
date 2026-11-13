@@ -14,6 +14,9 @@
 #   `--replace-all`, `--rename-section`, `--remove-section`, `set`, `unset`), `--get-color` and, on a terminal, `--edit` run
 #   unchanged; off a terminal the editor still edits, and what it prints is filtered.
 # - `clone`, `remote add` and `remote set-url` refuse a URL that carries a credential (exit 2): use a credential helper.
+# - `push` runs the branch rule's pre-push hook (pre_push.py, which install.sh puts in $AGENT_GUARD_GIT_HOOKS, default
+#   /usr/local/lib/agent-guard/hooks) whoever runs it, script or child process: `-c core.hooksPath=` that directory after the
+#   caller's own options, and `--no-verify` dropped; the hook then runs the hook the push would have run otherwise.
 # Anything else runs /usr/bin/git unchanged. Not covered: .git/config and ~/.gitconfig read as files, a git alias that runs
 # `config`, a header other than `Authorization:`, a token that is not GitHub's outside a URL, and the environment's
 # GIT_CONFIG_* variables, of which env_guard.py redacts only GIT_CONFIG_KEY_n (by its name). VERITY_GIT_GUARD=off disables.
@@ -107,5 +110,21 @@ case $sub in
     stripped "$@"; exit ;;
   var)
     for a in "${rest[@]}"; do [ "$a" = -l ] && { stripped "$@"; exit; }; done ;;
+  push)
+    # The branch rule's pre-push hook (pre_push.py) for every push, after the caller's own -c and through --no-verify; it
+    # then runs the hook the push would have run otherwise (AGENT_GUARD_CHAIN_HOOKS: none under --no-verify).
+    hooks=${AGENT_GUARD_GIT_HOOKS:-/usr/local/lib/agent-guard/hooks}
+    if [ -x "$hooks/pre-push" ]; then
+      chain=$("$REAL" "${pre[@]}" rev-parse --path-format=absolute --git-path hooks 2>/dev/null)
+      # git before 2.31 echoes the option it doesn't know and prints a relative path: then no hook is chained, and the push
+      # still runs, judged
+      [[ $chain == /* && $chain != *$'\n'* ]] || chain=
+      [ -n "$chain" ] && [ "$chain" -ef "$hooks" ] && chain=
+      kept=()
+      for a in "${rest[@]}"; do
+        if [ "$a" = --no-verify ]; then chain=; else kept+=("$a"); fi
+      done
+      AGENT_GUARD_CHAIN_HOOKS=$chain exec "$REAL" "${pre[@]}" -c "core.hooksPath=$hooks" push "${kept[@]}"
+    fi ;;
 esac
 exec "$REAL" "$@"

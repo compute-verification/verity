@@ -20,13 +20,12 @@ from verity.circuits.ports import In, Out, Ports
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, coll_concat
 from verity.circuits.types import Array, RecordType, Value
-
+from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as Cr
 from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.pouw.verifier import weights as W
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.spot.verifier.one_stage import partition as P
 from verity.protocols.spot.verifier.one_stage import registered as G
 

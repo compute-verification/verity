@@ -65,11 +65,12 @@ SESSIONS = (P.Session(GEMM64, 20, 0.5, 2.0, 1 << 15), P.Session("Other_v1{N=2}",
 
 def steady(type_: str, definition: str, run: str, blocks: int, gpu: float | None, *, full: int = 8, k_log: int = 20,
            verify: float | None = None, refused: str | None = None, provers: int = 1, art: str | None = None,
-           cores: int = P.HOST_CORES) -> P.Steady:
-    """A steady-state row, timed at the host's cores unless `cores` says otherwise."""
+           cores: int = P.HOST_CORES, form: str | None = None) -> P.Steady:
+    """A steady-state row, timed at the host's cores unless `cores` says otherwise, its statements of `definition`
+    unless `form` names another Definition."""
 
     return P.Steady(type_, definition, k_log, blocks, full, run, R.ART_RATES if art else R.RATES, gpu, verify, refused,
-                    provers, art, cores)
+                    provers, art, cores, form)
 
 
 def test_a_census_counts_a_request_over_its_tokens_and_a_cut_replaces_its_kinds():
@@ -111,7 +112,8 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
     gemm = by[GEMM64].cost
     assert (gemm.source, gemm.seconds, gemm.record, gemm.staged) == (P.STEADY, 1.0, "r20260102-000000-0002", "gemm64")
     assert gemm.verifier_seconds == 0.5 and gemm.at_steady_rate is None and gemm.provers == 1
-    assert gemm.note == "`gemm64`, 1 prover, full statements (out/rate/rate.json)"
+    assert gemm.note == "`gemm64` (`Gemm_v1{K=64,N=1,DOT=Dot_v1}`), 1 prover, full statements (out/rate/rate.json)"
+    assert gemm.definition == P.definition_id(GEMM64) and by[GEMM32].cost.definition is None
 
     # the card measures the K=64 GEMM alone: K=32 is another type, so it and the cut's block are modeled from k_log, at
     # the card's types' median seconds a witness bit and their fixed seconds' line in k_log (flat here, at 2 s)
@@ -167,6 +169,72 @@ def test_a_steady_row_prices_its_definition_and_ks_other_statics_and_is_not_meas
     assert P.report(whole, 1.0)["totals"]["status"] == "modeled"
 
 
+def test_a_types_row_names_the_definition_that_priced_it_and_which_form_of_the_type_it_is():
+    """A row staged for its census type in another Definition prices the type as any row of it does, and the type's
+    row names the Definition its statements are of: as the type's Boolean version where the tree registers it as that,
+    as another Definition where it doesn't, and with no qualifier where it is the type's own. A type priced from its
+    family's row names that row's Definition the same way, and a type priced off the steady state names none. The
+    form moves no figure."""
+
+    defs = {"Head_v1{K=4,FIRST=false}": 20, "Head_v1{K=4,FIRST=true}": 20, "Head_v1{K=4,LAYER=9}": 21,
+            "Tail_v1{K=4,FIRST=false}": 20, "Tail_v1{K=4,LAYER=9}": 21, "Odd_v1{N=2}": 20, "Bare_v1{N=2}": 20}
+    census = P.Census.of({"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 1, "macs": 1}, "definitions": {
+        name: {"k_log": k, "of": {name.split("{")[0]: "row"}, "prefill": 1, "decode": 0} for name, k in defs.items()}})
+    head, first, layer, tail, tail_layer, odd, bare = defs
+    run = "r20260101-000000-0001"
+    rows = (steady("head-bits", "Head_v1{K=4,FIRST=False}", run, 8, 16.0, form="Head_v2{K=4,FIRST=False}"),
+            steady("head-first", "Head_v1{K=4,FIRST=True}", run, 8, 8.0),
+            steady("tail", "Tail_v1{K=4,FIRST=False}", run, 8, 8.0),
+            steady("odd-v3", "Odd_v1{N=2}", run, 8, 8.0, form="Odd_v3{N=2}"))
+    # the tree's Boolean version of each census type, by the type's census name: `Odd_v3` is none of `Odd_v1`
+    registered = {head: "Head_v2{K=4,FIRST=False}", odd: "Odd_v2{N=2}"}
+    flock = P.Flock(rows, (), None, boolean=lambda block, definition: registered.get(block) == definition)
+    table = flock.table(census)
+    by = {r.block: r.cost for r in table.rows}
+    assert [c.source for c in by.values()] == [P.STEADY, P.STEADY, P.FAMILY, P.STEADY, P.FAMILY, P.STEADY, P.MISSING]
+
+    # a Boolean row prices the word-form census type, and its line says so
+    assert by[head].note == ("`head-bits` (its Boolean version, `Head_v2{K=4,FIRST=False}`), 1 prover, full statements "
+                             "(out/rate/rate.json)")
+    # a row of the type's own Definition names it with no qualifier
+    assert by[first].note == "`head-first` (`Head_v1{K=4,FIRST=True}`), 1 prover, full statements (out/rate/rate.json)"
+    # a Definition the tree doesn't register as the type's Boolean version is another Definition
+    assert by[odd].note == "`odd-v3` (another Definition, `Odd_v3{N=2}`), 1 prover, full statements (out/rate/rate.json)"
+    # a type priced from its family's row names the block type that row measured and the Definition it was staged in
+    assert by[layer].note == ("its Definition and K's, `head-bits` (`Head_v1{K=4,FIRST=False}` in its Boolean version, "
+                              "`Head_v2{K=4,FIRST=False}`), 1 prover, full statements, at 2^1 its seconds; the dearest of 2 "
+                              "measured")
+    assert by[tail_layer].note == ("its Definition and K's, `tail` (`Tail_v1{K=4,FIRST=False}`), 1 prover, full statements, "
+                                   "at 2^1 its seconds")
+    named = {head: "Head_v2{K=4,FIRST=False}", first: "Head_v1{K=4,FIRST=True}", layer: "Head_v2{K=4,FIRST=False}",
+             tail: "Tail_v1{K=4,FIRST=False}", tail_layer: "Tail_v1{K=4,FIRST=False}", odd: "Odd_v3{N=2}", bare: None}
+    assert {name: c.definition for name, c in by.items()} == named
+    doc = P.report(table, 1.0)
+    assert {r["block"]: r["definition"] for r in doc["rows"]} == named
+
+    # with nothing to say what the tree registers, no row is called a Boolean version
+    unsaid = {r.block: r.cost for r in P.Flock(rows, (), None).table(census).rows}
+    assert unsaid[head].note == ("`head-bits` (another Definition, `Head_v2{K=4,FIRST=False}`), 1 prover, full statements "
+                                 "(out/rate/rate.json)")
+    assert "`Head_v1{K=4,FIRST=False}` in another Definition, `Head_v2{K=4,FIRST=False}`" in unsaid[layer].note
+
+    # the form prices nothing: the same rows staged in their types' own Definitions give every figure the same
+    plain = P.Flock(tuple(replace(s, form=None) for s in rows), (), None).table(census)
+
+    def figures(t: P.Table) -> list[P.Row]:
+        return [replace(r, cost=replace(r.cost, note="", definition=None)) for r in t.rows]
+
+    assert figures(plain) == figures(table)
+    same = P.report(plain, 1.0)
+    assert (same["totals"], same["sources"]) == (doc["totals"], doc["sources"])
+    assert {r["block"]: r["definition"] for r in same["rows"]} == named | {
+        head: "Head_v1{K=4,FIRST=False}", layer: "Head_v1{K=4,FIRST=False}", odd: "Odd_v1{N=2}"}
+    # a sampling plan takes the prover's rows, each with its Definition and its line
+    cells = [{"block": name, "type": "", "taken": 1.0} for name in defs]
+    spot = P.Spot(flock, plan(cells), P.Serving(0.5, 4.0, "stated")).table(census)
+    assert [(r.cost.definition, r.cost.note) for r in spot.rows] == [(c.definition, c.note) for c in by.values()]
+
+
 def test_the_steady_rows_are_the_types_measured_at_steady_state_as_the_planner_reads_them():
     """`--steady-rows`' file holds a row for each block type its own steady-state row measures, by its census name, with
     the statement's GPU-seconds and blocks that row timed, and none for a type priced from its family's row, a single
@@ -212,12 +280,12 @@ def test_a_type_is_priced_at_the_stated_prover_count_from_rows_at_that_count_onl
     one, two, four = priced(1), priced(2), priced(4)
     assert (one[GEMM64].source, one[GEMM64].seconds, one[GEMM64].record, one[GEMM64].provers) == (
         P.STEADY, 2.0, "r20260101-000000-0001", 1)
-    assert one[GEMM64].note.startswith("`gemm64`, 1 prover, full statements")
+    assert one[GEMM64].note.startswith(f"`gemm64` (`{gemm}`), 1 prover, full statements")
     # the norm has no row at one prover: it is modeled, and its row says which counts measured it
     assert one[NORM].source == P.MODELED and one[NORM].provers is None
     assert one[NORM].note == "measured at steady state at 2 provers, which price no type at 1"
     assert (two[GEMM64].seconds, two[GEMM64].provers, two[NORM].seconds, two[NORM].source) == (0.5, 2, 3.0, P.STEADY)
-    assert two[GEMM64].note.startswith("`gemm64`, 2 provers, full statements")
+    assert two[GEMM64].note.startswith(f"`gemm64` (`{gemm}`), 2 provers, full statements")
     # at four provers the only row is void: the type is priced off the steady state, naming the attempt and the counts
     assert four[GEMM64].source == P.SINGLE and four[GEMM64].provers is None
     assert four[GEMM64].note == ("steady state tried as `gemm64` at 4 provers in r20260103-000000-0003 (out/rate/rate.json): "
@@ -255,10 +323,10 @@ def test_a_type_is_priced_at_the_hosts_cores_else_from_the_fewest_cores_above():
     assert ten == priced(cores=10)
     assert (ten[GEMM64].source, ten[GEMM64].seconds, ten[GEMM64].record, ten[GEMM64].cores) == (
         P.STEADY, 2.0, "r20260101-000000-0001", 10)
-    assert ten[GEMM64].note == "`gemm64`, 1 prover, statements 4/8 full (out/rate/rate.json)"
+    assert ten[GEMM64].note == f"`gemm64` (`{gemm}`), 1 prover, statements 4/8 full (out/rate/rate.json)"
     assert (ten[NORM].source, ten[NORM].seconds, ten[NORM].cores) == (P.STEADY, 2.0, 12)
-    assert ten[NORM].note == ("`norm`, 1 prover, statements 4/8 full (out/rate/rate.json); timed at 12 cores, above the "
-                              "host's 10")
+    assert ten[NORM].note == (f"`norm` (`{norm}`), 1 prover, statements 4/8 full (out/rate/rate.json); timed at 12 cores, "
+                              "above the host's 10")
     assert ten[GEMM32].source == P.MODELED and ten[GEMM32].cores is None
     assert ten[GEMM32].note == ("measured at steady state at 2 provers, which price no type at 1; measured at steady state "
                                 "at 6 cores, which price no type at 10")
@@ -269,8 +337,8 @@ def test_a_type_is_priced_at_the_hosts_cores_else_from_the_fewest_cores_above():
     assert "timed at" not in twelve[GEMM64].note + twelve[NORM].note
     wide = priced(cores=24)
     assert (wide[GEMM64].seconds, wide[GEMM64].record, wide[NORM].seconds) == (1.0, "r20260103-000000-0003", 3.0)
-    assert priced(cores=16)[GEMM64].note == ("`gemm64`, 1 prover, full statements (out/rate/rate.json); timed at 24 cores, "
-                                             "above the host's 16")
+    assert priced(cores=16)[GEMM64].note == (f"`gemm64` (`{gemm}`), 1 prover, full statements (out/rate/rate.json); timed at "
+                                             "24 cores, above the host's 16")
     # on a host of more cores than any row was timed at, no row prices a type: each names the cores that measured it
     over = priced(cores=32)
     assert (over[GEMM64].source, over[NORM].source) == (P.SINGLE, P.MODELED)
@@ -372,7 +440,8 @@ def test_a_row_an_art_holds_is_its_runs_and_names_the_art():
     )
     cost = {r.block: r.cost for r in P.Flock(rows, SESSIONS, "art:card").table(census).rows}
     assert (cost[GEMM64].source, cost[GEMM64].seconds, cost[GEMM64].record) == (P.STEADY, 1.0, art)
-    assert cost[GEMM64].note == "`gemm64`, 1 prover, full statements (rate.json of art:abababababab, measured in r20260102-000000-0002)"
+    assert cost[GEMM64].note == (f"`gemm64` (`{gemm}`), 1 prover, full statements (rate.json of art:abababababab, measured in "
+                                 "r20260102-000000-0002)")
     # the art's row of the norm isn't a steady-state measurement, so the older run's own prices it
     assert (cost[NORM].source, cost[NORM].seconds, cost[NORM].record) == (P.STEADY, 3.0, "r20260101-000000-0001")
     tried = {r.block: r.cost for r in P.Flock(rows[3:], SESSIONS, "art:card").table(census).rows}[NORM]
@@ -921,15 +990,24 @@ def test_a_row_is_a_steady_state_measurement_only_when_every_session_was_accepte
 
 def test_a_row_names_the_census_type_it_was_staged_for_not_the_form_staged():
     """A row staged in another form of its census type (the card stages `FlashInferFp8Linear_v1` as `_v2`) prices the
-    census's type: `stage.word` names it, and `stage.definition` only where a row has no `stage.word`."""
+    census's type: `stage.word` names it, and `stage.definition` only where a row has no `stage.word`. The Definition
+    staged is the row's `form` where it is another than its census type's, and the type's row names it."""
 
     good = {row["type"]: row for row in REFUSALS}["good"]
     staged = good | {"stage": good["stage"] | {"definition": "Good_v2{N=1}", "word": "Good_v1{N=1}"}}
     read = R.steady_row(staged, "r1")
-    assert read.definition == "Good_v1{N=1}" and read.measured
+    assert (read.definition, read.form, read.proved) == ("Good_v1{N=1}", "Good_v2{N=1}", "Good_v2{N=1}") and read.measured
     cost = P.Flock((read,)).table(P.Census((P.Block("Good_v1{N=1}", "Good_v1", 1.0, 20),), 1.0, 1.0)).rows[0].cost
-    assert cost.source == P.STEADY
-    assert R.steady_row(good | {"stage": good["stage"] | {"definition": "Good_v2{N=1}"}}, "r1").definition == "Good_v2{N=1}"
+    assert (cost.source, cost.definition) == (P.STEADY, "Good_v2{N=1}")
+    assert cost.note.startswith("`good` (another Definition, `Good_v2{N=1}`), 1 prover, full statements (out/rate/rate.json)")
+    # a row that names no census type is its staged Definition's, and one staged in its census type's own Definition
+    # has no other form, in the census's spelling of it or the Definition's id's
+    bare = R.steady_row(good | {"stage": good["stage"] | {"definition": "Good_v2{N=1}"}}, "r1")
+    assert (bare.definition, bare.form, bare.proved) == ("Good_v2{N=1}", None, "Good_v2{N=1}")
+    own = R.steady_row(good | {"stage": good["stage"] | {"definition": "Good_v1{N=1,FMA=True}", "word": "Good_v1{N=1,FMA=true}"}}, "r1")
+    assert (own.definition, own.form) == ("Good_v1{N=1,FMA=True}", None)
+    # a row that isn't a steady-state measurement keeps its form
+    assert R.steady_row(staged | {"flat": False}, "r1").form == "Good_v2{N=1}"
 
 
 def test_a_rows_cores_are_its_count_or_its_mappings_count_and_24_where_it_states_none():
@@ -1094,7 +1172,7 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     rows = {r["block"]: r for r in doc["rows"]}
     steady_rows = [r for r in doc["rows"] if r["source"] == P.STEADY]
     assert {r["record"] for r in steady_rows} == {RUNS[-1]}
-    assert sorted(r["note"].split(",")[0] for r in steady_rows) == [
+    assert sorted(r["note"].split(" (")[0] for r in steady_rows) == [
         "`ar-multimem`", "`dsa-logits-v3`", "`fr-w13`", "`fr-w2`", "`residual-add`", "`rmsnorm-v8`", "`sm-fp8-k2048`",
         "`sm-fp8-k6144`"]
     assert sum("statements 128/256 full" in r["note"] for r in steady_rows) == 2
@@ -1397,6 +1475,95 @@ def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path
         notlist: "its `rate.json` isn't a list of rows",
         alone: f"superseded by {notlist}", stands: f"superseded by {notlist}"}
     assert doc["inputs"][2]["targets"] == [] and {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
+
+
+HEAD_BLOCK = ('SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=4,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
+              'SCALE={"f64":"0x1.0000000000000p-4"}}')
+
+
+def registered(block: str) -> str:
+    """The id of the Definition the tree registers as a census type's Boolean version, asked of the registry itself."""
+
+    from verity.definitions import boolean
+    from verity.definitions.call_scope import spec_base, spec_statics, specialization
+
+    return boolean.boolean_version(specialization(spec_base(block), spec_statics(block))).id
+
+
+def test_a_definition_is_a_types_boolean_version_only_where_the_trees_registry_says_so():
+    """`boolean_version` asks the tree's registry: a census type's Boolean version is the one Definition
+    `verity.definitions.boolean.boolean_version` gives for the type's own, at the statics it binds, a function-valued
+    static's Boolean version among them. The type's own Definition, its Boolean Definition at other statics, a
+    version the tree doesn't hold, and anything of a type the registry doesn't bind are none."""
+
+    linear = "FlashInferFp8Linear_v1{K=2048,N=1}"
+    bits = registered(linear)
+    assert bits.startswith("FlashInferFp8Linear_v") and bits.endswith("{K=2048,N=1}") and bits != P.definition_id(linear)
+    assert R.boolean_version(linear, bits)
+    assert not any(R.boolean_version(linear, other) for other in (
+        P.definition_id(linear), registered("FlashInferFp8Linear_v1{K=1536,N=1}"), "FlashInferFp8Linear_v0{K=2048,N=1}"))
+    head = registered(HEAD_BLOCK)
+    assert head.startswith("SparseMlaHeadBlock_v") and R.boolean_version(HEAD_BLOCK, head)
+    assert not R.boolean_version(HEAD_BLOCK, P.definition_id(HEAD_BLOCK))
+    # a name the registry doesn't hold, and statics it can't bind
+    assert not R.boolean_version("Made_up_v1{N=1}", "Made_up_v2{N=1}")
+    assert not R.boolean_version("FlashInferFp8Linear_v1{BOGUS=1}", bits)
+
+
+def test_the_table_names_each_priced_rows_definition_and_its_form_from_the_trees_registry(tmp_path):
+    """On a store: a made-up row staged for a census type in the Definition the tree registers as its Boolean version
+    says so on the type's row, one staged in any other Definition is another Definition's, and the fixture's rows,
+    each of its type's own Definition, name it with no qualifier. The JSON row holds the Definition, the rendered
+    table the line, and the same rows staged in their types' own Definitions give every total the same."""
+
+    newest = RUNS[-1]
+    whole = json.loads((FIXTURES / "steady" / newest / "rate" / "rate.json").read_text())
+    good = next(row for row in whole if row["type"] == "residual-add")
+    linear, wide = "FlashInferFp8Linear_v1{K=2048,N=1}", "FlashInferFp8Linear_v1{K=6144,N=1}"
+
+    def staged(type_: str, word: str, definition: str, k_log: int) -> dict:
+        return good | {"type": type_, "stage": good["stage"] | {"word": word, "definition": definition, "k_log": k_log}}
+
+    def built(name: str, rows: list[dict]) -> dict:
+        s = Store(tmp_path / name)
+        for slot, card in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
+            s.record(s.doc(R.CARD_SCHEMA, card, fixture(card)), slot)
+        s.record(census_art(s), R.CENSUS)
+        s.record(s.tree("evidence/v1", R.ART_RATES, [*whole, *rows], {"runs": [newest]}), R.STEADY)
+        return R.build("flock", "glm53", store=s.fresh(), root=REPO)
+
+    bits = registered(linear)
+    doc = built("forms", [staged("fi-linear-bits", linear, bits, 24),
+                          staged("fi-linear-n2", wide, "FlashInferFp8Linear_v1{K=6144,N=2}", 26)])
+    rows = {r["block"]: r for r in doc["rows"]}
+    assert bits != linear and (rows[linear]["source"], rows[linear]["definition"]) == (P.STEADY, bits)
+    assert rows[linear]["note"].startswith(
+        f"`fi-linear-bits` (its Boolean version, `{bits}`), 1 prover, full statements (rate.json of ")
+    assert (rows[wide]["source"], rows[wide]["definition"]) == (P.STEADY, "FlashInferFp8Linear_v1{K=6144,N=2}")
+    assert rows[wide]["note"].startswith(
+        "`fi-linear-n2` (another Definition, `FlashInferFp8Linear_v1{K=6144,N=2}`), 1 prover, full statements (rate.json of ")
+    assert rows["ResidualAdd_v1{N=6144}"]["definition"] == "ResidualAdd_v1{N=6144}"
+    assert rows["ResidualAdd_v1{N=6144}"]["note"].startswith(
+        "`residual-add` (`ResidualAdd_v1{N=6144}`), 1 prover, full statements (rate.json of ")
+    # every steady-state and family's row names a Definition, and no other row does
+    assert all((r["definition"] is not None) == (r["source"] in (P.STEADY, P.FAMILY)) for r in doc["rows"])
+    assert {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 10
+    family = next(r for r in doc["rows"] if r["source"] == P.FAMILY)
+    assert f"(`{family['definition']}`), 1 prover, full statements, at 2^" in family["note"]
+    text = R.render(doc)
+    assert f"| `fi-linear-bits` (its Boolean version, `{bits}`), 1 prover, full statements " in text
+    assert "| `fi-linear-n2` (another Definition, `FlashInferFp8Linear_v1{K=6144,N=2}`), 1 prover, full statements " in text
+
+    # the same two rows staged in their types' own Definitions: every figure is the same, and no row has a qualifier
+    own = built("own", [staged("fi-linear-bits", linear, linear, 24), staged("fi-linear-n2", wide, wide, 26)])
+    assert (own["totals"], own["sources"], own["periods"]) == (doc["totals"], doc["sources"], doc["periods"])
+
+    def figures(d: dict) -> list[dict]:
+        return [{k: v for k, v in r.items() if k not in ("note", "definition", "record")} for r in d["rows"]]
+
+    assert figures(own) == figures(doc)
+    assert {r["block"]: r["definition"] for r in own["rows"] if r["block"] in (linear, wide)} == {linear: linear, wide: wide}
+    assert not any("Boolean version" in r["note"] or "another Definition" in r["note"] for r in own["rows"])
 
 
 def test_a_rows_cores_are_its_own_else_its_runs_host_else_24(tmp_path):

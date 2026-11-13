@@ -14,10 +14,14 @@ served token, the prover GPU-seconds a block and where that figure is from (`SOU
   and the statement cache's hit rate flat. A type whose rows at that prover count were all timed at more cores takes
   the one at the fewest, and its row says so; a row timed at fewer cores than stated prices nothing. A row whose
   staged Definition is no block type of the census is on no row of the table and in no figure, the range's other end
-  included: the table lists it as unread (`Table.unread`);
+  included: the table lists it as unread (`Table.unread`). A row may be staged for its census type in another
+  Definition than the type's own (`Steady.form`): the type's row names the Definition its statements are of, as the
+  type's Boolean version where the tree registers it as that (`Flock.boolean`) and as another Definition where it
+  doesn't;
 - `family`: no row of its own, but a steady-state row of its Definition and K at other statics, chosen as above, at
-  2^Δk its seconds a block (Δk between the two k_logs), the dearest such where there are several. It is priced, not
-  measured: the steady-state share and the measured status count it as neither;
+  2^Δk its seconds a block (Δk between the two k_logs), the dearest such where there are several, named with the
+  Definition its statements are of as a type's own row is. It is priced, not measured: the steady-state share and the
+  measured status count it as neither;
 - `single`: one warm process's sessions on the type alone, a block's marginal seconds plus its share of a full
   statement's fixed seconds;
 - `k_log`: no measurement of the type, so the single-session types' median seconds a witness bit times its 2^k_log
@@ -171,8 +175,10 @@ class Cost:
     names its cells' the same way), the same block at the steady-state types' median seconds a witness bit (the range's
     other end; None for a type measured at steady state), the proof server's verifier's seconds where a record holds
     them, the prover count, the host CPU cores a card and the blocks a statement held that a steady-state figure was
-    measured at, and the Lean verifier's seconds and the proof's bytes with where the two are from (`lean_source`: the
-    type's own `lean-verify` record, or scaled from another type's; None with no figure)."""
+    measured at, the Lean verifier's seconds and the proof's bytes with where the two are from (`lean_source`: the
+    type's own `lean-verify` record, or scaled from another type's; None with no figure), and the Definition the
+    statements a steady-state figure was measured on are of, by its id (`definition`: the type's own row's, or that of
+    the family's row it is scaled from; None from any other source)."""
 
     source: str
     seconds: float | None = None
@@ -187,6 +193,7 @@ class Cost:
     blocks: int | None = None
     lean_seconds: float | None = None
     lean_source: str | None = None
+    definition: str | None = None
 
 
 @dataclass(frozen=True)
@@ -264,12 +271,14 @@ class Session:
 
 @dataclass(frozen=True)
 class Steady:
-    """One row of a proof server's rate, a staged type at a prover count: the Definition it staged (by its id), its
-    statements of `blocks` blocks where a full one holds `full`, the GPU-seconds and the verifier's seconds a statement,
-    the provers that proved them, the host CPU cores they held for their card (`UNSTATED_CORES` where its record
-    states none), and why the row isn't a steady-state measurement (`refused`, None when it is one). `run` is the run that
-    measured it and `report` the file that holds it: in the run's own files, or in `art` where an art holds the run's
-    rows in their place."""
+    """One row of a proof server's rate, a staged type at a prover count: the Definition of the block type it was
+    staged for (`definition`, by its id), its statements of `blocks` blocks where a full one holds `full`, the
+    GPU-seconds and the verifier's seconds a statement, the provers that proved them, the host CPU cores they held for
+    their card (`UNSTATED_CORES` where its record states none), and why the row isn't a steady-state measurement
+    (`refused`, None when it is one). `run` is the run that measured it and `report` the file that holds it: in the
+    run's own files, or in `art` where an art holds the run's rows in their place. `form` is the Definition its
+    statements are of, by its id, where that is another than `definition` (the type's Boolean version, say); None
+    where they are of `definition` itself."""
 
     type: str
     definition: str
@@ -284,10 +293,17 @@ class Steady:
     provers: int = 1
     art: str | None = None
     cores: int = UNSTATED_CORES
+    form: str | None = None
 
     @property
     def measured(self) -> bool:
         return self.refused is None and self.gpu_seconds is not None
+
+    @property
+    def proved(self) -> str:
+        """The Definition its statements are of, by its id: `form`, else `definition`."""
+
+        return self.form or self.definition
 
     @property
     def record(self) -> str:
@@ -392,20 +408,32 @@ def _above(s: Steady, cores: int) -> str:
     return f"; timed at {s.cores} cores, above the host's {cores}" if s.cores > cores else ""
 
 
-def _kin(block: Block, kin: Sequence[Steady], cores: int) -> Cost:
+def _form(s: Steady, boolean: bool) -> str:
+    """How a figure's note names the Definition a row's statements are of: by its id alone where it is the Definition
+    of the block type the row was staged for; else as that type's Boolean version where the tree registers it as one
+    (`boolean`), and as another Definition where it doesn't."""
+
+    if s.form is None:
+        return f"`{s.definition}`"
+    return f"{'its Boolean version' if boolean else 'another Definition'}, `{s.form}`"
+
+
+def _kin(block: Block, kin: Sequence[Steady], cores: int, form: Callable[[Steady], str]) -> Cost:
     """`block` priced from the steady-state rows of its Definition and K at other statics, each the row that prices
     its own type on a host of `cores` cores a card: each at 2^Δk its seconds a block, Δk from the row's k_log to the
-    block's, and the dearest of them, so a family's cheapest member never prices the rest. The verifier's seconds stay
-    the type's own: none."""
+    block's, and the dearest of them, so a family's cheapest member never prices the rest. Its note names that row's
+    block type and, where the row was staged in another Definition, that one after it (`form`: a row's `_form`). The
+    verifier's seconds stay the type's own: none."""
 
     def dk(s: Steady) -> int:
         return 0 if block.k_log is None else block.k_log - s.k_log
 
     s = max(kin, key=lambda s: (s.gpu_seconds / s.blocks * 2.0**dk(s), s.definition))
     others = f"; the dearest of {len(kin)} measured" if len(kin) > 1 else ""
+    named = form(s) if s.form is None else f"`{s.definition}` in {form(s)}"
     return Cost(FAMILY, s.gpu_seconds / s.blocks * 2.0**dk(s), s.record,
-                f"its Definition and K's, `{s.type}` (`{s.definition}`), {s.at}, {s.fill}, at 2^{dk(s)} its seconds{others}"
-                f"{_above(s, cores)}", s.type, provers=s.provers, cores=s.cores)
+                f"its Definition and K's, `{s.type}` ({named}), {s.at}, {s.fill}, at 2^{dk(s)} its seconds{others}"
+                f"{_above(s, cores)}", s.type, provers=s.provers, cores=s.cores, definition=s.proved)
 
 
 @dataclass(frozen=True)
@@ -421,7 +449,10 @@ class Flock:
     that prover count, the other prover counts that measured it, and the core counts under the host's that did. A row
     whose staged Definition is no block type of the census, at any prover count, is the table's `unread` and enters no
     figure, the range's other end included. `lean`: the statements the Lean verifier accepted, a block type's the
-    newest run's; one of no block type of the census measures nothing."""
+    newest run's; one of no block type of the census measures nothing. `boolean`: whether the tree registers a
+    Definition (by its id) as the Boolean version of a census type (by its census name). A row staged in another
+    Definition than its type's own is named as the type's Boolean version only where `boolean` says it is one, and as
+    another Definition where it says not or none is given."""
 
     steady: Sequence[Steady] = ()
     sessions: Sequence[Session] = ()
@@ -433,13 +464,18 @@ class Flock:
     #: by the staged type only they were staged as
     aliases: Sequence[tuple[str, str]] = ()
     lean: Sequence[LeanVerify] = ()
+    boolean: Callable[[str, str], bool] | None = None
 
     def table(self, census: Census) -> Table:
         measured: dict[str, Steady] = {}
         tried: dict[str, Steady] = {}
         elsewhere: dict[str, set[int]] = {}
         under: dict[str, set[int]] = {}
-        held = {definition_id(b.name) for b in census.blocks}
+        held = {definition_id(b.name): b.name for b in census.blocks}
+
+        def form(s: Steady) -> str:
+            return _form(s, s.form is not None and self.boolean is not None and self.boolean(held[s.definition], s.form))
+
         unread = []
         names: dict[str, set[str]] = {}
         for definition, type_ in self.aliases:
@@ -478,12 +514,12 @@ class Flock:
             if s := measured.get(spelled):
                 where = s.held if s.art is None else f"{s.held}, measured in {s.run}"
                 cost = Cost(STEADY, s.gpu_seconds / s.blocks, s.record,
-                            f"`{s.type}`, {s.at}, {s.fill} ({where}){_above(s, self.cores)}", s.type,
+                            f"`{s.type}` ({form(s)}), {s.at}, {s.fill} ({where}){_above(s, self.cores)}", s.type,
                             verifier_seconds=None if s.verifier_seconds is None else s.verifier_seconds / s.blocks,
-                            provers=s.provers, cores=s.cores, blocks=s.blocks)
+                            provers=s.provers, cores=s.cores, blocks=s.blocks, definition=s.proved)
             else:
                 kin = families.get(_family(spelled), [])
-                cost = _kin(b, kin, self.cores) if kin else single(b)
+                cost = _kin(b, kin, self.cores, form) if kin else single(b)
                 why = []
                 if s := tried.get(spelled):
                     why.append(f"steady state tried as `{s.type}` at {s.at} in {s.run} ({s.held}): {s.refused}")
@@ -632,7 +668,9 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     a steady-state measurement, else why it isn't. `lean_verifier_seconds_per_token` and `proof_bytes_per_token` are
     the Lean verifier's seconds and the proof's bytes a served token (`_scaled`), None where no statement was measured,
     and `lean_verify` names each measured statement, the most proving time first, with its block type's share of the
-    proving time."""
+    proving time. A row's `definition` is the Definition the statements its figure was measured on are of, by its id,
+    where the figure is from a steady-state row, the type's own or its family's; its note says which form of the
+    type that Definition is."""
 
     total = table.gpu_seconds_per_token()
     blocks = sum(r.per_token for r in table.rows)
@@ -643,7 +681,7 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
 
     rows = [{"block": r.block, "k_log": r.k_log, "per_token": r.per_token, "seconds": r.cost.seconds,
              "planned_seconds": r.planned, "source": r.cost.source, "record": r.cost.record, "provers": r.cost.provers,
-             "cores": r.cost.cores, "statement_blocks": r.cost.blocks, "note": r.cost.note,
+             "cores": r.cost.cores, "statement_blocks": r.cost.blocks, "definition": r.cost.definition, "note": r.cost.note,
              "verifier_seconds": r.cost.verifier_seconds, "proof_bytes": r.cost.proof_bytes,
              "lean_verifier_seconds": r.cost.lean_seconds, "lean_source": r.cost.lean_source,
              "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total)}
