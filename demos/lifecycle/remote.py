@@ -13,8 +13,8 @@ from typing import Any
 
 from lifecycle import (DEVELOPER, LATER, NODE, OUTSIDE, PLAN, SHARED, SIZES, VERIFIER, Developer, Link, Verifier, load_of,
                        products, theta_of)
-from verity.configuration.deploy import runtime
-from verity.configuration.deploy.manifest import Channel, Manifest, Role
+from verity.runtime import runner as runtime
+from verity.protocol import Channel, Manifest, Role
 
 ID = "lifecycle-remote"
 LAYOUT = replace(NODE, links=(Link("uplink0", ("node0", OUTSIDE), 100_000, 100_000),))
