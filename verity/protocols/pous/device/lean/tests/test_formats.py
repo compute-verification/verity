@@ -253,6 +253,10 @@ def test_lms_verify(server):
 SETUP_RECORD = st.fixed_dictionaries({
     "passed": mostly(st.sampled_from([0, 1]), st.sampled_from([2, 255, True]), 4), "blocks": WIDE(64),
     "commitment": hexed(st.binary(max_size=70)), "salt": hexed(st.binary(max_size=30)), "root": hexed(st.binary(max_size=70))})
+#: A setup record's fields, well formed: the message's inputs, whose record's malformed fields `SETUP_RECORD` draws.
+WELL_FORMED_SETUP_RECORD = st.fixed_dictionaries({
+    "passed": st.sampled_from([0, 1]), "blocks": st.integers(0, 2 ** 64 - 1), "commitment": hexed(st.binary(max_size=70)),
+    "salt": hexed(st.binary(max_size=30)), "root": hexed(st.binary(max_size=70))})
 
 
 def setup_record_of(v) -> mc.SetupRecord:
@@ -283,7 +287,7 @@ def setup_record_message(v) -> str:
 def test_setup_record_message(server):
     I = mostly(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
     inputs = with_malformed(st.fixed_dictionaries({"I": hexed(I), "session": hexed(st.binary(max_size=40)),
-                                                   "record": mostly(SETUP_RECORD, malformed(SETUP_RECORD))}))
+                                                   "record": WELL_FORMED_SETUP_RECORD}))
     stats = D.run(port("setup_record_message", setup_record_message, inputs), examples=300, server=server)
     assert stats.outputs > 100, stats
 
