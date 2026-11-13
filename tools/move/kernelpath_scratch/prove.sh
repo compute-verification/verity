@@ -10,6 +10,7 @@
 #
 # Steps: sync tools host heavy guard cold sheets wheels boundaries root lints generator movecheck ratchet terms sites remedy
 # SITES_BASE is the commit sites reads the retired-terms list's growth from.
+# HOST, when set, is the adapter's test files the host step runs in place of the six that read pouw_cuda's sources.
 # MOVES and RANGES, each "BASE TOP;BASE TOP;...", are what movecheck and ratchet take; the defaults are the first proof's.
 set -u
 : "${OUT:?run it under research run, or set OUT to a directory}"
@@ -22,8 +23,8 @@ mkdir "$d/plug" && cp "$ROOT/tools/move/kernelpath_scratch/where_plugin.py" "$d/
 
 MOVES=${MOVES:-21ba413aa08c54cd8897c4fb41f7834c56101109 054ce0152301da7a0480651b5c0435334eabb18e}
 RANGES=${RANGES:-21ba413aa08c54cd8897c4fb41f7834c56101109 054ce0152301da7a0480651b5c0435334eabb18e}
-HOST="tests/protocols/test_pouw_device.py tests/commit/test_row_tables_device.py tests/protocols/test_pouw_h1_registered_device.py
-      tests/commit/test_history_tables_device.py tests/protocols/test_pouw_h1_tables_device.py tests/protocols/test_pouw_h1_nodes.py"
+HOST=${HOST:-tests/protocols/test_pouw_device.py tests/commit/test_row_tables_device.py tests/protocols/test_pouw_h1_registered_device.py
+      tests/commit/test_history_tables_device.py tests/protocols/test_pouw_h1_tables_device.py tests/protocols/test_pouw_h1_nodes.py}
 HEAVY="tests/check/test_pouw_ncp_v2_end_to_end.py tests/pipeline/test_serve_h1.py tests/protocols/test_pouw_h1_served.py"
 LINTS="tests/lint/test_ruff.py tests/lint/test_ruff_vllm.py tests/lint/test_p09_layering.py tests/lint/test_mypy.py
        tests/test_imports_resolve.py tests/test_no_dead_modules.py"
