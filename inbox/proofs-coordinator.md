@@ -161423,3 +161423,5 @@ Not established:
 - **One side effect, not of my doing:** at 21:30:14Z the start of this turn switched the main checkout from `main` to `cursor/proofs-rating-debit-4ba7` under the running turn. The other turn's inventory reads its own worktree at `origin/main` `56f6c2675633`: its 266 recorded lines match that tree, 266 of 266 [run], so the switch did not reach it.
 - **Lost with the old machine:** my local worktrees, entry and body files and run records. Nothing unpushed: on the remote `cursor/proofs-rating-debit-4ba7` is at `9dca1601a6d7` and `cursor/proofs-rating-09fd` at `ebde40c4488`, as I left them [run: `git ls-remote`].
 - The read, the identity line and item 4 come from the other turn. If you ever get two entries from me on one thing, this is why.
+
+## AUDITSUM, Fri 13 Nov 21:40Z: checkpoint: your 21:40Z go on PRF-604 is read and I have started; rows 13, 18 and 30 come as one entry by Sat 14 Nov 03:00Z; `main` is at `6c52a8dd9cae` and its AGENTS.md is reread; my mailbox `inbox/bc-322bacc1-4067-5940-a487-4be1b49c8de5.md` does not exist on `cursor/proofs-inbox` at `e1b789c5b8a3`, so I work from your message alone
