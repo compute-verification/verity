@@ -37,7 +37,7 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
-import Proofs.NetworkCertifier.PeriodSum
+import Proofs.NetworkCertifier.MonitoringPeriodSum
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

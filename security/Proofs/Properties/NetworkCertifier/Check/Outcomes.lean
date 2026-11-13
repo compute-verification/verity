@@ -89,7 +89,7 @@ theorem undigestedParamsReject : UndigestedParamsReject := by
     exact h why h'
 
 /-- The check accepts exactly the units every link-window of which is accepted. -/
-theorem accepts_iff (p : Params) (c : Commitment) (e : Evidence) : protocol.Accepts p c e ↔ LinkWindowsAccepted p c e := by
+theorem accepts_iff (p : Params) (c : Commitment) (e : Evidence) : protocol.Accepts p c e ↔ TransferBlocksAccepted p c e := by
   show (∃ pub prof, check p c e = .accept pub prof) ↔ _
   constructor
   · rintro ⟨pub, prof, h⟩
@@ -112,7 +112,7 @@ theorem accepts_iff (p : Params) (c : Commitment) (e : Evidence) : protocol.Acce
       ⟨fun l link hm w hw => (egress_none hfit (List.of_mem_zip hm).2 hw).mpr (he l link hm w hw),
         fun l hl w hw => ingress_none.mpr (hi l hl w hw)⟩)
 
-theorem acceptsLinkWindows : AcceptsLinkWindows := fun p c e => (accepts_iff p c e).mp
+theorem acceptsTransferBlocks : AcceptsTransferBlocks := fun p c e => (accepts_iff p c e).mp
 
 theorem acceptsOneRecordEach : AcceptsOneRecordEach := by
   intro p c e h d l hl w hw
@@ -186,8 +186,8 @@ theorem answer_of_decodedAccepted (a b c : ByteArray) (h : DecodedAccepted a b c
     (protocol.answer a b c).verdict = .accept :=
   (answer_accepts_iff a b c).mpr h
 
-/-- **The check accepts a unit every link-window of which is accepted** (the converse of `AcceptsLinkWindows`). -/
-theorem accepts_of_linkWindowsAccepted (p : Params) (c : Commitment) (e : Evidence) (h : LinkWindowsAccepted p c e) :
+/-- **The check accepts a unit every link-window of which is accepted** (the converse of `AcceptsTransferBlocks`). -/
+theorem accepts_of_transferBlocksAccepted (p : Params) (c : Commitment) (e : Evidence) (h : TransferBlocksAccepted p c e) :
     protocol.Accepts p c e :=
   (accepts_iff p c e).mpr h
 
