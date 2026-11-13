@@ -78,7 +78,7 @@ theorem joinedCouplingOfLaw_decoded (V : Vocab d α) (k : Verity.Registration.Co
       CouplesAt V k A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' (s c σ) (Pt c σ) (dd c σ)
         (readX c σ) (openOf c σ) (dColl c σ)) :
     CouplingTargetTwo V k A θ F fun c σ =>
-      joinBound V A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut +
+      joinCRBound V A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut +
         bindBound V A (x c σ) θ F c σ
           (joinFrame V A (x c σ) θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
           (openOf c σ) (dColl c σ) := by

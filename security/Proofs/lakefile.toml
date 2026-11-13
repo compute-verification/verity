@@ -176,7 +176,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.PremisesAt", "Proofs.Properties.Verity.SampledTwo.WiredParse",
   "Proofs.Properties.Verity.SampledTwo.WiredScope", "Proofs.Properties.Verity.SampledTwo.CouplesWired",
   "Proofs.Properties.Verity.SampledTwo.Undecodable", "Proofs.Properties.Verity.SampledTwo.WiredUnits",
-  "Proofs.Properties.Verity.SampledTwo.BlobFinder",
+  "Proofs.Properties.Verity.SampledTwo.BlobFinder", "Proofs.Properties.Verity.SampledTwo.GoodCaseHeld",
   "Proofs.Properties.Verity.SampledTwo.RuleTwo", "Proofs.Properties.Verity.SampledTwo.Device",
   "Proofs.Properties.Verity.SampledTwo.DeviceRead", "Proofs.Properties.Verity.SampledTwo.DeviceOrder",
   "Proofs.Properties.Verity.SampledTwo.Apart", "Proofs.Properties.Verity.SampledTwo.FirstCoins",

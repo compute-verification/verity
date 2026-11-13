@@ -14,6 +14,8 @@ public import Proofs.Properties.Verity.SampledTwo.Reached
 public import Proofs.Properties.Verity.SampledTwo.Fits
 public import Proofs.Properties.Verity.SampledTwo.AcceptsTop
 public import Proofs.Properties.Verity.SampledTwo.DrawRoots
+public import Proofs.Properties.Verity.SampledTwo.GoodCaseHeld
+public import Proofs.Properties.Verity.SampledTwo.BlobFinder
 
 /-!
 # The two-stage leg's projection at the form's accept, from the coin map's law
@@ -78,15 +80,17 @@ accepted play on two windows shows its sessions' order (`firstReads`, `orderShow
   holds of. That on two windows the first session samples no challenge tree is a theorem of the form's accept
   (`SessionCoins.firstTreeless_of_check`, from the form's refusal of a tree's line in the first session's log and
   `caseIsSent`), no longer a field; it gives the interior's log on the play's (`SessionCoins.interiorLogged_read`).
-* **The run of record's accept** (`playAccepts_form`'s premises): `heldOfAt` (HELDOF); `portsDistinctAt`;
-  `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions' workers); and
-  `sessionMsgs`. That an accepted play's records name their registrations' names and read back as the records the run
-  held, that the held copies' design evaluates, that each accepted play's held first stage samples one fixed number
-  of replay blocks, and that at each such number the held copies' parts are the interior program's strata's, are
-  theorems (ACCEPTS's `recordsHeldAt_of`, `recordsRead`, `twoHolds_at`, `firstK_of_formAccepts`,
-  `partsSizedAt_of_formAccepts`), no longer fields. The last is the run's refusal of an interior whose strata are not
-  the parts its replay block's cells give (`interior-parts`), read at `heldOfAt`'s copies; with `heldOfAt` it gives the
-  parts at each play's replay sample (`partsHeldAt_of_accepts`).
+* **The run of record's accept** (`playAccepts_form`'s premises): `heldOfAt` (HELDOF: the held copies at each
+  accepted play, or its blobs collide with the registered files `V.registered θ`, the plays the cut leaves out at the
+  blob finder's term, `cutBound_avoid`); `portsDistinctAt`; `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`,
+  `sessionsRun` (MESSAGES and the sessions' workers); and `sessionMsgs`. That an accepted play's records name their
+  registrations' names and read back as the records the run held, that the held copies' design evaluates, that each
+  accepted play's held first stage samples one fixed number of replay blocks, and that at each such number the held
+  copies' parts are the interior program's strata's, are theorems (ACCEPTS's `recordsHeldAt_of`, `recordsRead`,
+  `twoHolds_at`, `firstK_of_formAccepts`, `partsSizedAt_of_formAccepts`), no longer fields. The last is the run's
+  refusal of an interior whose strata are not the parts its replay block's cells give (`interior-parts`), read at the
+  held copies of the case kept on the plays with no such collision (`heldOfAt_goodCase`); with them it gives the parts
+  at each such play's replay sample (`partsHeldAt_of_accepts`).
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
@@ -258,8 +262,9 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   digestBefore : ∀ i < A.L.V.k x, Messages.DigestBefore
     (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
     (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂)) (FormAccepts C) JoinGood Dg i
-  /-- Each accepted play's held copies are the ones `heldOf` builds from its input and interior. -/
-  heldOfAt : HeldOfAt A C
+  /-- Each accepted play's held copies are the ones `heldOf` builds from its input and interior, or its blobs collide
+  with the registered files (`HeldOfAtOr`; `heldOfAtOr_of_files` at `V.registered θ`). -/
+  heldOfAt : HeldOfAtOr A C (V.registered θ)
   /-- Each accepted play's registrations list each port once. -/
   portsDistinctAt : PortsDistinctAt C
   /-- The reading's session statements are the ones the run's second stage checked. -/
@@ -290,9 +295,10 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   signer : V.signer θ = P.signer fs₁ fs₂ cut θ
 
 /-- **The projection's bound at the form's accept, from the coin map's law**: `joined` at the form's acceptance,
-`JoinGood` and the run's locator, at the cut's terms at the deployed two-session history, from the coin map's law
-(`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case kept on the plays
-`JoinGood` holds of. -/
+`JoinGood` with no collision of the play's blobs with the registered files, and the run's locator, at the cut's terms
+at the deployed two-session history plus the blob finder's collision probability (`cutBound_avoid`), from the coin
+map's law (`hHolds`) and the join's one premise (`JoinsAt`). The stages' pieces are taken at the case kept on the
+plays `JoinGood` holds of, and the run of record's accept at the case kept on the plays with no such collision. -/
 theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
     (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
@@ -303,7 +309,8 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
       (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
       (CoinMap.gapOf V θ F c σ (joinLocate A tab ℓ₁ ℓ₂) (A.L.V.k x) +
         joinMiss V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q +
-        terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) := by
+        (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ +
+          ENNReal.ofReal ((blobFinder V θ F c σ (V.registered θ)).Pr Verity.sha512Msg))) := by
   have hG : ∀ o, JoinGood o → LogIsDevice o ∧ CoinMap.FreshWide o.log := fun o hg => ⟨hg.1.2, hg.2⟩
   have hLs : ∀ pre i s c' b, CoinMap.stageLocate ℓ₁ ℓ₂ pre (.opening i s c') b = none :=
     fun _ _ _ _ _ => rfl
@@ -368,22 +375,40 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
       (fun _ hr => hr) (SessionCoins.sessionsFit_of A C tab JoinGood hsz hlog))
   have hSessions := SessionCoins.coinsAgree_sessions A C Ms tab (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) JoinGood
     (SessionCoins.devLocal_of A tab _ hLoc) hlog
-  -- The cut, at the deployed two-session history, with `FreshWide` joined to its event.
+  -- The cut, at the deployed two-session history, with `FreshWide` joined to its event and the plays whose blobs
+  -- collide with the registered files left out.
   have hw : Wired V k θ := fun o hθ hv => accepts_of_form h.caseIsSent (h.wiring o hθ hv)
-  have hCut : CutBound V k θ F c σ (fun o => ReadIsDevice o ∧ CoinMap.FreshWide o.log)
+  have hCut₀ : CutBound V k θ F c σ (fun o => ReadIsDevice o ∧ CoinMap.FreshWide o.log)
       (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) :=
     cutBound_and (fun o hr => CoinMap.freshWide_play V θ F c σ hr)
       (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw (firstReads θ) (orderShown θ) h.ledgerInOrder h.signer)
-  have hParts : PartsHeldAt A C := partsHeldAt_of_accepts h.heldOfAt (partsSizedAt_of_formAccepts h.heldOfAt)
+  have hCut : CutBound V k θ F c σ (fun o => JoinGood o ∧ ¬ BlobsCollide o.sent.blobs (V.registered θ))
+      (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ +
+        ENNReal.ofReal ((blobFinder V θ F c σ (V.registered θ)).Pr Verity.sha512Msg)) :=
+    cutBound_avoid (V.registered θ) hCut₀
+  -- The run of record's accept, at the case kept on the plays whose blobs don't collide with the registered files.
+  have hHeld : HeldOfAt A (goodCase C (NoCollide (V.registered θ))) := heldOfAt_goodCase h.heldOfAt
+  have hParts : PartsHeldAt A (goodCase C (NoCollide (V.registered θ))) :=
+    partsHeldAt_of_accepts hHeld (partsSizedAt_of_formAccepts hHeld)
+  have hReached : ReachedAccepts A x
+      (formReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
+      (fun o => FormAccepts C o ∧ NoCollide (V.registered θ) o) :=
+    reachedAccepts_goodCase (reachedAccepts A x (goodCase C (NoCollide (V.registered θ)))
+      (joinSessions A C Ms tab ℓ₁ ℓ₂) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A _)
+      (playAccepts_form A _ _ P' hParts hHeld (portsDistinctAt_goodCase h.portsDistinctAt)
+        (stmtsRead_goodCase h.stmtsRead) (roundsHeldAt_goodCase h.roundsHeldAt) (scopeHeldAt_goodCase h.scopeHeldAt)
+        (pinHeldAt_goodCase h.pinHeldAt) (sessionsRun_goodCase h.sessionsRun)) (sessionMsgs_goodCase h.sessionMsgs))
   exact joined V k A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q (FormAccepts C)
-    JoinGood (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) h.wiring
+    (fun o => JoinGood o ∧ ¬ BlobsCollide o.sent.blobs (V.registered θ))
+    (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ +
+      ENNReal.ofReal ((blobFinder V θ F c σ (V.registered θ)).Pr Verity.sha512Msg)) h.wiring
     (hHolds V A x θ F c σ _ _ (readsAt A.h))
-    hFit₁ hFit₂ hSess hFirst hSecond hSessions
+    (fun o hA hg => hFit₁ o hA hg.1) (fun o hA hg => hFit₂ o hA hg.1) (fun o hA hg => hSess o hA hg.1)
+    (coinsAgree_mono (fun _ hg => hg.1) hFirst) (coinsAgree_mono (fun _ hg => hg.1) hSecond)
+    (coinsAgree_mono (fun _ hg => hg.1) hSessions)
     (SessionCoins.stmtReadsNone A C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)))
-    h.msgOpens h.digestBefore hCut
-    (reachedAccepts A x C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A C)
-      (playAccepts_form A C _ P' hParts h.heldOfAt h.portsDistinctAt h.stmtsRead h.roundsHeldAt
-        h.scopeHeldAt h.pinHeldAt h.sessionsRun) h.sessionMsgs)
+    (fun o hA hg => h.msgOpens o hA hg.1) (fun i hi ω r r' hA hg => h.digestBefore i hi ω r r' hA hg.1) hCut
+    (fun o hA hg => hReached o ⟨hA, hg.2⟩)
     (stmtAt V A x θ F c σ _ C _ (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) h.caseCommits h.stmtX)
 
 end Verity.SampledTwo

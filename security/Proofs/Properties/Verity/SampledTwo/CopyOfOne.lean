@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.SampledTwo.HeldOfAtDesc
 `heldOf` reads an input and its interior through seven fields: the boundary verifier, the boundary record, the rule,
 the closure map, the interior verifier, the replay block and the templates' circuits (`heldOf_congr`). So where one
 input and interior that carry the parameters `P` and the boundary record `j` in those fields build `A.h`, every one
-does: `CopyOf A P j u` (`copyOf_of_one`), the premise `copyAt_of` takes of the session of record.
+does: `CopyOf A P j u` (`copyOf_of_one`), the premise `heldOfAtOr_at` (`RefsOfSent`) takes of the session of record.
 -/
 
 @[expose] public section

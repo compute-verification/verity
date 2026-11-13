@@ -10,7 +10,8 @@ public import Proofs.Properties.Verity.SampledTwo.Cut
 between the play's blobs and the files `B₀` (`BlobsCollide`). `blobFinder` outputs that collision: on a uniform tape
 of the play it hashes the play's blobs and `B₀`'s, and outputs the first pair that differs and has one digest
 (`blobPair`). `prob_collide_le` puts the sampled verdict accepting on a play whose blobs collide with `B₀` under its
-collision probability, the term the join's bound would add (`joinBound`) for the plays `HeldOfAtOr` leaves out.
+collision probability, and `cutBound_avoid` leaves those plays out of a cut at that term, the one the join's bound adds
+(`joinBound`) for the plays `HeldOfAtOr` leaves out; under `ecr/sha-512` at the finder it is at most `blobBound`.
 
 The vocabulary names no such finder: `fileFinder` and `publicFinder` compare the committed files with the registered
 ones, once a strategy; this one compares each play's blobs with `B₀`. Its premise is `ecr/sha-512` at it, at its
@@ -76,5 +77,40 @@ theorem prob_collide_le (V : Vocab d α) (k : Verity.Registration.Composite) (θ
         rw [hp]
         rfl
     _ = _ := Verity.Game.prCoin_eq_ofReal_pr _
+
+/-- **The cut with the plays whose blobs collide with `F₀` left out**: `Good` and no such collision at the cut's terms
+plus the blob finder's collision probability. -/
+theorem cutBound_avoid {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
+    {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {Good : Verity.Exchange → Prop} {terms : ℝ≥0∞}
+    (F₀ : Array ByteArray) (h : CutBound V k θ F c σ Good terms) :
+    CutBound V k θ F c σ (fun o => Good o ∧ ¬ BlobsCollide o.sent.blobs F₀)
+      (terms + ENNReal.ofReal ((blobFinder V θ F c σ F₀).Pr Verity.sha512Msg)) := by
+  unfold CutBound at h ⊢
+  calc Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ (Good o ∧ ¬ BlobsCollide o.sent.blobs F₀))
+        (V.game θ F c) σ
+      ≤ Verity.Game.prob (fun o => (V.Verdict k .sampled o ∧ ¬ Good o) ∨
+          (V.Verdict k .sampled o ∧ BlobsCollide o.sent.blobs F₀)) (V.game θ F c) σ :=
+        Verity.Game.prob_mono (fun o ho => (Classical.em (Good o)).elim
+          (fun hg => .inr ⟨ho.1, Classical.not_not.1 fun hn => ho.2 ⟨hg, hn⟩⟩)
+          (fun hg => .inl ⟨ho.1, hg⟩)) _ σ
+    _ ≤ Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Good o) (V.game θ F c) σ +
+          Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ BlobsCollide o.sent.blobs F₀) (V.game θ F c) σ :=
+        Verity.Game.prob_or_le (fun o => V.Verdict k .sampled o ∧ ¬ Good o)
+          (fun o => V.Verdict k .sampled o ∧ BlobsCollide o.sent.blobs F₀) (V.game θ F c) σ
+    _ ≤ _ := add_le_add h (prob_collide_le V k θ F c σ F₀)
+
+/-- **`ecr/sha-512` at the blob finder as a number**: its expected calls over `2^256`. -/
+noncomputable abbrev blobBound (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (V.game θ F c)) (F₀ : Array ByteArray) : ℝ≥0∞ :=
+  ENNReal.ofReal (Ex (fun t => ((blobFinder V θ F c σ F₀).cost t : ℝ)) / 2 ^ (256 : ℝ))
+
+/-- **The blob finder's collision probability under `ecr/sha-512` at it.** -/
+theorem blobPr_le {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Verity.Game.Strategy (V.game θ F c)} {F₀ : Array ByteArray}
+    (h : Claims.ExpectedCR FlockDeploy.sha512 (blobFinder V θ F c σ F₀)) :
+    ENNReal.ofReal ((blobFinder V θ F c σ F₀).Pr Verity.sha512Msg) ≤ blobBound V θ F c σ F₀ := by
+  have e : Verity.sha512Msg = FlockDeploy.sha512 := funext fun _ => rfl
+  rw [e]
+  exact ENNReal.ofReal_le_ofReal h
 
 end Verity.SampledTwo

@@ -8,15 +8,14 @@ public import Proofs.Properties.Verity.Soundness
 # The wired statement is in the session's scope, or the sampled verdict never accepts
 
 `CouplesAt.scope` at the statement `JoinsAt` fixes (`stmtX`: the record the commitment `c` carries), from `JoinsAt`
-alone (`scope_wired`):
+and that the held copies' design evaluates (`TwoHolds`, `scope_wired`):
 
 * where no play after `θ`, `F` and `c` meets the sampled verdict, the verdict's probability is zero
   (`prob_play_eq_zero`);
 * where one does, the form accepts it (`wiring`). Its case reads the commitment `c` (`caseCommits`), so its run's
   boundary record is the one `c` carries as the verifier's parser reads its canonical text (`input_of_accepts`), and
   the proved verifier's reader reads the statement back as that record (`jsonMsg_of_readBack`): the statement decodes.
-  The accepted play's held copies are `heldOf`'s (`heldOfAt`), so their design evaluates (`twoHolds_of_formAccepts`),
-  and a statement that parses where the design evaluates is in the two-stage scope at the connected program
+  A statement that parses where the held copies' design evaluates is in the two-stage scope at the connected program
   (`SpotFlock.Honest.scope_of_two`).
 -/
 
@@ -29,20 +28,20 @@ open Claims
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The wired statement is in the session's scope, or the sampled verdict never accepts** (`CouplesAt.scope`), from
-the join's premise. -/
+the join's premise and that the held copies' design evaluates. -/
 theorem scope_wired {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live₂} {x : Msg} {θ : ByteArray}
     {F : Array ByteArray} {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {C : CaseOf}
     {Ms : SessionReading} {tab : ℕ → String} {ℓ₁ ℓ₂ : String} {Dg : Verity.Exchange → ℕ → Option Msg}
     {P : Sessions.Deployment} {fs₁ fs₂ : ByteArray → List (String × ℕ)} {cut : List Verity.Release → ℕ}
     {P' : Verity.Exchange → ℕ → Claims.Prover Unit}
-    (h : JoinsAt V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg P fs₁ fs₂ cut P') :
+    (h : JoinsAt V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg P fs₁ fs₂ cut P') (hT : SpotFlock.RunsAs.Round2.TwoHolds A.h) :
     A.L.Scope x ∨ Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0 := by
   by_cases hE : ∃ o : Verity.Exchange, (o.params = θ ∧ o.files = F ∧ o.commitment = c) ∧ V.Verdict k .sampled o
   · left
     obtain ⟨o, ⟨hθ, -, hc⟩, hv⟩ := hE
     have hA : FormAccepts C o := h.wiring o hθ hv
     obtain ⟨kk, hk, hAcc⟩ := hA
-    obtain ⟨cm, i, hcm, hi, hrb, it, -, hit, -⟩ := input_of_accepts hAcc
+    obtain ⟨cm, i, hcm, -, hrb, -⟩ := input_of_accepts hAcc
     have hkc : kk.commitment = c := (h.caseCommits o kk hk).trans hc
     have hrec : recordMsg i.record = recordMsg cm.record := by
       obtain ⟨s, hs, -, hs'⟩ := VStar.Recursive.SampledTwo.readBack_ok hrb
@@ -59,11 +58,6 @@ theorem scope_wired {V : Vocab d α} {k : Verity.Registration.Composite} {A : Li
       unfold SpotFlock.decode
       rw [jsonMsg_of_readBack hrb hxr]
       rfl
-    have hinp : inputOn C o = some i := by
-      unfold inputOn
-      rw [hk]
-      exact hi
-    have hT := twoHolds_of_formAccepts h.heldOfAt ⟨kk, hk, hAcc⟩ hinp hit
     obtain ⟨s, hs⟩ : ∃ s, SpotFlock.parse A.h x = some s := by
       unfold SpotFlock.parse
       rw [hdec]
