@@ -100,9 +100,9 @@ def stub_case(monkeypatch, RP):
     return RP
 
 
-def write(out: Path, v2) -> None:
+def write(out: Path, v2, **more) -> None:
     a5.write_case(out, None, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
-                  session_roots={}, served=[], v2=v2)
+                  session_roots={}, served=[], v2=v2, **more)
 
 
 def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_spot_no_case(tmp_path, stub_case):
@@ -125,6 +125,84 @@ def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, s
     assert got["params"]["form"] == "one-stage" and got["params"]["proofs"] == zk["params"]["proofs"]
     assert json.loads(bytes.fromhex(got["evidence"])) == {"form": "one-stage", "proofs": {}}
     assert not (tmp_path / "case-v2-error.txt").exists()
+
+
+#: a sample's coin evidence in `a5_coins.evidence`'s form, what the challenger's session published, which names no key
+COINS = {"ledger": ["opened"], "main": ["c0"], "pins": ["pin"], "segment": {"label": "draw", "openings": []},
+         "session": {"log": ["head"]}}
+#: the challenger's key as the session's start had it (`a5_coins.held`'s, `ChallengerKey.to_json`'s form)
+KEY = {"H": 20, "W": 1, "public": "ab" * 80}
+WINDOW_ROOT = "ee" * 64
+
+
+@pytest.fixture
+def zk(monkeypatch, stub_case):
+    """`case_v2` answering one fixed case, whose params and evidence name no challenger."""
+    case = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
+            "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}
+    monkeypatch.setattr(a5, "case_v2", lambda c, sessions, **k: case)
+    return case
+
+
+def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carries_its_coins(tmp_path, zk, stub_case):
+    """v2 reads a sample's coins under the challenger its parameters name, on the window's root, from the evidence's
+    coins: the case of an audit sampled on the challenger's coins holds all three, the key in the parameters alone, the
+    one its session started under, and its sampled-proofs form is that case's. Its proofs, commitment and blobs are the
+    unnamed case's."""
+    write(tmp_path, {}, coins=COINS, window_root=WINDOW_ROOT, family="draw", challenger_key=KEY)
+    got = json.loads((tmp_path / "case-v2.json").read_text())
+    assert got["params"] == {**zk["params"], "challenger": {"key": KEY, "label": "draw"}, "window_root": WINDOW_ROOT}
+    evidence = {"coins": COINS, "proofs": {}}
+    assert sorted(evidence["coins"]) == ["ledger", "main", "pins", "segment", "session"]
+    assert got["evidence"] == stub_case.DT.canonical(evidence).encode().hex()
+    assert (got["blobs"], got["commitment"]) == (zk["blobs"], zk["commitment"])
+    sampled = json.loads((tmp_path / "case-sampled.json").read_text())
+    assert sampled == a5.case_with_form(got) and sampled["params"]["challenger"] == got["params"]["challenger"]
+    assert not (tmp_path / "case-v2-error.txt").exists()
+
+
+def test_an_audit_on_the_challengers_coins_with_no_window_root_has_no_v2_case(tmp_path, zk):
+    """v2 reads the challenger's session as the one its ledger opens on the window's root: with no root to name, no
+    case is written, the error file says why, and the v1 case stays. So with no challenger key to name: the evidence
+    names none, and a case without one would be read under no key."""
+    for at, (root, key) in enumerate(((None, KEY), (WINDOW_ROOT, None))):
+        out = tmp_path / str(at)
+        out.mkdir()
+        write(out, {}, coins=COINS, window_root=root, family="draw", challenger_key=key)
+        assert not (out / "case-v2.json").exists() and not (out / "case-sampled.json").exists()
+        assert "no window root" in (out / "case-v2-error.txt").read_text()
+        assert (out / "case.json").exists()
+
+
+@pytest.mark.parametrize("trees", [False, True])
+def test_the_per_member_case_names_the_challenger_only_where_its_sessions_ran_on_the_windows_session(tmp_path, monkeypatch,
+                                                                                                     zk, trees):
+    """The one statement's case names the challenger its sample's coins are from wherever the audit has their evidence.
+    The per-member case reads its sessions' trees from that challenger's session too, so it names the challenger only
+    where they ran there."""
+    pm = {**zk, "params": {"proofs": {"members": []}}}
+    monkeypatch.setattr(a5, "case_members", lambda case, **k: pm)
+    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, family="draw", member_trees=trees,
+          challenger_key=KEY)
+    named = {"challenger": {"key": KEY, "label": "draw"}, "window_root": WINDOW_ROOT}
+    assert json.loads((tmp_path / "case-v2.json").read_text())["params"] == {**zk["params"], **named}
+    assert json.loads((tmp_path / "case-v2-members.json").read_text())["params"] == {**pm["params"], **(named if trees else {})}
+
+
+@pytest.mark.parametrize("params,evidence", [({"challenger": {}}, {}), ({}, {"coins": {}})])
+def test_a_case_that_names_a_challenger_already_is_not_named_again(stub_case, params, evidence):
+    case = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical(evidence).encode().hex(), "params": params}
+    with pytest.raises(ValueError, match="already"):
+        a5.case_coins(case, COINS, KEY, "draw", WINDOW_ROOT)
+
+
+def test_the_case_is_named_where_replay_names_another_module(monkeypatch, stub_case):
+    """A process may hold another directory's `replay` under that name (`a5.own_replay`): the case is named with the
+    `replay.py` beside a5 all the same."""
+    monkeypatch.setitem(sys.modules, "replay", types.ModuleType("replay"))
+    case = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical({}).encode().hex(), "params": {}}
+    got = a5.case_coins(case, COINS, KEY, "draw", WINDOW_ROOT)
+    assert got["params"]["window_root"] == WINDOW_ROOT and "coins" in json.loads(bytes.fromhex(got["evidence"]))
 
 
 def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions_against(tmp_path, monkeypatch, RP):
@@ -246,3 +324,28 @@ def test_the_per_member_case_is_written_beside_the_others_and_changes_none(tmp_p
                   session_roots={}, served=[], per_member="v2 verifies --zk sessions; this audit's are plain")
     assert (other / "case-v2-members-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
     assert sorted(f.name for f in other.iterdir()) == ["case-python.json", "case-v2-members-error.txt", "case.json"]
+
+
+def test_the_audit_record_says_whether_the_case_for_the_compiled_check_was_written(tmp_path, monkeypatch, stub_case):
+    """`case_written`, what the audit record carries as ``case_v2``: written where `write_case` left ``case-v2.json``,
+    else not, with why in the words of the file that says so: v2's refusal of the audit's form, the v1 case's own
+    failure, or neither file."""
+    zk = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(), "params": {}}
+    monkeypatch.setattr(a5, "case_v2", lambda case, sessions, **k: zk)
+    (one := tmp_path / "one").mkdir()
+    write(one, {})
+    assert a5.case_written(one) == {"written": True}
+    (two := tmp_path / "two").mkdir()
+    write(two, a5.v2_proof([{}, {}], zk=True))
+    assert a5.case_written(two) == {
+        "written": False,
+        "why": "ValueError: v2 verifies one table's session on its circuit and public file; this audit drew 2 members"}
+    (plain := tmp_path / "plain").mkdir()
+    write(plain, a5.v2_proof([{}], zk=False))
+    assert a5.case_written(plain) == {"written": False, "why": "ValueError: v2 verifies --zk sessions; this audit's are plain"}
+    (failed := tmp_path / "failed").mkdir()
+    monkeypatch.setattr(stub_case, "params", lambda *a, **k: 1 / 0)
+    write(failed, {})
+    assert a5.case_written(failed) == {"written": False, "why": "ZeroDivisionError: division by zero"}
+    (none := tmp_path / "none").mkdir()
+    assert a5.case_written(none) == {"written": False, "why": "the audit wrote none, and no reason"}

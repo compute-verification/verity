@@ -86,6 +86,32 @@ def test_inputs_open_at_their_producer_and_outputs_at_their_own_unit(bundle) -> 
         assert (rows["o0"]["unit"], rows["o0"]["rank"], rows["o0"]["producer"]) == (base + 1 + c["unit"], 0, None)
 
 
+def test_every_opened_domain_is_64_bytes(bundle) -> None:
+    """Every row a sampled proof block opens is opened under a published frame-v3 domain id of 64 bytes: its member's
+    `frame_v3.domain_ids` entry for the row's port, which is its window port's root's domain, and for a registered row
+    its value's. The verifier reads the port's domain off the public file's header and refuses one that is not 64 bytes
+    or that two ports of a member share (Lean's `Flock.PortRoots.idsSized` and `dupId`); a bundle whose domain were the
+    port's name (`x`, `o0`) would fail here."""
+    doc, _ = bundle
+    members = {m["k"]: m for m in doc["members"]}
+    values = {v["value"]: v for v in doc["weights"]["values"]}
+    opened: dict[str, str] = {}
+    for u in doc["units"]:
+        m = members[u["member"]["k"]]
+        for r in u["rows"]:
+            key = f"unit:{u['unit']}/{r['port']}"
+            opened[key] = m["frame_v3"]["domain_ids"][r["port"]]
+            assert doc["window"]["roots"][r["window"]["port"]]["domain"] == opened[key]
+            if r["registered"]:
+                opened[f"{key}:value"] = values[r["registered"]["value"]]["domain"]
+    assert len(opened) == 4 * 5 + 4 * 2
+    assert {k: len(d) for k, d in opened.items() if len(bytes.fromhex(d)) != 64} == {}
+    for m in members.values():
+        ids = m["frame_v3"]["domain_ids"]
+        assert {len(bytes.fromhex(d)) for d in ids.values()} == {64}
+        assert len(set(ids.values())) == len(ids) == len(m["row_schemas"])
+
+
 def test_a_flipped_payload_byte_is_refused(bundle) -> None:
     doc, payload = bundle
     bad = bytearray(payload)

@@ -7,7 +7,7 @@
 # scheduler, which the tests read as fixtures (it needs vLLM); `pool_row_trace.py`: vLLM's own block pool, driven by the
 # replay's over whole traces, and the carried pool's row the vLLM integration exports from it; `pool_cut.py`: a trace
 # cut at every window edge, where vLLM's pool, the replay's and CompileSlice_v6's window agree on the carried row.
-# Those fixtures (`tests/fixtures/`) and the certifier's
+# Those fixtures (`tests/fixtures/`; `tests/fixtures_draft/`, `vllm_trace.py`'s with a draft) and the certifier's
 # vectors these modules write are fetched fixtures (`fixtures/artifacts.json`), which `suites.py` fetches before the
 # suites that read them; one a module rewrote is registered there again. Not a package: the modules load by path (the directory's name shadows the stdlib's
 # `encodings`), and they run here as a suite (`uv run tools/verity/check/suites.py benchmarks/network_e2e/encodings`).

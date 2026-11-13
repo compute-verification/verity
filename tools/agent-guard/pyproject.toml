@@ -7,6 +7,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # the boot test and the shell hook's run shells and git, and the names reader's makes its throwaway key with ssh-keygen, none
 # of which the read guard can trace: keyed on the suite's whole tree
-untraced = ["tests/test_agent_guard_boot.py", "tests/test_shell_hook.py", "tests/test_secret_files.py", "tests/test_envnames.py"]
+untraced = ["tests/test_agent_guard_boot.py", "tests/test_shell_hook.py", "tests/test_secret_files.py", "tests/test_envnames.py",
+            "tests/test_pre_push.py", "tests/test_carriers.py"]
 # The tests hold the hooks to the hooks file Cursor reads, and the boot test copies it into a scratch workspace.
 inputs = [".cursor/hooks.json", "tools/agent-guard/README.md"]   # two tests copy this package whole, its README with it

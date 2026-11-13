@@ -25,6 +25,13 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
   2^Δk its seconds a block; priced, not measured, and counted in no steady-state share), measured in a single session
   (the `proof_overhead` card), modeled from k_log (the card's types' median seconds a witness bit), or
   missing. Each row names the run or art its figure is from, and a steady-state row its prover count.
+- **A row priced from a steady-state row names the Definition that row's statements are of**, with its parameters,
+  after the staged type: `` `TYPE` (`DEFINITION`) ``. A row may be staged for a census type in another Definition than
+  the type's own, so the line says which form priced the type: `its Boolean version` where the tree registers that
+  Definition as the type's (`verity.definitions.boolean.boolean_version`), `another Definition` otherwise, and nothing
+  where it is the type's own. A family's row names the Definition of the row it is scaled from the same way, after that
+  row's own type's. The JSON rows hold it as `definition`, null on a row no steady-state row prices. Which Definition
+  was staged changes no figure: a row prices the census type it was staged for.
 - **A type is priced at a stated prover count**, `--provers N`, one by default: only the steady-state rows at N provers
   measure it, so its figure doesn't depend on which counts were run or in what order. Among those rows it takes the
   fullest statement's, then the newest run's. A row at N provers that didn't stand is named on its type's row with
@@ -109,7 +116,8 @@ rows, one a staged type and prover count. The command reads, by the script's nam
 
 | Field | What it is |
 | --- | --- |
-| `stage.definition`, `stage.k_log` | the staged Definition's id, matched to the census's block types, and log2 of a block's witness bits |
+| `stage.word` | the census type the row was staged for, by its census name, matched to the census's block types (optional: without it the type is `stage.definition`'s) |
+| `stage.definition`, `stage.k_log` | the staged Definition's id, the one its statements are of, and log2 of a block's witness bits |
 | `stage.blocks`, `stage.full` | the blocks in the statement proved, and in the type's full statement |
 | `provers`, `gpus` | the provers that proved it, and the GPUs they held |
 | `cores` | the CPU cores its provers held for its card: a count, or a mapping whose `count` is one (optional: see below) |

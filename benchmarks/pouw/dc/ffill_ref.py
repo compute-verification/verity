@@ -34,13 +34,13 @@ from __future__ import annotations
 import json
 import struct
 import sys
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from verity.definitions.ops.fp32 import F32_NAN_PTX, F32FmaV2
 
 M32 = 0xFFFFFFFF
 M64 = (1 << 64) - 1
-SIGN = 0x80000000
 
 BIAS = 0x4B400000                 # 1.5·2^23's word: f = BIAS + w read as binary32
 REGS = (0, 43, 86)                # the accumulator registers of IGMMA.64x256x32's 128 a thread the filler reads
@@ -91,7 +91,7 @@ def step(x: int, y: int, w: int, s: int, t: int, n: int) -> tuple[int, int]:
     return fma(f, s ^ sg, x), fma(f, t ^ sg, y)
 
 
-def chain(words, s: int, t: int, x0: int, y0: int) -> tuple[int, int]:
+def chain(words: Iterable[int], s: int, t: int, x0: int, y0: int) -> tuple[int, int]:
     """A thread's (x, y) after a step on each word in order (step n on the n-th)."""
     x, y = x0, y0
     for n, w in enumerate(words):
@@ -99,12 +99,12 @@ def chain(words, s: int, t: int, x0: int, y0: int) -> tuple[int, int]:
     return x, y
 
 
-def thread_words(segments) -> list[int]:
+def thread_words(segments: Iterable[Sequence[int]]) -> list[int]:
     """The words a thread's chains take, in step order, from its accumulator words after each MMA (128 a segment)."""
     return [int(seg[r]) for seg in segments for r in REGS]
 
 
-def receipt(c0: int, c1: int, tile: int, words) -> tuple[int, int]:
+def receipt(c0: int, c1: int, tile: int, words: Iterable[int]) -> tuple[int, int]:
     """A thread's receipt words (bits(x), bits(y)) on its tile, from the round's coins."""
     return chain(words, *coins(c0, c1, tile))
 
