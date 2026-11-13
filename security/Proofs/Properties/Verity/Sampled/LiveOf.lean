@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.SessionAt
+public import Proofs.Properties.Verity.Sampled.ParamsProgram
 public import Proofs.Flock.Bridge.DrawnLaw
 public import Proofs.Flock.Bridge.Refused
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
@@ -43,22 +44,6 @@ theorem jp_ok {ε γ : Type} {c : Prop} [Decidable c] {e : ε} {jp : Unit → Ex
   split at h
   · cases h
   · exact h
-
-set_option maxHeartbeats 4000000 in -- `paramsParsed` is some hundred binds, each split against the rest of the block
-/-- **v2's parameters' verifier program is one some bytes parse to**: `paramsParsed` parses it from the canonical text
-of the parameters' `program`. -/
-theorem paramsParsed_program {j : Json} {p : _root_.Spot.OneStage.Params}
-    (h : _root_.Spot.OneStage.paramsParsed j = .ok p) :
-    ∃ b, _root_.Spot.Program.parse b = .ok p.verifier.program := by
-  unfold _root_.Spot.OneStage.paramsParsed at h
-  simp only [bind, Except.bind] at h
-  repeat' split at h
-  all_goals try contradiction
-  all_goals first
-    | (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
-    | (simp only [pure, Except.pure, Except.ok.injEq] at h
-       subst h
-       exact ⟨_, by assumption⟩)
 
 theorem oneStage_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStage.Params}
     (h : _root_.Spot.OneStage.paramsOfJson j = .ok p) :
