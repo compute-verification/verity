@@ -80,3 +80,34 @@ Before the pins: 33 passed and 2 failed on this machine. After: 35 passed, ruff 
 
 W's first suites run, `r20261113-005354-0e28`, is still running.
 
+[2026-11-13T02:32Z] 50b9d84c73f9
+ENTRIESONCE to network-accounting (lead), Thu 12 Nov 6:32 PM PST. **The second record run ended: `r20261113-020913-e274`, exit 0, K = 26,400 = 384 + 384 + 25,600 + 32. Its record differs from the first run's in `run` and in nothing else, and `of_record` is leaf for leaf Monday's.**
+
+**The run** [ran]
+- Main's launcher, the tree as an input: first line "JOB: tree a77a1e1b9b71… of commit cb691107a07c… (want a77a1e1b9b71…)". Launched once, 6:09 PM PST, behind the guard, which printed the path `research` imports from (the VM's clean checkout of `main`, outside the branch's worktree) and `PYTHONPATH` empty.
+- The check: exit 0, accept, K 26,400 = schedules 384 + cells 384 + view 25,600 + jitter 32, every other term 0, the scan whole.
+- The circuit file: composed again in 560 s; its SHA-512 is the case's `proofs.circuit` pin, compared before the writer ran (`cf24115f9f1ae9c4…`, SAME); removed again. The kept directories' listings hash the same before and after.
+- The writer, unchanged: exit 0.
+
+**Where the record and the words are**
+- `out/record/onsite.json` and `out/record/what-changed.md` of run `r20261113-020913-e274`, in its run record in the evidence store.
+- The record: 64,536 bytes, sha256 `e79c285e1e0b7696b71d9a55b66094c82b4e304b404200af328978ff2d511164`.
+- `what-changed.md` holds your four points [read, whole]: my sentence word for word; the fields by origin; the acceptance a development executable's, no Lean file of `main` naming the composite, the lock's guarantee taking the three subprotocols' targets as hypotheses until each is proved; "the writer is unchanged". It also names the first run and says the two records differ in `run` alone.
+
+**The two records, and Monday's** [ran, on my machine, leaf for leaf]
+- First run `r20261113-004043-cdb6` against this one: one leaf differs of 566 in the published form, `run`. The raw files differ in 8 bytes, the run id's.
+- `of_record`: its 10 leaves are Monday's, each the same; `holds` true.
+- The composite's file the writer read is Monday's kept file byte for byte [ran, in the job: sha256 `20647ed430c7ac30…`, SAME].
+- The first record stays where it is, in its own run's record. This run's is the one of record.
+
+**The check runs' verdict lines, at `cb691107a07c`, each launched once, main's launcher, the tree as an input**
+- `r20261113-004319-805f`, the lock's fast path: "JOB: exit 1 in 3616 s". `Security/Properties` "check.py exit 1", 4 findings; `Security` "check.py exit 1", 20 findings. The 24 are by name the 24 of Tuesday's run [ran, set against set]; none names the network certifier's or the period check's Lean. "LOCK: the fast path kept no regenerated record"; the lock in the run's audit directory is the tree's byte for byte. No kernel replay.
+- `r20261113-004357-3ee3`, nine suites: "SUITES: suites.py exit 0", "JOB: exit 0 in 1013 s".
+- `r20261113-004429-11e1`, the certifier's and composition's suites: still running at 6:32 PM PST, 4 h limit. Its line follows in the report.
+
+**The job's inputs, placed before the launch:** the lane's notes, `lanes/network-accounting/net-284-part2-record-job/` (`show.py`, `rewrite.sh`, the other scripts, the guarded launch command and a list of each input's sha256), notes commits `e8be01dba1` and `6a0438552f`. The run's own record holds them too, under `inputs/`.
+
+Next: the last suite's line, then Part 2's report and the one comment on NET-284.
+
+TIMER: none
+
