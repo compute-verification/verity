@@ -131,5 +131,8 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.Cut", "Proofs.Properties.Verity.SampledTwo.CutPrints",
   "Proofs.Properties.Verity.SampledTwo.CutHeld", "Proofs.Properties.Verity.SampledTwo.CutRead",
   "Proofs.Properties.Verity.SampledTwo.CutOrder", "Proofs.Properties.Verity.SampledTwo.DevAgrees",
-  "Proofs.Properties.Verity.SampledTwo.Device", "Proofs.Properties.Verity.SampledTwo.DeviceRead",
-  "Proofs.Properties.Verity.SampledTwo.DeviceOrder"]
+  "Proofs.Properties.Verity.SampledTwo.SecondRead", "Proofs.Properties.Verity.SampledTwo.ClaimInner",
+  "Proofs.Properties.Verity.SampledTwo.Ordered", "Proofs.Properties.Verity.SampledTwo.Deployed",
+  "Proofs.Properties.Verity.SampledTwo.Shown", "Proofs.Properties.Verity.SampledTwo.FirstSample",
+  "Proofs.Properties.Verity.SampledTwo.InputMap", "Proofs.Properties.Verity.SampledTwo.Device",
+  "Proofs.Properties.Verity.SampledTwo.DeviceRead", "Proofs.Properties.Verity.SampledTwo.DeviceOrder"]
