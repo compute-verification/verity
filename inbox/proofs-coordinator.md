@@ -129919,3 +129919,163 @@ Branch `cursor/proofs-cut-9323` at `4c18473270` (pushed). Run out: `r20261113-08
 - [run] #9673 merged at 08:15:20Z, head `cdf0f4a9047a`, the head the scratch branch merged; it is an ancestor of `main` `b3902993caea`. [read] `main`'s form of a class is `^w[0-9]+/p[0-9]+-o[0-9]+(-nostop)?$`, as on that head.
 - [run] `main` `b3902993caea` with #9621's head `13a60635abb2` merged in and the fix's commit `77c5473205cb` put on it, in a local tree (nothing pushed, no branch of mine touched): `test_served_row.py` 17 passed, `test_served_record.py` 10. #9621's head still merges onto `main` with no conflict (`git merge-tree`, rc 0).
 - Nothing else changed since the 08:19Z entry. #9621's branch is at `13a60635abb2`, unmarked; the guard is at `60e10f61eed8`, not opened.
+
+## MEMBERS, Fri 13 Nov 08:23Z: MEMBERS: what stands before the per-member accept
+
+**In plain words.** Nine steps stand between `main` and an accept of the per-member form by the compiled check. Three are refusals in review now. Four are soundness's and WINDOWAT's and end with the guarantee listed in the lock. Then comes the switch, which is mine. It is small in the verifier, but it makes two statements that soundness owns false as they stand, so soundness must agree to its shape. Last is the driver and a window to run on. The commit the switch must sit on does not exist yet.
+
+Mailbox read through your 07:54Z. I merged no `main`. Every claim is tagged.
+
+### 1. The steps, in order
+
+Hours are the earliest in review. Chain 2 is planned on `main` at 15:00Z [relayed: your 07:22Z]. Today a records run took 69 min (`ae1b`) and the five suites 57 min (`b949`) [run].
+
+- **S1. Every member's files are held, sampled or not** (`membersRun_files`). Owner: me. [#9441](https://github.com/compute-verification/verity/pull/9441), marked at `51a2e803cb83`. In review now. [read]
+- **S2. A statement of a member the sample holds no unit of is refused.** Owner: WINDOWAT. [#9576](https://github.com/compute-verification/verity/pull/9576), marked at `338c4ad877ca`. In review now. Its records run passed; its quick tier was still running at 08:04Z [relayed: WINDOWAT 08:04Z].
+- **S3. The one-statement form refuses a sampling design by strata or by work.** Owner: me. [#9584](https://github.com/compute-verification/verity/pull/9584), marked at `ae80f367e6a2`. In review now. [read] Section 4 says why it is on the path.
+- If S1 to S3 are not on `main` before the chains, each is carried with `restack.py` after chain 2, then a records run and the suites: a new ready line about 17:00Z. [guess]
+- **S4. The window theorem** (`remote_soundness_window`, `Window/Instance.lean`). Owner: soundness. [#9520](https://github.com/compute-verification/verity/pull/9520), open at `e2865001c411`, mergeable [run: `gh pr view`, 08:10Z]. Hour: not known to me. I asked soundness nothing.
+- **S5. One `Sampled/OpensAt.lean`.** Owner: soundness. [#9475](https://github.com/compute-verification/verity/pull/9475) (`d2a507cb1b4c`) and #9520 both change it, with 6 conflicts [relayed: WINDOWAT 06:06Z]. Hour: not known to me.
+- **S6. WINDOWAT's proofs on `main`**: 26 files, 5,463 lines, on `cursor/proofs-windowat-5e4b` at `e977fbc96f63` [relayed: WINDOWAT 07:23Z]. No pull request yet [run: `gh pr list --head`, 08:17Z]. It needs S1 to S5 under it. WINDOWAT gives its hour.
+- **S7. The listing** of `soundnessAt_form` in `security/lean-audit.json`. Owner: WINDOWAT, by hand, on your word, since `--update` never adds to `open`. With S6 or right after. I call its commit L.
+- **S8. The switch** (section 3). Owner: me. No pull request. It sits on L. Earliest in review: L plus about 10 hours if I start at L, or L plus about 3 hours if I write it ahead on WINDOWAT's tree. [guess]
+- **S9. The driver and a window to run on** (section 5). Owners: FIRSTACCEPT for a5, the vllm lead for the served harness.
+- **Beside the path: one-parse**, [#9703](https://github.com/compute-verification/verity/pull/9703). Owner: me. No guarantee reads it (section 4). Earliest ready: chain 2, then `restack.py`, the split, a records run and the suites: about 18:00Z. [guess]
+
+So the switch cannot be in review before about 22:00Z today, and only if S4 and S5 are in review by about 17:00Z. [guess] Neither hour is known.
+
+### 2. The guarantee, `soundnessAt_form`
+
+**What it waits on.**
+- [read: `MemberForm/Sound.lean` at `e977fbc96f63`] It compiles, is in no lock, and takes seven hypotheses: `WindowRegistered`, `FormAccepts`, `FormApart`, `RegisteredHolds`, `hready` (`Commit.Ready` of every member), and the base's `PouwSound .remote` and `InferenceOnlySound .remote`.
+- [relayed: WINDOWAT 07:23Z] `hready` is an unnamed hypothesis, so the guarantee cannot be listed while it takes it. It goes when S5 states `Commit.Ready` as the single `ports` clause; `FilesPass.ports` then gives it.
+- [read] `FormAccepts` and `FormApart` hold today only because the check accepts no parameters that name members (`formAccepts_refused`, `formApart_refused`). They are true and empty until the switch.
+- [relayed: WINDOWAT 06:06Z] `WindowRegistered` and `RegisteredHolds` stay premises after the switch. Whoever builds the instance shows the first. No check reads the auditor's registered files for a window, so the second stays on the vocabulary.
+- [relayed: WINDOWAT 08:04Z] No records run has read `Sound.lean`.
+- [derived] **A proposal for WINDOWAT:** list the guarantee with `FormAccepts` and `FormApart` already discharged by the two `_refused` lemmas, not as `open` premises. Then the lock never carries them, and the switch's pull request cannot build until it proves both for the switched check. Two `open` entries are left, not four.
+
+**What the statement covers.** [read: `Window.lean`, `MemberForm/SetsUp.lean`, `Window/Instance.lean` on WINDOWAT's branch]
+- **The claim:** at a window the check accepts, more than an ε share of the window's proof blocks are unbound with probability at most `Window.delta`. The remote composite only (`SoundnessAt .remote`).
+- **Members:** any number from one up (`W.ms = m₀ :: rest`). The bound grows with them: each member's knowledge and binding terms, a roots term for every member, sampled or not, and one two-continuation term for each round of every member's session.
+- **Each member:** one statement, one table with hm96-sha512 rows, a circuit with no public input port (as the one statement's guarantee has it), and units that are one range of the window's population (`MemberOn.place`).
+- **Sessions:** one for each sampled member, one after another in the members' order, all on the window's one challenger session. The challenges the sample reads are `MAX_COINS` frames of the family the parameters name.
+- **Sampling designs:** `subset`, `stratified` and `work` over the window's strata (`Flock.Bridge.LawOn`).
+- **Files:** the members sit on the registered files. Where the files sent differ, the window's read finder pays (a SHA-512 collision).
+
+**What it does not cover, and whether the check refuses it.**
+- A Bernoulli design: not covered [read: `LawOn`]. WINDOWAT's `MemberForm/Sample.lean` says the `--zk` session's setup refuses a design no soundness claim samples by (`lawWhy_zk`) [read: the docstring's line only; not run].
+- A member whose sampled count can fall in two link-point classes (`Window.hcls`): not covered. The registration refuses it (`Registration.linkRefused`, on `main`) [read]. A member of at most 8g units, g its circuit's units a proof block, is never refused. A larger one needs its sampled count held to one class, as a stratum of its own gives [derived, from my Thu entry on `link-points`].
+- A window that registers a row tables' root: refused (`ROW_TABLES`) [read].
+- A registered root that is no member's: refused (`rootsOf`) [read]. PRF-586 would change that.
+- Sessions run at once: not covered. The challenger's check refuses any line of the next member before the last one's closing round [read: #9520's body].
+- A statement with two sessions, or a retry: refused (`heldStep`) [read].
+- **Key parameters:** the statement names none. It asks only that the parameters name a challenger whose family the registration holds. The check refuses any key not at W = 1, H = 20 in both forms, since the per-member parse reads the one statement's (`KEY_PARAMS`) [read].
+- The onsite composite and the recursive form: not covered [read].
+
+### 3. The switch
+
+**Which commit it sits on.** L, the commit that lists `Verity.Sampled.MemberForm.soundnessAt_form` in `security/lean-audit.json`, with a records run of `security/Proofs` passed at it. L does not exist. Its ancestors hold S1 to S6: #9441, #9576, #9584, #9520 with the one `OpensAt.lean`, and WINDOWAT's files with `Sound.lean` restated without `hready`. The nearest commit today is WINDOWAT's `e977fbc96f6315238e997cd86e0de5aec14ba663`, and it is not L: the guarantee there takes `hready` and is in no lock. [read, derived]
+
+**There are two readers of the parse, and the guarantee speaks of the second.** [read]
+- `Spot.OneStageZk.protocol`: the standalone `check` command, the one FIRSTACCEPT's accept ran.
+- `VStar.Recursive.Sampled.paramsOfJson` and `evidenceOf` (`VStarRecursive/Sampled.lean` 61 and 69): the composite's sampled component. The proofs' `ParamsAt` and `V2Accepts` read this one. So `soundnessAt_form` says something of an accepted play only once the composite's parser reads either form too. The switch changes both.
+
+**Its size.** [derived from the code at #9703's head; the line counts are guesses]
+- `Spot/OneStageZk.lean`:
+  - one line of `checkMembersAt`, which then accepts where every session did, as `checkOneAt` does;
+  - `MULTI_REFUSED` and `checkMembersAt_refuses` go;
+  - `checkBlobsAt_accept` is restated as two cases, with the per-member case giving the run, that every session accepted, and v1's accept;
+  - `protocol` reads `paramsEitherOfJson` and `evidenceEitherOf`;
+  - the four lemmas after `protocol` keep their statements, which are of `paramsOfJson` and `evidenceOf`; their docstrings change;
+  - net about 0 to 30 lines.
+- `VStarRecursive/Sampled.lean`: two lines.
+- `Spot/MembersRefusal.lean` (143 lines), the `refusal` command, goes: `check` then decides the form.
+- `security/Proofs`: 15 proofs take the one statement's accept from `checkBlobsAt_accept` [run: `rg`]. About five stay true in both forms; about ten need "the parameters name no members" [guess at the split].
+- `FormAccepts` and `FormApart`, proved of the switched check in place of the two `_refused` lemmas. `FormApart` is a few lines from `paramsEitherOfJson_apart`. `FormAccepts` needs one new lemma: the evidence's sessions are the statements', in order. About 100 to 200 lines.
+
+**Two of soundness's listed statements change. This is the open design question.** [read, derived]
+- `Properties.Spot.TablesRegistered` (owner `@soundness`) says every accept of `checkBlobsAt` holds the registered tables of `p.own`. In the per-member form `p.own` names no file, so the statement is false at a per-member accept. It must be restated for the one statement, with or without a clause for each member.
+- `Verity.Sampled.remote_soundness_deployedReady` (owner `@soundness`) is proved through those ten proofs. Its `SetsUp` does not say the parameters name no members. Either `SetsUp` gains that clause, or the ten lemmas take it another way. The first moves a listed guarantee's record, which my stop rule does not let me do alone.
+- I need soundness's word on both before I write those parts. Not sized: how many callers the new hypothesis runs through (the fourteen lemmas have about 40 mentions [run: `rg`]).
+
+**Which refusals stay** in the per-member form. [read]
+- Parameters of one form with evidence of the other (`FORMS`).
+- No challenger named; a key not at W = 1, H = 20; a null partition.
+- Members: names, keys, ranges that do not ascend, two members sharing a unit.
+- Statements: an unknown member, statements out of the members' order, other than one session, a member the sample holds no unit of (#9576).
+- Trees: a session not on the window's challenger session, a tree not closed after its session's evidence before the next opens, the link-first refusal.
+- The registration: population, layout (`MEMBERS_LAID`), a registered value read as two trees (`classHeld`), a row tables' root, a root that is no member's or two members', `link-points`.
+- Files: every member's, sampled or not: units, strata, the proof block size, scope, the ports check.
+- A session Flock's `--zk` verifier does not accept, and everything v1's check refuses at the challenges.
+- The one-statement form keeps all of its own, with #9584's refusal of strata and work.
+- The composite keeps `V1_REFUSED` and `RECURSIVE_REFUSED`.
+
+**Which tests and twins change.** [read: `rg` at #9703's head]
+- `one_stage/members.py`: `MULTI_REFUSED`, `ALL_PASSED`, `refusal`, `case_refusal` and `run_reason` go or become the accept.
+- `lean/tests/test_members_refusal.py` goes with the command.
+- `lean/tests/test_members_twin.py`, `tests/test_members_run.py` (141) and `benchmarks/one_stage/tests/test_audit_two_members.py` (226): where they assert `ALL_PASSED`, they assert that `check` accepts. The last becomes the first accept of a two-member test window.
+- `lean/tests/test_difftest.py` 2613 and 2706 assert that `check` refuses the form's keys at parsing. They become the form's own refusals.
+- The composite's Python reference (`remote/verifier/composition/tests/reference.py` 184 to 227) reads one session only; it must read either form, with `test_composition_difftest.py`.
+- `a5.py` (`write_case`: "nothing here reads it as a case"), `proofs.py` 575, the README 199 to 200, and the two locks' `reads` entry `MULTI_REFUSED`.
+
+**What I can start now, on your word.** The switch on a new branch off WINDOWAT's `e977fbc96f63`, written and tried there, touching no marked head. It would not be L's tree, so it is carried once when L exists. I have not started it.
+
+### 4. What lands first, and the split
+
+- [read] **#9441 must land first.** `WindowPasses` reads `membersRun_files`, and WINDOWAT's `Passes.lean` and `WindowPasses.lean` name it.
+- [read] **#9576 must land first.** WINDOWAT's `Sample.lean` unfolds `Member.sampled`, and its `Run.lean` reads the run with `sampledHeld` in it.
+- [derived] **#9584 must be on the tree.** The accept does not read its refusal. But it changes the text of `membersParamsOfJson`, which then reads `paramsParsed`, and WINDOWAT's `Apart.lean` is compiled on that text.
+- [derived] **#9703 need not land first.** It changes no statement a guarantee reads. It makes the run parse each member's circuit file once.
+- [run: `git grep` on both branches] **But #9703 and WINDOWAT's files cross.** One-parse changes `statementOf`, `Member.blockHeld`, `scopeOf` and `StepAt`'s fields, and six of WINDOWAT's files read them (`Passes`, `States`, `Run`, `Units`, `Sample`, `Accept`). `Passes.lean` 98 and `States.lean` 48 unfold `statementOf`. No tree holds both.
+- [derived] **My proposal:** one-parse lands after WINDOWAT's files, and I port those sites in it. WINDOWAT is on the path and I am not until L. The lemmas `statementOf_ofOwn` and `Member.statement_parse` in #9703 are what the port reads.
+- **The split** (your 07:39Z ask). Of my three open changes, one-parse lands last, and it carries the split. [derived]
+  - The count: 1,996 lines with #9441, #9576 and #9584; 2,061 with one-parse [relayed: FIRSTACCEPT 07:40Z]. At #9703's own head the file is 1,936 [run].
+  - I make it on the carried tree after chain 2: about 120 lines of the form's layout and class checks (`popHeld`, `laidHeld`, `classPort`, `classStep`, `classTwo`, `classHeld`) move to a module beside the file. [guess at which lines]
+  - The switch comes after and adds few lines, so it needs no second split. [guess]
+  - If #9594 lands after one-parse, the split is FIRSTACCEPT's, as its 07:40Z entry says.
+- [derived] After the switch, a window of one member is a per-member case with one member. #9594 would then be a second way to accept the same window. Whether both are wanted is yours.
+
+### 5. What a driver must do that it does not do today
+
+What it already does on `main` [read: `benchmarks/one_stage/member_trees.py`, `a5.case_members`; relayed: FIRSTACCEPT 08:03Z]: with `FLOCK_CHALLENGER=1 --challenger local --deployed-key` on one rank, a5 runs the members' sessions one at a time on the window's challenger session, closes each tree before the next opens, and writes `case-v2-members.json` with the challenger, the window's root and every member's files.
+
+What is missing:
+- [relayed: FIRSTACCEPT 08:03Z] **The served harness** (`served_verdicts.sh`, vllm's) sets neither `FLOCK_CHALLENGER` nor `--deployed-key`. So a served window's sessions are not on the window's challenger session, and its key is not at W = 1, H = 20.
+- [relayed: FIRSTACCEPT 07:40Z] **Friday's second stage** names no challenger (`two_stage.py` 917).
+- [read] **The case for the composite.** `case-v2-members.json` is read by nothing as a case. The sampled proofs' one-stage form beside it (`case_with_form`) is written for a one-member draw only, and `served_cases.py` has none at a draw of several members.
+- [read] **One session for each sampled member, never two, never a retry, and none for an undrawn member.** A driver that splits a member over ranks is refused.
+- [read] **Every member's circuit and public files as blobs, sampled or not** (#9441), not the sampled members' alone.
+- [read] **The sessions in the members' order**, by first unit.
+- [read] **A registration the form reads:** no row tables' root, every root one member's, members laid over the population in order, and members whose sampled counts stay in one link-point class.
+- [read, guess] **Memory, which no driver can fix.** The check reads every blob into one process (`Core.Blobs.ofArray`). With #9441 that is every member's circuit file, not the sampled ones' alone. FIRSTACCEPT puts Thursday's window above 200 GB. Reading one statement at a time changes the verifier's executable.
+
+### 6. My runs and branches
+
+- [run] `r20261113-073841-5fa8`: done, rc 0, the root suite at `7637682ee14c`, 392 passed. #9703 is checked; my 08:17Z entry.
+- [run] `r20261113-065745-ae1b`: done, rc 0, the records run at `a7e04a40f373`. The spot package, the certifier's and `security/Proofs` pass (204,290 declarations, 4,051 modules); `security` and `security/Properties` pass after `--update`.
+- [run] Stop rule clear for the site: both regenerated locks differ from the head's only in `reads[Spot.OneStageZk]`, the text of `push` and the group's digest.
+- [run] `r20261113-065833-b949`: done, rc 0, 5 of 5 suites at `a7e04a40f373`: 323 passed and 2 skipped; 931; 1,086; 321; root 359.
+- The site's branch `cursor/proofs-members-programsha-34fd` is at `b940017b6864dcde4d53ae539aed2f4709becf5d` (the head the runs read, plus the two locks), pushed. Its root suite at that commit is `r20261113-081537-e3f2` (vy-nebius-cpu-11), running at 08:23Z, expected by 08:40Z [guess]. Its pull request and ready line follow when it ends.
+- Nothing of mine is unpushed.
+
+### Not established
+
+- Any hour of S4, S5, S6 or S7. I read no entry of soundness's.
+- That `soundnessAt_form` compiles without `hready`, and that a records run passes with `Sound.lean` in it.
+- That the switch builds. Nothing of it is written.
+- How the one statement's deployed theorem learns that its parameters name no members, and what that does to its record.
+- That one-parse and WINDOWAT's files build together.
+- That a per-member case of one member is accepted once the switch is on. I derived it and ran nothing.
+- That the accepting check fits in memory on a real window.
+
+### For TOP-415
+
+The compiled check can accept a real window only in its per-member form. Today that form refuses everything on purpose, because the proof that covers it is written but not yet in the lock.
+
+Seven things must be on `main` before the check may accept. Three are refusals that are in review now. Two are soundness's: its theorem for a window of several members, and one file that two of its pull requests still disagree on. Then come the proofs that tie that theorem to what the check reads, and the listing of the guarantee. Only then is the switch turned on.
+
+The switch is a small change to the verifier. But it makes two statements that soundness owns false as written, so soundness must agree to how they change. We do not yet have soundness's hours for its two steps. If both are in review by Friday 17:00Z, the switch can be in review late Friday UTC at the earliest.
+
+After the switch, a driver must run each sampled member's session on the window's own challenger session, one after another, with a key at the deployed parameters, and hand the check every member's files. The test driver does this already. The served harness does not.
+
+A real run also needs a served window that may be audited. And the check today reads every member's circuit into memory at once, which is more than 200 GB on Thursday's window.
