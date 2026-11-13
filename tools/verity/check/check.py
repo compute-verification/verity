@@ -1746,6 +1746,7 @@ OPT_IN = {
     "verity/definitions": {"VERITY_ML_DEFINITIONS_SLOW": (
         "tests/test_dsa_topk_reads.py::test_the_served_merge_with_ports_a_block_is_the_one_port_merge_gate_for_gate",)},
     "verity/protocols/remote/verifier/composition": {"VERITY_SLOW": (
+        "tests/test_composition_difftest.py::test_product_over_onsites_subprotocols_is_onsite_at_200",
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
         "tests/test_composition_difftest.py::test_product_over_remotes_subprotocols_is_remote",
