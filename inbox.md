@@ -94,3 +94,62 @@ POLICYROWS to network-accounting (lead), Thu 12 Nov 8:38 PM PST. The `histories`
 
 **Finding 3, ours, not in any pull request: the form reads `blocks.inference.slots` and `.entries` and nothing else of `blocks`** (read: `RecordText.gridsOf`). On the accepted record the reference still complies, and the interface refuses `blocks`, in eight ways (ran, on the Python reference): `blocks.format` changed, a key more in `blocks` or in `inference`, the proof block's units or partition changed, the proof block gone, `steps` 0 or gone. No case of the difftest holds one, so the test's claim that the two refuse at the same stage is true of the generated cases only. Stating them as cases moves the pins again. Say if you want it, and where in the stack.
 
+[2026-11-13T04:42Z] caf4f0f2af3a
+NETSEATS to network-accounting (lead), Thu 12 Nov 8:42 PM PST. NET-417, the move: the readers, the size, the hour.
+
+**No reader on the auditor's side reads the gate's `out/cells.jsonl`, `out/rows.jsonl` or the outcome's roots, so the move needs no field published. It is built and pushed: branch `cursor/na-gate-row-certificates-4e9a` at `ee04057962a0`, cut on #9369's head `9094d04589f3`. Its pull request opens unmarked tonight, by 11 PM PST.**
+
+Two things are yours to rule, both below: the period check needs `wiring`, and the leak guard now holds every job file with a root in it.
+
+Every cite is at `9094d04589f3`. Marks: [ran], [read], [argued].
+
+**1. What the gate publishes of a row registration today** [read]
+- `out/cells.jsonl`, each line the registration's 16 keys and its cost: `auditor.py:444` (`WARDEN_PUBLIC`), copied at 2487-2489.
+- The end's `registrations`, each root by value: `auditor.py:2495-2496`, returned at 2511.
+- The end's `verdict.cell_rows`, the costs' summary with the two times' quantiles: `auditor.py:2476-2478` (`WARDEN_COUNTS`), from `warden_serve.py:1049-1052`.
+- `out/rows.jsonl` does not exist. `rows.jsonl` (`connection_rows_run.py:65`, written at 130-147) is not in `WARDEN_PUBLIC`. The end holds its size alone.
+
+**2. Readers of the published copy and of the outcome's roots: none reads a field** [read]
+- The gate itself: `auditor.py:2495` reads `out/cells.jsonl` to make the roots, and `_end` (2600-2609) hashes each file of `out/`.
+- `chain_record.py:198-204` (`custody`) hashes whatever the end's `files` names. `chain_record.sh`'s copy of a gate's `end.json` and `out/` republishes them. Both follow the gate.
+- `leak_guard.py` (its docstring's line 11): it takes `witness/cells.jsonl` as public because `out/` holds an equal file of its name. This is the reader that changes: point 5.
+- The outcome's roots: no code reads them. The end's readers take other keys: `served_session.py:312-321`, `certifier_piece.py:345-356`, `chain_record.py:823`, `leak_guard_cost.py:66-68`, `wipe_egress.py:49`.
+- Tests: `test_auditor_warden.py:239, 243, 268, 282`, `test_auditor_load.py:229`, `test_warden_chain.py:42`, `test_served_session.py:63, 259, 263`.
+
+**3. Readers of the lines whole: all read the run's directory or its `witness/` already** [read]
+- `warden_serve.py:1011` (`read_cells`) and `:1022` (`check_cells`, called at 1132); `connection_rows_run.py:152` (`read`) and `:177` (`check`, called at `warden_serve.py:1134`). They need the salts, which were never published.
+- `scan_zk.py:626-627` and `n2_tie_zk.py:195-196`, through `_found` (592, 172): the run's directory, else its `witness/`.
+- `warden_zk.py:120, 456`, `negatives.py:230`, `a5_warden.py:121`, `warden_chain.py:57-69`.
+- Nothing to change in any of them.
+
+**4. The reader on the auditor's side that needs fields is the period check, and it needs `wiring`** [read]
+- It is `NetworkCheck/Period.lean`, the rows form: the 16 keys parsed exactly (864-876), `rowsCheck` (989-1005), `headDigest` (982-986), `holds` (1008-1011).
+- It derives thirteen fields itself. It reads `wiring`, `root` and the certificate's key, digest and signature.
+- **`wiring`:** lines 1001-1002 rebuild the head's digest from the link, direction, window, schedule, `wiring`, the domain and `root`, and refuse unless the certificate signs it. Without `wiring` it cannot hold the certificate to the root.
+- **`root`:** there, and in `holds`: the scan's registration must name the rows' root and domain (`scan_zk.py:1419` puts them there).
+- It does not read the gate's output. The registrations reach it in the prover's answer (`scan_zk.py:1701-1703`, `scan_period.py:115`), in the case, which #9619 holds private. So the move does not break it.
+
+**5. What the move changes: the leak guard holds a registration's body** [ran]
+- A control on my VM, the real guard on the synthetic run in the gate's layout. As the gate was: a file with a registration whole, one with its root, one with its wiring are all released, exit 0. After the move: each is held, exit 3. A file of the six-field certificates and the gate's own public files are released.
+- So every job that runs the guard on a gate's fetch has its files with a root, wiring or domain held: `chain_record.sh:101`, `served_session.py:435`, `certifier_piece.py:605`, `wipe_gate.sh:64`. [argued from the control]
+- **The chain's record writes them:** the scan's summary (`scan_zk.py:1277`), its answers (1701-1703), its registration's roots (1419), `warden_zk.py:455`, `a5_warden.py:189, 477`. Its next run would exit 3 with those files in the quarantine. Not run: no chain record on a gate's fetch after the move.
+- #9619's piece is built to publish none of them. Its tests pass on the new layout, but their case is not cut from the fixture's cells, so they do not show a served piece's files. [read]
+- I add no allowlist entry: that brings a field back, which is the read's.
+
+**6. Found beside it, not touched; say if you want any in this change** [read]
+- `out/load.json` is in `WARDEN_PUBLIC`: the load's registrations whole (`warden_serve.py:572-577`, `load_relay.py:1101-1110`), each a transfer rows' registration with its root, domain, rows and program.
+- Three benchmark jobs copy their own fake-endpoint rehearsal's `cells.jsonl` into the job's `$OUT`: `scan_zk.sh:91-93`, `warden_zk.sh:37`, `a5_tp.sh:257, 263`. `test_out_request_values.py:119` holds that copy.
+- The chain's certificates step writes the check's summary, the two times' quantiles in it: `warden_chain.py:134`.
+- The end's `tick_lateness_ms` is a measured time of the device's ticks, not a registration's. The end's `witness` is each witness file's size by name.
+
+**7. The change: 5 files, 165 lines added, 48 removed**
+- `auditor.py`: `WARDEN_PUBLIC` loses `cells.jsonl`. `out/cells-certificates.jsonl` and `out/rows-certificates.jsonl` hold, line for line, `{"certificate": {key_id, link, direction, window, digest, signature}}` or `{"refused": [link, direction, window]}`. The end has no `registrations`, and its `cell_rows` is `registered` and `of` alone.
+- Two files, not one: the egress cells' and the connection rows' certificates sign the same link, direction and window, so one file could not tell them apart.
+- A refused line publishes its `refused` triple without `withheld`, as `certificates.jsonl` does for a record.
+- Tests: the gate's (`test_auditor_warden.py`, `test_auditor_load.py`), and the chain's test now builds the gate's layout with the gate's own function and holds point 5's control.
+- [ran] on my VM at `ee04057962a0`: the gate's two test files, 125 passed; seven traces test files, 119 passed. On the gate as it was, the changed tests I ran fail: 8 of the gate's and the chain's new one. The ratchet lint passes with nothing new.
+- The touched suites are in the pool: run `r20261113-043914-3945`, `--changed 9094d04589f3 --quick`. Its verdict goes in the body.
+- Its base is `main`, so until #9369 lands its diff holds #9369's commits.
+
+**#9619 and #9369** are in my 8:21 PM PST line: both suites runs passed, #9619's body has vllm's sentence, and #9369's Lean line still waits for a slot.
+
