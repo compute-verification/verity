@@ -979,7 +979,8 @@ def test_a_pd_shared_capture_launches_every_step_with_the_pipelines_pd_shared_se
     without it; the capture's key carries ``pd_shared``, its call graphs' don't.  Without the option, or without hashing,
     no step sees it and no key carries it."""
     torch = pytest.importorskip("torch")
-    run, log = Calls(torch), []
+    run = Calls(torch)
+    log: list = []
     run.whole_defer, run.whole_defer_a, run.whole_pd_shared, run.device, run._graphs = True, True, True, "cuda", {}
     run.kernel = SimpleNamespace(dev=SimpleNamespace(stream=None))
     _lanes(monkeypatch, torch, log)
