@@ -333,3 +333,28 @@ window, in a worktree and a run of their own:**
 
 Your note: a section in your report note, a CHECKPOINT line each 30 minutes, synced by its
 own path. Return by Fri 13 Nov 12:00Z. I resume you for Monday's move when its PR exists.
+
+## Fri 13 Nov 07:10Z: the weekend's move is pulled into TONIGHT, with more in it. Finish the build you are on; then the same check on chain 2's staged head, which I give you at about 11:30Z. The answer is owed before 13:00Z
+
+Daniel asked for the repository in its structure when he wakes. top (TOP-415, 07:05Z): every
+path-only move is on `main` by Fri 15:00Z, in two chains marked by 13:00Z. **Chain 2 holds the
+move you are checking (`verity/definitions/kernels` to `verity/circuits/kernels`) and more:
+each protocol goes under a group directory, so `verity/protocols/pouw` becomes
+`verity/protocols/accounting/pouw`** (our `build.sh`, `fixture.py` and `run.py` name it), and
+the Lake packages' paths move. Its maps are on pushed branches by 10:00Z and the chain is
+staged and rehearsed by 11:30Z; I asked top to post the staged head on TOP-415.
+
+- **Now:** finish the before-and-after build on the first map alone, as briefed. It tells us
+  whether an include line reaches the binary. Return with it as soon as it is done (not at
+  12:00Z), and keep the job ready to run again.
+- **At about 11:30Z I resume you with chain 2's staged head.** The same check on that tree:
+  the H200 kernel's sha256 against `5a6d7461…`, the rewritten lines of our sources and build
+  scripts, the opt-in build tests. **I say the result to top before its 13:00Z mark**, so the
+  run must be back by 12:45Z: choose the node for a slot it can give at once.
+- Your card run on Friday is launched from the pinned `c5840ecef3` and is not reached by the
+  chains. **Before your go, one more thing by reading:** does anything in Friday's job (the
+  launcher, `card.sh`, the verify step on a CPU node) take `main`'s head or a tree path
+  outside the pinned worktree? Say so in your return.
+- From now, in prose: "challenges" not "coins", "accounting protocol", "the auditor's
+  devices" and never "host". The code's names stay. #9489 and #9550 cross chain 2: they wait
+  for the chains and are carried across with `tools/move/restack.py` after Friday's run.
