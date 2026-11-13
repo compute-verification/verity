@@ -173,7 +173,7 @@ theorem stmtsOf_encStmts {xs : List Msg} (hl : xs.length < 2 ^ 64) (hb : ∀ x �
       (l := xs.map fun r => (⟨r.toArray⟩ : ByteArray))
       (fun b hm rest => by
         obtain ⟨r, hr, rfl⟩ := List.mem_map.1 hm
-        exact FlockComplete.rdBytes_encBytes (by simpa using hb r hr) rest)
+        exact FlockComplete.rdBytes_encBytes (hb r hr) rest)
       (by simpa using hl) []
     rw [List.append_nil] at h
     rw [henc]
@@ -181,7 +181,7 @@ theorem stmtsOf_encStmts {xs : List Msg} (hl : xs.length < 2 ^ 64) (hb : ∀ x �
   unfold SpotFlock.stmtsOf
   rw [hrd]
   simp only [hmap]
-  rw [if_pos rfl]
+  exact if_pos rfl
 
 /-- **The statements' message states each template's session statement**, where they fit their length words. -/
 theorem stmtsOf_stmtsMsg {k : Case} {m : Msg} (h : stmtsMsg k = some m) :
@@ -224,6 +224,10 @@ theorem stmtAtCase_some {k : Case} {t : ℕ} {x : Msg} (h : stmtAtCase k t = som
   obtain ⟨⟨p, e⟩, hf, m, hm, s, hs, record, hr, circuit, hc, pub, hp, rfl⟩ := h
   exact ⟨p, e, m, s, record, circuit, pub, hf, hm, hs, hr, hc, hp, rfl⟩
 
+theorem getLast?_cons_concat (a b : Msg) : ∀ l : List Msg, ((a :: l) ++ [b]).getLast? = some b
+  | [] => rfl
+  | c :: l => getLast?_cons_concat c b l
+
 /-- **A session's messages are its link message, its rounds' and its last message.** -/
 theorem sessionMsgs_some {spec : _root_.Flock.SessionSpec} {x : Msg} {record : String} {proofs : Array ByteArray}
     {ms : List Msg} (h : sessionMsgs spec x record proofs = some ms) :
@@ -256,7 +260,7 @@ theorem finalOf_sessionMsgs {spec : _root_.Flock.SessionSpec} {x : Msg} {record 
     (hrec : record.toUTF8.size < 2 ^ 64) (hp : proofs.size < 2 ^ 64) (hb : ∀ b ∈ proofs, b.size < 2 ^ 64) :
     ∃ a ∈ ms.getLast?, FlockDeploy.finalOf a = some ⟨x, record, proofs⟩ := by
   obtain ⟨lv, mids, -, -, rfl⟩ := sessionMsgs_some h
-  refine ⟨FlockDeploy.Final.encode ⟨x, record, proofs⟩, ?_, FlockComplete.finalOf_encode hs hrec hp hb⟩
-  simp
+  exact ⟨FlockDeploy.Final.encode ⟨x, record, proofs⟩, getLast?_cons_concat _ _ _,
+    FlockComplete.finalOf_encode hs hrec hp hb⟩
 
 end Verity.SampledTwo.SessionMsgs
