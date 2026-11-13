@@ -1497,7 +1497,9 @@ def _moved_to(run_dir: Path) -> Path | None:
         return None
     try:
         return _run_dir(run_dir.parent, tw["run"], tw["machine"])
-    except (FileNotFoundError, LookupError):
+    except (FileNotFoundError, LookupError) as e:
+        print(f"research: {run_dir.name}: its late twin {tw['run']} was not found on {tw['machine']} ({e}), so the run is not "
+              "followed there", file=sys.stderr)
         return None
 
 

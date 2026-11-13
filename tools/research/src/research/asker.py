@@ -8,19 +8,21 @@ and its last reason is memory, it asks (`ask`: `auto.read` and `auto.elsewhere`)
 shipped (`files`: the few `auto.read` reads, no checkout), never by what the launching checkout holds by then. The answer
 is a pool that has a place now for a job of this run's CPUs and memory, as a waiter with its ask finds the line there
 (`auto._pool`), not a count of free slots. There it launches the same request (`launch`) from a checkout of that commit
-(`tree`, made only for a launch) as `--twin PAIR@HOME` (`slot_only.late_twin`). slot.py's claim then lets one of the two run: the twin runs only if it claims the pair on the first's machine before the first takes a slot,
-and the first leaves its line once it finds the claim. A twin waits in its line no longer than ASK_EVERY_MIN minutes, or
-what is left of the first's wait: it was sent where it would start now, and one that hasn't started by then leaves, as
-one that can't reach the first's machine does at once. A machine whose twin left unrun is asked for no other twin of the
-run. One twin is live at a time. The asker ends when the run has started on either machine, has ended or been cancelled
-(it then cancels a live twin), when its twin was cancelled, or when the first's wait for a slot is over.
+(`tree`, made only for a launch) as `--twin PAIR@HOME` (`slot_only.late_twin`). slot.py's claim then lets one of the two
+run: the twin runs only if it claims the pair on the first's machine before the first takes a slot, and the first leaves
+its line once it finds the claim. A twin waits in its line no longer than ASK_EVERY_MIN minutes, or what is left of the
+first's wait: it was sent where it would start now, and one that hasn't started by then leaves, as one that can't reach
+the first's machine does at once. A machine whose twin left unrun is asked for no other twin of the run. One twin is live
+at a time. The asker ends when the run has started on either machine, has ended or been cancelled (it then cancels a live
+twin), when its twin was cancelled, or when the first's wait for a slot is over.
 
 Its record (`record`) is <runs root>/DIR/<run id>.json on the launching VM, written before every sleep and before a twin is
 launched, so a twin is never launched unrecorded, and copied beside the run's request on its machine
 (<root>/requests/<run id>/FILE), where another VM's `research status` reads it: who asks (the launching agent, since
 agent VMs share one host name; pid, since), when it looked last and looks next, each ask and its answer, the twin (its run
 and machine, why the first waited and for how many minutes) and how the asker ended. It is no file of the run dir, which
-the run's custody seals. `alive` reads it, and `told` is what `research status RUN` says from it.
+the run's custody seals. `alive` reads it, and `told` is what `research status RUN` says from it; a copy that can't be
+read is said to be unread, never taken for no asker.
 
 A run whose launching VM is gone has no asker: it waits where it is, `research status` says so, and the `stranded` monitor
 is what is left to see it.
@@ -31,6 +33,7 @@ import contextlib
 import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -56,6 +59,8 @@ DIR = ".askers"
 FILE = "asker.json"
 #: the states of a twin that may still be, or is, the run (`twin`)
 LIVE = ("launching", "launched", "unknown", "started")
+#: a UTC time of a record (`_epoch`)
+STAMP = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z")
 
 
 def _utc(t: float) -> str:
@@ -63,18 +68,18 @@ def _utc(t: float) -> str:
 
 
 def _epoch(text: Any) -> float | None:
-    try:
-        return datetime.fromisoformat(str(text).replace("Z", "+00:00")).timestamp()
-    except ValueError:
+    """A UTC time as `_utc` and slot.py's records write it, in seconds; None for anything else."""
+    if not (isinstance(text, str) and STAMP.fullmatch(text)):
         return None
+    return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
 
 
 def _sha256(path: str) -> str | None:
-    try:
-        with open(path, "rb") as f:
-            return hashlib.file_digest(f, "sha256").hexdigest()
-    except OSError:
+    """The digest of the file at ``path``; None where there is no such file."""
+    if not os.path.isfile(path):
         return None
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 def started(s: dict) -> bool:
@@ -114,8 +119,8 @@ def start(root: Path, m: dict) -> int:
     <runs root>/DIR/<run id>.log and ``m`` handed over its stdin, so nothing of the request is on disk or in its arguments.
     Its pid."""
     (root / DIR).mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(Path(__file__).resolve().parents[1]),
-                                                                     os.environ.get("PYTHONPATH")]))}
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(Path(__file__).resolve().parents[1]), env.get("PYTHONPATH")]))
     with open(root / DIR / f"{m['run']}.log", "ab") as log:
         p = subprocess.Popen([sys.executable, "-m", "research.asker"], stdin=subprocess.PIPE, stdout=log, stderr=log,
                              start_new_session=True, cwd="/", env=env)
@@ -128,12 +133,14 @@ def start(root: Path, m: dict) -> int:
 
 def see(run_dir: Path) -> tuple[dict, bool]:
     """The run in ``run_dir`` as its machine has it now (`remote.fetch`, then `runs.summarize`), and whether the machine
-    answered."""
+    answered; why it didn't goes to the asker's log."""
     from . import remote, runs
 
     try:
         reached = not remote.fetch(run_dir, timeout=120).get("last_fetch_error")
-    except (remote.Refused, subprocess.SubprocessError, OSError):
+    except (remote.Refused, subprocess.SubprocessError, OSError) as e:
+        print(f"asker: {run_dir.name} could not be read from its machine ({type(e).__name__}: {e}); it is read as it was "
+              "last seen", file=sys.stderr, flush=True)
         reached = False
     return runs.summarize(run_dir), reached
 
@@ -342,19 +349,23 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
 def record(run_dir: Path) -> dict | None:
     """The asker's record of the run in ``run_dir``: this VM's (marked "here": its asker is, or was, a process of this VM),
     else, for a run that carries its own id as its pair (its slot record, as fetched), the copy beside its request on its
-    machine, one ssh; None when there is none or it can't be read."""
+    machine, one ssh; None when there is none. A copy that can't be read is {"unread": why}: whether the run has an asker,
+    or a twin, is then not known."""
     from . import remote, runs
 
     if doc := remote._read_json(run_dir.parent / DIR / f"{run_dir.name}.json"):
         return {**doc, "here": True}
-    try:
-        if (remote._read_json(run_dir / runs.SLOT_FILE) or {}).get("twin") != run_dir.name or not (at := _beside(run_dir)):
-            return None
-        r = remote.ssh_run(at[0], ["cat", at[1]], timeout=30)
-        doc = json.loads(r.stdout) if r.returncode == 0 else None
-    except (OSError, subprocess.SubprocessError, ValueError):
+    if (remote._read_json(run_dir / runs.SLOT_FILE) or {}).get("twin") != run_dir.name or not (at := _beside(run_dir)):
         return None
-    return doc if isinstance(doc, dict) else None
+    q = shlex.quote(at[1])
+    try:
+        r = remote.ssh_run(at[0], ["sh", "-c", f"test ! -e {q} || cat {q}"], timeout=30)
+        if r.returncode:
+            return {"unread": f"exit {r.returncode}: {r.stderr.decode(errors='replace').strip()[-200:]}"}
+        doc = json.loads(r.stdout) if r.stdout.strip() else None
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        return {"unread": f"{type(e).__name__}: {e}"}
+    return doc if doc is None or isinstance(doc, dict) else {"unread": "it holds no record"}
 
 
 def alive(rec: dict | None, now: float) -> bool:
@@ -370,15 +381,20 @@ def alive(rec: dict | None, now: float) -> bool:
 
 def twin(run_dir: Path) -> dict | None:
     """The late twin that may be, or is, the run in ``run_dir`` (its asker's record: run, machine, state, why), or None: the
-    run has no twin, or its twin left unrun."""
-    tw = (record(run_dir) or {}).get("twin")
+    run has no twin, or its twin left unrun. A record that can't be read names none, and stderr says so."""
+    rec = record(run_dir) or {}
+    if "unread" in rec:
+        print(f"research: {run_dir.name}: whether it has a late twin is not known: its asker's record could not be read "
+              f"({rec['unread']})", file=sys.stderr)
+    tw = rec.get("twin")
     return tw if isinstance(tw, dict) and tw.get("state") in LIVE else None
 
 
 def told(s: dict, now: float) -> list[str]:
     """What `research status RUN` says of a pool run `--on auto` placed, from its summary ``s`` (`runs.summarize`) and its
     asker's record: its late twin, and, while it waits, whether an asker is alive for it (where, since when) or that none
-    is, so it will not move by itself. Of a late twin: which run it is the twin of. Nothing of any other run."""
+    is, so it will not move by itself; of a record that can't be read, that neither is known. Of a late twin: which run it
+    is the twin of. Nothing of any other run."""
     from . import auto
     from .store import ids
 
@@ -392,6 +408,9 @@ def told(s: dict, now: float) -> list[str]:
     if rec is None and pair != s["id"]:
         return []
     out, where = [], rr.get("machine")
+    if rec and "unread" in rec:
+        return [f"whether it has an asker, or a late twin, is not known: its asker's record beside its request on {where} could "
+                f"not be read ({rec['unread']})"]
     vm = f"the VM that launched it ({rec.get('by') or rec['host']}, pid {rec['pid']})" if rec else None
     if tw := (rec or {}).get("twin"):
         head = {"started": f"moved to {tw['machine']} as {tw['run']}", "launched": f"its late twin {tw['run']} waits on {tw['machine']} too, "

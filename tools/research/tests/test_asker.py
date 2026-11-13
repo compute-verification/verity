@@ -218,13 +218,14 @@ def test_a_twin_whose_launch_fails_is_recorded_and_the_run_keeps_its_place_and_a
     assert world.record()["asks"][0]["error"] == "Refused: no ssh" and world.slept == [60, 540, 0, 600]
 
 
-def test_a_send_file_that_changed_since_the_launch_moves_nothing(world, tmp_path):
-    """A twin ships the same request: a --send file edited since would make it another run under the first's pair."""
+@pytest.mark.parametrize("change", [lambda sent: sent.write_text('{"edited": true}'), Path.unlink], ids=["edited", "removed"])
+def test_a_send_file_that_changed_since_the_launch_moves_nothing(world, tmp_path, change):
+    """A twin ships the same request: a --send file edited or removed since would make it another run under the first's pair."""
     sent = tmp_path / "input.json"
     sent.write_text("{}")
     world.m["sends"] = {str(sent): asker._sha256(str(sent))}
     world.answers = [(None, NOWHERE)]
-    world.at[10] = lambda: sent.write_text('{"edited": true}')
+    world.at[10] = lambda: change(sent)
     world.at[20] = lambda: world.runs.update({RUN: held()})
     world.run()
     assert [minute for minute, _ in world.asked] == [1] and world.launched == [], "asked while the file was as sent, not after"
@@ -447,7 +448,9 @@ def test_an_asker_is_a_process_of_its_own_session_that_takes_the_launch_on_its_s
     rec = json.loads((root / asker.DIR / f"{RUN}.json").read_text())
     assert (rec["pid"], rec["host"], rec["ended"]["why"], rec["next"]) == (pid, os.uname().nodename, f"it started on {A}", None)
     assert rec["by"] == AGENT, "whose asker it is: the launching agent, since a VM's host name names no VM"
-    assert (root / asker.DIR / f"{RUN}.log").read_text() == f"asker of {RUN}: it started on {A}\n"
+    assert (root / asker.DIR / f"{RUN}.log").read_text() == (
+        f"asker: {RUN} could not be read from its machine (Refused: {root / RUN} is not a launched remote run); it is read as "
+        f"it was last seen\nasker of {RUN}: it started on {A}\n"), "its log says each look that could not read the run, and how it ended"
     assert "s3cret" not in "".join(p.read_text() for p in (root / asker.DIR).iterdir())
 
 
@@ -501,9 +504,10 @@ def _twin(state: str, **over) -> dict:
 FIRST = {"state": "waiting", "since": SINCE, "twin": RUN, "why": MEMORY}
 
 
-def test_the_asker_keeps_its_record_on_its_vm_and_beside_the_runs_request_never_in_the_run_dir(machines):
+def test_the_asker_keeps_its_record_on_its_vm_and_beside_the_runs_request_never_in_the_run_dir(machines, monkeypatch, capsys):
     """A file the asker wrote into the run dir would break the run's custody, which lists every file there; beside the
-    request, another VM reads it. A run that carries no pair of its own is asked for none."""
+    request, another VM reads it, and says so when it can't: a record that could not be read is never read as no asker.
+    A run that carries no pair of its own is asked for none."""
     d = _on(machines, A, RUN, "running", FIRST)
     rec = _record(machines)
     assert json.loads((machines / A / "requests" / RUN / asker.FILE).read_text()) == rec
@@ -514,6 +518,20 @@ def test_the_asker_keeps_its_record_on_its_vm_and_beside_the_runs_request_never_
     assert cli.main(["status", RUN, "--runs-dir", str(elsewhere)]) == 0
     assert asker.record(machines / "here" / RUN) == {**rec, "here": True}, "this VM's own record says it is"
     assert asker.record(elsewhere / RUN) == rec, "read from the run's machine by a VM that has no record of its own"
+    with monkeypatch.context() as mp:
+        mp.setattr(remote, "ssh_run", lambda ssh, argv, **kw: subprocess.CompletedProcess(argv, 255, b"", b"ssh: vy-a: timed out\n"))
+        assert asker.record(elsewhere / RUN) == {"unread": "exit 255: ssh: vy-a: timed out"}
+        assert asker.told(cli.R.summarize(elsewhere / RUN), T0) == [
+            f"whether it has an asker, or a late twin, is not known: its asker's record beside its request on {A} could not be "
+            "read (exit 255: ssh: vy-a: timed out)"]
+        capsys.readouterr()
+        assert asker.twin(elsewhere / RUN) is None and not asker.alive(asker.record(elsewhere / RUN), T0)
+        assert capsys.readouterr().err == (f"research: {RUN}: whether it has a late twin is not known: its asker's record could not "
+                                           "be read (exit 255: ssh: vy-a: timed out)\n"), "what --wait and cancel then say"
+        mp.setattr(remote, "ssh_run", lambda ssh, argv, **kw: (_ for _ in ()).throw(subprocess.TimeoutExpired(argv, kw["timeout"])))
+        assert asker.record(elsewhere / RUN)["unread"].startswith("TimeoutExpired: ")
+    (machines / A / "requests" / RUN / asker.FILE).unlink()
+    assert asker.record(elsewhere / RUN) is None, "a machine that answers and holds none: the run has no asker"
     named = "r20261001-090000-eeee"
     _on(machines, A, named, "running", {"state": "waiting", "since": SINCE, "why": MEMORY})
     (machines / A / "requests" / named / asker.FILE).write_text(json.dumps(rec))
@@ -598,9 +616,11 @@ def test_status_says_what_became_of_a_twin_that_has_not_started(machines, capsys
     _on(machines, A, RUN, "running", FIRST)
     _record(machines, twin=_twin(state, **({"left": UNREACHED} if state == "left" else {})))
     assert cli.main(["status", RUN, "--runs-dir", str(machines / "here")]) == 0
-    out = [ln.strip() for ln in capsys.readouterr().out.splitlines()]
-    assert f"auto {says}" in out
+    said = capsys.readouterr()
+    assert f"auto {says}" in [ln.strip() for ln in said.out.splitlines()]
     assert (asker.twin(machines / "here" / RUN) is None) == (state == "left"), "a twin that left unrun is no longer the run"
+    assert (f"research: {RUN}: its late twin {TWIN} was not found on {B} (" in said.err) == (state != "left"), \
+        "a twin the record names that no machine holds: status says it does not follow the run there"
 
 
 def test_wait_follows_the_run_to_its_twin_and_returns_the_twins_end(machines, capsys):
