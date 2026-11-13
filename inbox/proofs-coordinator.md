@@ -113996,3 +113996,36 @@ Not established:
 - None of my files has compiled in a run on my branch yet; `a8d5` decides `SessionCoins` and `SessionHeld`.
 - `SessionAgrees` waits on NEEDS 1, and `SessionDev` on COINMAP's files compiling.
 - `OpensFit` (or `SessionsFit`), `HeldSize` (CUT's, by one line), `InteriorLogged` (CUT's) and `tab` are open premises.
+
+## NEEDEDBITS, Fri 13 Nov 02:12Z: NOTHING NEW HAS COMPILED (still only `NeededBitsOf.lean` at `aba961b663`). `NeededBits h` with no premise, `WrittenOnce h` and `RowsArePorts h` are written whole in `NeededBitsHeld.lean`; its try has waited in cpu-12's check line since 01:49Z, one check ahead of it
+
+In plain words: the three facts are written, but none has been through Lean yet, because the machine's line has held the try for 23 minutes. They are: every gate an inner block needs is one of its own unit's bits; no gate is written twice; and every bit's row is one of its circuit's ports. The first now needs nothing beyond what an accepted run already passed. The second needs nothing at all. The third needs the design's evaluation, which every accepted run has. FRAME had already written "each bit is a gate of its inner block", so I do not write it. The last fact, about the lowering, has a route and a size below.
+
+- [read] `security/Proofs/Flock/SpotFlock/NeededBitsHeld.lean`, branch `cursor/proofs-neededbits-2597` at `fdad33da82` (FRAME's L1 `a6ccdd66a6` merged at `33f9e37747`, cleanly). Its statements:
+  - `SpotFlock.neededBits_held (h : Held) : NeededBits h`
+  - `SpotFlock.writtenOnce_held (h : Held) : WrittenOnce h`
+  - `SpotFlock.rowsArePorts_of_two (h : Held) (hd : two h s = some d) : RowsArePorts h`
+  - `SpotFlock.membersRowed_of_two (h : Held) (hd : two h s = some d) : MembersRowed h`
+  - `Flock.Bridge.NeededBitsOf.memberRowed_of` (from `HmOut.parseStmt … = .ok c` at untyped tags, `Built c.unit`, `unitLog ≤ 32` and `ProvedScope.scopeOkH c = true`)
+  - `outGate_inj`, the injectivity `WrittenOnce` rests on.
+  - About 400 lines, against my 01:38Z guess of about 310. No `sorry`, `axiom` or `native_decide`.
+- [read] For FRAME's `addressesConnected_of_rowed (hM : MembersRowed h) …`: `MembersRowed h` is mine only from `two h s = some d`, as `RowsArePorts h` is. `AddressesConnected` reads accepted runs (through `AddressesWired`), so the assembly can take `two` from the run (`CheckedRun.Ok`'s sixth component). If it cannot, `MembersRowed` should be stated under an accepted run; that is FRAME's call.
+- [run, pending] `r20261113-014817-691c`, `verity lean try security/Proofs/Flock/SpotFlock/NeededBitsHeld.lean --on vy-nebius-cpu-12 --pool proofs --as proofs`, at `9b9f60a475` (the same file, before the merge). At 02:10Z it had been "waiting in the check line since 01:49:02Z, not started: 1 check(s) ahead". I keep its place rather than move to cpu-11, whose line I cannot see.
+- [read] `BitsInUnits h`: FRAME's `SpotFlock.bitsInUnits` (`BitsInUnitsOf.lean`, L1 `0cd75757a9`) is built on my lemmas, so I do not write it.
+- [read] My new root is one line in `security/Proofs/Flock.lean`, after FRAME's `NeededBitsOf` line, and the lakefile is FRAME's again: `public import Proofs.Flock.SpotFlock.NeededBitsHeld`.
+- [derived] **The lowering fact for `wiresMove`** (every bit of an output row port of a unit of a member is a written bit). My statement, unless FRAME's use wants another: for `t < h.ms.length`, `u < h.ms[t].2.size`, an output row port `q = HmOut.nIn c + o` with `o < c.outPorts.size`, and `bit < 16 · c.ports[q]!.words`, there is an `x` with `(x, t, ⟨c.ports[q]!.name, u, bit⟩) ∈ writtenBits h.ms`, where `c = memberCircuit h t`, given `two h s = some d`. Its route:
+  - Every output word is returned (`check_complete`, `ResLowerDeployed.lean:1021`, from `HmRow.check`, untyped, `outNet = unitNet`).
+  - `outPos_eq` names that word's row and bit, and `RowsFitS` gives one output port a row.
+  - Two pieces I have not found as lemmas yet: port `q`'s words are output port `o`'s, and the output group's columns are computed rows (`R0.nIn ≤ outCol c j t < R0.nIn + R0.nComp`, which `outGate` asks). `KnownRead.out_of_check` proves that bound for its own check, so the lowering likely gives it.
+  - Size [guess]: about 150 lines, more if those two pieces must be proved from `Net.ofRows`.
+  - `wireTarget` also filters out returned gates (`!returned h g`); that is not part of this fact, and stays with `wiresMove`'s user.
+
+NEEDS:
+- FRAME: keep `public import Proofs.Flock.SpotFlock.NeededBitsHeld` in `security/Proofs/Flock.lean` when you next merge my branch. It is one line of your file, added in the place your `NeededBitsOf` line taught.
+- FRAME: say whether the lowering fact's statement above is the one `wiresMove`'s lemma wants (row name, leaf `u` and bit, or a gate in a given range).
+
+STOP RULE: nothing listed changes; no verifier change.
+
+Not established: any of `NeededBitsHeld.lean` compiled; that `check_complete`'s hypotheses hold at a held member (they are the ones `scoped_facts` already reaches); the two missing pieces of the lowering fact.
+
+Heads: `cursor/proofs-neededbits-2597` at `fdad33da82`, pushed. Unpushed: nothing.
