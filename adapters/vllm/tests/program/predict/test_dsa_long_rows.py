@@ -20,6 +20,7 @@ import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -85,7 +86,7 @@ def _members(nodes, family: str) -> int:
     return sum(n.n if n.form == "batch" else 1 for n in nodes if n.fn.id.startswith(family + "{"))
 
 
-def _calls(r, family: str) -> list[tuple[int, object]]:
+def _calls(r, family: str) -> list[tuple[int, Any]]:
     return [(i, n) for i, n in enumerate(r.program.fn.body.nodes) if n.fn.id.startswith(family + "{")]
 
 
@@ -563,7 +564,7 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     (prog,) = c.programs.values()
     assert (unit.LP, unit.T) == (LP, 0) and "run" not in dict(prog.fn.signature()[0])
     assert prog.fn.signature()[1] == TupleT(Array(1, I32), Array(1, BIT)), "its sample, then its length rule"
-    masks = Counter()
+    masks: Counter[int] = Counter()
     for n in prog.fn.body.nodes:
         if n.fn.id.startswith(COUNTED + "{"):
             masks[n.fn.bindings["N"]] += n.n if n.form == "batch" else 1

@@ -533,7 +533,8 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, salt: by
                                               T=u.events() - 1, prefix=u.prefix())
                             for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()),
                            edge=edge)
-    steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
+    ran: list[Any] = units   # a step's row is of a request the plan kept: None's AttributeError otherwise
+    steps = [[RowRef(r, ran[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
     compiled = Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
                         cap_bits=registered.cap_bits, idle=plan.idle, named=names)
     from .batch import BatchDependent, check_compiled
@@ -650,11 +651,13 @@ def _plan(registered: Registered, adv: Any, ingress: Any, partial: bool, salt: b
                     continue
                 chunks, launch = ((), None) if bi else launch_of(i, LP, T, C, rows[i], adv.steps)
                 hit = C if recompute_hits and C and carry is None else 0
-                hit_steps, entries = (), ()
+                hit_steps: tuple[int, ...] = ()
+                entries: tuple[int, ...] = ()
                 if hit and not bi:
                     pre = hit_chunks(i, hit, rows, adv.steps, len(carried))
                     hit_steps = tuple(s for s, _, _, _ in pre)
-                    launch = tuple(tuple((r.n, r.start) for r in adv.steps[s].rows) for s in hit_steps) + launch
+                    served: Any = launch   # `launch_of`'s tuple: class G's requests alone get here (`not bi`)
+                    launch = tuple(tuple((r.n, r.start) for r in adv.steps[s].rows) for s in hit_steps) + served
                     entries = tuple(m for _, _, _, m in pre) + chunks
                     chunks = tuple(n for _, _, n, _ in pre) + chunks
                     entries = entries if entries != chunks else ()
