@@ -11,7 +11,29 @@ one request, and the census's blocks. All runs are from the joint branch's head,
 
 ### Where it starts
 
-SWEEP_TABLE
+Every prompt length from 87 to 150, at 2 and 3 outputs, unpatched and patched [ran, `p3_fixcheck.py`; unpatched
+`r20261113-054824-e596` (2 outputs) and `r20261113-054824-5b84` (3), patched `r20261113-054823-6dc1` (2) and
+`r20261113-054824-a177` (3)]:
+
+| tree, outputs | refused | builds |
+|---|---|---|
+| unpatched, 2 | every length 129-150 | 87-128 |
+| unpatched, 3 | 126 and every length 129-150 | 87-125, 127, 128 |
+| patched, 2 | none | 87-150 |
+| patched, 3 | none | 87-150 |
+
+**The smallest length refused is 129 at 2 outputs and 126 at 3.** At 2 outputs the refusal grows with length; at 3 it
+does not (126 refused, 127 and 128 build).
+
+The refusals at different lengths come from the same cause, in three cases:
+- **129-144 ids:** prefill chains past 128 keys split (`p3_splits.py`: the second mixed band). About 876 ranges are stuck
+  (1,092 at 129), behind the logits' gather (`AllGather_v1{WORLD=1,N=19360}` <- `{WORLD=2,N=9680}`) [ran]. It has the same
+  signature as (126, 3), whose analysis is below [inferred from that].
+- **145-150 ids:** chains of 3 blocks are unsplit; 156-196 ranges are stuck, at 8 more a length (one token a length)
+  [ran]. The 150-id analysis is below.
+- **(126, 3):** the second decode step's chain (T = 128, NS = 2) [ran, analyzed below]. Whether a coarse range meets a
+  misaligned wire depends on where `coalesce` puts the wires across nodes, which is why 127 and 128 build at 3 outputs
+  [inferred].
 
 ### Its cause: one range per chain key, not per chain place
 
@@ -60,7 +82,7 @@ the same units in the same order) [read]; only the spans, and so `order`, get fi
 Verified [ran]:
 - `test_node_window_sparse.py`: 12 passed (`r20261113-053624-689e`);
 - 129 and 150 ids build at 2 outputs, 150 at 3, and 200 and 256 at 2 (`r20261113-053624-689e`);
-- PATCHED_SWEEP;
+- every length 87-150 builds at 2 and at 3 outputs (the sweep above);
 - the description changes only in `order` wherever a key repeats, e.g. at 64 ids (2 outputs) `5524b48d…` to `d848f5b1…`,
   8,343 to 8,403 ranges, and at 86 ids `70363f03…` to `7b8f323e…`, 14,175 to 15,555 ranges; templates, wires, cuts and
   registered reads are identical (`r20261113-055056-8688`). At 64 ids the repeat is the decode step's split chain
@@ -159,7 +181,9 @@ the prompt's LP tokens:
 
 The x wires are BatchedGemm{K=512}'s in the prefill step. Runs: `r20261113-053624-689e` (4 layers),
 `r20261113-055752-193f` (8 layers). That is why the counts aren't monotone in length: 65, 86 and 129 are mixed, and 127,
-128 and 150 aren't. SWEEP_BG
+128 and 150 aren't. Across the patched sweep (87-150, 2 outputs, `r20261113-054823-6dc1`), x is above 1 at exactly
+the 22 lengths `p3_splits.py` calls mixed (87-92 and 129-144), with no exception. All wires go from 37,684 at 92 ids to
+14,491 at 93, and from 35,830 at 144 to 15,773 at 145.
 
 **At 78 layers, mixed** [computed]: 78 × 4,096 = 319,488 x wires, about 61 MB of description at the 192 B a wire these cost
 at 4 layers (10,237,720 − 7,094,916 B over 16,376 wires at 86 ids). Before `coalesce` it is 2,048 × 86 × 78 = 13.7 million
