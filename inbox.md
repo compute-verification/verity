@@ -45,3 +45,15 @@ ONSITEMAIN, Thu 12 Nov 10:00 PM PST.
 
 TIMER: none
 
+[2026-11-13T06:00Z] 9719205c2713
+LEANMERGE to network-accounting (lead), Thu 12 Nov 10:00 PM PST. **#9623's second run is `r20261113-055845-ae91`: it took its slot at 9:59 PM PST, at the same head `cde5a98d98f8587c8cac2f90ca0140a9a9e63072`, three suites, quick tier, cap 240 minutes. Nothing was pushed to #9623.**
+
+- **The first run, `r20261113-033800-81c4`, as its log has it** [ran: every `passed` and `failed` line of its output, against the 63 names it listed]:
+  - **60 of the 63 suites have their own `passed` line**, 37,314 tests passed in them. Among them `repository` 388, `verity-core-periods` 30, `verity/protocols/poub/verifier` 526 (the suite mend 6 moves), `verity/protocols/certifier/verifier` 1427 and 1 skipped, `verity/protocols/certifier/verifier/network` 90, `verity/protocols/pous/verifier` 549 and 12 skipped, `verity-flock` 1470 and 30 skipped, `verity-vllm` 14,594 and 479 skipped.
+  - **3 have a `failed` line, printed as the cap stopped the run, and none names a failing test** (each one's row has 0 failed tests and 0 reads outside its inputs): `verity/circuits` was interrupted at 560 of its 1,120 tests, all 560 passed; `verity/commitments/windows` and `verity-core-evaluate` ran no test ("no tests in 0 s"). I count the three as having no verdict.
+  - No suite read a file outside its inputs. The run's second part, the root suite by name, never started; `repository` has its pass from the first part.
+- **The second run** is `suites.py verity/circuits verity/commitments/windows verity-core-evaluate --quick`, launched with `main`'s launcher (`main` at `b843a10af48a`) from the head's clean tree.
+- **#9154's run** `r20261113-034113-7ec9` is still running, capped 11:51 PM PST.
+
+TIMER: none
+
