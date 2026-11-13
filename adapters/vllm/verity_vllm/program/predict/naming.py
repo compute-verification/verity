@@ -36,13 +36,19 @@ import gzip
 import json
 import os
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Any, Callable
+from typing import Any
 
+from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.types import RecordType
 
+from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, correspondence_digest
+from verity_vllm.pipeline.build_instances import write_instances
+from verity_vllm.program.prune import kept_records
+
 from .build import BuildResult, _Decoder, build_program, decoder
-from .common import Unexpressible
+from .common import Unexpressible, kind
 from .phi import Phi
 
 #: the request wrapper's attribute holding the model (`vllm_meta.GreedyRequest.model`): the root of every module path and weight name
@@ -67,7 +73,7 @@ class Named:
     fields of a trace's `attention_impls_observed` the audit reads), and its checks as `derive`'s provenance states them
     (`BuildResult.checks`, None without any), which its instances header carries for the replay."""
 
-    names: dict[int, str]
+    names: dict[int, Any]
     params: list[list[str]]
     correspondence: dict
     prefix: dict | None
@@ -128,7 +134,7 @@ class _Walk:
     @staticmethod
     def slots(views: list[dict], r: int, in_place: bool, ports: range | None = None) -> list[dict]:
         """Row r of each view as a return slot: port p in view p, an fx output or the p-th written argument."""
-        out = []
+        out: list[dict] = []
         for p in ports or range(len(views)):
             w = 1
             for s in views[p]["shape"][1:]:
@@ -148,6 +154,16 @@ def _family(fn: Any) -> str:
     return str(getattr(fn, "base_id", fn.id)).split("{")[0].split("[")[0].rsplit("_v", 1)[0]
 
 
+def _is(fn: Any) -> Callable[[Any], bool]:
+    """The test a Call's Definition passes when it is ``fn`` itself."""
+    return lambda f: f is fn
+
+
+def _of(family: str) -> Callable[[Any], bool]:
+    """The test a Call's Definition passes when its family (`_family`) is ``family``."""
+    return lambda f: _family(f) == family
+
+
 def refuse(net: Any) -> None:
     """`Unexpressible` unless `name_request` names `net`'s request: the dense Llama-family decoder on one rank."""
     if type(net) is not _Decoder or net.world != 1:
@@ -155,7 +171,7 @@ def refuse(net: Any) -> None:
                             f"rank only)")
     C = net.C
     facts = [f for f, on in (("the fused MoE", C.E), ("q/k norms", C.qk_norm), ("a q/k/v bias", C.qkv_bias), ("the unfused norm chain", C.norm_chain),
-                             ("the extra MLP norms", C.extra_norms), ("the embedding scale", C.embed_scale), ("soft-caps", C.attn_cap or C.final_cap),
+                             ("the extra MLP norms", C.extra_norms), ("the embedding scale", C.embed_scale), ("soft-caps", C.attn_softcap or C.final_softcap),
                              (f"the activation {C.act!r}", C.act != "silu"), ("a sliding window", C.window is not None)) if on]
     if facts:
         raise Unexpressible(f"naming: {', '.join(facts)} (vLLM's dense decoder with SiLU and fused norms only)")
@@ -192,7 +208,7 @@ def _forward(w: _Walk, S: Any, C: Any, M: int, p0: int) -> None:
         for half, fn, port in (("query", S.rope_q, 0), ("key", S.rope_k, 1)):
             for r in range(M):
                 hint = f"{module}/{node}/{half}[{r}]"
-                w.call(lambda f, fn=fn: f is fn, f"RoPE {half}", occ, hint, w.slots(views, r, True, range(port, port + 1)), hint=hint)
+                w.call(_is(fn), f"RoPE {half}", occ, hint, w.slots(views, r, True, range(port, port + 1)), hint=hint)
         module = p + "self_attn.attn"
         views = [_view((M, C.NH, C.D), bf)]
         occ, node = w.site("unified_attention_with_output", module, views, ((3, "call"),))
@@ -209,7 +225,6 @@ def _forward(w: _Walk, S: Any, C: Any, M: int, p0: int) -> None:
 
 def _sample(w: _Walk, S: Any, C: Any, sampling: dict) -> None:
     """The sampled row's logits and its select (module docstring)."""
-    from .common import kind
     w.rows(S.logits, "LM head GEMM", "triton_launch", f"{WRAPPER}logits_processor", 1, [_view((1, C.V), BF16)], ((2, "other"),))
     if sampling.get("kind", "greedy") == "greedy":
         occ, node = w.site("argmax", "", [_view((1,), "int64")])
@@ -220,7 +235,7 @@ def _sample(w: _Walk, S: Any, C: Any, sampling: dict) -> None:
     occ, node = w.site("gumbel_topp_token_select", "", [_view((1,), "int32")])
     for member, W in (("top_p", 32), ("pos", 64), ("temperature", 32), ("splits", 32)):
         const = _family(kind("const", W=W, BITS=0))
-        w.call(lambda f, c=const: _family(f) == c, f"{W}-bit constant", occ, f"{node}/{member}",
+        w.call(_of(const), f"{W}-bit constant", occ, f"{node}/{member}",
                [{"port": 0, "output": None, "leaves": None}], member=member)
     w.call(lambda f: _family(f) == select, "token select", occ, f"{node}[0]", w.slots([_view((1,), "int32")], 0, False), row=0)
 
@@ -231,10 +246,8 @@ def name_request(raw: Any, net: Any, params: tuple, *, LP: int, T: int, C: int, 
     passes) over `params` (its user inputs, then the weights record), prefill LP rows after a cached prefix of C, then T decodes,
     sampled under `sampling`, then its length rule where `stop` gives one -> (its body in the registered compiler's form, its
     names), or `Unexpressible` (module docstring)."""
-    from verity_vllm.correspondence.runtime import SCHEMA
-    from verity_vllm.program.frontend.stop_rule import NAME as STOP
     from verity_vllm.program.frontend.seed_rule import NAME as SEED
-    from verity_vllm.program.prune import kept_records
+    from verity_vllm.program.frontend.stop_rule import NAME as STOP
     S, Cm = net.specs, net.C
     w = _Walk(list(raw.nodes))
     for M, p0 in [(LP - C, C)] + [(1, LP + s) for s in range(T)]:
@@ -278,9 +291,6 @@ def write_build(out: str, program: Any, named: Named) -> str:
     `named`'s Call and parameter names, its `result.json` (the Program's function, digest and correspondence digest, the
     request's shape, the declared target and `attention_impls_declared`) and its `prefix_cache.json` with a cached prefix ->
     the Program's digest."""
-    from verity.circuits.codec import encode_program, program_digest
-    from verity_vllm.correspondence.runtime import NAMESPACE, correspondence_digest
-    from verity_vllm.pipeline.build_instances import write_instances
     desc = encode_program(program)
     digest = program_digest(desc)
     desc["annotations"] = {"node_hints": {str(k): v for k, v in sorted(named.names.items())}, NAMESPACE: named.correspondence}

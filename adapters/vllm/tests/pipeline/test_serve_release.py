@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import threading
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -37,7 +38,7 @@ def test_no_release_before_the_last_protocols_draw():
     _host, _rc, dev = committed()
     draws = SL.Draws(PROTOCOLS)
     draws._cv = _Waits()
-    got = {}
+    got: dict[str, Any] = {}
     t = threading.Thread(target=lambda: got.update(rec=draws.release(0, dev)))
     t.start()
     draws._cv.entered.acquire()
@@ -181,7 +182,7 @@ def test_the_draws_dir_puts_each_file_once_and_a_bad_one_refuses_its_window_by_n
 def test_a_failed_run_ends_every_waiting_release():
     draws = SL.Draws(PROTOCOLS)
     draws._cv = _Waits()
-    got = {}
+    got: dict[str, Any] = {}
     t = threading.Thread(target=lambda: got.update(e=pytest.raises(SL.Refused, draws.wait, 3)))
     t.start()
     draws._cv.entered.acquire()

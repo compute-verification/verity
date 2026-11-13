@@ -43,6 +43,8 @@ from typing import Any
 
 from verity_vllm.config import workload_file
 
+from . import store_io
+
 HERE = Path(__file__).resolve().parent
 VLLM_ROOT = HERE.parents[1]  # adapters/vllm
 FIXTURES = HERE / "fixtures.toml"
@@ -94,7 +96,8 @@ def oracle() -> str:
 def record_result(row_key: str, check: str, exp: Any, act: Any, problems: list[str]) -> Path | None:
     """When `$VERITY_REGRESSION_RECORD_ACTUAL` names a directory, write the check's result document to `<dir>/<row>/<check>.json`:
     `{expected, actual, problems, matched, engine, oracle}` (canonical JSON) -- the input `rebaseline.py` merges into expected/.
-    Never raises (a recording failure is not a test failure)."""
+    A document that can't be written (the directory, a value JSON can't hold, an unknown oracle) is not recorded and returns None:
+    a recording failure is not a test failure."""
     d = os.environ.get(RECORD_ACTUAL_ENV)
     if not d:
         return None
@@ -105,7 +108,7 @@ def record_result(row_key: str, check: str, exp: Any, act: Any, problems: list[s
                "problems": list(problems), "matched": matched(act, problems), "engine": ENGINE, "oracle": oracle()}
         p.write_text(canonical(doc) + "\n")
         return p
-    except Exception:
+    except (OSError, TypeError, ValueError):
         return None
 
 
@@ -129,6 +132,15 @@ def load_files() -> dict[str, dict[str, Any]]:
                             f"{registered(FILES)}; `research data fetch-fixtures` fetches it (suites.py does before the suite runs)")
     with open(FILES, "rb") as f:
         return {k: v.get("files") or {} for k, v in (tomllib.load(f).get("rows") or {}).items()}
+
+
+def read_json(p: str | os.PathLike[str]) -> Any:
+    """The JSON document in the file `p` (gzip when its name ends `.gz`)."""
+    if str(p).endswith(".gz"):
+        with gzip.open(p, "rt") as f:
+            return json.load(f)
+    with open(p) as f:
+        return json.load(f)
 
 
 def sha256_file(p: Path) -> str:
@@ -180,7 +192,6 @@ class Row:
     def _fetch(self, art: str, label: str) -> Path:
         # the store's trees/ is a cache its eviction may clear under a running suite: a tree that went is fetched again
         if art not in self._fetched or not self._fetched[art].is_dir():
-            from . import store_io
             try:
                 self._fetched[art] = store_io.fetch(art)
             except Exception as e:  # the store not being reachable is a skip, not an error
@@ -208,9 +219,9 @@ class Row:
             if p.is_file():
                 return self._checked(rel, p) if verify else p
         for role in ("records", "programs"):
-            root = self._store_root(role)
-            if root is not None and (root / rel).is_file():
-                p = root / rel
+            store = self._store_root(role)
+            if store is not None and (store / rel).is_file():
+                p = store / rel
                 return self._checked(rel, p) if verify else p
         for root in self._shared_roots():
             if (root / rel).is_file():
@@ -267,12 +278,7 @@ class Row:
             return False
 
     def json(self, rel: str) -> Any:
-        p = self.path(rel)
-        if rel.endswith(".gz"):
-            with gzip.open(p, "rt") as f:
-                return json.load(f)
-        with open(p) as f:
-            return json.load(f)
+        return read_json(self.path(rel))
 
     def jsonl(self, rel: str) -> list[Any]:
         with open(self.path(rel)) as f:
@@ -369,7 +375,6 @@ class Row:
             except (OSError, ValueError):
                 pass
             shutil.rmtree(dest, ignore_errors=True)
-        from . import store_io
         try:
             return store_io.fetch_attempt(mine, dest)
         except Exception as e:  # the store not being reachable is a skip, not an error
@@ -385,10 +390,7 @@ class Row:
 
     def expected(self) -> dict[str, Any]:
         p = self.expected_path()
-        if not p.is_file():
-            return {}
-        with open(p) as f:
-            return json.load(f)
+        return read_json(p) if p.is_file() else {}
 
     def decisions(self, check: str) -> list[dict[str, Any]]:
         """The labelled decisions on this row for `check` (`[[rows.<row>.decisions]]` in fixtures.toml, design rule Draft 3 §7: a
@@ -409,7 +411,6 @@ SCRATCH_ENV = "VERITY_REGRESSION_SCRATCH"
 def scratch(row: Row) -> Path:
     """`$VERITY_REGRESSION_SCRATCH/r19-regress/<row>/<pid>` (default: the system temp dir): rebuilt manifests, their logs, the merged
     Programs view.  One per process: xdist workers rebuilding one row (#57's manifest and its refusal) never share a file."""
-    import tempfile
     p = Path(os.environ.get(SCRATCH_ENV) or tempfile.gettempdir()) / "r19-regress" / row.key / str(os.getpid())
     p.mkdir(parents=True, exist_ok=True)
     return p
@@ -429,7 +430,6 @@ def candidate_attempt_docs() -> list[dict[str, Any]]:
     """The manifests of the candidate attempts, fetched once per process (`store_io.attempt`), plus the chain they cite: an attempt's
     `inputs` name artifacts (`build=art:…`, `match=art:…`) whose manifests carry the publishing attempt in `meta.run_id` -- naming the
     Commit attempt alone resolves the Match and Build attempts behind it.  An unreachable store is NotResolvable."""
-    from . import store_io
     out: list[dict[str, Any]] = []
     queue = list(candidate_attempt_ids())
     seen: set[str] = set()

@@ -5,6 +5,8 @@ script:
   ``PP_PLAIN=1``, is a rate (a stream refuses a fixed design as its rule), and over the stand-in's window, one template's
   stratum of eight proof blocks a rank, its sampling design is the one the window registers under it: half the proof
   blocks for the honest run, every one for the forged run, and a stratified design under ``PP_PLAIN=1``;
+* the rule the script's weights tie arm states to its records audit is the rate of every unit of the tie, which names
+  the tie's own design, work over every one of its units;
 * each partition file (`partitions`: this benchmark's, the one-stage audit's and each one the script names) states a
   rate a stream takes or is listed as still stating a fixed design (`FIXED`), which an audit on a challenger's coins
   (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a served window's audit from its records
@@ -104,6 +106,28 @@ def test_each_rule_the_stand_in_states_is_a_rate_whose_design_its_window_registe
         assert registers == names and table is None, (text, registers, names, table)
         assert names["k"] == (UNITS if forged else UNITS // 2), (text, names)
         assert not plain or names[KEY] == "stratified", (text, names)
+
+
+def test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie():
+    """The weights tie's arm (``PP_WEIGHTS_TIE=1``) hands `records_audit.py audit` its stream's rule as text. The tie
+    registers its own design, work over every one of its N units, and a stream refuses that count as its rule, so the arm
+    states the rate that names it, ``work-rate:N/N`` with N the units its verifier's tie names: a rate a stream takes,
+    whose sampling design over N proof blocks is work with K = N, every unit sampled, at any N. A rate of fewer would name
+    another design than the tie's window registers, and leave units unproved."""
+    arm = RUN_SH.read_text().split('elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then', 1)[1].split("\nelse\n", 1)[0]
+    rules = re.findall(r"records_audit\.py audit [^\n]*--law (\S+)", arm)
+    assert rules == ["work-rate:$units/$units"], (
+        f"{RUN_SH.name}'s weights tie arm no longer states the rate of every unit of the tie to its records audit "
+        f"(`--{KEY} work-rate:$units/$units`): found {rules}; a fixed count is refused by name, and a rate of fewer units "
+        "is not the tie's design")
+    assert rule_of("work:$units".replace("$units", "613"))[1], "a stream takes a fixed count as its rule"
+    for units in (1, UNITS, 613):
+        text = rules[0].replace("$units", str(units))
+        rule, why = rule_of(text)
+        assert rule is not None, (text, why)
+        program, query = population_program([(SRW.template(STANDIN).fn, units)])
+        names = S.selection_law(rule, units, S.selection_sizes(rule, program, query))
+        assert names == {KEY: "work", "k": units}, (text, names)
 
 
 def test_each_partition_file_states_a_rate_or_is_listed_as_still_stating_a_fixed_design():
