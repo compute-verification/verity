@@ -28,8 +28,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import layout as L
-from verity.protocols.poub.verifier import p2
-from verity.protocols.poub.verifier import receipts as R
+from verity.protocols.accounting.poub.verifier import p2
+from verity.protocols.accounting.poub.verifier import receipts as R
 
 PER = p2.UNIT_BLOCKS
 _JOB: dict = {}
