@@ -7,13 +7,15 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from verity_vllm.engine import served_seed
-from verity_vllm.program.frontend import seed_rule as SR
-
-from verity.circuits.defs import bind
+from verity.circuits.defs import Builder, bind
 from verity.circuits.evaluation.bits import evaluate_words
+from verity.circuits.refs import Affine, Coll
 from verity.definitions.registry import boolean_io_shell as BX
 from verity.definitions.registry import io_shell as X
+
+from verity_vllm.engine import served_seed
+from verity_vllm.program.frontend import seed_rule as SR
+from verity_vllm.program.frontend.value_types import type_of_tensor
 
 
 def _col(xs) -> np.ndarray:
@@ -52,13 +54,14 @@ def test_a_forged_seed_fails_the_check():
     window's coin: the seed the rule gives passes, and every other a server might sample under fails: the derived seed with a
     bit flipped, the public default, the seed derived under another coin or for another id, the null field's digit sum, and
     for the seeded body the derived seed and a neighbour of its own."""
-    st, COIN = {"MODEL": "m", "LP": 2, "V": 1000, "RID": 4}, 16
+    LP, COIN = 2, 16
+    st = {"MODEL": "m", "LP": LP, "V": 1000, "RID": 4}
     coin, other = bytes(range(COIN)), bytes(range(1, COIN + 1))
     bodies = [X.sampled_encode("m", [5, 7], 9, 1000, temperature=0.7, top_p=0.9, seed=s, user=u)
               for s, u in ((None, "r001"), (12345, "r002"))]
-    arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(2, -1).astype(np.uint32)
+    arr: np.ndarray = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(2, -1).astype(np.uint32)
     rows = np.asarray(evaluate_words(bind(BX.IngressSampledV1, **st), arr), dtype=np.uint64).reshape(2, -1)
-    at = 1 + st["LP"] + 3
+    at = 1 + LP + 3
     parsed = [(int(r[0]), int(r[at]), int(r[at + 1]), bytes(int(c) for c in r[at + 2:])) for r in rows]
     assert [p[0] for p in parsed] == [1, 1] and [p[1] for p in parsed] == [0, 1] and parsed[1][2] == 12345
     derived = served_seed.derived(coin, "r001")
@@ -106,11 +109,9 @@ def test_the_wrappers_inputs_are_the_programs_parameters_and_the_check_refuses_a
     """The traced request wrapper's example inputs (`inputs`, bool tensors) type as the predicted Program's `params` at the
     policy's RID, every request-local group the workload Program and the batch rule hold its request's own; a row whose ids
     share no length has no RID, and a policy without one and a seed or inputs of other types are refused by name."""
-    from verity.circuits.defs import Builder
-    from verity.circuits.refs import Affine, Coll
     from verity.circuits.types import Array, Value
+
     from verity_vllm.program import workload as W
-    from verity_vllm.program.frontend.value_types import type_of_tensor
     from verity_vllm.program.predict import batch
 
     assert [type_of_tensor(t) for t in SR.inputs({"rid": 36})] == [t for _, t in SR.params(36)]

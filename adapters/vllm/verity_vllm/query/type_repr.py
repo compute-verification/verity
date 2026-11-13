@@ -10,7 +10,10 @@ class TypeReprError(ValueError):
 
 def parse_type_repr(s: str):
     """The `repr` of a `verity.circuits.types.Type` back to a Type: `Value<32>`, `Array<31,Value<32>>`, `(A, B)`, `{name: A, other: B}`."""
-    from verity.circuits.types import Array, RecordType, Tuple as TupleT, Value
+    # inside the function: importing this module does not load the core `verity`
+    from verity.circuits.types import Array, RecordType, Value
+    from verity.circuits.types import Tuple as TupleT
+
     pos = 0
     n = len(s)
 

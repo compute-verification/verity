@@ -10,6 +10,8 @@ Terms are the design's (store, block, tier, registration, receipt, pass, window,
   output are receipts, and none of them is the registry's.
 - `registry`: `NodeMemory`, the reference implementation of both interfaces over any `Backing` (host bytes, or a CUDA
   tensor read back for an opening).  Tests drive it with a fake codec and receipt.
+- `plan`: a pass's plan and its tree as functions of their arguments (the chained seed, canonical runs, the plan's
+  digest, the tree's nodes), which `registry` reads and hands on under their names.
 - `binder`: installs the hooks into a vLLM engine (`verity_vllm.engine.hooks`), all of them undone by `uninstall`.
 - `memory_map`: the store's KV events as memory-map/v1, the prover's record of the blocks each step wrote and freed.
 - `verify`: `verify_opening`, the verifier's side of one opening, the reference the store's openings are tested
