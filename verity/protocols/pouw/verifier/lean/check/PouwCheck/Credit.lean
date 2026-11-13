@@ -4,7 +4,6 @@ public import Std.Data.HashMap
 public import Flock.FV3
 public import Flock.Bytes
 public import Flock.Hash
-public import Flock.JsonParse
 public import Flock.Program
 public import Flock.RegKnown
 public import PouwCommit.Frame
