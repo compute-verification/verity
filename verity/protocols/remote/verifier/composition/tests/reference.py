@@ -71,8 +71,8 @@ def module(name: str, path: Path) -> ModuleType:
     return m
 
 
-#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `decode_params_v2`
-#: and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
+#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `parsed_params_v2`,
+#: `subset_law` and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
 ONE_STAGE = module("one_stage_difftest", ROOT / "verity/protocols/spot/verifier/lean/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "verity/protocols/pouw/verifier/lean/check/tests/pouw_period_cases.py")
@@ -180,8 +180,8 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
 
 def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit and
-    public files' SHA-512s and the verifier's registered file or null, then v1's params (`decode_params_v2`, which
-    refuses them naming no challenger) with a partition object."""
+    public files' SHA-512s and the verifier's registered file or null, then v1's params (`parsed_params_v2`, which
+    refuses them naming no challenger) with a partition object, under a subset law (`subset_law`), its last refusal."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
@@ -191,10 +191,10 @@ def _one_stage_params(rest: dict) -> dict:
             raise Reject(f"proofs: {k} is not a SHA-512 digest (128 lowercase hex)")
     if pr["registered"] is not None and not isinstance(pr["registered"], dict):
         raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
-    p = ONE_STAGE.decode_params_v2(rest)
+    p = ONE_STAGE.parsed_params_v2(rest)
     if p["partition"] is None:
         raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
-    return {**p, "proofs": pr}
+    return {**ONE_STAGE.subset_law(p), "proofs": pr}
 
 
 def _one_stage_evidence(rest: dict) -> dict:
