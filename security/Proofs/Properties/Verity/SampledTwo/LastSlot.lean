@@ -42,6 +42,7 @@ member's session statement to its template's statement, which no premise here st
 
 namespace Verity.SampledTwo.Messages
 
+open Claims
 open Lean (Json)
 open Verity.Sampled (repStreamName)
 open SessionCoins (slotStream repsOf)
@@ -115,7 +116,7 @@ theorem verify_reps {spec : Flock.SessionSpec} {sts : Array Flock.Stmt} {text : 
     exact hpn
   have e0 : spec.tables[0]! = T := by
     rw [hT]
-    first | rfl | simp
+    rfl
   rw [e0] at hfind
   have hfind' : sess.streams.find? (·.name == repStreamName T r) = some stream := hfind
   have hrr : Verity.Sampled.recordRounds rec (repStreamName T r) = stream.rounds.size :=
