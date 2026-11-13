@@ -129145,3 +129145,31 @@ GitHub shows no label on #9576 at 08:04Z [run: `gh pr view 9576`]; #9441, #9520,
 **The cap: your 07:39Z ruling is read.** FIRSTACCEPT's 07:40Z count adds #9594 (63 net lines, 2,124 with all five), so whichever of the five lands last carries the split, on the carried tree.
 
 **Not established.** Whether `ec73` ends before 08:43Z. A records run of `security/Proofs` at a head that holds `Sound.lean`. Everything at the per-member form's accept is still true and empty, and `soundnessAt_form` is in no lock.
+
+## [2026-11-13T08:06Z] ACCEPTS: head `b63b045150` on `cursor/proofs-accepts-7d08` COMPILES WHOLE, no `sorry` in it (`r20261113-075556-965f`: `AcceptsTop.lean` "lean exit 0 in 311 s", "none of its 12 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"); ASSEMBLY: it is yours to take, and it holds TWOLEG's `1874fb25cc` and RUNCOINS's `ad1c6637c1`; `acceptsRun_form` and `reachedAccepts_form` no longer ask `RecordsRead` (statement changes: my 07:59Z entry)
+
+**In plain words.** The file that joins my pieces compiles for the first time, with everything under it, on a tree that holds TWOLEG's form as it reads each record back and RUNCOINS's files over it. Where the two-stage form's check accepts a play, `SpotFlock.V` accepts the run, under ten named premises about the accepted plays. Six premises the run's accept theorem asks are proved here and not asked. The form stays off and nothing here is listed in a lock.
+
+**Compiled** [run], vy-nebius-cpu-10, `r20261113-075556-965f` at `b63b045150` (worktree clean, head pushed before launch), rc 0:
+- "lean-try: security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean: lean exit 0 in 311 s"
+- "lean-try: security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean: axiom probe: none of its 12 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"
+- "siblings: no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.AcceptsTop declares a name it does"
+- The twelve, each printed with "depends on axioms: [propext, Classical.choice, Quot.sound]": `jsonMsg_of_readBack`, `recordsRead`, `checks_of_accepted`, `recordsHeldAt_of`, `recordsAt_of_held`, `playAccepts_form`, `acceptsRun_form`, `reachedAccepts_form`, `caseCommits_at`, `reachedAccepts_at`, `acceptsRun_form_at`, `reachedAccepts_form_at`. The probe follows each theorem through everything it uses, so no `sorry` stands under them in `RecordNames`, `AtStmt`, `Within`, `Fits`, `Reached`, `OfRun`, `Accepts`, `AcceptsProof`, `Cover`, `ReadsOnly`, `RuleTwo` or `JpWalk` either.
+- Built as its dependencies in the same run, no error: all thirteen of my modules, RUNCOINS's `RunsAs` files at `ad1c6637c1` that I import (`Steps` "Built Proofs.Flock.SpotFlock.RunsAs.Steps (20s)", `Statement`, `Statements`, `OfCheck`, `Parsed`, `Round2`, `RoundTwoOf`, `SecondStageOf`, `Released`, `Outcome`, `Proved`, `Top`), HELDOF's `HeldOf`, TWOLEG's `Steps`. RUNCOINS: that is one compile of those files over `1874fb25cc`; it is not a whole try of `RunsAs.lean` (`Coins`, `Played`, `FirstSample` are not under my file).
+- The log's only `sorry` warnings are ArkLib's two. Mine are linter warnings: tactics never run in `AtStmt.lean:84`, `RecordNames.lean:421`, `Within.lean` (five places) and deprecated names in `AcceptsProof.lean` and `ReadsOnly.lean`.
+
+**What the head holds** [read]. The statements are the 07:59Z entry's. `acceptsRun_form` and `reachedAccepts_form` ask `SessionMsgs`, `HeldAt`, `TwoHolds A.h`, `HeldOfAt`, `PortsDistinctAt`, `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`, `PinHeldAt`, `SessionsRun`; `acceptsRun_form_at` and `reachedAccepts_form_at` ask the same of the plays at the statement `x` only (at `atStmt C x`) and conclude at `C`.
+
+**STOP RULE.** Nothing. No listed guarantee's statement, no named assumption and nothing the verifier accepts changed by my hand. In the lock I changed `roots` only (three appended since 05:57Z: `RecordNames`, `JpWalk`, `AtStmt`; `RunChecks` appended and then removed with its file) and `JpWalk`'s `compile_time` entry, whose digest matches the file [run: sha256 at the head].
+
+**NEEDS.**
+- ASSEMBLY: take `b63b045150`. Of my older modules only `Accepts` is a lock root (it came with RUNCOINS's merge); the other nine (`AcceptsProof`, `Cover`, `ReadsOnly`, `Reached`, `OfRun`, `Fits`, `Within`, `AcceptsTop`, `RuleTwo`) are lakefile roots only, and their lock roots are yours to add by the 05:57Z line. `AcceptsTop` imports the other eight, directly or through them.
+- Coordinator: nothing to decide.
+
+**Not established.** That any of the ten premises holds of a real play: none is proved, and four pieces of other workers are what would give them (`HeldAt` and `HeldOfAt`: HELDOF; `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`, `PinHeldAt`: SESSIONOF; `SessionsRun`, `SessionMsgs`: SESSIONCOINS; `PortsDistinctAt`: the keys' refusal, held until you say). That the whole Lean check passes at this head: I ran one file's try, not `check.py`. That the head compiles over TWOLEG's `1e20910586`, which is not named yet and needs one more `-` in two of my patterns.
+
+**Next** [guess]: remove the never-run tactics the linter names (one commit, one try), then wait for TWOLEG's next named head and mend the two patterns.
+
+**Runs.** Ended, rc 0: `965f`. Nothing out.
+
+**Machine** [run]: the VM built nothing; pen `~/wt/.pen` mine since 07:13:21Z; clock 08:06Z.
