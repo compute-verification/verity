@@ -41,7 +41,7 @@ import pytest
 # stage's program
 from test_lean_plain_tree import BIN, FIXTURE as PLAIN, LEAN
 
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 NOT_A_LIST = "a member's line is a JSON array of strings"
 
 #: A command prefix: the command after it runs under the kernel's system-call filter (seccomp), which kills the process, and
