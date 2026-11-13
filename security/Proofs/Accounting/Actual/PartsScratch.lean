@@ -22,7 +22,8 @@ definitions each needs that the tree does not hold. No body is `sorry`.
 * The covered form of (2), where a memory challenger covers its link, two ways. Form (a), `leak_le_sum_K_joined`:
   the challenger is one of the covering set, and adds its record's `K` and a jitter share. Form (b),
   `leak_le_sum_K_sinks` and `leak_le_sum_K_sealed`: the challenger is a sink inside the location, and adds
-  nothing while no declared link joins it to the outside (`Sealed`). At a node: `Site.challengersOf`,
+  nothing while no declared link joins it to the outside (`Sealed`, `not_sealed_of_link`). At a node:
+  `Site.challengersOf`,
   `Site.auditorsOf`, `Site.uncovered`, `Site.uncertified_registered_eq`, `Site.leak_le_sum_K_auditors`,
   `Site.leak_le_sum_K_sinks_registered`.
 * The runs: `onsite_node0_covered` (the example site), `oneNode_charged` and `twoNodes_charged` (two hosts with a
@@ -409,6 +410,18 @@ through a certifier. It is `Covered` at the sinks, with the certifiers and `X` a
 declared links, which names no behaviour of a sink. -/
 def Sealed [DecidableEq L] (ends : E → L × L) (β : E → ℕ) (cert X sink : Finset L) : Prop :=
   Covered ends β (cert ∪ X) sink
+
+/-- **A sink whose record leaves on a declared link is not sealed**: a link of positive capacity from a sink to a
+place outside the sinks, the certifiers and the location `X` refutes `Sealed`. Where the auditor is such a place and
+a sink's signed record reaches it on a declared link, the sinks are sealed only with the auditor's place among
+them. -/
+theorem not_sealed_of_link [DecidableEq L] (ends : E → L × L) (β : E → ℕ) (cert X sink : Finset L) (e : E)
+    (hx : (ends e).1 ∈ sink ↔ (ends e).2 ∉ sink) (h1 : (ends e).1 ∉ cert ∪ X) (h2 : (ends e).2 ∉ cert ∪ X)
+    (hβ : 0 < β e) : ¬ Sealed ends β cert X sink := by
+  intro h
+  have hle := le_uncertifiedCapacity ends β (cert ∪ X) sink e hx h1 h2
+  rw [show uncertifiedCapacity ends β (cert ∪ X) sink = 0 from h] at hle
+  omega
 
 end Covering
 
