@@ -4,8 +4,8 @@ public import Proofs.Flock.SpotFlock.RunsAs.Outcome
 import all Lean.Data.Json.Basic
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
-import all Spot.Run
-import all Spot.Record
+public import Spot.Run
+public import Spot.Record
 import Proofs.Flock.Claims.Sampling.Select.Code
 
 /-!
@@ -16,6 +16,10 @@ stage over the first stage's proved units, and round 2's statement check with no
 answer names `accept` only where the boundary audit and round 2's attached record both read accepted; round 2's record
 reads accepted only where its check has no code (`codes_of_attach`), and that check at the form's switch has no code
 only where the check with the form allowed has none (`check_true_of_codes`).
+
+Each stage's check of its challenges gave no code on the bytes it read (`Run.coinsCode … = none`, in
+`accepted_steps`), and each stage's registration passed the registration check with no code (`accepted_registered`).
+The walks are public: `run_path` over `Run.run` at either switch, `interiorSteps_ok` over the interior's steps.
 -/
 
 @[expose] public section
@@ -71,22 +75,48 @@ theorem symbol_answer (receipt draw read symbol pub audit : Json) (staged : List
       simp [List.pairwise_cons, Std.compare_eq_iff_eq]
   · simp
 
+/-- A Boolean whose negation is not true is true. -/
+private theorem of_not_not {b : Bool} (h : ¬(!b) = true) : b = true := by
+  cases b
+  · exact absurd rfl h
+  · rfl
+
+/-- Two values `!=` does not tell apart are equal. -/
+private theorem eq_of_not_bne {α : Type} [BEq α] [LawfulBEq α] {a b : α} (h : ¬(a != b) = true) : a = b := by
+  cases hab : a == b
+  · exact absurd (by simp [bne, hab]) h
+  · exact eq_of_beq hab
+
+/-- An option that is no `some` is `none`. -/
+private theorem none_of_forall {α : Type} {o : Option α} (h : ∀ c, o = some c → False) : o = none := by
+  cases o with
+  | none => rfl
+  | some c => exact (h c rfl).elim
+
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 8000000 in
-/-- **A run's answer**: refused at a step, or past every step, its first stage on the challenger's bytes, its second
-stage over the first stage's proved units, round 2's audit, and the answer naming `accept` where both audits read
-accepted. -/
-private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
+/-- **A run's answer**, at either switch: refused at a step, or past every step: the boundary registration passed the
+registration check under the law the rule gives its population and the work table the rule expands, the first stage
+ran with no closure map on the challenger's bytes and the check of them gave no code on the bytes it read, the second
+stage ran over the first stage's proved units, then the second stage's audit, and the answer names `accept` where
+both audits read accepted. -/
+theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
-    ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (draw : Json) (rest : Array ℕ) (read : ℕ),
+    ∃ (n : ℕ) (rule : Spot.Select.Rule) (law : Json) (workTable : Option Json) (resolved : Spot.Select.Rule)
+        (draw : Json) (rest : Array ℕ) (read : ℕ),
+      Spot.nat? (Spot.getD i.record "population") = some n ∧
+      i.rule.over n (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
+      rule.lawOver n = .ok law ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
         .ok workTable ∧
+      ¬(!(Spot.Registration.check i.record { i.params.verifier with law, workTable }).isEmpty) = true ∧
       ¬i.closure.isSome = true ∧
       Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
       Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
         .ok (draw, rest, read) ∧
-      ¬(!Spot.Run.coinsHold i.coins i.record i.params.verifier.windowRoot (i.source.extract 0 read)) = true ∧
+      (∀ code, Spot.Run.coinsCode i.key i.main i.coins i.record i.params.verifier.windowRoot i.family
+        (i.source.extract 0 read) = some code → False) ∧
       ∃ (inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)) (acc₂ : Bool)
         (staged : List (String × Json)) (receipt : Json) (sym : String) (pub audit : Json),
         Spot.Run.secondStage i ((Spot.Draw.proved draw).map Int.toNat) = .ok (.ok inner) ∧
@@ -102,13 +132,15 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
     | focus (cases h; done)
     | (obtain ⟨_, h⟩ | ⟨_, h⟩ := Spot.Run.ite_eq_ok h; exact Or.inl ⟨_, _, h.symm⟩)
     | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
-    | exact Or.inr ⟨_, _, _, _, _, by assumption, by assumption, by assumption, by assumption, by assumption,
+    | exact Or.inr ⟨_, _, _, _, _, _, _, _, by assumption, by assumption, by assumption, by assumption,
+        by assumption, by assumption, by assumption, by assumption, by assumption,
         _, _, _, _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm, fun _ => ⟨_, by assumption⟩⟩
-    | exact Or.inr ⟨_, _, _, _, _, by assumption, by assumption, by assumption, by assumption, by assumption,
+    | exact Or.inr ⟨_, _, _, _, _, _, _, _, by assumption, by assumption, by assumption, by assumption,
+        by assumption, by assumption, by assumption, by assumption, by assumption,
         _, _, _, _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm, fun hs => by simp at hs⟩
 
 /-- **The second stage under a two-stage rule with an interior** is the interior's steps. -/
-private theorem secondStage_two {i : Spot.Run.Input} {sample : Array ℕ} {grain : Json} {replay : String}
+theorem secondStage_two {i : Spot.Run.Input} {sample : Array ℕ} {grain : Json} {replay : String}
     {k : Spot.Select.Counts} {it : Spot.Run.Interior} {inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)}
     (hr : i.rule = .twoStage grain replay k) (hi : i.interior = some it)
     (h : Spot.Run.secondStage i sample = .ok (.ok inner)) :
@@ -127,22 +159,29 @@ private theorem secondStage_two {i : Spot.Run.Input} {sample : Array ℕ} {grain
 
 set_option maxHeartbeats 4000000 in
 /-- **The interior's steps, accepted**: the interior is the run's, its cells and counts are the replay block's and the
-rule's, its second stage is `selectSecond` on its bytes over the replay sample, and its coins hold. -/
-private theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot.Select.Counts}
+rule's, its record states the population the replay sample gives those cells and passed the registration check under
+the subset law at that population, its second stage is `selectSecond` on its bytes over the replay sample, and the
+check of its challenges gave no code on the bytes it read. -/
+theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot.Select.Counts}
     {sample : Array ℕ} {x : Spot.Run.Interior × Json × Json × Json × ℕ}
     (h : Spot.Run.interiorSteps i it k sample = .ok (.ok x)) :
     x.1 = it ∧ ∃ ns ids ks, Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
       Spot.Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
+      ¬(Spot.nat? (Spot.getD it.record "population") != some (sample.size * ns.toList.sum)) = true ∧
+      ¬(!(Spot.Registration.check it.record { it.params.verifier with
+        law := Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson (sample.size * ns.toList.sum))] }).isEmpty) =
+          true ∧
       Spot.Select.selectSecond sample ns ks it.source = .ok (x.2.2.1, x.2.2.2.2) ∧
-      ¬(!Spot.Run.coinsHold it.coins it.record it.params.verifier.windowRoot
-        (it.source.extract 0 x.2.2.2.2)) = true := by
+      (∀ code, Spot.Run.coinsCode i.key i.main it.coins it.record it.params.verifier.windowRoot it.family
+        (it.source.extract 0 x.2.2.2.2) = some code → False) := by
   unfold Spot.Run.interiorSteps at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat'
     first
     | split at h
     | focus (cases h; done)
-    | (cases h; exact ⟨rfl, _, _, _, by assumption, by assumption, by assumption, by assumption, by assumption⟩)
+    | (cases h; exact ⟨rfl, _, _, _, by assumption, by assumption, by assumption, by assumption, by assumption,
+        by assumption, by assumption⟩)
 
 /-- **Round 2's audit of an interior**: the run's `Own` (`runOwn`) at the interior's strata, the audit record of the
 second stage's draw, the answer whether round 2's attached record reads accepted, and one staged entry. -/
@@ -189,10 +228,11 @@ private theorem audit_wf {i : Spot.Run.Input} {record receipt draw law : Json} {
   exact record_wf h
 
 /-- **Part 5: the steps of an accepted two-stage run.** Its first stage ran with no closure map on the challenger's
-bytes under `Select.resolve`'s rule and the work table `Rule.tableOver` expands, with coins that hold; its second stage
-ran on the interior's bytes over the units the first stage proves, at the replay block's cells and the rule's counts,
-with coins that hold; and round 2's statement check with the form allowed reports no code at the `Own` the run builds
-(`runOwn`). -/
+bytes under `Select.resolve`'s rule and the work table `Rule.tableOver` expands, and the run's check of them gave no
+code on the bytes it read (`Run.coinsCode`, under the run's key, its copy of main's history and its family); its second
+stage ran on the interior's bytes over the units the first stage proves, at the replay block's cells and the rule's
+counts, and the same check gave no code on the bytes it read, under the same key and the interior's family; and
+round 2's statement check with the form allowed reports no code at the `Own` the run builds (`runOwn`). -/
 theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
     i.closure = none ∧
     ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (draw : Json) (rest : Array ℕ) (read : ℕ),
@@ -201,25 +241,27 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
       Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
       Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
         .ok (draw, rest, read) ∧
-      ¬(!Spot.Run.coinsHold i.coins i.record i.params.verifier.windowRoot (i.source.extract 0 read)) = true ∧
-      ∃ (grain : Json) (replay : String) (k : Spot.Select.Counts) (ns : Array ℕ) (ids : Array String) (ks : Array ℕ) (draw₂ : Json) (read₂ : ℕ)
-        (strata : Array (String × Array (ℕ × ℕ))),
+      Spot.Run.coinsCode i.key i.main i.coins i.record i.params.verifier.windowRoot i.family
+        (i.source.extract 0 read) = none ∧
+      ∃ (grain : Json) (replay : String) (k : Spot.Select.Counts) (ns : Array ℕ) (ids : Array String) (ks : Array ℕ)
+        (draw₂ : Json) (read₂ : ℕ) (strata : Array (String × Array (ℕ × ℕ))),
         i.rule = .twoStage grain replay k ∧
         Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
         Spot.Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
         Spot.Select.selectSecond ((Spot.Draw.proved draw).map Int.toNat) ns ks it.source = .ok (draw₂, read₂) ∧
-        ¬(!Spot.Run.coinsHold it.coins it.record it.params.verifier.windowRoot (it.source.extract 0 read₂)) = true ∧
+        Spot.Run.coinsCode i.key i.main it.coins it.record it.params.verifier.windowRoot it.family
+          (it.source.extract 0 read₂) = none ∧
         Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
         (Spot.SecondStage.check true (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)
           it.statements).codes = #[] := by
   obtain ⟨grain, replay, k, hr⟩ := ha.two
-  rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨workTable, resolved, draw, rest, read, ht, hc, hres, hsel, hcoins,
-      inner, acc₂, staged, receipt, sym, pub, audit, hsec, hia, hj, himp⟩
+  rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨_, _, _, workTable, resolved, draw, rest, read, -, -, -, ht,
+      -, hc, hres, hsel, hcoins, inner, acc₂, staged, receipt, sym, pub, audit, hsec, hia, hj, himp⟩
   · have hs := ha.accept
     rw [hj, symbol_refused] at hs
     cases hs
   · obtain ⟨x, hx, rfl⟩ := secondStage_two hr ha.interior hsec
-    obtain ⟨hx1, ns, ids, ks, hns, hids, hks, hss, hcoins₂⟩ := interiorSteps_ok hx
+    obtain ⟨hx1, ns, ids, ks, hns, hids, hks, -, -, hss, hcoins₂⟩ := interiorSteps_ok hx
     obtain ⟨it', receipt₂, draw₂, law₂, read₂⟩ := x
     simp only at hx1
     subst hx1
@@ -230,8 +272,69 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
     have hacc₂ : acc₂ = true := (Bool.and_eq_true_iff.1 hboth).2
     obtain ⟨m, hm, hwf⟩ := audit_wf haud
     rw [hacc₂, hm] at hacc
-    refine ⟨Option.not_isSome_iff_eq_none.1 hc, workTable, resolved, draw, rest, read, ht, hres, hsel, hcoins,
-      grain, replay, k, ns, ids, ks, draw₂, read₂, strata, hr, hns, hids, hks, hss, hcoins₂, hstrata, ?_⟩
+    refine ⟨Option.not_isSome_iff_eq_none.1 hc, workTable, resolved, draw, rest, read, ht, hres, hsel,
+      none_of_forall hcoins, grain, replay, k, ns, ids, ks, draw₂, read₂, strata, hr, hns, hids, hks, hss,
+      none_of_forall hcoins₂, hstrata, ?_⟩
     exact check_true_of_codes (codes_of_attach hwf hacc.symm)
+
+/-- **The registrations an accepted two-stage run checked.** Its boundary record passed the registration check with
+no code, under the run's parameters with the law the rule gives the record's population and the work table the rule
+expands; and its interior record states the population the first stage's proved units give the replay block's cells,
+and passed the registration check with no code under the interior's parameters with the subset law at that
+population. The first stage's sample is `accepted_steps`'s: `Rule.tableOver`, `Select.resolve` and `Select.select` are
+functions of the run's input. -/
+theorem accepted_registered {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
+    ∃ (n : ℕ) (rule : Spot.Select.Rule) (law : Json) (workTable : Option Json) (resolved : Spot.Select.Rule)
+        (draw : Json) (rest : Array ℕ) (read : ℕ) (ns : Array ℕ),
+      Spot.nat? (Spot.getD i.record "population") = some n ∧
+      i.rule.over n (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
+      rule.lawOver n = .ok law ∧
+      i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
+        .ok workTable ∧
+      (Spot.Registration.check i.record { i.params.verifier with law, workTable }).isEmpty = true ∧
+      Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
+      Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
+        .ok (draw, rest, read) ∧
+      Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
+      Spot.nat? (Spot.getD it.record "population") =
+        some (((Spot.Draw.proved draw).map Int.toNat).size * ns.toList.sum) ∧
+      (Spot.Registration.check it.record { it.params.verifier with
+        law := Json.mkObj [("law", Json.str "subset"),
+          ("k", Lean.toJson (((Spot.Draw.proved draw).map Int.toNat).size * ns.toList.sum))] }).isEmpty = true := by
+  obtain ⟨grain, replay, k, hr⟩ := ha.two
+  rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, law, workTable, resolved, draw, rest, read, hn, hrule,
+      hlaw, ht, hchk, -, hres, hsel, -, inner, acc₂, staged, receipt, sym, pub, audit, hsec, -, -, -⟩
+  · have hs := ha.accept
+    rw [hj, symbol_refused] at hs
+    cases hs
+  · obtain ⟨x, hx, rfl⟩ := secondStage_two hr ha.interior hsec
+    obtain ⟨-, ns, ids, ks, hns, -, -, hpop, hchk₂, -, -⟩ := interiorSteps_ok hx
+    exact ⟨n, rule, law, workTable, resolved, draw, rest, read, ns, hn, hrule, hlaw, ht, of_not_not hchk, hres, hsel,
+      hns, eq_of_not_bne hpop, of_not_not hchk₂⟩
+
+/-- **The answer's `draw` is the first stage's**: an accepted two-stage run's answer lists under `draw` the draw object
+its first stage's select returned, under `Select.resolve`'s rule and the work table `Rule.tableOver` expands. -/
+theorem answer_draw {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
+    ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (rest : Array ℕ) (read : ℕ),
+      i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
+        .ok workTable ∧
+      Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
+      Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
+        .ok (Spot.getD j "draw", rest, read) := by
+  obtain ⟨grain, replay, k, hr⟩ := ha.two
+  rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨_, _, _, workTable, resolved, draw, rest, read, -, -, -, ht,
+      -, -, hres, hsel, -, inner, acc₂, staged, receipt, sym, pub, audit, hsec, hia, hj, -⟩
+  · have hs := ha.accept
+    rw [hj, symbol_refused] at hs
+    cases hs
+  · obtain ⟨x, -, rfl⟩ := secondStage_two hr ha.interior hsec
+    obtain ⟨it', receipt₂, draw₂, law₂, read₂⟩ := x
+    obtain ⟨⟨e, he⟩, -⟩ := interiorAudit_some hia
+    have hd : Spot.getD j "draw" = draw := by
+      rw [hj, he]
+      apply getD_mkObj_mem
+      · simp [List.pairwise_cons, Std.compare_eq_iff_eq]
+      · simp
+    exact ⟨workTable, resolved, rest, read, ht, hres, by rw [hd]; exact hsel⟩
 
 end SpotFlock.RunsAs

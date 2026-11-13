@@ -126,7 +126,7 @@ structure AgreesTo (ξ ξ' : ByteArray) (R : ℕ) : Prop where
 /-- **The play's coins carry the bytes the run's samples read**: where the first stage, on the bytes the run holds
 (`i.source`), reads `read` bytes, round 0's coin's bytes start with those `read` bytes; and where the second stage, on
 the interior's bytes (`it.source`), reads `read` bytes, the second stage's coins' bytes, coin by coin, start with
-those. These are the bytes `Run.coinsHold` holds to the challenger's released coins; a sample reads no other byte
+those. These are the bytes `Run.coinsCode` holds to the challenger's released coins; a sample reads no other byte
 (`select_read`, `selectSecond_read`), and nothing about the rest of a coin is assumed. `RunCoinsFromDevice` says the
 bytes read are the device's coins released after the boundary record's digest and after the interior record's, or a
 break. -/
@@ -140,58 +140,38 @@ def PlayCoins (h : Held) (i : Spot.Run.Input) (it : Spot.Run.Interior) (c₀ : F
 /-- **`b` is the start of `ξ`.** -/
 def Starts (b ξ : ByteArray) : Prop := b.size ≤ ξ.size ∧ ξ.extract 0 b.size = b
 
-/-- **The evidence `drawCoins` reads of a stage's coin evidence**: the evidence without the key it carries. -/
-def drawEvidence : Json → Json
-  | .obj kvs => .obj (kvs.erase "key")
-  | j => j
-
-/-- **The evidence's key is the parameters' key `key`**: the key `Challenger.coinsReason` reads from the evidence
-(`coins`'s `key`) decodes to `key`. A named hypothesis: the base's coin check takes the key from the evidence; where it
-takes the verifier's key, the two are one. -/
-def EvidenceKeyIs (key : Spot.Challenger.ChallengerKey) (coins : Json) : Prop :=
-  Spot.Challenger.ChallengerKey.ofJson (Spot.getD coins "key") = .ok key
-
-/-- **The run's coin check reads the challenger's draw under the parameters' key `key`**: where the evidence's key is
-`key` (`EvidenceKeyIs`) and `coinsReason` finds no reason against the evidence `coins` for the window `w` and the bytes
-`read` released after `after`, `drawCoins` under `key` reads, from the evidence without its key, coins of some family
-that `read` starts. The family is `∃ label` because the base's `coinsReason` lets the evidence name it;
-where `coinsReason` takes each stage's family as an argument, it is that stage's own. It is stated at one key for the
-run; under `--challenger local` today's driver makes a second key and ledger for the second stage, where the
-statement at one key does not describe the run. -/
-def CheckReadsDraw (key : Spot.Challenger.ChallengerKey) : Prop :=
-  ∀ (coins : Json) (w : String) (after read : ByteArray), EvidenceKeyIs key coins →
-    Spot.Challenger.coinsReason coins w after read = none →
-    ∃ label ξ, Spot.Challenger.drawCoins key w label after (drawEvidence coins) = .ok ξ ∧ Starts read ξ
-
-/-- **A stage's bytes are the device's coins, or a break**: `read` starts the coins of some family (`∃ label`, the
-base's reading, as at `CheckReadsDraw`) that a run of the
-device `dev` under `key`, one its own ledger opens on the window `w`, released after `after`; or the model's finder
-outputs a break from the evidence (`Properties.Challenger.Break`: a forgery under the key, or a SHA-512 collision
-among what the reader and the device hash). -/
-def FromDevice (dev : Properties.Challenger.History) (key : Spot.Challenger.ChallengerKey) (w : String)
+/-- **A stage's bytes are the device's challenges, or a break**: `read` starts the challenges of the family `label` that
+a run of the device `dev` under the verifier's key `key`, one its own ledger opens on the window `w`, released after
+`after`; or the model's finder outputs a break from the evidence `coins` (`Properties.Challenger.Break`: a forgery
+under the key, or a SHA-512 collision among what the reader and the device hash). -/
+def FromDevice (dev : Properties.Challenger.History) (key : Spot.Challenger.ChallengerKey) (w label : String)
     (after : ByteArray) (coins : Json) (read : ByteArray) : Prop :=
-  ∃ label, (∃ s ∈ dev.runs key.pub, Properties.Challenger.OpensOn dev key.pub w s.id ∧
+  (∃ s ∈ dev.runs key.pub, Properties.Challenger.OpensOn dev key.pub w s.id ∧
       Starts read (s.released label after)) ∨
-    Properties.Challenger.Break dev key label (drawEvidence coins)
+    Properties.Challenger.Break dev key label coins
 
-/-- **The run's coins come from the device, in the order the two-stage guarantee assumes**: at an accepted two-stage
-run, where the coin check reads the challenger's draw under the verifier's key (`CheckReadsDraw`), the bytes the first
-stage read are the device's coins released after the boundary record's digest, and those the second stage read the
-device's coins released after the interior record's digest, each on the window its verifier holds; or a break. Each
-stage's evidence carries the parameters' key (`EvidenceKeyIs`). A stage
-that read no byte carries no evidence. The sessions' coins are not read by `Run.run`. Both stages are under the one
-key `key`; today's driver under `--challenger local` uses a second key for the second stage. -/
-def RunCoinsFromDevice (key : Spot.Challenger.ChallengerKey) : Prop :=
+/-- **The run's challenges come from the device, in the order the two-stage guarantee assumes**: at an accepted
+two-stage run, the bytes the first stage read are the device's challenges of the run's family (`Input.family`) released
+after the boundary record's digest, and those the second stage read the device's challenges of the interior's family
+(`Interior.family`) released after the interior record's digest, each on the window its verifier holds and under the
+run's one key (`Input.key`); or a break. The key, the window and the family are the verifier's own: the run's check
+of its challenges (`Run.coinsCode`) refuses a stage that read a byte where it holds none of them, and no evidence names
+them. A stage that read no byte carries no evidence. The sessions' challenges are not read by `Run.run`. -/
+def RunCoinsFromDevice : Prop :=
   ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (dev : Properties.Challenger.History),
-    AcceptedTwo i it j → CheckReadsDraw key → EvidenceKeyIs key i.coins → EvidenceKeyIs key it.coins →
+    AcceptedTwo i it j →
     ∃ (read₁ read₂ : ℕ),
       (∃ resolved workTable draw rest, Spot.Select.select resolved i.params.verifier.program
         i.params.verifier.query workTable i.closure i.source = .ok (draw, rest, read₁)) ∧
       (∃ sample ns ks draw, Spot.Select.selectSecond sample ns ks it.source = .ok (draw, read₂)) ∧
-      (0 < (i.source.extract 0 read₁).size → ∃ w d, i.params.verifier.windowRoot = some w ∧
-        Spot.Registration.digest i.record = .ok d ∧ FromDevice dev key w d i.coins (i.source.extract 0 read₁)) ∧
-      (0 < (it.source.extract 0 read₂).size → ∃ w d, it.params.verifier.windowRoot = some w ∧
-        Spot.Registration.digest it.record = .ok d ∧ FromDevice dev key w d it.coins (it.source.extract 0 read₂))
+      (0 < (i.source.extract 0 read₁).size → ∃ key w label d, i.key = some key ∧
+        i.params.verifier.windowRoot = some w ∧ i.family = some label ∧
+        Spot.Registration.digest i.record = .ok d ∧
+        FromDevice dev key w label d i.coins (i.source.extract 0 read₁)) ∧
+      (0 < (it.source.extract 0 read₂).size → ∃ key w label d, i.key = some key ∧
+        it.params.verifier.windowRoot = some w ∧ it.family = some label ∧
+        Spot.Registration.digest it.record = .ok d ∧
+        FromDevice dev key w label d it.coins (it.source.extract 0 read₂))
 
 /-! ## The top statement -/
 

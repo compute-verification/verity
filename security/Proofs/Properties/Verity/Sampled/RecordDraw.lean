@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Assembled
 public import Proofs.Flock.Claims.JsonNorm
-public import Proofs.Properties.Challenger.CanonRead
+public import Proofs.Properties.Challenger.CanonWf
 public import Proofs.Properties.Challenger.Coins
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
@@ -764,28 +764,6 @@ theorem drawOf_filter {n : ℕ} {units : Array ℕ} (h : unitsAscending n units 
     (List.toFinset_sort (· ≤ ·) (hs.imp ne_of_lt)).2 (hs.imp le_of_lt)
   simp only [FlockSoundness.Discharge.ZkLink.drawOf, himg, hsort, Array.toArray_toList]
 
-open Properties.Challenger.CanonRead (sortedKeys_arr sortedKeys_obj increasing_iff) in
-/-- **A well-formed value's objects hold their keys in order.** -/
-theorem sortedKeys_of_wf : ∀ j : Json, Claims.Json.Wf j → _root_.Spot.sortedKeys j = true := by
-  refine FlockDeploy.json_ind (fun _ => by simp [_root_.Spot.sortedKeys])
-    (fun _ _ => by simp [_root_.Spot.sortedKeys]) (fun _ _ => by simp [_root_.Spot.sortedKeys])
-    (fun _ _ => by simp [_root_.Spot.sortedKeys]) ?_ ?_
-  · intro a ih hw
-    cases hw with
-    | arr h => exact sortedKeys_arr.2 fun x hx => ih x hx (h x hx)
-  · intro m ih hw
-    cases hw with
-    | obj hm h =>
-      refine sortedKeys_obj.2 ⟨?_, fun p hp => ?_⟩
-      · rw [Std.TreeMap.Raw.toList_toArray, increasing_iff, List.pairwise_map]
-        exact (Std.TreeMap.Raw.ordered_keys_toList hm).imp fun hlt => compareOfLessAndEq_eq_lt.1 hlt
-      · have hp' : p ∈ m.toList := by
-          rw [← Std.TreeMap.Raw.toList_toArray]
-          exact Array.mem_toList_iff.2 hp
-        refine ih p hp' (h p.1 p.2 ?_)
-        rw [Std.TreeMap.Raw.get?_eq_getElem?]
-        exact (Std.TreeMap.Raw.mem_toList_iff_getElem?_eq_some hm).1 hp'
-
 /-! ## `norm` fixes a subset sample's file -/
 
 theorem norm_arr_of {a : Array Json} (h : ∀ x ∈ a, Flock.norm x = x) : Flock.norm (.arr a) = .arr a := by
@@ -845,7 +823,7 @@ theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.Spot.One
     Properties.Challenger.Limits.withinAt_spec (Properties.Challenger.Limits.evidenceOf_within hb')
   obtain ⟨raw, hraw, rfl⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   obtain ⟨cm, roots, -, hstream⟩ := drawCoins_ok hraw
-  obtain ⟨l, start, openings, os, -, -, hop, -, -, hr⟩ := Properties.Challenger.Coins.stream_ok hstream
+  obtain ⟨l, start, openings, os, -, -, hop, -, -, hr, -⟩ := Properties.Challenger.Coins.stream_ok hstream
   rw [challengerStream_ok hstream, ← zipIdx_filter_length, hr, List.length_range']
   rw [hop] at hops
   exact Nat.mul_le_mul (le_refl _) hops

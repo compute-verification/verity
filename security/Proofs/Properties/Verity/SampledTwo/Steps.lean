@@ -11,11 +11,17 @@ accepts at the switch `form` (`accepted_steps`):
 * the switch is on;
 * the run of record's input is `inputAt`'s (`inputAt_ok`): the interior registration's commitment is its record's, its
   sample read the bytes `ξ₂` (`OneStageZk.coinsOf`), every session `OneStageZk.membersRun` ran accepted (`r.all`), and
-  the input is `inputOf` at those sessions' verdicts stamped (`stamped`);
+  the input is `inputOf` at those sessions' verdicts stamped (`stamped`), each registration's record the one the
+  verifier's parser reads from its canonical text (`readBack`, read by `readBack_ok`), the boundary's with the
+  commitment's digest (`digestIs`, read by `digestIs_ok`);
+* neither stage's bytes run past one coin's (`stagesFit`, read as `ξ.size ≤ STAGE_BYTES` and `ξ₂.size ≤ STAGE_BYTES`
+  by `accepted_fits`);
 * `Spot.Run.run`, at the switch on, returned a run of record whose symbol is `accept`, and the first stage's bytes `ξ`
   run no further than what it read (`sourceRead`, read as `ξ.size ≤ read` by `sourceRead_le`), and on two windows the
   first session's log shows no second-stage coin after the interior's digest (`interiorUnshown`, read by
-  `interiorUnshown_roots`);
+  `interiorUnshown_roots`), and the stages' sessions are in order on one ledger (`stagesOrdered`, by
+  `accepted_ordered`, read by `orderReason_none` and `Ordered.stagesOrdered_order`), and on two windows no line of the
+  first session's log is a coin tree's (`firstTreeless`, by `accepted_treeless`, read by `firstTreeless_lines`);
 * the interior audit's verdict at its coins, over the sessions' verdicts, is the accept, with the check's public
   outputs and profile.
 
@@ -47,14 +53,48 @@ theorem finishWith_accept {form : Bool} {two : Core.Outcome OneStage.Public Core
   | accept pub' prof' =>
     cases hj : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") <;> cases form <;> simp_all
 
-/-- **What `inputAt` computed** where it returned. -/
+/-- **What `readBack` returned** is the value the verifier's parser reads from the record's canonical text, and it
+prints back to that text. -/
+theorem readBack_ok {record j : Json} (h : readBack record = .ok j) :
+    ∃ s, Flock.canon record = .ok s ∧ Flock.JsonParse.parse s = .ok j ∧ Flock.canon j = .ok s := by
+  unfold readBack at h
+  obtain ⟨s, hs, h⟩ := bind_ok h
+  obtain ⟨j', hj, h⟩ := bind_ok h
+  obtain ⟨s', hs', h⟩ := bind_ok h
+  cases hc : (s' == s)
+  · rw [hc] at h
+    cases h
+  · rw [hc] at h
+    simp only [↓reduceIte, pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    have hss : s' = s := by simpa using hc
+    rw [hss] at hs'
+    exact ⟨s, hs, hj, hs'⟩
+
+/-- **What `digestIs` passed**: the record's digest is the one named. -/
+theorem digestIs_ok {j : Json} {d : ByteArray} (h : digestIs j d = .ok ()) : Registration.digest j = .ok d := by
+  unfold digestIs at h
+  obtain ⟨d', hd, h⟩ := bind_ok h
+  split at h
+  · rename_i heq
+    rw [hd, heq]
+  · first
+      | (cases h; done)
+      | (simp only [throw, throwThe, MonadExceptOf.throw] at h
+         cases h)
+      | (simp at h; done)
+
+/-- **What `inputAt` computed** where it returned: the run of record's input is `inputOf` at each registration's
+record as `readBack` returned it, and the boundary's so returned has the commitment's digest (`digestIs`). -/
 theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input}
     (h : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) :
     (∃ s, Flock.canon e.record = .ok s ∧ OneStage.commitmentOf s.toUTF8 = .ok c₂) ∧
       OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂ ∧
       OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements bs = .ok r ∧ r.all = true ∧
-      ∃ vs received₂, stamped p e bs r.out = .ok vs ∧ i = inputOf p c ξ ξ₂ e received₂ vs := by
+      ∃ vs received₂ j₁ j₂, stamped p e bs r.out = .ok vs ∧
+        i = inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs ∧
+        readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂ ∧ Registration.digest j₁ = .ok c.digest := by
   unfold inputAt at h
   obtain ⟨s, h1, h⟩ := bind_ok h
   obtain ⟨c₂', h2, h⟩ := bind_ok h
@@ -66,9 +106,13 @@ theorem inputAt_ok {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : 
   · simp only [h5, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
     obtain ⟨vs, h6, h⟩ := bind_ok h
     split at h
-    · simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    · obtain ⟨j₁, hj₁, h⟩ := bind_ok h
+      obtain ⟨u, hd, h⟩ := bind_ok h
+      cases u
+      obtain ⟨j₂, hj₂, h⟩ := bind_ok h
+      simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, rfl, rfl, rfl⟩ := h
-      exact ⟨⟨s, h1, h2⟩, h3, h4, h5, vs, _, h6, rfl⟩
+      exact ⟨⟨s, h1, h2⟩, h3, h4, h5, vs, _, j₁, j₂, h6, rfl, hj₁, hj₂, digestIs_ok hd⟩
     · cases h
 
 /-- **An accepted two-stage check ran every step** (module docstring). -/
@@ -78,7 +122,9 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     form = true ∧ ∃ c₂ ξ₂ r i run, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok run ∧
       sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧
       Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
-      OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out } = .accept pub prof := by
+      ∃ law, secondLawOf p run = .ok law ∧
+        secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out } =
+          .accept pub prof := by
   unfold checkBlobsAtWith at h
   cases hp : prepare form p c ξ e bs with
   | error err => simp [hp] at h
@@ -89,12 +135,116 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     subst hf
     unfold prepare at hp
     obtain ⟨⟨c₂, ξ₂, r, i⟩, hi, hp⟩ := bind_ok hp
+    obtain ⟨u₀, -, hp⟩ := bind_ok hp
     obtain ⟨run', hr, hp⟩ := bind_ok hp
     obtain ⟨u, hs, hp⟩ := bind_ok hp
     obtain ⟨u', hu, hp⟩ := bind_ok hp
+    obtain ⟨u'', -, hp⟩ := bind_ok hp
+    obtain ⟨u₃, -, hp⟩ := bind_ok hp
+    obtain ⟨law, hl, hp⟩ := bind_ok hp
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
     obtain ⟨rfl, rfl⟩ := hp
-    exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, htwo⟩
+    exact ⟨rfl, c₂, ξ₂, r, i, run', hi, hr, hs, hu, hj, law, hl, htwo⟩
+
+/-- **An accepted two-stage check found the stages' sessions in order** (`stagesOrdered`). -/
+theorem accepted_ordered {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : stagesOrdered p e = .ok () := by
+  unfold checkBlobsAtWith at h
+  cases hp : prepare form p c ξ e bs with
+  | error err => simp [hp] at h
+  | ok v =>
+    unfold prepare at hp
+    obtain ⟨⟨_, _, _, _⟩, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨u, ho, -⟩ := bind_ok hp
+    cases u
+    exact ho
+
+/-- **An accepted two-stage check found no coin tree's line in the first session's log** (`firstTreeless`). -/
+theorem accepted_treeless {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : firstTreeless p e = .ok () := by
+  unfold checkBlobsAtWith at h
+  cases hp : prepare form p c ξ e bs with
+  | error err => simp [hp] at h
+  | ok v =>
+    unfold prepare at hp
+    obtain ⟨⟨_, _, _, _⟩, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨_, -, hp⟩ := bind_ok hp
+    obtain ⟨u, ht, -⟩ := bind_ok hp
+    cases u
+    exact ht
+
+/-- **On two windows no line of the first session's log is a coin tree's**: where the check's `firstTreeless` passed,
+the boundary's window is `w₁`, the interior audit's is `w₂` and another, and the first session's log reads as the
+lines `ls` (`firstLines`), no line of `ls` is a coin tree's (`Spot.Challenger.treeLine`). -/
+theorem firstTreeless_lines {p : Params} {e : Evidence} (h : firstTreeless p e = .ok ()) {w₁ w₂ : String}
+    {ls : List String} (h1 : p.boundary.verifier.windowRoot = some w₁)
+    (h2 : p.audit.base.verifier.windowRoot = some w₂) (hne : w₁ ≠ w₂) (hl : firstLines e = .ok ls) :
+    ∀ l ∈ ls, Spot.Challenger.treeLine l = false := by
+  have hb : (some w₁ == p.audit.base.verifier.windowRoot) = false := by
+    rw [h2]
+    simpa using hne
+  unfold firstTreeless at h
+  rw [h1] at h
+  simp only [hb, Bool.false_eq_true, ↓reduceIte, hl, bind, Except.bind] at h
+  intro l hl'
+  cases ht : Spot.Challenger.treeLine l
+  · rfl
+  · have hany : treeShown ls = true := List.any_eq_true.2 ⟨l, hl', ht⟩
+    rw [hany] at h
+    simp at h
+
+/-- **The stages' order holds** where `orderReason` finds no fault: the first stage's session has an end line, the
+second stage's a reserve line, and the end's `seq` is below the reserve's. -/
+theorem orderReason_none {ended reserve : Option Spot.Challenger.LedgerEntry} (h : orderReason ended reserve = none) :
+    ∃ en r, ended = some en ∧ reserve = some r ∧ en.seq < r.seq := by
+  cases ended with
+  | none => simp [orderReason] at h
+  | some en =>
+    cases reserve with
+    | none => simp [orderReason] at h
+    | some r =>
+      by_cases hlt : en.seq < r.seq
+      · exact ⟨en, r, rfl, rfl, hlt⟩
+      · simp [orderReason, hlt] at h
+
+/-- **Neither stage's bytes run past one coin's**, where `stagesFit` passed. -/
+theorem stagesFit_le {ξ ξ₂ : ByteArray} {u : Unit} (h : stagesFit ξ ξ₂ = .ok u) :
+    ξ.size ≤ STAGE_BYTES ∧ ξ₂.size ≤ STAGE_BYTES := by
+  unfold stagesFit at h
+  by_cases h1 : STAGE_BYTES < ξ.size
+  · simp [h1] at h
+  · by_cases h2 : STAGE_BYTES < ξ₂.size
+    · simp [h1, h2] at h
+    · omega
+
+/-- **An accepted two-stage check's stages each read at most one coin's bytes**: the first stage's bytes `ξ` and the
+bytes `ξ₂` the interior audit's sample read (`inputAt`'s) are each at most `STAGE_BYTES` long. -/
+theorem accepted_fits {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) {c₂ : OneStage.Commitment} {ξ₂ : ByteArray}
+    {r : OneStageZk.Run} {i : Spot.Run.Input} (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) :
+    ξ.size ≤ STAGE_BYTES ∧ ξ₂.size ≤ STAGE_BYTES := by
+  unfold checkBlobsAtWith at h
+  cases hp : prepare form p c ξ e bs with
+  | error err => simp [hp] at h
+  | ok v =>
+    unfold prepare at hp
+    obtain ⟨⟨c₂', ξ₂', r', i'⟩, hi', hp⟩ := bind_ok hp
+    obtain ⟨u, hfit, -⟩ := bind_ok hp
+    rw [hi] at hi'
+    simp only [Except.ok.injEq, Prod.mk.injEq] at hi'
+    obtain ⟨-, rfl, -, -⟩ := hi'
+    exact stagesFit_le hfit
 
 /-- **The evidence's first-stage bytes are no more than the run read**, where the run reports what it read and
 `sourceRead` passed. -/
@@ -107,23 +257,23 @@ theorem sourceRead_le {ξ : ByteArray} {run : Json} (h : sourceRead ξ run = .ok
   · omega
 
 /-- **On two windows the first session's log shows no second-stage coin after the interior's digest**: where the
-check's `interiorUnshown` passed, the boundary's window is `w` and not the interior's, the second stage's family is
-`label`, the interior registration's digest is `after` and the first session `e.coins` names on `w` has the roots
-`roots`, those roots show no coin of `label` released after `after`. -/
+check's `interiorUnshown` passed, the interior audit's parameters name the challenger key `k` and the family `label`,
+the boundary's window is `w` and not the interior audit's, the interior registration's digest is `after` and the
+first session `e.coins` names on `w` under `k` has the roots `roots`, those roots show no coin of `label` released
+after `after`. -/
 theorem interiorUnshown_roots {p : Params} {e : Evidence} (h : interiorUnshown p e = .ok ()) {w label : String}
     {after : ByteArray} {k : Spot.Challenger.ChallengerKey} {c : Spot.Challenger.LiveCommitment}
-    {roots : Spot.Challenger.Roots} (hw : p.boundary.verifier.windowRoot = some w)
-    (hne : some w ≠ p.interior.verifier.windowRoot)
-    (hl : Spot.getD (Spot.getD e.interior.base.coins "segment") "label" = .str label)
+    {roots : Spot.Challenger.Roots} (hk : p.audit.base.challenger = some (k, label))
+    (hw : p.boundary.verifier.windowRoot = some w)
+    (hne : some w ≠ p.audit.base.verifier.windowRoot)
     (ha : Spot.Registration.digest e.record = .ok after)
-    (hk : Spot.Challenger.ChallengerKey.ofJson (Spot.getD e.coins "key") = .ok k)
     (ht : Spot.Challenger.trustedSessionOf (Spot.getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
       (Spot.getD e.coins "pins") (Spot.getD e.coins "main") (Spot.getD e.coins "session") = .ok (c, roots)) :
     interiorShown roots label after = false := by
-  have hb : (some w == p.interior.verifier.windowRoot) = false := by simpa using hne
+  have hb : (some w == p.audit.base.verifier.windowRoot) = false := by simpa using hne
   unfold interiorUnshown at h
-  rw [hw, hl] at h
-  simp only [hb, Bool.false_eq_true, ↓reduceIte, ha, hk, ht, bind, Except.bind] at h
+  rw [hk, hw] at h
+  simp only [hb, Bool.false_eq_true, ↓reduceIte, ha, ht, bind, Except.bind] at h
   cases hc : interiorShown roots label after
   · rfl
   · rw [hc] at h
