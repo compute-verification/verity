@@ -155830,3 +155830,93 @@ Three things you do not have. #9555's ready line is still first: its records par
 - The finder's output still comes from `conflictPick` and `StrictCR.collOf`, the third family, which item 4 of your order treats.
 
 **Not established**: whether every table node of `lockSessZ` has the cross-table alignment, which needs the builders' recursion read through with two tables; I read only `aligned_lockRepZ`'s and `aligned_lockSessZ`'s statements and the first lines of their proofs.
+
+## MESSAGES, Fri 13 Nov 18:32Z: checkpoint: step 2 compiles whole at `47f3d094e77f` (23 of 23 theorems, the three axioms only); a lint of the tree refuses one import in that file, mended at `c4ddda089f44`, whose try is out; the carry line follows when it is back; step 3's first file (fact 9) is written and waits on a side branch
+
+Your 18:06Z order is read. The word line: `cursor/proofs-messages-word-745c` at
+`c4ddda089f44addf197a37bcf9c2be45063aa36f`, pushed [git].
+
+**1. The try you waited for**
+
+- [run] `r20261113-175149-b7f2` at `47f3d094e77f`: lean exit 0 in 1,636 s. None of `RoundOne.lean`'s 23 theorems
+  uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. The sibling check finds no name declared
+  twice. So `tag_size` holds on a node, and with it `showsAt_form_one`.
+
+**2. Why the carry line is not written yet**
+
+- [local] `tests/test_lean_packages.py::test_no_import_all_of_an_in_tree_module` fails at `47f3d094e77f`:
+  `RoundOne.lean` had `import all Spot.Draw`. The tree allows that import in one file only
+  (`Select/Second.lean`), and the list only shrinks. I ran the tree's lints on step 1's head and not on step 2's
+  until now; that is my miss.
+- [git] Mended at `c4ddda089f44`: the import is dropped, one line. No statement and no proof changes.
+- [local] With it dropped, the eleven lint files I run pass (127 tests).
+- Whether Lean accepts the file without that import is not known yet. [guess] It should: `Select/Steps.lean` and
+  `Select/OS.lean` unfold the same definition without it, and my proofs open no private definition of `Spot.Draw`.
+- The try at `c4ddda089f44` is out: `r20261113-182911-90db`, waiting for a place at 18:31Z. Due back about 19:10Z
+  [guess].
+- When it is back and the head compiles, I write "carry my word line at `c4ddda089f44…`" and commit nothing more
+  on that branch. If it fails, the mend is one more commit and the line names that head.
+
+**3. Step 3, first file: fact 9 (what an opening on a session's round answers)**
+
+- [git] `security/Proofs/Properties/Verity/SampledTwo/SessionAnswers.lean`, on
+  `cursor/proofs-messages-answers-745c` at `e54f73f247f8423414edae12fdf1d52b94239ab3`: the word line's head plus
+  one commit. It is where step 3 waits, not a line to carry. I move its commits onto the carried head when FRAME
+  names it.
+- What it states:
+  - `recordDigest`: the digest a session's record gives a round. For the first round, the SHA-512 of the link's
+    `root_F` and each table's `root_B` in table order. For any other round, the bytes of that round's
+    `msg_sha512`.
+  - `MembersHeld.answers`: at the read, a release put on round `j` of session `t` answers `recordDigest` of
+    session `t`'s record at the stream and round the layout gives `j`.
+  - `located_answers`, `logAnswers_of`, `logAnswers_run`: the same of the log the check read, and of the play's
+    own log at the run's locator. These follow `located_recorded`, `logRecorded_of` and `logRecorded_run` step
+    for step.
+- [local] Three of its lemmas pass on a core-Lean copy, in a module file, with the verifier's
+  `sessionTreeReason` copied in: `link_after`, `recordDigest_link`, `recordDigest_round`. The other six have not
+  been through Lean.
+- [git] `located_opened` and `MembersHeld` keep their statements. No file of SESSIONCOINS's is changed. The new
+  file is a root in the lakefile and in the audit's list.
+- [local] The same eleven lint files pass on that branch (127 tests).
+- Its try goes out when `90db` is back: one try at a time.
+
+**4. Step 3's scope, as I read it today** [read]
+
+- Fact 9 covers every round of a session but its closing one.
+- Fact 11 (the closing round answers the SHA-512 of the session's evidence): `members_read` already holds it at
+  the read. What is left is to carry it to the play's log, as fact 9 is carried.
+- Fact 10 (the record's digest is the SHA-512 of the bytes the session's verifier reads) needs three things I do
+  not have:
+  - the session's verifier checking each round's bytes against the record's digest, read from the masked
+    verdict's acceptance;
+  - that round `j − 1` of the record, in the order the verifier reads rounds, is the stream and round the layout
+    gives `j`. `SetupsOfTemplates` (`LastSlot.lean`) is the named hypothesis that says this, and no one has
+    proved it;
+  - that the `t`-th record the check read is the record of template `t`'s session.
+  I state the middle rounds with the last two as hypotheses and say whose they are.
+- A session's first round: showing its string needs fact 9 only. That two plays of one string have one message
+  needs the session's statement to be the same on both, so it leans on step 4.
+- The join takes its sessions' reading as any `SessionReading` with premises. The session facts are about one
+  reading, `SessionMsgs.sessionReading`. The messages' bound at the join needs the join's reading to be that one.
+
+**5. Next**
+
+- Read `90db`; write the carry line; try `SessionAnswers.lean`; then the middle rounds.
+
+## STOP RULE
+
+No listed guarantee, named assumption or lock is changed. If a lock record would grow a premise, I stop and write
+you first.
+
+## NEEDS
+
+Nothing now. If you would rather not wait for `90db`: `47f3d094e77f` compiles and can be carried as it is, and
+the one-line mend then goes on the carried head. Say so and I write the line at that head.
+
+## Not established
+
+- `RoundOne.lean` without `import all Spot.Draw` on a node: `90db` is not back.
+- `SessionAnswers.lean` on a node: no try yet. Six of its nine theorems have been through no Lean at all.
+- Fact 10 and its three ties; fact 11 at the play's log; `ShowsAt` and `ExplainsOr` at a session's rounds and at
+  the statements' round; the messages' bound for the join.
+- Whether the join's reading is `SessionMsgs.sessionReading`: I have not asked ASSEMBLY.
