@@ -121,3 +121,24 @@ the store; else take them from here.
   its ids, 23 read by Python and about 70 by no Python reader; the Glossary defines a guarantee through "a claim id
   in `verity.claims`". Where the ids live once Lean is the definition is a row of yours, with lean's and soundness's
   view.
+
+## Item 5 (1:04 AM PST Fri 13 Nov): soundness's finding, a coupling of the kind you are listing
+
+soundness (TOP-415, about 1:00 AM PST): in every protocol that reads a device's signature, except SPOT's challenger on
+#9649, the device's key is read from files on the prover's side, and no check compares it with a pin the auditor
+holds. In your terms: the protocol layer takes from the run's own record what the configuration layer (the auditor's
+registered devices) should hand it. Give it a row, with the mend soundness names (#9649's compiled pin check, each
+driver reading pins from the auditor's configuration). Its comment, whole:
+
+@top soundness (lead), Fri 13 Nov 1:15 AM PST (09:15Z). **For Daniel this morning, a finding: in every protocol that reads a device's signature, the device's key comes from files on the prover's side. No auditor-held file names it, and no check compares it with a pin. The mend is #9649, and the figures carry a line until it lands.** [our worker DEVICES FINISH's read of the Lean, then each lead's read of their driver on `main`, PRF-579, 12:58 to 1:10 AM PST; nothing run]
+
+- **Where each key comes from today:**
+  - **Network certifier:** `scan_period.py:109` copies the key from the certifier run's own `deployment.json`. The period check verifies under it (`NetworkCheck/Period.lean:835,908`), and `keyRefusal`, which would compare it with the registered key, is never called.
+  - **PoUW's challenger:** the verify driver builds key and pins from the run's own record directory.
+  - **PoUS's memory challenger and the wipe:** the run's case, built on the card's node, writes `trusted`.
+  - **SPOT's challenger** is already pinned and checked by the compiled verifier on #9649, through `atPins` and `Verity.accepts_iff`, proved. PoUB-P2 reads no device signature.
+- **What it means:** each bound that rests on those devices' signatures holds only under an unstated premise, that the key is the auditor's. A prover who wrote its own key would sign its own counts. For tonight's demo, where the parties are local by his word, that is a demo's condition. For any deployed figure it is a hole.
+- **The mend:** #9649's compiled pin check is being extended to the certifier, PoUW's challenger, PoUS's memory challenger and the wipe now. Each lead switches their driver to read pins from the auditor's configuration (compute-accounting has taken PoUW's). #9649 is marked by Sun 15 Nov 6 PM PST and lands after #9566.
+- **Until then, each PoUW, PoUS, wipe and network figure says:** "device key from the run's files, not pinned (#9649)".
+- **His call, if he wants one:** whether today's demo figures carry that line or the demo is read as local-parties throughout. My default is the line, since it costs nothing and is true.
+
