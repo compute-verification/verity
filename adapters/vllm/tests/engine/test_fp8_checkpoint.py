@@ -5,7 +5,9 @@ the recipe's bytes are pinned by a golden vector (a small synthetic two-shard ch
 container changes it, and needs a new recipe id."""
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import struct
 from fractions import Fraction
 from pathlib import Path
@@ -13,9 +15,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity_vllm.config import UsageError
 from verity_vllm.engine import fp8_checkpoint as F
 from verity_vllm.program import model as M
-
 
 # ------------------------------------------------------------------------------------------------------------------ numerics
 
@@ -41,7 +43,7 @@ def test_e4m3fn_rounds_to_nearest_even_over_the_whole_format():
     xs = np.array(mids + [-m for m in mids], dtype=np.float32)
     assert all(Fraction(float(x)) == Fraction(m) for x, m in zip(xs, mids))
     assert np.array_equal(F.e4m3fn(xs), np.array([_nearest_even(float(x), grid) for x in xs], dtype=np.uint8))
-    k = np.arange(4096, dtype=np.int64)
+    k: np.ndarray = np.arange(4096, dtype=np.int64)
     xs = ((k * 7919 % 8191 - 4095).astype(np.float32) / np.float32(4096.0)) * np.exp2((k % 22 - 14).astype(np.float32))
     assert np.array_equal(F.e4m3fn(xs), np.array([_nearest_even(float(x), grid) for x in xs], dtype=np.uint8))
     assert F.e4m3fn(np.array([-0.0, 0.0, -1e-9, 1e-9], dtype=np.float32)).tolist() == [0x80, 0x00, 0x80, 0x00]
@@ -197,3 +199,70 @@ def test_recipe_refuses_what_it_cannot_make(tmp_path, shape, config, why):
     base = _one_tensor_base(tmp_path, shape, config)
     with pytest.raises(ValueError, match=why):
         F.make(base, tmp_path / "out", ["model.safetensors"], base_repo="o/m", base_revision="0" * 40)
+
+
+# --------------------------------------------------------------------------------------------------------------- the command
+
+AT = "2026-01-01T00:00:00Z"
+
+
+def _pinned_base(tmp_path: Path) -> tuple[str, dict]:
+    """`_base_checkpoint` as a snapshot in an HF cache under `tmp_path`, and its BF16 pin: (the cache, the pin)."""
+    hf = tmp_path / "hf"
+    d = F.snapshot_dir(str(hf), "org/model", "0" * 40)
+    d.parent.mkdir(parents=True)
+    _base_checkpoint(d)
+    sha = {q.name: hashlib.sha256(q.read_bytes()).hexdigest() for q in sorted(d.iterdir())}
+    return str(hf), {"role": "BASE", "repo": "org/model", "revision": "0" * 40, "config_sha256": sha["config.json"],
+                     "safetensors_sha256": {fn: h for fn, h in sha.items() if fn.endswith(".safetensors")}}
+
+
+def _manifest(tmp_path: Path, *pins: dict) -> str:
+    (tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": list(pins)}))
+    return str(tmp_path / "checkpoints.json")
+
+
+def _pin(tmp_path: Path, hf: str, base: dict, **over: str) -> int:
+    a = {"base_role": "BASE", "role": "FP8", "repo": "local/model-fp8", "checkpoints": _manifest(tmp_path, base), "hf_home": hf, "at": AT}
+    return F.main(F.PinOptions(**dict(a, **over)))
+
+
+def test_pin_prints_the_new_entry_alone_on_stdout_and_logs_where_it_made_the_snapshot(tmp_path, capsys, caplog):
+    caplog.set_level(logging.INFO, logger="verity_vllm")
+    hf, base = _pinned_base(tmp_path)
+    assert _pin(tmp_path, hf, base) == 0
+    out = capsys.readouterr().out
+    entry = json.loads(out)
+    assert out == json.dumps(entry, indent=1) + "\n"
+    assert entry["revision"] == GOLDEN_REVISION and {fn: d["sha256"] for fn, d in entry["files"].items()} == GOLDEN_FILES
+    assert entry["safetensors_sha256"] == {fn: h for fn, h in GOLDEN_FILES.items() if fn.endswith(".safetensors")}
+    assert entry["config_sha256"] == GOLDEN_FILES["config.json"]
+    assert {k: entry[k] for k in ("role", "repo", "fp8_of", "resolved_at", "resolved_by", "recipe")} == {
+        "role": "FP8", "repo": "local/model-fp8", "fp8_of": "org/model", "resolved_at": AT, "resolved_by": "fp8-checkpoint pin",
+        "recipe": {"base_repo": "org/model", "base_revision": "0" * 40, "id": F.RECIPE}}
+    made = F.snapshot_dir(hf, "local/model-fp8", GOLDEN_REVISION)
+    assert sorted(q.name for q in made.iterdir()) == sorted(GOLDEN_FILES)
+    assert [(r.name, r.levelname, r.getMessage()) for r in caplog.records] == [
+        ("verity_vllm.engine.fp8_checkpoint", "INFO", f"made {made}")]
+
+
+def test_make_remakes_a_registered_pin_and_names_each_file_that_differs(tmp_path, capsys):
+    hf, base = _pinned_base(tmp_path)
+    assert _pin(tmp_path, hf, base) == 0
+    entry = json.loads(capsys.readouterr().out)
+    made = str(F.snapshot_dir(hf, "local/model-fp8", GOLDEN_REVISION))
+    assert F.main(F.MakeOptions(role="FP8", checkpoints=_manifest(tmp_path, base, entry), hf_home=hf)) == 0
+    assert capsys.readouterr().out == json.dumps({"role": "FP8", "local_path": made, "ok": True, "mismatch": []}) + "\n"
+    other = dict(entry, files=dict(entry["files"], **{"tokenizer.json": dict(entry["files"]["tokenizer.json"], sha256="0" * 64)}))
+    assert F.main(F.MakeOptions(role="FP8", checkpoints=_manifest(tmp_path, base, other), hf_home=hf)) == 1
+    assert capsys.readouterr().out == json.dumps({"role": "FP8", "local_path": made, "ok": False, "mismatch": ["tokenizer.json"]}) + "\n"
+
+
+def test_the_command_refuses_a_role_the_manifest_does_not_serve(tmp_path):
+    hf, base = _pinned_base(tmp_path)
+    with pytest.raises(UsageError, match="no checkpoints.json entry with role 'FP8'"):
+        F.main(F.MakeOptions(role="FP8", checkpoints=_manifest(tmp_path, base), hf_home=hf))
+    with pytest.raises(UsageError, match="no BF16 pin with role or repo 'OTHER' and shard sha256s"):
+        _pin(tmp_path, hf, base, base_role="OTHER")
+    with pytest.raises(UsageError, match="role 'BASE' is already pinned"):
+        _pin(tmp_path, hf, base, role="BASE")
