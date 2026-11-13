@@ -76,8 +76,8 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
-from verity.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P  # noqa: E402
+from verity.protocols.proofs.spot.prover.optimize import SHA512_ANDS  # noqa: E402
 
 #: a templated statement's id (`verity_flock.circuit.TMPL_STATEMENT`): its prover and server read the placed unit
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
@@ -95,7 +95,7 @@ STAGE_PY = REPO / "benchmarks" / "served_units" / "stage.py"
 def unit_ands(K: int) -> int:
     """One coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 s8 steps, the epilogue, two K-byte
     operand rows and three one-block rows (the scales and the output), each at `optimize.row_ands`."""
-    from verity.protocols.spot.optimize import row_ands
+    from verity.protocols.proofs.spot.prover.optimize import row_ands
 
     return K // 32 * S8_STEP + EPILOGUE + 2 * row_ands(K) + 3 * row_ands(1)
 

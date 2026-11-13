@@ -40,7 +40,7 @@ reveal say of the witness). `Decodes` follows from `Evaluates`, that the decoded
 gates on the decoded values of the gates it reads (`decodes_of_evaluates`, by `Prog.correct_of_eval`), which is what a
 session circuit that computes the unit's gates gives. Neither holds of every `h`. The check fixes template `t`'s session
 statement to `xS₀ t` but for what the run sets (`pin_of_stmtOkAt`), so `Evaluates` says that each
-`xS₀ t`'s circuit computes the gates of the drawn units of template `t` on the values its witness encodes, and `Reveals`
+`xS₀ t`'s circuit computes the gates of the sampled proof blocks of template `t` on the values its witness encodes, and `Reveals`
 that the frame (`h.frame`) opens them.
 
 So `ksTwo_spot_of_eval`: SPOT[Flock]'s two-stage knowledge soundness at its code (`ksTwo_spot`) from `Evaluates` and

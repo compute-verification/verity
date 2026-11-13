@@ -57,13 +57,13 @@ import all Init.WF
 /-!
 # `EndToEndRegistered`'s conclusion fails for a verifier that accepts everything (its nontrivial witness)
 
-`Flock.SecurityProofs.EndToEndRegistered_nontrivial`: at a model-level instance, a read a sampled unit's row makes of a
+`Flock.SecurityProofs.EndToEndRegistered_nontrivial`: at a model-level instance, a read a sampled proof block's row makes of a
 registered port, committed under the row's own hm96 leaf and listed by `OwnReadsHJ`, is not `Checked` against the
 port's registered root through the path the public file names. An accepted session's every such read is: at a
 verifier that accepts every transcript, `EndToEndRegistered`'s conclusion would be false.
 
 The instance: no gate (`circ0`), one unit and one table (`tabW`); the circuit file's one port `x` (`circW`) reads row 0
-of `portW`, a registered value of two rows whose root the row's leaf climbs to through `pathW`; the record draws unit
+of `portW`, a registered value of two rows whose root the row's leaf climbs to through `pathW`; the record samples unit
 0 (`tr0`), and the public file (`pubW`) names no registered tables, so the read's registered path is empty and
 `opensLeaf` refuses it on its length. `Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial` is the same for
 `EndToEndRegisteredDrawn`, whose conclusion is `EndToEndRegistered`'s.
@@ -77,7 +77,7 @@ open Lean (Json)
 open Exec Binding Registered Audit Refine
 open FlockSoundness.Discharge.Composed (drawJ partOf)
 
-/-- **`regPathsHJ` is empty** at a read whose public file, drawn at the record's sample, names no registered tables. -/
+/-- **`regPathsHJ` is empty** at a read whose public file, sampled at the record's sample, names no registered tables. -/
 theorem regPaths_none {n : ℕ} {Gate : Type} {I : Inputs} {c : Flock.Circuit} {pub : Flock.Public}
     {t : Exec.Transcript} {port : (Fin n × Fin c.ports.size) ⊕ Gate → Flock.Registered.Port} {u : Fin n}
     {q : Fin c.ports.size} {d : Json} {D : Flock.Draw.UnitDraw} {dp : Flock.Public}
@@ -139,7 +139,7 @@ def circW : Flock.Circuit := { (default : Flock.Circuit) with ports := #[{ name 
 
 def q0 : Fin circW.ports.size := ⟨0, by decide⟩
 
-/-- Each sampled unit's ports and one other position; one value, the empty row, under a constant registered leaf. -/
+/-- Each sampled proof block's ports and one other position; one value, the empty row, under a constant registered leaf. -/
 abbrev lay0 : FlockSoundness.Binding.Layout part0 plan0 tab0 decode0 where
   Pos := (Fin 1 × Fin circW.ports.size) ⊕ Unit
   inhPos := ⟨Sum.inr ()⟩
@@ -211,7 +211,7 @@ def rd0 : ReadsX lay0 rs0 where
 
 def jn (n : Nat) : Json := .num ⟨n, 0⟩
 
-/-- The record's sample: a subset draw of unit 0 of a population of 1. -/
+/-- The record's sample: a subset sample of unit 0 of a population of 1. -/
 def drawW : Json := Json.mkObj [("k", jn 1), ("law", .str "subset"), ("population", jn 1), ("units", .arr #[jn 0])]
 
 def recW : Json := Json.mkObj [("unit_draw", drawW)]

@@ -5,7 +5,7 @@
         --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2] [--lean-program F]] \\
         [--tmpl-unit-bin B] [--wide-leaf]
 
-* **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit drawn: a
+* **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit sampled: a
   sampled replay block at the full statement. A templated one (``verity/flock-circuit/tmpl`` in its circuit's META, as
   `served_units/stage.py` stages a table read) is proved and verified with its unit's rows at their positions, which
   ``--tmpl-unit-bin`` (`flock-tmpl-unit`) places once into ``stage/unit.placed`` from the circuit's template section.
@@ -75,10 +75,10 @@ import time
 from collections import Counter
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/flock/prover/python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/python"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.protocols.spot.verifier.one_stage.proofs import verifier_env
+from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
 from verity_flock import circuit as FC
 from verity_flock.proof_server import ProofServer, Statement
 

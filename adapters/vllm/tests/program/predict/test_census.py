@@ -1,4 +1,4 @@
-"""census/v1 and the requirement (`verity.definitions.circuits.census`, `.requirement`) of a real row's Programs: Llama-3.2-1B B1 256/32
+"""census/v1 and the requirement (`verity.circuits.census`, `.requirement`) of a real row's Programs: Llama-3.2-1B B1 256/32
 greedy on rtxpro6000 (cov-k05-7), its step (the traced Build `test_predict` pins) and its request Program (a prefill of 256 rows,
 then 31 decode steps), each step ending at a sampling event; the census path held to the explicit expansion on `TINY`'s; and
 the served MACs by precision of those rows and of GLM-5.3's served constructions on their stand-ins
@@ -21,7 +21,7 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.program import Program, is_input
 from verity.definitions.boolean import boolean_version, lift
-from verity.definitions.circuits.census import (
+from verity.circuits.census import (
     PRODUCTS,
     SILICON,
     NoBooleanWork,
@@ -29,14 +29,14 @@ from verity.definitions.circuits.census import (
     family,
     step_ends,
 )
-from verity.definitions.circuits.requirement import (
+from verity.circuits.requirement import (
     census_gates,
     census_schedule,
     from_census,
     upper_bound,
 )
-from verity.definitions.ops import prims as P
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import gemm as BG
 from verity.definitions.registry import b1, b1_tp2
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import tp_allreduce as TA

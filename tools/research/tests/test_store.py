@@ -483,6 +483,23 @@ def test_remote_config(env, monkeypatch):
         load_remote(env / "c.toml")
 
 
+@pytest.mark.parametrize("place", ["artifacts.json", "artifacts.json"])
+def test_the_registry_is_read_at_either_place_a_tree_holds_it(env, monkeypatch, place):
+    """A run's research can be older or newer than the tree it reads: wherever the tree holds the registry, it finds the
+    repository from below, reads the map there and writes it back there."""
+    from research.store import fixtures as F  # noqa: PLC0415
+    from research.store.local import find_repo  # noqa: PLC0415
+
+    monkeypatch.delenv("RESEARCH_REPO")
+    repo = env / "repo"
+    (repo / place).parent.mkdir(parents=True, exist_ok=True)
+    (repo / place).write_text(json.dumps({"art:" + "a" * 64: "pkg/data.json"}))
+    (repo / "pkg").mkdir()
+    assert find_repo(repo / "pkg") == repo
+    assert F.replica_map_file(repo) == repo / place and F.load_map(repo) == {"art:" + "a" * 64: "pkg/data.json"}
+    assert LocalStore(repo=repo).replica_map() == {"art:" + "a" * 64: "pkg/data.json"}
+
+
 def test_repo_replica_map_verified_then_fallback(env, fs_remote, tmp_path, capsys):
     repo = env / "repo"
     fixture = repo / "fixtures" / "golden" / "rec.json"
@@ -494,7 +511,7 @@ def test_repo_replica_map_verified_then_fallback(env, fs_remote, tmp_path, capsy
     tart = producer.put_artifact("fixture/v1", {"name": "tree"}, tree=tdir)
     producer.push(art)
     producer.push(tart)
-    (repo / "fixtures" / "artifacts.json").write_text(json.dumps({art: "fixtures/golden/rec.json", tart: "fixtures/tree"}, indent=1))
+    (repo / "artifacts.json").write_text(json.dumps({art: "fixtures/golden/rec.json", tart: "fixtures/tree"}, indent=1))
 
     consumer = LocalStore()   # fresh store; manifests come from the remote, bytes from the repo
     assert consumer.replica_map() == {art: "fixtures/golden/rec.json", tart: "fixtures/tree"}
@@ -533,7 +550,7 @@ def test_where_with_a_broken_vault_still_reports_local_and_repo(env, tmp_path, m
     fixture.write_text('{"pin": 1}')
     st = LocalStore()
     art = st.put_artifact("fixture/v1", {}, file=fixture)
-    (repo / "fixtures" / "artifacts.json").write_text(json.dumps({art: "fixtures/PIN.json"}))
+    (repo / "artifacts.json").write_text(json.dumps({art: "fixtures/PIN.json"}))
     where = {w["location"]: w for w in LocalStore().where(art)}
     assert where["local"]["present"] and where["repo"]["present"] and where["repo"]["path"] == "fixtures/PIN.json"
     assert where["remote"]["configured"] is True and where["remote"]["present"] is None and "SB_TEST_KEY" in where["remote"]["error"]

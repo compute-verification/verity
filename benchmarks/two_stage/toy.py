@@ -41,8 +41,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as REG, registration as R
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
@@ -162,7 +162,7 @@ def bits(words: np.ndarray) -> np.ndarray:
 # --- the boundary registration ----------------------------------------------------------------------------------------
 
 def boundary_window(n: int, q: int, run: str = RUN) -> CS.Binding:
-    """The boundary window: ``n`` replay blocks, the first stage drawing ``q`` of them."""
+    """The boundary window: ``n`` replay blocks, the first stage sampling ``q`` of them."""
     program, query = CS.population_program([(REPLAY, n)])
     (rid, _, _), = P.ranges(program, query)
     m = CS.Member(rid, n=n, rows=BOUNDARY_ROWS, outs=BOUNDARY_OUTS, schemas=tuple((p, V2) for p, _ in BOUNDARY_ROWS + BOUNDARY_OUTS))

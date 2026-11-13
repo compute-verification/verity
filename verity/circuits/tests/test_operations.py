@@ -1,19 +1,19 @@
-"""The operations list and the guard (`verity.definitions.circuits.operations`): a constant is data outside an operation, a table a primitive
+"""The operations list and the guard (`verity.circuits.operations`): a constant is data outside an operation, a table a primitive
 reads is data unless the library lists it, and the list's digest is pinned, so an edit without a version bump fails here."""
 from __future__ import annotations
 
 import pytest
 
 from verity.circuits import codec
-from verity.definitions.circuits import constants as K
+from verity.circuits import constants as K
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops import mufu
-from verity.definitions.circuits import operations as O
-from verity.definitions.ops import prims as P
-from verity.definitions.ops.boolean import cast, gemm, mufu as boolean_mufu, scalar  # noqa: F401  (register the listed Definitions)
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops import mufu
+from verity.circuits import operations as O
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import cast, gemm, mufu as boolean_mufu, scalar  # noqa: F401  (register the listed Definitions)
 
 #: `digest()` of VERSION 2. A change to the list needs a new VERSION, then this pin.
 DIGEST_V2 = ("ed918096fe165d6b29744c4d90da491e7be633eae488bb638be5744b6a876f49"

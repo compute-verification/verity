@@ -59,10 +59,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import h200 as H  # noqa: E402
 
-from verity.protocols.pouw.verifier.window import eps_at  # noqa: E402
-from verity.protocols.spot.verifier.consumers import entropy_bits
-from verity.protocols.spot.verifier.profile import MARGIN, Stratified, Stratum  # noqa: E402
-from verity.protocols.spot.optimize import (  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.window import eps_at  # noqa: E402
+from verity.protocols.proofs.spot.verifier.consumers import entropy_bits
+from verity.protocols.proofs.spot.verifier.profile import MARGIN, Stratified, Stratum  # noqa: E402
+from verity.protocols.proofs.spot.prover.optimize import (  # noqa: E402
     Candidate, CostModel, Objective, Plan, PlanBounds, ReplayGrain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
 

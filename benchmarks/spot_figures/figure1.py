@@ -86,15 +86,15 @@ from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
 from verity.protocols.reporting import PERIODS
-from verity.protocols.spot import plancheck
-from verity.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
+from verity.protocols.proofs.spot.prover import plancheck
+from verity.protocols.proofs.spot.prover.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design, two_stage_strata)
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
 ADVERSARY, DEPLOYMENTS, HARDWARE = ("benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
                                     "benchmarks/census/hardware.json")
-RHO, RHO_HARDWARE = "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml"
+RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml"
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
 PEAK = "h100-sxm5-80gb/e4m3"
@@ -777,7 +777,7 @@ def infiltration_ratio(infiltration: dict, exfiltration: list[dict], scope: str,
 
 
 def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
-    """Each panel's lines at 0 in `scope`, which a log axis has no place for: drawn along its floor and named in its
+    """Each panel's lines at 0 in `scope`, which a log axis has no place for: sampled along its floor and named in its
     caption."""
     return {panel: [r["label"] for r in rows if (r["value"] if "value" in r else r["by_scope"].get(scope, 1)) <= 0]
             for panel, rows in refs.items()}

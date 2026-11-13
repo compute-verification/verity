@@ -47,10 +47,10 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.codec import canonical_json
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.spot.verifier.one_stage import registered as G
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import weights as Wt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES
@@ -500,7 +500,7 @@ def record_of(run: Any) -> str | None:
 def bind(run: Any) -> str | None:
     """Bind the window's Commit record into ``run``'s commitment at its close (`pouw_h1.H1Run.finish`, before its
     `calls_root`): ``commit_record``'s (`named`, what the run records of it in ``details.commit_record``), else its
-    tap's. When ``commit_record`` names none, the window's refusal: ``finish`` binds no record, opens no draw coin and,
+    tap's. When ``commit_record`` names none, the window's refusal: ``finish`` binds no record, opens no sampling coin and,
     once its transcript is written, raises it as ValueError. Else None."""
     if run.commit_record is not None:
         run.commits["commit"], run.details["commit_record"] = named(run)

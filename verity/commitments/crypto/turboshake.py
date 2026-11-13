@@ -1,4 +1,4 @@
-"""TurboSHAKE128 (RFC 9861) in plain Python: the ticket hash of ``pearl-c`` (``verity/protocols/pouw/verifier``).
+"""TurboSHAKE128 (RFC 9861) in plain Python: the ticket hash of ``pearl-c`` (``verity/protocols/accounting/pouw/verifier``).
 
 Standard-library only and deliberately slow.  TurboSHAKE128 is the sponge of Keccak-p[1600, 12], the last 12 of
 Keccak-f[1600]'s 24 rounds, at rate 168 bytes: the message is followed by the domain byte ``D`` (0x01 … 0x7F), zeros to

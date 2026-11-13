@@ -70,9 +70,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.definitions.circuits import requirement
-from verity.protocols.poub.verifier import audit, codec
-from verity.protocols.poub.verifier.memory_map import (
+from verity.circuits import requirement
+from verity.protocols.accounting.poub.verifier import audit, codec
+from verity.protocols.accounting.poub.verifier.memory_map import (
     Change,
     Header,
     MemoryMapError,
