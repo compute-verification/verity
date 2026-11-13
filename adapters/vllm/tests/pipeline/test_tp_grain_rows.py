@@ -11,8 +11,8 @@ from typing import Any
 import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.commitments.windows import interface as I
 from verity.circuits.ops import gemm as GE
+from verity.commitments.windows import interface as I
 from verity.definitions.registry import b1_tp2 as B1T
 from verity.definitions.registry import moe
 from verity.definitions.registry import tp_allreduce as TA
