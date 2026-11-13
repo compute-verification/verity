@@ -22,16 +22,17 @@ t-th slice, a shared one (axis None) the whole argument. A feed states a run of 
 A reader that reads a row whole (`NodeWindow.take` with ``whole``) gets one row a member. Where its words are several
 writer rows (a ``COORDS`` GEMM's coordinates, a ``COLS`` family's column blocks), the frame gathers them first, as
 `pipeline.tp.grain` gathers a collective's coordinates: one `AllGather_v1{WORLD=n, N=c}` a member where the n writer rows of
-c words and the gathered row fit a gather unit's `GATHER_ROWS` rows, else two levels, `AllGather_v1{WORLD=K/c, N=c}` into
+c words and the gathered row fit a gather unit's `GATHER_ROWS` rows, else in levels, `AllGather_v1{WORLD=K/c, N=c}` into
 rows of K words (K the most words of a whole number of writer rows within `GATHER_ROWS`, `grain.chunk` at c = 1) and then
-`AllGather_v1{WORLD=R/K, N=K}` into the row of R words. A gather is made once for the rows it reads, and its first level's
+those R/K rows of K words gathered the same way into the row of R words (`AllGather_v1{WORLD=R/K, N=K}` where they fit one
+gather unit, so two levels in all). A gather is made once for the rows it reads, and its first level's
 K-word rows stand for those writer rows in any later read (``most``), so a column block of a gathered row reads its chunks
 rather than its coordinates. An `AllGather_v1` moves words and computes nothing, and has no rank static.
 
 The window is completeness only: that it computes what serving ran is held by the units' proofs on their committed rows.
 Refused by name (`Unexpressible`): a Program with no weights record, an input that is neither the prompt, the weights nor a
 ``peers_*`` partial, a lowered family's argument batched on an axis other than 0 or None, a read that cuts a writer's row,
-a gather whose rows are not one width or whose two levels don't fit, and at `_Builder.settle`, every template whose ports
+a gather whose rows are not one width or of which no whole number within a gather unit divides the row, and at `_Builder.settle`, every template whose ports
 aren't cut a writer row or whose unit Flock's composer wouldn't prove.
 """
 from __future__ import annotations
@@ -413,9 +414,9 @@ class NodeWindow:
         else:
             K = max((d for d in range(c, R + 1, c) if R % d == 0 and d // c + 1 <= GATHER_ROWS), default=c)
             k, G = K // c, R // K
-            if G + 1 > GATHER_ROWS:
-                raise Unexpressible(f"{self.name}: a whole read of {n} rows of {c} words: {G} chunks of {K} words pass a "
-                                    f"gather unit's {GATHER_ROWS} rows")
+            if k == 1:
+                raise Unexpressible(f"{self.name}: a whole read of {n} rows of {c} words: no whole number of them within a "
+                                    f"gather unit's {GATHER_ROWS} rows divides the {R} words")
             t1, a1 = self.unit(GATHER, bind(B1T.AllGather, WORLD=k, N=c), G * M)
             groups = [rows[g * k:(g + 1) * k] for g in range(G)]
             if (gs := _step(groups)) is not None:
@@ -426,9 +427,7 @@ class NodeWindow:
             for t, rs in enumerate(rowss):
                 for g in range(G):
                     self.chunks[rs[g * k]] = (rs[g * k:(g + 1) * k], Row(t1, a1 + g * M + t, "o0", K))
-            t2, a2 = self.unit(GATHER, bind(B1T.AllGather, WORLD=G, N=K), M)
-            self.b.feed(t2, "parts", a2, M, tuple(Row(t1, a1 + g * M, "o0", K) for g in range(G)), ((M, 1),))
-            got = [Row(t2, a2 + t, "o0", R) for t in range(M)]
+            got = self._gather([tuple(Row(t1, a1 + g * M + t, "o0", K) for g in range(G)) for t in range(M)])
         for rs, r in zip(rowss, got):
             self.wholes[rs] = r
         return got
