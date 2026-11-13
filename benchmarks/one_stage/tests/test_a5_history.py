@@ -19,7 +19,7 @@ from verity.protocols.spot.verifier.one_stage import draw as D, registration as 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops import gemm as G
+from verity.circuits.ops import gemm as G
 from verity.commitments import history as HT
 from verity.commitments.windows import history as HW, interface as I, rows as CS
 

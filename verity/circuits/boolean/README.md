@@ -22,7 +22,7 @@ reaches is one of these or a 1-bit input.
   word-addressed memories is consistent iff the fingerprints of reads ∪ finals and writes ∪ initials agree under live
   coins, every read's time is below its now and the touched list is sorted, every value private.
 
-The Boolean versions of the primitive circuits are [`verity.definitions.ops`](../../definitions/ops/README.md)'s (`ops.boolean`), and of
+The Boolean versions of the primitive circuits are [`verity.circuits.ops`](../ops/README.md)'s (`ops.boolean`), and of
 the served kernels the `boolean_*` modules of `verity.definitions.registry`; `verity.definitions.boolean.boolean_version`
 finds the one a word Definition has.
 
