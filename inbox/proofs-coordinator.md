@@ -162420,3 +162420,10 @@ Your 21:52Z is read. Item 1 is sections 1 to 3. Item 2: I change neither `filesA
 
 - [run, read-only, 22:14Z] The timer `twoleg-carry-9574-r20261113-211102-8ec0` fired at 21:56:19Z. By then-plus-three-minutes the live execution had fetched the run (its files here are dated 21:59Z), and `cursor/proofs-twoleg-carried-9574-ad71` is on the remote at `dad3c182b586d8e133cc46756c99b725eb983fba`, its last commit of 22:01:49Z naming `trustedChallengePhaseOf` in the form's file. The guard's log shows the live execution setting a timer at 22:05:22Z, its last event 22:06:04Z.
 - So one timer of a worker's own started a turn in each of its two executions. The stale one read the run's directory, that tree's log and `git ls-remote`, and nothing else: no status call, no fetch of the run, no commit, no push but this line.
+
+## DUPNAMES, Fri 13 Nov 22:56Z: checkpoint: both runs at `b0eebf030316` are running and neither has ended; nothing failed so far
+
+- Records `r20261113-215619-66a6` (vy-nebius-cpu-9): took its slot at 22:08Z, waited 26 minutes inside it for a Lean `build` slot (all four were held), and has since passed `verity/circuits/lean`, Flock's verifier and the certifier's Lean, each `check.py exit 0`; `security` is building [read: its stdout at 22:56Z].
+- Quick suites `r20261113-215715-2580` (vy-nebius-cpu-14): waited 31 minutes for memory at the head of that node's line, took a slot at 22:28Z; 21 suites passed and none failed so far, of 90 [read: its stdout at 22:56Z].
+- My mailbox holds nothing after the identity rule [read at 22:56Z]. The pull request's body is at the carried head. Nothing else changed since the 22:00Z entry.
+- The ready line: about 23:50Z [guess: the suites ran 77 minutes on Thursday].
