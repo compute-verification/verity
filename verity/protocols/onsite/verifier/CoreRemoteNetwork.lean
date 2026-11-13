@@ -112,7 +112,7 @@ private def recordsOf (policy sampled : String) : Answer :=
 -- the egress tie: every compute audit of the network certifier's period on the policy's record holds; one on another
 -- record, or a period with no compute audit, names the policy's record and the period's stray (the empty string when
 -- it has none); a period that doesn't decode names nothing, and its own rejection stands
-private def periodOn (audits : List String) : Case :=
+private def monitoringPeriodOn (audits : List String) : Case :=
   { refused NetworkCheck.Period.protocol with
     commitment := s!"\{\"audits\":[{",".intercalate audits}],\"windows\":[]}".toUTF8 }
 
@@ -122,21 +122,21 @@ private def digestOf (r : String) : String :=
   ((Lean.Json.parse r).toOption.bind fun j => (Flock.WindowRecord.digestHex j).toOption).getD ""
 
 #guard digestOf (record 0) != "" && digestOf (record 0) != digestOf (record 1)
-#guard (auditRecords (periodOn [record 0, record 0])).map (·.map Flock.hexOf) ==
+#guard (auditRecords (monitoringPeriodOn [record 0, record 0])).map (·.map Flock.hexOf) ==
   some [digestOf (record 0), digestOf (record 0)]
 #guard (Core.Remote.policyRecord (policyOn (record 0))).map (·.map Flock.hexOf) == some [digestOf (record 0)]
-#guard egress.strays [periodOn [record 0], policyOn (record 0)] == none
-#guard egress.strays [periodOn [record 0, record 0], policyOn (record 0)] == none
-#guard egress.strays [periodOn [record 1], policyOn (record 0)] ==
+#guard egress.strays [monitoringPeriodOn [record 0], policyOn (record 0)] == none
+#guard egress.strays [monitoringPeriodOn [record 0, record 0], policyOn (record 0)] == none
+#guard egress.strays [monitoringPeriodOn [record 1], policyOn (record 0)] ==
   some s!"record: verity/inference-only/v0 committed {digestOf (record 0)}, verity/certifier/v0 committed \
     {digestOf (record 1)}"
-#guard egress.strays [periodOn [record 0, record 1], policyOn (record 0)] ==
+#guard egress.strays [monitoringPeriodOn [record 0, record 1], policyOn (record 0)] ==
   some s!"record: verity/inference-only/v0 committed {digestOf (record 0)}, verity/certifier/v0 committed \
     {digestOf (record 1)}"
-#guard egress.strays [periodOn [], policyOn (record 0)] ==
+#guard egress.strays [monitoringPeriodOn [], policyOn (record 0)] ==
   some s!"record: verity/inference-only/v0 committed {digestOf (record 0)}, verity/certifier/v0 committed "
 #guard egress.strays [refused NetworkCheck.Period.protocol, policyOn (record 0)] == none
-#guard egress.strays [periodOn [record 1]] == none
+#guard egress.strays [monitoringPeriodOn [record 1]] == none
 
 /-! ### The verdict is the AND of remote's and the network certifier's
 
