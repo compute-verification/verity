@@ -72,7 +72,7 @@ ALLOWLIST = {
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
     "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
-    "verity/definitions/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
@@ -217,7 +217,7 @@ def test_markdown_size_caps() -> None:
 
 
 #: Test files that need torch, a GPU or cargo, and were never part of `check`.
-UNSUITED_TEST_DIRS = ("verity/definitions/kernels/",)
+UNSUITED_TEST_DIRS = ("verity/circuits/kernels/",)
 #: what pytest collects from a module: a function or a class of its own named as a test
 _DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 

@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from verity.circuits.defs import bind
-from verity.definitions.ops import s8 as OS8
+from verity.circuits.ops import s8 as OS8
 from verity.protocols.pouw.prover import circuit
 from verity.protocols.pouw.prover.circuit import eps1_reference as EPS
 from verity.protocols.pouw.verifier.protocol import DomainError

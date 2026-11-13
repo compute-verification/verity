@@ -32,7 +32,7 @@ doesn't call it, so a commit's weight words are not compared with a re-quantisat
 scale `s_x` and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
 
 Registered functions (all `Name_v1`):
-  primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity.definitions.ops.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity.definitions.ops.prims`)
+  primitives  core's: F32Fabs, F32Fmaxf, F32Fminf (`verity.circuits.ops.scalar`), F32ToE4m3Sat, HopperE4m3QgmmaDot32 (`verity.circuits.ops.prims`)
   composites  Fp8RowAbsMax{K}, Fp8RowScale, Fp8ActQuant{K}, DotE4m3{K}, ScaledMmFp8Coordinate{K,BIAS},
               ScaledMmFp8{K,N,BIAS} (the cutlass GEMM over the quantised row), QuantLinearFp8{K,N,BIAS} (= Fp8ActQuant
               + ScaledMmFp8, the linear as one function), LayerPreFp8{C,L0}, LayerPostFp8{C}, ServeFp8{C,LP,STEPS};
@@ -49,8 +49,8 @@ import types
 from verity.circuits.defs import CompositeDefinition, bind, composite
 from verity.circuits.refs import Coll as _Coll, concat, tuple_of
 from verity.circuits.types import Array, RecordType, Tuple, Value
-from verity.definitions.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
-from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf
+from verity.circuits.ops.prims import F32ToE4m3Sat, HopperE4m3QgmmaDot32
+from verity.circuits.ops.scalar import F32Fabs, F32Fmaxf, F32Fminf
 from verity.definitions.evidence import EVIDENCE
 from verity.definitions.registry import b1
 from verity.definitions.registry import hopper as H
