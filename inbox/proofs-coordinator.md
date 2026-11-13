@@ -135754,3 +135754,61 @@ Line numbers were checked at `6b1483bbb2a6`. "Not checked" is a count I could no
 - **Memory-accounting's read rate** is section 8 of the 09:43Z entry, with the bump's place above.
 - **"circuits' rows 1 and 2":** I take these to be rows C2 and C3 of part 2.3, which the document marks "found by circuits 1" and "circuits 2", with proofs an owner: the cut of a circuit into pieces sized to Flock's range of 2^27 bits, and the lowering to Boolean gates that lives in Flock's prover. If you mean something else, say so; otherwise I read those two for 14:00Z.
 - **I need nothing else from you.**
+
+## GATHER, Fri 13 Nov 10:32Z: question 1 is YES: with `552354cbe19` the audit's Python takes the combining member's file that Lean's `headerHeld` refuses, so by your rule it stays out of the carry until A is settled (the line that takes it is `a5.py:855`, on `main` since `ee7d633180b`, not the commit); `3257` at `552354cbe19` ended exit 0, all eight of `SMALL` true; the layout trial for question 2 is running (`cb47`, ends about 10:50Z)
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a`, the head I stand
+behind for Friday; its Friday-size rehearsal `r20261113-053940-1822` ended exit 0. Unchanged. The mend's head is
+`552354cbe19f8e374148566a2151a622fb994fb1` on `cursor/proofs-gather-wired-audit-6a9b`; `3257` ran at it. Your 10:04Z and
+10:19Z messages are read. Question 2's answer comes in the 11:30Z entry.
+
+**Question 1: YES** [read at `552354cbe19`; run where tagged]
+- What Lean refuses. `headerHeld` (`Spot/OneStageZk.lean:1002–1005`) holds a member's public file to the member's
+  slice of the registration (`Member.slice`, `:995–997`). The slice's roots are the record's roots named
+  `<member>/<port>` (`rootStep`, `:963–973`). `Record.matchesPublic` (`Spot/Record.lean:77`) asks that the file's
+  roots be exactly those. The combining member's file names 21 roots and its slice has 2 [relayed: TWOLEG's 10:01Z].
+- What the Python takes. `a5.audit`'s check of a member's header is `root:<port>` (`a5.py:855–858`): for each port
+  the file names, the root and domain must be the registration's for the tree that holds the port (`mine.held`),
+  which for a wired port is the writer's output tree. So it passes a file that names a root under `r0` to `r18`.
+- [run] In `3257` the combining member's checks before the sample are all true (`checks_before_draw.m19: true`), its
+  session's `lean-verify/m19` is true, and the audit is accepted. So yes: the Python takes that file.
+- Where the disagreement is. Not in `552354cbe19`. `a5.py:855` has read `mine.held` on `main` since `ee7d633180b`
+  (`a5.py:835–838` on `main` today) [run: `git log -S`]. The commit removes a raise at a later line
+  (`REG.bind_ports`' arguments) that kept `second` from finishing; without it the Python raises `KeyError`, it does not
+  refuse. Friday's trees are from before that later line and take the wired play the same way [run: `1822`].
+- The Python that is written as the mirror of the per-member form is `one_stage/members.py` (`_roots`, `:358–379`;
+  the header against the slice in `population_why`, `:436–444`, called at `:492`). It has Lean's rule, and the commit does not touch it [read; I
+  did not run it on the play].
+- So by your rule `552354cbe19` stays out of the carry until A is settled. If A goes by the layout, the commit is not
+  needed at all: every port of a member's file then has a root under its own name, and the line as `main` has it
+  finds one. That is what the trial below tests.
+
+**`3257`: the mend's rehearsal** [run; read 10:23Z]
+- `r20261113-095312-3257`, vy-nebius-cpu-1 (placed by `--on auto`, waited 24 s), 09:53:36Z to 10:02:34Z, exit 0, at
+  `552354cbe19`. Peak 14.9 GiB of the 32 GB asked.
+- `SMALL_ARGS="--inline --units 20 --v 2560 --logits"`: "the greedy select in 20 units, inputs committed, rc=0".
+  - `second rc=0`. `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record":
+    true, "round_two": true, "outcome": true, "cost": true}`.
+  - `A5`: accepted, complete, `registered_reads` true; 20 of 20 `lean-draw`, 20 of 20 `lean-verify`, 20 of 20
+    `m0-verifier` true; 40 strata of one unit in four; bound 2 wrong units of 160 at δ = 0.5.
+  - `TWO`: `"held": true`, `round_two` `{"ok": true, "codes": []}`, `outcome.statements = ["two-stage-form"]` alone,
+    `outcome.accepted` false: the two-stage accept is withheld by the form's switch, as on Friday's trees.
+- The tests that call the audit, on the same machine: "39 passed in 59.80s" (`test_a5_wiring.py`,
+  `test_two_stage_second.py`, `test_a5_tp_gates.py`), `pytest rc=0`.
+- It ran no form check: `two_stage_small.sh` has none, and I launch nothing with `--interior-trees`.
+
+**Question 2: the trial is running** [run]
+- Branch `cursor/proofs-gather-wired-layout-6a9b`, head `70ca0eda5dfb`, one commit on TWOLEG's scratch `654e34d42b`
+  without `552354cbe19`. For runs only.
+- It names a wired port under its reader, at the root, leaves and domain of the port whose tree holds it, in three
+  places: the layout (`rows.expected_ports`), the record's roots (`rows.registration`) and the class's rule
+  (`two_stage.interior_values`, which the first stage registers). The commitment is unchanged.
+- `r20261113-103102-cb47`, vy-nebius-cpu-14 (`--on auto`), launched 10:31Z: a play of two templates
+  (`--inline --units 2 --v 256 --logits`), then the play of twenty. Expected end about 10:50Z [guess].
+- One fact already [run, my VM]: an existing test on `main` holds the opposite and fails at the trial's head,
+  `test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves` (`windows/tests/test_interface.py:447`: a wired
+  port is in no root, domain or layout port).
+
+**Not established**
+- Anything about question 2 beyond the lines above.
+- That `members.py` refuses the play as Lean does: read, not run.
