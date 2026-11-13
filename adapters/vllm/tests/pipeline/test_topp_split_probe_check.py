@@ -22,8 +22,8 @@ from verity_vllm.pipeline import topp_split_probe as tp
 
 f32 = np.float32
 NUM_SM = 8
-RECORD_ID = 4
-DRAIN_ID = 5
+RECORD_ID = 6
+DRAIN_ID = 7
 
 
 def _cases() -> list[dict]:
@@ -32,6 +32,8 @@ def _cases() -> list[dict]:
         {"id": 1, "kind": "random", "S": 2, "V": 3000, "seed": tp.MANIFEST_SEED + 32001, "p": 0.9},    # so do this one's; 3000 % 16 != 0
         {"id": 2, "kind": "ties", "S": 2, "V": 1024, "seed": 7, "k": 12, "keep_frac": 0.25, "group_bias": None, "plateau": 3.5},
         {"id": 3, "kind": "ties", "S": 1, "V": 1024, "seed": 9, "k": 3, "keep_frac": 0.5, "group_bias": 0, "plateau": 3.5},
+        {"id": 4, "kind": "ties", "S": 4, "V": 1024, "seed": 13, "k": 12, "keep_frac": 0.75, "group_bias": 1, "plateau": 6.5},
+        {"id": 5, "kind": "ties", "S": 8, "V": 1024, "seed": 17, "k": 24, "keep_frac": 0.5, "group_bias": None, "plateau": 3.5},
     ]
 
 
@@ -136,7 +138,7 @@ def _report(d: Path, record: bool = True) -> dict:
 
 def test_a_fixture_equal_to_the_model_passes_and_is_counted(fx):
     rep = _report(fx)
-    assert rep == {"n": 5, "mask_ok": 5, "stats_ok": 5, "zgroup_ok": 1, "zgroup_checked": 1, "ties_cases": 4, "boundary_tie_cases": 1,
+    assert rep == {"n": 7, "mask_ok": 7, "stats_ok": 7, "zgroup_ok": 1, "zgroup_checked": 1, "ties_cases": 6, "boundary_tie_cases": 3,
                    "fail": [], "ok": True,
                    "drain": [{"B": 3, "S": 2, "rows_ok": 3}, {"B": 2, "S": 4, "rows_ok": 2}, {"B": 1, "S": 8, "rows_ok": 1}]}
 
@@ -151,13 +153,13 @@ def test_the_fixture_holds_two_rows_with_two_z_values(made):
 @pytest.mark.parametrize("record", [None, "absent.npz"])
 def test_without_the_record_its_rows_are_passed_over(fx, record):
     rep = tp.check(str(fx), record and str(fx / record), verbose=False)
-    assert rep["ok"] and (rep["n"], rep["mask_ok"], rep["stats_ok"]) == (4, 4, 4)
+    assert rep["ok"] and (rep["n"], rep["mask_ok"], rep["stats_ok"]) == (6, 6, 6)
 
 
 def test_a_kept_lane_the_model_masks_is_a_mask_failure(fx):
     _alter(fx, "c2_keep", _flip(None, 5))
     rep = _report(fx)
-    assert not rep["ok"] and (rep["n"], rep["mask_ok"], rep["stats_ok"]) == (5, 4, 5)
+    assert not rep["ok"] and (rep["n"], rep["mask_ok"], rep["stats_ok"]) == (7, 6, 7)
     [f] = rep["fail"]
     assert {k: f[k] for k in ("id", "kind", "S", "V", "mask_ok", "stats_ok", "zgroup_ok", "lanes_differ", "first")} == {
         "id": 2, "kind": "ties", "S": 2, "V": 1024, "mask_ok": False, "stats_ok": True, "zgroup_ok": None, "lanes_differ": 1, "first": [5]}
@@ -175,7 +177,7 @@ def test_a_failure_lists_the_first_eight_lanes_that_differ(fx):
 def test_a_stats_word_that_differs_is_a_stats_failure(fx):
     _alter(fx, "c1_stats", _stats_word)
     rep = _report(fx)
-    assert not rep["ok"] and (rep["mask_ok"], rep["stats_ok"]) == (5, 4)
+    assert not rep["ok"] and (rep["mask_ok"], rep["stats_ok"]) == (7, 6)
     [f] = rep["fail"]
     assert (f["id"], f["mask_ok"], f["stats_ok"], f["lanes_differ"], f["first"]) == (1, True, False, 0, [])
 
@@ -183,7 +185,7 @@ def test_a_stats_word_that_differs_is_a_stats_failure(fx):
 def test_a_lane_in_the_other_z_group_is_a_z_group_failure(fx):
     _alter(fx, "c0_zbit", lambda a: a ^ np.uint8(0xFF))
     rep = _report(fx)
-    assert not rep["ok"] and (rep["mask_ok"], rep["stats_ok"], rep["zgroup_ok"], rep["zgroup_checked"]) == (5, 5, 0, 1)
+    assert not rep["ok"] and (rep["mask_ok"], rep["stats_ok"], rep["zgroup_ok"], rep["zgroup_checked"]) == (7, 7, 0, 1)
     [f] = rep["fail"]
     assert (f["id"], f["mask_ok"], f["stats_ok"], f["zgroup_ok"]) == (0, True, True, False)
 
@@ -197,14 +199,14 @@ def test_a_z_bit_is_not_read_where_the_vocabulary_is_no_multiple_of_16(fx):
 def test_a_record_row_whose_tempered_logits_differ_from_the_recorded_digest_fails(fx):
     _alter_manifest(fx, lambda by_id: by_id[RECORD_ID].update(x_in_sha="0" * 16))
     rep = _report(fx)
-    assert not rep["ok"] and (rep["n"], rep["mask_ok"], rep["stats_ok"]) == (5, 5, 5)
+    assert not rep["ok"] and (rep["n"], rep["mask_ok"], rep["stats_ok"]) == (7, 7, 7)
     assert rep["fail"] == [{"id": RECORD_ID, "kind": "record", "S": 2, "x_in": "TemperatureScale model != pod apply_temperature"}]
 
 
 def test_a_record_row_with_no_digest_is_checked_by_its_mask_alone(fx):
     _alter_manifest(fx, lambda by_id: by_id[RECORD_ID].pop("x_in_sha"))
     rep = _report(fx)
-    assert rep["ok"] and rep["n"] == 5
+    assert rep["ok"] and rep["n"] == 7
 
 
 def test_a_record_row_is_tempered_at_the_manifest_s_temperature(fx):
@@ -218,7 +220,7 @@ def test_a_drain_row_that_differs_is_counted_out_of_its_batch(fx):
     rep = _report(fx)
     assert not rep["ok"] and rep["fail"] == [{"drain_B": 3, "S": 2, "rows_ok": 2}]
     assert rep["drain"] == [{"B": 3, "S": 2, "rows_ok": 2}, {"B": 2, "S": 4, "rows_ok": 2}, {"B": 1, "S": 8, "rows_ok": 1}]
-    assert (rep["n"], rep["mask_ok"], rep["stats_ok"]) == (5, 5, 5)
+    assert (rep["n"], rep["mask_ok"], rep["stats_ok"]) == (7, 7, 7)
 
 
 def test_a_drain_batch_at_another_split_count_than_the_geometry_s_is_refused(fx):
@@ -232,28 +234,37 @@ def test_a_fixture_with_no_drain_is_checked_by_its_rows(fx):
     man["cases"] = [c for c in man["cases"] if c["kind"] != "drain"]
     (fx / "manifest.json").write_text(json.dumps(man))
     rep = _report(fx)
-    assert rep["ok"] and rep["n"] == 5 and rep["drain"] == []
+    assert rep["ok"] and rep["n"] == 7 and rep["drain"] == []
 
 
 def test_check_prints_a_line_a_case_a_line_a_drain_batch_and_the_totals(fx, capsys):
     rep = tp.check(str(fx), str(fx / "rows.npz"))
     lines = capsys.readouterr().out.splitlines()
-    assert len(lines) == 5 + 3 + 1
-    assert [json.loads(s)["id"] for s in lines[:5]] == [0, 1, 2, 3, RECORD_ID]
+    assert len(lines) == 7 + 3 + 1
+    assert [json.loads(s)["id"] for s in lines[:7]] == [0, 1, 2, 3, 4, 5, RECORD_ID]
     kept = json.loads((fx / "manifest.json").read_text())["cases"][0]["kept"]
     assert json.loads(lines[0]) == {"id": 0, "kind": "random", "S": 2, "V": 1024, "mask_ok": True, "stats_ok": True, "zgroup_ok": True,
                                     "ties": True, "kept": kept}
-    assert json.loads(lines[2])["zgroup_ok"] is None and json.loads(lines[4])["ties"] is False
-    assert [json.loads(s) for s in lines[5:8]] == [{"drain_B": 3, "S": 2, "rows_ok": "3/3"}, {"drain_B": 2, "S": 4, "rows_ok": "2/2"},
+    assert json.loads(lines[2])["zgroup_ok"] is None and json.loads(lines[6])["ties"] is False
+    assert [json.loads(s) for s in lines[7:10]] == [{"drain_B": 3, "S": 2, "rows_ok": "3/3"}, {"drain_B": 2, "S": 4, "rows_ok": "2/2"},
                                                    {"drain_B": 1, "S": 8, "rows_ok": "1/1"}]
     totals = {k: v for k, v in rep.items() if k not in ("fail", "drain")}
-    assert lines[8] == f"TOTALS {json.dumps(totals)} fail: []"
+    assert lines[10] == f"TOTALS {json.dumps(totals)} fail: []"
     tp.check(str(fx), verbose=False)
     assert capsys.readouterr().out == ""
 
 
+def test_the_totals_line_names_the_first_five_failures(fx, capsys):
+    for i in range(6):
+        _alter(fx, f"c{i}_keep", _flip(None, 5))
+    _alter(fx, f"c{RECORD_ID}_keep", _flip(None, 5))
+    rep = tp.check(str(fx), str(fx / "rows.npz"))
+    assert [f["id"] for f in rep["fail"]] == [0, 1, 2, 3, 4, 5, RECORD_ID] and rep["mask_ok"] == 0
+    assert capsys.readouterr().out.splitlines()[-1].endswith(f"fail: {rep['fail'][:5]}")
+
+
 def test_case_row_reads_each_kind_and_refuses_another():
-    random, _r, ties, biased = _cases()
+    random, _r, ties, biased, *_more = _cases()
     x, p = tp.case_row(random)
     assert np.array_equal(x, tp.gen_random(random["seed"], 1024)) and p == 0.95
     for c in (ties, biased):
@@ -284,7 +295,7 @@ def _main(argv: list[str]) -> int | str | None:
 def test_the_check_command_exits_0_on_a_passing_fixture_and_writes_its_report(fx, capsys):
     out = fx / "report.json"
     assert _main(["check", "--dir", str(fx), "--record", str(fx / "rows.npz"), "--out", str(out)]) == 0
-    assert json.loads(out.read_text()) == _report(fx)
+    assert out.read_text() == json.dumps(_report(fx), indent=1)
     assert capsys.readouterr().out.splitlines()[-1].startswith("TOTALS ")
 
 
