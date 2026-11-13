@@ -84,7 +84,7 @@
 #   --transfer-gate`, a5.py --transfer-gate and its transfer-gate negatives). The stand-in's partition holds them before its
 #   SiluMul_v2{I} (served_tp --template), e.g. STANDIN=256:work:2 A5_TRANSFER_GATES='RoPEHead_v1{D=64}'
 #   A5_SETS='256 rope-head/d64/bf16': the toy's 32 RoPE heads a rank proved whole beside 2 of its 8 SiluMul rows.
-# A5_PLAIN=1 (with A5_CHALLENGER): plain sessions (a5.py --plain), not --zk: each rank's window is one member drawn by its stream
+# A5_PLAIN=1 (with A5_CHALLENGER): plain sessions (a5.py --plain), not --zk: each rank's window is one member sampled by its stream
 #   under the partition's stratified rate, inside PLAIN_SCOPE, e.g. STANDIN=256:stratified-rate:1/2 A5_SETS=256 A5_CHALLENGER=local
 #   A5_JOBS=2.
 # ZK_SERVER=1: every session's prover runs behind the Lean ZK server's send check (--firewall to a5.py and each STANDIN
