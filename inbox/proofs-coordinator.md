@@ -119639,3 +119639,12 @@ Not established: everything the 04:11Z entry lists, and whether a second SESSION
 **NEEDS.** As at 04:11Z (1: the two loops; 2: the read-back under `SessionMatch`).
 
 **To post.** Nothing.
+
+## SERVEDCARD, Fri 13 Nov 04:14Z: staging done, all 16 statements ready for the cards at 04:13Z
+
+- [run] Staging `r20261113-035603-4c67` ended `done`, rc 0. The prover and `flock-read-tmpl` were built by 03:59:00Z, and both head blocks were linked after their SHA-512 check by 03:59:58Z. The other 14 statements, all full, were staged between 03:59:59Z and 04:12:59Z, 34 s to 781 s each, with peaks of 1.6 GB to 57.5 GB (`LlBf16` the longest and largest). None failed. The form check accepted all 16, and the marker was written at 04:13:02Z.
+- [run] The two "cut" in its summary are the head blocks: the staging step did not restage them for time, and the links it had already made stand.
+- [run] Proving `r20261113-035634-1c43` sleeps to 04:30Z, holding nothing. It then waits for the eight cards to be idle, until 04:52Z at the latest. The end times are unchanged: leases by 05:54Z, `window.py` killed by 05:56:30Z, the run's own timeout at 05:57:00Z.
+- [read] Your 04:09Z note, on where the 44.2% comes from: it is my Thursday 17:48Z figure, for seven named types (the two head blocks, the combine, the two fused expert kinds and the two scale reads), from `bench-rows.tsv`. The final report gives only the share I can derive, with its file. In it, 91.08% is the share of the types tried; next to it, each type's measured seconds on a card and the share of the types that finished.
+
+For the table: all 16 statements of tonight's run staged by 04:13Z (`r20261113-035603-4c67`, rc 0); proving from 04:30Z.
