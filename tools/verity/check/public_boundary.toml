@@ -128,12 +128,13 @@ benchmarks = [
     # the CPU reference of the int8 attention's gate, which vLLM's int8 attention tests hold the served kernels to
     "benchmarks/pouw/edited_gemm/{fattn_ref.py,pyproject.toml}",
     # Pearl-C's kernels, which the vLLM integration serves through: `verity_vllm.protocols.pouw.pearl_c.kernel` loads
-    # `run.py`, `fixture.py` and the cubin from the directory its `kernel` setting names (a path the run gives it, which no
-    # import shows: `tests/test_public_boundary.py` holds it), and `pearl_c.grouped` the `grouped.py` beside sm_90a's
-    # `run.py`. With them, what builds each cubin: `build.sh`, the sources it compiles and the gate it runs on the SASS
-    "benchmarks/pouw/pearl_c_sm120/{run.py,fixture.py,build.sh,sass_gate.py}",
+    # `run.py` and the cubin from the directory its `kernel` setting names (a path the run gives it, which no import
+    # shows: `tests/test_public_boundary.py` holds it), and `pearl_c.grouped` the `grouped.py` beside sm_90a's `run.py`.
+    # With them, what builds each cubin: `build.sh`, the sources it compiles and the gate it runs on the SASS, and
+    # `ship.sh` and `fixture.py`, the check the cubin is shipped with
+    "benchmarks/pouw/pearl_c_sm120/{run.py,fixture.py,build.sh,ship.sh,sass_gate.py}",
     "benchmarks/pouw/pearl_c_sm120/{pearl_c_sm120.cu,hash_fast.cuh,hash_decode.cuh,mainloop_sm120.cuh}",
-    "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,sass_gate.py}",
+    "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,ship.sh,sass_gate.py}",
     "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h,debit_sm90.cu}",
     # the -h3 hashing both cubins include, and the wide rows' that sm_90a's does
     "benchmarks/pouw/pearl_c/{hash_h3.cuh,hash_wide.cuh,sha512.cuh}",
