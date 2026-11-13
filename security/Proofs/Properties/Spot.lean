@@ -122,6 +122,17 @@ theorem none_fail_ite_nil (b : Bool) (y : String × Check) :
       (b = false → Fails y = false) := by
   cases b <;> simp
 
+/-- Each value `certified` names has a read among `opened`, a `{value: root}`: an entry of `opened` is of that value. A
+read reported under another value's name is no read of it. -/
+def CertifiedRead (certified : Array String) (opened : Array (String × Json)) : Prop :=
+  ∀ v ∈ certified, ∃ y ∈ opened, y.1 = v
+
+/-- What the record's checks hold of an accept: `UnitsProved`, and a reported read of each value the verifier holds a
+certified entry for (the check `certified`), which `AcceptMeans` does not state. -/
+def UnitsRead (p : Params) (c : Commitment) (e : Evidence) : Prop :=
+  UnitsProved c e ∧
+    CertifiedRead (p.verifier.certified.map (·.1.value)) ((openedRoots c.record e.verdicts).getD #[])
+
 /-- The check `certified` holds exactly when each certified value has a reported read. -/
 theorem certifiedCheck_ok (certified : Array String) (opened : Option (Array (String × Json))) :
     (∀ x ∈ Record.certifiedCheck certified opened, Fails x = false) ↔ CertifiedRead certified (opened.getD #[]) := by
@@ -189,14 +200,14 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
 
 theorem recordChecks_nil (p : Params) (c : Commitment) (e : Evidence) :
     OneStage.recordChecks c.record (Flock.hexOf c.digest) e (p.verifier.certified.map (·.1.value)) = #[] ↔
-      UnitsProved p c e := by
+      UnitsRead p c e := by
   unfold OneStage.recordChecks
   simp only [Array.map_eq_empty_iff, Array.filter_eq_empty_iff]
   have hf : ∀ cs : Array (String × Check),
       (∀ x ∈ cs, ¬(match x with | (n, c) => n != "draw" && !c.codes.isEmpty) = true) ↔ ∀ x ∈ cs, Fails x = false := by
     intro cs; simp [Fails]
   rw [hf, none_fail_append, checks_ok, certifiedCheck_ok, checkProved_nil]
-  unfold UnitsProved Receipt openedRoots
+  unfold UnitsRead UnitsProved Receipt openedRoots
   simp only [Option.map_eq_some_iff, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂, and_assoc]
   exact Iff.rfl
 
@@ -1291,11 +1302,12 @@ theorem checkDraw_nil (draw pop law : Json) : Draw.checkDraw draw pop law = #[] 
 theorem registered_law {v : Registration.Verifier} {rec law : Json} (h : Registered v rec law) :
     Draw.derive v.program v.query v.law v.workTable = .ok law := h.1.2.2.2.1
 
-/-- The check accepts exactly what `AcceptMeans` says it accepts. -/
+/-- The check accepts exactly what `AcceptMeans` says of an accept and a reported read of each certified value
+(`UnitsRead`). -/
 theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
     OneStage.check p c e = .accept pub prof ↔
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
-        UnitsProved p c e ∧ VerdictsAccept e.verdicts ∧
+        UnitsRead p c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n := by
   unfold OneStage.check
@@ -1364,14 +1376,16 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
     rintro ⟨law', d', n', hreg', -⟩
     exact h1 ((registration_nil _ _).2 ⟨law', hreg'⟩)
 
-theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
+theorem acceptMeans : AcceptMeans := fun p c e pub prof h => by
+  obtain ⟨law, d, n, hr, hd, ⟨hu, -⟩, rest⟩ := (acceptMeans_iff p c e pub prof).1 h
+  exact ⟨law, d, n, hr, hd, hu, rest⟩
 
 /-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R8, with a sample of the agreed law over the
-registered population, its units proved and served as sampled, and verdicts that accept, is accepted, publishing
-`publicOf` and the profile `profileOf`. -/
+registered population, its units proved and served as sampled with each certified value read (`UnitsRead`), and
+verdicts that accept, is accepted, publishing `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat)
     (hr : Registered p.verifier c.record law) (hd : Drawn e.draw (getD c.record "population") law)
-    (hu : UnitsProved p c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
+    (hu : UnitsRead p c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
     (hn : nat? (getD c.record "population") = some n) :
     OneStage.check p c e = .accept (publicOf p e law d n) (profileOf p c e d n) :=
   (acceptMeans_iff p c e _ _).2 ⟨law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
