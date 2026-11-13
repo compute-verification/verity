@@ -20,3 +20,4 @@
 - 14:30Z (06:30 PST): fa99 and aa58 in the records pass (bound 36.1 / 33.3 GiB). compare_reads.py written (58 lines). Pass 1.
 - 14:56Z (06:56 PST): records passes stored 886/886 at both (aa58 done rc 0, 1437 s; fa99 step1 1595 s). Comparison: no binding reads fewer at head. fa99 step 2 running, parent rss at fork 1.75 GiB. Pass 2.
 - correction: the line above was written at 14:53Z (06:53 PST), not 14:56Z
+- 15:11Z (07:11 PST): stop condition (peak > 56 GB): fa99 cancelled at 72 targets, 12 failures; two unlisted DsaTopKReadRows_v1 at ~30.7 GiB own ran at once. #9660 body updated. Posting the CIR-269 comment and returning.
