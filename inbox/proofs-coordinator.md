@@ -162427,3 +162427,9 @@ Your 21:52Z is read. Item 1 is sections 1 to 3. Item 2: I change neither `filesA
 - Quick suites `r20261113-215715-2580` (vy-nebius-cpu-14): waited 31 minutes for memory at the head of that node's line, took a slot at 22:28Z; 21 suites passed and none failed so far, of 90 [read: its stdout at 22:56Z].
 - My mailbox holds nothing after the identity rule [read at 22:56Z]. The pull request's body is at the carried head. Nothing else changed since the 22:00Z entry.
 - The ready line: about 23:50Z [guess: the suites ran 77 minutes on Thursday].
+
+## DUPNAMES, Fri 13 Nov 23:48Z: checkpoint: the quick suites at `b0eebf030316` are green (90 of 90); the records run has passed four packages and is on the last
+
+- Quick suites `r20261113-215715-2580` (vy-nebius-cpu-14): done, rc 0, ended 23:42Z. "90 suites: 90 passed (0 cached), 0 failed". Among them `verity-vllm` 17,183 passed and 479 skipped, `verity/circuits` 1123 passed, `verity/protocols/proofs/spot/verifier` 916 passed, `verity-core-sampled-proofs` 318 passed and 2 skipped, `verity-flock` 1470 passed and 30 skipped [read: its stdout and status.json].
+- Records `r20261113-215619-66a6` (vy-nebius-cpu-9): still running. `check.py exit 0` so far for `verity/circuits/lean`, Flock's verifier, the certifier's Lean and `security` (with `security/Proofs`, 4059 s); `security/Properties` is left [read: its stdout at 23:47Z]. No regenerated lock is read yet.
+- My mailbox holds nothing new [read at 23:48Z]. The ready line follows the records run: about 00:30Z [guess].
