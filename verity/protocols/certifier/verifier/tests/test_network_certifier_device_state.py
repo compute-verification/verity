@@ -193,11 +193,12 @@ def test_a_refused_signer_gives_no_starts_certificate(tmp_path):
 
 
 def test_the_starts_tag_is_no_other_separator_and_neither_begins_the_other():
-    """The start's tag is a literal of the certificate's, as its other tags are, which the table of domain separators
-    does not hold: this holds what its entry there would. It is no entry of the table and no other tag of the
-    certificate's, and none of them begins it or is begun by it."""
+    """The start's tag is a literal of the certificate's, as its other tags are, and the table of domain separators
+    holds it as `CERTIFIER_START`. It is no other entry of the table and no other tag of the certificate's, and none
+    of them begins it or is begun by it."""
     mine = certificate.START_TAG.encode()
-    table = [v.encode() for k, v in vars(domains).items() if k.isupper() and isinstance(v, str)]
+    assert domains.CERTIFIER_START == certificate.START_TAG
+    table = [v.encode() for k, v in domains.TABLE.items() if k != "CERTIFIER_START"]
     own = [(v if isinstance(v, bytes) else v.encode()).rstrip(b"\0") for k, v in vars(certificate).items()
            if k.endswith("_TAG") and k != "START_TAG"]
     assert domains.CERTIFIER_CLOCK.encode() in table and certificate.CLOCK_TAG.encode() in own

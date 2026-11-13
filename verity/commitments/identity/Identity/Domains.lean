@@ -203,6 +203,7 @@ abbrev CERTIFIER_REVEAL_RESPONSE : String := "verity-network-certifier/reveal-re
 abbrev CERTIFIER_ROW_SHA512 : String := "verity-network-certifier/row-sha512/v1"
 abbrev CERTIFIER_SERVICE_SPEC : String := "verity-network-certifier/service-spec/v0"
 abbrev CERTIFIER_SESSION : String := "verity-network-certifier/session/v0"
+abbrev CERTIFIER_START : String := "verity-network-certifier/start/v1"
 abbrev CERTIFIER_STATEMENT : String := "verity-network-certifier/statement/v0"
 abbrev CERTIFIER_TRANSFER_REGISTRATION : String := "verity-network-certifier/transfer-registration/v1"
 abbrev CERTIFIER_TRANSFER : String := "verity-network-certifier/transfer/v1"

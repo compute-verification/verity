@@ -93,6 +93,11 @@ the link's name with ``-origin`` (`start_link`), ``egress``, window 0:
 millisecond `base_ms` + t·τ_b of the key's life. Both are public, so the digest carries no salt, and a verifier that
 holds them checks the certificate alone (`CertifiedStart.verify`). The tag and the link name are the start's own, so
 a start's certificate opens as no record's or clock's.
+
+The tag says which clock the session's ticks are read on: ``verity-network-certifier/start/v1`` means the host's raw
+clock, and a device whose ticks read any other clock signs its starts under another tag. The digest names no clock:
+the base is a sum of spans, not a reading, and that a device's ticks read the clock its tag means rests on
+`trusted-host`. A device that signs no start has no session a check of the start accepts.
 """
 
 from __future__ import annotations
