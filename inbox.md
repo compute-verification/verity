@@ -83,3 +83,24 @@ M9 was also caught by 21 other tests, since the hand-worked world's schedule has
 - The reader's part, when #9541's next head and the auditor's side exist.
 - #9454's union merge, on your word that #9467 landed. Rule 3 for #9305 and #9329, on your word that #9375 landed.
 
+[2026-11-13T01:02Z] 6d4dbf25179f
+LAYOUTREAD, NET-410, Thu 12 Nov 5:01 PM PST: **the trial stage passed. `move_check` certifies the move as pure.** For lean on LEAN-80.
+
+- [ran] The map leaves `benchmarks/training_slowdown/tests/test_one_calculator.py` out of its rewrite, with the reason in its header: commit `3c27d797231` on `cursor/na-nci-rho-map-8d6e`, pushed. Its base is `main` at `7e70df68bd18`.
+- [ran] The trial stage: run `r20261113-004432-5173`, research pool, launched once, exit 0. `stage.py`: "certified 3c27d7972312..ddcd999d0b25 is a pure move (42 renames, 85 path-only edits)" and "run again on it, it changes nothing". 77 files move, 86 are rewritten. With `--no-lock`: neither tree is a workspace member, and the root `pyproject.toml` and `uv.lock` do not change.
+- [ran] The trial branch, scratch, on origin: `scratch/na-nci-rho-trial-8d6e`. Its first commit is the move, `ddcd999d0b2`; its second is the hand commit, `f2e5fd524e9`. No pull request opens from it.
+- [ran] The hand commit as a patch file, on origin: `nci_rho_hand.patch` on the branch `scratch/na-nci-rho-hand-8d6e` (head `7f580b5d5dbc`; `git show origin/scratch/na-nci-rho-hand-8d6e:nci_rho_hand.patch`). It is `git format-patch -1 f2e5fd524e9`.
+- [read] Lean and lock lines the trial's move rewrites, on this base: line 11 of `security/Definitions/Nci/Guarantees/Remote.lean` (one path in a doc comment) and the three `test` paths of `security/lean-audit.json` (27963, 27968, 27973). No other Lean file, no other lock line. I ran no `--update`.
+
+**Two facts for lean, both about trees that are not `main` yet.**
+
+- [ran, on my machine, a dry run on #9433's head `d4df5d5bf859`] **No: the dry run does not list `security/Definitions/Nci/Remote.lean`.** The map leaves every `.lean` file out and takes one back in. #9433 writes four moved paths there (lines 10, 28, 30, 62), and the move would leave all four naming the old place. With that file added to the map's `[rewrite] include` the move rewrites those four, and `move_check` certifies it (42 renames, 86 path-only edits) [ran, on my machine]. On `main` today that file names `benchmarks/nci/tiers.py` and `benchmarks/rho`, which the move makes right with no edit, so the added line changes nothing there [read]. **Your word: do I add that one line to the map now?**
+- [read] **#9375's head `34c5cbb3705c` adds a second moved path to the same doc comment of `Guarantees/Remote.lean`,** on line 12 (`verity/protocols/inference_only/rho`). On a tree that holds #9375 the move rewrites lines 11 and 12 of that file, not line 11 alone [ran, the same dry run: 2 paths]. Same file, same comment; no new file.
+- [ran, on my machine] On `main` five other Lean doc comments name `benchmarks/nci/...`, dead paths today: the move makes them right without touching them, and the doc-paths test's warning list loses those five lines.
+
+**The detector** is built to training's four cases (your 4:47 PM message, read by hand: this machine's hook does not poll). [ran, on my machine, the one file] All 11 tests of the file pass on the trial tree. `NAMED_ONLY` keeps its entry: `config.py`'s message names `benchmarks/rho/data`, which the new rule finds, so the entry is not stale after the hand commit. Broken seven ways, the detector fails a case each time, and each of the four cases fails under one of them.
+
+**Next, tonight:** the comment on NET-410 with the hunk, the same text to you, then the suites on a node, once. Then the pull request.
+
+**Not checked:** any suite on a node; the trial on today's `main` (`e86d9204135`, 138 commits past the base; none touches the two trees, the three importing benchmarks, `verity/hardware`, `benchmarks/README.md`, `security/Definitions/Nci/` or the lock [ran]).
+
