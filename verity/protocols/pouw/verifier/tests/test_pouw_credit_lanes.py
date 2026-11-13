@@ -16,26 +16,19 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-import importlib.util
 import json
 import random
-import sys
 from pathlib import Path
 
 import pytest
 
+import test_circuit_h1window as h1
 from verity.circuits import codec
 from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.pouw.verifier import credit as Cr
 from verity.protocols.pouw.verifier import leaf_lanes as LL
 from verity.protocols.spot.verifier.one_stage import produced as PR
 from verity.protocols.spot.verifier.one_stage import proofs as PF
-
-if "test_circuit_h1window" not in sys.modules:
-    _spec = importlib.util.spec_from_file_location("test_circuit_h1window", Path(__file__).parent / "test_circuit_h1window.py")
-    sys.modules["test_circuit_h1window"] = importlib.util.module_from_spec(_spec)
-    _spec.loader.exec_module(sys.modules["test_circuit_h1window"])
-h1 = sys.modules["test_circuit_h1window"]
 
 LEAF = (8, 16)
 LINEARS = (("q_proj", 384, 32), ("k_proj", 384, 16), ("down_proj", 416, 16))

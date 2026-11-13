@@ -11,6 +11,7 @@ a reference made from other inputs.
 from __future__ import annotations
 
 import atexit
+import logging
 import multiprocessing
 import os
 from concurrent.futures import ProcessPoolExecutor
@@ -21,15 +22,18 @@ from verity_config.settings import of
 __all__ = ["cpus", "pool", "prefetch"]
 
 settings = of(__file__)
+log = logging.getLogger(__name__)
 _POOL: ProcessPoolExecutor | None = None
 
 
 def cpus() -> int:
-    """The job's CPUs: ``OMP_NUM_THREADS`` (a fill job's ``cpus=``), at most the CPUs the process may run on."""
+    """The job's CPUs: ``OMP_NUM_THREADS`` (a fill job's ``cpus=``), at most the CPUs the process may run on. A value that
+    is no integer counts as unset, and a warning says so."""
     allowed = len(os.sched_getaffinity(0))
     try:
         n = settings.OMP_NUM_THREADS
-    except ValueError:
+    except ValueError as e:
+        log.warning("cpus: %s, so the job takes the %d CPUs the process may run on", e, allowed)
         n = None
     return allowed if n is None else max(1, min(n, allowed))
 
