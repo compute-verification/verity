@@ -134958,3 +134958,66 @@ Clock: `date -u` read 10:24Z when I wrote this. Mailbox: your 09:52Z and 10:04Z,
 **Runs.** `r20261113-095047-96bf` failed rc 1 (item 6). `r20261113-101230-9404` done rc 0 (item 1). `r20261113-102309-0622` out.
 
 **To post.** Nothing.
+
+## SESSIONOF2, Fri 13 Nov 10:27Z: YES, the import can be cut. `oneTable_of_sessionOk` now sits in `SampledTwo/ScopeTable.lean`, whose imports reach no certifier file; it COMPILES at `b49c6e4061` on `cursor/proofs-sessionof2-7c3a` (`00d2`, `61c4`, both rc 0). ADDRROW2 changes one import line in `RowTable.lean`. I do NOT have `runMembers_sessions` on any branch: MESSAGES writes it
+
+One of the lane's rules is that the proofs about the sampled proof system never lean on the proofs about the network certifier. One file broke the rule only because it borrowed a small lemma of mine from a file that also talks about something else, and that something else drags the certifier's proofs in. I moved the lemma, unchanged and under its old name, into a file of its own that needs none of that. The borrowing file now has to name the new file in place of the old one, which is one line, and then the rule holds again.
+
+Mailbox read at 10:25Z (54 lines, your 10:03Z the last). This is your item 6 only; items 1 and 4 follow in the entry due by 11:30Z.
+
+**The answer** [run, on the join at `75f438d9f7f`, with the test's own functions (`_lean_reach`, `_covered`, `CERTIFIER_LEAN`)]
+
+- As the join stands, SPOT's roots reach 31 certifier files, and every chain starts from `SpotFlock/AddressFacts/RowTable.lean`.
+- `OneTable.lean` reaches them through one of its four imports, `SampledTwo.SessionCoins`. Its other three (`SpotFlock.Accepting`, `SpotFlock.RunsAs.SecondStageOf`, `Soundness.Discharge.HiddenExec.AcceptsP`) reach 1,695 files and none of the certifier.
+- `oneTable_of_sessionOk` and `oneTable_of_shape` read nothing of `SessionCoins`. [read: their text; run: they compile without it]
+- With `RowTable.lean`'s line 26 replaced by those three imports, SPOT's 3,348 roots reach 0 certifier files. [run: the import list replaced inside the script, not in the tree]
+
+**What I moved** [run]
+
+- New file `security/Proofs/Properties/Verity/SampledTwo/ScopeTable.lean`: `Verity.SampledTwo.oneTable_of_shape` and `Verity.SampledTwo.oneTable_of_sessionOk`, statements and proofs as they were, names and namespace unchanged. Its imports are the three above.
+- `OneTable.lean` (mine) now imports `ScopeTable` publicly beside `SessionCoins` and keeps `oneTable_of_scope`, `rounds_of_oneTable` and `reps_of_scope`. Every file that imports `OneTable` still sees both moved names.
+- One line each in `security/Proofs/lakefile.toml` and the `roots` of `security/Proofs/lean-audit.json`.
+- Commit `b49c6e40619f1a536313df29427a00a048a856f7`, one commit on top of `d45f63a86c`, which the join holds.
+
+**For ADDRROW2** (owner of `RowTable.lean`; I edit nothing there): line 26, `import Proofs.Properties.Verity.SampledTwo.OneTable` becomes `import Proofs.Properties.Verity.SampledTwo.ScopeTable`. `RowTable.lean` reads `oneTable_of_sessionOk` and nothing else of `OneTable.lean` (line 230, and two docstrings). [read on the join]
+
+**For ASSEMBLY**: merge `b49c6e4061` from `cursor/proofs-sessionof2-7c3a` (four files, one of them new, one new root), then ADDRROW2's one line.
+
+**Tries** [run; `--on auto --mem-gb 24`; each probe: no theorem past `propext`, `Classical.choice`, `Quot.sound`; peak as the try's `siblings` line prints]
+
+| run | node | file | at | lean | theorems | peak |
+|---|---|---|---|---|---|---|
+| `r20261113-101023-00d2` | vy-nebius-cpu-1 | `ScopeTable.lean` | `b49c6e4061` | 317 s | 2 | 4,151 MB |
+| `r20261113-101647-61c4` | vy-nebius-cpu-8 | `TableName.lean` | `b49c6e4061` | 314 s | 3 | 4,767 MB |
+
+- `61c4`'s dependency build compiled `ScopeTable` and then `OneTable` before `TableName`. [run: its log's `Built` lines] The two times are mostly the dependency build on a cold copy.
+- `pytest tests/test_lean_packages.py` at `b49c6e4061`: 34 passed, 1 failed. The failure is `test_no_import_all_of_an_in_tree_module` on `SampledTwo/FirstSample.lean` (`import all` of `Spot.Run`), a file my commit does not touch. [run on the VM]
+
+**Your item 5**: `runMembers_sessions`, or any fold of `stepMember_sessions` over the statements, is on none of my three branches. [run: `rg` on each] I do not write it.
+
+**The machine** [run]: it was replaced at 10:05:05Z and `~/wt` was gone. I made `~/wt/.pen` at 10:08:45Z and rebuilt the worktrees from the remote. Nothing was unpushed; the three heads were as my 09:54Z entry gave them.
+
+## STOP RULE
+
+Not met. No statement changed: two theorems moved between two files of mine. Neither name is in a lock; `ScopeTable` appears once, under `roots`. [run: `rg` on the three `lean-audit.json`]
+
+## NEEDS
+
+- **ADDRROW2**: the one import line above.
+- **ASSEMBLY**: merge `b49c6e4061`.
+
+## To post
+
+Nothing.
+
+## Not established
+
+- `RowTable.lean` with the changed import is not compiled: it is ADDRROW2's file, and it is on the join, not on my branch.
+- The boundary test itself was not run on a tree with the change; the count of 0 is from its functions with the import list replaced.
+- No whole build of `security/Proofs` at `b49c6e4061`.
+
+## Heads
+
+- `cursor/proofs-sessionof2-7c3a` `b49c6e40619f1a536313df29427a00a048a856f7`, pushed, nothing uncommitted.
+- `cursor/proofs-sessionof-9b17` `8c6dc95e53bf555b17124de3b39a75cf080003a9`, pushed, NOT compiled: your item 1's lemmas, in try `r20261113-102442-ebfe` (vy-nebius-cpu-14), expected end about 10:30Z.
+- `cursor/proofs-sessionof-5c1e` `521933e1430b7b404142adfafbba82b0aed0fba5`, untouched.
