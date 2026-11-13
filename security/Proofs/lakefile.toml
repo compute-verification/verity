@@ -176,7 +176,6 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.ClaimInner", "Proofs.Properties.Verity.SampledTwo.Ordered",
   "Proofs.Properties.Verity.SampledTwo.Deployed", "Proofs.Properties.Verity.SampledTwo.Shown",
   "Proofs.Properties.Verity.SampledTwo.CutRoots", "Proofs.Properties.Verity.SampledTwo.DrawRoots",
-  "Proofs.Properties.Verity.SampledTwo.FirstSample",
-  "Proofs.Properties.Verity.SampledTwo.InputMap", "Proofs.Properties.Verity.SampledTwo.DeviceOrder",
-  "Proofs.Properties.Verity.SampledTwo.DeviceAccept", "Proofs.Properties.Verity.SampledTwo.SecondRead",
-  "Proofs.Properties.Verity.SampledTwo.AcceptsOfSteps"]
+  "Proofs.Properties.Verity.SampledTwo.FirstSample", "Proofs.Properties.Verity.SampledTwo.InputMap",
+  "Proofs.Properties.Verity.SampledTwo.DeviceOrder", "Proofs.Properties.Verity.SampledTwo.DeviceAccept",
+  "Proofs.Properties.Verity.SampledTwo.SecondRead", "Proofs.Properties.Verity.SampledTwo.AcceptsOfSteps"]
