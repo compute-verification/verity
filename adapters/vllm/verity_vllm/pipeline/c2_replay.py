@@ -13,7 +13,6 @@ boundary linkage (declared prompt -> input ids; sampled id[s-1] -> input id[s]) 
 from __future__ import annotations
 
 import copy
-import ctypes
 import gc
 import hashlib
 import inspect
@@ -24,18 +23,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.check.replay import definitions as DF
-from verity_vllm.check.replay import driver as SR
-from verity_vllm.check.replay import replay_codes as RC
-from verity_vllm.check.replay.linkage import LINKAGE_SCHEMA
 from verity_vllm.commit import challenge as CH
-from verity_vllm.commit import executed_prefix as EPX
 from verity_vllm.commit import opened as OV
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import commit_plan as CP
-from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.query.manifest import format as MF
+
+# The replay driver, its Definition check and codes, the executed prefix, the serving rows and the manifest's format are imported
+# inside the functions that read them, as `vu_store` is: the driver's import puts the catalog's Definitions into the Definition
+# table, and a process that only imports this module (the Commit before its replay, a deferred Commit) is to hold none of them.
 
 logger = init_logger(__name__)
 
@@ -103,6 +99,8 @@ class ProgramSources:
 
 
 def live_weights(model: Any, prefix: str) -> Callable:
+    from verity_vllm.check.replay import driver as SR
+
     return SR.model_weights_provider(model, prefix)
 
 
@@ -187,6 +185,9 @@ def alias_layers(check: dict[str, Any]) -> int:
 def run(s: ReplaySources, replay_cache: dict[str, dict[str, Any]]) -> None:
     """The replay + linkage of the run on `s`, their artifact (`sampled_replay_p<pair>.json`) and their components on `s.row`.  A
     replay this host cannot hold (`driver.PoolDoesNotFit`) is raised, not recorded: it says nothing about the run."""
+    from verity_vllm.check.replay.driver import SCHEMA, PoolDoesNotFit
+    from verity_vllm.check.replay.linkage import LINKAGE_SCHEMA
+
     pair, rc = s.pair, s.rc
     _rc_key = cache_key(s)
     _cached = replay_cache.get(_rc_key) if _rc_key is not None else None
@@ -205,10 +206,10 @@ def run(s: ReplaySources, replay_cache: dict[str, dict[str, Any]]) -> None:
             if _rc_key is not None and sr.get("result") is not None:
                 replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(s.out / f"sampled_replay_p{pair}.json"),
                                          "seed": sample_of(sr).get("seed"), "code": s.versions.get("git_head")}
-        except SR.PoolDoesNotFit:
+        except PoolDoesNotFit:
             raise
         except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
-            sr = {"schema": SR.SCHEMA, "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated",
+            sr = {"schema": SCHEMA, "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated",
                   "why": f"sampled replay not run: {e!r}"[:300], "error": repr(e)[:300]}
             lk = {"schema": LINKAGE_SCHEMA, "result": None, "why": f"boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0}
     _art = s.out / f"sampled_replay_p{pair}.json"
@@ -245,6 +246,9 @@ def programs_of_record(s: ReplaySources | ProgramSources, _rl: dict[str, str], *
     record (--program-digest, B=1) or one of the manifest's component digests (B>=2), and the Definitions this tree evaluates their
     rows by must be the ones their Builds bound (`check.replay.definitions`); else REFUSED by name.  ``definitions=False`` for a
     caller that evaluates no row (the replay's plan, the serving rows): the replay that grades the picks checks them."""
+    from verity_vllm.check.replay import definitions as DF
+    from verity_vllm.query.manifest import format as MF
+
     args, required_manifest, reqs, sampling = s.args, s.manifest, s.reqs, s.sampling
     _of_record = CP.digests_of_record(args, required_manifest if isinstance(required_manifest, dict) else None)
     if getattr(args, "programs_root", None):
@@ -286,6 +290,8 @@ def arrivals(s: Any, rl: dict[str, str]) -> tuple[dict[str, int], bool]:
     """Each request's arrival step, and whether it moved off the declared one.  One schedule of record for every consumer: when the
     population was placed on the engine's committed-step axis (binding.coverage.schedule.use == observed), the replay's, the
     linkage's and the serving rows' arrivals are the same observed ones."""
+    from verity_vllm.check.replay import driver as SR
+
     declared = {rl[str(r.get("request_id"))]: int(r.get("arrive_step") or 0) for r in s.reqs}
     return SR.arrivals_of_record(declared, schedule_of_record(s.row))
 
@@ -295,6 +301,8 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
     run root)[:8], else the run root's first 8 bytes.  That last form has no coin: a prover steers the sample by committing again, in about
     the lesser of 1/p and 2^64 tries (p: the chance one sample misses its faults), so such a replay is a measurement.  The Commit's own
     replay reads its two flags here and no coin of a challenger gate; the served C2 passes its replay challenge (`pipeline.served_match`)."""
+    from verity_vllm.check.replay import driver as SR, replay_codes as RC
+
     _seed_chal = None
     if getattr(args, "replay_seed", None) is not None:
         _seed, _seed_src, _seed_form = int(args.replay_seed), RC.PROVER_SEED_SOURCE, "prover-chosen"
@@ -324,6 +332,8 @@ def build_t(program: dict[str, Any]) -> Any:
 
 def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
     """Each request Program's steps of record: its Build result's T + 1, else its rows' segment steps."""
+    from verity_vllm.query.manifest import format as MF
+
     return {k: (int(v["result"]["T"]) + 1) if build_t(v) is not None else (len(MF.segment_steps(progs[k]["rows"], progs[k].get("checks"))) if k in progs else None)
             for k, v in loaded.items()}
 
@@ -334,6 +344,8 @@ def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int]
     Program's Build result -- the prescribed-input linkage reads BOTH from the record, never from the served run.  The linkage horizon is the request's PROGRAM OF RECORD's, not the workload cap: horizon = min(cap,
     Program steps) -- the Program's T from its Build result (result.json T) else its ProgramIndex.n_steps; a request whose committed steps
     are FEWER than its Program of record still fails by name (the chain rule is unchanged inside the horizon).  Recorded per request."""
+    from verity_vllm.check.replay import driver as SR
+
     sampling = s.sampling
     return [{"request_id": _rl[str(r.get("request_id"))], "arrive_step": _arr[_rl[str(r.get("request_id"))]],
              "prompt_token_ids": list(r["prompt_token_ids"]), "cached": int(r.get("cached") or 0),
@@ -361,6 +373,9 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
     `population.not_executed_by_rule`, fed with named record facts (`EPX.executed_prefix_facts`) -- never literals.  On a tree without
     the `executed_prefix=` kwarg nothing bounds the replay population: an EOS-stopped request's rows past the stop are sampled and grade 'not
     evaluated' -> partial, never PASS.  An older signature receives only the arithmetic's facts."""
+    from verity_vllm.commit import executed_prefix as EPX
+    from verity_vllm.check.replay import driver as SR
+
     _sr_kw: dict[str, Any] = {}
     binding = s.row["commit"].get("binding")
     _ep_facts = EPX.executed_prefix_facts(_epr_r, binding if binding else {}, lk, _arr, s.stop_of_record,
@@ -412,6 +427,9 @@ def serving_rows(s: ReplaySources) -> None:
     """The in-Commit hook (`serving_rows.readers`) at the C2 site of a run whose replay is deferred to its bundle: the window
     committed from `s.com` over the Programs of record, as `evaluate` commits it in process, once the run's roots are final and
     before sampling (the deferred replay samples on CPU, after the bundle is sealed).  ``served``, as the in-process replay's is."""
+    from verity_vllm.check.replay import driver as SR
+    from verity_vllm.pipeline import serving_rows as SRW
+
     bm = json.loads((s.out / f"binding_map_p{s.pair}.json").read_text())
     rl = request_labels(s.reqs)
     loaded, digs = programs_of_record(s, rl, definitions=False)
@@ -425,6 +443,10 @@ def serving_rows(s: ReplaySources) -> None:
 def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the sample's reads only (`plan`), with the Programs and the sample the ``planner``'s when there is one."""
+    from verity_vllm.check.replay import definitions as DF
+    from verity_vllm.check.replay import driver as SR
+    from verity_vllm.commit import executed_prefix as EPX
+
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
     held["bm"] = _bm = json.loads((s.out / f"binding_map_p{pair}.json").read_text())
     _rl = request_labels(reqs)
@@ -439,6 +461,8 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
         _k0 = next(iter(_progs))
         held["pi0"] = _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
         facts = linkage_facts(_loaded, _progs, _pi0)
+    from verity_vllm.pipeline import serving_rows as SRW
+
     _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else no_weights, _progs, _bm,
                                   _arr, _loaded, s.manifest, args.label, _digs)
     _rd = held["rd"]
@@ -523,6 +547,8 @@ def reconcile(s: ReplaySources, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr
     """ONE mechanism, reconciled on the record: the Commit's classification of the manifest identities
     (binding coverage) and the population's third bucket must name the same identities -- n_exec per request, count per row family; a
     batch-level / named-input family is outside the population split's reach and is named, not equal."""
+    from verity_vllm.commit import executed_prefix as EPX
+
     row, pair = s.row, s.pair
     if "executed_prefix" in _sr_kw and _epr_r["any_eos_stop"]:
         binding = row["commit"].get("binding")
@@ -557,6 +583,8 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
     _rss_c2g = rss_kb()[0]
     _trim: int | str | None = None
     try:
+        import ctypes
+
         _trim = int(ctypes.CDLL("libc.so.6").malloc_trim(0))
     except Exception as e:  # noqa: BLE001  -- not glibc: the gc-only delta stands, named
         _trim = repr(e)[:80]
