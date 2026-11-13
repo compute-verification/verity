@@ -12,17 +12,17 @@ this package adds the primitives. It is code, so it requires nothing of `securit
   tensor-core dot steps; E4 the rest of the registry's gate primitives and the lazy families `TableRead{IB}x{EW}_v1`,
   `GatherBf16x{V}_v1` and `GatherF32x{V}_v1`. Any other primitive (the lifting families, `BitAtx`, `TopPMaskWordx`, ...)
   is refused by name.
-- `Evaluate/Scalar.lean`: the scalar primitives (`verity.definitions.ops.scalar`, and the vLLM integration's `I32Sub`,
+- `Evaluate/Scalar.lean`: the scalar primitives (`verity.circuits.ops.scalar`, and the vLLM integration's `I32Sub`,
   `I64ToI32`, `U32And`, `U32Xor`, `BitXor`, `SelectBit`), transcribed branch for branch from the Python. Each names the
   definition of `security/Definitions/Core/Scalar.lean` it must equal, or that Security has none yet; the equalities are
   proved in `security/Proofs`, as the certifier's are, since code never requires `security/`.
-- `Evaluate/Fp32.lean`, `Evaluate/Casts.lean`: the FP32 and BF16 arithmetic (`verity.definitions.ops.fp32`,
+- `Evaluate/Fp32.lean`, `Evaluate/Casts.lean`: the FP32 and BF16 arithmetic (`verity.circuits.ops.fp32`,
   `mufu.DivFullScaleA_v1`, and the vLLM integration's `F32Sub`, `F32Sqrt`, `F32MaxRef`, `F32GtStrict`, `F32FmaRm`,
-  `F32CeilFtz`, `I32ToF32` and `DivFullScaleA_v2`) and the casts of `verity.definitions.ops.prims`: copies of
+  `F32CeilFtz`, `I32ToF32` and `DivFullScaleA_v2`) and the casts of `verity.circuits.ops.prims`: copies of
   `security/Definitions/Core/{Fp32,Prims}.lean` where Security defines the primitive, transcriptions of the Python where it
   does not, each naming which. The `_v1` add, sub, mul and div return numpy's NaN on x86-64 (`Evaluate.Fp32.hostNan`),
   which Security does not state.
-- `Evaluate/TC/`: the seven tensor-core dot steps of `verity.definitions.ops.prims` (`Dots.lean`: Ampere's and Hopper's BF16,
+- `Evaluate/TC/`: the seven tensor-core dot steps of `verity.circuits.ops.prims` (`Dots.lean`: Ampere's and Hopper's BF16,
   Hopper's and sm_120's E4M3, sm_120's E5M2, NVFP4 and MXFP4), on copies of Security's step semantics: `Spec.lean` of
   `security/Definitions/Core/TC/{Pipeline,Spec}.lean` (`tc_dot_total`), `Fp8Atom.lean` of `Pouw/Fp8Atom/{E4M3,Atom}.lean` and
   `Pouw/PearlC/Sm120.lean` (`tc_dot_total_e4m3`), `Fp4.lean` of `Pouw/PearlC/Fp4.lean` (`BlockScaledAlignAdd`). The E5M2 step
@@ -60,7 +60,7 @@ refusal: seeded random Boolean composites over every node form, sampled by a Hyp
 mutations both sides refuse; each scalar primitive on the whole grid of its operands' edge words, on sampled words, and on
 words out of range; each FP32 and BF16 primitive the same way, its grid of FP edge words (signed zeros, subnormals, the
 extreme normals, ties and overflows on rounding, the infinities and every NaN class) batched in one Program per row,
-`Bf16ToF32` and `E4m3ToF32` on every word, and the GPU captures in `verity/definitions/ops/tests/fixtures` (the FP32
+`Bf16ToF32` and `E4m3ToF32` on every word, and the GPU captures in `verity/circuits/ops/tests/fixtures` (the FP32
 NaN probe, and the fetched `cvt.rn.bf16.f32` campaign of the A100 and RTX 4090 special values); each tensor-core dot
 step batched on every pair of its format's edge codes under every FP32 edge accumulator, on pairs of specials across its
 groups, on every pair of edge scale bytes, on 3118 accumulators over structured operands, on sampled words and on words out of
