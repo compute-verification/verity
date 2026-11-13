@@ -27,7 +27,7 @@ before.
 | `served_inputs` | CPUs, after a pass | a retained pass's inert work per input against the scheme's bound, by census or sample, or by fresh trials | a directory of `inputs.json` and the tiles' lines, which `served_table.py` reads |
 | `served_step` | one leased GPU, then CPUs | where a served decode step's time goes, one engine process an arm, under Nsight Systems or not (`served_step.py`) | a directory an arm and `breakdown.md` |
 | `served_profile` | one leased GPU, then CPUs | `e2e.py`'s own run with a range on every generate and forward, profiled (`served_profile.py`) | `served-profile.json` |
-| `retain_profile` | the node's CPUs, then one leased GPU a load (an H100 or H200) | what retaining every pass costs a served run and where its time goes: the node's copy and write rates, then each load served with no pass retained and with every pass retained under timers (`retain_profile.py`) | each load's served JSON, its profile and the logs |
+| `retain_profile` | the node's CPUs for the kernel's build, then one leased GPU (an H100 or H200) for the probe and for each serve | what retaining every pass costs a served run and where its time goes: the node's copy and write rates, then each load served with no pass retained and with every pass retained under timers (`retain_profile.py`) | each load's served JSON, its profile and the logs |
 | `noise_sweep` | leased GPUs, a point a lease | the served decode overhead over stock FP8 across a list of points, untimed screens (`noise_sweep.py` summarizes) | `points/<point>/`, `progress.jsonl`, `sweep.json` and `sweep.md` |
 | `forming_domain` | CPUs, after a pass | whether a retained pass's credited rows meet the forming lemma's domain conditions (`forming_domain.py`) | one JSON file |
 
