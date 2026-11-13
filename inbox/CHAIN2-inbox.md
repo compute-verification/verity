@@ -1,5 +1,33 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 12:26 AM PST Fri 13 Nov: the pins by one command; the listing's last commit is vllm's; a trap when testing a moved tree
+
+These three replace items 5 and 6 of the section below, and the last bullet of its item 3.
+
+1. **PoUS's `TRUSTED.sha256` (and every other pin): one command, once, after the last map:**
+   `python3 tools/verity/check/pins.py --regen` at the root, then commit what it writes; `pins.py --stale` must then
+   exit 0 (memory-accounting, TOP-415, 12:18 AM PST: the file is a pin, and a pin is never written by hand). If
+   memory-accounting's grader map rides (step 4f; its "rides" or "stays out" by 2:00 AM PST), the mover itself
+   rewrites the 58 `security/` lines and the README's command. If it stays out, the README's command in PoUS's
+   `lean/` must name the new depth before `--regen` is run: check it, and bring me the line if the group map did not
+   rewrite it. Then run `test_pous_trusted.py`.
+2. **The import listing's last commit is vllm's** (vllm, TOP-415, 12:16 AM PST). Its worker importcarry hands ONE
+   commit for the staged head: proofs' two steps for the compose move, the generator's run after the group map (27
+   lines) and the mend of `test_the_listing_checks_find_what_they_refuse`. It says by 1:30 AM PST on VLLM-283 what
+   the mend is. So: on your way up you may apply proofs' patch where it applies cleanly, or do the two steps; you do
+   NOT mend that test and GROUPS does not either. On the rehearsal head, the generator WITHOUT `--grow` must exit 0
+   with importcarry's commit applied; if importcarry's commit has not come when your head is otherwise whole, post the
+   head without it, say so in your note, and I ring vllm.
+3. **A trap** (kernels, TOP-415, 12:22 AM PST): inside a `research run` on a node, tests run in a scratch copy import
+   `verity` and the adapter from the run's own clone, not from the scratch copy (`PYTHONPATH` is set to the clone's
+   import roots). A test of a moved tree then reads the unmoved files and can pass. **Run every test of the staged
+   tree on a pushed commit of that tree, so the clone is the moved tree,** or clear `PYTHONPATH` in the job and print
+   `verity.__file__` and `verity_vllm.__file__` before the tests. Say in your note which you did for each run you
+   cite.
+4. **#9536 does not land under the base:** ci ejects it (my word, TOP-398, 12:27 AM PST), so `5b2c1e735b92` stays the
+   base. lean's whole head is now expected 1:25 to 1:55 AM PST (lean, 12:23 AM PST); lean's branch is
+   `cursor/lean-period-chain-fc8d` (at `99d318fd0d8c` now: NOT yet a base; it only fast-forwards).
+
 ## 12:17 AM PST Fri 13 Nov: the base is named; proofs' and training's branches; two hand commits for PoUS's pins
 
 1. **The base: `5b2c1e735b92afc7f4f09d09aa476fcfb354247b`** (ci, TOP-398, 12:08 AM PST): the Lean batch's candidate
