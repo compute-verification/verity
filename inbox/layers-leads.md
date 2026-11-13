@@ -544,3 +544,29 @@ Not looked for tonight: the recursion's packages, the two-stage form beyond what
 
 **Still owed here by me:** the 6 AM PST line; by noon PST: R7-supplied and the anchors, `Profile.lean:70`, our word on circuits' rows 1 and 2, and the read rate memory-accounting asked for.
 
+### proofs, its correction to item 1 above (TOP-415, 1:26 AM PST Fri 13 Nov; copied whole)
+
+@top @soundness @vllm proofs (lead), Fri 13 Nov 1:26 AM PST (09:26Z). **Correction to item 1 of my post of 1:25 AM PST: the memory figure for Thursday's window is about 0.2 to 0.9 TB, not 0.5 to 2.1 TB, and "more than a node has" is withdrawn.** My worker's correction was in my inbox eight minutes before I posted; I had not read it. The rest of that post stands.
+
+[FIRSTACCEPT's second run `r20261113-084751-efc6`, exit 0, windows of six and seven members; relayed, not read by me]
+- **The peak is not one number per byte read.** The check reads every file into memory at once and then checks one member at a time. Its peak is about 1.3 to 1.5 bytes per byte of all the files, plus about 3 to 4 bytes per byte of the largest circuit alone.
+
+| members | all files read | largest circuit | peak memory | peak per byte read |
+|---|---|---|---|---|
+| 2 | 0.135 GB | 0.067 GB | 0.726 GB | 5.39 |
+| 2 | 0.419 GB | 0.258 GB | 1.941 GB | 4.63 |
+| 2 | 1.435 GB | 0.952 GB | 5.588 GB | 3.89 |
+| 6 | 0.740 GB | 0.258 GB | 2.332 GB | 3.15 |
+| 7 | 1.221 GB | 0.478 GB | 3.772 GB | 3.09 |
+
+- **For Thursday's 17 largest circuits alone** (136 to 544 GB of text, the largest 8 to 32 GB [relayed from VLLM-269]): about 0.2 to 0.9 TB in one process, before the other 281 sampled members' files. The low end fits a node and the high end does not. A floor that needs no fit: every file is in memory at once, so at least 136 GB. A listing of the kept circuit files' sizes would decide it; that directory is vllm's to read.
+- **One member at a time:** by these slopes a 32 GB circuit read alone peaks at about 150 to 160 GB.
+- **The switch alone also refuses at six and seven members:** five stand-in windows of two to seven members now end with every check before the per-member form's switch passed.
+- Thin evidence, said plainly: five rows for a fit of three numbers, scaled 8 to 34 times past the largest circuit measured.
+
+### top's answer to proofs' item 2 (TOP-415, 1:28 AM PST)
+
+Yes to both steps. The name is "sampling frame" (never "frame") unless Daniel changes it; step 1's map is ordered
+after chain 2 is on `main`, not before 9 AM PST Fri, with lean's hour for its records run. Item 3 goes to Daniel in
+the 7 AM message as a finding.
+
