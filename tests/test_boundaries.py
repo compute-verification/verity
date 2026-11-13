@@ -113,8 +113,10 @@ ALLOWED = {
     "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness", "core.protocols.profile",
                             "core.protocols.spot"},
     # N2 of the proof-system plan: a link-window's network certificates are registered through the proof system; they
-    # are LMS signatures (`ml.crypto.lms`).
-    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.spot"},
+    # are LMS signatures (`ml.crypto.lms`).  Its manifest (`parties`) states its parties as the deployment layer's roles
+    # and its two messages as the wire's schemas.
+    "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.spot", "core.wire",
+                                 "core.deploy"},
     # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
     "core.protocols.record": set(),
     # The reporting grid every monitoring-period report states, its periods and δs: stdlib only.
