@@ -14,7 +14,10 @@ The pieces an honest `C*` needs before the setup check's loops, none of which ev
 * the key stream: with the prefix whole 128-byte blocks, `Expander.range`'s compression branch, which sets the counter
   into one padded block, compresses exactly chunk `i`'s padding (`L_setCounter`, `compress_setCounter`), and a chunk is
   SHA-512 of the prefix and its 21 bytes (`chunk_eq_hash`, from `Properties.Identity.update_update`);
-* a candidate at or above `p`: within `2^16` of `256^n`, every byte but the last two is `0xFF` (`ff_of_ge`);
+* `Expander.range` is its chunks, cut to `[lo, hi)` (`range_eq`);
+* the keys, or a collision (`keys_ok_or_collision`): a first `t` candidate at or above `p` is within `2^16` of `256^n`,
+  so every byte but its last two is `0xFF` (`ff_of_ge`), and chunks 0 and 1, which are its first 128 bytes, are equal
+  (`chunk01_of_ge`): SHA-512 of two inputs that differ in the counter (`collision_of_ge`);
 * the deployed parameters: `validate` accepts them by reduction (`validate_deployed`) and `packagePrefix` accepts any
   24-byte salt (`packagePrefix_ok`), its prefix whole blocks (`pad128_size`).
 -/
@@ -60,7 +63,7 @@ theorem foldl_beStep_shift (b : ByteArray) : ∀ (l : List Nat) (v : Nat),
     unfold beStep
     generalize 256 ^ l.length = P
     rw [Nat.zero_mul, Nat.zero_add, Nat.add_mul]
-    first | ac_rfl | grind
+    ac_rfl
 
 theorem beVal_lt (b : ByteArray) (lo n : Nat) : beVal b lo n < 256 ^ n := by
   have := foldl_beStep_lt b (List.range' lo n) 0 0 (by decide)
@@ -81,7 +84,6 @@ theorem toNat_shift_or (x : UInt64) (y : UInt8) (hx : x.toNat < 2 ^ 56) :
     exact Nat.mul_lt_mul_of_pos_right hx (by decide)
   rw [UInt64.toNat_or, UInt64.toNat_shiftLeft, UInt8.toNat_toUInt64, show (8 : UInt64).toNat % 64 = 8 from rfl,
     Nat.mod_eq_of_lt hlt, ← Nat.shiftLeft_add_eq_or_of_lt hy, Nat.shiftLeft_eq]
-  all_goals rfl
 
 /-- `natOfBERange`'s loop of at most eight bytes, in `UInt64`, is the fold while it fits. -/
 theorem foldl_uint64 (b : ByteArray) : ∀ (l : List Nat) (x : UInt64) (m : Nat), x.toNat < 256 ^ m →
@@ -131,7 +133,6 @@ theorem natOfBERange_eq (b : ByteArray) (n : Nat) : ∀ lo, natOfBERange b lo (l
     have hadd := beVal_add b lo (n / 2) (n - n / 2)
     rw [show n / 2 + (n - n / 2) = n by omega] at hadd
     rw [hadd, ← Nat.shiftLeft_add_eq_or_of_lt hlt, Nat.shiftLeft_eq, Nat.pow_mul]
-    all_goals first | rfl | simp
 
 theorem natOfBE_eq (b : ByteArray) : natOfBE b = beVal b 0 b.size := by
   have := natOfBERange_eq b b.size 0
@@ -297,6 +298,133 @@ theorem ff_of_ge {x : ByteArray} {k c : Nat} (hk : k + 2 < x.size) (hc : c ≤ 6
     omega
   exact UInt8.toNat_inj.1 (hbyte.trans rfl)
 
+/-- `Expander.range`'s compression loop from any block laid out as chunk 0's padding appends chunks `l` in order. -/
+theorem fold_range (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) (purpose : UInt8) :
+    ∀ (l : List Nat) (out B : ByteArray) (a b c d : UInt8),
+      L B = suffixHead s j purpose ++ a :: b :: c :: d :: padTail pre.size →
+      (l.foldl (fun r i => (r.1 ++ digest (Flock.Sha512.compress
+          ((Keys.Expander.ofPrefix pre).mid.update (suffix s j purpose 0)).h (setCounter r.2 i) 0),
+          setCounter r.2 i)) (out, B)).1 =
+        l.foldl (fun o i => o ++ (Keys.Expander.ofPrefix pre).chunk s j purpose i) out
+  | [], _, _, _, _, _, _, _ => rfl
+  | i :: l, out, B, a, b, c, d, hB => by
+    obtain ⟨h1, h2⟩ := compress_setCounter pre hpre s j purpose a b c d B hB i
+    rw [List.foldl_cons, List.foldl_cons]
+    dsimp only
+    rw [h1]
+    exact fold_range pre hpre s j purpose l _ _ _ _ _ _ h2
+
+/-- **`Expander.range` is its chunks**: on a prefix of whole blocks, bytes `[lo, hi)` of the stream are the chunks from
+`lo / 64` on, concatenated and cut to `[lo, hi)`. -/
+theorem range_eq (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) (purpose : UInt8) (lo hi : Nat) :
+    (Keys.Expander.ofPrefix pre).range s j purpose lo hi =
+      (chunks (Keys.Expander.ofPrefix pre) s j purpose (lo / 64) ((hi + 63) / 64 - lo / 64)).extract
+        (lo - 64 * (lo / 64)) (hi - 64 * (lo / 64)) := by
+  have hsz : ((Keys.Expander.ofPrefix pre).mid.update (Flock.be64 s.toUInt64 ++ Flock.be64 j.toUInt64 ++
+      ByteArray.mk #[purpose] ++ Flock.be32 0)).padding.size = 128 := padding_suffix_size pre hpre s j purpose 0
+  have hbuf : ((Keys.Expander.ofPrefix pre).mid.update (Flock.be64 s.toUInt64 ++ Flock.be64 j.toUInt64 ++
+      ByteArray.mk #[purpose] ++ Flock.be32 0)).buf.size = 21 := by
+    rw [← L_length]
+    exact (congrArg List.length (buf_suffix pre hpre s j purpose 0)).trans
+      ((L_length _).trans (suffix_size s j purpose 0))
+  unfold Keys.Expander.range
+  simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl,
+    bind_pure_comp, map_pure, Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one, hsz, hbuf,
+    bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
+  exact congrArg (fun o => ByteArray.extract o (lo - 64 * (lo / 64)) (hi - 64 * (lo / 64)))
+    (fold_range pre hpre s j purpose _ _ _ _ _ _ _ (L_padding_suffix pre hpre s j purpose 0))
+
+theorem digest_size (h : Array UInt64) : (digest h).size = 64 := Array.size_ofFn
+
+theorem chunk_size (e : Keys.Expander) (s j : Nat) (purpose : UInt8) (i : Nat) : (e.chunk s j purpose i).size = 64 := by
+  show (State.finalize _).size = 64
+  rw [finalize_eq]
+  exact digest_size _
+
+theorem L_foldl_append (c : Nat → ByteArray) : ∀ (l : List Nat) (init : ByteArray),
+    L (l.foldl (fun out i => out ++ c i) init) = L init ++ (l.map fun i => L (c i)).flatten
+  | [], init => by simp
+  | i :: l, init => by
+    rw [List.foldl_cons, L_foldl_append c l, L_append, List.map_cons, List.flatten_cons, List.append_assoc]
+
+theorem chunks_size (e : Keys.Expander) (s j : Nat) (purpose : UInt8) (first : Nat) :
+    ∀ n, (chunks e s j purpose first n).size = 64 * n
+  | 0 => rfl
+  | n + 1 => by
+    have ih := chunks_size e s j purpose first n
+    unfold chunks at ih ⊢
+    rw [List.range'_concat, List.foldl_append, List.foldl_cons, List.foldl_nil, ByteArray.size_append, chunk_size,
+      ih]
+    omega
+
+theorem L_chunks_two (e : Keys.Expander) (s j : Nat) (purpose : UInt8) (n : Nat) :
+    L (chunks e s j purpose 0 (n + 2)) = L (e.chunk s j purpose 0) ++ L (e.chunk s j purpose 1) ++
+      ((List.range' 2 n).map fun i => L (e.chunk s j purpose i)).flatten := by
+  unfold chunks
+  rw [L_foldl_append, show n + 2 = (n + 1) + 1 by omega, List.range'_succ, List.range'_succ]
+  simp [List.append_assoc]
+
+theorem getElem?_of_get! {b : ByteArray} {k : Nat} (hk : k < b.size) {v : UInt8} (h : b.get! k = v) :
+    (L b)[k]? = some v := by
+  have hk' : k < (L b).length := by rw [L_length]; exact hk
+  rw [Properties.Identity.get!_eq, List.getElem?_eq_getElem hk'] at h
+  rw [List.getElem?_eq_getElem hk', ← h]
+  all_goals rfl
+
+set_option exponentiation.threshold 20000 in
+theorem pow_256_2056 : (256 : Nat) ^ 2056 = 2 ^ 16448 := by
+  rw [show (256 : Nat) = 2 ^ 8 from rfl, ← Nat.pow_mul]
+
+/-- **A first `t` candidate at or above `p` makes chunks 0 and 1 equal**: its first 2,054 bytes are `0xFF`
+(`ff_of_ge`), and chunks 0 and 1 are its first 128. -/
+theorem chunk01_of_ge (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) (purpose : UInt8)
+    (h : 2 ^ 16448 - 21065 ≤ natOfBE ((Keys.Expander.ofPrefix pre).range s j purpose 0 2056)) :
+    (Keys.Expander.ofPrefix pre).chunk s j purpose 0 = (Keys.Expander.ofPrefix pre).chunk s j purpose 1 := by
+  rw [range_eq pre hpre, show (2056 + 63) / 64 - 0 / 64 = 31 + 2 from rfl, show 0 / 64 = 0 from rfl,
+    Nat.mul_zero, Nat.sub_zero, Nat.sub_zero] at h
+  generalize hx : (chunks (Keys.Expander.ofPrefix pre) s j purpose 0 (31 + 2)).extract 0 2056 = x at h
+  have hLx : L x = (L ((Keys.Expander.ofPrefix pre).chunk s j purpose 0) ++
+      L ((Keys.Expander.ofPrefix pre).chunk s j purpose 1) ++
+      ((List.range' 2 31).map fun i => L ((Keys.Expander.ofPrefix pre).chunk s j purpose i)).flatten).take 2056 := by
+    rw [← hx, Properties.Identity.L_extract_zero, L_chunks_two]
+  have h0 := L_length ((Keys.Expander.ofPrefix pre).chunk s j purpose 0)
+  have h1 := L_length ((Keys.Expander.ofPrefix pre).chunk s j purpose 1)
+  rw [chunk_size] at h0 h1
+  have hxs : x.size = 2056 := by
+    rw [← hx, ByteArray.size_extract, chunks_size]
+    all_goals decide
+  rw [← pow_256_2056, ← hxs] at h
+  apply L_inj
+  apply List.ext_getElem?
+  intro k
+  by_cases hk : k < 64
+  · have e0 : (L x)[k]? = (L ((Keys.Expander.ofPrefix pre).chunk s j purpose 0))[k]? := by
+      rw [hLx, List.getElem?_take_of_lt (by omega), List.append_assoc, List.getElem?_append_left (by omega)]
+    have e1 : (L x)[64 + k]? = (L ((Keys.Expander.ofPrefix pre).chunk s j purpose 1))[k]? := by
+      rw [hLx, List.getElem?_take_of_lt (by omega), List.append_assoc, List.getElem?_append_right (by omega), h0,
+        Nat.add_sub_cancel_left, List.getElem?_append_left (by omega)]
+    rw [← e0, ← e1, getElem?_of_get! (by omega) (ff_of_ge (k := k) (by omega) (by decide) h),
+      getElem?_of_get! (by omega) (ff_of_ge (k := 64 + k) (by omega) (by decide) h)]
+  · rw [List.getElem?_eq_none (by omega), List.getElem?_eq_none (by omega)]
+
+theorem suffix_ne (pre : ByteArray) (s j : Nat) (purpose : UInt8) :
+    pre ++ suffix s j purpose 0 ≠ pre ++ suffix s j purpose 1 := by
+  intro heq
+  have h1 := congrArg (fun b => (L b)[pre.size + 20]?) heq
+  simp only [Properties.Identity.getElem?_L_append_right, L_suffix] at h1
+  rw [List.getElem?_append_right (by rw [suffixHead_length]; omega),
+    List.getElem?_append_right (by rw [suffixHead_length]; omega), suffixHead_length] at h1
+  exact absurd h1 (by decide)
+
+/-- **A first `t` candidate at or above `p` is a SHA-512 collision**: chunks 0 and 1 are SHA-512 of two inputs that differ
+in the counter's last byte. -/
+theorem collision_of_ge (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) (purpose : UInt8)
+    (h : 2 ^ 16448 - 21065 ≤ natOfBE ((Keys.Expander.ofPrefix pre).range s j purpose 0 2056)) :
+    ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v :=
+  ⟨_, _, suffix_ne pre s j purpose, by
+    rw [← chunk_eq_hash, ← chunk_eq_hash]
+    exact chunk01_of_ge pre hpre s j purpose h⟩
+
 /-! ## The deployed parameters -/
 
 theorem validate_deployed : P2.Params.deployed.validate = .ok P2.Params.deployed := by rfl
@@ -318,5 +446,21 @@ theorem packagePrefix_ok (q : P2.Params) {salt : ByteArray} (h : salt.size = 24)
       FlockSoundness.Randomness.frame (.str q.primeId) ++ FlockSoundness.Randomness.frame (.bytes salt))) := by
   simp only [Keys.packagePrefix, h]
   rfl
+
+/-- **The keys, or a collision**: block `j` of segment `s`'s keys are `K`, the stream's first 2,056 bytes, and `t`, its
+first candidate, below `p`; or that candidate is at or above `p`, and SHA-512 has a collision (`collision_of_ge`). -/
+theorem keys_ok_or_collision (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) :
+    (∃ t, t < P2.Params.deployed.p ∧ (Keys.Expander.ofPrefix pre).keys P2.Params.deployed s j =
+        .ok (natOfBE ((Keys.Expander.ofPrefix pre).range s j Keys.PURPOSE_K 0 2056), t, 0)) ∨
+      ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
+  by_cases h : natOfBE ((Keys.Expander.ofPrefix pre).range s j Keys.PURPOSE_T 0 2056) < P2.Params.deployed.p
+  · refine Or.inl ⟨_, h, ?_⟩
+    have hfuel : Keys.STREAM_BYTES / 2056 = 133695479 + 1 := by decide
+    unfold Keys.Expander.keys
+    simp only [deployed_blockBytes]
+    rw [hfuel, Keys.Expander.below.eq_2]
+    simp only [Nat.zero_mul, Nat.zero_add, Nat.one_mul, h, ↓reduceIte, pure_bind]
+    all_goals rfl
+  · exact Or.inr (collision_of_ge pre hpre s j Keys.PURPOSE_T (by rw [← deployed_p]; exact Nat.le_of_not_lt h))
 
 end PousCheck.Properties.SecurityProofs.Accepts
