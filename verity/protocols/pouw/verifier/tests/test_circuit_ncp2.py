@@ -10,8 +10,8 @@ import circuit_fixtures as F
 from verity.circuits.evaluation import evaluate
 from verity.protocols.pouw.prover.circuit import ncp2
 from verity.protocols.pouw.prover.circuit import reference as R
-from verity.protocols.pouw.verifier.protocol import DomainError
 from verity.protocols.pouw.prover.schemes.ncp import assemble, checked_route_u, shift_perm
+from verity.protocols.pouw.verifier.protocol import DomainError
 
 
 def _outputs(shape, call, kind="shift24"):

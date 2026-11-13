@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.pouw.verifier.protocol import DomainError, Shape
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.pouw.verifier.protocol import DomainError, Shape
 
 CAP = Path(__file__).resolve().parents[5] / "security" / "Proofs" / "Pouw" / "PearlC" / "Cap"
 INT_FORM = (CAP / "IntForm.lean").read_text()
