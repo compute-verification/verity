@@ -478,21 +478,27 @@ SITES = {"runner": ("load_model", "initialize_kv_cache"), "pool": ("get_new_bloc
 def vllms_classes(monkeypatch, store: NodeMemory, first_runner: bool = False) -> SimpleNamespace:
     """vLLM's model runner, block pool and scheduler as `Binder.install` finds them, under the stand-in for vLLM
     (`tests.fake_vllm`): each method records its call in ``calls`` (the scheduler's, with whether the store had a pass
-    open) and answers with a value of its own.  The surface holds Model Runner V2 alone; with ``first_runner`` the
-    first runner's module is there too, with a class of its own."""
+    open) and answers with a value of its own.  As vLLM's, a runner has its model (``loads``) once its own `load_model`
+    ran and its KV caches (``binds``) once its own `initialize_kv_cache` did, so a hook that reads either does so after
+    vLLM's own.  The surface holds Model Runner V2 alone; with ``first_runner`` the first runner's module is there
+    too, with a class of its own."""
     calls: list[tuple] = []
 
     def runner_class():
         class GPUModelRunner:
             def __init__(self) -> None:
-                vars(self).update(vars(runner()))
+                held = vars(runner())
+                self.loads, self.binds = held.pop("model"), held.pop("kv_caches")
+                vars(self).update(held)
 
             def load_model(self, *a, **kw):
                 calls.append(("load_model", a, kw))
+                self.model = self.loads
                 return "loaded"
 
             def initialize_kv_cache(self, kv_cache_config, is_profiling=False):
                 calls.append(("initialize_kv_cache", is_profiling))
+                self.kv_caches = self.binds
                 return "kv"
 
         return GPUModelRunner
@@ -580,7 +586,7 @@ def test_install_wraps_vllms_classes_and_uninstall_puts_them_back(monkeypatch, b
     assert {(e.owner, e.name, e.tag) for e in patches} == {(cls, name, "verity-store") for cls, name in v.sites}
     for i, cls in enumerate(v.runners):
         r = cls()
-        r.model = torch.nn.Sequential(*[torch.nn.Identity()] * i, torch.nn.Linear(64, 32, bias=False))
+        r.loads = torch.nn.Sequential(*[torch.nn.Identity()] * i, torch.nn.Linear(64, 32, bias=False))
         assert r.load_model("x", y=1) == "loaded" and v.calls[-1] == ("load_model", ("x",), {"y": 1})
         assert r.initialize_kv_cache(SimpleNamespace(num_blocks=PAGES), True) == "kv"
         assert v.calls[-1] == ("initialize_kv_cache", True)
