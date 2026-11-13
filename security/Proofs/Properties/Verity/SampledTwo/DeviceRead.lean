@@ -24,7 +24,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 accepts only where the form does (`Wired`), the first stage's coin evidence reads under the parameters' key
 (`FirstReads`), the ledger opens neither session's run on the other's window (`Apart`), and the vocabulary's signer is
 the deployment's, an accepted play whose logs the check didn't read, or read other than the device's, is at most as
-likely as the read finder's collision plus the forger's forgery over both sessions. -/
+likely as the read finder's collision plus the forger's forgery over both sessions. `Apart` is taken, not proved. -/
 theorem cutRead_dev₂ (V : Vocab d α) (k : Verity.Registration.Composite) (P : Deployment)
     (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hw : Wired V k θ) (hF : FirstReads θ)

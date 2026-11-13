@@ -212,6 +212,7 @@
   "Proofs.Properties.Verity.SampledTwo.DevAgrees",
   "Proofs.Properties.Verity.SampledTwo.Device",
   "Proofs.Properties.Verity.SampledTwo.DeviceOrder",
+  "Proofs.Properties.Verity.SampledTwo.DeviceAccept",
   "Proofs.Properties.Verity.SampledTwo.DeviceRead",
   "Proofs.Properties.Verity.SampledTwo.FirstCoins",
   "Proofs.Properties.Verity.SampledTwo.Fits",
