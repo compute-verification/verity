@@ -2,8 +2,11 @@
 object, a line of a run's ``verdicts.jsonl``, saying which verdict it is and which class, serve, registration and rate
 it is of.
 
-    python benchmarks/one_stage/verdict_record.py PIECE --stage1 F --summary F --serve RUN --out DIR \\
-      [--run RUN] [--commit SHA] [--control id|max_tokens]
+    python benchmarks/one_stage/verdict_record.py PIECE --first F --summary F --serve RUN --run RUN --out DIR \\
+      [--commit SHA] [--control id|max_tokens]
+
+``--first`` is the class's first-stage file, the one `two_stage.py first` writes for it: the class's boundary record
+and its digest and, for a stop class, its stop record and that one's (its ``stop``).
 
 A stop class's response lengths are held by a verdict on each of its pieces, each accepted and complete, and a reader
 of those verdicts has to be able to refuse a set that is not one class's: verdicts of different classes, serves or
@@ -26,7 +29,7 @@ registrations, or one that ran at another rate than its registration registers. 
 **The pieces** (`PIECES`), each a verifier's command and the registration of the population it sampled:
 
 * ``stop_record``: the stop audit (`stop_audit.py`), whose population's registration is the stop record
-  (``stage1.json``'s ``stop.record``). ``accept`` when its audit record accepted and is complete, ``not complete`` when
+  (the first-stage file's ``stop.record``). ``accept`` when its audit record accepted and is complete, ``not complete`` when
   it accepted with entries that did not run, else ``refuse``.
 * ``second_stage``: the compute audit's second stage (`two_stage.py second`), whose population's registration is the
   class's boundary record. ``refuse`` unless the second stage held (`two_stage.held`). Then ``accept`` or ``not
@@ -39,13 +42,12 @@ verdict and proved (`Piece.open`).
 
 **Refused** (`record`, `append`): a summary that does not name this class's registration, so a command that refused
 before it registered gets no record, since nothing ties what it wrote to the class; a boundary or stop record that is
-not the one whose digest ``stage1.json`` names; and a second record on one piece and control in one file."""
+not the one whose digest the first-stage file names; and a second record on one piece and control in one file."""
 from __future__ import annotations
 
 import argparse
 import json
 import math
-import os
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -61,18 +63,18 @@ FILE = "verdicts.jsonl"
 #: the negative controls: a run on the same path with one thing changed (null on the honest run)
 CONTROLS = ("id", "max_tokens")
 ACCEPT, NOT_COMPLETE, REFUSE, WITHHELD = "accept", "not complete", "refuse", "withheld"
-#: the environment variable `research run` gives a job its run's id in
-RUN_ENV = "RESEARCH_RUN_ID"
+#: a registration record's key for its sampling design, and that design's key for its kind
+DESIGN = "law"
 
 
 def rate(registered: Mapping[str, Any]) -> str:
     """The rate a registration record registers its population at: K of N as NUM/DEN in lowest terms for a subset
     design, so K = N reads ``1/1``; any other design as itself (``work:K``), which is no rate and never ``1/1``.
     ValueError where the record registers no design, or a subset that is not 1 <= K <= N."""
-    law, n = registered.get("law"), registered.get("population")
-    if not isinstance(law, Mapping) or type(law.get("law")) is not str or type(law.get("k")) is not int:
-        raise ValueError(f"the registration record registers no sampling design: its `law` is {law!r}")
-    kind, k = law["law"], law["k"]
+    design, n = registered.get(DESIGN), registered.get("population")
+    if not isinstance(design, Mapping) or type(design.get(DESIGN)) is not str or type(design.get("k")) is not int:
+        raise ValueError(f"the registration record registers no sampling design, but {design!r}")
+    kind, k = design[DESIGN], design["k"]
     if kind != "subset":
         return f"{kind}:{k}"
     if type(n) is not int or not 1 <= k <= n:
@@ -91,18 +93,18 @@ def class_of(boundary: Mapping[str, Any]) -> str:
 
 
 def _named(held: object, what: str) -> tuple[Mapping[str, Any], str]:
-    """The record ``held`` (``stage1.json``, or its ``stop``) holds and its digest, the one it names beside it."""
+    """The record ``held`` (the first-stage file, or its ``stop``) holds and its digest, the one it names beside it."""
     rec = held.get("record") if isinstance(held, Mapping) else None
     if not isinstance(rec, Mapping):
-        raise ValueError(f"stage1.json holds no {what}")
+        raise ValueError(f"the first-stage file holds no {what}")
     if R.digest(rec) != held.get("registration"):
-        raise ValueError(f"stage1.json's {what} is not the record whose digest it names as its registration")
+        raise ValueError(f"the first-stage file's {what} is not the record whose digest it names as its registration")
     return rec, held["registration"]
 
 
-def _stop_record(stage1: Mapping[str, Any], summary: Mapping[str, Any], boundary: Mapping[str, Any],
+def _stop_record(first: Mapping[str, Any], summary: Mapping[str, Any], boundary: Mapping[str, Any],
                  digest: str) -> tuple[str, Mapping[str, Any]]:
-    rec, stop = _named(stage1.get("stop"), "stop record")
+    rec, stop = _named(first.get("stop"), "stop record")
     if rec.get("previous") != digest:
         raise ValueError("the stop record's `previous` is not the class's boundary record")
     if summary.get("registration") != {"boundary": digest, "stop": stop}:
@@ -112,12 +114,12 @@ def _stop_record(stage1: Mapping[str, Any], summary: Mapping[str, Any], boundary
     return word, rec
 
 
-def _second_stage(stage1: Mapping[str, Any], summary: Mapping[str, Any], boundary: Mapping[str, Any],
+def _second_stage(first: Mapping[str, Any], summary: Mapping[str, Any], boundary: Mapping[str, Any],
                   digest: str) -> tuple[str, Mapping[str, Any]]:
-    first = summary.get("first_stage")
-    if not isinstance(first, Mapping) or first.get("registration") != digest:
+    named = summary.get("first_stage")
+    if not isinstance(named, Mapping) or named.get("registration") != digest:
         raise ValueError("the second stage's summary does not name this class's boundary record as its first stage's "
-                         f"`registration`, but {first!r}: nothing ties it to the class")
+                         f"`registration`, but {named!r}: nothing ties it to the class")
     outcome = summary.get("outcome")
     outcome = outcome if isinstance(outcome, Mapping) else {}
     if summary.get("held") is not True:
@@ -132,8 +134,8 @@ def _second_stage(stage1: Mapping[str, Any], summary: Mapping[str, Any], boundar
 @dataclass(frozen=True)
 class Piece:
     """A verdict on a stop class. `module`: the verifier's command, as a record names it. `open`: what stands between
-    its verdict and proved, in words. `read`: (``stage1.json``, the command's ``summary.json``, the class's boundary
-    record, its digest) -> the verdict's word and the registration record of the population it sampled."""
+    its verdict and proved, in words. `read`: (the first-stage file, the command's ``summary.json``, the class's
+    boundary record, its digest) -> the verdict's word and the registration record of the population it sampled."""
 
     module: str
     open: str
@@ -149,9 +151,9 @@ PIECES = {
 }
 
 
-def record(piece: str, stage1: Mapping[str, Any], summary: Mapping[str, Any], *, run: str, serve: str, commit: str,
+def record(piece: str, first: Mapping[str, Any], summary: Mapping[str, Any], *, run: str, serve: str, commit: str,
            control: str | None = None) -> dict[str, Any]:
-    """The verdict record of ``piece`` on the class of ``stage1`` (its ``stage1.json``) from the verifier's command's
+    """The verdict record of ``piece`` on the class of ``first`` (its first-stage file) from the verifier's command's
     ``summary`` (the module docstring). ``run``: the run that produced the verdict. ``serve``: the served run the
     class came from. ``commit``: the commit the verifier ran at. ``control``: the negative control the run is, or
     None on the honest run. ValueError for what the module docstring's "Refused" lists and an argument that names
@@ -164,8 +166,8 @@ def record(piece: str, stage1: Mapping[str, Any], summary: Mapping[str, Any], *,
         if type(value) is not str or not value:
             raise ValueError(f"a verdict's record names its {name}")
     p = PIECES[piece]
-    boundary, digest = _named(stage1, "boundary record")
-    word, registered = p.read(stage1, summary, boundary, digest)
+    boundary, digest = _named(first, "boundary record")
+    word, registered = p.read(first, summary, boundary, digest)
     return {"piece": piece, "control": control, "run": run, "verifier": {"module": p.module, "commit": commit},
             "verdict": word, "proved_by": None, "open": p.open,
             "registration": digest, "serve": serve, "class": class_of(boundary), "rate": rate(registered)}
@@ -193,21 +195,20 @@ def _head() -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("piece", choices=list(PIECES))
-    ap.add_argument("--stage1", required=True, help="the class's stage1.json (two_stage.py first)")
+    ap.add_argument("--first", required=True, help="the class's first-stage file, which two_stage.py first writes")
     ap.add_argument("--summary", required=True, help="the verifier's command's summary.json on that class")
     ap.add_argument("--serve", required=True, help="the id of the served run the class came from")
-    ap.add_argument("--run", default=os.environ.get(RUN_ENV), help=f"the id of the run that produced the verdict (${RUN_ENV})")
+    ap.add_argument("--run", required=True, help="the id of the run that produced the verdict")
     ap.add_argument("--commit", help="the commit the verifier ran at (this tree's HEAD)")
     ap.add_argument("--control", choices=CONTROLS, help="the negative control this run is; none on the honest run")
     ap.add_argument("--out", required=True, help=f"the run's directory of kept files: the record is one more line of its {FILE}")
     a = ap.parse_args(argv)
-    run, commit = a.run or "", a.commit or _head()
-    if lacks := [flag for flag, got in ((f"--run (or ${RUN_ENV}, which `research run` sets)", run),
-                                        ("--commit (this tree is no git checkout)", commit)) if not got]:
-        ap.error(f"a verdict's record names the run that produced it and the commit its verifier ran at: {', '.join(lacks)}")
+    commit = a.commit or _head()
+    if not commit:
+        ap.error("a verdict's record names the commit its verifier ran at: --commit (this tree is no git checkout)")
     try:
-        rec = record(a.piece, json.loads(Path(a.stage1).read_text()), json.loads(Path(a.summary).read_text()),
-                     run=run, serve=a.serve, commit=commit, control=a.control)
+        rec = record(a.piece, json.loads(Path(a.first).read_text()), json.loads(Path(a.summary).read_text()),
+                     run=a.run, serve=a.serve, commit=commit, control=a.control)
         append(Path(a.out) / FILE, rec)
     except (ValueError, KeyError, OSError) as e:
         print(f"verdict_record: no record written: {e}", file=sys.stderr)
