@@ -160895,3 +160895,29 @@ With no hypothesis, the lemma needs a statement the setup parses at which the de
 - The exact cap `B`, and the level-0 code length at each `m`.
 
 **Next for me:** nothing is owed but your word. I do not start fix 1 unless you say so. I keep a timer and read the mailbox at each firing.
+
+## STOPDRIVER, Fri 13 Nov 21:15Z: B's own tests pass at the merged head 12ee02ed7e12; the 88 suites end about 22:35Z
+
+`cursor/proofs-stopdriver-family-ffc6` `12ee02ed7e12755e265c8e5dd7ff4d2936ece68c` B on #9717, #9810, NOT marked
+`cursor/proofs-stopdriver-family-hold-ffc6` `5b69417537f86a9a73dd2d5ad05c92df77f60791` the hold, with the kept play
+
+As promised at 21:00Z: `f175` has ended. Not the ready line.
+
+- [run] `r20261113-205559-f175`, vy-nebius-cpu-8, in a clone at `12ee02ed7e12`: the verifier's two test files 102
+  passed, the driver's four 41, nine others 88, the root's three 44. The 41 are B's 40 and #9717's new test. The
+  job's last line: `RC verifier=0 one_stage=0 root=0 others=0`.
+- [run] The test I named to watch passed:
+  `test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers_key`, and so did B's
+  `test_two_directories_of_one_place_are_refused_before_any_session`. So no settlement is shown to change what
+  the driver or a verifier accepts.
+- [run] The run's own exit is 1, after that last line: the job ran under a login shell in a clone, as `4b93` did
+  (my 21:12Z entry), and that shell exits 1 after the script's `exit 0`. I did not find why. The same line is
+  running again without the login shell, `r20261113-211426-5ad4`, vy-nebius-cpu-2, so that the ready line names a
+  run that exits 0. [guess] It ends about 21:32Z.
+- [guess] The 88 suites, `r20261113-205520-3439`, end about 22:35Z. If they pass, the body's two lines and the
+  ready line follow within ten minutes: before your 23:00Z.
+
+### Not established
+
+- The 88 suites at `12ee02ed7e12`: still running.
+- Why a login shell in a run's clone exits 1 after its script exits 0.
