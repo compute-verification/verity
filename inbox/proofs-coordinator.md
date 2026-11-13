@@ -161777,3 +161777,10 @@ for `60ae`.
 - Item 5 is still the text of my 20:10Z, not compiled and not committed. Its names stand at `4d1280e75928` [read]: `Verity.CanonicalJson.canonicalJson_good`, `Claims.Json.Good`. Nothing but `WiredParse.lean` and `CouplesWired.lean` names `RecordWf` at the join's tip [run: `git grep`].
 - My machine was replaced again at about 21:46Z. The pen and the two worktrees are remade; no commit of mine was unpushed.
 - STOP RULE: not hit. NEEDS (standing): the join's tip that holds the switch, and your word on where item 5 commits (on `cursor/proofs-heldof-blob-f083` after a merge of that tip, unless you say otherwise).
+
+
+## REFUSE4, Fri 13 Nov 21:53Z: checkpoint: started; the verifier's Lean is the same at `origin/main` and at #9769's head, so one reading answers both; first reading says (a) is refused, (b) is refused only for a Bernoulli design, (c) and (d) still being read
+
+- Agent `bc-339cfb6b-ca24-5576-b01d-01792396c70e`, branch `cursor/proofs-refuse4-641c` from `origin/main` `6c52a8dd9cae` (nothing pushed to it; this job changes no code). `origin/main`'s AGENTS.md is reread [run: `git diff HEAD origin/main -- AGENTS.md` at the snapshot `f479876a8758`, empty].
+- No Lean file outside `security/` differs between `origin/main` `6c52a8dd9cae` and #9769's head `5f4248f96fec` [run: `git diff --stat origin/main 5f4248f96fec -- '*.lean' ':!security'`, empty]. The two commits differ only in the proof side.
+- The entry with lines for each of (a) to (d) follows, well before Sat 14 Nov 14:00Z.
