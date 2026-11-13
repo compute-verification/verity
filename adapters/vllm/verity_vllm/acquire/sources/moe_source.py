@@ -91,14 +91,18 @@ import inspect
 import re
 import time
 from collections.abc import Mapping
+from functools import partial
 from typing import Any
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.partial_source import _moe_reduces
 from verity_vllm.engine import hooks
+from verity_vllm.log import init_logger
 from verity.definitions.registry.moe import router_kernel
 from verity_vllm.query.manifest.bind import Port
 from verity_vllm.query.manifest.format import MOE_FP8_PLANES, MOE_PLANES
+
+logger = init_logger(__name__)
 
 MOE_MODULE_CLASSES = {"MoERunner", "MoERunnerInterface", "FusedMoE", "SharedFusedMoE"}
 TENSORS_PER_LAYER = len(MOE_PLANES)
@@ -201,7 +205,7 @@ class MoeBlockSource:
         self._handles: list = []
         self._hooks = hooks.Hooks()
         self.active = False
-        self.stats = {"launches": 0, "bytes": 0, "layers": len(self.layers), "tensors_per_layer": TENSORS_PER_LAYER, "acquire_s": 0.0,
+        self.stats: dict[str, Any] = {"launches": 0, "bytes": 0, "layers": len(self.layers), "tensors_per_layer": TENSORS_PER_LAYER, "acquire_s": 0.0,
                       "unattributed": 0, "shapes": {}, "plane_flushes": 0, "router": {}, "outputs": 0}
         # the committer decides (gather collector: a launch; arena committer: nothing staged -> False); absent = an old committer
         self._flush_after_plane = getattr(committer, "flush_after_plane", None)
@@ -228,7 +232,8 @@ class MoeBlockSource:
                               (TOPK_BIAS_MODULE, "fused_topk_bias")):
             try:
                 mod = importlib.import_module(modname)
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                logger.info_once("moe source: %s does not import here (%s): its %s is not wrapped", modname, repr(e), attr)
                 continue
             if hasattr(mod, attr):
                 sites.append((mod, attr))
@@ -259,7 +264,7 @@ class MoeBlockSource:
             self._handles.append(m.register_forward_pre_hook(pre_hook))
             self._handles.append(m.register_forward_hook(post_hook, always_call=True))
         for mod, attr in self._sites():
-            self._hooks.wrap(mod, attr, lambda orig, attr=attr, mod=mod: self._wrap(attr, orig, mod))
+            self._hooks.wrap(mod, attr, partial(self._wrap, attr, mod=mod))
         ops_c = self.torch.ops._C
         if hasattr(ops_c, GROUP_QUANT_OP):
             self._hooks.patch(ops_c, GROUP_QUANT_OP, self._group_quant(getattr(ops_c, GROUP_QUANT_OP)))
@@ -538,5 +543,6 @@ class MoeBlockSource:
                               f"(registry.moe Definitions bit-exact vs the same kernels); shapes seen {self.stats['shapes']}")}]
 
 
-__all__ = ["MoeBlockSource", "moe_layers_of", "router_kernel", "grouped_topk_args", "binds_planes", "claims", "hash_router_input",
-           "MOE_MODULE_CLASSES", "TENSORS_PER_LAYER", "COVERS_FAMILIES", "GROUP_QUANT_OP", "HASH_KERNEL", "LABELS", "PORTS", "CALL_PORTS"]
+__all__ = ["MoeBlockSource", "moe_layers_of", "plane_layer", "router_kernel", "grouped_topk_args", "binds_planes", "claims",
+           "hash_router_input", "MOE_MODULE_CLASSES", "TENSORS_PER_LAYER", "COVERS_FAMILIES", "GROUP_QUANT_OP", "HASH_KERNEL", "LABELS",
+           "PORTS", "CALL_PORTS"]

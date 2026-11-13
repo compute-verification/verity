@@ -32,7 +32,7 @@ def on(clean):
 
 def _backend() -> types.ModuleType:
     m = types.ModuleType("fake_flashattn_mla_sparse")
-    m.flash_attn_varlen_func = _fa3
+    m.__dict__.update(flash_attn_varlen_func=_fa3)
     return m
 
 

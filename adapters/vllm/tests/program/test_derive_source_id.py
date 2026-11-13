@@ -9,12 +9,12 @@ import sys
 import pytest
 import torch
 from torch import nn
-
 from verity.circuits.codec import encode_program, program_digest
+from verity.definitions.registry import b1
+
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import vllm_meta as vm
 from verity_vllm.program.frontend.derive import derive_report
-from verity.definitions.registry import b1
 
 PROF = dict(mode="profile", profile="b1-eager")
 OLD_PATH = "verity_capture.experimental.cb_a.vllm_meta"
@@ -43,6 +43,7 @@ class _ToyVllmLM(nn.Module):
 @pytest.fixture(scope="module")
 def moved_vllm_meta():
     spec = importlib.util.spec_from_file_location(OLD_PATH, vm.__file__)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     sys.modules[OLD_PATH] = mod
     try:
