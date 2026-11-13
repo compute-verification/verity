@@ -33,6 +33,9 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+#: what code outside the integration may import: the record of the value settings in force (the rest is the integration's own)
+__all__ = ["RECORD_SCHEMA", "REDACTED", "record"]
+
 VALUE, WHERE, DEBUG = "value", "where", "debug"
 ROLES = (VALUE, WHERE, DEBUG)
 RECORD_SCHEMA = "verity-vllm/settings/v1"
