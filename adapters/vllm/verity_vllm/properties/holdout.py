@@ -9,7 +9,7 @@ new request ids and, for batched workloads, new batch arrangements — and rerun
 development trace (`if rows == 32`, fixture-specific mappings, output-specific hacks) survives this.
 Holdouts carry NO expected tokens: the clean control run of the sealed driver is the only reference.
 
-`--assemble` collects `<dir>/<holdout>/gates.json` files (written by `run_config.py` for each holdout run) into the
+`--assemble` collects `<dir>/<holdout>/gates.json` files (written by `pipeline/match.py` for each holdout run) into the
 `holdouts.json` that gate G7 reads: pass iff ≥ 1 holdout and every holdout's G1..G6 pass.
 """
 from __future__ import annotations
