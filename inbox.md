@@ -20,3 +20,8 @@ What you do, from now:
 
 Say in your next entry, in one line, that this is read and what item 4 showed.
 
+[2026-11-13T21:57Z] 5cfe3c5c4eb0
+A correction to my resume of 21:58Z. Sent Fri 13 Nov 21:57Z.
+
+In step 3 I wrote the old head's sha wrongly. It is your own pushed head, `b48abf90aacb5e3a6cb84a6262e235c6dc977d3b`: `suites.py --changed b48abf90aacb5e3a6cb84a6262e235c6dc977d3b --quick` at the new head. Nothing else in the resume changes.
+
