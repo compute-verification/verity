@@ -117,6 +117,9 @@ ALLOWED = {
     # and its two messages as the wire's schemas.
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.spot", "core.wire",
                                  "core.deploy"},
+    # The inference-only policy's manifest (`parties`): one party, the verifier, as the deployment layer's role.  Its
+    # check is Lean (`nci/lean`), so the unit imports no protocol and no ml.
+    "core.protocols.inference_only": {"core.deploy"},
     # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
     "core.protocols.record": set(),
     # The reporting grid every monitoring-period report states, its periods and δs: stdlib only.
@@ -139,6 +142,7 @@ PLACE: dict[str, tuple[str, ...]] = {
     "core.deploy": ("configuration/deploy",),
     "core.devices.memory_challenger": ("protocols/pous/device",),
     "core.protocols.certifier": ("protocols/certifier/verifier",),
+    "core.protocols.inference_only": ("protocols/inference_only/verifier",),
     "core.protocols.pous": ("protocols/pous/verifier", "protocols/pous/device/challenger_session.py",
                             "protocols/pous/device/memory_challenger.py"),
     "core.protocols.pouw": ("protocols/pouw/verifier",),
@@ -194,8 +198,8 @@ _LISTED = {*_UNIT_AT, *NO_UNIT}
 ML_TREES = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
 CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement", "difftest",
-              "protocols/certifier/device", "protocols/compose", "protocols/flock/sigma", "protocols/inference_only/verifier",
-              "protocols/recursion", "protocols/remote", "protocols/tests")
+              "protocols/certifier/device", "protocols/compose", "protocols/flock/sigma", "protocols/recursion",
+              "protocols/remote", "protocols/tests")
 _SIDE_AT = {t: side for side, trees in (("ml", ML_TREES), ("core", CORE_TREES)) for t in trees}
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
