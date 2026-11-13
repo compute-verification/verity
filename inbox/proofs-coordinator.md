@@ -122428,3 +122428,38 @@ No ready line in this entry: `1199` has not ended (58 suites written). The ready
 **Not established.** No Lean check (kernel replay, lock rules) and no quick tier on #9665's head; no second reader on its statement, which I wrote and proved. Whether the device's line names the digest of the line before it as written (`Chained`) is taken: I read `challenger.py` for it when sizing, and no run checks it.
 
 **Pause:** yes, at any time; nothing unpushed. Heads: #9595 `41a71836c3`, #9581 `e230e76f63`, #9625 `2f3c3e6022`, #9665 `5edf7e30ee`, #9637 `73a3f2fea2`, scratch `cursor/proofs-prf600-periodread-scratch-0b7e`. Mailbox read at `7e01000574`.
+
+## ACCEPTS, Fri 05:30Z: STATEMENT CHANGE 3 (`ddbac96a10`, not compiled): `playAccepts_form`, `acceptsRun_form` and `reachedAccepts_form` drop `NamesDistinct` and take `RecordsHeldAt` in place of `RecordsAt`; RUNSAS's `321cdde02b` merged (no conflict); by reading, TWOLEG's new last step breaks no file of mine; `RecordsHeldAt` has no owner; turn ends on `r20261113-052326-960f`
+
+In plain words: the accept's top statements now ask nine things of the plays the form accepts, down from fourteen at 04:00Z. I am only waiting on one build, so I end the turn (your 04:19Z item 1).
+
+**1. The statement, as pushed** [read: `AcceptsTop.lean` at `ddbac96a10`; NOT compiled].
+`playAccepts_form A C S P' (hheld : HeldAt A C) (htwo : TwoHolds A.h) (hrec : RecordsHeldAt A C) (hread : RecordsRead C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S) (hsess : SessionsRun A C S P') : PlayAccepts A C S P'`.
+- `RecordsHeldAt A C` is new: `RecordsAt` less its `RegistersNone it.record` half, so `RecordsHeld A.h x m₁` alone. `recordsAt_of_held` gives `RecordsAt` back from it with `TwoHolds` and `RecordsRead` (RUNSAS's `registersNone_of_two`).
+- `NamesDistinct A.h` is RUNSAS's `namesDistinct_of_two htwo`.
+- `acceptsRun_form` and `reachedAccepts_form` take the same nine and `SessionMsgs`. `OfRun.lean`, `Within.lean`, `Fits.lean`, `Reached.lean` are untouched.
+
+**2. The merge** [run: `git merge`, `git merge-tree`]. `d967551b46` merges RUNSAS's compiled head `321cdde02b` into mine with no conflict. It brings `SecondStageOf.lean`, `Played.lean`, RUNCOINS's `RunsAs/Within.lean` with its root (RUNCOINS deletes it on its own line; nothing of mine imports it) and `Round2.lean`'s proof changes. RUNSAS's `PopulationOf.lean` (`632a30da27`, not compiled) is not in it.
+
+**3. TWOLEG's new last step, by reading only** [read: `git diff` of my head against the merge with `cursor/proofs-twoleg-c5e5` at `dd230ef7e2`; derived; nothing compiled]. Your 03:26Z item 2 and 04:09Z question.
+- The merge has no conflict (`git merge-tree`).
+- `accepted_steps`' tail changes to `∃ law, secondLawOf p run = .ok law ∧ secondCheck … = .accept pub prof`. My three uses (`Accepts.lean`, `Fits.lean`, `Within.lean`) drop everything after `inputAt`, so they do not see it. RUNCOINS's `OfCheck.lean` drops that last conjunct too.
+- `inputAt_ok` and `accepted_fits` keep their statements.
+- `inputOf` gains `family`, `key` and `main`. No file of mine names `.key`, `.family`, `.main` or `.coins` of the run's input.
+- `paramsOfJson` gains a refusal (`SAME_FAMILY`): RUNCOINS's `paramsOfJson_twoStage` walks the parser binding by binding and may need one more step; `ruleIsTwo` stands on it.
+- I compile on TWOLEG's head once TWOLEG says the form and `Steps.lean` compile there; a try before that gives no verdict on my files.
+
+**4. `RecordsHeldAt` has no owner** [read: this file, searched for `RecordsHeld`]. `RecordsHeld h x m₁` holds both records to the held names `h.boundaryNames` and `h.interiorNames`. `HeldMatches` has no field for those two, so nothing about the run's accept can give it as the statements stand. It needs a field of `HeldMatches` (or of HELDOF's held copy) tying the names to the run's parameters, and then the run's own `R3-ports` and `R7-values` checks. Coordinator: whose is it? I can take the second half (the run's two checks) if HELDOF or RUNCOINS states the first.
+
+**5. Runs** [run: `research fetch`, 05:25Z].
+- `r20261113-052326-960f` (vy-nebius-cpu-14): `AcceptsTop.lean` at `ddbac96a10`; Lean slot since 05:24Z, building dependencies; expected about 05:45Z [guess].
+- `r20261113-051943-a0a1` (vy-nebius-cpu-1): `AcceptsTop.lean` at `bb06c823bc` (change 2 alone); Lean slot since 05:20Z; expected about 05:40Z [guess].
+- One one-off timer of mine is set for 05:46Z.
+
+**Heads.** `cursor/proofs-accepts-7d08` at `ddbac96a10`, nothing unpushed. Last head where every file is known to compile: `66e1ede150`. The pen `~/wt/.pen` is this loop's (05:16Z).
+
+**STOP RULE.** Not reached: no lock, no `Sampled.lean`, no guarantee listed, no change to the form, no switch.
+
+**NEEDS.** 1. Coordinator: item 4. 2. TWOLEG: `RecordsRead`'s form change (my 03:00Z) stands.
+
+**Not established.** That `AcceptsTop.lean` compiles at `bb06c823bc` or at `ddbac96a10`. Item 3, beyond a reading. Anything about a run: the form accepts no play today.
