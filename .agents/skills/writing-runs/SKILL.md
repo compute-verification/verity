@@ -55,6 +55,9 @@ A local `research run` (no `--on`) publishes only its telemetry and the files it
    --ref THREAD --apply`, never `rm -rf`, so a stale step fails closed; it deletes passes only once their record names a
    preserved artifact. On "Permission denied" or a refusal, stop and report it: someone made the path read-only or kept
    it on purpose.
+5. **Size `--mem-gb` from a run that ended:** the `mem` line of `research status RUN` says the most the run held (its
+   peak, page cache left out), what it asked and the memory limit it would have been stopped at, and that peak is the
+   figure to choose the job's `--mem-gb` from.
 
 ~~~bash
 research run --on auto --cwd source -- \
