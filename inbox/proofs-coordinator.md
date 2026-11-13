@@ -115748,3 +115748,28 @@ Branch `cursor/proofs-accepts-7d08` at `ce21628a5f`, pushed. Nothing is unpushed
 **To post.** Nothing.
 
 **Not established.** An axiom probe that names `stmtAt` (run `7b19`). `PlayAccepts`, `SessionMsgs`, `SourcesFit` and `CaseCommits`, which are premises. An earlier period's genuine challenger signature still makes the error ⊤, as `Accepts.lean`'s docstring says. Ready for soundness's reading: all four files.
+
+## MESSAGES, Fri 02:51Z: both message files compile clean; I take SessionReading's stmts and msg
+
+Plain words: the two files that build the frame's prover and bound how often its messages can differ from the ones the device's digests recorded now compile with no axiom beyond the three allowed, on the base as it stands after TWOLEG's latest merge. What is left to plug in is the reading of each inner block's session messages and of the second stage's statements, which the coordinator has now given me to define. No Lean slot made me wait more than 10 minutes this hour.
+
+- Machines and waits [run]: r20261113-014519-7f02 on vy-nebius-cpu-11 took slot build/1 within 1 minute, a cold tree (lean exit 0 after 1842 s). After the 02:14Z message I moved to vy-nebius-2: r20261113-021746-2e09 waited about 2 minutes (slot build/9 from 02:19Z), cold too (1683 s). r20261113-024829-093c is in line there now.
+- `MessagesShown.lean` [run]: r20261113-014519-7f02 at e684647ce5: lean exit 0, axiom probe "none of its 34 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". `runShown A x : RunShown A x` holds at every `Live₂`, so the messages' bound has no `RunShown` premise left.
+- `Messages.lean` [run]: r20261113-021746-2e09 at the merge 56669d473f (base `origin/cursor/proofs-twoleg-c5e5` at 99da2b9189 merged, no conflict): lean exit 0, "none of its 30 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". This includes `callsLe` (the frame's prover makes no SHA-512 call, so `CallsLe` is the verifier's calls within the strategy's declared cost, a premise `VerifierCallsLe` the instance's cost owes) and `messagesBound`.
+- New since [derived, its try running]: `messagesFixed` in `MessagesShown.lean` (226c49b856), `MessagesFixed` at the frame at the sum over rounds of the square roots of each round's collision finder's success, with premises `MsgOpens` (the form's parse: the message read opens the recorded digest), `DigestBefore` for each round below `k` (coin map and cut: the digest is fixed by the coins the history shows), and `RunsThrough` (accept piece: an accepting run reaches every round). r20261113-024829-093c checks it (ETA 03:00Z warm, 03:20Z cold).
+- Milestone for 07:00Z [run]: `callsLe` compiled, and round 1's message (the interior record) is what `formReading` reads at round 1 and what `messagesFixed` fixes there; met.
+
+Ready for soundness's reading: `security/Proofs/Properties/Verity/SampledTwo/Messages.lean` (r20261113-021746-2e09) and `MessagesShown.lean` up to `runShown` (r20261113-014519-7f02); `messagesFixed` once r20261113-024829-093c passes.
+
+STOP RULE: kept. No guarantee, lock or named assumption touched; nothing wired into `Sampled.lean`; no piece rests on the switch being off. `DevAgrees.lean` is not imported.
+
+NEEDS:
+1. COINMAP: no device coin placed at an unshown round (the second stage's statement round `stage+1`, and a session's deciding message), while `readsAt` still counts deciding rounds.
+2. TWOLEG: `MessagesFixed` / `AcceptsRun` restricted to the rounds a run reaches, or `RunsThrough` from the accept piece.
+3. TWOLEG (its 02:50Z entry) or the 02:43Z default: the bytes of `SessionReading.stmts`/`msg`. I start on the default (the form's statements as `FlockDeploy.encList` of HELDOF's `memberRaw`) now, in a new file `SampledTwo/SessionMsgs.lean`, and switch if TWOLEG says otherwise.
+
+To post: nothing.
+
+Not established: `messagesFixed` compiled (r20261113-024829-093c); `SessionReading.stmts`/`msg` (not started); that the default bytes are what the device's digests open (`MsgOpens` at the sessions' rounds), which is where the two kinds of bytes meet. The earlier-period signature hole is not mine; `DigestBefore` is where my statement meets it.
+
+Branch `cursor/proofs-messages-f55d`, pushed head 226c49b856; nothing unpushed.
