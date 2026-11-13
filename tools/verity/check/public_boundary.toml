@@ -18,7 +18,7 @@ when_closed = ["tests"]
 # vectors the network certifier's encodings are held to
 fixtures = [
     "adapters/vllm/workloads",
-    "verity/protocols/certifier/verifier/tests/fixtures/{arith_encode,cache_step,cache_step_v2,replay_step}_vectors.json",
+    "verity/protocols/certifier/verifier/tests/fixtures/{arith_encode,cache_step,replay_step}_vectors.json",
 ]
 
 [public]

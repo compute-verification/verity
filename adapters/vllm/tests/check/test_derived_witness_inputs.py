@@ -8,16 +8,16 @@ import gzip
 import json
 
 import pytest
-
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
-from verity_vllm.check.match import program_compare as CMP
-from verity_vllm.check.match.canonical_operands import as_progression
 from verity.definitions.registry import b1, b1_tp2
 from verity.definitions.registry import prims as P
+
+from verity_vllm.check.match import program_compare as CMP
+from verity_vllm.check.match.canonical_operands import as_progression
 
 H, V = 8, 8
 BF16, I32 = Value(16), Value(32)
