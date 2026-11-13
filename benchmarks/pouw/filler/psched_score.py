@@ -12,7 +12,7 @@ these need: every shape the arm runs gets its own `dscore sgate` row and ncu DRA
 The run is score.py's, step for step: the arm's document, coins and commit; the build (score.build) and pscore.cu's; under
 `gpu-lease 1 --wait` the gates before anything is timed, FILL's `dcap dgate`, the phase filler's `dcap pgate` (every
 receipt of dfill_p at each phase S, its rows appended to dgate.jsonl, which the locked receipts gate reads), the scorer's
-`dscore sgate` at the split's chunk shape and CAP's `dcap gate`; ncu's DRAM bytes for dfill_k and the counter's control as
+`dscore sgate` at the split's chunk shape and dcap's `dcap gate`; ncu's DRAM bytes for dfill_k and the counter's control as
 score.py takes them, and for dfill_p (`pscore pncu`, ncu-phase.csv); then every suite point, through `pscore pscore` where
 the arm places a phase filler and through the locked `dscore dscore` elsewhere. After the lease the locked `report`
 scores the out dir (its own output kept as score-locked.json), and this adds the one gate it can't see, `phase_dram`:
@@ -32,23 +32,24 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import score as SC
 
+HERE = Path(__file__).resolve().parent
 A, S = SC.A, SC.S
 PNCU_TILES = 32
 
 
-def phase_of(arm, ph, b, l):
+def phase_of(arm: Any, ph: str, b: int, l: int) -> Any:
     q = arm.phase(ph, b, l)
     if q is not None and A.placed(arm, ph, b, l).place != "split":
         raise A.ArmError(f"{arm.name}: a phase filler at {ph} {b}/{l} needs a split (pscore runs FILL v1's beside it)")
     return q
 
 
-def filler_of(arm, ph, b, l):
+def filler_of(arm: Any, ph: str, b: int, l: int) -> A.Filler:
     """The chunk shape at a point: `filler_at(phase, B, L)` when the arm has one, else its `filler`. A phase point keeps the
     arm's `filler` (pscore pumps it on the split)."""
     at = getattr(arm, "filler_at", None)
@@ -60,7 +61,7 @@ def filler_of(arm, ph, b, l):
     return f
 
 
-def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
+def measure(arm: Any, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
     env = dict(os.environ, DFILL_COINS=(out / "coins.txt").read_text().strip(), DFILL_CHUNK_LOG2=str(arm.filler.chunk_log2))
     fl, err, rc_log = arm.filler, out / "errors.txt", out / "rc.txt"
 
@@ -142,7 +143,7 @@ def phase_dram(out: Path) -> dict:
             "why": None if ok else f"phase filler DRAM {rate / hbm:.2%} of HBM > {S.DRAM_LIMIT:.0%}"}
 
 
-def report(out: Path, arm) -> dict:
+def report(out: Path, arm: Any) -> dict:
     res = SC.report(out, arm)
     shutil.copy(out / "score.json", out / "score-locked.json")
     g = res["gates"]
@@ -179,7 +180,7 @@ def show(res: dict) -> None:
         print(f"  gate {k}: {'pass' if res['gates'][k]['ok'] else 'FAIL'}  {res['gates'][k]}")
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] == "measure":
         ap = argparse.ArgumentParser(prog="psched_score.py measure")
