@@ -20,10 +20,13 @@ imports without torch.
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
+import os
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Iterator
+from typing import Any
 
 from verity.circuits.codec import canonical_json
 
@@ -124,7 +127,7 @@ class TensorView:
     storage_offset: int | None = None
 
     @classmethod
-    def from_json(cls, d: dict | None) -> "TensorView | None":
+    def from_json(cls, d: dict | None) -> TensorView | None:
         if d is None:
             return None
         return cls(tuple(d["shape"]), d["dtype"], tuple(d["strides"]) if d.get("strides") is not None else None,
@@ -164,7 +167,7 @@ class ArgSlot:
     name: str | None
     leaves: tuple[int, int] | None
     view: TensorView | None
-    spans: tuple["ArgSpan", ...] = ()     # non-empty exactly when the argument is read from several fx inputs (then node/arg/leaves are None)
+    spans: tuple[ArgSpan, ...] = ()     # non-empty exactly when the argument is read from several fx inputs (then node/arg/leaves are None)
 
 
 @dataclass(frozen=True)
@@ -223,7 +226,7 @@ class RuntimeCorrespondence:
 
     # -- construction -----------------------------------------------------------------------------------------------------
     @classmethod
-    def from_json(cls, doc: dict) -> "RuntimeCorrespondence":
+    def from_json(cls, doc: dict) -> RuntimeCorrespondence:
         t = cls(doc)
         for k, rec in enumerate(cls.records(doc)):
             t._calls[k] = rec
@@ -241,8 +244,7 @@ class RuntimeCorrespondence:
             if "members" in c:
                 raise ValueError(f"calls[{k}] is a batch's, its members' records (`prune.BATCHED`): no reader takes a batch's yet")
             o = occs[c["occ"]] if c.get("occ") is not None else None
-            outs = (o or {}).get("outputs") or []
-            ins = (o or {}).get("inputs") or []
+            outs, ins = occurrence_views(o, "outputs"), occurrence_views(o, "inputs")
             rets = []
             for r in c.get("returns") or ():
                 wa = r.get("written_arg")
@@ -255,7 +257,6 @@ class RuntimeCorrespondence:
                 rets.append(ReturnSlot(k, int(r["port"]), (o or {}).get("node", ""), r.get("output"),
                                        tuple(r["leaves"]) if r.get("leaves") is not None else None, c.get("member"), c.get("row"), view,
                                        wa, (win or {}).get("node")))
-            rets = tuple(rets)
             args = []
             for i, a in enumerate(c.get("args") or ()):
                 src = ins[a["input"]] if a.get("input") is not None and a["input"] < len(ins) else None
@@ -272,9 +273,10 @@ class RuntimeCorrespondence:
                 coll = CollectiveOccurrence(cj["kind"], int(cj["occurrence"]), tuple(int(x) for x in cj["operand_ranks"]),
                                             cj.get("own_operand"), cj.get("peer_operand"), cj.get("peer_input"),
                                             tuple(int(x) for x in cj.get("peer_operands") or ()), tuple(cj.get("peer_inputs") or ()))
+            lifetime = o.get("lifetime") if o else None
             yield CallCorrespondence(k, (o or {}).get("module", ""), (o or {}).get("module_class"), (o or {}).get("node"), (o or {}).get("op"),
-                                     (o or {}).get("rule"), c.get("member"), c.get("row"), c.get("hint"), rets, tuple(args),
-                                     dict((o or {}).get("lifetime") or {}), rank, coll)
+                                     (o or {}).get("rule"), c.get("member"), c.get("row"), c.get("hint"), tuple(rets), tuple(args),
+                                     dict(lifetime) if lifetime else {}, rank, coll)
 
     # -- lookups ----------------------------------------------------------------------------------------------------------
     def __len__(self) -> int:
@@ -307,14 +309,6 @@ class RuntimeCorrespondence:
         """Every Call whose owning module path is exactly `module` (the module-body partition)."""
         return list(self._by_module.get(module, ()))
 
-    def calls_under(self, prefix: str) -> list[int]:
-        """Every Call whose owning module path is `prefix` or lies below it."""
-        out: list[int] = []
-        for m, ks in self._by_module.items():
-            if m == prefix or (prefix and m.startswith(prefix + ".")) or prefix == "":
-                out.extend(ks)
-        return sorted(out)
-
     def modules(self) -> list[str]:
         return sorted(self._by_module)
 
@@ -325,6 +319,14 @@ class RuntimeCorrespondence:
 
     def collective_calls(self) -> list[int]:
         return sorted(k for k, r in self._calls.items() if r.collective is not None)
+
+
+def occurrence_views(occurrence: Mapping[str, Any] | None, key: str) -> Sequence[Any]:
+    """An occurrence's `outputs` or `inputs` (`key`), neither of which `JSON_SCHEMA` requires of it: no entries for a Call with no
+    occurrence, and none where the occurrence records none (predict's naming writes `inputs` only for an op that writes an
+    argument in place).  A truth test, so every value reads as it did under `(occurrence or {}).get(key) or []`."""
+    views = occurrence.get(key) if occurrence else None
+    return views if views else []
 
 
 # ---------------------------------------------------------------------------------------------------------------------------
@@ -446,7 +448,7 @@ def _walk(s: _Stream, build: bool) -> Any:
             key = s.value()
             s.take(":")
             v = _walk(s, build)
-            if build:
+            if out is not None:
                 out[key] = v
     if c == "[":
         s.pos += 1
@@ -460,7 +462,7 @@ def _walk(s: _Stream, build: bool) -> Any:
                 s.pos += 1
                 continue
             v = s.value()
-            if build:
+            if lst is not None:
                 lst.append(v)
     return s.value()
 
@@ -470,9 +472,8 @@ def read_descriptor_annotation(desc_path: str, namespace: str = NAMESPACE) -> di
     walked key by key, `definitions` (the Program body -- a request Program's is GBs of reference runs) is streamed through and
     dropped, only `annotations` is built.  None when the descriptor carries no `annotations` or no such namespace.  The value is
     exactly `json.load(f)["annotations"][namespace]` (`correspondence_digest` of it is the recorded digest)."""
-    import gzip
-    opener = gzip.open(desc_path, "rt", encoding="utf-8") if str(desc_path).endswith(".gz") else open(desc_path, encoding="utf-8")
-    with opener as fh:
+    gz = str(desc_path).endswith(".gz")
+    with (gzip.open(desc_path, "rt", encoding="utf-8") if gz else open(desc_path, encoding="utf-8")) as fh:
         s = _Stream(fh)
         s.take("{")
         found: dict | None = None
@@ -494,7 +495,7 @@ def read_descriptor_annotation(desc_path: str, namespace: str = NAMESPACE) -> di
     return found.get(namespace)
 
 
-def read_program_dir(program_dir: Any) -> tuple["RuntimeCorrespondence | None", str | None, str | None]:
+def read_program_dir(program_dir: Any) -> tuple[RuntimeCorrespondence | None, str | None, str | None]:
     """The table of one Build output dir (`derive_step`: `result.json` + `descriptor.json[.gz]`), as (table, digest, problem).
     `result.json:program.correspondence_digest` is the cheap presence test (the frontend that emits the record records its digest there):
     a Build without it is a v1-frontend Build -> (None, None, None) without decoding the descriptor.  With it, the descriptor's record is
@@ -507,14 +508,14 @@ def read_program_dir(program_dir: Any) -> tuple["RuntimeCorrespondence | None", 
 
 def read_program_document(program_dir: Any) -> tuple[dict | None, str | None, str | None]:
     """`read_program_dir`'s (document, digest, problem): the record's document, not its table."""
-    import os
     d = str(program_dir)
     res_p = os.path.join(d, "result.json")
     recorded = None
     if os.path.isfile(res_p):
         try:
             with open(res_p) as f:
-                recorded = (json.load(f).get("program") or {}).get("correspondence_digest")
+                program = json.load(f).get("program")
+            recorded = program.get("correspondence_digest") if program else None
         except (OSError, ValueError) as e:
             return None, None, f"{res_p}: unreadable ({e})"
         if recorded is None:
@@ -528,7 +529,7 @@ def read_program_document(program_dir: Any) -> tuple[dict | None, str | None, st
     if doc is None:
         return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but the descriptor carries no {NAMESPACE!r} annotation"
     digest = correspondence_digest(doc)
-    problem = None if recorded in (None, digest) else f"{d}: correspondence_digest {digest[:16]} != result.json's {str(recorded)[:16]}"
+    problem = None if recorded in (None, digest) else f"{d}: correspondence_digest {str(digest)[:16]} != result.json's {str(recorded)[:16]}"
     return doc, digest, problem
 
 
@@ -557,9 +558,8 @@ def validate_document(doc: dict) -> list[str]:
             if inp.get("source") not in ("input", "weight", "call", "constant", "other"):
                 problems.append(f"occurrences[{o}].inputs[{j}].source {inp.get('source')!r} not in the enum")
         c = occ.get("collective")
-        if c is not None:
-            if not all(isinstance(x, int) for x in c.get("operand_ranks", [])) or not isinstance(c.get("occurrence"), int):
-                problems.append(f"occurrences[{o}].collective has a non-integer rank coordinate: {c!r}")
+        if c is not None and not (all(isinstance(x, int) for x in c.get("operand_ranks", [])) and isinstance(c.get("occurrence"), int)):
+            problems.append(f"occurrences[{o}].collective has a non-integer rank coordinate: {c!r}")
     for k, c in enumerate(doc["calls"]):
         if "occ" not in c:
             problems.append(f"calls[{k}] lacks 'occ'")
@@ -570,4 +570,4 @@ def validate_document(doc: dict) -> list[str]:
 
 __all__ = ["SCHEMA", "NAMESPACE", "JSON_SCHEMA", "TensorView", "ReturnSlot", "ArgSlot", "ArgSpan", "RankOccurrence", "CollectiveOccurrence",
            "CallCorrespondence", "RuntimeCorrespondence", "correspondence_digest", "load_correspondence", "read_program_dir", "read_program_document",
-           "read_descriptor_annotation", "validate_document"]
+           "read_descriptor_annotation", "validate_document", "occurrence_views"]

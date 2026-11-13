@@ -14,9 +14,11 @@ import re
 import pytest
 
 from tests.observe import test_fold_synthetic as T
+from verity_vllm.config import UsageError
 from verity_vllm.observe.events import DispatchEnter, DispatchExit
 from verity_vllm.observe.fold import resolve_log as RL
 from verity_vllm.observe.fold.resolver import Profile
+from verity_vllm.pipeline import cli
 from verity_vllm.properties import census as CEN
 from verity_vllm.properties import kernel_allowlist as KA
 
@@ -64,7 +66,7 @@ def reconcile(monkeypatch):
 def device_census() -> dict:
     """What the bare run of the traced log launches: each declared kernel once per declaring event of its step (`ALT`, the
     norm's alternative, never)."""
-    per_step = {}
+    per_step: dict[int, tuple] = {}
     RL.resolve_log("traced", profile(), None, lambda se, sr: per_step.__setitem__(sr.step, (sr, se.roots)))
     steps = []
     for step, (sr, roots) in sorted(per_step.items()):
@@ -141,6 +143,16 @@ def test_a9_untraced_in_place_overwrite_is_refused(reconcile):
     assert (m["step"], m["device_count"], m["declaring_events"]) == (0, 2, 1)
     assert [(e["op"], e["module"]) for e in m["events"]] == [("_C.fused_add_rms_norm.default", "model.norm")]
     assert m["buffers"] == norm_writes("untraced", 0)["model.norm"]
+
+
+def test_reconcile_names_no_profile_of_its_own(tmp_path):
+    """Which profile a log resolves against is the caller's to say: without `--profile` the reconciliation is refused as a
+    usage error, before it reads the census."""
+    opts = cli.parse("census", ["--reconcile", str(tmp_path / "census.json")], {})
+    assert opts.profile is None
+    with pytest.raises(UsageError, match="--profile"):
+        CEN.main(opts)
+    assert cli.parse("census", ["--reconcile", "c.json", "--profile", "toy"], {}).profile == "toy"
 
 
 def test_every_launch_count_exemption_has_a_one_line_reason():

@@ -1,0 +1,19 @@
+# Quantization-aware training of the top four blocks: each of their matrices is the start's plus sparse ternary codes
+# of a latent Muon trains, three entries of twenty nonzero under one scale a matrix. E is the codes it trained.
+# Its gradient passes as 4-bit codes at one bf16 scale a row, and the latents are bf16 with their update rounded
+# stochastically, Muon's momentum int8 codes at one bf16 scale a row.
+start = "s-t20"
+route = "qat"
+target = { gain = 1.1 }
+budget = { steps = 2700, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+targets = "blocks.[2345].w*.weight"
+keep = 0.15
+lr = 1.5e-3
+warmup = 50.0
+decay = 0.4
+grad_code = "rtn4"
+low_state = true

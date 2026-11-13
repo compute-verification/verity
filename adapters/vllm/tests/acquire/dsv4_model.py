@@ -241,7 +241,9 @@ class Attention(torch.nn.Module):
     """`DeepseekV4FlashMLAAttention`, with FlashMLA's `forward_mqa` split of the step's rows (module docstring)."""
 
     def setup(self, layer: int, static: dict[str, Any], buf: torch.Tensor) -> None:
-        self.layer, self.md, self.seen = layer, None, {}
+        self.layer = layer
+        self.md: Any = None
+        self.seen: dict[str, Any] = {}
         self.prefix = f"model.layers.{layer}.attn"
         self.compress_ratio = CSA_R if layer in CSA else HCA_R
         self.n_local_heads, self.padded_heads, self.eps = NHL, NHP, 1e-6
@@ -442,7 +444,8 @@ def dsv4_model() -> torch.nn.Module:
                 parent.append(m)
             else:
                 parent.add_module(name.rsplit(".", 1)[-1], m)
-    root.static_forward_context = static = {}
+    static: dict[str, Any] = {}
+    root.static_forward_context = static
     buf = torch.full((TOPK_ROWS, TOPK), -7, dtype=torch.int32)
     for i in range(L):
         root.model.layers[i].setup(i)

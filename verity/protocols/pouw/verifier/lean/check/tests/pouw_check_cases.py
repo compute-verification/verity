@@ -26,6 +26,11 @@ from verity.commitments.crypto import lms
 EPS = ["1", "1/2", "1/3", "2/3", "1/10", "1/20", "3/4"]
 DELTA = ["1/2", "1/10", "1/100", "1/1000", "1/65536", "1/1048576", "3/7"]
 TEMPLATES = sorted(CC.TILES)
+#: a bernoulli rate in lowest terms whose numerator has 4,301 digits and denominator 5,001, past `int`'s default limit
+LONG_P = "1" + "0" * 4300 + "/" + "1" + "0" * 4999 + "1"
+#: each mutation that writes its short one's rate 1/2 as `LONG_P`
+LONG = {"answer-public-bernoulli-long": "answer-public-bernoulli",
+        "answer-public-bernoulli-padded-long": "answer-public-bernoulli-padded"}
 
 
 def _hex(rng: random.Random, n: int = 64) -> str:
@@ -251,6 +256,7 @@ MUTATIONS = [
     ("salt-no-x", "record", "window.activations", _DROP), ("salt-x-after", "record", "window.activations.values", None),
     ("salt-values-form", "record", "window.activations.program", 7), ("salt-two-w", None, None, None),
 ]
+MUTATIONS += [(long, *next(m[1:] for m in MUTATIONS if m[0] == short)) for long, short in LONG.items()]
 NAMES = [m[0] for m in MUTATIONS]
 #: the mutations of a live execution phase, and of a seeded one that brings a live execution phase's salt or inputs
 LIVE_NAMES = {n for n in NAMES if n.startswith(("live-", "salt-"))} - {"live-seeded", "salt-seeded"}
@@ -352,6 +358,9 @@ def _derived(name: str, case: dict, rng: random.Random):
     if name == "answer-level-renamed":
         prof = ans["profile"]
         return {**prof, "drawn": {"tile": prof["drawn"][CC.LEVEL]}, "levels": [{**prof["levels"][0], "name": "tile"}]}
+    if name in LONG:
+        short = _derived(LONG[name], case, rng)
+        return {**short, "p": short["p"].replace("1/2", LONG_P)}
     units, n, k = ans["public"]["draw"]["units"], rec["population"], rec["law"]["k"]
     stratum = {"k": k, "template": "t0", "units": [[0, n]]}
     work = {**stratum, "floor": 1, "work": 3}

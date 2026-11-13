@@ -17,6 +17,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, optional, present, required
 
+__all__ = ["DeclaredStop"]
+
 
 @dataclass(frozen=True)
 class StopRule:

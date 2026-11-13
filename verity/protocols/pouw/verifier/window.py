@@ -860,13 +860,14 @@ def round_key(commitment: Ch.LiveCommitment, coin: bytes, r: int, root: bytes) -
     return derive(coin, ROUND_NOISE_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "root": root, "round": r})
 
 
-__all__ = ["COINS", "DEPTHS", "DRAW", "DRAW_FAMILIES", "ENTRY_SCHEMA", "EPS_BITS", "Entry", "GRID_BITS", "KINDS",
-           "LEGACY_REGISTERED", "LENGTH_KEYS", "LIVE_SCHEME", "MODES", "M_MAX", "PORT", "PUBLIC",
-           "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "SALT_FAMILIES",
-           "STOP_FIXED", "T_BITS", "Work", "bucket", "draw_challenger", "draw_epoch_reason", "entry_bc", "entry_digest",
-           "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem", "length_item",
-           "length_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families", "mode",
-           "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "ratio_str", "record_digest",
-           "record_problem", "round_key", "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions",
-           "side_domain", "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read",
-           "tiles", "window_problem"]
+__all__ = ["COINS", "DEPTHS", "DRAW", "DRAW_FAMILIES", "ENTRY_BITS", "ENTRY_BYTES", "ENTRY_SCHEMA", "ENTRY_WORDS",
+           "EPS_BITS", "EXACT_BITS", "Entry", "GRID_BITS", "KINDS", "KIND_CODE", "LEGACY_REGISTERED", "LENGTH_KEYS",
+           "LIVE_SCHEME", "MODES", "M_MAX", "OWNER", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS",
+           "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "ROW_STEP", "SALT", "SALT_FAMILIES", "SIDE_DOMAIN",
+           "SIDE_INDEX_WORDS", "STOP_FIXED", "TILE", "T_BITS", "Work", "bucket", "draw_challenger", "draw_epoch_reason",
+           "entry_bc", "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime",
+           "layout_problem", "length_item", "length_problem", "level", "levels", "live_challenger", "live_epoch_reason",
+           "live_families", "miss_at_most", "mode", "on_grid", "pad", "pad_node", "pass_tiles", "point",
+           "public_inputs", "ratio_str", "record_digest", "record_problem", "round_key", "rounds_reason",
+           "salt_epoch_reason", "sampling", "session_cap", "sessions", "side_domain", "side_index", "side_levels",
+           "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles", "window_problem"]
