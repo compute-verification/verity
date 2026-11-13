@@ -49,7 +49,7 @@ name = "sampled-proofs-verifier"
 root = "Spot.VerifierMain"
 
 # The planner's designs checked in exact arithmetic (`Spot.PlanCheck`), which
-# `verity/protocols/spot/plancheck.py` calls.
+# `verity/protocols/spot/prover/plancheck.py` calls.
 [[lean_exe]]
 name = "sampled-proofs-plancheck"
 root = "Spot.PlanCheckMain"

@@ -220,7 +220,7 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-periods", "verity-core-evaluate", "verity-core-firewall",
-              "verity/protocols/recursion/verifier/vstar_cli", "verity/protocols/flock/sigma", "verity-core-sampled-proofs",
+              "verity/protocols/recursion/verifier/vstar_cli", "verity/protocols/flock/verifier/sigma", "verity-core-sampled-proofs",
               "verity/protocols/poub/verifier/lean",
               "verity/protocols/certifier/verifier/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/protocols/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",

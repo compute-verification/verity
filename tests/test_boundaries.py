@@ -88,7 +88,7 @@ NO_DATE_OR_REASON = ("verity/configuration/config", "verity/protocols/inference_
 #: file's text: it reads no other distribution at run time and names no path of the census, and each of its
 #: directories is a package.  The code that came from ``benchmarks/``, and the Lean check of σ beside Flock's prover.
 #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
-HELD_AS_VERITY = ("verity/composite/device/live_challenger", "verity/protocols/flock/sigma",
+HELD_AS_VERITY = ("verity/composite/device/live_challenger", "verity/protocols/flock/verifier/sigma",
                   "verity/protocols/poub/device/live_verifier", "verity/protocols/pouw/clear",
                   "verity/protocols/pouw/receipts")
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
@@ -99,7 +99,7 @@ HELD_AS_VERITY = ("verity/composite/device/live_challenger", "verity/protocols/f
 SPOT_ROW = "verity/protocols/spot"
 CERTIFIER_ROW = "verity/protocols/certifier"
 SPOT_TREES = ("verity/protocols/spot", "verity/protocols/spot/verifier/lean", "verity/protocols/flock/verifier",
-              "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py")
+              "verity/protocols/flock/prover", "verity/protocols/flock/prover/pod", "verity/protocols/flock/prover/agreement", "verity/protocols/flock/prover/tool.py")
 SPOT_LEAN = ("verity/protocols/spot/verifier/lean", "verity/protocols/flock/verifier")
 SPOT_SECURITY = ("security/*/Flock", "security/*/Flock.lean", "security/*/Spot", "security/*/Spot.lean",
                  "security/Definitions/Claims/Sampling*")
@@ -133,7 +133,7 @@ BENCHMARKS_IMPORTERS = {
                                                                           "(`benchmarks/vllm_encoded`, its `VLLM_ENCODED`)",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
-        "verity/protocols/flock/pod/gemm_hill.py", "verity/protocols/flock/pod/read_gadget.py",
+        "verity/protocols/flock/prover/pod/gemm_hill.py", "verity/protocols/flock/prover/pod/read_gadget.py",
         "verity/protocols/flock/prover/python/verity_flock/bench.py", "verity/protocols/flock/prover/python/verity_flock/circuit_bench.py",
         "verity/protocols/flock/prover/python/verity_flock/instances.py", "verity/protocols/flock/prover/python/verity_flock/ir_bench.py",
         "verity/protocols/flock/prover/python/verity_flock/register.py",
