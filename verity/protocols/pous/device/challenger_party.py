@@ -62,8 +62,8 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from verity.configuration.deploy import stream
+from verity.configuration.deploy.manifest import ProtocolDef
 from verity.configuration.deploy.party import Finish, Identity, Received, Send
-from verity.configuration.deploy.runtime import ProtocolDef
 from verity.configuration.wire import Message, Phase, Refused
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.device.challenger_session import (

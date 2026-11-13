@@ -10,6 +10,8 @@ to a deployment configuration (`config.Component`), which is where it says what 
   and the messages sent before them (`after`);
 - its messages: the wire schemas (`verity.configuration.wire.Schema`), each with its kind.
 
+`ProtocolDef` is the protocol as a run takes it: its manifest with a factory for each of its parties (`party.Party`).
+
 `place` checks a binding of the parties to a site's machines: each party's principal owns its machine (`principal`), the
 machine provides what the party needs (`needs`), a coin-carrying channel passes no developer-owned machine (`coins-hop`),
 and each channel's link meets its latency bound (`latency`). It refuses anything else by name, or, in a `simulated`
@@ -20,11 +22,13 @@ machines with no link is refused in either mode.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from verity.configuration.wire import NAME, MessageTypes, Refused, Schema
+
+from .party import Party
 
 PRINCIPALS = ("developer", "auditor", "anyone")
 OWNERS = ("developer", "auditor")
@@ -110,6 +114,14 @@ class Manifest:
     def peers(self, party: str) -> tuple[str, ...]:
         return tuple(sorted({c.receiver for c in self.channels if c.sender == party}
                             | {c.sender for c in self.channels if c.receiver == party}))
+
+
+@dataclass(frozen=True)
+class ProtocolDef:
+    """A protocol as a run takes it: its manifest, and a factory for each of its parties."""
+
+    manifest: Manifest
+    parties: Mapping[str, Callable[[], Party]]
 
 
 # --- placement ----------------------------------------------------------------------------------------------------------
@@ -224,4 +236,4 @@ def site_of(machines: Sequence[Mapping[str, Any]], links: Sequence[Mapping[str, 
                 tuple(Route(tuple(k["ends"]), k["latency_ms"], tuple(k.get("via", ()))) for k in links))
 
 
-__all__ = ["Channel", "Manifest", "PlaceResult", "Role", "Topology", "place", "site_of"]
+__all__ = ["Channel", "Manifest", "PlaceResult", "ProtocolDef", "Role", "Topology", "place", "site_of"]

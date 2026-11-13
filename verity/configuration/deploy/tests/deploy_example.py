@@ -13,9 +13,8 @@ import hashlib
 from pathlib import Path
 
 from verity.commitments.crypto import lms
-from verity.configuration.deploy.manifest import Channel, Manifest, Role
+from verity.configuration.deploy.manifest import Channel, Manifest, ProtocolDef, Role
 from verity.configuration.deploy.party import Finish, LogEntry, Received, Send, Timer
-from verity.configuration.deploy.runtime import ProtocolDef
 from verity.configuration.wire import Body, Bool, Int, Message, Schema
 
 ID = "verity/example/deadline"
