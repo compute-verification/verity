@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -235,9 +238,51 @@ def test_a_git_that_cant_commit_is_refused_before_anything_runs(tmp_path, monkey
     for k, v in {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "user.useConfigOnly", "GIT_CONFIG_VALUE_0": "true"}.items():
         monkeypatch.setenv(k, v)
     assert _stage(monkeypatch, repo, "tools/move/zorble_map.toml", "--base", base, "--branch", "staged") == 1
-    assert "git has no identity here to commit the moves as" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "git has no identity here to commit the moves as" in err
+    assert ST.NAMED in err and ST.NAMED in " ".join(_recipe().replace("\\\n", " ").split()), "the refusal gives README.md's recipe"
     assert len(git(repo, "worktree", "list").splitlines()) == 1
     assert git(repo, "branch", "--list", "staged") == ""
+
+
+def _recipe() -> str:
+    """README.md's `research run` line for a node, to its last continued line, less its block's indent."""
+    lines = (HERE.parent / "README.md").read_text().splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith("    research run "))
+    end = next(i for i in range(start, len(lines)) if not lines[i].endswith("\\"))
+    return "\n".join(line[4:] for line in lines[start:end + 1])
+
+
+def test_the_readmes_node_recipe_commits_on_a_node_as_the_checkout_it_is_typed_in(tmp_path):
+    """README.md's `research run` line as it prints it, typed by a shell in a checkout whose configuration holds an identity.
+    `research` is a stand-in that runs the command it is given, word for word, in a clone whose git has no identity, with
+    nothing of the typing shell's environment, as a node does: the move's commit there carries the checkout's configured
+    identity as author and committer, and so does the bundle the checkout fetches to push."""
+    repo, base = _repo(tmp_path, {**TREE, "tools/move/zorble_map.toml": WORDS})
+    lead, node, out, bin_ = (tmp_path / n for n in ("lead", "node", "out", "bin"))
+    for clone in (lead, node):
+        git(tmp_path, "clone", "-q", str(repo), str(clone))
+    out.mkdir()
+    bin_.mkdir()
+    (tmp_path / "lead.gitconfig").write_text("[user]\n\tname = Lead Checkout\n\temail = lead@checkout.invalid\n")
+    (tmp_path / "node.gitconfig").write_text("[user]\n\tuseConfigOnly = true\n")    # git guesses no name from the host
+    shell = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    path = f"{Path(sys.executable).parent}:{shell.get('PATH', os.defpath)}"
+    on_node = {"PATH": path, "HOME": str(tmp_path), "GIT_CONFIG_GLOBAL": str(tmp_path / "node.gitconfig"),
+               "GIT_CONFIG_NOSYSTEM": "1", "OUT": str(out)}
+    (bin_ / "research").write_text('#!/bin/sh\nwhile [ "$1" != -- ]; do shift; done\nshift\n'
+                                   f"cd {shlex.quote(str(node))} && exec env -i "
+                                   + " ".join(f"{k}={shlex.quote(v)}" for k, v in on_node.items()) + ' "$@"\n')
+    (bin_ / "research").chmod(0o755)
+    assert subprocess.run(["git", "var", "GIT_AUTHOR_IDENT"], cwd=node, env=on_node, capture_output=True).returncode != 0
+    typed = {**shell, "PATH": f"{bin_}:{path}", "GIT_CONFIG_GLOBAL": str(tmp_path / "lead.gitconfig"), "GIT_CONFIG_NOSYSTEM": "1"}
+    line = _recipe().replace("NAME.toml", "zorble_map.toml").replace("BRANCH", "staged")
+    r = subprocess.run(["bash", "-c", line], cwd=lead, env=typed, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    who = "Lead Checkout <lead@checkout.invalid>"
+    assert git(node, "log", "--format=%an <%ae>|%cn <%ce>", f"{base}..staged") == f"{who}|{who}"
+    git(lead, "fetch", "-q", str(out / "move.bundle"), "staged:staged")
+    assert git(lead, "log", "--format=%an <%ae>|%cn <%ce>", f"{base}..staged") == f"{who}|{who}"
 
 
 def test_the_staged_branch_bundles_for_the_checkout_that_pushes_it(tmp_path, monkeypatch, capsys):

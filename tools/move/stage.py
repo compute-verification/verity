@@ -54,6 +54,10 @@ SCRIPT = {kind: RS.LINE_SCRIPT[line] for kind, line in LINE.items()}
 #: the tables that make a map each kind: a word map's words may all be scoped to files (`[[words_in]]`)
 TABLES = {"words": ("words", "words_in"), "paths": ("paths",)}
 SHOWN = 20
+#: how a node's run names the identity its commits carry, as README.md's recipe prints it: the configured one of the
+#: checkout the command is typed in, which pushes the result
+NAMED = ('env GIT_AUTHOR_NAME="$(git config user.name)" GIT_AUTHOR_EMAIL="$(git config user.email)" '
+         'GIT_COMMITTER_NAME="$(git config user.name)" GIT_COMMITTER_EMAIL="$(git config user.email)"')
 
 
 class Refused(Exception):
@@ -192,8 +196,10 @@ def stage(repo: Path, base: str, maps: list[str], *, extra: list[str] = (), no_l
                       "reads word maps and a move's `Move:` line names its map")
     if any(subprocess.run(["git", "var", v], cwd=repo, capture_output=True).returncode
            for v in ("GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT")):
-        raise Refused("git has no identity here to commit the moves as (a node has none): set user.name and user.email, or "
-                      "GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL")
+        raise Refused("git has no identity here to commit the moves as (a node has none): the run names the identity of the "
+                      "checkout that will push the result, read from that checkout's own configuration where the command "
+                      "is typed and given ahead of the one command the node runs, never exported in a shell: `research run "
+                      f"... -- {NAMED} bash -c 'python3 tools/move/stage.py ...'` (tools/move/README.md)")
     s = Stage(repo, base, extra=[f"--map={x}" for x in extra], no_lock=no_lock, rerun=rerun, log=log)
     moves, parent = [], base
     try:

@@ -68,13 +68,21 @@ second.
 
 Over the whole tree `rename.py` and `move_check.py` each run for minutes, so the lead stages on a node, from a checkout at
 the window's base. The node's clone can't push and its git has no identity (`stage.py` refuses before running), so the
-run names one and bundles the branch into its outputs, and the lead pushes it from the checkout:
+run names the identity of the checkout that will push the result, read from that checkout's own configuration where the
+command is typed and given ahead of the one command the node runs, never exported in a shell, and bundles the branch into
+its outputs; the lead pushes it from that checkout:
 
     git fetch origin main && git checkout --detach origin/main
-    research run --on auto --cwd clone -- bash -c 'export GIT_{AUTHOR,COMMITTER}_NAME=LEAD GIT_{AUTHOR,COMMITTER}_EMAIL=EMAIL;
-      python3 tools/move/stage.py tools/move/NAME.toml --base HEAD --no-fetch --branch BRANCH \
+    research run --on auto --cwd clone -- env \
+      GIT_AUTHOR_NAME="$(git config user.name)" GIT_AUTHOR_EMAIL="$(git config user.email)" \
+      GIT_COMMITTER_NAME="$(git config user.name)" GIT_COMMITTER_EMAIL="$(git config user.email)" \
+      bash -c 'python3 tools/move/stage.py tools/move/NAME.toml --base HEAD --no-fetch --branch BRANCH \
         --bundle "$OUT/move.bundle" --certificate "$OUT/cert.json"'
     research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
+
+An agent's push that adds a commit under any other name but the one `research queue cross` commits under is refused
+(`tools/agent-guard/pre_push.py`), so the run names no other. A carry on a node (`restack.py` in `stage.py`'s place) names
+the identity the same way.
 
 A move's PR, whose body says `Move: tools/move/NAME.toml`, lands on its ready mark alone, with no land verdict, whatever
 it touches: the verified queue reruns the map, from `main`, on its batch's tip, over whatever landed since, and takes it

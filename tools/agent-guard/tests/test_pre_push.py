@@ -2,24 +2,30 @@
 gives every push the pre-push hook (pre_push.py), which refuses a branch registered to another agent and `main`, `checked`
 and `next`, and then runs the hook the push would have run without it, for a push to the repositories whose `main`,
 `checked` and `next` drive lands (verity and infra). A push no agent started (a person's, the queue's) is not judged, and
-neither is one to another repository (the notes, whose `main` every agent's `research notes sync` pushes)."""
+neither is one to another repository (the notes, whose `main` every agent's `research notes sync` pushes). A judged push is
+refused, too, when it adds a commit that the checkout's configured identity did not write, as author or as committer."""
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
 GUARD = Path(__file__).resolve().parents[1]
-GIT_ENV = {"GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
 ME, OTHER = "bc-11111111-1111-4111-8111-111111111111", "bc-22222222-2222-4222-8222-222222222222"
 REAL_GIT = "/usr/bin/git"
+#: the identity the miniature VM's git configuration holds, and another, as a script's exports leave it in a shell
+OWN = "Own Machine <own@machine.invalid>"
+TRIAL = {"GIT_AUTHOR_NAME": "trial", "GIT_AUTHOR_EMAIL": "trial@invalid", "GIT_COMMITTER_NAME": "trial",
+         "GIT_COMMITTER_EMAIL": "trial@invalid"}
+AS_TRIAL = "author and committer trial <trial@invalid>"
 
 
 class VM:
     """An agent VM in miniature: `git` on PATH is the guard, whose pushes go through a hooks directory with pre_push.py in it;
-    `origin` stands in for verity on GitHub (AGENT_GUARD_PUSH_REMOTES), `node` for a node's bare repository."""
+    `origin` stands in for verity on GitHub (AGENT_GUARD_PUSH_REMOTES), `node` for a node's bare repository. Its identity
+    (OWN) is in its global configuration, as a VM's is, and nothing in its environment names another."""
 
     def __init__(self, tmp: Path):
         self.tmp, self.origin, self.node, self.ws = tmp, tmp / "origin.git", tmp / "node.git", tmp / "ws"
@@ -30,8 +36,11 @@ class VM:
         (hooks / "pre-push").write_text(f"#!/bin/sh\nexec python3 {GUARD / 'pre_push.py'} \"$@\"\n")
         for f in (bin_ / "git", hooks / "pre-push"):
             f.chmod(0o755)
+        self.config = tmp / "gitconfig"
+        self.config.write_text("[user]\n\tname = Own Machine\n\temail = own@machine.invalid\n")
         base = {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "AGENT_GUARD_", "CURSOR_", "VERITY_"))}
-        self.env = {**base, **GIT_ENV, "PATH": f"{bin_}:{base.get('PATH', '/usr/bin:/bin')}", "VERITY_REAL_GIT": REAL_GIT,
+        self.env = {**base, "GIT_CONFIG_GLOBAL": str(self.config), "GIT_CONFIG_NOSYSTEM": "1",
+                    "PATH": f"{bin_}:{base.get('PATH', '/usr/bin:/bin')}", "VERITY_REAL_GIT": REAL_GIT,
                     "AGENT_GUARD_GIT_HOOKS": str(hooks), "AGENT_GUARD_STATE": str(self.state),
                     "AGENT_GUARD_PUSH_REMOTES": str(self.origin)}
         for bare in (self.origin, self.node):
@@ -45,14 +54,28 @@ class VM:
         script.chmod(0o755)
         self.script = script
 
-    def git(self, *args: str, cwd: Path | None = None) -> str:
+    def git(self, *args: str, cwd: Path | None = None, **env: str) -> str:
         return subprocess.run([REAL_GIT, *args], cwd=cwd or self.ws, check=True, capture_output=True, text=True,
-                              env=self.env).stdout
+                              env={**self.env, **env}).stdout
 
     def push(self, *args: str, agent: str | None = ME, **env: str) -> subprocess.CompletedProcess:
         """`push.sh ARGS` run by `agent`'s shell (None: no agent's), as a script run from the agent's command would be."""
         e = {**self.env, **env, **({"CURSOR_CONVERSATION_ID": agent} if agent else {})}
         return subprocess.run([str(self.script), *args], cwd=self.ws, capture_output=True, text=True, env=e)
+
+    def shell(self, script: str, agent: str | None = ME, **env: str) -> subprocess.CompletedProcess:
+        """`script` run by bash in the checkout, by `agent`'s shell: its exports reach every git after them."""
+        e = {**self.env, **env, **({"CURSOR_CONVERSATION_ID": agent} if agent else {})}
+        return subprocess.run(["bash", "-c", script], cwd=self.ws, capture_output=True, text=True, env=e)
+
+    def commit(self, message: str, *args: str, **env: str) -> str:
+        """An empty commit in the checkout, under the VM's identity unless `args` or `env` name another: its id."""
+        self.git("commit", "-q", "--allow-empty", "-m", message, *args, **env)
+        return self.git("rev-parse", "HEAD").strip()
+
+    def who(self, revs: str, bare: Path | None = None) -> set[str]:
+        """Each `AUTHOR | COMMITTER` among `revs`."""
+        return set(self.git("log", "--format=%an <%ae> | %cn <%ce>", *revs.split(), cwd=bare or self.ws).splitlines())
 
     def heads(self, bare: Path | None = None) -> set[str]:
         out = self.git("for-each-ref", "--format=%(refname:short)", "refs/heads", cwd=bare or self.origin)
@@ -257,3 +280,254 @@ def test_an_inbox_message_pushed_to_verity_passes(vm):
                        env={**vm.env, "CURSOR_CONVERSATION_ID": ME})
     assert p.returncode == 0, p.stderr
     assert f"inbox/{OTHER}" in vm.heads()
+
+
+EXPORTS = "export " + " ".join(f"{name}={value}" for name, value in TRIAL.items())
+
+
+def test_a_commit_under_another_author_is_refused_naming_it_and_the_checkouts_identity(vm):
+    sha = vm.commit("another's", "--author=trial <trial@invalid>")
+    p = vm.push("origin", "HEAD:refs/heads/mine")
+    assert p.returncode != 0 and "mine" not in vm.heads()
+    assert f"this push adds 1 commit that this checkout's identity, {OWN}, did not write" in p.stderr
+    assert f"{sha[:12]} author trial <trial@invalid>." in p.stderr and "committer trial" not in p.stderr
+
+
+def test_a_commit_under_another_committer_is_refused(vm):
+    sha = vm.commit("carried", GIT_COMMITTER_NAME="trial", GIT_COMMITTER_EMAIL="trial@invalid")
+    p = vm.push("origin", "HEAD:refs/heads/mine")
+    assert p.returncode != 0 and "mine" not in vm.heads()
+    assert f"{sha[:12]} committer trial <trial@invalid>." in p.stderr and "author trial" not in p.stderr
+
+
+def test_names_exported_in_the_shell_that_commits_and_pushes_are_refused(vm):
+    """A scratch script's `export` of the four names outlives the scratch repository: every later `git commit` in that shell
+    takes them, in a checkout too, and the push from the same shell is the first thing that reads what they wrote."""
+    p = vm.shell(f"{EXPORTS}\ngit commit -q --allow-empty -m one && git commit -q --allow-empty -m two\n"
+                 "git push origin HEAD:refs/heads/mine\n")
+    assert p.returncode != 0 and not vm.heads()
+    assert "this push adds 2 commits that" in p.stderr and p.stderr.count(AS_TRIAL) == 2
+    assert vm.who("-2") == {"trial <trial@invalid> | trial <trial@invalid>"}
+
+
+def test_a_branch_whose_commits_are_all_the_checkouts_passes_new_and_moved(vm):
+    vm.commit("one"), vm.commit("two")
+    assert vm.push("origin", "HEAD:refs/heads/mine").returncode == 0
+    vm.commit("three")
+    assert vm.push("origin", "HEAD:refs/heads/mine").returncode == 0
+    assert vm.who("mine", vm.origin) == {f"{OWN} | {OWN}"}
+
+
+def remotes_line(vm: VM) -> str:
+    """A branch `line` on the remote with one commit under another identity (as its `main` holds the queue's), the checkout
+    back on a new branch `work` cut from before it: that commit's id."""
+    vm.git("switch", "-q", "-c", "line")
+    theirs = vm.commit("the remote's own", **TRIAL)
+    vm.git("push", "-q", "origin", "line")
+    vm.git("switch", "-q", "-c", "work", "main")
+    return theirs
+
+
+def test_a_merge_of_a_branch_the_remote_already_has_passes_once_a_ref_of_the_remotes_here_holds_it(vm):
+    theirs = remotes_line(vm)
+    vm.commit("mine")
+    vm.git("merge", "-q", "--no-ff", "-m", "Merge line", "origin/line")
+    vm.git("update-ref", "-d", "refs/remotes/origin/line")       # as after a pull by URL: the commit is here, no ref holds it
+    p = vm.push("origin", "HEAD:refs/heads/work")
+    assert p.returncode != 0 and f"{theirs[:12]} {AS_TRIAL}." in p.stderr and "`git fetch origin`" in p.stderr
+    vm.git("fetch", "-q", "origin")
+    assert vm.push("origin", "HEAD:refs/heads/work").returncode == 0
+    assert vm.git("rev-list", "--count", "--merges", "work", cwd=vm.origin).strip() == "1"
+
+
+def test_a_cherry_pick_of_the_remotes_commit_passes_under_the_checkouts_identity_and_not_under_anothers(vm):
+    """A cherry-pick is a new commit with its source's author and the picker as committer."""
+    vm.git("switch", "-q", "-c", "line")
+    ours, theirs = vm.commit("ours"), vm.commit("another's", **TRIAL)
+    vm.git("push", "-q", "origin", "line")
+    vm.git("switch", "-q", "-c", "work", "main")
+    vm.commit("mine")
+    vm.git("cherry-pick", "--allow-empty", ours)
+    assert vm.git("rev-parse", "HEAD").strip() != ours and vm.push("origin", "HEAD:refs/heads/work").returncode == 0
+    vm.git("cherry-pick", "--allow-empty", theirs)
+    picked = vm.git("rev-parse", "HEAD").strip()
+    p = vm.push("origin", "HEAD:refs/heads/work")
+    assert p.returncode != 0 and f"{picked[:12]} author trial <trial@invalid>." in p.stderr
+
+
+def test_another_names_commits_pass_to_a_repository_that_is_not_the_queues(vm):
+    vm.commit("another's", **TRIAL)
+    assert vm.push("node", "HEAD:refs/heads/work").returncode == 0 and "work" in vm.heads(vm.node)
+    assert vm.push(str(vm.node), "HEAD:refs/heads/again").returncode == 0
+
+
+def test_another_names_commits_pass_in_a_push_no_agent_started(vm):
+    vm.commit("another's", **TRIAL)
+    assert vm.push("origin", "HEAD:refs/heads/work", agent=None).returncode == 0 and "work" in vm.heads()
+    assert vm.push("origin", "HEAD:refs/heads/again", agent="").returncode == 0, "an empty id is no agent"
+
+
+def test_a_deletion_adds_nothing(vm):
+    vm.git("push", "-q", "origin", "HEAD:refs/heads/mine", "HEAD:refs/heads/free")
+    vm.commit("another's", **TRIAL)
+    assert vm.push("origin", "--delete", "mine").returncode == 0 and "mine" not in vm.heads()
+    vm.config.write_text("")
+    assert vm.push("origin", ":free").returncode == 0 and "free" not in vm.heads(), "nor does it need an identity"
+
+
+def test_a_new_branch_is_held_to_what_it_adds_to_the_remotes_other_branches_not_to_its_whole_history(vm):
+    for i in range(3):
+        vm.commit(f"the remote's own {i}", **TRIAL)
+    vm.git("push", "-q", "origin", "HEAD:refs/heads/main")
+    vm.git("switch", "-q", "-c", "work")
+    vm.commit("mine")
+    assert vm.push("-u", "origin", "work").returncode == 0, "git hands the hook no remote sha for a new branch"
+    vm.git("switch", "-q", "-c", "other")
+    sha = vm.commit("another's", **TRIAL)
+    p = vm.push("-u", "origin", "other")
+    assert p.returncode != 0 and "this push adds 1 commit that" in p.stderr and f"{sha[:12]} {AS_TRIAL}." in p.stderr
+
+
+def test_a_refusal_names_five_commits_and_counts_the_rest_and_what_it_says_to_run_makes_them_again(vm):
+    """Seven commits under another name, a merge of the remote's branch mended by hand among them. The refusal's own
+    commands, run in a shell that still holds the names, give a branch that passes: the same seven under the checkout's
+    identity, the merge and its mend kept, and the remote's commit, under the other name too, left as it is."""
+    theirs = remotes_line(vm)
+    change = "echo $i > f$i && git add f$i && git commit -q -m $i"
+    made = vm.shell(f"{EXPORTS}\nfor i in 1 2 3; do {change}; done\n"
+                    "git merge -q --no-ff --no-commit origin/line && echo mended > m && git add m && git commit -q -m merge\n"
+                    f"for i in 4 5 6; do {change}; done\n", agent=None)
+    assert made.returncode == 0, made.stderr
+    old = vm.git("rev-parse", "HEAD").strip()
+    p = vm.shell(f"{EXPORTS}\ngit push origin work")
+    assert p.returncode != 0 and "work" not in vm.heads()
+    assert "this push adds 7 commits that" in p.stderr and p.stderr.count(AS_TRIAL) == 5 and "; and 2 more." in p.stderr
+    assert theirs[:12] not in p.stderr, "the remote's own commit is not one this push adds"
+    said = re.findall(r"`([^`]+)`", p.stderr)
+    unset, switch, again = (next(c for c in said if c.startswith(w)) for w in ("unset ", "git switch ", "FILTER_BRANCH_"))
+    assert old[:12] in switch
+    run = "\n".join([EXPORTS, unset, switch, again, "git push origin again"]).replace("<new-branch>", "again")
+    done = vm.shell(run)
+    assert done.returncode == 0, done.stderr
+    assert vm.who("again --not line", vm.origin) == {f"{OWN} | {OWN}"}
+    assert vm.git("rev-parse", "again^{tree}", cwd=vm.origin) == vm.git("rev-parse", f"{old}^{{tree}}")
+    assert vm.git("rev-list", "--merges", "--format=%P", "again", cwd=vm.origin).split()[-1] == theirs
+    assert vm.git("log", "--format=%s", "again", "--not", "line", cwd=vm.origin).split() == "6 5 4 merge 3 2 1".split()
+
+
+def test_a_push_that_adds_commits_from_a_checkout_with_no_configured_identity_is_refused(vm):
+    vm.config.write_text("[user]\n\tname = Own Machine\n")
+    p = vm.push("origin", "HEAD:refs/heads/mine")
+    assert p.returncode != 0 and "mine" not in vm.heads()
+    assert "this checkout has no identity to hold them to" in p.stderr
+    vm.config.write_text("[user]\n\tname = Own Machine\n\temail = own@machine.invalid\n")
+    assert vm.push("origin", "HEAD:refs/heads/mine").returncode == 0
+
+
+def test_a_push_whose_commits_git_cannot_list_is_refused(tmp_path):
+    p = hook(VERITY[0], f"refs/heads/x {A} refs/heads/x {ZERO}", tmp=tmp_path, GIT_DIR=str(tmp_path / "no-repository"))
+    assert p.returncode == 1 and "git could not list the commits this push adds" in p.stderr
+    assert hook(VERITY[0], f"(delete) {ZERO} refs/heads/x {B}", tmp=tmp_path, GIT_DIR=str(tmp_path / "no-repository")).returncode == 0
+
+
+def test_a_name_given_on_a_command_line_or_in_the_environments_configuration_is_not_the_checkouts(vm):
+    """A wrapper that puts `-c user.name=...` on every git of a script puts it on the push too, and a script that exports a
+    configuration (GIT_CONFIG_COUNT) leaves it in the shell that commits and pushes: neither is what the checkout's files
+    hold."""
+    sha = vm.commit("another's", **TRIAL)
+    p = vm.shell("git -c user.name=trial -c user.email=trial@invalid push origin HEAD:refs/heads/mine")
+    assert p.returncode != 0 and f"{sha[:12]} {AS_TRIAL}." in p.stderr and f"this checkout's identity, {OWN}," in p.stderr
+    vm.git("switch", "-q", "-c", "other", "main")
+    p = vm.shell("export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0=trial GIT_CONFIG_KEY_1=user.email "
+                 "GIT_CONFIG_VALUE_1=trial@invalid\ngit commit -q --allow-empty -m one\ngit push origin HEAD:refs/heads/other\n")
+    assert vm.who("-1") == {"trial <trial@invalid> | trial <trial@invalid>"}
+    assert p.returncode != 0 and AS_TRIAL in p.stderr and f"this checkout's identity, {OWN}," in p.stderr and not vm.heads()
+
+
+def test_a_tag_is_held_as_a_branch_is(vm):
+    sha = vm.commit("another's", **TRIAL)
+    vm.git("tag", "v1")
+    p = vm.push("origin", "v1")
+    assert p.returncode != 0 and f"{sha[:12]} {AS_TRIAL}." in p.stderr
+    assert not vm.git("for-each-ref", "refs/tags", cwd=vm.origin)
+
+
+def test_a_push_by_url_is_held_to_its_lines_alone_and_the_refusal_never_prints_the_url(vm):
+    sha = vm.commit("another's", **TRIAL)
+    p = vm.push(str(vm.origin), "HEAD:refs/heads/mine")
+    ours = [line for line in p.stderr.splitlines() if line.startswith("pre-push")]
+    assert p.returncode != 0 and len(ours) == 1 and f"{sha[:12]} {AS_TRIAL}." in ours[0]
+    assert str(vm.origin) not in ours[0] and "--remotes=<remote>" in ours[0] and "push to the remote by its name" in ours[0]
+
+
+#: the one identity let through beside the checkout's, as `research queue cross` gives it to git for a crossing's commits, and
+#: a name of a lane's own, as a head crossed by hand carries
+QUEUES = "research queue <queue@research.invalid>"
+QUEUE = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
+         "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
+BY_HAND = {"GIT_AUTHOR_NAME": "restack carry", "GIT_AUTHOR_EMAIL": "noreply@invalid",
+           "GIT_COMMITTER_NAME": "restack carry", "GIT_COMMITTER_EMAIL": "noreply@invalid"}
+
+
+def crossed(vm: VM, names: dict[str, str]) -> tuple[str, str, list[str]]:
+    """A head the agent pushed to its branch `mine`, crossed over a move the remote's `main` landed since, as `research queue
+    cross` crosses one: a merge of the move's parent, then the head mapped across the move with the move as a second parent,
+    each made by `commit-tree` with `names` in git's environment. The head as pushed, the crossed head, and the two commits
+    the crossing made."""
+    vm.git("push", "-q", "origin", "main")
+    vm.git("switch", "-q", "-c", "work")
+    old = vm.commit("the lane's own change")
+    assert vm.push("origin", "HEAD:refs/heads/mine").returncode == 0
+    vm.git("switch", "-q", "main")
+    base, move = vm.commit("the move's parent", **TRIAL), vm.commit("the move", **TRIAL)
+    vm.git("push", "-q", "origin", "main")
+    tree = vm.git("rev-parse", f"{old}^{{tree}}").strip()
+    merge = vm.git("commit-tree", tree, "-p", old, "-p", base, "-m", f"Merge {base}", **names).strip()
+    new = vm.git("commit-tree", tree, "-p", merge, "-p", move, "-m", f"Mapped across {move}", **names).strip()
+    assert set(vm.git("rev-list", new, "--not", old, "origin/main").split()) == {merge, new}
+    return old, new, [merge, new]
+
+
+def cross_push(vm: VM, old: str, new: str) -> subprocess.CompletedProcess:
+    """The push `research queue cross --push` makes with the caller's own git, a lease on the old head."""
+    return vm.push(f"--force-with-lease=refs/heads/mine:{old}", "origin", f"{new}:refs/heads/mine")
+
+
+def test_a_head_crossed_as_the_queue_crosses_one_passes_under_the_queues_identity(vm):
+    old, new, _ = crossed(vm, QUEUE)
+    assert vm.who(f"{new} --not {old} origin/main") == {f"{QUEUES} | {QUEUES}"}
+    p = cross_push(vm, old, new)
+    assert p.returncode == 0, p.stderr
+    assert vm.git("rev-parse", "refs/heads/mine", cwd=vm.origin).strip() == new
+
+
+def test_the_same_head_crossed_by_hand_under_a_name_of_a_lanes_own_is_refused_naming_its_commits(vm):
+    old, new, made = crossed(vm, BY_HAND)
+    p = cross_push(vm, old, new)
+    assert p.returncode != 0 and vm.git("rev-parse", "refs/heads/mine", cwd=vm.origin).strip() == old
+    assert "this push adds 2 commits that" in p.stderr
+    assert all(f"{sha[:12]} author and committer restack carry <noreply@invalid>" in p.stderr for sha in made)
+
+
+def test_the_one_identity_let_through_beside_the_checkouts_is_the_queues_and_an_allowance_is_one_entry(vm):
+    load = "import json, sys; sys.dont_write_bytecode = True; sys.path.insert(0, sys.argv[1]); import pre_push; "
+    listed = subprocess.run(["python3", "-c", load + "print(json.dumps(pre_push.OTHERS))", str(GUARD)], cwd=vm.ws,
+                            capture_output=True, text=True, check=True, env=vm.env).stdout
+    assert list(json.loads(listed)) == [QUEUES] and "research queue cross" in json.loads(listed)[QUEUES]
+    code = (load + "pre_push.OTHERS.update({who: 'a tool that commits as itself' for who in sys.argv[4:]}); "
+            "sys.exit(pre_push.main(sys.argv[2:4]))")
+
+    def judged(sha: str, *others: str) -> int:
+        return subprocess.run(["python3", "-c", code, str(GUARD), "origin", str(vm.origin), *others], cwd=vm.ws,
+                              input=f"refs/heads/work {sha} refs/heads/work {ZERO}\n", capture_output=True, text=True,
+                              env={**vm.env, "CURSOR_CONVERSATION_ID": ME}).returncode
+
+    start = vm.git("rev-parse", "HEAD").strip()
+    for near in ({**QUEUE, "GIT_AUTHOR_EMAIL": "queue@invalid"}, {**QUEUE, "GIT_COMMITTER_NAME": "queue"}, BY_HAND):
+        assert judged(vm.commit("near the queue's, and not it", **near)) == 1, near
+        vm.git("reset", "-q", "--hard", start)
+    assert judged(vm.commit("the queue's", **QUEUE)) == 0
+    vm.git("reset", "-q", "--hard", start)
+    sha = vm.commit("a tool's", **TRIAL)
+    assert judged(sha) == 1 and judged(sha, "trial <other@invalid>") == 1
+    assert judged(sha, "trial <trial@invalid>") == 0
