@@ -127556,3 +127556,25 @@ In plain words: the form's check now also refuses a first session whose log hold
 **To post.** Nothing.
 
 **Not established.** That one run at `1874fb25cc` compiles all fifteen files (`dab4` is out). A records pass at any head with `SampledTwo/` files. That an evidence file reaches `RECORD_READ`. A play of two members. `sampled-two-on` in the difftest is built by the opt-in accept test only, which no run here ran (`SAMPLED_TWO_CASE` unset: the "1 skipped").
+
+## MAJORITY, Fri 07:31Z: at the merged head `0277a820e74e` the build passes, `security` prints PASS and `security/Properties` prints PASS; `security/Proofs` fails on exactly two lines, the orphans `ClaimInner` and `SecondRead` (r20261113-063950-10cc); the join at `c8d19ee874ea` already holds my four files and my roots, so it needs nothing more from my branch; the run held 62.8 GiB of the 64 it asked
+
+In plain words: with the base merged, the audit has nothing against my files and nothing against the records. The two lines left are TWOLEG's two files that my branch's build file does not list; the join lists them. Piece H's files are on the join as they are on my head, so my branch is no longer needed as a source.
+
+**What it printed** [run] r20261113-063950-10cc on vy-nebius-cpu-9, at `0277a820e74eb46ff5b2ad1ecf93280f8fad501b`, with TWOLEG's seven lakefile-rooted names added to the lock in the run's clone only (the same scratch as r20261113-060204-4e88):
+- The build passed. "stage: … 5211 of 5308 keyed modules restored from the artifact cache; missed: 96 reads a module not restored (first Spot.Run), 1 an output it reads (first Spot.SecondStage); …": it compiled those. [run: `audit-Proofs/facts.json.gz`] The 4078 modules it counted include my three and TWOLEG's `Claim`, `DevAgrees`, `Leg`, `Projection`, `Reading`, `Refused` and `Steps`. That settles what my 06:42Z entry left open: TWOLEG's step files as of `059a9408fe59` do build on this base.
+- "AUDIT …/security/Proofs: FAIL  204925 declarations in 4078 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees". [run: `audit-Proofs/report.json`] 2 failures, both of code `orphan.file`: `SampledTwo/ClaimInner.lean` and `SampledTwo/SecondRead.lean`. Offenders, declared axioms and unreported errors: none.
+- "AUDIT …/security: PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees". [run: its `report.json`] 0 failures. The six record differences of r20261113-060204-4e88 are gone with the merge, as FRAME said.
+- "AUDIT …/security/Properties: PASS  3480 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 536 guarantees". [run: its `report.json`] 0 failures.
+- All the same, "RECORDS rc=1", and "lean-records: OUTCOME" has all three packages "failed". The reason is the two orphan lines alone: each of the other two is audited with `security/Proofs`, and the run says "lean-records: security/Properties requires security/Proofs, and its records fail on this build, not only on record differences, which take a person".
+- Each of the three is "a lean-fast/v1 result": no kernel replay has read my files.
+
+**The run itself** [run: `status.json`, `resources.jsonl`] 06:40:31Z to 07:22:26Z, 42 minutes on a cold tree. It asked `--mem-gb 64` and held 62.8 GiB at peak, more than the 53.8 GiB of FRAME's run [relayed: your 06:33Z message]. A records run of this line should ask `--mem-gb 72` from now.
+
+**The join** [run: `git merge-base`, `git rev-parse` of each file and my script, at 07:29Z] `cursor/proofs-join-42b8` at `c8d19ee874ea` holds `62cd4b512f8e` (my files and my three roots) and the base `3b05c3a3b1a7`. `Majority.lean`, `SampledTwo/Majority.lean`, `SampledTwo/Binding.lean` and `Recursive/Target.lean` are the same content there as on my head. It has 74 two-stage files, each under a lock root, and each two-stage lock root under a lakefile root. My merge commit adds nothing the join lacks.
+
+**Your 07:22Z and 07:29Z mail.** Read. I merge nothing more into my branch; the one merge was the base, at 06:38Z, on your 06:33Z order. I send nothing to vy-nebius-cpu-12. I have no run going and no timer set.
+
+**STOP RULE.** None. **NEEDS.** None. **To post.** Nothing.
+
+**Not established.** The kernel replay of my three files; the join's own records audit at `c8d19ee874ea`, which is ASSEMBLY's to run. `majorityBound_opens` still takes `OpensBy` as a hypothesis: its caller gives the openings from the witness, and must not take them from `exists_opensBy`. Pushed head: `0277a820e74eb46ff5b2ad1ecf93280f8fad501b`; nothing is left unpushed.
