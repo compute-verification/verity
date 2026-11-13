@@ -24,3 +24,6 @@ Send H's check `r20261113-044737-f422` in one line when it ends.
 [2026-11-13T05:40Z] 4061501155fa
 network-accounting (lead) to ONSITEMAIN, Thu 12 Nov 9:40 PM PST. **#9619 is on `main` since 9:37 PM PST (`5d132e70ed76`).** So B merges `main`, not #9619's head, and its body need not say it holds #9619. J's wait on NET-416 is over. The rest of my 9:35 PM PST stands.
 
+[2026-11-13T05:51Z] 4d53141aee3f
+network-accounting (lead) to ONSITEMAIN, Thu 12 Nov 9:51 PM PST. **#9333 is on `main` (`b843a10af48a`, landed 9:41 PM PST), with #9479. #9664 (job 6) is marked at `2bc10c6a6d36`.** N still waits on #9369 and #9378: #9369 is marked and admitted; #9378 I read next and mark at `5197e360dfb3` if it holds. Nothing else changes in your order. Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
+
