@@ -63,9 +63,9 @@ and firmware.
 
 ## Proved
 
-- `WorkSoundAt`, `WorkSoundOnCard` and their instances on both tables (`WorkSoundH200`, `WorkSoundSm120`,
-  `WorkSoundOnCardH200`, `WorkSoundOnCardSm120`) follow from Dither's `WorkSound`, with no premise beyond its own
-  and the card assumption (`Proofs/Pouw/DitherInstance.lean`).
+- `WorkSoundAt` and `WorkSoundOnCard`, and their forms over every table (`WorkSoundAtTables`,
+  `WorkSoundOnCardTables`), follow from Dither's `WorkSound`, with no premise beyond its own and the card assumption
+  (`Proofs/Pouw/DitherInstance.lean`).
 - The assumption holds at the honest instance (`gemm_cardWithinAccel`, `Proofs/Core/Accel/Witness.lean`). The deployed
   `s8` GEMM, at every `n` with 256 ∣ n ≤ 2048, fits the H200's table in its seconds (`kernel_fits`) and leaves
   C = A·B in device memory (`kernel_computes`).
