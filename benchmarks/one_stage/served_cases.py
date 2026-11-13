@@ -62,7 +62,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 * **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
   `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
   ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
-  (`credit.commit_of`, as `Core.Remote.windowRecords` reads it): the case commits to the auditor's ledger, so the tie
+  (`credit.commit_of`, as `Core.Remote.executionPhaseRecords` reads it): the case commits to the auditor's ledger, so the tie
   is its windows'. A period with a window on another record, or on none, is refused here, before any composite runs,
   and so is handed to neither: remote would reject it on the tie, and onsite, which doesn't check it, would credit
   another record's work beside this window's. Without a period case none is made, and a composite names it missing.
@@ -243,7 +243,7 @@ def sampled_case(audit: Path) -> dict[str, Any]:
 def period_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
     """PoUW's period case in ``d`` as `pouw_piece.py period` wrote it, its answer line and its verdict, once every window
     of the period names the record of digest ``digest`` as its Commit record (`credit.commit_of`, as
-    `Core.Remote.windowRecords` reads each window's ``commit``): the record tie remote checks (`Core.Remote.windows`)."""
+    `Core.Remote.executionPhaseRecords` reads each window's ``commit``): the record tie remote checks (`Core.Remote.windows`)."""
     case = _json(d / "case.json")
     _need(isinstance(case, dict) and CASE_KEYS <= set(case) <= CASE_KEYS | {"blobs"},
           f"{d}/case.json is not a case: it holds {sorted(CASE_KEYS)} and its blobs")
