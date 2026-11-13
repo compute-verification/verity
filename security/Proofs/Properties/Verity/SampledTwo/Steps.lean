@@ -421,7 +421,7 @@ theorem interiorUnshown_roots {p : Params} {e : Evidence} (h : interiorUnshown p
     (hw : p.boundary.verifier.windowRoot = some w)
     (hne : some w ≠ p.audit.base.verifier.windowRoot)
     (ha : Spot.Registration.digest e.record = .ok after)
-    (ht : Spot.Challenger.trustedSessionOf (Spot.getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
+    (ht : Spot.Challenger.trustedChallengePhaseOf (Spot.getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
       (Spot.getD e.coins "pins") (Spot.getD e.coins "main") (Spot.getD e.coins "session") = .ok (c, roots)) :
     interiorShown roots label after = false := by
   have hb : (some w == p.audit.base.verifier.windowRoot) = false := by simpa using hne
