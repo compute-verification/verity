@@ -45,17 +45,21 @@ theorem stagesOrdered_order {p : Params} {e : Evidence} (h : stagesOrdered p e =
   generalize hs : Spot.getD e.interior.base.coins "ledger" = s at h
   cases f <;> cases s <;> first | (cases h; done) | skip
   case arr.arr first second =>
+    first
+      | dsimp only at h
+      | simp only at h
+      | skip
     cases hx : Spot.Challenger.extendsHead first second
-    · rw [hx] at h
-      cases h
-    · rw [hx] at h
-      obtain ⟨_, -, h⟩ := bind_ok h
+    · (simp only [hx, Bool.not_false, ↓reduceIte] at h) <;> cases h
+    · simp only [hx, Bool.not_true, Bool.false_eq_true, ↓reduceIte] at h
       obtain ⟨⟨wins, ms⟩, hc, h⟩ := bind_ok h
       try dsimp only at h
       split at h
       · cases h
       · rename_i heq
         obtain ⟨en, r, he, hr, hlt⟩ := orderReason_none heq
-        exact ⟨first, second, hf, hs, hx, wins, ms, hc, en, r, he, hr, hlt⟩
+        first
+          | exact ⟨first, second, rfl, rfl, hx, wins, ms, hc, en, r, he, hr, hlt⟩
+          | exact ⟨first, second, hf, hs, hx, wins, ms, hc, en, r, he, hr, hlt⟩
 
 end VStar.Recursive.SampledTwo

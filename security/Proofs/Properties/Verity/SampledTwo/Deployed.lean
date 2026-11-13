@@ -30,24 +30,37 @@ theorem membersParamsOfJson_deployed {j : Json} {p : OneStageZk.Params} (h : One
     ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
   unfold OneStageZk.membersParamsOfJson at h
   split at h
-  · cases h
-  · obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨q, hq, h⟩ := bind_ok h
-    try dsimp only at h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    exact Properties.Challenger.Limits.paramsOfJson_deployed hq
+  all_goals first
+    | (cases h
+       done)
+    | (obtain ⟨_, -, h⟩ := bind_ok h
+       obtain ⟨q, hq, h⟩ := bind_ok h
+       try dsimp only at h
+       obtain ⟨_, -, h⟩ := bind_ok h
+       simp only [pure, Except.pure, Except.ok.injEq] at h
+       subst h
+       have hd := Properties.Challenger.Limits.paramsOfJson_deployed hq
+       exact hd)
+
+/-- **What the form's parameters hold of its interior audit**: the audit's parameters are what one-stage v2's
+per-member parse returned, and the two stages' coin families are apart (`familiesApart`, `SAME_FAMILY`). -/
+theorem paramsOfJson_audit {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
+    (∃ j', OneStageZk.membersParamsOfJson j' = .ok p.audit) ∧
+      (!familiesApart (p.boundary.challenger.map (·.2)) (p.audit.base.challenger.map (·.2))) ≠ true := by
+  unfold paramsOfJson at h
+  simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+  repeat' split at h
+  all_goals try contradiction
+  all_goals try (cases h; done)
+  all_goals
+    (simp only [pure, Except.pure, Except.ok.injEq] at h
+     subst h
+     exact ⟨⟨_, by assumption⟩, by assumption⟩)
 
 /-- **The two-stage form's parameters name a challenger key at the deployed parameters** (module docstring). -/
 theorem paramsOfJson_deployed {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
     ∃ key label, p.audit.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
-  unfold paramsOfJson at h
-  simp only [bind, Except.bind] at h
-  repeat' split at h
-  all_goals try contradiction
-  all_goals try (simp [throw, throwThe, MonadExceptOf.throw] at h; done)
-  all_goals try (simp only [pure, Except.pure, Except.ok.injEq] at h; subst h;
-    exact membersParamsOfJson_deployed (by assumption))
+  obtain ⟨⟨_, hm⟩, -⟩ := paramsOfJson_audit h
+  exact membersParamsOfJson_deployed hm
 
 end VStar.Recursive.SampledTwo
