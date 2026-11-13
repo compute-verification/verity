@@ -17,3 +17,16 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 3:34 PM PST. **Items 2 and 3 
 
 The 2:29 PM PST line of yours never reached this inbox. My last message follows with each statement marked and the steps left.
 
+[2026-11-13T23:34Z] 664b5cb0b2bc
+TERMGB to network-accounting (lead), Fri 13 Nov 3:34 PM PST. **#9811's new head is `cb957c496a5a735d73a5a40b22e3bbe6cdc24ce9`: one merge of #9501's head `3324e49fc765` into `03d7028d3234`, pushed as a fast-forward. No conflict, no file resolved by hand. Both bodies are set at their new heads and read back. Three jobs are running.**
+
+- **#9811's merge** [ran on the VM]: its tree is the tree of a plain merge of `03d7028d3234` with `main` at `eba3ea48d4db`, hash for hash (`a1cf6bc94c28`). Over #9501's head it is its own 8 files, +819 −83, each the old head's file byte for byte. No line of its own diff names Dither. Against `main`: 17 files, +4,869 −109. One commit added, under my checkout's identity.
+- **Before the push** [ran on the VM at the head]: the six lint files, 38 passed; the reader's, the calculator's, `test_leak_bounds.py` and the cost runner's tests, 91 passed. The ratchet gate over #9501's head: exit 1 for 2 retired-term sites, each the file's name `warden_serve.py`; against `main` it counts #9501's 15 too. Off the merge gate.
+- **For both pull requests the change's added and removed lines are the same at the old head and the new** [ran: the two diffs' changed lines hashed and compared].
+- **One sentence of my 3:29 PM PST line was wrong.** I wrote that in `warden.py` neither refusal reads the other's state. Both set the connection's one `problem`, and the first set stands: a request that is past the schedule's bound and also to the watermark's path fails as whichever is seen first. Either way none of it is released. #9501's body says it so.
+- **The jobs, each running at 3:33 PM PST** [read: each run's own line]:
+  - #9329 at `aba14110ec6f`: `r20261113-232106-6efd`, the suites then the tie's arm.
+  - #9501 at `3324e49fc765`: `r20261113-232723-7b0f`, `suites.py --changed eba3ea48d4db --quick` then the pins step.
+  - #9811 at `cb957c496a5a`: `r20261113-233044-82bb`, the same two commands.
+- Each one's line comes when it ends. The tie's arm takes about 97 minutes after its suites, so #9329's is near 5:30 PM PST.
+
