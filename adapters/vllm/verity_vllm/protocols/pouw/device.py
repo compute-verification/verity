@@ -26,8 +26,8 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.kernels import SHA512
-from verity.protocols.pouw import prover
-from verity.protocols.pouw.prover.circuit import ncp2
+from verity.protocols.accounting.pouw import prover
+from verity.protocols.accounting.pouw.prover.circuit import ncp2
 
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import native as PN
