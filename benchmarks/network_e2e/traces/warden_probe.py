@@ -42,7 +42,7 @@ def certifier_clock():
     """The network certifier's own clock, which its origin is a reading of: its host's raw clock, read by its clock id
     (`pacer.raw_clock`). A probe's times are laid against that origin, so a probe given no clock reads this one: on
     another clock its times would be off by however far the two clocks stand apart."""
-    from verity.protocols.certifier.verifier.pacer import raw_clock
+    from verity.protocols.accounting.certifier.verifier.pacer import raw_clock
     return raw_clock
 
 
@@ -171,7 +171,7 @@ def main(argv: list[str]) -> int:
     _path()
     import warden_serve
 
-    from verity.protocols.certifier.verifier import warden
+    from verity.protocols.accounting.certifier.verifier import warden
 
     probe = Probe(out=out)
     gc.callbacks.append(probe.collections)
