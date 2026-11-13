@@ -65,7 +65,9 @@ rec["unlowered"] = {k: len(v) for k, v in w.unlowered.items()}
 del c0, w0
 log(f"window {d0[:16]}: {rec['templates']} templates, {rec['units']} units, {len(w.stood)} stood ports")
 rec["native"] = NV.native_selftest()
-inputs = NV.made_up(fn, [(7 * k + 1) % 256 for k in range(a.ids)], a.seed)
+import numpy as np  # noqa: E402
+
+inputs = NV.made_up(fn, [(7 * k + 1) % 256 for k in range(a.ids)], np.random.default_rng(a.seed))
 log(f"made up: {sum(x.nbytes for x in inputs.values()) / 2**30:.2f} GiB of inputs")
 values = NV.Values(fn, inputs, w, log).evaluate()
 rec["program_seconds_by_family"] = {k: round(v, 1) for k, v in sorted(values.times.items(), key=lambda kv: -kv[1])}
@@ -102,7 +104,6 @@ log(f"read: {rec['read']}")
 if not a.no_plants:
     import dataclasses
 
-    import numpy as np
     reg = c.registered
     b0, b1 = NE.shard_param("model.embed_tokens.weight", NE.WIDTH, 0), NE.shard_param("model.embed_tokens.weight", NE.WIDTH, 1)
     (o1,) = [o for o in reg.openings if o.reader == read and o.table == b1 and o.units == a.ids]
@@ -110,8 +111,8 @@ if not a.no_plants:
     c2 = dataclasses.replace(c, registered=dataclasses.replace(
         reg, roots=tuple(dataclasses.replace(x, table=b0) if hit(x) else x for x in reg.roots),
         openings=tuple(dataclasses.replace(x, table=b0) if hit(x) else x for x in reg.openings)))
-    rng = np.random.default_rng(a.seed)
-    picked = {t: NV.sample(ck.counts[t], rng, a.most) for t in ck.c.ids}
+    key = NV.draws(a.seed)
+    picked = {t: NV.sample(ck.counts[t], key, t, a.most) for t in ck.c.ids}
     covered = sum(1 for u in picked[read] if o1.at <= u < o1.at + o1.units)
     ck2 = NV.Check(c2, w, values, tables)
     r2 = NV.run(ck2, a.seed, log, a.most, only=[read])[read]
