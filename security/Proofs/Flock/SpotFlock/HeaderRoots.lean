@@ -30,7 +30,7 @@ to the port's published root over the population (`PortRoots.pubRoot`), and unde
 for `q` that decodes to the port's domain (`PortRoots.idOf`).
 
 Flock's `checkPublic` ties the statement's `frame_v3` roots to the tree over the rows (`FailClosed.ties_of_check`).
-The statement's public file is the loaded one, or the sample drawn from it (`HmOut.drawn`), which keeps the header's
+The statement's public file is the loaded one, or the sample sampled from it (`HmOut.drawn`), which keeps the header's
 `frame_v3` and the tables' counts and sets the population to the loaded file's (`roots_of_load`). The loaded header is
 the raw header normalized (`loadPublic_raw`), and normalizing keeps each field's string (`raw_entry`).
 -/
@@ -67,7 +67,7 @@ theorem loadPublic_raw {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {f 
     simp [headerOf, ‹_root_.Flock.findByte f 10 = some _›, ‹String.fromUTF8? _ = some _›,
       ‹_root_.Flock.JsonParse.parse _ = .ok _›, Except.toOption]
 
-/-- **A drawn sample keeps the header's `frame_v3`** and sets the population to the loaded file's. -/
+/-- **A sampled sample keeps the header's `frame_v3`** and sets the population to the loaded file's. -/
 theorem drawn_frame {c : _root_.Flock.Circuit} {pub pub' : _root_.Flock.Public} {d : Json}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pub.header = .obj m)
     (h : _root_.Flock.HmRow.drawn c pub d = .ok pub') :
@@ -105,7 +105,7 @@ theorem wf_of_headerOf {f : ByteArray} {hdr : Json} (h : headerOf f = some hdr) 
         exact FlockComplete.JsonRT.parse_wf s _ hp
 
 /-- **The statement's public file keeps the loaded file's `frame_v3` and input roots**: it is the loaded file, or the
-sample drawn from it, which keeps the header's `frame_v3`, the tables' counts and starts, and sets the population to
+sample sampled from it, which keeps the header's `frame_v3`, the tables' counts and starts, and sets the population to
 the loaded file's. -/
 theorem drawn_ties {c : _root_.Flock.Circuit} {pop pub : _root_.Flock.Public} {draw : Option Json}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m) (hpn : pop.population = none)
@@ -241,7 +241,7 @@ theorem inRoot_idOf {c : _root_.Flock.Circuit} {pop : _root_.Flock.Public} (hpn 
     rfl
 
 /-- **The raw header names input port `q`'s registered root and domain**, at a loaded public file `pop` and a
-statement's public file `pub` that is `pop` or the sample drawn from it, where `pub`'s `frame_v3` holds `q`'s domain and
+statement's public file `pub` that is `pop` or the sample sampled from it, where `pub`'s `frame_v3` holds `q`'s domain and
 its root over `pub`'s rows (`PublicTies.inputs`). -/
 theorem roots_of_load {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {pf : ByteArray}
     {pop pub : _root_.Flock.Public} {draw : Option Json} {hdr : Json} {q : ℕ} (hq : q < c.ports.size)
