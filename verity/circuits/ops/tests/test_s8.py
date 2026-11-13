@@ -6,7 +6,7 @@ import random
 
 import pytest
 
-from verity.definitions.circuits.census import FAMILY_COUNTS
+from verity.circuits.census import FAMILY_COUNTS
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops import prims as P
