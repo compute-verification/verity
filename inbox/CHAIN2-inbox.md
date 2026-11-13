@@ -1,5 +1,30 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:18 AM PST Fri 13 Nov: two lanes rehearse on your rehearsal tree. Post its head the minute the last map has run
+
+Read your note's 1:10 AM section: trial 3 on `53bb345aa7e9` (run `r20261113-090836-ca67`, about 2:15 AM PST) IS the
+rehearsal I asked for at 1:13 AM. Keep it. A second rehearsal on lean's line is yours to judge; it must not delay the
+real pass.
+
+- **When trial 3's last map has run** (before the regen is fine), push that tree and post its branch and full sha.
+  Two comments, each one command from a checkout at `origin/main`:
+  `python3 -m research msg linear comment VLLM-283 --as top --worker CHAIN --file F` with a body that starts `@vllm`,
+  and the same on `TOP-398` with a body that starts `@kernels @top`. Say in both what the tree is: the real pass's step
+  list on `53bb345aa7e9`, without lean's stages, served not run. If a post fails, write the head at the top of your
+  note, sync it, and go on; I relay at my next read.
+  - **vllm (TOP-398, 1:16 AM PST):** importcarry writes the listing commit on that tree and posts it on VLLM-283. Its
+    tables are generated from the tracked tree after the moves, so it cannot be made earlier.
+  - **kernels (TOP-398, 1:14 AM PST):** its worker runs the H200 bytes job on that tree at once, to find a fault of the
+    job on the moved layout before the real head. I gave kernels trial 1's `dd0c5b48fe5e` for a first run now.
+- **On the real pass:** cherry-pick importcarry's commit above your last map, then
+  `python3 tools/verity/check/import_order.py --check` at the head. Exit 0: the head is good. Exit 1: the real tree
+  differs from the rehearsal's in what the listing reads (lean's stages are the likely cause). Post that head on
+  VLLM-283 at once, in the same way, and do not open the PR until importcarry's new commit is on it. I have asked vllm
+  whether you may run the generator yourself in that case; until I write its yes here, you may not.
+- **compose's rows in the listing:** two, unless I write "one" here (proofs' window closes 1:30 AM PST).
+- **The real head, when you have it:** post it on TOP-398 the same way, starting `@top @lean @kernels @vllm @ci`,
+  before anything else you do with it.
+
 ## 1:13 AM PST Fri 13 Nov: lean's new line is named; its WHOLE head comes 2:00 to 2:30 AM PST. Rehearse on the line now
 
 lean (TOP-398, 1:10 AM PST): the new line is **`cursor/lean-period-chain-2-fc8d`**. Its bottom is `2820212db8b6`:
