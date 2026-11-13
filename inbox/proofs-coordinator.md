@@ -119191,3 +119191,51 @@ STOP RULE: not reached. NEEDS: none beyond my 03:59Z entry's (which TWOLEG sessi
 **To post.** Nothing.
 
 **Not established.** Every theorem in this entry until `49aa` and `a535` end. `Parsed.lean` on the real tree.
+
+
+## ASSEMBLY, Fri 04:06Z: the messages' change compiled in both files with only the three axioms (r20261113-032633-3e3a, done, rc 0); the join's first try is out (r20261113-040020-7bc4, vy-nebius-2, 12 checks ahead at 04:02Z); `JoinElems.lean` and `Joined.lean` are written and pushed, not compiled
+
+In plain words: the assembly's two theorems still compile after the change that lets the messages' piece speak only of plays whose read coins agree with the run's. The join's branch now holds two files of mine: one turns the coin map's agreement into what the releases' piece asks of the two stages' rounds, the other is the projection's bound at the coin map's frame and the messages' prover, over any acceptance. No file of the join reads the form's check yet; the one that does is next. The join's first try is in vy-nebius-2's line and has not started.
+
+**1. `3e3a`** [run `r20261113-032633-3e3a`, vy-nebius-cpu-12, tree `8af933566b`]
+- "`ProjectionOf.lean`: lean exit 0 in 618 s", "axiom probe: none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The nine are `play_params`, `messagesFixedAgreed_of_fixed`, `messagesFixedAgreed_of_reached`, `devAgrees_mono`, `coinsAgree_mono`, `messagesFixedAgreed_mono`, `projection_core`, `projection_agreed`, `projection_of` [read: the file at `8af933566b`].
+- "`CouplingOf.lean`: lean exit 0 in 29 s", "none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" (`coupling_of`).
+- So the messages' change (`63d233290e`) is DONE by the brief's definition. `cutBound_and` (`1a80621ef6`, after that tree) is not in `3e3a`; it is in `7bc4`'s try of `ProjectionOf.lean`.
+
+**2. The join's first try** [run]
+- `r20261113-040020-7bc4`, vy-nebius-2, `--pool proofs --mem-gb 24 --timeout 7200 --cwd clone`, tree `30199c131c`, four `--try` steps in order: `JoinElems.lean`, `Joined.lean`, `Steps.lean` (decides `accepted_fits` and `stagesFit`), `ProjectionOf.lean` (probes `cutBound_and`).
+- At 04:02Z: "12 check(s) ahead in line". If it has not started by 04:17Z I move it to `--on auto`.
+
+**3. Written, pushed, not compiled** [read: my files at `30199c131c`]
+
+| file | what it proves | imports |
+|---|---|---|
+| `SampledTwo/JoinElems.lean` (106 lines) | `FirstFits`, `SecondFits` (a stage's bytes are at most 16 bytes an element of its round's releases that fit); `firstElems_of`, `secondElems_of`: TWOLEG's `FirstElems`, `SecondElems` at `CoinMap.dev L` and `CoinMap.ElemAgrees L A x reads` from them; `readsAt_of_le` (rounds `0` to `stage` are read); `usedOf_congr`, `fitOf_congr` (two locators that put the same releases on round `n` give the same `usedOf` and `fitOf` there) | `DevAgrees`, `CoinMap` (both compiled) |
+| `SampledTwo/Joined.lean` (153 lines) | `joinFrame` (the coin map at `L` with `Messages.prover`; `joinFrame_eq`, by `rfl`, is the coin map's frame), `joinReading`, `joinMiss`; `joined`: `ProjectionBound` at `gapOf + joinMiss + terms`, over any `Acc` and `Good` | `ProjectionOf`, `JoinElems`, `MessagesShown` (compiled) |
+
+- `joined` discharges inside itself: `DevAgrees` (`devAgrees_formReading` with `firstElems_of`, `secondElems_of`), `MessagesFixedAgreed` (`missBound`, `runShown`, `reachedOfRounds`, `messagesFixedAgreed_of_reached`), and `AcceptsRun` (from the accept on the rounds a run reaches, cut to the rounds below `k` by `run_length_le`).
+- `joined`'s remaining hypotheses, each in its owner's words: `hAcc` (wiring), `hLaw` (`CoinMapLaw` at the coin map's frame and agreement, `hide = gapOf`), `FirstFits`, `SecondFits`, `SessionsAgree`, the three `CoinsAgree`, `StmtReadsNone`, `MsgOpens`, `DigestBefore` below `k`, `CutBound`, `ReachedAccepts` written out (so `Joined.lean` imports no file over the form's check), `StmtAt`.
+- The six facts: `firstElems_of`/`secondElems_of` take the fits; `FirstFits`/`SecondFits` at the stages' locator come from COINMAP's `size_le_fit_first`/`stageWidth_le_fit_second` with STAGECOINS's `FirstShown`/`SecondShown` and `sourceRead_holds`, `StageDraws`, `FreshWide`, ACCEPTS's `SourcesFit` and `input_of_accepts` (the interior); at the run's locator by `fitOf_congr` and SESSIONCOINS's `locAt_run_stage`. That step reads the form, so it goes in the last file, `JoinedForm.lean`, which I write now.
+
+**4. Clauses named before they are added** [derived]
+- `Good` at the last theorem is `fun o => ReadIsDevice o ∧ FreshWide o.log`. `FreshWide` holds on every play (`freshWide_play`, in `CoinStages.lean`), so CUT's bound is unchanged (`cutBound_and`); STAGECOINS's pieces at `ReadIsDevice` reach it by `coinsAgree_mono`. Nothing is added to the coin map's agreement.
+
+**5. The honest witness** [derived]: the last theorem will be one statement over `C`, `ℓ₁`, `ℓ₂`, `tab` and the named premises; its witness is the term `joinedForm` applied at TWOLEG's fixture play once that play is accepted. It is not listed as a guarantee before then.
+
+**6. Heads** [run: `git log`]: the join holds COINMAP at `a36ddec4875b2cbc6b1dc5765ad8b1ca79597af9` (merge `a93ec4f34a`), not its tip. `cursor/proofs-join-42b8` at `30199c131c`, pushed; `cursor/proofs-assembly-992e` at `1a80621ef6`, pushed. Nothing is unpushed. The base's `e033bfc14be4` is not merged into the join; it comes through RUNCOINS and ACCEPTS.
+
+**STOP RULE.** Nothing done. No lock, no `Sampled.lean`, no guarantee listed, no change to the form.
+
+**NEEDS.**
+1. SESSIONCOINS: whether `SessionDev.lean` (`locAt_run_stage`, `devElems_of`) has compiled. Until it says, the run's locator's agreement with the stages' at rounds `0` to `stage` is a premise of the last theorem.
+2. TWOLEG: `StageDraws` at the first and second draws (the coordinator asked); a premise until then.
+3. ACCEPTS: `Fits.lean`'s `sourcesFit` compiled, to drop `SourcesFit` from the last theorem.
+
+**To post.** Nothing.
+
+**Not established.**
+- `JoinElems.lean`, `Joined.lean`: not compiled (`7bc4`). `cutBound_and`: not compiled.
+- `accepted_fits`, `stagesFit` on the join: `7bc4` decides.
+- Everything from `CoinMapAgree.lean` (`coinMapHolds`) and `CoinStages.lean` (`size_le_fit_first`, `stageWidth_le_fit_second`, `freshWide_play`): unproved at `a36ddec487` (COINMAP).
+- `StageDraws`; `PrintsInOrder` (until HISTORY proves it at `dev₂`); `CoinsAgree … .second` at the join's `Good` (until STAGECOINS's `DevSecond` reads `FreshWide`).
+- An earlier period's genuine challenger signature still makes the cut's forger term ⊤.
