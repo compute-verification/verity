@@ -123,11 +123,12 @@ at `deployZk Readable.relation`'s (`R_base`). -/
 theorem fixture_stmt (h : HonestFixture) :
     ∃ (y : Claims.Msg) (w : Claims.Flock.Wit),
       Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse y w := by
-  obtain ⟨mask, Ir, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hRun, hW, -, -, -⟩ := h
+  obtain ⟨mask, b0, x, aux, nOf, hd, recRest, decI, w, st, ω, r, hRun, hW, -, -⟩ := h
   obtain ⟨hR, hx, hf, hacc⟩ := hRun
   obtain ⟨xr, rs, hxr, -, -⟩ := schedMatches_dense x st hx hf
   obtain ⟨-, -, -, -, hrel, -⟩ := vstar_complete_run_setup_at FlockDeploy.sha512 (IAt decI)
-    (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck (bLAt mask Ir b0 x aux nOf hd recRest)
+    (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck
+    (bLAt mask (VStarBuild.IrDep x) b0 x aux nOf hd recRest)
     (numsFixed _) hR ω r hacc hW (VPieces.nS_pos hxr)
   obtain ⟨y, hy⟩ := R_base hrel
   exact ⟨y, _, hy⟩
