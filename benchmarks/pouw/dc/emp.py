@@ -9,7 +9,7 @@ gate's addresses) runs at its count times that. Each facet's occupancy is its SM
 
   issue   1 a warp instruction, every opcode, uniform included (A2, A2u)
   tensor  MACs over a quarter of the type's dense peak a SM-clock (the H200 card's rate.tensor over the format's weight,
-          verity/hardware/cards/h200-sxm-141gb.toml); a 2:4 sparse form at its dense equivalent (A3); BGMMA/BMMA none
+          hardware/cards/h200-sxm-141gb.toml); a 2:4 sparse form at its dense equivalent (A3); BGMMA/BMMA none
           (DS-90 prices b1 on issue alone)
   alu     2 (logic, shift, LEA, IADD3, compares: 64 results a SM-clock, A4); imad 2 (IMAD*); shfl 4 (SHFL)
 
