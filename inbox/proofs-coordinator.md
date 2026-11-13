@@ -125124,3 +125124,55 @@ Nothing.
 - That the five per-bit clauses can be decided per template.
 - That `heldOkDesc` at the form's accept gives `TwoHolds` without `walksOk` [derived: it does not; `walksOk` stays a
   premise].
+
+## SESSIONCOINS, Fri 13 Nov 06:32Z: MESSAGES IS RIGHT, THE LAYOUT IS CHANGED: `slotStream` and `roundOf` now go rep stream by rep stream, at `49dbe8d36f`, in one try (`r20261113-063039-7ab0`); ASSEMBLY takes `650835f367` now (compiled, `5d6f`), then `49dbe8d36f` once `7ab0` passes
+
+**Plain words.** MESSAGES read the deployed verifier correctly. I read the lines myself, and I found no misreading. Within a session, the deployed check takes rep 0's rounds first and then rep 1's. My reading alternated the two reps, so at every `--zk` session the join's premises could hold at no honest play. I changed the layout to the deployed order and restated the lemmas that read it. That is three of my files. No other worker's file on the join reads these names. One try of the change is running. Separately, the docstrings-only head and `heldSize`/`coinsRead_read` both compiled.
+
+### 1. `custody`'s order, read [read]
+- `FlockDeploy.act` (`security/Proofs/Flock/Claims/Deploy.lean`, `.decide … ((rest.dropLast.map List.tail).zip crest.dropLast)`) pairs the session's message `j ≥ 1` with its coin `j`, so `mids[j − 1]` is round `j`.
+- `custody` zips `mids` with `lv.streams.toList.flatMap (·.toList)`, and `liveOf` builds `lv.streams` by `spec.repStreams.mapM`. That is table by table, rep 0 then rep 1, each stream with all its rounds (`Flock/Record.lean:53`). It checks `r.coins == c.vals r.n`.
+- So the session's round `j ≥ 1` is recorded round `j − 1` in that flat order. `SpotFlock.sessStep` hands `cs.drop (off h t)` to `FlockDeploy.next true`, and `seqCoins` puts `r' t j` at `off t + j`. Both are as MESSAGES writes.
+
+### 2. Where the alternating layout came from [read]
+I took it from one-stage v2's `Verity.Sampled.slotAt` (`security/Proofs/Properties/Verity/Sampled/Layout.lean`, on `main`). There round `0` is the link's opening and round `2k + r + 1` is round `k` of rep `r`, as `Live.layout`. My old docstring cited it. **For RUNSAS:** on `main`, `Live.layout` is what the one-stage reading and decoders are built at: `readingAt A.tables A.layout` and `decodersAt reg A.layout` (`Sampled/Instance.lean:618–619`), used in `RootB.lean`, `MovesReach.lean` and `MovesReachAt.lean`. Separately, `Sampled/Moves.lean:194` rebuilds the record stream by stream (`addRoundJ rs tab rep`), which does not depend on the order across streams. I did not read how the one-stage frame's round `j` reaches `FlockDeploy.V`'s coin `j`, so I make no claim about whether it meets `custody`.
+
+### 3. The change: each statement before and after (`49dbe8d36f`, on top of `650835f367`)
+- **New:** `repsOf (K : ℕ) : ℕ := (K - 2) / 2`, the rounds a rep has in a session of `K = 2 + 2·repRounds` rounds at one table.
+- **`slotStream`.** Before: `slotStream (tab) (j) := if j = 0 then (TREE_SESSION, 0) else (repStreamName tab ((j-1) % 2), (j-1) / 2)`. After: `slotStream (tab) (R j) := if j = 0 then (TREE_SESSION, 0) else if j - 1 < R then (repStreamName tab 0, j - 1) else (repStreamName tab 1, j - 1 - R)`. This is MESSAGES's text.
+- **`roundOf`.** Before: `roundOf tab name k` gave rep 0 `2k + 1` and rep 1 `2k + 2`. After: `roundOf tab R name k` gives rep 0 with `k < R` round `k + 1`, rep 1 round `R + 1 + k`, and anything else `none`. This is MESSAGES's text.
+- **`sessLoc off K M tab pre`:** its body reads `roundOf (tab t) (repsOf (K t)) …`. `locOf A tab`'s text is unchanged, and it gets `R t = repsOf (SpotFlock.k₀ A.h t) = (k₀ − 2) / 2`, MESSAGES's `R t`.
+- **Restated at `slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j`,** where each read `slotStream (tab t) j`: `LocatedOwn`, `located_record`, `coin_record`, `agree_record` and `located_opened`.
+- **Restated at `repsOf (K t)`:** `MembersHeld.own`, `MembersHeld.key` and `MembersHeld.opened`. `roundOf_slot` and `roundOf_slotStream` take `R`.
+- **Unchanged statements:** `withCoins`, `CoinsReadSessions`, `coinsRead_sessions`, `coinsAgree_sessions`, `InteriorLogged`, `DevLocal`, `LocatesSessions`, `DevReads`, `sessionsAgree_run`, `devReads_run`, `closes_after`, `stmtReadsNone`, and everything in `SessionCut`, `SessionLogged`, `SessionHeld`, `SessionAgrees`, `SessionFits` and `SessionDev`.
+- **Files:** `SessionCoins.lean`, `SessionOpened.lean` and `SessionRecord.lean`.
+- **Other workers' files that read `slotStream`, `roundOf`, `locOf`, `sessLoc` or the four record lemmas:** none. I ran `git grep -w` over `SampledTwo/` on `cursor/proofs-join-42b8` at `ac8d23dd32`, and for `SessionCoins.<name>` over all of `security/`. The only hits are my files [run].
+- **The session's last round** `j = 2R + 1` (the last message's) maps to rep 1's round `R`, which no record has, so no coin is read there. Before the change it mapped to rep 0's round `R`, which no record has either [derived].
+- `roundOf_slot` and `roundOf_slotStream` passed `lake env lean` on a Mathlib-only stand-in on the VM before this machine was replaced [run]. The edit was redone on the new machine from the same text.
+
+### 4. Runs
+- [run] `r20261113-061218-fb31` (vy-nebius-2, `d2e6c8ce5b`): `SessionCut.lean` "lean exit 0 in 345 s", siblings clean, "axiom probe: none of its 7 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". So `heldSize` and `coinsRead_read` compile (item 3 of your message).
+- [run] `r20261113-062029-5d6f` (vy-nebius-2, `650835f367`, docstrings only): `SessionDev` "lean exit 0 in 252 s" (22 theorems), `SessionOpened` "lean exit 0 in 240 s" (6), `SessionCut` "lean exit 0 in 47 s" (7), each probe clean, `ALL rc=0`.
+- [run] `r20261113-063039-7ab0` (vy-nebius-2, `49dbe8d36f`), launched 06:30Z. It tries `SessionDev --siblings`, which builds `SessionCoins`, `SessionHeld` and `SessionRecord` as deps, then `SessionOpened --siblings` and `SessionCut --siblings`. It is the one try I have out. I expect it near 06:50Z, going by `5d6f`'s times on a warm tree.
+- **Memory:** 24 GB asked. `523c` held 22.2 GiB at peak; `fb31`'s cgroup peak was 5.2 GB.
+
+### 5. For ASSEMBLY
+Take `650835f367` now: it is `74727ce82a` plus `heldSize`, `coinsRead_read` and docstrings, all compiled. Take `49dbe8d36f` once `7ab0` passes; I will name it in a title. The field change (`firstTreeless` in place of `interiorLogged`) is as in my 06:11Z entry. Nothing ASSEMBLY's files state changes with the layout.
+
+### STOP RULE
+Kept. The layout changes statements the join reads through mine (section 3). It changes no listed guarantee, no named assumption and nothing in a lock: this commit touches no `lean-audit.json`, and `roots` is unchanged. No accept is touched and nothing is wired into `Sampled.lean`.
+
+### NEEDS
+1. **MESSAGES:** with this layout, `SeqCoinsRead`, `SessionsRun` and `SessionMsgs` should now meet at an honest play. Check that `sessionMsgs`'s order (`Accepts.lean:247`) is the one `slotStream` gives.
+2. **RUNSAS / soundness:** whether the one-stage leg's `slotAt` meets `custody` (section 2) is theirs.
+
+### To post
+Nothing.
+
+### Not established
+- `49dbe8d36f` compiled (`7ab0` running).
+- That `SessionsRun` and `SessionMsgs` hold at an honest play at the new layout. That is MESSAGES's and the join's to show.
+- How the one-stage leg's round order meets `custody`.
+- `FirstTreeless` discharged: it waits on TWOLEG's refusal, as ruled.
+
+Branch `cursor/proofs-sessioncoins-e4a0` at `49dbe8d36f5450cb24e0f6cb0bd323d95654a28f`, pushed; nothing unpushed. No `import all` in any file of mine [run].
