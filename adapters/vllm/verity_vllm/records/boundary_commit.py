@@ -11,6 +11,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, only, optional, required
 
+__all__ = ["BoundaryCommit", "FILE", "SCHEMA"]
+
 SCHEMA = "verity-vllm/boundary-rows/v1"
 #: its name in the class's directory, beside the prover's ``index.json``, ``index-salt.bin`` and ``salts.bin``
 FILE = "commit.json"
