@@ -37,9 +37,10 @@ parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; 
 node.
 `answer_signed` is the run on the memory challenger's signed setup (`verity/pous/p2/v4/signed-run`,
 `PousCheck.SignedRun`): `run.check_signed_at` in place of `tie` and `run.check_at`, its case (`case_signed`) the
-session, the setup record the session's key signed (`memory_challenger.sign_setup_record`) and the prover's openings
-(`openings_of`, from its table), a few megabytes at a served store where `case` carries the table and `C*`. It
-certifies nothing, and its profile says why (`SIGNED_GAPS`).
+session, the setup record the session's key signed (`memory_challenger.sign_setup_record`: the published outputs the
+memory challenger's device was given) and the prover's openings (`openings_of`, from its table), a few megabytes at a
+served store where `case` carries the table and `C*`. It certifies nothing, and its profile says why (`SIGNED_GAPS`);
+setup's acceptance is the open premise `SETUP_ACCEPTED`, among its certificate's hypotheses.
 
 `trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_session.placement`). The setup's salt is
@@ -58,7 +59,7 @@ import subprocess
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -81,8 +82,12 @@ SIGNED_PROTOCOL = "verity/pous/p2/v4/signed-run"
 """`PousCheck.SignedRun.ID`: the run on the memory challenger's signed setup (`answer_signed`)."""
 SIGNED_GAPS = ("the signed run's guarantee is not proved: this check takes the memory challenger's signed setup where "
                "the run's check reads the store",
-               "the memory challenger's host saw the whole encoded store at setup")
+               "setup's check is not yet a proof, and it ran on the developer's node")
 """`PousCheck.SignedRun.GAPS`: why the signed run certifies nothing, after the point's own gaps."""
+SETUP_ACCEPTED = ("the store at the published root is the encoding of the registered weights under the published "
+                  "commitment and salt (SetupAccepted)")
+"""`PousCheck.SignedRun.SETUP_ACCEPTED`: setup's acceptance, an open premise of the signed run, among its certificate's
+hypotheses."""
 SETUP_PROTOCOL = "verity/pous/p2/v4/setup"
 SESSION_DOMAIN = "verity/pous-period/session/v1"
 W, C0 = 1024, 105
@@ -202,8 +207,11 @@ def openings_of(point: R.Point, salt: bytes, digests: bytes, rounds: Sequence[mc
 
 
 def profile_signed(point: R.Point) -> dict[str, Any]:
-    """`PousCheck.SignedRun.profileJson`: `profile`, its gaps the point's and then `SIGNED_GAPS`."""
-    return profile(point) | {"gaps": gaps(point)[1] + list(SIGNED_GAPS)}
+    """`PousCheck.SignedRun.profileJson`: `profile`, its gaps the point's and then `SIGNED_GAPS`, and its certificate's
+    hypotheses, when it has a certificate, followed by `SETUP_ACCEPTED`."""
+    cert, why = gaps(point)
+    cert = None if cert is None else replace(cert, hypotheses=(*cert.hypotheses, SETUP_ACCEPTED))
+    return profile(point) | {"certificate": None if cert is None else cert.to_json(), "gaps": why + list(SIGNED_GAPS)}
 
 
 def answer_signed(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
@@ -657,7 +665,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL", "EncodedStore", "Period",
+__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL", "EncodedStore", "Period",
            "Prover", "Run", "SetupInputs", "answer", "answer_signed", "audit", "case", "case_signed", "certificate",
            "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg", "openings_of", "point_for",
            "point_of", "profile", "profile_signed", "records", "run", "serve", "setup_case", "setup_inputs",

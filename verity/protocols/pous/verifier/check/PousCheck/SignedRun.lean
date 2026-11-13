@@ -8,12 +8,13 @@ meta import MemoryChallenger.SetupRecord
 /-!
 # A PoUS run on the memory challenger's signed setup, as a core protocol
 
-`RunProtocol`'s run with the store's place taken by what the memory challenger signed over it: `period.answer_signed`'s
-check in Lean. The run's check (`Run.checkAt`) reads the memory challenger's table of `C*` and ties it to the published
-root; this one reads the memory challenger's setup record (`MemoryChallenger.SetupRecord`), signed by the session's own
-key under the session's id, and one Merkle path per round, so its case is the session, the record and the paths, a few
-megabytes at a served store where the run's is the whole table and `C*`. Its guarantee is not proved, and it certifies
-nothing: its profile says why (`GAPS`).
+`RunProtocol`'s run with the store's place taken by what the memory challenger's device signed at setup:
+`period.answer_signed`'s check in Lean. The run's check (`Run.checkAt`) reads the memory challenger's table of `C*` and
+ties it to the published root; this one reads the device's setup record (`MemoryChallenger.SetupRecord`, the published
+outputs it was given), signed by the session's own key under the session's id, and one Merkle path per round, so its
+case is the session, the record and the paths, a few megabytes at a served store where the run's is the whole table and
+`C*`. Its guarantee is not proved, and it certifies nothing: its profile says why (`GAPS`). Setup's acceptance is not
+checked here: it is the open premise `SETUP_ACCEPTED`, which the profile's certificate names among its hypotheses.
 
 Each byte string is canonical JSON:
 
@@ -29,11 +30,12 @@ Each byte string is canonical JSON:
      index under the published salt, has the published root on its path;
   3. `verdict`, unchanged, against the rows the openings opened (`expectedOf`: block `i`'s row is the first opening
      of a round at `i`; a block no round asks has none): an answer that is not its block is wrong;
-  4. the setup record is signed by the session's key, under the session's scheme and id (`setupRecordOk`), says setup's
-     check passed, and holds the published blocks, commitment, salt and root.
+  4. the setup record is signed by the session's key, under the session's scheme and id (`setupRecordOk`), and holds
+     the published blocks, commitment, salt and root.
 
 On acceptance it publishes `RunProtocol`'s `{"certified": false, "eps": "0", "s_bits": 0}`, and its profile is
-`RunProtocol`'s with `GAPS` after the point's gaps. `protocol` (`verity/pous/p2/v4/signed-run`) accepts S1's LMS
+`RunProtocol`'s with `GAPS` after the point's gaps and `SETUP_ACCEPTED` after its certificate's hypotheses, when it has a
+certificate. `protocol` (`verity/pous/p2/v4/signed-run`) accepts S1's LMS
 (`SCHEMES`) only; `testProtocol`, under an id of its own, the test signers' schemes and only them.
 -/
 
@@ -52,7 +54,13 @@ def ID : String := "verity/pous/p2/v4/signed-run"
 def GAPS : List String :=
   ["the signed run's guarantee is not proved: this check takes the memory challenger's signed setup where the run's " ++
      "check reads the store",
-   "the memory challenger's host saw the whole encoded store at setup"]
+   "setup's check is not yet a proof, and it ran on the developer's node"]
+
+/-- Setup's acceptance, an open premise of the signed run, named as soundness names it (`SetupAccepted`): the store at
+the published root is the encoding of the registered weights under the published commitment and salt. -/
+def SETUP_ACCEPTED : String :=
+  "the store at the published root is the encoding of the registered weights under the published commitment and salt " ++
+    "(SetupAccepted)"
 
 /-- One round's opening: the row digest of the block its round asks for, and its Merkle path. -/
 structure Opening where
@@ -122,15 +130,18 @@ def checkAt (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray) (pub
   Run.need v.accepted ("; ".intercalate v.reasons.toList)
   Run.need (setupRecordOk schemes r.signed.scheme r.signed.publicKey sid e.setup)
     "the setup record is not signed by the session's key under the session's id"
-  Run.need s.passed "the setup record does not say setup's check passed"
   Run.need (s.blocks == pub.blocks) s!"the setup record holds {s.blocks} blocks, not the published {pub.blocks}"
   Run.need (s.commitment == pub.commitment) "the setup record's commitment to W is not the published one"
   Run.need (s.salt == pub.salt) "the setup record's salt is not the published one"
   Run.need (s.root == pub.root) "the setup record's root is not the published one"
 
-/-- The profile: `RunProtocol`'s, its gaps the point's and then `GAPS`. -/
+/-- The profile: `RunProtocol`'s, its gaps the point's and then `GAPS`, and its certificate's hypotheses, when it has a
+certificate, followed by `SETUP_ACCEPTED`. -/
 def profileJson (pt : Run.Point) : Json :=
-  (RunProtocol.profileJson pt).setObjVal! "gaps" (.arr (((RunProtocol.gaps pt).2 ++ GAPS).map Json.str).toArray)
+  let (c, gs) := RunProtocol.gaps pt
+  let c := c.map fun c => { c with hypotheses := c.hypotheses ++ [SETUP_ACCEPTED] }
+  ((RunProtocol.profileJson pt).setObjVal! "gaps" (.arr ((gs ++ GAPS).map Json.str).toArray)).setObjVal! "certificate"
+    (match c with | some c => c.toJson | none => .null)
 
 /-- Nothing certified: `eps` 0 and `s_bits` 0, the vacuous statement. -/
 def PUBLIC : RunProtocol.Public := ⟨false, ⟨0, 1⟩, 0⟩
@@ -170,6 +181,10 @@ def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 #guard ((profileJson Run.DEPLOYED).getObjValD "gaps") == .arr (GAPS.map Json.str).toArray
 #guard ((profileJson { Run.DEPLOYED with k := 104 }).getObjValD "gaps") ==
   .arr (("k = 104 is below the certificate's 105" :: GAPS).map Json.str).toArray
+#guard (((profileJson Run.DEPLOYED).getObjValD "certificate").getObjValD "hypotheses") ==
+  .arr #[.str SETUP_ACCEPTED]
+#guard ((profileJson Run.DEPLOYED).getObjValD "certificate").getObjValD "theorem" ==
+  ((RunProtocol.profileJson Run.DEPLOYED).getObjValD "certificate").getObjValD "theorem"
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
 
 end PousCheck.SignedRun

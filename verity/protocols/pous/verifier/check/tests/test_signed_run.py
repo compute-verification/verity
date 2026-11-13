@@ -10,8 +10,8 @@ test signer's (its setup record at the next leaf); under the deployed protocol i
 one edit that one of the check's refusals names: the point's, the session's or the setup's published outputs; the
 openings (one missing or extra, a row, a path, the opening of a round whose index an earlier round drew); a prover that
 answers every other round with zeros, or no trusted key; the setup record signed under another id, by another key, with
-its signature off, saying setup's check did not pass, or holding other published outputs; and the case's JSON (a setup
-record whose outcome byte is neither 0 nor 1, an opening's hex in capitals)."""
+its signature off, or holding other published outputs; and the case's JSON (a setup record with a `passed` key beside
+its fields, an opening's hex in capitals)."""
 
 from __future__ import annotations
 
@@ -143,7 +143,7 @@ def signed_run(signer, coins: bytes = COINS, prover=period.honest, setup_signer=
     session = R.ChallengePhaseRecord(signed, challenger.commitment, challenger.openings())
     if setup_signer is None:
         setup_signer = dataclasses.replace(signer, q=signer.q + 1) if signer.scheme != mc.LMS else signer
-    fields = dict(passed=True, blocks=pub.blocks, commitment=pub.commitment, salt=pub.salt, root=pub.root) | record
+    fields = dict(blocks=pub.blocks, commitment=pub.commitment, salt=pub.salt, root=pub.root) | record
     setup = mc.sign_setup_record(setup_signer, sid if setup_session is None else setup_session, **fields)
     openings = tuple(period.openings_of(h.point, pub.salt, h.digests, session.signed.rounds))
     return Signed(h.point, sid, (signer.public_key,), pub, session, setup, openings)
@@ -231,7 +231,6 @@ def edited(signer) -> dict[str, tuple[dict, str | None]]:
                            "the setup record is not signed by the session's key under the session's id"),
         "setup-signature": (dataclasses.replace(s, setup=dataclasses.replace(s.setup, signature=flip(s.setup.signature, 300))),
                             "the setup record is not signed by the session's key under the session's id"),
-        "not-passed": (signed_run(signer, passed=False), "the setup record does not say setup's check passed"),
         "setup-blocks": (signed_run(signer, blocks=pub.blocks + 1),
                          f"the setup record holds {pub.blocks + 1} blocks, not the published {pub.blocks}"),
         "setup-commitment": (signed_run(signer, commitment=flip(pub.commitment, 1)),
@@ -241,8 +240,7 @@ def edited(signer) -> dict[str, tuple[dict, str | None]]:
     }
     out = {n: (c.case(), r) for n, (c, r) in cases.items()}
     honest_case = out["honest"][0]
-    out["passed-2"] = (_setup_json(honest_case, passed=2), DECODER)
-    out["passed-true"] = (_setup_json(honest_case, passed=True), DECODER)
+    out["setup-passed"] = (_setup_json(honest_case, passed=1), DECODER)
     ev = json.loads(bytes.fromhex(honest_case["evidence"]))
     ev["paths"][0]["row"] = ev["paths"][0]["row"].upper()
     out["row-capitals"] = (honest_case | {"evidence": D.canonical(ev).encode().hex()}, DECODER)
@@ -278,11 +276,13 @@ def test_each_refusal_agrees(test_server) -> None:
 
 def test_the_deployed_signer_agrees(deployed_server, test_server) -> None:
     """Under the deployed protocol, signed at S1's deployed parameters: the honest run is accepted, its profile v0's
-    with the point's gap and the signed run's two, and a setup record saying setup's check did not pass is refused. The
-    test protocol refuses the deployed signer, and the deployed one a test signer."""
+    with the point's gap and the signed run's two, and a setup record holding another root is refused. The test protocol
+    refuses the deployed signer, and the deployed one a test signer."""
     signer = M.deployed_signer()
+    pub = held().published
     cases = {"honest": (signed_run(signer).case(), None),
-             "not-passed": (signed_run(signer, passed=False).case(), "the setup record does not say setup's check passed")}
+             "setup-root": (signed_run(signer, root=M._flip(pub.root, 3)).case(),
+                            "the setup record's root is not the published one")}
     got = _agree(DEPLOYED, deployed_server, cases)
     assert got["honest"]["profile"]["gaps"] == [
         f"P2 has no certificate at (w, c0, blocks) = ({period.W}, {period.C0}, {got['honest']['profile']['blocks']})",
@@ -292,6 +292,15 @@ def test_the_deployed_signer_agrees(deployed_server, test_server) -> None:
     assert json.loads(D.replay(TEST, cases["honest"][0], test_server)[1])["verdict"] == "reject"
     test_case = signed_run(M.test_signer(M.SECRETS[0], 2, 1)).case()
     assert json.loads(D.replay(DEPLOYED, test_case, deployed_server)[1])["verdict"] == "reject"
+
+
+def test_setup_accepted_is_the_certificates_hypothesis() -> None:
+    """At the deployed point, where P2 has a certificate, the signed run's profile is v0's but for its gaps and its
+    certificate's hypotheses, which end with the open premise `SETUP_ACCEPTED` (the Lean's `#guard`s pin its own)."""
+    signed, v0 = period.profile_signed(R.DEPLOYED), period.profile(R.DEPLOYED)
+    assert signed["certificate"]["hypotheses"] == [*v0["certificate"]["hypotheses"], period.SETUP_ACCEPTED], signed
+    assert signed["certificate"] | {"hypotheses": None} == v0["certificate"] | {"hypotheses": None}
+    assert signed["gaps"] == [*v0["gaps"], *period.SIGNED_GAPS]
 
 
 @pytest.mark.slow

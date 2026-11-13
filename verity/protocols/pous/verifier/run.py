@@ -30,8 +30,9 @@ acceptance establishes is `RunCheckAccepts` (`security/Properties/Pous/EndToEnd.
 (`memory_challenger.SetupRecord`) and one `Opening` per round, the row of the block the round asks for and its path to
 the published root.  It checks step 1 and steps 3 to 4 above, then that each opening's row is under the root, then the
 verdict against the rows the openings opened (an answer that is not its block is wrong), then that the setup record is
-signed by the session's key and scheme under the session's id, says setup's check passed and holds the published
-blocks, commitment, salt and root.  Its guarantee is not proved."""
+signed by the session's key and scheme under the session's id and holds the published blocks, commitment, salt and
+root.  Setup's acceptance it does not check: it is the open premise `period.SETUP_ACCEPTED`.  Its guarantee is not
+proved."""
 
 from __future__ import annotations
 
@@ -181,7 +182,6 @@ def check_signed_at(point: Point, schemes: Mapping[str, mc.Verify], trusted: Col
     _need(mc.setup_record_ok(signed_setup, scheme=session.signed.scheme, public_key=session.signed.public_key,
                              session=session_id, schemes=schemes),
           "the setup record is not signed by the session's key under the session's id")
-    _need(r.passed, "the setup record does not say setup's check passed")
     _need(r.blocks == setup.blocks, f"the setup record holds {r.blocks} blocks, not the published {setup.blocks}")
     _need(r.commitment == setup.commitment, "the setup record's commitment to W is not the published one")
     _need(r.salt == setup.salt, "the setup record's salt is not the published one")
