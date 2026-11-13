@@ -114073,3 +114073,30 @@ Mailbox read at `bea8cf9117` (your 02:00Z word: #9537 marked, scratch `lean` yes
 **Can I pause:** soon. What I have left besides the three runs is PR 4's body and PR 2's body, which I write now and push to my scratch branch. After that I wait on `a005` (PR 2 opens on its pass) and `d333`, each more than 20 minutes away, and I end the turn with an entry naming heads and runs.
 
 **Pushed:** PR 3 `43fde9d04680`, PR 4 `95fe99986bbe`. Unpushed: nothing in the tree; the PR bodies under `/tmp` go to the scratch branch next.
+
+## NEEDEDBITS, Fri 13 Nov 02:13Z: THE LOWERING FACT `wiresMove` NEEDS DOES NOT FOLLOW FROM `two h`, as worded; two exact conditions are missing (one is the running Bits check's own refusal); nothing new has compiled
+
+Nothing new has compiled: only `NeededBitsOf.lean` at `aba961b663`. My try of `NeededBitsHeld.lean` is still in cpu-12's line, where all four check slots are busy.
+
+In plain words: "every bit of an output row port of a unit is a written bit" is false in two cases the accepted run's checks allow. First, an output row may be padded with zero words up to a whole SHA-512 block; those padding bits come from no inner block, so no written bit sits there. Second, an inner block may return a value straight from one of its inputs or from its constant, not from a computed row; the program then has no gate that writes it. The running Bits layout check refuses both cases, but `two h` does not run that check. So the fact needs either a narrower wording (padding) or a new clause in `two` (the second case), which is FRAME's file.
+
+- [read] **Padding.** `HmRow.checkRows` (`verity/protocols/flock/verifier/Flock/HmRow.lean:1718-1720`) accepts a v2 output row as `p.bits == 16 * w || padded`. Here `padded := n == 1 && p.words == (w + 63) / 64 * 64 && p.bits == 16 * p.words`, and `w` is the output group's words. `templateOk`'s `ports.all v2Row` allows both. A written bit's bit is `16 · (x − outAt) + t` for an output word `x` (`Bridge.outPos_eq`), so it is below `16 · w`. Bits from `16 · w` up to `16 · words` are no written bit.
+  - **Fix: word the fact over `bit < 16 · w`**, `w` the output port's own words (`(HmOut.outGroup c o).2.2.2`), not `16 · ports[q].words`. Coverage below `16 · w` follows from `check_complete` (`Proofs/Flock/Claims/Recursion/ResLowerDeployed.lean:1019`: every output word is returned) and `outPos_eq`.
+  - Then `wiresMove`'s lemma must also know the reader's source bit is below the writer's `16 · w`, which a per-template `wiresMove` can decide.
+- [read] **Computed rows.** `Bits.outGate` is none unless `R0.nIn ≤ outCol c j t < R0.nIn + R0.nComp`; `R0` is `Rows.ofNet c.unit`. Nothing in `two h` gives that bound:
+  - `Net.ofRows` (`Net.lean:187-212`) checks an output group's alignment, slot and bits, not its columns against `inWords · WORD` or `constPos`;
+  - `HmRow.check` and `scopeOkH` do not either.
+  - `Spot.Bits.check` (`Spot/Bits.lean:807-809`) refuses it ("a returned output bit … sits on no computed row (an input or the constant)"), but no `SpotFlock` file calls `Bits.check`.
+  - **Missing condition, exactly:** for each member `t`, with `c = stmtOf (h.xS₀ t)`, `nIn = min (c.unit.inWords · WORD) c.unit.constPos` and `nComp = c.unit.constPos − nIn`:
+    `(List.range c.upv).all fun k => (List.range (c.leavesOut.getD k #[]).size).all fun j => (List.range 16).all fun t => decide (nIn ≤ outCol c j t) && decide (outCol c j t < nIn + nComp)`.
+    That is `Bits.check`'s own clause, per template, of size `upv · leaves · 16`. Its `nIn` and `nComp` are `Rows.ofNet`'s; that they agree needs `Bits.check`'s "constant among its input words" clause too, or `Net.ofRows_ok`'s `inWords · WORD ≤ constPos`, which `Built` gives.
+- [derived] With both, the fact is about 150 lines of mine: for `bit < 16 · w` of output row `nIn c + o`, word `x = outAt o + bit / 16` is returned by some `(k, j)`, `check_complete` gives that, and `outGate c n u k j (bit % 16)` is some by the new clause. Then `mem_writtenBits_of` and `outPos_eq` place it at `⟨ports[nIn c + o].name, u, bit⟩`.
+
+STOP RULE: nothing listed changes. Adding the clause to `two` makes the verifier refuse more, not accept more. Before: a template whose unit returns an input or the constant is accepted by `two`. After: refused. I do not make the change: it is FRAME's file.
+
+NEEDS:
+- FRAME: (a) the fact's wording over `bit < 16 · w` (yes or no); (b) the computed-rows clause in `templateOk` or `wiringOk` (your file), or say I should take it as a named hypothesis meanwhile. I write the fact once (a) is answered, against whichever (b) you pick.
+
+Not established: anything of `NeededBitsHeld.lean` compiled (try `r20261113-014817-691c`, cpu-12, in line since 01:49Z); that no honest Friday template returns an input or its constant [guess: none does, since `Bits.check` would refuse it and the running pipeline runs it].
+
+Heads: `cursor/proofs-neededbits-2597` at `fdad33da82`, pushed. Unpushed: nothing.
