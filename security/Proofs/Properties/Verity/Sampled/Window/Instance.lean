@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Window.Read
 public import Proofs.Properties.Verity.Sampled.Window.UnboundLaid
 public import Proofs.Properties.Verity.Sampled.Instance
+public import Proofs.Properties.Verity.Sampled.MemberForm.SetsUp
 
 /-!
 # SPOT's vocabulary as deployed over windows of several members
@@ -12,19 +13,23 @@ the deployed device (`WindowInstance.base`), as `Sampled/Instance.lean` builds t
 `windowSpotSound_sessions` applies to it with every field of `WindowDeployed` and `WindowCovers` either proved or one
 of the named `Prop`s below.
 
-* **The base** (`WindowInstance`): a vocabulary whose signer is the deployed device's and whose declared calls cover
-  the deployed device's reading of what the prover sent at its history (`CostsRead`), the window the deployment runs at
-  each parameters (`window`), and the committed files the verifier sets that window's sessions up on (`SetsUp`), at
-  which the window reads `MAX_COINS` frames' bytes (`lb`) and its members each have the window's one table with
+* **The base** (`WindowInstance`): a vocabulary whose signer is the deployed device's, that reads the committed files
+  as v2 reads the members' registered files (`read`, `MemberForm.membersRead`) and places each gate at its files'
+  place (`place`), and whose declared calls cover the deployed device's reading of what the prover sent at its
+  history (`CostsRead`); and the window the deployment runs at each parameters (`window`).
+* **The window the verifier sets up** (`WindowInstance.SetsUp`, `MemberForm.MembersSetUp`): the parameters' members
+  on the registered files, read on the committed files, laid out in order, each member's files passing the files
+  check. There the window reads `MAX_COINS` frames' bytes (`lb`) and its members each have the window's one table with
   hm96-sha512 rows (`members`, `Window.table`).
 * **The windows** (`WindowInstance.windows`): the deployment's window wherever the verifier sets it up on the
   committed files.
 * **The sampled names** (`WindowInstance.vocab`, at constructions `K` over the base, whose game and declared calls
-  are the vocabulary's): v2's log, the binding's read finder and forger at `2t` calls, the further finders (the file
-  finders under `ecr/sha-512`, and at a window `K`'s two-continuation finders under `cr/sha-512` and each member's
-  roots finder under `ecr/sha-512`, `rootsSpecs`), the window's
-  premises at the projected strategy (`JointFinderCR`), no loss, and the window's δ (`Window.delta`) at the
-  deployment's window, `⊤` where it runs none.
+  are the vocabulary's): v2's log, the window's read finder (`windowReadFinder`: the members' files sent, then the
+  binding's read finder) and the binding's forger at `2t` calls, the further finders (at a window `K`'s
+  two-continuation finders under `cr/sha-512` and each member's roots finder under `ecr/sha-512`, `rootsSpecs`), the
+  window's premises at the projected strategy (`JointFinderCR`), the extractor at the deployment's windows (`extractOf`:
+  the seats' traces side by side, `tracesWith`), no loss, and the window's δ (`Window.delta`) at the deployment's
+  window, `⊤` where it runs none.
 * **The claim's transfer** (`ClaimTransfers`, `claimTransfers`): the units the extracted transcript doesn't bind are
   at most as many as the window's incorrect proof blocks (`Window.unboundWrong`,
   `JointAuditV5.UnboundWrong.card_le`), wherever the claim reads the window (`ClaimReads`): the window's members are
@@ -37,13 +42,18 @@ of the named `Prop`s below.
   construction (`Window.delta_extend`: the window's δ doesn't read the widening), and the claim's transfer from
   `ClaimReads`.
 * **`WindowCovers`** (`covers`): where the deployment runs no window the published δ is `⊤`; where it runs one the
-  verifier doesn't set up on the committed files, no play is accepted (`RegisteredFiles`, `WindowAt`).
+  verifier doesn't set up on the committed files, an accepted play's blobs sent hold v2's tables and the members'
+  files, so it sets the window up there (`WindowAt`), or the window's read finder outputs a collision, at most the
+  read finder's bound, the δ's last term (`verdict_le_files`).
+* **The verifier's window at an accepted play** (`windowAt_members`): `WindowAt` from the deployment's window on the
+  registered files (`WindowRegistered`), which the vocabulary reads on every committed files alike (`read`,
+  `MemberForm.WindowOn.of_read`), laid out with its members' files passing at an accepted play (`WindowPasses`).
 * **The leg and remote's soundness** (`spotSound`, `remote_soundness_window`): `windowSpotSound_sessions` at the
   constructions `constructionsAt` assembles at the deployed device's history, the sessions' readings and decoders at
   the window's table, the family the parameters name (`labelAt`) and the window's bytes as `MAX_COINS` frames' coins.
-* **What stays open**: what the claim reads of the window (`ClaimReads`), the verifier's window at the registered
-  files (`WindowAt`), and what the verifier's acceptance gives of a play (`WindowReads`, `WindowRead`), each of the
-  windows the deployment runs.
+* **What stays open**: what the claim reads of the window (`ClaimReads`), the verifier's window at an accepted play
+  (`WindowAt`), and what the verifier's acceptance gives of a play (`WindowReads`, `WindowRead`), each of the windows
+  the deployment runs.
 -/
 
 @[expose] public section
@@ -54,10 +64,6 @@ open Verity.Game
 open scoped ENNReal
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
-
-/-- **The window's table's name**: its first member's. Every member's, at a window whose members have one table
-(`MembersAt`). -/
-def Window.table (W : Window) : String := (W.ms.head?.map fun m => m.I.tags.table).getD ""
 
 /-- **The window's δ doesn't read the widening** (`Window.sessionDelta_extend`). -/
 theorem Window.delta_extend (W : Window) (S : Widening) (t : ℕ) (cr : ℝ) : (W.extend S).delta t cr = W.delta t cr := by
@@ -118,36 +124,41 @@ theorem Window.Laid.extend {W : Window} (h : W.Laid) (S : Widening) : (W.extend 
   ⟨h.total, h.emb⟩
 
 /-- **The deployment over windows, before SPOT's names**: the other subprotocols' vocabulary over the deployed device
-(`base`), whose signer is the deployed device's (`deployment`, `signer`) and whose declared calls cover the deployed
-device's reading at its history (`costs`, `Device.dev`); the window the deployment runs at each parameters
-(`window`), whose bound's parameters `θ` fixes; and the committed files the verifier sets that window's sessions up
-on (`SetsUp`), at which the window reads `MAX_COINS` frames' bytes (`lb`) and its members each have the window's one
-table with hm96-sha512 rows (`members`). A deployed instance fills `signer`, `lb` and `members` at its construction;
-no theorem takes any of them as a hypothesis of its own. -/
+(`base`), whose signer is the deployed device's (`deployment`, `signer`), which reads the committed files as v2 reads
+the members' registered files (`read`, `MemberForm.membersRead`: v2 reads each member's files on the blobs sent,
+which are the registered files where `FilesSent` holds), which places each gate at its files' place (`place`), and
+whose declared calls cover the deployed device's reading at its history (`costs`, `Device.dev`); and the window the
+deployment runs at each parameters (`window`), whose bound's parameters `θ` fixes. A deployed instance fills
+`signer`, `read` and `place` at its construction; no theorem takes any of them as a hypothesis of its own. -/
 structure WindowInstance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   base : Vocab d α
   deployment : Device.Deployment
   signer : ∀ θ, base.signer θ = deployment.signer base.families θ
+  read : ∀ θ F, base.read θ F = MemberForm.membersRead (base.registered θ) θ
+  place : ∀ θ F c g, base.place θ F c g = placeOfFiles (base.read θ F) g
   costs : CostsRead base (Device.dev (deployment.setupOf base.families))
   window : ByteArray → Option Window
-  SetsUp : ByteArray → Array ByteArray → Window → Prop
-  lb : ∀ θ F W, SetsUp θ F W → W.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64
-  members : ∀ θ F W, SetsUp θ F W → MembersAt W W.table
 
 namespace WindowInstance
 
 variable (I : WindowInstance d α)
 
+/-- **The committed files the verifier sets the window `W` up on**, at the per-member form
+(`MemberForm.MembersSetUp`). -/
+def SetsUp (θ : ByteArray) (F : Array ByteArray) (W : Window) : Prop := MemberForm.MembersSetUp I.base θ F W
+
+/-- A window the verifier sets up reads `MAX_COINS` frames' bytes. -/
+theorem lb (θ : ByteArray) (F : Array ByteArray) (W : Window) (h : I.SetsUp θ F W) :
+    W.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64 :=
+  (show MemberForm.MembersSetUp I.base θ F W from h).lb
+
+/-- A window the verifier sets up has members of its one table with hm96-sha512 rows. -/
+theorem members (θ : ByteArray) (F : Array ByteArray) (W : Window) (h : I.SetsUp θ F W) : MembersAt W W.table :=
+  (show MemberForm.MembersSetUp I.base θ F W from h).toWindowOn.membersAt
+
 /-- **The deployed device's history at each play** (`Device.dev`), at the base's layouts. -/
 noncomputable abbrev dev : Exchange → Properties.Challenger.History :=
   Device.dev (I.deployment.setupOf I.base.families)
-
-/-- **SPOT's further finders as deployed**: the circuit file's and the public file's (`Vocab.fileFinder`,
-`Vocab.publicFinder`) at two calls each. -/
-noncomputable def fileSpecs (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
-    List (FinderSpec (I.base.game θ F c) (I.base.cost θ F c)) :=
-  [{ finder := fun _ => I.base.fileFinder θ F, budget := fun _ => 2, calls := fun _ _ => Nat.le_refl 2 },
-   { finder := fun _ => I.base.publicFinder θ F, budget := fun _ => 2, calls := fun _ _ => Nat.le_refl 2 }]
 
 noncomputable def coinsReadOf : Subprotocol → Sent → Option (List Release)
   | .sampled => Verity.Sampled.coinsRead
@@ -155,7 +166,7 @@ noncomputable def coinsReadOf : Subprotocol → Sent → Option (List Release)
 
 noncomputable def finderOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Verity.Game.Strategy (I.base.game θ F c) → Claims.Finder
-  | .sampled => Binding.readFinder I.base I.dev
+  | .sampled => windowReadFinder I.base I.dev
   | a => I.base.finder a
 
 noncomputable def forgerOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
@@ -261,7 +272,7 @@ noncomputable def rootsSpecs (θ : ByteArray) (F : Array ByteArray) (c : ByteArr
 
 noncomputable def findersOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     List (FinderSpec (I.base.game θ F c) (I.base.cost θ F c))
-  | .sampled => fun θ F c => I.fileSpecs θ F c ++ I.strictSpecs K θ F c ++ I.rootsSpecs θ F c
+  | .sampled => fun θ F c => I.strictSpecs K θ F c ++ I.rootsSpecs θ F c
   | a => I.base.finders a
 
 /-- **SPOT's window premises as deployed**: at the deployment's window, `JointShareV5`'s per-finder premises at the
@@ -335,11 +346,30 @@ theorem forgerOf_signed : ∀ a θ F c σ (x : (I.forgerOf a θ F c σ).S),
   | .network, θ, F, c, σ, x => I.base.forger_signed .network θ F c σ x
   | .wipe, θ, F, c, σ, x => I.base.forger_signed .wipe θ F c σ x
 
-/-- **The deployed vocabulary**: the base with SPOT's names (v2's log, the binding's read finder and forger, the
-further finders and the window's premises at `K`'s finders and projection, the window's δ and no loss). -/
+/-- **The extractor at the deployment's windows**: at a window, the seats of the window's members at the projected
+strategy, each member's transcript at its own files' circuit, side by side in the order the vocabulary reads the
+members' files (`Flock.Guarantees.tracesWith`); elsewhere the base's. -/
+noncomputable def extractOf (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (I.base.game θ F c)) : (I.base.read θ F).circuit.Trace :=
+  match I.windows θ F with
+  | some W => Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
+      (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ))
+  | none => I.base.extract θ F c σ
+
+theorem extractOf_some {θ : ByteArray} {F : Array ByteArray} {W : Window} (hW : I.windows θ F = some W)
+    (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)) :
+    I.extractOf K θ F c σ = Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
+      (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ)) := by
+  unfold extractOf
+  rw [hW]
+
+/-- **The deployed vocabulary**: the base with SPOT's names (v2's log, the window's read finder and the binding's
+forger, the further finders and the window's premises at `K`'s finders and projection, the extractor at the
+deployment's windows, the window's δ and no loss). -/
 noncomputable def vocab : Vocab d α :=
   { I.base with
     coinsRead := I.coinsReadOf
+    extract := I.extractOf K
     finder := I.finderOf
     callsMul := I.callsMulOf
     callsAdd := I.callsAddOf
@@ -367,17 +397,6 @@ noncomputable def liftOf (K' : WindowConstructions I.base) : WindowConstructions
 
 /-! ## The fields of `WindowDeployed` -/
 
-theorem fileCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
-    {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (h : (I.vocab K).finderCR .sampled θ F c σ) :
-    (I.base.fileFinder θ F).Pr Verity.sha512Msg < 1 ∧ (I.base.publicFinder θ F).Pr Verity.sha512Msg < 1 := by
-  have hall := List.forall_iff_forall_mem.1
-    (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c ++ I.rootsSpecs θ F c) σ from h)
-  have hl : finderCROf (I.fileSpecs θ F c) σ :=
-    List.forall_iff_forall_mem.2 fun f hf => hall f (List.mem_append_left _ (List.mem_append_left _ hf))
-  obtain ⟨h1, h2⟩ := hl
-  have lt2 : ((2 : ℕ) : ℝ) / 2 ^ (256 : ℝ) < 1 := budget_lt (by norm_num)
-  exact ⟨lt_of_le_of_lt h1 lt2, lt_of_le_of_lt h2 lt2⟩
-
 /-- **The two-continuation finders' premises**: at the deployment's window, where the further finders meet theirs,
 each two-continuation finder `K` builds from the strategy meets the strict birthday bound (`strictSpecs`). -/
 theorem strictCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : Window}
@@ -387,14 +406,14 @@ theorem strictCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : Win
       Claims.StrictBirthday Verity.sha512Msg (K.recordFinder W θ F c σ) ∧
       Claims.StrictBirthday Verity.sha512Msg (K.bindFinder W θ F c σ) := by
   have hall := List.forall_iff_forall_mem.1
-    (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c ++ I.rootsSpecs θ F c) σ from h)
+    (show finderCROf (I.strictSpecs K θ F c ++ I.rootsSpecs θ F c) σ from h)
   have hs : I.strictSpecs K θ F c =
       (List.finRange W.rounds).map (I.msgSpec K W θ F c) ++ [I.recordSpec K W θ F c, I.bindSpec K W θ F c] := by
     unfold strictSpecs
     rw [hW]
-  refine ⟨fun j => hall (I.msgSpec K W θ F c j) (List.mem_append_left _ (List.mem_append_right _ ?_)),
-    hall (I.recordSpec K W θ F c) (List.mem_append_left _ (List.mem_append_right _ ?_)),
-    hall (I.bindSpec K W θ F c) (List.mem_append_left _ (List.mem_append_right _ ?_))⟩
+  refine ⟨fun j => hall (I.msgSpec K W θ F c j) (List.mem_append_left _ ?_),
+    hall (I.recordSpec K W θ F c) (List.mem_append_left _ ?_),
+    hall (I.bindSpec K W θ F c) (List.mem_append_left _ ?_)⟩
   · rw [hs]
     exact List.mem_append_left _ (List.mem_map.2 ⟨j, List.mem_finRange j, rfl⟩)
   · rw [hs]
@@ -409,7 +428,7 @@ theorem rootsCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : Wind
     {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (hW : I.windows θ F = some W)
     (h : (I.vocab K).finderCR .sampled θ F c σ) : W.RootsCR := by
   have hall := List.forall_iff_forall_mem.1
-    (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c ++ I.rootsSpecs θ F c) σ from h)
+    (show finderCROf (I.strictSpecs K θ F c ++ I.rootsSpecs θ F c) σ from h)
   have hs : I.rootsSpecs θ F c = W.ms.map fun m => I.rootsSpec m θ F c := by
     unfold rootsSpecs
     rw [hW]
@@ -422,7 +441,7 @@ on the committed files at the published share, more than the window's `ε` share
 incorrect at the projected strategy (`JointAuditV5.wrongSet`). -/
 def ClaimTransfers : Prop :=
   ∀ θ F W, I.windows θ F = some W → W.RootsFix → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
-    ¬ Accounting.IntegrityHolds (I.base.partsOf θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ)
+    ¬ Accounting.IntegrityHolds (I.base.partsOf θ F) (I.base.Opens θ F c) (I.extractOf K θ F c σ)
         (I.base.certOf θ).ε →
       (K.live W θ F c σ).ε * (K.live W θ F c σ).nJ <
         ((((K.live W θ F c σ).joint (I.base.cost θ F c σ)).wrongSet (K.project W θ F c σ)).card : ℝ)
@@ -434,9 +453,10 @@ every member's roots fix their domains (`Window.RootsFix`: the files check's one
 the public files alone, which the window's δ pays for), at every strategy the committed files are read at the claim
 at the projected strategy (`reads`, `JointAuditV5.ReadsAt`): the vocabulary's read is the members' files in order,
 each member's files pass the verifier's files check (`MemberV5.Checked`), the commitment's openings hold wherever a
-member's deployed commitment opens and at its files' constants, and the extracted transcript is, at each member's
-gates, that member's transcript at the trace its session fixes at the joint registration
-(`JointAuditV5.memberX`). It is asked of every member, with a proof block in the sample or not. -/
+member's deployed commitment opens and at its files' constants, and the extracted transcript (`extractOf`: the seats'
+traces side by side, `Flock.Guarantees.tracesWith`) is, at each member's gates, that member's transcript at the trace
+its session fixes at the joint registration (`JointAuditV5.memberX`). It is asked of every member, with a proof
+block in the sample or not. -/
 structure ClaimReads : Prop where
   laid : ∀ θ F W, I.windows θ F = some W → W.Laid
   share : ∀ θ F W, I.windows θ F = some W → (I.base.certOf θ).ε = W.ε
@@ -444,7 +464,9 @@ structure ClaimReads : Prop where
   reads : ∀ θ F W, I.windows θ F = some W → W.RootsFix →
     ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
     ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).ReadsAt (I.base.read θ F) (I.base.Opens θ F c)
-      (I.base.extract θ F c σ) (K.project W θ F c σ)
+      (Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
+        (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ)))
+      (K.project W θ F c σ)
 
 /-- **The claim's transfer holds wherever the claim reads the window** (`ClaimTransfers`, from `ClaimReads`): the
 units the extracted transcript doesn't bind are at most as many as the window's incorrect proof blocks at the
@@ -454,14 +476,19 @@ the published share has more than that share of the committed files' units unbou
 population. -/
 theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
   intro θ F W hW hR c σ hI
-  have hcard : (Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ)).card ≤
+  rw [I.extractOf_some K hW c σ] at hI
+  have hcard : (Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c)
+        (Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
+          (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ)))).card ≤
       (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).wrongSet (K.project W θ F c σ)).card :=
     Flock.Guarantees.JointAuditV5.UnboundWrong.card_le
       (Window.unboundWrong (K.live W θ F c σ) (I.base.cost θ F c σ))
       (((h.laid θ F W hW).extend (K.coins W θ F c σ)).joint (I.base.cost θ F c σ))
-      (I.base.read θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ) (K.project W θ F c σ) (h.reads θ F W hW hR c σ)
+      (I.base.read θ F) (I.base.Opens θ F c) _ (K.project W θ F c σ) (h.reads θ F W hW hR c σ)
   have hlt : (I.base.certOf θ).ε * ((I.base.units θ F : ℕ) : ℝ) <
-      ((Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ)).card : ℝ) :=
+      ((Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c)
+        (Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
+          (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ)))).card : ℝ) :=
     not_le.1 hI
   have he : (K.live W θ F c σ).ε * ((K.live W θ F c σ).nJ : ℝ) =
       (I.base.certOf θ).ε * ((I.base.units θ F : ℕ) : ℝ) :=
@@ -469,11 +496,11 @@ theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
   exact he.trans_lt (lt_of_lt_of_le hlt (Nat.cast_le.2 hcard))
 
 /-- **`WindowDeployed` at the deployed vocabulary**, from what the claim reads of the window (`ClaimReads`,
-`claimTransfers`), at constructions whose read finder and forger are the binding's
+`claimTransfers`), at constructions whose read finder is the window's and whose forger is the binding's
 (`WindowConstructions.withBinding`): the leg's per-finder premises are `error`'s condition at this strategy
 (`strictSpecs`, `rootsSpecs`, `premisesOf`), and the published δ is the window's, which doesn't read the widening
 (`Window.delta_extend`). -/
-theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFinder I.base I.dev θ F c σ)
+theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = windowReadFinder I.base I.dev θ F c σ)
     (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hC : I.ClaimReads K) :
     WindowDeployed (I.vocab K) (I.liftOf K K) I.windows where
   finder θ F c σ := (hKr θ F c σ).symm
@@ -488,45 +515,66 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
 
 /-! ## `WindowCovers` -/
 
-/-- **The registered files pass the file check wherever some files do**, at parameters naming the one-stage form
-(`Instance.RegisteredFiles`, at this base). -/
-def RegisteredFiles : Prop :=
-  ∀ θ F, (∃ p, ParamsAt θ p) → I.base.Registered θ F → I.base.Registered θ (I.base.registered θ)
-
-/-- **The verifier's window at the registered files' files**: at parameters naming the one-stage form where the
-deployment runs a window, committed files that name the registered circuit and public files, and that some play's
-sampled verdict accepts, are files the verifier sets that window up on. -/
+/-- **The verifier's window at an accepted play**: at parameters naming the one-stage form where the deployment runs
+a window, committed files on which some play's sampled verdict accepts, with blobs sent holding v2's tables and the
+members' files at their registered files (`TablesSent`, `FilesSent`), are files the verifier sets that window up
+on. -/
 def WindowAt (k : Verity.Registration.Composite) : Prop :=
   ∀ θ F W, I.window θ = some W → (∃ p, ParamsAt θ p) →
-    I.base.circuitFile θ F = I.base.circuitFile θ (I.base.registered θ) →
-    I.base.publicFile θ F = I.base.publicFile θ (I.base.registered θ) →
-    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o) → I.SetsUp θ F W
+    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent o.sent ∧
+      FilesSent I.base o) → I.SetsUp θ F W
 
 /-- **`WindowCovers` at the deployed vocabulary**: where the deployment runs no window, the published δ is `⊤`
-(`deltaOf`); where it runs one that the verifier doesn't set up on the committed files, an accepting play's files
-pass the file check, so under the further finders' premises they name the registered files (`namedFile_eq`), where
-the verifier sets the window up (`WindowAt`). -/
-theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hWa : I.WindowAt k) :
+(`deltaOf`); where it runs one that the verifier doesn't set up on the committed files, a play the sampled verdict
+accepts there has blobs sent holding a pinned table or a member's file at other bytes than its registered file, as
+the verifier sets the window up wherever they hold them (`WindowAt`), so the window's read finder outputs a
+collision there (`verdict_le_files`), with probability at most its bound under its premise (`Vocab.FinderCR`), the
+published δ's last term. -/
+theorem covers (k : Verity.Registration.Composite) (hWa : I.WindowAt k) :
     WindowCovers (I.vocab K) k I.windows := by
-  intro θ F hS hP c σ hcr
+  intro θ F hS hP c σ _ hFC
   rcases hA : I.window θ with _ | W
   · exact le_top.trans_eq (I.deltaOf_none hA _).symm
-  refine le_of_eq_of_le ?_ zero_le
-  by_contra hne
-  obtain ⟨t, hv⟩ := Instance.exists_tape_of_prob_ne hne
-  have hreach : Verity.Game.Reaches (I.base.game θ F c) (Verity.Game.Tape.out _ σ t) :=
-    Verity.Game.Tape.reaches_out _ σ t
-  have hv' : I.base.Verdict k .sampled (Verity.Game.Tape.out _ σ t) := hv
-  obtain ⟨hθ, hF, -⟩ := Binding.play_reaches hreach
-  have hreg : I.base.Registered θ F := by
-    have h1 := hv'.1
-    rw [hθ, hF] at h1
-    exact h1
-  have hR := hRg θ F hP hreg
-  obtain ⟨h1, h2⟩ := I.fileCR K hcr
-  have hs := hWa θ F W hA hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) ⟨c, _, hreach, hv'⟩
-  rw [I.windows_of hA hs] at hS
-  cases hS
+  have hv : Verity.Game.prob (fun o => I.base.Verdict k .sampled o) (I.base.game θ F c) σ ≤
+      ENNReal.ofReal ((windowReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg) :=
+    verdict_le_files I.base k I.dev θ F c σ fun t hv ht hf => by
+      have hs := hWa θ F W hA hP ⟨c, _, Verity.Game.Tape.reaches_out _ σ t, hv, ht, hf⟩
+      rw [I.windows_of hA hs] at hS
+      cases hS
+  have hcr : (windowReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤
+      I.sampledBound θ ((I.vocab K).cost θ F c σ) :=
+    (I.vocab K).finderPr_le_crBound hFC
+  refine hv.trans ((ENNReal.ofReal_le_ofReal hcr).trans ?_)
+  show _ ≤ I.deltaOf θ .sampled ((I.vocab K).cost θ F c σ)
+  rw [I.deltaOf_some hA]
+  unfold Window.delta
+  exact le_add_left le_rfl
+
+/-- **The deployment's window is the parameters' members on the registered files**, at parameters naming the
+one-stage form: a statement of `I.window θ` and the registered files alone. -/
+def WindowRegistered : Prop :=
+  ∀ θ W, I.window θ = some W → (∃ p, ParamsAt θ p) → MemberForm.WindowOn I.base θ (I.base.registered θ) W
+
+/-- **At an accepted play, the deployment's window is laid out in order and its members' files pass**: wherever the
+deployment's window is the parameters' members on committed files on which some play's sampled verdict accepts,
+with blobs sent holding v2's tables and the members' files at their registered files. -/
+def WindowPasses (k : Verity.Registration.Composite) : Prop :=
+  ∀ θ F W, I.window θ = some W → MemberForm.WindowOn I.base θ F W →
+    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent o.sent ∧
+      FilesSent I.base o) →
+    W.Laid ∧ ∀ m ∈ W.ms, MemberForm.FilesPass m
+
+/-- **`WindowAt` at the per-member form**: the deployment's window, the parameters' members on the registered files
+(`WindowRegistered`), is on every committed files, which the vocabulary reads alike (`read`,
+`MemberForm.WindowOn.of_read`), and at an accepted play it is laid out with its members' files passing
+(`WindowPasses`). -/
+theorem windowAt_members (k : Verity.Registration.Composite) (hW : I.WindowRegistered)
+    (hpass : I.WindowPasses k) : I.WindowAt k := by
+  intro θ F W hw hP hplay
+  have hon : MemberForm.WindowOn I.base θ F W :=
+    (hW θ W hw hP).of_read ((I.read θ _).trans (I.read θ F).symm)
+  obtain ⟨hlaid, hpassed⟩ := hpass θ F W hw hon hplay
+  exact (⟨hon, hlaid, hpassed⟩ : MemberForm.MembersSetUp I.base θ F W)
 
 /-! ## The leg at the deployment -/
 
@@ -547,8 +595,8 @@ noncomputable def constructionsAt (K₀ : WindowConstructions I.base) (k : Verit
 
 /-- **What the verifier's acceptance gives of each play, at the deployment's windows** (`WindowRead`), at composite
 `k`: at every play on files the verifier sets one of the deployment's windows up on, which `k`'s sampled verdict
-accepts, whose log v2 read is the device's, whose blobs sent hold each pinned table at its registered file and whose
-sample answers the strategy's `afterAt`, every release of the family the parameters name precedes every opening, and
+accepts, whose log v2 read is the device's, whose blobs sent hold each pinned table and each member's file at its
+registered file and whose sample answers the strategy's `afterAt`, every release of the family the parameters name precedes every opening, and
 the play has the sessions of the window's sample at the coins that family releases. -/
 def WindowReads (k : Verity.Registration.Composite) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) : Prop :=
@@ -557,6 +605,7 @@ def WindowReads (k : Verity.Registration.Composite) (ev : ℕ → Exchange → O
     I.base.Verdict k .sampled (CoinTape.run (I.base.game θ F c) σ z) →
     Binding.Logged Binding.readsV2 (CoinTape.run (I.base.game θ F c) σ z) →
     TablesSent (CoinTape.run (I.base.game θ F c) σ z).sent →
+    FilesSent I.base (CoinTape.run (I.base.game θ F c) σ z) →
     SampledDigest k (CoinTape.run (I.base.game θ F c) σ z).sent (afterAt I.base k θ F c σ) →
     WindowRead W W.table ev filesDec (labelAt θ) (afterAt I.base k θ F c σ) _root_.Spot.Challenger.MAX_COINS
       (CoinTape.run (I.base.game θ F c) σ z)
@@ -566,28 +615,28 @@ constructions `constructionsAt` assembles): `WindowDeployed` and `WindowCovers` 
 deployed device printed each play's log and signed what its signatures are on (`Device.printsLog_dev`,
 `Device.signsPlay_dev`, at the base's signer, `WindowInstance.signer`), and each window the verifier sets up reads
 `MAX_COINS` frames' bytes and has members of its one table (`lb`, `members`). What is left is what the claim reads of
-the window (`ClaimReads`), the registered files' file check (`RegisteredFiles`), the verifier's window at the
-registered files (`WindowAt`) and what the verifier's acceptance gives of each play (`WindowReads`). -/
+the window (`ClaimReads`), the verifier's window at an accepted play (`WindowAt`) and what the verifier's acceptance
+gives of each play (`WindowReads`). -/
 theorem spotSound (K₀ : WindowConstructions I.base) (k : Verity.Registration.Composite)
     (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)
     (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
-    (hRg : I.RegisteredFiles) (hWa : I.WindowAt k) (hWR : I.WindowReads k ev filesDec) :
+    (hWa : I.WindowAt k) (hWR : I.WindowReads k ev filesDec) :
     (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)).SpotSound k :=
   windowSpotSound_sessions (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)) k
     (I.liftOf (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) K₀) I.dev reg Window.table ev filesDec
     record₀ recordDigest (fun θ _ _ _ => labelAt θ) _root_.Spot.Challenger.MAX_COINS
     (I.deployed (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) (fun _ _ _ _ => rfl)
       (fun _ _ _ _ => rfl) hC)
-    (I.covers (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) k hRg hWa)
+    (I.covers (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) k hWa)
     (fun _ _ _ _ o _ => Device.printsLog_dev _ o)
     (fun θ F _ _ c => Device.signsPlay_dev (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
       I.deployment θ F c (I.signer θ))
     (fun θ F W h => I.lb θ F W (I.windows_some h).2)
     (fun θ F W h => I.members θ F W (I.windows_some h).2)
-    (fun θ F W h c σ z hv hl ht hd => hWR θ F W h c σ z hv hl ht hd)
+    (fun θ F W h c σ z hv hl ht hf hd => hWR θ F W h c σ z hv hl ht hf hd)
 
 end WindowInstance
 
@@ -595,8 +644,8 @@ end WindowInstance
 verifier accepts files that passed the commit phase's check while one of its three claims fails with probability at
 most their errors summed, at the vocabulary `WindowInstance.vocab` builds from the deployment and the constructions
 `WindowInstance.constructionsAt` assembles, wherever what the claim reads of the window (`ClaimReads`), the
-registered files' file check (`RegisteredFiles`), the verifier's window at the registered files (`WindowAt`), what
-the verifier's acceptance gives of each play (`WindowReads`), and the base's PoUW and inference-only targets hold.
+verifier's window at an accepted play (`WindowAt`), what the verifier's acceptance gives of each play
+(`WindowReads`), and the base's PoUW and inference-only targets hold.
 The sampled leg's error at a window is `Window.delta`: the sample's own miss and the members' knowledge and binding
 terms summed (`JointShareV5`), each member's registration's roots term (`Window.rootsErr`), a two-continuation term
 per round opened after a digest in every member's session, its closing round among them, one for the record and one
@@ -608,10 +657,10 @@ theorem remote_soundness_window (I : WindowInstance d α) (K₀ : WindowConstruc
     (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
-    (hRg : I.RegisteredFiles) (hWa : I.WindowAt .remote) (hWR : I.WindowReads .remote ev filesDec)
+    (hWa : I.WindowAt .remote) (hWR : I.WindowReads .remote ev filesDec)
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).SoundnessAt .remote :=
   Verity.remote_soundness_of_subprotocols ι α d _
-    (I.spotSound K₀ .remote reg ev filesDec record₀ recordDigest hC hRg hWa hWR) hW hI
+    (I.spotSound K₀ .remote reg ev filesDec record₀ recordDigest hC hWa hWR) hW hI
 
 end Verity.Sampled
