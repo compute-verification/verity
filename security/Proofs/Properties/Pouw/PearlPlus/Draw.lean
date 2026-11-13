@@ -9,23 +9,23 @@ import Proofs.Core.Game.Prob
 import Proofs.Pouw.Prob
 
 /-!
-# Pearl+'s run draw (`Properties.Pouw.PearlPlusDraw`)
+# Pearl+'s run sample (`Properties.Pouw.PearlPlusDraw`)
 
 `DrawIsOnItsStreams`, by `pearlDraw`'s steps. Its filter keeps the positive tickets with their positions (`posOf`), and
-`weightedDraw` reads draw `j`'s integer below their total, which is the run's `W` (`last_sums`), from `uniform`, which
+`weightedDraw` reads sample `j`'s integer below their total, which is the run's `W` (`last_sums`), from `uniform`, which
 is `uniformOn` of the stream at `("u", j)`. Over their running sums (`runSums`) `bisectRight` finds the unit the integer
 falls in (`pick_posOf`), the unit `finSigmaFinEquiv` numbers that ticket on (`ticketAt_fst`): both count every unit's
 weight before it and skip a unit of none. Where some ticket holds weight the filter's list is nonempty
 (`posOf_ne_nil`); where none does it is empty (`posOf_eq_nil`) and the sample is too.
 
-`CoinBytesGiveUniformTickets`, by counting. `uniformOn` of a stream's bytes is C-Flock's rejection sampler on them
+`CoinBytesGiveUniformTickets`, by counting. `uniformOn` of a stream's bytes is Flock's rejection sampler on them
 (`uniformOn_bytesOf`, through `DrawExec.uniform_streamOf`), so at most `256^L / W` streams of `L` bytes give each
 integer below `W` (`card_uniformOn_le`, `DrawExec.uniformL_le` at one value). The streams that number tickets in `E` lie
 in the union over `E`'s tickets `c` of the products of those sets, each of at most `(256^L / W)^t` streams, and the
 tickets number `W^t` (`card_ticket_total`). Where `W^t` is 0 there is no ticket to number and no stream in the event.
 
 Their witnesses are at the honest pass of the deployed scheme (`honestPass`, one tile of 3,047,424 tickets): its
-tickets hold weight and each draw has bytes to read, a draw that names no tile is not on its streams, and a sampler
+tickets hold weight and each sample has bytes to read, a sample that names no tile is not on its streams, and a sampler
 that returns 0 whatever it reads numbers ticket 0 more often than uniform tickets do.
 -/
 
@@ -182,7 +182,7 @@ theorem uniformOn_lt {n : ℕ} (hn : 0 < n) {s : ByteArray} {r : ℕ}
     cases h
     exact Properties.Pouw.Commit.draw_uniform_lt n hn s _ _ rp hu
 
-/-! ## The draw -/
+/-! ## The sample -/
 
 theorem toOption_mapM {ε α β : Type} (f : α → Except ε β) :
     ∀ l : List α, (l.mapM f).toOption = l.mapM fun a => (f a).toOption
@@ -202,7 +202,7 @@ theorem toOption_bind_pure {ε α β : Type} (x : Except ε α) (f : α → β) 
     (x >>= fun a => pure (f a) : Except ε β).toOption = x.toOption.map f := by
   cases x <;> rfl
 
-/-- Draw `j` of `weightedDraw` once its integer is read: its running-sum position, or the stream's refusal. -/
+/-- Sample `j` of `weightedDraw` once its integer is read: its running-sum position, or the stream's refusal. -/
 def drawStep (cum : List ℕ) (j : ℕ) : Option ℕ → Except String ℕ
   | some r => pure (bisectRight cum r)
   | none => throw s!"draw {j} read {DRAW_WORDS} words of its stream without one below the limit"
@@ -211,7 +211,7 @@ theorem toOption_drawStep (cum : List ℕ) (j : ℕ) (o : Option ℕ) :
     (drawStep cum j o).toOption = o.map (bisectRight cum) := by
   cases o <;> rfl
 
-/-- `weightedDraw` over the positive tickets: draw `j`'s position of `uniform`'s integer below their total. -/
+/-- `weightedDraw` over the positive tickets: sample `j`'s position of `uniform`'s integer below their total. -/
 theorem weightedDraw_eq (key : ByteArray) (ws : List ℕ) (t : ℕ) (hW : ws.sum ≠ 0) :
     weightedDraw key ((posOf ws 0).map (·.1)) t = (List.range t).mapM fun j =>
       drawStep (runSums ((posOf ws 0).map (·.1)) 0) j
@@ -380,7 +380,7 @@ theorem coinBytesGiveUniformTickets : CoinBytesGiveUniformTickets := by
 /-- The honest pass's one tile holds 3,047,424 tickets: `wref(1, 1024, 64)` a cell over its 16 credited rows. -/
 theorem honest_ticketTotal : ticketTotal (tickets [honestPass]) = 3047424 := by decide +kernel
 
-/-- Each draw has bytes to read: `DRAW_WORDS` words of at least 9 bytes. -/
+/-- Each sample has bytes to read: `DRAW_WORDS` words of at least 9 bytes. -/
 theorem drawBytes_pos (tk : List ((ℕ × ℕ) × ℕ)) : 0 < drawBytes tk := by
   unfold drawBytes DRAW_WORDS Flock.Draw.width
   omega
@@ -395,8 +395,8 @@ theorem mapM_range_one_ne_nil {β : Type} (f : ℕ → Option β) : (List.range 
   rw [List.range_one, List.mapM_cons, List.mapM_nil]
   cases f 0 <;> simp
 
-/-- **`DrawIsOnItsStreams`'s nontrivial lemma**: its conclusion fails at a draw that names no tile whatever it is asked
-(`.ok []`), at the honest pass and one draw: each draw on its stream names a tile or throws. -/
+/-- **`DrawIsOnItsStreams`'s nontrivial lemma**: its conclusion fails at a sample that names no tile whatever it is asked
+(`.ok []`), at the honest pass and one sample: each sample on its stream names a tile or throws. -/
 theorem drawIsOnItsStreams_nontrivial :
     ¬ (Except.ok [] : Except String (List (ℕ × ℕ))).toOption =
       if ticketTotal (tickets [honestPass]) = 0 then some [] else
@@ -444,7 +444,7 @@ theorem coinBytesGiveUniformTickets_honest :
   exact drawIsOnItsStreams_honest
 
 /-- **`CoinBytesGiveUniformTickets`'s nontrivial lemma**: its bound fails at a sampler that returns 0 whatever it reads
-(`some 0` in `uniformOn`'s place), at the honest pass's tickets, one draw and the event that the draw is ticket 0: the
+(`some 0` in `uniformOn`'s place), at the honest pass's tickets, one sample and the event that the sample is ticket 0: the
 sampler numbers ticket 0 with probability 1, and a uniform ticket is ticket 0 with probability 1/3,047,424. -/
 theorem coinBytesGiveUniformTickets_nontrivial :
     ¬ _root_.Pouw.pr (fun _ : Fin 1 → Fin (drawBytes (tickets [honestPass])) → Fin 256 =>
