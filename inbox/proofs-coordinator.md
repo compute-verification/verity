@@ -152537,3 +152537,30 @@ What I take from it: the two-stage instance must define `registered θ` as the r
 **Not a STOP**: an array that is a function of θ alone meets `hx₀` and `hT₀`, and the vocabulary names it. I start item 3's Lean now, with `B₀ := V.registered θ` fixed in the statements.
 
 Also [read]: the one-stage instance's `CostsRead` (`Sampled/Instance.lean:149`) charges one call per sent blob to `V.cost`, which answers my 16:18Z guess about route (ii). Route (ii) is not taken in any case.
+
+## SERVEDCARD, Fri 13 Nov 16:51Z: the retry's build and staging ran ahead on node A, 16:36Z to 16:44Z on cores 20-23 and 44-47 with no card: both EmbeddingRead_v1 reads staged at `499739a84f` and the GPU prover built; the slot on cards 4 and 5 now holds the proving alone
+
+The ahead half of my 10:02Z entry is done and its row is released. Nothing changes in the go command. I need nothing from you; two things for you to know are in section 3.
+
+**1. What ran** [run: `r20261113-163602-6653`, `out/steps.txt`, `out/window.log`]
+- `stage_prove.sh` with `STEPS=stage` at `499739a84f` on node A, pinned to cores 20-23 and 44-47 (8 cores), every card hidden from it. It ran from 16:36:32Z to 16:43:54Z, 7 minutes 22 seconds, and exited 0.
+- Its steps, on those 8 cores:
+  - `flock-read-tmpl` built in 73 s.
+  - The GPU prover built in 272 s (`--features gpu`, CUDA 13.3's `nvcc`, SM 90).
+  - Both reads staged at full size in 365 s each, side by side, at 6.3 GB (H=4) and 5.0 GB (H=96) peak resident memory.
+  - Both units placed by a `flock-tmpl-unit` built and run under the work directory: 338,343,730 bytes (H=4) and 350,579,694 bytes (H=96), the sizes this morning's CPU check gave.
+- What it kept: `/workspace/tmp/proofs-tmplretry-499739a84f`, 2.9 GB. Its marker reads `499739a84f… 2026-11-13T16:43:54Z units-sha256 88d4286849d162d3 staged 2`, which is what the go command checks before it reads a lease.
+- **Where that directory is:** on node A, `/workspace/tmp` is on the node's `/`, not a disk of its own [read: `findmnt` and `df` on node A, 16:35Z and 16:49Z]. `/` had 107 GB free at 16:49Z. My 10:02Z entry said only "on disk". The go run removes the directory when it ends. If there is no go, I remove it by 19:58Z unless you tell me to keep it for a later slot; staging it again takes these 7 minutes.
+
+**2. What I checked before and after**
+- Before the launch: no other loop held the pen; my mailbox held nothing after 09:23Z; my row stood on the calendar and no other lane's row named cores 20-23 or 44-47 [read: `calendars/node-a.md`, synced 16:35Z].
+- During: the job's process was pinned to 20-23 and 44-47, and the only compute processes on any card were kernels' own, on one card [run: `taskset -cp` and `nvidia-smi` on node A, 16:37Z]. Nothing of the job ran on a card or on cores 48-95.
+- After: the run's state is `done`, none of its processes is left, and the row is released on the calendar with cores 20-23 and 44-47 free from 16:44Z [read: notes `a75fbd7284`].
+
+**3. Two things for you to know**
+- **A timer of yours reached me.** At 16:33Z I received `proofs-1552Z-prf589-opened`, which fired on Thu 12 Nov at 15:51:59Z and is about another worker's run on card 7 (PRF-589). At 16:32Z I also received five Slack events addressed to @proofs, dated 09:36Z to 09:41Z (TOP-415, NET-403, TOP-398), about seven hours late. I acted on none of them.
+- **My own 16:33Z timer's notification had not reached me by 16:50Z,** though it has left my list of timers, as a timer that has fired does. I launched from the clock at 16:36Z, one minute into the row. If its notification arrives now, I do nothing more. The 19:00Z timer is still set. Your "go" is a direct resume, which reached me at once this morning; if it does not reach me by 19:27Z, nothing launches, as agreed.
+
+**4. What stands for 19:00Z:** unchanged from my 10:02Z entry, section 3. At 19:00Z I check the lease, that cards 4 and 5 are idle and that the marker still reads as above, then end with "ready" and the go command (`STEPS=prove`, cards 4 and 5, cores 48-71, `KILL_AT` 19:57:00Z).
+
+For the table: nothing new. No card has run. The times above are CPU work on 8 of node A's cores, not card figures.
