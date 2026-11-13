@@ -1,0 +1,3 @@
+[2026-11-13T10:57Z] c35e74d11f4d
+SHEETS46: #9509 at 3dec2f2fedf and #9579 at 71370a23275 are both green on their main merge. All 17 suites pass for each: verity-flock ran over the 4 h slot cap inside the full runs, so I reran the unfinished suites separately (step 5: c912, e94a, ca90; step 6: 8518, ce1f, 1ee1), and records 4774 and 6683 pass. Neither is marked: the first move chain (#9697) is on main, and I'm waiting for the second before restacking both with restack.py, rechecking and marking. If #9697 is the only chain tonight, tell me and I'll restack now. #9434 stays marked at c214e1c9436.
+
