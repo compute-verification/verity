@@ -75,7 +75,7 @@ reads, which round 2 takes as given and holds each statement's header and regist
 alone: the template's Definition and rows, the interior's
 partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
 scheme, in a process where `FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS` and
-`FLOCK_GEMM_TILE` are unset, since each changes the file. The interior's digests depend on Q, which a rate law draws, so
+`FLOCK_GEMM_TILE` are unset, since each changes the file. The interior's digests depend on Q, which a rate law samples, so
 the names are each run's and are handed to `outcome`.
 
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
@@ -96,12 +96,12 @@ log holds `{"event": "salt", "salt", "salted_at"}` (with `"external": true` from
 `{"event": "registration", "order", "registration", "salted_at", "received_at"}` or `{"event": "late-registration",
 "salted_at", "received_at"}`. With no registration deadline `register` reads no clock and logs nothing to the epoch log.
 
-**The window's seed salt.** `Stream.seed_salt` draws a window's seed salt at its open, before it serves: the one coin of
+**The window's seed salt.** `Stream.seed_salt` samples a window's seed salt at its open, before it serves: the one coin of
 the challenger's seed-salt family released after the window's open root (`coins.draw_seed_salt`), a family no sample
-reads, drawn once a window and before any registration of it (`seed-salted`, `seed-salt-late`), and logged
+reads, sampled once a window and before any registration of it (`seed-salted`, `seed-salt-late`), and logged
 (`{"event": "seed-salt", "window_root", "seed_salt", "seeded_at"}`). Each registration of that window is held to it by
 both verifiers (`registration.check`'s `seed_salt`, R6-seed-salt): its window names it, a certified input the window's
-circuits read. A verifier that didn't draw it reads it from the challenger's log (`coins.seed_salt_of`).
+circuits read. A verifier that didn't sample it reads it from the challenger's log (`coins.seed_salt_of`).
 
 **No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is sampled once, after its receipt (`select`); its
 proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
@@ -281,7 +281,7 @@ class All:
 
 
 def fixed(text: Any) -> str:
-    """The refusal of a law that is no rate (`rate`): a fixed count `subset:K`, `stratified:K` or `work:K` samples each proof
+    """The refusal of a sampling design that is no rate (`rate`): a fixed count `subset:K`, `stratified:K` or `work:K` samples each proof
     block with K/N, which falls as the prover pads the N it registers. The Lean verifier's `Select.FIXED` is this."""
     return ("a law is rate:NUM/DEN or rate:NUM/DEN:T (0 < NUM <= DEN, T >= 1), stratified-rate:NUM/DEN or work-rate:NUM/DEN "
             f"(0 < NUM <= DEN) or bernoulli:NUM/DEN, not {text!r}: a fixed count samples each proof block with K/N, which "
@@ -289,7 +289,7 @@ def fixed(text: Any) -> str:
 
 
 def rate(text: Any) -> bool:
-    """Whether a law text is a rate: a rate sampling design (`draw.parse_rate`), a stratified or work rate sampling design
+    """Whether a sampling design text is a rate: a rate sampling design (`draw.parse_rate`), a stratified or work rate sampling design
     (`draw.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses (`bernoulli`). The Lean verifier's
     `Select.rate?` is this."""
     if D.parse_rate(text) is not None or D.parse_strata_rate(text) is not None:
@@ -309,7 +309,7 @@ class Law:
     K/N as the prover pads N, is refused (`fixed`). A rate samples `subset:K` at K = ceil(NUM N / DEN) rounded up to a
     multiple of the T tables (`draw.rate_count`) over the N proof blocks each registration brings, so every proof block is
     sampled with probability at least NUM/DEN however large the prover makes N. The stratified rate samples the stratified
-    sampling design at the K its strata need to draw ceil(NUM n_s / DEN) of each template's n_s proof blocks (`draw.strat_k`),
+    sampling design at the K its strata need to sample ceil(NUM n_s / DEN) of each template's n_s proof blocks (`draw.strat_k`),
     and the work rate the work sampling design at K = ceil(NUM N / DEN) with each stratum's floor at the rate
     (`selection_table`, `draw.rate_floor`), so each stratum's proof blocks are sampled with probability at least NUM/DEN
     however the prover spreads N over templates."""
@@ -779,7 +779,7 @@ def selection_table(rule: Selection, program: Program, query: Mapping[str, Any],
 
 def params_law(law: Any, program: Program, query: Mapping[str, Any],
                work_table: Mapping[str, Any] | None) -> tuple[Any, Mapping[str, Any] | None]:
-    """One-stage's parameters' agreed sampling design and the work table it is expanded over: a law object as given, with
+    """One-stage's parameters' agreed sampling design and the work table it is expanded over: a sampling design object as given, with
     `work_table`, or a rate as a selection rule states it (`draw.parse_rate`, `draw.parse_strata_rate`), its sampling design
     over the population of `program` under `query` and its strata (`selection_law`) and its work table (`selection_table`). Raises
     `ValueError` for any other text, a query that doesn't apply, or a rate `selection_law` or `selection_table` refuses.
@@ -934,8 +934,8 @@ def second_law(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> d
     t's being [off_t, off_t + Q·n_t), off_t = Q·Σ_{t'<t} n_t', and sampled replay block `sample[i]`'s instances of it
     [off_t + i·n_t, off_t + (i+1)·n_t), one cell. One stratum per cell, template by template and in each by sampled
     replay block, named `r/t` (replay block r of the registration, template t of the check's), `ks[t]` of the cell's
-    `ns[t]` proof blocks in each; the strata tile [0, Q·Σ n_t) in order. The stratified law sizes each stratum's count
-    in proportion to its size, which cells of several templates' sizes don't follow, so the law is the work law at
+    `ns[t]` proof blocks in each; the strata tile [0, Q·Σ n_t) in order. The stratified sampling design sizes each stratum's count
+    in proportion to its size, which cells of several templates' sizes don't follow, so the sampling design is the work sampling design at
     k = 1 and unit work: its rule (`draw.work_k`) gives each stratum max(floor, 1) capped at its size, and each cell's
     floor is its count. The Lean verifier's `Select.secondLaw` is this."""
     off = _offsets(len(sample), ns)
@@ -1524,9 +1524,9 @@ class Stream:
     A stream runs one epoch with one salt: `salt` issues it from the coins, or `salt_released` records one released
     elsewhere with its release, and under `Check.registration_deadline` every registration is received within the
     deadline of that release, or the epoch ends (`ended`) at the first that isn't. A window's seed salt is
-    `seed_salt`'s, drawn at the window's open, and both verifiers hold every registration of the window to name it
-    (R6). That it is drawn once a window and before the window's first registration is the stream's own bookkeeping,
-    outside the rules below: a verifier that didn't draw it reads it from the challenger's log, which shows the one coin
+    `seed_salt`'s, sampled at the window's open, and both verifiers hold every registration of the window to name it
+    (R6). That it is sampled once a window and before the window's first registration is the stream's own bookkeeping,
+    outside the rules below: a verifier that didn't sample it reads it from the challenger's log, which shows the one coin
     (`coins.seed_salt_of`). `epoch_log` holds the challenger's clock readings.
 
     The stream's own rules (the budget, the open registrations, the salt and both deadlines, and each registration's
@@ -1848,14 +1848,14 @@ class Stream:
         self._epoch_log.append({"event": "salt", "salt": salt.hex(), "salted_at": released_at, "external": True})
 
     def seed_salt(self, coins: ChallengerCoins, window_root: str) -> bytes:
-        """The window's seed salt, drawn at the window's open, before it serves (`coins.draw_seed_salt`): the first coin
+        """The window's seed salt, sampled at the window's open, before it serves (`coins.draw_seed_salt`): the first coin
         of the challenger's seed-salt family (`coins`, a `coins.ChallengerCoins` over that family of the window's
         session), released after the window's open root `window_root`. Its release is read on the challenger's clock
         (`seeded_at`) and logged (`epoch_log`). Each registration of the window (`register`'s and `register_interiors`'
         `window_root`) is then held to it by both verifiers: its window names it (`registration.SEED_SALT`), and a
         window that names another, or none, is refused (`R6-seed-salt`), as is a seed salt where the stream drew none.
-        Raises `Refused`: `seed-salted` (the window has its salt: nothing redraws it) or `seed-salt-late` (the stream
-        received a registration of the window already); and `CoinError` where the draw fails."""
+        Raises `Refused`: `seed-salted` (the window has its salt: nothing resamples it) or `seed-salt-late` (the stream
+        received a registration of the window already); and `CoinError` where the sample fails."""
         if isinstance(window_root, str) and window_root in self._seed_salts:
             raise _refuse("seed-salted", {"window_root": window_root})
         if isinstance(window_root, str) and any(window_root in (*e.copies[8:9], *e.interior_copies[8:9])

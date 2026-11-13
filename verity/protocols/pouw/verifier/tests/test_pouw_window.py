@@ -329,7 +329,7 @@ def test_a_side_tree_is_its_rows_then_frame_v3_pads_to_two_to_the_d():
             Wd.side_levels(small, (leaves * 2)[:n])
 
 
-#: the registered window root and its domain id
+#: the registered execution phase root and its domain id
 ROOT, DOMAIN = _d(7), _d(8)
 
 
