@@ -74,7 +74,7 @@ PRESERVED); the `replicas` table records `verified_utc` and `verified` per locat
 
 ## Replica resolution for `fetch`
 
-Replica resolution order for `fetch`: local objects -> repo replica (`fixtures/artifacts.json`: `{art id: repo-relative
+Replica resolution order for `fetch`: local objects -> repo replica (`artifacts.json`: `{art id: repo-relative
 path}` of the payload — a file, or a tree's directory; every blob is sha256-checked against the manifest before use, mismatch
 warns on stderr and falls through) -> remote (downloaded bytes are checked too: `IntegrityError` on mismatch). The repo map
 supplies bytes only; the manifest must still be resolvable locally or remotely. Bytes that arrive from a repo or the remote are
