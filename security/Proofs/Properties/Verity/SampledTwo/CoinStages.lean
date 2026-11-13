@@ -89,6 +89,81 @@ theorem devBits_nil_of_used (ℓ₁ ℓ₂ : String) (i : ℕ) :
       simp [widthOf] at h
     · rw [if_neg hloc]
 
+/-! ## Every play's fresh coins carry their 512 bits -/
+
+/-- **Every leaf of `g` satisfies `P`**, whatever the prover sends and the coins (`FlockSoundness.Game.Leaves`'s
+shape, which this module doesn't import). -/
+def Leaves {β : Type} (P : β → Prop) : Game β → Prop
+  | .ret a => P a
+  | .send _ k => ∀ m, Leaves P (k m)
+  | @Game.coin _ _ _ _ k => ∀ c, Leaves P (k c)
+
+theorem Leaves.reach {β : Type} {P : β → Prop} :
+    ∀ (g : Game β) (s : Strategy g) {o : β}, Leaves P g → PlayReaches g s o → P o
+  | .ret _, _, _, h, ho => by
+    subst ho
+    exact h
+  | .send _ k, s, _, h, ho => Leaves.reach (k s.1) s.2 (h s.1) ho
+  | @Game.coin _ _ _ _ k, s, _, h, ho => by
+    obtain ⟨c, hc⟩ := ho
+    exact Leaves.reach (k c) (s c) (h c) hc
+
+theorem FreshWide.cons {rl : Verity.Release} {log : List Verity.Release}
+    (hr : ∀ l, rl.frame = .fresh l → rl.coins.length = 512) (h : FreshWide log) : FreshWide (rl :: log) := by
+  intro r hr' l hl
+  rcases List.mem_cons.1 hr' with rfl | hm
+  · exact hr l hl
+  · exact h r hm l hl
+
+theorem leaves_optGame {β γ : Type} {P : β → Prop} {n : Game β} {y : γ → Game β} (hn : Leaves P n)
+    (hy : ∀ x, Leaves P (y x)) : ∀ o, Leaves P (optGame o n y)
+  | none => hn
+  | some x => hy x
+
+/-- **The device's releases release each fresh coin's 512 bits**: where `f` at every such log has `P` at every leaf,
+so do the releases then `f`. -/
+theorem leaves_relK {β : Type} (P : β → Prop) :
+    ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Verity.Release → Game β),
+      (∀ log, FreshWide log → Leaves P (f log)) → Leaves P (relK k fs ts f)
+  | 0, _, _, f, hf => hf [] (fun _ h => by cases h)
+  | k + 1, fs, ts, f, hf => by
+    have h0 : Leaves P (f []) := hf [] (fun _ h => by cases h)
+    intro m
+    rcases m with _ | ⟨fr, b⟩
+    · exact h0
+    · cases fr with
+      | fresh l =>
+        refine leaves_optGame h0 (fun fs' => ?_) _
+        intro x
+        exact leaves_relK P k fs' ts _ fun log hl =>
+          hf _ (FreshWide.cons (fun _ _ => List.length_ofFn) hl)
+      | hello spec =>
+        show Leaves P (if _ then _ else _)
+        split
+        · intro t
+          exact leaves_relK P k fs _ _ fun log hl => hf _ (FreshWide.cons (fun _ h => by cases h) hl)
+        · exact h0
+      | opening i sn n =>
+        show Leaves P (if _ then _ else _)
+        split
+        · refine leaves_optGame h0 (fun T => ?_) _
+          refine leaves_optGame h0 (fun p => ?_) _
+          intro d
+          exact leaves_relK P k fs _ _ fun log hl => hf _ (FreshWide.cons (fun _ h => by cases h) hl)
+        · exact h0
+
+/-- **Every play of the period's game releases each fresh coin's 512 bits.** -/
+theorem freshWide_play {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α) (θ : ByteArray)
+    (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c)) {o : Verity.Exchange}
+    (h : PlayReaches (V.game θ F c) σ o) : FreshWide o.log := by
+  have hl : Leaves (fun o : Verity.Exchange => FreshWide o.log) (V.game θ F c) := by
+    rw [game_eq]
+    intro a
+    refine leaves_relK _ _ _ _ _ fun log hl => ?_
+    intro _ _ _
+    exact hl
+  exact Leaves.reach _ σ hl h
+
 /-! ## The bits collected for each stage -/
 
 /-- **The first stage's bits are its family's released coins.** -/
