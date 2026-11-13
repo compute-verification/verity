@@ -10,7 +10,6 @@ the gpu test's are 512 and 4608."""
 from __future__ import annotations
 
 import json
-import os
 import types
 
 import lane_refs as LR
@@ -18,7 +17,9 @@ import numpy as np
 import partials as PT
 import pytest
 import torch
+from verity_config.settings import of
 
+SETTINGS = of(__file__)
 RC = PT.RC
 COM = types.SimpleNamespace(root=bytes(range(7, 71)), epoch=3)
 COIN, ROOT = bytes(range(100, 164)), bytes(range(30, 94))
@@ -137,10 +138,10 @@ def test_a_saved_capture_is_checked_after_serving(tmp_path):
     _served_ok(json.loads((tmp_path / "doc.json").read_text()))
 
 
-@pytest.mark.skipif(not (torch.cuda.is_available() and os.environ.get("PARTIALS_LIB")),
+@pytest.mark.skipif(not (torch.cuda.is_available() and SETTINGS.PARTIALS_LIB),
                     reason="the gpu backend needs CUDA and PARTIALS_LIB (an h1u.cu build with kh_lanes)")
 def test_gpu_rows_are_serve_regs_lane_rows():
-    kern = PT.Kernel(os.environ["PARTIALS_LIB"])
+    kern = PT.Kernel(SETTINGS.PARTIALS_LIB)
     nk = [(64, 512), (32, 4608)]  # m = 2, 3: both of kh_lanes' instantiations
     win = _window(nk, STEPS, dev="cuda", u_step=1 << 40)
     leaves = [PT.Leaf(s, w, rb * (n // 32) + (s + w) % (n // 32)) for s in STEPS for w, (n, _) in enumerate(nk)

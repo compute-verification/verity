@@ -1,6 +1,6 @@
 """Every environment variable PoUW's benchmarks read, declared once (`verity_config.settings`): the Pearl-C kernels'
-(``pearl_c_sm120``, ``pearl_c_sm90``, ``pearl_c4``), their vLLM arm (``pearl_c_vllm``), the GPU harness (``harness``) and
-served H1 (``served_h1``).  Code reads them through ``of(__file__)``::
+(``pearl_c_sm120``, ``pearl_c_sm90``, ``pearl_c4``), their vLLM arm (``pearl_c_vllm``), the GPU harness (``harness``),
+served H1 (``served_h1``) and the served path's opt-in tests.  Code reads them through ``of(__file__)``::
 
     from verity_config.settings import of
     S = of(__file__)
@@ -134,5 +134,15 @@ REGISTRY = Registry(
     S("POUW_CHALLENGER_GATE", str, None, WHERE, "infra's gate, USER@HOST"),
     S("POUW_CHALLENGER_PEER", str, None, WHERE, "the node the window's client runs on, as the gate names it (its draw session)"),
     S("POUW_CHALLENGER_SSH_KEY", str, None, WHERE, "the lane's own gate key, for the window's draw session"),
+    # ---------------------------------------------------------------- which of the served path's tests run (tests/)
+    S("VERITY_POUW_H1_PIN", present, False, WHERE, "set, test_h1_pin.py builds the H1 unit's circuit at K = 64 and holds it "
+                                                   "to its pin (about 3.5 minutes, 9.5 GB): which tests run"),
+    S("PARTIALS_LIB", str, None, WHERE, "an h1u.cu build with kh_lanes, which the partials' GPU tests load (test_partials.py, "
+                                        "test_lane_refs.py); unset, they skip"),
+    S("VERITY_POUW_H1U_SO", str, None, WHERE, "an h1u.cu -hbc build (benchmarks/hash/dither/sbench.sh's h1u_kc.so), which "
+                                              "test_served_h1_producer.py's GPU tests load; unset, they skip"),
+    S("VERITY_POUW_NOISE_CUBIN", str, None, WHERE, "noise.cu built for the device (`receipts.Cubin`), for "
+                                                   "test_served_h1_producer.py's GPU tests of its J10-R streams; unset, they "
+                                                   "skip or take hashlib's"),
     standalone=STANDALONE,
 )
