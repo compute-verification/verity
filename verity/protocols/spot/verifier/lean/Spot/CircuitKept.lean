@@ -161,7 +161,8 @@ def portsOf (k : V Kept) (pub : V Public) : Except String Unit :=
 theorem portsOf_kept (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (zk : Bool) (count : Nat)
     (own : Circuit → V Unit) :
     PortRoots.checkOf parsed tags publicFile =
-      portsOf (parsed.map (keptOf tags zk count own)) (loadOf (parsed.map (keptOf tags zk count own)) tags publicFile) := by
+      portsOf (parsed.map (keptOf tags zk count own))
+        (loadOf (parsed.map (keptOf tags zk count own)) tags publicFile) := by
   unfold PortRoots.checkOf PortRoots.checkWith portsOf
   cases parsed with
   | error e => rfl

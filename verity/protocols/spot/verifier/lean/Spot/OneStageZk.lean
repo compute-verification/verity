@@ -1243,6 +1243,37 @@ def fileOf (tags0 : Flock.Tags) (tables : List (String × ByteArray)) (bs : Core
       kept := (Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB tables).map
         (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk) }
 
+/-- What `fileOf` keeps under a digest whose blob is `circuitB`. -/
+theorem fileOf_ok {tags0 : Flock.Tags} {tables : List (String × ByteArray)} {bs : Core.Blobs} {d : String}
+    {circuitB : ByteArray} (hc : bs.get d "circuit" = .ok circuitB) :
+    fileOf tags0 tables bs d =
+      { circuit := .ok circuitB, lookups := lookupsOf circuitB, tags := tagsAt tags0 circuitB
+        kept := (Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB tables).map
+          (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk) } := by
+  unfold fileOf
+  rw [hc]
+
+/-- What `fileOf` keeps under a digest no blob has: the refusal. -/
+theorem fileOf_error {tags0 : Flock.Tags} {tables : List (String × ByteArray)} {bs : Core.Blobs} {d e : String}
+    (hc : bs.get d "circuit" = .error e) :
+    fileOf tags0 tables bs d = { circuit := .error e, lookups := .error e, tags := tags0, kept := .error e } := by
+  unfold fileOf
+  rw [hc]
+
+/-- A bind on a value returned is its continuation at the value. -/
+theorem ok_bind {α β : Type} (a : α) (f : α → V β) : (Except.ok a : V α) >>= f = f a :=
+  rfl
+
+/-- A bind on a refusal is the refusal. -/
+theorem error_bind {α β : Type} (e : String) (f : α → V β) : (Except.error e : V α) >>= f = Except.error e :=
+  rfl
+
+/-- `tablesHeld` is its reads of the circuit file, then `tablesMatch` at the blobs' lookup tables. -/
+theorem tablesHeld_match (p : Own) (bs : Core.Blobs) :
+    tablesHeld p bs =
+      bs.get p.circuit "circuit" >>= fun circuitB => lookupsOf circuitB >>= tablesMatch (tablesOf bs) :=
+  rfl
+
 /-- `StepAt.ofOwn` on what is kept of the circuit file: the blobs' lookup tables `tables`, the tags its sessions run
 under `tags`, and what its checks read of the parse `k`. Every check that read the parse reads `k`, and the three
 that load the public file read one load of it (`Spot.CircuitKept.loadOf`). -/
@@ -1313,9 +1344,16 @@ theorem statementOf_on {tags0 : Flock.Tags} (ht : Flock.Tags.find? STATEMENT = s
     (population : ByteArray → V Unit) (bs : Core.Blobs) :
     statementOf p population bs =
       statementOn tags0 (tablesOf bs) (fileOf tags0 (tablesOf bs) bs p.circuit) p population bs := by
-  unfold statementOf statementOn fileOf tablesHeld
+  unfold statementOf statementOn
+  rw [tablesHeld_match]
   simp only [StepAt.ofOwn_kept, ht]
-  cases bs.get p.circuit "circuit" <;> rfl
+  cases hc : bs.get p.circuit "circuit" with
+  | error e =>
+    rw [fileOf_error hc]
+    simp only [error_bind] <;> rfl
+  | ok circuitB =>
+    rw [fileOf_ok hc]
+    simp only [ok_bind] <;> rfl
 
 /-- `Member.files` on what the files' pass keeps of the member's circuit file (`statementOn` in place of
 `statementOf`). -/
