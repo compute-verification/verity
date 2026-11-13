@@ -1085,6 +1085,9 @@ def test_the_front_opens_a_relay_session_sends_no_group_and_returns_once_its_rel
     assert CP.main(_front(tmp_path, "--client-port", "8012", "--windows", "1119", serve="serve-long")) == 0
     assert (CP.SS.A.warden_height(1119), CP.SS.A.session_minutes(1119, 13) + CP.SS.MARGIN) == (13, 66)
     assert _asked(tmp_path)[4].endswith("--windows 1119 --minutes 66 --height 13 --scan-class w63k4")
+    assert CP.main(_front(tmp_path, "--client-port", "8012", "--windows", "1119", "--bucket-ms", "200",
+                          serve="serve-longest")) == 0
+    assert _asked(tmp_path)[6].endswith("--windows 1119 --minutes 126 --height 13 --bucket-ms 200 --scan-class w63k4")
 
 
 @pytest.mark.parametrize("statuses, rc, naps, why", [

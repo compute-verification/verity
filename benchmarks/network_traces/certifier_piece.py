@@ -102,10 +102,13 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
 * **front --session** and **close** put the gate's relay session (`auditor.py`'s "A relay session") around the served
   run's own load, in the rehearsal front's place: the load's clients are the run's, and the front sends no group.
   - ``front --session`` asks the gate for ``relay-session``: PORT is the endpoint's, ``--client-port`` the port of
-    the peer's loopback the load's clients connect to and ``--windows`` the session's length in execution phases. By
-    default ``--height`` is the least whose key signs them (`auditor.warden_height`) and ``--minutes``
-    `auditor.session_minutes` plus `served_session.MARGIN`, at most the gate's. This tree's gate checks the request
-    first. It returns once the gate's ``status`` shows the relay listening: exit 0, with
+    the peer's loopback the load's clients connect to and ``--windows`` the session's length in execution phases.
+    ``--height`` at the piece's default, 10, which signs 204 of them, is raised to the least whose key signs the
+    session's (`auditor.warden_height`), and ``--minutes`` is by default `auditor.session_minutes` at that height
+    plus `served_session.MARGIN`, at most the gate's: for the longest session, 1119 execution phases, height 13,
+    with ``--minutes`` 66 at the scan's 100 ms tick (59 min 40 s of them) and 126 at 200 ms (119 min 21 s). The
+    gate refuses any other ``--height`` too low for the session. This tree's gate checks the request first. It
+    returns once the gate's ``status`` shows the relay listening: exit 0, with
     SERVE_DIR/`PRIVATE`/RUN/`RELAY` (0600) holding ``client``, 127.0.0.1:CLIENT_PORT on the peer, and
     ``deployment``, the relay's (its schedule, ``origin_unix`` and ``windows``), and one line on stdout naming the
     run, the client's address and that file. Exit 2 when the gate refused the request or a session is open already,
