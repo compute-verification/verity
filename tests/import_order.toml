@@ -326,12 +326,19 @@ reaches = [
     "verity/channel.py",
 ]
 loaded_by = [
+    "verity/hardware/lean.py",
+    "verity/hardware/tests/test_cards.py",
+    "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
+    "verity/hardware/tests/test_policy.py",
 ]
 
 [[place]]
 paths = [
     "verity/hardware",
+]
+loads = [
+    "verity/device.py",
 ]
 
 [[place]]

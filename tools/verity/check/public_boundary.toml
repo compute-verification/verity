@@ -92,9 +92,10 @@ shared = [
     "verity/protocols/reporting.py",
     "tools/config",
     # the hardware cards, the data sheets' numbers, which the integration's served device reads, and the node files, which
-    # say which cards a kind of node carries and what its host holds (the Lean tables' test reads Accounting's B200 sheet
-    # and the node files' test reads the Site, so each stays private)
-    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards.py,nodes.py,tests/test_cards.py}",
+    # say which cards a kind of node carries and what its host holds; their readers are the Site's file's (the Lean
+    # tables' test reads Accounting's B200 sheet, so it stays private; the node files' test stays private until a
+    # boundary decision exports it)
+    "verity/hardware/{__init__.py,pyproject.toml,README.md,tests/test_cards.py}",
     "hardware/{cards,nodes}",
     # the vLLM endpoint's load generator, which the served run's requests come from
     "demos/vllm/serve_load.py",
