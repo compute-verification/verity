@@ -19,10 +19,10 @@ from typing import Any
 
 import numpy as np
 import torch
-
+from verity.protocols.pouw.prover.circuit import h1zy as Z
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import leaf_lanes as LL
-from verity.protocols.pouw.prover.circuit import h1zy as Z
+
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import receipts as RC
 from verity_vllm.protocols.pouw.h1 import registered as NR
@@ -95,7 +95,7 @@ class Window:
         """Call c's A over the Program's M slots (its served codes as the prover kept them, then zero rows) and its B."""
         row = self.calls[c]
         k, m = int(row["k"]), int(row["served"])
-        a = np.zeros((int(self.layout["m"]), k), np.int8)
+        a: np.ndarray = np.zeros((int(self.layout["m"]), k), np.int8)
         if m:
             with np.load(self.prover / PV.CALLS / f"{c}.npz") as kept:
                 a[:m] = kept["a"].reshape(m, k)
@@ -140,7 +140,7 @@ def test_serving_computes_on_the_served_weights_in_place_and_binds_the_run_once_
     assert made.weight_of(call, None) is layers[1].weight
     assert made.bind(run).run is run
     bare = RC.Receipts.serving(served, run, [layers[0], SimpleNamespace()])
-    handed = np.ones((32, 64), np.int8)
+    handed: np.ndarray = np.ones((32, 64), np.int8)
     got = bare.weight_of(call, handed)
     assert got is not layers[1].weight and np.array_equal(got.numpy(), handed) and bare.weight_of(call, handed) is got
 
@@ -150,7 +150,8 @@ def test_the_producers_receipt_is_the_word_references_and_its_lane_partials_xor_
     position, a live and a dead row block alike, and the combine's ok on the live proof block's lane partials and its
     receipt is 1; one flipped receipt bit and it is 0."""
     rng = np.random.default_rng(20261101)
-    a, b, u0 = np.zeros((64, 64), np.int8), rng.integers(-127, 128, (32, 64), dtype=np.int8), 10
+    a: np.ndarray = np.zeros((64, 64), np.int8)
+    b, u0 = rng.integers(-127, 128, (32, 64), dtype=np.int8), 10
     a[:20] = rng.integers(-127, 128, (20, 64), dtype=np.int8)
     got = RC.call_receipts(RC.Call(torch.from_numpy(a), torch.from_numpy(b)), SALT, u0, RA, RB)
     assert got.shape == (2, 2 * (64 // 32 + 2))

@@ -12,7 +12,7 @@ The served sizes it reads:
 
 - PoUW: Pearl+ on Llama 3.2 1B on one H200, credited under the H100 record (`pearl-c-h100-v1-h3`, `devH100`) at the
   inert-work share 1/400: four passes of 64 calls (prefill at m = 128, three decode passes at m = 4) over the model's
-  four linears in 16 layers, 29,440 credited 64 x 64 tiles, 459 work-weighted draws, sampling δ 1/100.
+  four linears in 16 layers, 29,440 credited 64 x 64 tiles, a work-weighted sample of 459 tiles, sampling δ 1/100.
 - SPOT: the GLM-5.3 workload card (`benchmarks/spot_figures/cards/workload.glm-5.3.json`): its window of one
   request (the floor), and one request of 3,320.5 computed tokens (`benchmarks/spot_figures/breakeven/reprice.py`), at
   the card's cut.
@@ -38,9 +38,9 @@ PHASES = {"week": 7 * 24, "month": 30 * 24, "year": 365 * 24}
 # 2 + 4400·n rounds and a weight of n·2^33; γ ≤ 2^51 at one table (`γ_le_51`), γ ≤ 16(√(2rC) + r)² in general.
 KAPPA_TABLE = -202.98
 GAMMA_ONE = 51.0
-TABLE_CAP = 64
+TABLES_MAX = 64
 
-# The recursion's outer proof (`security/Proofs/Flock/Claims/Recursion/KappaEpsCap.lean`): Pr[acc ∧ ¬R] ≤ κ + t·ε.
+# The recursion's outer proof (its κ + t·ε lemma in `security/Proofs/Flock/Claims/Recursion/`): Pr[acc ∧ ¬R] ≤ κ + t·ε.
 REC_KAPPA, REC_EPS = -167.7, -174.95
 
 # Pearl+ as served.
@@ -48,7 +48,7 @@ PASSES = (128, 4, 4, 4)
 LAYERS = 16
 LINEARS = {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192)}
 TILES = 29440
-DRAWS = 459
+SAMPLE = 459
 RHO = Fraction(1, 400)
 # rev1's price of one unit row at the H100 record (`devH100`, `Prices.h100`; `security/Definitions/Pouw/PearlC/DeviceRev1.lean`)
 H100 = {"r": 32, "G": 4, "add": 32, "bf16": 2, "fs": 64, "qa": 4, "c": 0}
@@ -65,7 +65,7 @@ SM120_CHECKS, SM120_BUDGET = 48000, -41.0
 # Dither's design point (`verity/protocols/pouw/verifier/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
 DITHER = {"delta_coin": 1e-6, "G": 1.15e7, "q": 13816}
 
-# SPOT's link term as the sampled audit states it (`EndToEndHiddenDrawn`'s δ_link), at k = ⌈2^24/e⌉ and M, R_w at 2^192.
+# SPOT's binding error ε_bind as its one-stage audit states it, at k = ⌈2^24/e⌉ and M, R_w at 2^192.
 LINK_K = math.ceil(2**24 / math.e)
 TOKENS_REQUEST = 3320.5
 
@@ -100,8 +100,8 @@ def delta_pearl(q: float, n: int = TILES) -> float:
     return lg(2.0**q + n) - 128
 
 
-def sampling_eps(delta: Fraction, draws: int = DRAWS) -> float:
-    return 1 - float(delta) ** (1 / draws)
+def sampling_eps(delta: Fraction, t: int = SAMPLE) -> float:
+    return 1 - float(delta) ** (1 / t)
 
 
 def operand_positions() -> int:
@@ -124,7 +124,7 @@ def bind(q: float) -> float:
 
 
 def integrity_ks(sz: dict[str, float], t: float) -> float:
-    """The integrity leg's ks t at a card size and `2^t` calls: `n·(κ + fork)` at one table plus the link term."""
+    """The integrity subprotocol's ks t at a card size and `2^t` calls: `n·(κ + fork)` at one table plus ε_bind."""
     return l2sum(sz["n"] + KAPPA_TABLE, sz["n"] + session_ks(t, 1), link(sz["W"], t))
 
 
@@ -141,34 +141,34 @@ def rows() -> list[dict[str, Any]]:
         out.append({"term": term, "guarantee": guarantee, "formula": formula, "at": at,
                     "log2": round(value, 2) if isinstance(value, float) else value, "rests_on": rests_on, "tag": tag})
 
-    s1, s64 = session_ks(T, 1), session_ks(T, TABLE_CAP)
+    s1, s64 = session_ks(T, 1), session_ks(T, TABLES_MAX)
     row("flock session KS", "Flock.Guarantees.MaskedKS (one --zk session)", "κ + √γ·2T/2^256.5",
-        f"T = 2^{T}, 1 table / {TABLE_CAP} tables", f"{s1:.2f} / {s64:.2f}", "StrictBirthday; ListWithin")
+        f"T = 2^{T}, 1 table / {TABLES_MAX} tables", f"{s1:.2f} / {s64:.2f}", "StrictBirthday; ListWithin")
 
     ks_terms = "TileServiceSound / ServiceSound (open)"
-    for kd, what in ((DRAWS, "Pearl+'s 459 draws, the served K_d"), (COMPOSE_KD, "the docstring's example K_d")):
-        row("pouw δ_ks", "Properties.Pouw.Period h1CheckedCreditPeriod, H1J10RCheckedCreditPeriod",
-            "K_d · one session's KS (each session 2^80 calls)", f"K_d = {kd} ({what}), {TABLE_CAP} tables",
+    for kd, what in ((SAMPLE, "Pearl+'s sample of 459 tiles, the served K_d"), (COMPOSE_KD, "the docstring's example K_d")):
+        row("pouw δ_ks", "PoUW's monitoring-period credit, H1 checked (and J10-R)",
+            "K_d · one session's KS (each session 2^80 calls)", f"K_d = {kd} ({what}), {TABLES_MAX} tables",
             lg(kd) + s64, ks_terms)
     row("pouw δ_ks", "same", "κ·K_d + √γ·2T/2^256.5 (the window's 2^80 calls shared)",
-        f"K_d = {DRAWS} (served), {TABLE_CAP} tables", l2sum(KAPPA_TABLE + lg(TABLE_CAP) + lg(DRAWS), s64), ks_terms)
+        f"K_d = {SAMPLE} (served), {TABLES_MAX} tables", l2sum(KAPPA_TABLE + lg(TABLES_MAX) + lg(SAMPLE), s64), ks_terms)
 
     pos = operand_positions()
     bind_el, bind_word = bind(T), bind(T) - 2
-    row("pouw δ_bind", "Pouw.Guarantees.PeriodBindingPerProver", "|L|·√(q/2^256 + κ) at κ = 0",
+    row("pouw δ_bind", "PoUW's monitoring-period binding, per prover", "|L|·√(q/2^256 + κ) at κ = 0",
         f"κ = 0, |L| = {pos:,} operand bytes (or /4 in 32-bit words), q = 2^{T}", f"{bind_el:.2f} / {bind_word:.2f}",
         "ExpectedCR; κ = 0 assumed (κ unbounded on main)", "assumed")
 
-    ks_pouw = lg(DRAWS) + s64
+    ks_pouw = lg(SAMPLE) + s64
     for d, what in ((WINDOW_DELTA, "WINDOW_DELTA"), (SERVED_DELTA, "the served run's δ")):
         p = l2sum(lg(d), bind_el, ks_pouw)
-        row("pouw leg p", "Nci.Guarantees.RemotePeriod (p = δ_s + δ_bind + δ_ks)", "δ_s + δ_bind + δ_ks a window",
-            f"δ_s = {what}, δ_bind at κ = 0 at bytes, δ_ks at K_d = {DRAWS}", p,
+        row("pouw p", "the remote product's monitoring-period guarantee (p = δ_s + δ_bind + δ_ks)", "δ_s + δ_bind + δ_ks a window",
+            f"δ_s = {what}, δ_bind at κ = 0 at bytes, δ_ks at K_d = {SAMPLE}", p,
             "PouwSound's bridge, not stated; κ = 0 assumed", "assumed")
 
     nmax = SM120_BUDGET - lg(SM120_CHECKS) - s64
     row("sm120 n_π·δ_ZK", "Accounting.Guarantees.TS.Sm120SheetHeadline and siblings (ProofSoundAt)",
-        "n_π · one session's KS, against 2^-41/checks", f"n_π = 1, {TABLE_CAP} tables; budget 2^{SM120_BUDGET - lg(SM120_CHECKS):.2f}",
+        "n_π · one session's KS, against 2^-41/checks", f"n_π = 1, {TABLES_MAX} tables; budget 2^{SM120_BUDGET - lg(SM120_CHECKS):.2f}",
         s64, f"holds for n_π up to 2^{nmax:.1f}; Flock's bound omits the rows link ProofSoundAt reads")
 
     gaps = {name: pearl_gap(n, k) for name, (n, k) in LINEARS.items()}
@@ -183,7 +183,7 @@ def rows() -> list[dict[str, Any]]:
             delta_pearl(q), "TTOutTilePearlCH100Rev1")
     for d in (SERVED_DELTA, WINDOW_DELTA):
         e = (1 + float(eps_a)) / (1 - sampling_eps(d)) - 1
-        row("pearl+ ε", f"{served}, with the sample", "(1 + ε_a)/(1 − ε_s) − 1, ε_s = 1 − δ^(1/t)", f"t = {DRAWS}, δ_s = {d}",
+        row("pearl+ ε", f"{served}, with the sample", "(1 + ε_a)/(1 − ε_s) − 1, ε_s = 1 − δ^(1/t)", f"t = {SAMPLE}, δ_s = {d}",
             f"{e:.3%}", "TTOutTilePearlCH100Rev1 (ε_a)", "assumed")
 
     for t in (T, 64):
@@ -198,20 +198,20 @@ def rows() -> list[dict[str, Any]]:
     sizes = card_sizes()
     for name, sz in sizes.items():
         ks = l2sum(sz["n"] + KAPPA_TABLE, sz["n"] + s1)
-        ks64 = l2sum(sz["n"] + KAPPA_TABLE + lg(TABLE_CAP), sz["n"] + s64)
+        ks64 = l2sum(sz["n"] + KAPPA_TABLE + lg(TABLES_MAX), sz["n"] + s64)
         lk = link(sz["W"], T)
         kst = l2sum(ks, lk)
-        row("integrity ks_t", "Nci.Guarantees.RemotePeriod (ks t = ε_ks + δ_link, EndToEndHiddenDrawn)",
+        row("integrity ks_t", "the remote product's monitoring-period guarantee (ks t = ε_ks + ε_bind, SPOT's one-stage audit)",
             "n·(κ + fork) + W·(2T(1+k)/2^256 + …)",
-            f"card {name}: n = 2^{sz['n']:.2f} units, W = 2^{sz['W']:.2f} bits, 1 / {TABLE_CAP} tables",
+            f"card {name}: n = 2^{sz['n']:.2f} units, W = 2^{sz['W']:.2f} bits, 1 / {TABLES_MAX} tables",
             f"{kst:.2f} / {l2sum(ks64, lk):.2f}", "StrictBirthday; ecr/sha-512 at the link finders")
         if name == "floor":
             for period, n in PHASES.items():
-                row("integrity Σ ks_t", "Nci.Guarantees.RemotePeriod", "Σ_t ks t over hourly windows",
+                row("integrity Σ ks_t", "the remote product's monitoring-period guarantee", "Σ_t ks t over hourly windows",
                     f"card floor, a {period} ({n} windows)", kst + lg(n), "")
 
-    row("joint, statistical", "Accounting.Guarantees.JointPeriodLive at the remote product (integrity + PoUW)",
-        "Σ_a δ_a a block", "δ = 1/100 a leg", "0.02 a block", "by design")
+    row("joint, statistical", "the joint monitoring-period guarantee at the remote product (integrity + PoUW)",
+        "Σ_a δ_a a block", "δ = 1/100 a subprotocol", "0.02 a block", "by design")
     floor = sizes["floor"]
     for q in (64, T):
         terms = (delta_pearl(q), bind(q), integrity_ks(floor, q))
