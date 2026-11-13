@@ -225,9 +225,10 @@ registered advice closed them (`window_advice.follows`), never the later one's o
 N2's K, charge the carry once. A Commit period that carries a request in from one the run doesn't hold, or that leaves a
 request with outputs still to keep and no next Commit period, is refused.
 
-## The leak bound
+## K, the count the period check charges
 
-`leak_bounds.py` is the one calculator of K, the bits a covert sender's secrets can number over a monitoring period.
+`leak_bounds.py` is the one calculator of K, the count `NetworkCheck.Period`'s rows form charges over a monitoring
+period. K bounds a count expression, which no statement yet ties to the bits a covert sender's secrets can number.
 `per_link` gives K for one link: one network certifier on one uplink, certifying a request rate of one scan class (an
 `ingress_scan.Class`, or a window class's `scan`). `datacenter` sums K over a datacenter's links, and `world` over the
 world's. Each comes in two forms, beside its share of one copy of the weights and its ε. The terms are those of
@@ -257,10 +258,14 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   They are charged whatever the requests served, since the sender picks how many connections it opens. The
   endpoint's slot count isn't a term of the network certifier's schedule: it enters the compute audit's terms, which go
   into JointPeriodLive.
-- The free inputs (`terms.free_per_block`): as registered, the sampling block's slot entries, NR·T / EVERY entries of NE
-  bits (`ingress_scan.entry_bits`) a sampling block; or, if `prog` is an input only at its anchored entries, an entry's
-  33 + KO·IDB bits for each of those slot entries, whatever the requests served, since any of them may be anchored by
-  a request the sender opens.
+- The free inputs (`terms.free_per_block`), in three readings. The check's: the scan's view rows, its T egress units'
+  states of NV bits (`ingress_scan.view_bits`), which the period check charges every sampling block while it holds no
+  view tie, as it holds none (`NetworkCheck.Period`'s `Scan.terms`). As registered: the sampling block's slot entries,
+  NR·T / EVERY entries of NE bits (`ingress_scan.entry_bits`), which the check would charge once in the view rows'
+  place only with both of the scan's ties held (each ingress unit's state read the unit before's output, each egress
+  unit's view its ingress unit's), so this reading is conditional on the two ties, which no check holds. Or, if `prog`
+  is an input only at its anchored entries, an entry's 33 + KO·IDB bits for each of those slot entries, whatever the
+  requests served, since any of them may be anchored by a request the sender opens.
 - No faulty term with every proof block drawn.
 - The jitter term is charged at D_j = 2 (`leak_bounds.JITTER_BOUND`): one bit a bucket, T bits a sampling block (the
   record's `terms.jitter_per_block`). J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel). J is
@@ -288,8 +293,9 @@ that computes it and the sin of the next, both registered reads, so a state tree
 refused at that proof block's o1; the block round's registration names it as `scan/state`.
 Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
 and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
-K charges to the sampling block's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
-tied audit's inputs; K is unchanged in what it bounds, and the registered reading's free term is those slot entries.
+K charges to the term of a sampling block whose scan is sampled in part (`tiedAudits`). The egress tie moves the free
+term from the scan's `prog` to the tied audit's inputs; the registered reading's free term is those slot entries. Either
+reaches the egress rows only through the scan's view rows, which the check charges whatever the draw.
 
 The two forms:
 - The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of b = NS + NV bits, and
@@ -313,9 +319,11 @@ The scale:
   the copy it is of. The demo's served model (Llama-3.2-1B in BF16, `leak_bounds.SERVED`) is a share a caller states
   beside it.
 
-FILE has both readings of the free inputs. `prog` as registered is the record's K. `prog` only at its anchored entries
-is what the generator-form lowering would give if it registers `prog` everywhere but its anchors, and is not the
-record's number.
+FILE has each reading of the free inputs. The scan's view rows are the record's K, the period check's own charge.
+`prog` as registered is that K with both of the scan's ties, conditional on them, and `prog` only at its anchored
+entries is what the generator-form lowering would give if it registers `prog` everywhere but its anchors; neither is
+the record's number. K in any reading bounds a count expression, which no statement yet ties to the bits a sender can
+move, so none is a leak bound.
 
 K also rests on these conditions:
 - The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.

@@ -1,8 +1,10 @@
-"""leak-bounds: K, the bits a covert sender in the server can move through the network certifier's accepted transcripts
+"""leak-bounds: K, the count `NetworkCheck.Period`'s rows form charges the network certifier's accepted transcripts
 over a monitoring period, for one link (`per_link`), summed over a datacenter's links (`datacenter`; the census's
 reference datacenter has `datacenter_links`) and over the world's (`world`, the adversary resource model's), each beside
 its share of one copy of the weights a deployment protects (`WEIGHTS`, the adversary resource model's, `protected`;
-the demo's served model is `SERVED`) and ε, the union of its scans' δ. It is the one calculator of K:
+the demo's served model is `SERVED`) and ε, the union of its scans' δ. K bounds a count expression, the product the
+rows form's terms are the exponents of; no statement yet ties that count to the bits a covert sender in the server can
+move, so K in any reading is no leak bound. It is the one calculator of K:
 `chain_record.py leak` reads it on a warden run, and the slowdown ρ is derived from both bounds.
 
 A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
@@ -15,11 +17,16 @@ of the scan's statement:
   can carry, a connection's cap its lane's egress_cells (`Schedule.caps`, the only caps the rows form takes;
   `capsTerm`, charged twice as `#Ss ≤ ∏_c (cap_c + 1)`). They are charged whatever the requests served: the sender
   picks how many connections it opens;
-* the sampling block's free inputs (`READINGS`). As registered, the scan's ``prog`` is its tied compute audit's
-  outputs, NR·T / EVERY slot entries of NE bits (`ingress_scan.entry_bits`), which the rows form charges a sampling
-  block with every proof block drawn once, as its slot entries (`Scan.terms`'s `entries`). If ``prog`` is an input
-  only at its anchored entries, they are an entry's 33 + KO·IDB bits (`ingress_scan.entry_layout`) for each of those
-  slot entries, any of which a request the sender opens may anchor, whatever the requests served;
+* the sampling block's free inputs (`READINGS`). The check's reading is the scan's view rows, its T egress units'
+  states of NV bits (`ingress_scan.view_bits`), which the rows form charges every sampling block while the period's
+  check holds no view tie, as it holds none (`Scan.terms`'s `view`): input gates of the scan that nothing holds to what
+  its ingress units computed. As registered, the scan's ``prog`` is its tied compute audit's outputs, NR·T / EVERY slot
+  entries of NE bits (`ingress_scan.entry_bits`), which the rows form would charge a sampling block with every proof
+  block drawn once, in the view rows' place (`Scan.terms`'s `entries`), only with both of the scan's ties held, each
+  ingress unit's state read the unit before's output and each egress unit's view its ingress unit's: a reading
+  conditional on the two ties, which no check holds. If ``prog`` is an input only at its anchored entries, they are an
+  entry's 33 + KO·IDB bits (`ingress_scan.entry_layout`) for each of those slot entries, any of which a request the
+  sender opens may anchor, whatever the requests served;
 * no faulty proof block, every one being drawn;
 * the jitter term at D_j = `JITTER_BOUND`, ⌈log2 D_j^T⌉ = T bits a sampling block, one a bucket (`JITTER`).
 
@@ -73,10 +80,16 @@ class Weights(NamedTuple):
 #: the demo's served model, Llama-3.2-1B's parameters (128,256 × 2,048 tied embedding, 16 layers of 60,821,504, the
 #: final norm) in BF16. The served checkpoint is int8, so its share is of this BF16 copy, as its label says.
 SERVED = Weights(1_235_814_400 * 16, "the demo's served model (Llama-3.2-1B) in BF16")
-#: each reading of the sampling block's free inputs (the scan's `prog`, its slot entries), as a report labels it
-READINGS = {"registered": "`prog` as registered, the sampling block's slot entries (the record's K)",
+#: each reading of the sampling block's free inputs, as a report labels it: the scan's view rows, the period check's
+#: own charge, first; then its `prog`, the slot entries, in two readings, each conditional
+READINGS = {"view": "the scan's view rows, each egress unit's state, as the period's check charges a sampling block "
+                    "while it holds no view tie (the record's K)",
+            "registered": "`prog` as registered, the sampling block's slot entries once (conditional on both of the "
+                          "scan's ties, which no check holds)",
             "anchors": "`prog` only at its anchored entries, every slot entry anchored (conditional on the "
                        "generator-form lowering)"}
+#: the period check's reading, the one a record's K is in, and the one it would be in with both of the scan's ties
+CHECKED, WITH_TIES = "view", "registered"
 STATEMENTS = {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted",
               "pooled": "PooledLeakAccepted, conditional: hesc and hleak await SampledKSLive and P2",
               "datacenter": "the sum over links of each link's statement, each at δ / links: our composition, which no "
@@ -116,6 +129,11 @@ class LinkLoad:
         return self.scan.NR * (self.T // self.scan.EVERY)
 
     @property
+    def view(self) -> int:
+        """A sampling block's view rows' bits: its T egress units' states (`NetworkCheck.Period`'s `Scan.view`)."""
+        return self.T * IS.view_bits(self.scan)
+
+    @property
     def b(self) -> int:
         """A proof block's committed bits, an incorrect proof block's charge in the pooled form."""
         return IS.state_bits(self.scan) + IS.view_bits(self.scan)
@@ -147,10 +165,12 @@ class LinkLoad:
         return self.T * self.tau
 
     def free(self, reading: str) -> int:
-        """The free inputs' bits a sampling block in ``reading`` (`READINGS`): its `entries` slot entries, each of
-        `ingress_scan.entry_bits` as registered and of its unpadded `entry_layout` at its anchors."""
+        """The free inputs' bits a sampling block in ``reading`` (`READINGS`): its `view` rows, or its `entries` slot
+        entries, each of `ingress_scan.entry_bits` as registered and of its unpadded `entry_layout` at its anchors."""
         if reading not in READINGS:
             raise ValueError(f"a reading is one of {', '.join(READINGS)}, not {reading!r}")
+        if reading == "view":
+            return self.view
         if reading == "registered":
             return self.entries * IS.entry_bits(self.scan)
         return self.entries * sum(w for _, w in IS.entry_layout(self.scan))

@@ -3,8 +3,11 @@ run's files, and `datacenter` is links × `per_link` for identical links, each l
 
 K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
 `eps`) rather than from the calculator:
+- the check's free inputs are the scan's view rows, T egress units' states of `ingress_scan.view_bits`, charged every
+  sampling block while the check holds no view tie (`Scan.terms`'s `view`), and the first reading a report gives;
 - the registered free inputs are the sampling block's slot entries, NR·T / EVERY entries of `ingress_scan.entry_bits`,
-  and at the anchors those entries' unpadded `entry_layout`, whatever the requests served;
+  the reading with both of the scan's ties and conditional on them, and at the anchors those entries' unpadded
+  `entry_layout`, whatever the requests served;
 - the caps of every connection a sampling block's schedule can carry, lanes·T of them (`Schedule.caps`), are charged
   twice, as schedules and as fail cells, each ⌈log2(cap + 1)⌉, whatever the requests served;
 - a sampling block's jitter term is ⌈log2 D_j^T⌉ over its scan's T steps (`Scan.terms`), at D_j = 2;
@@ -113,6 +116,28 @@ def test_datacenter_is_links_times_per_link():
     assert mixed == LB.datacenter({one: 3, ko64: 1}, "week", "anchors")
     assert mixed.bits == pytest.approx(3 * LB.per_link(KO1, RATE, "week", "anchors", T=32).bits
                                        + LB.per_link(W63, 1, "week", "anchors", T=32).bits)
+
+
+def test_the_checks_free_inputs_are_the_scans_view_rows_and_the_slot_entries_are_labelled_conditional_on_both_ties():
+    """The first reading is the period check's own: every sampling block is charged its scan's T view rows of NV bits
+    (`Scan.view`, T · paramBits of the egress template's one parameter), whatever the requests served. The slot
+    entries once are a reading beside it, labelled as conditional on both of the scan's ties, never as the record's."""
+    assert list(LB.READINGS) == ["view", "registered", "anchors"]
+    assert (LB.CHECKED, LB.WITH_TIES) == ("view", "registered")
+    assert "the record's K" in LB.READINGS[LB.CHECKED] and "no view tie" in LB.READINGS[LB.CHECKED]
+    assert "conditional on both of the scan's ties, which no check holds" in LB.READINGS[LB.WITH_TIES]
+    assert "the record's K" not in LB.READINGS[LB.WITH_TIES]
+    for cls, nv in ((W63, 4_832), (replace(W63, KO=4), 800)):
+        link = LB.link(cls, RATE, T=32)
+        assert IS.view_bits(cls) == nv and link.view == link.free("view") == 32 * nv
+        assert link.free("view") > link.free("registered")
+        block = link.bits(link.block_s, "view")
+        assert block == link.cap + 32 * nv + link.jitter
+        assert block - link.bits(link.block_s, "registered") == 32 * nv - link.free("registered")
+    k4 = LB.link(replace(W63, KO=4), RATE, T=32, egress_cells=5)
+    assert (k4.cap, k4.free("view"), k4.jitter, k4.bits(k4.block_s, "view")) == (768, 25_600, 32, 26_400)
+    assert k4.bits(k4.block_s, "registered") == 1_696
+    assert LB.link(W63, RATE, T=64).free("view") == 2 * 32 * 4_832
 
 
 def test_the_registered_free_inputs_are_the_tied_audits_slot_entries():

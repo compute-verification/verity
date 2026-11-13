@@ -611,14 +611,15 @@ def run_class(params):
 
 
 def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
-    """K, the bits the network certifier's accepted transcripts can carry about the secret, per monitoring period on
-    the warden run ``run`` (a fetched gate run: its ``end.json`` and ``deployment.json``), for the scan's class
-    (`run_class`) and its draw of every proof block, by `leak_bounds` (`SCOPES`): one link certifying the run's own
-    request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference datacenter has
-    machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
-    (`leak_bounds.world`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
-    pooled one (`PooledLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
-    (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
+    """K, the count the period check's rows form charges the network certifier's accepted transcripts (a bound on a
+    count expression, no leak bound: `leak_bounds`), per monitoring period on the warden run ``run`` (a fetched gate
+    run: its ``end.json`` and ``deployment.json``), for the scan's class (`run_class`) and its draw of every proof
+    block, by `leak_bounds` (`SCOPES`): one link certifying the run's own request rate (`leak_bounds.per_link`), and as
+    many identical links summed as the census's reference datacenter has machines (`leak_bounds.datacenter_links`) and
+    as the adversary resource model's compute fills (`leak_bounds.world`). Each count is in both forms, the per-period
+    form (`PeriodLeakAccepted`'s count) and the pooled one (`PooledLeakAccepted`'s at q = 1), in each reading of the
+    sampling block's free inputs (`leak_bounds.READINGS`: the period check's, the scan's view rows, first), and beside
+    ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     from verity.core.protocols.certifier import ingress_scan as IS, warden as W
     weights = LB.WEIGHTS if weights is None else weights
@@ -698,9 +699,14 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "eps, m·δ), each scan at the scan's δ",
                 "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
                 "sum",
-                "the scan's prog is a compute audit's output (NetworkCheck.Period's progTied), so its slot entries' "
-                "bits are the tied audit's free inputs, which Lean's rows-form K charges to the sampling block's term "
-                "(tiedAudits), as this K does",
+                "the scan's view rows, each egress unit's state, are input gates nothing holds to what its ingress "
+                "units computed while NetworkCheck.Period holds no view tie, so Lean's rows-form K charges every bit "
+                "of them to the sampling block's term (Scan.terms's view), as this K does in its view reading; the "
+                "scan's prog is a compute audit's output (progTied), and its slot entries' bits, the registered "
+                "reading's, are charged once in the view rows' place only with both of the scan's ties held, which "
+                "no check holds",
+                "K in any reading bounds a count expression: no statement yet ties that count to the bits a sender "
+                "can move, so none is a leak bound",
                 f"a share is of one copy of the weights, {weights.label}, whatever the links"]}
 
 
