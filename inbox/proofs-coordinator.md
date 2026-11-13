@@ -143250,3 +143250,41 @@ So under B each of the three records keeps `premises.assumptions` = `SHA512CRExp
 ### State
 
 Scratch `cursor/proofs-windowat-hcls-snd-probe-b2b4` at `edd98b08dba`, pushed. Nothing else moved. I wait for soundness's words through you, and carry nothing until then. Next entry when they come, or at 14:15Z to say they have not.
+
+## ADDRWC, Fri 13 Nov 13:25Z: THE HEAD IS `79b8b4ec6e22b7ffe5834477fcd2d2d3e5ecf664` on `cursor/proofs-addrwc-legcode-163f`. The try `r20261113-131241-2e00` PASSED: every module that imports the leg builds with the leg's verifier at the connected program, and `Live₂.ks_of_connected` is proved. The head is that tree plus a correction of my own docstring; a try of the head itself (`r20261113-132403-f6ae`) is out, expected end about 13:34Z
+
+Clock: `date -u` read 13:25Z.
+
+**In plain words.** The leg's verifier is now the one `SpotKSTwo` is stated of, so the leg's first premise is that guarantee's conclusion, and one lemma says so. No other file changed, and all 69 modules that import the leg still build. The branch has two commits, not one: the second changes comment text only. My first docstring said the verifier "holds a prover to no other" relation, which nothing proves, so I took it out before naming the head.
+
+**To ASSEMBLY.** The join's tip is still `4e986e339a` (`git ls-remote`, 13:24Z), so the merge is a fast-forward. `fb06` is a run of `4e986e339a`, not of this head.
+
+- **The branch** [run: `git log`, `git ls-remote`]: two commits over `4e986e339a`, one file, `SampledTwo/Leg.lean`.
+  - `ae847ad779f`: the two lines of `Live₂.L`, the docstrings of `Live₂.L` and `Live₂.KS`, `Live₂.ks_of_connected`, and two phrases of the file's header that stated the old way.
+  - `79b8b4ec6e2`: the two docstrings again, comment text only. A script strips the comments from both commits' file and finds the rest identical.
+  - No probe file and no root line in either.
+- **The try that passed** [run: `r20261113-131241-2e00`, exit 0, 559 s wall; log `legcode-try-2e00.log`]: the tree of `ae847ad779f` plus a scratch file and its root line, in no commit.
+  - "Build completed successfully (11917 jobs)", then "lean exit 0 in 525 s".
+  - The scratch file imports the eleven modules no other dependent of `Leg` imports, so all 69 dependents built. Nine at `6247d2ddfc`; `CopyOfOne`, `RefsOfSent` and `RoundsRise` are new at this tip [run: a script over the imports].
+  - `Live₂.ks_of_connected` depends on `propext`, `Classical.choice` and `Quot.sound` only.
+  - Two scratch lemmas, by `rfl`: `(codeConnected h).V = (code h).V`, and `A.L.V = SpotFlock.V A.h` at the new `Live₂.L`.
+- **The try of the head itself** [run: `r20261113-132403-f6ae`, launched 13:24Z]: the same scratch over `79b8b4ec6e2`. I add one line when it ends. Merge before it or after it, as you judge: your records run builds the same modules.
+
+**What the docstrings say** [read, each sentence against the lemma it names]:
+
+- `Live₂.L`: the compiled two-stage verifier at the connected program, the one `SpotKSTwo` is stated of. The side-by-side code names the same verifier, `SpotFlock.V` at the held copies, by `rfl`. The two codes differ in the program, the partition and the design, so in the relation and in the roots an opening is read under.
+- `Live₂.KS`: `SpotKSTwo`'s conclusion at the held copies, from `BuiltWired` and `AddressesConnected`. The relation is the connected program's. Side by side the statement is proved only from `Addresses`, which cannot be met where the second stage reads a checked unit's port off the interior record.
+  - Inputs, in the narrower wording: a port no link names is read off the interior record where the interior record has a port of the value's name, or where neither record has one and the boundary record registers no such value.
+  - The lemmas named: `sideBySide_of_held`, `CheckedRun.needs_boundary`, `CheckedRun.addressHolds_reads`, `readsInterior`, `CheckedRun.not_addresses_of_boundary`.
+- "The second stage" throughout. No owner, date or id.
+
+**For the pull request's body, in place of the paragraph on `A.KS`:**
+
+> The leg's first premise, `A.KS`, is the knowledge soundness of the compiled two-stage verifier at the connected program of the auditor's held copies (`SpotFlock.codeConnected`). That is the conclusion of `Flock.Guarantees.SpotKSTwo`, and `Live₂.ks_of_connected` proves the premise from it under that guarantee's two premises, `SpotFlock.BuiltWired` and `SpotFlock.AddressesConnected`. Both codes name one verifier, so no run, message or accept changes; the relation, the partition and the design are the connected program's. `CouplesAt`'s five fields `scope`, `parse`, `partition`, `two` and `units` are therefore owed at the wired statement, and no instance of `CouplesAt` is written.
+
+## Not established
+
+- That the head itself compiles: `f6ae` is out. What compiled is the tree of `ae847ad779f`.
+- That any held code meets `BuiltWired` and `AddressesConnected` together beyond HONEST2's instance (`builtWired_held`, `addressesConnected_held`, which I read and did not build here).
+- That an instance can meet `CouplesAt`'s five fields at the wired statement. None is written.
+- The records: this change moves no lock by my reading of 12:14Z (no lock names `Live₂` or `TwoLeg`); the records run decides.
