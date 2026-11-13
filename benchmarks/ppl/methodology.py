@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import math
 
+__all__ = ["C4_DOCS", "CALIBRATION", "CHECK_WINDOW", "CONTEXTS", "EVAL_SETS", "REF_BATCH", "REPRODUCE_FLOOR", "SEEDS",
+           "compare", "reproduces", "scored_tokens", "sign_threshold", "windows"]
+
 #: the held-out text each eval set reads (datasets.json pins the files)
 EVAL_SETS = ("c4", "wikitext2")
 #: context length -> how many windows: windows 0..n-1 of the set's token stream cut at that length

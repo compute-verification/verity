@@ -25,6 +25,7 @@ found on silicon is adopted the usual way (facet_break's `refit`, then the devic
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -41,7 +42,7 @@ class Row:
     load: float                   # the cheater's load on the row over T (1.0: binding)
     dual: float                   # the certificate's weight on the row (0 off the facet)
     ceiling: bool                 # the issue ceiling: silicon cannot beat it
-    flip_pct: float | None        # the move in the cheater's favour (per cent) at which core first rises; None: ≥ cap
+    flip_pct: float | None        # the move in the cheater's favour (per cent) at which core first rises; None: none swept
     core_at_flip: float | None
     core_at_2pct: float           # core with the row's lane coefficient 2 % in the cheater's favour
 
@@ -75,7 +76,7 @@ class Margin:
 class LeastFill:
     device: str
     design: str
-    per_word: float | None        # least filler a word that holds the margin; None if `cap` did not
+    per_word: float | None        # least filler a word that holds the margin; None if none up to `limit` did
     mix: dict[str, float]
     core: float                   # the joint margin's worst core at `per_word`
     gamma: float                  # honest's γ at `per_word`
@@ -110,6 +111,14 @@ def _joint(pi: E.Machine, cc: dict[str, dict[str, float]], row: str, hit: tuple[
     return replace(pi, c={k: ({**v, row: pi.c[k][row] * f} if k in hit else v) for k, v in cc.items()})
 
 
+def _core(d: E.Design, data: Path, q: float, operands: str, credit: str) -> Callable[[E.Machine], float]:
+    """`d`'s core ε at q*, as a function of Π."""
+    def core(p: E.Machine) -> float:
+        return E.eps(d, p, q, data, operands=operands, credit=credit).core()
+
+    return core
+
+
 def _worst_single(core, pi: E.Machine, row: str, m: float) -> float:
     """The higher core from moving `row`'s lane coefficient by (1 − m) or (1 + m): the cheater's favoured direction."""
     return max(core(_single(pi, row, 1 - m)), core(_single(pi, row, 1 + m)))
@@ -134,10 +143,10 @@ def _near_rows(pi: E.Machine, d: E.Design, data: Path, q: float, thr: float, ope
 
 
 def _flip(d: E.Design, pi: E.Machine, data: Path, q: float, row: str, base: float, operands: str, credit: str,
-          step: float = 0.005, cap: float = 0.10) -> tuple[float | None, float | None]:
+          step: float = 0.005, limit: float = 0.10) -> tuple[float | None, float | None]:
     m = 0.0
-    core = lambda p: E.eps(d, p, q, data, operands=operands, credit=credit).core()
-    while m < cap - 1e-9:
+    core = _core(d, data, q, operands, credit)
+    while m < limit - 1e-9:
         m += step
         c = _worst_single(core, pi, row, m)
         if c > base + 5e-4:
@@ -153,7 +162,7 @@ def audit(design: str, data: Path, q: float = 1.22, operands: str = "free", cred
     e = E.eps(d, pi, q, data, operands=operands, credit=credit)
     c = e.cheat
     load, base = pi.load(c.n), e.core()
-    core = lambda p: E.eps(d, p, q, data, operands=operands, credit=credit).core()
+    core = _core(d, data, q, operands, credit)
     rows: list[Row] = []
     for r in pi.rows:
         x = load[r] / c.T if c.T else 0.0
@@ -179,7 +188,7 @@ def margin_audit(design: str, data: Path, m: float = 0.02, near_thr: float = MAR
     operand floor are axioms, not measured rows, so both are left alone."""
     pi = E.machine(vector, data)
     d = E.design(design, data)
-    core = lambda p: E.eps(d, p, q, data, operands=operands, credit=credit).core()
+    core = _core(d, data, q, operands, credit)
     base = core(pi)
     near = _near_rows(pi, d, data, q, near_thr, operands, credit)
     singles = tuple((r, _worst_single(core, pi, r, m)) for r in near)
@@ -189,11 +198,11 @@ def margin_audit(design: str, data: Path, m: float = 0.02, near_thr: float = MAR
 
 
 def least_filler(design: str, data: Path, mix: dict[str, float] | None = None, target: float | None = None,
-                 m: float = 0.02, near_thr: float = MARGIN_NEAR, step: float = 0.005, cap: float = 0.30,
+                 m: float = 0.02, near_thr: float = MARGIN_NEAR, step: float = 0.005, limit: float = 0.30,
                  q: float = 1.22, operands: str = "free", credit: str = "floor", vector: str = "") -> LeastFill:
     """The least verified filler a word, in class mix `mix` (default the design's), that holds the margin:
     its joint worst core is ≤ `target` (default the design's base core, the floor it sits at). The filler replaces the
-    design's own and sweeps in `step` up to `cap`, checked as the design's filler is (its p and luck), or by a receipt
+    design's own and sweeps in `step` up to `limit`, checked as the design's filler is (its p and luck), or by a receipt
     the check recomputes (p = 0) when the design has none. Returns the per_word, the worst core there and honest's γ."""
     pi = E.machine(vector, data)
     d0 = E.design(design, data)
@@ -201,23 +210,23 @@ def least_filler(design: str, data: Path, mix: dict[str, float] | None = None, t
     check = d0.filler[0] if d0.filler else E.Filler(p=0.0, luck=E.PINNED)
     base_core = E.eps(d0, pi, q, data, operands=operands, credit=credit).core()
     target = base_core if target is None else target
-    base_worst = _joint_worst(lambda p: E.eps(d0, p, q, data, operands=operands, credit=credit).core(), pi,
+    base_worst = _joint_worst(_core(d0, data, q, operands, credit), pi,
                               _near_rows(pi, d0, data, q, near_thr, operands, credit), m)
 
     def at(x: float) -> tuple[E.Design, float, float]:
         d = replace(d0, filler=(E.Filler(per_word=x, mix=mix, route="lanes", p=check.p, luck=check.luck,
                                          source="redteam.least_filler"),))
-        core = lambda p: E.eps(d, p, q, data, operands=operands, credit=credit).core()
+        core = _core(d, data, q, operands, credit)
         near = _near_rows(pi, d, data, q, near_thr, operands, credit)
         return d, _joint_worst(core, pi, near, m), E.eps(d, pi, q, data, operands=operands, credit=credit).gamma
 
     x = step
-    while x < cap + 1e-9:
+    while x < limit + 1e-9:
         d, worst, gamma = at(x)
         if worst <= target + 1e-6:
             return LeastFill(pi.vector, d0.name, round(x, 4), mix, worst, gamma, base_worst)
         x += step
-    _, worst, gamma = at(cap)
+    _, worst, gamma = at(limit)
     return LeastFill(pi.vector, d0.name, None, mix, worst, gamma, base_worst)
 
 

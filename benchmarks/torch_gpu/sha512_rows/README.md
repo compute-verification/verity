@@ -60,10 +60,7 @@ The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds 
 - `check.py`: the engine against the reference: every variant, edge sizes, the H200 layer on sampled slots.
 - `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the H200 demo's shape.
 - `sass.py`: opcode counts per variant.
-- `sass_count.py`: one kernel's SASS counts per main-loop iteration, by opcode and issue pipe (`hashcat.sh`'s pipe mix).
 - `gpu.sh`: one leased GPU run.
-- `hashcat.sh`, `hashcat_forms.cu`, `hashcat_summary.py`: hashcat's SHA-512 kernels against the default compression in
-  one lease at one locked SM clock; `hashcat_summary.py`'s `VERDICT overall` line says whether any of them is faster.
 - `tests/`: the host twin always, every variant on a CUDA device.
 
 From the tree's root, on a CUDA GPU (an H200 for the H200 layer) with CUDA torch, CUDA's nvcc and `gpu-lease`:

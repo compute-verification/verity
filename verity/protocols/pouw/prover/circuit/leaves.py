@@ -41,8 +41,8 @@ id, the word count and the role, and each tree holds exactly one (schema id, wor
                                   words each, then its good bit's ok word (`cap`)
     cap-rows (pouw/cap-rows/v1)   a strip's admission bits sixteen per word, low     64                 X
                                   bit first, 64 bits (TM <= 64, the rest zero),
-                                  then the cap's bound as two words, then 58 zero
-                                  words (`cap`)
+                                  then the inert-work bound's value as two words,
+                                  then 58 zero words (`cap`)
     cap-chunks                    a tile row's two chunk digests, two bytes per      64                 X
       (pouw/cap-chunks/v1)        word, low byte first: `PearlTileDigest`'s
                                   TurboSHAKE128 (D = 0x21) of each 32 columns' C̃
@@ -67,20 +67,20 @@ id, the word count and the role, and each tree holds exactly one (schema id, wor
     cap-rows   row/v2          (none)
     cap-chunks row/v2          (none)
 
-Every per-call row (role X) but ok, the tile digest, the cap's rows and the row_k cut's rows (below) is a row-seg row,
-so decode's serial hash chain is a segment's, not the row's.  The cap's per-word and
+Every per-call row (role X) but ok, the tile digest, the inert-work bound's rows and the row_k cut's rows (below) is a
+row-seg row, so decode's serial hash chain is a segment's, not the row's.  The inert-work bound's per-word and
 per-row-sum rows are at most one SHA-512 block at any k up to 2^14, so a segment's chain is the row's and v2 hashes them
-in fewer blocks.  The cap's strip row and chunk digests are padded with zero words to 64, one whole block, because
-Flock's composer refuses a unit none of whose rows hashes a block before its last one (its SHA-512 range would hold no
-slot), and without a whole block the strip (ok rows in, cap-rows out), a row digest (cap-word rows in, cap-chunks out),
-the tile (cap-chunks rows in, the tile digest out) and the tally (cap-sums rows and cap-rows in) would read and write
-only one-block v2 rows; a row tally has one through sd.  They are v2 rather than row-seg rows because Flock's widened
-proved scope takes a v2 row whose bytes are whole blocks or end in its first block, and a row-seg row only of whole
-blocks: padded, each is two compressions, as its short row-seg row was, where a row-seg row of a block is three.  Every
-other row is a v2 row, the registered ones included, so each (row, role) has one leaf schema in the registered tree and
-in every statement that reads or writes it, and no row is `sha512/row/v1`.  A
-v2 row costs what a v1 row of the same words would, a 128-byte prefix block and the row; the role byte that v2 drops is
-bound by the registration domain.
+in fewer blocks.  The inert-work bound's strip row and chunk digests are padded with zero words to 64, one whole block,
+because Flock's composer refuses a unit none of whose rows hashes a block before its last one (its SHA-512 range would
+hold no slot), and without a whole block the strip (ok rows in, cap-rows out), a row digest (cap-word rows in,
+cap-chunks out), the tile (cap-chunks rows in, the tile digest out) and the tally (cap-sums rows and cap-rows in) would
+read and write only one-block v2 rows; a row tally has one through sd.  They are v2 rather than row-seg rows because
+Flock's widened proved scope takes a v2 row whose bytes are whole blocks or end in its first block, and a row-seg row
+only of whole blocks: padded, each is two compressions, as its short row-seg row was, where a row-seg row of a block is
+three.  Every other row is a v2 row, the registered ones included, so each (row, role) has one leaf schema in the
+registered tree and in every statement that reads or writes it, and no row is `sha512/row/v1`.  A v2 row costs what a v1
+row of the same words would, a 128-byte prefix block and the row; the role byte that v2 drops is bound by the
+registration domain.
 
 A row unit cut along k (`rowk`, ``Shape.row_k``) passes its pieces' values in six more rows, v2 in either role, each in the
 session of one row's units (k is the segment's length where the row is a segment's):
@@ -104,17 +104,18 @@ blocks (a multiple of 64 words), the v2 rows Flock's widened scope takes; pc8-ca
 nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its
 elements.
 
-Which unit ports make up each row is `pc4.PORTS`, `pc8.PORTS` and the cap's `cap.PORTS`, `rowk.PORTS4` and
-`rowk.PORTS8` for the cut, and `pc8.SIDE_PORTS` for the audit execution phase's tile (`pc8.Pc8TileSide`), which reads fp8-pi rows:
-its execution phase's side rows, whose index field no unit writes.  `statement_rows` gives a unit's Flock rows from these:
-META ``row_schemas``, a [schema, bits] per row (the input rows, then the output rows), and ``out_row_ports``, each
-output row's run of output ports.  Every output row is a row of exactly its words, as every input row is: the ok word
-and the tile digest each one port's v2 row, not padded to whole blocks, and a row a unit writes as several outputs (A′_i
-‖ P_A,i or B̃_j ‖ P_B,j: the codes, the scales and P) one run's row-seg or v2 row, the row its readers commit.
-`words_*` are each row's words from its elements, and `commit` and `tree_leaf` a row's commit string and tree leaf;
-``tests/vectors/pouw_rows.json`` pins them, and Flock's tests recompute every row's vector through its ports, commit
-each output row as its reader does, and compose each unit's statement rows (``verity/protocols/flock/prover/tests/test_pouw_rows.py``).
-The anchored inputs are no row: they are public input regions (`anchors.region_words`).
+Which unit ports make up each row is `pc4.PORTS`, `pc8.PORTS` and the inert-work bound's `cap.PORTS`, `rowk.PORTS4` and
+`rowk.PORTS8` for the cut, and `pc8.SIDE_PORTS` for the audit execution phase's tile (`pc8.Pc8TileSide`), which reads
+fp8-pi rows: its execution phase's side rows, whose index field no unit writes.  `statement_rows` gives a unit's Flock
+rows from these: META ``row_schemas``, a [schema, bits] per row (the input rows, then the output rows), and
+``out_row_ports``, each output row's run of output ports.  Every output row is a row of exactly its words, as every
+input row is: the ok word and the tile digest each one port's v2 row, not padded to whole blocks, and a row a unit
+writes as several outputs (A′_i ‖ P_A,i or B̃_j ‖ P_B,j: the codes, the scales and P) one run's row-seg or v2 row, the
+row its readers commit.  `words_*` are each row's words from its elements, and `commit` and `tree_leaf` a row's commit
+string and tree leaf; ``tests/vectors/pouw_rows.json`` pins them, and Flock's tests recompute every row's vector through
+its ports, commit each output row as its reader does, and compose each unit's statement rows
+(``verity/protocols/flock/prover/tests/test_pouw_rows.py``).  The anchored inputs are no row: they are public input
+regions (`anchors.region_words`).
 
 An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: Flock's and the
 Lean verifier's hash a hidden row's bits as given.  So the row unit that writes the row returns the word (`OK`), not the bit,
@@ -122,15 +123,15 @@ as a select between the constants 1 and 0, every bit fixed in gates (`pc4.ok_wor
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import lru_cache
-from typing import Sequence
 
-from verity.commitments import domains, hm96
-from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
-                                        sha512_row_seg_word_digest, sha512_row_v2_digest)
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value
+from verity.commitments import domains, hm96
+from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, row_bytes,
+                                        sha512_row_seg_word_digest, sha512_row_v2_digest)
 
 from ..schemes import pearl_c as C
 from . import hashes as H
@@ -167,8 +168,8 @@ ROW_WORDS = {"bf16": lambda k: k, "fp32": lambda k: 2 * k, "nvfp4-p": lambda k: 
              "pc8-head": lambda k: 23, "pc8-carry": lambda k: 128, "fp8-codes": lambda k: k // 2, "pc4-head": lambda k: 3,
              "pc4-carry": lambda k: 64, "nvfp4-codes": lambda k: k // 4 + k // 32}
 _V2, _SEG = SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG
-#: each row's frame-leaf schema in a tree of each role it sits in: the per-call rows (role X) segmented, and the registered
-#: rows (role W), the admission bit, the tile digest, the cap's rows and the cut's rows v2
+#: each row's frame-leaf schema in a tree of each role it sits in: the per-call rows (role X) segmented, and the
+#: registered rows (role W), the admission bit, the tile digest, the inert-work bound's rows and the cut's rows v2
 ROW_SCHEMA = {("bf16", ROLE_X): _SEG, ("bf16", ROLE_W): _V2, ("fp32", ROLE_X): _SEG, ("fp32", ROLE_W): _V2,
               ("nvfp4-p", ROLE_X): _SEG, ("nvfp4-p", ROLE_W): _V2, ("fp8-p", ROLE_X): _SEG, ("fp8-p", ROLE_W): _V2,
               ("fp8-pi", ROLE_X): _SEG, ("fp8-pi", ROLE_W): _V2,

@@ -12,40 +12,40 @@ An attack case's ``verdict`` is property/v1's, ``refuse`` or ``budget``, and its
 accepting it is still sound (``{class or "any": units}``, "any" the sum over the classes), or None when no charge is (a type
 pun). Refusing an attack is always sound. An honest case's ``allow`` is the most a check may charge it and still pass it.
 
-Primitives are main's registry, with two steps registered under their ids only where absent, each with the signature and
-silicon model of the branch that defines it: `BlackwellS8ImmaDot32_v1` (the census branch's exact s8 IMMA step) and
+Primitives are the registry's, the two IMMA steps among them: `BlackwellS8ImmaDot32_v1` (the exact s8 step) and
 `BlackwellU8S8ImmaDot32_v1` (the s8 family's u8·s8 step without .satfinite). A case that binds the s8 family
-(`verity.definitions.ops.s8`: `S8Dot_v1`, `S8Matmul_v1`, `LimbSplit_v1`) names it in ``needs`` and is skipped where the
-family is absent. Every honest case does, since property/v1 refuses a bare IMMA. The receipt fold (`PouwDuoAbsorb_v1`) is
+(`verity.definitions.ops.s8`: `S8Dot_v1`, `S8Matmul_v1`, `LimbSplit_v1`) names it in ``needs``.
+Every honest case does, since property/v1 refuses a bare IMMA. The receipt fold (`PouwDuoAbsorb_v1`) is
 registered nowhere yet, so ``fold-reused`` uses its LOP3+IMAD step (`benchmarks/pouw/edited_gemm/receipt_folds_r9.py`) as a
 Definition of its own.
 """
 from __future__ import annotations
 
-import importlib
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
-
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
-from verity.definitions.ops import prims
-from verity.definitions.ops import scalar  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
-from verity.circuits.program import Program
-from verity.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.definitions.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32, IntegerMma, S32_MAX, S32_MIN, s32_value,
-                                                 s32_word)
-from verity.circuits.types import Array, Tuple as TupleT, Value
+from typing import Any
 
 import verity.protocols.pouw.prover.circuit.words  # noqa: F401  (PouwNoiseByte)
-from verity.definitions.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe, topp_word_gates  # noqa: F401
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
+from verity.circuits.program import Program
+from verity.circuits.refs import Coll, array_of, concat, tuple_of
+from verity.circuits.types import Array, Value
+from verity.circuits.types import Tuple as TupleT
+from verity.definitions.ops import (
+    prims,
+    s8,
+    scalar,  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
+)
+from verity.definitions.registry import (  # noqa: F401
+    dsa,
+    dsv4_qnorm_insert,
+    flashmla,
+    marlin_moe,
+    topp_word_gates,
+)
 from verity.definitions.registry.ref_prims import gather_f32
-
-try:
-    FAMILY: Any = importlib.import_module("verity.definitions.ops.s8")
-except ModuleNotFoundError as e:
-    if e.name != "verity.definitions.ops.s8":
-        raise
-    FAMILY = None
+from verity.definitions.silicon.integer import S32_MAX, s32_word
 
 CLASSES = ("roundings", "compare_select", "gathers", "products", "other")
 NEEDS_FAMILY = "verity.definitions.ops.s8"
@@ -59,22 +59,10 @@ def _p(fid: str) -> PrimitiveDefinition:
     return REGISTRY[fid]  # type: ignore[return-value]
 
 
-def _step(fid: str, model: IntegerMma, doc: str) -> PrimitiveDefinition:
-    if fid in REGISTRY:
-        return _p(fid)
-    name = fid.rsplit("_v", 1)[0]
-    return PrimitiveDefinition(name, 1, (("acc", S32), ("a", A32), ("b", A32)), S32,
-                               lambda acc, *ab, _m=model: _m.step(acc, ab[:32], ab[32:64]), doc=doc,
-                               conformance="exact-model-tested")
-
-
-U8S8_WRAP = IntegerMma(name="blackwell_sm120_u8s8_m16n8k32", arch="sm_120", dtype="u8", b_dtype="s8", operand_bits=8,
-                       k_per_instruction=32, satfinite=False,
-                       validated="the u8.s8 form without .satfinite on the device: run r20261015-084000-06d8")
-IMMA = _step("BlackwellS8ImmaDot32_v1", BLACKWELL_SM120_S8_M16N8K32,
-             "acc (s32) plus 32 exact s8 x s8 products, clamped once to s32 (IMMA.16832.S8.S8.SAT)")
-IMMA_U8S8 = _step("BlackwellU8S8ImmaDot32_v1", U8S8_WRAP,
-                  "acc (s32) plus 32 exact u8 x s8 products, modulo 2^32 (IMMA.16832.U8.S8)")
+#: acc (s32) plus 32 exact s8 x s8 products, clamped once to s32 (IMMA.16832.S8.S8.SAT)
+IMMA = _p("BlackwellS8ImmaDot32_v1")
+#: acc (s32) plus 32 exact u8 x s8 products, modulo 2^32 (IMMA.16832.U8.S8)
+IMMA_U8S8 = _p("BlackwellU8S8ImmaDot32_v1")
 
 
 def _fn(name: str, params: list[tuple[str, Any]], ret: Any, body: Callable[..., Coll]) -> CompositeDefinition:
@@ -136,10 +124,6 @@ class Case:
     needs: tuple[str, ...] = ()
     size: dict = field(default_factory=dict)
     samples: Callable[[], list[tuple[dict, tuple, tuple]]] | None = field(default=None, repr=False)
-
-    @property
-    def available(self) -> bool:
-        return all(m != NEEDS_FAMILY or FAMILY is not None for m in self.needs)
 
     def program(self) -> Program:
         return self.build(**self.size)
@@ -312,13 +296,13 @@ def gather_table(V: int = 128) -> Program:
 def _dot(**kw: Any) -> Any:
     statics = {"L": kw["K"], "T0": "zero", "C": None, "DOT": IMMA, "A": S8_RANGE, "B": S8_RANGE, "TAIL": (), "TDOT": None,
                "NOISE": "none", "LIMBS": "none", "COMMIT": "final"} | kw
-    return FAMILY.S8Dot.bind(**statics)
+    return s8.S8Dot.bind(**statics)
 
 
 def _matmul(**kw: Any) -> Any:
     statics = {"L": kw["K"], "T0": "zero", "C": None, "DOT": IMMA, "A": S8_RANGE, "B": S8_RANGE, "TAIL": (), "TDOT": None,
                "NOISE": "none", "LIMBS": "none", "COMMIT": "final"} | kw
-    return FAMILY.S8Matmul.bind(**statics)
+    return s8.S8Matmul.bind(**statics)
 
 
 def fam_bound_dither(K: int = DITHER_K) -> Program:
@@ -367,7 +351,7 @@ def _y(B: Any, x: Coll, w: Coll) -> Coll:
 
 def limb_split(N: int = 3, Y: tuple[int, int] = Y_DOT32, name: str = "RedteamLimbSplit") -> Program:
     """LimbSplit_v1{bytes} of a runtime S8Dot word, which N - 1 carries cover when Y is its true interval."""
-    split = FAMILY.LimbSplit.bind(FORM="bytes", N=N, Y=Y)
+    split = s8.LimbSplit.bind(FORM="bytes", N=N, Y=Y)
     return Program(_fn(name, [("x", A32), ("w", A32)], Array(N, S8), lambda B, _S, x, w: B.call(split, _y(B, x, w))))
 
 
@@ -376,9 +360,9 @@ def limb_split_bare(N: int = 3) -> Program:
     def body(B, _S, x, w):
         r, limbs = _y(B, x, w), []
         for _ in range(N - 1):
-            limbs.append(B.call(FAMILY.S32LowByte, r))
-            r = B.call(FAMILY.S32ByteCarry, r)
-        limbs.append(B.call(FAMILY.S32LowByte, r))
+            limbs.append(B.call(s8.S32LowByte, r))
+            r = B.call(s8.S32ByteCarry, r)
+        limbs.append(B.call(s8.S32LowByte, r))
         return array_of(limbs)
     return Program(_fn("RedteamLimbSplitBare", [("x", A32), ("w", A32)], Array(N, S8), body))
 
@@ -715,5 +699,5 @@ CASES: tuple[Case, ...] = (
 BY_ID = {c.id: c for c in CASES}
 assert len(BY_ID) == len(CASES)
 
-__all__ = ["BY_ID", "CASES", "CLASSES", "Case", "FAMILY", "IMMA", "IMMA_U8S8", "NEEDS_FAMILY", "PQUANT", "RECEIPT_FOLD",
+__all__ = ["BY_ID", "CASES", "CLASSES", "Case", "IMMA", "IMMA_U8S8", "NEEDS_FAMILY", "PQUANT", "RECEIPT_FOLD",
            "fold", "limbs", "pquant", "shift_lanes", "table"]

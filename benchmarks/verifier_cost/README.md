@@ -118,6 +118,22 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
   bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
 ~~~
 
+`population.sh N...` times the one-stage run's population-order check (`Slots.popOk`) against a template population's
+units: `population.py` writes, per N, a population of about N units over a layered call hierarchy (by default 234 root
+batches of 234 templates over six levels of at most 1,800 composites, about 8,100 Definitions; `POPULATION_ARGS`
+changes them), and `population/Main.lean`, built in a scratch Lake package against the checkout's verifier, times
+`Partition.unitGates` (one gate table per program, `unitGates_eq_unitGatesFast`), `Slots.popOk` (from the ranges,
+`popOk_eq_popOkRanges`: no replay unit and no input gate is built) and the references: `TemplateQuery.gates` on every
+unit, each recomputing its offset and template through an unmemoized walk, and `popOk` as stated, off `Slots.layout`'s
+population, at N and either side of it. It fails where a reference differs. The references run up to `REF_MAX` units
+(default 50). `POPULATION_ARGS='--input-members M'` widens the root's input nodes to M members each, which only the
+layout's input class reads. `$OUT` gets population.jsonl, one row per N and function (units, milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone --mem-gb 90 -- \
+  bash benchmarks/verifier_cost/population.sh 20 50 100000 1000000 6963296
+~~~
+
 `whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
 `whole_run.py` writes, per N, an accepted `run` input (`run`: a v1 audit on challenger coins with N/8 more ports) or the
 program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's three templates,
@@ -177,6 +193,24 @@ stage at a time (`tmplOf`, `Tmpl.parse`, each of `TmplUnit.read`'s checks, `HmRo
 digest and sections), with the template's size against the unrolled unit's (rows and entries, the copies multiplied
 through the calls) into stmt.jsonl; `--base REV` first times the same `flock-tmpl` built against REV's verifier on the
 same staged statement (stmt-base.jsonl).
+
+`flock_members.sh` measures what a member of a run waits before its first check when one process verifies the run's
+members in turn (`verify-members`, which reads the run's program once) against a process a member (`verify`). Per spec,
+`one_stage/m1_unit.py` stages, proves and verifies one statement bound to its program, and `flock_members.py` hands that
+member in `FM_MEMBERS` times each way, pinned to one core, the two ways alternating over `FM_ROUNDS` rounds. Its numbers
+are a member's `before_check_ms` (the verifier's own `inputs:` and `setup:` stage lines) alone, as the kept process's
+first member, which pays the one read, and as a later member, with the memory the kept process holds between members
+(`rss_kb`: its resident memory at each `MEMBER` line). Every process runs under the verifier's allocator setting, as its
+Python callers start it (`proofs.verifier_env`), unless the job's environment sets a value of its own, and
+`members.json` records the value (`env`). Its guard: each kept member's `VERDICT` lines are byte for byte `verify`'s
+alone, every member is accepted and the kept process exits 0; a run that fails it exits nonzero and none of its figures
+counts. The target is a later member's wait with nothing of the program's in it: what is left reads the member's own
+circuit and public file.
+
+~~~sh
+research run --as proofs --on auto --cpus 16 --mem-gb 64 --max-min 150 --cwd source -- \
+  env FM_MEM_GB=64 bash benchmarks/verifier_cost/flock_members.sh
+~~~
 
 `flock_sessions.sh census:NAME [N...]` measures the Lean verifier's seconds on a served block type's sessions, on one
 core, against the statement's blocks. `flock_sessions.py stage` stages the type's flat statement at `full` as

@@ -88,17 +88,16 @@ h1u_build() {
 
 # s8_linear's exact plain linear (benchmarks/torch_gpu/s8_linear), given as files in LIBS: its build.sh run unchanged
 # from a scratch copy, with this tree's ship frame (ship.sh, ship_nvcc.sh, ship_probe.sh, ship_clock.c), which that
-# build.sh sources, and harness gate (benchmarks/pouw/harness/sass_gate.py, its sass_gate.py's mma_gate) beside it, and the adapter's
-# directory it stages, empty: its row_table build is skipped (no Python at PY). $OUT/s8ship (the cubin, its SASS
-# gate's sass.json, MANIFEST.sha256); prints the wgmma directory
+# build.sh sources, and harness gate (benchmarks/pouw/harness/sass_gate.py, its sass_gate.py's mma_gate) beside it.
+# $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
 s8_build() {
   local t=$S/s8/benchmarks/torch_gpu h=$S/s8/benchmarks/pouw/harness nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
   local w=$t/s8_linear
-  mkdir -p "$w" "$h" "$S/s8/adapters/vllm/verity_vllm" || return 2
+  mkdir -p "$w" "$h" || return 2
   cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
   cp "$ROOT"/benchmarks/torch_gpu/{ship.sh,ship_nvcc.sh,ship_probe.sh,ship_clock.c} "$t/" || return 2
   cp "$ROOT/benchmarks/pouw/harness/sass_gate.py" "$h/" || return 2
-  CUDA=$(dirname "$(dirname "$nv")") PY=/nonexistent bash "$w/build.sh" "$OUT/s8ship" >&2 || return 2
+  CUDA=$(dirname "$(dirname "$nv")") bash "$w/build.sh" "$OUT/s8ship" >&2 || return 2
   echo "$w"
 }
 

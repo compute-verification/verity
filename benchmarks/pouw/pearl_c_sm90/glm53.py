@@ -30,6 +30,13 @@ import json
 import sys
 from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from verity.protocols.pouw.prover.schemes.pearl_c import PearlC
+
+__all__ = ["CONFIG", "DECODE_M", "DEEPGEMM", "FADD_READINGS", "Linear", "PREFILL_M", "SCHEME", "TP", "expert_rows", "gamma",
+           "in_domain", "linears", "scheme", "table"]
 
 SCHEME = "pearl-c-h100-v1-h3"
 #: the checkpoint's config.json, the fields the linears read
@@ -85,7 +92,7 @@ def expert_rows(m: int, c: dict = CONFIG) -> Fraction:
     return Fraction(m * c["K"], c["E"])
 
 
-def scheme(fadd: Fraction | None = None, name: str = SCHEME):
+def scheme(fadd: Fraction | None = None, name: str = SCHEME) -> PearlC:
     """The registered record's scheme, with the FP32 add's price at `fadd` when given."""
     from verity.protocols.pouw.prover.schemes import pearl_c as C
     from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
@@ -97,7 +104,7 @@ def scheme(fadd: Fraction | None = None, name: str = SCHEME):
     return C.PearlC(forming=sid.forming, device=dev, hashing=sid.hashing, prices=prices)
 
 
-def gamma(s, n: int, k: int, cast: Fraction = Fraction(0)) -> Fraction:
+def gamma(s: PearlC, n: int, k: int, cast: Fraction = Fraction(0)) -> Fraction:
     """One unit's gap at scheme `s` (module docstring), W_ref with `cast` more per activation element (the kernel's cast over
     the credited one)."""
     from verity.protocols.pouw.verifier.protocol import Shape

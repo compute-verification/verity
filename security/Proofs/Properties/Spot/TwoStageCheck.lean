@@ -249,7 +249,7 @@ theorem twoStageCheckPatternsSound_form (D : Point) (b : ℚ) (hb : checkTwoStag
   obtain ⟨-, hq1, hθ, hδ, -⟩ := valid_of_check hb
   have hq1' : ((D.q : ℚ) : ℝ) ≤ 1 := by exact_mod_cast hq1
   have hR := admissibleTwo_rankin_patterns s Pt d (fun _ => (D.q : ℝ)) D.δ D.θ R req hs
-    (firstStage_le hs hq1' hfirst) (fun _ => hq1') (by exact_mod_cast hδ) (by exact_mod_cast hθ) hreq.1
+    (firstStage_le hs hq1' hfirst) (fun _ => hq1') (by exact_mod_cast hδ) (by exact_mod_cast hθ)
   refine bits_of_rankin hb cls hR (fun ρ _ => rankinFactorPatterns_nonneg s Pt d req hq1' _ ρ)
     (fun ρ hρ c v hc hv => ?_) (fun ρ hρ => (hcov.1 ρ hρ).imp fun _ h => h.1) hcov.2
   obtain ⟨c', hc', hcv⟩ := hcov.1 ρ hρ
@@ -257,9 +257,9 @@ theorem twoStageCheckPatternsSound_form (D : Point) (b : ℚ) (hb : checkTwoStag
   subst hc'
   have hv' : _root_.Spot.FactorUpper.lnFactorUpperPatterns c.cells c.reads c.N D.S D.params = some v := by
     simpa [classFactor, hform] using hv
-  obtain ⟨hN, hserve⟩ := hreq.2.2 ρ hρ c hc
+  obtain ⟨hN, hserve⟩ := hreq.2 ρ hρ c hc
   exact factorUpperPatternsSound c.cells c.reads c.N D.S D.params v hv' s Pt d R req ρ hcv hN hserve
-    fun r r' hne => (hreq.2.1 r r' hne).mono (blocksTo_mono req (blocksIn_subset Pt d.part ρ) r)
+    fun r r' hne => (hreq.1 r r' hne).mono (blocksTo_mono req (blocksIn_subset Pt d.part ρ) r)
       (blocksTo_mono req (blocksIn_subset Pt d.part ρ) r')
 
 /-- **A capped point's bits bound the capped count**, at a point whose form is the capped one, at replay block `ρ`'s
@@ -342,16 +342,14 @@ theorem pair_classesCover (form : Form) : ClassesCover pairStmt pairPart pairDes
 
 theorem pair_requestsCover (form : Form) :
     RequestsCover pairStmt pairPart pairDesign (fun _ => ()) (pairPoint form) fun _ => 0 := by
-  refine ⟨fun r => ⟨0, fun v hv => ?_⟩, fun r r' h => absurd (Subsingleton.elim r r') h, fun ρ hρ c hc => ?_⟩
-  · have hv2 : v < 2 := mem_range.1 (blocksTo_subset _ _ _ _ _ hv)
-    interval_cases v <;> decide
-  · obtain rfl : ρ = 0 := by
-      have : pairDesign.part.blocks.length = 1 := rfl
-      omega
-    simp only [pairPoint, List.getElem?_cons_zero, Option.some.injEq] at hc
-    subst hc
-    exact ⟨(card_le_univ _).trans (by simp),
-      fun ⟨⟩ _ => ⟨(by decide : servedBits (fun _ : Fin pairStmt.prog.outs.length => ()) () = 2), pair_readsCover⟩⟩
+  refine ⟨fun r r' h => absurd (Subsingleton.elim r r') h, fun ρ hρ c hc => ?_⟩
+  obtain rfl : ρ = 0 := by
+    have : pairDesign.part.blocks.length = 1 := rfl
+    omega
+  simp only [pairPoint, List.getElem?_cons_zero, Option.some.injEq] at hc
+  subst hc
+  exact ⟨(card_le_univ _).trans (by simp),
+    fun ⟨⟩ _ => ⟨(by decide : servedBits (fun _ : Fin pairStmt.prog.outs.length => ()) () = 2), pair_readsCover⟩⟩
 
 theorem pair_servedCover (form : Form) :
     ServedCover pairStmt pairPart pairDesign (fun _ => ()) (pairPoint form) fun _ => 0 := by
@@ -418,7 +416,7 @@ theorem twoStageCheckSound_nontrivial :
   norm_num
 
 /-- **`TwoStageCheckPatternsSound`'s honest witness**: `twoStageCheckSound_honest`'s, and the one request reading both
-of `pairStmt`'s outputs reads in its one replay block, serves `2` bits and reads at most the class's `reads`. -/
+of `pairStmt`'s outputs serves `2` bits and reads at most the class's `reads`. -/
 theorem twoStageCheckPatternsSound_honest :
     InScopeTwo pairPart pairDesign pairStmt ∧ FirstStageAt pairDesign ((pairPoint .patterns).q : ℝ) ∧
       ClassesCover pairStmt pairPart pairDesign (pairPoint .patterns) (fun _ => 0) ∧

@@ -15,9 +15,9 @@ Rankin's `θ`, `δ` and its replay blocks' classes. These properties say that nu
   block (`[subset Q, all]`) with `q N ≤ Q`;
 * `ClassesCover`: each replay block `ρ` is in a class `cls ρ` whose cells cover it (`Covers`), and class `i` holds at
   most its `count` replay blocks;
-* `RequestsCover`, the patterns' form: each request reads in one replay block, no two read one proof block, and at most
-  a class's `N` requests read in each of its replay blocks, each serving the point's `S` bits and reading at most the
-  class's `reads` (`ReadsCover`);
+* `RequestsCover`, the patterns' form: no two requests read one proof block, and at most a class's `N` requests read in
+  each of its replay blocks, each serving the point's `S` bits and reading at most the class's `reads` (`ReadsCover`);
+  a request may read in several replay blocks;
 * `ServedCover`, the capped form: no two requests read one proof block, and the requests reading in each replay block
   serve at most its class's `N` times the point's `S` bits together;
 * `TwoStageCheckSound`: a sets' point's bits `b` bound `Σ_{T admissible} 2^{b(T)} ≤ 2^b`;
@@ -50,13 +50,12 @@ def ClassesCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) (D : Poi
   (∀ ρ < d.part.blocks.length, ∃ c, D.classes[cls ρ]? = some c ∧ Covers s Pt d ρ c.cells) ∧
     ∀ i c, D.classes[i]? = some c → ((Finset.range d.part.blocks.length).filter (cls · = i)).card ≤ c.count
 
-/-- **The requests read as the point's classes say**: each request reads in one replay block, no two read one proof
-block, and in each replay block `ρ` at most its class's `N` requests read, each serving `D.S` bits and reading at most
-the class's `reads`. -/
+/-- **The requests read as the point's classes say**: no two requests read one proof block, and in each replay block
+`ρ` at most its class's `N` requests read, each serving `D.S` bits and reading at most the class's `reads`. A request
+may read in several replay blocks. -/
 def RequestsCover (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R] [DecidableEq R]
     (req : Fin s.prog.outs.length → R) (D : Point) (cls : ℕ → ℕ) : Prop :=
-  (∀ r, ∃ ρ, ∀ v ∈ blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r, replayOf Pt d.part v = some ρ) ∧
-    (∀ r r', r ≠ r' → Disjoint (blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r)
+  (∀ r r', r ≠ r' → Disjoint (blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r)
       (blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r')) ∧
     ∀ ρ < d.part.blocks.length, ∀ c, D.classes[cls ρ]? = some c →
       (Finset.univ.filter fun r => (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty).card ≤ c.N ∧

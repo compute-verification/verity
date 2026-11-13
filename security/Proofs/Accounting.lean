@@ -1,8 +1,6 @@
 module
 
-public import Proofs.Accounting.Defs
 public import Proofs.Accounting.Memory
-public import Proofs.Accounting.MemoryShare
 public import Proofs.Accounting.Device
 public import Proofs.Accounting.Gates
 public import Proofs.Accounting.FillerLuck
@@ -107,6 +105,7 @@ public import Proofs.Pouw.H1Zy.Tile
 public import Proofs.Accounting.TS.HeldSound
 public import Proofs.Accounting.TS.Session.Tile.Computes
 public import Proofs.Accounting.TS.TileSound
+public import Proofs.Accounting.TS.PeriodSound
 public import Proofs.Accounting.Actual
 public import Proofs.Accounting.Responder
 public import Proofs.Accounting.Responder.Latency
@@ -116,10 +115,14 @@ public import Proofs.Accounting.Compose
 public import Proofs.Accounting.ComposeMonitoringPeriod
 public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
 public import Proofs.Accounting.Served
+public import Proofs.Pous.Obligation
 public import Proofs.Accounting.Additive
+public import Proofs.Accounting.Coverage
 public import Proofs.Accounting.ServingBlocks
 public import Proofs.Accounting.ServingBlocks.Witnesses
-public import Proofs.Accounting.Coverage
+public import Proofs.Accounting.Defs.Actual.Source
+public import Proofs.Accounting.Defs.Localization
+public import Definitions.Pous.P2.Cost
 
 /-!
 # The proofs of resource accounting's guarantees

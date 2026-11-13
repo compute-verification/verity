@@ -115,13 +115,44 @@ def test_a_chunked_prefill_beside_decodes_is_recorded_row_by_row_in_the_runners_
     assert sum(sum(s["emitted"].values()) for s in steps) == 3 + 3
 
 
-def test_a_preemption_and_its_resume_are_recorded(tmp_path):
-    sched = FakeScheduler(budget=16, max_seqs=4, preempt_at={1: "a"})
+@pytest.mark.parametrize("resend_resumed", [False, True])
+def test_a_preemption_and_its_resume_are_recorded(tmp_path, resend_resumed):
+    """The same record from a scheduler that names a resumed request among its cached requests (the pin) and from one
+    that sends it again among the new ones and names none as resumed (vLLM 0.34): there it is no second first schedule."""
+    sched = FakeScheduler(budget=16, max_seqs=4, preempt_at={1: "a"}, resend_resumed=resend_resumed)
     trace = ST.StepTrace().install(sched)
     drive(sched, {0: [_req("a", 4, [5, 6, 7, 8], 4), _req("b", 4, [5, 6, 2], 4)]})
     steps = ST.steps(trace.records)
+    assert steps[0]["new"] == ["a", "b"] and steps[0]["resumed"] == []
     assert steps[1]["preempted"] == ["a"] and steps[1]["rows"] == [["b", 4, 1]]
     assert steps[2]["resumed"] == ["a"] and steps[2]["rows"] == [["b", 5, 1], ["a", 0, 5]]
+    assert [s["new"] for s in steps[1:]] == [[]] * (len(steps) - 1) and [s["resumed"] for s in steps[3:]] == [[]] * (len(steps) - 3)
+
+
+def test_a_resumed_request_sent_again_in_full_is_no_cache_hit_of_a_new_one_and_an_aborted_one_is_forgotten(tmp_path):
+    """Under vLLM 0.34's scheduler: a resumed request that starts from cached blocks is recorded by its row's start, as the
+    pin's is, and never under ``cache_hit``, which is a new request's; and a preempted request that is aborted before it
+    runs again does not make a later request of its id a resume."""
+    sched = FakeScheduler(budget=16, max_seqs=4, preempt_at={2: "a"}, prefix_block=4, resend_resumed=True)
+    trace = ST.StepTrace().install(sched)
+    drive(sched, {0: [_req("a", 9, [5, 6, 7, 8], 4), _req("b", 4, [5, 6, 7, 2], 4)]})
+    steps = ST.steps(trace.records)
+    back = next(s for s in steps if s["resumed"])
+    assert back["resumed"] == ["a"] and back["new"] == [] and back["cache_hit"] == {}
+    assert [row for row in back["rows"] if row[0] == "a"][0][1] > 0, "the resumed request starts from its cached blocks"
+
+    assert ST.step_geometry(SimpleNamespace(scheduled_new_reqs=[SimpleNamespace(req_id="x", num_computed_tokens=8)]),
+                            preempted={"x"}) == ({"x": 8}, [], ["x"], {})
+    sched = FakeScheduler(budget=16, max_seqs=4, preempt_at={1: "a"}, resend_resumed=True)
+    trace = ST.StepTrace().install(sched)
+    sched.add_request(_req("a", 4, [5, 6, 7, 8], 4))
+    sched.add_request(_req("b", 4, [5, 6, 2], 4))
+    for _ in range(2):
+        so = sched.schedule()
+        sched.update_from_output(so, sched.execute(so))
+    assert ST.steps(trace.records)[1]["preempted"] == ["a"] and trace._preempted == {"a"}
+    sched.finish_requests("a", "aborted")
+    assert trace._preempted == set()
 
 
 def test_an_abort_from_outside_the_scheduler_is_recorded_as_a_finish(tmp_path):

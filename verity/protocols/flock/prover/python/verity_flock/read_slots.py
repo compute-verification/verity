@@ -12,7 +12,7 @@ stage that computes it and each slot read's value from its slot. Stage 0 is the 
 deepest stage returns the output words. Assertions go to the stage of their deepest bit."""
 from __future__ import annotations
 
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 import numpy as np
 
@@ -251,12 +251,15 @@ class _Plan:
 AUTO_ROUNDS = 6
 
 
-def _auto(plan, max_nets: int) -> _Plan:
-    """The placement whose nets' slots take the fewest cells (then the fewest nets) in at most ``max_nets`` nets: no cap, then
-    caps that fit every net in ``2^L`` for L one below the largest net's slot, then one below that, while it shrinks and keeps
-    within ``max_nets`` (a lower L never takes fewer nets). A cap is `ands_cap` of the net's ports, assertions and inline
-    read rows in the last placement, so it tightens as the cut moves the exports, and never loosens. A cap that would leave a
-    net no AND gives L up."""
+def _auto(plan, max_nets: int, size=None) -> _Plan:
+    """The placement whose block is the smallest (``size`` of the placement, when given), then whose nets' slots take the
+    fewest cells, then the fewest nets, in at most ``max_nets`` nets: no cap, then caps that fit every net in ``2^L`` for L
+    one below the largest net's slot, then one below that, while it shrinks and keeps within ``max_nets`` (a lower L never
+    takes fewer nets). A cap is `ands_cap` of the net's ports, assertions and inline read rows in the last placement, so it
+    tightens as the cut moves the exports, and never loosens. A cap that would leave a net no AND gives L up."""
+    def key(P: _Plan) -> tuple[int, int, int]:
+        return (size(P) if size else 0, P.cells, len(P.nets))
+
     best = plan(None)
     L = max(best.logs)
     while L > 7:
@@ -274,25 +277,29 @@ def _auto(plan, max_nets: int) -> _Plan:
             if max(last.logs) <= L:
                 got = last
                 break
-        if got is None or len(got.nets) > max_nets or (got.cells, len(got.nets)) >= (best.cells, len(best.nets)):
+        if got is None or len(got.nets) > max_nets or key(got) >= key(best):
             break
         best = got
     return best
 
 
 def split(C: gf2.Circuit, in_names: Sequence[str], out_names: Sequence[str], name: str, definition, units: IL.Units,
-          slots: Mapping[str, int] = SLOT_TABLES, stage_ands: int | str | None = "auto") -> ReadSlots | None:
+          slots: Mapping[str, int] = SLOT_TABLES, stage_ands: int | str | None = "auto",
+          block: Callable[[list[int], dict[str, int]], int] | None = None) -> ReadSlots | None:
     """``C`` (a unit circuit on input ports ``in_names`` and 16-bit output ports ``out_names``, ``units`` its one unit's leaf
     ports) split at its slot reads (the module docstring), or None when it reads no table a slot holds (``slots``: table ->
     index width; a read's value must be at most `tail.VALUE_BITS` wide). ``C`` is only read.
 
     ``stage_ands`` caps a net's ANDs, each AND going to the first net at or after its operands' with room: more stages, each
     nearer a power of two, since every net's slot is one (a unit whose reads cut it into a few large nets can need a block
-    twice the flat unit's). An int is the cap on every net, None no cap, and ``"auto"`` (`_auto`) the per-net caps whose nets'
-    slots take the fewest cells, from each net's ports, exports and assertions (`ands_cap`); the statement's fixed ranges
-    (compressions, lookups, mask) are the same whatever the cut, so the fewest cells is the smallest block. The automatic caps
-    cut at most the nets that keep the statement within the device prover's `GPU_SLOT_TYPES`, its `FIXED_TYPES` and one
-    type a table read in slots taking the rest. The chosen caps are the result's ``caps``."""
+    twice the flat unit's). An int is the cap on every net, None no cap, and ``"auto"`` (`_auto`) the per-net caps whose
+    statement takes the smallest block, then whose nets' slots take the fewest cells, from each net's ports, exports and
+    assertions (`ands_cap`). ``block`` (each net's slot log, unit first, and the lookup slots of each table -> the
+    statement's block log, `circuit.block_log`; `class_statement.UnitStager` gives it) ranks the cuts by their block:
+    `circuit.compose` aligns each range to its own slot, so of two cuts of the same cells the one with the larger slot can
+    take a block twice the other's (a packed unit slot placed after the compressions). Without it, the fewest cells. The
+    automatic caps cut at most the nets that keep the statement within the device prover's `GPU_SLOT_TYPES`, its
+    `FIXED_TYPES` and one type a table read in slots taking the rest. The chosen caps are the result's ``caps``."""
     kind, data, lookups = C.kind, C.data, C.lookups
     slot = {g: t for g, (t, idx, w) in enumerate(lookups) if slots.get(t) == len(idx) and w <= TL.VALUE_BITS}
     live = C.live()
@@ -319,8 +326,14 @@ def split(C: gf2.Circuit, in_names: Sequence[str], out_names: Sequence[str], nam
     def plan(caps):
         return _Plan(C, live, slot, in_names, out_names, caps, read_rows)
 
+    def size(P: _Plan) -> int:
+        per: dict[str, int] = {}
+        for g in sorted(P.rd):
+            per[slot[g]] = per.get(slot[g], 0) + 1
+        return block(P.logs, per)
+
     tables = {lookups[data[v][0]][0] for v in live if kind[v] == "lookup" and data[v][0] in slot}
-    P = (_auto(plan, GPU_SLOT_TYPES - FIXED_TYPES - len(tables)) if stage_ands == "auto"
+    P = (_auto(plan, GPU_SLOT_TYPES - FIXED_TYPES - len(tables), size if block else None) if stage_ands == "auto"
          else plan(None if stage_ands is None else [stage_ands]))
     depth, rd, need, need_lk, a_at, D = P.depth, P.rd, P.need, P.need_lk, P.a_at, P.D
     reads = sorted(rd)

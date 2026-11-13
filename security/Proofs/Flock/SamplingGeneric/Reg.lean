@@ -46,10 +46,10 @@ import Proofs.Flock.Soundness.Rewinding
 /-!
 # The sampled compiler's committed form
 
-`CompilerKSReg` from the sessions' bound (`Compiled.SessionKS`): the knowledge soundness of a compiled sampled verifier
-against the committed trace's incorrect set (`Compiled.Freg` at the plurality `Compiled.regVal`, which the prover's tape
-fixes before the window's coins), so its sampling term is the acceptance probability `P_a(Freg)` of a set fixed at
-registration.
+What `CompilerKSReg` is proved from, given the sessions' bound (`Compiled.SessionKS`): the knowledge soundness of a
+compiled sampled verifier against the committed trace's incorrect set (`Compiled.Freg` at the plurality
+`Compiled.regVal`, which the prover's tape fixes before the window's coins), so its sampling term is the acceptance
+probability `P_a(Freg)` of a set fixed at registration. The committed form itself is in `SamplingGeneric/RegTrace.lean`.
 
 * `plurAt`, `pr_off_le`: **the rewinding lemma at a table's plurality** (`FlockSoundness.Rewinding.prBad_le`), over
   any finite space: a point opens a position off a trace that is the table's plurality wherever a point opens, with
@@ -75,8 +75,9 @@ registration.
 * `pr_miss_le`, `miss_of_event`: a set of proof blocks refused at `δ` is missed with probability at most `P_a ≤ δ`
   (`Sessions.draws`), so the event's bound at a family of sets gives the bound on an accepted run whose set is outside
   `M_δ`.
-* `ksReg_of_sessionKS`, `compilerKSReg_of`: **`KSReg`**: the union of the three, and on the sample, `miss_of_event` at
-  `Freg`.
+
+`SamplingGeneric/RegTrace.lean` puts them together once, at any table of the statement (`event_le_of_off`), and
+`KSReg` is that at the committed trace (`ksReg_of_sessionKS`, `compilerKSReg_of`).
 -/
 
 @[expose] public section
@@ -585,68 +586,6 @@ theorem miss_of_event {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H
   · exact Or.inl ⟨hp.1, hm⟩
   · exact Or.inr ⟨hp.2, fun u hu hF => hm ⟨u, hu, hF⟩⟩
 
-/-! ## The committed form -/
-
-set_option synthInstance.maxSize 1024 in
-/-- **`KSReg` from the sessions' bound**: at each tape, an accepted run that samples a proof block of `Freg` has the
-first such block's session unfound at its first slot (the sessions' bound at `leadSel selReg`), or its extractions
-disagree with themselves (`B_conf`) or open a gate off the committed trace (the rewinding lemma); and a set refused at
-`δ` is missed with probability at most `P_a ≤ δ` (`miss_of_event`). -/
-theorem ksReg_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
-    (hSK : L.SessionKS H) : L.KSReg H := by
-  intro x hsc Ω _ _ P
-  obtain ⟨s, Pt, hs, hPt, hin⟩ := hsc
-  obtain ⟨β, hβ0, hβ, hκ⟩ := hSK x Ω P
-  have hFlt : ∀ ω, ∀ v ∈ L.Freg H P x ω, v < L.nPU x := by
-    intro ω v hv
-    simp only [Freg, hs, mem_filter, mem_range] at hv
-    simp only [Compiled.nPU, hs]
-    exact hv.1
-  have hper : ∀ ω, Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-      ∃ u ∈ L.checked x r, u ∈ L.Freg H P x ω) ≤
-      Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ i, L.leadSel x (L.selReg H P x ω) (L.checked x rc.1) = some i ∧
-          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
-            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
-      (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) +
-        L.nG x * Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
-          ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr)) := by
-    intro ω
-    have hIO := (Sampling.Pr_union_le
-      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2)
-      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)).trans
-        (add_le_add le_rfl (L.pr_offReg_le H P x ω))
-    refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
-      ∃ u ∈ L.checked x r, u ∈ L.Freg H P x ω)).symm.trans_le (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
-    obtain ⟨hacc, v, hvl, hvF⟩ := hrc
-    obtain ⟨i, hi, u, hiu, huF⟩ := L.selReg_some H P x ω (hS.slots x rc.1) (hFlt ω) hvl hvF
-    obtain ⟨i₀, u₀, hlead, hu₀⟩ := leadOf_some hiu u.isLt
-    rcases reg_split hS hs hPt hin P ω rc.1 rc.2 hacc i u hiu huF i₀ u₀ hlead hu₀ with h | h | h
-    · exact Or.inl ⟨hacc, i₀, by rw [leadSel, hi, Option.bind_some, hlead], u₀, hu₀, h⟩
-    · exact Or.inr (Or.inl h)
-    · exact Or.inr (Or.inr h)
-  have hT := L.pr_unfound_le H P β hβ0 hβ (fun ω => L.leadSel x (L.selReg H P x ω))
-    fun ω r => hκ ω r (L.leadSel x (L.selReg H P x ω))
-  have hI := pr_inConf_le hbind hs P
-  have hC : Ex (fun ω : Ω => Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
-      ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr)) ≤ Real.sqrt ((Bconf H L Ω P x).Pr H) :=
-    (Ex_sqrt_le _ fun _ => Pr_nonneg _).trans (Real.sqrt_le_sqrt (pr_conflict_le hbind hs P))
-  have hn : (0 : ℝ) ≤ L.nG x := Nat.cast_nonneg _
-  have h1 : Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-      ∃ u ∈ L.checked x p.2, u ∈ L.Freg H P x p.1) ≤ L.εreg H x P := by
-    refine (Sampling.Pr_prod_eq_Ex _).trans_le ((Ex_mono hper).trans ?_)
-    rw [Ex_add, Ex_add, Ex_mul_left]
-    unfold Compiled.εreg
-    linarith [mul_le_mul_of_nonneg_left hC hn]
-  refine ⟨h1, fun s' hs' δ hδ => ?_⟩
-  rw [show s' = s from Option.some.inj (hs'.symm.trans hs)]
-  exact miss_of_event hS hs hPt hin P (L.Freg H P x) hFlt h1 hδ
-
 end Compiled
-
-/-- **The committed form** from the sessions' bound. -/
-theorem compilerKSReg_of (hsess : SessionKSOf) : CompilerKSReg := by
-  intro Coin _ _ _ A L H hA hB hS
-  exact Compiled.ksReg_of_sessionKS hB hS (hsess Coin A L H hA hS)
 
 end Claims.SamplingGeneric

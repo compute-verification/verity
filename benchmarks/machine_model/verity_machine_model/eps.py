@@ -46,7 +46,7 @@ selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
   Honest's time is measured when the design runs the profile's kernel; otherwise, when the profile is measured, the
   measured time plus the model's difference between the design and the profile's kernel, and else its fastest
   program's model time.
-- **ε_skip** is the ε_skip calculator's number for the design's noise (benchmarks/pouw/eps_budget.py, `design_skip`), which
+- **ε_skip** is the number `skip.design_skip` makes for the design's noise, which
   its `[skip.served]` records at the device's current vector, and at another vector V as `at = { V = … }` (♭ moves
   with Π); **ε_mand** and **ε_clock** are the design's accounting (data/designs/), each part with its source.
 - **ε_adapt** is the proof block's (data/adapt.toml, Theorem D): what steering instances in unproved regions gains
@@ -75,6 +75,12 @@ from scipy.optimize import linprog
 
 from verity_machine_model.model import DATA, census, model, vector
 
+__all__ = ["Adapt", "CREDITS", "Design", "Eps", "Filler", "Form", "Honest", "LANES", "MMA", "Machine", "Mix", "NOISE",
+           "OPERANDS", "PINNED", "PRODUCTS", "Part", "QS", "ROUTES", "SUMS", "Setup", "Table", "UNI", "adapt", "adapts",
+           "aliases", "binding", "budget", "deficit", "design", "designs", "eps", "forms", "honest", "lane_fill",
+           "machine", "profiles", "setup", "table", "threshold", "undominated", "uniform_issue_charged",
+           "uniform_on_issue"]
+
 LANES = 32
 UNI = "UNI"
 MMA = "MMA"
@@ -92,7 +98,7 @@ NOISE = {                                          # how a product is noised and
     "pv": "P served with a fresh bit, V served, Ycum's base-128 digits committed: every product checked",
     "clean": "served plain, never proved",
 }
-SUMS = {                                           # the kernel forming a peel's sums DG, S and X(0) (eps_budget prices it)
+SUMS = {                                           # the kernel forming a peel's sums DG, S and X(0) (`skip` prices it)
     "vsum": "the linear vsum, 35 per-thread instructions an entry",
     "vfold": "the vfold, the V producers in one pass: 0.69–0.73 warp instructions an entry",
 }
@@ -183,8 +189,8 @@ class Part:
 
 
 PINNED = ("Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit (and PinnedFillLuckAt): the check recomputes the "
-          "drawn tile's receipt from committed data and the round's coins and compares it with the committed one, so a "
-          "wrong receipt fails whenever its tile is drawn and nothing is left to guess; what a right receipt cost is "
+          "sampled tile's receipt from committed data and the round's coins and compares it with the committed one, so a "
+          "wrong receipt fails whenever its tile is sampled and nothing is left to guess; what a right receipt cost is "
           "FILL-OPT's")
 PFILL = ("Accounting.Guarantees.FillerLuck.FillerBlocksDeficit (and FillerLuckAt): pfill's cell check, a short cell "
          "right with probability at most ½ + 2^(−3/2)")
@@ -354,8 +360,8 @@ def design(name: str, data: Path = DATA) -> Design:
     filler = Filler(per_word=f.get("per_word", 0.0), mix=f.get("mix"), route=f.get("route", "lanes"),
                     source=f.get("source", ""), p=f.get("p", Filler.p), luck=f.get("luck", ""))
     if filler.route != "lanes" or (filler.per_word and not filler.mix):
-        raise SystemExit(f"{name}: honest runs a filler on lanes, with its class mix (decision 73: a uniform "
-                         "instruction takes an issue slot, so no design fills the uniform datapath)")
+        raise SystemExit(f"{name}: honest runs a filler on lanes, with its class mix (a uniform instruction takes an "
+                         "issue slot, so no design fills the uniform datapath)")
     if filler.per_word and ("p" not in f or not 0 <= filler.p <= 1 or (filler.p < 1 and not filler.luck)):
         raise SystemExit(f"{name}: [filler] p is the probability a deficient block passes its check, and `luck` the "
                          f"theorem that proves it: 0 for a receipt the check recomputes ({PINNED.split(' ')[0]}), "
@@ -452,7 +458,9 @@ def adapts(data: Path = DATA) -> list[str]:
 
 def designs(data: Path = DATA) -> list[str]:
     """The design names, their numbers in numeric order (dither-1s-l32 before dither-1s-l128)."""
-    key = lambda n: [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", n)]
+    def key(n: str) -> list[int | str]:
+        return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", n)]
+
     return sorted((p.stem for p in (data / "designs").glob("*.toml")), key=key)
 
 
@@ -744,7 +752,7 @@ class Setup:
                        tensor_mma=self.honest.tensor(self.operands, d.floor), budget=budget(d) if luck else 0.0,
                        table=self.table, forms=self.forms)
 
-    def machine_eps(self, q: float, **routes) -> float:
+    def machine_eps(self, q: float, **routes: bool | float | None) -> float:
         return max(0.0, 1 - self.cheat(q, **routes).T / self.baseline.T)
 
     def floor(self) -> float:
@@ -895,10 +903,13 @@ def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = 
                clock=d.clock.eps if credit == "H" else 0.0, adapt=adapt)
 
 
-def threshold(s: Setup, hi: float = 64.0, tol: float = 1e-9, **routes) -> float | None:
+def threshold(s: Setup, hi: float = 64.0, tol: float = 1e-9, **routes: bool | float | None) -> float | None:
     """The least q* at which ε_machine reaches its floor (to 1e-6), or None when it hasn't at q* = hi."""
     floor = s.floor()
-    f = lambda q: s.machine_eps(q, **routes) - floor
+
+    def f(q: float) -> float:
+        return s.machine_eps(q, **routes) - floor
+
     if f(hi) > tol:
         return None
     lo = 0.0

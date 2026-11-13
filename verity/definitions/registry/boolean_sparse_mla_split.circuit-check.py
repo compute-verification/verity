@@ -5,6 +5,15 @@ from __future__ import annotations
 from typing import Any, Callable
 
 
+def _glm53_served_roots() -> list[Any]:
+    """A split's end on one column block of 64 at GLM-5.3's served statics, what a split row's chain of 64-column values units
+    (`sparse_mla_split.split_chain` at ``cols`` = 64) ends each split in."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import boolean_sparse_mla_split as BX
+
+    return [bind(BX.SparseMlaSplitEndV2, DV=64, INV=BX.SPARSE_MLA_GLM53["INV"], SCALE=BX.SPARSE_MLA_GLM53["SCALE"])]
+
+
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""

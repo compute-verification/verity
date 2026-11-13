@@ -3,11 +3,11 @@ module
 public import Proofs.Pouw.Fp8Atom.Fp32Proofs
 public import Proofs.Pouw.PearlC.FreezeP
 public import Proofs.Pouw.PearlC.Cap.IntForm
-public import Proofs.Pouw.PearlC.Cap.Pins
 public import Proofs.Pouw.PearlC.Cap.SaltDeadStep
 public import Proofs.Pouw.PearlC.Cap.SaltDead
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
+public import Proofs.Pouw.PearlC.Cap.Pins
 
 /-!
 # The cap circuit's Lean pieces

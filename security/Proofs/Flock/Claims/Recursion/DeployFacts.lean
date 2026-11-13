@@ -1,6 +1,5 @@
 module
 
-public import Proofs.Flock.Claims.Recursion
 public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Flock.Claims.Recursion.DeployScope
 public import Proofs.Flock.Claims.Recursion.Inner
@@ -40,6 +39,11 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployK
 import Std.Tactic.BVDecide.Normalize.Prop
+public import Proofs.Flock.Claims.KS.PlainAcc
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
+public import Proofs.Flock.Claims.Recursion.Gap
+public import Proofs.Flock.Claims.Recursion.KSLin
+public import Proofs.Flock.Claims.Recursion
 
 /-!
 # The compiled verifier's structural code facts

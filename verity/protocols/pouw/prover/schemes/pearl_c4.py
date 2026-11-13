@@ -49,13 +49,13 @@ off) is `clean`: the same α and block rule on α·x, no noise.
 **Why the chain's exactness matters.**  On the domain the chain is exact, so rounding does not tie a word to its order,
 as Pearl-C's H100 argument had it.  The design rests instead on every code and every block scale depending on the salt.
 
-**The domain and the debit** are TT_OUT-FP4's (``tt-out/fp4-sm120``, proposed).  Admission is per row,
+**The domain and the inert work** are TT_OUT-FP4's (``tt-out/fp4-sm120``, proposed).  Admission is per row,
 salt-free (`row_passes`): D-NF (`dnf`: 0 ≤ β and a_E's E4M3 byte v in 0x08–0x7E, a normal UE4M3 with bit 7 clear and not
 NaN; one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.5ρ, `dead_blocks`); its row is admitted and
 its salt-dead codes are charged per element (items 3 and 4), so a row with many screened blocks is rejected only when
-its tile's debit passes the cap.  Items 3 and 4 charge the reference's witness alone,
+its tile's inert work passes the bound.  Items 3 and 4 charge the reference's witness alone,
 not every element of a screened block: F1′ charges a screened block's
-near-certain codes at their own p_t.  A sampled tile's debit is replayed over its credited words (`tile_debit`):
+near-certain codes at their own p_t.  A sampled tile's inert work is replayed over its credited words (`tile_debit`):
 
 ~~~text
 1  F1′ split     per row and aligned 128 of k: 128·S_w, κ = min(c·M_w, 0.125) inside S_w's expectation, on every word
@@ -63,13 +63,13 @@ near-certain codes at their own p_t.  A sampled tile's debit is replayed over it
 1b F2 int8      per tile: max(0, 1 − c_L − 4·(2 − f_A − f_B)) per chain MAC, f the realised scale bytes' flatness (below)
 2  identity      per atom whose lone skip leaves the word unchanged: 64 per atom-word
 3  dead pairs    per word and position t whose A code and B code are both salt-dead (`salt_dead`, each side): 1
-4  forming       per salt-dead (the reference's witness, `salt_dead`) or unneeded A element: f_s · |cols|/n
+4  forming       per A element that is salt-dead (the reference's witness, `salt_dead`) or meets only zero B codes: f_s · |cols|/n
 5  sub-grid      per (word, block) with 2304·m_a·m_b·2^(e_a+e_b−2) below its step's grid (it adds exactly 0): `block`
 D-24 windows     per row and aligned 128 of k whose every 8-chunk has ≤ 2 of 4 pairs nonzero: 0.5 per MAC, on every word it feeds
-cap              debit ≤ ρ · the credited cells' share of creditOf, ρ = 1/400
+bound            inert work ≤ ρ · the credited cells' share of creditOf, ρ = 1/400
 ~~~
 
-**F1′ and F2** (what makes ``tt-out/fp4-sm120``'s debit sound).
+**F1′ and F2** (what makes ``tt-out/fp4-sm120``'s count of inert work sound).
 F1′ charges the salt-free base split A′ = A0 + ΔA its expected saving under the exact noise distribution given this salt's E
 lines (`noise_law`): p_t = P(code ≠ modal code) at the block's modal scale byte (`change_probabilities`); per window,
 min(1, E[max(0, R_24 − κ)] + E[max(0, R_skip − κ)]) with R_24 one 2:4 pass plus a CUDA-core patch of the excess, R_skip
@@ -80,13 +80,13 @@ per row, and per block-column class (`int8_saving`), with c_L the fast-matmul ca
 count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`). They are the rows
 `base-split-debit/fp4-sm120` (F1′ charges the base split's saving) and `int8-route-debit/nvfp4` (F2 charges the masked
 int8 route's saving per sampled tile), which replace `no-base-split/fp4-sm120` and the retired domain claim
-`scale-flatness/nvfp4`.  A tile whose debit passes the cap fails the tile rule outright (`clear_work.check_opened`),
+`scale-flatness/nvfp4`.  A tile whose inert work passes the bound fails the tile rule outright (`clear_work.check_opened`),
 and D-SK stays.  **R1**: a row whose own F1′ per word passes ρ·(its cell credit) is uncredited, declared by the prover
 (`r1_rows`, through `clear_work.declare`) and checked on sampled tiles (`row_over_debit`, through
 `clear_work.check_opened`); it is still formed, checked and hashed.
 
-A code is *salt-dead* unless two samples in the noise support give it two values (`salt_dead`), so the forming debit is on
-codes, not on the atom's word.  F1′ takes p_t = 0 on salt-dead codes.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
+A code is *salt-dead* unless two samples in the noise support give it two values (`salt_dead`), so forming's inert work is
+counted on codes, not on the atom's word.  F1′ takes p_t = 0 on salt-dead codes.  D-24 is charged per row window rather than per 16-row span (a cheaper computation may
 gather any 16 such rows), and the literal spans are counted.  D-SS's spread bound (2^15.8, implied by D-NF) is counted, not
 enforced: items 2 and 5 charge what it would exclude.  D-SB is enforced on every formed side before hashing
 (`check_scale_bytes`): every block scale in 0x01–0x7E (UE8M0: short of 0xFF) and every a_E at most 0x7E,
@@ -121,10 +121,10 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
-from verity.errors import InvalidArtifact
 from verity.commitments import domains
 from verity.definitions.silicon import fp32
 from verity.definitions.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
+from verity.errors import InvalidArtifact
 
 from verity.protocols.pouw.verifier.protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from verity.protocols.pouw.verifier.registration import (  # noqa: F401 - re-exported
@@ -136,9 +136,11 @@ from verity.protocols.pouw.verifier.registration import (  # noqa: F401 - re-exp
     VO_ROTATION,
     check_registration,
 )
+
 from . import pearl_c as C
 from . import pearl_c4_c_L as CL
 from . import pearl_kw as P
+from .pearl_c_work import UnitRecord
 
 R = 32
 ATOM = 64
@@ -183,7 +185,7 @@ GROUP_MAX = 2304                   # the largest |group dot| in quarters: 16 pro
 #: wall-time window below it, 1.81, is `concurrent-budgets/sm120`'s, not the rule's).
 FFMA_UNITS, DENSE_CORRECTION, INT8_PATCH_SLOTS, INT8_LEAF_SLOTS = 16.92, 0.125, 4, 2
 
-_E2M1_MIDPOINTS = (0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0)
+E2M1_MIDPOINTS = (0.25, 0.75, 1.25, 1.75, 2.5, 3.5, 5.0)
 _E2M1_HALVES = (0, 1, 2, 3, 4, 6, 8, 12)
 
 
@@ -197,7 +199,7 @@ class Fmt:
     block: int
     one: int
 
-    def __reduce__(self):
+    def __reduce__(self) -> tuple[Callable[[str], Fmt], tuple[str]]:
         return _format, (self.name,)
 
 
@@ -226,7 +228,7 @@ def e2m1(word: int) -> int:
     """cvt.rn.satfinite.e2m1 of one finite FP32 word: nearest even, ±6 past the top, the sign kept (−0 is 0x8)."""
     v = abs(P.f32_of_bits(_finite(word)))
     code = 0
-    for i, mid in enumerate(_E2M1_MIDPOINTS):
+    for i, mid in enumerate(E2M1_MIDPOINTS):
         if v > mid or (v == mid and (i + 1) % 2 == 0):
             code = i + 1
         else:
@@ -502,7 +504,7 @@ def peel(c_word: int, pa: Sequence[int], pb: Sequence[int]) -> int:
     return acc
 
 
-# ---- the domain rules and the debit -------------------------------------------------------------------------------
+# ---- the domain rules and the inert work --------------------------------------------------------------------------
 
 def _exact_rho_sq(x: Sequence[int]) -> Fraction:
     positions = range(0, len(x), C.S5_STRIDE)
@@ -512,7 +514,7 @@ def _exact_rho_sq(x: Sequence[int]) -> Fraction:
 def dead_blocks(fmt: Fmt, x: Sequence[int]) -> list[bool]:
     """Per scale block: screened when (clean amax_b)² > 90·ρ² (9.5ρ; exact, ρ² over every 8th position).  Salt-free, and
     it covers every salt-dead element (Lean `saltDead4_screened`), so items 3 and 4, on the witness (`salt_dead`), never
-    charge more than their block forms; the debit counts co-screened block pairs (`screened_block_pairs`) but charges
+    charge more than their block forms; the replay counts co-screened block pairs (`screened_block_pairs`) but charges
     none, instead of rejecting the rows."""
     rho_sq = _exact_rho_sq(x)
     return [Fraction(P.f32_of_bits(max(w & 0x7FFFFFFF for w in x[b:b + fmt.block]))) ** 2 > DEAD_RHO_SQ * rho_sq
@@ -534,8 +536,8 @@ def dnf(beta: int) -> bool:
 
 def row_passes(fmt: Fmt, x: Sequence[int]) -> bool:
     """Admission, per row and salt-free: every word a finite widened BF16 word (its low 16 bits zero, as `parse_row`
-    writes them; Lean's `Fp4Sem.RowOK`), and D-NF (`dnf`).  A row's screened blocks are charged in its tiles' debit
-    (`tile_debit`), and the tile's cap rejects them."""
+    writes them; Lean's `Fp4Sem.RowOK`), and D-NF (`dnf`).  A row's screened blocks are charged in its tiles' inert work
+    (`tile_debit`), and the tile's bound rejects them."""
     if any(w & 0xFFFF or (w >> 23) & 0xFF == 0xFF for w in x):
         return False
     try:
@@ -588,22 +590,23 @@ def salt_dead(fmt: Fmt, x: Sequence[int], alpha: int, ae: int) -> list[bool]:
         second = max(mags[:at] + mags[at + 1:], default=0)
         for t, (ct, dt) in enumerate(zip(c, clean)):
             rest = second if t == at else top
-            draws = (_finite(atom.align_add(ct, up)), dt, _finite(atom.align_add(ct, down)))
-            dead.append(len({code(v, max(v & 0x7FFFFFFF, rest)) for v in draws}) == 1)
+            ends = (_finite(atom.align_add(ct, up)), dt, _finite(atom.align_add(ct, down)))
+            dead.append(len({code(v, max(v & 0x7FFFFFFF, rest)) for v in ends}) == 1)
     return dead
 
 
-def _scale_value(fmt: Fmt, byte: int) -> float:
+def scale_value(fmt: Fmt, byte: int) -> float:
     m, e = scale_dyadic(fmt, byte)
     return m * 2.0 ** e
 
 
 def noise_sigma(e_row: Sequence[int], ae: int) -> float:
     """The noise's standard deviation in the atom's C units given this salt's E line: a_E·2^-4·‖E‖·√8.5625 (F uniform)."""
-    return _scale_value(NVFP4, ae) / 16 * math.sqrt(8.5625 * sum(float(e2m1_value(c)) ** 2 for c in e_row))
+    return scale_value(NVFP4, ae) / 16 * math.sqrt(8.5625 * sum(float(e2m1_value(c)) ** 2 for c in e_row))
 
 
-_F2 = (0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12)    # 2·value of each E2M1 code, in half units
+#: 2·value of each E2M1 code, in half units
+E2M1_SIGNED_HALVES = (0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12)
 
 
 def _pmf_conv(a: tuple[int, tuple[float, ...]], b: tuple[int, tuple[float, ...]]) -> tuple[int, tuple[float, ...]]:
@@ -619,12 +622,13 @@ def _pmf_conv(a: tuple[int, tuple[float, ...]], b: tuple[int, tuple[float, ...]]
 
 @lru_cache(maxsize=64)
 def _f_power(m: int) -> tuple[int, tuple[float, ...]]:
-    """The sampling design of the sum of m independent uniform samples of 2·F (F one E2M1 code), on the integers from its lowest value."""
+    """The distribution of the sum of m independent uniform samples of 2·F (F one E2M1 code), on the integers from its lowest
+    value."""
     if m == 0:
         return 0, (1.0,)
     if m == 1:
         pmf = [0.0] * 25
-        for v in _F2:
+        for v in E2M1_SIGNED_HALVES:
             pmf[v + 12] += 1 / 16
         return -12, tuple(pmf)
     return _pmf_conv(_f_power(m // 2), _f_power(m - m // 2))
@@ -632,16 +636,16 @@ def _f_power(m: int) -> tuple[int, tuple[float, ...]]:
 
 @lru_cache(maxsize=512)
 def noise_law(e_row: tuple[int, ...]) -> tuple[int, tuple[float, ...]]:
-    """The exact law of n = Σ_r (2E_r)·(2F_r) given this salt's E line, F_r uniform over the 16 E2M1 codes and independent
-    (one element's noise is a_E·2^-6·n): (lowest value, pmf over the consecutive integers from it).  F is symmetric, so
-    only |E_r| matters, and each magnitude's m-fold sum is a stretched power of one sample's law."""
-    law: tuple[int, tuple[float, ...]] = (0, (1.0,))
-    for v in sorted({abs(_F2[c]) for c in e_row} - {0}):
-        lo, pmf = _f_power(sum(1 for c in e_row if abs(_F2[c]) == v))
+    """The exact distribution of n = Σ_r (2E_r)·(2F_r) given this salt's E line, F_r uniform over the 16 E2M1 codes and
+    independent (one element's noise is a_E·2^-6·n): (lowest value, pmf over the consecutive integers from it).  F is
+    symmetric, so only |E_r| matters, and each magnitude's m-fold sum is a stretched power of one sample's distribution."""
+    dist: tuple[int, tuple[float, ...]] = (0, (1.0,))
+    for v in sorted({abs(E2M1_SIGNED_HALVES[c]) for c in e_row} - {0}):
+        lo, pmf = _f_power(sum(1 for c in e_row if abs(E2M1_SIGNED_HALVES[c]) == v))
         stretched = [0.0] * ((len(pmf) - 1) * v + 1)
         stretched[::v] = pmf
-        law = _pmf_conv(law, (lo * v, tuple(stretched)))
-    return law
+        dist = _pmf_conv(dist, (lo * v, tuple(stretched)))
+    return dist
 
 
 @lru_cache(maxsize=512)
@@ -675,10 +679,10 @@ def modal_byte(fmt: Fmt, v: Sequence[float], cdf: Callable[[float], float], sigm
     lo_b = block_scale(fmt, P.f32_bits(max(top - 6 * sigma, 0.0)))[0]
     hi_b = block_scale(fmt, P.f32_bits(top + 6 * sigma))[0]
     if fmt is MXFP4:
-        edges = {s: (3 * _scale_value(fmt, s), 6 * _scale_value(fmt, s)) for s in range(lo_b, hi_b + 1)}
+        edges = {s: (3 * scale_value(fmt, s), 6 * scale_value(fmt, s)) for s in range(lo_b, hi_b + 1)}
     else:
         def mid(s, t):
-            return 3 * (_scale_value(fmt, s) + _scale_value(fmt, t))
+            return 3 * (scale_value(fmt, s) + scale_value(fmt, t))
         edges = {s: (mid(s - 1, s) if s > UE4M3_MIN else 0.0, mid(s, s + 1) if s < UE4M3_TOP else math.inf)
                  for s in range(lo_b, hi_b + 1)}
     return max(edges, key=lambda s: (_below(v, cdf, edges[s][1]) - _below(v, cdf, edges[s][0]), -s))
@@ -690,15 +694,15 @@ def change_probabilities_exact(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Se
     product formula over the bytes the clean amax ± 6σ reaches.  Kept to check that `change_probabilities` charges at
     least it; the rule is `change_probabilities`."""
     e = tuple(e_row)
-    cdf = _below_law(e, _scale_value(NVFP4, ae) / 64)
+    cdf = _below_law(e, scale_value(NVFP4, ae) / 64)
     sigma = noise_sigma(e_row, ae)
     p, modes = [], []
     for b in range(0, len(x), fmt.block):
         v = [P.f32_of_bits(fp32.mul(alpha, w)) for w in x[b:b + fmt.block]]
         mode = modal_byte(fmt, v, cdf, sigma)
         modes.append(mode)
-        vs = _scale_value(fmt, mode)
-        edges = [-m * vs for m in reversed(_E2M1_MIDPOINTS)] + [m * vs for m in _E2M1_MIDPOINTS]
+        vs = scale_value(fmt, mode)
+        edges = [-m * vs for m in reversed(E2M1_MIDPOINTS)] + [m * vs for m in E2M1_MIDPOINTS]
         for t, vt in enumerate(v):
             if dead[b + t]:
                 p.append(0.0)
@@ -712,7 +716,7 @@ def change_probabilities_exact(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Se
 #: lower bound on p_t gives up; both on the charging side.
 F1_EPS = 1e-12
 #: R1's tolerance band: a row within this relative distance of its bound may be
-#: declared either way, and a tile's debit is compared with its cap at the same margin.  Soundness cost ≤ 10^-9·ρ.
+#: declared either way, and a tile's inert work is compared with its bound at the same margin.  Soundness cost ≤ 10^-9·ρ.
 R1_TOLERANCE = 1e-9
 #: B̃'s overfit factor, measured, not derived: a layout chosen after the salt for B̃'s residual is shared by all n
 #: weight rows and re-lays no A′; its hill-climb needs 6.8× F1′'s expectation on the worst family.  B̃'s
@@ -722,9 +726,9 @@ F1_B_OVERFIT = 10
 #: B-OVF, measured, not derived: a unit's creditOf is discounted by β(n_b)·mnk, n_b the
 #: largest tabled n ≤ its n.  β is the worst net saving of a B̃ layout annealed and block-optimised after the salt, over
 #: the families R1 admits at `F1_B_OVERFIT`, after A0's gather and ρ, with a 1.5× margin on the measured gain and made
-#: non-increasing in n.  It is taken on each bucket's own R1 admission boundary at k = 1,024 (``k_min``), where the cap
-#: is largest, and just inside it (the worst family can sit there), never below the grid's table.  The fork
-#: (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
+#: non-increasing in n.  It is taken on each bucket's own R1 admission boundary at k = 1,024 (``k_min``), where the
+#: inert-work bound is largest, and just inside it (the worst family can sit there), never below the grid's table.
+#: The fork (tt-out-aw/pearl-c-nvfp4-sm120) takes the same discount.
 B_OVF = ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
          (1024, Fraction(50, 10_000)), (2048, Fraction(18, 10_000)), (4096, Fraction(0)))
 #: The claimed domain's least n: n = 64 (an MQA unit of one 64-wide KV head) would need 5.7% and is not claimed.
@@ -740,9 +744,9 @@ def b_ovf(n: int) -> Fraction:
 def _byte_edges(fmt: Fmt, s: int) -> tuple[float, float]:
     """The noisy amax interval [lo, hi) whose block takes scale byte s."""
     if fmt is MXFP4:
-        return 3 * _scale_value(fmt, s), 6 * _scale_value(fmt, s)
-    lo = 3 * (_scale_value(fmt, s - 1) + _scale_value(fmt, s)) if s > UE4M3_MIN else 0.0
-    hi = 3 * (_scale_value(fmt, s) + _scale_value(fmt, s + 1)) if s < UE4M3_TOP else math.inf
+        return 3 * scale_value(fmt, s), 6 * scale_value(fmt, s)
+    lo = 3 * (scale_value(fmt, s - 1) + scale_value(fmt, s)) if s > UE4M3_MIN else 0.0
+    hi = 3 * (scale_value(fmt, s) + scale_value(fmt, s + 1)) if s < UE4M3_TOP else math.inf
     return lo, hi
 
 
@@ -777,7 +781,7 @@ def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence
     - 0 on salt-dead codes.
     It charges at least `change_probabilities_exact` in every window.  The atom's one RZ rounding of C + noise, 2^-23
     relative, is not modelled."""
-    cdf = _below_law(tuple(e_row), _scale_value(NVFP4, ae) / 64)
+    cdf = _below_law(tuple(e_row), scale_value(NVFP4, ae) / 64)
     hw = hw_scales(fmt, scales)
     p: list[float] = []
     modes: list[int | None] = []
@@ -788,8 +792,8 @@ def change_probabilities(fmt: Fmt, x: Sequence[int], alpha: int, e_row: Sequence
         if mode is None:
             p.extend([0.0] * len(v))
             continue
-        vs = _scale_value(fmt, mode)
-        edges = [-math.inf] + [-m * vs for m in reversed(_E2M1_MIDPOINTS)] + [m * vs for m in _E2M1_MIDPOINTS] + [math.inf]
+        vs = scale_value(fmt, mode)
+        edges = [-math.inf] + [-m * vs for m in reversed(E2M1_MIDPOINTS)] + [m * vs for m in E2M1_MIDPOINTS] + [math.inf]
         for t, vt in enumerate(v):
             if dead[b + t]:
                 p.append(0.0)
@@ -808,12 +812,12 @@ def _edge_cdf(cdf: Callable[[float], float], edge: float, v: float) -> float:
 _EXCESS_MAX = 4                    # 0.5 − c·x < 0 from x = 4 on
 
 
-def _pair_excess(js: tuple[int, ...]) -> int:
+def pair_excess(js: tuple[int, ...]) -> int:
     dev = sorted(j for j in js if j)
     return min(sum(dev[:len(dev) - 2]) if len(dev) > 2 else 0, _EXCESS_MAX)
 
 
-_COMBOS = [(js, _pair_excess(js)) for js in itertools.product(range(3), repeat=4)]
+_COMBOS = [(js, pair_excess(js)) for js in itertools.product(range(3), repeat=4)]
 
 
 def _conv(a: Sequence[float], b: Sequence[float]) -> list[float]:
@@ -1005,7 +1009,7 @@ def word_replay(fmt: Fmt, a_codes: Sequence[int], b_codes: Sequence[int], a_scal
 
 @dataclass(frozen=True)
 class Debit:
-    """A sampled tile's replayed debit over its credited words in FP4 units, by item (module docstring), and the counts
+    """A sampled tile's replayed inert work over its credited words in FP4 units, by item (module docstring), and the counts
     behind it and behind the domain checks."""
 
     split: Fraction
@@ -1047,7 +1051,7 @@ RowTerms = dict[tuple[str, int], tuple[list[bool], Fraction, int]]
 def row_terms(fmt: Fmt, memo: RowTerms, label: str, side: Formed, e_rows: Sequence[Sequence[int]], pos: int,
               f1: RowF1 = row_f1) -> tuple[list[bool], Fraction, int]:
     """A row of A′ ("A") or B̃ ("B"): its salt-dead codes and its F1′ (B̃'s at `F1_B_OVERFIT` times its expectation),
-    evaluated once per `memo`, so R1 and the debit read the same evaluation."""
+    evaluated once per `memo`, so R1 and the tile's inert work read the same evaluation."""
     if (label, pos) not in memo:
         dead = salt_dead(fmt, side.x[pos], side.alpha[pos], side.ae[pos])
         memo[label, pos] = (dead, *f1(fmt, side, e_rows, pos, dead, 1 if label == "A" else F1_B_OVERFIT))
@@ -1057,7 +1061,7 @@ def row_terms(fmt: Fmt, memo: RowTerms, label: str, side: Formed, e_rows: Sequen
 def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequence[int], n: int,
                e_a: Sequence[Sequence[int]], e_b: Sequence[Sequence[int]], m: int | None = None,
                f1: RowF1 | None = None, memo: RowTerms | None = None) -> Debit:
-    """The debit over the credited words at tile positions rows x cols of a tile's formed operands (A′ = a, B̃ = b, with
+    """The inert work over the credited words at tile positions rows x cols of a tile's formed operands (A′ = a, B̃ = b, with
     this salt's E lines e_a and e_b), for a unit of m x k x n (m defaults to n).  `f1` evaluates a row's F1′; a verifier
     may pass a faster evaluation that charges at least the rule's (`benchmarks/pouw/pearl_c4/f1_fast.py`).  `memo` holds
     rows already evaluated on these operands with this `f1` (`row_terms`)."""
@@ -1084,10 +1088,10 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
     mask_a = {i: sum(1 << t for t, d in enumerate(dead_a[i]) if d) for i in rows}
     mask_b = {j: sum(1 << t for t, d in enumerate(dead_b[j]) if d) for j in cols}
     pairs = sum((mask_a[i] & mask_b[j]).bit_count() for i in rows for j in cols)
-    unneeded = [all(b.codes[j][t] & 7 == 0 for j in cols) for t in range(len(a.codes[0]))]
-    elements = sum(d or u for i in rows for d, u in zip(dead_a[i], unneeded))
+    zero_b = [all(b.codes[j][t] & 7 == 0 for j in cols) for t in range(len(a.codes[0]))]
+    elements = sum(d or u for i in rows for d, u in zip(dead_a[i], zero_b))
     screened_only = sum(not (d or u) and blocks_a[i][t // fmt.block]
-                        for i in rows for t, (d, u) in enumerate(zip(dead_a[i], unneeded)))
+                        for i in rows for t, (d, u) in enumerate(zip(dead_a[i], zero_b)))
     spans = sum(all(win_a[i][w] for i in range(r, r + 16)) for r in range(0, len(a.codes) - 15, 16)
                 for w in range(len(win_a[0])))
     counts = {"salt_dead_a": sum(sum(dead_a[i]) for i in rows), "salt_dead_b": sum(sum(dead_b[j]) for j in cols),
@@ -1096,7 +1100,7 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
               "d24_spans_a": spans, "identity_atom_words": identity, "subgrid_block_words": subgrid, "dead_pairs": pairs,
               "screened_block_pairs": block_pairs,
               "screened_blocks_a": sum(sum(blocks_a[i]) for i in rows), "screened_blocks_b": sum(sum(blocks_b[j]) for j in cols),
-              "forming_elements": elements, "screened_only_elements": screened_only, "unneeded_positions": sum(unneeded),
+              "forming_elements": elements, "screened_only_elements": screened_only, "unneeded_positions": sum(zero_b),
               "dss_spread_rows": sum(not spread_ok(fmt, a.scales[i]) for i in rows)
               + sum(not spread_ok(fmt, b.scales[j]) for j in cols),
               "words": len(rows) * len(cols)}
@@ -1114,7 +1118,7 @@ class PearlC4:
     cap = CAP
 
     def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
-                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h3"):
+                 f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h3") -> None:
         if fmt not in FORMATS:
             raise ValueError(f"format {fmt!r}: one of {', '.join(FORMATS)}")
         if hashing not in HASHINGS:
@@ -1126,8 +1130,8 @@ class PearlC4:
         self.f1 = row_f1 if f1 is None else f1
         self.name = NAMES[fmt] + ("" if hashing == "h0" else f"-{hashing}")
         #: MXFP4 is contrast only: its int8 closure holds under F2, but F1′ puts 9.5–57% of honest MXFP4 credit over the
-        #: cap (UE8M0 scales don't move with the salt, and its round-up scales make honest zeros reliable), so its line is
-        #: D on honest coverage and Pearl-C4 claims NVFP4 alone.
+        #: inert-work bound (UE8M0 scales don't move with the salt, and its round-up scales make honest zeros reliable),
+        #: so its line is D on honest coverage and Pearl-C4 claims NVFP4 alone.
         self.contrast = self.fmt is MXFP4
         self.r1_tolerance = R1_TOLERANCE
         self.k_min, self.tile, self.n_min = k_min, tile, n_min
@@ -1141,20 +1145,20 @@ class PearlC4:
             claims=("tt-out/fp4-sm120", "random-oracle", "cr/sha-512", "cr/sha-256", "device-reproducibility",
                     "live-verifier"),
             hypotheses=(
-                "TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
-                "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
-                "F2 and the FP4 conditions, proposed and not proved: no sm_120 W1 program outputs correct C̃ and U words "
-                "of the units whose replayed debit is under the cap for less than their credit less the debit",
-                f"sm_120's mma.sync kind::mxf4nvf4 and BF16 m16n8k16 are reproduced exactly ({self.fmt.atom.name}, "
-                "blackwell_sm120_nvf4_m16n8k64 for the noise atom, hopper_bf16_m16n8k16), pinned on the RTX 5090",
+                ("TT_OUT-FP4(1/400) for this Π and domain (D-NF, D-24, D-SS, D-SB, and D-SK: B̃'s noise keyed by "
+                 "this job's salt, seed-B = H_seed-B(salt ‖ root_b), recomputed by the verifier), with the debit's F1′ and "
+                 "F2 and the FP4 conditions, proposed and not proved: no sm_120 W1 program outputs correct C̃ and U words "
+                 "of the units whose replayed debit is under the cap for less than their credit less the debit"),
+                (f"sm_120's mma.sync kind::mxf4nvf4 and BF16 m16n8k16 are reproduced exactly ({self.fmt.atom.name}, "
+                 "blackwell_sm120_nvf4_m16n8k64 for the noise atom, hopper_bf16_m16n8k16), pinned on the RTX 5090"),
                 "the E2M1, UE4M3 and UE8M0 casts are as modelled (from the PTX ISA, not captured)",
             ),
             allowances=(
                 "the noisy block amax (17 units per element) and ρ over every 8th position (2) are in W_ref, not credited",
-                "savings no replay reaches (cross-atom cancellation, gathering across blocks, adaptive regrouping after "
-                "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replayed debit charges the rest "
-                "(tile_debit), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
-                "(B_OVF, credit_of)",
+                ("savings no replay reaches (cross-atom cancellation, gathering across blocks, adaptive regrouping after "
+                 "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replayed debit charges the rest "
+                 "(tile_debit), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
+                 "(B_OVF, credit_of)"),
                 "the unscale is glue outside the checked values",
             ),
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("block", self.fmt.block),
@@ -1168,8 +1172,8 @@ class PearlC4:
                 omega=Fraction(1),
                 claims=(),
                 hypotheses=(),
-                allowances=("MXFP4 is contrast only: its line is D on honest coverage under F1′, and "
-                            "Pearl-C4 claims NVFP4 alone",),
+                allowances=(("MXFP4 is contrast only: its line is D on honest coverage under F1′, and "
+                             "Pearl-C4 claims NVFP4 alone"),),
                 parameters=self.certificate.parameters,
             )
 
@@ -1195,7 +1199,8 @@ class PearlC4:
 
     def credit_of(self, shape: Shape) -> int:
         """`wref` less A's uncredited forming, 19 units per element, and B-OVF's discount rounded up:
-        creditOf = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n)·mnk⌉ (`b_ovf`).  R1's bound and the tile cap read it."""
+        creditOf = mnk + 32·mk + 256·mn + f_s·mk − ⌈β(n)·mnk⌉ (`b_ovf`).  R1's bound and the tile's inert-work bound read
+        it."""
         m, k, n = shape.m, shape.k, shape.n
         return self.wref(shape) - FORMING_UNCREDITED * m * k - math.ceil(b_ovf(n) * m * n * k)
 
@@ -1230,9 +1235,10 @@ class PearlC4:
     def row_passes(self, words: Sequence[int]) -> bool:
         return row_passes(self.fmt, words)
 
-    def tile_cap(self, record, ops: C.Ops, rows: Sequence[int], cols: Sequence[int]) -> tuple[Fraction, Fraction]:
-        """(debit, cap) over the credited words at tile positions rows x cols: `tile_debit`'s total, and ρ times the
-        credited cells' share of creditOf (each row's `credit_of` at |K|, over n).  The breakdown stays in `last_debit`."""
+    def tile_cap(self, record: UnitRecord, ops: C.Ops, rows: Sequence[int], cols: Sequence[int]) -> tuple[Fraction, Fraction]:
+        """(inert work, its bound) over the credited words at tile positions rows x cols: `tile_debit`'s total, and ρ times
+        the credited cells' share of creditOf (each row's `credit_of` at |K|, over n).  The breakdown stays in
+        `last_debit`."""
         s = record.matmul.shape
         self.last_debit = tile_debit(self.fmt, ops.a, ops.b, rows, cols, s.n, ops.e_a, ops.e_b, s.m, self.f1,
                                      self._memo(ops))
@@ -1240,7 +1246,7 @@ class PearlC4:
         return self.last_debit.total, CAP * cell * len(rows) * len(cols)
 
     def _memo(self, ops: C.Ops) -> RowTerms:
-        """The encoded tile's `row_terms`, shared by R1 (`row_debit_ratio`) and the debit (`tile_cap`), so a sampled tile's
+        """The encoded tile's `row_terms`, shared by R1 (`row_debit_ratio`) and the inert work (`tile_cap`), so a sampled tile's
         rows are evaluated once; a new tile or a new `f1` starts a new one."""
         if self._rows[0] is not ops or self._rows[1] is not self.f1:
             self._rows = (ops, self.f1, {})
@@ -1249,7 +1255,7 @@ class PearlC4:
     def _r1_cap(self, k_kept: int, n: int) -> Fraction:
         return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
 
-    def row_debit_ratio(self, record, ops: C.Ops, side: str, pos: int) -> Fraction:
+    def row_debit_ratio(self, record: UnitRecord, ops: C.Ops, side: str, pos: int) -> Fraction:
         """R1's reading: the F1′ per word of the row at
         tile position `pos` of A′ ("A") or B̃ ("B"), over ρ·(its cell credit).  Over 1 the row must be declared
         excluded; `clear_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
@@ -1258,7 +1264,7 @@ class PearlC4:
         units = row_terms(self.fmt, self._memo(ops), side, formed, e_rows, pos, self.f1)[1]
         return units / self._r1_cap(record.k_kept, record.matmul.shape.n)
 
-    def row_over_debit(self, record, ops: C.Ops, side: str, pos: int) -> bool:
+    def row_over_debit(self, record: UnitRecord, ops: C.Ops, side: str, pos: int) -> bool:
         """Whether R1 requires the row excluded (its ratio over 1)."""
         return self.row_debit_ratio(record, ops, side, pos) > 1
 
@@ -1326,6 +1332,19 @@ class PearlC4:
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
 
 
-__all__ = ["FORMATS", "HASHINGS", "MXFP4", "NAMES", "NVFP4", "Debit", "PearlC4", "check_registration", "clean", "dnf", "e2m1",
-           "form", "hw_scales", "labelled", "line", "line_block", "row_passes", "row_seed", "salt_dead", "scale_bytes_ok", "seed_b", "tile_debit",
-           "unit_seed_a", "word_replay"]
+#: the private names these four had, which readers outside the module still import
+_E2M1_MIDPOINTS, _F2, _pair_excess, _scale_value = E2M1_MIDPOINTS, E2M1_SIGNED_HALVES, pair_excess, scale_value
+
+__all__ = ["ATOM", "B_OVF", "B_OVF_MIN_N", "DEAD_RHO_SQ", "DELTA", "DENSE_CORRECTION", "E2M1_MIDPOINTS",
+           "E2M1_SIGNED_HALVES", "F1_B_OVERFIT", "F1_EPS", "FFMA_UNITS", "FLOOR", "FORMATS", "FORMING_CREDITED",
+           "FORMING_UNCREDITED", "FOUR", "GAMMA_FOLD", "HASHINGS", "HEAD_INTERLEAVE", "INT8_LEAF_SLOTS",
+           "INT8_PATCH_SLOTS", "K_BETA", "LABELS", "LABEL_BLOCKS", "LINES_PER_BLOCK", "MXFP4", "NAMES", "NOISE_F_SCALE",
+           "NVFP4", "ONE", "PEEL_K", "R", "R1_TOLERANCE", "REGISTRATION_STACKS", "ROLE_EA", "ROLE_EB", "ROLE_FA",
+           "ROLE_FB", "ROTATION_8", "SIXTH", "SPAN_K", "TILE", "TOP", "UE4M3_MIN", "UE4M3_NORMAL", "UE4M3_TOP",
+           "VO_ROTATION", "Debit", "Fmt", "Formed", "PearlC4", "b_ovf", "basis", "bf16_row", "block_scale", "chain",
+           "change_probabilities", "change_probabilities_exact", "check_registration", "check_scale_bytes", "clean",
+           "dead_blocks", "dnf", "e2m1", "e2m1_value", "e_tilde", "form", "gram", "hw_scales", "int8_depth_cost",
+           "int8_saving", "labelled", "line", "line_block", "modal_byte", "noise_atom", "noise_sigma", "pair_excess",
+           "parse_row", "peel_factors_a", "peel_factors_b", "pow2_word", "quantize", "row_f1", "row_passes", "row_seed",
+           "salt_dead", "scale_bytes_ok", "scale_dyadic", "scale_value", "seed_b", "split_saving", "split_units",
+           "stats", "tile_debit", "two_four_windows", "ue4m3", "ue4m3_word", "ue8m0_up", "unit_seed_a", "word_replay"]

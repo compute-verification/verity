@@ -100,6 +100,13 @@ path = "out/run/run.json"
 sha256 = "7c5b8089d9c47f51da3040ae3e324780506b06063af4ce37f0db5889f749bd42"
 partial = "none"
 
+[held."l16-t20-1.1x-ref-optim-fullmuon-fe-wsd-102"]
+run = "r20261103-132106-82a6"
+art = "art:e72d1439f85c5050a0a975555f0a6d8b0f1eb4715bc64de80c0a3dadb07c6ea1"
+path = "out/run/run.json"
+sha256 = "7c5b8089d9c47f51da3040ae3e324780506b06063af4ce37f0db5889f749bd42"
+partial = "none"
+
 [held."s-t20-1.1x-ref-optim-747"]
 run = "r20261103-073437-3edd"
 art = "art:05afacd6ecd0829636d735ccb30e41ee326fc940379a752bc1cd76ba8e204a1d"

@@ -31,7 +31,9 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   sample; the verifier's Lean stratified sample over its own program and partition; each member serves its share
   (``serve --zk --draw-file``) and Lean ``verify --zk --partition --program`` holds each session; the audit record and
   a6's negatives. A tampered copy of one kind's member (bit 0 of every instance's first output word flipped before it is
-  committed) is registered and proved on its own (``subset:2``), and the Lean verifier must refuse it.
+  committed) is registered and proved on its own (``subset:2``), and the Lean verifier must refuse its session: its
+  proof, or, where the prover's self-check stopped it and no proof left, the session for want of one, which the
+  negative names (``lean_read_no_proof``; `benchmarks/one_stage/forged_proofs.py` hands Lean the forged proof).
 * **Statement form.** Each template is a flat statement (its unit's whole netlist in the circuit file, which the verifier
   reads line by line), or with ``--layout MODE`` (``iv/hybrid/4``) a templated one (`UnitStager`'s ``layout``, statement
   ``verity/flock-circuit/tmpl``; with ``--structural``, `struct_lower`'s template, which not every Definition lowers yet),
@@ -1067,9 +1069,10 @@ def main() -> int:
             tlean = a0.lean_verify(a.lean, tst_d, tn, tdir / "session", zk=True)
         tm0 = ((trecord or {}).get("verdict") or {})
         neg[f"wrong-output-word ({tm['kind']})"] = {
-            "refused": a0.lean_refused(tlean) and tm0.get("accepted") is not True, "registration_ok": tcheck.ok,
-            "m0_verifier": tm0.get("why"), "m0_accepted": tm0.get("accepted"), "lean": tlean.get("why"),
-            "lean_refused": a0.lean_refused(tlean), "prover": (tlive or {}).get("why"), "draw": (trecord or {}).get("unit_draw")}
+            "refused": (a0.lean_refused(tlean) or a0.lean_read_no_proof(tlean)) and tm0.get("accepted") is not True,
+            "registration_ok": tcheck.ok, "m0_verifier": tm0.get("why"), "m0_accepted": tm0.get("accepted"),
+            "lean": tlean.get("why"), "lean_refused": a0.lean_refused(tlean), "lean_read_no_proof": a0.lean_read_no_proof(tlean),
+            "prover": (tlive or {}).get("why"), "draw": (trecord or {}).get("unit_draw")}
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True, default=str))
 
     summary["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units", "profile")}

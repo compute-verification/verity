@@ -12,6 +12,23 @@ PouwSegCheck statements, the r9 twin, the filler scorer's fold table) is held to
 - `receipt_conform.py`: the checks, and `python receipt_conform.py` to run them on the reference and the header.
 - `conform_host.cpp`: the header's host driver the checks build.
 
+Its two modules are `receipt_folds` (the steps, key rules and schedules) and `receipt_conform` (the checks). Each has
+two names, and a caller takes what the module's `__all__` lists:
+
+- `verity.protocols.pouw.receipts.receipt_folds` and `.receipt_conform`, for a test or any other reader in the
+  workspace, which edits no `sys.path` for them;
+- `receipt_folds` and `receipt_conform`, where this directory is on `sys.path`: in `python receipt_conform.py` itself,
+  and in a file started by path, such as a script run where there is no workspace, which puts it there.
+
+Under each name the checks read the `receipt_folds` of that name. A process that uses both names holds each module
+twice; the copies agree, since the modules hold tables and functions and no state, and no check compares one of them by
+identity. A kernel includes `receipt_folds.cuh` by relative path.
+
+`receipt_folds` imports the standard library alone. `receipt_conform` imports numpy only inside four of its checks
+(`p2ff_r9`, `pfill_ref`, `egemm_ref`, `e2e_definitions`), and the workspace only where `e2e_definitions` evaluates E2E's
+Definitions (`verity.circuits`). Neither reads the environment, and nothing under `verity/` but this directory's own
+test imports them: they are a definition and its checks, not code a prover or verifier runs.
+
 ## The folds
 
 All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d1, d2, d3): rows (g, g + 8) by columns
@@ -25,7 +42,7 @@ All words are uint32 and arithmetic wraps. An MMA gives a lane four words (d0, d
 | ram | y ← (rotl(y, 7) + d0)·a0 + d1, then (rotl(y, 19) + d2)·a1 + d3 | key_ok | binds pairs only, through Q = a0·d0 + d1 |
 | xin7 | xin13 with rotations (7, 19) | key_ok | retired: ±128 is an int8 ratio at its step boundary |
 
-`FOLDS` in `receipt_folds.py` carries each status with its source:
+`FOLDS` in `receipt_folds.py` carries each fold's status with what is proved and what is open:
 
 - **(D), duo's premise.** Two different runs of a chain's words leave different final states on some start state
   (pfill commits the whole state; a served chain's receipt y ^ rotl(z, 16) needs the same up to one constant). It is
