@@ -781,3 +781,50 @@ and your note says 24 "symbolic links with no data" beside 83,665 record files.*
 on HASH-130 that reconciles the two (are 73 links also record files, matched by path and
 size through the link?), from `hash130b-node-links.txt` and your node listing; no new run
 on the node unless the listing cannot say. Ten minutes, at the start of your next resume.
+
+## Fri 13 Nov 15:47Z: CHAIN 2 IS ON `main` (`4ae17f7eafd7`). GO: one line on HASH-130, then the Pearl-C SPLIT as a pull request of ours
+
+This section is your go for the split; my resume names it. The 07:38Z rule holds.
+
+**State** [read by me]: chain 2 (#9734) landed at 15:30Z; `main` is `4ae17f7eafd7`. PoUW
+is `verity/protocols/accounting/pouw/`; the machine-code check is
+`verity/protocols/accounting/pouw/prover/sass_gate.py` (compute-research's map rode, so
+your first prerequisite holds); `pouw_cuda` is under `…/prover/kernels/`; our three
+Pearl-C directories are where they were, with rewritten lines. `AGENTS.md` changed with
+the chains: **the import boundaries are one listing, `tests/import_order.toml`, written
+by `uv run tools/verity/check/import_order.py`; a trusted list gains a line only under
+`--grow`, which your option C does not need. Read `AGENTS.md`'s "Dependencies point
+inward" paragraph on `main` before you write.**
+
+**0. First, ten minutes:** the line on HASH-130 that reconciles infra's 97 links with your
+24 (the 09:47Z section).
+
+**1. The split** (your design's section 7, "The split"; compute-accounting's conditions
+in the 08:57Z section are its acceptance):
+- Branch `cursor/kernels-pearlc-split-<four hex>` from `origin/main`. No path changes.
+- **Re-read your design against `main` first:** every file:line in it moved or shifted.
+  Say in your note what changed in the design, if anything.
+- The four commits: the scheme's `unit_block` and `keys_of` with a test that they equal
+  today's `fixture.py` outputs for both kernels' `VARIANTS`; `kernel.py` loading `run.py`
+  alone with the new `source_digest`, `host.py` and `pearl_c/__init__.py` on the scheme,
+  each loaded file's hash beside the digest at `ends.py`, `test_pouw.py`, the public
+  boundary's `_loaded` assertion; `fixture.py` re-exporting the two; `build.sh` cut at
+  its gates with `ship.sh` and its callers.
+- **vllm's refactor batch** (HASH-124, 09:52Z) changes `pearl_c/ends.py` and
+  `served_y.py` in typing only, after chain 2: look whether it is on `main` or open, and
+  write on top of it or say what meets.
+- **Shown before the pull request opens:** both cubins the same SHA-256 as `main`'s
+  (`pearl_c_sm90` `5a6d7461f5f0…`; KYARM's `kyarm-jobs/moves/moved-head.sh` in the notes
+  builds and compares, on a CPU node with the toolkit); the suites whole, on a pushed
+  commit with `verity.__file__` printed: `adapters/vllm`, `benchmarks/pouw`,
+  `benchmarks/harness`, PoUW's verifier, the root suite; the listing's generator says
+  "the same" or its diff is in the body; mypy on the adapter's files.
+- **On a node, a job's scratch goes under `/workspace/research/scratch`** (top, TOP-398,
+  15:44Z: thirteen builds abreast filled a root disk this morning).
+- The pull request: opened unmarked, with the repository's template; its body says that
+  `kernel_source_sha256` changes once with the same cubin, and why. compute-accounting
+  and vllm review; I ring them when you return.
+- **It must not land within a day before compute-accounting's timed H200 run of Tue 17
+  Nov.** So: open by Sat 14 Nov 06:00Z if it holds; I agree the mark's day with them.
+**Return when the pull request is open with its evidence, or by Sat 02:00Z with where it
+stands.** A CHECKPOINT each 30 minutes; commit and push before each long run.

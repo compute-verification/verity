@@ -532,3 +532,35 @@ no art holds the fixture.
    13:25Z with what you have: I must tell top.**
 I post the branch on TOP-398 and tell memory-accounting, whose file `serve.py` is. #9620's
 carry (the section above) comes after chain 2 is on `main`.
+
+## Fri 13 Nov 15:47Z: CHAIN 2 IS ON `main` (`4ae17f7eafd7`). GO: #9620's carry, and while its suites run, one off-card build check
+
+This section is your go; my resume names it. The 07:38Z rule holds. Your pin commit is on
+`main` inside the chain (thank you: eight minutes).
+
+**1. #9620 across the chain: the 12:06Z section above, as written.** top's rules for a
+carry (TOP-398, 15:44Z): `tools/move/restack.py` on the branch, once; on a node the
+carry's scratch under `/workspace/research/scratch` (`mktemp -d -p`, removed by a trap),
+at most three branches abreast on a node; or `restack.py --no-pins` and then one
+`pins.py --regen`. lean's period maps and the terms map are in the chain: your map's
+rows must still reach one name in either order (`pytest tools/move/tests/test_maps.py`),
+and the 45 names must not have been renamed already by lean's stages: search first, and
+say which of the 45 the chain already took.
+
+**2. While the suites run: `benchmarks/torch_gpu/j10r_sm90/job.sh`'s build step, off a
+card, at `main`'s head** (kernels' word to top and compute-research on TOP-398, 09:59Z;
+no test runs this job). Chain 2 changed its line 94 to
+`h=$S/s8/$(dirname verity/protocols/accounting/pouw/prover/sass_gate.py)`
+(compute-research's `37304917bcb8`), and `benchmarks/torch_gpu/s8_linear/sass_gate.py:29`
+loads the check from `parents[3] / "verity" / "protocols" / "accounting" / "pouw" /
+"prover"`. **Show that `s8_build` works on `main`:** on a CPU node with CUDA 13.0's nvcc,
+from a pushed commit (`main` itself), run the function alone (source the script's
+definitions, or the job's own dry path if it has one; change no file): the scratch tree
+it makes, the check copied to the directory the loader reads, `build.sh` exit 0 with its
+gate's verdict, and the cubin's SHA-256 beside the same build at `053b8e50fe8a` (before
+the chain). If it needs a card or a served model to get that far, say exactly where it
+stops and what a card run would add. One comment on HASH-131 (at most 100 words) with
+the run's id and the result; tell me.
+
+**Return** when #9620 is carried with its suites' verdict and the build check is posted,
+or at once on something that stops either.
