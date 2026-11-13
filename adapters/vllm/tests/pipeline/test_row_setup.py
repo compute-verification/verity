@@ -336,6 +336,10 @@ def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
     assert json.loads((Path(r.d) / "release.json").read_text()) == json.loads(rel.read_text())
     assert r.ncb == r.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_rel")
     assert json.loads((Path(r.d) / "tree.json").read_text())["release_line"].startswith("r16-int-3|commit=a2dabe493 ")
+    tree_doc = json.loads((Path(r.d) / "tree.json").read_text())
+    assert list(tree_doc) == ["schema", "tree", "export", "release_line"]
+    assert (tree_doc["schema"], tree_doc["tree"], tree_doc["release_line"]) == (
+        "verity-sweep/executing-tree/v1", r.tree, f"r16-int-3|commit=a2dabe493 tree={r.tree}")
     for pinned in (prepared("--native-collect-build", str(tmp_path / "nc_own")),
                    prepared(environ={"NATIVE_COLLECT_BUILD": str(tmp_path / "nc_own")})):
         assert pinned.ncb == pinned.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_own")
