@@ -8,13 +8,16 @@
 # and TMP name a writable directory: TMPDIR if it is under an RW_DIR, else the private /tmp, else a private tmpfs on the
 # first RW_DIR's `.sandbox-tmp` (a tmpfs is gone with the sandbox), so a build writes nothing outside the RW_DIRs that
 # outlives it.
+# An RO_DIR under an RW_DIR (a build's fetched dependencies) is bound read-only over itself.
 # With --at, TREE is also bound at FIXED, with every RW_DIR under it, and CMD starts in FIXED's copy of the directory it
 # was started in (one under TREE). Lean writes a source's absolute path into what it compiles, so a build that reads its
 # sources under FIXED gives the same bytes wherever TREE is. FIXED is a name in /var/tmp, made in this sandbox's private
 # tmpfs there and gone with it: nothing is made on the host, and two sandboxes at once each have their own. Where
 # /var/tmp got no private tmpfs, or is a link (CMD's physical directory is not under FIXED), --at refuses: a tree bound
 # elsewhere would compile to other bytes.
-# CMD is PID 1, so every process a build starts (compile-time code included) ends with it.
+# CMD is PID 1, so every process a build starts (compile-time code included) ends with it. It runs with no capability
+# and can make no user namespace (this one's count is capped at 0, which only a capability here lifts), so it can't
+# remount, mount over or unmount anything, here or in a namespace it opens: the mounts above are the ones it gets.
 set -euo pipefail
 rw=()
 ro=()
@@ -38,6 +41,9 @@ seen=" ${rw[*]} ${ro[*]} "
 awk '{print $5}' /proc/self/mountinfo | sort -u | while read -r m; do
   case "$keep" in *" $m "*) continue;; esac
   mount -o remount,bind,ro "$m" 2>/dev/null || true
+done
+for d in "${ro[@]}"; do
+  for w in "${rw[@]}"; do case "$d/" in "$w"/*) [ ! -d "$d" ] || { mount --bind "$d" "$d"; mount -o remount,bind,ro "$d"; };; esac; done
 done
 private_tmp=
 private_var_tmp=
@@ -92,4 +98,5 @@ elif [ -z "$tmp" ]; then
   mount -t tmpfs -o mode=1777 tmpfs "$tmp"
 fi
 export TMPDIR="$tmp" TEMP="$tmp" TMP="$tmp"
-exec "$@"
+echo 0 > /proc/sys/user/max_user_namespaces
+exec setpriv --bounding-set=-all --inh-caps=-all --ambient-caps=-all -- "$@"

@@ -2551,15 +2551,16 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     monkeypatch.setattr(LC, "closure", lambda p: [p, "Dep"])
     argv = LC.in_sandbox("Sec", link, ["lake", "build"])
     box = argv.index(str(LC.SANDBOX))
-    assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
-    assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+    assert argv[box + 1:argv.index("--", box)] == ["--ro", str(real / "Sec" / ".lake" / "packages"),
+                                                   str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
 
 
 def test_a_build_s_sandbox_binds_its_tree_at_the_fixed_path_with_its_fetched_dependencies_read_only_there_too(
         tmp_path, monkeypatch):
     """A build reads its tree at check.py's `FIXED` (`sandbox.sh --at`), so what it compiles doesn't depend on where the
-    slot tree is. The tree's `.lake` directories are writable under both paths, so the fetched dependencies are mounted
-    read-only under both; a `packages` that is a link out of the tree (the node's kept dependencies) keeps its name."""
+    slot tree is. The tree's `.lake` directories are writable under both paths, and the fetched dependencies are handed
+    over as `--ro` by the tree's own path: `sandbox.sh` binds them read-only before it binds the tree at FIXED, whose copy
+    keeps them so. A `packages` that is a link out of the tree (the node's kept dependencies) keeps its name."""
     real = tmp_path / "cache-root" / "build-2"
     (real / "Sec" / ".lake").mkdir(parents=True)
     (real / "Dep" / ".lake" / "packages").mkdir(parents=True)
@@ -2572,11 +2573,9 @@ def test_a_build_s_sandbox_binds_its_tree_at_the_fixed_path_with_its_fetched_dep
     assert LC.bound("Sec", link) == ["--at", str(fixed), str(real)]
     argv = LC.in_sandbox("Sec", link, ["lake", "build"], LC.bound("Sec", link))
     box = argv.index(str(LC.SANDBOX))
-    assert argv[box + 1:argv.index("--", box)] == ["--at", str(fixed), str(real), str(real / "Sec" / ".lake"),
-                                                   str(real / "Dep" / ".lake")]
-    assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [
-        str(real / "Sec" / ".lake" / "packages"), str(real / "Dep" / ".lake" / "packages"),
-        str(fixed / "Sec" / ".lake" / "packages"), str(fixed / "Dep" / ".lake" / "packages")]
+    assert argv[box + 1:argv.index("--", box)] == [
+        "--ro", str(real / "Sec" / ".lake" / "packages"), "--ro", str(real / "Dep" / ".lake" / "packages"),
+        "--at", str(fixed), str(real), str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert LC.built_report(LC.bound("Sec", link), "✔ [3/4] Built Sec.A (1.2s)\n") == {
         "sandbox": True, "bound": [str(fixed), str(real)], "compiled": ["Sec.A"]}
     monkeypatch.setattr(LC, "closure", lambda p: [p, "../elsewhere"])
@@ -2615,7 +2614,7 @@ def test_every_lake_build_reads_the_tree_at_the_fixed_path_and_a_lake_command_it
     assert LC.build("Sec", tree, "lake", echo=lambda _: None) == (0, "✔ [1/1] Built Sec.A (1.0s)\n")
     assert LC.build("Sec", tree, "lake", ["+Sec.A:deps"], echo=lambda _: None)[0] == 0
     assert LC.build("Sec", tree, "lake", cmd=["env", "lean", "A.lean"], echo=lambda _: None)[0] == 0
-    assert [a[a.index("--", a.index("ro")) + 1:] for a in seen] == [
+    assert [a[a.index("--", a.index(str(LC.SANDBOX))) + 1:] for a in seen] == [
         ["lake", "build", "dep/plugin:shared"], ["lake", "build"], ["lake", "build", "+Sec.A:deps"],
         ["lake", "env", "lean", "A.lean"]]
     assert [binds(a) for a in seen] == [at, at, at, None]
@@ -2625,27 +2624,14 @@ def test_every_lake_build_reads_the_tree_at_the_fixed_path_and_a_lake_command_it
     assert LC.built_report(LC.bound("Sec", tree), "")["bound"] == at and LC.built_report([], "")["bound"] is None
 
 
-def read_only(tmp: Path, dirs: list[Path], cmd: list[str], monkeypatch) -> tuple[int, list[str]]:
-    """`READ_ONLY` as the sandbox runs it, on ``dirs`` and then ``cmd``, where a test may not mount: `mount` is a stand-in
-    that records its arguments and the `.lake` directories then under the directory it is given. The status, and its lines."""
-    stand_in, log = tmp / "mount-stand-in", tmp / "mount.log"
-    stand_in.mkdir(exist_ok=True)
-    (stand_in / "mount").write_text('#!/usr/bin/env bash\necho "$* : $(cd "${@: -1}" && echo */.lake)" >> "$MOUNT_LOG"\n')
-    (stand_in / "mount").chmod(0o755)
-    log.unlink(missing_ok=True)
-    monkeypatch.setenv("PATH", str(stand_in), prepend=os.pathsep)
-    monkeypatch.setenv("MOUNT_LOG", str(log))
-    rc = subprocess.run(["bash", "-c", LC.READ_ONLY, "ro", *map(str, dirs), "--", *cmd]).returncode
-    return rc, log.read_text().splitlines() if log.is_file() else []
-
-
 def test_a_dependency_with_a_lakefile_lean_and_no_lake_directory_gets_an_empty_one_before_its_read_only_mount(
         tmp_path, monkeypatch):
     """Lake keeps a `lakefile.lean` dependency's compiled configuration in the workspace's `.lake/config`, by the dependency's
     place among the packages it loads, and where that place holds no trace of it Lake first makes the dependency's own
     `.lake`. Under the read-only mount that failed the load, on a tree whose dependencies were fetched again under an older
     `.lake/config` (those nothing builds then have no `.lake`), as soon as a branch changed the dependencies' order. The
-    directory is made before the mount, empty, in those dependencies alone, and nothing else there is written."""
+    directory is made before the sandbox starts (`lake_dirs`, which `in_sandbox` runs before it hands the directories to
+    `sandbox.sh` as `--ro`), empty, in those dependencies alone, and nothing else there is written."""
     packages = tmp_path / "tree" / "pkg" / ".lake" / "packages"
     for dep, files in (("leansqlite", ["lakefile.lean", "sub/lakefile.lean"]), ("batteries", ["lakefile.toml"]),
                        ("mathlib", ["lakefile.lean", ".lake/build/lib/Mathlib.olean"])):
@@ -2664,16 +2650,16 @@ def test_a_dependency_with_a_lakefile_lean_and_no_lake_directory_gets_an_empty_o
         return {p.relative_to(packages).as_posix() for p in packages.rglob("*")}
 
     before = held()
-    rc, mounts = read_only(tmp_path, [packages, none_fetched], ["bash", "-c", "exit 7"], monkeypatch)
-    assert rc == 7, "the command runs after the mounts, and its status is the sandbox's"
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "dep"])
+    argv = LC.in_sandbox("pkg", tmp_path / "tree", ["true"])
     assert held() - before == {"leansqlite/.lake"} and before <= held()
     assert [p.name for p in elsewhere.iterdir()] == ["lakefile.lean"], "nothing is written through a link"
     assert list((packages / "leansqlite" / ".lake").iterdir()) == [] and list(none_fetched.iterdir()) == []
-    assert [m.split(" : ")[0] for m in mounts] == [f"--bind {d} {d}" if i % 2 == 0 else f"-o remount,bind,ro {d}"
-                                                    for d in (packages, none_fetched) for i in (0, 1)]
-    assert "leansqlite/.lake" in mounts[0].split(" : ")[1].split(), "it is there before the first mount of its directory"
+    box = argv.index(str(LC.SANDBOX))
+    assert argv[box + 1:box + 5] == ["--ro", str(packages.resolve()), "--ro", str(none_fetched.resolve())]
     after = held()
-    assert read_only(tmp_path, [packages, none_fetched], ["true"], monkeypatch)[0] == 0 and held() == after, "and stays as it is"
+    LC.lake_dirs([str(packages), str(none_fetched)])
+    assert held() == after, "and stays as it is"
 
 
 def test_a_lake_directory_made_in_a_tree_never_appears_in_the_dependencies_the_node_keeps(tmp_path, monkeypatch):
@@ -2687,7 +2673,8 @@ def test_a_lake_directory_made_in_a_tree_never_appears_in_the_dependencies_the_n
     assert LC.link("pkg", tree, deps, links, log=lambda _: None) and links == {"pkg": "k"}
     packages = tree / "pkg" / ".lake" / "packages"
     assert not (packages / "leansqlite" / "lakefile.lean").samefile(deps / "k" / "leansqlite" / "lakefile.lean")
-    assert read_only(tmp_path, [packages], ["true"], monkeypatch)[0] == 0 and (packages / "leansqlite" / ".lake").is_dir()
+    LC.lake_dirs([str(packages)])
+    assert (packages / "leansqlite" / ".lake").is_dir()
     assert sorted(p.relative_to(deps).as_posix() for p in (deps / "k").rglob("*")) == ["k/leansqlite", "k/leansqlite/lakefile.lean"]
 
 
