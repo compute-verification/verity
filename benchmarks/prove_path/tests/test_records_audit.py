@@ -685,7 +685,7 @@ def test_a_tie_with_no_prefix_takes_pearls_values_by_their_own_names_in_32_bit_s
 def test_a_ties_summary_names_w_and_for_pearls_w_its_development_verifier():
     """The summary's ``tie`` names W's digest and the values tied to it. Tied to Pearl+'s W (its window names a Pearl-C
     scheme) it also says what holds W's roots to the credited ones, Pearl+'s verdict, which reads the prover's salt key and
-    opens drawn rows in the clear; tied to H1's W, whose window names none, it doesn't."""
+    opens sampled rows in the clear; tied to H1's W, whose window names none, it doesn't."""
     entry = {"value": "pearl-a/0/0", "root": "00" * 64, "leaves": 16, "words": K, "domain": "00" * 32, REG.WIDTH_KEY: 32}
     outputs = {"pearl-a/0/0": {"record": "", "value": "pearl-a/0/0"}}
     pearl = {"format": R.FORMAT_V2, "window": {"kind": "served", "entry": "pouw:pearl-c-h100-v1-h3",
@@ -1078,7 +1078,7 @@ def _history(d: Path, n: int = 4) -> SimpleNamespace:
 
 
 def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_bodies(tmp_path, monkeypatch):
-    """A window with a history table (`interface.History`) is audited with a5 handed the table as the verifier of record
+    """A window with a history table (`interface.History`) is audited with a5 handed the table as the verifier
     takes it (``history``, `ml.windows.history.params`): from the window's public bodies it computes the table's root, to
     which it holds the root the window's registration records, the root the table is pinned at (`history.pins`). A
     registration that records no root for the table is refused before any session. The sessions (`a5.audit`) are stubbed

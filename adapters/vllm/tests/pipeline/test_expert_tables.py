@@ -145,7 +145,7 @@ def test_a_table_served_otherwise_has_another_root(ckpt, regs):
 
 
 def test_ranks_and_keys_are_distinct_values(ckpt, regs):
-    """The two ranks' tables are registered under distinct programs at disjoint nonces, and another key draws other salts."""
+    """The two ranks' tables are registered under distinct programs at disjoint nonces, and another key samples other salts."""
     assert regs[0]["program"] != regs[1]["program"]
     n0, n1 = (set(d["nonces"].values()) for d in regs)
     assert len(n0) == len(regs[0]["values"]) and not n0 & n1 and min(n0 | n1) >= ET.TABLES_NONCE

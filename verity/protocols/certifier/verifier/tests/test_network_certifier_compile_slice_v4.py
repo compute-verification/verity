@@ -146,7 +146,7 @@ def test_registered_rows_are_held_to_the_computed(request, which):
 @pytest.mark.parametrize("which", ["synth", "asynth"])
 def test_the_checked_witness_is_unique(request, which):
     """The checked witness one bit off the reference's is refused, by the cache or the pool bit: each field's first,
-    middle and last bit, and 96 bits drawn at random. A hit, evictable count or return the steps read is held by the
+    middle and last bit, and 96 bits sampled at random. A hit, evictable count or return the steps read is held by the
     record that carries it, or is zero; a slot, a list entry or a time stamp off is the stream's check or the bus
     products' disagreement."""
     x = request.getfixturevalue(which)
