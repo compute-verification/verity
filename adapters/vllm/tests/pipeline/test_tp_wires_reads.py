@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.definitions.ops import gemm as GE
+from verity.circuits.ops import gemm as GE
 from verity.definitions.registry import b1_tp2 as B1T
 from verity.definitions.registry import dead_free as DF
 from verity.definitions.registry import moe
