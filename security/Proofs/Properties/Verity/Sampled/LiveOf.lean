@@ -418,7 +418,8 @@ theorem session_parts {V : Vocab d α} {θ : ByteArray} (hD : DigestsAt V θ) {k
 
 /-! ## The bound -/
 
-open FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.ZkHidden in
+open FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.ZkHidden
+  FlockSoundness.Discharge.Composed in
 /-- **The session's planned rate is at most `ρ` wherever `2^23 ≤ ρ·(e·k)`**: every table of the plan, a set-up one or
 the reference setup's refused one, has a schedule `Zk.schedule` returned, whose level 0's `logLen` is at most `23`
 (`zkLogLenCap_23`), as `hr_planZHJ_23` for the plan without the verifier's own words. -/
