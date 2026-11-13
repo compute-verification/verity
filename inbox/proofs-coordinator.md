@@ -148097,3 +148097,130 @@ None out. Ended and read this turn: `r20261113-144847-e174` (rc 0).
 - A record's round at a session's last slot is no longer read back to a release (`located_opened` there). No file read it.
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `8aefa1adc70e5d23953149397ac6f6d16f4bc24c`, pushed; nothing unpushed.
+
+## HELDOF, Fri 13 Nov 15:14Z: `CouplesAt` at the wired statement compiles under three named premises (`UnitsWired`, `TwoHolds A.h`, `RecordWf c`); the undecodable case compiles but for `δ`; `units` splits into a labelling and a reading
+
+Branch `cursor/proofs-heldof-couples-f083`, head `cc1068d1c8b`, off the join's `ff6ea109e06f`. Five files under `security/Proofs/Properties/Verity/SampledTwo/`, each tried with `--siblings`: no name clash, and every theorem uses only `propext`, `Classical.choice` and `Quot.sound` [run]. No file under `verity/` changed, no lock record, no listed statement.
+
+| file | what it proves | run |
+|---|---|---|
+| `WiredParse.lean` | `partition_wired`, `two_wired`, `twoHolds_of_formAccepts`, `decode_of_stmtOf`, `parse_wired` | r20261113-142529-dbf9 |
+| `WiredScope.lean` | `scope_wired` | r20261113-142636-1f9f |
+| `CouplesWired.lean` | `RecordWf`, `UnitsWired`, `couplesAt_wired` | r20261113-142750-5b05 |
+| `WiredUnits.lean` | `unitsAreReplay_of`, `unitsWired_of` | r20261113-144229-1fe9 |
+| `Undecodable.lean` | `prob_zero_of_stmtOf_none`, `couplingTwo_of_stmtOf_none` | r20261113-145628-04ff (first try r20261113-144031-a06b failed: I read the wrong component of `readBack_ok`) |
+
+**The five fields, `units` first** [run, except where marked]:
+
+| field | where it comes from | premise left |
+|---|---|---|
+| `units` | `UnitsWired V A x θ F c readX`, named once; `unitsWired_of` splits it in two (below) | the labelling and the reading |
+| `scope` | `scope_wired`: from `JoinsAt` alone. If some play at `c` is accepted, the accept's read-back gives decode and `TwoHolds`; if none is, `prob_play_eq_zero` | none |
+| `parse` | `parse_wired` after `decode_of_stmtOf hJ.stmtX hW` | `RecordWf c` |
+| `partition` | `partition_wired`: `some` at every statement | none |
+| `two` | `two_wired` | `SpotFlock.RunsAs.Round2.TwoHolds A.h`, which `twoHolds_of_formAccepts` proves from `HeldOfAt` and one accepted play |
+
+The instance, at one `c σ`: `couplesAt_wired (hJ : JoinsAt …) (hW : RecordWf c) (hT : TwoHolds A.h) (hU : UnitsWired V A x θ F c readX) (hX …) (hcaps …) (hopens …) (hcr …) (hdelta …) : ∃ s Pt dd, CouplesAt V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' s Pt dd readX openOf dColl`. `extract`, `opens`, `collisionResistant` and `delta` pass through as they stand. `caps` is taken at the values the verifier parses, `∀ s Pt dd, A.L.parse x = some s → A.L.partition s = some Pt → A.L.two s = some dd → CapsAt dd Pt ((V.certOf θ).ε * V.units θ F) A.δ`.
+
+**1. Your two texts for soundness.**
+
+(i) The lemma for the undecodable case, compiled (`Undecodable.lean`):
+
+~~~lean
+theorem prob_zero_of_stmtOf_none {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
+    {F : Array ByteArray} {c : ByteArray} {C : CaseOf}
+    (hwire : ∀ o : Verity.Exchange, o.params = θ → V.Verdict k .sampled o → FormAccepts C o)
+    (hcc : CaseCommits C) (hn : stmtOf c = none) (σ : Verity.Game.Strategy (V.game θ F c)) :
+    Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0
+
+theorem couplingTwo_of_stmtOf_none {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live₂} {θ : ByteArray}
+    {F : Array ByteArray} {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {C : CaseOf}
+    (terms : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → ℝ≥0∞) (x : Msg)
+    (hwire : ∀ o : Verity.Exchange, o.params = θ → V.Verdict k .sampled o → FormAccepts C o)
+    (hcc : CaseCommits C) (hn : stmtOf c = none)
+    (hδ : ∃ (Ω : Type) (_ : Fintype Ω) (_ : Nonempty Ω) (P : Prover Ω),
+      V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
+        ENNReal.ofReal (A.errAt x P) + terms c σ ≤ V.delta θ .sampled (V.cost θ F c σ)) :
+    ∃ (x : Msg) (Ω : Type) (_ : Fintype Ω) (_ : Nonempty Ω) (P : Prover Ω),
+      (A.L.Scope x ∨ Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0) ∧
+      Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
+          ENNReal.ofReal (PrBad FlockDeploy.sha512 A.L.V A.R A.L.E x P) + terms c σ ∧
+        (V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
+          ENNReal.ofReal (A.errAt x P) + terms c σ ≤ V.delta θ .sampled (V.cost θ F c σ))
+~~~
+
+Why it holds: an accepted play's case carries a commitment whose record reads back (`input_of_accepts`, `readBack_ok`), so `Flock.canon` prints that record, and `stmtOf c` is the print (`CaseCommits`). `hwire` and `hcc` are `JoinsAt`'s `wiring` and `caseCommits`, and neither reads `c` or `σ`. At an undecodable `c` there is no `JoinsAt`, so the guarded theorem takes them as premises of their own.
+
+(ii) The `δ` premise as the guarded `joinedCouplingOfLaw` would take it, with `hwire` and `hcc` beside it (the prover is renamed `P₀`, since `P` is the deployment there):
+
+~~~lean
+    (hwire : ∀ o : Verity.Exchange, o.params = θ → V.Verdict k .sampled o → FormAccepts C o) (hcc : CaseCommits C)
+    (h : ∀ c σ, (∃ x', stmtOf c = some x') → CouplesAt V k A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P'
+      (s c σ) (Pt c σ) (dd c σ) (readX c σ) (openOf c σ) (dColl c σ))
+    (hδ : ∀ c σ, stmtOf c = none → ∃ (Ω : Type) (_ : Fintype Ω) (_ : Nonempty Ω) (P₀ : Prover Ω),
+      V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
+        ENNReal.ofReal (A.errAt (x c σ) P₀) +
+            (joinBound V A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut +
+              bindBound V A (x c σ) θ F c σ
+                (joinFrame V A (x c σ) θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
+                (openOf c σ) (dColl c σ)) ≤
+          V.delta θ .sampled (V.cost θ F c σ))
+~~~
+
+At each `c`, `by_cases` on `∃ x', stmtOf c = some x'`: one side is today's `coupling_of` path, the other is `couplingTwo_of_stmtOf_none … (x c σ) hwire hcc hn (hδ c σ hn)`. [derived] `twoLeg` never reads the `δ` clause when the verdict's probability is 0 (`Leg.lean:205-206`, `rw [h0]; exact zero_le`). So `hδ` exists only to meet `CouplingTargetTwo`'s text. Stating that clause under `A.L.Scope x` would drop `hδ`, but it would change `CouplingTargetTwo`'s text, so I name it and don't propose it.
+
+**2. `parse`'s premise and the parser switch.** It is named once: `RecordWf c := ∀ cm, Spot.OneStage.commitmentOf c = .ok cm → Claims.Json.Wf cm.record`. `canonicalJson_toUTF8_iff` alone does not give `Wf`: it relates `Core.canonicalJson s.toUTF8` to `Flock.JsonParse.parse s` and `Flock.canon` [read, `CanonicalJson.lean:135` at `fe28c96c4322`]. Two things discharge it after the switch [read + derived]:
+- `canonicalJson_good` (same file, line 208) gives `Claims.Json.Good` of whatever `Core.canonicalJson` returns.
+- `commitmentOf`'s record is exactly that value (`Spot/OneStage.lean:406-409`: `let j ← Core.canonicalJson b; …; return { record := j, … }`).
+
+So after the switch, `Good cm.record` holds for every `c` with no premise. And `decode_of_stmtOf` needs `Good`, not `Wf`: it calls `good_of_canon` only to turn `Wf` into `Good` for `parse_canon`. After the switch I'd restate it with no premise and delete `RecordWf`:
+
+~~~lean
+theorem recordGood {c : ByteArray} {cm : Spot.OneStage.Commitment} (h : Spot.OneStage.commitmentOf c = .ok cm) :
+    Claims.Json.Good cm.record
+-- from `Core.canonicalJson c = .ok cm.record` (unfolding `commitmentOf`'s `do`) and `Verity.CanonicalJson.canonicalJson_good`
+theorem decode_of_stmtOf {c : ByteArray} {x : Msg} (hx : stmtOf c = some x) : ∃ st, SpotFlock.decode x = some st
+~~~
+
+**3. `two`**: as ordered: `twoHolds_of_formAccepts`, then `two_wired` under `TwoHolds A.h` [run].
+
+**4. `units`, cut by reading.** `UnitsAreReplay` is `∃ e : Fin (V.units θ F) ↪ ℕ, ∀ w u, u ∈ unbound (V.partsOf θ F) (V.Opens θ F c) (readX w) → e u ∈ wrongReplay H Cm s Pt dd w`, and `wrongReplay` is the block indices below `dd.part.blocks.length` that are not `ReplayCorrect`. `unitsWired_of` (compiled) gives `UnitsWired` from two parts:
+- **The labelling, a premise on the parameters:** `e : Fin (V.units θ F) ↪ ℕ` with `hlen : ∀ s dd, A.L.two s = some dd → ∀ u, e u < dd.part.blocks.length`. `SpotFlock.two` ignores its statement (`Code.lean:758`, `def two (_ : AuditStatement)`), so `dd` is the held copies' design alone. `hlen` therefore says only that the held copies' replay blocks label the registered circuit's units injectively [read + derived].
+- **The reading, a lemma about `readX`:** `hread : ∀ s Pt dd, A.L.parse x = some s → A.L.partition s = some Pt → A.L.two s = some dd → ∀ w u, ReplayCorrect FlockDeploy.sha512 A.L.commit s Pt dd w (e u) → u ∉ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (readX w)`. A replay block correct at a witness leaves its unit correct in `readX w` and opened by `c` at each of its committed wires.
+
+What `extract` asks of `readX`: only `V.extract θ F c σ = majority V A x θ F c σ (joinFrame …) readX`. `V.extract` is the vocabulary's one fixed extractor, a construction applied to the strategy and never chosen per strategy (`security/Properties/Verity/Game.lean:66, 689`) [read]. So a vocabulary meets `extract` by defining its extractor as that majority, with `readX` a reading fixed along with it. Beyond that `extract` asks nothing of `readX`, which leaves `hread` as the only constraint, and that is the bridge soundness names [derived].
+
+**5. `SentCollides` follow-up: whether `HeldOfAt` and `joinedOfLaw` can carry a disjunct per play.** `HeldOfAt A C` is a `∀` over accepted plays (`AcceptsTop.lean:139`), held as `JoinsAt.heldOfAt`. `joinedOfLaw` reads it through `partsHeldAt_of_accepts` and `playAccepts_form` (`JoinsAt.lean:377, 385`), each at every accepted play [read]. The per-play text:
+
+~~~lean
+def HeldOfAtOr (A : Live₂) (C : CaseOf) (o₀ : Verity.Exchange) : Prop :=
+  ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it →
+    (∃ u, SpotFlock.HeldOf.heldOf i it u = some A.h) ∨ BlobsCollide o.sent.blobs o₀.sent.blobs
+~~~
+
+`refsAt_of_held`'s proof gives it as it stands, with `hne` per play [read]. Carrying it into `joinedOfLaw` changes `joinedOfLaw`'s statement:
+- Its sampled verdict becomes at most today's bound plus `Verity.Game.prob (fun o => BlobsCollide o.sent.blobs o₀.sent.blobs) (V.game θ F c) σ`, by a union bound [guess: I have not found `prob_or_le` for `Verity.Game`; `Accounting.Compose` has one].
+- `o₀` must be fixed before the play, a function of `θ F c` alone, e.g. a choice of an accepted exchange at `c`. The event is then a function of the play and constants, so a finder that plays `σ` once outputs the named pair, and `ecr/sha-512` bounds it [derived].
+
+That is a new term in `joinBound` and a change to a statement ASSEMBLY holds, so I wrote nothing.
+
+### STOP RULE
+No field hit it: each of the five meets `CouplesAt` as its text stands, at a decodable `c` [run]. The undecodable `c` is your 14:28Z ruling, and its texts are (i) and (ii) above.
+
+### NEEDS
+- Your word on whether to write `recordGood` and the premise-free `decode_of_stmtOf` on this branch once the parser switch is on the join (after the carry).
+
+### To post
+Nothing.
+
+### Not established
+- `UnitsWired`'s two parts: neither the labelling `e` with `hlen` nor `hread` has an instance or a proof; both are open.
+- That `CouplesAt`'s other fields (`extract`, `caps`, `opens`, `collisionResistant`, `delta`) have instances at the wired statement: passed through, not met.
+- That `hδ` is satisfiable at an undecodable `c` for the deployment's `x c σ`: `errAt` at an out-of-scope statement is not bounded by anything I read.
+- `recordGood` and the premise-free `decode_of_stmtOf`: written as text, not compiled, since `CanonicalJson.lean` and the switch aren't on this branch.
+- `HeldOfAtOr` and the extra term in `joinedOfLaw`: text only, and the union bound for `Verity.Game` is a guess.
+- The 15:12Z caveat stands: counting doesn't by itself give a colliding pair outside the MUFU digests `tablesOf` missed.
+
+### Branches
+- `cursor/proofs-heldof-couples-f083` at `cc1068d1c8b` (new, off the join's `ff6ea109e06f`; carried with the join on your word "carry"; no merge of `main`, no rebase)
+- `cursor/proofs-heldof-join9441-f684` at `b755ba133f9`, `cursor/proofs-heldof-joinswitch-f684` at `1002467c84a`, `cursor/proofs-heldof-4c7b` at `2861eed8d0a`: unchanged
