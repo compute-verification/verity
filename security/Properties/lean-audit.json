@@ -2158,11 +2158,10 @@
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlusDraw",
     "Properties.Challenger",
-    "Properties.Verity.Game",
-    "Properties.Flock.Circuit.CircuitOf"
+    "Properties.Verity.Game"
    ],
    "except": [],
-   "why": "the value tie is stated against Pearl+'s verdict's own functions through its properties (`Properties.Pouw.PearlPlus`, `Properties.Pouw.PearlPlusDraw`), the play's collision finder as the challenger's (`Properties.Challenger.collisionIn`) under the composite's SHA-512 (`Properties.Verity.Game`), and a cell's rows in the committed files as core's circuit (`Properties.Flock.Circuit.CircuitOf`)"
+   "why": "the value tie is stated against Pearl+'s verdict's own functions through its properties (`Properties.Pouw.PearlPlus`, `Properties.Pouw.PearlPlusDraw`), and the play's collision finder as the challenger's (`Properties.Challenger.collisionIn`) under the composite's SHA-512 (`Properties.Verity.Game`)"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
@@ -13186,9 +13185,7 @@
    "Properties.Pouw.PearlPlus.FleetYAtWIsTheCall": "unstated: the period's runs pooled convexly across sequences at ends fixed before the coins, at one δ; a draft statement over the period's runs as functions of its coins, unproved",
    "Properties.Pouw.PearlPlus.UntiedCellsAtMost": "unstated: a run whose wrong share is at most ε has at most `cellsAt` ε untied credited cells, a fact of the run's passes and table with no probability in it, proved (`Properties.Pouw.PearlPlus.untiedCellsAtMost`, in `Proofs.Properties.Pouw.PearlPlus.Tie`) and stated by no guarantee yet: the step from `YAtWIsTheCall`'s share to a count of cells",
    "Properties.Pouw.PearlPlus.UntiedCellsAtW": "unstated: `YAtWIsTheCall` as a count of cells: an accepted run whose table holds its openings has more than `cellsAt` ε untied credited cells with probability at most δ + q / 2^256; a draft statement, unproved, whose acceptance is an abstract run's (`Run.Accepts`)",
-   "Properties.Pouw.PearlPlus.PeriodUntiedCellsAtW": "unstated: `PeriodYAtWIsTheCall` as a count of cells: a sequence's accepted prefix holds more untied credited cells than `Runs.cellsUpTo` with probability at most δ + q / 2^256; a draft statement over the period's runs as functions of its coins, unproved",
-   "Properties.Pouw.PearlPlus.UntiedRowsAtMost": "unstated: where each cell takes at most its lowering's rows of the committed circuit (`CellRowsAtMost`), a run whose wrong share is at most ε has its untied credited cells' rows number at most `rowsAt` ε; a fact of the run and the committed files with no probability in it, unproved",
-   "Properties.Pouw.PearlPlus.UntiedRowsAtW": "unstated: `UntiedCellsAtW` as rows of the committed circuit at a placement of cells in it (`CellPlace`), each cell taking at most its lowering's rows (`CellRowsAtMost`); a draft statement, unproved, whose placement of W's y entries in the committed files is not yet fixed"
+   "Properties.Pouw.PearlPlus.PeriodUntiedCellsAtW": "unstated: `PeriodYAtWIsTheCall` as a count of cells: a sequence's accepted prefix holds more untied credited cells than `Runs.cellsUpTo` with probability at most δ + q / 2^256; a draft statement over the period's runs as functions of its coins, unproved"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

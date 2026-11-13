@@ -4,7 +4,6 @@ public import Properties.Pouw.PearlPlus
 public import Properties.Pouw.PearlPlusDraw
 public import Properties.Challenger
 public import Properties.Verity.Game
-public import Properties.Flock.Circuit.CircuitOf
 
 /-!
 # Pearl+'s served y at the registration record's entries (`PouwCheck.PearlPlus.tieOf`, `checkTile`, `todo`)
@@ -55,12 +54,6 @@ root and the call's index: `yCell`, the unscale (`Rule.yOf`) of the tile's U at 
   records with the most cells a ticket first. At |K| a cell the same fill is the MACs `creditAtAssumption` takes off
   (`macsAt`). `UntiedCellsAtMost`, with no probability in it, carries the share to the count: every credited untied
   cell lies in a tile that is not tied.
-* `UntiedRowsAtW`, **the same as rows of the committed circuit** (`Flock.Bridge.circuitOfFile`): a credited cell is one
-  output word of |K| MACs, and at a placement of cells in the committed files (`CellPlace`, which Γ's unit fixes) the
-  rows of its unit that compute its word number at most `L.rows |K| = |K| · perMac + perWord` (`CellRowsAtMost`, the
-  lowering's counts and no witness of it). Then the untied credited cells' rows number at most n(ε) in rows
-  (`rowsAt`, the fill at `L.rows |K|` a cell), except with probability δ + q / 2^256; the give-up's rows are
-  `givenUpRows`. PoUW's remote claim reads MACs (`macsAt`'s count) and the circuit's gates read rows (`rowsAt`'s).
 
 **The table and the opener.** A run's commitment fixes its values before the coin: `Run.table` holds them, for each of
 W's values and each leaf position at most one opening. It is the prover's, a field of the run, which the verifier never
@@ -621,88 +614,5 @@ def PeriodUntiedCellsAtW : Prop :=
     _root_.Claims.ExpectedCR _root_.Verity.sha512Msg (P.finder q) →
     ∀ a : ℕ, _root_.Pouw.pr (fun x : Fin n → Ω => ∃ k : Fin n, P.seq k = a ∧ P.AcceptedUpTo x k ∧
       P.cellsUpTo x k ε < (P.untiedUpTo x k : ℝ)) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
-
-/-! ## From a cell's MACs to the committed circuit's rows -/
-
-/-- **A matmul cell's lowering, as counts**: the rows of the committed circuit a MAC takes and the rows its output word
-takes past its MACs, read off the template's Boolean lowering. -/
-structure CellLowering where
-  perMac : ℕ
-  perWord : ℕ
-
-/-- **The rows a cell of `k` MACs takes**: `k · perMac + perWord`. -/
-def CellLowering.rows (L : CellLowering) (k : ℕ) : ℕ := k * L.perMac + L.perWord
-
-/-- **The most rows that ε of the run's ticket weight can hold** (`atBy` at `L.rows |K|` a cell): n(ε) in rows. -/
-noncomputable def rowsAt (L : CellLowering) (passes : List Pass) (ε : ℝ) : ℝ :=
-  atBy (fun r => (L.rows r.kKept : ℚ)) passes ε
-
-open Classical in
-/-- **The rows of unit `u` that compute the gates `O`**: the gates of `u` that feed a gate of `O` (`Circuit.Feeds`). -/
-noncomputable def rowsComputing {C : _root_.Verity.Circuit} {m : ℕ} (P : _root_.Verity.Partition C m) (u : Fin m)
-    (O : Finset (Fin C.N)) : Finset (Fin C.N) :=
-  (P.gates u).filter fun g => ∃ o ∈ O, C.Feeds g o
-
-/-- **A placement of cells in the committed files**: for a cell, the unit of `partsOfFile` that computes its y word and
-the word's gates in `circuitOfFile`. It is how W's `pearl-y/{s}/{c}` entries read as the file's rows, which Γ's unit
-fixes. -/
-abbrev CellPlace (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (pf : ByteArray) : Type :=
-  Cell → Option (Fin (Flock.Bridge.unitsOfFile tags cf tables pf) ×
-    Finset (Fin (Flock.Bridge.circuitOfFile tags cf tables pf).N))
-
-/-- **The rows that compute a cell** at the placement: the rows of its unit that compute its word, none where it is
-not placed. -/
-noncomputable def cellRows {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {pf : ByteArray}
-    (place : CellPlace tags cf tables pf) (c : Cell) : Finset (Fin (Flock.Bridge.circuitOfFile tags cf tables pf).N) :=
-  match place c with
-  | some (u, O) => rowsComputing (Flock.Bridge.partsOfFile tags cf tables pf) u O
-  | none => ∅
-
-/-- **A cell takes its lowering's rows**: at the placement, every real cell of the passes is placed at a nonempty word,
-and the rows of its unit that compute that word number at most `L.rows k`, where `k` is the cell's MACs, its record's
-kept width |K|. It is a fact of the template's lowering at Γ's placement, with no witness of the lowering in it. -/
-def CellRowsAtMost (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (pf : ByteArray)
-    (place : CellPlace tags cf tables pf) (L : CellLowering) (passes : List Pass) : Prop :=
-  ∀ c ∈ realCells passes, ∃ (p : Pass) (u : Fin (Flock.Bridge.unitsOfFile tags cf tables pf))
-      (O : Finset (Fin (Flock.Bridge.circuitOfFile tags cf tables pf).N)),
-    passes[c.1]? = some p ∧ place c = some (u, O) ∧ O.Nonempty ∧
-      (rowsComputing (Flock.Bridge.partsOfFile tags cf tables pf) u O).card ≤ L.rows p.records[c.2.1]!.kKept
-
-/-- **The rows of the run's untied credited cells**, at the placement. -/
-noncomputable def Run.untiedRows (R : Run) {tags : Flock.Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
-    {pf : ByteArray} (place : CellPlace tags cf tables pf) :
-    Finset (Fin (Flock.Bridge.circuitOfFile tags cf tables pf).N) :=
-  R.untiedCredited.biUnion (cellRows place)
-
-/-- **The give-up's rows**, at the placement: those of the real cells the records do not credit. -/
-noncomputable def givenUpRows (passes : List Pass) {tags : Flock.Tags} {cf : ByteArray}
-    {tables : List (String × ByteArray)} {pf : ByteArray} (place : CellPlace tags cf tables pf) :
-    Finset (Fin (Flock.Bridge.circuitOfFile tags cf tables pf).N) :=
-  (givenUpCells passes).biUnion (cellRows place)
-
-/-- **The wrong share counts the untied rows**: where each cell takes its lowering's rows (`CellRowsAtMost`), a run
-whose wrong share is at most ε has at most n(ε) in rows (`rowsAt`) of untied credited cells' rows. No probability. -/
-def UntiedRowsAtMost : Prop :=
-  ∀ (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (pf : ByteArray)
-    (place : CellPlace tags cf tables pf) (L : CellLowering) (R : Run) (ε : ℝ),
-    CellRowsAtMost tags cf tables pf place L R.passes → R.wrongShare ≤ ε →
-      ((R.untiedRows place).card : ℝ) ≤ rowsAt L R.passes ε
-
-/-- **PoUW's guarantee at W's entries, as rows of the committed circuit.** On `YAtWIsTheCall`'s premises, at a
-placement where each cell takes its lowering's rows: over `t` uniform work-weighted tickets, the run is accepted on the
-tiles they name with openings its table holds while its untied credited cells' rows number more than n(ε) in rows
-(`rowsAt L R.passes ε`), with probability at most δ + q / 2^256. So except with that, on accept, the rows of
-`circuitOfFile` that compute an untied cell's y are the give-up's (`givenUpRows`) and at most n(ε) in rows more. -/
-def UntiedRowsAtW : Prop :=
-  ∀ (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (pf : ByteArray)
-    (place : CellPlace tags cf tables pf) (L : CellLowering)
-    (R : Run) (t : ℕ) [Nonempty (TicketDraws (tickets R.passes) t)]
-    (O : TicketDraws (tickets R.passes) t → Opener) (q : ℕ) (ε δ : ℝ),
-    0 ≤ ε → ε ≤ 1 → (1 - ε) ^ t ≤ δ →
-    CellRowsAtMost tags cf tables pf place L R.passes →
-    _root_.Claims.ExpectedCR _root_.Verity.sha512Msg (R.finder t O q) →
-    _root_.Pouw.pr (fun c : TicketDraws (tickets R.passes) t =>
-      R.Accepts (O c) (drawnAt (tickets R.passes) c) ∧ R.Holds (O c) (drawnAt (tickets R.passes) c) ∧
-        rowsAt L R.passes ε < ((R.untiedRows place).card : ℝ)) ≤ δ + (q : ℝ) / 2 ^ (256 : ℝ)
 
 end Properties.Pouw.PearlPlus
