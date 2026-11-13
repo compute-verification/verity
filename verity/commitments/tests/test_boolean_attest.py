@@ -1,4 +1,4 @@
-"""`verity.definitions.commitments.gates.attest`: the period unit accepts a party's signature of its period root
+"""`verity.commitments.gates.attest`: the period unit accepts a party's signature of its period root
 (`lms.period_root_message`) with the period tree's domain id over its count, at the toy binding, on both leaves of a
 height-1 key, and refuses it with one thing wrong (the count, the domain id, the root, the deployment, the attachment, the
 link, the period, the lower key's identifier or root, C) exactly where `lms.verify` of the role digest and `merkle`'s
@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from verity.circuits import evaluation as E
-from verity.definitions.commitments.gates import attest as G
+from verity.commitments.gates import attest as G
 from verity.commitments.indexed import RangeU64Domain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.crypto import lms as R
