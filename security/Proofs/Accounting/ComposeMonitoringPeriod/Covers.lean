@@ -47,7 +47,7 @@ def MonitoringPeriodCoversStmt : Prop :=
         DeadConeDead Sc Cd Np (Wp.liveAt x w) →
         (∑ t : Fin Np, if (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t then (0 : ℝ)
           else (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ)) ≤
-          (∑ u : Fin Np, if (Wp.windowAt x w).modeAt (tileStage Cd Np) (coinAt x w).1 u = .paid then 0
+          (∑ u : Fin Np, if (Wp.executionPhaseAt x w).modeAt (tileStage Cd Np) (coinAt x w).1 u = .paid then 0
             else liveCone Sc Cd Np (Wp.liveAt x w) u) * (wordsOf Sc Cd : ℝ)
 
 namespace CoversProof
@@ -188,7 +188,7 @@ theorem monitoringPeriodCovers : MonitoringPeriodCoversStmt := by
   intro ι K C Ξ V Sc Cd n Np Kd hr hK Wp pr hw hc
   refine ⟨CoversProof.monitoringPeriodLayer_writerReads Cd hr hK pr, fun x w hx hdead => ?_⟩
   refine CoversProof.sum_not_good_le Sc Cd Np (Wp.liveAt x w)
-    ((Wp.windowAt x w).modeAt (tileStage Cd Np) (coinAt x w).1)
+    ((Wp.executionPhaseAt x w).modeAt (tileStage Cd Np) (coinAt x w).1)
     (fun t => (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t) fun t hg ht => ?_
   obtain ⟨u, hu, hb⟩ : ∃ u, Relation.ReflTransGen (Cd.monitoringPeriodLayer hr hK pr).Late u (w, t) ∧
       monitoringPeriodMode Cd Wp pr x u ≠ .paid :=
