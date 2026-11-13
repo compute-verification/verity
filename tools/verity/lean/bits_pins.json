@@ -104,15 +104,15 @@
   }
  },
  "pouwBinding": {
-  "lean": "Pouw.Guarantees.PeriodBindingPerProver",
+  "lean": "Pouw.Guarantees.MonitoringPeriodBindingPerProver",
   "guarantees": {
-   "Pouw.SecurityProofs.PeriodBindingPerProver": [
+   "Pouw.SecurityProofs.MonitoringPeriodBindingPerProver": [
     "unfolded_hash",
     "64f30f40c6ae82fca10844cdd2b2d0782a38949e2b06a7d744a9c1710d5ada70"
    ]
   },
   "definitions": {
-   "Pouw.Guarantees.PeriodBindingPerProver": "a7149770af8e66c7ae22a6189d06919d9b319a9b6100925dcd5500d95d353a43"
+   "Pouw.Guarantees.MonitoringPeriodBindingPerProver": "a7149770af8e66c7ae22a6189d06919d9b319a9b6100925dcd5500d95d353a43"
   }
  }
 }

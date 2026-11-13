@@ -381,7 +381,7 @@ theorem pooledCovers : PooledCovers := by
       exact_mod_cast hw'.2⟩) (by simpa using hB0)
     simpa using this
 
-theorem pooledCoversSession : PooledCoversSession :=
+theorem pooledCoversRun : PooledCoversRun :=
   fun n _ _ _ _ D ω δ b h => pooledCovers n (fun t => D.size t ω) (fun t => D.samples t ω) δ b h
 
 theorem line_incorrect {gs : Array Line.Group} {per blocks bb cb nb : ℕ} {ws : Array (ℕ × ℕ)} {δ : ℚ}
@@ -401,10 +401,10 @@ theorem line_incorrect {gs : Array Line.Group} {per blocks bb cb nb : ℕ} {ws :
         · cases h
         · cases h; rfl
 
-theorem lineCoversSession : LineCoversSession := by
+theorem lineCoversRun : LineCoversRun := by
   intro n _ _ _ _ D ω δ _ _ _ _ _ _ _ l h
   obtain ⟨b, hb, hw⟩ := line_incorrect h
   rw [hw]
-  exact pooledCoversSession n _ _ _ _ D ω δ b hb
+  exact pooledCoversRun n _ _ _ _ D ω δ b hb
 
 end Properties.RemoteAudit
