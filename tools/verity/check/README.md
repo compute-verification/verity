@@ -88,7 +88,7 @@ follows.
 | `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
 | `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
-| `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
+| `merge_map.py` | git's merge driver for `artifacts.json` |
 | `merge_rows.py` | git's merge driver for Markdown: two changes to one table's rows merge row by row |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
 | `import_order.py` | writes the generated tables of `tests/import_order.toml`, which folder may import which, from the tree |
