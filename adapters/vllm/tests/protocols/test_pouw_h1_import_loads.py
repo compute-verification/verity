@@ -1,7 +1,7 @@
 """Which of H1's modules load the live circuit when imported alone: the four of `LOADERS`.  A Definition enters the
 Definition table (`verity.circuits.defs.REGISTRY`) as its module loads, and a reader of the table by id
 (`verity.commitments.windows.interface.resolve`) answers for it from then on.  The live circuit
-(`verity.protocols.pouw.prover.circuit.live`) builds its Definitions as it loads, so a module that comes to load it at its
+(`verity.protocols.accounting.pouw.prover.circuit.live`) builds its Definitions as it loads, so a module that comes to load it at its
 head changes what that reader answers in every process that imports the module.  The modules that stage a window's sampled
 proof blocks rebuild their values through `served`: they import it where they rebuild one and never at their head.  Each
 case imports its module in a process of its own: the test process has loaded the live circuit for other tests."""
@@ -15,7 +15,7 @@ import pytest
 
 from verity_vllm.protocols.pouw import h1
 
-LIVE = "verity.protocols.pouw.prover.circuit.live"
+LIVE = "verity.protocols.accounting.pouw.prover.circuit.live"
 #: the modules whose import loads the live circuit: `live` builds a window's live tables with it, `served` imports `live`,
 #: and `kept` and `handoff` import `served`
 LOADERS = frozenset({"verity_vllm.protocols.pouw.h1.handoff", "verity_vllm.protocols.pouw.h1.kept",
