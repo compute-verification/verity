@@ -117,7 +117,7 @@ def test_plain_tables_holds_the_program_to_the_circuit(root, tmp_path):
     other = tmp_path / "other.json"
     other.write_bytes(canonical_json(encode_program(Program(TM.rope_head(64).definition()))))
     [v] = _verify(root, _sessions(root)[0], program=other)
-    assert not v["accepted"] and v["program_sha512"] != _meta(root)["program_sha512"], v
+    assert not v["accepted"] and "program_sha512" not in v and "not held to the circuit" in v["program_note"], v
 
 
 @pytest.mark.slow

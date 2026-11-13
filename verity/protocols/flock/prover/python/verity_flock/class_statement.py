@@ -860,7 +860,8 @@ def _leaf_bits(t) -> list[int]:
 
 def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[str]]],
                   public: Sequence[str] = (), structural: bool = False, reads: str = "inline",
-                  stage_ands: int | str | None = "auto", packed: bool = False) -> tuple[IL.Lowering, list[int]]:
+                  stage_ands: int | str | None = "auto", packed: bool = False,
+                  block: Callable[[list[int], dict[str, int]], int] | None = None) -> tuple[IL.Lowering, list[int]]:
     """A unit Definition on named u16 row ports: input row ``(row, params)`` is the little-endian bit concatenation of those
     parameters' leaves, in order (PoUW's rows, `leaves.words_*`; ``p[r]`` is row ``r`` of parameter ``p``, as a tile reads
     it), of exactly its words (its bits a multiple of 16); output
@@ -875,7 +876,8 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     (`unit_circuit`), its circuit dropped once laid out (nothing reads it after `ir_lower.layout`). ``reads``: ``inline``, each
     table read laid out as rows of the unit (`ir_lower._Read`), or ``slots``, its reads of the pinned MUFU tables split out to
     lookup slots (`read_slots.split`, a `read_slots.ReadSlots`, its nets' ANDs capped by ``stage_ands``, by default the caps
-    whose nets take the fewest cells; the flat unit's own when it reads none)."""
+    whose statement's ``block`` is the smallest, then whose nets take the fewest cells; the flat unit's own when it reads
+    none)."""
     if reads not in ("inline", "slots") or (structural and reads != "inline"):
         raise ValueError(f"{name}: reads is inline or slots, and a structural unit's are inline")
     ports, out_words, row_words = unit_ports(definition, name, in_rows, public, packed)
@@ -893,7 +895,8 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
         return TmplLowering(name, unit, units, None, _TmplLayout.of(t), t), out_words
     C = unit_circuit(definition, ports, _UnitCircuit)
     in_names, out_names = [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(W)]
-    if reads == "slots" and (low := RS.split(C, in_names, out_names, name, unit, units, stage_ands=stage_ands)) is not None:
+    if reads == "slots" and (low := RS.split(C, in_names, out_names, name, unit, units, stage_ands=stage_ands,
+                                             block=block)) is not None:
         return low, out_words
     lay = IL.layout(C, in_names, out_names)
     return IL.Lowering(name, unit, units, None, lay), out_words
@@ -1084,7 +1087,8 @@ class UnitStager:
     that template `struct_lower`'s, or a table read's the verifier's own (`read_tmpl`; `unit_lowering`'s ``structural``), the
     flat unit never built, the outputs the template's (`TmplLowering.evaluate`); else `tmpl.emit`'s of the flat unit.
     ``reads`` (``inline`` or ``slots``, flat statements only): `unit_lowering`'s; under ``slots`` a unit reading a pinned MUFU table is the unit, tail stages and lookup slots of
-    `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s). The
+    `read_slots`, the last stage returning the outputs, its nets' ANDs capped by ``stage_ands`` (`read_slots.split`'s; the
+    automatic caps ranked first by the block `circuit.compose` places the cut in, `circuit.block_log` of these rows). The
     proof's own leaves are `LEAF_SCHEME`'s (FLOCK_PLAIN_LEAVES=1: plain SHA-512, a recursive session's inner statement). A unit
     whose Definition alone needs more witness bits than Flock's proved range is refused before it is lowered
     (`circuit.refuse_past_range`)."""
@@ -1106,13 +1110,23 @@ class UnitStager:
         if layout is not None and reads != "inline":
             raise ValueError(f"{name}: a templated statement's unit lays its reads out inline")
         FC.refuse_past_range(definition, name)
-        self.low, self.out_words = unit_lowering(definition, name, [(r, ps) for r, _s, _b, ps in in_rows], tuple(public_inputs),
-                                                 structural, reads, stage_ands, self.packed)
-        if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(self.out_words))):
-            raise ValueError(f"{name}: the output rows {[list(ps) for _s, ps in out_rows]} are not the outputs, once each")
         oname = lambda ps: tuple(f"o{p}" for p in ps)  # noqa: E731
         seg_out = tuple(oname(ps) for s, ps in out_rows if s == SCHEMA_HM96_SHA512_ROW_SEG)
         v2_out = tuple(oname(ps) for s, ps in out_rows if s != SCHEMA_HM96_SHA512_ROW_SEG)
+        unit_in = [(r, ps) for r, _s, _b, ps in in_rows]
+        rows: list[FC.Port] = []
+
+        def block(logs: list[int], lookups: dict[str, int]) -> int:
+            if not rows:
+                words = unit_ports(definition, name, unit_in, tuple(public_inputs), self.packed)[1]
+                rows.extend(FC._port(r, -(-b // 16), b, s == SCHEMA_HM96_SHA512_ROW_SEG) for r, s, b, _ps in in_rows)
+                rows.extend(FC._out_ports([[f"o{j}", w] for j, w in enumerate(words)], bool(in_rows or public_inputs), seg_out, v2_out)[0])
+            return FC.block_log(rows, logs[0], not public_inputs, logs[1:], lookups)
+
+        self.low, self.out_words = unit_lowering(definition, name, unit_in, tuple(public_inputs), structural, reads, stage_ands,
+                                                 self.packed, block)
+        if sorted(p for _s, ps in out_rows for p in ps) != list(range(len(self.out_words))):
+            raise ValueError(f"{name}: the output rows {[list(ps) for _s, ps in out_rows]} are not the outputs, once each")
         cache_slot_circuits()
         port = lambda nm: SimpleNamespace(name=nm, dtype="u16")  # noqa: E731
         content = json.dumps([definition.id, [list(r[:3]) + [list(r[3])] for r in in_rows], [[s, list(ps)] for s, ps in out_rows]]
@@ -1519,7 +1533,7 @@ def _source_digest() -> str:
             yield from (d / f for f in files if f.endswith(".py") and "." not in f[:-3])
 
     h = hashlib.sha256()
-    for name in ("verity", "verity.circuits", "verity.definitions.kernels", "verity.core", "verity_flock", "circuit_check",
+    for name in ("verity", "verity.circuits", "verity.definitions.kernels", "verity_flock", "circuit_check",
                  "verity_vllm"):
         spec = importlib.util.find_spec(name)
         roots = [Path(r) for r in (spec.submodule_search_locations or [])] if spec else []

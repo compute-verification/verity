@@ -21,6 +21,10 @@ EVENT_LOG_MAX_BYTES = 1 << 20
 CONVERSATION_ID = os.environ.get("CURSOR_CONVERSATION_ID", "")
 #: a regex for the push URLs the push rules judge, in place of verity's and infra's on GitHub (`worktree_guard.QUEUE_URL`)
 PUSH_REMOTES = os.environ.get("AGENT_GUARD_PUSH_REMOTES", "")
+#: the secrets Cursor injects into this VM, by name, and those of them this process's environment lacks: what
+#: `kept_session.py start` reads before it starts a tmux server (a value is never read out)
+INJECTED = [n for n in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n]
+INJECTED_UNSET = [n for n in INJECTED if not os.environ.get(n)]
 
 
 def record_event(hook: str, event: object) -> None:

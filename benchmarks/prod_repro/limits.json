@@ -1,0 +1,10 @@
+{
+ "glm53": {
+  "auto": {
+   "starts": false,
+   "at": "its recipe's flags and vLLM's own limit of requests at once",
+   "why": "the model is built at its own limit before one is fitted, and the kernel warm-up then runs out of memory on every card",
+   "run": "r20261112-051200-3770"
+  }
+ }
+}

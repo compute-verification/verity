@@ -64,11 +64,11 @@ def _stage_run(tmp: Path, stage: str, *, params: dict, inputs: dict, files: dict
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text)
     (d / "evidence").mkdir()
-    (d / "evidence" / "timeline.jsonl").write_text(evidence % stage)
+    (d / "evidence" / "stages.txt").write_text(evidence % stage)
     doc = {"schema": A.OUTPUTS_SCHEMA, "outputs": [
         {"name": {"build": "build", "match": "match", "commit": "verdict"}[stage], "kind": kind, "meta": meta, "tree": f"outputs/{stage}",
          "refs": {k: v for k, v in inputs.items()}},
-        {"name": "evidence", "kind": "execution-evidence/v1", "meta": {"row": ROW, "stage": stage}, "file": "evidence/timeline.jsonl"},
+        {"name": "evidence", "kind": "execution-evidence/v1", "meta": {"row": ROW, "stage": stage}, "file": "evidence/stages.txt"},
     ]}
     (d / "outputs.json").write_text(json.dumps(doc))
     return d
@@ -121,7 +121,7 @@ def test_store_io_reads_attempts_and_their_outputs_by_kind(store):
     outs = store_io.attempt_outputs(IDS["match"])
     assert outs["match"]["id"] == store["arts"]["match"] and outs["match"]["kind"] == "vllm-match-record/v1"
     assert outs["match"]["payload"] == {"type": "tree", "name": None} and outs["match"]["meta"]["program_digest"] == PD
-    assert outs["evidence"]["kind"] == "execution-evidence/v1" and outs["evidence"]["payload"] == {"type": "file", "name": "timeline.jsonl"}
+    assert outs["evidence"]["kind"] == "execution-evidence/v1" and outs["evidence"]["payload"] == {"type": "file", "name": "stages.txt"}
     assert set(outs) >= {"match", "evidence"}
     only = store_io.attempt_outputs(IDS["match"], ("vllm-match-record/v1",))
     assert list(only) == ["match"]
@@ -132,9 +132,9 @@ def test_fetch_attempt_unions_the_stage_trees_like_a_row_dir(store, tmp_path):
     to = store_io.fetch_attempt([IDS["build"], IDS["match"], IDS["commit"]], tmp_path / "union")
     rels = sorted(str(p.relative_to(to)) for p in to.rglob("*") if p.is_file())
     assert rels == ["ATTEMPTS.json", "build_request/required_values.json", "build_summary.json", "commit/commit_summary.json",
-                    "commit/commit_verdict.json", "evidence/build/timeline.jsonl", "evidence/commit/timeline.jsonl",
-                    "evidence/match/timeline.jsonl", "global_match.json", "match/instances.jsonl", "match/versions.json"], rels
-    assert (to / "evidence" / "match" / "timeline.jsonl").read_text() == '{"stage": "match"}\n', "each stage's evidence, by stage"
+                    "commit/commit_verdict.json", "evidence/build/stages.txt", "evidence/commit/stages.txt",
+                    "evidence/match/stages.txt", "global_match.json", "match/instances.jsonl", "match/versions.json"], rels
+    assert (to / "evidence" / "match" / "stages.txt").read_text() == '{"stage": "match"}\n', "each stage's evidence, by stage"
     rec = json.loads((to / "ATTEMPTS.json").read_text())
     assert set(rec["attempts"]) == set(IDS.values()) and rec["conflicts"] == []
     # an account file two attempts carry with different bytes is a conflict, named -- never a silent overwrite

@@ -38,6 +38,12 @@ switch routes only the rank bits past t, so its tags cost kb - t ANDs.  `DsaButt
 `DsaWaksmanSwap_v2` and `DsaWaksmanPick_v2`, one AND a payload bit a switch, and `DsaTopKRow_v2` is the three over the indices'
 constant bits.
 
+`DsaRadixTies_v2`, `DsaRadixPass_v2` and `DsaButterflyTagsCount_v1` are Calls to their steps (`_piece`), each step traced, with
+a builder (`boolean_dsa.own_gates`) that Flock's flat lowering runs once an activation.  `DsaCountSum_v1`'s builder also
+commits the sum it returns (`_committed`): in a lowered unit, one row more for each bit of a sum that is a form, so that a row
+reading a count reads the sum's own columns and not the ANDs of the subtree under it.  No Definition has a gate for it: the
+ANDs below, the descriptions and the ids are the same with it, and a unit's rows are its ANDs and these commits.
+
 ANDs (`verity_flock.ir_lower.definition_ands`) at TOPK = 2,048:
 
     N          mask         settings     switches   rows, W 576 E 16   DsaTopKRow
@@ -142,6 +148,15 @@ def _piece(name: str, statics: list, build, signature):
     return d
 
 
+def _committed(build):
+    """The builder ``build`` (`own_gates`'s) with each word it returns committed (`forms.Circuit.commit`): a bit of the word
+    that is a form gets a bit of its own, by one row that holds it to that form.  A count going up `prefix_counts`' tree is
+    then W + 1 columns wherever a row reads it, not, bit for bit, an XOR over the ANDs of the whole subtree under it, which
+    each of those rows would carry.  A commit is a row of the lowering that runs the builder and no gate
+    (`trace.TracingCircuit.commit`), so the Definition, its description and its id are what they were."""
+    return lambda C, *operands: [C.commit(list(w)) for w in build(C, *operands)]
+
+
 def _count_sum(S):
     """`DsaCountSum_v1{W}`: the sum of two counts of W bits, in W + 1: a step up `prefix_counts`' tree, two halves' counts to
     the whole's."""
@@ -166,6 +181,8 @@ def _counts(n: int, width: int) -> Array:
 
 DsaCountSum = _piece("DsaCountSum", ["W"], _count_sum,
                      lambda S: ((("a", Array(S.W, BIT)), ("b", Array(S.W, BIT))), Array(S.W + 1, BIT)))
+#: the sums are committed, and only the sums: what a split hands down and a key's tag stay forms over them
+DsaCountSum.build = _committed(DsaCountSum.build)
 DsaCountSplit = _piece("DsaCountSplit", ["W", "U"], _count_split,
                        lambda S: ((("p", Array(S.W, BIT)), ("u", Array(S.U, BIT))), _counts(2, S.W)))
 DsaRadixTie = _piece("DsaRadixTie", ["W", "RB"], _tie,

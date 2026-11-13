@@ -4,12 +4,16 @@ against that arm (methodology.compare). A results file whose gates failed holds 
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 
 import methodology
 
+__all__ = ["BASELINE_ARMS", "BASELINE_POINTS", "arm_stats", "baseline_check", "baseline_table", "load", "lock", "pct",
+           "point_key", "table"]
 
-def load(paths) -> list[dict]:
+
+def load(paths: Iterable[str | Path]) -> list[dict]:
     return [json.loads(Path(p).read_text()) for p in paths]
 
 

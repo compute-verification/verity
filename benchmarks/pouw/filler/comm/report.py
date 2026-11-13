@@ -24,6 +24,8 @@ slowdown <= the scorer's LIMIT at every point, kfill_k's SASS (IMMA.16832.S8.S8 
 DRAM bytes against the scorer's DRAM_LIMIT with bw_read's 1 GiB control, and clocks read only (application clocks at
 their defaults in every nvidia-smi row).
 """
+from __future__ import annotations
+
 import argparse
 import glob
 import importlib.util
@@ -31,21 +33,24 @@ import json
 import os
 import statistics
 from collections import defaultdict
+from collections.abc import Iterator
 from pathlib import Path
+
+#: what the tests read
+__all__ = ["fold_label", "gates", "main", "proved_fraction", "rows"]
 
 PHI = 0.9  # Theorem K's per-word proved fraction for a word-binding fold (c = 1 at φ 0.9)
 K_FRACTION = PHI  # the fraction of a run with no fold recorded (an old binary): the word-binding reading
 SASS_OK = {"IMMA.16832.S8.S8"}
 
 
-def proved_fraction(nc, xin, S):
+def proved_fraction(nc: int | None, xin: bool, S: int | None) -> float:
     """The fold's proved fill fraction under Theorem K (the filler receipt break). duo (NC 2) binds every
     word: PHI, provisional (binding proved for runs of one to four words, DuoQuadNoKernel; longer runs and the served
-    receipt's projected form open). The ram fold (NC 4) binds a word PAIR only through Q = a0·d0 + d1, so it certifies half the words
-    (PHI/2); round 3's rem fill K, taken at PHI under ram, was 2× this. The r9 XOR-family folds (NC 4 with -DPFILL_LI
-    or -DPFILL_XIN13) read at the same proved half (a run may pick a
-    complement flip from the data, so Theorem K certifies only >= 1/2 of the words); their fuller reading waits on r10's
-    select-charging lemma, so it isn't credited here."""
+    receipt's projected form open). The ram fold (NC 4) binds a word PAIR only through Q = a0·d0 + d1, so it certifies
+    half the words (PHI/2), not PHI. The r9 XOR-family folds (NC 4 with -DPFILL_LI or -DPFILL_XIN13) read at the same
+    proved half (a run may pick a complement flip from the data, so Theorem K certifies only >= 1/2 of the words);
+    their fuller reading waits on the select-charging lemma, so it isn't credited here."""
     if nc is None:
         return PHI
     if nc == 2:
@@ -53,7 +58,7 @@ def proved_fraction(nc, xin, S):
     return PHI * 0.5
 
 
-def fold_label(nc, xin):
+def fold_label(nc: int | None, xin: bool) -> str | None:
     if nc is None:
         return None
     if nc == 2:
@@ -67,17 +72,21 @@ S = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(S)
 
 
-def rows(out_dir):
+def _records(path: str) -> list[str]:
+    """A rank file's record lines: those that start a JSON object."""
+    with open(path) as f:
+        return [ln for ln in f if ln.startswith("{")]
+
+
+def rows(out_dir: str) -> Iterator[dict]:
     for sd in sorted(glob.glob(os.path.join(out_dir, "set*"))):
-        settings = open(os.path.join(sd, "settings.txt")).read().strip() if os.path.exists(os.path.join(sd, "settings.txt")) else ""
+        settings = _read(os.path.join(sd, "settings.txt")).strip()
         arms = defaultdict(lambda: defaultdict(list))  # (tp, B, L) -> arm -> [per-repeat [rank records]]
         gates = []
         wrapped = set()
         for f in sorted(glob.glob(os.path.join(sd, "rank*.jsonl"))):
             seen = defaultdict(int)
-            for line in open(f):
-                if not line.startswith("{"):
-                    continue
+            for line in _records(f):
                 r = json.loads(line)
                 if r.get("mode") == "pf_gate":
                     gates.append(r["ok"])
@@ -186,15 +195,16 @@ def rows(out_dir):
             yield row
 
 
-def _read(p):
-    return open(p).read() if os.path.exists(p) else ""
+def _read(p: str) -> str:
+    path = Path(p)
+    return path.read_text() if path.exists() else ""
 
 
-def gates(out_dir, rs):
+def gates(out_dir: str, rs: list[dict]) -> dict:
     """The run's gates, each {"ok": bool, ...}, and all_ok."""
     pf = []
     for fn in glob.glob(os.path.join(out_dir, "set*", "rank*.jsonl")):
-        pf += [json.loads(ln) for ln in open(fn) if ln.startswith("{") and '"pf_gate"' in ln]
+        pf += [json.loads(ln) for ln in _records(fn) if '"pf_gate"' in ln]
     out = {"pf_gate": {"ok": bool(pf) and all(r["ok"] for r in pf), "records": len(pf),
                        "kinds": sorted({r.get("kind", "") for r in pf})}}
     ph = [r for r in rs if "fill" in r]
@@ -208,7 +218,7 @@ def gates(out_dir, rs):
     # the deferred pass: the pre-timing dp_gate on every rank, and the deferred receipts after the defer arm
     dp = []
     for fn in glob.glob(os.path.join(out_dir, "set*", "rank*.jsonl")):
-        dp += [json.loads(ln) for ln in open(fn) if ln.startswith("{") and '"dp_gate"' in ln]
+        dp += [json.loads(ln) for ln in _records(fn) if '"dp_gate"' in ln]
     if dp:
         out["dp_gate"] = {"ok": all(r["ok"] for r in dp), "records": len(dp),
                           "bad": sum(r["bad"] + r["control_equal"] + r["q_bad"] for r in dp)}
@@ -245,7 +255,7 @@ def gates(out_dir, rs):
     return out
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("out_dir")
     ap.add_argument("--json", action="store_true")
@@ -257,7 +267,10 @@ def main():
             print(json.dumps(r))
         print(json.dumps({"gates": g}))
         return
-    f = lambda v, p=4: "-" if v is None else (f"{v:.{p}f}" if isinstance(v, float) else str(v))
+
+    def f(v, p=4) -> str:
+        return "-" if v is None else (f"{v:.{p}f}" if isinstance(v, float) else str(v))
+
     print("| set | TP | B | L | base ms | comm exposed | served | idle | off-comm idle | phase ms | slowdown | fill | "
           f"fill K (x{K_FRACTION}) | fill (whole tiles) | coverage base → phase | comm+filler/comm | receipts bad/checked |")
     print("|" + "---|" * 17)

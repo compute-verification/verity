@@ -56,6 +56,7 @@ from __future__ import annotations
 from fractions import Fraction
 from typing import Any, Mapping, Sequence
 
+from verity.protocols.spot.verifier.profile import work_k
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
@@ -178,12 +179,6 @@ def rate_table(program: Program, query: Mapping[str, Any], num: int, den: int,
 def stratum_k(k: int, size: int, population: int) -> int:
     """A stratum's sample under the stratified rule: max(1, round(k * size / population)), rounding half up."""
     return max(1, (2 * k * size + population) // (2 * population))
-
-
-def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
-    """A stratum's sample under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least `floor` and
-    at most `size`."""
-    return min(size, max(floor, (k * work * size + total - 1) // total))
 
 
 def work_table(table: Mapping[str, Any]) -> dict[str, tuple[int, int]]:

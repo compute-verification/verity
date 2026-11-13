@@ -25,6 +25,8 @@ from pathlib import Path
 import numpy as np
 from cgemm_ref import C_TAG, DITHER_TAG, NCT, block, cs, tile_receipts
 
+__all__ = ["patch_cols"]
+
 PU_TAG, PZ_TAG = 12, 13
 
 

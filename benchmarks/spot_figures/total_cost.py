@@ -30,6 +30,10 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
 * `per_expert` (A′): (A)'s serving, tax, forms and verification phases on another cut of the circuit, the model's
   `partition` card `per-expert` (the MoE cut per expert: the router's slots, table reads at each slot's expert and
   per-expert GEMMs), labelled with the card's `label`; lines only for a model with that card.
+* `head_units` (A″): the same on the model's `partition` card `head-scores-values` (a sparse-attention head's key
+  block proved as its scores unit and its values units on column blocks), labelled with the card's `label`; lines
+  only for a model with that card.  Each unit commits its own row of the block's keys and no unit writes that row, so
+  nothing holds two units' keys equal: its lines are a cost model's, not a bound, and every label says so.
 * `every_block` (C): serving commits every proof block's outputs, and the audit samples them one-stage; its tax is a
   lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits
   (`audit_exfiltration_delivered`); infiltration is its write form (the K incorrect blocks the plan detects, each the
@@ -229,6 +233,10 @@ CONFIGURATIONS = {
                                          "two-stage, by template", ("exfiltration", "infiltration"),
                                          partition="per-expert", serve="tokens", form="patterns",
                                          registration="machine")),
+    **_spans("head_units", Configuration("(A″) Tokens only, a head's key block as its scores and values units (modeled, "
+                                         "key rows not held equal)", TOKENS, REQUEST, "two-stage, by template",
+                                         ("exfiltration", "infiltration"), partition="head-scores-values",
+                                         serve="tokens", form="patterns", registration="machine")),
     "every_block": Configuration("(C) Every proof-block boundary", "every proof block's outputs", "a proof block",
                                  "one-stage", PANELS),
 }
@@ -343,11 +351,17 @@ def taxes(card: dict, names: tuple[str, ...] = tuple(CONFIGURATIONS)) -> dict[st
     return {n: out[CONFIGURATIONS[n].serve or n] for n in names}
 
 
+def cut_strata(strata: list[dict], card: dict) -> list[dict]:
+    """`strata` with a `partition` card's strata in place of theirs of the kinds it replaces."""
+    v = card["value"]
+    return [x for x in strata if x.get("kind") not in v["replaces"]] + v["strata"]
+
+
 def cut(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     """The inputs with the circuit cut by a `partition` card: its strata in place of the `workload` card's of the kinds
     it replaces."""
     v, part = card["value"], c["partition"]
-    strata = [x for x in part.value["strata"] if x.get("kind") not in v["replaces"]] + v["strata"]
+    strata = cut_strata(part.value["strata"], card)
     art = f" ({card['art']})" if card.get("art") else ""
     return c | {"partition": replace(part, value=part.value | {"strata": strata},
                                      source=f"{part.source}; cut by the partition card {v['name']}{art}")}
@@ -1263,6 +1277,8 @@ STYLE = {"tokens": ("#08306B", "-", 4.2), "tokens_pod": ("#2171B5", "-", 2.8),
          "tokens_datacenter": ("#9ECAE1", "-", 1.4), "tokens_sets": ("#08306B", SETS, 1.6),
          "per_expert": ("#00441B", CUT, 4.2), "per_expert_pod": ("#238B45", CUT, 2.8),
          "per_expert_datacenter": ("#A1D99B", CUT, 1.4), "per_expert_sets": ("#00441B", SETS, 1.6),
+         "head_units": ("#7A0177", CUT, 4.2), "head_units_pod": ("#C51B8A", CUT, 2.8),
+         "head_units_datacenter": ("#FA9FB5", CUT, 1.4), "head_units_sets": ("#7A0177", SETS, 1.6),
          "tokens_bi": ("#6BAED6", (0, (1, 1.6)), 2.4), "layer_of_token": ("#D95F02", "-", 2.4),
          "every_block": ("#555555", (0, (6, 3)), 2.4)}
 YLABELS = {"exfiltration": "Exfiltration capacity", "infiltration": "Infiltration, bits written",

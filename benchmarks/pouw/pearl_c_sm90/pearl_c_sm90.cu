@@ -16,6 +16,8 @@
 
 #include "../pearl_c/hash_h3.cuh"
 #include "../pearl_c_sm120/hash_fast.cuh"
+// rows past hash_fast.cuh's 128 segments (run.py's `row_digests`): y's rows of n words
+#include "../pearl_c/hash_wide.cuh"
 // decode's A commitment and tile leaves (run.py's PD_SERVED): the variants the decode shapes take, then their PD_STAMP twins
 // (run.py's PD_STAMPED, the profile's stamps); PD_PDL: pd_commit waits at its entry for the launch before it and lets the
 // call's forming launch behind it (pdl_entry); PD_SM90: hash_decode.cuh's PD_SM90_FORMS

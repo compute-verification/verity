@@ -36,6 +36,12 @@ from research.store.model import Label
 from test_merge_gate import CHECK_FILES
 
 RULES = 'hold_label = "hold"\n'
+#: rules naming the author of the queue's commits (`Rules.author`), a dummy; `NAMED`: such a commit's author and committer, and
+#: `OWN`: those of one made where the rules name none (`Q.IDENTITY`)
+AUTHOR = ("rules-bot[bot]", "7+rules-bot[bot]@users.noreply.invalid")
+AUTHORED = RULES + f'author = {{ name = "{AUTHOR[0]}", email = "{AUTHOR[1]}" }}\n'
+NAMED = "{0} <{1}> | {0} <{1}>".format(*AUTHOR)
+OWN = "research queue <queue@research.invalid> | research queue <queue@research.invalid>"
 AGENT = "bc-605d7c89-ca73-5a32-a582-ee77c49e762a"
 
 
@@ -65,6 +71,11 @@ class FakeGitHub:
 
     def open_prs(self) -> list[PR]:
         return list(self.prs.values())
+
+    def pr(self, n: int) -> PR:
+        if n not in self.prs:
+            raise QueueError(f"gh api repos/{self.repo}/pulls/{n}: Not Found (HTTP 404)")
+        return self.prs[n]
 
 
 class World:
@@ -202,6 +213,58 @@ def test_the_queues_merges_carry_the_time_they_are_made_whatever_date_the_caller
     q = world.queue()
     [m] = q.sync()[0]
     assert "2026-09-28" not in _git(q.workdir, "log", "-1", "--format=%aI %cI", m.commit)
+
+
+def _who(repo: Path, commit: str) -> str:
+    """``commit``'s author and committer."""
+    return _git(repo, "log", "-1", "--format=%an <%ae> | %cn <%ce>", commit)
+
+
+def test_a_commit_made_as_an_identity_alone_carries_the_time_it_is_made_and_one_given_its_dates_keeps_them(tmp_path, monkeypatch):
+    """`_git` drops the dates a caller pins from a commit made as the queue, `IDENTITY` or the author a repository's rules name
+    (the object passed isn't what says so: its keys are), and keeps the dates given with the identity."""
+    _git(tmp_path, "init", "-q")
+    tree, given = _git(tmp_path, "write-tree"), "2026-01-01T00:00:00+00:00"
+    for k in Q.DATES:
+        monkeypatch.setenv(k, "2026-09-28T23:00:00+0000")
+    for identity in (Q.IDENTITY, dict(Q.IDENTITY), Rules.parse(AUTHORED).identity):
+        made = Q._git(tmp_path, "commit-tree", tree, "-m", "m", env=identity).stdout.strip()
+        assert "2026-09-28" not in _git(tmp_path, "log", "-1", "--format=%aI %cI", made)
+        dated = Q._git(tmp_path, "commit-tree", tree, "-m", "m", env={**identity, **dict.fromkeys(Q.DATES, given)}).stdout.strip()
+        assert _git(tmp_path, "log", "-1", "--format=%aI %cI", dated) == f"{given} {given}"
+
+
+def test_the_queues_merges_carry_the_author_the_rules_name_and_its_own_where_they_name_none(world, monkeypatch):
+    """A repository whose rules name an author (`Rules.author`) gets the queue's merges as that author and committer, at the
+    time they're made, as any of its merges; while they name none it gets them as `IDENTITY`, and the chain reads both alike:
+    the members merged as `IDENTITY` before the rules named an author are still the queue's."""
+    base = _git(world.origin, "rev-parse", "refs/heads/main")
+    world.gh.put(1, world.change({"a.txt": "a1\n"}))
+    world.gh.put(2, world.change({"ci/queue.toml": AUTHORED}))
+    q = world.queue()
+    one, two = q.sync()[0]
+    assert q.identity is Q.IDENTITY and _who(q.workdir, one.commit) == _who(q.workdir, two.commit) == OWN
+    _git(world.origin, "update-ref", "refs/heads/main", two.commit)                    # they land, the rules with them
+    world.gh.put(3, world.change({"c.txt": "c3\n"}))
+    monkeypatch.setenv("GIT_AUTHOR_DATE", "2026-09-28T23:00:00+0000")
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2026-09-28T23:00:00+0000")
+    q = world.queue()
+    [three] = q.sync()[0]
+    assert _who(q.workdir, three.commit) == NAMED
+    assert "2026-09-28" not in _git(q.workdir, "log", "-1", "--format=%aI %cI", three.commit)
+    assert Q.chain_of(q.workdir, base, three.commit) == [one, two, three] and world.on_next(q) == [3]
+
+
+def test_a_queue_given_its_rules_merges_as_the_author_they_name_and_keeps_the_members_merged_before(world):
+    """`--rules FILE` names the author as the rules on `main` do; a member merged as `IDENTITY` keeps its place and its commit
+    under rules that name another author."""
+    world.gh.put(1, world.change({"a.txt": "a1\n"}))
+    [one] = world.queue().sync()[0]
+    world.gh.put(2, world.change({"b.txt": "b2\n"}))
+    q = world.queue(rules=Rules.parse(AUTHORED))
+    kept, two = q.sync()[0]
+    assert kept == one and (_who(q.workdir, one.commit), _who(q.workdir, two.commit)) == (OWN, NAMED)
+    assert world.on_next(q) == [1, 2]
 
 
 def test_a_new_push_moves_its_pr_to_the_tip_and_keeps_the_commits_before_it(world):
@@ -816,6 +879,105 @@ def test_a_merged_tree_whose_caller_names_no_root_goes_under_merged_root_not_tmp
     with queue.merged_worktree(repo, _git(repo, "rev-parse", "HEAD")) as wt:
         assert wt.is_relative_to(fast) and (wt / "f.txt").read_text() == "x\n"
     assert not list(fast.glob(f"{queue.MERGED_PREFIX}*")) and not list(tmp.iterdir())
+
+
+def _regeneration(world: World, ran: Path) -> tuple[Queue, str, PR]:
+    """A queue's clone of a `main` holding stub move scripts: `rename.py` writes its working directory to ``ran`` and adds
+    `moved.txt`, `move_check.py` certifies; (the queue, `main`, a move PR naming the map)."""
+    main = _move_main(world, {
+        "tools/move/rename.py": f"import os, sys\nfrom pathlib import Path\nPath({str(ran)!r}).write_text(os.getcwd())\n"
+                                "Path(sys.argv[sys.argv.index('--root') + 1], 'moved.txt').write_text('m\\n')\n",
+        "tools/move/x_map.toml": "", "tools/verity/check/move_check.py": "print('{\"certified\": true}')\n"})
+    q = world.queue()
+    q._clone()
+    q.fetch()
+    return q, main, PR(1, main, "move", "Lane `lane-1`.\nMove: tools/move/x_map.toml\n")
+
+
+def test_a_moves_regeneration_checks_its_tip_out_under_merged_root_not_tmpdir(world, monkeypatch):
+    """`_regenerated` runs `rename.py` in a worktree of the tip: under TMPDIR, the control pod's network volume, its add and
+    remove took minutes; under `MERGED_ROOT` (--preflight-root, --merged-root), as `merged_worktree`'s, they don't, and it
+    leaves nothing."""
+    import tempfile
+
+    from research import queue
+
+    tmp, fast, ran = world.tmp / "tmpdir", world.tmp / "fast", world.tmp / "ran"
+    tmp.mkdir()
+    q, main, pr = _regeneration(world, ran)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp))
+    monkeypatch.setattr(queue, "MERGED_ROOT", fast)
+    commit, why, report = q._regenerated(main, pr, main)
+    assert commit and why == "" and report == {"certified": True}, why
+    assert _git(q.workdir, "show", f"{commit}:moved.txt") == "m"
+    assert Path(ran.read_text()).is_relative_to(fast), ran.read_text()
+    assert not list(fast.iterdir()) and not list(tmp.iterdir())
+    assert _git(q.workdir, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_a_regenerated_move_carries_the_author_the_rules_name_and_is_read_as_the_queues_move_either_way(world, monkeypatch):
+    """A move the queue regenerates is its commit as a merge is: `IDENTITY`'s where the rules name no author, the named
+    author's where they do, and its `Move:` trailer and its PR, not who made it, say it is the queue's move."""
+    from research import queue
+
+    q, main, pr = _regeneration(world, world.tmp / "ran")
+    monkeypatch.setattr(queue, "MERGED_ROOT", world.tmp / "fast")
+    own, why, _ = q._regenerated(main, pr, main)
+    q._rules = Rules.parse(AUTHORED)
+    named, why_named, _ = q._regenerated(main, pr, main)
+    assert own and named and (why, why_named) == ("", ""), (why, why_named)
+    assert (_who(q.workdir, own), _who(q.workdir, named)) == (OWN, NAMED)
+    for commit in (own, named):
+        body = _git(q.workdir, "log", "-1", "--format=%B", commit)
+        assert Q.queue_commit(commit, main, body) == Q.Member(1, main, "lane-1", commit)
+        assert Q.move_of(q.workdir, commit) == "tools/move/x_map.toml"
+    assert _git(q.workdir, "rev-parse", f"{own}^{{tree}}") == _git(q.workdir, "rev-parse", f"{named}^{{tree}}")
+
+
+def _worktree_locks(repo: Path) -> Callable[[], tuple[bool, bool, bool]]:
+    """Whether train.lock is held, whether the worktree lock is held so that a shared hold waits (a worktree added), and whether
+    it is held so that an exclusive one does (a fetch, or a worktree added), in ``repo``'s git directory, each asked from a file
+    of its own as another process would."""
+    import fcntl
+
+    common = Path(_git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
+
+    def held(name: str, op: int) -> bool:
+        with open(common / name, "a") as f:
+            try:
+                fcntl.flock(f, op | fcntl.LOCK_NB)
+            except BlockingIOError:
+                probe = "held"
+            else:
+                fcntl.flock(f, fcntl.LOCK_UN)
+                probe = "free"
+        return probe == "held"
+
+    return lambda: (held("train.lock", fcntl.LOCK_EX), held(Q.WORKTREES_LOCK, fcntl.LOCK_SH),
+                    held(Q.WORKTREES_LOCK, fcntl.LOCK_EX))
+
+
+def test_a_moves_regeneration_adds_and_removes_its_worktree_under_train_lock_and_the_worktree_lock(world, monkeypatch):
+    """train.sh's launches add and prune worktrees of the same clone under train.lock, and two at once fail ("Could not write
+    new index file"); and a fetch there, which holds the worktree lock shared, reads every worktree's HEAD, which a worktree
+    half added has as a placeholder (`bad object worktrees/…/HEAD`), so the steps after a landing that fetched beside a
+    regeneration's add lost their fetch.  So each worktree command of a regeneration holds both (`worktrees_locked`)."""
+    from research import queue
+
+    q, main, pr = _regeneration(world, world.tmp / "ran")
+    monkeypatch.setattr(queue, "MERGED_ROOT", world.tmp / "fast")
+    locks, real, held = _worktree_locks(q.workdir), queue._git, []
+
+    def git(repo, *args, **kw):
+        if args[:1] == ("worktree",):
+            held.append((args[1], *locks()))
+        return real(repo, *args, **kw)
+
+    monkeypatch.setattr(queue, "_git", git)
+    commit, why, _ = q._regenerated(main, pr, main)
+    assert commit and why == "", why
+    assert held == [("add", True, True, True), ("remove", True, True, True), ("prune", True, True, True)], held
+    assert locks() == (False, False, False)
 
 
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
@@ -2161,10 +2323,10 @@ def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
     the ejected PR."""
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     q = world.queue()
-    q.eject(1, "held for Daniel's decision 10", "memory-accounting")
+    q.eject(1, "held for a decision", "memory-accounting")
     head = next(p.head for p in world.gh.open_prs() if p.number == 1)
     (lab,) = world.store.labels(label_target(1, head), key=vocab.READY)
-    assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for Daniel's decision 10")
+    assert (lab.value, lab.by, lab.ref) == (False, "memory-accounting", "held for a decision")
 
 
 def test_an_ejection_naming_a_head_refuses_once_its_owner_pushed_another(world):
@@ -2269,6 +2431,35 @@ def test_rules_name_the_hold_label_and_refuse_anything_else():
     for bad in ('[[grant]]\nrole = "red-team"\npaths = ["x/"]\n', 'colour = "red"\n'):
         with pytest.raises(QueueError):
             Rules.parse(bad)
+
+
+def test_rules_name_the_author_of_the_queues_commits_with_a_name_and_an_address_or_name_none():
+    """Rules that name no author leave the queue's commits as `IDENTITY`, the same object, so nothing about them changes;
+    rules that name one name both its name and its address, and half of one, an empty one, one git would write otherwise
+    (it drops a newline, `<` and `>` without a word) or one no environment holds (a NUL) is refused when the rules load,
+    saying what to write."""
+    for unnamed in (Rules.parse(RULES), Rules.parse(""), Rules()):
+        assert unnamed.author is None and unnamed.identity is Q.IDENTITY
+    name, email = AUTHOR
+    for text in (AUTHORED, f'[author]\nname = "{name}"\nemail = "{email}"\n'):
+        rules = Rules.parse(text)
+        assert rules.author == AUTHOR and rules.hold_label == "hold"
+        assert rules.identity == {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email,
+                                  "GIT_COMMITTER_NAME": name, "GIT_COMMITTER_EMAIL": email}
+    write = ('write `author = { name = "NAME", email = "ADDRESS" }`, the two the queue\'s commits carry as author and committer, '
+             "or leave `author` out and they carry research queue <queue@research.invalid>")
+    for bad, why in (('author = { name = "n" }', "names no email"), ('author = { email = "e@x.invalid" }', "names no name"),
+                     ("author = {}", "names no name"), ('author = { name = "", email = "e@x.invalid" }', "names an empty name"),
+                     ('author = { name = "n", email = " " }', "names an empty email"),
+                     ('author = { name = "a\\nb", email = "e@x.invalid" }', r"names name 'a\nb', which holds '\n'"),
+                     ('author = { name = "n", email = "<e@x.invalid>" }', "names email '<e@x.invalid>', which holds '<' and '>'"),
+                     ('author = { name = "n", email = "e\\u0000@x.invalid" }', r"names email 'e\x00@x.invalid', which holds '\x00'"),
+                     ('author = { name = 7, email = "e@x.invalid" }', "names name 7, not a string"),
+                     ('author = { name = "n", email = "e@x.invalid", date = "d" }', "has unknown keys ['date']"),
+                     ('author = "n <e@x.invalid>"', "is 'n <e@x.invalid>', not a table")):
+        with pytest.raises(QueueError) as refused:
+            Rules.parse(bad, "queue.toml")
+        assert str(refused.value) == f"queue.toml: author {why}: {write}", bad
 
 
 def test_until_the_move_the_rules_are_read_from_tools_check(world):
@@ -2759,9 +2950,10 @@ def _preflight(world: World, free=lambda: 1.0, fetch=None, store=None, repo: Pat
                budget_s: float = math.inf, **kw):
     """The preflight on ``world``.  Its checks' budget never runs out, so each waits on its check's end: the preflight is
     fail-open, and a check a slow disk kept past the real `PREFLIGHT_CHECKS_S` would be skipped, the refusal a test expects
-    missed."""
+    missed.  Nor does the budget of its read of the marked heads (`collide_s`), unless a test gives one."""
     from research.queue import Preflight
 
+    kw.setdefault("collide_s", math.inf)
     return Preflight(repo or world.dev, str(world.origin), store or world.store, sync=sync, python=sys.executable,
                      root=world.tmp / "pre", log=world.logs.append, free=free, fetch=fetch, budget_s=budget_s, **kw)
 
@@ -3301,6 +3493,130 @@ def test_the_preflight_runs_the_ratchet_gate_only_on_a_change_that_reaches_what_
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
 
 
+def _marked(world: World, n: int, files: dict[str, str], base: str = "origin/main") -> str:
+    """Open PR #``n`` changing ``files`` on ``base``, marked ready at its head on its owner's word: the head."""
+    from research.queue import MarkOnly, ready
+
+    world.gh.put(n, head := world.change(files, base=base), ready=False)
+    assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=None) == 0
+    return head
+
+
+def _merges(monkeypatch) -> list[str]:
+    """The heads `merged_tree` merges from here on, in order: the preflight's own merge of the head it marks, and each merge
+    its read of the marked heads makes."""
+    heads, real = [], Q.merged_tree
+    monkeypatch.setattr(Q, "merged_tree", lambda repo, base, head, **kw: heads.append(head) or real(repo, base, head, **kw))
+    return heads
+
+
+def _on_main(world: World) -> str:
+    """`main` as the verified queue lands onto it, with what the preflight runs there: its tip."""
+    world.with_store_remote()
+    return _move_main(world, {**PREFLIGHT_FILES, DRIVE_FLAGS: 'land_into = "main"\n'})
+
+
+def test_the_preflight_names_each_marked_pr_a_head_doesnt_merge_with_as_a_warning_and_takes_the_mark(world, capsys):
+    """Two marked heads that change the same lines each merge onto `main`, so neither mark is refused, and hours later the
+    queue refuses whichever it merges second.  The mark names the other PR, its lane, the files (the first few of many) and
+    the fix, and goes through; an open PR that isn't marked is no collision yet."""
+    from research.queue import COLLIDE_SAYS, PREFLIGHT_COLLIDE_NAMED, MarkOnly, StoreLabels, ready
+
+    main = _on_main(world)
+    five = _marked(world, 5, {"a.txt": "a5\n", "b.txt": "b5\n"})
+    many = [f"d/{i}.txt" for i in range(PREFLIGHT_COLLIDE_NAMED + 2)]
+    seven = _marked(world, 7, dict.fromkeys(many, "7\n"))
+    world.gh.put(6, world.change({"a.txt": "a6\n"}), ready=False)
+    world.gh.put(2, h2 := world.change({"a.txt": "a2\n", "b.txt": "b2\n", **dict.fromkeys(many, "2\n")}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert [s for s in world.logs if "warning" in s] == [
+        f"research queue: preflight: warning: #2 at {h2[:12]}: it doesn't merge with 2 marked PR(s), each merged onto `main` at "
+        f"{main[:12]} and this head onto that, as a candidate holding both merges them:\n"
+        f"    #5 (lane-5) at {five[:12]}, in a.txt, b.txt\n"
+        f"    #7 (lane-7) at {seven[:12]}, in {', '.join(many[:PREFLIGHT_COLLIDE_NAMED])} and 2 more\n  {COLLIDE_SAYS}"], world.logs
+    assert "wait for the PR named to land, merge `main` and mark the new head" in COLLIDE_SAYS
+    assert "nothing refused" in next(s for s in world.logs if f"preflight: #2 at {h2[:12]}" in s)
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
+def test_the_preflight_merges_no_marked_head_that_shares_no_changed_path_with_the_head(world, monkeypatch, capsys):
+    """A conflict needs a file both sides change, so only the marked heads that share a changed path with the head are merged:
+    the read stays a few merges however many heads are marked."""
+    from research.queue import MarkOnly, ready
+
+    _on_main(world)
+    five, six = _marked(world, 5, {"b.txt": "b5\n"}), _marked(world, 6, {"a.txt": "a\nboth\n", "c.txt": "c6\n"})
+    world.gh.put(2, world.change({"a.txt": "a\nboth\n", "d.txt": "d2\n"}), ready=False)
+    merged = _merges(monkeypatch)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert five not in merged and six in merged, merged                           # #6 shares a.txt, and merges
+    assert not [s for s in world.logs if "warning" in s], world.logs
+
+
+def test_the_preflight_merges_no_marked_head_the_head_contains_or_that_contains_it(world, monkeypatch, capsys):
+    """A stack is no collision: the head merges with a marked head below it, and with one above it, by ancestry, and the
+    queue lands them in that order.  Neither is merged, though each shares every path the lower one changes."""
+    from research.queue import MarkOnly, ready
+
+    _on_main(world)
+    five = _marked(world, 5, {"a.txt": "a5\n"})
+    world.gh.put(2, h2 := world.change({"a.txt": "a5\nand 2\n"}, base=five), ready=False)
+    merged = _merges(monkeypatch)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert h2 in merged and five not in merged, merged                            # #2 contains #5's head
+    del merged[:]
+    assert ready(world.gh, world.store, 5, "lane-5", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    assert five in merged and h2 not in merged, merged                            # #2, marked by now, contains #5's
+    assert not [s for s in world.logs if "warning" in s], world.logs
+
+
+def test_the_read_of_the_marked_heads_names_what_its_own_budget_left_unread_and_takes_none_of_the_checks_time(
+        world, monkeypatch, capsys):
+    """The read has a budget of its own, read from the clock before each group of merges: past it the marked heads still to
+    merge are named, every one, and not merged, the collision already found is still told, and the mark goes through.  The
+    merged tree's checks get their whole budget from when the read ends, so a slow read never costs a lint its time."""
+    from research.queue import COLLIDE_SAYS, PREFLIGHT_COLLIDE_NAMED, MarkOnly, Preflight, StoreLabels, ready
+
+    main = _on_main(world)
+    five, *rest = (_marked(world, n, {"a.txt": f"a{n}\n"}) for n in range(5, 7 + PREFLIGHT_COLLIDE_NAMED))
+    world.gh.put(2, h2 := world.change({"a.txt": "a2\n"}), ready=False)
+    now, real, deadlines = [0.0], Q.conflicting_files, []
+
+    def slow(repo: Path, base: str, head: str) -> list[str]:
+        now[0] += 1000.0                                                          # one merge outlasts the read's 50 s
+        return real(repo, base, head)
+
+    monkeypatch.setattr(Q, "conflicting_files", slow)
+    monkeypatch.setattr(Preflight, "_checks", lambda self, *a: deadlines.append(a[5]) or {})
+    merged = _merges(monkeypatch)
+    pre = _preflight(world, budget_s=120.0, collide_s=50.0, collide_jobs=1, clock=lambda: now[0])
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=pre) == 0, capsys.readouterr().err
+    assert five in merged and not set(rest) & set(merged), merged
+    assert [s for s in world.logs if "warning" in s] == [
+        f"research queue: preflight: warning: #2 at {h2[:12]}: it doesn't merge with 1 marked PR(s), each merged onto `main` at "
+        f"{main[:12]} and this head onto that, as a candidate holding both merges them:\n"
+        f"    #5 (lane-5) at {five[:12]}, in a.txt\n  {COLLIDE_SAYS}",
+        f"research queue: preflight: warning: #2 at {h2[:12]}: whether it merges with these PRs wasn't read: "
+        f"{', '.join(f'#{n}' for n in range(6, 7 + PREFLIGHT_COLLIDE_NAMED))} (not merged in time). The read has 50 s of its own "
+        "and refuses nothing; the queue's merge judges each"], world.logs
+    assert deadlines == [1000.0 + 120.0], deadlines
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
+def test_a_read_of_the_marked_heads_that_cant_read_the_marks_says_so_and_takes_the_mark(world, capsys):
+    """Without the store's remote the ready marks here may be old, so the read answers from none of them: it says why in a
+    warning, and the mark goes through as it did before the read was there."""
+    from research.queue import MarkOnly, ready
+
+    _move_main(world, {**PREFLIGHT_FILES, DRIVE_FLAGS: 'land_into = "main"\n'})
+    world.gh.put(5, world.change({"a.txt": "a5\n"}), ready=False)
+    world.gh.put(2, h2 := world.change({"a.txt": "a2\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    [said] = [s for s in world.logs if "warning" in s]
+    assert said.startswith(f"research queue: preflight: warning: #2 at {h2[:12]}: the marked PRs it doesn't merge with weren't "
+                           "read (QueueError: STALE: the labels of pr:5@") and said.endswith("the queue's merge judges each"), said
+
+
 def test_the_preflight_refuses_what_the_sync_holds_a_marked_pr_waiting_on_one_it_contains(world, capsys):
     """A re-mark the sync would hold is refused, rather than taken and left for the next sync to say "contains #N, which isn't
     admitted".  Here #5 is marked but contains lane-4's unmarked #6, which #5 doesn't carry, so the sync
@@ -3816,6 +4132,56 @@ def _key(repo: Path, commit: str, pkg: str = "pkg") -> str:
     return json.loads(r.stdout)[pkg]
 
 
+#: a commit's own `lean_changed.py` whose `--ask` prints what the data file beside it (`ASKS`) gives its packages, or fails
+ASK_TOOL = """import json, pathlib, sys
+if sys.argv[1] == "--ask":
+    asks = json.loads((pathlib.Path(__file__).parent / "asks.json").read_text())
+    if "fail" in asks:
+        sys.stderr.write("no ask for these\\n")
+        sys.exit(asks["fail"])
+    print(sum(asks[p] for p in sys.argv[2:]))
+"""
+ASKS = "tools/verity/lean/asks.json"
+
+
+@pytest.mark.parametrize("files, gb, why", [
+    ({KEY_FILES[0]: ASK_TOOL, ASKS: '{"pkg": 140, "lib": 9}'}, 149, None),
+    ({KEY_FILES[0]: ASK_TOOL, ASKS: '{"fail": 3}'}, 93, "`tools/verity/lean/lean_changed.py --ask` at {c} exited 3: no ask for these"),
+    ({KEY_FILES[0]: ASK_TOOL, ASKS: '{"pkg": 0, "lib": 0}'}, 93,
+     "`tools/verity/lean/lean_changed.py --ask` at {c} printed no whole number of GB: '0'"),
+    ({KEY_FILES[0]: "import sys\nprint(7)\n"}, 93, "{c} has no `tools/verity/lean/lean_changed.py --ask`"),
+    ({}, 93, "{c} has no `tools/verity/lean/lean_changed.py --ask`"),
+], ids=["ask", "fails", "not-a-number", "no-ask", "no-tool"])
+def test_a_records_run_asks_the_memory_its_commit_s_own_ask_prints_and_93_where_it_has_none_or_it_fails(world, files, gb, why):
+    """`records_mem_gb` runs the commit's own `lean_changed.py --ask PKG...`, with the files beside it at that commit, and
+    takes the one whole number it prints; a commit whose tool has no `--ask`, or none, and an `--ask` that fails or prints
+    anything else, get `RECORDS_MEM_GB`.  Each says which in its log line."""
+    from research.queue import records_mem_gb
+
+    c, logs = world.change({"asked.txt": f"{files}\n", **files}), []
+    assert records_mem_gb(world.dev, c, ["pkg", "lib"], logs.append) == gb
+    said = ("--mem-gb 149, its own `tools/verity/lean/lean_changed.py --ask`'s" if why is None else
+            f"--mem-gb 93, as {why.format(c=c[:12])}")
+    assert logs == [f"research queue: records run at {c[:12]}: {said}"]
+
+
+def test_an_ask_that_runs_over_its_timeout_gets_93_and_says_so(world, monkeypatch):
+    from research import queue as Q
+
+    c, logs, run = world.change({KEY_FILES[0]: ASK_TOOL, ASKS: '{"pkg": 140}'}), [], subprocess.run
+
+    def over(argv, **kw):
+        if "--ask" in argv:
+            assert kw["timeout"] == Q.ASK_TIMEOUT_S
+            raise subprocess.TimeoutExpired(argv, kw["timeout"])
+        return run(argv, **kw)
+
+    monkeypatch.setattr(Q.subprocess, "run", over)
+    assert Q.records_mem_gb(world.dev, c, ["pkg"], logs.append) == 93
+    assert logs == [f"research queue: records run at {c[:12]}: --mem-gb 93, as `tools/verity/lean/lean_changed.py --ask` at "
+                    f"{c[:12]} ran over 60 s"]
+
+
 def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = True, passes: dict[str, str] | None = None,
                records: dict | None = None, steps: list | None = None, kind: str | None = None, at: float | None = None,
                argv: list[str] | None = None, state: str | None = None, rc: int | None = None, rid: str | None = None) -> str:
@@ -3876,7 +4242,7 @@ def test_a_head_that_changes_a_lock_is_vouched_for_only_by_a_pass_on_its_lean_in
     """A records run that failed a package still writes a record, which reads as a pass, and vouches for nothing.  Only a
     result's `passes`, the Lean inputs key of each package it passed, vouches: with no run the warning names the command to
     start; with a failing one, that run too."""
-    from research.queue import RECORDS_COMMAND, StoreLabels
+    from research.queue import RECORDS_COMMAND, RECORDS_MEM_GB, StoreLabels
 
     world.with_store_remote()
     _keyed(world, {LOCK: _lock()})
@@ -3886,14 +4252,15 @@ def test_a_head_that_changes_a_lock_is_vouched_for_only_by_a_pass_on_its_lean_in
     err = capsys.readouterr().err
     assert f"research queue ready: warning: #1 at {h[:12]}: it changes the Lean lock of pkg against `main`" in err
     assert f"the store holds no pass of it on {h[:12]}'s Lean inputs" in err
-    assert f"start `{RECORDS_COMMAND.format(pkg='pkg')}`" in err
-    assert ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output "
+    assert f"start `{RECORDS_COMMAND.format(pkg='pkg', gb=RECORDS_MEM_GB)}`" in err
+    assert f"--mem-gb 93, as {h[:12]} has no `tools/verity/lean/lean_changed.py --ask`" in world.logs[-1]
+    assert ("research run --on auto --mem-gb 93 --max-min 120 --project verity --source . --cwd clone --declared-output "
             "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records pkg --update") in err
     failed = _published(world, h, passed=False)
     assert _mark(world, 1, h) == 1
     err = capsys.readouterr().err
     assert f"records run {failed} of {h[:12]} failed pkg (`research status {failed}`" in err
-    assert RECORDS_COMMAND.format(pkg="pkg") in err
+    assert RECORDS_COMMAND.format(pkg="pkg", gb=RECORDS_MEM_GB) in err
     assert StoreLabels(world.store, log=world.logs.append).ready(1, h) is True
 
     key = _key(world.dev, h)
@@ -3923,7 +4290,7 @@ def test_a_head_that_changes_a_lock_no_records_run_passed_is_marked_and_the_warn
                           f"and the store holds no pass of each on {h[:12]}'s Lean inputs"), err
     assert f": {RECORDS_AFTER_LANDING}:\n  - " in err
     for pkg in ("lib", "pkg"):
-        assert f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg)}`" in err
+        assert f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg, gb=93)}`" in err
     assert "is not marked" not in err and f"#1 at {h[:12]}: marked on lane-1's word, with no quick tier" in out
     assert StoreLabels(world.store, log=world.logs.append).ready(1, h) is True
 
@@ -4518,6 +4885,67 @@ def _move_main(world: World, files: dict[str, str]) -> str:
     moved = world.change(files)
     _git(world.dev, "push", "-q", "origin", f"{moved}:refs/heads/main")
     return moved
+
+
+def _landed_move(world: World, rows: str, files: dict[str, str | None]) -> tuple[str, str]:
+    """`main` moved by a layout move: its map `tools/move/x_map.toml` (``rows``) lands, then the move writing ``files`` on it,
+    with its `Layout-move:` line, as `tools/move/stage.py` commits one.  Returns (the move's base, the move)."""
+    base = _move_main(world, {"tools/move/x_map.toml": rows})
+    tree = _git(world.dev, "rev-parse", f"{world.change(files)}^{{tree}}")
+    move = _git(world.dev, "commit-tree", tree, "-p", base, "-m", "Move\n\nLayout-move: tools/move/x_map.toml")
+    _git(world.dev, "push", "-q", "origin", f"{move}:refs/heads/main")
+    return base, move
+
+
+def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map_its_words_in_any_case(world, capsys):
+    """`map_retires` reads a map as `layout.py` and `rename.py` take it: a row that keeps its path and a one-word module retire
+    nothing, and a map missing at the base or that doesn't parse can't be read, the one that doesn't parse said on stderr."""
+    main = _move_main(world, {"tools/move/l_map.toml": '[paths]\n"old/" = "new/"\n"kept.py" = "kept.py"\n'
+                                                       '[retired]\npaths = ["gone/"]\n[drop]\npaths = ["x.toml"]\n'
+                                                       '[modules]\n"old" = "new"\n"pkg.old" = "pkg.new"\n',
+                              "tools/move/w_map.toml": '[words]\n"Warden" = "NetworkCertifier"\n'
+                                                       '[[words_in]]\nfiles = ["a/*"]\nwords = { tap = "certifier" }\n',
+                              "tools/move/bad_map.toml": "[paths\n"})
+    layout, words = (Q.map_retires(world.origin, main, f"tools/move/{m}_map.toml") for m in ("l", "w"))
+    assert layout == Q.Retired(frozenset({"old", "gone", "x.toml", "pkg.old"})), layout
+    assert words == Q.Retired(words=frozenset({"warden", "tap"})), words
+    assert words.named("a NETWORK WARDEN, pkg.old") == ["warden"] and layout.named("from pkg.old import y; Old") == ["old", "pkg.old"]
+    capsys.readouterr()
+    assert Q.map_retires(world.origin, main, "tools/move/bad_map.toml") is None
+    assert f"tools/move/bad_map.toml at {main[:12]} doesn't parse" in capsys.readouterr().err
+    assert Q.map_retires(world.origin, main, "tools/move/none_map.toml") is None
+    assert not capsys.readouterr().err
+
+
+def test_a_head_crosses_a_move_in_flight_whose_map_at_its_head_and_on_main_retires_nothing_its_own_change_names(world):
+    """`crossed` reads `lacked_moves`'s predicate against a move PR's map at its head, and `main`'s copy beside it: a head
+    whose files or added lines name neither copy's retired names crosses it, and none crosses a move whose map can't be read
+    at its head; it raises for a head whose own change can't be read, which `World.crossing` takes as crossing nothing."""
+    main = _move_main(world, {"tools/move/x_map.toml": '[paths]\n"c.txt" = "moved/c.txt"\n'})
+    move = world.change({"tools/move/x_map.toml": '[paths]\n"d.txt" = "moved/d.txt"\n'})
+    bad = world.change({"tools/move/x_map.toml": "[paths\n"})
+    heads = {n: world.change(files) for n, files in ((1, {"b.txt": "1\n"}), (2, {"e.txt": "reads c.txt\n"}),
+                                                     (3, {"d.txt": "written\n"}))}
+    moves = [(move, "tools/move/x_map.toml"), (bad, "tools/move/x_map.toml")]
+    assert {n: Q.crossed(world.origin, main, h, moves) for n, h in heads.items()} == {
+        1: frozenset({move}), 2: frozenset(), 3: frozenset()}
+    with pytest.raises(Q.QueueError):
+        Q.crossed(world.origin, main, "f" * 40, moves, files=())
+
+
+def test_the_status_command_refuses_a_head_lacking_a_move_whose_change_names_what_it_retires_and_admits_the_rest(world):
+    """`status --loop` says what `World.ready` decides of a head below a move `main` landed: one whose own change names none of
+    the move's retired names is admitted, and one that names one, in a path or an added line, is refused with the move and
+    the fix."""
+    base, move = _landed_move(world, '[paths]\n"c.txt" = "moved/c.txt"\n', {"c.txt": None, "moved/c.txt": "c\n"})
+    world.gh.put(1, world.change({"b.txt": "1\n"}, base=base))
+    world.gh.put(2, world.change({"e.txt": "reads c.txt\n"}, base=base))
+    loop = world.queue(land_into="checked").status(loop=True)
+    assert [loop[n].state for n in (1, 2)] == ["ready", "refused"], loop
+    assert loop[1].why.startswith("admitted: "), loop[1]
+    assert loop[2].why == (f"it lacks the move {move[:12]} `main` landed (tools/move/x_map.toml), whose retired names its own "
+                           "change names (`c.txt`): merge `main` into it and rename them, or cross it with "
+                           "`tools/move/restack.py`, and mark the new head ready"), loop[2]
 
 
 def _merge_main(world: World, head: str) -> str:
@@ -5271,6 +5699,26 @@ def test_the_open_prs_are_read_a_wave_of_pages_at_a_time_until_one_isnt_full(mon
     monkeypatch.setattr(Q, "GH_PAGES", 2)
     assert [p.number for p in Q.GitHub("o/r").open_prs()] == list(range(250, 0, -1))
     assert sorted(asked) == [1, 2, 3, 4]
+
+
+def test_one_pr_is_read_open_or_not_and_a_failed_read_names_it(monkeypatch):
+    """`GitHub.pr` reads `repos/<repo>/pulls/<n>`, which answers for a merged PR as for an open one."""
+    import research.queue as Q
+
+    asked: list[list[str]] = []
+
+    def gh(argv, **kw):
+        asked.append(argv)
+        if argv[-1].endswith("/9"):
+            return subprocess.CompletedProcess(argv, 1, "", "gh: Not Found (HTTP 404)")
+        return subprocess.CompletedProcess(argv, 0, json.dumps({"number": 7, "state": "closed", "merged": True, "body": "Lane `lean`.",
+                                                                "head": {"sha": "a" * 40, "ref": "b7"}}), "")
+
+    monkeypatch.setattr(subprocess, "run", gh)
+    p = Q.GitHub("o/r").pr(7)
+    assert (p.number, p.head, p.owner, asked) == (7, "a" * 40, "lean", [["gh", "api", "repos/o/r/pulls/7"]])
+    with pytest.raises(QueueError, match=r"^gh api repos/o/r/pulls/9: gh: Not Found \(HTTP 404\)$"):
+        Q.GitHub("o/r").pr(9)
 
 
 def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):

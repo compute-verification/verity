@@ -8,6 +8,7 @@ import fnmatch
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tomllib
@@ -255,6 +256,62 @@ def test_a_dry_run_says_what_would_change_and_an_install_names_only_what_still_r
     assert f"restart when safe: {node / 'bin' / 'a.py'} (" in out and (node / "bin" / "c.py").read_text() == "c3\n"
 
 
+def test_a_file_whose_processes_are_left_to_end_is_never_named_for_a_restart(world, capsys):
+    """A run's own process (a waiter for a check slot) read its file when it started and ends by itself: nothing restarts it.
+    An entry's `no_restart` says so, and neither drift nor an install then names the file for a process older than it; a
+    file without it is still named."""
+    node, repo = world["node"], world["repo"]
+    plain = 'src = "src/b.sh"\nnodes = ["n"]\n'
+    text = world["manifest"].read_text()
+    assert text.count(plain) == 1
+    world["manifest"].write_text(text.replace(plain, plain + 'no_restart = "a run of its own: it read the file when it started"\n'))
+    n = deploy.load(world["manifest"])["n"]
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=repo)
+    b, c = node / "bin" / "b", node / "bin" / "c.py"
+
+    def installed_later(name: str, argv: list[str], stdin: bytes | None) -> subprocess.CompletedProcess:
+        r = local(name, argv, stdin)
+        if argv[:2] == ["sudo", "-n"]:
+            for f in json.loads(stdin)["files"]:
+                os.utime(f["path"], (FUTURE, FUTURE))
+        return r
+
+    holders = [subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.read()", str(f)], stdin=subprocess.PIPE) for f in (b, c)]
+    try:
+        for f in (b, c):
+            os.utime(f, (FUTURE, FUTURE))
+        rep = deploy.drift(n, "origin/main", local, repo)
+        _commit(repo, {"src/b.sh": "b2\n", "src/c.py": "c2\n"}, "both change")
+        _git(repo, "push", "-q", "origin", "main")
+        assert deploy.main(["install", "n", "--by", "lane-x", "--apply", "--no-fetch"], run=installed_later,
+                           manifest=world["manifest"], repo=repo) == 0
+    finally:
+        for h in holders:
+            h.stdin.close()
+            h.wait()
+    by = {Path(e["path"]).name: e for e in rep["entries"]}
+    assert (by["b"]["state"], by["b"]["restart"]) == ("ok", None)
+    assert by["c.py"]["state"] == "ok" and "a process started" in by["c.py"]["restart"]
+    out = capsys.readouterr().out
+    assert b.read_text() == "b2\n" and f"installed     {b}  <- src/b.sh" in out
+    assert f"restart when safe: {c} (" in out and str(b) not in out.split("restart when safe: ")[1]
+
+
+def test_no_restart_says_why_and_is_only_for_a_copied_file_that_names_no_service(tmp_path):
+    m = tmp_path / "deploy.toml"
+    head, why = '[nodes.n]\nrecord = "/r"\n', 'no_restart = "its runs end by themselves"\n'
+    for entry in (f'[[file]]\npath = "/p"\nsrc = "s"\nrun = ["systemd:a"]\nnodes = ["n"]\n{why}',
+                  f'[[file]]\npath = "/p"\nby = "setup.sh"\nnodes = ["n"]\n{why}',
+                  f'[[tree]]\npath = "/p"\nsrc = "s"\nnodes = ["n"]\n{why}',
+                  '[[file]]\npath = "/p"\nsrc = "s"\nnodes = ["n"]\nno_restart = " "\n',
+                  '[[file]]\npath = "/p"\nsrc = "s"\nnodes = ["n"]\nno_restart = true\n'):
+        m.write_text(head + entry)
+        with pytest.raises(ValueError, match="`no_restart` says why"):
+            deploy.load(m)
+    m.write_text(head + f'[[file]]\npath = "/p"\nsrc = "s"\nnodes = ["n"]\n{why}')
+    assert deploy.load(m)["n"].entries[0].no_restart == "its runs end by themselves"
+
+
 def test_installing_a_changed_unit_reloads_systemd_once_and_an_unchanged_one_does_not(world, monkeypatch):
     node, repo, manifest = world["node"], world["repo"], world["manifest"]
     monkeypatch.setattr(deploy, "UNITS", f"{node}/units/")
@@ -371,6 +428,36 @@ def test_a_trust_store_that_holds_a_distrusted_root_is_drift_until_the_upgrade_r
     assert "root     " in deploy.render("n", "origin/main", rep) and "--only-upgrade ca-certificates" in deploy.render("n", "origin/main", rep)
     (certs / "emSign_ECC_Root_CA_-_G3.pem").unlink()
     assert deploy.clean(deploy.drift(n, "origin/main", local, world["repo"]))
+
+
+def test_a_null_device_that_is_not_the_character_device_1_3_with_mode_666_is_drift_with_the_command_that_repairs_it(
+        world, tmp_path, monkeypatch):
+    whole = [stat.S_IFCHR | 0o666, 1, 3]
+    assert deploy.null_fault(whole) is None
+    closed = deploy.null_fault([stat.S_IFCHR | 0o644, 1, 3])
+    assert "has mode 644, not 666" in closed["what"] and closed["fix"] == "sudo chmod 666 /dev/null"
+    remake = "sudo rm -f /dev/null && sudo mknod -m 666 /dev/null c 1 3"
+    for seen, what in (([stat.S_IFREG | 0o666, 0, 0], "is a regular file, not the character device 1,3"),
+                       ([stat.S_IFDIR | 0o755, 0, 0], "is a directory, not the character device 1,3"),
+                       ([stat.S_IFCHR | 0o666, 1, 5], "is the character device 1,5, not the character device 1,3"),
+                       ("FileNotFoundError: [Errno 2] No such file or directory: '/dev/null'", "can't be read (FileNotFoundError")):
+        assert what in deploy.null_fault(seen)["what"] and deploy.null_fault(seen)["fix"] == remake, seen
+    n = world["nodes"]["n"]
+    deploy.install(n, "origin/main", "lane-x", [], local, apply=True, repo=world["repo"])
+    (world["node"] / "bin" / "unit.service").write_text("[Unit]\n")
+    rep = deploy.drift(n, "origin/main", local, world["repo"])
+    assert rep["null_device"] is None and deploy.clean(rep), "this machine's own null device, as the probe reads it"
+    null = tmp_path / "null"
+    null.write_text("a regular file where the device was\n")
+    null.chmod(0o644)
+    monkeypatch.setattr(deploy, "NULL", str(null))
+    rep = deploy.drift(n, "origin/main", local, world["repo"])
+    assert rep["null_device"] == deploy.null_fault([stat.S_IFREG | 0o644, 0, 0]) and not deploy.clean(rep)
+    line = next(ln for ln in deploy.render("n", "origin/main", rep).splitlines() if ln.startswith("  null     "))
+    assert f"{null} is a regular file" in line and line.endswith(f"(sudo rm -f {null} && sudo mknod -m 666 {null} c 1 3)")
+    null.unlink()
+    assert "can't be read (FileNotFoundError" in deploy.drift(n, "origin/main", local, world["repo"])["null_device"]["what"]
+    assert deploy.main(["drift", "--no-fetch"], run=local, manifest=world["manifest"], repo=world["repo"]) == 1
 
 
 def test_a_node_ssh_cannot_connect_to_is_unreachable_and_any_other_failed_probe_is_an_error(world, capsys):
@@ -578,6 +665,34 @@ def test_the_manifest_runs_nothing_in_tmux_and_each_entry_has_an_owner_handle():
     registry = json.loads((deploy.SRC / ".agents/skills/using-slack/registry.json").read_text())
     handles = {h["handle"] for h in registry["handles"]}
     assert not [(e["path"], e.get("owner")) for e in entries if e.get("owner") not in handles]
+
+
+LEASE_SH, LEASE_STOP = "/home/research/.research/lease.sh", "/usr/local/sbin/vy-nebius-stop"
+
+
+def test_every_node_that_runs_the_lease_loop_gets_the_loop_and_the_stop_command_and_none_gets_one_without_the_other():
+    """The loop stops its machine only through the stop command, so deploy keeps the pair in step: both come from the tree on
+    the same nodes. Those hold every node the manifest gives a lease unit or a deadline, and every CPU node, where vm_setup.sh
+    writes the unit at first boot. A node with only one of the two runs a loop of one revision against a stop command of
+    another, or a loop deploy never brings up to date."""
+    nodes = deploy.load()
+
+    def on(path):
+        return {n.name for n in nodes.values() if path in {e.path for e in n.entries}}
+
+    loop, stop = on(LEASE_SH), on(LEASE_STOP)
+    assert loop and loop == stop, f"one without the other on {sorted(loop ^ stop)}"
+    cpu = {n for n in nodes if re.fullmatch(r"vy-nebius-cpu-\d+", n)}
+    assert len(cpu) > 2 and not sorted(cpu - loop), "every CPU node"
+    generated = sorted({e.path for n in nodes.values() for e in n.entries if e.by and re.search(r"/vy-(lease|deadline)", e.path)})
+    assert len(generated) >= 5, generated
+    for path in generated:
+        assert on(path) and not sorted(on(path) - loop), path
+    for name in sorted(loop):
+        entries = {e.path: e for e in nodes[name].entries}
+        assert entries[LEASE_SH].src == "tools/research/src/research/pods/sh/lease.sh", name
+        assert entries[LEASE_STOP].src == "tools/research/src/research/pods/nebius/vm_stop.sh", name
+        assert entries[LEASE_SH].run == ["systemd:vy-lease"], "what drift names to restart once the file is installed"
 
 
 PODS = deploy.MANIFEST.parent
