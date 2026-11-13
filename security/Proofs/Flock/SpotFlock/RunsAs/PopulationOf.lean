@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.RunsAs.Steps
-import all Spot.Run
+public import Spot.Run
 import Proofs.Flock.Claims.Sampling.Select.Code
 
 /-!
