@@ -26,7 +26,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
     `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
-    `inference_only/nci/` and `inference_only/rho/`.
+    `verity/protocols/inference_only/nci/` and `verity/protocols/inference_only/rho/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -317,6 +317,9 @@ Landing.
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
   skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
   naming a dead path.
+- **A survey is answered at once.** A question sent to several people for their answers (a survey, a what-if, a price)
+  asks each to answer on reading it, with what they know now, and sets no later deadline. An answer that lacks a figure
+  says "not known" and the hour it will be known. Each answer is passed on as it arrives, not held for the rest.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
   `show-environment`, and an env file's with `python3 tools/agent-guard/envnames.py FILE...` (on another machine,
   `ssh HOST python3 - FILE... < tools/agent-guard/envnames.py`), never `cat`, `sed`, `cut` or `grep` on it or on a glob
