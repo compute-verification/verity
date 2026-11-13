@@ -123,7 +123,7 @@ def CarriedRoots {L K S m : ℕ} (G : Hash.Msg → Hash.Digest) (lay : AuditStat
       (o i)) →
     ∀ i, Hash.RowSeg.digest G (rin i) = Hash.RowSeg.digest G (poolOpen chains genesis rout i)
 
-/-- **The restarts serving picks are registered patterns**: at each secret in `Zs` and draw of the coins at which every
+/-- **The restarts serving picks are registered patterns**: at each secret in `Zs` and sample of the coins at which every
 run's audit accepts, the restarts `chains z ω` and opened rows `genesis z ω` serving picked are one of the patterns of
 `Cs`. Under the public restart rule a run restarts there only at the registration's first run or at a chosen reset, of
 which the record rule refuses a second in a week. -/

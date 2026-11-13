@@ -547,7 +547,7 @@ def _parity(x, K: int) -> tuple:
 
 def _read_rows(reads: dict, refs, K: int) -> tuple[list, int]:
     """Each read's rows (`ir_lower._Read.fill`, at the columns `_Read` was placed at) in template references, its index
-    forms as ``refs`` writes them, and their references counted. A product row's low minterm columns are drawn from one
+    forms as ``refs`` writes them, and their references counted. A product row's low minterm columns are sampled from one
     list of ints, so a read's tens of millions of references share 2^lo int objects."""
     out, nrefs = [], 0
     for r in reads.values():
