@@ -3254,8 +3254,8 @@
   "Verity.Assumptions.WitnessPathPrivateOrChannelHides": {
    "owner": "@memory-accounting",
    "digest": "94e2691599abd9f3ae0894a0436659a5773bd7a143d4ad3e0659f797b0e2c895",
-   "issue": "MEM-245",
-   "due": "2026-11-17"
+   "issue": "MEM-303",
+   "due": "2026-11-30"
   },
   "Verity.Assumptions.ZkServerOwnUser": {
    "owner": "@proofs",
@@ -4800,6 +4800,54 @@
   "Verity.Sampled.remote_soundness_deployedReady": {
    "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
    "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsH200": {
+   "honest": ["Pous.SecurityProofs.StreamedWipeMeetsH200_honest"],
+   "nontrivial": "Pous.SecurityProofs.StreamedWipeMeetsH200_nontrivial"
+  },
+  "Accounting.SecurityProofs.RateAudit": {
+   "honest": ["Accounting.SecurityProofs.RateAudit_honest"],
+   "nontrivial": "Accounting.SecurityProofs.RateAudit_nontrivial"
+  },
+  "Accounting.SecurityProofs.RateAuditWindows": {
+   "honest": ["Accounting.SecurityProofs.RateAuditWindows_honest"],
+   "nontrivial": "Accounting.SecurityProofs.RateAuditWindows_nontrivial"
+  },
+  "Accounting.SecurityProofs.RateAuditInteractiveRO": {
+   "honest": ["Accounting.SecurityProofs.RateAuditInteractiveRO_honest"],
+   "nontrivial": "Accounting.SecurityProofs.RateAuditInteractiveRO_nontrivial"
+  },
+  "Accounting.SecurityProofs.RateAuditInteractive": {
+   "honest": ["Accounting.SecurityProofs.RateAuditInteractive_honest"],
+   "nontrivial": "Accounting.SecurityProofs.RateAuditInteractive_nontrivial"
+  },
+  "Accounting.SecurityProofs.RateAuditPartial": {
+   "honest": ["Accounting.SecurityProofs.RateAuditPartial_honest"],
+   "nontrivial": "Accounting.SecurityProofs.RateAuditPartial_nontrivial"
+  },
+  "Accounting.SecurityProofs.RateAuditSketch": {
+   "honest": ["Accounting.SecurityProofs.RateAuditSketch_honest"],
+   "nontrivial": "Accounting.SecurityProofs.RateAuditSketch_nontrivial"
+  },
+  "Accounting.SecurityProofs.RateAuditSketchInteractiveRO": {
+   "honest": ["Accounting.SecurityProofs.RateAuditSketchInteractiveRO_honest"],
+   "nontrivial": "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_nontrivial"
+  },
+  "Accounting.SecurityProofs.RateAuditTensorSketchRank": {
+   "honest": ["Accounting.SecurityProofs.RateAuditTensorSketchRank_honest"],
+   "nontrivial": "Accounting.SecurityProofs.RateAuditTensorSketchRank_nontrivial"
+  },
+  "Accounting.SecurityProofs.BoundReceiptLink": {
+   "honest": ["Accounting.SecurityProofs.BoundReceiptLink_honest"],
+   "nontrivial": "Accounting.SecurityProofs.BoundReceiptLink_nontrivial"
+  },
+  "Accounting.SecurityProofs.BoundReceiptLinkInteractive": {
+   "honest": ["Accounting.SecurityProofs.BoundReceiptLinkInteractive_honest"],
+   "nontrivial": "Accounting.SecurityProofs.BoundReceiptLinkInteractive_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.AuditRO": {
+   "honest": ["Accounting.SecurityProofs.Remote.AuditRO_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.AuditRO_nontrivial"
   }
  },
  "unwitnessed": {
@@ -4850,14 +4898,6 @@
   "Accounting.SecurityProofs.BandwidthOfAuditPerRun": {
    "type_hash": "7bfcaf861d98451805b9a88b5568f8a05b715c8cc82215a6f38723f5419b0c19",
    "unfolded_hash": "48e1b392237621cfd8d048ce62577353fe1ff8e2fd5a971055bc153a88060035"
-  },
-  "Accounting.SecurityProofs.BoundReceiptLink": {
-   "type_hash": "443d7659b64dd5e9c18c01b0446857e2ac8ac26e4c429246823cbf6268e9a2b2",
-   "unfolded_hash": "ddf1aef8d63baee4f72040c37bb44b578af37bf10262ab340cf3413063b29ece"
-  },
-  "Accounting.SecurityProofs.BoundReceiptLinkInteractive": {
-   "type_hash": "e510173b00c2373437d9754102d72bddf9a8a541339414b94e6edc0b59024855",
-   "unfolded_hash": "5b885d8ea9220f167d1f6921164766bf758069e80b68e9be70f3a5d33ad1f29c"
   },
   "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": {
    "type_hash": "8c3dda6ff4ca31c818104a37896b5af0666c53ff846e2ccaf90aa792e29a6820",
@@ -5007,41 +5047,9 @@
    "type_hash": "14fc8839652c00b0a01f3ef7ca1a00dc6d81947286cfbe1f4de32537cd8abd99",
    "unfolded_hash": "4767dd3593e9b20f25921862923a269db3c43ec8494a3991a891b13e1cd433e6"
   },
-  "Accounting.SecurityProofs.RateAudit": {
-   "type_hash": "a21adbd046d00882c1e70e700d64da16422d54a36bf8750774eecbb17dc8992c",
-   "unfolded_hash": "56581ef9934edec98be4b007fb0e044fb59cb952545fb9a5ee7576dbccce0c93"
-  },
-  "Accounting.SecurityProofs.RateAuditInteractive": {
-   "type_hash": "a9e512a8762f00eb0f062299bcbcd2abcefbb99d792b69e7f44066e484ba959b",
-   "unfolded_hash": "392b4ff3768f6826db18d9098005218d5a66b1c06ac1583ecd148aff446e2802"
-  },
-  "Accounting.SecurityProofs.RateAuditInteractiveRO": {
-   "type_hash": "1b265f7685a9864a460bd163cc157fb12a582e9d9fa6b420f13806f35bb8b9dc",
-   "unfolded_hash": "ab768c3564e987cc9d23ebf20afc4f5ae51bba1ab61f05388a796587f99b8f6a"
-  },
-  "Accounting.SecurityProofs.RateAuditPartial": {
-   "type_hash": "5f96143a36e6bf82af8ee4caddc6418ae331c479b53af58e173f366e16e4a4bb",
-   "unfolded_hash": "5cad5f047e0149d68c3e7804158ce9059d80a66aac26d58091f8c6a4c343dfb8"
-  },
-  "Accounting.SecurityProofs.RateAuditSketch": {
-   "type_hash": "c2da9a3535ab69d0a66155ff9170f29cbe6fee89bb085ea25e3be184516ac957",
-   "unfolded_hash": "ce9ecdb63fc89f03637928468c0e239de051ceddc5cedd8e5e15a52207d5bb06"
-  },
-  "Accounting.SecurityProofs.RateAuditSketchInteractiveRO": {
-   "type_hash": "c339a2318219c4b2c8612d18a1e030331ba51804671e6e6c7c2e4cc28c0d45fd",
-   "unfolded_hash": "acc406d75ae5564ca8dea5142386cb7d378ab9a04a6c9643678f3e9b00fc986f"
-  },
   "Accounting.SecurityProofs.RateAuditTensorSketch": {
    "type_hash": "815d06f69502065e94d00c5777538da1002429c92e4f4a936dc35cf46755df66",
    "unfolded_hash": "501ebe7fce93dc17bb29d8cbd303f5107c2ce5cc25adaf7dcee45260f4c6206a"
-  },
-  "Accounting.SecurityProofs.RateAuditTensorSketchRank": {
-   "type_hash": "050fafe71166380170011271e9b1dfe43c3ed59c5709179994caa08d188e4b86",
-   "unfolded_hash": "d05a276d44f5bedca8a167f6affc79369276ce79ffd1b46668e0a61031925629"
-  },
-  "Accounting.SecurityProofs.RateAuditWindows": {
-   "type_hash": "8b09fdd4b0aadf8d320872ec1bd6365d9019b2ff1e5344640ca6dd86f9da4464",
-   "unfolded_hash": "a9853f68b5a5452aff0c54e9a6136cdb3c0154bbe98e5a654fd81fb33179c6c4"
   },
   "Accounting.SecurityProofs.RateChain": {
    "type_hash": "f55c90ec8a0a5d173334fd7798d680ae7b64fb946e3a516f2206592ed4b73802",
@@ -5094,10 +5102,6 @@
   "Accounting.SecurityProofs.RatePooled": {
    "type_hash": "e61727e981125bd0882fc93a541bd73dc760d696d4ebb876a094ca58ff96d36f",
    "unfolded_hash": "4f839be16e17b28cc955ee786f09a8993d7894f0b7a2f8958686ddab8204d9d0"
-  },
-  "Accounting.SecurityProofs.Remote.AuditRO": {
-   "type_hash": "742a3c4f0cba3aa06f167857be9f51ee5663b4e55a29f62d7b09e68c5cb4bdc5",
-   "unfolded_hash": "f3fb5ff01a75c3e91ef80830cb39e2b722226196107c0327d5f0ff865acce516"
   },
   "Accounting.SecurityProofs.Remote.Held": {
    "type_hash": "156e45cf5c184510b4e81f318c0b50e17b6cab0af1582be40fc592c055f0eac2",
@@ -5524,10 +5528,6 @@
   "Pous.SecurityProofs.StreamedWipeMeetsFamily": {
    "type_hash": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255",
    "unfolded_hash": "2c44dfafca4dd9b61448620c3a735030c19a6af6381c8051349eb0bd3474d68e"
-  },
-  "Pous.SecurityProofs.StreamedWipeMeetsH200": {
-   "type_hash": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
-   "unfolded_hash": "f5db05faad237b32a0f201ae3cb4b9673fd1cd9c7baea419c54066ea8cb521ae"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsReads": {
    "type_hash": "a2f5444f8d5e25a0cfbb34ecce8550e64849fff88fd423a419993391aa377856",
@@ -6886,6 +6886,18 @@
    },
    "type_hash": "e510173b00c2373437d9754102d72bddf9a8a541339414b94e6edc0b59024855",
    "unfolded_hash": "5b885d8ea9220f167d1f6921164766bf758069e80b68e9be70f3a5d33ad1f29c"
+  },
+  "Accounting.SecurityProofs.BoundReceiptLinkInteractive_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.BoundReceiptLinkInteractive_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.BoundReceiptLink_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.BoundReceiptLink_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.BoundReceiptShare": {
    "owner": "@memory-accounting",
@@ -8591,6 +8603,18 @@
    "type_hash": "1b265f7685a9864a460bd163cc157fb12a582e9d9fa6b420f13806f35bb8b9dc",
    "unfolded_hash": "ab768c3564e987cc9d23ebf20afc4f5ae51bba1ab61f05388a796587f99b8f6a"
   },
+  "Accounting.SecurityProofs.RateAuditInteractiveRO_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditInteractiveRO_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditInteractive_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditInteractive_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.RateAuditPartial": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RateAuditPartial : Accounting.Guarantees.RateAuditPartial"],
@@ -8603,6 +8627,12 @@
    },
    "type_hash": "5f96143a36e6bf82af8ee4caddc6418ae331c479b53af58e173f366e16e4a4bb",
    "unfolded_hash": "5cad5f047e0149d68c3e7804158ce9059d80a66aac26d58091f8c6a4c343dfb8"
+  },
+  "Accounting.SecurityProofs.RateAuditPartial_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditPartial_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.RateAuditSketch": {
    "owner": "@memory-accounting",
@@ -8632,6 +8662,18 @@
    "type_hash": "c339a2318219c4b2c8612d18a1e030331ba51804671e6e6c7c2e4cc28c0d45fd",
    "unfolded_hash": "acc406d75ae5564ca8dea5142386cb7d378ab9a04a6c9643678f3e9b00fc986f"
   },
+  "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditSketch_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditSketch_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.RateAuditTensorSketch": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RateAuditTensorSketch : Accounting.Guarantees.RateAuditTensorSketch"],
@@ -8658,6 +8700,12 @@
    "type_hash": "050fafe71166380170011271e9b1dfe43c3ed59c5709179994caa08d188e4b86",
    "unfolded_hash": "d05a276d44f5bedca8a167f6affc79369276ce79ffd1b46668e0a61031925629"
   },
+  "Accounting.SecurityProofs.RateAuditTensorSketchRank_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditTensorSketchRank_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.RateAuditWindows": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RateAuditWindows : Accounting.Guarantees.RateAuditWindows"],
@@ -8670,6 +8718,18 @@
    },
    "type_hash": "8b09fdd4b0aadf8d320872ec1bd6365d9019b2ff1e5344640ca6dd86f9da4464",
    "unfolded_hash": "a9853f68b5a5452aff0c54e9a6136cdb3c0154bbe98e5a654fd81fb33179c6c4"
+  },
+  "Accounting.SecurityProofs.RateAuditWindows_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAuditWindows_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAudit_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.RateAudit_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.RateChain": {
    "owner": "@memory-accounting",
@@ -9123,6 +9183,12 @@
    },
    "type_hash": "742a3c4f0cba3aa06f167857be9f51ee5663b4e55a29f62d7b09e68c5cb4bdc5",
    "unfolded_hash": "f3fb5ff01a75c3e91ef80830cb39e2b722226196107c0327d5f0ff865acce516"
+  },
+  "Accounting.SecurityProofs.Remote.AuditRO_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.Remote.AuditRO_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.Remote.Held": {
    "owner": "@memory-accounting",
@@ -21300,6 +21366,12 @@
    },
    "type_hash": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
    "unfolded_hash": "f5db05faad237b32a0f201ae3cb4b9673fd1cd9c7baea419c54066ea8cb521ae"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsH200_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsH200_nontrivial": {
+   "owner": "@memory-accounting"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsReads": {
    "owner": "@memory-accounting",
