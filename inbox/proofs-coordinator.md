@@ -118634,3 +118634,27 @@ In plain words: today `descCore` decides everything in the `two` on my base (TWO
 - That the heldof branch's new lemmas compile.
 - `wiresMove`'s per-template form.
 - The single-parse form's size.
+
+## HISTORY, Fri 13 Nov 03:59Z: addendum to my 03:53Z, on your 03:58Z resume: (a) to (c) do NOT follow from `dev₂`, so I stop at the entry; the paragraph for soundness is under To post. My 03:53Z file `DeviceOrder.lean` proves `PrintsInOrder` at `dev₂` word for word, but only UNDER (a) to (c) as a hypothesis, which does not meet your condition
+
+Clock: `date -u` read 03:54Z. Mailbox read at 03:43Z. CUT's branch is still `e242db0feb` [run: `git fetch`]. One session only: my own timer for this wake is cancelled. I am on a new machine; the inbox worktree is recreated.
+
+**1. (a), (b), (c), one by one** [read: `Device.lean` `dev₂`, `ledgerOf`, `ledgerAt`; `Sampled/Device.lean` `RunSetup`, `Deployment`].
+- (a) a root opened once and a session opened once: NO. `dev₂`'s ledger under a key is `ledgerAt (S₁ o) pk ++ ledgerAt (S₂ o) pk`, and `ledgerAt S pk` is `S.ledger`, the field `ledger : List Json` of `RunSetup`, which the definition never constrains. At the deployment it is `Q.opens θ a ++ Q.closes θ a log b ρ`, two free functions of the one-stage `Deployment`, whose only law is `ledger_le`, a count. The definition would have to say: each session writes exactly one `open` line, of its own run, on one window root.
+- (b) only the two setups' runs opened: NO, same line. It would have to say: every `open` line a session writes names that session's own run id.
+- (c) no `end` of the second's run with `seq` below a `reserve` of the first's: NO, same line; `seq` is whatever the line's JSON says. It would have to say: the lines' `seq` increase in the order the device writes them, and the first session's `reserve` is written before the second session's `end`.
+- Of (a) my proof uses one half only: a run is opened on one root. "A root is opened for one run" is not needed.
+
+**2. CUT's exact `PrintsInOrder`** [read: `CutOrder.lean` at `e242db0feb`, lines 309-312]: `if w₁ = w₂ then PrintsOn dev w₁ log else ∀ pk a b, LedgerOpens (dev.ledger pk) w₁ a → LedgerOpens (dev.ledger pk) w₂ b → EndsBefore (dev.ledger pk) a b → ∃ log₁ log₂, log = log₁ ++ log₂ ∧ PrintsOn dev w₁ log₁ ∧ PrintsOn dev w₂ log₂`. `printsInOrder_dev₂` (`SampledTwo/DeviceOrder.lean`, head `19734e8d9f`) concludes `PrintsInOrder (dev₂ S₁ S₂ cut o) w₁ w₂ o.log` with that definition unchanged, from `windowsOf o.params = some (w₁, w₂)` and, on two windows only, `LedgerInOrder (S₁ o) (S₂ o)`, which is (a) to (c) as a hypothesis [read: my file; NOT compiled, in `r20261113-035036-7f94`]. So it is the reduction, not the proof at the model's device your ruling asks for. I did not change the device's definition or give `History` an order.
+
+**3. Which of mine read the form's accept** [read]. `printsTwo_dev₂`, `holdsTwo_*`, `signsPlay_dev₂` and `printsInOrder_dev₂` are about the device and read no accept: nothing of them is emptied by TWOLEG's finding. `binds_dev₂` (`Binds`), `cut_dev₂`, `cutRead_dev₂` and `cutOrder_dev₂` (`CutBound`) are CUT's statements at my history and quantify over accepted plays, so they say nothing of a run until TWOLEG's honest play passes.
+
+**4. Runs** [run]. The try at `73a07f3775` was `r20261113-031037-f5e0`: done, rc 0 ("tries: DeviceRead rc=0 Device rc=0"; 1 and 35 theorems, three axioms), as in my 03:53Z. The new one, `r20261113-035036-7f94` at `19734e8d9f` (three tries: `DeviceOrder.lean`, `DeviceRead.lean`, `Device.lean`), was waiting for a place at 03:54Z. The base's move to `e033bfc14be4` is not merged: no file of mine needs it to build.
+
+STOP RULE: reached, as you ruled for this case: none of (a) to (c) follows. I stop at this entry and change no definition.
+
+NEEDS: soundness's word on the paragraph below.
+
+To post (for soundness): The proofs model the auditor's challenger device as a history of runs and signed ledger lines. For the two-stage audit the cut needs one fact about that device: a session's coins leave it after the session's `reserve` line and before its `end` line, so the ledger's order of the two sessions is the order of their coins in the play's log. That fact follows by a short proof (written) from three properties of the device's ledger lines: each session opens its own run once, on one window; no line opens any other run; and the second session's `end` does not carry a lower sequence number than the first session's `reserve`. None of the three names a window the prover chose, so a prover who swaps the two windows does not make them false. But today the model does not say what ledger lines the device writes: each session's lines are an arbitrary list, so none of the three can be proved. The decision for soundness: should the model say what a session writes (one `reserve`, one `open` of its own run on one window, one `end`, sequence numbers increasing in the order of writing, the first session reserved before the second ends)? It could do so either by building the lines from each session's id, window and sequence number, or by adding the three properties as a law every two-session deployment must satisfy, as the one-stage deployment already carries a law bounding how many lines it writes. Until then the fact stays a hypothesis of the cut and is not proved at the model's device.
+
+Not established: that `DeviceOrder.lean` or CUT's `CutOrder.lean` compiles; that `Device.lean` and `DeviceRead.lean` still build over TWOLEG's `4d19a7ad4f`; (a) to (c) at any deployment.
