@@ -120023,3 +120023,38 @@ In plain words. Each template of the design registers, for its inner block (proo
 Nothing.
 
 Not established: that `OwnReads.lean` compiles against the moved base or on FRAME's head (`e358` in line; FRAME's next try); that `HeldOfReads.lean` compiles at HELDOF's head `98b170f1a9` (read only); `ReadsWf` at any real parameters; `OpensOwn` at any device (HISTORY's (a), (b), (c), soundness's PRF-490); that any play is accepted, so that any of these is more than true and empty. The sibling checks covered only the modules built in each try's tree, and the package's Lean check with its lock has run on none of these heads.
+
+## COUNT, Fri 13 Nov 04:21Z: the served run's section is at a new head that merges onto main and names its class, serve and registration; both suites runs are out; I end the turn to free the place
+
+**In plain words, for Daniel.** The part of the exfiltration command that says what a served run's audit showed now writes, in the verdict it records, which class of requests, which serve and which registration that verdict is of, as the reader that counts four verdicts will require. Where a served run's files give none of one, the section says so and does not guess. Its branch now merges onto `main` without a conflict. The security level's change is unchanged since its ready line and still merges onto `main`; its suites at the new head are still running. Nothing here was measured on a served engine. I wait only on two test runs, so I end my turn and come back when they are due.
+
+### The security level's pull request, #9479
+
+- [run] Head `03307c405574d5d48bc2d469b266cdf411bba6e9`, as in the ready line of 04:06Z. It merges onto `main` at `e2665bcddcda` with no conflict (`git merge-tree`, 04:12Z), and with benchmarks' #9551 at `c6014df8def6` with no conflict.
+- [run] The command at this head, on the files of the planner's run at this branch (no label read or written), prints the security level's lines as the pull request's body quotes them, the same as before the two merges: at most 2^-101.08 over one verification phase counted in calls, at the planner's row at the pinned budget nearest, β = 5.5%, at an assumed cache factor of 0.1. Modeled, no served engine.
+- [run] With the section's pull request (#9621) it meets in one place, `benchmarks/exfiltration/README.md`: each adds a section after the same line. In a scratch merge that keeps both, `tests/test_exfiltration.py` passes (38) and `tests/test_served_row.py` passes (16), so the pin of the print with no verdicts of record holds with #9476 and #9551 in as well. Whichever of the two lands second takes the other's section; it is mine to do on #9621.
+- [run] Its body is replaced (04:20Z): the checked paragraph at this head, what `main` now holds, the pin's two digests.
+- Suites at this head: `r20261113-040507-8074` on vy-nebius-cpu-4, launched 04:05Z, running at 04:19Z [run]; expected by about 04:35Z [guess: the run at the head before took 28 minutes]. At the head before, `72b1a8a4a2b4`, 6 of 6 passed in `r20261113-033239-bbbf` [run].
+
+### The served run's section, #9621
+
+- [run] Head `b0430debe99738344104d7c9c040a3ea189f000c`, pushed 04:13Z, unmarked. Since my 03:58Z entry: benchmarks' #9551 merged in twice more, at `f7cfb5c09b62` and at `c6014df8def6` (which holds `main` with the certifier term's simulated card), never rebased; and two commits of mine, below.
+- [run] It merges onto `main` at `e2665bcddcda` with no conflict. One merge earlier it had two, in the README and in the command's module, both from the simulated card.
+- [run] **The three names** (your point 4). The verdict's record now holds `class`, `serve` and `registration` beside the command's seven fields. `class` is the directory the second stage's summary names its first stage's file under; `registration` is the digest the second stage read; `serve` is the serve's run. Each is null where the files give none, and the section then prints which it lacks. On the rehearsal's files it prints the class `p4-o2`, the registration's digest, and "The record names no `serve`".
+- [read] `class` is the key network's rule reads (`READ` in `verity/protocols/certifier/verifier/class_charge.py`). The ruling's text names `serve` and `registration` and not the class's key; if the driver's writer uses another key for the class, this one line changes.
+- [read] The command's own reader of a verdict record (`verdict` in `exfiltration.py`) returns its seven fields and drops any other key, so a record with the three names is still read today and is not yet refused for lacking them. The refusal is the reader's change, benchmarks' or the join's.
+- [run] A fifth line among what holds the four runs' files to each other: the first stage's class is the one the second stage names.
+- [run] The hole I flagged at 03:58Z (the command's block read "not known" for one hole on a run with two of four commits) is mended by #9551's newer head: it now prints `closed at the runs read (first, second); serve, replay not given`.
+- [run] Tests at this head, one file a command on my VM: `tests/test_served_row.py` 16 passed, `tests/test_served_record.py` 9, `tests/test_exfiltration.py` 37, `tests/test_spot_status.py` 32. The whole command on the rehearsal's fetched files: exit 0, 219 lines.
+- Suites at this head: `r20261113-041334-85c1` on vy-nebius-cpu-4, launched 04:13Z, running at 04:19Z [run]; expected by about 04:45Z [guess]. Three earlier runs of this branch are cancelled as superseded, each by a newer head: `r20261113-034553-e7cf`, `r20261113-034848-bc7f` (it waited 21 minutes for a check slot on vy-nebius-cpu-3 and never ran) and `r20261113-041026-a8ae`.
+- It waits on #9551 landing, and on benchmarks' read: it is their command.
+
+### The join of the two readers
+
+- Nothing built. [run] #9501's head moved to `7191b404f342`; I have not read it.
+
+### What I wait on
+
+- The two runs above. Per your 04:18Z message I end the turn now with one timer for 04:46Z. Both branches are pushed; the scripts I would need again are in the lane's notes.
+- On return: each run's result into its pull request's body and into an entry.
+- From you: the mark on #9479 (the ready line of 04:06Z stands unless `8074` comes back red); your word on the join; whether you want the follow-up that prints the security level at the served run's own sizes (it needs #9479 and #9621 both; not built).
