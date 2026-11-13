@@ -34,7 +34,7 @@ theorem bitsOf_extract_prefix (b : ByteArray) (n : ℕ) :
   · rw [extract_of_size_le (by omega)]
     all_goals exact List.prefix_refl _
 
-/-- **A draw's read holds its coins**: where `drawCoins` reads coins `ξ` from coin evidence `coins` under a key, a
+/-- **A sample's read holds its coins**: where `drawCoins` reads coins `ξ` from coin evidence `coins` under a key, a
 window, family `label` after `after`, and the read of its session's log lines places them (`readLog`), the read's
 coins of the family released after `after` are `ξ`'s bits, none of them empty. -/
 theorem drawn_fresh {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray} {coins : Json}
@@ -65,7 +65,7 @@ theorem freshCoins_append (label : String) (after : ByteArray) (a b : List Verit
   unfold freshCoins
   rw [List.filterMap_append]
 
-/-- **A draw's read shows its coins**: every log the read of `drawn_fresh` matches release by release has `ξ`'s bits as
+/-- **A sample's read shows its coins**: every log the read of `drawn_fresh` matches release by release has `ξ`'s bits as
 its coins of the family released after `after`. -/
 theorem drawn_shown {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray} {coins : Json}
     {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String} {l olog : List Verity.Release}
@@ -77,7 +77,7 @@ theorem drawn_shown {key : Spot.Challenger.ChallengerKey} {w label : String} {af
   obtain ⟨hf, hne⟩ := drawn_fresh hd hlog hls hr
   rw [Verity.Sampled.freshCoins_ofV2 label after hO hne, hf]
 
-/-- **A draw's read shows its coins after releases of other families**: where releases `l₀` that hold no coins of the
+/-- **A sample's read shows its coins after releases of other families**: where releases `l₀` that hold no coins of the
 family after `after` come before the read, a log the two match release by release has `ξ`'s bits as those coins. -/
 theorem drawn_shown_after {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray}
     {coins : Json} {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String}
@@ -95,7 +95,7 @@ theorem drawn_shown_after {key : Spot.Challenger.ChallengerKey} {w label : Strin
     exact hne
   rw [Verity.Sampled.freshCoins_ofV2 label after hO hne', happ, hf]
 
-/-- **A draw's read shows its coins first** in a log it matches the start of: there, `ξ`'s bits start the log's coins of
+/-- **A sample's read shows its coins first** in a log it matches the start of: there, `ξ`'s bits start the log's coins of
 the family released after `after`. -/
 theorem drawn_shown_append {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray}
     {coins : Json} {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String}

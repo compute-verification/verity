@@ -638,7 +638,7 @@ theorem coinsReason_none {main : Json} {window : String} {after read : ByteArray
         · rename_i hall
           exact ⟨ξ, hd, by simpa using hm, by simpa using hpre, by simpa using hall⟩
 
-/-- **The coin check of a stream's run reads the challenger's draw**: where `coinsReason` gives no reason under `key`,
+/-- **The coin check of a stream's run reads the challenger's sample**: where `coinsReason` gives no reason under `key`,
 `drawCoins` under `key` reads, from the same evidence, coins of the same family that `read` is the start of. -/
 theorem coinsReason_draw {main : Json} {window : String} {after read : ByteArray}
     (h : coinsReason key main coins window label after read = none) :

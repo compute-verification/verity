@@ -5,8 +5,8 @@ public import Proofs.Flock.SpotFlock.Cap
 /-!
 # A first stage of count `K` samples below its population
 
-A first stage that samples a uniform `K`-subset (`firstK`) proves exactly the units it draws (`select_proved`), and a
-`subset` draw that ends is distinct indices below the population it draws over (`Discharge.Exec.subset_spec`). So
+A first stage that samples a uniform `K`-subset (`firstK`) proves exactly the units it samples (`select_proved`), and a
+`subset` sample that ends is distinct indices below the population it samples over (`Discharge.Exec.subset_spec`). So
 every unit it proves is below the registration's population, `Partition.units` (`select_subset_lt`), and every block of
 the replay sample is (`RegTwo.sample_lt`).
 -/

@@ -12,7 +12,7 @@ the deployed two-session history, from the join's one premise (`JoinsAt`, `Joins
 
 `joinedCoupling`: the two-stage leg's coupling (`CouplingTargetTwo`) with the join's projection bound and MAJORITY's
 majority bound as its terms, from one `CouplesAt` (`JoinedCoupling.lean`) at each commitment and strategy and nothing
-else. It is `joinedCouplingOfLaw` at the same proof of the law.
+else. It is `joinedCouplingOfLaw` at the same proof of the sampling design.
 
 What `JoinsAt` holds, what the join discharges and what is not established are in `JoinsAt.lean`'s docstring. Every
 field of `JoinsAt` is over the form's accept, so the theorem says nothing about a run of record until the form accepts

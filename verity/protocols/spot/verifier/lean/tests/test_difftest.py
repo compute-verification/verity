@@ -5,7 +5,7 @@ verdicts, valid ones and one or two changes to each. A disagreement is the Pytho
 The Python held to it is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
 `wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `coins.draw_first` on
-`OwnRandomness` over the given bytes, for the `link_points` piece `link_points` (its law held as `draw_first` holds
+`OwnRandomness` over the given bytes, for the `link_points` piece `link_points` (its sampling design held as `draw_first` holds
 one, `coins.law_problem`), for the `select` piece the challenger's sample from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
 `slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
@@ -750,8 +750,8 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
 
 
 def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
-    """`OneStage.ranOut`: whether the coins `src` run out before the draw under the verifier's law as derived ends
-    (`coins.ran_out`); false when the law doesn't derive, the record names no population or the draw refuses otherwise."""
+    """`OneStage.ranOut`: whether the coins `src` run out before the sample under the verifier's law as derived ends
+    (`coins.ran_out`); false when the sampling design doesn't derive, the record names no population or the sample refuses otherwise."""
     if not _nat(rec.get("population")):
         return False
     try:
@@ -944,7 +944,7 @@ def draw(j):
 
 
 def ran_out(j):
-    """`coins.ran_out` on `draw`'s input: whether that draw runs out of the source's bytes; refused where `draw` is."""
+    """`coins.ran_out` on `draw`'s input: whether that sample runs out of the source's bytes; refused where `draw` is."""
     j = _json(j)
     if not isinstance(j, dict) or not isinstance(j.get("law"), dict):
         raise D.Reject("law is not an object")
@@ -1020,7 +1020,7 @@ def select(j):
 
 
 def design(j):
-    """`Pieces.design`: the sampling design of `select`'s draw (`audit.design`, Lean `Core.SamplingDesign.ofFlock`), C-Flock's law
+    """`Pieces.design`: the sampling design of `select`'s sample (`audit.design`, Lean `Core.SamplingDesign.ofFlock`), Flock's law
     held to core's `Core.SamplingDesign`, the work sampling design's among them."""
     return {"design": _json(audit.design(select(j)["draw"]).to_json())}
 
@@ -1117,7 +1117,7 @@ def public_units(j):
 
 
 def link_points(j):
-    """Each member's fewest and most drawn units under the law over the population when the draw ends (None where none
+    """Each member's fewest and most sampled proof blocks under the sampling design over the population when the sample ends (None where none
     does), and the members whose link points differ (`link_points.bounds`, `refused`; Lean `LinkPoints.piece`)."""
     j = _json(j)
     if not (isinstance(j, dict) and _nat(j.get("population"))):
@@ -1154,7 +1154,7 @@ def _unhex(x) -> bytes:
 
 def fits(j):
     """`OneStageZk.fitsWhy` and `drawFitsWhy` at ``limit`` (`proofs.fits_why`, `proofs.draw_fits_why`): the files hex,
-    the tables ``[name, hex]`` pairs, the program hex or null, and the partition object, registered reads and draw null
+    the tables ``[name, hex]`` pairs, the program hex or null, and the partition object, registered reads and sample null
     for none."""
     j = _json(j)
     if not (isinstance(j, dict) and _nat(j.get("limit"))):
@@ -1786,7 +1786,7 @@ def laws(draw, n: int):
 @st.composite
 def agreed_laws(draw, n: int):
     """One-stage's agreed law: mostly a rate as a selection rule states it (`OneStage.design`), a rate law's tables a divisor
-    of `n` so its count fits, else a law object (`laws`)."""
+    of `n` so its count fits, else a sampling design object (`laws`)."""
     kind = draw(st.sampled_from(["rate", "stratified-rate", "work-rate", "rate", "stratified-rate", "work-rate", "object"]))
     if kind == "object":
         return draw(laws(n))
@@ -2804,10 +2804,10 @@ def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
 
 
 def test_link_points_refuses_a_law_none_of_whose_draws_ends():
-    """`link_points.refused` refuses a law no draw of which ends (`NEVER_ENDS`, `ends`): `subset:11` over 10 units, a
-    Bernoulli law of denominator 0, a stratum drawing more units than it has; `subset:10` and `bernoulli 0/0` end. These
+    """`link_points.refused` refuses a sampling design no sample of which ends (`NEVER_ENDS`, `ends`): `subset:11` over 10 units, a
+    Bernoulli law of denominator 0, a stratum sampling more units than it has; `subset:10` and `bernoulli 0/0` end. These
     are `LinkPoints`' `#guard`s. The `link_points` piece can't reach them, since `Draw.flockLaw` (`coins.law_problem`)
-    refuses a subset above the population and a denominator of 0, and a stratum's rule draws at most its units."""
+    refuses a subset above the population and a denominator of 0, and a stratum's rule samples at most its units."""
     stratum = {"k": 3, "law": "stratified", "strata": [{"k": 3, "template": "a", "units": [[0, 2]]}]}
     assert LP.ends({"k": 10, "law": "subset"}, 10) and LP.ends({"law": "bernoulli", "p": "0/0"}, 10)
     for law in ({"k": 11, "law": "subset"}, {"law": "bernoulli", "p": "1/0"}, stratum):
@@ -3646,7 +3646,7 @@ def _cut(population: int, cuts: list[int], owners: list[int]) -> list[list[list[
 
 def _link_case(kind: str, k: int, population: int, strata: tuple, works: list[int], members: tuple, gs: list[int],
                bad: int) -> dict:
-    """A `link_points` input: a `kind` law of `k` over `population` units, a stratified or work law's strata cut by
+    """A `link_points` input: a `kind` law of `k` over `population` units, a stratified or work sampling design's strata cut by
     `strata` (`_cut`) with each stratum's k its rule's (work `works`, floor 1), and members cut by `members`, each `gs`
     units a proof block; `bad` from 1 to 4 breaks one member: a unit past the population, two of its ranges meeting, no
     unit a proof block, or no range."""
@@ -4174,7 +4174,7 @@ def _second_statement(rec: dict, part: SS.Part, q: int, drawn, named: bool, regi
 def _checked_names(s) -> dict:
     """What `flock-verify verify`'s verdict names of the session of statement `s` it checked (`second_stage.verified_of`):
     its public file's header and its registered reads by the SHA-512 of their canonical JSON, its sample, and one table,
-    as the verifier of record runs it."""
+    as the verifier runs it."""
     if not isinstance(s, dict):
         return {}
     out = {"public_header_sha512": _sha(codec.canonical_json(s.get("header"))), "unit_draw": s.get("draw"),
@@ -4670,7 +4670,7 @@ def _shared_at(c: dict, i: int, ports, reads=()) -> dict:
     """`c` with its `i`-th statement's header, and its template's reference header, sharing rows at `ports`
     (``shared_rows``, a table of one row a slot each), and that statement, and its template's reference statement,
     reading each port of `reads` more from its own rows of the interior record, each slot its own row, which the
-    verifier of record reports."""
+    verifier reports."""
     s = c["statements"][i]
     t, h, named = s["template"], s["header"], any("/" in r["port"] for r in c["interior"]["roots"])
     shared = dict.fromkeys(ports, h["instances"])
@@ -4763,7 +4763,7 @@ def _returned(c: dict, x: int) -> dict:
 
 
 def _reported(c: dict, x: int) -> dict:
-    """`c` with the verifier of record reporting no reads, a read at another root or of no root, or verdicts that
+    """`c` with the verifier reporting no reads, a read at another root or of no root, or verdicts that
     aren't."""
     vs = c["verdicts"] if isinstance(c.get("verdicts"), dict) else {}
     lean, checked = vs.get("lean"), {k: v for k, v in vs.items() if k.startswith("lean-verify/")}
@@ -4846,7 +4846,7 @@ def _valued(c: dict, x: int) -> dict:
 
 def _read_registered(c: dict, x: int) -> dict:
     """`c` with its first statement reading, at a port `z` of no interior root, the boundary's registered value `w` or
-    `w2`, slot 0 its first row, which `second-read` takes at a port no link names and the verifier of record reports,
+    `w2`, slot 0 its first row, which `second-read` takes at a port no link names and the verifier reports,
     and its template's reference statement reading `w` or `w2` there, slot 0 its first row, slot 0 its second, or slot 1
     its first: which value a port reads, and at which rows, is the reference's (`second-values`), never the run's
     choice."""
@@ -4922,7 +4922,7 @@ def _read_linked(c: dict, x: int, value: dict = LINKED_VALUE, root: str = "00" *
     """`c` with its interior registering a value of its first link's name (`value`'s root and domain, the link's rows a
     block for each sampled block), which its verifier fills itself when `filled` (`_filled`), the boundary record then
     holding no port of that name unless `kept`, and each statement of the linked template reading it at the linked port
-    as round 2 places it, each slot its unit's row of its cell's sampled block, as the verifier of record reports it.
+    as round 2 places it, each slot its unit's row of its cell's sampled block, as the verifier reports it.
     By `x`, that read is as placed, at the boundary port, at another root (`root`), domain or leaf count, or at the
     boundary port's rows."""
     links, rows, sample, ss, b = c.get("links"), c.get("rows"), c.get("sample"), c.get("statements"), c.get("boundary")
@@ -5156,8 +5156,8 @@ def _read_opening(c: dict, x: int) -> dict:
             "rows": [*rows, *placed], "supplied": {**supplied, **mine}, "fixed": fixed,
             "ref_reads": {**(refs or {}), **more, at: ref}, "reads": recorded}
 
-#: A change to a second_statements input, its `x` drawn: a statement changed (`_restated`), reversed, one dropped, none,
-#: a slot drawn more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
+#: A change to a second_statements input, its `x` sampled: a statement changed (`_restated`), reversed, one dropped, none,
+#: a slot sampled more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
 #: no interior root, every read moved on (checked as moved, or not), the design's links, wires or rows, the reads the
 #: verifier reports, what a verdict of record names of a session it checked (`_unverified`), the reference
 #: headers (`_referenced`), the reference statements' registered reads (`_valued`), a registered value read where the
@@ -6045,7 +6045,7 @@ def test_the_select_piece_draws_every_rule(pieces):
     which the sampled runs reach only probably, a rate law's a subset's of its count over the 10 units, a stratified or
     work rate's every stratum's k at least its rate of the stratum's units, and a two-stage rule's first stage its replay
     rate's subset. Then the same with every non-ASCII digit `str.isdigit` admits in place of an ASCII one, a rate whose
-    count passes the population, a fixed count, as a law or a two-stage rule's replay law, and the retired two-stage
+    count passes the population, a fixed count, as a sampling design or a two-stage rule's replay law, and the retired two-stage
     forms, which all refuse."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
@@ -6090,7 +6090,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 
 
 def test_a_work_draws_design_is_cores(pieces):
-    """C-Flock's work law held to `Core.SamplingDesign`: a work draw's sampling design, Lean's (`Core.SamplingDesign.ofFlock`) the Python's
+    """C-Flock's work sampling design held to `Core.SamplingDesign`: a work sample's sampling design, Lean's (`Core.SamplingDesign.ofFlock`) the Python's
     (`audit.design`), is the profile's `work` case with each stratum's works and floor, and its sample's design is the
     stratified one at its k_s."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
@@ -6956,7 +6956,7 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     (`two-stage-form`), which the Python allowing the form (`second_stage.FORM`) accepts, as it does the run whose
     session also reads the interior's own `out`, each slot its own rows, which its verifier reports and its template's
     reference statement reads; a session reading `out` its reference doesn't is refused (`second-values`), as is one
-    reading its linked `x` from the interior's own (`second-read`), a statement whose verifier of record checked its
+    reading its linked `x` from the interior's own (`second-read`), a statement whose verifier checked its
     session against a public file whose header names another circuit file (`second-verified`), and an interior naming
     links is no run's. Then refused at each step: a grain the registration's query isn't (`grain`); no
     interior registration (`interior`); an interior registration of another population (`interior-population`), of
@@ -7069,11 +7069,11 @@ def test_round_two_holds_each_session_to_its_part(pieces):
     named by template) after a replay sample of two: the honest statements pass, one for each part, by position in the
     parts' order (else `second-order`), with a part's `x` read from the boundary where the design links it, each slot
     at its unit's row of its cell's replay block, or read from its own `x` at its own rows, and fail only on the form
-    while it is refused (`two-stage-form`); every part needs a statement, the second stage drawing in it or not
+    while it is refused (`two-stage-form`); every part needs a statement, the second stage sampling in it or not
     (`second-cover`); a read of the boundary at another cell's replay block, of a tree of more than `2^64` leaves, of
     its own `x` at another slot's rows, of a boundary port the design doesn't link, or of a linked port anywhere but
     the boundary port its link names (or the interior's value of its name, where the interior registers one), or a
-    linked port not read (`second-read`) is refused, as are reads the verifier of record doesn't report
+    linked port not read (`second-read`) is refused, as are reads the verifier doesn't report
     (`second-reported`); links none derived, one for a template of no part, or one whose rows don't place its part's
     units, are refused (`second-links`);
     a header that isn't its template's reference header placed in the run (`second_stage.at_run`: its set
@@ -7651,7 +7651,7 @@ def test_round_two_takes_the_opened_row_of_a_read_whose_table_key_and_verdict_th
 
 
 def test_round_two_holds_each_statement_to_the_verdict_that_checked_it(pieces):
-    """Round 2 reads a statement only as a verifier of record checked it, Lean's the Python's whole (`second-verified`):
+    """Round 2 reads a statement only as the verifier checked it, Lean's the Python's whole (`second-verified`):
     over the two-template interior the honest statements pass, and a statement that passes every other check is refused
     when the public file its session was checked against has a header naming another circuit file, or its session's
     verdict of record is gone, didn't accept, is not of record, or names another sample, other registered reads or

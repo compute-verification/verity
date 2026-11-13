@@ -41,7 +41,7 @@ open Flock
 /-! ## The first stage, the cells and the requests -/
 
 /-- **The boundary registration the first stage samples on**, as `Run.run` hands `Select.select`: the verifier's copies
-with the law and work table the rule expands over the record's population, the resolved rule and the closure map. -/
+with the sampling design and work table the rule expands over the record's population, the resolved rule and the closure map. -/
 structure First where
   verifier : Spot.Registration.Verifier
   rule : Spot.Select.Rule
@@ -72,7 +72,7 @@ def cellsOf (i : Spot.Run.Input) (it : Spot.Run.Interior) : Option (Array Nat ×
 def requests (l : Spot.Slots.SlotOrder) : Nat := (l.blocks.filter fun b => b.unit.isSome).size
 
 /-- **The first stage's law**, as `Select.select` samples on the boundary registration: none for the `All` rule, else
-the law it derives over the program's population, or the one the rule names where it derives none. -/
+the sampling design it derives over the program's population, or the one the rule names where it derives none. -/
 def firstLaw (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json) (table : Option Json) :
     V (Option Draw.Law) := do
   let n ← Spot.Partition.units d query
@@ -84,7 +84,7 @@ def firstLaw (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json) (table 
     let parsed ← Spot.Draw.flockLaw ((derived.map (·.toJson)).getD named) n
     pure (some (derived.getD parsed))
 
-/-- **A law is well formed over strata of sizes `ns`**; `none`, the `All` rule's, always is. -/
+/-- **A sampling design is well formed over strata of sizes `ns`**; `none`, the `All` rule's, always is. -/
 def lawOk (ns : List Nat) : Option Draw.Law → Bool
   | none => true
   | some (.subset K) => 1 ≤ K && K ≤ ns.sum

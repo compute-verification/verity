@@ -2,7 +2,7 @@
 registration of N spans, the first stage's sample S of Q replay blocks after it, the proof server's interior registration of
 S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 
-* **The stream** (`stream_of`): the challenger's `service.Stream` over the toy's design (`toy.spec`), its `TwoStage` drawing
+* **The stream** (`stream_of`): the challenger's `service.Stream` over the toy's design (`toy.spec`), its `TwoStage` sampling
   both stages with Lean (`Select.select`, `Select.selectSecond`) on one challenger session's coins (`StageCoins`): a
   development session on this machine (`a5_coins.start`'s ``local``, on `ROOT`, pinned on ``--main``), withheld, each
   stage one sample of it after its registration's digest. Its samples show the path, not an auditor's coins.
@@ -45,7 +45,7 @@ those reads (the interior's at the interior record and the links' boundary ports
 ``interior/``, their private files too), a5's records (``audit/``, the run's statement and verdicts in its
 ``case.json``), the challenger session's records (``challenger/``), both stages' coin evidence and the coins each read
 (``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, laws
-and draws, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
+and samples, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
 copies it reads them against (``guard/``, `guard.export`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm \\

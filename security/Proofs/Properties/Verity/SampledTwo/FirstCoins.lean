@@ -24,7 +24,7 @@ the chosen coin wherever the device's release does. The projection's `CoinsAgree
 (`coinsAgree_of_coinsRead`), and with the coin map's second law it gives `AcceptsRun`'s coin premise.
 
 **What it rests on**, each a named `Prop` taken as a hypothesis:
-* `FirstShown`: the play's log shows, after the first stage's digest in the first draw's family, the bytes the first
+* `FirstShown`: the play's log shows, after the first stage's digest in the first sample's family, the bytes the first
   stage read. It is the meeting of the run's coin check (`Run.coinsCode`) with the cut's `LogIsDevice`.
 * `DevFirst`: the coin map's reading of round 0 starts with those bytes (the coin map's to prove).
 * `CoinsOfBytes`: every byte string of at most one coin's bytes is a coin's bytes followed by zeros.
@@ -69,7 +69,7 @@ def FirstRead (i : Spot.Run.Input) (read : ℕ) : Prop :=
     Spot.Run.coinsCode i.key i.main i.coins i.record i.params.verifier.windowRoot i.family
       (i.source.extract 0 read) = none
 
-/-- **The first stage's draw on a case**: the family of the boundary registration's challenger, which the run's coin
+/-- **The first stage's sample on a case**: the family of the boundary registration's challenger, which the run's coin
 check reads (`inputOf`'s `family`), and the boundary registration's digest, after which it holds its coins. -/
 def firstDraw (k : Case) : Option (String × ByteArray) :=
   match Spot.OneStage.commitmentOf k.commitment,
@@ -81,7 +81,7 @@ def firstDraw (k : Case) : Option (String × ByteArray) :=
 
 /-- **The play's log shows the bytes the first stage read**: on a play the form accepts whose log is the device's, the
 bits of the bytes the run's first stage read, where it read any, start the coins the log shows released in the first
-draw's family after its digest. -/
+sample's family after its digest. -/
 def FirstShown (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
   ∀ o, FormAccepts C o → Good o → ∀ i read, inputOn C o = some i → FirstRead i read →
     0 < (i.source.extract 0 read).size →
@@ -89,8 +89,8 @@ def FirstShown (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
       Properties.Challenger.bitsOf (i.source.extract 0 read) <+:
         (Verity.Sampled.freshCoins label after o.log).flatten
 
-/-- **The coin map reads round 0 from the first draw's releases**: on a play the form accepts, where bytes `b` of at most
-one coin's length, whose bits start the coins the log shows released in the first draw's family after its digest, are
+/-- **The coin map reads round 0 from the first sample's releases**: on a play the form accepts, where bytes `b` of at most
+one coin's length, whose bits start the coins the log shows released in the first sample's family after its digest, are
 not empty, the coin map's coin for round 0 starts with `b`. -/
 def DevFirst (C : CaseOf) (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) : Prop :=
   ∀ o, FormAccepts C o → ∀ label after (b : ByteArray), (C o).bind firstDraw = some (label, after) →

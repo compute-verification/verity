@@ -21,7 +21,7 @@ the read finder's SHA-512 collision plus the forger's forgery of the challenger'
   open, the interior audit's `coins`). Each is read under the parameters' challenger key (`keyOf`, the interior audit's,
   at the deployed LMS parameters), its window, its family and what its coins follow.
 * **The log the check read** (`readsLogs`, `LogIsDevice`): each session's releases read as v2 reads a session's log
-  (`Verity.Sampled.readLog`), the first with the coins its draw read (`Spot.Challenger.drawCoins`) and the interior
+  (`Verity.Sampled.readLog`), the first with the coins its sample read (`Spot.Challenger.drawCoins`) and the interior
   with the second stage's (`OneStageZk.coinsOf`) and its sessions' records. On one window the two are one session, and
   each read is to be the play's log `o.log`; on two, the first's releases then the interior's are (`logsOf`).
   `LogIsDevice o`: each such log is `o.log`, release by release, in order and no other (`Binding.Read.Of`).
@@ -144,7 +144,7 @@ window, after the interior registration's digest (`oneStageZkSource`). -/
 def secondDraws (p : VStar.Recursive.SampledTwo.Params) (e : VStar.Recursive.SampledTwo.Evidence) : Option Draws := do
   oneStageZkSource p.audit (← (interiorOf e).toOption)
 
-/-- **The two sessions' records in what the prover sent**: the first stage's draw with its coin evidence, then the
+/-- **The two sessions' records in what the prover sent**: the first stage's sample with its coin evidence, then the
 interior's with the interior audit's, each where the case reads as the two-stage form's and the parameters name a key
 at the deployed parameters; at most two. -/
 def records (s : Verity.Sent) : List (Draws × Json) :=
@@ -185,7 +185,7 @@ def logsOf (w₁ w₂ : String) (r₁ r₂ : List Release) : List (List Release)
   if w₁ = w₂ then [r₁, r₂] else [r₁ ++ r₂]
 
 /-- **The device's log as the two-stage form's check read it**, from what the prover sent, as the logs it makes of
-the play's log (`logsOf`): the first session's releases with the coins its draw read under the parameters' key
+the play's log (`logsOf`): the first session's releases with the coins its sample read under the parameters' key
 (`drawCoins`), and the interior's with the second stage's coins (`OneStageZk.coinsOf`); none where either doesn't
 read. -/
 def readsLogs (s : Verity.Sent) : List (List Release) :=

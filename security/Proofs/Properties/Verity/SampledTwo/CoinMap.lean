@@ -9,7 +9,7 @@ public import Proofs.Properties.Verity.Sampled.CoinMap
 
 `CoinMapLaw` (`Proofs.Properties.Verity.SampledTwo.Projection`) reads a play of the period's game as a run of the two-stage
 verifier whose coins are written into the play's tape where the device releases them. This module builds that map and
-states its law.
+states its sampling design.
 
 * **Where a release goes** (`Locate`, `locAt`, `widthOf`, `usedOf`): a locator names, from the device's log before a
   frame, the frame and the bytes it answers, the run's round whose coin the frame's release continues. A family's fresh
@@ -29,7 +29,7 @@ states its law.
   shortfall below uniform (`Verity.Game.shortfall`, the one-stage leg's `openGap` at each node) plus the chance its class
   at the run's uniform elements is empty. A fresh coin's write costs nothing: its 512 bits are the coin's 4 elements one
   for one.
-* **The law** (`LawAt`, `ElemAgrees`, `CoinMapHolds`): the period's play is at most as likely, at every
+* **The sampling design** (`LawAt`, `ElemAgrees`, `CoinMapHolds`): the period's play is at most as likely, at every
   event, as the frame's play at a uniform tape and uniform run coins plus the hiding term (`LawAt`); and `CoinMapLaw`
   at the coin map's agreement (`ElemAgrees`): on the frame's plays counted, the coin `dev` reads for each read round has
   the run's coin's elements below what its releases that fit carry (`DevAgrees.lean`'s `ElemsBelow` at `fitOf`,
@@ -411,9 +411,9 @@ noncomputable def gapOf (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) 
   alongVal (game_eq V θ F c)
     (fun s => gapK L K (frames (V.families θ)) (V.families θ) [] [] (finish (V.signer θ) θ F c s.1) s.2) σ
 
-/-! ## The law -/
+/-! ## The sampling design -/
 
-/-- **The law at the locator `L`** (`CoinMapLaw`'s first clause): the period's play is at most as likely, at every event,
+/-- **The sampling design at the locator `L`** (`CoinMapLaw`'s first clause): the period's play is at most as likely, at every event,
 as the frame's play at a uniform tape and uniform run coins, plus the hiding term. -/
 def LawAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (L : Locate) (P : Claims.Prover (TapeOf V θ F c σ)) : Prop :=

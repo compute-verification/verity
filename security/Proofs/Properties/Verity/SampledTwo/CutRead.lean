@@ -25,7 +25,7 @@ That an accepted play is one whose logs the cut reads does not follow from the f
 
 The interior session's read exists on every accepted play (`second_reads`): the form's per-member check read its coin
 trees (`members_trees`) and every statement's session's record on the blobs (`members_records`), and the second
-stage's draw read its log's pairs (`oneStageZk_reads`, `Sampled.releasedRootsOf_pairsOk`), which is what the read
+stage's sample read its log's pairs (`oneStageZk_reads`, `Sampled.releasedRootsOf_pairsOk`), which is what the read
 needs (`Sampled.readLog_isSome`).
 
 So an accepted play is one whose logs the cut reads, or one of its two records carries a break (`reads_or_break`), and
@@ -155,7 +155,7 @@ theorem members_records {ts : Array LoggedTree} {L : List String}
              rw [Verity.Sampled.Trees.get_ok _ hb']
              simp [hrec])
 
-/-- **The interior session's read exists** where the second stage's draw read its coins, the form read the
+/-- **The interior session's read exists** where the second stage's sample read its coins, the form read the
 challenger's trees from the interior's coin evidence (`treesOf`), and every statement's session's record is on the
 blobs: its lines read as coin trees (`Binding.trees_of`, `Sampled.coinTreesOf_fold`) and as its coin commitment's
 pairs (`Sampled.releasedRootsOf_pairsOk`). -/

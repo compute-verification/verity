@@ -5,7 +5,7 @@ public import PouwPearlPlus.Run
 public import PouwCommit.Rows
 
 /-!
-# One drawn tile (`clear_audit.Verifier.check_tile`, `clear_work.check_opened`, `verify_run.check_y`)
+# One sampled tile (`clear_audit.Verifier.check_tile`, `clear_work.check_opened`, `verify_run.check_y`)
 
 `checkTile p wn tid o` is the verdict on tile `tid` of pass `p` from the prover's openings `o`, in the Python's order:
 

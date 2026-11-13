@@ -20,7 +20,7 @@ public import Proofs.Flock.Bridge.Members
 about the session's labels (`CheckedRun.labelled_of_ok`). This file proves the other five, and so `Sits h`
 (`AddressRow.sits_of_slots`), from two facts of the registration:
 
-* no inner block is always checked (`h.reg.always`): an always-checked inner block the second stage didn't draw has
+* no inner block is always checked (`h.reg.always`): an always-checked inner block the second stage didn't sample has
   no instance in a session, so `Sits` is false with one;
 * `AddressRow.SampleSlots h`: each outer block the first stage samples is a slot of the layout that names itself.
   The design's evaluation holds the registration's `blockOf ρ t p` to the members' unit only at such a slot
@@ -37,9 +37,9 @@ The steps:
 * `unit_inj`, `cell_of_unit`: a member's unit `ρ · n_t + p` with `p < n_t` has one template, outer block and
   position, which `cellBlock` and `cellPos` read back.
 * `CheckedRun.n_eq_findIdx`: an accepted run's instance of its checked inner block (`rankAt`) is the first of the
-  session's drawn units that the registration maps to the inner block, counted in its part.
-* `sits_of_slots`: the checked inner block is its own outer block's unit (`member_of_replayOf`) and a drawn cell's
-  (`proved_of_checked`), so the drawn unit at the instance is `i · n_t + p` with `sample[i]` the inner block's outer
+  session's sampled proof blocks that the registration maps to the inner block, counted in its part.
+* `sits_of_slots`: the checked inner block is its own outer block's unit (`member_of_replayOf`) and a sampled cell's
+  (`proved_of_checked`), so the sampled proof block at the instance is `i · n_t + p` with `sample[i]` the inner block's outer
   block and `p` its position; the sample lists each outer block once (`selectSecond_sample`), so `i` is the outer
   block's place in the first stage's record (`blocks_of_ok`).
 -/
@@ -118,7 +118,7 @@ theorem arr_idxOf_getD {a : Array ℕ} (hnd : a.toList.Nodup) {i : ℕ} (hi : i 
   rw [hg]
   exact hnd.idxOf_getElem i hl
 
-/-- **A session's drawn units**, as `CheckedRun.drawn_of_ok` gives them: the second draw's units in the part `P`,
+/-- **A session's sampled proof blocks**, as `CheckedRun.drawn_of_ok` gives them: the second sample's units in the part `P`,
 each counted from the part's first slot. -/
 theorem mem_drawn {proved : Array ℤ} {P : Spot.SecondStage.Part} {q : ℕ} {A : Array ℕ}
     (hA : A = ((proved.map Int.toNat).filter (P.holds q)).map (· - P.lo)) {x : ℕ} :
@@ -251,7 +251,7 @@ open AddressRow
 
 variable {h : Held} {r : CheckedRun h.stage}
 
-/-- **The instance of an accepted run's checked inner block** is the first of its session's drawn units that the
+/-- **The instance of an accepted run's checked inner block** is the first of its session's sampled proof blocks that the
 registration maps to the inner block, counted in the inner block's part of the run's sample. -/
 theorem n_eq_findIdx (hr : r.Ok h) {dj : Json} {D : _root_.Flock.Draw.UnitDraw} (hdj : r.ins.read.draw = some dj)
     (hD : _root_.Flock.Draw.UnitDraw.ofJson dj = .ok D) :
@@ -272,7 +272,7 @@ end CheckedRun
 
 /-- **Where the second stage puts a checked inner block** (`Sits`), with no inner block always checked and the first
 stage sampling slots that name themselves (`SampleSlots`): at an accepted run, the checked inner block's instance is
-one of its session's, the session's instances carry their slots as labels (`labelled_of_ok`), and the drawn unit at
+one of its session's, the session's instances carry their slots as labels (`labelled_of_ok`), and the sampled proof block at
 the instance is `i · n_t + p`, where `i` is the place of the inner block's outer block in the first stage's record
 and `p` the inner block's position in its cell. -/
 theorem AddressRow.sits_of_slots {h : Held} (hna : ∀ v, h.reg.always v = false) (hSS : AddressRow.SampleSlots h) :
@@ -307,7 +307,7 @@ theorem AddressRow.sits_of_slots {h : Held} (hna : ∀ v, h.reg.always v = false
     intro i hi
     rw [hPn]
     exact _root_.Flock.Bridge.Members.rank_mul_add_lt hi hp
-  -- a drawn unit the registration maps to the inner block is its own outer block's cell's
+  -- a sampled proof block the registration maps to the inner block is its own outer block's cell's
   have key : ∀ j : ℤ, j ∈ Spot.Draw.proved draw → h.reg.blockAt (sampleOf h r) j.toNat = r.u →
       ∃ i, i < (sampleOf h r).size ∧ (sampleOf h r).getD i 0 = r.ρ ∧
         j.toNat = (partOf h r).lo + (i * h.reg.ns.getD t 0 + p) := by
@@ -344,7 +344,7 @@ theorem AddressRow.sits_of_slots {h : Held} (hna : ∀ v, h.reg.always v = false
     rw [hrank]
     exact AddressRow.arr_findIdx
       (f := fun x => h.reg.blockAt (sampleOf h r) ((partOf h r).lo + x) == r.u) hfind
-  -- the drawn unit at the instance
+  -- the sampled proof block at the instance
   obtain ⟨j', hj', hge', hlt', hx'⟩ := (AddressRow.mem_drawn hprov).1 hmem
   have hju' : h.reg.blockAt (sampleOf h r) j'.toNat = r.u := by
     have e : (partOf h r).lo + D.proved.getD (r.n h) 0 = j'.toNat := by omega

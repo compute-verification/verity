@@ -20,10 +20,10 @@ instantiate `Reads`, and the properties are stated at `PouwCheck`'s v2 protocol 
   (`ShapeAdmitted`).
 * **A's honest root** (`σ.aRoot = C.aRoot H`): the case reads the `A` root the call registered, and coins the
   certifier drew after it (`CoinsAfterA`). That the registered root is `A`'s honest one is the call's statement.
-* **The honest root** (`(σ.exec ω).root = C.root H (word L κ ω)`): the case reads the root the call registered. A drawn
-  unit's proof establishes its tiles' words under that root. That every unit's statement holds is sampling's
+* **The honest root** (`(σ.exec ω).root = C.root H (word L κ ω)`): the case reads the root the call registered. A sampled
+  proof block's proof establishes its tiles' words under that root. That every unit's statement holds is sampling's
   guarantee, at the window's ε and δ, not the case's. The case establishes only that the units cover the call's tiles
-  once each and that every drawn unit's proof was accepted (`UnitsCover`).
+  once each and that every sampled proof block's proof was accepted (`UnitsCover`).
 
 The bits a call exchanges are not part of its acceptance: the network certifier counts them per forward, and the case
 refuses a forward whose counted and release bits pass its credited calls' bits (`EgressWithin`), the check
@@ -48,8 +48,8 @@ commitment and evidence. They give the calls the case credits; each call's regis
 the coins the network certifier signed for the call, in the lead's arrangement, and the `A` root its signed record
 says it drew them after; the forward each call belongs to, and the bits the certifier counted while a forward was open
 and its release carries; the registered partition's units of the call,
-each a set of the call's MMA tiles; the units the window's coin drew; and whether the verifier of record accepted each
-drawn unit's proof. -/
+each a set of the call's MMA tiles; the units the window's coin drew; and whether the verifier accepted each
+sampled proof block's proof. -/
 structure Reads (P : Core.Protocol) where
   /-- The calls the window credits. -/
   calls : P.Commitment → P.Evidence → List ℕ
@@ -61,7 +61,7 @@ structure Reads (P : Core.Protocol) where
   root : P.Commitment → ℕ → Hash.Digest
   /-- A call's coins, from the certifier's signed record, in the lead's arrangement. -/
   coins : (c : P.Commitment) → P.Evidence → (i : ℕ) → Coins (layoutAt (shape c i))
-  /-- The `A` root the certifier's signed record says its coins were drawn after. -/
+  /-- The `A` root the certifier's signed record says its coins were flipped after. -/
   coinsAfter : P.Evidence → ℕ → Hash.Digest
   /-- The forward a call belongs to. -/
   forward : P.Commitment → ℕ → ℕ
@@ -73,7 +73,7 @@ structure Reads (P : Core.Protocol) where
   units : (c : P.Commitment) → (i : ℕ) → List (Finset (ℕ × ℕ × Fin (layoutAt (shape c i)).S))
   /-- The units of a call the window's coin drew, as indices into `units`. -/
   drawn : P.Evidence → ℕ → List ℕ
-  /-- Whether the verifier of record accepted a drawn unit's proof. -/
+  /-- Whether the verifier accepted a sampled proof block's proof. -/
   proved : P.Evidence → ℕ → ℕ → Bool
 
 variable (P : Core.Protocol) (r : Reads P)
@@ -92,13 +92,13 @@ def EgressWithin : Prop :=
         (layoutAt (r.shape c j)).callBits).sum
 
 /-- **The coins follow `A`**: at an accepted window, each credited call's coins come from a certifier record that was
-drawn after the call's registered `A` root. -/
+sampled after the call's registered `A` root. -/
 def CoinsAfterA : Prop :=
   ∀ p c e, P.Accepts p c e → ∀ i ∈ r.calls c e, r.coinsAfter e i = r.aRoot c i
 
-/-- **The units cover the call's tiles once each, and every drawn unit was proved**: at an accepted window, each
-credited call's units are pairwise disjoint, their union is the call's committed tiles (`tileIdx`), every drawn index
-names a unit, and the verifier of record accepted each drawn unit's proof. -/
+/-- **The units cover the call's tiles once each, and every sampled proof block was proved**: at an accepted window, each
+credited call's units are pairwise disjoint, their union is the call's committed tiles (`tileIdx`), every sampled index
+names a unit, and the verifier accepted each sampled proof block's proof. -/
 def UnitsCover : Prop :=
   ∀ p c e, P.Accepts p c e → ∀ i ∈ r.calls c e,
     (r.units c i).Pairwise Disjoint ∧
