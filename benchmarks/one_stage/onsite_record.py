@@ -1027,10 +1027,10 @@ DISCHARGE = ("the figure's premises (`PREMISES`), each open until every theorem 
              "premise. No premise about our own Python stands: soundness is in Lean or rests on an auditor-trusted "
              "device")
 #: what to do about a name the record gives a guarantee or a discharge by that no lock lists (`unlisted`)
-UNLISTED = ("no lock of this tree lists it as a guarantee, so the Lean check replays no such theorem: take the name "
-            "out, leaving its premise open and saying in words what would discharge it (for a guarantee of "
-            "`RESTS_ON`, stop resting on it and make what it gave a premise), or land the theorem with its lock "
-            "record first (`tools/verity/lean/check.py --update`) and name it then")
+NOT_LOCKED = ("no lock of this tree lists it as a guarantee, so the Lean check replays no such theorem: take the name "
+              "out, leaving its premise open and saying in words what would discharge it (for a guarantee of "
+              "`RESTS_ON`, stop resting on it and make what it gave a premise), or land the theorem with its lock "
+              "record first (`tools/verity/lean/check.py --update`) and name it then")
 #: why a guarantee of `RESTS_ON` is open at a statement other than the one it names
 RESTATED = ("its statement in the lock isn't the one whose hypotheses and antecedents `RESTS_ON` names: read them again, "
             "name each in its takes, and pin the lock's digest")
@@ -1863,7 +1863,7 @@ def unlisted(locks: Sequence[Path]) -> dict[str, str]:
     """Each guarantee or discharge the record names that no lock of ``locks`` lists as a guarantee, with where it is
     named: `RESTS_ON`'s guarantees, `DISCHARGES`' theorems, `STATE_HELD`, and each premise's ``discharged_by`` and
     ``stated_by``. The record rests on, and credits a discharge to, only theorems the Lean check replays, so the tree's
-    locks leave none (`UNLISTED`: what to do about one)."""
+    locks leave none (`NOT_LOCKED`: what to do about one)."""
     listed = {g for lock in locks for g in json.loads(lock.read_text())["guarantees"]}
     named = {g: "RESTS_ON" for g in RESTS_ON} | {t: "DISCHARGES" for t in DISCHARGES} | {STATE_HELD: "STATE_HELD"}
     for n, p in PREMISES.items():

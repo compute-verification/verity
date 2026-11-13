@@ -1170,11 +1170,13 @@ def test_the_record_names_no_guarantee_or_discharge_the_trees_locks_dont_list(mo
     (`PREMISES`), each pinned discharge (`DISCHARGES`) and RowsStateHeld (`STATE_HELD`) is a guarantee one of the
     tree's locks lists, so the Lean check replays it: a name of a theorem in no Lean file, or of one stated and not
     yet a guarantee, fails here with what to do about it. A premise whose discharge isn't in the lock names none and
-    is open."""
+    is open. The rule reads a lock's ``guarantees`` alone: a statement a lock holds only under its ``shape.frozen`` is
+    not listed."""
     monkeypatch.undo()
     got = OR.unlisted(OR.LOCKS)
-    assert not got, "\n".join(f"onsite_record.{where} names {g}: {OR.UNLISTED}" for g, where in got.items())
-    assert all(x in OR.UNLISTED for x in ("take the name out", "leaving its premise open", "check.py --update"))
+    assert not got, "\n".join(f"onsite_record.{where} names {g}: {OR.NOT_LOCKED}" for g, where in got.items())
+    assert all(x in OR.NOT_LOCKED for x in ("take the name out", "leaving its premise open", "check.py --update"))
+    assert "completion of its --registered file" in OR.UNLISTED, "the member's word, never the lock's"
     absent = "Properties.NetworkPeriod.phaseStateHeld"
     monkeypatch.setitem(OR.PREMISES, "rows-state-held", dict(OR.PREMISES["rows-state-held"], discharged_by=(absent,)))
     monkeypatch.setitem(OR.RESTS_ON, "NetTiming.SecurityProofs.PeriodTiedCount", {"statement": None, "takes": {}})
@@ -1186,6 +1188,9 @@ def test_the_record_names_no_guarantee_or_discharge_the_trees_locks_dont_list(mo
     empty.write_text(json.dumps({"guarantees": {}}))
     assert {OR.PERIOD_REGISTERED, ACCEPTED, OR.STATE_HELD} <= set(OR.unlisted((empty,)))
     assert OR.unlisted((empty,))[OR.PERIOD_REGISTERED] == f"PREMISES[{OR.CERTIFIER_KEY!r}]'s stated_by"
+    frozen = tmp_path / "frozen.json"
+    frozen.write_text(json.dumps({"guarantees": {}, "shape": {"frozen": {OR.PERIOD_REGISTERED: "frozen: a statement"}}}))
+    assert OR.PERIOD_REGISTERED in OR.unlisted((frozen,))
 
 
 def test_each_guarantee_the_figure_rests_on_is_named_by_what_it_takes_at_its_statement_in_security_lock(monkeypatch):
