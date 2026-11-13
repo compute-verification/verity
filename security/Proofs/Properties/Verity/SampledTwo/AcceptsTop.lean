@@ -10,6 +10,7 @@ public import Proofs.Properties.Verity.SampledTwo.RecordNames
 public import Proofs.Flock.SpotFlock.RunsAs.Steps
 public import Proofs.Flock.SpotFlock.HeldOfRun
 public import Proofs.Flock.SpotFlock.Cap
+public import Proofs.Flock.SpotFlock.RunsAs.Top
 public import Proofs.Properties.Verity.Sampled.Record.Reg
 public import Proofs.Properties.Verity.SampledTwo.InputMap
 public import Proofs.Flock.SpotFlock.RunsAs.PopulationOf
@@ -51,7 +52,9 @@ first stage samples a uniform `K`-subset of the replay blocks (`SpotFlock.firstK
 `PartsSizedAt` at `K`, which reads the play's parameters alone, gives it (`partsHeldAt_of_sized`). Every accepted
 play's first stage is of a count `K` (`firstK_of_formAccepts`): the form's parser takes a two-stage rule only with a
 rate law (`Select.Rule.ofJson`), which `Select.resolve` makes `subset:K` at `1 ≤ K ≤ n`, so `PartsSizedAt` at each
-such `K` gives `PartsHeldAt` with nothing else asked (`partsHeldAt_of_accepts`). Asked at every
+such `K` gives `PartsHeldAt` with nothing else asked (`partsHeldAt_of_accepts`). The run refuses an interior whose
+strata are not the parts its replay block's cells give (`interior-parts`), so an accepted play gives `PartsSizedAt`
+too (`partsSizedAt_of_formAccepts`). Asked at every
 size it would hold of no held copy (`HeldOf.not_partsAre`: no stratum makes a part of a sample of no block).
 
 `playAccepts_form` is `PlayAccepts` from what is left. Nothing here turns the form on, and none of the premises says
@@ -317,6 +320,85 @@ theorem partsHeldAt_of_accepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C)
   intro o i it hA hi hit
   obtain ⟨K, hK⟩ := firstK_of_formAccepts hof hA hi hit
   exact partsHeldAt_of_sized hK (hs K hK) o i it hA hi hit
+
+/-- **An accepted interior's strata are the parts its replay block's cells give** at its replay sample
+(`Run.interiorSteps`, else `interior-parts`). -/
+theorem interiorSteps_parts {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot.Select.Counts}
+    {sample : Array ℕ} {x : Spot.Run.Interior × Lean.Json × Lean.Json × Lean.Json × ℕ}
+    (h : Spot.Run.interiorSteps i it k sample = .ok (.ok x)) :
+    ∃ ns strata, Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
+      Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
+      Spot.SecondStage.parts sample.size strata =
+        some (Spot.Run.cellParts sample.size (it.circuits.map (·.1)).toList ns it.circuits.size) := by
+  unfold Spot.Run.interiorSteps at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat'
+    first
+    | split at h
+    | focus (cases h; done)
+    | (cases h; exact ⟨_, _, by assumption, by assumption, not_not.1 (by assumption)⟩)
+
+/-- **The held copies' parts are the ones the replay block's cells give** (`Run.cellParts`): `heldOf` holds the
+interior's templates' names and the replay block's cells. -/
+theorem partsAt_heldOf {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : SpotFlock.HeldOf.Unread}
+    {h : SpotFlock.Held} (hh : SpotFlock.HeldOf.heldOf i it u = some h) {ns : Array ℕ}
+    (hns : Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns) (q : ℕ) :
+    SpotFlock.partsAt h q = Spot.Run.cellParts q (it.circuits.map (·.1)).toList ns it.circuits.size := by
+  obtain ⟨first, ns', ks, l, hz, -, hc, -, rfl, -⟩ := SpotFlock.HeldOf.heldOf_spec hh
+  have hns' : ns' = ns := by
+    unfold SpotFlock.HeldOf.cellsOf at hc
+    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at hc
+    obtain ⟨ns'', hns'', hc⟩ := hc
+    obtain rfl : ns'' = ns := Except.ok.inj ((SpotFlock.HeldOf.ok_of_toOption hns'').symm.trans hns)
+    split at hc
+    · simp only [Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq, Prod.mk.injEq] at hc
+      obtain ⟨-, -, -, -, h₁, -⟩ := hc
+      exact h₁.symm
+    · cases hc
+  subst hns'
+  unfold SpotFlock.partsAt Spot.Run.cellParts
+  rw [SpotFlock.HeldOf.ms_withFrame, SpotFlock.HeldOf.ms_length_held₀]
+  rfl
+
+/-- **`PartsSizedAt` is a lemma of the accept**: an accepted play's interior passed `interior-parts`
+(`interiorSteps_parts`), whose parts are the held copies' (`partsAt_heldOf`), at its replay sample, which has `K`
+blocks where the held first stage samples a `K`-subset (`SpotFlock.select_subset_size`). -/
+theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) :
+    ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K := by
+  intro K hK o i it strata hA hi hit hst
+  obtain ⟨u, hu⟩ := hof o i it hA hi hit
+  obtain ⟨first, -, -, -, -, hf, -, -, hh, -⟩ := SpotFlock.HeldOf.heldOf_spec hu
+  have hfirst : A.h.reg.first = first := by
+    rw [hh]
+    rfl
+  obtain ⟨j, ha⟩ := acceptedTwo_of_formAccepts (ruleIsTwo C) hA hi hit
+  obtain ⟨grain, replay, k, hr⟩ := ha.two
+  rcases SpotFlock.RunsAs.run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, law, workTable, resolved, draw, rest,
+      read, -, -, -, ht, -, hcl, hres, hsel, -, inner, acc₂, staged, receipt, sym, pub, audit, hsec, -, -, -⟩
+  · have hs := ha.accept
+    rw [hj, SpotFlock.RunsAs.symbol_refused] at hs
+    cases hs
+  · obtain ⟨x, hx, -⟩ := SpotFlock.RunsAs.secondStage_two hr ha.interior hsec
+    obtain ⟨ns, strata', hns, hst', hparts⟩ := interiorSteps_parts hx
+    rw [hst] at hst'
+    cases hst'
+    have hsel0 := hsel
+    rw [Option.not_isSome_iff_eq_none.1 hcl] at hsel0
+    have hproved : (Spot.Draw.proved draw).map Int.toNat = rest :=
+      SpotFlock.RunsAs.proved_select (SpotFlock.RunsAs.resolve_ne_all hr hres) hsel0
+    unfold SpotFlock.HeldOf.firstOf at hf
+    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
+    obtain ⟨n', -, rule', -, law', -, workTable', hwt', resolved', hres', rfl⟩ := hf
+    obtain rfl : workTable' = workTable :=
+      Except.ok.inj ((SpotFlock.HeldOf.ok_of_toOption hwt').symm.trans ht)
+    obtain rfl : resolved' = resolved :=
+      Except.ok.inj ((SpotFlock.HeldOf.ok_of_toOption hres').symm.trans hres)
+    have hsel' : Spot.Select.select A.h.reg.first.rule A.h.reg.first.program A.h.reg.first.query
+        A.h.reg.first.table A.h.reg.first.closure i.source = .ok (draw, rest, read) := by
+      rw [hfirst]
+      exact hsel
+    rw [hproved, SpotFlock.select_subset_size hK hsel'] at hparts
+    rw [hparts, partsAt_heldOf hu hns K]
 
 /-- **Held copies `heldOf` builds agree with what each accepted play's run reads** (`HeldAt`), given their parts
 (`HeldOf.heldMatches_of`). -/
