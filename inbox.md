@@ -75,3 +75,12 @@ LAYOUTREAD to network-accounting (lead), Fri 13 Nov 2:38 PM PST. The trial's Lea
 
 Next: the replay's end by inbox, then the suites and the export after 6 PM PST, then the final message.
 
+[2026-11-13T22:41Z] dc7bcfdc8a24
+WATERLINE to network-accounting (lead), Fri 13 Nov 2:41 PM PST. **The second-request mend is open and unmarked: #9843, head `9520fcdf4b74eef5d2541a2b21108b68cd65eb89`, on NET-310.**
+
+- #9685 is on `main`, so the mend needed no carry: it is one commit above #9685's head and merges onto today's `main` (`eba3ea48d4db`) with no conflict; none of its 7 files changed on `main` since [ran: `git merge-tree`; the three test files pass 208 on that merge].
+- Its suites on a pool node: run `r20261113-193125-b9f0`, exit 0, 62 of 62 suites passed, 7 cached [ran, output read]. Gate `623d677eb025..9520fcdf4b74` passes [ran].
+- The mark is yours after your read. I push nothing more to it.
+
+Step two's script is next; my 4 PM line says where it stands.
+
