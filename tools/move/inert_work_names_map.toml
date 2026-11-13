@@ -278,7 +278,7 @@ files = ["verity/protocols/pouw/prover/schemes/pearl_c4.py",
 
 [keep]
 patterns = [
-    '''["'](?:pouw_pearl_c_served_debit/per-input|cross_group_beyond_debit_mean_worst|cross_group_beyond_debit_mean|cross_group_beyond_debit_max|worst_word_share_tile_cap_ok|debit_share_of_credit|debit_max_word_share|rejected_at_scheme_cap|pouw_pearl_c_served_debit|unneeded_positions|max_debit_over_cap|rows_over_row_cap|forming_elements|debit_atom_share|debit_eF_share|census_row_cap|debit_over_cap|over_cap_tiles|tile_cap_ok|debit_exact|debit_share)["']''',    # a record's keys
+    '''(?<!\.D, )["'](?:pouw_pearl_c_served_debit/per-input|cross_group_beyond_debit_mean_worst|cross_group_beyond_debit_mean|cross_group_beyond_debit_max|worst_word_share_tile_cap_ok|debit_share_of_credit|debit_max_word_share|rejected_at_scheme_cap|pouw_pearl_c_served_debit|unneeded_positions|max_debit_over_cap|rows_over_row_cap|forming_elements|debit_atom_share|debit_eF_share|census_row_cap|debit_over_cap|over_cap_tiles|tile_cap_ok|debit_exact|debit_share)["']''',    # a record's keys
     '''["'](?:tile_cap|row_cap)["'](?=: str\()''',    # ... the k256 gate's header
     'max_debit_over_cap=',    # ... the replay's accept line
     '(?<!cap\.)Pc8\w*Cap\w*',    # a Definition staged into a circuit
