@@ -9,10 +9,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # the number is held to the session harness's own summary of the same records (`summary.py`'s `gamma_spec`),
-# settings.py is built on verity_config's registry, the result is written through the harness kit's writer, and
-# the number's row on the Metrics tab is metrics.toml's
+# settings.py is built on verity_config's registry, and the result is written through the harness kit's writer
 inputs = [
-    "benchmarks/metrics.toml",
     "benchmarks/remote_session/summary.py",
     "tools/config/verity_config",
     "verity/__init__.py",

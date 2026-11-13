@@ -40,7 +40,7 @@ Under `research run` an accepted session of a node run or of `--from` also write
 `$RESEARCH_RUN_DIR/result.json`, the file `research` reads a run's result from, through the harness kit's writer
 (`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
 alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), the same number under
-`METRIC`, the id `benchmarks/metrics.toml` holds it to on the console's Metrics tab, with its `TARGET` (and, unbound,
+`METRIC`, the id this directory's `metrics.toml` holds it to on the console's Metrics tab, with its `TARGET` (and, unbound,
 `"bound": false` and the premise in its verdict, which also names an error above 2^`ERROR_BOUND_LOG2`), `verified`
 (the bytes the verifier certified read over the session's span), `capacity at READING` and `free at READING` for each
 reading the
@@ -76,7 +76,7 @@ SETTINGS = of(__file__)
 #: openings a window
 UNPACED = re.compile(r"([1-9]\d*):(\d+(?:\.\d{1,3})?):([1-9]\d*)")
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
-#: the number's row on the console's Metrics tab (`benchmarks/metrics.toml`), and the goal's target for it
+#: the number's row on the console's Metrics tab (this directory's `metrics.toml`), and the goal's target for it
 METRIC, TARGET = "memory-accounting/node-read-rate-uncertified", 0.14
 #: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
 #: ledger, and the windows' PRF advantages are in no δ
@@ -419,7 +419,7 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     run and the keys of the session's entry in that record it was read from.
 
     - `metric`: the printed number in its unit.
-    - `METRIC`: the same number, the Metrics tab's row (`benchmarks/metrics.toml`), with `TARGET` and where the number
+    - `METRIC`: the same number, the Metrics tab's row (this directory's `metrics.toml`), with `TARGET` and where the number
       stands against it. A session whose verifier held no checkpoint still writes the row, with `"bound": false` and
       its verdict naming that premise (`HELD_NONE`); a bound session's row holds neither. Where the number's error is
       above 2^`ERROR_BOUND_LOG2` the verdict names that too (`ABOVE_BOUND`): the record's declared error at the first

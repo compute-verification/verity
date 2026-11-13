@@ -73,7 +73,7 @@ by window as the share is: the record's declared error, which adds the sketch's 
 binding terms to the ledger's own and holds no PRF advantage; no rate is in it, so it is one number for both
 readings). A capacity's rate is the verifier's own figure for the node (`timing.py`), not the registered hardware's,
 and its unit says so. The printed number is written once more under
-`memory-accounting/node-read-rate-uncertified`, the id of its row on the console's Metrics tab (`benchmarks/metrics.toml`).
+`memory-accounting/node-read-rate-uncertified`, the id of its row on the console's Metrics tab (`benchmarks/memory/metrics.toml`).
 That entry also carries the goal's target, 0.14, and says whether the number is within it or past it. A session whose
 verifier held no checkpoint (`BIND=0`) still writes it, with `"bound": false` and its verdict naming that premise
 (`within target; the verifier held no checkpoint`); a bound session's entry holds neither. Where the number's error
