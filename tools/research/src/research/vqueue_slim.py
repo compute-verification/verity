@@ -48,15 +48,17 @@ its records say (`failing`): the repository paths and `art:` ids they name (`Fai
 declared inputs narrowed by what its run traced, a failed Lean build's modules and their imports, a step's declared reads;
 None when nothing bounds them); and what failed (`Failed.kind`).  It fails as soon as a
 shard has failed a step it judges, or a suite of one, while the others run (`_early`: a shard's failures so far, which its
-check writes as each one fails), a failure read then as it would be at the end; a candidate on another candidate whose check
+check writes as each one fails), a failure read then as it would be at the end, and it passes as soon as every step it
+judges passed in every shard holding it, while a shard still runs a step off the gate (`_passed_early`: circuit-check holds
+no pass); a candidate on another candidate whose check
 runs is compared with what that check has failed so far, the rest unknown until it ends (`based` with ``so_far``).  A
 candidate built on another in flight, no member of it changing a Lean input (`lean_inputs`), audits nothing itself where its
 base's check is judged on lean-audit (`audits`) or took its verdict on it from the check of a candidate below that is: `start`
 with ``audit_from``, the candidate whose check ran it, leaves lean-audit out of its run (``lean_audit_from``), and `audited`
 gives it the verdict on the step that the run beside `main` keeps once that candidate has landed (`answers`), pending until
 then whatever that check says, so it lands after that candidate, drops with it, and stays pending while it is rerun.  A step
-it leaves out still runs: `failures` reads what it failed, which the loop rings to who acts on it, but what the run beside
-the base's check failed too (`Loop._off_gate`)."""
+it leaves out still runs: `failures` reads what it failed once every run has ended, which the loop rings to who acts on
+it, but what the run beside the base's check failed too (`Loop._off_gate`), its candidate landed or dropped by then or not."""
 from __future__ import annotations
 
 import ast
@@ -150,6 +152,9 @@ LEAN_FILES = "**/*.lean"
 LEAN_AUDIT_STEP = ("tools/verity/check/check.py", "tools/verity/check/lean_slot.py")
 #: the files whose directory is a Lean package's: a Lake package's lakefile, an audited one's lock
 LEAN_PACKAGE_FILES = ("lakefile.toml", "lakefile.lean", "lean-audit.json")
+#: the part of a check that replays every module of the security analysis's proofs, which `start`'s ``heavy_on`` sends to its
+#: own machines (`heavy_shards`), and the part that audits it where a plan names it in no shard
+HEAVY_PART, HEAVY_REST = "lean-audit:security/Proofs", "lean-audit:*"
 #: how long after the loop cancelled a run a check that replaces it waits for the run's record (`start`'s ``after``), in
 #: seconds; past it the check launches without that run's passes
 CARRY_WAIT_S = 180
@@ -257,6 +262,23 @@ def declared_steps(driver: Landing, sha: str, steps: list[str]) -> list[str]:
     return [s for s in steps if s in names]
 
 
+def heavy_shards(driver: Landing, sha: str, n: int, doc: dict | None = None) -> set[int]:
+    """The shards, 1 to ``n``, of candidate ``sha``'s check that audit `HEAVY_PART`: of the auto plan ``doc`` (its shards'
+    parts), else of the plan with ``n`` shards in ``sha``'s own ci.toml (`merge.shard_plans`), those naming it, else those
+    naming `HEAVY_REST`; every shard, logged, where the plan can't be read or names neither."""
+    from .merge import shard_plans
+
+    shards = doc.get("shards") if doc is not None else (shard_plans(driver.repo, sha) or {}).get(n)
+    parts = [s.get("parts") if isinstance(s, dict) else s for s in shards] if isinstance(shards, list) else []
+    if len(parts) == n and all(isinstance(p, list) for p in parts):
+        for part in (HEAVY_PART, HEAVY_REST):
+            if got := {k for k, p in enumerate(parts, 1) if part in p}:
+                return got
+    driver.q.log(f"research queue vqueue: candidate {sha[:12]}'s plan of {n} shards can't be read or names neither {HEAVY_PART} "
+                 f"nor {HEAVY_REST}: every shard goes on the heavy machines")
+    return set(range(1, n + 1))
+
+
 def replaced(lines: Iterable[dict], members: Iterable[int], now: float) -> dict[str, float]:
     """The runs a check of a candidate holding ``members`` replaces (`start`'s ``after``), each by when the loop cancelled it:
     of each line of the loop's log (``lines``) in the last `CARRY_WAIT_S` that cancelled the check of a candidate sharing a
@@ -310,7 +332,7 @@ def _carrying(runs: Iterable[str]):
 
 
 def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect: Path | None = None,
-          audit_from: str | None = None, after: dict[str, float] | None = None) -> dict | None:
+          audit_from: str | None = None, after: dict[str, float] | None = None, heavy_on: str = "") -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it: `SLIM_STEPS` but those a run
     of every step of ``sha`` above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's
     keywords (`Landing.beside_args`: ratchet-gate judges the merges above ``base``), on the queue's machines (`Landing.on`).
@@ -319,7 +341,10 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     `auto:N` has the auto plan its shards launch by made first (`Landing.plan_shards`, ``plan``, which `judge` follows).
     With ``audit_from`` too, the candidate below whose check ran lean-audit (`audits`), its base or the one its base's check
     took it from, whose verdict on it this one takes (`audited`): every step but lean-audit.  Each sends only the steps the
-    candidate's own ci.toml declares as jobs (`declared_steps`).
+    candidate's own ci.toml declares as jobs (`declared_steps`).  With ``heavy_on`` (machines, a comma list) too, the check
+    that gates sends the shard that audits `HEAVY_PART` (`heavy_shards`; the whole run, of one shard) to those machines
+    alone, the others to theirs, and its record keeps them (``heavy_on``), so an auto plan's shards launched later do too, as
+    does a launch that waited for the records of the runs it replaces (``after``).
     The record to keep (`Landing._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
     shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
     launched (``at``), the ``steps`` it runs and those it skips (``skip``), ``gate`` (`CHECK`) with ``shards``, and
@@ -346,16 +371,18 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     skip = [s for s in skip if s in every]
     steps = [s for s in every if s not in skip]
     sent = ",".join(every if n else steps)
+    heavy_on = heavy_on if n and LEAN_STEP in every else ""
     what = (f"train.sh {sha[:12]} {driver.on} --deferred {sent}{flags}"
             + (f" as an auto plan's {n} shards" if auto else f" as {n} shards" if n > 1 else "")
             + (f" as candidate {sha[:12]}'s check" if n else f" beside candidate {sha[:12]}'s check")
-            + (f", {LEAN_STEP} {audit_from[:12]}'s" if audit_from else ""))
+            + (f", {LEAN_STEP} {audit_from[:12]}'s" if audit_from else "")
+            + (f", {HEAVY_PART}'s shard on {heavy_on}" if heavy_on else ""))
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
     rec = {"ids": [], "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
            **({"gate": CHECK} if n else {}), **({"lean_audit_from": audit_from} if audit_from else {}),
-           **({"carry": sorted(after)} if after else {})}
+           **({"carry": sorted(after)} if after else {}), **({"heavy_on": heavy_on} if heavy_on else {})}
     go = {"what": what, "sent": sent, "kw": kw, "n": n, "auto": auto}
     awaited, gone = _awaiting(driver, after or {})
     if awaited:
@@ -367,19 +394,22 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
 
 def _go(driver: Landing, rec: dict, go: dict, gone: list[str]) -> str | None:
     """Launch what `start` made ``go`` of into ``rec`` (``at`` then): an auto plan's job (``plan``), each shard of ``n``
-    (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`); ``gone``, the runs it waited for in vain, kept
-    as ``carry_without``.  None, logged, once launched; the tail of a launch that registered no run, logged."""
+    (`_launch`), or one run, each launch naming ``rec``'s ``carry`` (`_carrying`), the shard that audits `HEAVY_PART` (the
+    whole run, of one) on ``rec``'s ``heavy_on``; ``gone``, the runs it waited for in vain, kept as ``carry_without``.  None,
+    logged, once launched; the tail of a launch that registered no run, logged."""
     sha, sent, kw, n, carry = rec["tip"], go["sent"], go["kw"], go["n"], rec.get("carry") or ()
+    heavy_on = rec.get("heavy_on") or ""
     if go["auto"]:
         got, tail = {"ids": [], "plan": {**driver.plan_shards(driver.repo, sha, sent, n=n), "n": n, "deferred": sent,
                                          "kw": kw}}, ""
     elif n > 1:
-        got, tail = _launch(driver, sha, sent, kw, n, carry=carry)
+        got, tail = _launch(driver, sha, sent, kw, n, carry=carry, heavy_on=heavy_on)
         if got is not None and not any("launch" in r for r in got["shards"]):
             _grouped(got)
     else:
         with _carrying(carry):
-            got, tail = driver._started(driver.launch_postland(driver.repo, sha, driver.on, sent, **kw, train_from=OWN_TRAIN))
+            got, tail = driver._started(driver.launch_postland(driver.repo, sha, heavy_on or driver.on, sent, **kw,
+                                                               train_from=OWN_TRAIN))
     if got is None:
         driver.q.log(f"research queue vqueue: {go['what']} registered no run: {tail}")
         return tail
@@ -403,15 +433,20 @@ def _waited(driver: Landing, rec: dict) -> Verdict:
 
 
 def _launch(driver: Landing, sha: str, sent: str, kw: dict, n: int, plan: str | None = None,
-            carry: Iterable[str] = ()) -> tuple[dict | None, str]:
+            carry: Iterable[str] = (), heavy_on: str = "", doc: dict | None = None) -> tuple[dict | None, str]:
     """Each of ``n`` shards of candidate ``sha``'s check launched on its machines (`shard_machines`): `--shard K/N` of ci.toml's
-    plan, or of the auto plan whose file is ``plan``, `--shard auto:K/N` with it, each naming the runs ``carry`` (`_carrying`).
-    The record of every shard's launch (``shards``); None with the tail of one that registered no run, the others' runs
+    plan, or of the auto plan ``doc`` whose file is ``plan``, `--shard auto:K/N` with it, each naming the runs ``carry``
+    (`_carrying`); with ``heavy_on``, the shards that audit `HEAVY_PART` (`heavy_shards`) on those machines instead.  The
+    record of every shard's launch (``shards``); None with the tail of one that registered no run, the others' runs
     cancelled."""
+    ons = shard_machines(driver.on, n)
+    if heavy_on:
+        heavy = heavy_shards(driver, sha, n, doc)
+        ons = [heavy_on if k in heavy else on for k, on in enumerate(ons, 1)]
     with _carrying(carry):
         got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{'auto:' * bool(plan)}{k}/{n}",
                                                       **({"shard_plan": plan} if plan else {}), train_from=OWN_TRAIN))
-               for k, on in enumerate(shard_machines(driver.on, n), 1)]
+               for k, on in enumerate(ons, 1)]
     if any(r is None for r, _ in got):
         if ids := [i for r, _ in got if r for i in r["ids"]]:
             driver.cancel(driver.repo, ids, f"vqueue: a shard of candidate {sha[:12]}'s check registered no run")
@@ -461,7 +496,8 @@ def _planned(driver: Landing, rec: dict, what: str) -> Verdict:
     elif doc["n"] != plan["n"]:
         why = f"has {doc['n']} shards, not {plan['n']}"
     got, tail = (None, f"its auto plan {why}") if why is not None else _launch(
-        driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN), rec.get("carry") or ())
+        driver, rec["tip"], plan["deferred"], plan["kw"], plan["n"], str(Path(plan["out"]) / AUTO_PLAN), rec.get("carry") or (),
+        heavy_on=rec.get("heavy_on") or "", doc=doc)
     if got is None:
         abandon(rec)
         return _keep(rec, _down(rec, f"registered no run: {tail}"))
@@ -481,7 +517,8 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     drive.toml's `warn_steps` (`_gate`).  Pending while it waits for the records of the runs it replaces, the call that finds
     the wait over launching it (`_waited`), and while its auto plan is made, the call that finds it made launching the
     shards (`_planned`), and while it launches or runs, each shard's launch read as the run's own is; the check that gates,
-    while it runs, fails once a shard has failed one of those steps (`_early`).
+    while it runs, fails once a shard has failed one of those steps (`_early`), and passes once each of them passed in every
+    shard that holds it, whatever a step off the gate still does (`_passed_early`), its runs left to end.
     Infra when it registered no run (``rec`` None, its auto plan failed, or a detached launch that printed no run ids,
     a shard's stopping the other shards; `Failed.launch` when it says one of `LAUNCH_ONLY`), never ran or was stopped, or was lost or killed before it passed each of those
     steps; infra's one `Failed` says which.  Once it ended, pass when it passed each of them (the check that gates: in
@@ -495,6 +532,8 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     if rec is None:
         return _down(None, "registered no run")
     if "verdict" in rec:
+        if rec.get("still_running"):
+            _settle(driver, rec)
         return _kept(rec["verdict"])
     if "wait" in rec:
         return _waited(driver, rec)
@@ -530,7 +569,10 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     if lost := driver._lost(rec, states):
         states = {r: ("lost", -1) for r in states}
     if any(st in ACTIVE for st, *_ in states.values()):
-        return _early(driver, rec, states) if check else Verdict(PENDING)
+        if not check:
+            return Verdict(PENDING)
+        v = _early(driver, rec, states)
+        return _passed_early(driver, rec, states) if v.state == PENDING else v
     why = "lost" if lost else ", ".join(f"{st} rc={rc}" for st, rc, *_ in states.values())
     if not lost and driver._never_ran(rec, states):
         return _keep(rec, _down(rec, f"never ran or was stopped ({why})"))
@@ -634,6 +676,36 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     return v
 
 
+def _passed_early(driver: Landing, rec: dict, states: dict) -> Verdict:
+    """The verdict of the check that gates (``rec``) while a shard of it runs and none has failed a step it is judged on
+    (`_early`): pass, kept as the end's is, once every step it is judged on (`_gate`) passed in every shard that holds it
+    (`shard_steps`, `shard_passed`: a failure an allowance at its base covers counting as passed), whatever a step off the
+    gate (policy.toml's `off_gate`, drive.toml's `warn_steps`) still does there; pending while a shard's plan isn't known, a
+    shard's records can't be fetched, or one of those steps hasn't ended in a shard that holds it.  The records are each
+    shard's dirs fetched afresh (`landing.evidence`), never the Landing's cache, which the end's reading and `failures` read.
+    ``rec`` says its runs still run (``still_running``) until a later `judge` finds each ended (`_settle`): `failures`
+    reads nothing of them until then."""
+    groups = rec.get("groups") or [rec["ids"]]
+    dirs = driver.evidence(driver.repo, rec["ids"])
+    shards = [[d for d in dirs if d.name in g] for g in groups]
+    if not all(shards):
+        return Verdict(PENDING)
+    view = shard_steps(shards, [any(states.get(r, (None, None))[1] == 0 for r in g) for g in groups])
+    judged = _gate(driver, rec)
+    passes = shard_passed(view, driver._allowed_steps(rec.get("base") or rec["tip"], dirs))
+    if view is None or any(s not in passes for s in judged):
+        return Verdict(PENDING)
+    rec["still_running"] = True
+    return _keep(rec, Verdict(PASS), judged)
+
+
+def _settle(driver: Landing, rec: dict) -> None:
+    """``rec``'s ``still_running`` (`_passed_early`) dropped once none of its runs is active, or they are lost (`Landing._lost`)."""
+    states = driver.states(driver.repo, rec["ids"])
+    if driver._lost(rec, states) or not any(st in ACTIVE for st, *_ in states.values()):
+        del rec["still_running"]
+
+
 def _written(path: Path, otherwise: float) -> float:
     """When ``path`` was last written (a fetched file keeps its node's time), ``otherwise`` when it wasn't fetched."""
     return path.stat().st_mtime if path.is_file() else otherwise
@@ -649,9 +721,10 @@ def failures(driver: Landing, rec: dict | None, step: str) -> dict[str, str] | N
     """What the run ``rec`` records failed of ``step``, a step `judge` leaves out (policy.toml's `off_gate`, drive.toml's
     `warn_steps`), once its verdict is kept: each failure the step's logs name (`reds.named`: ratchet-gate's merges,
     circuit-check's failures), by its key with its line, else the step itself; {} when it passed.  A shard's twin that passed
-    it answers for the shard (`shard_steps`).  None while the run runs, and when it didn't run the step to its end: no shard
-    holds it, one skipped or stopped it, or a kill ended it (`KILLED_RC`, a signal)."""
-    if rec is None or "verdict" not in rec or not rec.get("ids"):
+    it answers for the shard (`shard_steps`).  None while the run runs, a pass kept early among it (``still_running``), and
+    when it didn't run the step to its end: no shard holds it, one skipped or stopped it, or a kill ended it (`KILLED_RC`, a
+    signal)."""
+    if rec is None or "verdict" not in rec or rec.get("still_running") or not rec.get("ids"):
         return None
     groups = driver._shards(rec)
     view = shard_steps(groups, [True] * len(groups)) or []
