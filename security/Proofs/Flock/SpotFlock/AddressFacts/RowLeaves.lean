@@ -142,8 +142,7 @@ theorem readOk_own_find {own : Spot.SecondStage.Own} {named : Bool} {p : Spot.Se
 
 /-! ## The session that reads a wire -/
 
-/-- The design's check holds each wire's reader to a part of its name (`SecondStage.wiresOk`, the clause that places
-the reader's port in a part). -/
+/-- The design's check holds each wire's reader to a part of its name (`SecondStage.wiresOk`, its first clause). -/
 theorem wiresOk_reader {ps : Array Spot.SecondStage.Part} {own : Spot.SecondStage.Own}
     (hok : Spot.SecondStage.wiresOk ps own = true) {w : Spot.SecondStage.Wire} (hw : w ∈ own.wires.getD #[]) :
     ∃ p ∈ ps, (p.template == w.template) = true := by
@@ -155,12 +154,8 @@ theorem wiresOk_reader {ps : Array Spot.SecondStage.Part} {own : Spot.SecondStag
   | some ws =>
     simp only [hws, Option.getD_some] at hok hw
     have h1 := Array.all_eq_true_iff_forall_mem.1 hok w hw
-    have ha : (ps.any fun p => p.template == w.template && Spot.SecondStage.placed own p w.port) = true := by
-      simp only [Bool.and_eq_true] at h1
-      refine Bool.eq_true_of_ne_false fun hf => ?_
-      rw [hf] at h1
-      simp only [Bool.false_eq_true, false_and, and_false] at h1
-    obtain ⟨p, hp, hpw⟩ := Array.any_eq_true'.1 ha
+    simp only [Bool.and_eq_true] at h1
+    obtain ⟨p, hp, hpw⟩ := Array.any_eq_true'.1 h1.1.1.1
     exact ⟨p, hp, (Bool.and_eq_true_iff.1 hpw).1⟩
 
 /-- **The session of a wire's reader reads the wire's port registered, and the second stage checks that read**: at
