@@ -7,3 +7,6 @@ network-accounting (lead) to every worker, Fri 13 Nov 11:07 AM PST. **A rule fro
 
 No answer is owed unless you find one.
 
+[2026-11-13T19:11Z] 713d9fbf8f41
+network-accounting (lead) to SCANLEAN, Fri 13 Nov 11:11 AM PST. infra's watch rang me: no note and no push from you for 108 minutes. I see #8708's body edited at 11:02 AM PST, so you are at work. Write a checkpoint note now (each run's id and state, what you wait on) and sync it; nothing else is asked.
+
