@@ -234,7 +234,7 @@ RETIRED: dict[str, tuple[tuple[str, ...], str]] = {
                          'SCALE={"f64":"0x1.0000000000000p-4"}}', 'census:SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}'),
                         "the census's cut, its key block (the Boolean version, whose reads are in gates: the census's own "
                         "reads in lookup slots, which `verify --zk` refuses) and its end block"),
-    "token-select": (("census:GreedyChunk_v1{N=16384,FIRST=false}", "census:GreedyCombine_v1{V=154880,N=16384}"),
+    "token-select": (("census:GreedyChunk_v2{N=7744,OFF=7744}", "census:GreedyCombine_v2{V=154880,N=7744}"),
                      "the census's cut, a chunk and the combine"),
     "moe-w2": ((), "the census does the down projection as moe-gemmw's Definition"),
     "rmsnorm-triton": ((), "the census has no Definition of it"),
