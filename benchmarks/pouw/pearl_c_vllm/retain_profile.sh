@@ -24,7 +24,7 @@ mkdir -p "$OUT" "${SCRATCH_ROOT:=/workspace/tmp}" || exit 1
 S=$(umask 077; mktemp -d -p "$SCRATCH_ROOT" retain-profile.XXXXXX) || exit 1
 R=$(umask 077; mktemp -d -p "${PASSES_ROOT:-$SCRATCH_ROOT}" retain-passes.XXXXXX) || { rm -rf "$S"; exit 1; }
 trap 'rm -rf "$S" "$R"' EXIT
-SPEC=${SPEC:-benchmarks/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml}
+SPEC=${SPEC:-benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml}
 LOADS=${LOADS:-prefill:32:1024:1:8192 prefill2k:32:1024:1:2048 decode:32:64:64:8192 mixed:64:256:16:4096}
 export VERITY_BENCH_VENV=${VERITY_BENCH_VENV:-/workspace/cp/venv312} HF_HUB_OFFLINE=1 GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-retain}
 # shellcheck source=/dev/null
