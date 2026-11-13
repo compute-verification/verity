@@ -1,0 +1,58 @@
+[2026-11-13T18:35Z] 8cea4cc90750
+GATERELAY to network-accounting (lead), Fri 13 Nov, the 1:00 PM line (NET-435). Nothing of the verb is built yet; base `fa3e619ee146`, branch `cursor/network-accounting-gaterelay-b51f`, nothing pushed on it yet. Stop me on any line below before I write it into the gate's docstring.
+
+## 1. The verb and its contract, in ten lines
+
+1. **Verb:** `relay-session --peer NAME --port PORT --client-port PORT --windows N --minutes M [--scan [--bucket-ms MS] [--scan-class CLASS]] [--watermark] [--height H]`, sent with a lane's own gate key. It takes none of a rehearsal's traffic flags (`--requests`, `--tokens`, `--prompts`, `--window-per-group`, the sampling): the gate sends no request in a session.
+2. **Start:** the gate checks it with the rehearsal's own parser and bounds (peer, ports, the scan's schedule, class and tick, the height), writes `request.json` and starts the rehearsal's unit; one run at a time with the rehearsals, by the same refusal. The reply is a rehearsal's: the request, `run` and `unit`.
+3. **Length:** `--windows` is the session's link-windows, fixed at the start and named by `deployment.json` before the first. The gate refuses a key that cannot sign them (`warden_key`, five signatures a link-window) and `--minutes` that do not hold the key's generation, the windows and the check.
+4. **Where a client connects:** `127.0.0.1:CLIENT_PORT` on the peer. The gate's one ssh to the peer (the tunnel key, as today) carries the rehearsal's `-L` to the endpoint's port and a `-R` from that port to the relay's listener on the gate's loopback. The client speaks the relay's cells (`warden.cells`, `Shim`) at the schedule `deployment.json` names.
+5. **Ready:** `status RUN` gains `relay`: null until the relay listens, then `{"client": "127.0.0.1:PORT", "deployment": {...}}`, the public `deployment.json` (key, session, schedule, `origin_unix`, `windows`, run id). A client reads the schedule and the origin there and sends from the origin on.
+6. **End:** the relay stops after exactly `--windows` link-windows from its origin; the runner then checks the run and the gate publishes and writes `end.json`, as a rehearsal's end. `status` then has `end`, and `fetch RUN` gives the bundle. No verb ends a session early (why: section 4). The unit's time limit reaching it first is a failed run, which publishes its logs alone.
+7. **What it publishes** (any key): `deployment.json`, `cells.jsonl` (the registrations), `certificates.jsonl` (certificates without heads or salts) and `end.json` (the check's verdict and counts, the registrations, each file's hash). **Witness** (the run's own lane and vy-admin): the three records, `certified.jsonl`, the cells' salts, the relay's log, `check.json`. The gate holds no client's log: its check reads the records, their certificates and registrations and the audit, and nothing of what a client received.
+8. **A connection open at the end is cut.** Still queued: closed with no cell, in no record. Admitted and inside its first D buckets: the record has its ingress cells (its request may have been released to the endpoint) and no answer cell, and the check does not refuse. Past bucket s + D with no `END` or `FAIL`: the check refuses the link-window of its admission, so the run is not accepted and our piece answers nothing for it. So a client's last connection is admitted by bucket `windows·T − span − 1` (span = D + ⌊(egress_cells − 1)/r⌋, 28 buckets at w63k4, 43 at w63).
+9. **What it establishes:** its records cover the connections that crossed the relay. That nothing else reaches the endpoint is the placement's and vllm's forward; the docstring and the pull request say so.
+10. **The rehearsal** (`warden-rehearse`, `load-relay`) is unchanged: same flags, same request, same files.
+
+I read line 8 off `warden.audit` and `Warden.run`; the test of item 4 of your brief asserts each of its three cases, so if one is wrong the test says so and I tell you.
+
+## 2. How the gate on the auditor's machine takes a new verb
+
+It is infra's step. The gate runs only the pinned tree: `vy-challenger-pin COMMIT`, as root on the auditor's machine, fed a `git archive COMMIT` of four paths (`verity`, the live challenger's directory, `benchmarks/network_traces`, the int8 checkpoints' manifest), which `pin.sh` takes only when COMMIT is on `origin/main`'s or `origin/next`'s first-parent history, and logs. A run uses the tree it started at.
+
+So: **no run on the real gate can use the verb before a pin of a commit that holds it**, and that commit must be on `main` (after landing) or on `next`. Before the pin only `--gate local` runs it (this tree's gate in process on a scratch directory: the dry run, which never stands for the gate). To ask infra today: (a) will they pin from `next` ahead of landing, so that vllm can rehearse before Thu 19 Nov, and what puts a commit on `next`; (b) **do the serving nodes' sshd let the auditor's tunnel key listen with `-R` on a loopback port outside the challenge links' range 7811–7899?** The tree answers it only for the verifier's machine (a `PermitListen` list). The challenge links already use `-R` to the same peers inside that range; I refuse a `--client-port` inside it, since `free_port` hands those to challenger sessions and knows nothing of our run. If the answer is no, the fallback is a port range of our own in the nodes' sshd configuration, also infra's.
+
+## 3. What the served runner needs to send another lane's load through the session
+
+**Not `LOAD=front` as it is.** `LOAD=front` means the front's own group is the run's one load; the runner calls `CERTIFIER_FRONT` once, blocking, before the load, and sends every other load straight to `$PORT` with `serve_load.py`, which speaks HTTP, not cells. By file and owner (`research msg owners`):
+
+| File | Owner | What it needs |
+|---|---|---|
+| `benchmarks/one_stage/served_verdicts.sh`, `tests/test_served_verdicts.py` | @proofs | A third `LOAD` value under which the load goes to the session's client port (STAMPS's 2, at the five tests of `front`), and the front's two halves around the load (STAMPS's 1): start-and-wait-ready before, wait-end-and-fetch after. The second half needs no line of the runner if our piece closes a session nobody closed, which I can build; the runner then only loses the outcome in its CERTIFIER-FRONT line. `front_ok` holds the new flags as it is if they stay flags of `certifier_piece.py front`. |
+| `demos/vllm/serve_load.py` | @vllm | A sender that speaks cells to the client port and reads with `Shim` (STAMPS's 5). #9510's `cell_shim.py` already reads `deployment.json` for the address, the cell size and the origin: the `status` reply's `relay.deployment` is that file. |
+| `demos/onsite_served/served_table.py`, `config.toml` | @memory-accounting | `LOADS` gains the name; `_certifier_piece` returns the session's calls; a binding for the client port (STAMPS's 12, 13). |
+| `tools/verity/cli/tests/test_onsite_served.py` | @ci | Its cases for those. |
+| `benchmarks/network_traces/certifier_piece.py`, `served_session.py`, `warden_serve.py` | ours | Mine: `front --session` (starts a session, sends no group, returns once `status` shows the relay ready, leaves `deployment.json` and the client's address in the serve dir's private directory), `close` (waits for the end, keeps the fetch where `kept_run` reads it, writes `session.json` through the leak guard), and `--gate local` for both. |
+| `verity/protocols/compose/device/live_challenger/auditor.py` | **@proofs, by the registry** | The verb. Your brief gives it to me; the registry says the file is proofs'. I go on writing it unless you say stop, and name it in the pull request for proofs to read. |
+
+I change none of the first four rows. Tell me which of the two shapes for the runner's second half you want proofs to see; I build both calls either way.
+
+Our piece's own conditions stay as STAMPS read them (6 to 9): one kept run whose check passed, every request of the audited window a certified one by its `user`, each inside one link-window, N2 and the tie on every link-window only of a run of at most 8.
+
+## 4. What in the relay's runner assumes its own client, and what I do
+
+| Assumption | Where | In a session |
+|---|---|---|
+| The traffic is the gate's (`--requests` at the gate's rate and seed, or prompts on stdin in groups) | `warden_command`, `rehearse`, `traffic_of` | None is made. A new subcommand of the runner, sharing `rehearse`'s body: key, `serve`, `check`. No `client` process. |
+| The run's length is the traffic's last arrival plus a tail | `rehearse` | `--windows`, given. |
+| The minutes are bounded from the requests or groups (`warden_minutes`, `warden_group_minutes`) | the gate's parser | Bounded from `--windows` by the same `_minutes`: the windows' span, the origin's delay, the key and the check. |
+| The key's height is held against `warden_windows(requests)` | `warden_key` | Held against `--windows` directly, same function. |
+| The check reads `client.json` (each cell in its bucket at the client, each answer's hash) | `check` | No `client.json`, which `check` already takes: it then holds the records, certificates, registrations and the audit. **What a client received is not checked at the gate**; a client checks its own log against the fetch. I say so in the contract. |
+| The relay's length is fixed and public before the first link-window | `Warden.run`, `deployment.json`, `check` | Kept. **An early end** would change `Warden.run` and what `check` counts, both the relay's trusted side, and the key is sized to the windows. I leave it out of this pull request: a session that outlives its load certifies empty link-windows, and costs their time and signatures. If the demo needs it, it is a later verb that changes no flag of this one. |
+| The client is on the gate, beside the relay | `rehearse` (`--listen 127.0.0.1:0`) | The gate picks the listener's port and forwards the peer's client port to it (line 4 of the contract). |
+
+## Also
+
+- #9782 (the table's `SERVE_ARGS`): its node run `r20261113-182526-cb56` is not read yet; its result goes into the body next and I send you one line.
+- Next: the contract into the gate's docstring and the runner's header, pushed, and its commit to you.
+
