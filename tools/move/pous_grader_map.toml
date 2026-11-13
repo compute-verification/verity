@@ -1,0 +1,42 @@
+# The PoUS grader's move: what `tools/move/layout.py --map tools/move/pous_grader_map.toml` moves and rewrites.
+#
+# The Lake package `pous_grader` (`verity/protocols/pous/lean/`: the grader, its driver `grade.sh`, the trusted-file
+# hashes and the submissions) becomes `tools/pous_grader/`: it grades a proof submitted for one of PoUS's open lemmas
+# and is no part of the protocol, so it leaves `verity/`. The row moves every file under it and rewrites each path that
+# names it, and each path inside it that names another place from its own directory: the trusted-file list's
+# `../../../../security/...` and `check.sh`'s, which sit two directories deeper today than after the move. Every digest
+# stays: the package requires no package by path, so its `lakefile.toml` and `lake-manifest.json` keep their bytes, and
+# `grade.sh` finds the proofs package through the trusted-file list, so it names no directory a move renames.
+#
+# What stays: every other file of `verity/protocols/pous/`, every Lean file's bytes ([rewrite] exclude: a path in a Lean
+# comment keeps the old name until an edit of that file takes it, and the analysis's files that name the grader are
+# among those the trusted-file list pins), and the package's name, its lock and its records. No module, root or Lean
+# name changes: the package holds no Python, and a Lean module is named from its package's root. The format is
+# `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/protocols/pous/lean/" = "tools/pous_grader/"
+
+[retired]
+# the directory this map empties: `layout.py` refuses a tracked file under it that has no row
+paths = ["verity/protocols/pous/lean/"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), the
+# archive, fixtures, every Lean file (above), and the tree file (`tests/tree.toml`), whose not-yet lines name each path
+# where it is before its move: a move doesn't edit it, and a line whose move landed is its owner's to delete.
+exclude = ["fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "*.patch", "**/lake-manifest.json.lock", "tools/move/**",
+           "archive/**", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "**/*.lean", "tests/tree.toml"]
+# Rewritten though a pattern above matches: the registry of fetched fixtures and the fixtures' READMEs.
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md"]
+
+[split]
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`): the directory holds no Python, so no import names it.
+"verity.protocols.pous.lean" = "tools.pous_grader"
