@@ -1,7 +1,7 @@
 """CIR-274 (REQBLOCK): `scratch/cir271/collect43.py` with the W ranks compiled in parallel, one process a rank (fork), then
 composed as `tp_steps.compile_tp` composes them, and `pipeline.tp.wires.sites_circuit` over the bindings. A rank's
 `RankSites` comes back with its Definitions by reference (a registered one by id, a binding as its Definition and record),
-so the parent's are the ones it would have built. Run from adapters/vllm:
+so the parent's are the ones it would have built. `interface.layout` is computed once a Definition. Run from adapters/vllm:
 
     ../../.venv/bin/python ../../scratch/cir274/collect_par.py OUT LAYERS LP
 
@@ -36,6 +36,21 @@ from verity_vllm.program.tp_workload import TpWorkload  # noqa: E402
 
 from verity.circuits import codec as C, defs as D  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
+from verity.commitments.windows import interface as I  # noqa: E402
+
+_LAYOUTS: dict[int, tuple] = {}
+_layout = I.layout
+
+
+def _layout_once(fn):
+    """`interface.layout`, a function of its Definition alone, computed once a Definition (the window's 4-layer profile spends
+    nearly all of `sites_circuit` recomputing it)."""
+    if (got := _LAYOUTS.get(id(fn))) is None:
+        got = _LAYOUTS[id(fn)] = (fn, _layout(fn))
+    return got[1]
+
+
+I.layout = _layout_once
 
 
 def _rebind(defn, bindings):
