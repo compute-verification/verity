@@ -117,6 +117,7 @@ abbrev POUS_MEMORY_CHALLENGER_COIN : String := "verity-pous/memory-challenger/co
 abbrev POUS_MEMORY_CHALLENGER_ROUND_RECORDS : String := "verity-pous/memory-challenger/round-records/v1"
 abbrev POUS_MEMORY_CHALLENGER_SESSION_LOG : String := "verity-pous/memory-challenger/session-log/v1"
 abbrev POUS_MEMORY_CHALLENGER_SESSION : String := "verity-pous/memory-challenger/session/v1"
+abbrev POUS_MEMORY_CHALLENGER_SETUP_RECORD : String := "verity-pous/memory-challenger/setup-record/v1"
 abbrev POUS_MEMORY_CHALLENGER : String := "verity-pous/memory-challenger/v1"
 abbrev POUS_ROUND_RECORDS_FRAME_V3_SHA512 : String := "verity-pous/round-records/frame-v3-sha512/v1"
 abbrev POUS_STORAGE_PROFILE : String := "verity-pous/storage-profile/v1"

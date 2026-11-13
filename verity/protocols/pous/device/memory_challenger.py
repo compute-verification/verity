@@ -60,6 +60,12 @@ the memory challenger role's digest `lms.memory_challenger_message(I, session, r
 test signer's scheme starts with `TEST_PREFIX`; `register` never adds one, so a test-signed record is refused outside
 tests, as is an unsigned one.
 
+**Setup record.** With the key and under the session id it signs a session's record with, the memory challenger signs
+the store's setup (`sign_setup_record`): a `SetupRecord`, whether setup's check passed and the setup's published blocks,
+commitment, salt and root, as raw bytes under `SETUP_RECORD_TAG` (`SetupRecord.value`), never 64 bytes long, so never a
+session's record or the wipe's.  `setup_record_ok` checks one against a session's scheme, key and id.  The Lean
+`MemoryChallenger.SetupRecord` is the definition, held to these by difftest.
+
 Times are the challenger's monotonic clock in ns (`time.perf_counter_ns`, Linux's CLOCK_MONOTONIC); the challenger
 refuses a clock coarser than a microsecond (`CLOCK_RESOLUTION_NS`).
 """
@@ -100,6 +106,7 @@ COIN_TAG = b"verity-pous/memory-challenger/coin/v1\0"
 COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
 RECORD_BINDING = b"verity-pous/memory-challenger/round-records/v1\0"
 SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
+SETUP_RECORD_TAG = b"verity-pous/memory-challenger/setup-record/v1\0"
 SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
 SALT_LOG = "verity-pous/memory-challenger/salt-log/v1"
 COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
@@ -365,6 +372,102 @@ class SignedSession:
     def from_json(cls, doc: Mapping[str, Any]) -> SignedSession:
         return cls(SessionCommitment.from_json(doc["commitment"]), doc["ended"], tuple(Round.from_json(r) for r in doc["rounds"]),
                    doc["scheme"], bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]))
+
+
+def _field(b: bytes) -> bytes:
+    return len(b).to_bytes(8, "big") + b
+
+
+@dataclass(frozen=True, slots=True)
+class SetupRecord:
+    """What the memory challenger signs over a store at setup: whether setup's check passed, and the setup's published
+    outputs, its blocks, commitment to `W`, salt and root.  `value()` is the record's bytes, never a digest:
+    `SETUP_RECORD_TAG ‖ outcome byte ‖ u64 blocks ‖ [commitment] ‖ [salt] ‖ [root]`, the outcome byte `1` when setup's
+    check passed and `0` when it did not, each `[·]` a u64 big-endian length then the bytes.  It is at least 79 bytes
+    long, so never a session's record or the wipe's, which are 64-byte digests."""
+
+    passed: bool
+    blocks: int
+    commitment: bytes
+    salt: bytes
+    root: bytes
+
+    def __post_init__(self) -> None:
+        if type(self.passed) is not bool:
+            raise TypeError(f"passed is True or False, not {self.passed!r}")
+
+    def value(self) -> bytes:
+        return (SETUP_RECORD_TAG + bytes([1 if self.passed else 0]) + self.blocks.to_bytes(8, "big") +
+                _field(self.commitment) + _field(self.salt) + _field(self.root))
+
+
+def setup_record_message(ident: bytes, session: bytes, record: SetupRecord) -> bytes:
+    """The role's message the setup record is signed as under the key whose identifier is `ident`:
+    `lms.memory_challenger_message(ident, session, record.value())`."""
+    return lms.memory_challenger_message(ident, session, record.value())
+
+
+_SETUP_KEYS = frozenset({"blocks", "commitment", "passed", "public_key", "root", "salt", "scheme", "signature"})
+
+
+def _hex(doc: Mapping[str, Any], key: str) -> bytes:
+    v = doc[key]
+    if not isinstance(v, str) or not re.fullmatch(r"(?:[0-9a-f]{2})*", v):
+        raise ValueError(f"setup.{key} is not lowercase hex")
+    return bytes.fromhex(v)
+
+
+@dataclass(frozen=True, slots=True)
+class SignedSetupRecord:
+    """A setup record with the scheme, public key and signature it is signed with."""
+
+    record: SetupRecord
+    scheme: str
+    public_key: bytes
+    signature: bytes
+
+    def to_json(self) -> dict[str, Any]:
+        r = self.record
+        return {"blocks": r.blocks, "commitment": r.commitment.hex(), "passed": 1 if r.passed else 0,
+                "public_key": self.public_key.hex(), "root": r.root.hex(), "salt": r.salt.hex(), "scheme": self.scheme,
+                "signature": self.signature.hex()}
+
+    @classmethod
+    def from_json(cls, doc: Mapping[str, Any]) -> SignedSetupRecord:
+        """Exactly `to_json()`'s object: an outcome other than `1` or `0` is not a record."""
+        if not isinstance(doc, Mapping) or set(doc) != _SETUP_KEYS:
+            raise ValueError(f"setup holds the keys {sorted(_SETUP_KEYS)} and no others")
+        passed, blocks, scheme = doc["passed"], doc["blocks"], doc["scheme"]
+        if type(passed) is not int or passed not in (0, 1):
+            raise ValueError(f"setup.passed: {passed!r} is neither 1 (setup's check passed) nor 0 (it did not)")
+        if type(blocks) is not int or blocks < 0:
+            raise ValueError(f"setup.blocks: {blocks!r} is not a natural number")
+        if not isinstance(scheme, str):
+            raise ValueError("setup.scheme is not a string")
+        record = SetupRecord(passed == 1, blocks, _hex(doc, "commitment"), _hex(doc, "salt"), _hex(doc, "root"))
+        return cls(record, scheme, _hex(doc, "public_key"), _hex(doc, "signature"))
+
+
+def sign_setup_record(signer: Signer, session: bytes, *, passed: bool, blocks: int, commitment: bytes, salt: bytes,
+                      root: bytes) -> SignedSetupRecord:
+    """The memory challenger's signature over a setup's outcome and published outputs, under the session's id."""
+    record = SetupRecord(passed, blocks, commitment, salt, root)
+    return SignedSetupRecord(record, signer.scheme, signer.public_key, signer.sign(session, record.value()))
+
+
+def setup_record_ok(signed: SignedSetupRecord, *, scheme: str, public_key: bytes, session: bytes,
+                    schemes: Mapping[str, Verify] = SCHEMES) -> bool:
+    """`signed` is under `scheme`, which `schemes` accepts, and `public_key`, and its signature verifies on its record's
+    bytes under `session`.  It does not read the outcome byte: a failed setup's record is signed like any other."""
+    if signed.scheme != scheme or signed.public_key != public_key:
+        return False
+    verify = schemes.get(signed.scheme)
+    if verify is None:
+        return False
+    try:
+        return bool(verify(signed.public_key, session, signed.record.value(), signed.signature))
+    except (ValueError, TypeError, OverflowError):
+        return False
 
 
 def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> CapacityBound:
@@ -703,9 +806,9 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 
 
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS", "PROTOCOL",
-           "RECORDS_TREE", "RECORD_SCHEMA", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening",
-           "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog", "SessionCommitment", "SessionLog",
-           "SessionLogError", "SignedSession", "Signer",
-           "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "coin_leaf", "collector_paused",
-           "covering_certificate", "lms_verify", "message", "records_root", "register", "resolution_of", "verdict",
-           "verify_coin"]
+           "RECORDS_TREE", "RECORD_SCHEMA", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
+           "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog",
+           "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",
+           "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "coin_leaf", "collector_paused",
+           "covering_certificate", "lms_verify", "message", "records_root", "register", "resolution_of",
+           "setup_record_message", "setup_record_ok", "sign_setup_record", "verdict", "verify_coin"]

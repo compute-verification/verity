@@ -9,6 +9,7 @@ public import MemoryChallenger.Judge
 public import MemoryChallenger.StreamedWipe
 public import MemoryChallenger.WipeJudge
 public import MemoryChallenger.WipeProtocol
+public import MemoryChallenger.SetupRecord
 public import MemoryChallenger.Difftest
 
 /-!
@@ -23,6 +24,8 @@ crypto, and each verdict behind the core protocol interface (`Core.Protocol`).
   that verdict on a record as its caller holds it; `Protocol`, the same verdict as a core protocol;
 * `StreamedWipe`, the streamed-label wipe's formats and its check of a signed session; `WipeJudge`, that verdict on a
   record as its caller holds it; `WipeProtocol`, the wipe as a core protocol (`verity/wipe/v0`);
+* `SetupRecord`, what the memory challenger signs over a store at setup, under a session's key and id, and its check
+  against a session (`setupRecordOk`);
 * `Difftest`, the functions `tests/` holds to the Python, among them those of `Attest`, the package `core_attest`'s
   period tree and checks, which this module imports.
 -/

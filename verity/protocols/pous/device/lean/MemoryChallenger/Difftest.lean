@@ -4,15 +4,16 @@ public import Difftest
 public import Lms.Sign
 public import Attest.Period
 public import MemoryChallenger.WipeJudge
+public import MemoryChallenger.SetupRecord
 
 /-!
 # The difftest's Lean half
 
 The functions `tests/` holds to `memory_challenger.py` and `streamed_wipe.py` through `verity_difftest.Port`, each over JSON
 in the formats of `MemoryChallenger.Protocol` (byte strings lowercase hex, integers naturals) and
-`MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, the streamed wipe's
-signed message and egress count, and a device's HSS role digests and checks (`Lms.Hss`, `Attest.Period`: the
-`range-u64` domain id, the period tree's root, the verifier's acceptance of a period and the liveness check).
+`MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, the setup record's
+bytes, message and check (`SetupRecord`), the streamed wipe's signed message and egress count, and a device's HSS role
+digests and checks (`Lms.Hss`, `Attest.Period`: the `range-u64` domain id, the period tree's root, the verifier's acceptance of a period and the liveness check).
 `memory-challenger-difftest` serves them (`Difftest.serve`). Each verdict's own difftest drives the executable its callers
 run, `memory-challenger-verdict` and `streamed-wipe-verdict`.
 -/
@@ -88,6 +89,24 @@ def lmsVerifyFn (j : Json) : V Json := do
   let some p := (SCHEMES ++ TEST_SCHEMES).lookup scheme | throw s!"no scheme {scheme}"
   pure (.bool (← lmsVerify p (← hex j "public_key") (← hex j "session") (← hex j "record") (← hex j "signature")))
 
+private def setupRecordOf (j : Json) : V SetupRecord := do
+  pure { passed := ← passedOfJson j "input", blocks := ← J.nat j "blocks" "input", commitment := ← hex j "commitment",
+         salt := ← hex j "salt", root := ← hex j "root" }
+
+/-- `SetupRecord(passed, blocks, commitment, salt, root).value()`. -/
+def setupRecordFn (j : Json) : V Json := do pure (hexJ (← (← setupRecordOf j).value))
+
+/-- `setup_record_message(I, session, record)`. -/
+def setupRecordMessageFn (j : Json) : V Json := do
+  pure (hexJ (← SetupRecord.message (← hex j "I") (← hex j "session") (← setupRecordOf (← J.get j "record" "input"))))
+
+/-- `setup_record_ok(SignedSetupRecord.from_json(setup), scheme=…, public_key=…, session=…)` over `SCHEMES` and
+`pous_test_signer.SCHEMES`. -/
+def setupRecordOkFn (j : Json) : V Json := do
+  let s ← decodeSignedSetupRecord (← J.get j "setup" "input")
+  pure (.bool (setupRecordOk (SCHEMES ++ TEST_SCHEMES) (← J.str j "scheme" "input") (← hex j "public_key")
+    (← hex j "session") s))
+
 /-- `streamed_wipe.message(commitment, ended, fill_start_ns, fill_end_ns, batches, egress_bits)`. -/
 def wipeMessageFn (j : Json) : V Json := do
   let c ← StreamedWipe.Commitment.ofJson (← J.get j "commitment" "input")
@@ -162,6 +181,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("coin_digest", coinDigestFn), ("coin_tree", coinTreeFn), ("verify_coin", verifyCoinFn),
   ("records_root", recordsRootFn), ("header", headerFn), ("message", messageFn), ("block_digest", blockDigestFn),
   ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn), ("wipe_message", wipeMessageFn),
+  ("setup_record", setupRecordFn), ("setup_record_message", setupRecordMessageFn), ("setup_record_ok", setupRecordOkFn),
   ("wipe_egress_units", wipeEgressUnitsFn), ("party_key_message", partyKeyMessageFn),
   ("period_root_message", periodRootMessageFn), ("liveness_message", livenessMessageFn), ("hss_verify", hssVerifyFn),
   ("domain_u64", domainU64Fn), ("attest_root", attestRootFn), ("attest_check", attestCheckFn),
