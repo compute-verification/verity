@@ -12,28 +12,24 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
-import importlib.util
 import math
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
+from conftest import load
+
+from verity.commitments.merkle import tree_levels
+from verity.protocols.pouw.verifier import audit
+from verity.protocols.pouw.verifier.audit import ROW_SCHEMA, TILE_SCHEMA, activation_binding, rows_domain
+from verity.protocols.pouw.verifier.protocol import Matmul, Shape
+from verity.protocols.pouw.prover.schemes import pearl_c as C
 
 KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
-_spec = importlib.util.spec_from_file_location("pearl_c_sm120_run", KERNEL / "run.py")
-R = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(R)
-
-from verity.commitments.merkle import tree_levels  # noqa: E402
-from verity.protocols.pouw.verifier import audit  # noqa: E402
-from verity.protocols.pouw.verifier.audit import ROW_SCHEMA, TILE_SCHEMA, activation_binding, rows_domain  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c as C  # noqa: E402
-
+R = load("pearl_c_sm120/run.py")
 #: pearl_c_sm120.cu's PD_VARIANT_LIST, the variants the cubin builds
 SERVED_LIST = re.search(r"#define PD_VARIANT_LIST\(X\) (.*)", (KERNEL / "pearl_c_sm120.cu").read_text()).group(1).strip()
 SERVED = tuple(int(x) for x in re.findall(r"X\((\d+)\)", SERVED_LIST))
@@ -305,11 +301,7 @@ def test_pd_commits_zero_form_writes_its_bytes_without_reading_the_zero_rows(hos
     """pd_commit_t's Z form (pd_commit_zero_V, as pearl_c_sm90.cu's pd_commit_g takes it) at 64 rows whose last 16 are zero,
     given `grouped.zero_state` at p14 and the first zero row at i4, writes pd_commit_V's every byte in each served variant,
     and still does with those rows nonzero: it takes the zero row's digest (`pearl_c.row_digest`) for them unread."""
-    if "pearl_c_sm90_grouped" not in sys.modules:
-        spec = importlib.util.spec_from_file_location("pearl_c_sm90_grouped", KERNEL.parent / "pearl_c_sm90" / "grouped.py")
-        sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(sys.modules[spec.name])
-    G = sys.modules["pearl_c_sm90_grouped"]
+    G = load("pearl_c_sm90/grouped.py")
     m, mr, n, k, idx = 64, 48, 384, 1024, 5
     rng = np.random.default_rng(3)
     a = rng.integers(0, 256, (m, 4 * k), dtype=np.uint8)
