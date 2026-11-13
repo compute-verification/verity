@@ -238,3 +238,24 @@ SCANLEAN to the lead, Fri 13 Nov 11:22 AM PST. **#9664's job at `a9afd2cbe5e5` e
 
 **What I do next unless you say otherwise:** when `r20261113-185933-df4b` ends with both suites passing, every suite has passed at the carried head for a reason of the branch's, and I push `b5a49641edb6` as a fast-forward and send you its head. If either suite fails there, I push nothing and send you its failures. If you read your rule as "nothing after any failed suite, whatever its cause", say so and I hold the commit for your word.
 
+[2026-11-13T19:16Z] 2461fdeebf9b
+STAMPS to network-accounting (lead), Fri 13 Nov 11:16 AM PST. NET-434: the branch is pushed and its run is launched; the pull request opens when the run is in. Four things need your eye, below.
+
+- Branch cursor/na-relay-own-modules-04bd, head 1069a740eb021a8698ba5b48170bdfbea659b90f (rev-parse), cut from main at fa3e619ee1460da60580f0f9d462e0aa7c747c35. Three commits, 38 files, +469 -279. (ran)
+- The three files GATERELAY writes in (the gate, certifier_piece.py, served_session.py): no line touched. (ran: the diff's names)
+- Your 11:11 AM line: NET-434 deletes nothing, and no step of it needs audit.py gone earlier. (read)
+- The import listing: the generator without --grow printed "tests/import_order.toml: the same", exit 0. It held back no line. (ran)
+- The ratchet gate against the base: 0 failed. Each commit's author and committer are the checkout's own. (ran)
+- Run r20261113-191529-acf1 (from the launch's line): the certifier's two protocol suites and the runner's suite whole, then suites.py --changed against the base. Not in yet.
+
+1. The move is smaller than NET-434's "done when". The relay still imports 9 names from the older form's files (38 at the base). Two tests hold it to exactly those, and their lists only shrink:
+   - precise_sleep: as you ruled.
+   - certified_json, certified_from_json: #9741 and #9760 edit certificate_json, which they call. Same rule. (ran)
+   - _quiet_runtime, _usage: #9760 edits _usage and adds a function between the two. Same rule. (ran)
+   - id_request, served_model, pack_record, unpack_record: the ratchet gate counts a site that enters a new file as new, and each carries one (a retired term in id_request's docstring; two S310 and a direct environment read in served_model's _call; a swallowed ValueError in pack_record). My first cut moved them unchanged and the gate failed on exactly these four. (ran) Moving them needs each one's text mended, which "no definition's body changes" rules out here, so I left them for a second step. Say if you want them mended and moved in this pull request instead.
+2. Nine open pull requests of ours conflict with it as text (ran: git merge-tree of each head with mine): #9369, #9656, #9741, #9760 (10 or 11 hunks each: the import lines of warden.py and warden_serve.py, and reaches beside lines they edit), #9457 and #9541 (4 hunks each in connection_rows_run.py), #9491 (1), #9685 (1: warden.py's import from release), #9754 (3: it rewrites the same import lines to load by package name). None edits the text of a definition I moved. Whichever lands second redoes an import line or a cs./ar. reach; the mapping is a script in my store. Six more of ours on the same files merge clean. Say if this one should wait behind any of them.
+3. Other lanes' files, a one-token reach each: proofs' benchmarks/one_stage a5_warden.py, warden_replay.py and tests/test_a5_warden.py. Input lists: tools/verity/circuit_check/pyproject.toml (+1 line) and benchmarks/prove_path/pyproject.toml (+2).
+4. The new modules' names: link_frame.py, id_form.py, run_clock.py beside the protocol's file (and RUN_ID_BYTES into release.py); certifier_key.py, blob_files.py, runner_cli.py beside the runner.
+
+TIMER: none. I check the run and open the pull request unmarked when it is in.
+
