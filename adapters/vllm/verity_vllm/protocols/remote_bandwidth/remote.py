@@ -64,6 +64,7 @@ from verity.protocols.accounting.poub.verifier import codec as rcodec
 from verity.protocols.accounting.poub.verifier import receipts as rb
 
 from verity_vllm import config
+from verity_vllm.engine.handle import core_or_none, engine_of
 from verity_vllm.errors import Refused
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
@@ -684,8 +685,8 @@ class CommitSession:
         self.install()
 
     def check(self, llm: Any, runner: Any) -> dict[str, Any]:
-        vc, why = llm.llm_engine.vllm_config, []
-        if getattr(getattr(llm.llm_engine, "engine_core", None), "engine_core", None) is None:
+        vc, why = engine_of(llm).vllm_config, []
+        if getattr(core_or_none(llm), "engine_core", None) is None:
             why.append("the engine core in another process")
         if vc.scheduler_config.async_scheduling:
             why.append("async scheduling resolved on")
