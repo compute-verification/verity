@@ -202,7 +202,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   run, `members_run`). The pass that reads every member's files (`membersFiles`) is compiled as `membersFilesKept`,
   proved equal to it: it reads the blobs' lookup tables once and a circuit file once for the members that name it,
   and keeps of the file the circuit's own verdicts and the circuit without its rows (`Spot/CircuitKept.lean`), so
-  its work on a circuit's rows is by the file and not by the member. The executable's `members PARAMS EVIDENCE` (`Spot/MembersParse.lean`,
+  its work on a circuit's rows is by the file and not by the member; and it parses and hashes the program, and
+  evaluates the partition's query on it, once for the members that read it under the parameters' partition, so its
+  work on the program is by the program and not by the member. The executable's `members PARAMS EVIDENCE` (`Spot/MembersParse.lean`,
   `proofs.members_parsed`) prints what its parsers read of the two files, with the words `parsed, not checked` and no
   verdict. A window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`).
