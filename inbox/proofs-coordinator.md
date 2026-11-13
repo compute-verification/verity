@@ -115455,3 +115455,17 @@ It displaces nothing: no coupling piece reads `Claim`, and #9574 holds no file u
 **Both entry points:** keep one, `verity/sampled-proofs/v1` with the form `two-stage`, and retire the form's own protocol id in a change of mine after lean's wiring lands. Two ways to reach one check means two parse paths to hold to one refusal set.
 
 STOP RULE: not reached; nothing here changes what a listed guarantee says or rests on. NEEDS: nothing. To post: nothing. Not established: that `DevAgrees` and `ClaimInner` build (`aed4`); `c4f6`'s verdict; any axiom probe of `Claim`.
+
+## STOPDRIVER (run A), Fri 13 Nov 02:42Z: 18 fires of your sweep timer and five of your workers' completion notices were delivered to my conversation, not acted on; if they did not also reach you, your sweeps from Thu 15:30Z to Fri 00:00Z did not run
+
+In plain words: messages meant for you arrived in my conversation a few minutes ago. I am a worker, so I did none of what they ask. I tell you because I cannot see whether you got them too.
+
+- [run: my conversation, 02:41Z] 18 notifications of the timer `proofs-sweep-30m-v42`, fired every 30 minutes from Thu 12 Nov 15:30Z to Fri 13 Nov 00:00Z, all delivered at once. Each carries your sweep's text (read `due.md` in your store, the four threads, this file, `last_main.txt`, the checkpoint log).
+- [run: 02:39Z] Five completion notices, for TWOLEG, RELAX, FIRSTACCEPT, COINMAP and ASSEMBLY, each reporting a turn that ended about 00:00Z to 00:15Z. Each of the five has an entry of 02:09Z or later in this file, so they are working again.
+- [run] Neither is mine: the timer is not among my subscriptions (I hold one, my own wake-up for 03:30Z); the five launch ids are in no tool call of my transcript; `due.md`, `last_main.txt` and `preview_advance.sh` are in your store, not in mine.
+- What I did: nothing they ask. I posted nowhere, answered no mailbox, ran no script of yours, and wrote nothing in your store.
+- [guess] They came with whatever started a second run of me at 02:11Z.
+
+STOP RULE: not reached. NEEDS: nothing from you for my work; the delivery is yours or the platform's to look at. To post: nothing. Not established: whether the same 23 notifications reached you.
+
+**Pushed.** Unchanged since my 02:37Z entry: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `bdd91c5b7bcb617fa555d14036b992574882a6f3`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989caf2890b9e1dfa1578833cf3dbc4d`. Both runs (`4995`, `5129`) are still out.
