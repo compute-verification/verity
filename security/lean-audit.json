@@ -17099,6 +17099,58 @@
    },
    "type_hash": "5dce48d50f5d44e873cafe044f8c7c4d19868f47d4f9e0bcd82c8da9e92e8470"
   },
+  "FlockSoundness.Audit.audit_executionPhase_split_of_record": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Audit.audit_executionPhase_split_of_record {n m : Nat} {σ : Fin n → Fin m} {cl : Fin n → Finset (Fin n)}",
+    "  {Reg : Type} {session : Finset (Fin n) → Reg → Verity.Game Bool} {C : Nat} {call : Fin m → Fin C}",
+    "  {w v f : Fin m → Nat}",
+    "  (A :",
+    "    FlockSoundness.Audit.Analysis",
+    "      ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.executionPhaseK σ call w f 27713) ⋯).closure cl)",
+    "      Reg session)",
+    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
+    "  (hone :",
+    "    ∀ (s : Fin m),",
+    "      instLTNat.lt 0 (w s) →",
+    "        Eq (FlockSoundness.Audit.Law.callWork σ call w (call s))",
+    "          (instHMul.hMul (w s) (FlockSoundness.Audit.Law.stratum σ s).card))",
+    "  (hN : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v))",
+    "  (hfy :",
+    "    ∀ (s : Fin m),",
+    "      instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (FlockSoundness.Audit.Law.stratum σ s).card)",
+    "        (instHMul.hMul (f s) (FlockSoundness.Audit.Law.totalWork σ v)))",
+    "  (σ' :",
+    "    (FlockSoundness.Audit.audit",
+    "        ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.executionPhaseK σ call w f 27713) ⋯).closure",
+    "          cl)",
+    "        Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (Verity.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Or",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ w)",
+    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))))",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ v)",
+    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ v cl (A.wrong (A.committedOf σ')))))))",
+    "      (FlockSoundness.Audit.audit",
+    "        ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.executionPhaseK σ call w f 27713) ⋯).closure",
+    "          cl)",
+    "        Reg session)",
+    "      σ')",
+    "    (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) εks) δlink)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "f6b340b10b34acbc14534834589b7499617ce19e7c4652bca93448e2f40abb2b"
+  },
   "FlockSoundness.Audit.audit_profile": {
    "owner": "@proofs",
    "signature": [
@@ -17119,56 +17171,6 @@
     "reads": []
    },
    "type_hash": "4814a27e5c54996ff912db20d9f833f62003ca6046b4e4b85e1e660db37e1735"
-  },
-  "FlockSoundness.Audit.audit_window_split_of_record": {
-   "owner": "@proofs",
-   "signature": [
-    "FlockSoundness.Audit.audit_window_split_of_record {n m : Nat} {σ : Fin n → Fin m} {cl : Fin n → Finset (Fin n)}",
-    "  {Reg : Type} {session : Finset (Fin n) → Reg → Verity.Game Bool} {C : Nat} {call : Fin m → Fin C}",
-    "  {w v f : Fin m → Nat}",
-    "  (A :",
-    "    FlockSoundness.Audit.Analysis",
-    "      ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.windowK σ call w f 27713) ⋯).closure cl) Reg",
-    "      session)",
-    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink)",
-    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
-    "  (hone :",
-    "    ∀ (s : Fin m),",
-    "      instLTNat.lt 0 (w s) →",
-    "        Eq (FlockSoundness.Audit.Law.callWork σ call w (call s))",
-    "          (instHMul.hMul (w s) (FlockSoundness.Audit.Law.stratum σ s).card))",
-    "  (hN : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v))",
-    "  (hfy :",
-    "    ∀ (s : Fin m),",
-    "      instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (FlockSoundness.Audit.Law.stratum σ s).card)",
-    "        (instHMul.hMul (f s) (FlockSoundness.Audit.Law.totalWork σ v)))",
-    "  (σ' :",
-    "    (FlockSoundness.Audit.audit",
-    "        ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.windowK σ call w f 27713) ⋯).closure cl) Reg",
-    "        session).Strategy) :",
-    "  ENNReal.instLE.le",
-    "    (Verity.Game.prob",
-    "      (fun o =>",
-    "        And (Eq o.fst Bool.true)",
-    "          (Or",
-    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ w)",
-    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))))",
-    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ v)",
-    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ v cl (A.wrong (A.committedOf σ')))))))",
-    "      (FlockSoundness.Audit.audit",
-    "        ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.windowK σ call w f 27713) ⋯).closure cl) Reg",
-    "        session)",
-    "      σ')",
-    "    (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) εks) δlink)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "73b48a52c85dff5069fc2f52551899db7c325d0b7836c049e984851ff669b153"
   },
   "FlockSoundness.Audit.audit_work_floor": {
    "owner": "@proofs",
@@ -54222,12 +54224,12 @@
    }
   },
   "Proofs.Flock.Soundness.Audit.Window": {
-   "digest": "693fb3da4a6b304c9eb272312580a2e0d762203f6a6cd280504b088a2c81c2ab",
+   "digest": "a3dce255ea2a4d64b3c3185366bab7de727df126c374aeefff7016c754e9fd06",
    "definitions": {
     "FlockSoundness.Audit.Law.callK": "8671f5eb3a6edd693d25456e4a7d6001a12f2187bc6a091ba1ee0ca80e91e8b8",
     "FlockSoundness.Audit.Law.callUnits": "b34a2a8fe8e026de957966b5ebe14dedf05c25d8a07f55bc4739b5e9e332487f",
     "FlockSoundness.Audit.Law.callWork": "63fe3beb07ce66471bc7dfd36a4e0408cfbbf3d18ac3dfc803bfef807b1ecd59",
-    "FlockSoundness.Audit.Law.windowK": "5367cefae30ea4a48794607c1d01941738879d891a99e2911104e937f3406d8c"
+    "FlockSoundness.Audit.Law.executionPhaseK": "99a74f83483723ef21eb8aa2e037660505f1c78b0381ab9ce14d1e4ba263e31e"
    }
   },
   "Proofs.Flock.Soundness.Audit.Work": {
@@ -59356,7 +59358,7 @@
    }
   },
   "Spot.ChallengerSession": {
-   "digest": "6a8c3941a4a349f3d1356d02d58a036ae018f3415022fbc12a8b54e1d64d2935",
+   "digest": "0fa80c84fdd85d10dec172406e29b5de41f64a29897ab3833c1ee3e78dca27f2",
    "definitions": {
     "Spot.Challenger.Audited": "67907e70e13df8e0a71d4816b64126a9e02156a2a7f4c1774e923ffbcb2780de",
     "Spot.Challenger.Audited.circuit": "a73b3aad92abf4ba22c25228c2c6b5e86d2861b68fec367d0b459573c172b2c4",
@@ -59368,8 +59370,9 @@
     "Spot.Challenger.Audited.recordLeaf": "4fb23bbaa7c23a44c0b11886116d9e8810204bc3464f3e27e06493d3626100f3",
     "Spot.Challenger.Audited.refusedHellos": "20f0945aa4208178d9e1e5d250acf0cb511dd7c273cb85b37f40d982590477e7",
     "Spot.Challenger.Audited.session": "93767b21aab806676b870651d843a90a55c1c4b0f5f2df983abda085da629033",
+    "Spot.Challenger.CHALLENGE_PHASE_FORM": "d1268277aeafbbb974a502971d48e293c7358ff6d7bc2ea46eacc2a6b83e4fab",
     "Spot.Challenger.CLOSE_FILE": "fadc9ba9e35218af1e0f6667a72de9b061e31718bf22da9001f1d110e8dfb388",
-    "Spot.Challenger.CLOSE_FORM": "ccd462d7e73e698ea2e41534a4bd4ac4ea103920eb080220369a8d80479d4f9d",
+    "Spot.Challenger.CLOSE_FORM": "1a2bf334e17095d5e166e55a5c1b3d6768a2a41c8e34fa8a0b6c519ea59c4a2d",
     "Spot.Challenger.CLOSE_ROLE": "f6d4e2cd13a3c7667f8f086d76905c1107e030395ca5484b5e4abbdd3f5d7ad8",
     "Spot.Challenger.ChallengerClose": "fb78752d934123ae1e7c74e864bd4ce6cddfab1251e4a9ca02bf296747b4c1cb",
     "Spot.Challenger.ChallengerClose.chain": "0e0facfb789d0f4bf759db400547845652b15c2b31419a5d51f94c908f7a2eb6",
@@ -59402,11 +59405,11 @@
     "Spot.Challenger.LedgerEntry.text": "9aae972af729f04f943642dfde0f03673ee93dfb1aefafe5cb97af2ef7b7d103",
     "Spot.Challenger.MAIN_FORM": "669871bfa92bc7d29c6e51d6cacb1ba9b7de7daba7e5907bf7d7cb69cc916bbe",
     "Spot.Challenger.MAX_CAP": "87e760415eafc4614078d8102b2641d8fe7ec955843c1982ca4b6562b355a5df",
+    "Spot.Challenger.MAX_CHALLENGE_PHASE_ID": "bbf5bb7cc6d7388036f49b214753fa64873b0cb1af073ab02c8d234d704e20fc",
     "Spot.Challenger.MAX_LEDGER_LINE": "c2f9e56ba524e5b70225cd8d4e11ea0af3c841a2ed2850be2a0a8965878037e6",
     "Spot.Challenger.MAX_LOG_LINE": "0108696237df272e9eb4892813a3f67a43899e875a8febbc809c55c49494a0a3",
     "Spot.Challenger.MAX_LOG_LINES": "c54db0c2bc9ef2e3821ba144853fab4feddb5b352ed550dbd7c4898899265c2d",
     "Spot.Challenger.MAX_MINUTES": "5e149430ce56cbded7ed79cb7ff5fd85d1c73c3ab7448edf099834dce4828ffb",
-    "Spot.Challenger.MAX_SESSION_ID": "270c602d143d4abe89df9f8b88e7c41ebb9432464391bc0414210ff6cedc8c89",
     "Spot.Challenger.MAX_TREE_LINES": "185b46461690cd2f43d966d9f02eca5b2979c0a94ae9ff2a293dbecabfc8e22c",
     "Spot.Challenger.MonitoringPeriod": "f798e136eb0fc56245acdcc5fd0674a0ca2cb49d256de03d1e6882f03d65d1eb",
     "Spot.Challenger.MonitoringPeriod.cap": "cbc30aa90e9841952a38b28268ae8acdda6c152e296db4c3e6c740f0c1764110",
@@ -59423,22 +59426,21 @@
     "Spot.Challenger.PINS_FORM": "44e7b3943a1ccd4bc91767de1df72e5662da9f14c4dbfaa1b7e9d81497dccdd9",
     "Spot.Challenger.RECORD_FILE": "d3bf257d0794bc215126831407febe3188283735bff362dd185769d41e3b735c",
     "Spot.Challenger.RESERVED": "e567916873339eb2563aef78daf00322326f23016b2e0aa8034dc413c9f2b75b",
+    "Spot.Challenger.RUN_FORM": "82492004ec49998ce6d4d3b620b65706f91208efcb2111e3cda7343e0f3dc0fe",
     "Spot.Challenger.Reserve": "6914f46ca08972dd7b58136857940fa36d349234eedf35372e1c55a0674f49d7",
     "Spot.Challenger.Reserve.entry": "ef9f9de438e22bd738652221f459127f77bd6a046d598400de41bbc18c5b2cbe",
     "Spot.Challenger.Reserve.period": "84f98d0b49e29f8e0b119b446d94a9cc421ee9bad39088a8a8562467594459b5",
     "Spot.Challenger.Reserve.session": "34bf7b29136ff48041c7ebf346248a3be6ead2b2e52a9a26b9109f6b80b7481d",
     "Spot.Challenger.Roots": "9dbc5c9e1d2e56491d759432cd69c78885beb8d7e139c99443b4bb083f5ba709",
     "Spot.Challenger.SEALED_FILES": "6c74f43da2c17c6705afda2e0f77d91a42409ad74c9d1163dbb6b1db95237bb9",
-    "Spot.Challenger.SESSION_FORM": "74fa6cb14b8e8635aa240a7efa9e6dbcba8b9a5c442f801be9f126f541c16abd",
     "Spot.Challenger.TREE_EVENT": "1f1ab52dd34825e61439beb71b2fbf3e81d6f8d30247c658cb4471492f77e96c",
-    "Spot.Challenger.WINDOW_FORM": "abd973a27b4dfbc8dc013fe6a27f2dd15c742c7e1d4f0de65c7750dfed55c19a",
     "Spot.Challenger.Win": "c9c9af174c2ed79fe5ec5ce02ec43fdf0e93a0047959ff0fd65455d01c85d455",
     "Spot.Challenger.Win.ended": "abfb2a2086f4c717ea9c96f73eb6aa6064a2a18f9048d1da93e10f8d382b7877",
     "Spot.Challenger.Win.leaf": "970d3ddae2c569a36fbd74fabb74795d92380740919b88f0a4f968ecc402a627",
     "Spot.Challenger.Win.opened": "0dfa582ecd30165302bd3385b2369a19d7b519e724dbefffc493d9e6fb59d5f5",
     "Spot.Challenger.Win.root": "addbbb4bfd24443201b29060198f2e1765a9ec47a710d514f14fd173b0f2da28",
     "Spot.Challenger.ZERO": "485851f6467b12f818f58c0905c5c43e6d826f93a1de28d925a827df6b163520",
-    "Spot.Challenger.auditedOpen": "8b85d907bbc7c9c020316594f48e4097d969a7ba400457b58db2872d51cbf93b",
+    "Spot.Challenger.auditedOpen": "bf8b687ad7d543ace87f3f2842f788e432c44a6dd0e86287e42c62321b8aa5c9",
     "Spot.Challenger.auditedSession": "889d0e2c91d2bdaa254df3466b304172e100d27ee52ac59b02d21e377fdc1dd1",
     "Spot.Challenger.checked": "f274ccd2dd3283a1d4e68a0d4d9d64c8e622ab49bd8c074ec067c8901c7666d0",
     "Spot.Challenger.circuitReason": "4f82835da0c27d15b5754ed206ab67f2969cce5f3dd45efa4df2a3f06f39b73e",
@@ -59456,7 +59458,7 @@
     "Spot.Challenger.isCap": "2d90e69f6440dbb97cc83b311119bfe95b530298922b09786f80b31845c16e6b",
     "Spot.Challenger.isCircuit": "9369c9f74a6c09ffd0def438d49f86f3cb067e4324cfdec1efc96b4e3974a7e4",
     "Spot.Challenger.isReservedSession": "4a69796184ab8e03297e3f5a4478712f07f3b9ba45156d6aab00d5801e43e3bf",
-    "Spot.Challenger.isSessionId": "b052b2f7dfce92a39b783972fd2083f97d334031af30fa408ccda8fb85f9e51c",
+    "Spot.Challenger.isSessionId": "b7f68a5a8b7c6b09040c78512a86ed52ec734570375c52fbfcd664261b373995",
     "Spot.Challenger.isWindow": "841e643d638611a463e82d02155a0ef4a3bd88a08a91e3befa656be717850bb4",
     "Spot.Challenger.laneOf": "3ba007928485ea0a0d8a08cebe90f7ba68ddc127e85990e7d39f5a9bad5c7759",
     "Spot.Challenger.later": "58d88c005130eedebd51e923f0619b4cfd07cf819ebe27124db98e2ce87d6c5e",
@@ -59470,7 +59472,7 @@
     "Spot.Challenger.pinnedSession": "025caa49f6b2e7d707b945855078969dc55a1bb865ba7c24738729b29de4ce30",
     "Spot.Challenger.pinsReason": "b54bdd00c4d273bd5eed6c05b88929d12e34785fbb058ba17a033be25abbaa9d",
     "Spot.Challenger.releasedRootsOf": "f6efdc7f4e3583700eee2975e7e7cd56b784443111f8e935ed685ceca06f130f",
-    "Spot.Challenger.sessionNamed": "075341074061e2a13eb0362e556d155b0935895a1ff55a2f28572c36e4f7b8ea",
+    "Spot.Challenger.sessionNamed": "5bd114d07ba60fef52f3dabaed94fb0374a3b033024f4e0ad3f56ce6cc99a34b",
     "Spot.Challenger.sessionOf": "93326ce6279fe7cef0383674d094c0c4134a122b62c065c785af27b6d102a7cf",
     "Spot.Challenger.treeLine": "d151b9c394dd0f77207eff5243c79a148ac33ccc204a06b9922aa71da348a358",
     "Spot.Challenger.trustedSessionOf": "d3efff05831b44caa53671b0dff21bb7362a97b83874419aedb1aaef448859a8",
@@ -59501,7 +59503,7 @@
    }
   },
   "Spot.ChallengerTrees": {
-   "digest": "0a260660f3be4b3de4e6d354e63f97f0fe1ab8e323a39a051478479c3f7f2348",
+   "digest": "f9b680cdb11308118971d4465861d2d4b65a846a3e9ab92131993e08c00f4086",
    "definitions": {
     "Spot.Challenger.CLOSING_ROUND": "d5b52ed5bbc911171fcde44965fc16d98f0e7745a9c511556b7187fea8a147f4",
     "Spot.Challenger.EXTRA_OPENING": "cd951e71f0cc22850ce69d91662de65f1c56936351b021115fff7c346dec9c71",
@@ -59553,7 +59555,7 @@
     "Spot.Challenger.sessionsTreeReason": "f319a9a42207e67aae111ca28870607ca334507a4cc66f4deb0a5ae15b9758d8",
     "Spot.Challenger.trustedTreesOf": "6dc6a3d322f244fdeed301636cfd424c71896a7fdc9939901a64453181424d7a",
     "_private.Spot.ChallengerTrees.0.Spot.Challenger.isHexN": "f64395dae2b481481fb338d4f8730ddd551baf681a0dcfa566c41739153688ac",
-    "_private.Spot.ChallengerTrees.0.Spot.Challenger.isStream": "4173134f039b1afdc50502fed6068247db4344d6e99eab9e80f1584aed226a5d",
+    "_private.Spot.ChallengerTrees.0.Spot.Challenger.isStream": "309cd9c208507fa8b7d8e9821458813e988cea258fb66dcca1b3b228d442a179",
     "_private.Spot.ChallengerTrees.0.Spot.Challenger.strOf": "6c2dd601d7dcb3185d6862f2b82b3af5eeb7c3bb18898c1406d237da45453011"
    }
   },
@@ -60295,13 +60297,13 @@
    }
   },
   "Spot.Supplied": {
-   "digest": "c78a08e0630e23207f19973b0ad0f95378eaa3d6b9171017f5ab74f10c023a26",
+   "digest": "772536cb29a1500513fc1706666cd9ea121ed4fe94c29aaf8ff4de1aa08674e6",
    "definitions": {
+    "Spot.Supplied.RUN_SALT": "5c14501c4a700c03fd71848bc075f501397ff96dcfe33d3b9c97eba8f4926af3",
     "Spot.Supplied.Rows": "9ea3fe879313cec826c93ccd8e9bd6d38ab7dd085e00750198a87e2dc948eda6",
     "Spot.Supplied.SALT_BYTES": "0b23db9afdbca052397549d242aaa63a19c8cd47e30d75a8e9dfa18f9c1e85d9",
     "Spot.Supplied.SOURCES": "a2e5ca27fbc20849e3e89afec40911a29739b38626244c35f077694724fceee2",
     "Spot.Supplied.SUPPLIED_SALT": "bbb62d6b80fffa6eea2c9472cf38d43be8fd10aff097afa691e7c9c21df219c0",
-    "Spot.Supplied.WINDOW_SALT": "c0f44ae3371afd1e08529bfec5bb1e935b7cee76a1328fb14f4d9977228188ff",
     "Spot.Supplied.bytesLeaves": "71efef66b63a4b091d71ccbc79ace3ea049227807225d4f6c9940b2bbedf0e1f",
     "Spot.Supplied.digestLeaves": "258572b194e7c6dfebb87e355e6c32bf8f78f1e452932ffe52e6aecc14c02303",
     "Spot.Supplied.digests": "7331260433eb1558a3b697f2037e80db4de700b2c54aa007d7fae773508a4d85",
@@ -60314,7 +60316,7 @@
     "Spot.Supplied.salt": "e8347bcafefbb00cd680acb08929c63c64d9e5076cf854b4f2bb21abbbde51cf",
     "Spot.Supplied.sourceBytes": "46f81947ff19decbbdb4400ea3a3a1894011af5dda57738f508d53794a1c468b",
     "Spot.Supplied.sources": "f09f4e2282a1d3185bcfb0265b0c1a87e208ae299644d829a09d828d17df4db8",
-    "Spot.Supplied.windowSalt": "05d58e566e2197bbbdaa3cf7db8f72f1e8f919e3fad5fa7c9f98846f040da16b",
+    "Spot.Supplied.windowSalt": "4f56008a14c81472a8db26f65096fbf65da68b477b22dfd6f13336dc1e7fba90",
     "_private.Spot.Supplied.0.Spot.Supplied.decimal?": "fe8ea3956fc4dd7925b45be315c39e794afb66a3bed0f038e8fd68a4061d47fe",
     "_private.Spot.Supplied.0.Spot.Supplied.source": "6df8076cbf55e2405542f93dfde7cffa2a04130e071e0d999c75f73fb9b66577"
    }
