@@ -23,17 +23,25 @@ for it.  It accepts the run at P2's deployed point (`DEPLOYED`: `2^19` blocks of
 
 The first refusal is the reason (`Refused`), word for word the Lean's.  `check_at` takes another point and other schemes, for tests.
 `PousCheck.Run` (`pous-run`, in `check/`) is the check in Lean, held to this by `check/tests/test_run.py`; what its
-acceptance establishes is `RunCheckAccepts` (`security/Properties/Pous/EndToEnd.lean`), proved."""
+acceptance establishes is `RunCheckAccepts` (`security/Properties/Pous/EndToEnd.lean`), proved.
+
+`check_signed` (`check_signed_at` at another point) is the run on the memory challenger's signed setup
+(`PousCheck.SignedRun`): in place of the table it reads the setup record the session's key signed under the session's id
+(`memory_challenger.SetupRecord`) and one `Opening` per round, the row of the block the round asks for and its path to
+the published root.  It checks step 1 and steps 3 to 4 above, then that each opening's row is under the root, then the
+verdict against the rows the openings opened (an answer that is not its block is wrong), then that the setup record is
+signed by the session's key and scheme under the session's id, says setup's check passed and holds the published
+blocks, commitment, salt and root.  Its guarantee is not proved."""
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from verity.protocols.pous.device import memory_challenger as mc
 from .schemes.p2 import CERT_BLOCKS, CERT_K, DELTA_NS, POINT, RTT_ALLOWANCE_CAP_NS, P2Params
-from .verifier import DIGEST_BYTES, VerifierKey
+from .verifier import DIGEST_BYTES, VerifierKey, row_leaf, verify_path
 
 SALT_BYTES = 24
 """The setup salt's bytes (`labels.SALT_BITS / 8`)."""
@@ -121,6 +129,65 @@ def check_at(point: Point, schemes: Mapping[str, mc.Verify], trusted: Collection
     _need(v.accepted, "; ".join(v.reasons))
 
 
+@dataclass(frozen=True, slots=True)
+class Opening:
+    """One round's opening for `check_signed`: the row digest of the block its round asks for, and its Merkle path,
+    siblings from the leaf up (`verifier.MerkleTree.path`)."""
+
+    row: bytes
+    path: tuple[bytes, ...]
+
+    def to_json(self) -> dict[str, Any]:
+        return {"path": [p.hex() for p in self.path], "row": self.row.hex()}
+
+    @classmethod
+    def from_json(cls, doc: Mapping[str, Any]) -> Opening:
+        return cls(bytes.fromhex(doc["row"]), tuple(bytes.fromhex(p) for p in doc["path"]))
+
+
+def check_signed_at(point: Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], setup: Setup,
+                    session: ChallengePhaseRecord, signed_setup: mc.SignedSetupRecord, openings: Sequence[Opening],
+                    session_id: bytes) -> None:
+    """`check_signed` at `point` under `schemes`."""
+    q, sc, rounds, r = point.params, session.commitment, session.signed.rounds, signed_setup.record
+    _need(setup.blocks == q.blocks, f"the setup published {setup.blocks} blocks, not the point's {q.blocks}")
+    _need(len(setup.salt) == SALT_BYTES, f"the setup's salt is {len(setup.salt)} bytes, not {SALT_BYTES}")
+    _need(sc.blocks == q.blocks, f"the session audits {sc.blocks} blocks, not the setup's {q.blocks}")
+    _need(sc.k == point.k, f"the session runs {sc.k} rounds, not the point's {point.k}")
+    _need(sc.limit_ns <= point.limit_ns,
+          f"the session's limit of {sc.limit_ns} ns is past the point's Δ + RTT = {point.limit_ns} ns")
+    _need(sc.block_bytes == q.block_bytes, f"the session's answers are {sc.block_bytes} bytes, not the point's {q.block_bytes}")
+    _need(sc.binding == setup.root, "the session is not bound to the root the setup published")
+    _need(sc.session == session_id, "the session does not run under the id the auditor designated")
+    _need(len(openings) == len(rounds),
+          f"the case holds {len(openings)} openings, not one for each of the session's {len(rounds)} rounds")
+    for j, (rd, o) in enumerate(zip(rounds, openings)):
+        _need(0 <= rd.index < q.blocks and
+              verify_path(setup.root, q.blocks, rd.index, row_leaf(q, setup.salt, rd.index, o.row), o.path),
+              f"round {j}'s opening is not a row under the root the setup published")
+    opened: dict[int, bytes] = {}
+    for rd, o in zip(rounds, openings):
+        opened.setdefault(rd.index, o.row)
+    v = mc.verdict(session.signed, sc, session.openings, opened.get, trusted=frozenset(trusted), schemes=schemes)
+    _need(v.accepted, "; ".join(v.reasons))
+    _need(mc.setup_record_ok(signed_setup, scheme=session.signed.scheme, public_key=session.signed.public_key,
+                             session=session_id, schemes=schemes),
+          "the setup record is not signed by the session's key under the session's id")
+    _need(r.passed, "the setup record does not say setup's check passed")
+    _need(r.blocks == setup.blocks, f"the setup record holds {r.blocks} blocks, not the published {setup.blocks}")
+    _need(r.commitment == setup.commitment, "the setup record's commitment to W is not the published one")
+    _need(r.salt == setup.salt, "the setup record's salt is not the published one")
+    _need(r.root == setup.root, "the setup record's root is not the published one")
+
+
+def check_signed(trusted: Collection[bytes], setup: Setup, session: ChallengePhaseRecord,
+                 signed_setup: mc.SignedSetupRecord, openings: Sequence[Opening], session_id: bytes) -> None:
+    """Accept the run on the memory challenger's signed setup (`PousCheck.SignedRun`), or raise `Refused` with the first
+    reason, at `DEPLOYED` under S1's LMS: in place of the table, the setup record the session's key signed under the
+    session's id, and one opening per round, its row under the published root.  Its guarantee is not proved."""
+    check_signed_at(DEPLOYED, mc.SCHEMES, trusted, setup, session, signed_setup, openings, session_id)
+
+
 def check(trusted: Collection[bytes], setup: Setup, digests: bytes, session: ChallengePhaseRecord,
           session_id: bytes) -> None:
     """Accept the run, or raise `Refused` with the first reason (module docstring).  `trusted` is the verifier's list of
@@ -128,4 +195,5 @@ def check(trusted: Collection[bytes], setup: Setup, digests: bytes, session: Cha
     check_at(DEPLOYED, mc.SCHEMES, trusted, setup, digests, session, session_id)
 
 
-__all__ = ["DEPLOYED", "SALT_BYTES", "ChallengePhaseRecord", "Point", "Refused", "Setup", "check", "check_at"]
+__all__ = ["DEPLOYED", "SALT_BYTES", "ChallengePhaseRecord", "Opening", "Point", "Refused", "Setup", "check", "check_at",
+           "check_signed", "check_signed_at"]

@@ -5,7 +5,7 @@
 # `security/Properties/Pous.lean`; it moves into `verity/protocols/pous` once they are proved.
 name = "pous_check"
 defaultTargets = ["PousCheck", "pous-setup", "pous-setup-difftest", "pous-audit-difftest", "pous-timed-audit", "pous-run",
-  "pous-run-protocol", "pous-verdict-difftest"]
+  "pous-run-protocol", "pous-signed-run", "pous-verdict-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -62,6 +62,10 @@ root = "PousCheck.RunMain"
 [[lean_exe]]
 name = "pous-run-protocol"
 root = "PousCheck.RunProtocolMain"
+
+[[lean_exe]]
+name = "pous-signed-run"
+root = "PousCheck.SignedRunMain"
 
 [[lean_exe]]
 name = "pous-verdict-difftest"

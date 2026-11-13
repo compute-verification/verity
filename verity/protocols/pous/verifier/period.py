@@ -35,6 +35,12 @@ a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's ro
 of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed
 parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
 node.
+`answer_signed` is the run on the memory challenger's signed setup (`verity/pous/p2/v4/signed-run`,
+`PousCheck.SignedRun`): `run.check_signed_at` in place of `tie` and `run.check_at`, its case (`case_signed`) the
+session, the setup record the session's key signed (`memory_challenger.sign_setup_record`) and the prover's openings
+(`openings_of`, from its table), a few megabytes at a served store where `case` carries the table and `C*`. It
+certifies nothing, and its profile says why (`SIGNED_GAPS`).
+
 `trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_session.placement`). The setup's salt is
 still sampled on the node.
@@ -67,10 +73,16 @@ from . import protocol as pous_protocol
 from . import run as R
 from . import setup
 from .schemes import p2 as P2
-from .verifier import DIGEST_BYTES
+from .verifier import DIGEST_BYTES, MerkleTree, row_leaf
 
 PROTOCOL = "verity/pous/p2/v4/run"
 """`PousCheck.RunProtocol.ID`; a test signer's runs answer under `memory_challenger.TEST_PREFIX` + it."""
+SIGNED_PROTOCOL = "verity/pous/p2/v4/signed-run"
+"""`PousCheck.SignedRun.ID`: the run on the memory challenger's signed setup (`answer_signed`)."""
+SIGNED_GAPS = ("the signed run's guarantee is not proved: this check takes the memory challenger's signed setup where "
+               "the run's check reads the store",
+               "the memory challenger's host saw the whole encoded store at setup")
+"""`PousCheck.SignedRun.GAPS`: why the signed run certifies nothing, after the point's own gaps."""
 SETUP_PROTOCOL = "verity/pous/p2/v4/setup"
 SESSION_DOMAIN = "verity/pous-period/session/v1"
 W, C0 = 1024, 105
@@ -166,6 +178,47 @@ def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
         raise R.Refused(f"setup: {e}") from None
     if R.Setup(q.blocks, commitment, vk.root, salt) != published:
         raise R.Refused("the run's commitment is not what its setup published")
+
+
+def case_signed(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup,
+                session: R.ChallengePhaseRecord, signed_setup: mc.SignedSetupRecord,
+                openings: Sequence[R.Opening]) -> dict[str, Any]:
+    """The signed run protocol's case (`PousCheck.SignedRun`): `case`'s params and commitment, and its evidence the
+    session, the memory challenger's signed setup record and one opening per round, in place of the table and the
+    setup's own inputs."""
+    params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
+    evidence = {"paths": [o.to_json() for o in openings], "session": session.to_json(), "setup": signed_setup.to_json()}
+    return {"commitment": canonical_json_bytes(published.to_json()).hex(),
+            "evidence": canonical_json_bytes(evidence).hex(), "params": params}
+
+
+def openings_of(point: R.Point, salt: bytes, digests: bytes, rounds: Sequence[mc.Round]) -> list[R.Opening]:
+    """The prover's openings for `check_signed`, from its table of `C*` (`digests`, one row digest a block): for each
+    round, its index's row and that row's leaf's path in the tree of the table's leaves under `salt`."""
+    q = point.params
+    rows = [digests[DIGEST_BYTES * i:DIGEST_BYTES * (i + 1)] for i in range(q.blocks)]
+    tree = MerkleTree([row_leaf(q, salt, i, r) for i, r in enumerate(rows)])
+    return [R.Opening(rows[r.index], tree.path(r.index)) for r in rounds]
+
+
+def profile_signed(point: R.Point) -> dict[str, Any]:
+    """`PousCheck.SignedRun.profileJson`: `profile`, its gaps the point's and then `SIGNED_GAPS`."""
+    return profile(point) | {"gaps": gaps(point)[1] + list(SIGNED_GAPS)}
+
+
+def answer_signed(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
+                  session: R.ChallengePhaseRecord, signed_setup: mc.SignedSetupRecord, openings: Sequence[R.Opening],
+                  session_id: bytes, protocol: str = SIGNED_PROTOCOL) -> dict[str, Any]:
+    """The signed run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `run.check_signed_at`, then nothing
+    certified (`eps` 0, `s_bits` 0) and `profile_signed`."""
+    digest = hashlib.sha512(canonical_json_bytes(published.to_json())).hexdigest()
+    try:
+        R.check_signed_at(point, schemes, trusted, published, session, signed_setup, openings, session_id)
+    except R.Refused as e:
+        return {"commitment": digest, "profile": None, "protocol": protocol, "public": None, "reason": str(e),
+                "verdict": "reject"}
+    return {"commitment": digest, "profile": profile_signed(point), "protocol": protocol,
+            "public": {"certified": False, "eps": "0", "s_bits": 0}, "reason": None, "verdict": "accept"}
 
 
 def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
@@ -604,7 +657,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "EncodedStore", "Period", "Prover", "Run", "SetupInputs",
-           "answer", "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps",
-           "honest", "leg", "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs",
+__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL", "EncodedStore", "Period",
+           "Prover", "Run", "SetupInputs", "answer", "answer_signed", "audit", "case", "case_signed", "certificate",
+           "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg", "openings_of", "point_for",
+           "point_of", "profile", "profile_signed", "records", "run", "serve", "setup_case", "setup_inputs",
            "setup_store", "tie"]
