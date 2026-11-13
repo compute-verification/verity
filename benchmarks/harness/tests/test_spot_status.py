@@ -326,7 +326,37 @@ def test_a_hole_is_closed_on_a_served_run_only_at_every_one_of_its_commits(repo)
     doc = S.served(record, root=repo.root)
     assert _by_hole(doc) == {REDRAWN: "open", RECOMMITTED: "open"} and doc["label"] == "SPOT"
     text = S.render(doc)
-    assert f"  - at `{repo.fix2[:12]}`: closed\n" in text and f"  - at `{repo.base[:12]}`: open: the fix's commit" in text
+    assert (f"  - at `{repo.fix2[:12]}` (second): closed\n" in text
+            and f"  - at `{repo.base[:12]}` (first): open: the fix's commit" in text)
+
+
+def test_a_served_run_passes_each_runs_open_reverted_and_not_known_why_through(changes, tmp_path, monkeypatch):
+    """Each served run's commit is read by `closes`, and its why reaches the record's runs and the print, by run: an
+    ancestor is closed, a reverted fix is open naming its revert, and a tree that rewrote the fix's lines is not known,
+    naming the commit to declare."""
+
+    fix = changes.commit("a\nfix\n", "fix")
+    _git(changes.root, "checkout", "-q", "-b", "reverted")
+    _git(changes.root, "revert", "--no-edit", fix)
+    revert = changes.head()
+    _git(changes.root, "checkout", "-q", "main")
+    rewrite = changes.commit("a\nrewritten\n", "rewrite the fix's line")
+    (data := tmp_path / "spot_holes.json").write_text(json.dumps({"fixes": {REDRAWN: fix, RECOMMITTED: fix}}))
+    monkeypatch.setattr(S, "FIXES", data)
+    monkeypatch.setattr(S, "LOCK", LOCK)
+    record = _served(rewrite, first=_entry(ONE, fix), replay=_entry(BASE, revert), second=_entry(BOTH, rewrite))
+    doc = S.served(record, root=changes.root)
+    assert _by_hole(doc) == {REDRAWN: "open", RECOMMITTED: "open"} and doc["label"] == "SPOT"
+    runs = {r["name"]: r["holes"].get(REDRAWN) for r in doc["served"]["runs"]}
+    reverted = f"reverted by {revert[:12]}, which reverts the fix"
+    assert runs["serve"] is None and runs["first"] == {"status": "closed", "why": None}
+    assert runs["replay"] == {"status": "open", "why": reverted}
+    assert runs["second"]["status"] == "not known" and runs["second"]["why"].startswith(
+        f"the fix's own patch (`git diff {fix[:12]}^ {fix[:12]}`) doesn't apply in reverse at the run's tree")
+    text = S.render(doc)
+    assert (f"- redrawn sample: open\n  - at `{rewrite[:12]}` (second): not known: the fix's own patch" in text
+            and f"  - at `{fix[:12]}` (first): closed\n  - at `{revert[:12]}` (replay): open: {reverted}\n" in text)
+    assert "add it to this hole's commits in spot_holes.json" in text
 
 
 def test_a_served_commit_this_repository_lacks_or_a_run_with_no_commit_is_not_known(repo):

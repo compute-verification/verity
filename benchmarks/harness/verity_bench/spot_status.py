@@ -269,7 +269,9 @@ def served(record: Mapping[str, Any], *, root: Path | None = None) -> dict:
     `SERVED_RUNS`), closed only where it is closed at every one. A run the record holds no entry for (its reader was
     given no directory of it) is listed as not given and read at no commit; then a hole closed at every commit read is
     `CLOSED_READ`, not closed, and the label is `SPOT`. One whose entry names no commit, or a dirty tree, is not
-    known. `served` lists each run with its commit and machine, the runs read and those not given."""
+    known. `served` lists each run with its commit and machine and, where its commit is read, each hole there as
+    `closes` gives it (`holes`: open with why, reverted by which commit, or not known with its hint), the runs read
+    and those not given; the print names the runs at each commit whose status it lists."""
 
     if not isinstance(record, Mapping):
         raise ValueError(f"a served run's record is one JSON object, not {type(record).__name__}")
@@ -298,6 +300,9 @@ def served(record: Mapping[str, Any], *, root: Path | None = None) -> dict:
                        "machine": r.get("machine"), "why": why})
         sources[f"{name} {r.get('run') or '(no run id)'}"] = (at, why)
     doc = _over(sources, root or jobs.repository_root())
+    for r in listed:
+        at = r["commit"] if r["given"] and not r["why"] else None
+        r["holes"] = {h["hole"]: h["at"][at] for h in doc["holes"]} if at else {}
     read = [r["name"] for r in listed if r["given"]]
     if missing := [r["name"] for r in listed if not r["given"]]:
         for h in doc["holes"]:
@@ -343,11 +348,16 @@ def render(doc: Mapping[str, Any]) -> str:
              f"{of}. The label is `SPOT soundness` only when both are closed in every "
              f"{'one, with all four runs read' if sv else 'run read'}.", "", f"- label: **{doc['label']}**"]
     partly = sv and f" ({', '.join(sv['read']) or 'its record alone'}); {', '.join(sv['not_given'])} not given"
+    runs_at: dict[str, list[str]] = {}
+    for r in sv["runs"] if sv else ():
+        if r["holes"]:
+            runs_at.setdefault(r["commit"], []).append(r["name"])
     for h in doc["holes"]:
         lines.append(f"- {h['hole']}: {h['status']}" + (partly if h["status"] == CLOSED_READ else ""))
         kinds = {(s["status"], s["why"]) for s in h["at"].values()}
         if len(kinds) > 1:
-            lines += [f"  - at `{c[:12]}`: {s['status']}" + (f": {s['why']}" if s["why"] else "") for c, s in h["at"].items()]
+            lines += [f"  - at `{c[:12]}`" + (f" ({', '.join(runs_at[c])})" if c in runs_at else "") + f": {s['status']}"
+                      + (f": {s['why']}" if s["why"] else "") for c, s in h["at"].items()]
         elif kinds and (why := next(iter(kinds))[1]):
             lines.append(f"  - at every commit read: {why}")
         if not doc["runs"]:
