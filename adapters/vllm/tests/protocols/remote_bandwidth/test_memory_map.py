@@ -16,8 +16,8 @@ import struct
 import numpy as np
 import pytest
 from verity.circuits import requirement
-from verity.protocols.poub.verifier import audit, codec, memory_map
-from verity.protocols.poub.verifier.memory_map import MemoryMapError, Replay
+from verity.protocols.accounting.poub.verifier import audit, codec, memory_map
+from verity.protocols.accounting.poub.verifier.memory_map import MemoryMapError, Replay
 
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.memory_map import LIFETIME, Lines

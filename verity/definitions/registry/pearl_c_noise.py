@@ -1,7 +1,7 @@
 """Pearl-C -h3's noise derivation as Definitions: the labelled hashes that seed a call's noise, and a noise line from its hash.
 
 -h3 derives every noise line of a call from the epoch's salt, the fixed operand's root and each row's digest
-(`verity.protocols.pouw.prover.schemes.pearl_c`: `seed_b`, `row_seed`, `sample_line`; in Lean `Pouw.PearlC.NoiseSha512`):
+(`verity.protocols.accounting.pouw.prover.schemes.pearl_c`: `seed_b`, `row_seed`, `sample_line`; in Lean `Pouw.PearlC.NoiseSha512`):
 
     s512(ℓ, m)  = the first 32 bytes of SHA-512(pearl-c/h3s/ℓ\\0, zero-padded to 128 bytes ‖ m)
     seed_B      = s512("seed-B", salt ‖ root_B)                                          PearlCSeedB

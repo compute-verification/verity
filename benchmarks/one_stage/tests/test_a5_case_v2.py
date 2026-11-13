@@ -18,7 +18,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import a5  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import proofs as PF  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
 
 
 @pytest.fixture
@@ -327,7 +327,7 @@ def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
     """`a5.link_points` records the registration's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
     which `coins.law_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
     every member."""
-    from verity.protocols.spot.verifier.one_stage import link_points as LP
+    from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
 
     monkeypatch.setattr(a5.CC, "law_problem", lambda law, population: None)
     m = {"k": 0, "m": SimpleNamespace(template="t", base=0, n=40), "st": {"meta": {"vus_per_block": 1}}}

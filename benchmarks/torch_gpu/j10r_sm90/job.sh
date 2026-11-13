@@ -46,7 +46,7 @@ build() {
 }
 
 # sm_90a arms of benchmarks/hash/dither/h1u.cu, compiled from this tree with dither/job.sh's flags plus --no-compress:
-# $OUT/lib/sm_90a/h1u_ARM.so, their resource usage and BUILD.txt; then verity/protocols/pouw/prover/sass_gate.py on them as
+# $OUT/lib/sm_90a/h1u_ARM.so, their resource usage and BUILD.txt; then verity/protocols/accounting/pouw/prover/sass_gate.py on them as
 # sass_pins.json stands (sass-gate.json, a diagnostic only)
 H1U_BASE=-DH1U_KSPLIT=4,-DH1K_AUTO=1,-DH1K_RONLY=1
 H1U_A=$H1U_BASE,-DH1U_JCTA=1,-DH1U_WARPS=4,-DH1U_JX=1,-DH1U_JBW=1
@@ -80,7 +80,7 @@ h1u_build() {
     "$(dirname "$nv")/cuobjdump" --dump-resource-usage "$f" > "${f%.so}.res.txt" 2>&1
   done
   cat "$lib/BUILD-h1u.txt"; grep -h -A1 -E 'Function.*(h1umj|h1jr|h1_seeds_c)' "$lib"/h1u_*.res.txt | head -40
-  POUW_CUDA_BIN=$(dirname "$nv") POUW_SASS_GATE_CACHE=none python3 verity/protocols/pouw/prover/sass_gate.py "$lib"/h1u_*.so \
+  POUW_CUDA_BIN=$(dirname "$nv") POUW_SASS_GATE_CACHE=none python3 verity/protocols/accounting/pouw/prover/sass_gate.py "$lib"/h1u_*.so \
     --json "$OUT/sass-gate.json" > "$OUT/sass-gate.txt" 2>&1
   echo "sass gate (sass_pins.json as it stands, diagnostic): rc $?"; tail -20 "$OUT/sass-gate.txt"
   return $rc
@@ -88,15 +88,15 @@ h1u_build() {
 
 # s8_linear's exact plain linear (benchmarks/torch_gpu/s8_linear), given as files in LIBS: its build.sh run unchanged
 # from a scratch copy, with this tree's ship frame (ship.sh, ship_nvcc.sh, ship_probe.sh, ship_clock.c), which that
-# build.sh sources, and harness gate (verity/protocols/pouw/prover/sass_gate.py, its sass_gate.py's mma_gate) beside it.
+# build.sh sources, and harness gate (verity/protocols/accounting/pouw/prover/sass_gate.py, its sass_gate.py's mma_gate) beside it.
 # $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
 s8_build() {
-  local t=$S/s8/benchmarks/torch_gpu h=$S/s8/$(dirname verity/protocols/pouw/prover/sass_gate.py) nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
+  local t=$S/s8/benchmarks/torch_gpu h=$S/s8/$(dirname verity/protocols/accounting/pouw/prover/sass_gate.py) nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
   local w=$t/s8_linear
   mkdir -p "$w" "$h" || return 2
   cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
   cp "$ROOT"/benchmarks/torch_gpu/{ship.sh,ship_nvcc.sh,ship_probe.sh,ship_clock.c} "$t/" || return 2
-  cp "$ROOT/verity/protocols/pouw/prover/sass_gate.py" "$h/" || return 2
+  cp "$ROOT/verity/protocols/accounting/pouw/prover/sass_gate.py" "$h/" || return 2
   CUDA=$(dirname "$(dirname "$nv")") bash "$w/build.sh" "$OUT/s8ship" >&2 || return 2
   echo "$w"
 }
