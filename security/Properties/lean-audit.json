@@ -2135,6 +2135,7 @@
    "except": [
     "Properties.Pouw.Credit",
     "Properties.Pouw.Period",
+    "Properties.Pouw.Period.Witnesses",
     "Properties.Pouw.PeriodJ10R",
     "Properties.Pouw.PeriodJ10RStrata",
     "Properties.Pouw.ServedFreed",
