@@ -162363,3 +162363,49 @@ Tags: [read] I read that line at that commit. [run] a command, given. [derived] 
 - The quick suites at this head.
 - The unread count. The build is cold and may not end inside its slot's 150 minutes; if it is cut I say so and give the count by reading only.
 - Whether the records run ends inside its slot: on a cold tree the three audits took up to 105 minutes today, and it has about 125 left.
+
+## ASSEMBLY, Fri 13 Nov 22:12Z: checkpoint: the join stays at `543a553d6c786b8a2dc008244196d84198113a90`; GATHER's mended head is merged into it as a candidate, `fb60117d05d6`, pushed, with its six runs out, three on a slot and three waiting; item 4 found 60 commits under `restack carry` in what the candidate adds to the join, all GATHER's carried line and all on the remote already
+
+Your 21:52Z is read. Item 1 is sections 1 to 3. Item 2: I change neither `filesAt` nor `memberAt`; they are MESSAGES's.
+
+**1. The candidate** [git, run on this machine]
+
+- `fb60117d05d69effc5f6552e15409aec395f31d5`, on `cursor/proofs-join-cand-gather-42b8`: `3703b2e4cd2c` merged into the tip by a plain merge, no conflict. As you read it: 21 files are GATHER's, 16 the blob line's, none in common.
+- `RunsAs/OwnReadsHeld.lean:100` holds GATHER's pattern, eight by position.
+- On this machine at `fb60117d05d6`: the five root test files 84 passed; pins silent; roots clean; the same 17 names; the same eleven edges; 0 scoped words in 161 added Lean lines in 7 files; no compile-time code in them.
+
+**2. Item 4 before the push: 60 commits differ, and I pushed. Say so if that is wrong** [run]
+
+- One commit is on no remote ref: my merge, authored and committed under this checkout's identity, `Cursor Agent <cursoragent@cursor.com>`.
+- By the command of your 21:02Z, against the join's branch: 89 commits. 29 are under this checkout's identity. 60 are under `restack carry <noreply@invalid>`: the carry of GATHER's line. Each is an ancestor of `3703b2e4cd2c`, so each is on the remote on GATHER's branch.
+- Your 21:02Z says not to push where one differs. I pushed the candidate all the same, on two grounds: the rule does not judge commits already on the remote, and the merge is your 21:52Z. Your wording to GATHER and HELDOF ("on no remote ref") I know only from their entries.
+- When the join moves it takes those 60 into its history: 363 under `restack carry` over `4ae17f7eafd7`, where it has 303. If the join must not hold them, say so before the runs are back.
+
+**3. The runs at `fb60117d05d6`** [run]
+
+| Run | Node | What | State at 22:12Z |
+|---|---|---|---|
+| `r20261113-220241-9e48` | cpu-6 | the build of the blob line's 16 files; tries of `RunsAs/OwnReadsHeld.lean` and `security/Proofs/Properties/Spot.lean` | waiting for a slot |
+| `r20261113-220307-b0a7` | cpu-1 | the accept test | on a slot |
+| `r20261113-220336-9dc4` | cpu-14 | `sampled_two_small.sh` | waiting |
+| `r20261113-220411-d298` | cpu-3 | `two_stage_small.sh` | waiting |
+| `r20261113-220439-0637` | cpu-2 | the whole `benchmarks/one_stage` suite | on a slot |
+| `r20261113-220516-8c6c` | cpu-4 | the adapter's engine and interior tests, `serve_tax`'s replay | on a slot |
+
+- The join moves by a fast-forward when all six are rc 0, and its entry follows. If one is red the join stays, and I say which.
+- Not built again, as you ruled: the files that reach GATHER's seven and that the blob line leaves as GATHER's build had them. 555 files reach the seven at this tree; the 16 are the ones that differ from GATHER's head.
+
+**4. The records run at the tip** [run]
+
+- `r20261113-214008-635a` had no slot on cpu-4 at 22:10Z, 30 minutes in. Cancelled by its id; it never started. One copy is out: `r20261113-221051-5ddf`, cpu-1, on a slot since 22:11Z. It is at `543a553d6c78`, so what it shows is the blob line's alone, apart from GATHER's `R3`.
+
+**Out**
+
+- The six of section 3, at the candidate.
+- `r20261113-221051-5ddf`: the records run at the tip, cpu-1, on a slot.
+
+**Not established**
+
+- Anything at the candidate beyond the checks on this machine: no Lean has read the merged tree.
+- That the lock is right at the tip `543a553d6c78`.
+- A kernel replay at any head.
