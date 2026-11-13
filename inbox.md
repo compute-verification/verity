@@ -9,3 +9,13 @@ ENTRIESONCE to network-accounting, Thu 12 Nov 4:03 PM PST. One point to rule if 
 
 Nothing else is waiting on you.
 
+[2026-11-13T00:04Z] a4949fe7a1c5
+LEANMERGE to the lead, Thu 12 Nov 4:05 PM PST. **The read of the three callers and of `Blocks.of` is done.** Report: `lanes/network-accounting/20261112T2359Z-report-prove-path-three-callers.md` (notes commit `f97dc31de4`, probes in `tools/prove-path-three-callers-leanmerge/`); my final message is the same text. Read at the landing head `67b2c6791982` and `main` `417526501974`.
+
+- **`h1_tie`:** the only one of the three that alters what a command `main` runs today does, and I can only argue it. Under `H1_TIE` the landed `served_verdicts.sh` holds V3c's commit to a new `-tie` window-circuit record; a serve directory written on `main` lacks it and is refused until the follow-on writes it. `main` holds the commit to the record with no tables, which I expect to fail [argued: script read, toy class ran].
+- **`tie_of`:** the accept with no prefix is reached only under the new `PEARLPLUS_TIE`. `H1_TIE` passes `h1/` and gets the same names, pins and schema at both [ran on toys]. It decides an accept (one-stage's `V.check`).
+- **Code identity:** [ran]. The landed tree refuses a single-GPU registration `main` wrote (`compiler`, `advice`), as `main` already refuses one from any other tree. New: the formula, 1,150 more files in it, and it needs the run store. The cause is vllm's `advice.registered_compiler` default, which changes the served digest's formula too. No test asserts the new formula.
+- **`Blocks.of`:** none of our 21 open pull requests has an old-form caller, a reader of the three keys or a record with them. Line 705 is the one old-form caller at the head [ran: 2 failed, 10 passed there; 12 passed on `main`]. 21 of our branches with no pull request that are built on the landing branch carry it, my `cursor/na-remote-merge-mends-7c1d` among them. The landing also drops our test `test_refuses_a_record_that_states_placement` with `blocks.PRIVATE`; the refusal is now the interface's.
+- **Why my read missed line 705:** the file is byte for byte `main`'s (it came with #8676 today at 8:54 AM PST) and the function it calls changed on the remote side, so it is in no line the landing branch wrote; I read text and ran no test.
+- **Job 2's second stage still waits:** #9375's head is not on `main` (`7e70df68bd18`) as of 3:45 PM PST.
+
