@@ -104,6 +104,7 @@ untraced = [
     "tests/test_literal_addresses.py",
     "tests/test_merge_drivers.py",
     "tests/test_module_strings.py",
+    "tests/test_no_environment_in_asserts.py",
     "tests/test_no_wall_clock.py",
     "tests/test_pins.py",
     "tests/test_protocol_specs.py",
