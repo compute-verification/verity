@@ -165,9 +165,9 @@ The records are in the evidence store, in the run files of the runs that carry
 - `out/*-verdicts.jsonl`: a verdict record as the verdict's own verifier writes it, `run`, `serve` (the served run
   its class came from), `registration` (the digest of what that serve registered), `verifier` (its `module` and
   the `commit` it ran at), `verdict` and `proved_by`. A record that names no run, serve, registration or verifier
-  doesn't read, and one that doesn't read holds no execution phase. Of its `verdict` the rule reads `link`, `window`, `class`,
-  `head`, `accepted` and `complete`. Which of the four verdicts it is, is its verdict's `format`; a verdict whose
-  verifier's format the reader doesn't list reads as missing;
+  doesn't read, and one that doesn't read holds no execution phase, in a run that no other replaces. Of its
+  `verdict` the rule reads `link`, `window`, `class`, `head`, `accepted` and `complete`. Which of the four verdicts
+  it is, is its verdict's `format`; a verdict whose verifier's format the reader doesn't list reads as missing;
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read;
 - `out/*-controls.jsonl`: a control record, `run`, `verifier` (its `module` and `commit`), `control` (what was
@@ -203,8 +203,30 @@ accept and takes away no refusal: its records that are accepted and complete fil
 were refused count for nothing, and everything else it holds is read as any run's. An accept of its is still read
 on its head: the serve and the registration it names, the rate it states and its verifier are held to what holds
 any record's, so it can keep a class at its whole schedule and never helps hold one. A record is a superseded
-run's where that run's files hold it or it names that run as its `run` or its `serve`. So superseding a run never
-raises what is held.
+run's where that run's files hold it or it names that run as its `run` or its `serve`.
+
+The order of runs is read from their ids, which state the date and the time of a launch; a name that is no run id
+is launched after nothing, and nothing after it. Two rules read it:
+
+- a run has no accept on a serve launched after it: a verdict record that names such a serve and is accepted and
+  complete fills no verdict, and what such a record refused stands. A record's own run is the one whose files
+  hold it and the one it names as its `run`;
+- a record of a superseded run that doesn't read could have been a refusal, so an execution phase is held only
+  where its serve was launched after every superseded run that holds one: after the newest of them, which the
+  line names with how many such records there are. It is one rule for every line of the run's four kinds of file
+  that doesn't read, a line that is no JSON among them. A bad file is mended by a new serve with new verifier
+  runs, never by a second run over the old serve; a control record that doesn't read is mended, for the serves
+  launched after its run, by a new control run.
+
+So superseding a run raises what is held only on a serve launched after that run, and only where the run holds a
+record that doesn't read. In a run that no other replaces, a record that doesn't read holds no execution phase at
+all, and a line that is no JSON is named by its line, its file and its run. The ids are the tooling's, which is
+enough for the runs of record here; in a deployment the order comes from the auditor's own ledger, from something
+the prover cannot write.
+
+A verdict that doesn't count, refused or not complete, counts against the execution phase it names by its serve,
+its link, its number and its class, whatever head it names: refused under one head, registered again under
+another and accepted would be a second try at a verdict. An accept under another head counts for nothing.
 
 An execution phase is one serve's: a serve, a link and the phase's number. A registration of connection rows names
 no serve, so a head's serve is the one its verdict records name, which is a run's word and no proof; the answer's
@@ -221,7 +243,8 @@ with what the four differ in: the class, the execution phase, the head, the serv
 
 An execution phase is held where its head was read, some class of it holds a row and every class that holds one has
 its four verdicts, of the one serve its head's records name, at the registered rate, each by a verifier with its
-control. The answer is how many execution
+control, with no verdict of that serve refused or not complete under another head, and of a serve launched after
+each superseded run that holds a record that doesn't read. The answer is how many execution
 phases of a link are held (the document's `stop`'s
 `held_phases`), and a row is charged by it:
 

@@ -307,12 +307,16 @@ def test_four_verdicts_that_are_not_one_classs_hold_nothing_and_the_first_line_n
         assert stop([registration(first)], records).why[0] == LACK
 
 
-def held_back(ruled: int, phases: int, rate: int = 0, control: int = 0, serve: int = 0) -> str:
+def held_back(ruled: int, phases: int, rate: int = 0, control: int = 0, serve: int = 0, unread: int = 0,
+              head: int = 0) -> str:
     """The answer's first line where execution phases have their verdicts and none of them is held."""
     back = ([f"{serve} by its serve, one named by all of a head's verdict records"] if serve else []) + (
         [f"{rate} by the rate, `1/1` as registered and as run"] if rate else []) + (
         [f"{control} by a negative control, one refused by each verifier that accepted, at its commit, for the "
-         "control's word"] if control else [])
+         "control's word"] if control else []) + (
+        [f"{head} by a verdict refused or not complete under another head of the execution phase"] if head else []) + (
+        [f"{unread} by a superseded run's record that doesn't read, of a run its serve was not launched after"]
+        if unread else [])
     return (f"each connection is charged its whole schedule: {ruled} of the {phases} execution phase(s) read have the "
             f"4 verdicts of each class that holds a row, and none of them is held: {' and '.join(back)}")
 
@@ -849,7 +853,7 @@ def test_the_run_files_are_read_from_the_store_and_no_run_is_the_whole_schedule(
                "out/another.json": "{}"},
         "r3": {"out/another.json": "{}"}, "r4": None})
     assert SV.read(store, ["r1", "r2"]) == (registrations, [read, audit, stop_record, tie], [],
-                                            [of_stop, of_read, of_audit, of_tie], [SERVED], [])
+                                            [of_stop, of_read, of_audit, of_tie], [SERVED], [], [])
     neither = ("holds none of `out/*-verdicts.jsonl`, `out/registrations.jsonl`, `out/*-controls.jsonl`, "
                "`out/serve-registrations.jsonl`")
     got = SV.of_runs(store, ["r1", "r2", "r3", "r4", "r5"])
@@ -864,10 +868,14 @@ def test_the_run_files_are_read_from_the_store_and_no_run_is_the_whole_schedule(
     assert none == LB.Stop(0, (*LB.NO_RECORDS.why, "no run in the store carries "
                                "`run_of_record=exfiltration-glm53-stop-verdicts`"))
     assert SV.of_runs(store, ["r3"]) == LB.Stop(0, (*LB.NO_RECORDS.why, f"r3 is not read: it {neither}"))
-    broken = Store(tmp_path, {"r6": {"out/response-tie-verdicts.jsonl": "{not json\n"}})
-    got = SV.of_runs(broken, ["r6"])
-    assert got.held == 0 and got.why[0].startswith("each connection is charged its whole schedule: the records of r6 "
-                                                   "don't read: ")
+    # a line that is no JSON, in a run that is not superseded, holds nothing at all: the line names every run
+    # handed, then the line, its file and its run
+    broken = Store(tmp_path, {"r6": {"out/response-tie-verdicts.jsonl": jsonl([tie]) + "\n{not json\n"},
+                              "r1": store.runs["r1"], "r2": store.runs["r2"]})
+    got = SV.of_runs(broken, ["r1", "r2", "r6"])
+    assert got.held == 0 and len(got.why) == 1 and got.why[0].startswith(
+        "each connection is charged its whole schedule: the records of r1, r2, r6 don't read: line 3 of "
+        "`out/response-tie-verdicts.jsonl` of r6 is no JSON: ")
     # the calculator's rows follow the answer: the one execution phase held is one of a node's week, the rest of
     # the week is charged its whole schedule, and what the row would be with every one held is held apart
     doc = LB.document(LB.inputs(), stop=SV.of_runs(store, ["r1", "r2"]), only=["node"], periods=["week"])
@@ -926,6 +934,23 @@ def uncounted(n: int, *runs: str) -> str:
             "another reason, stands")
 
 
+def dont_read(n: int, *runs: str, where: str) -> str:
+    return (f"{n} record(s) of the superseded run(s) {', '.join(runs)} don't read, and keep at its whole schedule "
+            "each execution phase of a serve that was not launched after their run: such a record could have been "
+            f"a refusal. The first is {where}")
+
+
+def later(n: int, *runs: str) -> str:
+    return (f"{n} verdict record(s) of {', '.join(runs)} name a serve launched after their own run, are accepted and "
+            "complete, and fill no verdict: a run has no accept on a serve launched after it, and what such a "
+            "record refused stands")
+
+
+def kept_whole(at: str, newest: str, n: int = 1) -> str:
+    return (f"{at}: held to its whole schedule by a record that doesn't read: its serve was not launched after "
+            f"{newest}, the newest of the superseded runs that hold one ({n} such record(s))")
+
+
 def test_a_superseded_run_adds_no_accept(tmp_path):
     """The reader is handed every run that carries the record, with which of them another run replaces. A
     superseded run's accepts count for nothing: not alone, not to fill in a verdict a later run lacks, and not as a
@@ -960,9 +985,9 @@ def test_a_superseded_run_adds_no_accept(tmp_path):
     # `read` hands the accepts apart, leaves the refused controls out and keeps the registrations
     assert SV.read(store, ["r1", "r3"], ["r1"]) == (
         [registration(first)] * 2, records[:1] + records[2:], [dropped(4, "r1"), uncounted(4, "r1")],
-        the_controls(), [SERVED] * 2, records)
+        the_controls(), [SERVED] * 2, records, [])
     assert SV.read(store, ["r1", "r3"]) == ([registration(first)] * 2, records + records[:1] + records[2:], [],
-                                            the_controls() * 2, [SERVED] * 2, [])
+                                            the_controls() * 2, [SERVED] * 2, [], [])
     # a superseded run's refused control backs no verifier: the four of a later run are then held back by a control
     alone = Store(tmp_path / "controls", {"old": held_files(first, []), "new": held_files(first, records, controls=[])})
     assert SV.of_runs(alone, ["old", "new"]).held == 1
@@ -996,7 +1021,7 @@ def test_a_superseded_run_adds_no_accept(tmp_path):
     got = SV.of_runs(served, ["s1", "v1"], ["s1"])
     assert (got.held, got.verdicts) == (0, ()) and got.why[0] == LACK and got.why[-1] == dropped(4, "s1")
     assert SV.read(served, ["s1", "v1"], ["s1"]) == (
-        [registration(first)], [], [dropped(4, "s1")], the_controls(), [SERVED], of_serve("s1", records))
+        [registration(first)], [], [dropped(4, "s1")], the_controls(), [SERVED], of_serve("s1", records), [])
     # a superseded serve's head refuses only within its own serve: a later serve's head of the same number of the
     # link, another session's, is held, and the superseded one is named with what it lacks
     theirs = head(3, 5, 0, domain=bytes([1]) * 64)
@@ -1050,7 +1075,8 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
     """What a superseded run refused on a head stands, whatever a later run accepted on it: a refused verdict, an
     accept that is not complete, a record that doesn't read, and a registration that gives the execution phase
     another head. The run must be among the runs handed for that to be read, so a superseded run that is not
-    holds everything at its whole schedule. And superseding a run never raises what is held."""
+    holds everything at its whole schedule. And superseding a run never raises what is held, where no serve is
+    launched after it: here every run and serve is named in words, and no word is a run id."""
     first = head(3, 5, 0)
     accepts = held_files(first, four(first))
     for old, lack in ((tie_but(first, accepted=False), "the response tie is refused (run of the response tie)"),
@@ -1068,14 +1094,19 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
         assert unread == LB.Stop(0, (
             "each connection is charged its whole schedule: the superseded run(s) old are not among the runs "
             "handed, so what they refused was not read: a superseded run adds no accept and takes away no refusal",))
-    # a superseded run's record that doesn't read holds nothing, as any run's does
+    # a superseded run's record that doesn't read holds nothing, as any run's does, where the serve is not known
+    # to be launched after that run: these runs and this serve are named in words, and no word is a run id
     store = Store(tmp_path / "unread", {"old": held_files(first, [*four(first), "accept"]), "new": accepts})
-    for superseded in ((), ["old"]):
-        got = SV.of_runs(store, ["old", "new"], superseded)
-        assert got.held == 0 and got.why[0].endswith(f"{NO_RECORD}it is no object: 'accept'")
-    # it is handed on as a record of the run's, and is none of its accepts
+    got = SV.of_runs(store, ["old", "new"])
+    assert got.held == 0 and got.why[0].endswith(f"{NO_RECORD}it is no object: 'accept'")
+    got = SV.of_runs(store, ["old", "new"], ["old"])
+    assert got.held == 0 and got.why[0] == held_back(1, 1, unread=1) and got.why[-1] == dont_read(
+        1, "old", where="line 5 of `out/the-verdicts.jsonl` of old: it is no object")
+    assert kept_whole(f"the link {LINK}, execution phase 3", "old") in got.why
+    # it is handed apart, as its run alone, and is none of the run's accepts
     handed = SV.read(store, ["old", "new"], ["old"])
-    assert handed[1] == ["accept", *four(first)] and handed[5] == four(first) and handed[2][0] == dropped(4, "old")
+    assert handed[1] == four(first) and handed[5] == four(first) and handed[2][0] == dropped(4, "old")
+    assert handed[6] == ["old"]
     # and the registration it kept is read as any run's: another head for the execution phase holds nothing
     other = head(3, 6, 0)
     store = Store(tmp_path / "heads", {"old": held_files(other, four(other)), "new": accepts})
@@ -1140,6 +1171,259 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
                 assert got <= both, (a, b, superseded)
                 seen, lowered, most = seen + 1, lowered + (got < both), max(most, both)
     assert (seen, most) == (3 * len(kept) ** 2, 2) == (1875, 2) and lowered
+
+
+#: run ids in the order of their launch; `RUN` and `TWIN` state one second
+EARLY, RUN, TWIN, LATE, LAST = ("r20260102-030405-0a0a", "r20260102-030406-0b0b", "r20260102-030406-ffff",
+                                "r20260102-030407-0000", "r20270101-000000-0c0c")
+
+
+def test_the_order_of_runs_is_read_from_their_ids():
+    """One run is launched after another only where both names are run ids and the first states a later second:
+    never where one of them is no run id, which is the side that keeps a schedule whole."""
+    ids = (EARLY, RUN, TWIN, LATE, LAST)
+    for i, a in enumerate(ids):
+        for j, b in enumerate(ids):
+            assert SV.launched_after(a, b) is (i > j and (a, b) != (TWIN, RUN)), (a, b)
+    for word in ("the serve", "", "old", LAST.upper(), LAST[1:], f"{LAST}-2", f"x{LAST}", LAST[:-1], f"{LAST}\n",
+                 LAST.replace("-", "_"), "r2027010a-000000-0c0c", None, 20270101, [LAST], {"run": LAST}):
+        for other in (EARLY, word):
+            assert not SV.launched_after(word, other) and not SV.launched_after(other, word), word
+
+
+def why_not(read, x: object) -> str:
+    try:
+        read(x)
+    except ValueError as e:
+        return str(e)
+    raise AssertionError(x)
+
+
+def test_a_superseded_runs_record_that_doesnt_read_keeps_whole_each_serve_not_launched_after_it(tmp_path):
+    """A record of a superseded run that doesn't read could have been a refusal, so it keeps at its whole schedule
+    each execution phase of a serve that was not launched after that run, with a line that names the run, and
+    charges nothing on a serve launched after it: a bad file is mended by a new serve, never by a second run over
+    the old one. It is one rule for every line of the run's files that doesn't read: a verdict record, a control
+    record, a registration of connection rows, a serve's registration, and a line of any of them that is no JSON.
+    In a run that is not superseded such a line holds no execution phase at all, whatever the serve."""
+    first = head(3, 5, 0)
+    at = f"the link {LINK}, execution phase 3"
+    record, text = {CC.VERDICT: {}}, "{no json"
+    no_json = "it is no JSON: " + why_not(json.loads, text)
+    lines = {"a verdict record": ("out/a-verdicts.jsonl", jsonl([record]), CC.lacks(record)),
+             "a control record": ("out/a-controls.jsonl", jsonl([record]), SV.control_lacks(record)),
+             "a registration of connection rows": (SV.REGISTRATIONS_FILE, jsonl([{"format": "another's"}]),
+                                                   why_not(SV.head_of, {"format": "another's"})),
+             "a serve's registration": (SV.SERVES_FILE, jsonl(["no object"]), why_not(SV.digest_of, "no object")),
+             **{f"no JSON in {path}": (path, text + "\n", no_json) for path in (
+                 "out/a-verdicts.jsonl", "out/a-controls.jsonl", SV.REGISTRATIONS_FILE, SV.SERVES_FILE)}}
+    assert len(lines) == 8 and all(lack for _, _, lack in lines.values())
+    after = 0
+    for i, (name, (path, bad, lack)) in enumerate(lines.items()):
+        last = dont_read(1, RUN, where=f"line 1 of `{path}` of {RUN}: {lack}")
+        for j, serve in enumerate((EARLY, RUN, TWIN, LATE, "the serve")):
+            store = Store(tmp_path / f"{i}-{j}", {RUN: {path: bad}, "old": {path: bad},
+                                                  LAST: held_files(first, of_serve(serve, four(first)))})
+            assert SV.of_runs(store, [LAST]).held == 1
+            # in a run that is not superseded: nothing is held, and the one line says what doesn't read
+            live = SV.of_runs(store, [RUN, LAST])
+            assert live.held == 0 and len(live.why) == 1 and lack.removeprefix("it is ") in live.why[0], (name, serve)
+            got = SV.of_runs(store, [RUN, LAST], [RUN])
+            if serve == RUN:
+                # the superseded run as the serve: the accepts that name it fill no verdict, as built
+                assert (got.held, got.verdicts, got.why[-2:]) == (0, (), (dropped(4, RUN), last)), name
+                continue
+            # superseded: held only where the serve was launched after the run
+            assert got.held == (serve == LATE) and got.why[-1] == last and len(got.verdicts) == 4, (name, serve)
+            assert (kept_whole(at, RUN) in got.why) == (serve != LATE), (name, serve)
+            assert got.why[0] == (f"1 of the 1 execution phase(s) read are charged below their schedule{EVERY_OTHER}"
+                                  if serve == LATE else held_back(1, 1, unread=1)), (name, serve)
+            after += got.held
+            # a superseded run whose name is no run id: no serve is launched after it
+            worded = SV.of_runs(store, ["old", LAST], ["old"])
+            assert worded.held == 0 and kept_whole(at, "old") in worded.why, (name, serve)
+            assert worded.why[-1] == dont_read(1, "old", where=f"line 1 of `{path}` of old: {lack}")
+    assert after == len(lines)
+    # an execution phase is held only where its serve was launched after each such run, and the line names those
+    # it was not launched after
+    bad = {"out/a-verdicts.jsonl": "\n\n" + jsonl(["accept", record])}
+    where = f"line 3 of `out/a-verdicts.jsonl` of {EARLY}: it is no object"
+    for serve, held in ((TWIN, 0), (LAST, 1)):
+        store = Store(tmp_path / f"two-{held}", {EARLY: bad, LATE: bad,
+                                                 LAST: held_files(first, of_serve(serve, four(first)))})
+        got = SV.of_runs(store, [EARLY, LATE, LAST], [EARLY, LATE])
+        assert got.held == held and got.why[-1] == dont_read(4, EARLY, LATE, where=where)
+        assert (kept_whole(at, LATE, 4) in got.why) == (not held)
+        assert SV.read(store, [EARLY, LATE, LAST], [EARLY, LATE])[6] == [EARLY, EARLY, LATE, LATE]
+        # each alone superseded, the other's record holds nothing at all
+        for one in (EARLY, LATE):
+            assert SV.of_runs(store, [EARLY, LATE, LAST], [one]).held == 0
+        # a name that is no run id is the newest: no serve is launched after it
+        store = Store(tmp_path / f"word-{held}", {"old": bad, LATE: bad, LAST: store.runs[LAST]})
+        got = SV.of_runs(store, ["old", LATE, LAST], ["old", LATE])
+        assert got.held == 0 and kept_whole(at, "old", 4) in got.why
+    # two serves' execution phases: the one launched after the run is held, the one launched before it is not
+    second = head(4, 2, 0)
+    both = {SV.REGISTRATIONS_FILE: jsonl([registration(first), registration(second)]),
+            "out/the-verdicts.jsonl": jsonl(of_serve(EARLY, four(first)) + of_serve(LATE, four(second))),
+            "out/the-controls.jsonl": jsonl(the_controls()), SV.SERVES_FILE: jsonl([SERVED])}
+    store = Store(tmp_path / "serves", {RUN: bad, LAST: both})
+    assert SV.of_runs(store, [LAST]).held == 2 and SV.of_runs(store, [RUN, LAST]).held == 0
+    got = SV.of_runs(store, [RUN, LAST], [RUN])
+    assert got.held == 1 and got.why[0].startswith("1 of the 2 execution phase(s) read are charged below")
+    assert kept_whole(at, RUN, 2) in got.why and not any("execution phase 4: held" in line for line in got.why)
+    # the first line counts the execution phases kept whole beside those another rule holds back
+    store = Store(tmp_path / "rate", {RUN: bad, LAST: both | {
+        "out/the-verdicts.jsonl": jsonl(of_serve(EARLY, four(first))
+                                        + at_rate(CC.RESPONSE_TIE, "1/8", of_serve(LATE, four(second))))}})
+    assert SV.of_runs(store, [RUN, LAST], [RUN]).why[0] == held_back(2, 2, rate=1, unread=1)
+    # a record that doesn't read in the files of a run that is not superseded holds nothing, whichever run it names
+    store = Store(tmp_path / "named", {RUN: {"out/another.json": "{}"},
+                                       LAST: held_files(first, [*of_serve(LATE, four(first)), {CC.RUN: RUN}])})
+    got = SV.of_runs(store, [RUN, LAST], [RUN])
+    assert got.held == 0 and len(got.why) == 2 and got.why[1].startswith(f"{RUN} is not read: ")
+
+
+def test_a_run_has_no_accept_on_a_serve_launched_after_it(tmp_path):
+    """A verdict record that names a serve launched after its own run, the one whose files hold it or the one it
+    names, fills no verdict where it is accepted and complete, with a line that names the run; what such a record
+    refused stands, and its accept is still held to what holds any record on its head."""
+    first = head(3, 5, 0)
+
+    def of(name: str, holder: str, serve: str, run: str | None = None, only: int | None = None) -> Store:
+        records = of_serve(serve, four(first))
+        records = [r | {CC.RUN: run} if run and only in (None, i) else r for i, r in enumerate(records)]
+        return Store(tmp_path / name, {holder: held_files(first, records)})
+
+    # a serve launched before its verifiers' run, in its second, or named by no run id: its accepts count
+    for i, (holder, serve) in enumerate(((LATE, EARLY), (RUN, TWIN), (TWIN, RUN), (RUN, RUN), (EARLY, "the serve"),
+                                         ("a run", LATE))):
+        got = SV.of_runs(of(f"counts-{i}", holder, serve), [holder])
+        assert got.held == 1 and not any("launched after" in line for line in got.why), (holder, serve)
+    # a serve launched after the run whose files hold the record
+    store = of("holder", EARLY, LATE)
+    got = SV.of_runs(store, [EARLY])
+    assert (got.held, got.verdicts, got.why[0], got.why[-1]) == (0, (), LACK, later(4, EARLY))
+    assert SV.read(store, [EARLY])[1::2] == ([], the_controls(), of_serve(LATE, four(first)))
+    # a serve launched after the run a record names as the one that produced it, whichever run's files hold it
+    got = SV.of_runs(of("named", LAST, LATE, run=EARLY), [LAST])
+    assert (got.held, got.verdicts, got.why[0], got.why[-1]) == (0, (), LACK, later(4, EARLY))
+    got = SV.of_runs(of("one", LAST, LATE, run=EARLY, only=1), [LAST])
+    assert got.held == 0 and len(got.verdicts) == 3 and got.why[-1] == later(1, EARLY)
+    assert got.why[2].endswith(": the response tie is missing")
+    # after both: counted once, under the run whose files hold it
+    assert SV.of_runs(of("both", EARLY, LATE, run=RUN), [EARLY]).why[-1] == later(4, EARLY)
+    # a superseded run's accept is counted as that run's alone
+    got = SV.of_runs(of("old", EARLY, LATE), [EARLY], [EARLY])
+    assert got.held == 0 and got.why[-2:] == (dropped(4, EARLY), uncounted(4, EARLY))
+    # what such a record refused stands against a later run's accepts on its head
+    accepts = held_files(first, of_serve(LATE, four(first)))
+    store = Store(tmp_path / "refused", {EARLY: held_files(first, of_serve(LATE, tie_but(first, accepted=False))[1:2]),
+                                         LAST: accepts})
+    got = SV.of_runs(store, [EARLY, LAST])
+    assert got.held == 0 and SV.of_runs(store, [LAST]).held == 1
+    assert got.why[2].endswith(": the response tie is refused (run of the response tie)")
+    assert not any("launched after" in line for line in got.why)
+    # and its accept is still read on its head: the serve it names is held to the one the others name
+    store = Store(tmp_path / "serve", {EARLY: accepts, LAST: held_files(first, of_serve(EARLY, four(first)))})
+    got = SV.of_runs(store, [EARLY, LAST])
+    assert got.held == 0 and SV.of_runs(store, [LAST]).held == 1 and got.why[-1] == later(4, EARLY)
+    assert got.why[2].endswith(f"its verdicts on this head name 2 `serve`s, not one ({EARLY}, {LATE})")
+
+
+def test_a_verdict_that_doesnt_count_counts_against_its_execution_phase_whatever_head_it_names(tmp_path):
+    """Refused under one head, registered again under another and accepted would be a second try at a verdict. So
+    a verdict that is refused, or accepted and not complete, counts against the execution phase it names by its
+    serve, its link, its number and its class, whatever head it names, where that phase's head was read: the
+    phase is charged its whole schedule, with a line that names the verdict, its class and its run. An accept
+    under another head counts for nothing, as does a verdict that names another serve, link, number or class."""
+    first, second, other = head(3, 5, 0), head(4, 2, 0), head(3, 6, 0)
+    registrations, records = [registration(first), registration(second)], four(first) + four(second)
+    assert stop(registrations, records).held == 2
+    at = f"the link {LINK}, execution phase 3"
+    nothing = ("1 verdict record(s) read are on no head read, or on no class of one that holds a row, and count for "
+               "nothing")
+    tie = four(other)[1] | {CC.RUN: "an earlier run"}
+    refused = tie | {CC.VERDICT: tie[CC.VERDICT] | {CC.ACCEPTED: False}}
+    for word, over in ((CC.REFUSED, {CC.ACCEPTED: False}), (CC.REFUSED, {CC.ACCEPTED: None}),
+                       (CC.REFUSED, {CC.ACCEPTED: "true"}), (CC.NOT_COMPLETE, {CC.COMPLETE: False})):
+        got = stop(registrations, [*records, tie | {CC.VERDICT: tie[CC.VERDICT] | over}])
+        assert got.held == 1 and len(got.verdicts) == 8 and nothing not in got.why, over
+        assert (f"{at}: held to its whole schedule by a verdict under another head: the response tie is {word} on "
+                "class 0 (an earlier run)") in got.why, over
+        assert not any("execution phase 4: held" in line for line in got.why)
+    # an accept under another head counts for nothing
+    got = stop(registrations, [*records, tie])
+    assert got.held == 2 and nothing in got.why
+    # nor does a refusal of another serve, link, number or class, of a class that holds no row under the head read,
+    # or of a format listed for none of the four
+    for record, verdict in (({CC.SERVE: "another serve"}, {}), ({}, {CC.LINK: "requests"}), ({}, {CC.WINDOW: 5}),
+                            ({}, {CC.CLASS: 1}), ({}, {CC.CLASS: 2}), ({}, {SV.FORMAT: "another's"})):
+        got = stop(registrations, [*records, refused | record | {CC.VERDICT: refused[CC.VERDICT] | verdict}])
+        assert got.held == 2 and not any("under another head" in line for line in got.why), (record, verdict)
+        assert (nothing in got.why) == (SV.FORMAT not in verdict), (record, verdict)
+    # it counts against the phase it names and no other
+    fourth = refused | {CC.VERDICT: refused[CC.VERDICT] | {CC.WINDOW: 4}}
+    got = stop(registrations, [*records, fourth])
+    assert got.held == 1 and any(line.startswith(f"the link {LINK}, execution phase 4: held to its whole schedule by "
+                                                 "a verdict under another head: ") for line in got.why)
+    # the first line counts it, beside what another rule holds back
+    assert stop(registrations[:1], [*four(first), refused]).why[0] == held_back(1, 1, head=1)
+    got = stop(registrations, [*four(first), *at_rate(CC.RESPONSE_TIE, "1/8", four(second)), refused])
+    assert got.why[0] == held_back(2, 2, rate=1, head=1)
+    # an execution phase that lacks a verdict is named with it too
+    got = stop(registrations[:1], [*four(first)[1:], refused])
+    assert got.held == 0 and got.why[0] == LACK and nothing not in got.why and got.why[4].startswith(
+        f"{at}: held to its whole schedule by a verdict under another head: ")
+    # with the other head's registration handed too, the phase is given two heads, which holds nothing at all
+    got = stop([*registrations, registration(other)], [*records, refused])
+    assert got.held == 0 and got.why[0] == TWO_HEADS + ONE_SERVE
+    # a superseded run's refusal stands under another head as it does on the one read
+    store = Store(tmp_path, {"old": {"out/the-verdicts.jsonl": jsonl([refused])},
+                             "new": held_files(first, four(first))})
+    assert SV.of_runs(store, ["new"]).held == 1
+    for superseded in ((), ["old"]):
+        assert SV.of_runs(store, ["old", "new"], superseded).held == 0
+
+
+def renamed(files: dict[str, str], names: dict[str, str]) -> dict[str, str]:
+    """A run's files with each word for a serve replaced by a name."""
+    out = {}
+    for path, text in files.items():
+        for word, name in names.items():
+            text = text.replace(json.dumps(word), json.dumps(name))
+        out[path] = text
+    return out
+
+
+def test_superseding_a_run_raises_what_is_held_only_on_a_serve_launched_after_it(tmp_path):
+    """Labelling a run superseded raises what is held only on serves that did not exist when that run was
+    launched, and only where the run holds a record that doesn't read. Over each pair of the kinds of run files,
+    the runs named by run ids: with every serve launched before both runs, superseding the one, the other or both
+    never raises what is held; with a serve launched between them it does, and each time the superseded run holds
+    such a record and a serve the records name was launched after it."""
+    first = head(3, 5, 0)
+    kinds = run_files() | {"the four and a line that is no JSON": held_files(first, four(first)) | {
+        "out/more-verdicts.jsonl": "{no json\n"}}
+    raised = {}
+    for serve in (EARLY, LATE):
+        files = {kind: renamed(its, {"the serve": serve, "another serve": "r20260101-000000-0d0d"})
+                 for kind, its in kinds.items()}
+        raised[serve] = seen = 0
+        for i, (a, old) in enumerate(files.items()):
+            for j, (b, new) in enumerate(files.items()):
+                store = Store(tmp_path / f"{serve}-{i}-{j}", {RUN: old, LAST: new})
+                both = SV.of_runs(store, [RUN, LAST]).held
+                for superseded in ([RUN], [LAST], [RUN, LAST]):
+                    seen += 1
+                    if SV.of_runs(store, [RUN, LAST], superseded).held <= both:
+                        continue
+                    handed = SV.read(store, [RUN, LAST], superseded)
+                    serves = {r[CC.SERVE] for r in handed[1] + handed[5] if CC.reads(r)}
+                    assert any(SV.launched_after(s, run) for run in handed[6] for s in serves), (a, b, superseded)
+                    raised[serve] += 1
+        assert seen == 3 * len(kinds) ** 2 == 2028
+    assert raised[EARLY] == 0 and raised[LATE]
 
 
 def things(files: dict[str, str]) -> list[tuple[str, object]]:
