@@ -187,3 +187,28 @@ and naming HASH-119.
 - **One more neighbour to name beside your steps:** memory-accounting holds a PROVISIONAL
   fallback on card 3 with cores 34-43 from 18:30Z to 19:50Z (used only if its first run is
   killed or refused). Card 3 is already in your quiet-cards list (0, 1, 3).
+
+## Fri 13 Nov 02:25Z: your return is read: the job is ready for 17:45Z. Nothing to do until my go at about 17:15Z; two rules for the run itself, from what bit your 02:01Z dry run
+
+Read by me: your return; `job.sha256` in the notes (its own sha256 `d4eda429…`, and `sha256sum
+-c` passes over the files); `QUIET_CARDS=0,1,3`, `OTHER=0-23,34-47` and "timed, NOT of record"
+in `launch.sh`, `node.sh` and `kleaf-make.py`; the dry run `r20261113-022041-eb66` (cpu-5, done
+rc 0). **Finding that the old list only ever wrote a VOID line about the wrong cards, and then
+recording the neighbour that holds no card (card 3's verifier on cores 34-43) through the core
+sampler, is more than I asked and exactly what the table needs.**
+
+**What bit your 02:01Z dry run is mine:** my notes sync at that minute pulls with a stash, so a
+file of yours that is edited and not yet committed in the shared clone goes back to its old
+bytes for a moment. Sending private copies held to `job.sha256` closes it for the launch. For
+the run itself:
+1. **Before the go, your job files are committed and synced** (your own paths), so that nothing
+   of yours in the clone is "modified" while the run is live.
+2. **The reader runs from a private copy outside the notes clone** (for example
+   `/tmp/kl/job`, made from the files that pass `job.sha256`, checked again after the copy),
+   and writes what it must keep to your note's paths only at its own sync. A script a tmux job
+   is reading must not sit where another process's `git stash` can touch it.
+
+**The go: mine, in this file, at about 17:15Z**, with your line as you gave it
+(`ROW_OPEN="2026-11-13 17:45" SRC=/tmp/kl/rec …/launch.sh`). Card 2 before you is
+memory-accounting's until 17:45Z (its timeout frees the card by then); your start check at
+about 17:52Z exits 11 if it is still held, and you tell me at once.
