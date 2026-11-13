@@ -31,10 +31,10 @@ verity-bench lean-verify --lean F --proof TREE  # Flock's Lean verifier timed on
 
 ## Specs
 
-A spec is `benchmarks/specs/<name>.toml` (`verity-bench/vllm-spec/v0`; a steady-state spec is the other schema, in
+A spec is `benchmarks/harness/specs/<name>.toml` (`verity-bench/vllm-spec/v0`; a steady-state spec is the other schema, in
 its own section below): the preset (model and revision, precision, GPU,
 vLLM pin, engine settings), its arms and the modules of its experimental arms, its sweep (another file in
-`benchmarks/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
+`benchmarks/harness/specs/`, `verity-bench/vllm-sweep/v0`), reps, eager or CUDA graphs, and admission (`max_minutes` and friends,
 which never enter identity). A command names a spec by its name or its file; a file under the directory the specs
 had of their own (`presets.FORMER_SPECS`) is the spec of that name here. Loading is strict: an unknown key (an
 engine setting outside `presets.ENGINE_SETTINGS`
