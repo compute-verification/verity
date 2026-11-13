@@ -184,8 +184,8 @@ RULED: dict[str, str] = {"S8Dot_v1": "verity.circuits.ops.s8", "S8Matmul_v1": "v
                          "S8Dot_v2": "verity.circuits.ops.boolean.s8", "S8Matmul_v2": "verity.circuits.ops.boolean.s8",
                          "GemmAccumulatorS8_v1": "verity.circuits.ops.gemm",
                          "GemmAccumulatorS8_v2": "verity.circuits.ops.boolean.gemm",
-                         "PouwSegDot_v2": "verity.protocols.pouw.prover.circuit.segment",
-                         "PouwSegDot0_v2": "verity.protocols.pouw.prover.circuit.segment"}
+                         "PouwSegDot_v2": "verity.protocols.accounting.pouw.prover.circuit.segment",
+                         "PouwSegDot0_v2": "verity.protocols.accounting.pouw.prover.circuit.segment"}
 
 
 def serves_none(bindings: dict) -> dict[str, int]:

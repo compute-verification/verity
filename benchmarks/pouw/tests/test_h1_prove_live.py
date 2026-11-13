@@ -14,10 +14,10 @@ import live as LV
 import numpy as np
 import pytest
 
-from verity.protocols.pouw.prover.circuit import live as L
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import live_reads as LR
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.pouw.prover.circuit import live as L
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import live_reads as LR
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 T, S, PREFIX = 4, 2, "h1/"
 PROGRAM, WINDOW, SESSION = "ab" * 64, "cd" * 64, "session-1"
@@ -126,7 +126,7 @@ def test_evidence_is_credits_live_statements_on_the_staged_program(prepared, tmp
     import hashlib
     import shutil
 
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
 
     base, _pub, _rc = prepared
     work = tmp_path / "work"
