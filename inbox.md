@@ -82,3 +82,29 @@ The runs' last lines (READ):
 
 Refs TRN-156
 
+[2026-11-13T11:26Z] f543e07f47b5
+WALKER, Fri 13 Nov, 3:27 AM PST.
+
+**Fix 3 is draft [#9730](https://github.com/compute-verification/verity/pull/9730) at 5efe513c14, cut from #9676's head. `Work` is byte-equal with the rule on and off at every shape I read, up to s(2,256,512). With the rule on, the reading adds nothing measurable above the build's own peak. The column case costs 5.6 s per reading, so the hash sweep isn't needed.**
+
+- **Equal on and off.** RAN: r20261113-103730-77ec compared `Work` byte for byte, rule on against rule off, at tiny(2,16,64), s(2,16,64) and s(2,64,512); all equal. RAN: at s(2,256,512), the rule-on reading (r20261113-103757-2734) and the rule-off reading (r20261113-103824-cc0b) have the same sha256.
+- **Before and after.** RAN: r20261113-110022-b1a5 is #9676 at 3a94714cfb, untraced. r20261113-110211-383d is this head, with the column clock. Both ran on cpu-7 at the same time.
+
+  | shape | before (#9676) | after | build alone |
+  |---|---|---|---|
+  | s(2,256,512) | 836.1 s, 12.99 GiB | 705.1 s, 10.15 GiB | 10.1 GiB |
+  | tiny(2,1024,64) | still running in b1a5 | 308.5 s, 3.09 GiB | 3.1 GiB |
+
+  RAN: with the rule off, tiny(2,1024,64) took 796.3 s at 9.44 GiB (cc0b). INFERRED: #9676 will land near that. RAN: the same head alone on cpu-11 read s(2,256,512) in 468.9 s, so the times move with load and the peaks don't.
+- **Column case** (your item 2). RAN: 5.6 s over 192 column products at s(2,256,512), out of 705.1 s. 5.6 s over 16 at tiny(2,1024,64), out of 308.5 s. INFERRED: under 2%, so I don't propose the follow-up.
+- **Counts.** RAN: rule on, every reading has softmax:runs and select:runs, and no softmax or select read by words (4+4 on tiny, 12+12 on s). The column case is counted apart as `("columns","words")`, by design.
+- **Your four conditions**, with the PR body listing each line that checks one:
+  - No float fact is written twice: the rule's verdicts come from `_generic`, `_shape` and `_finite`, and its code names neither 0 nor -inf.
+  - Canonical runs: `_runs` merges equal neighbours, and rows compare by `_shape` of the expanded constants, never by parts.
+  - Branch tests: the `split`, `masked-row` and `finite` bodies, plus `input-word` (guarded and unguarded) and `repeated-base`. All are equal on and off and state which nodes fall back. RAN: mutations on the VM, reverted. An always-false condition fails `masked-row` and `input-word`. Comparing raw constants instead of `_shape` fails `finite`.
+  - The reading says how it read: `Reader.read_by`. The tiny test holds rows and selects at zero fallbacks and states 16 column products. The flag and the clock are constructor arguments; no CLI.
+- **Suites.** RAN: 4 of 4 passed at 38e65802bf (r20261113-103702-78cf). The head since adds the column count and clock, a docstring, and the tiny count test; that test passes on the VM by name. A rerun at 5efe513c14 is in flight as r20261113-112505-0ef9. `--on auto` placed it on cpu-2. I did not name cpu-2; say if you want it moved.
+- **s-t20 "if it then reads".** INFERRED: it should read at about the build's 57.5 GiB plus `_leaves`. Launching it means another 160 GB machine beside 54ec, and you kept the check machines for the chains, so I'm waiting for your go.
+- **54ec.** RAN: still in the pass. Heartbeat at 17,913 s: RSS 128.9 GiB, pass peak 132.2 GiB, against a stop at 144 GiB. I'll send its end.
+- No merge of `main`.
+
