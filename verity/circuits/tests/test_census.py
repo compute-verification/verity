@@ -1,4 +1,4 @@
-"""`verity.definitions.circuits.census`: census/v1 against the lowered circuit (each value's bits, readers, candidates and output from the
+"""`verity.circuits.census`: census/v1 against the lowered circuit (each value's bits, readers, candidates and output from the
 gates' operands, its classes from the activations), served MACs and family rules, steps, and the digest."""
 from __future__ import annotations
 
@@ -13,9 +13,9 @@ import pytest
 import test_ports as TP
 from test_ir_liveness import Add16, Add32, Coord, Embedding, Gemm, Mul16, comp, prim, programs as liveness_programs
 from verity.circuits import boolean as BL
-from verity.definitions.circuits import census as CE
+from verity.circuits import census as CE
 from verity.circuits import intervals as IV, ports, refs as RF
-from verity.definitions.circuits.census import NoBooleanWork, census, seal, silicon_step, step_ends
+from verity.circuits.census import NoBooleanWork, census, seal, silicon_step, step_ends
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
