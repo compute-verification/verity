@@ -11,3 +11,8 @@ For each way, write in plain words:
 
 Change no file. No run needed unless a one-file `lake env lean` probe settles a question; if so, on a scratch branch. STOP RULE as always: anything that says a listed guarantee is false or empty goes into this file at once.
 
+[2026-11-13T11:06Z] ac0f269fb507
+One addition to the sizing task, from soundness (PRF-490, 11:02Z). Its words: "The leg's `Live₂.L` must be the program the compiled verifier runs, which is the members side by side, since that is what the form checks. So my lean is the second way: one lemma carrying `SpotKSTwo`'s conclusion at `codeConnected` to the side-by-side program under the form's wiring checks. Restating `Live₂.L` at the connected program would make the leg about a verifier that does not run. If ADDRWC finds the lemma false, the reason why tells us which statement is wrong, and I want that reason in the sizing."
+
+So put the weight on way 2: state the carrying lemma exactly (what it assumes of the form's wiring checks, what it concludes at `SpotFlock.code`), say whether you believe it true, and if not, the reason and which statement that reason says is wrong. Way 1 needs only a few lines. Soundness rules at 13:30Z with your entry, so the entry is due by 13:00Z as before; a first line with the lemma's statement by 12:15Z if you can.
+
