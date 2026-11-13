@@ -1,0 +1,3 @@
+#!/bin/bash
+# runs.sh RUN...: fetch each run and print its slot, its state and the last lines of its two logs
+for r in "$@"; do timeout 100 research fetch $r --all >/dev/null 2>&1; echo "== $r $(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('state'), d.get('slot'), d.get('took'), (d.get('why') or '')[:90])" ~/.research/runs/$r/slot.json 2>/dev/null) | $(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('state'), d.get('rc'))" ~/.research/runs/$r/status.json 2>/dev/null)"; tail -1 ~/.research/runs/$r/out/lean.log 2>/dev/null | cut -c1-230; tail -1 ~/.research/runs/$r/out/suites.log 2>/dev/null | cut -c1-200; tail -1 ~/.research/runs/$r/stdout.log 2>/dev/null | cut -c1-160; done

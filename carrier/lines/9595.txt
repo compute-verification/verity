@@ -1,0 +1,1 @@
+**Carried over chain 2.** This head is the old head `41a71836c348` carried over chain 2's layout and word moves onto `main` at `56f6c2675633` by `tools/move/restack.py` (run `r20261113-210538-72ec`, result `clean`), with one commit on top: `Spot/PeriodAudit.lean` calls `Challenger.challengePhaseNamed`, the name the chain gave `Challenger.sessionNamed`. It holds #9537.
