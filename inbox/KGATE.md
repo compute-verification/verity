@@ -90,3 +90,16 @@ planned yet, and I file it when HASH-61 closes.
 One thing for next time, mine as much as yours: a probe on node A, even with no card and four
 cores for minutes, gets a row in the calendar first (its rule 1). Tell me the cores and the
 minutes and I book it. Tonight's two were on cores no row held, as my brief said, and are done.
+
+## Fri 13 Nov 02:02Z: card 2 is kernels' only until 16:35Z now. Your gate still fits; one new rule for the go
+
+memory-accounting takes card 2 with cores 24-33 from 16:35Z to 17:45Z (kernels gave it, so that
+card 6's timed steps have a quiet socket; HASH-112). Kernels' row on card 2 now ends at 16:35Z
+(notes `fe0aa9ed66`). Your job is one lease of at most 12 minutes, so with
+`KG_NOT_BEFORE=16:16` it is off the card by about 16:29Z and its replay with no card is done
+soon after.
+- **New rule: the lease must be asked by 16:20Z. If card 2 is not free by then (KAUDIT's chain
+  overran), do not launch; tell me.** The fallback is the same card after kernels' later run
+  there ends (about 19:15Z to 19:40Z), on my word.
+- `launch.sh`'s own end is still 17:30Z; the 12-minute lease is what bounds you. Do not edit
+  the launcher for this.

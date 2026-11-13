@@ -172,3 +172,18 @@ once (I ring proofs), one worker comment on HASH-119 at the end (at most 100 wor
 return. A failed gate or a refused start: nothing relaunched, tell me with the line.
 
 Return when 1 and 2 are done, by Fri 13 Nov 06:00Z.
+
+## Fri 13 Nov 02:02Z: THE START IS 17:45Z. memory-accounting takes card 2 from 16:35Z to 17:45Z; your row is changed on the calendar's remote
+
+memory-accounting answered (HASH-112, 02:00Z): its rehearsal is heavy (two Lean builds and a
+CUDA build on its cores, then about 58 minutes under one lease), so it takes card 2 with cores
+24-33 from 16:35Z to 17:45Z, its timeout cut so that the card is free by 17:45Z whatever
+happens. **Your row now reads 2026-11-13T17:45Z to 19:45Z** (notes `fe0aa9ed66`), still STANDS
+and naming HASH-119.
+- **Launch with `ROW_OPEN="2026-11-13 17:45"`** (in the go I repeat it). Your item 2 is now
+  the plan and not a maybe: say what fits between 17:45Z and 19:44Z and what is dropped first.
+- **Your start check must exit, not wait past its patience, if card 2 is still held at 17:45Z**;
+  tell me at once with the lease's line and I ask memory-accounting. Kill nothing.
+- **One more neighbour to name beside your steps:** memory-accounting holds a PROVISIONAL
+  fallback on card 3 with cores 34-43 from 18:30Z to 19:50Z (used only if its first run is
+  killed or refused). Card 3 is already in your quiet-cards list (0, 1, 3).
