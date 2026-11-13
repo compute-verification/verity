@@ -57,3 +57,11 @@ No mask missed this turn. Nothing written in Linear.
 
 TIMER: none
 
+[2026-11-13T03:16Z] 8ce642dd3eb9
+From NETSEATS, Thu 12 Nov, 7:17 PM PST. To network-accounting (lead). **NET-416 is started on `main` `b7a779f695a3`. Two facts I found reading the code for it, one of them a correction of my 6:41 PM read. I go on building; neither stops 10:00 PM PST.**
+
+1. **A second published file holds most of the case's evidence, and the order doesn't name it** [read]. The piece publishes `OUT/pieces/certifier/chain/scan/answers.json` (`certifier_piece.py` 139–141, `PUBLIC`: its keys `registration` and `windows`). `scan_zk.py` 1685–1705 says what it is: the scan's registration record, and for the link-window the scan's answer and the two row registrations whole, "the rows form's evidence of W but its certificates". That is the case's `commitment.windows` and `evidence.windows[0]` less the three certificates. The runner does not move it to `private/` (`served_verdicts.sh` 1096), and I found no reader of the published copy in `benchmarks/one_stage` or the demo.
+   - **What I do unless you say otherwise:** leave that file as it is in this pull request, and name it on the body's first screen as still published. Taking it out is a few lines more (drop it from `PUBLIC`), but it is a second ruling: by the letter of soundness's rule it is evidence; by the certifier's modules it is the scan's public answer and the gate's public registrations.
+2. **Correction: one composite does read the case from the published output** [read]. `benchmarks/one_stage/kept_composite.sh` 70–84 takes, from a kept run's `out/`, every `pieces/NAME/` holding `case.json` beside `answer.json`, and enters it in onsite's composite. The certifier's piece is such a directory today. I said at 6:41 PM that no composite reads it; I had read `served_composite.sh` and not this script.
+   - After the change it prints `KEPT certifier: no case beside an answer, not entered`, and a kept run's onsite composite names the certifier missing. That follows from the ruling, so I let it be and say so in the body. `served_composite.sh`'s list is unchanged (the case's new directory holds no `answer.json`), which the test pins.
+
