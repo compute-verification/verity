@@ -12,7 +12,10 @@ computed whatever the others say:
   evidence does not) that the challenger's signed log shows released after the later registration
   (`Challenger.coinsReason`), and that log shows a coin released after the earlier registration, the last of those before
   the first released after the later one (`receiptReason`): the record whose ports the later blocks read was received
-  first, and no coin that sampled one of them was released before the challenger received what fixes its rows;
+  first, and no coin that sampled one of them was released before the challenger received what fixes its rows; and
+  that family is the later record's own, the one of the place its window names (`familyReason`, `Place.family`:
+  `NO_PLACE` where the window names none, `OTHER_FAMILY` where it names another), so which family of the session the
+  sample read is the record's to fix and never the caller's to choose;
 * `audit`: the earlier stream's audit record (`Record.record`'s) is the earlier registration's and accepted, with
   `complete`, whether that record says every one of its entries ran (`auditVerdict`); no verdict when none is handed.
 
@@ -33,9 +36,11 @@ module
 
 public import Spot.Record
 public import Spot.ChallengerDraw
+public import Spot.Place
 meta import Spot.Record
 meta import Spot.ChallengerCoins
 meta import Spot.ChallengerDraw
+meta import Spot.Place
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -136,6 +141,19 @@ def orderReason (key : Option Challenger.ChallengerKey) (main : Json) (window : 
       | .error why => some why
       | .ok received => receiptReason received earlier later
 
+def NO_PLACE : String := "the later record's window names no place in its session, so no family is its sample's"
+
+def OTHER_FAMILY : String := "the later sample's family is not the one of the place its record's window names"
+
+/-- Why the family the caller names for the later sample's coins is not the later record's own: the window of the
+record `later` names no place (`NO_PLACE`), or the family of another (`OTHER_FAMILY`; `Place.family`). None where the
+caller names no family: `orderReason` refuses that read (`NO_FAMILY`). -/
+def familyReason (family : Option String) (later : Json) : Option String :=
+  match family, Place.family (getD later "window") with
+  | none, _ => none
+  | some _, none => some NO_PLACE
+  | some named, some mine => if named == mine then none else some OTHER_FAMILY
+
 /-- The verdict on the earlier stream's audit record: whether it is the earlier registration's and accepted, and
 whether it is complete, every one of its entries having run; `why` when it did not accept, or accepted and is not
 complete. -/
@@ -235,7 +253,8 @@ def acrossFound (i : Across) : V AcrossFound := do
   let later ← Flock.WindowRecord.digest i.later
   let received := loggedAt i.log previous
   return { logged := .ofReason (if received.isSome then none else some UNLOGGED), received,
-           order := .ofReason (orderReason i.key i.main i.window i.family earlier later i.coins i.read),
+           order := .ofReason ((orderReason i.key i.main i.window i.family earlier later i.coins i.read).or
+             (familyReason i.family i.later)),
            audit := auditVerdict i.audit previous, earlier := previous, later := Flock.hexOf later }
 
 /-- The verdicts on one read across streams (`acrossFound`): `{"logged", "received", "order", "audit", "case",
@@ -266,6 +285,22 @@ private def root (n : Nat) : ByteArray := ByteArray.mk #[n.toUInt8]
 #guard orderReason none .null "" none (root 1) (root 2) (Json.mkObj []) (root 0) == some NO_FAMILY
 -- and neither does one whose verifier holds no key
 #guard orderReason none .null "" (some "draw/1") (root 1) (root 2) (Json.mkObj []) (root 0) == some NO_KEY
+
+/-- A later record whose window is a stop class's of prompt 4 and outputs 4, with `more`. -/
+private def laterOf (more : List (String × Json)) : Json :=
+  Json.mkObj [("window", Json.mkObj ([("prompt", Lean.toJson (4 : Nat)), ("outputs", Lean.toJson (4 : Nat)),
+    ("stopped", Json.bool true)] ++ more))]
+
+-- the stop blocks' family is their record's, and neither the class's spans' nor one the caller chooses
+#guard familyReason (some "draw/68719476755") (laterOf [("population", "stop")]) == none
+#guard familyReason (some "draw/68719476754") (laterOf [("population", "stop")]) == some OTHER_FAMILY
+#guard familyReason (some "draw/0") (laterOf [("population", "stop")]) == some OTHER_FAMILY
+#guard familyReason (some "draw/68719476754") (laterOf []) == none
+-- a window that names no place fixes no family, and a read of no family is `orderReason`'s to refuse
+#guard familyReason (some "draw/0") (Json.mkObj [("window", Json.mkObj [("run", "ab")])]) == some NO_PLACE
+#guard familyReason (some "draw/68719476755") (laterOf [("population", "spans")]) == some NO_PLACE
+#guard familyReason (some "draw/0") Json.null == some NO_PLACE
+#guard familyReason none (laterOf [("population", "stop")]) == none
 
 private def wide (n : Nat) : ByteArray := ByteArray.mk (List.replicate 64 n.toUInt8).toArray
 
