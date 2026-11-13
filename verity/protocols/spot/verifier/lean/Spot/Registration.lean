@@ -12,9 +12,17 @@ A v2 record (`verity/registration/v2`) adds `"registered": [{"value", "root", "l
 `"word_bits"` for a value whose leaves are not 16 bits), and R7 holds it to the verifier's own entries
 (`Registered.entries`), a value the verifier pinned before the record to its root (`pinned`: the weights' root recorded
 before the salt), and each value an earlier record of the log registered under the domain it takes now to that record's
-root (`heldRoots`). The verifier expects a v2 record exactly when it expects values registered. Its entry for a value
+root (`heldRoots`). The verifier expects a v2 record exactly when it expects values registered or holds certified
+entries (`Verifier.v2`). Its entry for a value
 counts the value's rows in the row format the verifier holds for it (`schemas`; a bit row's `words` hold as many of its
 leaves as their bits do), and in `row/v1` rows when it names none.
+
+A verifier may hold certified entries (`certified`): the entry and root of a value that is none of its program's
+parameters, which it built from a registration it read under the deployment's key (the certified rows of a link). R7
+then holds the record's registered values to be its own and the certified ones, each once (`R7-values`), a certified
+value's entry to the verifier's leaves, words, word bits and domain as its own values', and its root to the
+verifier's (`certifiedHeld`, `R7-certified`). A certified value is not an output value, and no pinned root or root of
+the log is read for it: its entries join the verifier's own after the output values' steps (`checkOutputs`).
 
 A verifier that names its window's open root R (`windowRoot`, which it reads from the challenger's signed open of the
 window, never from the record) takes every registered value's domain under R (`Registered.domainAt`) but the ones it
@@ -211,6 +219,13 @@ structure Verifier where
   /-- the per-member form's members, each its units as `[lo, hi)` ranges and its circuit's units a proof block, whose
   link points `link-points` holds to one count (`linkRefused`); none in the one-statement form -/
   members : Array (Array (Nat × Nat) × Nat) := #[]
+  /-- the certified entries, `(entry, root)` each: values that are none of `registered`, whose entry and root the
+  verifier built from a registration it read under the deployment's key, which R7 holds the record's entry for the
+  value to (`checkOutputs`, `certifiedHeld`) -/
+  certified : Array (Registered.Entry × String) := #[]
+
+/-- Whether the verifier expects a v2 record: it expects values registered or holds certified entries. -/
+def Verifier.v2 (v : Verifier) : Bool := !(v.registered.isEmpty && v.certified.isEmpty)
 
 /-- The programs the declarations declare for `day`, in the log's order. -/
 def declaredOf (day : Nat) (ds : Array (Nat × String)) : List String :=
@@ -423,16 +438,18 @@ def checkRegistered (c : Array String) (got : Json) (mine : V (Array Registered.
         | .ok r => if !jeq (getD e "root") (Json.str r) then c := addCode c "R7-supplied"
   return c
 
-/-- R7 with output values: `checkRegistered` on the entries and held roots `applyOutputs` leaves, after its codes. -/
+/-- R7 with output values: `checkRegistered` on the entries and held roots `applyOutputs` leaves, then the certified
+entries (`certified`), which no output step reads, after its codes. -/
 def checkOutputs (c : Array String) (got : Json) (mine : V (Array Registered.Entry))
     (held : Array (String × String)) (supplied : Array (String × Supplied.Rows))
     (rootOf : String → Supplied.Rows → Registered.Entry → V String)
-    (outputs : Array (String × String × Earlier)) (log : Array Json) : Array String :=
+    (outputs : Array (String × String × Earlier)) (log : Array Json)
+    (certified : Array Registered.Entry := #[]) : Array String :=
   match mine with
   | .error _ => addCode c "R7-registered"
   | .ok mine =>
     let (c, mine, held) := applyOutputs c mine held outputs log
-    checkRegistered c got (.ok mine) held supplied rootOf
+    checkRegistered c got (.ok (mine ++ certified)) held supplied rootOf
 
 /-- **Whether a window carries the previous window's pool** (`registration.pool_chains`): neither the verifier refused
 the window the public lag back (`Pool.refused`) nor serving reset it (`reset`), and the log's last record, the previous
@@ -480,6 +497,13 @@ def poolChained (rec : Json) (v : Verifier) : Bool :=
   | some p => match entryOf rec p.pin, poolOpen rec v p with
     | some e, some (d, r) => jeq (getD e "domain") (Json.str d) && jeq (getD e "root") (Json.str r)
     | _, _ => false
+
+/-- R7's certified roots (`registration._certified_held`): the record's entry for each certified value (`entryOf`) has
+the root the verifier holds for it; `R7-certified` otherwise. -/
+def certifiedHeld (rec : Json) (v : Verifier) : Bool :=
+  v.certified.all fun x => match entryOf rec x.1.value with
+    | some e => jeq (getD e "root") (Json.str x.2)
+    | none => false
 
 /-- R3's index of the record's roots, each root's port canonicalized once: the last root naming each canonical port, and
 how many distinct ports the roots name, a port with no canonical form counting as one of its own (`jeq` equals it to
@@ -543,7 +567,7 @@ def r8Codes (v : Verifier) (c : Array String) : Array String :=
 /-- `registration.check`'s failure codes, R1–R8 in order, then `link-points` (`linkRefused`): empty when the record
 holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
-  let v2 := !v.registered.isEmpty
+  let v2 := v.v2
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
   let get := getD rec
   let mut c : Array String := #[]
@@ -607,8 +631,8 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
         v.schemas)
-      v.outputs v.log
-    c := kept (poolChained rec v) c "R7-pool-chain"
+      v.outputs v.log (v.certified.map (·.1))
+    c := kept (certifiedHeld rec v) (kept (poolChained rec v) c "R7-pool-chain") "R7-certified"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c
@@ -616,7 +640,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
 before it and every verifier port with every root. The reference `check` is proved equal to (`check_eq_checkRef`). -/
 def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
-  let v2 := !v.registered.isEmpty
+  let v2 := v.v2
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
   let get := getD rec
   let mut c : Array String := #[]
@@ -681,8 +705,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1))
         v.schemas)
-      v.outputs v.log
-    c := kept (poolChained rec v) c "R7-pool-chain"
+      v.outputs v.log (v.certified.map (·.1))
+    c := kept (certifiedHeld rec v) (kept (poolChained rec v) c "R7-pool-chain") "R7-certified"
   -- R8
   c := r8Codes v c
   return if linkRefused v then addCode c "link-points" else c

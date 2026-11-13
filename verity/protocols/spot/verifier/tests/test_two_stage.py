@@ -298,6 +298,23 @@ def test_the_run_of_record_holds_the_form_switch(monkeypatch):
     assert {"interior", "symbol"} <= set(checks["run"]["detail"][V.DISAGREE]["fields"])
 
 
+def test_a_two_stage_outcome_is_complete_only_on_the_form_the_request_definition_and_its_records():
+    """`second_stage.complete`: true only when the two-stage form is allowed, the replay block is the registered request
+    Definition and each audit record accepted and is itself complete. One of the three missing, it is false: the form
+    off, as `FORM` is; a stand-in replay block; a record that is missing, did not accept, is not complete or does not
+    say; no record at all. An argument that is not the boolean true counts as missing."""
+    whole = {"accepted": True, "complete": True}
+    assert SS.FORM is False
+    assert SS.complete(True, True, [whole, whole]) is True and SS.complete(True, True, [whole]) is True
+    assert not SS.complete(SS.FORM, True, [whole, whole])
+    assert not SS.complete(True, False, [whole, whole])
+    for record in (None, {"accepted": True, "complete": False}, {"accepted": False, "complete": True},
+                   {"accepted": True}, {"complete": True}, {"accepted": 1, "complete": True}):
+        assert not SS.complete(True, True, [whole, record])
+    assert not SS.complete(True, True, [])
+    assert not SS.complete(1, True, [whole]) and not SS.complete(True, "yes", [whole])
+
+
 def _linked(s: dict, shift: int = 0, **ports) -> dict:
     """Statement `s`'s registered reads, the honest prover's (PAIR's linked `x` and `o0` read at the boundary, N_RHO
     rows a replay block, each slot its unit's of its cell's), each read the replay block `shift` on, with `ports`

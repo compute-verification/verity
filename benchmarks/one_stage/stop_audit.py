@@ -55,6 +55,10 @@
   ``cross-stream-order`` (its ``case``), name that as their premise.
   ``summary.json`` copies the record's ``accepted`` and ``complete`` and lists every entry's ``premise``. It says the
   response's length is held (``length_held``) only when the record accepted and is complete.
+* **The answer** (`answer_of`, ``answer.json`` beside ``audit.json``, one canonical line) is the stop stream's, in
+  one-stage's form (`audit.answer`): an accept of a record that accepted, whose public ``complete`` is that record's
+  own, so it is false while any entry above is null; else a reject of the stop registration. A reader that wants a
+  complete audit of the stop population reads `audit.answer_complete` of it, never the verdict alone.
 * **The proof deadline** counts on the stream built again here, from its sample read again, not from the first
   stage's: nothing here holds the time between the two commands.
 
@@ -69,6 +73,7 @@ import sys
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -87,12 +92,14 @@ from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.commitments.rowleaf import row_leaf  # noqa: E402
 from verity.commitments.windows import rows as CS, tables as TB  # noqa: E402
 from verity.protocols.spot.verifier import service as S  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as REG, registration as R  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import audit as A, partition as P, registered as REG, registration as R  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
 
 FORMAT = "verity/one-stage/stop-audit/v0"
 TOOL = "benchmarks/one_stage/stop_audit.py"
+#: the stop stream's answer, written beside ``audit.json`` (`answer_of`)
+ANSWER = "answer.json"
 #: the statement's one member, and its output row's circuit port
 MEMBER, OUT = "stop", "o0"
 
@@ -470,6 +477,22 @@ def summary_of(r: Resumed, stop: BS.Stop, design: str, got: Mapping[str, Any]) -
             "premises": sorted({v["premise"] for v in verdicts.values() if "premise" in v})}
 
 
+def answer_of(r: Resumed, got: Mapping[str, Any]) -> dict[str, Any]:
+    """The stop stream's answer of an outcome (`decide`'s), in one-stage's form. Of an audit record that accepted it is
+    `audit.answer` at the stream's δ: its public ``complete`` is the record's own, true only when every entry has a
+    verdict, so an accept whose record left an entry null says so and `audit.answer_complete` refuses it. Else a
+    reject of the stop registration, naming the record's checks that failed and its verdicts that did not accept, or
+    that the stream refused the outcome and wrote no record."""
+    audit = got.get("audit") or {}
+    if got.get("accepted") is True and audit.get("accepted") is True:
+        return A.answer(audit, Fraction(r.stream.delta).limit_denominator(10**12))
+    failed = sorted(k for k, c in (audit.get("checks") or {}).items() if not c.get("ok"))
+    refused = sorted(k for k, v in (audit.get("verdicts") or {}).items() if v.get("accepted") is False)
+    named = "; ".join(f"{what}: {', '.join(names)}" for what, names in (("checks", failed), ("verdicts", refused)) if names)
+    return {"commitment": r.registration.digest, "profile": None, "protocol": R.PROTOCOL, "public": None,
+            "reason": named or "the stop stream refused the outcome", "verdict": "reject"}
+
+
 # --- the command ------------------------------------------------------------------------------------------------------
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -536,6 +559,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "error": f"{type(e).__name__}: {e}"})
     if got.get("audit") is not None:
         (out / "audit.json").write_text(json.dumps(got["audit"], indent=1, sort_keys=True, default=str) + "\n")
+    (out / ANSWER).write_bytes(canonical_json(answer_of(r, got)) + b"\n")
     summary = summary_of(r, stop, a.design, got)
     summary["statement"] = {"pin": st["pin"], "ands": st["ands"], "k_log": st["meta"].get("k_log"), **proved["statement"][MEMBER]}
     return done(0 if summary["accepted"] else 1, summary)

@@ -32,7 +32,7 @@ from verity.protocols.spot.verifier.profile import (Bernoulli, IntegrityProfile,
                                           WorkStratum)
 
 from .draw import check_draw, check_proved, law_of
-from .registration import digest as registration_digest
+from .registration import PROTOCOL, digest as registration_digest
 
 FORMAT = "verity/one-stage/audit/v0"
 PROFILE = "verity/integrity-profile/v1"
@@ -54,7 +54,7 @@ def profile(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: flo
     elif draw["law"] in ("stratified", "work"):
         law = core_law(law_of(draw), registration["population"])
     else:
-        raise ValueError(f"no profile for a {draw['law']!r} draw")
+        raise ValueError(f"no profile for a {draw['law']!r} sample")
     return IntegrityProfile(levels=(Level(LEVEL, registration["partition"]),), sizes=(registration["population"],),
                             draws={LEVEL: law}, delta=delta, programs=(registration["program"],),
                             drawn={LEVEL: len(draw["units"])})
@@ -132,16 +132,51 @@ def session_registered(verdicts: Mapping[str, Mapping[str, Any]],
     return {k: r for k, r in out.items() if k in named}
 
 
+#: the public output of an accept that says whether every verdict ran (`answer`), read by `answer_complete`
+COMPLETE = "complete"
+
+
+def answer(record: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
+    """One-stage's answer of the accepted audit record `record`, as Lean's `OneStage.check` gives it on that record's
+    evidence (`Core.Answer.toJson`): the commitment is the registration's digest; the profile is `profile` with `delta`
+    an exact ratio; and the public outputs are the sampled proof blocks and the proved ones, the bound on incorrect
+    proof blocks at `delta` with each template's own under a stratified or work sampling design, and `COMPLETE`, the
+    record's own ``complete``: whether every verdict ran, those that are not of record too. A record without one says
+    it of none."""
+    if record.get("accepted") is not True:
+        raise ValueError("only an accepted audit record has an accept's answer")
+    registration, sample = record["registration"], record["draw"]
+    p = profile(registration, sample, delta).to_json()
+    p["delta"] = str(delta)
+    wrong = wrong_units(registration, sample, delta)
+    return {"commitment": registration_digest(registration), "profile": p, "protocol": PROTOCOL,
+            "public": {"bound": wrong["bound"], COMPLETE: record.get("complete") is True,
+                       "drawn": sorted(sample["units"]), "per_template": wrong.get("per_template"),
+                       "proved": sorted(record["proved_units"])},
+            "reason": None, "verdict": "accept"}
+
+
+def answer_complete(answer: Any) -> bool:
+    """Whether `answer` is an accept that says every verdict ran: its verdict is ``accept`` and its public `COMPLETE`
+    is true. An answer without the field, as one written before the field was, is not complete, and neither is a
+    reject or an undecided, which has no public outputs."""
+    public = answer.get("public") if isinstance(answer, Mapping) else None
+    return isinstance(public, Mapping) and answer.get("verdict") == "accept" and public.get(COMPLETE) is True
+
+
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  law: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None,
-                 session_registered: Mapping[str, str] | None = None) -> dict[str, Any]:
+                 session_registered: Mapping[str, str] | None = None, certified: Sequence[str] = ()) -> dict[str, Any]:
     """`draw` is the verifier's own sample. `served`: the proof blocks the sessions were served, when the sample was handed to them
     (each must serve exactly the sample). `session_roots`: `{registered port: root}` from the sessions' statements (each
     must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
-    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); a registration with
-    registered values needs it, each the registered root."""
+    record opened the sessions' reads against (`session_registered(verdicts)`, never the registration's own); each read it
+    reports must be of a registered value, at that value's registered root, and a registered value needs no reported read.
+    `certified`: the names of the values the verifier holds certified entries for; each of them does need a reported
+    read (the check `certified` names the ones that have none), so a read reported under another value's name does not
+    stand in for it."""
     checks = {"draw": check_draw(draw, registration, law).to_json(),
               "proved": check_proved(draw, proved_units, instances).to_json()}
     if receipt.get("registration") != registration_digest(registration):
@@ -153,13 +188,16 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
         wrong = sorted(p for p, r in session_roots.items() if p not in registered or registered[p] != r)
         if not session_roots or wrong:
             checks["roots"] = {"ok": False, "codes": ["roots"], "detail": {"ports": wrong}}
-    if "registered" in registration or session_registered is not None:
-        want = {e["value"]: e["root"] for e in registration.get("registered", [])}
-        opened = dict(session_registered or {})
-        if opened != want:
-            checks["registered"] = {"ok": False, "codes": ["registered"],
-                                    "detail": {"registered": sorted(want), "opened": sorted(opened),
-                                               "wrong": sorted(v for v in want if v not in opened or opened[v] != want[v])}}
+    want = {e["value"]: e["root"] for e in registration.get("registered", [])}
+    opened = dict(session_registered or {})
+    wrong = sorted(v for v in opened if v not in want or opened[v] != want[v])
+    if wrong:
+        checks["registered"] = {"ok": False, "codes": ["registered"],
+                                "detail": {"registered": sorted(want), "opened": sorted(opened), "wrong": wrong}}
+    unread = sorted(v for v in certified if v not in opened)
+    if unread:
+        checks["certified"] = {"ok": False, "codes": ["certified"],
+                               "detail": {"certified": sorted(certified), "unread": unread}}
     ran = {k: v for k, v in verdicts.items() if v.get("accepted") is not None}
     of_record = [v for v in verdicts.values() if v.get("of_record")]
     accepted = (bool(of_record) and all(v.get("accepted") is True for v in of_record)
@@ -173,9 +211,9 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     if accepted:
         p = profile(registration, draw, delta)
         if draw["law"] in ("stratified", "work"):
-            drawn = {s["template"]: sum(1 for u in draw["units"] if any(lo <= u < hi for lo, hi in s["units"]))
-                     for s in draw["strata"]}
-            rec["profile"] = {**p.draws[LEVEL].to_json(), "delta": p.delta, "drawn": drawn}
+            sampled = {s["template"]: sum(1 for u in draw["units"] if any(lo <= u < hi for lo, hi in s["units"]))
+                       for s in draw["strata"]}
+            rec["profile"] = {**p.draws[LEVEL].to_json(), "delta": p.delta, "drawn": sampled}
         else:
             rec["profile"] = p.to_json()
         digests = [v.get("digest") for v in of_record]

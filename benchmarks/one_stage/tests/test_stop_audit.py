@@ -1,7 +1,7 @@
 """`stop_audit.py`'s verifier's half on a stop class's hand-off, sampled on a test's own challenger
 (`fake_challenger`): the stop stream built again from ``stage1.json`` alone, the verifier's own ``--registered`` file,
 the audit record's entries and what each refuses, and Lean's verdicts on the read across the class's two streams
-(`Record.across`) held to the Python's on twelve written cases. No input is drawn. No proof runs here: a session's
+(`Record.across`) held to the Python's on twelve written cases. No input is random. No proof runs here: a session's
 verdicts are stand-ins of the form `a0.lean_verify` reports, and ``stop_audit_small.sh`` is the run that proves. The
 class is the two-stage driver's tests' (`test_two_stage_driver._stop_class`)."""
 
@@ -141,6 +141,44 @@ def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_
     assert {SA.BOUNDARY_PREMISE, SA.STOP_RULE_PREMISE, SA.REQUEST_PREMISE} == set(summary["premises"])
 
 
+def test_the_stop_streams_answer_carries_its_audit_records_complete(tmp_path, monkeypatch):
+    """`answer_of` is one-stage's answer of the stop stream's outcome. The record that accepts with three entries null
+    gives an accept of the stop registration over the stop sample whose public ``complete`` is false, which a reader
+    that wants a complete audit refuses (`audit.answer_complete`). The same record saying complete gives one it takes:
+    the field is the record's own. A session Lean's verdict refuses gives a reject of that registration with no public
+    outputs, naming the failed checks and the two verdicts that did not accept: Lean's, and the registered reads'
+    entry, which is Lean's verdict held to the verifier's file."""
+    first = _stage1(tmp_path, monkeypatch, "answer")
+    r = _resume(first)
+    got, _ = _audit(first)
+    a = SA.answer_of(r, got)
+    assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, SA.R.PROTOCOL)
+    assert a["commitment"] == first["stop"]["registration"]
+    assert a["public"]["drawn"] == a["public"]["proved"] == sorted(first["stop"]["units"])
+    assert a["public"]["complete"] is got["audit"]["complete"] is False and not SA.A.answer_complete(a)
+    whole = SA.answer_of(r, {**got, "audit": {**got["audit"], "complete": True}})
+    assert whole["public"] == {**a["public"], "complete": True} and SA.A.answer_complete(whole)
+    refused, _ = _audit(first, accepted=False, why="the proof does not verify")
+    b = SA.answer_of(r, refused)
+    assert (b["verdict"], b["public"], b["profile"], b["commitment"]) == ("reject", None, None, a["commitment"])
+    assert b["reason"] == f"checks: roots; verdicts: {SA.LEAN}, {SA.READS}" and not SA.A.answer_complete(b)
+
+
+def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
+    """`answer_of` on outcomes written by hand, of a stream that holds only its δ and its registration's digest: a
+    record that did not accept for a verdict alone names the verdict; an outcome the stream refused, which has no
+    audit record, says so; an outcome that did not accept beside a record that did is a reject."""
+    r = NS(stream=NS(delta=0.5), registration=NS(digest="ab" * 64))
+    entry = {"accepted": False, "checks": {"proved": {"ok": True}},
+             "verdicts": {SA.LEAN: {"accepted": True}, SA.BOUNDARY_AUDIT: {"accepted": False}, SA.STOP_RULE: {"accepted": None}}}
+    reject = {"commitment": "ab" * 64, "profile": None, "protocol": SA.R.PROTOCOL, "public": None, "verdict": "reject"}
+    assert SA.answer_of(r, {"accepted": False, "audit": entry}) == {**reject, "reason": f"verdicts: {SA.BOUNDARY_AUDIT}"}
+    none = {**reject, "reason": "the stop stream refused the outcome"}
+    assert SA.answer_of(r, {"accepted": False, "refused": {"codes": ["sessions"]}}) == none
+    assert SA.answer_of(r, {"accepted": False, "audit": {"accepted": True}}) == none
+    assert not any(SA.A.answer_complete(SA.answer_of(r, g)) for g in ({"accepted": False, "audit": entry}, {"accepted": False}))
+
+
 def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path, monkeypatch):
     """One hand-off, audited on a stream built again each time. Refused: a session Lean's verdict refuses (a length
     that is not the rule's); a boundary stream's outcome that did not accept, that is another registration's, or
@@ -155,7 +193,7 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     stage1 = _stage1(tmp_path, monkeypatch, "refusals")
     _, summary = _audit(stage1, accepted=False, why="the proof does not verify")
     assert summary["accepted"] is False and summary["verdicts"][SA.LEAN] is False and summary["verdicts"][SA.ORDER] is True
-    assert summary["failed"] == ["registered", "roots"]
+    assert summary["failed"] == ["roots"]
 
     refused = SMALL.unaccepted(stage1)
     got, summary = _audit(stage1, refused)
@@ -231,7 +269,7 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     """`Record.across` (the Lean verifier's piece, as `stop_audit.across` calls it) against the Python on one
     hand-off, verdict by verdict: ``logged`` against the boundary stream's log's digests (`resume`'s test), ``order``
     against `two_stage.stop_order`, reason for reason, ``audit``, its ``accepted`` and its ``complete``, against
-    `boundary_audit` on the outcome record, and ``case`` against the four. Twelve written cases: no input is drawn,
+    `boundary_audit` on the outcome record, and ``case`` against the four. Twelve written cases: no input is random,
     and none is one the Lean refuses, so the two sides are held to each other on these and no further. Case 1: the
     hand-off with a boundary outcome that accepted and is complete, on the first stage's session and on one made by
     hand. Case 2: a stop record on a

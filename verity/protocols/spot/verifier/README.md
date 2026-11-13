@@ -33,9 +33,9 @@ configs, Definitions) or advice charged at its width. A value the served hardwar
 atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
 or it is advice.
 
-Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The draw samples replay blocks.
+Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The first stage samples replay blocks.
 The proof server replays them and sends the verifier their interior registration (`Interior`). Once it is in, the
-verifier draws the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
+verifier samples the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
 blocks, one session a template, and the verifier audits both stages.
 
 It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
@@ -376,6 +376,7 @@ A program's weights, constants and tables are values: committed once, under hidi
   its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
   (`verity/protocols/pouw/verifier/tests/test_pouw_supplied_inputs.py`).
+- **Certified values.** R7 holds a registered value no parameter reads to the verifier's `certified` entry of it.
 - **Reads.** Every port of a statement is either a registered port of the `--registered` file
   (`Registered.checkComplete`) or bound to the window's committed values: the file's `bound` names its rows' root and
   domain as the registration holds them, and the public header's must be the same (`bind_ports`; `Flock.RegBound`). No
@@ -486,7 +487,17 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   `sessions` being the session records' SHA-512 and `verdict` the verifier's digest (a list when the sampled
   proof blocks were proved in several sessions). Its ε terms come from the soundness analysis, not from the run, so the run leaves them null.
 
-Pinned by `tests/test_one_stage.py` (the profile, audit record and incorrect-block bound tests, under each sampling design).
+One-stage's answer of an accepted record (`audit.answer`, as Lean's `OneStage.check` gives it) publishes `{"bound",
+"complete", "drawn", "per_template", "proved"}`. `complete` is the record's own: whether every verdict ran. An accept
+waits on the verdicts of record and on those that ran, so an accept can say `complete` is false, and then a verdict
+that is not of record did not run. A reader that wants a complete audit reads `audit.answer_complete`, never the
+verdict alone: it is true only of an accept whose `complete` is true, so an answer without the field (one written
+before it, a reject, an undecided) is not complete. A two-stage outcome says it only under `second_stage.complete`:
+the two-stage form allowed, the replay block the registered request Definition, and each audit record accepted and
+complete.
+
+Pinned by `tests/test_one_stage.py` (the profile, audit record, answer and incorrect-block bound tests, under each
+sampling design).
 
 ### The consumers
 
