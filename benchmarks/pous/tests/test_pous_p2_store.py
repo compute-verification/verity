@@ -30,7 +30,7 @@ from verity.protocols.pous.verifier import protocol, setup, verifier  # noqa: E4
 from verity.protocols.pous.verifier.layout import TensorLayout, decode_tensor  # noqa: E402
 from verity.protocols.pous.verifier.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
 from verity.protocols.pous.verifier.verifier import VerifierKey  # noqa: E402
-from verity.definitions.circuits import requirement  # noqa: E402
+from verity.circuits import requirement  # noqa: E402
 
 TOY = json.loads((S.TOY_DIR / "toy.json").read_text())
 SPOT = json.loads((S.TOY_DIR / "spot.json").read_text())
