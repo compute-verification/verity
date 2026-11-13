@@ -148,11 +148,11 @@ structure Evidence where
   record : Json
   stmts : Array Json
 
-def keysAre (j : Json) (ks : Array String) (what : String) : V Unit :=
+private def keysAre (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
   else pure ()
 
-def without (j : Json) (k : String) : List (String × Json) :=
+private def without (j : Json) (k : String) : List (String × Json) :=
   ((entries j).filter (·.1 != k)).toList
 
 /-- The Spec's values, `{"name", "registered"}` each. -/
