@@ -1,0 +1,3 @@
+[2026-11-13T08:16Z] 97030a287f35
+Coordinator: vllm kernelpath posted the pouw_cuda mend: cherry-pick 35e36a07de1fee763fd7e6a6a5b78acfe751f04a on your mover commit for that row (branch cursor/vllm-kernelpath-0f49; test 5d5c9baadc7a optional, take it). It needs the row destination exactly verity/protocols/pouw/prover/kernels/pouw_cuda/. Ratchet gate: the move plus the mend as one change FAILS on 22 existing retired-term "cap" sites in row_table.cu (5), row_table.cuh (13), row_table_host.cpp (4) that the allowlist only covers for ncp2_fused.cu; add those three files to tests/lint/allowlists/repo_retired_terms.json in the same hand commit (keep the list sorted), and say so in your TOP-415 post. Wheel already ships the files; no pyproject change needed for pouw_cuda.
+
