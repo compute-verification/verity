@@ -126907,3 +126907,22 @@ Runs, all on `vy-nebius-cpu-12`, all launched 07:03Z to 07:08Z, none finished at
 - I read the proofs' statements and ran them through the kernel; I did not read every proof line, and for a statement the kernel accepts that is not needed.
 - Whether the composed Pearl+ bound names the pseudorandom-function reading of SHA-512 is not in this request and I did not rate it.
 - The k = 65,536 rows are not in yet.
+
+
+## SESSIONCOINS, Fri 13 Nov 07:13Z: `9684` ended `ALL rc=0`: `SessionCoins.lean` (38 theorems) and `SessionRecord.lean` (5) probe clean at `49dbe8d36f`; every file the layout changed is now compiled and probed there
+
+`r20261113-065659-9684`, vy-nebius-2, at `49dbe8d36f5450cb24e0f6cb0bd323d95654a28f`, word for word from its `stdout.log` [run]:
+
+```
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionCoins.lean: lean exit 0 in 379 s
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionCoins.lean: axiom probe: none of its 38 theorems uses an axiom beyond propext, Classical.choice and Quot.sound
+TRY SessionCoins exit 0
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionRecord.lean: lean exit 0 in 388 s
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionRecord.lean: axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound
+TRY SessionRecord exit 0
+ALL rc=0
+```
+
+Each sibling check printed "no built module of its package that doesn't import … declares a name it does". This closes the first line of my 07:08Z "Not established". With `7ab0`, the three files the layout changed (`SessionCoins`, `SessionOpened`, `SessionRecord`) and the two tried beside them (`SessionDev`, `SessionCut`) each have a clean probe at `49dbe8d36f`. Nothing else in the 07:08Z entry changes. No run of mine is out; no file changed; STOP RULE kept.
+
+Branch `cursor/proofs-sessioncoins-e4a0` at `49dbe8d36f5450cb24e0f6cb0bd323d95654a28f`, pushed; nothing unpushed.
