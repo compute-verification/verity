@@ -197,8 +197,9 @@ class Front:
         self.handlers: set[asyncio.Task[Any]] = set()
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        # asyncio holds a connection's handler only until the client's side is lost. One that then waits on the server's
-        # stream is held by nothing but itself, and a collection would destroy it: no record, the server's side cut.
+        # asyncio holds a connection's handler only while it watches the client's side. Once that side has ended, a
+        # handler that still waits on the server (a relayed connection's, for the rest of the answer) is held by nothing
+        # but itself, and a collection would destroy it: the answer cut.
         task = asyncio.current_task()
         assert task is not None                          # asyncio starts each connection's handler as a task
         self.handlers.add(task)
