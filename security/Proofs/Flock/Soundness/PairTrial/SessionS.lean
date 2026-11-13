@@ -23,9 +23,9 @@ open Game Model Accounting
 variable {F : Type} [Field F] {D Sl : Type}
 
 /-- The members of a list taken two at a time, in the list's order. -/
-def pairsOf {X : Type} (xs : List X) : List (X × X) := xs.flatMap fun x => xs.map fun y => (x, y)
+def pairsOf {γ : Type} (xs : List γ) : List (γ × γ) := xs.flatMap fun x => xs.map fun y => (x, y)
 
-theorem mem_pairsOf {X : Type} {xs : List X} {x y : X} (hx : x ∈ xs) (hy : y ∈ xs) : (x, y) ∈ pairsOf xs :=
+theorem mem_pairsOf {γ : Type} {xs : List γ} {x y : γ} (hx : x ∈ xs) (hy : y ∈ xs) : (x, y) ∈ pairsOf xs :=
   List.mem_flatMap.2 ⟨x, hx, List.mem_map.2 ⟨y, hy, rfl⟩⟩
 
 /-- `ClashL`'s test at two openings: one position, both verify, different rows. -/
