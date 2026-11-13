@@ -153440,3 +153440,147 @@ carried switch: the tool's result `7814a7867c810d4177d9c010f6c61cc7fe207964` and
 committed on it); `cursor/proofs-sessionof2-params-4e98` `9c5b95260b60c5f4fb04c694ad058b8163de4470` (my live line,
 frozen); `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`;
 `cursor/proofs-sessionof-5c1e` `521933e1430b`. No run of mine is out. The four runs of this entry were one at a time.
+
+## [2026-11-13T17:19Z] ACCEPTS: LINK 1 OF EACH CHAIN, DRAFTED AS TEXT FOR SOUNDNESS (not compiled, on no branch): `DeclaredFromLog` (the parameters' day and declarations are the named prefix's) and `HeldRootsFromLog` (each held value's root is θ's at the named prefix); each gives our record's side with lemmas we already have; THE TWO-STAGE BOUNDARY DOES REACH R2 AND R7, through `accepted_registered` and `registration_nil`, though no one lemma says so; my draft's first pinned form failed its own attack and is replaced; about 350 to 500 lines in 8 to 11 files [guess]
+
+**Where the names are.** Our side is the carried join `daa91ec75a3ea896790a6d7e539eab919d03f3f7` (it holds `dd528bb7b6d3`) [read]. The registration's side, `Verity.Registration.View`, `AtHead` and `RootIn`, is only on soundness's draft at `13e68d1d0a3a` (`security/Definitions/Core/Registration.lean:85-107`, `security/Properties/Ties.lean:113`) [read]. So both statements wait on the draft landing, or restate those three. Paths below are the carried join's unless the draft is named.
+
+### 1. The statement for the declaration
+
+```lean
+/-- The verifier's declared day and declarations are the day and the declarations of the prefix of the accepted
+log whose head `h` the parameters name. -/
+def DeclaredFromLog (D : Verity.Registration.Digests) (c : Verity.Registration.Composite)
+    (log : Verity.Registration) (h : String) (v : Spot.Registration.Verifier) (day : ℕ) : Prop :=
+  ∃ ds, v.declared = some (day, ds) ∧
+    Verity.Registration.AtHead D c log h fun w => ds.toList = w.declarations.map fun e => (e.day, e.program)
+```
+
+**In one sentence:** the day the verifier samples for is `day`, and its list of `(day, program)` declarations is exactly what the log declares up to the head the parameters name.
+
+**What it reads:**
+- `Spot.Registration.Verifier.declared`: `verity/protocols/proofs/spot/verifier/lean/Spot/Registration.lean:200`.
+- `Verity.Registration.Digests`, `Composite`, `Registration`, `Registration.Declared`: `security/Definitions/Core/Site.lean:358`, `:351`, `:222`, `:206`.
+- `Verity.Registration.AtHead` and `View.declarations`: the draft's `security/Definitions/Core/Registration.lean:106`, `:85-92`.
+
+**What it gives with what we have** [derived, not compiled]. `Properties.Spot.DeclaredDay` (`security/Properties/Spot.lean:71`) is a conjunct of `R2` (`:81`), which every accepted one-stage check gives (`acceptMeans`, `security/Proofs/Properties/Spot.lean:1333`). Together they give: at the named prefix, the log declares exactly one program for `day`, and the record's `program` is it. To be written:
+
+```lean
+theorem record_program_declared (hD : DeclaredFromLog D c log h v day) (hR : Properties.Spot.DeclaredDay rec v) :
+    Verity.Registration.AtHead D c log h fun w =>
+      ∃ e ∈ w.declarations, e.day = day ∧ Spot.jeq (Spot.getD rec "program") (.str e.program) = true
+```
+
+`Spot.jeq` and `Spot.getD` are at `.../Spot/Json.lean:26`, `:60`. This is the soundness tie's `DeclaredIn` up to the circuit file, with no META in it. `blocks` is read by neither side: our parser drops it (`Spot/OneStage.lean:379-381`) and R2 never reads it.
+
+### 2. The statement for the roots
+
+My first form was `∀ x ∈ v.pinned, ∀ t ∈ w.theta, t.value = x.1 → t.root = x.2`. It FAILS its own attack: parameters naming the genesis head, where θ is empty, meet it with any root [derived]. It also misses the weights: a value held across windows that the verifier does not pin takes its root from its own log of earlier records (`heldRoots`), not from the parameters. So the statement is over the values held across windows, at the root R7 holds each to, and it asks θ to name the value (`RootIn`'s `∃`):
+
+```lean
+/-- Each value the verifier holds across windows is held by R7 to a root θ registers for it, at the prefix of the
+accepted log whose head `h` the parameters name. -/
+def HeldRootsFromLog (D : Verity.Registration.Digests) (c : Verity.Registration.Composite)
+    (log : Verity.Registration) (h : String) (v : Spot.Registration.Verifier) : Prop :=
+  Verity.Registration.AtHead D c log h fun w =>
+    ∀ u ∈ v.held, ∃ r, ((v.pinned ++ Spot.Registration.heldRoots v.log (Spot.Registration.ownEntries v)).find?
+      (·.1 == u)).map (·.2) = some r ∧ Verity.Registration.RootIn u r w
+```
+
+**In one sentence:** for every value the verifier holds across windows, the root it holds the record to (its pinned root first, else the one its earlier records first registered) is the root θ registers for that value, up to the named head.
+
+**What it reads:**
+- `Verifier.held`, `.pinned`, `.log`: `Spot/Registration.lean:197`, `:185`, `:175`.
+- `heldRoots`, `ownEntries`: `Spot/Registration.lean:291`, `:285`.
+- `RootIn` (the draft's `security/Properties/Ties.lean:113`), and the draft's `AtHead`.
+
+The list `v.pinned ++ heldRoots v.log (ownEntries v)` is exactly what R7 hands `applyOutputs` (`security/Properties/Spot.lean:258-259`).
+
+**What it gives** [derived, not compiled]:
+- A pinned value: `pinnedHeld_of_accept` (`security/Proofs/Properties/Spot.lean:1603`) puts θ's root in the record's entry for it.
+- A value taken from the log: `history_of_R7` (`:1545`) is where I would start; I have not read its statement whole.
+- Either way, the record's registered root of each value held across windows is θ's root at the named head.
+- The pinned values that are no θ value (a window's arrivals at the root the network certifier signed, `PinnedHeld`'s docstring, `security/Properties/Spot.lean:277-284`) are left out by taking `v.held`.
+
+Whether `v.held` is exactly the set of θ's values: [guess] yes for weights. Whether θ's value names are our registered parameters' names, and θ's roots our 128-hex roots: [guess], not read.
+
+### 3. What each needs that nothing has
+
+**(a) Our parameters naming the registration's head.**
+- No key of the parameters names one [read: the keys `Spot/OneStage.lean:231-246`; no `head` in `Spot/OneStage.lean` or `Spot/Registration.lean`]. Today `h` is a free argument.
+- Change: a field of `Verifier` (`Spot/Registration.lean:163-213`), its parse and keys in `paramsParsed` (`Spot/OneStage.lean:231`, `:375-389`), and its Python mirror (`verity/protocols/proofs/spot/verifier/one_stage/verifier.py:236-270`, `.../one_stage/registration.py:622-634`) with the difftest.
+- Whose: sampled proofs, so proofs.
+- [derived] The verifier need not read the head: it is the honest auditor's statement of which log it filled its parameters from. That makes the statement a property of the auditor's setup, which the trust base's honest verifier covers only if the code that fills the parameters is in Lean. Two ways to close it:
+  - (i) keep the two statements as premises (`open`, then `domain` once a builder exists);
+  - (ii) write the builder in Lean, `Spot.Registration.declaredOfView : Core.Registration.View → ℕ → …` and the held roots from `View.theta`, and prove the statements of it. The draft's own docstring names (ii) for `DeclaredIsParams` ("or when the parameters are derived from the log"). I would do (ii).
+- Today the Python driver fills `day`/`declarations` from a checked log (`benchmarks/prove_path/records_audit.py:588-612`) and nothing fills `pinned` from θ [read].
+
+**(b) `day` and `declarations` no longer optional where a log is held.**
+- They are "both or neither" (`Spot/OneStage.lean:30-32`, `:243-244`, `:375-383`), and `declaredCode none = none` (`Spot/Registration.lean:222-223`), so a verifier that omits them checks nothing.
+- Change: a composite that holds a log refuses parameters without them. That is a flag where the composite builds or reads the boundary's parameters (`VStarRecursive/SampledTwo.lean:177-179` reads them by `paramsParsed`) or, under (ii), the builder always sets them.
+- Whose: proofs.
+
+**(c) The spec's `Theta` holding leaves, words and domain.**
+- It is `security/Definitions/Core/Compiler.lean:208-211`, `value` and `root` only, read by `Compiler.init`. The code's is `verity/protocols/interface/CoreProtocol/Registration.lean:64-72`. The draft's denotation `Properties.Registration.theta` (its `security/Properties/Core/Registration.lean:39`) would carry the new fields.
+- Whose: the definitions tree's Core (soundness's draft owns the registration denotation; who owns `Compiler.lean` I have not looked up).
+- Needed by neither statement above, which tie roots alone; it is needed for the stronger form, that θ's entry and the verifier's own entry agree on leaves, words and domain.
+
+**Records that would move** [read from the carried join's locks; which guarantees' `unfolded_hash` moves is the records run's, not established]:
+- (a) and (b): `reads` of the modules `Spot.Registration` and `Spot.OneStage` in `security/lean-audit.json` and `security/Properties/lean-audit.json`; of the guarantees by name, `Properties.Spot.acceptMeans` (the one that names `AcceptMeans`). `Properties.Spot`'s module `reads` moves only if `R2` or `DeclaredDay` changes, which neither statement asks.
+- (c): `reads` of `Definitions.Core.Compiler` in both locks. Of the guarantees by name, `Accounting.SecurityProofs.RegisteredCircuitRequirement` (security) and `Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement` (properties) name `RegisteredCircuit`, which reads θ through the compiler [guess]. If landed after the draft, also its `RegistrationSound` three and `Properties.Registration.checks*` three, which read `View.theta`.
+
+### 4. Does the two-stage boundary reach the record's facts
+
+YES, in two steps that no one lemma joins [read]:
+- `SpotFlock.RunsAs.accepted_registered` (`security/Proofs/Flock/SpotFlock/RunsAs/Steps.lean:286-294`): an accepted two-stage run has `Registration.check i.record { i.params.verifier with law, workTable }` empty, where `i.params` is the form's `boundary` parameters and `i.record` the commitment's record (`inputOf`, `verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/SampledTwo.lean:293`).
+- `Properties.Spot.registration_nil` (`security/Proofs/Properties/Spot.lean:857-858`): `Registration.check rec v = #[] ↔ ∃ law, Registered v rec law`. That gives `R2` (so `DeclaredDay`) and, for a v2 verifier, `R7` and `PinnedHeld` at that verifier, whose `declared`, `pinned`, `held` and `log` are the boundary parameters' own (a structure update of `law` and `workTable` only) [derived].
+- The lemma the two-stage proofs use, `checks_of_accepted` (`security/Proofs/Properties/Verity/SampledTwo/AcceptsTop.lean:128-139`), keeps only `∃ v, check i.record v = #[] ∧ namesOf v = namesOf i.params.verifier`, which forgets `declared` and `pinned`. So a two-stage reader needs `accepted_registered` itself, or a variant of `checks_of_accepted` naming the verifier: a lemma of a few lines [guess].
+- `RecordNames.lean` (`recordOk_of_check`) is only about the names: ports and registered values, each once.
+- One homonym [read]: the two-stage `Params.declared` (`SampledTwo.lean:144`, `Run.lean:116`) is "the items both registrations show", not R2's declarations.
+
+### 5. The attack, for each statement
+
+Below, θ's value is `w` (weights). [derived] means by reading the definitions; nothing was played.
+
+**`DeclaredFromLog`**:
+- Meets: log `[info θ(w, r), decl(day 0, P)]`; parameters `day = 0`, `declarations = [(0, P)]`, head = the log's head (prefix 2). `ds = [(0, P)]`, as the view's.
+- Fails: the same log with `declarations = [(0, P')]`, `P' ≠ P` (the prover's program in place of the declared one). At prefixes 0, 1 and 2 the view declares `[]`, `[]` and `[(0, P)]`, none of them `[(0, P')]`.
+- Fails: `declared = none`, the parameters omitting both. No `ds` exists.
+- What it does not stop: naming the head of prefix 1, before the declaration. `ds = []` meets it, and R2 then refuses (`R2-undeclared`), so the check stops it, not the statement.
+- What only B3 stops: naming a head of another log. `AtHead` needs `(n, h)` among this log's heads, which holds by collision only if entries' digests bind (B3, my 17:14Z entry).
+
+**`HeldRootsFromLog`**:
+- Meets: the same log, `held = [w]`, `pinned = {w: r}`.
+- Fails: `pinned = {w: r'}`, `r' ≠ r`. At every prefix where θ names `w`, its root is `r`; at prefix 0, θ is empty and `RootIn`'s `∃` fails.
+- Fails: `w` held, not pinned, its root taken from an earlier record of the verifier's log that registered `r'`.
+- Fails: `w` held, with no root at all. No `r` exists.
+- The genesis attack that broke my first form fails here at prefix 0, for the same reason.
+
+### 6. Size [guess unless marked]
+
+| piece | Lean lines | files |
+|---|---|---|
+| two statements and the two "gives" lemmas | ~60 + ~100 | one new module beside `Properties.Ties` (it would import `Spot.Registration`, so `Properties.Ties`' layer, or a layer of its own, grows), and its proofs file |
+| the head field, its parse and keys | ~30 | 2 |
+| the same in Python, with its difftest rows | ~40 Python, ~30 test | 2 or 3 |
+| under (ii), the builder from the code's view and its two properties | ~40 + ~120 | 2 |
+| `checks_of_accepted` naming its verifier | ~15 | 1 |
+| (c), the spec's `Theta` | ~5 in `Compiler.lean`, ~5 in the draft's denotation, ~30 to mend proofs and instances that build a `Theta` (count not taken) | 3 or 4 |
+
+In all, about 350 to 500 lines in 8 to 11 files, (c) included; about 250 without it.
+
+## STOP RULE
+
+Items 1 and 2 of your order are in. Nothing compiled, run or committed but the entries; nothing on soundness's branch. Item 3, the ports' keys lemma on a new branch cut from the carried join, starts now.
+
+## NEEDS
+
+Nothing to start item 3. For the drafts: soundness's word on the form (a premise, or (ii), the builder), and whether (c) is in it.
+
+## Not established
+
+- Nothing compiled. Every statement above is text; the "gives" lemmas are derived by reading.
+- That `v.held` is θ's value set; that θ's names and roots are in our parameters' namespace and hex form; `history_of_R7`'s exact statement.
+- Which guarantees' `unfolded_hash` moves under (a), (b) or (c): only the records run says.
+- Who owns `security/Definitions/Core/Compiler.lean`.
+- The Python side of the head field is sized, not read in full.
