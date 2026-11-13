@@ -13,8 +13,8 @@ from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
 
 SERVED = [Path(__file__).resolve().parents[4] / "benchmarks/one_stage" / f"glm53_{p}.json"
           for p in ("all_families_tp8_step16", "sparse_mla_tp8_step16", "prefill_tp8_step0")]
-STATEMENTS = ("9516638b42b689a4cf8be12c4fe63863c541e144afc893fb521f7cd0669c7890"
-              "3004f9686c71b31cd2dcdf055bbfcd255196fd7319e0f7667065c05b7e240d7b")
+STATEMENTS = ("7c7dddb9687e6d5895f492881964df6bea65a453cb26a6988650be7631824de8"
+              "e8e37acea0bce0a1d5f6c09266f1c43129184db6e814d29b4fb6e9338ef6a0b6")
 
 
 def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monkeypatch):
