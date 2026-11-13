@@ -108,7 +108,7 @@ What an agent may change:
 - Each owner removes the smells it finds in its own files without asking: code serving a retired question, two
   sources of truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired
   process, structure that doesn't earn itself, dead references. What crosses owners goes to that owner.
-- Close your own lane's PRs whenever you want: Daniel's standing request, so nobody asks first.
+- Close your own lane's PRs whenever you want; nobody asks first.
 - Hard switches: once a replacement lands, no second path stays alive beside it, and every bridge kept for the
   transition names its end state. The admin audits for splits and tells Daniel when an abstraction fails or turns into
   red tape.
@@ -141,38 +141,40 @@ Keys and access:
 
 Landing:
 
-- The vLLM adapter's lint ratchets are no-growth: no change adds an
-  exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
-  cleanup lanes pay the exceptions down; a feature PR owes none (`adapters/vllm/tools/ratchet_gate.py`).
-- A `# noqa` is an exception too: in `adapters/vllm`, no
-  change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
-  retirement. The ratchet gate counts them, with no allowlist.
-- Outside `adapters/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and judges each candidate's merges off
-  the merge gate, never reverting (`--gate check` rings each failed merge's lane): fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
-  list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
-  `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
-  the PR's base). No new swallowing handler: re-raise, record, or test first.
+- Lint ratchets are no-growth, and a change to a lint is judged like source; cleanup lanes pay the exceptions down and a
+  feature PR owes none. `adapters/vllm/tools/ratchet_gate.py` states the rules (the adapter's ratchets and `noqa`
+  count, `tests/lint/`'s lists) and judges each candidate's merges off the merge gate, ringing a failed merge's lane,
+  never reverting. Fix the code, never the list: a rename moves its entries (`--move OLD NEW`), an environment read
+  goes through the area's settings registry, and a swallowing handler re-raises, records or narrows.
 
 Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
-- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
-  PoUW's bar is T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
-  credit as well as of exclusion. SAK is over noised operands only, never prover-chosen ones (pinned weights,
-  served activations, un-noised outputs), and an un-noised call earns no compute credit.
+- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's)
+  also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute credit as well as of
+  exclusion. SAK is over noised operands only, never prover-chosen ones (pinned weights, served activations, un-noised
+  outputs), and an un-noised call earns no compute credit.
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
+- A demo shows that the code works, so it runs fast: it samples one or two proof blocks, or whatever keeps it quick.
+  What the theorems give at an operating point (a sampling design, δ, a datacenter's size) is a separate result computed
+  from the bounds; no demo is sized up to show one.
+- Network accounting is two things for each execution block. First, its consistency with the network certificates: its
+  committed inputs and outputs are what they say crossed the wire, pass or fail, with no sampling requirement. Second,
+  from SPOT, its transfers' covert capacity, in three terms reported apart: side channels, the timing channel (which the
+  network certifier mostly fixes) and what SPOT fails to check; at full sampling only the first two remain.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
+- `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
+  class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet.
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ.
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
-  the protocol's properties into `Properties/`. Where it leads: Lean is the definition and the
-  verifier, the provers' Python mirrors it under difftest, and a verifier imports none of it.
+  the protocol's properties into `Properties/`.
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
   assumptions outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
@@ -187,6 +189,7 @@ Protocols and claims:
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
+- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next (`verity/protocols/pouw/verifier/README.md`).
 - PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
@@ -198,10 +201,7 @@ Protocols and claims:
 - A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
-- Sampling is one design, two-stage in general: serving commits the replay blocks' boundaries, the first stage samples
-  replay blocks, the prover commits their interiors, and the second stage samples k proof blocks in each on fresh coins.
-  Harm is read at a replay block's footprint, the fewest incorrect proof blocks of any interior its boundary allows
-  (compute credit charges it whole). One-stage is the case where each replay block is one proof block.
+- Harm is read at a replay block's footprint (GLOSSARY.md, "Two-stage design"), and compute credit charges it whole.
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
