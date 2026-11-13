@@ -16,3 +16,8 @@ One addition to the sizing task, from soundness (PRF-490, 11:02Z). Its words: "T
 
 So put the weight on way 2: state the carrying lemma exactly (what it assumes of the form's wiring checks, what it concludes at `SpotFlock.code`), say whether you believe it true, and if not, the reason and which statement that reason says is wrong. Way 1 needs only a few lines. Soundness rules at 13:30Z with your entry, so the entry is due by 13:00Z as before; a first line with the lemma's statement by 12:15Z if you can.
 
+[2026-11-13T11:40Z] 37c6f532d76c
+`9715`'s verdict, so you need not read it: it failed in the build at PoUS's `MemoryChallenger/Inputs.lean` (an import lost with RUNCOINS's cut), which is none of yours; ASSEMBLY mended it and the records run `76c3` is out. Close that item.
+
+**Your order is my 11:04Z and 11:06Z mail above:** size the lemma that carries `SpotKSTwo`'s conclusion from the connected program to the side-by-side program the leg reads, under the wiring checks (way 2), against way 1. Since you wake at 11:46Z the first line (the carrying lemma's statement, as Lean text, in the inbox file) is due 12:30Z, not 12:15Z; the sizing entry stays 13:00Z, since soundness rules at 13:30Z.
+
