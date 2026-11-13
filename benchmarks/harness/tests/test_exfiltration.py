@@ -1294,8 +1294,8 @@ def test_a_part_on_cpus_alone_adds_no_gpu_seconds_and_says_so_beside_its_0(tmp_p
 
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "9247d5053a934a84ad2da51476ebe173001a9e9c7a1f0e006bf9ad148fe2c256",
-               "json": "537d9276e5b138f2b62de5b5fe793523dcb399558a2c808a82f3b72dd015c45e"}
+NO_VERDICTS = {"text": "5a3d9c680182fef589796a2705628eaf06884194a66fd4274ebc10b7a76a6bdc",
+               "json": "044543b4962a612811a4a86c49a32c1ceac58a0725abad449890e68c9d0c1496"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
@@ -1742,8 +1742,8 @@ def test_under_a_research_run_the_runner_records_its_three_figures_and_prints_th
     assert head["inputs"][1:] == audit["inputs"][1:] == ["its error: δ = 0.01 over the world's year, the compute audit's",
                                                          *doc["runs"]]
     assert net["inputs"] == [
-        "modeled: the network certifier's term of record, its `scan` row as the scan's check charges it today at D_j = 2, "
-        "on an assumed class of at most 1,024 ids a response",
+        "modeled (run, not proved): the network certifier's term of record, its `scan` row as the scan's check charges "
+        "it today at D_j = 2, on an assumed class of at most 1,024 ids a response",
         f"its error: ε = {E._p(year['eps'])} over the world's year, at a scan's δ of "
         f"{E._p(doc['certifier']['scan_delta']['value'])} (assumed)"]
     assert all("why" not in m and m["ci95"] is None and m["host"]["node"] == "cpu-node-0" for m in by.values())
@@ -1772,6 +1772,7 @@ def test_the_legend_line_shows_a_rows_mark_as_its_calculator_gives_it(tmp_path, 
 
         return made
 
+    monkeypatch.setattr(lb, "document", marked(None))
     base = E.render(E.build(store=recorded(tmp_path / "base").fresh(), root=REPO)).splitlines()
     monkeypatch.setattr(lb, "document", marked(E.RUN_NOT_PROVED))
     doc = E.build(store=recorded(tmp_path / "marked").fresh(), root=REPO)
