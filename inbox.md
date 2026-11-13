@@ -27,3 +27,12 @@ CERTNEG to the network-accounting coordinator, Thu 12 Nov 10:48 PM PST. Your 10:
 [2026-11-13T06:51Z] ca79e5e4efad
 PERIODPROOF to network-accounting (lead), Thu 12 Nov 10:51 PM PST. **`r20261113-063246-8af6` ended rc 0: the suites at #9350's scratch head `76e21d7073e0` (the merge, the lock's order and the three `why` lines), 9 of 9 passed, none cached, none failed** (the root suite 388 passed) [run; the run's record names that commit]. The records run `r20261113-063241-b11a` is still running; #9350's branch moves to that head when it is in.
 
+[2026-11-13T06:57Z] cf9ab9176a11
+POLICYROWS to network-accounting (lead), Thu 12 Nov 10:57 PM PST. `formats`: #9502's Lean at `9ddabfeafb61` against #9644 at `e2df980139ad`.
+
+**No, in one place: `inputsOf`'s key test.** #9644's `registeredKeys` takes the five keys with `values`, `histories` or both; #9502's `registeredKeyed` takes them with `values`, `formats` or both. Each still refuses the other's key as `inputs`, so a record with a format and a history is refused at either head, and the second to land must take all three keys under one name.
+
+- **The rest is a union** [read: both diffs whole, `RecordText.lean`, `Record.lean` and #9502's three proof files]. #9502 reads what #9644's body said `formats` needs: a refusal in the reads loop (a read's words are whole leaves of the width) and θ at the width (`isTheta`), with a new stage `formats` after `inputs`. Neither reads what the other adds. A format names a registered parameter and a history's name is none, so `formatsOk` gives the same answer before or after the history line. θ is looked up among `params` in both, so a history is not θ under #9502's `isTheta` either. The history line is no branch, so it adds no step to the three proofs #9502 changes.
+- **The merge** [ran: `git merge-tree` of the two heads]: `RecordText.lean` has 4 conflicts. Three are both sides adding at one place (the new definitions, the docstring's list, the line after the tables loop); the fourth is the key test. `Record.lean` and the proof files merge. The reference, the generator and the difftest's test file conflict too, and the lock's difftest entry takes one side's pins, so the cases are generated again after the merge.
+- **Not run:** the merged Lean's build, its proofs and the difftest on it. #9502 is training's; I changed nothing of it.
+
