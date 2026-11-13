@@ -6891,16 +6891,137 @@
    "unfolded_hash": "5b885d8ea9220f167d1f6921164766bf758069e80b68e9be70f3a5d33ad1f29c"
   },
   "Accounting.SecurityProofs.BoundReceiptLinkInteractive_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.BoundReceiptLinkInteractive_honest :",
+    "  Exists fun n =>",
+    "    And (Accounting.BoundReceipt.InteractiveNode.ofNode n).QueryDetermined",
+    "      (Eq",
+    "        (Pous.pr fun x =>",
+    "          And",
+    "            (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).Accepts x.fst x.snd.fst.fst",
+    "              x.snd.fst.snd x.snd.snd)",
+    "            (And",
+    "              (instLENat.le",
+    "                (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).compute 1 1 x.fst",
+    "                  x.snd.fst.fst x.snd.fst.snd)",
+    "                1)",
+    "              (And",
+    "                (instLENat.le",
+    "                  (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).tileWork 1 x.fst",
+    "                    x.snd.fst.fst x.snd.fst.snd)",
+    "                  0)",
+    "                (Not",
+    "                  (instLTNat.lt",
+    "                    (instHMul.hMul",
+    "                      (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).footprint x.fst",
+    "                        x.snd.fst.fst x.snd.fst.snd)",
+    "                      1)",
+    "                    (Accounting.Rate.floor 1 0 0 0 1 1 1 (instHSub.hSub 1 0) 0))))))",
+    "        1)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e615ce527148601df81df5bc515fb16464fc5a8f5dfcb4b61a4ea47d3cfb78d4"
   },
   "Accounting.SecurityProofs.BoundReceiptLinkInteractive_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.BoundReceiptLinkInteractive_nontrivial :",
+    "  Exists fun n =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And",
+    "              (instLENat.le",
+    "                (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).compute 0 1 x.fst",
+    "                  x.snd.fst.fst x.snd.fst.snd)",
+    "                0)",
+    "              (And",
+    "                (instLENat.le",
+    "                  (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).tileWork 1 x.fst",
+    "                    x.snd.fst.fst x.snd.fst.snd)",
+    "                  0)",
+    "                (instLTNat.lt",
+    "                  (instHMul.hMul",
+    "                    (((Accounting.BoundReceipt.InteractiveNode.ofNode n).under x.snd.fst.snd).footprint x.fst",
+    "                      x.snd.fst.fst x.snd.fst.snd)",
+    "                    1)",
+    "                  (Accounting.Rate.floor 1 0 0 0 0 0 1 (instHSub.hSub 1 0) 0)))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "              (instHDiv.hDiv (instHMul.hMul 2 (Nat.cast 1)) (instHPow.hPow 2 2)))",
+    "            (instHDiv.hDiv (Nat.choose 0 (instHSub.hSub 1 0)).cast (instHPow.hPow 2 0)))",
+    "          (instHDiv.hDiv (Nat.choose 0 (instHAdd.hAdd 0 1)).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "2daa46fcafe64e5c379d291c113b535ff68b61eaba30fe6f6de8d938ee9901e8"
   },
   "Accounting.SecurityProofs.BoundReceiptLink_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.BoundReceiptLink_honest :",
+    "  Exists fun n =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (n.Accepts x.fst x.snd.fst.fst x.snd.fst.snd x.snd.snd)",
+    "          (And (instLENat.le (n.compute 1 1 x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "            (And (instLENat.le (n.tileWork 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (Not",
+    "                (instLTNat.lt (instHMul.hMul (n.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                  (Accounting.Rate.floor 1 0 0 0 1 1 1 (instHSub.hSub 1 0) 0))))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1c664abd745b4c3fb234d380e2a55cdd4f3c7bdb8636254d1ae8b4240becb952"
   },
   "Accounting.SecurityProofs.BoundReceiptLink_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.BoundReceiptLink_nontrivial :",
+    "  Exists fun n =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (n.compute 0 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (And (instLENat.le (n.tileWork 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "                (instLTNat.lt (instHMul.hMul (n.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                  (Accounting.Rate.floor 1 0 0 0 0 0 1 (instHSub.hSub 1 0) 0)))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "              (instHDiv.hDiv (instHMul.hMul 2 (Nat.cast 1)) (instHPow.hPow 2 2)))",
+    "            (instHDiv.hDiv (Nat.choose 0 (instHSub.hSub 1 0)).cast (instHPow.hPow 2 0)))",
+    "          (instHDiv.hDiv (Nat.choose 0 (instHAdd.hAdd 0 1)).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "71bfc8fdaf9ec3ea60b7527302adae95ba87dbd287281cb82cba76f3a0962eb7"
   },
   "Accounting.SecurityProofs.BoundReceiptShare": {
    "owner": "@memory-accounting",
@@ -8609,16 +8730,106 @@
    "unfolded_hash": "ab768c3564e987cc9d23ebf20afc4f5ae51bba1ab61f05388a796587f99b8f6a"
   },
   "Accounting.SecurityProofs.RateAuditInteractiveRO_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditInteractiveRO_honest :",
+    "  Exists fun A =>",
+    "    And",
+    "      (∀ (E : Accounting.Rate.Store 1 1) (R : Pous.Bits 0) (O O' : Accounting.Rate.Oracle 1 1 1 0),",
+    "        Eq (A.side E R O) (A.side E R O'))",
+    "      (Eq",
+    "        (Pous.pr fun x =>",
+    "          And (A.Accepts x.fst x.snd.fst.fst x.snd.fst.snd x.snd.snd)",
+    "            (And (instLENat.le (A.compute 1 1 x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "              (Not",
+    "                (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                  (Accounting.Rate.floor 1 0 0 0 1 1 1 1 0)))))",
+    "        1)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "271c4826e2292536db38627c408a9db2c1de441599e6a40692b8e5aae13896fd"
   },
   "Accounting.SecurityProofs.RateAuditInteractiveRO_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditInteractiveRO_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                (Accounting.Rate.floor 1 0 0 0 0 0 1 1 0))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "            (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "          (instHDiv.hDiv (Nat.choose 0 1).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8657170682f43b95f5a887e9ba95005da6d7b34e9f57a02ddc5fcd7847c95192"
   },
   "Accounting.SecurityProofs.RateAuditInteractive_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditInteractive_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (A.Accepts x.fst x.snd.fst.fst x.snd.fst.snd x.snd.snd)",
+    "          (And (instLENat.le (A.compute 1 1 x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "            (Not",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                (Accounting.Rate.floor 1 0 0 0 1 1 1 (instHSub.hSub 1 0) 0)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "329a98c5921e4af03ce45528c815fac75dcca8e44f095979e088bff91bc3b191"
   },
   "Accounting.SecurityProofs.RateAuditInteractive_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditInteractive_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                (Accounting.Rate.floor 1 0 0 0 0 0 1 (instHSub.hSub 2 1) 0))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 2 1).cast (Nat.cast 2)) 1)",
+    "            (instHDiv.hDiv (instHMul.hMul (Nat.choose 2 1).cast (instHPow.hPow 2 0))",
+    "              (instHPow.hPow 2 (instHMul.hMul 3 1))))",
+    "          (instHDiv.hDiv (Nat.choose 0 (instHSub.hSub 2 1)).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "fcdf1ea0ba8292873d617948506eb29c0b4727685167e1c71c7fac3a32b058ac"
   },
   "Accounting.SecurityProofs.RateAuditPartial": {
    "owner": "@memory-accounting",
@@ -8634,10 +8845,53 @@
    "unfolded_hash": "5cad5f047e0149d68c3e7804158ce9059d80a66aac26d58091f8c6a4c343dfb8"
   },
   "Accounting.SecurityProofs.RateAuditPartial_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditPartial_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (A.Accepts x.fst x.snd.fst.fst x.snd.fst.snd x.snd.snd)",
+    "          (And (instLENat.le (A.compute 1 (fun x => 0) x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "            (Not",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) (instHMul.hMul 1 1))",
+    "                (Accounting.Rate.floor 1 0 0 0 1 1 (instHMul.hMul 1 1) 1 0)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1e357fa5600c6abb2a341545cad562bb2816f3b01796c03661cd87ceed30446a"
   },
   "Accounting.SecurityProofs.RateAuditPartial_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditPartial_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 (fun x => 0) x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) (instHMul.hMul 1 1))",
+    "                (Accounting.Rate.floor 1 0 0 0 0 0 (instHMul.hMul 1 1) 1 0))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "            (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "          (instHDiv.hDiv (Nat.choose 0 1).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "5c13b762aa8095d5ae7ea9270ed0e3964ccf9333df8e2f7e084985c0761c3619"
   },
   "Accounting.SecurityProofs.RateAuditSketch": {
    "owner": "@memory-accounting",
@@ -8668,16 +8922,110 @@
    "unfolded_hash": "acc406d75ae5564ca8dea5142386cb7d378ab9a04a6c9643678f3e9b00fc986f"
   },
   "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_honest :",
+    "  Exists fun dig =>",
+    "    Exists fun A =>",
+    "      Eq",
+    "        (Pous.pr fun x =>",
+    "          And (A.Accepts dig x.snd.fst.fst x.snd.fst.snd x.fst x.snd.snd)",
+    "            (And (instLENat.le (A.compute 1 1 x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "              (Not",
+    "                (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                  (Accounting.RateSketch.floor 1 1 0 0 0 1 1 1 1)))))",
+    "        1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "2ed178eb237f2c927f5959e36bea6fe86cdd2fdf5fdfad2626b89e58c8e93832"
   },
   "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditSketchInteractiveRO_nontrivial :",
+    "  Exists fun dig =>",
+    "    Exists fun A =>",
+    "      Not",
+    "        (ENNReal.instLE.le",
+    "          (Pous.pr fun x =>",
+    "            And True",
+    "              (And (instLENat.le (A.compute 0 1 x.snd.fst.fst x.snd.fst.snd x.fst) 0)",
+    "                (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                  (Accounting.RateSketch.floor 1 1 0 0 0 0 0 1 1))))",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "                (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "              (Pous.pr fun σ => instLTNat.lt 2 (Accounting.RateSketch.fib dig σ)))",
+    "            (instHDiv.hDiv (instHMul.hMul 0 2).cast (Fintype.card Bool).cast)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "6e2b028b42b65e513e9e47c7182816579327d2d2649ae1f14132f362882021b6"
   },
   "Accounting.SecurityProofs.RateAuditSketch_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditSketch_honest :",
+    "  Exists fun dig =>",
+    "    Exists fun A =>",
+    "      Eq",
+    "        (Pous.pr fun x =>",
+    "          And (A.Accepts dig x.snd.fst.fst x.snd.fst.snd x.fst x.snd.snd)",
+    "            (And (instLENat.le (A.compute 1 1 x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "              (Not",
+    "                (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                  (Accounting.RateSketch.floor 1 1 0 0 0 1 1 1 1)))))",
+    "        1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "0798acb14e545516d6a5f7e0d0e0734b80d35737f79ce602f1a416a75911c7aa"
   },
   "Accounting.SecurityProofs.RateAuditSketch_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditSketch_nontrivial :",
+    "  Exists fun dig =>",
+    "    Exists fun A =>",
+    "      Not",
+    "        (ENNReal.instLE.le",
+    "          (Pous.pr fun x =>",
+    "            And True",
+    "              (And (instLENat.le (A.compute 0 1 x.snd.fst.fst x.snd.fst.snd x.fst) 0)",
+    "                (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                  (Accounting.RateSketch.floor 1 1 0 0 0 0 0 1 1))))",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "                (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "              (Pous.pr fun σ => instLTNat.lt 2 (Accounting.RateSketch.fib dig σ)))",
+    "            (instHDiv.hDiv (instHMul.hMul 0 2).cast (Fintype.card Bool).cast)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "4c2a06aaf4bf8a08b200747c81deaaacd06133dd40a5077607dbb211dd9a4200"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketch": {
    "owner": "@memory-accounting",
@@ -8706,16 +9054,107 @@
    "unfolded_hash": "d05a276d44f5bedca8a167f6affc79369276ce79ffd1b46668e0a61031925629"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketchRank_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditTensorSketchRank_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (A.Accepts Accounting.RateSketch.sketch x.snd.fst.fst x.snd.fst.snd x.fst x.snd.snd)",
+    "          (And (instLENat.le (A.compute 1 1 x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "            (Not",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                (Accounting.RateSketch.floor 1 256 0 0 0 1 1 1 1)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d09af8461fdd0a439fe3b2f26a8d2d38f8d865b68cdcb2798a957fac0a457d66"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketchRank_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditTensorSketchRank_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 1 x.snd.fst.fst x.snd.fst.snd x.fst) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                (Accounting.RateSketch.floor 1 256 0 0 0 0 0 1 1))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "              (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "            (Pous.pr fun σ =>",
+    "              Exists fun u => instLTNat.lt ((Accounting.Tag.signMatrix (σ.block u)).map Int.cast).rank 0))",
+    "          (instHDiv.hDiv (Nat.cast 0) (instHPow.hPow 2 (instHMul.hMul 8 0)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a18da97bbac05f73160218ed3ac249ecb042454cb33d1f7815b333582e39f2cd"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketch_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditTensorSketch_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (A.Accepts Accounting.RateSketch.sketch x.snd.fst.fst x.snd.fst.snd x.fst x.snd.snd)",
+    "          (And (instLENat.le (A.compute 1 1 x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "            (Not",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                (Accounting.RateSketch.floor 1 256 0 0 0 1 1 1 1)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d09af8461fdd0a439fe3b2f26a8d2d38f8d865b68cdcb2798a957fac0a457d66"
   },
   "Accounting.SecurityProofs.RateAuditTensorSketch_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditTensorSketch_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 1 x.snd.fst.fst x.snd.fst.snd x.fst) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.snd.fst.fst x.snd.fst.snd x.fst) 1)",
+    "                (Accounting.RateSketch.floor 1 256 0 0 0 0 0 1 1))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "              (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1057)))",
+    "            (Pous.pr fun σ => Not (Accounting.RateSketch.SectorsBind σ)))",
+    "          (instHDiv.hDiv (Nat.cast 0) (instHPow.hPow 2 256))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "877d779f2b632e08ba4ee37d6e86129dc4be72e1bcda17574657159765e65840"
   },
   "Accounting.SecurityProofs.RateAuditWindows": {
    "owner": "@memory-accounting",
@@ -8731,16 +9170,111 @@
    "unfolded_hash": "a9853f68b5a5452aff0c54e9a6136cdb3c0154bbe98e5a654fd81fb33179c6c4"
   },
   "Accounting.SecurityProofs.RateAuditWindows_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditWindows_honest :",
+    "  Exists fun D =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And",
+    "          (∀ (i : Fin 1),",
+    "            And ((D.dev i x.snd).Accepts x.fst (x.snd i).fst.fst (x.snd i).fst.snd (x.snd i).snd)",
+    "              (instLENat.le ((D.dev i x.snd).compute 1 1 x.fst (x.snd i).fst.fst (x.snd i).fst.snd) 1))",
+    "          (Not",
+    "            (instLTNat.lt",
+    "              (Finset.univ.sum fun i =>",
+    "                instHMul.hMul ((D.dev i x.snd).footprint x.fst (x.snd i).fst.fst (x.snd i).fst.snd) 1)",
+    "              (instHMul.hMul (instHSub.hSub (instHAdd.hAdd 1 1) 1) (Accounting.Rate.floor 1 0 0 0 1 1 1 1 0)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "402a2342720eb5a48639b2ad2563c21274a1b80179638916964d14c2cc6c8bd6"
   },
   "Accounting.SecurityProofs.RateAuditWindows_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAuditWindows_nontrivial :",
+    "  Exists fun D =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (instHMul.hMul (Nat.cast 1)",
+    "          (Pous.pr fun x =>",
+    "            And",
+    "              (∀ (i : Fin 1),",
+    "                And True (instLENat.le ((D.dev i x.snd).compute 0 1 x.fst (x.snd i).fst.fst (x.snd i).fst.snd) 0))",
+    "              (instLTNat.lt",
+    "                (Finset.univ.sum fun i =>",
+    "                  instHMul.hMul ((D.dev i x.snd).footprint x.fst (x.snd i).fst.fst (x.snd i).fst.snd) 1)",
+    "                (instHMul.hMul (instHSub.hSub (instHAdd.hAdd 1 1) 1) (Accounting.Rate.floor 1 0 0 0 0 0 1 1 0)))))",
+    "        (instHMul.hMul (Nat.cast 1)",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "              (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "            (instHDiv.hDiv (Nat.choose 0 1).cast (instHPow.hPow 2 0)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a59400753d616fe04b3ef93c87eaf7590257631aa4985ffe267b0c588038d538"
   },
   "Accounting.SecurityProofs.RateAudit_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAudit_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (A.Accepts x.fst x.snd.fst.fst x.snd.fst.snd x.snd.snd)",
+    "          (And (instLENat.le (A.compute 1 1 x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "            (Not",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                (Accounting.Rate.floor 1 0 0 0 1 1 1 1 0)))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "039a8546c9955172d81be955ce0c51e1ad66d1ff834a5c6e09e146a3134562af"
   },
   "Accounting.SecurityProofs.RateAudit_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.RateAudit_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (And (instLENat.le (A.compute 0 1 x.fst x.snd.fst.fst x.snd.fst.snd) 0)",
+    "              (instLTNat.lt (instHMul.hMul (A.footprint x.fst x.snd.fst.fst x.snd.fst.snd) 1)",
+    "                (Accounting.Rate.floor 1 0 0 0 0 0 1 1 0))))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "            (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "          (instHDiv.hDiv (Nat.choose 0 1).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "b751a3f02d32dbaeb904e287571c1aee8bda9fa6690bfbb8506e26e0164e32f9"
   },
   "Accounting.SecurityProofs.RateChain": {
    "owner": "@memory-accounting",
@@ -9196,10 +9730,55 @@
    "unfolded_hash": "f3fb5ff01a75c3e91ef80830cb39e2b722226196107c0327d5f0ff865acce516"
   },
   "Accounting.SecurityProofs.Remote.AuditRO_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.AuditRO_honest :",
+    "  Exists fun A =>",
+    "    Eq",
+    "      (Pous.pr fun x =>",
+    "        And (Bandwidth.Accepts A x.fst x.snd.fst x.snd.snd)",
+    "          (Not",
+    "            (instLTNat.lt",
+    "              (instHAdd.hAdd",
+    "                (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (A.ingress x.fst x.snd.fst) 0) 0) (instHMul.hMul 0 1)) 0)",
+    "              (instHMul.hMul 1 1))))",
+    "      1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "fb2de43a741d01c9dfcfcb195d4715e88f1aa93c86400c7db5f896f8fcd05427"
   },
   "Accounting.SecurityProofs.Remote.AuditRO_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.AuditRO_nontrivial :",
+    "  Exists fun A =>",
+    "    Not",
+    "      (ENNReal.instLE.le",
+    "        (Pous.pr fun x =>",
+    "          And True",
+    "            (instLTNat.lt",
+    "              (instHAdd.hAdd",
+    "                (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (A.ingress x.fst x.snd.fst) 0) 0) (instHMul.hMul 0 1)) 0)",
+    "              (instHMul.hMul 1 1)))",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHPow.hPow (instHDiv.hDiv (instHSub.hSub 1 1).cast (Nat.cast 1)) 1)",
+    "            (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 1)))",
+    "          (instHDiv.hDiv (Nat.choose 0 1).cast (instHPow.hPow 2 0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "51658d736315889a39fc571dc61791de0b598a35624c97da4a9e037c0ca57e1f"
   },
   "Accounting.SecurityProofs.Remote.Held": {
    "owner": "@memory-accounting",
@@ -21383,10 +21962,50 @@
    "unfolded_hash": "f5db05faad237b32a0f201ae3cb4b9673fd1cd9c7baea419c54066ea8cb521ae"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsH200_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipeMeetsH200_honest :",
+    "  And (instLTNat.lt 0 33)",
+    "    (And (instLENat.le (instHMul.hMul (instHPow.hPow 32 2906) (instHPow.hPow 2 129)) (instHPow.hPow 33 2906))",
+    "      (And (instLTNat.lt 0 2365587456)",
+    "        (Eq",
+    "          (instHAdd.hAdd",
+    "            (instHAdd.hAdd",
+    "              (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul 512 (Pous.StreamedWipe.missing 2365587456 33)) 2365587456)",
+    "                (Nat.log2 2906))",
+    "              130)",
+    "            0)",
+    "          39068035213)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "bce5bb696a0946c140d2f4a92ef50a19ad4441c7f33ab6939658b068e74a5c63"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsH200_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipeMeetsH200_nontrivial :",
+    "  Exists fun prf =>",
+    "    Exists fun P =>",
+    "      Not",
+    "        (ENNReal.instLE.le (Pous.StreamedWipe.winRealBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) prf P)",
+    "          (instHAdd.hAdd (instHPow.hPow (ENNReal.instInv.inv 2) 128)",
+    "            (Pous.StreamedWipe.prfAdvantage prf",
+    "              (Pous.StreamedWipe.wipeDistinguisherBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) P))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "0ab80d811699b4a046347ace572b6f889696336fa4b4849dde1150700a3edf78"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsReads": {
    "owner": "@memory-accounting",
@@ -21495,10 +22114,40 @@
    "unfolded_hash": "3ad4dba7ae60c5f40ffc98633c8c95e1e89b53ca443c386daf173201e8a4f391"
   },
   "Pous.SecurityProofs.StreamedWipe_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipe_honest :",
+    "  Exists fun prf => Exists fun P => Eq (Pous.pr fun x => Pous.StreamedWipe.Accepts P x.fst.fst (prf x.snd) x.fst.snd) 1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "08001578f548294fb4daa4e83b5528e6833305ed58fe8571803275024e10c38e"
   },
   "Pous.SecurityProofs.StreamedWipe_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipe_nontrivial :",
+    "  Exists fun prf =>",
+    "    Exists fun P =>",
+    "      Not",
+    "        (ENNReal.instLE.le (Pous.StreamedWipe.winRealBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) prf P)",
+    "          (instHAdd.hAdd (Pous.StreamedWipe.bound 1 1 1 1 1 0 0)",
+    "            (Pous.StreamedWipe.prfAdvantage prf",
+    "              (Pous.StreamedWipe.wipeDistinguisherBy (fun {N k b q M E} => Pous.StreamedWipe.acceptAll) P))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d5619f4b235ed58fa1fd43929b67e3ecd8d725a845676bf667e2bd30eb3b72c8"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tGap": {
    "owner": "@compute-accounting",
@@ -31530,13 +32179,14 @@
    }
   },
   "Definitions.Accounting.BoundReceipt": {
-   "digest": "834c8fe24e8f96d65ed63350777ae737d8437c45cb566fb8c04b964394360e1a",
+   "digest": "ff28083abf943190c7635c71f280f205ca2658b64236410c247a4d1d6b17e2f2",
    "definitions": {
     "Accounting.BoundReceipt.Coins": "5bd3e33203ab507f0dade1983b5d07fcbf91a18e2857842b16567c5bd937f8f2",
     "Accounting.BoundReceipt.InteractiveNode": "663671d9afffa89fb8e9c25550b362c674575911c5b6be20f1d8369b8147cb38",
     "Accounting.BoundReceipt.InteractiveNode.QueryDetermined": "74389a2b77452caafc3f98ee0ea38f50507d0091fec78e4638487f19ee9ae666",
     "Accounting.BoundReceipt.InteractiveNode.gpuSide": "6617249cdbf38e595a296742f526d88806e6c92c97bd090247dd47c4b0bc45be",
     "Accounting.BoundReceipt.InteractiveNode.node": "64d6dbcaa563588438dd0682fb626cb257cebcac5b97c96474cc0d885dfe926a",
+    "Accounting.BoundReceipt.InteractiveNode.ofNode": "a167ad7ff57f244ee693af2d1b165d8d1ffac2b356b71d6a0b1a45414768979d",
     "Accounting.BoundReceipt.InteractiveNode.restSide": "1b84f2fd45004f188d972bc050f446f85aacebf736f1bbabd16393084f1a35f2",
     "Accounting.BoundReceipt.InteractiveNode.under": "66ff895b105a8833174085749294d0c91c7ecf2df0cd73f2f886256d375eedca",
     "Accounting.BoundReceipt.Mix": "bedbca35f8b2fbd990eff56b367389fd0320356dd508046f111a75a217366f15",

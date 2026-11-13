@@ -938,9 +938,9 @@
    "Accounting.Assumptions.TS.OperandHMu",
    "Accounting.Assumptions.TS.ReceiptLuckAt",
    "Accounting.Assumptions.TS.UnitFixed",
+   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Accounting.Compose.PrefixOf",
    "Accounting.Compose.Scope",
-   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Properties.Pouw.Period.RegisteredBeforeDraw",
    "Properties.Pouw.Period.SaltIsLiveCoin",
    "Properties.Pouw.Period.SampleIsCoin",
@@ -3989,10 +3989,40 @@
    "unfolded_hash": "31d5f25d5b4a941187d3332230e482ec3f6753741e88053f0485d7f47d3dfc54"
   },
   "Pous.Period.SecurityProofs.obligationHeld_honestInstance": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.obligationHeld_honestInstance :",
+    "  Exists fun τ =>",
+    "    And",
+    "      (Pous.Period.DeviceModel Pous.Period.obligationRun Pous.Period.obligationAudit τ Pous.Period.RING_D",
+    "        Pous.Period.RING_Q Pous.Period.RING_L 1)",
+    "      (And (Pous.Period.Instantiates Pous.Period.obligationAudit τ)",
+    "        (Pous.Period.Fits Pous.Period.honestDevice (Pous.Period.obligationRun.win Accounting.Resource.capacity).len 1",
+    "          Pous.Period.HONEST_S.cast Pous.EndToEnd.S.cast))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pous.Period.Audits.OnTime", "Pous.Period.Drawn"],
+    "open": [],
+    "reads": ["Pous.Period.Instantiates"]
+   },
+   "type_hash": "4349f0543e3d27097a2542417688ebf3769efbc372a44620fe41ec0d437d90a9"
   },
   "Pous.Period.SecurityProofs.obligationHeld_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.obligationHeld_nontrivial :",
+    "  Not (Real.instLE.le (Pouw.pr fun x => True) (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a0344d70b46e1803251dab17762befc1d28dd76d02a928db29593ede8e8b3357"
   },
   "Pous.Period.SecurityProofs.periodCapacity": {
    "owner": "@memory-accounting",
@@ -4008,10 +4038,53 @@
    "unfolded_hash": "d707b0fc20021c5a35bc2f764954c606827932ecfa5ad9c114f258750fbe1e63"
   },
   "Pous.Period.SecurityProofs.periodCapacity_honestInstance": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodCapacity_honestInstance :",
+    "  And",
+    "    (Pous.Period.DeviceModel Pous.Period.verdictRun Pous.Period.sidAudit Pous.Period.honestStrategy Pous.Period.RING_D",
+    "      Pous.Period.RING_Q Pous.Period.RING_L 1)",
+    "    (And (Pous.Period.Instantiates Pous.Period.sidAudit Pous.Period.honestStrategy)",
+    "      (And",
+    "        (Pous.Period.Fits Pous.Period.honestDevice (Pous.Period.verdictRun.win Accounting.Resource.capacity).len 1",
+    "          Pous.Period.HONEST_S.cast Pous.EndToEnd.S.cast)",
+    "        (∀",
+    "          (ω :",
+    "            Prod Unit",
+    "              (Prod Unit",
+    "                (Prod (Pous.ringRO (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065)).Ω",
+    "                  (Prod Pous.EndToEnd.HmCoins Pous.EndToEnd.Streams)))),",
+    "          Pous.Period.verdictRun.accepts Accounting.Resource.capacity ω →",
+    "            And (Pous.Period.sidAudit.Accepts ω) (Not (Pous.Period.sidAudit.Break ω)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pous.Period.Audits.OnTime", "Pous.Period.Drawn"],
+    "open": [],
+    "reads": ["Pous.Period.Instantiates"]
+   },
+   "type_hash": "10e56e688bb605dc67ef74fe04c317be56e7177b18f774914cba90d958986d11"
   },
   "Pous.Period.SecurityProofs.periodCapacity_nontrivialEmpty": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodCapacity_nontrivialEmpty :",
+    "  Not",
+    "    (And",
+    "      (Pous.Period.emptyRun.CapacitySoundPerRun Pous.Period.HONEST_S.cast",
+    "        (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal))",
+    "      (Pous.Period.emptyRun.CapacitySound Pous.Period.HONEST_S.cast",
+    "        (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "86157b4976196c8eaff9e4dbacadb8f5373a840e909464ccd9738f08c2de7adc"
   },
   "Pous.Period.SecurityProofs.periodHeld": {
    "owner": "@memory-accounting",
@@ -4040,7 +4113,23 @@
    "unfolded_hash": "45b5b884466a67826e9718d77fab1b3ae31d4558752482f6333f2b706da5d0e5"
   },
   "Pous.Period.SecurityProofs.periodHeldAt_honestInstance": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeldAt_honestInstance :",
+    "  And",
+    "    (Pous.Period.RingDeviceAt (instHPow.hPow 2 19) PousCheck.Run.DEPLOYED Pous.Period.honestRun",
+    "      (Pous.Period.sidAuditAt (instHPow.hPow 2 19)) Pous.Period.RING_D Pous.Period.RING_Q Pous.Period.RING_L 1)",
+    "    (Pous.Period.Fits Pous.Period.honestDevice (Pous.Period.honestRun.win Accounting.Resource.capacity).len 1",
+    "      Pous.Period.HONEST_S.cast (Pous.EndToEnd.SAt (instHPow.hPow 2 19)).cast)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pous.Period.AuditsOf.Certified"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ba108cc061040ec56210f5db571816a4690a89e42c462131fb6d7b4c3f0bbacf"
   },
   "Pous.Period.SecurityProofs.periodHeldCoins": {
    "owner": "@memory-accounting",
@@ -4099,10 +4188,39 @@
    "unfolded_hash": "2bdb97e1e46b354f0331dd7b5ed0c15ef0a57ef3a188d92c7f33dec812b062ea"
   },
   "Pous.Period.SecurityProofs.periodHeldDemo_honestInstance": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeldDemo_honestInstance :",
+    "  And",
+    "    (Pous.Period.RingDeviceAt (instHMul.hMul 1038 (instHPow.hPow 2 16)) Pous.Period.demoPoint Pous.Period.demoRun",
+    "      (Pous.Period.sidAuditAt (instHMul.hMul 1038 (instHPow.hPow 2 16))) Pous.Period.RING_D Pous.Period.RING_Q",
+    "      Pous.Period.RING_L 1)",
+    "    (Pous.Period.Fits Pous.Period.demoDevice (Pous.Period.demoRun.win Accounting.Resource.capacity).len 1",
+    "      Pous.Period.HONEST_S.cast 1060008348186)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pous.Period.AuditsOf.Certified"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "4b339efe62ebe9aed4a4233ff7fdff24b5071d1ff02f3425309777d66bfa324a"
   },
   "Pous.Period.SecurityProofs.periodHeldDemo_nontrivialDemo": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeldDemo_nontrivialDemo :",
+    "  Not (Real.instLE.le (Pouw.pr fun x => True) (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "9354391c3f64cdce1e75e12d70d26b2898586785c103fbe9531beecaa81bea35"
   },
   "Pous.Period.SecurityProofs.periodHeldDeployed": {
    "owner": "@memory-accounting",
@@ -4118,7 +4236,24 @@
    "unfolded_hash": "a0ed5d5a2833f2490795c66cafdac2ca9745a83747ce711c1cf3a7c481f72d29"
   },
   "Pous.Period.SecurityProofs.periodHeldDeployed_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeldDeployed_honest :",
+    "  And",
+    "    (Pous.Period.DeviceModel Pous.Period.honestRun Pous.Period.sidAudit Pous.Period.honestStrategy Pous.Period.RING_D",
+    "      Pous.Period.RING_Q Pous.Period.RING_L 1)",
+    "    (And (Pous.Period.Instantiates Pous.Period.sidAudit Pous.Period.honestStrategy)",
+    "      (Pous.Period.Fits Pous.Period.honestDevice (Pous.Period.honestRun.win Accounting.Resource.capacity).len 1",
+    "        Pous.Period.HONEST_S.cast Pous.EndToEnd.S.cast))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pous.Period.Audits.OnTime", "Pous.Period.Drawn"],
+    "open": [],
+    "reads": ["Pous.Period.Instantiates"]
+   },
+   "type_hash": "187432b55f88605341d383c8627dce1105c8d3f761aa4b8181016ea97c0dd86f"
   },
   "Pous.Period.SecurityProofs.periodHeldGame_honest": {
    "owner": "@memory-accounting",
@@ -4188,10 +4323,39 @@
    "type_hash": "be577666ca2d997724e2f6c27e85a0f32ab25a6091fd7b50d55ae36d137f0698"
   },
   "Pous.Period.SecurityProofs.periodHeld_honestInstance": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeld_honestInstance :",
+    "  And",
+    "    (Pous.Period.DeviceModel Pous.Period.honestRun Pous.Period.sidAudit Pous.Period.honestStrategy Pous.Period.RING_D",
+    "      Pous.Period.RING_Q Pous.Period.RING_L 1)",
+    "    (And (Pous.Period.Instantiates Pous.Period.sidAudit Pous.Period.honestStrategy)",
+    "      (Pous.Period.Fits Pous.Period.honestDevice (Pous.Period.honestRun.win Accounting.Resource.capacity).len 1",
+    "        Pous.Period.HONEST_S.cast Pous.EndToEnd.S.cast))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Pous.Period.Audits.OnTime", "Pous.Period.Drawn"],
+    "open": [],
+    "reads": ["Pous.Period.Instantiates"]
+   },
+   "type_hash": "187432b55f88605341d383c8627dce1105c8d3f761aa4b8181016ea97c0dd86f"
   },
   "Pous.Period.SecurityProofs.periodHeld_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeld_nontrivial :",
+    "  Not (Real.instLE.le (Pouw.pr fun x => True) (instHAdd.hAdd Pous.Params.δ.cast Pous.Params.εMax.toReal))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ac7874e72d8635e02fc6e22c75de65e8b6dd680f107e04b035b93d77a8e08430"
   },
   "Pous.Period.SecurityProofs.pooledShort_log": {
    "owner": "@memory-accounting",
@@ -24752,6 +24916,20 @@
     "Pous.Period.Strategy": "ed199d30a98be5fa95987d783e637fca18a1bee1dfdec8739d04b0e05473b050",
     "Pous.Period.Strategy.pre": "9b452a9084c82c7df820973e2057765e71fa974a1d28f092add285d92c28ce74",
     "Pous.Period.Strategy.step": "763d2ff6837aaaf6be99aecf1f11a06768e76fe56981c5c0c9e670b5cbb3ec02"
+   }
+  },
+  "Properties.Pous.Period.Witnesses": {
+   "digest": "acd16be7eda860d2b6ee72070e45286dbc4f5eff0ff28a609ee0331e925c8753",
+   "definitions": {
+    "Pous.Period.DEMO_FULL": "095e839b2073f6ce713ba20145102c14dcd3c08e87b59273e43f3c17e51a323a",
+    "Pous.Period.IdKeys": "1d58abfafe6743dbb04496c05c77544b5acb9e1481e6b7ab124770e86c8967e3",
+    "Pous.Period.demoDevice": "726b74e49c4d49a307ddd3379661f4d59fbcce62ced264796b402d132b8313bb",
+    "Pous.Period.demoPoint": "84999ec59058d56f9b2db5a670524c06f76692cf8584850cc88a11032275f069",
+    "Pous.Period.demoRun": "a6ffd3ee28f00aed70626a3ff47ad75eca9edf06a54db5cb7a6a8a705d8159ce",
+    "Pous.Period.obligationAudit": "daf79c98bea9d882089c853f152f1dc8c5ce84eec1c69b4193d7a128a2c8ac8e",
+    "Pous.Period.obligationRun": "965d65fe4fd0ec162952a063ae9f3d36c2f3037541ab5b58e4a6f941b86fc2f1",
+    "Pous.Period.sidAuditAt": "a60d5efa5b0b6730abf9dffb74c1f7c268cd83065c0fe128fe3466d5d6960299",
+    "Pous.Period.verdictRun": "ebbc8081aa698556663227ac88cf560991906aa400bd34238be34b52125ec18c"
    }
   },
   "Properties.Pous.PeriodAt": {
