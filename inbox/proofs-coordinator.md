@@ -115291,3 +115291,46 @@ Two things failed in 1262, both in my script, both fixed in 1374:
 - The accept under a served workload on live coins under the deployed key: this is a test window.
 
 **NEEDS**: none. **To post**: none.
+
+## STAGECOINS, Fri 02:39Z: the first stage's file builds; the two-window premise now rests on the first session's roots; a try of the whole chain is building on vy-nebius-2
+
+In plain words: the file that says the first stage's coins are the device's (`FirstCoins.lean`) now compiles in a run. The second stage's file and one helper failed in that run on small tactic errors, which I fixed. A try of the whole chain at the fixed head is building. I also replaced the premise that says, on two windows, the first session's log holds none of the second stage's coins (`SecondAlone`). It now follows from a narrower premise: the roots of the first session the run reads show no coin of the second stage's family after the interior's digest. That premise follows in turn from the form's new `interiorUnshown` refusal wherever the refusal reads the session the cut reads. The outer block's coins and the inner blocks are untouched by this.
+
+Head pushed: `ab1fdf31a5` on `cursor/proofs-stagecoins-71b1`. Nothing unpushed.
+
+Runs:
+- `r20261113-014929-1c4e` [run] on vy-nebius-cpu-11, at `1c2ab294bf`: waited 12.5 min (01:49Z to 02:02Z), then failed in 9 min. One error, in my `FirstCoins.lean:115` (`getD_mkObj_none`: a rewrite needed `get?_eq_getElem?` first). TWOLEG's `Steps.lean` and CUT's `Cut.lean`, `CutPrints.lean` and `CutHeld.lean` built, with warnings only.
+- `r20261113-021142-f490` [run] on vy-nebius-cpu-11, at `b583ab3420`: started at once (02:12Z), failed at 02:21Z. **`FirstCoins.lean` built** (warnings only: deprecations and unused simp arguments). The errors were all in mine:
+  - `SecondCoins.lean`: `groupOf_second`'s case split; two `show` patterns with placeholders Lean couldn't fill, in `formReading_coin_second` and `formReading_agree_second`.
+  - `StageLog.lean:35`: a goal the rewrite had already closed.
+  Fixed in `ab1fdf31a5`. `CoinBytes`, `StageCut`, `StageAlone` and `StageCoins` were not reached.
+- `r20261113-022257-6cff` [run]: cancelled after 1 min unstarted. The shell hook had refused the command that held the fixes, so this try went out at the old head.
+- `r20261113-022405-5bd3` [run] on **vy-nebius-2** (sent there per 02:13Z), at `ab1fdf31a5`, leaf `StageCoins.lean`, which imports everything below: waited 4 min (02:24Z to 02:28Z) and is building in slot p7. ETA for a verdict: about 02:50Z.
+
+What is new [read, not yet compiled]: `StageAlone.lean`.
+- `none_readLog`: the cut's read of a log places no coin of family `label'` after `after'` where no root line of the log names them. It holds for every family the read is for, and is the `fresh_readTail` induction with a count of zero.
+- `countFresh_zero`: where a session's released roots don't show `after` for `label` (`interiorShown roots label after = false`), the count of such root lines is zero (`releasedRootsOf_ok`, `countFresh_eq`).
+- `FirstUnshown C` (named `Prop`) and `secondAlone_of : FirstUnshown C → SecondAlone C`.
+- `unshown_of_accepts`: an accepted play's case passed `interiorUnshown` (TWOLEG's new `accepted_steps` conjunct).
+- `SessionMatches C` (named `Prop`) and `firstUnshown_of : CaseIsSent C → SessionMatches C → FirstUnshown C`, through TWOLEG's `interiorUnshown_roots`.
+- In `StageCoins.lean`: `coinsAgree_second_matches`, the second stage's `CoinsAgree` with `SessionMatches` in place of `SecondAlone`.
+
+ACCEPTS's ask (the second stage's clause of `SourcesFit`: `ξ₂.size ≤ stage · L`): my lemmas don't give it. [derived] From `oneStageZk_reads`, `drawCoins_ok` and `challengerStream_ok`: `ξ₂.size = COIN_BYTES · n`, where `n` is the number of the interior session's root lines of the interior audit's family whose root is the interior commitment's digest (`(look roots label).filter (· == after)`). Nothing I have bounds `n` by `stage`. My second-stage reading needs no bound: `stageCoinsOf` is `none` above `stage · L`, so `CoinsAgree` holds vacuously there. A bound needs the form to refuse a longer `ξ₂`, or the run to read all of it (an interior `sourceRead`); that is TWOLEG's.
+
+### STOP RULE
+Nothing here changes a listed guarantee or what it rests on. No lock is touched, the accept is not turned on, and the form is not wired into `Sampled.lean`. `DevAgrees.lean` is not imported anywhere in my files [read].
+
+### NEEDS
+1. TWOLEG (cc HISTORY `bc-3e1bb2d6-7c79-5a00-8b4a-12f4945146a9`): `SessionMatches`. `interiorUnshown` reads the first session from `e.coins` under the evidence's key. It compares the boundary's window with `p.interior.verifier.windowRoot`, takes the family from `e.interior.base.coins`' segment, and takes `after` from `Registration.digest e.record`. The cut reads that session from `firstCoins e` under the parameters' key, against the interior audit's window and family, after the interior commitment's digest. Either `interiorUnshown` reads what the run reads, which makes `SessionMatches` a lemma (only the `firstCoins`/`e.coins` field equality remains: `firstCoins` is `e.coins` without `key`), or the matches stay a premise with you as owner. Same as my 01:52Z NEEDS 1, now with the exact `Prop`.
+2. CUT: `CutReads`. TWOLEG or whoever instantiates `C`: `CaseIsSent`. Both unchanged.
+3. REDRAW / TWOLEG: `FirstDrawn`. Unchanged until the base holds the key change; then `firstDraw` reads `i.family` (the 00:48Z ruling).
+4. COINMAP: `DevFirst`, `DevSecond`. Unchanged.
+5. TWOLEG (for ACCEPTS): a bound on `ξ₂.size`, as above.
+
+### To post
+Nothing.
+
+### Not established
+- `StageAlone.lean`, `SecondCoins.lean` (as fixed), `CoinBytes.lean`, `StageCut.lean` and `StageCoins.lean` have not compiled yet; `5bd3` is the first try that reaches them.
+- The first stage's family is still the one the evidence's segment names.
+- The known hole (a signature from an earlier period passes) is noted, not worked around.
