@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.Honest.Runs
 public import Proofs.Flock.SpotFlock.Honest.Written
 public import Proofs.Flock.SpotFlock.AddressFacts.RowLeaves
+public import Proofs.Flock.SpotFlock.SampleBelow
 
 /-!
 # The row at the instance
@@ -17,6 +18,11 @@ the member's units write is one of `R`'s ports (`written_of_two`), so no written
 So the row at the instance's address map takes `R`'s reference reads being well formed and where the second stage
 puts a checked proof block (`AddressRow.Sits`): `rowFact_of_sits`. The address premise, the design premises and
 `HonestExists` follow from the same two (`addressesConnected_of_sits`, `premises_of_sits`, `honest_of_sits`).
+
+Where the second stage puts a checked proof block is owed of a registration with no proof block always checked whose
+first stage samples only slots of the layout that name themselves. The instance is one: none is always checked
+(`always_held`), and its first stage samples one unit of a population of one (`Bnd.units`), so the one outer block
+(`sample_held`), which the layout's one proof block names (`sampleSlots_held`).
 -/
 
 @[expose] public section
@@ -72,5 +78,32 @@ theorem premises_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (h
 theorem honest_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (held R B desc q c₀))
     (hA : Accepts (held R B desc q c₀)) : HonestExists :=
   honest_of_row R B desc q c₀ hWf (rowFact_of_sits R B desc q c₀ hWf hS) hA
+
+/-! ## The first stage's sample -/
+
+/-- **No proof block is always checked** at the instance. -/
+theorem always_held (v : ℕ) : (held R B desc q c₀).reg.always v = false := rfl
+
+/-- **The first stage samples the one outer block**: its population is one unit (`Bnd.units`), and a `subset:1`
+sample is below its population (`RegTwo.sample_lt`). -/
+theorem sample_held (c : ByteArray) : ∀ ρ ∈ (held R B desc q c₀).reg.sample c, ρ = 0 := by
+  intro ρ hρ
+  obtain ⟨n, hn, hlt⟩ := RegTwo.sample_lt (reg B) B.firstK c
+  have hn1 : n = 1 := Except.ok.inj (hn.symm.trans B.units)
+  have hρn : ρ < n := hlt ρ hρ
+  omega
+
+/-- **Each block the first stage samples is a slot of the layout that names itself**: the layout is one proof block,
+unit `0`, and the sample is that block. -/
+theorem sampleSlots_held (l : Spot.Slots.SlotOrder)
+    (hl : (Spot.Slots.layout (held R B desc q c₀).reg.first.program
+      (held R B desc q c₀).reg.first.query).toOption = some l) (c : ByteArray) :
+    ∀ ρ ∈ (held R B desc q c₀).reg.sample c, ∃ b, l.blocks[ρ]? = some b ∧ b.unit = some ρ := by
+  intro ρ hρ
+  rw [layout_held R B desc q c₀] at hl
+  obtain rfl := Option.some.inj hl
+  obtain rfl := sample_held R B desc q c₀ c ρ hρ
+  refine ⟨⟨some 0, B.gs⟩, ?_, rfl⟩
+  simp [Spot.Slots.SlotOrder.blocks, oneLayout]
 
 end SpotFlock.Honest
