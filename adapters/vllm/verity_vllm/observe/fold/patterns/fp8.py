@@ -31,14 +31,29 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import fp8
+from verity.definitions.registry import deepgemm, fp8
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_weight_view,
+    is_row_major,
+)
 from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, first, op_name
-from verity_vllm.observe.fold.patterns.resolutions import _fmt, attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _fmt,
+    attribution_for,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.target import _targets, target_of
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 QUANT_EPS = 1e-10
@@ -51,8 +66,8 @@ def header_fp8_kernel(ctx: StepContext) -> str | None:
     """The block-scaled FP8 linear kernel class the record's engine carried (`RunHeader.profile["backends"]["fp8_block_gemm_kernel"]`,
     written by `vllm_adapter.profile_manifest` from `fp8_block_gemm_kernel_of(model)`), None when the header does not say."""
     try:
-        prof = ctx.header.profile or {}
-        k = (prof.get("backends") or {}).get("fp8_block_gemm_kernel")
+        backends = (ctx.header.profile or {}).get("backends")
+        k = backends.get("fp8_block_gemm_kernel") if backends else None
         return k if isinstance(k, str) else None
     except (AttributeError, TypeError):
         return None
@@ -87,9 +102,9 @@ class PerTokenGroupFp8Quant:
         eps = as_float(_arg(a, "eps", pos=4))
         lo, hi = as_float(_arg(a, "fp8_min", "min_8bit", pos=5)), as_float(_arg(a, "fp8_max", "max_8bit", pos=6))
         ue8m0 = _arg(a, "scale_ue8m0", "use_ue8m0", pos=7)
-        if not all(isinstance(v, ViewDesc) for v in (x, xq, xs)) or not isinstance(G, int) or eps is None or lo is None or hi is None:
+        if not (isinstance(x, ViewDesc) and isinstance(xq, ViewDesc) and isinstance(xs, ViewDesc)) or not isinstance(G, int) or eps is None or lo is None or hi is None:
             return unsupported(node, "per_token_group_fp8_quant arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
-        if G != self.group:
+        if self.group != G:
             return unsupported(node, "group size differs from the group this pattern resolves", group_size=G, pinned=self.group)
         if G not in fp8.QUANT_GROUPS:
             return unsupported(node, "group size is not one Fp8GroupQuant_v1 is registered at", group_size=G, registered=list(fp8.QUANT_GROUPS))
@@ -106,7 +121,6 @@ class PerTokenGroupFp8Quant:
         if not (x.dtype == "bfloat16" and xq.dtype == E4M3 and xs.dtype == "float32"):
             return unsupported(node, "Fp8GroupQuant_v1 is bf16 -> (e4m3, f32)", dtypes=[x.dtype, xq.dtype, xs.dtype])
         if bool(ue8m0):
-            from verity.definitions.registry import deepgemm  # loaded only on the ue8m0 branch
             spec = bind(deepgemm.Fp8GroupQuantUe8m0, K=K, G=G)
         else:
             spec = bind(fp8.Fp8GroupQuant, K=K, G=G)
@@ -137,7 +151,7 @@ class CutlassScaledMmFp8Block:
         xs = _arg(a, "a_scales", pos=3)
         bs = _arg(a, "b_scales", pos=4)
         bias = _arg(a, "bias", pos=5)
-        if not all(isinstance(v, ViewDesc) for v in (out, xq, b, xs, bs)):
+        if not (isinstance(out, ViewDesc) and isinstance(xq, ViewDesc) and isinstance(b, ViewDesc) and isinstance(xs, ViewDesc) and isinstance(bs, ViewDesc)):
             return unsupported(node, "cutlass_scaled_mm arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         if bias is not None:
             return unsupported(node, "bias epilogue: ScaledMmFp8Block_v1 has none", bias=repr(bias) if isinstance(bias, ViewDesc) else bias)
@@ -193,13 +207,11 @@ class DynamicDeepGemmFp8Linear:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or op_name(node.op) != "dynamic_flashinfer_deepgemm_blockscale_gemm":
             return None
-        from verity.definitions.registry import deepgemm
-
         a = bound_args(node)
         x, w, ws = _arg(a, "input", pos=0), _arg(a, "weight", pos=1), _arg(a, "weight_scale", pos=2)
         group, ue8m0 = _arg(a, "group_size", pos=3), _arg(a, "use_deep_gemm_e8m0", pos=4)
         outs = node.output_views()
-        if not all(isinstance(v, ViewDesc) for v in (x, w, ws)) or len(outs) != 1:
+        if not (isinstance(x, ViewDesc) and isinstance(w, ViewDesc) and isinstance(ws, ViewDesc)) or len(outs) != 1:
             return unsupported(node, "dynamic FP8 linear arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         out = outs[0]
         if group != 128 or ue8m0 is not True:

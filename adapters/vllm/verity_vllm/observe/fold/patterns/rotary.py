@@ -9,11 +9,29 @@ from verity.circuits.defs import bind
 from verity.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, is_int, is_row_major, split_heads
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    is_int,
+    is_row_major,
+    split_heads,
+)
 from verity_vllm.observe.fold.patterns.ops import bound_args, op_name
-from verity_vllm.observe.fold.patterns.resolutions import _fmt, _group_compute, attribution_for, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _fmt,
+    _group_compute,
+    attribution_for,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.transparent import SCRATCH_INT_COPIES
-from verity_vllm.observe.fold.resolver import Compute, Gather, PerRow, Resolution, StepContext, Unsupported
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    PerRow,
+    Resolution,
+    StepContext,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 

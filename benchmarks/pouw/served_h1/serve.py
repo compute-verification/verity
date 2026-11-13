@@ -88,7 +88,7 @@ In order, into OUT (`record.json` throughout, `manifest.json` at the end, the op
             words equal to the tally's bits and a tampered one refused against the admit root, the tile's selected rows
             zeroed under a nonzero scale still admitted, a live unit's receipt the ungated one
 
-    cd adapters/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../verity/configuration/config:../../benchmarks/pouw/served_h1
+    cd adapters/vllm; PYTHONPATH=.:../..:../../tools/research/src:../../tools/config:../../benchmarks/pouw/served_h1
     $PY ../../benchmarks/pouw/served_h1/serve.py --out OUT --cubin noise.cubin --at <ISO time> --by LANE \
       --coins live --challenger 127.0.0.1:PORT --session ID
 """
@@ -114,7 +114,7 @@ if TYPE_CHECKING:
 
     import torch
 
-    from verity.protocols.spot.device.challenger import LiveCommitment
+    from verity.protocols.proofs.spot.device.challenger import LiveCommitment
     from verity_vllm.protocols.pouw.h1.receipts import Cubin
 
 HERE = Path(__file__).resolve().parent
@@ -447,8 +447,8 @@ def run(a: argparse.Namespace) -> dict:
                                                                        RC.noise_blocks_cpu(probe, 40)))})
 
     from tests.engine import int8_exact_gpu as G
-    from verity.protocols.pouw.verifier import verifier
-    from verity.protocols.pouw.verifier.coins import Challenger
+    from verity.protocols.accounting.pouw.verifier import verifier
+    from verity.protocols.accounting.pouw.verifier.coins import Challenger
     from verity_vllm import protocols as PO
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.engine import int8_ops
@@ -528,9 +528,9 @@ def run(a: argparse.Namespace) -> dict:
     pending: list[tuple] = []
     round_log: list[dict] = []
     if live:
-        from verity.protocols.pouw.verifier import window as Wd
-        from verity.protocols.pouw.prover.circuit import h1tile as HT
-        from verity.protocols.spot.device import challenger as Ch
+        from verity.protocols.accounting.pouw.verifier import window as Wd
+        from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+        from verity.protocols.proofs.spot.device import challenger as Ch
         live_salt = cs.salt(registration)
         rounds = cs.rounds
 

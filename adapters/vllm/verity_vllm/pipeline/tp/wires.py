@@ -1,11 +1,11 @@
-"""A tensor-parallel window's collective sites at a grain C-Flock proves (`sites_circuit`): each request's W rank Programs'
+"""A tensor-parallel window's collective sites at a grain Flock proves (`sites_circuit`): each request's W rank Programs'
 producers of a partial, the units combining them and the calls that read a combine's output, with each site's binding
 (`program.tp_binding`) as wires. Row p of every combine unit's parts, cut W ways, is rank p's partial row there, and every
 read of a combine's output is the output row of the unit that computes it.
 
 A wired row is committed under its writer's salt (`wiring.salts`), so a peer row and its writer's output are one public
 string. A peer row that isn't its writer's output is a wrong block of the window (`wiring.check`, and `check_drawn` on the
-units a sample draws), never a free input: `interface.input_count` counts every peer row wired.
+units a sample samples), never a free input: `interface.input_count` counts every peer row wired.
 
 **Units** (`grain.lower`). A site's units are:
 * its producers' units, per rank;
@@ -41,13 +41,13 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.pipeline.tp import grain as G
-from verity_vllm.program import tp_binding as TB
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.definitions.registry import dead_free as DF
 from verity.commitments.windows import interface as I
+from verity.definitions.registry import dead_free as DF
+
+from verity_vllm.pipeline.tp import grain as G
+from verity_vllm.program import tp_binding as TB
 
 PRODUCER, GATHER, COMBINE, OUTPUT, NORM, CONSUMER = "producer", "gather", "combine", "output", "norm", "consumer"
 #: the rank of the stages every rank reads: combines, output gathers and norms
@@ -248,6 +248,7 @@ class _Window:
             if l1 >= h1:
                 continue
             dest, m, uw = off + l1 - lo, (h1 - l1) // w, u0 + (l1 - slo) // w
+            why: str | None
             if (l1 - slo) % w or (h1 - l1) % w:
                 why = f"part of {w}-word rows of {tw}"
             elif P % w or dest % w:
