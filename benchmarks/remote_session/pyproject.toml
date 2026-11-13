@@ -53,6 +53,10 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
           # test_host_read_flow.py runs host_read.py, whose reference receipts are sketching.py's product
           "verity/protocols/accounting/poub/prover/codec_tensor/reader.py", "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py",
           "verity/protocols/accounting/poub/prover/codec_tensor/sketching.py",
+          # test_sass_gate.py: sass_gate.py runs the PoUW harness's mma_gate; test_rows.py checks that rows.sh's
+          # paths exist, these two among them
+          "verity/protocols/accounting/pouw/prover/sass_gate.py", "verity/protocols/accounting/poub/prover/word_codec/kv.cu",
+          "benchmarks/pouw/harness/jobs/toolkit.sh",
           # test_host_read_tiers.py: host_read_tiers.sh's lease, asked of the tree's own gpu-lease over faked cards
           "tools/research/src/research/pods/sh/gpu_lease.sh", "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit
