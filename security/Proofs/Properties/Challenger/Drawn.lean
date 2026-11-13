@@ -36,7 +36,7 @@ stream as its coins of `label` after `after`, the commitment and the roots that 
 log, which is the session's); or the finder outputs a break. What `drawCoins` checks (`Coins.drawCoins_ok`), and
 `coinsReason` through it. -/
 theorem session_run {w : String} {after ξ : ByteArray} {c : LiveCommitment} {roots : Roots}
-    (ht : trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
+    (ht : trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
       (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots))
     (hw : withheldOn (getD coins "ledger") w = true)
     (hl : getD (getD coins "segment") "label" = Json.str label)
@@ -60,7 +60,7 @@ theorem session_run {w : String} {after ξ : ByteArray} {c : LiveCommitment} {ro
 /-- The run `session_run` gives shows no root in the family but `after`: `challengerStream` accepted its roots
 (`Coins.stream_ok`). -/
 theorem session_family {w : String} {after ξ : ByteArray} {c : LiveCommitment} {roots : Roots}
-    (ht : trustedSessionOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
+    (ht : trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
       (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots))
     (hw : withheldOn (getD coins "ledger") w = true)
     (hl : getD (getD coins "segment") "label" = Json.str label)
