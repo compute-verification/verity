@@ -38,9 +38,10 @@ class _Committer:
         return self.weights
 
 
-def _replay(monkeypatch, com: _Committer, *, registration: Any = None, replay: dict | None = None, world: int = 2) -> tuple[dict, dict]:
+def _replay(monkeypatch, com: _Committer, *, registration: Any = None, replay: dict | None = None, world: int = 2,
+            manifest: Any = None) -> tuple[dict, dict]:
     """Rank 1's `in_process` over `com` and a run whose commitment holds the weight registration `registration`: (its record
-    without the wall, what the evaluation was given)."""
+    without the wall, what the evaluation was given).  `manifest` is the required manifest the rank was started with."""
     given: dict[str, Any] = {}
 
     def evaluate(p, cfg, **kw):
@@ -53,7 +54,7 @@ def _replay(monkeypatch, com: _Committer, *, registration: Any = None, replay: d
     monkeypatch.setattr(RR, "evaluate", evaluate)
     monkeypatch.setattr(OC, "OpenedReader", lambda com_, rc: ("reader", com_, rc))
     monkeypatch.setattr(SR, "default_workers", lambda processes=1: 100 + processes)
-    st = {"rank": 1, "world": world, "bmap": {"digest": "dd"}, "com": com, "weights": LIVE, "replay": replay, "manifest_doc": None}
+    st = {"rank": 1, "world": world, "bmap": {"digest": "dd"}, "com": com, "weights": LIVE, "replay": replay, "manifest_doc": manifest}
     rc = SimpleNamespace(weight_registration=registration, run_root=RUN_ROOT)
     record = RR.in_process(st, rc)
     assert isinstance(record.pop("wall_s"), float)
@@ -72,6 +73,13 @@ def test_a_rank_whose_parameters_register_to_the_committed_root_replays_with_the
     assert check["method"].startswith("rank 1: live parameters (weight SHARDS) re-registered at replay == the run's committed weights root")
     assert given["run_root"] == RUN_ROOT and given["committed"] == ("reader", com, given["rc"]) and given["bmap"] == {"digest": "dd"}
     assert given["memo"] == {"memo": None} and given["st"]["facts_of"] is given["p"]
+
+
+def test_the_ranks_memo_is_of_its_own_identities_and_the_replay_is_given_the_whole_manifest(monkeypatch):
+    manifest = {"ranks": 2, "identities": [{"rank": 0, "op": "a"}, {"rank": 1, "op": "b"}, {"op": "c"}, {"rank": 1, "op": "d"}]}
+    given = _replay(monkeypatch, _Committer("aa"), registration={"root": "aa"}, manifest=manifest)[1]
+    assert given["memo"] == {"memo": {"ranks": 2, "identities": [{"rank": 1, "op": "b"}, {"rank": 1, "op": "d"}]}}
+    assert given["manifest_doc"] is manifest
 
 
 def test_the_parameters_registered_again_are_the_engines_and_the_committers_model_is_put_back(monkeypatch):
