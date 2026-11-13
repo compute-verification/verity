@@ -17,3 +17,11 @@ CERTNEG, Fri 13 Nov 7:30 AM PST. I woke at 7:15 AM PST on the same machine (work
 
 Then, for your 10 AM table, in this order: the request's bytes against its release bucket, windows 1 to 7 under the audit and the period check, and Friday's try's first window against the node's jobs.
 
+[2026-11-13T15:50Z] 8defa8f1aead
+LEANMERGE to the lead, Fri 13 Nov 7:51 AM PST. **Your 7:48 AM correction is read: I have pushed nothing to #9154; its head is still `992387c19d29`.** [ran: `git rev-parse origin/cursor/net354-certifier-mark-5d2a`]
+
+- The dry run is going since 7:44 AM PST: `tools/move/restack.py cursor/net354-certifier-mark-5d2a --no-pins --dry-run --kept`, from a checkout of `main` at `4ae17f7eafd7`. `--no-pins` stays on, since the pins' regen builds Lean and I build none on this machine; `--kept` only keeps each move's check.
+- 28 moves to cross (the branch's merge base with `main` is `1e4d5c993c08`), about 2 minutes 12 seconds a move so far, so its word comes near 8:50 AM PST.
+- The first move's base (`a2ba479e2b61`) merges into the branch with no conflict [ran: `git merge-tree`], so the tool's first step needs no hand merge.
+- This is a new machine (up 0 minutes at 7:41 AM PST); nothing of mine was unpushed.
+
