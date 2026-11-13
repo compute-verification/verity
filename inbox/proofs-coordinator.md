@@ -127578,3 +127578,37 @@ In plain words: with the base merged, the audit has nothing against my files and
 **STOP RULE.** None. **NEEDS.** None. **To post.** Nothing.
 
 **Not established.** The kernel replay of my three files; the join's own records audit at `c8d19ee874ea`, which is ASSEMBLY's to run. `majorityBound_opens` still takes `OpensBy` as a hypothesis: its caller gives the openings from the witness, and must not take them from `exists_opensBy`. Pushed head: `0277a820e74eb46ff5b2ad1ecf93280f8fad501b`; nothing is left unpushed.
+
+## COUNT, Fri 13 Nov 07:32Z: #9479 AND #9640 ARE BOTH ON `main` (`main` is `9182900fb94eefbc4a6cc5d6e14885dc6b18f5ff`; #9640 landed 07:27Z as `225f303981ef`, #9479 at 05:41Z as `07276cd9e0`); the guard's suites passed 3 of 3 at `3d9bf269f1ad` (`r20261113-071018-dd20`); its head is now `60e10f61eed86e26a1b87f48ed68ce7bccb1e6b9` (one test changed), suites `r20261113-072923-691e` out; #9621 is not on `main`, so nothing is opened and there is no ready line yet
+
+**In plain words, for Daniel.** The two changes to the command that prints exfiltration capacity are both on `main` now, so benchmarks can make its one run at that commit. The small safety change I was asked for (no run is ever marked proved on the audit's final answer alone) passed its tests on a node. I then changed one test in it so that tonight's moves of directories cannot break it, and that head is being tested now. It waits on the section it builds on reaching `main`. Nothing here ran on a served engine or a GPU.
+
+### Point 3 of 05:57Z: both are on `main` [run: `gh pr view`, `git merge-base --is-ancestor`, 07:31Z]
+
+- #9640: merged 07:27:44Z; its commit on `main`'s first-parent line is `225f303981ef8f5194bce95afe244bda0fcc4921`.
+- #9479: merged 05:41:41Z as `07276cd9e0`.
+- `main` is `9182900fb94eefbc4a6cc5d6e14885dc6b18f5ff`, two pull requests past #9640. Any commit of `main` from `225f303981ef` on holds both.
+- What the run of record changes in the print [run, 06:23Z, at #9621's head]: the security level's line reads "not read" while the rows of record hold no binding bound, so it prints a bound only once benchmarks' run is made and labelled.
+
+### The guard (ci's note on #9621)
+
+- Suites at `3d9bf269f1ad`, your command with `--quick`: `r20261113-071018-dd20` on vy-nebius-cpu-14, done rc 0, 3 of 3 passed, none cached: `verity-bench` 655 passed, `repository` 388, `verity-graph` 220 [run].
+- New head `60e10f61eed86e26a1b87f48ed68ce7bccb1e6b9` on `cursor/proofs-count-guard-c41d`, pushed 07:28Z [run: `git ls-remote`]. One more commit, a test only: the test that a whole record reads as before named each verifier by typed text, and five of those names are paths in the tree, two of them under `verity/protocols/spot/`, which moves tonight. The path-only move rewrites them in the section's data file. A candidate that held the move and this branch as it stood would have failed that test [derived: I did not run the mover]. The test now reads each name from the data file; the items, their order and their wording stay pinned [run: the tests below].
+- At `60e10f61eed8`, on my machine, one file a command [run]: `tests/test_served_row.py` 25 passed, `tests/test_served_record.py` 9, `tests/test_exfiltration.py` 38, `tests/test_spot_status.py` 32; ruff clean. With #9621's own `served_row.py` under these tests, the seven new cases fail (the mark reads `proved`) and the other 18 pass [run].
+- Suites at `60e10f61eed8`: `r20261113-072923-691e` on vy-nebius-cpu-9, sent 07:29Z with `--on auto`, waiting for a slot at 07:31Z; about 8 minutes once it starts [run; the end is a guess]. No `ulimit -Sv` in it.
+- Both branches merge onto `main` `9182900fb94e` with no conflict: #9621's head `13a60635abb2` and the guard's `60e10f61eed8` [run: `git merge-tree --write-tree`, rc 0 each].
+
+### Opening it, under your 07:22Z rule
+
+- #9621 is open at `13a60635abb2`, ready and admitted, not on `main` [run, 07:30Z].
+- I merge no `main` and rebase nothing. Once #9621 lands, the branch differs from `main` by its two commits as it stands, because the queue lands a pull request by a merge commit whose parent is the pull request's head [run, on #9479, #9640 and #9662]. I then open it with `research queue open --issue PRF-456` (the issue #9621 is attached to [read: Linear]), `Lane proofs`, `Goal proofs/network-number-printed`, and give the ready line from `691e` if it passed.
+- If a chain of moves lands first and the branch crosses it, I carry it with `tools/move/restack.py` only when you say, and give a new ready line.
+- Your 07:00Z text said "rebase then". I read the 07:22Z rule as overriding it; say if you want otherwise.
+
+### Machine
+
+Replaced again at 07:22Z; the pen retaken at 07:25Z, the worktree rebuilt from the pushed branch. Nothing was lost. The stale timers and Slack events that reached this loop at 07:22Z to 07:25Z were yours; I acted on none.
+
+### What I wait on
+
+`r20261113-072923-691e`; #9621 on `main`; your word naming #9501's head.
