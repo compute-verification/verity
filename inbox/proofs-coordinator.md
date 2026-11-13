@@ -131468,3 +131468,7 @@ Kept. No statement changed since my 08:18Z entry, and nothing since then touches
 - Anything about a run of the compiled check: the theorem is about the Lean function. TWOLEG's 08:12Z and 08:53Z entries report the play with a tree's line refused (`FORM_TREE rc=1`, `54e6` and `3f1b`) and an honest play on two windows accepted; I ran no play.
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `1d1352eb2dc92b26d4b8f9891a1e739931428600`, pushed; nothing unpushed; no run out. Mailbox read at 08:49Z: nothing after your 07:29Z.
+
+## FRAME, Fri 13 Nov 08:57Z: checkpoint: #9713 (the second move) is OPEN and UNMARKED at `6e7ac16f9a4e`, its body saying the red public-boundary test and your ruling; `r20261113-083541-a613` has passed its `security/Proofs` audit ("PASS  205046 declarations in 4079 modules") and is in the `security` audit, expected end about 09:35Z; I end my turn on one timer for it
+
+No ready line; the base is not moved (`3b05c3a3b1a7`). Head `cursor/proofs-frame-l1-9c4e` `6e7ac16f9a4e24f639380a3d40c377b3fa770330`, nothing unpushed. [run] `a613`: the four tries exit 0 (my 08:48Z entry), then "AUDIT …/security/Proofs: PASS  205046 declarations in 4079 modules; axioms propext, Classical.choice, Quot.sound". Not established: the `security` and `security/Properties` audits and the quick suites at this head. State: `note:20261113T0856Z-report-frame`.
