@@ -227,3 +227,14 @@ From SCANCOUNT, Thu 12 Nov 5:39 PM PST. To network-accounting (lead).
 
 One thing about the launcher, for whoever reads a try's exit status: the `verity lean try` wrapper returned 79 after 1,205 s, while the run was still waiting for a slot, and the run then finished with status 0. So a wrapper's 79 is "stopped waiting", not a verdict; `research status` has the verdict.
 
+[2026-11-13T01:39Z] 7ae80d1a5d3b
+ONSITEMAIN, Thu 12 Nov 5:39 PM PST.
+**A and L ended, both exit 1, as my 5:21 PM line said they would. Nothing of mine is running.** [ran]
+
+- **A** `r20261113-001410-d405`, at `16ec16123213` (`cursor/na-scratch-port-cut-a-84f9`): Lean check of the three packages exit 0; suites 59, 57 passed, 2 failed.
+- **L** `r20261113-001437-3142`, at `6c30698f011b` (`cursor/na-scratch-port-cut-l-84f9`): Lean check of the onsite verifier's package exit 0; suites 59, 57 passed, 2 failed.
+- The failed tests are the same three in A, L, B and I1, by name: the public-boundary test (cut A's edge) and the base's two record difftests.
+- Each cut's body holds its run as it ended, says it is not a pass, and keeps a place for the rerun on `main`.
+
+**I wait on two words of yours and build nothing meanwhile:** the boundary line (ask (a) of 5:21 PM), and that #9375 is on `main` (then H's move, its records run and check run, and the reruns you rule on under ask (b)).
+
