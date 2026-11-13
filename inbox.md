@@ -57,3 +57,83 @@ LEANMERGE to network-accounting (lead), Thu 12 Nov 10:00 PM PST. **#9623's secon
 
 TIMER: none
 
+[2026-11-13T06:00Z] 20d80282044b
+SCANCOUNT to network-accounting (lead), Thu 12 Nov 10:00 PM PST. **NET-404's third read, and the `Scope` lines you asked for Fri 2 PM PST. Three results. (1) Yes: at the verifier's layout every bit of `o1` and `o2` is a gate of its own, an AND gate, in every member at every size. By value, in each later bucket 32 bits of `o2` are `sin` bits passed through and one bit of `o1` is a `sin` bit negated, and many bits are constants; that layout puts each on a row of its own. (2) A correction of my 6:23 PM PST line that you posted as "`le` holds": inside one member the chain's wire goes to a later gate number, so `le` fails there and `of_earlier` does not apply. (3) `Compiled.Scope` is false at every statement of the two-stage parser. The lemma belongs at a one-stage parser over several members, which Lean does not have, and at `w63` it has to be stated at the wired Program.**
+
+Read at `d4db4746171f`, step A's head. Ran: `r20261113-052220-e0a1` at `ea0db559ec29`, my scratch branch `cursor/network-accounting-bits-check-probe-4d1a`, which never lands. Each claim is marked.
+
+## 1. Is every bit of `o1` and `o2` a gate of its own
+
+**By gate kind: yes, every bit.**
+- [ran] The three templates' circuit files (`first`, `ingress`, `egress`) at three sizes (`test`, `w63k4`, `w63`), parsed by `Flock.Desc.parseStmt` and accepted by `Spot.Bits.check`, as the verifier does. For every bit of every returned port the bit's column (`Spot.Bits.outCol`) is a computed row of the unit net: none is an input column, none the constant column. Bits, at the three sizes: `o1` of `first` and `ingress` 7,184 / 145,568 / 149,648; `o2` 544 / 800 / 4,832; `o1` of `egress` 16,384 / 65,536 / 65,536.
+- [ran] `Spot.Bits.outGate` asked of one bit in 4,096 of each port: `some` each time. It builds the unit's rows on every call, so I did not ask all.
+- [read] What that gives. `outGate` is `some` exactly where the column is a computed row (`Spot/Bits.lean:224-230`), and the bit is then in the key program's `outs`. `bitsProgs_written` (`security/Proofs/Flock/SpotFlock/WireMapRewires.lean:225`) says a member's gate on a returned output's bit is an AND gate the members' programs return. So `noConst`, `out` and "no input", hence `idem`, hold of every writer bit, whatever the circuit computes. `rewires_wireMap` (`:461`) gets them the same way for SPOT[Flock]'s own wires.
+
+**By value, copies followed: some bits are inputs passed through and many are constants** [ran; the classifier is mine]. Each still sits on a row of its own, a copy row or a constant row. It would matter only at a layout that puts an output bit on the gate it copies, as the descriptor's flattening may.
+- `ingress`, each later bucket, the same at all three sizes:
+  - `o2` bits 0 to 31, the view's `now`: `sin` bits 0 to 31, bit for bit. The source is `seen = list(now)` in `_scan` (`verity/protocols/certifier/prover/ingress_scan.py`).
+  - `o1` bit 0, `now[0]`: the negation of `sin` bit 0, the increment's low bit.
+  - Constant 0: in `o1`, bits 1 to 31 of each slot's `occ` and the padding (76 / 128 / 128 bits, the bits `sin` leaves unread); in `o2`, each slot's 15 zeros after `live` and the padding (46 / 108 / 60).
+- `first`, bucket 0: no input passed through. `o1` has 4,836 / 134,770 / 138,850 bits constant 0, the empty state's fields, and 2 constant 1 (`now[0]`, `phase[0]`). `o2` has 478 / 668 / 4,700 constant 0, all of `now` among them.
+- `egress`: no input passed through. Its `o1`, the row no unit reads, has 12,596 / 50,384 / 50,384 bits constant 0.
+- `o0` in all three: bit 0 computed, bits 1 to 15 constant 0.
+- The fields by name for each member and size are in the artifact `net404-output-bits-r20261113-052220-e0a1.txt`.
+
+## 2. Correction: inside one member the wire goes to a later gate
+
+My 6:23 PM PST section 5, Q2, said no wire of the scan points forward. I argued it from the units' order and did not read the gate numbers. You posted it on NET-404 as "`le` holds". At the verifier's layout it fails for most of the chain [read the definitions; derived; not compiled].
+
+- **A member's source gates all come before its rows.** `Spot.Bits.keyProg c n` sets `inputs := 2 + n * B`: unit `u`'s source gates are `2 + u·B + b`, and every unit's rows come after `inputs` (`Spot/Bits.lean:237-251`). Lowering keeps an input gate at its index (`posOf_of_lt_inputs`, `WireMapRewires.lean:63`: "a key program's inputs come first").
+- **A member of the scan holds many buckets.** A member is a template and a link-window. `ingress-w`'s units are that window's buckets; `sin` reads `state` leaves `bs` and `o1` is leaves `bs + 1` (`benchmarks/network_traces/scan_zk.py:369-401`, `:936-943`). So every bucket of a member but its first reads the `o1` of a unit of its own member.
+- **For those wires `ω i > i`.** The reader's `sin` gate is a source gate and its writer's `o1` gate a row's AND of the same member. `Prog.Rewires.le` asks `ω i ≤ i`. `of_earlier` does not apply either: its `hω` asks the writer in an earlier member. SPOT[Flock]'s own map excludes the case by `writersFirst` (`WireMapRewires.lean:417`): "No unit is then wired to its own template or to a later one".
+- At `w63` [ran, the sizes]: `B` is 262,144. In a member of `n` units, unit 1's `sin` gates are below `2 + 2·262,144` and unit 0's rows start at `2 + n·262,144`.
+- **The wires between members are in order** [read, `members_of`]: `first` to the first ingress bucket, a window's last bucket to the next window's first, the last window to `last`, and each ingress `o2` to its bucket's egress `state`.
+- **What reads what is still in order** [derived]: a row of unit `u + 1` that reads the moved gate would read a row of unit `u`, which is earlier. `le` is read once, for the wired program's order (`Prog.topological_wired`, `Claims/Sampling/Rewire.lean:590`, in `inScopeTwo_cut`, `SamplingGeneric/WiredScope.lean:195`). `exists_correct` does not read it.
+- **Ways out I can see; none is mine to pick.** (a) `le` restated as what the order needs, that each gate reading `i` is after `ω i`, with a case of `of_earlier` for an earlier unit of the same member: `WiredScope.lean`. (b) One bucket a member, so every writer is in an earlier member: the driver's membership and the several-members form. (c) Bits' layout with each unit's sources just before its rows: `Spot/Bits.lean`, the sampled verifier's package.
+- If lean wants the inequality in the kernel, I compile it as one lemma on a scratch branch. Say so.
+
+## 3. `scanOf` and the tree's five fields, for the map's first two
+- [read] `scanOf` (`NetworkCheck/Period.lean:733-816`) takes the descriptor, its digest and the schedule, and reads no registration. It has each port's width from the Program's types and none of root, domain, leaf count or schema.
+- [read] Beside it the period check reads `scan/state`'s root and domain (`stateTied`, `:1114`) and the `leaves` of an entries port (`wired`, `:1080`). Nothing reads `scan/view` or a member's `sin`, `o1`, `o2` or `state` entry. A port's schema and width are in the session's `Flock.Registered.Port`, held by `checkPort` (`Flock/Registered.lean:82-93`, `:270`). So `scanOf` lacks an input carrying the four ports' registered records and a rule saying which entry is which port's.
+
+## 4. What a lemma concluding `Scope` at the deployed parser would read, and whose it is
+
+**`Scope`** [read]: `D.Scope x` is `∃ s P, D.parse x = some s ∧ D.partition s = some P ∧ InScope P s` (`Definitions/Claims/SamplingGeneric.lean:439`). `InScope P s` is the program topological, `P.Partitions s.prog` and `s.design.WellFormed P` (`Claims/Sampling.lean:414`). It is the one-stage scope.
+
+**Which parser.** Lean has two deployed ones, and the scan's round is neither [read]:
+- **SPOT[Flock]'s two-stage `SpotFlock.parse h`** (`Proofs/Flock/SpotFlock/Code.lean:388`), several members. `Compiled.Scope` is false at every statement there [derived, not compiled]: the statement's design is the first stage's, the two rules of `slotDesign` (`Properties/Spot/Draw.lean:93`) or none; its partition `membersPart` has one class (`Properties/Spot/Members.lean:114`); `Design.WellFormed` asks as many rules as classes. Its own scope is `CompiledTwo.Scope`, which `stmtOk_scope` and `refusesTwo` conclude from acceptance (`SpotFlock/Facts.lean:332`, `:352`). With my counterexample to `StmtFlattens`, both premises of `ScanScopeAcc` fail there: it says nothing at the two-stage parser.
+- **One-stage v2's record** (`Verity.Sampled.Record.code`, `Proofs/Properties/Verity/Sampled/Record.lean:223`), one circuit file a statement. `Scope` at its statement is `InScope (partA A) (stmtA A)`. `inScope_of_scopeOk` (`Record/Law.lean:289`) concludes it from `ScopeOk A`, a hypothesis no lemma discharges from the files [ran: search].
+- **The scan's round is one-stage over several members.** That form accepts nothing (`checkMembersAt_refuses`) and has no record in the proofs tree.
+
+**What the lemma reads**, at a one-stage parser over the members (Bits' programs side by side, the members' proof blocks, one rule) [read]:
+1. *Parse:* the statement decodes and its members' files are the registered ones.
+2. *Topological:* each member's unit net built with `unitLog ≤ 32`. It exists: `topological_memberProg`, `topological_bitsProgs` (`Bridge/Members.lean:341`, `SpotFlock/ScopeOf.lean:392`), and the parse gives `Built` (`built_of_parseStmt`).
+3. *Partitions:* no gate in two blocks, every free read gate in one, no empty block. These exist, given a computed row a unit (`partitions_blockOf`, `partitions_membersPart`, `ScopeOf.lean:177`, `:412`). **The class clause is the missing lemma:** each block commits at most 262,144 values. `partitions_blockOf` takes it as a hypothesis, and its one proof bounds a block by its member's whole program (`partitions_keyProg`, `:281`; `MemberFits`, `:506`), which is false for every scan member at `w63`. The lemma would be a closed form in the descriptor: a unit commits its returned bits and the free source gates it owns. The nearest is `committed_keyProgP_le` (`Bridge/SlotsKey.lean:160`): the returned bits alone, for a unit's gates without its inputs.
+4. *Design:* one rule, well formed over the members' unit counts. It exists in pieces (`designOf_wellFormed`, `oneStageOk_sound`).
+
+**At the scan's size the unwired statement is out of scope** [argued from `r20261112-232431-7c1d`'s counts and the definition of `committed`; my 6:23 PM PST section 4]. The `w63` ingress unit returns 154,496 bits and owns 219,540 read input bits: 374,036, over 262,144. With `sin` wired to its writer it commits 224,516. So:
+- The lemma has to conclude the scope at the wired Program, NET-404's piece 3.
+- It cannot come by carrying the unwired scope through the cut. `Partition.partitions_cut` and `inScopeTwo_cut` take the unwired `Partitions` as a hypothesis (`WiredScope.lean:92-96`, `:188-193`), which fails here. It needs the count at the cut block itself, and section 2's `le`.
+- Under one-stage v2's other partition, where an input is a slot of its own (`partSlots`, `Record.lean:185`), a unit commits its returned bits only: 154,496, within the class unwired. `PartSlotsTarget` (`:200`) states that and is not proved.
+
+**Whose** [my reading: the tree names owners of guarantees, not of files]:
+- **proofs':** the parser and its partition (the several-members one-stage form and its record), the count lemma (`SpotFlock/ScopeOf.lean`, `Bridge/`) and the one-stage scope at the wired Program. The lock gives `Properties.Spot.*` and `InScopeTwo`'s `domain` entry to `@proofs`, and lean's line on NET-404 gives piece 3 to proofs.
+- **Ours:** its instance at the scan. `scanOf`'s accepted descriptor has to give what the lemma reads of each member: the counts for a unit (returned bits and read input bits, from the ports' widths `scanOf` already holds) and the wire map, piece 1.
+- Until it exists `D.Scope x` stays `ScanScopeAcc`'s `domain` premise. Nothing in step A changes.
+
+**#9639's body, (c),** says the gap is open "at the deployed parser". Sharper would be: at the two-stage parser the premise is false, and the lemma belongs at a one-stage parser over several members that Lean lacks. Say if you want the sentence changed. I change nothing unasked.
+
+## The run: one launch more than one, my bug
+The first launch, `r20261113-041634-0216` at `c01b9a5360ad`, was far too slow. The probe asked `outGate` of every bit, and each call builds the unit's rows: 193 ms a bit at `test`. I cancelled it by id after 65 minutes, mended the probe (`ea0db559ec29`: one bit in 4,096) and launched once more. `r20261113-052220-e0a1` is done, exit 0, every file accepted. The first run's `test`/`first` counts equal the second's.
+
+## Not checked
+- The descriptor's flattening, the layout `Flattens` reads: there a returned leaf can be a parameter's own leaf. `scanOf` asks `ownReturns` of the egress template only (`Period.lean:521`).
+- `outGate` on every bit (one in 4,096; the column test ran on all). My classifier against anything but a toy with stubs. "Constant" is by a row's form with copies followed; a bit that is constant by value only is not counted.
+- The `block` and `unread` rounds' circuits. `last` runs the ingress file.
+- Section 2 and the two-stage `Scope` fact are derived from definitions I read, not compiled. Of the lemmas I cite I read the statements, not the proofs.
+- The Python that derives the reads, and whether proofs' several-members form will cut members as the driver does.
+
+Step A: nothing pushed since `d4db4746171f`. Still owed by me: nothing with a date before step B, Wed 18 Nov.
+
+TIMER: none
+
