@@ -264,4 +264,89 @@ theorem Member.filesOn_congr {b₁ b₂ : Core.Blobs} (m : Member) (hp : Alike b
   unfold Member.filesOn statementOn
   rw [hp]
 
+/-- What `fileOf` keeps of a circuit file reads the blobs for its digest alone. -/
+theorem fileOf_congr {b₁ b₂ : Core.Blobs} {d : String} (hd : Alike b₁ b₂ d) (tags0 : Flock.Tags)
+    (tables : List (String × ByteArray)) : fileOf tags0 tables b₁ d = fileOf tags0 tables b₂ d := by
+  unfold fileOf
+  rw [hd]
+
+/-- **A member's files' verdict on the blobs held is its files' verdict on all the blobs fed** (`Member.files`), where
+the stream holds what the files' pass keeps of its circuit file on all the blobs, a program kept as `programOf` keeps
+it, the tables fed, and its public file; the program it keeps after is kept so too. -/
+theorem memberFiles_eq {C : Ctx} {S : State} {full : Core.Blobs} {m : Member} {tags0 : Flock.Tags}
+    (ht0 : C.tags0 = some tags0) (htag : Flock.Tags.find? STATEMENT = some tags0)
+    (htab : tablesOf S.blobs = tablesOf full)
+    (hfile : ∃ h b, S.file = some (h, b, some (fileOf tags0 (tablesOf full) full m.own.circuit)))
+    (hprog : ∀ pk, S.prog = some pk → pk = programOf pk.bytes) (hp : Alike S.blobs full m.own.pub) :
+    (memberFiles C S m).1 = m.files (C.slice m) full ∧
+      ∀ pk, (memberFiles C S m).2 = some pk → pk = programOf pk.bytes := by
+  obtain ⟨h, b, hf⟩ := hfile
+  unfold memberFiles
+  rw [ht0]
+  dsimp only
+  rw [hf]
+  dsimp only
+  refine ⟨?_, ?_⟩
+  · rw [htab, ProgramKept.next_eq hprog, Member.filesOn_congr m hp, ← Member.files_on htag]
+  · intro pk hpk
+    cases hpk
+    rw [ProgramKept.next_eq hprog]
+    rfl
+
+/-- **What the stream keeps of every member's files, after the feed**: each member's files' verdict on all the blobs
+fed, by its place. -/
+def FilesKept (C : Ctx) (full : Core.Blobs) (S : State) : Prop :=
+  S.files.size = C.ms.size ∧
+    ∀ i m, C.ms[i]? = some m → S.files[i]? = some (m.files (C.slice m) full >>= fun _ => pure ())
+
+/-- **What the stream keeps of every statement's session, after the feed**: what is kept of it on all the blobs fed,
+at its member's files' verdict there, by its place. -/
+def SessionsKept (C : Ctx) (full : Core.Blobs) (S : State) : Prop :=
+  ∀ held, membersHeld C.ms C.sts = .ok held → ∀ k st m s, C.sts[k]? = some st → held[k]? = some m →
+    st.sessions[0]? = some s →
+      S.sessions[k]? = some (some (SessionKept.of m (m.files (C.slice m) full) full s))
+
+/-- **The fold's half of `StreamSound`, stated and not proved**: on a feed in the per-member stream's order, its
+state after every step keeps every member's files and every statement's session as they read on all the blobs fed. -/
+def StepsKept : Prop :=
+  ∀ (p : Params) (c : OneStage.Commitment) (e : Evidence) ms sts plan (bs : List ByteArray),
+    (membersStream p c e ms sts).plan = .ok plan → (membersStream p c e ms sts).Fed plan bs →
+      FilesKept (Ctx.of p c e ms sts) (Core.Blobs.ofArray bs.toArray) ((membersStream p c e ms sts).steps bs) ∧
+        SessionsKept (Ctx.of p c e ms sts) (Core.Blobs.ofArray bs.toArray) ((membersStream p c e ms sts).steps bs)
+
+/-- **The finish's half of `StreamSound`, stated and not proved**: on a state that keeps every member's files and
+every statement's session as they read on the blobs `full`, the finish is `checkBlobs` on them. -/
+def FinishKept : Prop :=
+  ∀ (p : Params) (c : OneStage.Commitment) (e : Evidence) ms sts (S : State) (full : Core.Blobs),
+    p.members = some ms → e.statements = some sts →
+      FilesKept (Ctx.of p c e ms sts) full S → SessionsKept (Ctx.of p c e ms sts) full S →
+        finish (Ctx.of p c e ms sts) S = checkBlobs p c e full
+
+/-- **`StreamSound` is its two halves**: every other form's stream is `checkBlobs` on its blobs (`keepAll_sound`), and
+the per-member form's is where its fold keeps what it reads (`StepsKept`) and its finish reads it as `checkBlobs` does
+(`FinishKept`). -/
+theorem streamSound_of (hs : StepsKept) (hf : FinishKept) : StreamSound := by
+  intro p c e plan bs hp hfed
+  change (stream p c e).plan = .ok plan at hp
+  change (stream p c e).Fed plan bs at hfed
+  change (stream p c e).finish ((stream p c e).steps bs) = checkBlobs p c e (Core.Blobs.ofArray bs.toArray)
+  match hm : p.members, he : e.statements with
+  | some ms, some sts =>
+    have hst : stream p c e = membersStream p c e ms sts := by simp only [stream, hm, he]
+    rw [hst] at hp hfed ⊢
+    obtain ⟨h1, h2⟩ := hs p c e ms sts plan bs hp hfed
+    exact hf p c e ms sts _ _ hm he h1 h2
+  | none, none =>
+    have hst : stream p c e = keepAll p c e (oneNames p e) := by simp only [stream, hm, he]
+    rw [hst]
+    exact keepAll_sound _ _ _ _ _
+  | some _, none =>
+    have hst : stream p c e = keepAll p c e (pure #[]) := by simp only [stream, hm, he]
+    rw [hst]
+    exact keepAll_sound _ _ _ _ _
+  | none, some _ =>
+    have hst : stream p c e = keepAll p c e (pure #[]) := by simp only [stream, hm, he]
+    rw [hst]
+    exact keepAll_sound _ _ _ _ _
+
 end Spot.OneStageZk.Streamed
