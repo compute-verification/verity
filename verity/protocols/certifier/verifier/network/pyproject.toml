@@ -15,7 +15,7 @@ untraced = [
     "tests/test_network_records_protocol.py",
 ]
 # `verity_difftest`, through which the network checks' tests speak to their Lean executables
-inputs = ["verity", "verity/difftest/python/verity_difftest"]
+inputs = ["verity", "tools/difftest/python/verity_difftest"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
