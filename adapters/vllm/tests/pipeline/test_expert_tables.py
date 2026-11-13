@@ -316,8 +316,8 @@ def test_an_embedding_shards_tables_are_registered_at_one_width_and_committed_on
 
 
 def test_a_shards_one_width_is_its_columns_alone():
-    """`shard_block`: the widest H / 2^k of at most `SHARD_ROW` words, and no H that has none.  The cap is held beside the
-    nonce scheme's name: tables under a key in use are at these widths, so the two change together."""
+    """`shard_block`: the widest H / 2^k of at most `SHARD_ROW` words, and no H that has none.  `SHARD_ROW` is held beside
+    the nonce scheme's name: tables under a key in use are at these widths, so the two change together."""
     assert (ST.SHARD_ROW, ET.NONCES) == (256, "field-order")
     assert [ST.shard_block(H) for H in (6144, 4096, 2048, 5120, 256, 192, 7)] == [192, 256, 256, 160, 256, 192, 7]
     with pytest.raises(ValueError, match="no H / 2\\^k of at most 256 words"):
