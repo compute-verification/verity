@@ -1076,9 +1076,9 @@ def run_chain(st: dict, args: Sequence[dict[str, list[int]]]) -> list[tuple[int,
 def size(**st) -> dict[str, int]:
     """Each unit's ANDs (an n-input AND n − 1), every input row's width (padded) and each unit's free width at statics
     `st`."""
-    S, memo = SimpleNamespace(**st), {}
+    S = SimpleNamespace(**st)
     bits = row_bits(S)
-    return {"compile_ands": ands(compile_unit(**st), memo), "pool_ands": ands(pool_unit(**st), memo),
+    return {"compile_ands": ands(compile_unit(**st)), "pool_ands": ands(pool_unit(**st)),
             **{f"{r}_bits": b for r, b in bits.items()},
             "compile_free_bits": free_width(S, {r: bits[r] for r in COMPILE_ROWS}),
             "pool_free_bits": free_width(S, {r: bits[r] for r in POOL_ROWS})}

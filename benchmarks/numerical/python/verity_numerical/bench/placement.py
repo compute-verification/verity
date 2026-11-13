@@ -68,6 +68,7 @@ __all__ = [
     "from_job",
     "from_runpod",
     "gate",
+    "is_global_net",
     "is_host_bridge",
     "is_host_private",
     "is_hypervisor_vendor",
@@ -86,7 +87,7 @@ __all__ = [
 NAT_IDS = ("machine_id", "product_uuid", "boot_id")
 #: The measured prover-verifier round trip a shared-IP pair must reach: well above the 0.03 ms of two containers on one host.
 RTT_FLOOR_MS = 0.1
-#: How many connects :func:`tcp_rtt` makes; the NAT exception needs every one to succeed (red-team-flock-3 R1).
+#: How many connects :func:`tcp_rtt` makes; the NAT exception needs every one to succeed.
 RTT_CONNECTS = 30
 #: The evidence's ``product_uuid`` for a pod whose DMI uuid could not be read (every RunPod container).
 UNREADABLE = "unreadable"
@@ -94,7 +95,7 @@ RTT_METHOD = "tcp-connect: median and minimum of 30 kernel-level TCP connects on
 #: RunPod's global network: a shared-IP pair's only accepted link is ``<verifier pod id>.runpod.internal`` resolving into 10/8.
 RUNPOD_INTERNAL = ".runpod.internal"
 GLOBAL_NET = ipaddress.ip_network("10.0.0.0/8")
-#: ``/sys/class/dmi/id/sys_vendor`` prefixes of hypervisors' guests (red-team-flock-3 S1): a VM's DMI uuid and boot id are its own.
+#: ``/sys/class/dmi/id/sys_vendor`` prefixes of hypervisors' guests: a VM's DMI uuid and boot id are its own.
 HYPERVISOR_VENDORS = ("QEMU", "KVM", "Xen", "VMware", "Microsoft Corporation", "innotek", "Parallels", "Red Hat", "OpenStack",
                       "Amazon EC2", "Google")
 PROBE = "benchmarks/numerical/python/verity_numerical/bench/placement.py"
@@ -290,7 +291,7 @@ def is_hypervisor_vendor(vendor: str | None) -> bool:
 
 
 def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping[str, Any]) -> tuple[list[str], dict[str, Any]]:
-    """Why a pair sharing a public IP does not earn the NAT exception (red-team-flock-3 S1-S5), and its
+    """Why a pair sharing a public IP does not earn the NAT exception, and its
     evidence: the machine id and boot id recorded and different, and the DMI uuid too unless both pods are bare metal (where it
     is compared only if read, and the evidence says :data:`UNREADABLE` where it was not); both pods bare metal (no ``hypervisor`` CPU flag, a DMI
     ``sys_vendor`` that is no hypervisor's); the link ``<verifier pod id>.runpod.internal`` resolving into 10/8; the TCP-connect RTT
