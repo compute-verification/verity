@@ -19,6 +19,7 @@ public import Spot.Schedule
 public import Spot.OneStage
 public import Spot.PublicUnits
 public import Spot.CircuitKept
+public import Spot.OneStageZkStatement
 public import Spot.OneStageZk
 public import Spot.OneStageZkStream
 public import Spot.MembersParse
