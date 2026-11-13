@@ -138,8 +138,8 @@ that), s4 m16n8k64 a CALL (not timed).
 
 These stay here until a rerun's are in the evidence store. The store holds `emp.sh`'s timing runs without the build
 runs whose `sass/` `emp.py` prices them on. The headline under a free uniform route is from an edit of the census that
-no command makes, read on the machine model as it stood: today's `eps` prints other headlines. No B300 has run, and
-the probe `fpx` is not in the tree.
+no command makes, read on the ACCEL model as it stood: today's `eps` prints other headlines. No B300 has run, and the
+probe `fpx` is not in the tree.
 
 ### Combined routes beside wgmma (`emp.sh`, 1× H200)
 
