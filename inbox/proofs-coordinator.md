@@ -126389,3 +126389,61 @@ Agent `bc-a5cbdecf-6e51-5b21-bf0d-c67169176e17`, branch `cursor/proofs-honest2-7
 ## MEMBERS, Fri 13 Nov 07:03Z: checkpoint, turn ended on runs; one timer set for about 07:37Z
 
 [run] Waiting on one-parse records `r20261113-053035-5934` (vy-nebius-cpu-5, head `a2d48735c2b463c4ed31121ddc74a81f4f595b14`, expected end about 07:35Z [guess]); the site's records `r20261113-065745-ae1b` (vy-nebius-cpu-10, running, about 09:00Z [guess]) and suites `r20261113-065833-b949` (vy-nebius-cpu-11, in a line at 07:02Z, about 08:15Z [guess]), both at `a7e04a40f37321e7d6b09f8174ef70337805f045`. Nothing unpushed. On resume: `lanes/proofs/20261113T0702Z-checkpoint-members-site-runs-out.md`.
+
+## CUT, Fri 13 Nov 07:03Z: COMPILED HEAD `680b549018` (all seven files at `b44ce4a759`, base merged, rc 0 in `9958`; `CutRoots.lean` rc 0 in `1646`); the rename `FirstCoinsShown` is at `4d24802945`, whose try is `r20261113-070138-4159`; the one-root half is mine and is Lean now, resting on one named premise on two windows
+
+**Plain words.** All seven of the cut's files compile with the base merged in, each with a clean axiom probe. The one-root half of `draws₁` and `draws₂` is now a compiled file, `CutRoots.lean`. It says: on a play whose logs the check read and found the device's, every fresh coin the play's log shows of the outer block's family comes after the outer block's registration digest, and every one of the inner block's family after the inner block's registration digest. When both sessions are on one window this takes no premise. On two windows it takes one named premise, `OtherRoots`, which the form's accept does not give today; NEEDS 1 names the two refusals that would make it a lemma. ASSEMBLY's rename is on my branch, and its try is running. The machine was replaced at about 07:00Z. I rebuilt the worktrees from the pushed branch and lost only an unpushed entry draft, rewritten here.
+
+**The coordinator's two lines.** The one-root half of `draws₁`, `draws₂` is mine, and it is no longer "not started": `oneRoot_first` and `oneRoot_second` (`CutRoots.lean`, compiled) give it from `ReadIsDevice o`, `OtherRoots o.sent` and `caseOf o.sent = .ok (p, c, e)`. They read the cut's `readsLogs_cases`, the challenger's `releasedRootsOf` and `challengerStream` (each draw's own-family root check), and the form's `caseOf` and `interiorOf`; no form step that TWOLEG's next head changes.
+
+**1. Try 18, `r20261113-063005-9958`, vy-nebius-cpu-12, all seven files at `b44ce4a759`: rc 0** [run: its `stdout.log` and `status.json`]. `b44ce4a759` is `8cf4d46672` plus the merge of the base `3b05c3a3b1` (`77fd3109c7`) plus the never-run alternatives dropped.
+
+| File | `lean exit 0 in` | axiom probe: "none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound" |
+|---|---|---|
+| `Cut.lean` | 415 s | 7 |
+| `CutPrints.lean` | 62 s | 23 |
+| `CutHeld.lean` | 288 s | 10 |
+| `CutRead.lean` | 61 s | 8 |
+| `CutOrder.lean` | 60 s | 15 |
+| `CutFirst.lean` | 78 s | 24 |
+| `CutAccept.lean` | 109 s | 11 |
+
+Each file's siblings line reads "no built module of its package that doesn't import … declares a name it does". The linter reports no never-run alternative in `CutFirst.lean` or `CutAccept.lean` any more.
+
+- **A conflict in a file that is not mine.** The base merge conflicted in `verity/protocols/spot/verifier/lean/Spot/Run.lean` (two hunks). I took the base's lines in the first (`supplied`, `fixed`, `reads`, and `SecondStage.check form own it.statements`) and kept the docstring of my side in the second, over the signature both sides share. The resolved lines equal the join's [run: `git diff` against `cursor/proofs-join-42b8`]. The file keeps the key change (`Input.key`, `main`, `family`, `coinsCode`) that came with TWOLEG's `1f211470c7`.
+- **A correction to my 06:26Z entry.** It said the linter reports 17 never-run alternatives in `CutAccept.lean`. It reported 11; 17 was the count of all its "unused tactic" lines. All 11 are removed.
+
+**2. `CutRoots.lean`: try 19, `r20261113-065424-1646`, vy-nebius-cpu-12, at `680b549018`: rc 0** [run]: "lean exit 0 in 309 s"; "axiom probe: none of its 16 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; siblings: "no built module of its package that doesn't import Proofs.Properties.Verity.SampledTwo.CutRoots declares a name it does". Its lakefile root and its lock root are in the commit that adds it (the roots rule: it is on no join yet). That is my only lock edit; the five roots `Cut` … `CutOrder` are ASSEMBLY's, and I left them alone. What it holds [read: the file]:
+- `OneRootIn ℓ after log`: every fresh coin of family `ℓ` in `log` is released after `after`. It has the same body as COINMAP's `CoinMap.OneRoot`, which is not on my branch.
+- `readLog_fresh`: a fresh coin a session's read shows is after a root its log's lines name for that family. `drawCoins_roots`: the roots a draw's session shows of the draw's own family are all the draw's digest (`Coins.stream_ok`).
+- `first_oneRoot`, `second_oneRoot`: each session's read shows its own stage's family after its own digest alone, and shows any other family after one root wherever the session's roots do. `oneRoot_draws`: the play's log, from `ReadIsDevice` and `OtherRoots`.
+- `oneRoot_first`, `oneRoot_second`, in the case's words, for ASSEMBLY: the log shows the family the first stage's segment names after `c.digest` alone, and the family the interior audit's parameters name after the interior registration's digest alone. These are the families and digests `firstDraw` and `secondDraw` return.
+
+**Why two windows need a premise** [read: `releasedRootsOf`, `challengerStream`, the form's `interiorUnshown`; derived, not run as a play]. On one window both reads are the whole log, and each draw's own check gives its family one root. On two windows the log is the first session's releases, then the interior's. A session may reserve more than one family, and each draw checks only its own family's roots in its own session. So the first session could release a coin of the inner block's family after some other root, or the interior's session a coin of the outer block's family after some other root, and no check I read refuses it: `interiorUnshown` refuses the first session only when it shows the inner block's family after the inner block's own digest, and nothing reads the interior session's roots of the outer block's family. `stageLocate` places coins by family alone [read], which is why `StageDraws` asks for one root over the whole log. `OtherRoots` says this does not happen. It is stated on the sessions' roots (`trustedSessionOf`), as STAGECOINS's `FirstUnshown` is, so a form check on roots gives it directly.
+
+**3. The rename** (`4d24802945`) [run: `rg`]. `FirstShown` is `FirstCoinsShown` in `CutFirst.lean` (6) and `CutAccept.lean` (4), the ten places of the join, and in one docstring of `CutRead.lean`. Three docstring lines went past 120 columns with the longer name and I rewrapped them, so the join's next merge of my files conflicts on those three lines: take mine. No statement changed. Try `r20261113-070138-4159` (vy-nebius-cpu-12, `CutRead`, `CutFirst`, `CutAccept`, `CutRoots` at `4d24802945`) launched 07:01:38Z; expected end about 07:25Z [guess: from try 18's and 19's times on the same machine]. My try's command never had `ulimit -Sv`.
+
+**4. TWOLEG's heads** [read: `git diff`]. `870cc9da1b` (named, on the join) touches no file mine read; I have not merged it. On its branch, `c9e1f9dee0` and after change `inputAt_ok`'s last conjunct to the input at `{ c with record := j₁ }` with `readBack c.record = .ok j₁`. `CutFirst.lean`'s `firstReads_of_shown` takes that conjunct apart (`⟨-, -, -, -, vs, received₂, -, rfl⟩`, line 260 on my branch) and reads the run's record as `c.record`, so it breaks there; `CutHeld`, `CutRead`, `CutOrder` take only the first conjuncts, `CutAccept` reads only `accepted_ordered`, and `CutRoots` reads no step of `inputAt`. I wrote nothing against that head and wait for TWOLEG to name it. The new refusal (a coin tree's line in the first session's log, on two windows) gives neither half of `OtherRoots`: it speaks of tree lines, not root lines.
+
+**5. Premises the cut names.** `cutBound_accept` (compiled): `Wired`, `PrintsInOrder`, `SignsPlay`. `oneRoot_first`, `oneRoot_second` (compiled): `ReadIsDevice` (the cut's event) and `OtherRoots`. `PrintsInOrder` is proved of no device. No file of mine states any of the five ledger facts.
+
+### STOP RULE
+Kept. Nothing listed. The lock's only edit is `CutRoots` in `roots`, with its lakefile root in the same commit. No `unwitnessed` entry, no device lines, no form change. NEEDS 1 asks for form changes that only refuse more; I wrote nothing against them.
+
+### NEEDS
+1. **TWOLEG, the form, two refusals on two windows** (each refuses more, accepts nothing new). (i) Refuse a first session whose roots show any root of the interior's family: today `interiorShown roots label after` asks only whether they contain the interior's digest; asking whether `look roots label` is non-empty is enough. (ii) Refuse an interior session whose roots show a root of the boundary's family other than the boundary registration's digest, reading them as `interiorUnshown` reads the first session's, with `trustedSessionOf` on `e.interior.base.coins`. With both, `OtherRoots` is a lemma and the one-root halves of `draws₁`, `draws₂` hold on every accepted play `JoinGood` holds of. I expect the honest play to pass both, since on two windows each honest session reserves only its own stage's family [guess]; `sampled_two_small.sh` would say.
+2. **Coordinator, for Friday:** either TWOLEG adds the two refusals, or `JoinsAt` takes `OtherRoots` as a field in place of the one-root halves (narrower than what stands there: two windows only, the other stage's family only). I go on assuming the second unless told otherwise.
+3. **ASSEMBLY, after try `r20261113-070138-4159` passes:** merge `4d24802945`. The one-root halves of `draws₁`, `draws₂` come from `oneRoot_first hg.1 hx hcase hl` and `oneRoot_second hg.1 hx hcase h5 hch`, with `hcase` from `CaseIsSent`; `OneRootIn` unfolds to `CoinMap.OneRoot`'s body.
+
+### To post
+Nothing.
+
+### Not established
+- The renamed files compiled at `4d24802945` (try `r20261113-070138-4159` has no verdict); they compile at `b44ce4a759` under the old name.
+- `OtherRoots` at any play: the form's accept does not give it, and without it the one-root statements say nothing on two windows.
+- That the honest play passes the two refusals of NEEDS 1 [guess].
+- Any file of mine at TWOLEG's `c9e1f9dee0` or later.
+- `PrintsInOrder` of any device. Nothing of the cut reaches a listed guarantee; no records run of `security/Proofs` has passed at my head, so no ready line.
+- The known hole stands: an earlier period's genuine signature in the evidence makes the forger's term bound nothing at a one-play history.
+
+Branch `cursor/proofs-cut-9323` at `4d24802945`, pushed; nothing unpushed. Runs: `9958` done rc 0; `1646` done rc 0; `r20261113-070138-4159` running.
