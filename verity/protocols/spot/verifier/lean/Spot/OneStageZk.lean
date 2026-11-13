@@ -69,7 +69,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   exactly `{"member", "sessions"}`, the statements' sessions in order being v1's `sessions`. The statements are held as
   public structure before any session is read (`membersHeld`): each names a member of the parameters that no earlier
   statement named, in the members' order (by first unit), with exactly one session, on live coins and never retried;
-  an undrawn member has no statement. Each session's coins are one tree's, as the one statement's are, and its tree's
+  an unsampled member has no statement. Each session's coins are one tree's, as the one statement's are, and its tree's
   last opening is its closing round (`Challenger.memberTreeReason`): one more `session` round, of no coins, opened after
   the SHA-512 of the session's evidence (`sessionEvidence`: its record's bytes, then each rep file's name and bytes,
   each under an 8-byte length, `evidenceBytes`, which `evidenceParts` decodes), so the files the verdict reads are
@@ -871,7 +871,7 @@ def follows (held : Array Member) (m : Member) : Bool :=
 /-- One statement held, after the members `held` of the statements before it: it names a member of the parameters
 `ms` that no earlier statement named, in the members' order (`follows`: by first unit, the registration's, one order
 so one statement), and has exactly one session (one pass on live coins, never retried; none would prove nothing, and
-an undrawn member has no statement). The members so far, with its own. -/
+an unsampled member has no statement). The members so far, with its own. -/
 def heldStep (ms : Array Member) (held : Array Member) (st : StatementFiles) : V (Array Member) :=
   match st.member with
   | none => throw "a statement of the proofs names no member, and the parameters' proofs are per member"
