@@ -49,6 +49,11 @@ def test_spec_is_pre_execution_and_concrete():
         assert bad not in blob
 
 
+def test_a_specs_initial_state_is_a_fresh_engine():
+    assert _spec()["initial_state"] == {
+        "kind": "fresh", "note": "fresh engine, empty KV cache; any prefix reuse happens inside this run's own requests"}
+
+
 def test_spec_dtype_is_the_served_dtype():
     """`configuration.dtype`: explicit driver value > engine-argument override (`engine.args.dtype`) > HF torch_dtype."""
     assert _spec()["configuration"]["dtype"] == "bfloat16"                                              # HF fallback (no override)

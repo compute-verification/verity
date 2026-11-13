@@ -199,6 +199,19 @@ def test_a_cards_model_takes_from_the_header_what_the_record_does_not_state(tmp_
     assert card.model["sha256"] == two
 
 
+def test_a_cards_c_cites_the_manifests_hf_config_for_a_field_it_holds_at_the_same_value(tmp_path):
+    C = {"model": "org/m", "H": 8, "NL": 2, "QKV": 24}
+    hand = {"model": "hand", "H": "hand", "NL": "hand", "QKV": "derived"}
+
+    def provenance(name: str, manifest: dict[str, Any]) -> dict[str, str]:
+        card = CARD.build_card(_run(tmp_path / name, {"run.json": {"C": C, **manifest}}).run_dir, _results())
+        assert {k: v["value"] for k, v in card.C.items()} == C, manifest
+        return {k: v["provenance"] for k, v in card.C.items()}
+    for i, manifest in enumerate(_left_out("hf_config")):
+        assert provenance(f"n{i}", manifest) == hand, manifest
+    assert provenance("stated", {"hf_config": {"H": 8, "NL": 3, "QKV": 24}}) == {**hand, "H": "hf-config"}
+
+
 def test_the_vu_partition_row_prints_n_a_for_what_g8s_detail_leaves_out():
     def text(status: str, detail: Any = None, reason: str | None = None, **g8: Any) -> str:
         return CARD.vu_partition_text({"G8": {"status": status, "reason": reason, **({} if detail is None else {"detail": detail}), **g8}})
@@ -355,6 +368,27 @@ def test_the_top_section_claims_an_unknown_sm_without_a_gpus_cc_and_no_holdouts_
         assert top[top.index("HOLDOUTS") + 1:top.index("SUPPORT CLAIM")] == [f"  {'(none)':<32}n/a"], g7
     top = CARD.top_section(_card(gates={"G7": {"detail": {"holdouts": {"h1": {"pass": True}, "h2": {}}}}})).splitlines()
     assert top[top.index("HOLDOUTS") + 1:top.index("SUPPORT CLAIM")] == [f"  {'h1':<32}PASS", f"  {'h2':<32}FAIL"]
+
+
+#: The top section's nine counts that pass only at zero: each one's key in the card's counts, by its row's label.
+ZERO_PASSES: dict[str, str] = {
+    "PROTECTED FILES MODIFIED": "protected_files_modified", "EXISTING PRIMITIVES MODIFIED": "existing_primitives_modified",
+    "NEW ROOT CLASSES": "new_root_classes", "NEW ALLOWLIST ENTRIES": "new_allowlist_entries", "OLD GOLDEN DIGEST CHANGES": "golden_digest_changes",
+    "Unsupported": "unsupported", "Ambiguous matches": "ambiguous", "Unknown/unvalidated roots": "unknown_or_unvalidated_roots",
+    "CUDA census residue": "census_residue"}
+
+
+def test_the_top_sections_nine_counts_pass_at_zero_fail_at_another_number_and_are_n_a_when_not_stated():
+    def rows(counts: dict[str, Any]) -> dict[str, str]:
+        top = _rows(_card(counts=counts))
+        return {label: top[label] for label in ZERO_PASSES}
+    for counts in _each({}, {key: None for key in ZERO_PASSES.values()}):
+        assert rows(counts) == {label: "n/a   n/a" for label in ZERO_PASSES}, counts
+    assert rows({key: 0 for key in ZERO_PASSES.values()}) == {label: "0     PASS" for label in ZERO_PASSES}
+    assert rows({key: 2 for key in ZERO_PASSES.values()}) == {label: "2     FAIL" for label in ZERO_PASSES}
+    for label, key in ZERO_PASSES.items():      # each row reads its own count
+        assert rows({**{k: 0 for k in ZERO_PASSES.values()}, key: 1}) == {
+            **{each: "0     PASS" for each in ZERO_PASSES}, label: "1     FAIL"}, key
 
 
 def _line(md: str, starts: str) -> str:
