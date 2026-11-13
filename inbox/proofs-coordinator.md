@@ -120871,3 +120871,37 @@ In plain words: `majorityBound` took as a premise that two witnesses reading one
 **To post.** Nothing.
 
 **Not established.** The records audit. Pushed head: `a7cacd92709df11273ea65e682bed82903cc7d39`; nothing is left unpushed.
+
+## FRAME, Fri 13 Nov 04:43Z: the records run of the merged tree failed on the lock, not on the build; the lock is mended on the pull request's branch and a second records run is out; the base stays at `e033bfc14be4`
+
+**In plain words.** The build of the merged tree is green and the base has not moved again. What failed is the lock's bookkeeping: my pull request took two premises off the lock's lists because its two statements no longer rest on them, but a third statement that came in with `main`, the one that bounds the first hit, still rests on both. I put the two entries back exactly as `main` has them, pushed that to the pull request's branch only, and launched the records run again. The pull request opens when that run has written the records. While the runs wait in line I am writing the last clause of the wiring that still passes over every bit, so that it is decided once per template.
+
+**What failed and what I changed.**
+- [run] `r20261113-031145-40d7` at `e033bfc14be4`: `security/Proofs` "AUDIT … PASS  204605 declarations in 4068 modules; axioms propext, Classical.choice, Quot.sound", `security/Properties` "AUDIT … PASS  3480 declarations in 107 modules … 536 guarantees", `security` "AUDIT … FAIL  27782 declarations in 731 modules … 1138 guarantees". The run has not printed its last line yet (04:40Z).
+- [run] The failures of `security` that are not record differences, pasted: "open: SpotFlock.Addresses is a premise of Flock.SecurityProofs.SpotFirstHitTwo, declared in Proofs.Flock.SpotFlock.SlotsAt rather than Definitions.Assumptions: an open premise the lock doesn't list" and the same line for "SpotFlock.Built … declared in Proofs.Flock.SpotFlock.FrameIsBuilt". Every other line of the audit is a record difference, which `--update` writes.
+- [read] Why: on `main` the lock lists `SpotFlock.Built` under `domain` and `SpotFlock.Addresses` under `open`. My branch replaced them with `SpotFlock.BuiltWired` and `SpotFlock.AddressesConnected`, which `SpotKSTwo` and `SpotExfilTwo` now rest on. `SpotFirstHitTwo`, which the merge of `main` brought, still rests on the two old ones.
+- [read] The mend, `b7b1bed91b59a92ab5e9a3822657675608a84dd9` on `cursor/proofs-frame-connected-4e1b` (lock only, 11 lines, not run): both entries are back, each byte for byte `main`'s (digests `b127ee90592d…` and `5a41733162d8…`, the ones the audit printed).
+- [run] `r20261113-044058-a971`, launched 04:42Z on vy-nebius-2 at `b7b1bed91b59`: `lean_changed.py --records security --update` (`security`, then `security/Properties`; `security/Proofs` passed on the same inputs). Expected about 45 minutes after it gets a slot [guess].
+
+**Notice (the lock's lists).** Before this pull request the lock's `open` list has `SpotFlock.Addresses`. After it, it has `SpotFlock.Addresses` (for `SpotFirstHitTwo` alone) and `SpotFlock.AddressesConnected` (for `SpotKSTwo` and `SpotExfilTwo`), both under the same issue: one more open premise by name until the first-hit statement is restated at the connected program, which is not in this pull request. `domain` has `SpotFlock.Built` and `SpotFlock.BuiltWired` the same way. My 02:20Z table said one replaced the other; that was true before `main` brought `SpotFirstHitTwo`. The body's table will say this.
+
+**The base.** `cursor/proofs-two-round-base-84b5` is at `e033bfc14be4fc20dd09c7c8e33d211fc94cc1c0`, unmoved since 03:50Z. It moves to the commit that holds the regenerated records when `a971` passes, and I say so then. Nobody needs the lock's commit to build: it changes no Lean.
+
+**Answers.**
+- HELDOF (04:36Z NEEDS): `BlockSize.lean:73` is fixed on L1 since `8e282166e9` and is in `a8d00d755a`; it is not on the base, which is why your merged head still has it. The per-template `wiresMove`: in writing now, below.
+- ADDRWC (04:32Z NEEDS): yes. When `portsOnce_of_rows` has compiled I drop `portsOnce` from `wiringOk` and prove `portsOnce_of_two` from it, in the same change that swaps `wiresMove` for its per-template clause, so `wiringOk` changes once.
+
+**The per-template `wiresMove` (written so far; nothing of it has compiled in the tree).**
+- [read] The clause I am writing, per template and per row its units read source bits at that a wire names and no link names: the row has rows (`heldRows`), the wire's writer is a template (`heldWriter`), no link names the writer's port, the reader's cell size is positive and divides its units, the writer has as many replay blocks of units, the rows' runs hold the reader's cell (`Spot.SecondStage.fits`) and each run's last row is inside the writer's cell; and per input column of one unit, the bit it reads is inside the writer's output port's words. It reads the circuit files and the registered wiring once per template and never a unit.
+- [run, on this VM, a copy of the two definitions with core Lean only, a few seconds] `rowAt_of_fits`: where runs hold units `0` to `n - 1` (`fits`), the bisection `rowAt` finds unit `j < n`'s run. "depends on axioms: [propext, Classical.choice, Quot.sound]". It is the one step that had no lemma anywhere in the tree; it has not been compiled in the tree.
+- [read] The rest uses what is on L1: `outputsWritten_of_two` (NEEDEDBITS), `bitsInUnits`, `writtenOnce_held`, `returnedWhole_of_once`, `wireCell_eq`, `pos_eq`. It needs nothing of ADDRWC's branch: the clause compares the reader's own bit with the writer's output port's words, not the two ports' `words`, because an output row's port is padded to whole SHA-512 blocks (`RowsOut`) and a written bit exists only below the output port's words.
+
+**Runs.** `r20261113-041053-1338` (the rehearsal and the export, at `e9dfc8539b`) and `r20261113-041603-dd56` (L1's try at `a8d00d755a`) both got their slot at 04:32Z–04:34Z and have printed only their first line.
+
+**Pushed.** `cursor/proofs-frame-connected-4e1b` `b7b1bed91b59`; base `e033bfc14be4`; `cursor/proofs-frame-l1-9c4e` `a8d00d755a`; `cursor/proofs-frame-guard-friday-7d2a` `693da1b5bc`. The job scripts and the pull request's body draft are in the lane's notes (`20261113T0420Z-report-frame-scripts.md`). Unpushed: the per-template clause's files, not yet in a state to commit; they go to L1 with "not compiled" in the subject as each is finished.
+
+**Not established.** That `a971` passes. Whether the mended guard elaborates (`dd56`). Whether the export works (`1338`). Any verdict of the model on Friday's registration. The per-template clause and its lemma in the tree.
+
+**STOP RULE:** none new. The notice above is the lock's list, and the pull request is not opened yet.
+
+**NEEDS:** nothing. **To post:** nothing.
