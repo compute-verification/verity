@@ -386,3 +386,18 @@ it. So one more try is worth its minutes, if it is bounded:
 
 One worker comment on HASH-119 when there is a first pair, or when there is no run.
 CHECKPOINT each 15 minutes; commit and push before the launch and before you end.
+
+## Fri 13 Nov 21:21Z: A RULE FOR THIS MACHINE, from infra (INF-671): no process listing with command lines here
+
+You run on the lead's machine. Infra's test (`python3 tools/agent-guard/inbox.py guard`) shows that no shell hook has
+run on it, so the guard that refuses a command printing a secret checks nothing here.
+
+- **Processes only with `python3 tools/agent-guard/procs.py`.** Never `ps` with arguments (`ps aux`, `ps -ef`,
+  `ps -eo ... args`), never `pgrep -a`, never a read of `/proc/*/cmdline`: a process on this machine carries a
+  token on its command line, and a listing puts it into your output.
+- **Names of environment variables only with `compgen -e`**, as before.
+- This holds for commands you run on this machine. A `research run` on a node is the node's own matter.
+- If you ran such a listing since you started here, say so in your next return, with the time; do not paste it again.
+
+This file gets this one section because it is the only way to reach you while you run. Your brief is still my resume
+of 19:27Z.
