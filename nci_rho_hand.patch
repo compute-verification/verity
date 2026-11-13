@@ -1,6 +1,6 @@
-From f2e5fd524e9815cac8e2a3aeb1eb16b5adb4d3db Mon Sep 17 00:00:00 2001
+From 60b695f7a6a58295f258e070ae645fa7f76eac7a Mon Sep 17 00:00:00 2001
 From: Cursor Agent <cursoragent@cursor.com>
-Date: Fri, 13 Nov 2026 01:01:03 +0000
+Date: Fri, 13 Nov 2026 06:28:24 +0000
 Subject: [PATCH] benchmarks: the index's rows for nci/ and rho/, and the
  one-calculator test at the calculator's new place
 
@@ -9,22 +9,23 @@ By hand, the second commit of the move of verity/protocols/inference_only/nci/ a
 
 - benchmarks/README.md lists every directory of benchmarks/: a row each for rho/ and nci/, as before they left.
 - benchmarks/training_slowdown/tests/test_one_calculator.py found a reach of the calculator by the path part
-  inference_only, which benchmarks/rho lacks. It now finds the directory's name, rho, as a part of a path: one of the
-  parts of a path written whole, or the name alone as an operand of /. The name alone anywhere else, a dictionary's
-  key or a subscript's, is the benchmark's own and is not found. Its toy sources name the new path, with a case for
-  each of the four. config.py's message stays found, so NAMED_ONLY keeps its entry.
+  inference_only, which benchmarks/rho lacks. It now finds the directory's name, which is its package's
+  (calculator.CALCULATOR.name), as a part of a path: one of the parts of a path written whole, or the name alone as
+  an operand of /. The name alone anywhere else, a dictionary's key or a subscript's, is the benchmark's own and is
+  not found. Its toy sources take the path and the name from CALCULATOR, with a case for each of the four.
+  config.py's message stays found, so NAMED_ONLY keeps its entry.
 
 Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
 ---
- benchmarks/README.md                          |  2 +
- .../tests/test_one_calculator.py              | 38 +++++++++++--------
- 2 files changed, 25 insertions(+), 15 deletions(-)
+ benchmarks/README.md                          |  2 ++
+ .../tests/test_one_calculator.py              | 34 ++++++++++++-------
+ 2 files changed, 23 insertions(+), 13 deletions(-)
 
 diff --git a/benchmarks/README.md b/benchmarks/README.md
-index eb08c866bb6..b047ad9030f 100644
+index 5bd1adbade4..7c20e887fea 100644
 --- a/benchmarks/README.md
 +++ b/benchmarks/README.md
-@@ -131,6 +131,8 @@ What the protocols cost: measured on served inference, and bounded on training.
+@@ -139,6 +139,8 @@ What the protocols cost: measured on served inference, and bounded on training.
  | `prod_repro/` | one command over the serving cost benchmark's serve, load and replay: what the serve turned on (prefix caching, speculative decoding, the context limit), whether the replayed window's tokens are the served ones, what our changes cost over stock with its interval, and the advice a request, each measured or said not to be | maintained |
  | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
  | `inference_only/` | the inference-only policy of Llama 3.2 1B as served, stated, and of the class this tree builds, with the Lean count's verdict on it, and each one's number: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound | maintained |
@@ -34,7 +35,7 @@ index eb08c866bb6..b047ad9030f 100644
  
  ### Kernels
 diff --git a/benchmarks/training_slowdown/tests/test_one_calculator.py b/benchmarks/training_slowdown/tests/test_one_calculator.py
-index db037b16281..490cea87cc9 100644
+index 82a9afe39bf..074808e9a8d 100644
 --- a/benchmarks/training_slowdown/tests/test_one_calculator.py
 +++ b/benchmarks/training_slowdown/tests/test_one_calculator.py
 @@ -1,4 +1,4 @@
@@ -43,16 +44,16 @@ index db037b16281..490cea87cc9 100644
  `training_slowdown.calculator`, and computes a slowdown in one function of it, `calculator.slowdown`.
  
  - One door: no other module or test under this directory imports a module of the calculator or names its directory
-@@ -25,28 +25,32 @@ from training_slowdown import formalism as F
- HERE = Path(__file__).resolve().parents[1]
- #: the one module that reaches the calculator, and this file, whose toy sources name it
+@@ -27,28 +27,32 @@ HERE = Path(__file__).resolve().parents[1]
  DOOR, THIS = "training_slowdown/calculator.py", "tests/test_one_calculator.py"
+ #: the calculator's package, which has its directory's name
+ PACKAGE = calculator.CALCULATOR.name
 -#: the calculator's modules as its directory on the import path names them, and the part of a path only its
 -#: directory and its policy's have
--MODULES, DIRECTORY = {"rho", "periods"}, "inference_only"
+-MODULES, DIRECTORY = {PACKAGE, "periods"}, "inference_only"
 +#: the calculator's modules as its directory on the import path names them, and its directory's name: a part of every
 +#: path to it, and alone a key of the benchmark's own records too
-+MODULES, DIRECTORY = {"rho", "periods"}, "rho"
++MODULES, DIRECTORY = {PACKAGE, "periods"}, PACKAGE
  #: files that name the calculator's directory in a message and read nothing of it, each with why. It only shrinks.
  NAMED_ONLY = {"training_slowdown/config.py": "its refusal of a policy says where the registry's tables are"}
  
@@ -82,32 +83,31 @@ index db037b16281..490cea87cc9 100644
              out.append((n.lineno, repr(n.value[:60])))
      return [f"{line}: {what}" for line, what in sorted(out)]
  
-@@ -63,16 +67,20 @@ def test_only_the_one_module_reaches_the_calculator():
+@@ -65,17 +69,21 @@ def test_only_the_one_module_reaches_the_calculator():
  
  
  def test_a_reach_is_found():
 -    """The check above isn't vacuous: an import by name, one behind a path put on the import path, a module loaded
 -    from its file and a path in parts are each found, and a docstring or a relative import of this package is not."""
--    assert reaches("import sys\nsys.path.insert(0, 'verity/protocols/inference_only/rho')\nimport periods\n"
 +    """The check above isn't vacuous: an import by name, one behind a path put on the import path (a path written
 +    whole), a module loaded from its file and a path in parts (its directory, then its package, each an operand of
 +    `/`) are each found, and a docstring, a relative import of this package, a dictionary's `rho` key or a
 +    subscript's is not."""
-+    assert reaches("import sys\nsys.path.insert(0, 'benchmarks/rho')\nimport periods\n"
-                    "from rho import min_cut\nimport rho.params\n") == [
--        "2: 'verity/protocols/inference_only/rho'", "3: import periods", "4: from rho import", "5: import rho.params"]
-+        "2: 'benchmarks/rho'", "3: import periods", "4: from rho import", "5: import rho.params"]
+     home = calculator.CALCULATOR.relative_to(HERE.parents[1]).as_posix()
+     assert reaches(f"import sys\nsys.path.insert(0, '{home}')\nimport periods\n"
+                    f"from {PACKAGE} import min_cut\nimport {PACKAGE}.params\n") == [
+         f"2: '{home}'", "3: import periods", f"4: from {PACKAGE} import", f"5: import {PACKAGE}.params"]
      assert reaches("from pathlib import Path\nimport importlib.util\n"
--                   "P = Path('verity') / 'protocols' / 'inference_only' / 'rho' / 'rho' / 'min_cut.py'\n"
+-                   f"P = Path('verity') / 'protocols' / 'inference_only' / '{PACKAGE}' / '{PACKAGE}' / 'min_cut.py'\n"
 -                   "importlib.util.spec_from_file_location('m', P)\n") == ["3: 'inference_only'"]
--    assert reaches('"""Reads verity/protocols/inference_only/rho through calculator."""\nfrom . import calculator\n'
--                   'from .rho import x\n\ndef f():\n    """As inference_only says."""\n    rho = 1\n') == []
-+                   "P = Path('benchmarks') / 'rho' / 'rho' / 'min_cut.py'\n"
-+                   "importlib.util.spec_from_file_location('m', P)\n") == ["3: 'rho'", "3: 'rho'"]
-+    assert reaches('"""Reads benchmarks/rho/data through calculator."""\nfrom . import calculator\n'
-+                   'from .rho import x\n\ndef f():\n    """As benchmarks/rho/data says."""\n    rho = 1\n') == []
-+    assert reaches('got = {"rho": 1.0}\n') == []
-+    assert reaches('half = got["rho"] / 2\n') == []
+-    assert reaches(f'"""Reads {home} through calculator."""\nfrom . import calculator\n'
+-                   f'from .{PACKAGE} import x\n\ndef f():\n    """As inference_only says."""\n    {PACKAGE} = 1\n') == []
++                   f"P = Path('benchmarks') / '{PACKAGE}' / '{PACKAGE}' / 'min_cut.py'\n"
++                   "importlib.util.spec_from_file_location('m', P)\n") == [f"3: '{PACKAGE}'", f"3: '{PACKAGE}'"]
++    assert reaches(f'"""Reads {home}/data through calculator."""\nfrom . import calculator\n'
++                   f'from .{PACKAGE} import x\n\ndef f():\n    """As {home}/data says."""\n    {PACKAGE} = 1\n') == []
++    assert reaches(f'got = {{"{PACKAGE}": 1.0}}\n') == []
++    assert reaches(f'half = got["{PACKAGE}"] / 2\n') == []
  
  
  def test_the_products_term_is_the_calculators(monkeypatch):
