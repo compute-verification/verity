@@ -1165,9 +1165,11 @@
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   },
   "Properties.Challenger.Drawn.familyOneCommitment": {
+   "honest": ["Properties.Challenger.familyOneCommitment_honest"],
    "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
   },
   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "honest": ["Properties.Challenger.familyOneCommitmentRead_honest"],
    "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
   },
   "Properties.Site.refuses": {
@@ -4508,6 +4510,9 @@
    "type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31",
    "unfolded_hash": "0c9cd9cc1ff7c0c68e2f27b924ca9402548d77da20ca38b8c224d14e3b58f286"
   },
+  "Properties.Challenger.familyOneCommitmentRead_honest": {
+   "owner": "@proofs"
+  },
   "Properties.Challenger.familyOneCommitmentRead_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -4534,6 +4539,9 @@
     "reads": []
    },
    "type_hash": "12cc19971ea099cfc9cd50cfc554cb55d253b3c3df70a23e273181d6006237d5"
+  },
+  "Properties.Challenger.familyOneCommitment_honest": {
+   "owner": "@proofs"
   },
   "Properties.Challenger.familyOneCommitment_nontrivial": {
    "owner": "@proofs",
