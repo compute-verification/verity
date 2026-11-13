@@ -132091,3 +132091,146 @@ None out. No timer held.
 - That `sessionMatches`' first half follows from `commitmentOf`: a guess from reading the definitions.
 - That the nine run's-accept premises can take `Good`: not read.
 - Anything compiled at `82ad1c6cb5`. The last compiled head of the join is `401d7ef808` (`22d3`), where the structure had 25 fields.
+
+## WINDOWAT, Fri 13 Nov 09:13Z: hcls probe compiles; the one statement has not the shape; 167 of 298 members above 8; way (i) is text only, because `Window.hcls`'s file is soundness's, and it would move three listed statements, not one
+
+**In plain words.** The reading holds in Lean: under a `subset` sampling design over a population that is not a power of two, a window exists only where every member's whole size has its session's link points. The one statement's deployed guarantee asks nothing of that kind. Thursday's window is the case the finding is about: each session samples one proof block, 167 of its 298 members hold more than 8, and its sampling design can run out. I wrote no draft of way (i): its field is in soundness's file, and the change reaches the definitions that three listed guarantees read. The statements are below as text.
+
+Mailbox read at `4b0a3eee8b` on `cursor/proofs-inbox`; your 08:55Z is my newest. No `~/wt/.pen`.
+
+**1. The probe compiles** [run: `r20261113-085413-5120`, rc 0].
+- `--on auto` put it on vy-nebius-cpu-7's research pool. It waited 29 s (sent 08:54:13Z, started 08:54:42Z, ended 08:58:53Z), at 16 GB.
+- `lean exit 0 in 249 s`; "none of its 19 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". First try.
+- Branch `cursor/proofs-windowat-hcls-probe-b2b4` at `dc8414b9c0`, off `e977fbc96f`. The file is `security/Proofs/Properties/Verity/Sampled/MemberForm/ProbeHcls.lean` (231 lines) as committed at `8083a5488f`; the head is an empty commit that says it compiled. Never to merge, in no lock, no pull request.
+
+The two statements that carry it:
+
+```lean
+theorem probe_hcls_subset (W : Window) {k : ℕ} (hlaw : W.law = .subset k) (hk : 1 ≤ k)
+    (hn : 2 ^ (8 * Flock.Draw.width W.nJ) % W.nJ ≠ 0) (m : Member W.nJ) (hm : m ∈ W.ms) :
+    mPtsOf m.D.unroll.g m.n = mPtsOf m.D.unroll.g (m.kd / nTab m.I)
+
+theorem probe_not_hcls (W : Window) (hlaw : W.law = .subset 1) (hn : W.nJ = 9) (m : Member W.nJ) (hm : m ∈ W.ms)
+    (hs : (m.kd / nTab m.I + m.D.unroll.g - 1) / m.D.unroll.g ≤ 8)
+    (hb : 8 < (m.n + m.D.unroll.g - 1) / m.D.unroll.g) : False
+```
+
+- The first: at any window whose sampling design is `subset k` with `k ≥ 1` over a population `nJ` that does not divide `2^(8·width nJ)`, every member's whole size has its session's link points.
+- The second is the concrete member you asked for: no window exists whose sampling design is one proof block of nine and which has a member whose session's sample is at most 8 blocks and whose whole size is more than 8.
+- How, each step a compiled lemma of the file:
+  - A3 makes every byte stream some outcome's (`probe_exists_stream`), so one outcome's stream is all `0xFF`.
+  - On it every candidate is rejected (`uniform_allFF`), so `subset` gives nothing on any prefix (`subset_allFF`), so `Spot.Draw.drawUnits` errors (`drawUnits_allFF`, through `drawUnits_seq`).
+  - There the model's sample is every unit (`probe_execSel_error`), and `hcls` reads the member's whole size (`probe_hcls_ranOut`).
+- What it is not:
+  - It is not a `Window` built in Lean. A window holds parsed circuit files, so "not `hcls`" is stated as "no window has such a member".
+  - It covers `subset` only. For `stratified`, Thursday's sampling design, the running out is shown on the Python twin alone (3 below).
+
+**2. The one statement has not the shape** [read, at `e977fbc96f`].
+- Its deployed guarantee is `Flock.SecurityProofs.SampledKSLiveV5` (in `deployed` of `security/lean-audit.json`).
+- It fixes the link points once, at `mPtsOf D.unroll.g (kd / nTab I)` with `kd := Bridge.lawK law`, in the types of its setup `y₀` and its sessions `wr` (`Flock/Bridge/V5/Statement.lean:339-345`). It has no hypothesis over outcomes about a sample's size.
+- Where its proof needs a sample's size it reads the sample file's decoding: a file of the verifier's sample decodes only to `kd` units (`Bridge.lawOn_size`, `Flock/Bridge/Draw.lean:500-503`), under the second half of `RecordCustodyZKJPLaw` (`Soundness/Assumptions/ZkP.lean:44-50`).
+- At a sample that ran out the model's sample is every unit, and its file decodes only where `n = kd` [derived]. So nothing is asked there that an honest run does not give.
+- The shape is only in the several-member statements. `JointAuditV5.hcls` (`Flock/EndToEnd/Joint/V5/Statement.lean:199-201`) is read by `JointSampledV5`, `JointShareV5` and `JointHorizonV5`. All three are listed with owner `@proofs`; none is in `deployed`.
+
+**(c) No session is accepted by the compiled check at a sample that ran out, in either form** [read, at `e977fbc96f`].
+- `OneStage.checkAt` (`Spot/OneStage.lean:560-563`): `match ξ.bind (coinsWhy p c e) with | some why => .reject s!"draw: coins: {why}"`.
+- `coinsReason` (`:497-501`) gives `drawnFrom`'s error as the reason; `drawnFrom` (`:491-494`) is `Draw.drawUnits`, whose `take` throws `RAN_OUT` (`Spot/Draw.lean:253-258`).
+- The one statement's check calls it with the challenges at `Spot/OneStageZk.lean:795`, and the per-member form's `checkMembersAt` at `:1527`.
+- The Lean model's event has no such clause: `JointAuditV5.Accepts` (`Joint/V5/Statement.lean:226-227`) reads the sessions' verdicts only. That is what way (i) adds.
+
+**3 and (b). Thursday's window** [read: the kept audit's summary; run on my VM: the table and the twin].
+- Where: `out/v3c-audit/summary.json` (13,322,076 bytes) of `r20261112-120044-297f`, the audit FIRSTACCEPT's 08:03Z entry names. I took it from the evidence store's record of that run (`research data fetch art:0bfd3d58… --path 'out/v3c-audit/*'`). Nothing on cpu-6 was read or run.
+- Fields read:
+  - `law` is `{"k": 1, "law": "stratified"}`.
+  - `members` has 102,781 entries `{base, k, n, template}`; their `n` sum to 1,109,804 proof blocks over 298 templates.
+  - `timing[…].timing.units` is 1 for each of the 298 sessions, and `draw_counts` is 1 for each template.
+- So each member's session samples `kd` = 1 proof block, and its whole size is its template's count:
+
+| proof blocks | members | session's `kd` | `k_log` | a pick among it can run out |
+|---|---|---|---|---|
+| 4 | 131 | 1 | 24 to 27 | no |
+| 104 | 2 | 1 | 22, 26 | yes |
+| 108 | 128 | 1 | 24 to 27 | yes |
+| 112 | 3 | 1 | 24, 25 | yes |
+| 1,792 | 1 | 1 | 27 | yes |
+| 2,048 | 28 | 1 | 22 to 25 | no |
+| 3,584 | 1 | 1 | 26 | yes |
+| 5,376 | 1 | 1 | 27 | yes |
+| 57,344 | 1 | 1 | 22 | yes |
+| 71,680 | 1 | 1 | 22 | yes |
+| 897,792 | 1 | 1 | 27 | yes |
+
+- **167 of 298 members hold more than 8 proof blocks**; the other 131 hold 4.
+- **139 of the 298 picks are among a number that is not a power of two.** The twin's `ran_out` on `0xFF` bytes says yes for exactly those sizes and no for 4 and 2,048 [run on my VM: `coins.ran_out`, which the difftest holds to Lean's `Draw.ranOutOf`].
+- **The window's sampling design can run out** [run on my VM]: the 298 strata at `k` = 1, in the summary's order, on 65,536 bytes of `0xFF` run out; on zeros the sample ends.
+- The window has one sample. Where any pick runs out the model samples every unit [read: `execSel`], and every member's part is its whole. The 159 members whose own pick cannot run out are in that too.
+- **One caveat on "above 8".** The link points count blocks of `g` proof blocks (`mPtsOf g n`, `g` the circuit file's), and the summary does not carry `g`.
+  - A member of `n` proof blocks is past its session's class when `n > 8·g`.
+  - The prover's `compose` doubles the units in a block only while they are at most 4,096 (`verity_flock/circuit.py:838-839`) [read]. At that most, the members of 57,344, 71,680 and 897,792 proof blocks are still 14, 18 and 220 blocks.
+  - For the other 164 it turns on `g`: at `g` = 1 all of them, and for instance a member of 108 only when `g ≤ 13`.
+  - `g` is in the header of each kept circuit file on cpu-6, which I did not read. So by blocks the count is between 3 and 167.
+
+**(a) Way (i): text only, no draft.** Two reasons [read].
+- `Window.hcls` is in `Sampled/Window.lean`, which my brief lists as soundness's and which is on #9520's branch. Soundness's worker is building the instance that must give that field.
+- It is not a change of one field. The incorrect proof blocks of the listed statements are defined through a simulation that needs the link points at every outcome.
+
+The statements, before and after:
+
+1. **The field**, in `JointAuditV5` (`Joint/V5/Statement.lean:199-201`, on `main`) and the same in `Window` (`Sampled/Window.lean:248-250`).
+
+```lean
+-- before
+hcls : ∀ (k : Fin ms.length) (ω : Ω),
+  mPtsOf (ms.get k).D.unroll.g ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
+    mPtsOf (ms.get k).D.unroll.g ((ms.get k).kd / nTab (ms.get k).I)
+
+-- after: asked only where the sample ended
+def Bridge.Ended (src) (law : Flock.Draw.Law) (pop : ℕ) (ω : Ω) : Prop :=
+  ∃ r, Spot.Draw.drawUnits law pop (Properties.Spot.bytesOf (src ω 0)) = .ok r
+
+hcls : ∀ (k : Fin ms.length) (ω : Ω), Bridge.Ended src law nJ ω →
+  mPtsOf (ms.get k).D.unroll.g ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
+    mPtsOf (ms.get k).D.unroll.g ((ms.get k).kd / nTab (ms.get k).I)
+```
+
+2. **The acceptance event** (`:221-227`). Today the game's outcome is `(R, the sample, the transcripts)`, with no outcome of the challenges in it, so "the sample ended" cannot be said of it. One way: the outcome also carries whether the sample ended, and `Accepts` asks it.
+
+```lean
+-- before
+def Accepts (o : w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) : Prop :=
+  List.Forall₂ (fun m t => (m.part o.2.1).Nonempty → AcceptsZKP m.I m.own t) w.ms o.2.2
+
+-- after: `game` ends in (R, (decide (Ended ω), w.L.draw ω), ts)
+def Accepts (o : w.Reg × (Bool × Finset (Fin w.nJ)) × List Discharge.Exec.Transcript) : Prop :=
+  o.2.1.1 = true ∧ List.Forall₂ (fun m t => (m.part o.2.1.2).Nonempty → AcceptsZKP m.I m.own t) w.ms o.2.2
+```
+
+3. **What the listed statements read besides.**
+- `MemberV5.OneClass L` (`:117`) asks the link points at every outcome of a member's law. `sim` (`:155`) and `wrongSet` (`:164`) take it, and the incorrect proof blocks are defined by them. I would leave these as they are.
+- `memberLaw`, `memberStrat` and `oneClass_memberLaw` (`:243-257`) take a member's session played alone at every outcome `ω` of the window's sample. After, they are taken at `ω` where the sample ended and at one chosen outcome that ended elsewhere. `OneClass` then holds from the new `hcls`.
+- That needs one outcome whose sample ends: a new field, or a proof from A3 (a stream of zeros ends Thursday's sampling design on the twin; not written in Lean).
+- `prob_member` (`Joint/V5/Member.lean:51-54`) is today an equality between a member's event in the window's game and in its session played alone. After, it is an inequality on the outcomes that ended.
+- `JointSampledV5`, `JointShareV5` and `JointHorizonV5` (`:295`, `:312`, `:400`) keep their text and read the changed `game`, `Accepts`, `memberLaw` and `memberSim`. So three records move, not `JointShareV5`'s alone.
+
+4. **Size** [run: `rg`]. `Joint/V5/{Statement,Session,Member,Layout,Bound}.lean` are 1,349 lines. A text search finds the names that change at 293 places in 29 files, a few of them other things of the same name. Among them are `WeightSecurity/Deployed.lean` and `Pressure.lean` (37 places, another lane's), soundness's `Sampled/Window*.lean`, `Members/Widen.lean` and `MemberForm/SetsUp.lean`, and my own `MemberForm/{ClaimReads,OpensOwn}.lean` through `toV5`.
+
+**STOP RULE.** Way (i) changes what `Flock.SecurityProofs.JointSampledV5`, `JointShareV5` and `JointHorizonV5` say (listed in `security/lean-audit.json`, owner `@proofs`). Before and after are 1 and 2 above. I changed no file that a listed guarantee reads and no lock; the probe is a file of its own on a branch that never merges.
+
+**What I can do next, on your word.** The `Joint/V5` half as a compiled draft on `cursor/proofs-windowat-hcls-b2b4`: items 1 to 3 in the five files of `Joint/V5`, with `Window` and its readers left to soundness. It is on `main` and its guarantees' owner in the lock is `@proofs`. Without your word I write none of it: at 08:40Z you said to change nothing in `Joint/V5/Statement.lean`, and it is the same file.
+
+**State.**
+- `cursor/proofs-windowat-5e4b` at `e977fbc96f`, unchanged, pushed.
+- [#9576](https://github.com/compute-verification/verity/pull/9576) is not marked by me; I carry it on your word "carry".
+- Runs: `r20261113-085413-5120` done, rc 0. No run of mine is going.
+- Every theorem of mine over the per-member form's accept is true and empty until the compiled check accepts parameters that name members. The probe is about `Window`, not about an accept.
+
+**To post** (PRF-490, as ours):
+> The probe compiles (`cursor/proofs-windowat-hcls-probe-b2b4`, `ProbeHcls.lean`, 19 theorems, no axiom beyond the three): under `subset k` over a population that is not a power of two, a `Window` exists only where every member's whole size has its session's link points; `probe_not_hcls` is the member of one in nine. The one statement has not the shape: `SampledKSLiveV5` fixes the link points at `kd` and reads a sample's size off its file's decoding. The compiled check refuses a sample that ran out in both forms (`OneStage.checkAt`, `Spot/OneStage.lean:560`). Thursday's window (`297f`'s summary, from the store): `stratified` at 1, 298 members, each session one proof block; 167 members hold more than 8 proof blocks, 139 picks are among a number that is not a power of two, and the twin says its sampling design runs out on `0xFF` bytes. Way (i) is not one field: `JointSampledV5`, `JointShareV5` and `JointHorizonV5` read `game`, `Accepts`, `memberLaw` and `memberSim`, which all change; `WeightSecurity/Deployed.lean` reads them too. Before and after are in WINDOWAT's entry.
+
+**Not established.**
+- The probe for a `stratified` or `work` sampling design in Lean. It is compiled for `subset` only.
+- `g` for any of Thursday's members, so the count by blocks.
+- That the summary's order of templates is the registration's order of strata. The running out does not turn on it; which pick runs out first does.
+- That no session is accepted at a sample that ran out in the Lean model of the one statement. Read for the compiled check only.
+- That way (i) as written above compiles. None of it is written.
+- That an outcome whose sample ends exists under A3 for every sampling design.
