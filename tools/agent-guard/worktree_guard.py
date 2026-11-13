@@ -434,9 +434,10 @@ def after_cd(commands: list[list[str]], indexed: list[Git], envs: list[dict[str,
     it in (`dirs[i]`, shell_hook.cd_dirs; "" where they leave that in doubt) joined with its own `-C`, so `cd CHECKOUT && git
     ...` is judged in CHECKOUT and `cd SCRATCH && git ...` in SCRATCH. One that anything but a `cd` leaves unplaced stays so
     (`Git.unknown`): another move anywhere in the command (`moves`), `--git-dir`, `GIT_DIR`."""
-    if len(dirs) != len(commands) or moves([words for words in commands if words[:1] != ["cd"]]):
+    if moves([words for words in commands if words[:1] != ["cd"]]):
         return indexed
-    return [indexed_invocations([commands[g.i]], dirs[g.i], envs[g.i:g.i + 1])[0]._replace(i=g.i) if dirs[g.i] else g for g in indexed]
+    to = [dirs[g.i] if g.i < len(dirs) else "" for g in indexed]
+    return [indexed_invocations([commands[g.i]], d, envs[g.i:g.i + 1])[0]._replace(i=g.i) if d else g for g, d in zip(indexed, to)]
 
 
 def identity_reason(indexed: list[Git], envs: list[dict[str, str]]) -> str | None:

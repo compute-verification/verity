@@ -1321,6 +1321,7 @@ CD_INTO_A_CHECKOUT = [
     (f"cd {{V}}/sub && git {COMMIT}", "scratch"), (f"cd {{V}}; git {COMMIT}", "notes"), (f"cd {{V}}\ngit {COMMIT}", "notes"),
     (f"cd {{V}} 2>/dev/null && git {COMMIT}", "notes"), (f"cd {{V}} && git add -A && git {COMMIT}", "notes"),
     (f"cd {{V}} && git diff --cached --quiet || git {COMMIT}", "notes"), (f"cd {{V}} && git status | tail -1; git {COMMIT}", "notes"),
+    (f"cd {{V}} && git status |& tail -1; git {COMMIT}", "notes"), (f"cd {{V}} && env LC_ALL=C git add -A && git {COMMIT}", "notes"),
     ("cd {V} && git commit --author='A <a@a>' -m x", "notes"), ("cd {V} && GIT_AUTHOR_NAME=a git merge lane/mine", "notes"),
     ("cd {V} && env GIT_COMMITTER_EMAIL=a@a git commit -m x", "notes"), ("cd {V} && git config user.email a@a", "notes"),
     (f"cd {{S}} && cd {{V}} && git {COMMIT}", "notes"), (f"cd {{T}} && cd verity && git {COMMIT}", "scratch"),
@@ -1361,11 +1362,10 @@ def test_the_identity_rule_follows_a_cd_written_out_and_passes_what_a_cd_leaves_
 
     def typed(form: str) -> str:
         return form.replace("{T}", str(tmp_path)).replace("{S}", str(tmp_path / "scratch"))
-    for form, clone in CD_INTO_A_CHECKOUT:
-        out = clones(typed(form), clone)
-        assert out["permission"] == "deny" and IDENTITY_FIX in out["agent_message"], (form, clone, out)
-    for form, clone in CD_OUT_OF_A_CHECKOUT + CD_IN_DOUBT:
-        assert clones(typed(form), clone) == {"permission": "allow"}, (form, clone)
+    passed = [(form, clone) for form, clone in CD_INTO_A_CHECKOUT
+              if (out := clones(typed(form), clone))["permission"] != "deny" or IDENTITY_FIX not in out["agent_message"]]
+    refused = [(form, clone) for form, clone in CD_OUT_OF_A_CHECKOUT + CD_IN_DOUBT if clones(typed(form), clone) != {"permission": "allow"}]
+    assert not passed and not refused, {"passed": passed, "refused": refused}
     for form, _ in CD_INTO_A_CHECKOUT + CD_OUT_OF_A_CHECKOUT + CD_IN_DOUBT:      # one directory for each command `flattened` gives
         assert len(hook.cd_dirs(typed(form), str(tmp_path))[0]) == len(hook.flattened(typed(form))), form
 
