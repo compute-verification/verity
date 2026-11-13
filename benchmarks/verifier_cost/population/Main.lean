@@ -45,8 +45,10 @@ def popOkLayout (p : Program) (q : Json) (n : Nat) : Bool :=
 /-- The one-stage check's population step (`OneStageZk.popHeld`) on a verifier of the program `p` and the query `q`
 alone and a record that names the population `n`: whether it held. -/
 def popHeldOk (p : Program) (q : Json) (n : Nat) : Bool :=
-  (OneStageZk.popHeld { program := p, query := q, law := .null, workTable := none, scheme := "", ports := #[],
-    leafLayer := none, anchors := #[], log := #[], partition := none } (Json.mkObj [("population", toJson n)])).toBool
+  let v : Registration.Verifier :=
+    { program := p, query := q, law := .null, workTable := none, scheme := "", ports := #[], leafLayer := none,
+      anchors := #[], log := #[], partition := none }
+  (OneStageZk.popHeld v (Json.mkObj [("population", toJson n)])).toBool
 
 /-- `Slots.inputGates`' size, without the array. -/
 def inputCount (d : Flock.TemplateQuery.Desc) : Nat := Id.run do
