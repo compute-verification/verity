@@ -32,12 +32,14 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.refs import runs
+from verity.commitments import randomness as RND
 from verity.commitments.windows import interface as IF
 
 from .node_window import PEERS, STAND_IN, WEIGHTS, NodeWindow, _family
 
 PROMPT = "prompt"
 SAMPLE = 1024
+DRAW_DOMAIN = "verity/node-window/value-check/v1"
 _DT = {8: np.uint8, 16: np.uint16, 32: np.dtype("<u4"), 64: np.dtype("<u8")}
 
 
@@ -85,10 +87,10 @@ def _shape(t: Any) -> tuple[int, ...]:
     return tuple(out)
 
 
-def made_up(fn: Any, prompt: Sequence[int], seed: int) -> dict[str, np.ndarray]:
-    """Program ``fn``'s inputs, made up under ``seed``: the prompt's ids as given, each peer's partials bf16 of N(0, 1/4), the
-    weights record as its u16 words, field by field (`_field`); refused for any other input."""
-    rng = np.random.default_rng(seed)
+def made_up(fn: Any, prompt: Sequence[int], rng: np.random.Generator) -> dict[str, np.ndarray]:
+    """Program ``fn``'s inputs, made up from the caller's ``rng`` (test data, not a challenge): the prompt's ids as given, each
+    peer's partials bf16 of N(0, 1/4), the weights record as its u16 words, field by field (`_field`); refused for any other
+    input."""
     out: dict[str, np.ndarray] = {}
     for name, t in fn.signature()[0]:
         if name == PROMPT:
@@ -642,17 +644,23 @@ def _family_of(fn: Any) -> str:
     return fn.defn.name if hasattr(fn, "defn") else fn.id.split("_v")[0]
 
 
-def sample(n: int, rng: np.random.Generator, most: int = SAMPLE) -> list[int]:
-    return list(range(n)) if n <= most else sorted(rng.choice(n, most, replace=False).tolist())
+def draws(seed: int) -> RND.Key:
+    """The value check's key under ``seed``, from the one challenge derivation."""
+    return RND.derive(str(seed).encode(), DRAW_DOMAIN, {})
+
+
+def sample(n: int, key: RND.Key, index: str, most: int = SAMPLE) -> list[int]:
+    """Up to ``most`` of ``n`` units, the draw at ``index`` of ``key`` (all of a smaller template)."""
+    return list(range(n)) if n <= most else list(key.subset(most, n, index))
 
 
 def run(ck: Check, seed: int, log: Callable[[str], None] = print, most: int = SAMPLE,
         only: Sequence[str] | None = None) -> dict[str, Any]:
-    """Every template of ``ck``'s circuit: up to ``most`` units sampled under ``seed`` (all of a smaller one); a template whose
-    outputs the frame states is checked at its sample, any other through its sample's readers that are (a reader's
-    units added to its own check, up to ``most`` more)."""
-    rng = np.random.default_rng(seed)
-    picked = {tid: sample(ck.counts[tid], rng, most) for tid in ck.c.ids}
+    """Every template of ``ck``'s circuit: up to ``most`` units sampled under ``seed`` (`draws`, each template's draw at its
+    id; all of a smaller one); a template whose outputs the frame states is checked at its sample, any other through its
+    sample's readers that are (a reader's units added to its own check, up to ``most`` more)."""
+    key = draws(seed)
+    picked = {tid: sample(ck.counts[tid], key, tid, most) for tid in ck.c.ids}
     out: dict[str, Any] = {}
     extra: dict[str, set[int]] = {}
     through: dict[str, dict[str, int]] = {}
@@ -727,5 +735,5 @@ def plant_read_shift(c: IF.Circuit, family: str, port: str | None = None) -> tup
     raise ValueError(f"no registered read into {family} {port}")
 
 
-__all__ = ["Check", "FREE", "NATIVE", "SAMPLE", "Tables", "Values", "made_up", "native_selftest", "plant_read_shift",
+__all__ = ["Check", "FREE", "NATIVE", "SAMPLE", "Tables", "Values", "draws", "made_up", "native_selftest", "plant_read_shift",
            "plant_wire_row", "run", "sample"]
