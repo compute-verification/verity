@@ -152564,3 +152564,54 @@ The ahead half of my 10:02Z entry is done and its row is released. Nothing chang
 **4. What stands for 19:00Z:** unchanged from my 10:02Z entry, section 3. At 19:00Z I check the lease, that cards 4 and 5 are idle and that the marker still reads as above, then end with "ready" and the go command (`STEPS=prove`, cards 4 and 5, cores 48-71, `KILL_AT` 19:57:00Z).
 
 For the table: nothing new. No card has run. The times above are CPU work on 8 of node A's cores, not card figures.
+
+## WINDOWAT, Fri 13 Nov 16:51Z: my live line: `b367df2d7cbc` on `cursor/proofs-windowat-hcls-b2b4` (text B on the draft, with MEMBERS's live line merged in; my changed files build, `6464` rc 0)
+
+**my live line** is `b367df2d7cbcd83d1ba805bae67ce310338f1146`, the head of `cursor/proofs-windowat-hcls-b2b4`, pushed by a plain push (a fast-forward of `a5b8ce506db`). I commit and push nothing more on it until FRAME reports its carried head.
+
+**In plain words.** Your 16:16Z and 16:40Z orders are done, in the order of my 16:32Z section 2 (mailbox read at the hook's 16:40Z message).
+
+1. **B is on the draft as three commits**, and the tree after them is the scratch's, byte for byte.
+2. **MEMBERS's live line merged in with no conflict**, so nothing of soundness's or MEMBERS's was settled by me. The merge changes none of my files.
+3. **My changed files build at the merged head**: run `6464`, rc 0.
+4. **Your correction is taken**: the mend of `popOk` is `public import Spot.PopOrder`, not `import all Init.Util`, the line my 16:32Z point 1 read. What the conclusion needs holds for either line: #9576 changes no import in that file [read, 16:32Z]. I have not read the pull request that carries the new import, so that the two compile together is still not established.
+
+### STOP RULE
+
+This entry restates nothing on `main`. The line holds no merge of `main` later than `053b8e50fe8a` and no merge of #9520's new head `b5bb54bfb0d`; the four `PeriodPlays` lines are not mended. No lock is edited by hand, no pull request is opened or marked, and nothing was done to #9576. The scratch `-snd-probe` stays at `4667f9e890d`, unnamed and uncarried. `cursor/proofs-windowat-5e4b` stays at `e977fbc96f`.
+
+### 1. B on the draft, three commits [run: `git log`, `git diff`]
+
+| commit | what | files |
+|---|---|---|
+| `04999824be847303042911784fba4308bf2211c5` | the split: `JointAuditV5` without the field `hend`; the three guarantees ask the two SHA-512 premises under `∀ _ : Nonempty w.EndΩ`; `Ends.lean` and `hend_of_stream` removed | 17, +215 −326 |
+| `9decf319bdc4243b8595c2795577f4306884c1ae` | `MemberForm/Reads.lean` alone: the six lines and the docstring's clause | 1, +9 −3 |
+| `7d04a7614671d24df16ecb9032d1406cbb516cd3` | `WeightSecurity/Deployed.lean` and `Pressure.lean` | 2, +29 −16 |
+
+The first does not compile without the other two, and its message says so.
+
+**The empty diff.** `git diff 4667f9e890d 7d04a7614671` prints nothing (0 bytes), and the two commits have one tree: `150d16cf1552b4d8bb867700dbc9c7c8316d208c`.
+
+### 2. The merge [run: `git merge --no-ff fd561fbff5b289f1d579cb3faf83e8d135359d5d`]
+
+- It ended with exit 0 and no conflict in any file. The merge commit is the live line's head; its parents are `7d04a7614671` and MEMBERS's `fd561fbff5b2`.
+- Its tree is `501e8e4b348c`, the tree my 16:32Z in-memory merge gave.
+- It changes 2,278 files against `7d04a7614671`, none of them among the files of mine under `Joint/V5`, `Sampled/Window`, `Sampled/MemberForm`, `Sampled/Members` or `WeightSecurity`. Under `security/Proofs` it changes six: `NetworkCertifier/README.md`, `Properties/Challenger.lean`, `Challenger/Coins.lean`, `Challenger/Drawn.lean`, `Nci/LeafWidthsPart.lean` and `Verity/Sampled/RecordDraw.lean`.
+
+### 3. The build [run: `r20261113-164224-6464`, rc 0, on the tree of `b367df2d7cbc`, not dirty]
+
+`lean_changed.py --build` over `MemberForm.lean`, `Members.lean`, every file under `Window/`, `WeightSecurity.lean` and `Joint/V5/Layout.lean`: "Build completed successfully (11815 jobs)", `security/Proofs: exit 0 in 392 s`.
+
+- Built there, among others: `Spot.OneStageZk`, `Properties.Challenger` and `Sampled.RecordDraw` (which the merge changes and my files stand on); all five `Joint/V5` files; `Sampled.Window` and the nine edited files under `Window/`; `Members.Widen`; `MemberForm.ClaimReads`, `Reads`, `WindowPasses`, `Sound` and the root `MemberForm`; `WeightSecurity.Deployed`, `Pressure` and the root.
+- Warnings in the files the change edits: the same two as before, on soundness's lines from before my change (`Window/Read.lean:68:10`, `Window/Instance.lean:213:6`, both deprecations).
+
+### Not established
+
+- No records run at `b367df2d7cbc`: the locks are as git merged them, and the three `witnesses.unwitnessed-changed` of my 15:00Z entry are expected there, not re-run.
+- The whole check, the kernel replay and the test suites were not run. The build covers the targets above and what they import, not every module of `security/Proofs`.
+- Whether FRAME's carry of this head against `4ae17f7eafd7` goes through: FRAME's.
+- What the merge of #9520's new head meets inside the new layout: after the carry, at your word.
+
+### Next
+
+Nothing on this branch until FRAME names its carried head. Then, in the pass's order: the plain push of the carried commit over my branch, the lines FRAME's table names as still holding an old path or name (the four `PeriodPlays` lines among them, if the script leaves them), a records run at the carried head, and #9520's new head at your word. My timer stays.
