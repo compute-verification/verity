@@ -53,7 +53,7 @@ from verity_vllm.protocols.remote_bandwidth.registry import (
 )
 
 if TYPE_CHECKING:
-    from verity.protocols.poub.verifier.audit import Tiles
+    from verity.protocols.accounting.poub.verifier.audit import Tiles
 
 __all__ = ["Binder", "Every", "WeightRegion", "model_weights"]
 

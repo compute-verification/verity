@@ -197,7 +197,7 @@ digest    = SHA-512( P(ℓ) ‖ row bytes )
   verifier's own registration: it holds the file's roots and domain ids before the proof, and within one verification it reads
   them as given. Any consumer that carries a registered root into another statement or commitment recomputes that root's domain
   id from its own derivation of the binding, and refuses a root whose recorded domain differs (R3-domain in
-  `verity.protocols.spot.verifier.one_stage.registration` does).
+  `verity.protocols.proofs.spot.verifier.one_stage.registration` does).
 - **Reference and conformance.** `verity.commitments.rowleaf`: `bit_row`, `sha512_row_v2_prefix`, `_layout` and `_digest`, the last
   refusing a nonzero fill. The vectors in `vectors_sha512.json` are `bit_row_leaves`, `bit_row_trees` and `bit_row_hiding_leaves`:
   random rows at ℓ = 0, 1, 13, 888, 896, 1016, 1023, 1024, 1025, 3172 and 8192 (888 and 896 straddle the length whose SHA-512 padding
@@ -241,7 +241,7 @@ digest      = SHA-512( Q(ℓ) ‖ d_0 ‖ … ‖ d_(s−1) )
 - **When META names `out_row_ports`.** Exactly when some output row is row-seg or some run covers more than one port; a
   statement whose output rows are all lone v2 ports omits it. Its presence is part of the circuit text, so of the statement's
   identity, and a writer that computes it otherwise (PoUW's `leaves.statement_rows` follows this rule) gets another statement
-  digest. `OUT_ROW_PORTS_RULE` in `verity/protocols/flock/prover/tests/test_lean_verifier.py` pins the rule with each case's circuit
+  digest. `OUT_ROW_PORTS_RULE` in `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py` pins the rule with each case's circuit
   SHA-512. The pair vectors are `ROW_SEG_PAIRS` and `ROW_V2_PAIRS` there.
 - **Reference and conformance.** `rowleaf.sha512_row_seg_segments`, `_prefix`, `_segment_prefix` and `_digest`, the last refusing a
   nonzero fill. `row_seg_leaves` in `vectors_sha512.json`: random rows at ℓ = 0, 1, 13, 8191, 8192, 8193, 24,581 and 65,536 and word rows (BF16 k = 4096 and 5, FP32 k = 4096), with every
