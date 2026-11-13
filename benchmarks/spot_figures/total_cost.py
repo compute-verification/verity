@@ -90,9 +90,9 @@ from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
-from verity.protocols.spot import plancheck
+from verity.protocols.spot.prover import plancheck
 from verity.protocols.spot.device import challenger
-from verity.protocols.spot.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
+from verity.protocols.spot.prover.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
                                             two_stage_price, two_stage_statements)
 
 SCHEMA = "spot-figure1/v2"
