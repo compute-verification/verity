@@ -1,0 +1,274 @@
+research: this checkout's research code is 5 commit(s) behind origin/main (1e4d5c993c, as of its last fetch), so origin/main's runs, from /home/ubuntu/.cache/research-at-main/b5994250193c/tree; RESEARCH_AT_CHECKOUT=1 runs this checkout's
+  -  #9039  f5a4a2b0  ready    training                 admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9071  2dea0d32  ready    training                 admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9075  cbe0bcdd  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9149  4a31b967  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9209  4c8742d0  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9224  58bd76f9  ready    infra                    admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9275  4dfe6b13  ready    training                 admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9332  5a6be198  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9340  3aefb20f  ready    circuits                 admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9346  949c03c3  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9373  54d0d016  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9379  59a7b3ca  ready    compute-accounting       admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9384  8007f9b1  ready    lean                     admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9402  f25d5dc8  ready    lean                     admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9410  a90b665f  ready    soundness                admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9430  b441117d  ready    top                      admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9431  c131fc06  ready    memory-accounting        admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9436  a740e5c5  ready    compute-accounting       admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9454  de9bd72f  ready    network-accounting       admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9458  049c5875  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9461  3d1a6e40  ready    lean                     admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9464  002c3a32  ready    infra                    admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9474  b23c853a  ready    training                 admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9496  92579572  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9510  fab8b939  ready    vllm                     admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9513  0f850991  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9518  87a28563  ready    compute-accounting       admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9532  3b605fda  ready    training                 admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9534  08b63525  ready    vllm                     admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9537  44b84839  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9544  09577b4d  ready    vllm                     admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9549  e0c95da4  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9551  af192d1f  ready    benchmarks               admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9563  3828c556  ready    network-accounting       admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9564  5033e184  ready    infra                    admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9573  1dd8140b  ready    lean                     admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9582  5076cf69  ready    top                      admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9584  ae80f367  ready    proofs                   admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9587  76644201  ready    comms                    admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9590  334cb9c3  ready    benchmarks               admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #9591  d2903662  ready    vllm                     admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk
+  -  #5632  419fc713  waiting  compute-research         stale, idle since 2026-11-05: not marked ready at 419fc713: `research queue ready 5632 --on MACHINE` (or --local; --mark without the tier)
+  -  #5790  5dac3393  waiting  compute-research         stale, idle since 2026-11-04: not marked ready at 5dac3393: `research queue ready 5790 --on MACHINE` (or --local; --mark without the tier)
+  -  #6856  6f4b60c9  waiting  top                      stale, idle since 2026-11-05: not marked ready at 6f4b60c9: `research queue ready 6856 --on MACHINE` (or --local; --mark without the tier)
+  -  #6901  41fed65e  waiting  ci                       stale, idle since 2026-11-06: not marked ready at 41fed65e: `research queue ready 6901 --on MACHINE` (or --local; --mark without the tier)
+  -  #7200  841483b0  waiting  ci                       stale, idle since 2026-11-04: not marked ready at 841483b0: `research queue ready 7200 --on MACHINE` (or --local; --mark without the tier)
+  -  #7375  584cc2ae  waiting  bc-629a532d-3c1f-447e-b1 stale, idle since 2026-11-05: not marked ready at 584cc2ae: `research queue ready 7375 --on MACHINE` (or --local; --mark without the tier)
+  -  #7378  1027d5a6  waiting  compute-research         stale, idle since 2026-11-04: not marked ready at 1027d5a6: `research queue ready 7378 --on MACHINE` (or --local; --mark without the tier)
+  -  #7442  565e60f5  waiting  bc-629a532d-3c1f-447e-b1 stale, idle since 2026-11-06: not marked ready at 565e60f5: `research queue ready 7442 --on MACHINE` (or --local; --mark without the tier)
+  -  #7605  4e11f724  waiting  ci                       stale, idle since 2026-11-07: not marked ready at 4e11f724: `research queue ready 7605 --on MACHINE` (or --local; --mark without the tier)
+  -  #7850  ed27bb14  waiting  proofs                   stale, idle since 2026-11-07: not marked ready at ed27bb14: `research queue ready 7850 --on MACHINE` (or --local; --mark without the tier)
+  -  #7952  4d3d22fd  waiting  proofs                   stale, idle since 2026-11-08: not marked ready at 4d3d22fd: `research queue ready 7952 --on MACHINE` (or --local; --mark without the tier)
+  -  #8003  9c329817  waiting  MOESERVE-C               not marked ready at 9c329817: `research queue ready 8003 --on MACHINE` (or --local; --mark without the tier)
+  -  #8048  00e8774d  waiting  vllm                     not marked ready at 00e8774d: `research queue ready 8048 --on MACHINE` (or --local; --mark without the tier)
+  -  #8120  b6e0c1dc  waiting  proofs                   stale, idle since 2026-11-08: not marked ready at b6e0c1dc: `research queue ready 8120 --on MACHINE` (or --local; --mark without the tier)
+  -  #8139  f51a277c  waiting  proofs                   not marked ready at f51a277c: `research queue ready 8139 --on MACHINE` (or --local; --mark without the tier)
+  -  #8177  6dd74f50  waiting  proofs                   stale, idle since 2026-11-08: not marked ready at 6dd74f50: `research queue ready 8177 --on MACHINE` (or --local; --mark without the tier)
+  -  #8179  edfbacf2  waiting  top                      stale, idle since 2026-11-08: not marked ready at edfbacf2: `research queue ready 8179 --on MACHINE` (or --local; --mark without the tier)
+  -  #8221  219562ad  waiting  ci                       stale, idle since 2026-11-09: not marked ready at 219562ad: `research queue ready 8221 --on MACHINE` (or --local; --mark without the tier)
+  -  #8327  e7d7b2ef  waiting  top                      stale, idle since 2026-11-09: not marked ready at e7d7b2ef: `research queue ready 8327 --on MACHINE` (or --local; --mark without the tier)
+  -  #8330  43ef89f9  waiting  ci                       stale, idle since 2026-11-09: not marked ready at 43ef89f9: `research queue ready 8330 --on MACHINE` (or --local; --mark without the tier)
+  -  #8363  a81a1b11  waiting  proofs                   not marked ready at a81a1b11: `research queue ready 8363 --on MACHINE` (or --local; --mark without the tier)
+  -  #8395  06965f76  waiting  vllm                     not marked ready at 06965f76: `research queue ready 8395 --on MACHINE` (or --local; --mark without the tier)
+  -  #8396  08a65ece  waiting  vllm                     not marked ready at 08a65ece: `research queue ready 8396 --on MACHINE` (or --local; --mark without the tier)
+  -  #8406  3d8e9aa8  waiting  proofs                   not marked ready at 3d8e9aa8: `research queue ready 8406 --on MACHINE` (or --local; --mark without the tier)
+  -  #8414  35972405  waiting  proofs                   not marked ready at 35972405: `research queue ready 8414 --on MACHINE` (or --local; --mark without the tier)
+  -  #8415  720ef04b  waiting  network-accounting       stale, idle since 2026-11-10: not marked ready at 720ef04b: `research queue ready 8415 --on MACHINE` (or --local; --mark without the tier)
+  -  #8439  a0c7bd5a  waiting  vllm                     not marked ready at a0c7bd5a: `research queue ready 8439 --on MACHINE` (or --local; --mark without the tier)
+  -  #8449  de834106  waiting  training                 not marked ready at de834106: `research queue ready 8449 --on MACHINE` (or --local; --mark without the tier)
+  -  #8455  6d11ce6c  waiting  vllm                     not marked ready at 6d11ce6c: `research queue ready 8455 --on MACHINE` (or --local; --mark without the tier)
+  -  #8460  9f323405  waiting  compute-accounting       stale, idle since 2026-11-10: based on remote, and not marked ready at 9f323405
+  -  #8462  6f4ffa9e  waiting  proofs                   not marked ready at 6f4ffa9e: `research queue ready 8462 --on MACHINE` (or --local; --mark without the tier)
+  -  #8463  b1409cff  waiting  circuits                 not marked ready at b1409cff: `research queue ready 8463 --on MACHINE` (or --local; --mark without the tier)
+  -  #8465  ea98b7c1  waiting  ci                       based on ci/vqueue-live, not main: retarget it to main
+  -  #8483  f1868997  waiting  vllm                     not marked ready at f1868997: `research queue ready 8483 --on MACHINE` (or --local; --mark without the tier)
+  -  #8503  51fe8160  waiting  compute-accounting       stale, idle since 2026-11-10: based on remote, and not marked ready at 51fe8160
+  -  #8543  2007687f  waiting  proofs                   not marked ready at 2007687f: `research queue ready 8543 --on MACHINE` (or --local; --mark without the tier)
+  -  #8556  84f44319  waiting  lean                     not marked ready at 84f44319: `research queue ready 8556 --on MACHINE` (or --local; --mark without the tier)
+  -  #8559  6d556aa4  waiting  lean                     not marked ready at 6d556aa4: `research queue ready 8559 --on MACHINE` (or --local; --mark without the tier)
+  -  #8578  0a713e7c  waiting  proofs                   not marked ready at 0a713e7c: `research queue ready 8578 --on MACHINE` (or --local; --mark without the tier)
+  -  #8580  03afbdd8  waiting  vllm                     not marked ready at 03afbdd8: `research queue ready 8580 --on MACHINE` (or --local; --mark without the tier)
+  -  #8615  9b5371e8  waiting  lean                     not marked ready at 9b5371e8: `research queue ready 8615 --on MACHINE` (or --local; --mark without the tier)
+  -  #8642  1f5fcd4a  waiting  ci                       not marked ready at 1f5fcd4a: `research queue ready 8642 --on MACHINE` (or --local; --mark without the tier)
+  -  #8671  28f124b2  waiting  kernels                  not marked ready at 28f124b2: `research queue ready 8671 --on MACHINE` (or --local; --mark without the tier)
+  -  #8701  44dd026b  waiting  lean                     not marked ready at 44dd026b: `research queue ready 8701 --on MACHINE` (or --local; --mark without the tier)
+  -  #8708  635b2f97  waiting  network-accounting       not marked ready at 635b2f97: `research queue ready 8708 --on MACHINE` (or --local; --mark without the tier)
+  -  #8714  338bfb2c  waiting  ci                       not marked ready at 338bfb2c: `research queue ready 8714 --on MACHINE` (or --local; --mark without the tier)
+  -  #8719  076356b2  waiting  ci                       not marked ready at 076356b2: `research queue ready 8719 --on MACHINE` (or --local; --mark without the tier)
+  -  #8725  452a2f79  waiting  vllm                     not marked ready at 452a2f79: `research queue ready 8725 --on MACHINE` (or --local; --mark without the tier)
+  -  #8731  3cb71ba0  waiting  proofs                   not marked ready at 3cb71ba0: `research queue ready 8731 --on MACHINE` (or --local; --mark without the tier)
+  -  #8746  a7f8fb67  waiting  lean                     not marked ready at a7f8fb67: `research queue ready 8746 --on MACHINE` (or --local; --mark without the tier)
+  -  #8750  d9ab8212  waiting  lean                     not marked ready at d9ab8212: `research queue ready 8750 --on MACHINE` (or --local; --mark without the tier)
+  -  #8752  5828ccbf  waiting  top                      not marked ready at 5828ccbf: `research queue ready 8752 --on MACHINE` (or --local; --mark without the tier)
+  -  #8763  0e673a6f  waiting  circuits                 not marked ready at 0e673a6f: `research queue ready 8763 --on MACHINE` (or --local; --mark without the tier)
+  -  #8767  d6cf59bc  waiting  proofs                   not marked ready at d6cf59bc: `research queue ready 8767 --on MACHINE` (or --local; --mark without the tier)
+  -  #8772  95b4fb12  waiting  -                        no owner: add a `Lane {name}` line to the PR body
+  -  #8780  bfade2be  waiting  training                 not marked ready at bfade2be: `research queue ready 8780 --on MACHINE` (or --local; --mark without the tier)
+  -  #8829  1358bfbd  waiting  network-accounting       not marked ready at 1358bfbd: `research queue ready 8829 --on MACHINE` (or --local; --mark without the tier)
+  -  #8869  df881f32  waiting  proofs                   not marked ready at df881f32: `research queue ready 8869 --on MACHINE` (or --local; --mark without the tier)
+  -  #8900  1c041bac  waiting  proofs                   not marked ready at 1c041bac: `research queue ready 8900 --on MACHINE` (or --local; --mark without the tier)
+  -  #8942  131c1e70  waiting  lean                     not marked ready at 131c1e70: `research queue ready 8942 --on MACHINE` (or --local; --mark without the tier)
+  -  #8945  58ceca0f  waiting  lean                     not marked ready at 58ceca0f: `research queue ready 8945 --on MACHINE` (or --local; --mark without the tier)
+  -  #8950  787faa47  waiting  proofs                   not marked ready at 787faa47: `research queue ready 8950 --on MACHINE` (or --local; --mark without the tier)
+  -  #8964  042bad63  waiting  vllm                     not marked ready at 042bad63: `research queue ready 8964 --on MACHINE` (or --local; --mark without the tier)
+  -  #8996  186d42c9  waiting  infra                    not marked ready at 186d42c9: `research queue ready 8996 --on MACHINE` (or --local; --mark without the tier)
+  -  #9006  af13b199  waiting  vllm                     not marked ready at af13b199: `research queue ready 9006 --on MACHINE` (or --local; --mark without the tier)
+  -  #9015  976716c5  waiting  lean                     not marked ready at 976716c5: `research queue ready 9015 --on MACHINE` (or --local; --mark without the tier)
+  -  #9023  6b782d97  waiting  proofs                   not marked ready at 6b782d97: `research queue ready 9023 --on MACHINE` (or --local; --mark without the tier)
+  -  #9031  bd61ed3e  waiting  vllm                     not marked ready at bd61ed3e: `research queue ready 9031 --on MACHINE` (or --local; --mark without the tier)
+  -  #9061  7fa90303  waiting  memory-accounting        not marked ready at 7fa90303: `research queue ready 9061 --on MACHINE` (or --local; --mark without the tier)
+  -  #9063  036c84a0  waiting  memory-accounting        not marked ready at 036c84a0: `research queue ready 9063 --on MACHINE` (or --local; --mark without the tier)
+  -  #9079  c4bdf9e1  waiting  kernels                  not marked ready at c4bdf9e1: `research queue ready 9079 --on MACHINE` (or --local; --mark without the tier)
+  -  #9080  a5eb9732  waiting  proofs                   contains #9176, which is refused: conflicts with `main` in benchmarks/one_stage/tests/test_two_stage_second.py, benchmarks/one_stage/two_stage_small.py, benchmarks/one_stage/two_stage_small.sh, verity/protocols/spot/verifier/lean/tests/test_difftest.py: merge `main` into the branch and re-mark it
+  -  #9091  bc68ae1e  waiting  proofs                   not marked ready at bc68ae1e: `research queue ready 9091 --on MACHINE` (or --local; --mark without the tier)
+  -  #9106  dc380f3c  waiting  lean                     not marked ready at dc380f3c: `research queue ready 9106 --on MACHINE` (or --local; --mark without the tier)
+  -  #9108  16757e17  waiting  proofs                   not marked ready at 16757e17: `research queue ready 9108 --on MACHINE` (or --local; --mark without the tier)
+  -  #9114  fe770e57  waiting  bc-b43da88b-5d25-4463-9b not marked ready at fe770e57: `research queue ready 9114 --on MACHINE` (or --local; --mark without the tier)
+  -  #9128  6ef9e427  waiting  proofs                   not marked ready at 6ef9e427: `research queue ready 9128 --on MACHINE` (or --local; --mark without the tier)
+  -  #9154  5dcf9585  waiting  network-accounting       not marked ready at 5dcf9585: `research queue ready 9154 --on MACHINE` (or --local; --mark without the tier)
+  -  #9184  b83ec00f  waiting  lean                     not marked ready at b83ec00f: `research queue ready 9184 --on MACHINE` (or --local; --mark without the tier)
+  -  #9195  e9688e88  waiting  top                      not marked ready at e9688e88: `research queue ready 9195 --on MACHINE` (or --local; --mark without the tier)
+  -  #9212  f2412ec7  waiting  proofs                   contains #9176, which is refused: conflicts with `main` in benchmarks/one_stage/tests/test_two_stage_second.py, benchmarks/one_stage/two_stage_small.py, benchmarks/one_stage/two_stage_small.sh, verity/protocols/spot/verifier/lean/tests/test_difftest.py: merge `main` into the branch and re-mark it
+  -  #9216  e9f5475a  waiting  network-accounting       not marked ready at e9f5475a: `research queue ready 9216 --on MACHINE` (or --local; --mark without the tier)
+  -  #9217  47f41861  waiting  top                      not marked ready at 47f41861: `research queue ready 9217 --on MACHINE` (or --local; --mark without the tier)
+  -  #9222  c86747a8  waiting  ci                       not marked ready at c86747a8: `research queue ready 9222 --on MACHINE` (or --local; --mark without the tier)
+  -  #9228  c4a83b81  waiting  network-accounting       not marked ready at c4a83b81: `research queue ready 9228 --on MACHINE` (or --local; --mark without the tier)
+  -  #9229  7cab9aeb  waiting  proofs                   not marked ready at 7cab9aeb: `research queue ready 9229 --on MACHINE` (or --local; --mark without the tier)
+  -  #9237  459f5e2d  waiting  proofs                   not marked ready at 459f5e2d: `research queue ready 9237 --on MACHINE` (or --local; --mark without the tier)
+  -  #9240  539f0425  waiting  memory-accounting        not marked ready at 539f0425: `research queue ready 9240 --on MACHINE` (or --local; --mark without the tier)
+  -  #9251  8a5aebc5  waiting  proofs                   not marked ready at 8a5aebc5: `research queue ready 9251 --on MACHINE` (or --local; --mark without the tier)
+  -  #9254  da87cdcc  waiting  circuits                 not marked ready at da87cdcc: `research queue ready 9254 --on MACHINE` (or --local; --mark without the tier)
+  -  #9268  11c43d13  waiting  soundness                not marked ready at 11c43d13: `research queue ready 9268 --on MACHINE` (or --local; --mark without the tier)
+  -  #9282  520a4037  waiting  proofs                   not marked ready at 520a4037: `research queue ready 9282 --on MACHINE` (or --local; --mark without the tier)
+  -  #9305  2d5f7a16  waiting  network-accounting       not marked ready at 2d5f7a16: `research queue ready 9305 --on MACHINE` (or --local; --mark without the tier)
+  -  #9312  b034e9d2  waiting  proofs                   not marked ready at b034e9d2: `research queue ready 9312 --on MACHINE` (or --local; --mark without the tier)
+  -  #9313  19474e53  waiting  proofs                   not marked ready at 19474e53: `research queue ready 9313 --on MACHINE` (or --local; --mark without the tier)
+  -  #9317  0978f5af  waiting  circuits                 not marked ready at 0978f5af: `research queue ready 9317 --on MACHINE` (or --local; --mark without the tier)
+  -  #9318  0e1df5b6  waiting  circuits                 not marked ready at 0e1df5b6: `research queue ready 9318 --on MACHINE` (or --local; --mark without the tier)
+  -  #9319  0e7b13e3  waiting  network-accounting       not marked ready at 0e7b13e3: `research queue ready 9319 --on MACHINE` (or --local; --mark without the tier)
+  -  #9322  a845a7a3  waiting  vllm                     not marked ready at a845a7a3: `research queue ready 9322 --on MACHINE` (or --local; --mark without the tier)
+  -  #9329  c77b01b8  waiting  network-accounting       not marked ready at c77b01b8: `research queue ready 9329 --on MACHINE` (or --local; --mark without the tier)
+  -  #9333  2e6f1977  waiting  network-accounting       not marked ready at 2e6f1977: `research queue ready 9333 --on MACHINE` (or --local; --mark without the tier)
+  -  #9339  f31e7d81  waiting  proofs                   not marked ready at f31e7d81: `research queue ready 9339 --on MACHINE` (or --local; --mark without the tier)
+  -  #9349  1125cf10  waiting  proofs                   not marked ready at 1125cf10: `research queue ready 9349 --on MACHINE` (or --local; --mark without the tier)
+  -  #9350  b782fc88  waiting  network-accounting       not marked ready at b782fc88: `research queue ready 9350 --on MACHINE` (or --local; --mark without the tier)
+  -  #9357  bb527fd2  waiting  proofs                   not marked ready at bb527fd2: `research queue ready 9357 --on MACHINE` (or --local; --mark without the tier)
+  -  #9364  446d8afd  waiting  vllm                     not marked ready at 446d8afd: `research queue ready 9364 --on MACHINE` (or --local; --mark without the tier)
+  -  #9368  0f03244a  waiting  vllm                     not marked ready at 0f03244a: `research queue ready 9368 --on MACHINE` (or --local; --mark without the tier)
+  -  #9369  08740c9d  waiting  network-accounting       not marked ready at 08740c9d: `research queue ready 9369 --on MACHINE` (or --local; --mark without the tier)
+  -  #9371  3da6c052  waiting  circuits                 not marked ready at 3da6c052: `research queue ready 9371 --on MACHINE` (or --local; --mark without the tier)
+  -  #9374  8e09000b  waiting  training                 not marked ready at 8e09000b: `research queue ready 9374 --on MACHINE` (or --local; --mark without the tier)
+  -  #9376  359dd99f  waiting  proofs                   not marked ready at 359dd99f: `research queue ready 9376 --on MACHINE` (or --local; --mark without the tier)
+  -  #9377  cff53ece  waiting  memory-accounting        not marked ready at cff53ece: `research queue ready 9377 --on MACHINE` (or --local; --mark without the tier)
+  -  #9378  a852289e  waiting  network-accounting       not marked ready at a852289e: `research queue ready 9378 --on MACHINE` (or --local; --mark without the tier)
+  -  #9380  c81daa73  waiting  lean                     not marked ready at c81daa73: `research queue ready 9380 --on MACHINE` (or --local; --mark without the tier)
+  -  #9385  58424227  waiting  compute-accounting       not marked ready at 58424227: `research queue ready 9385 --on MACHINE` (or --local; --mark without the tier)
+  -  #9389  352a40c4  waiting  compute-accounting       not marked ready at 352a40c4: `research queue ready 9389 --on MACHINE` (or --local; --mark without the tier)
+  -  #9390  df3b53fa  waiting  circuits                 not marked ready at df3b53fa: `research queue ready 9390 --on MACHINE` (or --local; --mark without the tier)
+  -  #9394  2c2a9863  waiting  top                      not marked ready at 2c2a9863: `research queue ready 9394 --on MACHINE` (or --local; --mark without the tier)
+  -  #9403  a6fe271d  waiting  compute-accounting       not marked ready at a6fe271d: `research queue ready 9403 --on MACHINE` (or --local; --mark without the tier)
+  -  #9407  0542a4f3  waiting  top                      not marked ready at 0542a4f3: `research queue ready 9407 --on MACHINE` (or --local; --mark without the tier)
+  -  #9413  2e217623  waiting  compute-accounting       not marked ready at 2e217623: `research queue ready 9413 --on MACHINE` (or --local; --mark without the tier)
+  -  #9417  3b384b35  waiting  training                 not marked ready at 3b384b35: `research queue ready 9417 --on MACHINE` (or --local; --mark without the tier)
+  -  #9419  1fcd520e  waiting  ci                       contains #9396, which is refused: conflicts with `main` in tools/research/src/research/vqueue_loop.py: merge `main` into the branch and re-mark it
+  -  #9427  b694e1ef  waiting  circuits                 not marked ready at b694e1ef: `research queue ready 9427 --on MACHINE` (or --local; --mark without the tier)
+  -  #9429  792cecd5  waiting  compute-accounting       not marked ready at 792cecd5: `research queue ready 9429 --on MACHINE` (or --local; --mark without the tier)
+  -  #9432  f2d5416b  waiting  compute-accounting       not marked ready at f2d5416b: `research queue ready 9432 --on MACHINE` (or --local; --mark without the tier)
+  -  #9433  29603056  waiting  compute-accounting       not marked ready at 29603056: `research queue ready 9433 --on MACHINE` (or --local; --mark without the tier)
+  -  #9434  e86d890a  waiting  compute-accounting       not marked ready at e86d890a: `research queue ready 9434 --on MACHINE` (or --local; --mark without the tier)
+  -  #9435  353215ae  waiting  proofs                   not marked ready at 353215ae: `research queue ready 9435 --on MACHINE` (or --local; --mark without the tier)
+  -  #9439  ddc19366  waiting  ci                       not marked ready at ddc19366: `research queue ready 9439 --on MACHINE` (or --local; --mark without the tier)
+  -  #9441  1bb432a5  waiting  proofs                   not marked ready at 1bb432a5: `research queue ready 9441 --on MACHINE` (or --local; --mark without the tier)
+  -  #9446  819334ae  waiting  proofs                   not marked ready at 819334ae: `research queue ready 9446 --on MACHINE` (or --local; --mark without the tier)
+  -  #9450  2e149dad  waiting  training                 not marked ready at 2e149dad: `research queue ready 9450 --on MACHINE` (or --local; --mark without the tier)
+  -  #9451  d1e4ca67  waiting  compute-accounting       not marked ready at d1e4ca67: `research queue ready 9451 --on MACHINE` (or --local; --mark without the tier)
+  -  #9452  378fcba9  waiting  proofs                   not marked ready at 378fcba9: `research queue ready 9452 --on MACHINE` (or --local; --mark without the tier)
+  -  #9457  259aadb0  waiting  network-accounting       not marked ready at 259aadb0: `research queue ready 9457 --on MACHINE` (or --local; --mark without the tier)
+  -  #9463  f1ba1f28  waiting  soundness                not marked ready at f1ba1f28: `research queue ready 9463 --on MACHINE` (or --local; --mark without the tier)
+  -  #9466  f21a30f2  waiting  proofs                   not marked ready at f21a30f2: `research queue ready 9466 --on MACHINE` (or --local; --mark without the tier)
+  -  #9471  befbbd5f  waiting  ci                       not marked ready at befbbd5f: `research queue ready 9471 --on MACHINE` (or --local; --mark without the tier)
+  -  #9475  871ab913  waiting  soundness                not marked ready at 871ab913: `research queue ready 9475 --on MACHINE` (or --local; --mark without the tier)
+  -  #9476  ba1eeb95  waiting  benchmarks               not marked ready at ba1eeb95: `research queue ready 9476 --on MACHINE` (or --local; --mark without the tier)
+  -  #9477  ea436b56  waiting  compute-accounting       not marked ready at ea436b56: `research queue ready 9477 --on MACHINE` (or --local; --mark without the tier)
+  -  #9480  496aa183  waiting  proofs                   not marked ready at 496aa183: `research queue ready 9480 --on MACHINE` (or --local; --mark without the tier)
+  -  #9483  ee58fefe  waiting  kernels                  not marked ready at ee58fefe: `research queue ready 9483 --on MACHINE` (or --local; --mark without the tier)
+  -  #9486  93817fbb  waiting  proofs                   not marked ready at 93817fbb: `research queue ready 9486 --on MACHINE` (or --local; --mark without the tier)
+  -  #9488  75bbfd75  waiting  memory-accounting        not marked ready at 75bbfd75: `research queue ready 9488 --on MACHINE` (or --local; --mark without the tier)
+  -  #9489  c5840ece  waiting  kernels                  not marked ready at c5840ece: `research queue ready 9489 --on MACHINE` (or --local; --mark without the tier)
+  -  #9491  5043cff7  waiting  network-accounting       not marked ready at 5043cff7: `research queue ready 9491 --on MACHINE` (or --local; --mark without the tier)
+  -  #9492  63088686  waiting  proofs                   not marked ready at 63088686: `research queue ready 9492 --on MACHINE` (or --local; --mark without the tier)
+  -  #9493  e19024da  waiting  vllm                     not marked ready at e19024da: `research queue ready 9493 --on MACHINE` (or --local; --mark without the tier)
+  -  #9494  ebc94575  waiting  proofs                   not marked ready at ebc94575: `research queue ready 9494 --on MACHINE` (or --local; --mark without the tier)
+  -  #9501  382ff836  waiting  network-accounting       not marked ready at 382ff836: `research queue ready 9501 --on MACHINE` (or --local; --mark without the tier)
+  -  #9502  9ddabfea  waiting  training                 not marked ready at 9ddabfea: `research queue ready 9502 --on MACHINE` (or --local; --mark without the tier)
+  -  #9503  239477cc  waiting  vllm                     not marked ready at 239477cc: `research queue ready 9503 --on MACHINE` (or --local; --mark without the tier)
+  -  #9504  e30d3803  waiting  vllm                     not marked ready at e30d3803: `research queue ready 9504 --on MACHINE` (or --local; --mark without the tier)
+  -  #9508  f9cf4032  waiting  infra                    not marked ready at f9cf4032: `research queue ready 9508 --on MACHINE` (or --local; --mark without the tier)
+  -  #9509  ec96845a  waiting  compute-accounting       not marked ready at ec96845a: `research queue ready 9509 --on MACHINE` (or --local; --mark without the tier)
+  -  #9516  12289fa4  waiting  vllm                     not marked ready at 12289fa4: `research queue ready 9516 --on MACHINE` (or --local; --mark without the tier)
+  -  #9519  d7a37667  waiting  training                 not marked ready at d7a37667: `research queue ready 9519 --on MACHINE` (or --local; --mark without the tier)
+  -  #9520  5db6bb70  waiting  soundness                not marked ready at 5db6bb70: `research queue ready 9520 --on MACHINE` (or --local; --mark without the tier)
+  -  #9522  ccf47197  waiting  compute-accounting       not marked ready at ccf47197: `research queue ready 9522 --on MACHINE` (or --local; --mark without the tier)
+  -  #9524  e37a931d  waiting  soundness                not marked ready at e37a931d: `research queue ready 9524 --on MACHINE` (or --local; --mark without the tier)
+  -  #9526  0fc74f2d  waiting  proofs                   not marked ready at 0fc74f2d: `research queue ready 9526 --on MACHINE` (or --local; --mark without the tier)
+  -  #9527  c837a39a  waiting  proofs                   not marked ready at c837a39a: `research queue ready 9527 --on MACHINE` (or --local; --mark without the tier)
+  -  #9531  b16502a2  waiting  training                 not marked ready at b16502a2: `research queue ready 9531 --on MACHINE` (or --local; --mark without the tier)
+  -  #9533  2c431b69  waiting  network-accounting       not marked ready at 2c431b69: `research queue ready 9533 --on MACHINE` (or --local; --mark without the tier)
+  -  #9535  2135d432  waiting  compute-accounting       not marked ready at 2135d432: `research queue ready 9535 --on MACHINE` (or --local; --mark without the tier)
+  -  #9536  5e8fe717  waiting  lean                     not marked ready at 5e8fe717: `research queue ready 9536 --on MACHINE` (or --local; --mark without the tier)
+  -  #9541  f1b9feaa  waiting  network-accounting       not marked ready at f1b9feaa: `research queue ready 9541 --on MACHINE` (or --local; --mark without the tier)
+  -  #9542  d6fc43e9  waiting  kernels                  not marked ready at d6fc43e9: `research queue ready 9542 --on MACHINE` (or --local; --mark without the tier)
+  -  #9545  e05a9bca  waiting  lean                     not marked ready at e05a9bca: `research queue ready 9545 --on MACHINE` (or --local; --mark without the tier)
+  -  #9547  7c92f78e  waiting  network-accounting       not marked ready at 7c92f78e: `research queue ready 9547 --on MACHINE` (or --local; --mark without the tier)
+  -  #9548  e25355c6  waiting  compute-research         not marked ready at e25355c6: `research queue ready 9548 --on MACHINE` (or --local; --mark without the tier)
+  -  #9554  0fb0e751  waiting  ci                       not marked ready at 0fb0e751: `research queue ready 9554 --on MACHINE` (or --local; --mark without the tier)
+  -  #9555  df901c23  waiting  proofs                   not marked ready at df901c23: `research queue ready 9555 --on MACHINE` (or --local; --mark without the tier)
+  -  #9558  102ad1d7  waiting  training                 not marked ready at 102ad1d7: `research queue ready 9558 --on MACHINE` (or --local; --mark without the tier)
+  -  #9560  a2f43c29  waiting  top                      not marked ready at a2f43c29: `research queue ready 9560 --on MACHINE` (or --local; --mark without the tier)
+  -  #9565  fe31b503  waiting  training                 not marked ready at fe31b503: `research queue ready 9565 --on MACHINE` (or --local; --mark without the tier)
+  -  #9568  597ac0a4  waiting  compute-accounting       not marked ready at 597ac0a4: `research queue ready 9568 --on MACHINE` (or --local; --mark without the tier)
+  -  #9569  fe800897  waiting  circuits                 not marked ready at fe800897: `research queue ready 9569 --on MACHINE` (or --local; --mark without the tier)
+  -  #9572  54819b2c  waiting  ci                       not marked ready at 54819b2c: `research queue ready 9572 --on MACHINE` (or --local; --mark without the tier)
+  -  #9574  9a20c71e  waiting  proofs                   not marked ready at 9a20c71e: `research queue ready 9574 --on MACHINE` (or --local; --mark without the tier)
+  -  #9575  18c20e0e  waiting  top                      not marked ready at 18c20e0e: `research queue ready 9575 --on MACHINE` (or --local; --mark without the tier)
+  -  #9576  5d5c7183  waiting  proofs                   not marked ready at 5d5c7183: `research queue ready 9576 --on MACHINE` (or --local; --mark without the tier)
+  -  #9577  a53821ee  waiting  compute-accounting       not marked ready at a53821ee: `research queue ready 9577 --on MACHINE` (or --local; --mark without the tier)
+  -  #9578  e638267a  waiting  training                 not marked ready at e638267a: `research queue ready 9578 --on MACHINE` (or --local; --mark without the tier)
+  -  #9579  f658c8f5  waiting  compute-accounting       not marked ready at f658c8f5: `research queue ready 9579 --on MACHINE` (or --local; --mark without the tier)
+  -  #9580  96478388  waiting  ci                       contains #9396, which is refused: conflicts with `main` in tools/research/src/research/vqueue_loop.py: merge `main` into the branch and re-mark it
+  -  #9581  8ba1af43  waiting  proofs                   not marked ready at 8ba1af43: `research queue ready 9581 --on MACHINE` (or --local; --mark without the tier)
+  -  #9583  05ac7144  waiting  memory-accounting        not marked ready at 05ac7144: `research queue ready 9583 --on MACHINE` (or --local; --mark without the tier)
+  -  #9588  1f441a6b  waiting  vllm                     not marked ready at 1f441a6b: `research queue ready 9588 --on MACHINE` (or --local; --mark without the tier)
+  -  #9589  7e7a8b29  waiting  network-accounting       not marked ready at 7e7a8b29: `research queue ready 9589 --on MACHINE` (or --local; --mark without the tier)
+  -  #9592  69b38085  waiting  lean                     not marked ready at 69b38085: `research queue ready 9592 --on MACHINE` (or --local; --mark without the tier)
+  -  #9593  d8c696ed  waiting  proofs                   not marked ready at d8c696ed: `research queue ready 9593 --on MACHINE` (or --local; --mark without the tier)
+  -  #9594  9049e2c5  waiting  proofs                   not marked ready at 9049e2c5: `research queue ready 9594 --on MACHINE` (or --local; --mark without the tier)
+  -  #9595  4f6a8f3d  waiting  proofs                   not marked ready at 4f6a8f3d: `research queue ready 9595 --on MACHINE` (or --local; --mark without the tier)
+  -  #9596  7764f46a  waiting  proofs                   not marked ready at 7764f46a: `research queue ready 9596 --on MACHINE` (or --local; --mark without the tier)
+  -  #9597  47fe2fd3  waiting  soundness                not marked ready at 47fe2fd3: `research queue ready 9597 --on MACHINE` (or --local; --mark without the tier)
+  -  #9598  044c5282  waiting  compute-research         not marked ready at 044c5282: `research queue ready 9598 --on MACHINE` (or --local; --mark without the tier)
+  -  #9599  326de72f  waiting  network-accounting       not marked ready at 326de72f: `research queue ready 9599 --on MACHINE` (or --local; --mark without the tier)
+  -  #9600  38063014  waiting  compute-research         not marked ready at 38063014: `research queue ready 9600 --on MACHINE` (or --local; --mark without the tier)
+  -  #9601  e1352578  waiting  memory-accounting        not marked ready at e1352578: `research queue ready 9601 --on MACHINE` (or --local; --mark without the tier)
+  -  #9602  6b8605d7  waiting  proofs                   not marked ready at 6b8605d7: `research queue ready 9602 --on MACHINE` (or --local; --mark without the tier)
+  -  #9603  8801fc5b  waiting  kernels                  not marked ready at 8801fc5b: `research queue ready 9603 --on MACHINE` (or --local; --mark without the tier)
+  -  #9604  dd42eff0  waiting  compute-accounting       not marked ready at dd42eff0: `research queue ready 9604 --on MACHINE` (or --local; --mark without the tier)
+  -  #8436  194f459e  refused  ci                       conflicts with `main` in tools/research/src/research/vqueue_loop.py, tools/research/tests/test_vqueue_loop.py: merge `main` into the branch and re-mark it
+  -  #8756  700b6dde  refused  ci                       conflicts with `main` in tools/research/src/research/drive.py, tools/research/src/research/vqueue_loop.py, tools/research/tests/test_drive_executor.py, tools/research/tests/test_vqueue_loop.py, tools/verity/graph/README.md, tools/verity/graph/tasks.toml, tools/verity/graph/tests/test_graph.py, tools/verity/graph/tests/test_lean_listing.py, tools/verity/graph/tests/test_lean_runner.py, tools/verity/graph/verity_graph/families/lean_lock.py, tools/verity/graph/verity_graph/runners/lean_lock.py, tools/verity/graph/verity_graph/runners/lean_suites.py: merge `main` into the branch and re-mark it
+  -  #9176  99f2f3ba  refused  proofs                   conflicts with `main` in benchmarks/one_stage/tests/test_two_stage_second.py, benchmarks/one_stage/two_stage_small.py, benchmarks/one_stage/two_stage_small.sh, verity/protocols/spot/verifier/lean/tests/test_difftest.py: merge `main` into the branch and re-mark it
+  -  #9253  cf5587e2  refused  proofs                   conflicts with `main` in verity/protocols/flock/verifier/FlockVerify.lean: merge `main` into the branch and re-mark it
+  -  #9363  f3ffe4e2  refused  lean                     its head carries 187 merges of an old `next` that `main` doesn't hold, of PRs closed unlanded (3fc9da7a2056 (#5584), 2c2289d6355c (#6769), eb7f06d7047e (#6625) and 184 more), which would land with it: retarget the PR to the demo branch it builds on, or restack its own commits onto `main` (a branch from `origin/main` with each cherry-picked, and the branch of each open PR it needs merged, never `next`) and mark that head
+  -  #9396  ebbfff99  refused  ci                       conflicts with `main` in tools/research/src/research/vqueue_loop.py: merge `main` into the branch and re-mark it
+  -  #9415  6567a712  refused  ci                       conflicts with `main` in tools/research/src/research/vqueue.py, tools/research/src/research/vqueue_loop.py: merge `main` into the branch and re-mark it
+  -  #9462  0321d0a5  refused  ci                       conflicts with `main` in tools/research/src/research/vqueue_loop.py: merge `main` into the branch and re-mark it
+  -  #9479  bc529962  refused  proofs                   conflicts with `main` in benchmarks/spot_figures/pyproject.toml: merge `main` into the branch and re-mark it
+  -  #9495  71190382  refused  ci                       conflicts with `main` in tools/research/tests/test_vqueue_loop.py: merge `main` into the branch and re-mark it
+  -  #9556  e0b946eb  refused  ci                       conflicts with `main` in .agents/skills/team/SKILL.md, tools/move/README.md, tools/research/src/research/queue.py: merge `main` into the branch and re-mark it
+
+no Linear issue named (14 of 275 open PRs; add a `Refs KEY` or `Issue: none: REASON` line with `research queue edit N --body-file F`):
+  #6901  ci                       repo_lane_text.json pruned to what main holds (346 files, 905 sites)
+  #7200  ci                       test_flock_json: the three Lean.Json.parse callers no proof reads, in ALLOWED (checked's repository red)
+  #7442  bc-629a532d-3c1f-447e-b1 benchmarks/proof_overhead: proof overhead against proof-block output width
+  #8719  ci                       check: --candidate leaves out the tests tools/verity/candidate-deselect.txt names, in a candidate's check only
+  #8900  proofs                   SUPERSEDED by #8873's new head (close): the first-hit term with every call charged as 513 compressions
+  #9010  -                        covert_witness scorer: a search record's tokens a step restated, and the one command that rebuilds the published tables
+  #9080  proofs                   Lean: where each gate's value sits at the connected program of a two-stage audit, and the sessions' openings from it (two new files, no statement changes)
+  #9114  bc-b43da88b-5d25-4463-9b redteam/README.md: the red team's page for training (a training circuit and its output in, its loss and slowdown out)
+  #9369  network-accounting       Network certifier: a device state for each key, a certified start for each session, and the host's raw clock
+  #9407  top                      Layout: the difftest harness to tools/difftest/ and the challenger service to spot/device/live_challenger/, two certified moves staged
+  #9458  proofs                   One-stage's accept publishes complete: whether every verdict ran
+  #9480  proofs                   Two-stage audit of GLM-5.3's greedy select as its 20 units: the serve's layout, the driver's design and the rehearsal
+  #9545  lean                     The network record difftest's helper reads `Blocks.of` in either form
+  #9596  proofs                   research auto's two probe tests no longer read the machine's own hold file

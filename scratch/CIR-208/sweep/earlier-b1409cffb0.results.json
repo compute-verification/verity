@@ -1,0 +1,6033 @@
+{
+ "baseline": {
+  "base": "b1409cffb0",
+  "heads": [
+   "8c11a1d5ab"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.80s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "controlA": {
+  "base": "b1409cffb0",
+  "heads": [
+   "996048a54d"
+  ],
+  "conflicts": {},
+  "pytest": "1 failed, 2 passed in 5.09s",
+  "pytest_failed": [
+   "test_no_new_superseded_versions"
+  ],
+  "superseded": 240,
+  "entries": 239,
+  "new": [
+   {
+    "id": "F32Sqrt_v1",
+    "file": "verity/definitions/registry/ref_prims.py",
+    "by": "F32Sqrt_v2",
+    "boolean": false
+   }
+  ],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "controlB": {
+  "base": "b1409cffb0",
+  "heads": [
+   "490ac07613"
+  ],
+  "conflicts": {},
+  "pytest": "1 failed, 2 passed in 4.61s",
+  "pytest_failed": [
+   "test_no_new_superseded_versions"
+  ],
+  "superseded": 239,
+  "entries": 238,
+  "new": [
+   {
+    "id": "NvLogf_v2",
+    "file": "verity/definitions/registry/topp_word_gates.py",
+    "by": "NvLogf_v4",
+    "boolean": false
+   }
+  ],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-5632": {
+  "base": "b1409cffb0",
+  "heads": [
+   "419fc713e8"
+  ],
+  "conflicts": {
+   "419fc713e8": [
+    "Security/lean-audit.json"
+   ]
+  }
+ },
+ "pr-5790": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5dac339304"
+  ],
+  "conflicts": {
+   "5dac339304": [
+    "Security/Properties/lean-audit.json",
+    "security/Properties/Pouw/Period.lean"
+   ]
+  }
+ },
+ "pr-6856": {
+  "base": "b1409cffb0",
+  "heads": [
+   "6f4b60c980"
+  ],
+  "conflicts": {
+   "6f4b60c980": [
+    ".agents/skills/asking-daniel/SKILL.md",
+    ".agents/skills/authoring-skills/SKILL.md",
+    ".agents/skills/coordinating/SKILL.md",
+    ".agents/skills/friction/SKILL.md",
+    ".agents/skills/kernel-engineering/SKILL.md",
+    ".agents/skills/process-design/SKILL.md",
+    ".agents/skills/team/SKILL.md",
+    ".agents/skills/testing/SKILL.md",
+    ".agents/skills/using-slack/SKILL.md",
+    ".agents/skills/writing-runs/SKILL.md",
+    "AGENTS.md",
+    "GLOSSARY.md",
+    "infra/slack-events/README.md",
+    "pyproject.toml",
+    "tests/test_agent_guard_hook.py",
+    "tests/test_boundaries.py",
+    "tests/test_infra_paths.py",
+    "tools/agent-guard/boot.sh",
+    "tools/agent-guard/git_guard.sh",
+    "tools/agent-guard/inbox.py",
+    "tools/agent-guard/install.sh",
+    "tools/agent-guard/oom_watch.py",
+    "tools/agent-guard/shell_hook.py",
+    "tools/agent-guard/task_hook.py",
+    "tools/agent-guard/test_git_guard.sh",
+    "tools/agent-guard/tests/test_agent_guard_boot.py",
+    "tools/agent-guard/tests/test_agent_guard_oom.py",
+    "tools/agent-guard/tests/test_task_hook.py",
+    "tools/agent-guard/worktree_guard.py",
+    "tools/research/src/research/store/README.md",
+    "tools/verity/check/README.md",
+    "verity/core/__init__.py",
+    "verity/difftest/README.md",
+    "verity/protocols/certifier/verifier/README.md"
+   ]
+  }
+ },
+ "pr-6901": {
+  "base": "b1409cffb0",
+  "heads": [
+   "41fed65e09"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 5.12s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-7200": {
+  "base": "b1409cffb0",
+  "heads": [
+   "841483b0c0"
+  ],
+  "conflicts": {
+   "841483b0c0": [
+    "tests/test_flock_json.py"
+   ]
+  }
+ },
+ "pr-7375": {
+  "base": "b1409cffb0",
+  "heads": [
+   "584cc2ae09"
+  ],
+  "conflicts": {
+   "584cc2ae09": [
+    "AGENTS.md",
+    "pyproject.toml",
+    "tests/test_boundaries.py"
+   ]
+  }
+ },
+ "pr-7378": {
+  "base": "b1409cffb0",
+  "heads": [
+   "1027d5a6ce"
+  ],
+  "conflicts": {
+   "1027d5a6ce": [
+    "ARCHITECTURE.md",
+    "Security/Definitions/Hash.lean",
+    "Security/Definitions/Pouw.lean",
+    "Security/Definitions/Pouw/Assumptions.lean",
+    "Security/Definitions/Pouw/Guarantees.lean",
+    "Security/Proofs/Pouw.lean",
+    "Security/lean-audit.json",
+    "benchmarks/pouw/contents/paths/np_kernel.toml",
+    "benchmarks/pouw/np_kernel/run.sh",
+    "benchmarks/pouw/tests/test_np_kernel.py",
+    "security/Definitions/Hash/Keyed.lean",
+    "security/Definitions/Pouw/Assumptions/LeadCommit.lean",
+    "security/Definitions/Pouw/Guarantees/KeyedLeaf.lean",
+    "security/Definitions/Pouw/KeyedLeaf.lean",
+    "security/Proofs/Pouw/Salt.lean",
+    "security/Proofs/Pouw/Salt/Witness.lean",
+    "verity/protocols/pouw/verifier/salt.py",
+    "verity/protocols/pouw/verifier/serving.py",
+    "verity/protocols/pouw/verifier/tests/test_pouw_salt.py"
+   ]
+  }
+ },
+ "pr-7442": {
+  "base": "b1409cffb0",
+  "heads": [
+   "565e60f5e6"
+  ],
+  "conflicts": {
+   "565e60f5e6": [
+    "benchmarks/flock_s8_block/README.md",
+    "benchmarks/flock_s8_block/program.py",
+    "benchmarks/flock_s8_block/run.sh"
+   ]
+  }
+ },
+ "pr-7605": {
+  "base": "b1409cffb0",
+  "heads": [
+   "4e11f72418"
+  ],
+  "conflicts": {
+   "4e11f72418": [
+    "tools/research/src/research/goals.py",
+    "tools/research/src/research/queue.py",
+    "tools/research/tests/conftest.py"
+   ]
+  }
+ },
+ "pr-7850": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ed27bb143d"
+  ],
+  "conflicts": {
+   "ed27bb143d": [
+    ".agents/skills/friction/SKILL.md",
+    "AGENTS.md",
+    "ARCHITECTURE.md",
+    "GLOSSARY.md",
+    "Security/Definitions/Pouw.lean",
+    "adapters/vllm/tests/protocols/test_pouw_lead.py",
+    "adapters/vllm/tests/protocols/test_protocol_options.py",
+    "adapters/vllm/verity_vllm/protocols/__init__.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
+    "benchmarks/datacenter/README.md",
+    "benchmarks/datacenter/datacenter/logical.py",
+    "benchmarks/harness/verity_bench/vllm/commit_arm.py",
+    "benchmarks/one_stage/a5.py",
+    "benchmarks/one_stage/a5_coins.py",
+    "benchmarks/one_stage/challenger_party.py",
+    "benchmarks/one_stage/interfaces/README.md",
+    "benchmarks/one_stage/interfaces/tests/test_block_record.py",
+    "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py",
+    "benchmarks/one_stage/served_composite.sh",
+    "benchmarks/one_stage/served_integrity.py",
+    "benchmarks/one_stage/served_verdicts.py",
+    "benchmarks/one_stage/tests/test_a5_case_v2.py",
+    "benchmarks/pouw/h1_prove/job.sh",
+    "benchmarks/pouw/h1_prove/recorded.py",
+    "benchmarks/prove_path/e2e_chains/README.md",
+    "benchmarks/rho/README.md",
+    "demos/README.md",
+    "demos/lifecycle/README.md",
+    "demos/lifecycle/lifecycle.py",
+    "demos/onsite_served/README.md",
+    "demos/vllm/README.md",
+    "examples/h200/README.md",
+    "examples/h200/e2e_h200/legs.py",
+    "integrations/vllm/README.md",
+    "security/Definitions/Accounting/JointPeriod.lean",
+    "security/Definitions/Claims/Sampling.lean",
+    "security/Definitions/Nci/Guarantees/Remote.lean",
+    "security/Definitions/Nci/Guarantees/RemotePeriod.lean",
+    "security/Definitions/Pouw/Guarantees/Window.lean",
+    "security/Proofs/Properties/Spot.lean",
+    "security/Proofs/Properties/Verity/Recursive.lean",
+    "security/Proofs/Properties/Verity/Recursive/Audit.lean",
+    "security/Proofs/Properties/Verity/Sampled.lean",
+    "security/Proofs/Properties/Verity/SampledDraw.lean",
+    "security/Proofs/Properties/Verity/Subprotocols.lean",
+    "security/Properties/Remote.lean",
+    "security/Properties/Spot.lean",
+    "security/Properties/Spot/Draw.lean",
+    "security/Properties/Verity/Game.lean",
+    "security/Properties/Verity/README.md",
+    "security/README.md",
+    "tools/verity/cli/tests/step0.py",
+    "verity/README.md",
+    "verity/commitments/identity/Identity/Domains.lean",
+    "verity/core/protocols/__init__.py",
+    "verity/core/protocols/sampled_proofs/parties.py",
+    "verity/core/service/sampled_proofs/SampledProofs/OneStageZk.lean",
+    "verity/difftest/tests/test_flock_json_port.py",
+    "verity/ml/commitments/window.py",
+    "verity/protocols/certifier/verifier/README.md",
+    "verity/protocols/flock/prover/python/verity_flock/rec_circuits.py",
+    "verity/protocols/flock/prover/python/verity_flock/rec_live.py",
+    "verity/protocols/flock/verifier/Flock/WindowRecord.lean",
+    "verity/protocols/inference_only/nci/tiers.py",
+    "verity/protocols/inference_only/rho/tests/test_envelopes.py",
+    "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Protocol.lean",
+    "verity/protocols/onsite/verifier/CoreOnsite.lean",
+    "verity/protocols/pouw/prover/circuit/__init__.py",
+    "verity/protocols/pouw/prover/circuit/pc4.py",
+    "verity/protocols/pouw/prover/circuit/pc8.py",
+    "verity/protocols/pouw/verifier/README.md",
+    "verity/protocols/recursion/verifier/recursive/VStarRecursive/Protocol.lean",
+    "verity/protocols/recursion/verifier/recursive/VStarRecursive/Sampled.lean",
+    "verity/protocols/remote/verifier/CoreRemote.lean",
+    "verity/protocols/remote/verifier/README.md",
+    "verity/protocols/remote/verifier/composition/README.md",
+    "verity/protocols/remote/verifier/composition/tests/reference.py",
+    "verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py",
+    "verity/protocols/spot/verifier/README.md",
+    "verity/protocols/spot/verifier/lean/tests/test_difftest.py"
+   ]
+  }
+ },
+ "pr-7952": {
+  "base": "b1409cffb0",
+  "heads": [
+   "4d3d22fda0"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.92s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8003": {
+  "base": "b1409cffb0",
+  "heads": [
+   "9c32981736"
+  ],
+  "conflicts": {
+   "9c32981736": [
+    "benchmarks/prove_path/records_audit.py",
+    "benchmarks/spot_proved/pyproject.toml"
+   ]
+  }
+ },
+ "pr-8048": {
+  "base": "b1409cffb0",
+  "heads": [
+   "00e8774d8d"
+  ],
+  "conflicts": {
+   "00e8774d8d": [
+    "adapters/vllm/verity_vllm/pipeline/serving_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/tp/serving_rows.py",
+    "adapters/vllm/verity_vllm/program/predict/dsa.py",
+    "adapters/vllm/verity_vllm/program/predict/steps.py",
+    "verity/definitions/requirement/pyproject.toml"
+   ]
+  }
+ },
+ "pr-8120": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b6e0c1dc5d"
+  ],
+  "conflicts": {
+   "b6e0c1dc5d": [
+    "verity/protocols/flock/verifier/Flock/Test/FoldT.lean"
+   ]
+  }
+ },
+ "pr-8139": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f51a277c6e"
+  ],
+  "conflicts": {
+   "f51a277c6e": [
+    "benchmarks/verifier_cost/whole_run.py",
+    "verity/protocols/pous/lean/TRUSTED.sha256",
+    "verity/protocols/spot/verifier/lean/Spot/Run.lean",
+    "verity/protocols/spot/verifier/lean/tests/test_challenger_difftest.py",
+    "verity/protocols/spot/verifier/lean/tests/test_difftest.py",
+    "verity/protocols/spot/verifier/tests/fake_challenger.py"
+   ]
+  }
+ },
+ "pr-8177": {
+  "base": "b1409cffb0",
+  "heads": [
+   "6dd74f50be"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.83s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8179": {
+  "base": "b1409cffb0",
+  "heads": [
+   "edfbacf27b"
+  ],
+  "conflicts": {
+   "edfbacf27b": [
+    "Security/Proofs/Flock/Bridge/V5/Refused.lean",
+    "benchmarks/pouw/h1_lanes/job.sh",
+    "benchmarks/pouw/h1_lanes/leaf.py",
+    "benchmarks/pouw/h1_prove/h1unit.py",
+    "benchmarks/pouw/tests/test_h1_pin.py",
+    "security/Proofs/Flock/Bridge/V5.lean",
+    "security/Proofs/Flock/Bridge/V5/Accepted.lean",
+    "verity/protocols/flock/verifier/Flock/ProvedScope.lean"
+   ]
+  }
+ },
+ "pr-8221": {
+  "base": "b1409cffb0",
+  "heads": [
+   "219562ad35"
+  ],
+  "conflicts": {
+   "219562ad35": [
+    "tools/research/src/research/drive.py",
+    "tools/research/tests/test_drive_checked.py"
+   ]
+  }
+ },
+ "pr-8327": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e7d7b2efa1"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.91s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8330": {
+  "base": "b1409cffb0",
+  "heads": [
+   "43ef89f982"
+  ],
+  "conflicts": {
+   "43ef89f982": [
+    "adapters/vllm/pyproject.toml",
+    "benchmarks/one_stage/pyproject.toml",
+    "benchmarks/pouw/pyproject.toml",
+    "tools/verity/graph/README.md",
+    "tools/verity/graph/tasks.toml",
+    "tools/verity/graph/tests/test_build.py",
+    "tools/verity/graph/verity_graph/families/build.py",
+    "tools/verity/graph/verity_graph/families/test_file.py",
+    "tools/verity/graph/verity_graph/runners/lean_build.py",
+    "tools/verity/graph/verity_graph/runners/lean_suites.py",
+    "verity/core/difftest/pyproject.toml",
+    "verity/core/protocols/pouw/lean/check/pyproject.toml",
+    "verity/core/protocols/remote_bandwidth/lean/pyproject.toml",
+    "verity/protocols/certifier/verifier/network/pyproject.toml",
+    "verity/protocols/flock/prover/pyproject.toml",
+    "verity/protocols/remote/verifier/composition/pyproject.toml"
+   ]
+  }
+ },
+ "pr-8363": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a81a1b11ea"
+  ],
+  "conflicts": {
+   "a81a1b11ea": [
+    "security/Proofs/Flock/SpotFlock/Code.lean",
+    "security/Proofs/Flock/SpotFlock/Instance.lean",
+    "security/Proofs/Flock/SpotFlock/InstanceAddresses.lean",
+    "security/Proofs/Flock/SpotFlock/InstanceBoundary.lean",
+    "security/Proofs/Flock/SpotFlock/InstanceCodes.lean",
+    "security/Proofs/Flock/SpotFlock/InstanceReads.lean",
+    "security/Proofs/Flock/SpotFlock/InstanceRecords.lean",
+    "security/Proofs/Flock/SpotFlock/InstanceRun.lean",
+    "security/Proofs/Flock/SpotFlock/OneTable.lean",
+    "verity/protocols/spot/verifier/lean/Spot/SecondStage.lean"
+   ]
+  }
+ },
+ "pr-8395": {
+  "base": "b1409cffb0",
+  "heads": [
+   "06965f7613"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.90s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8396": {
+  "base": "b1409cffb0",
+  "heads": [
+   "08a65eced1"
+  ],
+  "conflicts": {
+   "08a65eced1": [
+    "adapters/vllm/tests/pipeline/commit_arb_gpu.py",
+    "adapters/vllm/verity_vllm/pipeline/cli.py"
+   ]
+  }
+ },
+ "pr-8406": {
+  "base": "b1409cffb0",
+  "heads": [
+   "3d8e9aa8c0"
+  ],
+  "conflicts": {
+   "3d8e9aa8c0": [
+    "benchmarks/two_stage/tests/TwoGuard.lean",
+    "fixtures/artifacts.json",
+    "security/Proofs/Flock/SpotFlock/Code.lean",
+    "security/Proofs/Flock/SpotFlock/Sessions.lean"
+   ]
+  }
+ },
+ "pr-8414": {
+  "base": "b1409cffb0",
+  "heads": [
+   "3597240567"
+  ],
+  "conflicts": {
+   "3597240567": [
+    "verity/protocols/spot/verifier/one_stage/partition.py",
+    "verity/protocols/spot/verifier/tests/test_two_stage.py"
+   ]
+  }
+ },
+ "pr-8415": {
+  "base": "b1409cffb0",
+  "heads": [
+   "720ef04b33"
+  ],
+  "conflicts": {
+   "720ef04b33": [
+    "benchmarks/network_e2e/encodings/cache_pool_vectors.py",
+    "benchmarks/network_e2e/encodings/compile_slice_pool.py",
+    "benchmarks/network_e2e/encodings/pyproject.toml",
+    "benchmarks/network_e2e/encodings/tests/test_cache_step_v2.py",
+    "benchmarks/network_e2e/encodings/tests/test_compile_slice_pool.py",
+    "fixtures/artifacts.json",
+    "tests/test_lean_vocabulary.py",
+    "tools/verity/circuit_check/pyproject.toml",
+    "tools/verity/circuit_check/reads/bindings.json",
+    "tools/verity/circuit_check/reads/loaded.json",
+    "tools/verity/circuit_check/reads/registries.json",
+    "verity/protocols/certifier/prover/cache_step_v2.circuit-check.json",
+    "verity/protocols/certifier/prover/cache_step_v2.circuit-check.py",
+    "verity/protocols/certifier/prover/cache_step_v2.py",
+    "verity/protocols/certifier/prover/compile_slice_v2.circuit-check.json",
+    "verity/protocols/certifier/prover/compile_slice_v2.circuit-check.py",
+    "verity/protocols/certifier/prover/compile_slice_v2.py",
+    "verity/protocols/certifier/prover/compile_slice_v3.circuit-check.json",
+    "verity/protocols/certifier/prover/compile_slice_v3.circuit-check.py",
+    "verity/protocols/certifier/prover/compile_slice_v3.py",
+    "verity/protocols/certifier/prover/compile_slice_v4.circuit-check.py",
+    "verity/protocols/certifier/prover/compile_slice_v4.py",
+    "verity/protocols/certifier/prover/compile_slice_v5.circuit-check.py",
+    "verity/protocols/certifier/prover/compile_slice_v5.py",
+    "verity/protocols/certifier/prover/compile_slice_v6.circuit-check.py",
+    "verity/protocols/certifier/verifier/README.md",
+    "verity/protocols/certifier/verifier/replay_step.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_cache_step_v2.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_compile_slice_v2.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_compile_slice_v3.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_compile_slice_v4.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_compile_slice_v5.py"
+   ]
+  }
+ },
+ "pr-8436": {
+  "base": "b1409cffb0",
+  "heads": [
+   "194f459e9a"
+  ],
+  "conflicts": {
+   "194f459e9a": [
+    "tools/research/src/research/vqueue_loop.py",
+    "tools/research/tests/test_vqueue_loop.py"
+   ]
+  }
+ },
+ "pr-8439": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a0c7bd5aae"
+  ],
+  "conflicts": {
+   "a0c7bd5aae": [
+    "benchmarks/ppl/README.md",
+    "benchmarks/ppl/frontier_plot.py"
+   ]
+  }
+ },
+ "pr-8449": {
+  "base": "b1409cffb0",
+  "heads": [
+   "de834106fd"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.94s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8455": {
+  "base": "b1409cffb0",
+  "heads": [
+   "6d11ce6c56"
+  ],
+  "conflicts": {
+   "6d11ce6c56": [
+    ".agents/skills/using-slack/registry.json",
+    "benchmarks/one_stage/a5.py"
+   ]
+  }
+ },
+ "pr-8460": {
+  "base": "b1409cffb0",
+  "heads": [
+   "9f32340577"
+  ],
+  "conflicts": {
+   "9f32340577": [
+    ".agents/skills/coordinating/SKILL.md",
+    ".agents/skills/friction/SKILL.md",
+    ".agents/skills/lean-proofs/SKILL.md",
+    ".agents/skills/using-slack/registry.json",
+    "AGENTS.md",
+    "ARCHITECTURE.md",
+    "GLOSSARY.md",
+    "Security/Definitions.lean",
+    "Security/Definitions/Accounting.lean",
+    "Security/Definitions/Accounting/Guarantees.lean",
+    "Security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
+    "Security/Definitions/Accounting/RateAuditHorizon.lean",
+    "Security/Definitions/Population/DrawPressure.lean",
+    "Security/Definitions/Pouw.lean",
+    "Security/Definitions/Pouw/Assumptions.lean",
+    "Security/Definitions/Pouw/Guarantees.lean",
+    "Security/Models.lean",
+    "Security/Proofs/Accounting.lean",
+    "Security/Proofs/Accounting/RateAudit/Horizon.lean",
+    "Security/Proofs/Core.lean",
+    "Security/Proofs/Flock.lean",
+    "Security/Proofs/Flock/Bridge.lean",
+    "Security/Proofs/Flock/Bridge/PopMatches.lean",
+    "Security/Proofs/Flock/Bridge/V5/Statement.lean",
+    "Security/Proofs/Flock/C3.lean",
+    "Security/Proofs/Flock/Claims.lean",
+    "Security/Proofs/Flock/Claims/Sampling.lean",
+    "Security/Proofs/Flock/Recursive.lean",
+    "Security/Proofs/Flock/Soundness.lean",
+    "Security/Proofs/Flock/Soundness/Audit/Partitioning/Model.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Composed.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/HiddenExec/RowsAtHP.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/HiddenExec/SitesP.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJP.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkReg.lean",
+    "Security/Proofs/NetworkCertifier.lean",
+    "Security/Proofs/Population/DrawPressure.lean",
+    "Security/Proofs/Pouw.lean",
+    "Security/Proofs/Pouw/PearlC/RowCapAtGamma.lean",
+    "Security/Proofs/Properties/CertifierDevice.lean",
+    "Security/Proofs/lakefile.toml",
+    "Security/Properties/Pous/Pooled.lean",
+    "Security/Properties/Verity/Game.lean",
+    "Security/Properties/lakefile.toml",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionHeadRef_v1[SCALE_OP=div]-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionHeadRef_v1[SCALE_OP=div]-f32.json",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionHeadRef_v1[SCALE_OP=mul]-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionHeadRef_v1[SCALE_OP=mul]-f32.json",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/EmbeddingRef_v1+AddRef_v1+MulRef_v1+ArgmaxRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/EmbeddingRef_v1+AddRef_v1+MulRef_v1+ArgmaxRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/F32ErfRn_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/F32ExpRn_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/F32TanhRn_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/GeluRef_v1[APPROX=none]-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/GeluRef_v1[APPROX=none]-f32.json",
+    "adapters/vllm/docs/data/ref-prims/GeluRef_v1[APPROX=tanh]-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/GeluRef_v1[APPROX=tanh]-f32.json",
+    "adapters/vllm/docs/data/ref-prims/I64ToI32_v1-i32.json",
+    "adapters/vllm/docs/data/ref-prims/LayerNormRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/LayerNormRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/LinearRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/LinearRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/RMSNormRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/RMSNormRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/ReluRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/ReluRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/RoPEHeadGptJ_v1+RoPEGptJ_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/RoPEInterleavedRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/RoPEInterleavedRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/RoPERef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/RoPERef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/SiluRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/SiluRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/SoftmaxRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/SoftmaxRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/ref-vocab-manifest.json",
+    "adapters/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v1.json",
+    "adapters/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v2.json",
+    "adapters/vllm/manifests/semantic-profiles/qwen2-eager-batch-invariant-v1.json",
+    "adapters/vllm/tests/acquire/fixtures/served_llama.tar.gz",
+    "adapters/vllm/tests/check/fixtures/deepseek_v4/inventory-tp8-rank0.json",
+    "adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json",
+    "adapters/vllm/tests/check/fixtures/glm_moe_dsa/inventory-tp8-rank0.json",
+    "adapters/vllm/tests/commit/serving_row_leaf_vector.json",
+    "adapters/vllm/tests/commit/test_device_pool.py",
+    "adapters/vllm/tests/commit/test_lead_rows.py",
+    "adapters/vllm/tests/commit/test_lead_rows_cuda.py",
+    "adapters/vllm/tests/engine/collectives/fixtures/tp2/collective_shard.steps03.rank0.json.gz",
+    "adapters/vllm/tests/engine/collectives/fixtures/tp2/collective_shard.steps03.rank1.json.gz",
+    "adapters/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank0.json",
+    "adapters/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank1.json",
+    "adapters/vllm/tests/engine/fixtures/glm53_tp8_moe_l3.rank0.jsonl.gz",
+    "adapters/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.jsonl.gz",
+    "adapters/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.values.npz",
+    "adapters/vllm/tests/engine/fixtures/qwen3_235b_a22b_tp8_moe_l47.rank0.jsonl.gz",
+    "adapters/vllm/tests/engine/fixtures/qwen3_235b_a22b_tp8_moe_l47.rank7.jsonl.gz",
+    "adapters/vllm/tests/engine/fixtures/qwen3_30b_a3b_tp2_moe_l24.rank0.jsonl.gz",
+    "adapters/vllm/tests/engine/int8_producers_gpu.py",
+    "adapters/vllm/tests/engine/rope_cache_engine_gpu.py",
+    "adapters/vllm/tests/engine/rope_cache_gpu.py",
+    "adapters/vllm/tests/engine/test_int8_producers.py",
+    "adapters/vllm/tests/engine/test_int8_wgmma.py",
+    "adapters/vllm/tests/engine/test_rope_cache.py",
+    "adapters/vllm/tests/lint/test_no_research_imports.py",
+    "adapters/vllm/tests/lint/test_p11_names.py",
+    "adapters/vllm/tests/pipeline/fixtures/advice_run_a/step_trace.jsonl.gz",
+    "adapters/vllm/tests/pipeline/fixtures/llama32_1b_bi_eager_served_window_parts.json",
+    "adapters/vllm/tests/pipeline/served_rope.py",
+    "adapters/vllm/tests/pipeline/test_circuit_db.py",
+    "adapters/vllm/tests/pipeline/test_code_closure.py",
+    "adapters/vllm/tests/pipeline/test_cpu_replay.py",
+    "adapters/vllm/tests/pipeline/test_experiment_index.py",
+    "adapters/vllm/tests/pipeline/test_research_tools.py",
+    "adapters/vllm/tests/pipeline/test_serve_day.py",
+    "adapters/vllm/tests/pipeline/test_serve_offloop.py",
+    "adapters/vllm/tests/pipeline/test_serve_openai.py",
+    "adapters/vllm/tests/pipeline/test_serve_pearl.py",
+    "adapters/vllm/tests/pipeline/test_serve_release.py",
+    "adapters/vllm/tests/pipeline/test_serve_tie.py",
+    "adapters/vllm/tests/pipeline/test_source_identity.py",
+    "adapters/vllm/tests/pipeline/test_workload_file.py",
+    "adapters/vllm/tests/program/data/QWEN3_235B_A22B_FP8.config.json",
+    "adapters/vllm/tests/program/data/dsa_glm53_kslots.npz",
+    "adapters/vllm/tests/program/data/dsa_h200_logits.npz",
+    "adapters/vllm/tests/program/data/fp8_block_operands.npz",
+    "adapters/vllm/tests/program/data/fp8_production_row_l0_qkv.npz",
+    "adapters/vllm/tests/program/data/fp8_saved_operands.npz",
+    "adapters/vllm/tests/program/data/topp_split_fixture/b8_s_schedule_r15_attempt2.json",
+    "adapters/vllm/tests/program/data/topp_split_fixture/fstoch01_s16_intermediates.npz",
+    "adapters/vllm/tests/program/data/topp_split_fixture/manifest.json",
+    "adapters/vllm/tests/program/predict/fixtures/naming_traces.json",
+    "adapters/vllm/tests/program/predict/test_block_counts.py",
+    "adapters/vllm/tests/program/predict/test_weights_tie.py",
+    "adapters/vllm/tests/program/predict/test_window_circuit_pearl.py",
+    "adapters/vllm/tests/program/predict/test_window_circuit_tables.py",
+    "adapters/vllm/tests/program/predict/test_window_rows.py",
+    "adapters/vllm/tests/program/predict/weights_tie_fixture.py",
+    "adapters/vllm/tests/program/test_io_shell.py",
+    "adapters/vllm/tests/program/test_lifted_request.py",
+    "adapters/vllm/tests/program/test_lifted_tiny.py",
+    "adapters/vllm/tests/program/test_nan_conversion.py",
+    "adapters/vllm/tests/program/test_prune.py",
+    "adapters/vllm/tests/program/test_running_example.py",
+    "adapters/vllm/tests/properties/fixtures/dsv4_mhc_capture_20261013.json",
+    "adapters/vllm/tests/properties/fixtures/dsv4_q_norm_commit_20261021.json",
+    "adapters/vllm/tests/protocols/pouw_h1_gpu.py",
+    "adapters/vllm/tests/protocols/remote_bandwidth/test_registry.py",
+    "adapters/vllm/tests/protocols/test_credit_gate_outside.py",
+    "adapters/vllm/tests/protocols/test_credit_gate_writes.py",
+    "adapters/vllm/tests/protocols/test_pouw.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_answers.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_commit.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_nodes.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_prover.py",
+    "adapters/vllm/tests/protocols/test_pouw_lead.py",
+    "adapters/vllm/tests/protocols/test_pouw_lead_cuda.py",
+    "adapters/vllm/tests/protocols/test_pouw_pearl_c_window.py",
+    "adapters/vllm/tests/query/test_units_canonical.py",
+    "adapters/vllm/tests/records/data/global_program.json",
+    "adapters/vllm/tests/records/data/replay_addresses.json",
+    "adapters/vllm/tests/records/data/required_manifest.json",
+    "adapters/vllm/tests/records/data/served_tokens.json",
+    "adapters/vllm/tests/regression/checks/attempt_provenance.py",
+    "adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json",
+    "adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json",
+    "adapters/vllm/tests/regression/fixtures.toml",
+    "adapters/vllm/tests/regression/store_io.py",
+    "adapters/vllm/tests/regression/test_attempt_resolution.py",
+    "adapters/vllm/tests/remotetie_demo.py",
+    "adapters/vllm/tests/tools/test_ratchet_gate.py",
+    "adapters/vllm/tools/retain_device_gpu.py",
+    "adapters/vllm/tools/retain_device_gpu.sh",
+    "adapters/vllm/tools/wgbench/stamp.cu",
+    "adapters/vllm/tools/wgbench/wgbench.py",
+    "adapters/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy",
+    "adapters/vllm/verity_vllm/commit/committer/device_pool.py",
+    "adapters/vllm/verity_vllm/commit/committer/native_collect.py",
+    "adapters/vllm/verity_vllm/commit/committer/native_host.py",
+    "adapters/vllm/verity_vllm/commit/committer/weights_rows.py",
+    "adapters/vllm/verity_vllm/commit/lead_rows.py",
+    "adapters/vllm/verity_vllm/commit/row_tables_device.py",
+    "adapters/vllm/verity_vllm/commit/step_rows.py",
+    "adapters/vllm/verity_vllm/commit/store_dump.py",
+    "adapters/vllm/verity_vllm/config.py",
+    "adapters/vllm/verity_vllm/engine/build.py",
+    "adapters/vllm/verity_vllm/engine/int8_producers.py",
+    "adapters/vllm/verity_vllm/engine/int8_wgmma.cu",
+    "adapters/vllm/verity_vllm/engine/int8_wgmma.py",
+    "adapters/vllm/verity_vllm/engine/int8_wgmma_acc.h",
+    "adapters/vllm/verity_vllm/engine/profiles/int8_quant_plans.py",
+    "adapters/vllm/verity_vllm/engine/rope_cache.py",
+    "adapters/vllm/verity_vllm/ops/epoch_store.sh",
+    "adapters/vllm/verity_vllm/pipeline/advice.py",
+    "adapters/vllm/verity_vllm/pipeline/cli.py",
+    "adapters/vllm/verity_vllm/pipeline/commit.py",
+    "adapters/vllm/verity_vllm/pipeline/cpu_replay.py",
+    "adapters/vllm/verity_vllm/pipeline/experiment.py",
+    "adapters/vllm/verity_vllm/pipeline/remote_session.py",
+    "adapters/vllm/verity_vllm/pipeline/research_outputs.py",
+    "adapters/vllm/verity_vllm/pipeline/research_result.py",
+    "adapters/vllm/verity_vllm/pipeline/research_tools.py",
+    "adapters/vllm/verity_vllm/pipeline/seal_stages.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_commit.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_day.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_h1_gate.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_openai.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_release.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_seal.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
+    "adapters/vllm/verity_vllm/pipeline/source_identity.py",
+    "adapters/vllm/verity_vllm/pipeline/tp/commit.py",
+    "adapters/vllm/verity_vllm/pipeline/weight_rows.py",
+    "adapters/vllm/verity_vllm/program/predict/block_counts.py",
+    "adapters/vllm/verity_vllm/program/predict/weights_tie.py",
+    "adapters/vllm/verity_vllm/program/predict/window_builder.py",
+    "adapters/vllm/verity_vllm/program/predict/window_circuit.py",
+    "adapters/vllm/verity_vllm/program/predict/window_class.py",
+    "adapters/vllm/verity_vllm/program/predict/window_cut.py",
+    "adapters/vllm/verity_vllm/program/predict/window_rows.py",
+    "adapters/vllm/verity_vllm/program/workload.py",
+    "adapters/vllm/verity_vllm/protocols/__init__.py",
+    "adapters/vllm/verity_vllm/protocols/pous.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/answers.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/commit.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/drawn.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/drawn_rows.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/live.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/names.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/nodes.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/prover.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/registered.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/served.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/lead/__init__.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/ends.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/served_y.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole_calls.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/window.py",
+    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py",
+    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/registry.py",
+    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/verify.py",
+    "adapters/vllm/verity_vllm/protocols/spot.py",
+    "adapters/vllm/verity_vllm/query/required.py",
+    "adapters/vllm/verity_vllm/records/__init__.py",
+    "adapters/vllm/verity_vllm/records/block_counts.py",
+    "adapters/vllm/verity_vllm/records/pearl_served.py",
+    "adapters/vllm/verity_vllm/records/source_identity.py",
+    "adapters/vllm/verity_vllm/settings.py",
+    "benchmarks/codec_tensor/pyproject.toml",
+    "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml",
+    "benchmarks/harness/specs/prefill.toml",
+    "benchmarks/hash/dither/README.md",
+    "benchmarks/hash/dither/job.sh",
+    "benchmarks/hash/exactlin/kgate.py",
+    "benchmarks/hash/exactlin/ksweep.py",
+    "benchmarks/hash/exactlin/tensor_util.py",
+    "benchmarks/live_challenger/pyproject.toml",
+    "benchmarks/network_e2e/encodings/code_v1.py",
+    "benchmarks/network_e2e/encodings/tests/test_code_v1.py",
+    "benchmarks/network_e2e/encodings/tests/test_v1.py",
+    "benchmarks/network_e2e/encodings/v1.py",
+    "benchmarks/network_sim/records.py",
+    "benchmarks/network_traces/README.md",
+    "benchmarks/network_traces/certifier_piece.py",
+    "benchmarks/network_traces/chain_record.py",
+    "benchmarks/network_traces/compile_slice_zk.py",
+    "benchmarks/network_traces/egress_zk.py",
+    "benchmarks/network_traces/leak_bounds.py",
+    "benchmarks/network_traces/pyproject.toml",
+    "benchmarks/network_traces/replay.py",
+    "benchmarks/network_traces/scan_zk.py",
+    "benchmarks/network_traces/served_session.py",
+    "benchmarks/network_traces/tests/test_active_replay.py",
+    "benchmarks/network_traces/tests/test_chain_record.py",
+    "benchmarks/network_traces/tests/test_leak_bounds.py",
+    "benchmarks/network_traces/tests/test_negatives.py",
+    "benchmarks/network_traces/tests/test_scan_zk.py",
+    "benchmarks/network_traces/tests/test_warden_serve.py",
+    "benchmarks/network_traces/warden_serve.py",
+    "benchmarks/network_traces/warden_zk.py",
+    "benchmarks/numerical/python/verity_numerical/bench/unit_costs_prover.py",
+    "benchmarks/one_stage/README.md",
+    "benchmarks/one_stage/a0.py",
+    "benchmarks/one_stage/a5.py",
+    "benchmarks/one_stage/a5_llama1b_h200.sh",
+    "benchmarks/one_stage/a5_warden.py",
+    "benchmarks/one_stage/composite.py",
+    "benchmarks/one_stage/interfaces/README.md",
+    "benchmarks/one_stage/interfaces/pyproject.toml",
+    "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json",
+    "benchmarks/one_stage/pouw_piece.py",
+    "benchmarks/one_stage/prove_leg.py",
+    "benchmarks/one_stage/pyproject.toml",
+    "benchmarks/one_stage/replay.py",
+    "benchmarks/one_stage/served_composite.sh",
+    "benchmarks/one_stage/served_overhead.py",
+    "benchmarks/one_stage/served_pouw.sh",
+    "benchmarks/one_stage/served_shares.py",
+    "benchmarks/one_stage/served_stock.sh",
+    "benchmarks/one_stage/served_verdicts.py",
+    "benchmarks/one_stage/served_verdicts.sh",
+    "benchmarks/one_stage/tests/test_a10_rewritten.py",
+    "benchmarks/one_stage/tests/test_a5_case_v2.py",
+    "benchmarks/one_stage/tests/test_a5_outputs.py",
+    "benchmarks/one_stage/tests/test_a5_tp_gates.py",
+    "benchmarks/one_stage/tests/test_a5_wiring.py",
+    "benchmarks/one_stage/tests/test_composite.py",
+    "benchmarks/one_stage/tests/test_served_pouw.py",
+    "benchmarks/one_stage/tests/test_served_verdicts.py",
+    "benchmarks/one_stage/tests/test_v2_case.py",
+    "benchmarks/one_stage/v2_case.py",
+    "benchmarks/pous/big_case.py",
+    "benchmarks/pous/p2_v1/store.py",
+    "benchmarks/pous/served_case.py",
+    "benchmarks/pous/served_piece.py",
+    "benchmarks/pous/tests/test_pous_p2_store.py",
+    "benchmarks/pouw/contents/kernels/hashed_gemm-hgemm.toml",
+    "benchmarks/pouw/h1_prove/drawn.py",
+    "benchmarks/pouw/h1_prove/drawn.sh",
+    "benchmarks/pouw/h1_prove/h1unit.py",
+    "benchmarks/pouw/pearl_c4/fixture.py",
+    "benchmarks/pouw/pearl_c4/replay.py",
+    "benchmarks/pouw/pearl_c_sm90/glm53_passes.py",
+    "benchmarks/pouw/pearl_c_sm90/glm53_timing.py",
+    "benchmarks/pouw/pearl_c_sm90/h200.sh",
+    "benchmarks/pouw/pearl_c_vllm/served_passes.py",
+    "benchmarks/pouw/pearl_c_vllm/served_step.py",
+    "benchmarks/pouw/pearl_c_vllm/verify.sh",
+    "benchmarks/pouw/pearl_c_vllm/verify_run.py",
+    "benchmarks/pouw/pyproject.toml",
+    "benchmarks/pouw/tests/test_h1_prove.py",
+    "benchmarks/pouw/tests/test_pearl_c_sm90_glm53.py",
+    "benchmarks/pouw/tests/test_pearl_c_vllm.py",
+    "benchmarks/pouw/tests/test_price_twins_accounting.py",
+    "benchmarks/prove_path/class_size.py",
+    "benchmarks/prove_path/e2e_chains/README.md",
+    "benchmarks/prove_path/prove_path.py",
+    "benchmarks/prove_path/pyproject.toml",
+    "benchmarks/prove_path/records_audit.py",
+    "benchmarks/prove_path/run.sh",
+    "benchmarks/prove_path/tests/test_prove_path.py",
+    "benchmarks/prove_path/tests/test_records_audit.py",
+    "benchmarks/prove_path/window_cost.py",
+    "benchmarks/remote_session/tests/test_challengers.py",
+    "benchmarks/sampling_plan/README.md",
+    "benchmarks/sampling_plan/cpu_budget.py",
+    "benchmarks/sampling_plan/h200.py",
+    "benchmarks/sampling_plan/inputs.py",
+    "benchmarks/sampling_plan/int8_llama.py",
+    "benchmarks/sampling_plan/pyproject.toml",
+    "benchmarks/sampling_plan/served_window.py",
+    "benchmarks/sampling_plan/tests/test_demo_a.py",
+    "benchmarks/sampling_plan/tests/test_h200.py",
+    "benchmarks/sampling_plan/tests/test_served_window.py",
+    "benchmarks/sampling_plan/transformer.py",
+    "benchmarks/verifier_cost/README.md",
+    "demos/lifecycle/README.md",
+    "demos/lifecycle/lifecycle.py",
+    "demos/onsite_served/README.md",
+    "demos/onsite_served/served_table.py",
+    "demos/vllm/README.md",
+    "demos/vllm/placement.toml",
+    "examples/README.md",
+    "examples/dither_full_util/README.md",
+    "examples/h200/interfaces/tests/test_block_record.py",
+    "examples/h200/interfaces/verity_e2e_demo/block_record.py",
+    "examples/vllm/commit.sh",
+    "infra/control/top_watch.py",
+    "infra/ops/tests/test_top_watch.py",
+    "integrations/vllm/README.md",
+    "integrations/vllm/manifests/records.json",
+    "integrations/vllm/pyproject.toml",
+    "integrations/vllm/tests/dead_code_keep.json",
+    "integrations/vllm/tests/lint/README.md",
+    "integrations/vllm/tests/lint/allowlists/p16_cli_callers.json",
+    "integrations/vllm/tests/pipeline/test_hot_commit.py",
+    "integrations/vllm/tests/program/test_conformance_record.py",
+    "integrations/vllm/verity_vllm/pipeline/boolean_replay.py",
+    "integrations/vllm/verity_vllm/pipeline/hot.py",
+    "integrations/vllm/verity_vllm/pipeline/research_tools.py",
+    "integrations/vllm/verity_vllm/program/frontend/conformance.py",
+    "integrations/vllm/verity_vllm/program/predict/steps.py",
+    "integrations/vllm/verity_vllm/program/prune.py",
+    "integrations/vllm/verity_vllm/program/quarantine/dense/gelu_tanh_mul_bf16.py",
+    "integrations/vllm/verity_vllm/query/query_artifact.py",
+    "pyproject.toml",
+    "security/Definitions/Accounting/Assumptions/RemoteDraw.lean",
+    "security/Definitions/Accounting/Bandwidth/Game.lean",
+    "security/Definitions/Accounting/Guarantees/Bandwidth.lean",
+    "security/Definitions/Accounting/Guarantees/RateAuditDeployed.lean",
+    "security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
+    "security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
+    "security/Definitions/Accounting/Guarantees/RateAuditPooled.lean",
+    "security/Definitions/Accounting/Guarantees/RemoteBinding.lean",
+    "security/Definitions/Accounting/Guarantees/RemotePass.lean",
+    "security/Definitions/Accounting/JointPeriod.lean",
+    "security/Definitions/Accounting/RateAuditDeployed.lean",
+    "security/Definitions/Accounting/RateAuditHorizon.lean",
+    "security/Definitions/Accounting/RateAuditPooled.lean",
+    "security/Definitions/Accounting/Remote/Draw.lean",
+    "security/Definitions/Accounting/Remote/Sketch.lean",
+    "security/Definitions/Core/Assumptions/Transport.lean",
+    "security/Definitions/Core/Guarantees/Transport.lean",
+    "security/Definitions/Core/Partition.lean",
+    "security/Definitions/Core/ProofSystem.lean",
+    "security/Definitions/Core/Requirement.lean",
+    "security/Definitions/Core/Site.lean",
+    "security/Definitions/Core/Transport.lean",
+    "security/Definitions/Hash/Tree.lean",
+    "security/Definitions/Nci/Guarantees/Remote.lean",
+    "security/Definitions/NetworkCertifier/WindowCharge.lean",
+    "security/Definitions/Pous/Model/StreamedWipeServer.lean",
+    "security/Definitions/Pouw/Assumptions/Lead.lean",
+    "security/Definitions/Pouw/Dimension/Pointwise.lean",
+    "security/Definitions/Pouw/Dimension/Ssn.lean",
+    "security/Definitions/Pouw/Game/ClopperPearson.lean",
+    "security/Definitions/Pouw/Game/Defs.lean",
+    "security/Definitions/Pouw/Guarantees/Lead.lean",
+    "security/Definitions/Pouw/Guarantees/Writes.lean",
+    "security/Definitions/Pouw/PearlC/TileDraw.lean",
+    "security/Definitions/Pouw/PearlC/Unscale.lean",
+    "security/Definitions/Spot.lean",
+    "security/Definitions/Spot/Dataflow.lean",
+    "security/Definitions/Spot/Exfiltration.lean",
+    "security/Definitions/Spot/LongValue.lean",
+    "security/Definitions/Spot/Necessity.lean",
+    "security/Definitions/Spot/Oblivious.lean",
+    "security/Proofs/Accounting/Defs.lean",
+    "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean",
+    "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean",
+    "security/Proofs/Accounting/MemoryShare.lean",
+    "security/Proofs/Accounting/RateAudit/Deployed.lean",
+    "security/Proofs/Accounting/RateAudit/DeployedRun.lean",
+    "security/Proofs/Accounting/RateAudit/DeployedSketch.lean",
+    "security/Proofs/Accounting/RateAudit/Horizon.lean",
+    "security/Proofs/Accounting/RateAudit/Pooled.lean",
+    "security/Proofs/Accounting/RateAudit/Session.lean",
+    "security/Proofs/Accounting/RateAudit/SketchInteractive.lean",
+    "security/Proofs/Accounting/RemoteHeld/Draw.lean",
+    "security/Proofs/Accounting/RemoteHeld/DrawMeets.lean",
+    "security/Proofs/Accounting/RemoteHeld/Line.lean",
+    "security/Proofs/Accounting/RemoteHeld/Subprotocol.lean",
+    "security/Proofs/Accounting/TS/PeriodSound.lean",
+    "security/Proofs/Core/Annotation.lean",
+    "security/Proofs/Core/Fp32.lean",
+    "security/Proofs/Core/HongKung.lean",
+    "security/Proofs/Core/ProofSystem.lean",
+    "security/Proofs/Core/Site.lean",
+    "security/Proofs/Core/Transport.lean",
+    "security/Proofs/Flock/Bridge/V5/EndToEndHidden.lean",
+    "security/Proofs/Flock/Bridge/V5/Honest.lean",
+    "security/Proofs/Flock/Bridge/V5/Transports.lean",
+    "security/Proofs/Flock/Claims/Complete.lean",
+    "security/Proofs/Flock/Claims/Complete/Replay.lean",
+    "security/Proofs/Flock/Claims/GS.lean",
+    "security/Proofs/Flock/Claims/KS.lean",
+    "security/Proofs/Flock/Claims/KS/PlainUntrim.lean",
+    "security/Proofs/Flock/Claims/KS/ZkAccepts.lean",
+    "security/Proofs/Flock/Claims/Recursion/Assumptions/HonestFixture.lean",
+    "security/Proofs/Flock/Claims/Recursion/Finders.lean",
+    "security/Proofs/Flock/Claims/Recursion/IrDep.lean",
+    "security/Proofs/Flock/Claims/Recursion/IrDepSession.lean",
+    "security/Proofs/Flock/Claims/Recursion/SeqCap.lean",
+    "security/Proofs/Flock/Claims/Recursion/SeqDeploy.lean",
+    "security/Proofs/Flock/Claims/Recursion/SeqDeployStop.lean",
+    "security/Proofs/Flock/Claims/Recursion/SeqKey.lean",
+    "security/Proofs/Flock/Claims/Recursion/SeqStop.lean",
+    "security/Proofs/Flock/Claims/Recursion/Serve.lean",
+    "security/Proofs/Flock/Claims/RootFind.lean",
+    "security/Proofs/Flock/Claims/Sampling/EndToEndDeploy.lean",
+    "security/Proofs/Flock/Claims/Sampling/Reference.lean",
+    "security/Proofs/Flock/Claims/Sampling/Reference/DeployedCode.lean",
+    "security/Proofs/Flock/Claims/System.lean",
+    "security/Proofs/Flock/Claims/ZK.lean",
+    "security/Proofs/Flock/Claims/ZK/Layout.lean",
+    "security/Proofs/Flock/Claims/ZK/PadsRoot.lean",
+    "security/Proofs/Flock/Claims/ZK/Stop.lean",
+    "security/Proofs/Flock/EndToEnd/Joint.lean",
+    "security/Proofs/Flock/Recursive/KSCoinTreeWitnesses.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/Guarantees.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZLJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/General/Instances.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HdecCor.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/UnrolledP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenDec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExecP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/PinnedCols.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Placed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/PlacedP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/SiteHP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Sites.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainReg.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/AtM1.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/NonVacuousSeg.lean",
+    "security/Proofs/NetworkCertifier/Causal.lean",
+    "security/Proofs/NetworkCertifier/Code.lean",
+    "security/Proofs/NetworkCertifier/README.md",
+    "security/Proofs/Pous/PeriodGame.lean",
+    "security/Proofs/Pous/Pooled.lean",
+    "security/Proofs/Pous/StreamedWipe/Witnesses.lean",
+    "security/Proofs/Pouw/Dimension/H100DenseProofs.lean",
+    "security/Proofs/Pouw/Dimension/H100FragProofs.lean",
+    "security/Proofs/Pouw/Lead.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/Cells.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/GrindProofs.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/Kept.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/PointwiseProofs.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/Registers.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/Revisit.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/Writes.lean",
+    "security/Proofs/Pouw/Lead/Commit.lean",
+    "security/Proofs/Pouw/Lead/Commit/Credit.lean",
+    "security/Proofs/Pouw/Lead/Commit/Hybrid.lean",
+    "security/Proofs/Pouw/Lead/Commit/Rounds.lean",
+    "security/Proofs/Pouw/Lead/Commit/RowBound.lean",
+    "security/Proofs/Pouw/Lead/Compose.lean",
+    "security/Proofs/Pouw/Lead/Compose/Deployed.lean",
+    "security/Proofs/Pouw/Lead/Compose/G.lean",
+    "security/Proofs/Pouw/Lead/Compose/Honest.lean",
+    "security/Proofs/Pouw/Lead/MH100W.lean",
+    "security/Proofs/Pouw/Lead/MH100W/Floor.lean",
+    "security/Proofs/Pouw/Lead/Network.lean",
+    "security/Proofs/Pouw/Lead/Network/Cells.lean",
+    "security/Proofs/Pouw/Lead/Network/Rot.lean",
+    "security/Proofs/Pouw/Lead/Network/Term.lean",
+    "security/Proofs/Pouw/Lead/PStar.lean",
+    "security/Proofs/Pouw/Lead/PStar/AlphabetProofs.lean",
+    "security/Proofs/Pouw/Lead/PStar/Call.lean",
+    "security/Proofs/Pouw/Lead/PStar/ExpansionProofs.lean",
+    "security/Proofs/Pouw/Lead/PStar/Lanes.lean",
+    "security/Proofs/Pouw/Lead/PStar/Marginal.lean",
+    "security/Proofs/Pouw/Lead/PStar/MassFloorProofs.lean",
+    "security/Proofs/Pouw/Lead/PStar/Stream.lean",
+    "security/Proofs/Pouw/Lead/PStar/Table.lean",
+    "security/Proofs/Pouw/Lead/PStar/Tile.lean",
+    "security/Proofs/Pouw/Lead/PStar/Walks.lean",
+    "security/Proofs/Pouw/Lead/Statement.lean",
+    "security/Proofs/Pouw/Lead/Statement/Gap.lean",
+    "security/Proofs/Pouw/Lead/Tags.lean",
+    "security/Proofs/Pouw/Lead/Tags/Distinct.lean",
+    "security/Proofs/Pouw/Lead/Tags/Exact.lean",
+    "security/Proofs/Pouw/Lead/Tags/Fold.lean",
+    "security/Proofs/Pouw/Lead/Tags/Repeats.lean",
+    "security/Proofs/Pouw/Lead/Tags/Shift.lean",
+    "security/Proofs/Pouw/Lead/Tags/SsnProofs.lean",
+    "security/Proofs/Pouw/Lead/Tags/TagProofs.lean",
+    "security/Proofs/Pouw/Lead/Tags/Tile.lean",
+    "security/Proofs/Pouw/Lead/Tail.lean",
+    "security/Proofs/Pouw/Lead/Tail/Across.lean",
+    "security/Proofs/Pouw/Lead/Tail/Blocks.lean",
+    "security/Proofs/Pouw/Lead/Tail/Chernoff.lean",
+    "security/Proofs/Pouw/Lead/Tail/Columns.lean",
+    "security/Proofs/Pouw/Lead/Tail/Fiber.lean",
+    "security/Proofs/Pouw/Lead/Tail/G.lean",
+    "security/Proofs/Pouw/Lead/Tail/Gap.lean",
+    "security/Proofs/Pouw/Lead/Tail/Nontrivial.lean",
+    "security/Proofs/Pouw/Lead/Tail/Repeats.lean",
+    "security/Proofs/Pouw/Lead/Tail/Route.lean",
+    "security/Proofs/Pouw/Lead/Tail/Slots.lean",
+    "security/Proofs/Pouw/Lead/Tail/Table.lean",
+    "security/Proofs/Pouw/Lead/Tail/Words.lean",
+    "security/Proofs/Pouw/PearlC/TileCheckWordsRev1.lean",
+    "security/Proofs/Pouw/PearlC/TileDrawGamma.lean",
+    "security/Proofs/Pouw/PearlC/TileGammaTol.lean",
+    "security/Proofs/Pouw/PearlPlus.lean",
+    "security/Proofs/Pouw/PearlPlus/Assembly.lean",
+    "security/Proofs/Pouw/PearlPlus/Atom.lean",
+    "security/Proofs/Pouw/PearlPlus/Cap.lean",
+    "security/Proofs/Pouw/PearlPlus/Debit.lean",
+    "security/Proofs/Pouw/PearlPlus/Draw.lean",
+    "security/Proofs/Pouw/PearlPlus/Factors.lean",
+    "security/Proofs/Pouw/PearlPlus/Keys.lean",
+    "security/Proofs/Pouw/PearlPlus/Noise.lean",
+    "security/Proofs/Pouw/PearlPlus/Numerics.lean",
+    "security/Proofs/Pouw/PearlPlus/Peel.lean",
+    "security/Proofs/Pouw/PearlPlus/Rho.lean",
+    "security/Proofs/Pouw/PearlPlus/Rules.lean",
+    "security/Proofs/Pouw/PearlPlus/Semantics.lean",
+    "security/Proofs/Pouw/PearlPlus/Stats.lean",
+    "security/Proofs/Pouw/PearlPlus/Words.lean",
+    "security/Proofs/Pouw/PeriodJ10R/Stratum.lean",
+    "security/Proofs/Pouw/Salt/Witness.lean",
+    "security/Proofs/Pouw/Sampling/ClopperPearson.lean",
+    "security/Proofs/Pouw/TileBound/WinogradStrassen.lean",
+    "security/Proofs/Pouw/Writes.lean",
+    "security/Proofs/Properties/Accounting/Remote/ComponentWitnesses.lean",
+    "security/Proofs/Properties/Accounting/Remote/Subprotocol.lean",
+    "security/Proofs/Properties/Core/Period.lean",
+    "security/Proofs/Properties/Core/Site.lean",
+    "security/Proofs/Properties/NetworkCertifier/Device/Late.lean",
+    "security/Proofs/Properties/NetworkPeriod.lean",
+    "security/Proofs/Properties/NetworkScan.lean",
+    "security/Proofs/Properties/NetworkScan/Causal.lean",
+    "security/Proofs/Properties/NetworkScan/Walk.lean",
+    "security/Proofs/Properties/Pous/Component.lean",
+    "security/Proofs/Properties/Pous/Run.lean",
+    "security/Proofs/Properties/Pous/RunAt.lean",
+    "security/Proofs/Properties/Pous/TimedAudit.lean",
+    "security/Proofs/Properties/Pouw/Check.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Noise.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Noise/Fa.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Noise/Fb.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Noise/Gram.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Noise/LineKey.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Open.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Verdict.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Witnesses.lean",
+    "security/Proofs/Properties/Remote.lean",
+    "security/Proofs/Properties/Remote/Honest.lean",
+    "security/Proofs/Properties/Spot.lean",
+    "security/Proofs/Properties/Verity/Soundness.lean",
+    "security/Proofs/Properties/Verity/Subprotocols.lean",
+    "security/Proofs/Properties/Verity/Wipe.lean",
+    "security/Proofs/Spot.lean",
+    "security/Proofs/Spot/Determinacy.lean",
+    "security/Proofs/Spot/Egress.lean",
+    "security/Proofs/Spot/Exfiltration.lean",
+    "security/Proofs/Spot/ExfiltrationBound.lean",
+    "security/Proofs/Spot/ExfiltrationExamples.lean",
+    "security/Proofs/Spot/HonestCone.lean",
+    "security/Proofs/Spot/Instance.lean",
+    "security/Proofs/Spot/JointPressure.lean",
+    "security/Proofs/Spot/Leakage.lean",
+    "security/Proofs/Spot/LongValue.lean",
+    "security/Proofs/Spot/Necessity.lean",
+    "security/Proofs/Spot/NecessityMatrix.lean",
+    "security/Proofs/Spot/NecessitySkeleton.lean",
+    "security/Proofs/Spot/Oblivious.lean",
+    "security/Proofs/Spot/Transfer.lean",
+    "security/Proofs/Spot/Work.lean",
+    "security/Proofs/lake-manifest.json",
+    "security/Properties/Accounting/JointBridge/ServiceSoundOfSessions.lean",
+    "security/Properties/Accounting/RegisteredCircuit.lean",
+    "security/Properties/Accounting/Remote.lean",
+    "security/Properties/Accounting/Remote/Line.lean",
+    "security/Properties/Accounting/Remote/Line/Record.lean",
+    "security/Properties/Accounting/Remote/Pooled.lean",
+    "security/Properties/Accounting/Remote/Schedule.lean",
+    "security/Properties/Accounting/Remote/Subprotocol.lean",
+    "security/Properties/Accounting/Served.lean",
+    "security/Properties/Core/Period.lean",
+    "security/Properties/Core/Site.lean",
+    "security/Properties/NetworkPeriod.lean",
+    "security/Properties/NetworkScan.lean",
+    "security/Properties/Pous/EndToEnd.lean",
+    "security/Properties/Pous/EndToEndAt.lean",
+    "security/Properties/Pous/Period.lean",
+    "security/Properties/Pous/PeriodAt.lean",
+    "security/Properties/Pous/PeriodGame.lean",
+    "security/Properties/Pous/Wipe.lean",
+    "security/Properties/Pouw/Check.lean",
+    "security/Properties/Pouw/Lead/Commit.lean",
+    "security/Properties/Pouw/Lead/V2.lean",
+    "security/Properties/Pouw/PearlPlus.lean",
+    "security/Properties/Pouw/PearlPlus/Witnesses.lean",
+    "security/Properties/Pouw/PearlPlusDraw.lean",
+    "security/Properties/Pouw/Period.lean",
+    "security/Properties/Pouw/PeriodJ10R.lean",
+    "security/Properties/Remote.lean",
+    "security/Properties/Spot.lean",
+    "security/Properties/Spot/Draw.lean",
+    "security/Properties/Verity/Idle.lean",
+    "security/Properties/Verity/Soundness.lean",
+    "security/Properties/Verity/Subprotocols.lean",
+    "security/Properties/lake-manifest.json",
+    "security/README.md",
+    "tests/test_boundaries.py",
+    "tests/test_lean_vocabulary.py",
+    "tests/test_repository.py",
+    "tests/test_seed_ports.py",
+    "tests/test_vllm_public_api.py",
+    "tools/move/accept_prob_map.toml",
+    "tools/research/pyproject.toml",
+    "tools/research/src/research/drive.py",
+    "tools/research/src/research/merge.py",
+    "tools/research/src/research/pods/nebius/dispatch.py",
+    "tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml",
+    "tools/research/src/research/queue.py",
+    "tools/research/src/research/store/kinds.py",
+    "tools/research/src/research/store/tools_registry.py",
+    "tools/research/src/research/store/vllm_tools.py",
+    "tools/research/src/research/telemetry/source_identity.py",
+    "tools/research/tests/test_drive_checked.py",
+    "tools/research/tests/test_drive_lowrisk.py",
+    "tools/research/tests/test_nebius_commit_pack.py",
+    "tools/research/tests/test_queue.py",
+    "tools/research/tests/test_store_vllm_tools.py",
+    "tools/verity/check/suites.py",
+    "tools/verity/circuit_check/pyproject.toml",
+    "tools/verity/circuit_check/src/circuit_check/by_calls.py",
+    "tools/verity/circuit_check/src/circuit_check/sidecars.py",
+    "tools/verity/cli/tests/test_run.py",
+    "tools/verity/cli/verity_cli/run.py",
+    "tools/verity/lean/check.py",
+    "tools/verity/lean/tests/test_audit.py",
+    "tools/verity/lean/tests/test_lean_changed.py",
+    "verity/README.md",
+    "verity/circuits/defs.py",
+    "verity/circuits/layout.py",
+    "verity/circuits/population.py",
+    "verity/circuits/query.py",
+    "verity/circuits/query_codec.py",
+    "verity/circuits/tests/test_boolean.py",
+    "verity/circuits/tests/test_format_spec.py",
+    "verity/circuits/tests/test_population_values.py",
+    "verity/circuits/tests/test_qcall_vectors.py",
+    "verity/circuits/tests/test_qword_vectors.py",
+    "verity/circuits/tests/test_running_example.py",
+    "verity/circuits/tests/test_template_instance.py",
+    "verity/claims/__init__.py",
+    "verity/commitments/attest/lean/Attest.lean",
+    "verity/commitments/attest/lean/Attest/FrameV3Sha512.lean",
+    "verity/commitments/crypto/transport.py",
+    "verity/commitments/gates/embedding.py",
+    "verity/commitments/gates/sha512_stream.circuit-check.json",
+    "verity/commitments/gates/sha512_stream.circuit-check.py",
+    "verity/commitments/gates/sha512_stream.py",
+    "verity/commitments/keyed.py",
+    "verity/commitments/randomness/lake-manifest.json",
+    "verity/commitments/tests/test_boolean_embedding.py",
+    "verity/commitments/tests/test_boolean_rowleaf.py",
+    "verity/commitments/tests/test_boolean_sha512_stream.py",
+    "verity/commitments/tests/test_keyed.py",
+    "verity/commitments/tests/test_transport.py",
+    "verity/commitments/windows/interface.py",
+    "verity/commitments/windows/rows.py",
+    "verity/commitments/windows/tests/test_blocks.py",
+    "verity/commitments/windows/tests/test_interface.py",
+    "verity/composite/device/live_challenger/auditor.py",
+    "verity/composite/device/live_challenger/tests/test_auditor_days.py",
+    "verity/core/attest/lean/lean-audit.json",
+    "verity/core/protocols/certifier/tests/test_network_certifier_warden.py",
+    "verity/core/protocols/composition/pyproject.toml",
+    "verity/core/protocols/composition/tests/test_composition_difftest.py",
+    "verity/core/protocols/interface/CoreProtocol.lean",
+    "verity/core/protocols/network/nci/lean/lean-audit.json",
+    "verity/core/protocols/pous/challenger_party.py",
+    "verity/core/protocols/pous/lean/TRUSTED.sha256",
+    "verity/core/protocols/pous/pyproject.toml",
+    "verity/core/protocols/pous/tests/test_pous_wipe_monitoring.py",
+    "verity/core/protocols/pouw/README.md",
+    "verity/core/protocols/pouw/lean/check/README.md",
+    "verity/core/protocols/pouw/lean/check/pyproject.toml",
+    "verity/core/protocols/pouw/lean/commit/lean-audit.json",
+    "verity/core/protocols/remote/CoreRemote.lean",
+    "verity/core/protocols/remote/RemoteMain.lean",
+    "verity/core/protocols/remote_bandwidth/README.md",
+    "verity/core/protocols/remote_bandwidth/pyproject.toml",
+    "verity/core/protocols/sampled_proofs/README.md",
+    "verity/core/protocols/sampled_proofs/one_stage/proofs.py",
+    "verity/core/protocols/sampled_proofs/optimize.py",
+    "verity/core/protocols/sampled_proofs/parties.py",
+    "verity/core/protocols/sampled_proofs/tests/test_optimize.py",
+    "verity/core/protocols/sampled_proofs/tests/test_service_window.py",
+    "verity/core/service/flock/Flock.lean",
+    "verity/core/service/flock/Flock/Desc.lean",
+    "verity/core/service/sampled_proofs/SampledProofs.lean",
+    "verity/core/service/sampled_proofs/SampledProofs/ChallengerDraw.lean",
+    "verity/core/service/sampled_proofs/SampledProofs/ChallengerTrees.lean",
+    "verity/core/service/sampled_proofs/SampledProofs/OneStageZk.lean",
+    "verity/core/service/sampled_proofs/SampledProofs/Run.lean",
+    "verity/core/service/sampled_proofs/tests/test_difftest.py",
+    "verity/definitions/circuits/census.py",
+    "verity/definitions/circuits/requirement.py",
+    "verity/definitions/circuits/requirement_units.py",
+    "verity/definitions/ops/tests/test_codec_ml.py",
+    "verity/definitions/registry/int8_exact.circuit-check.json",
+    "verity/definitions/registry/io_shell.circuit-check.py",
+    "verity/definitions/registry/io_shell.py",
+    "verity/definitions/registry/lifted.py",
+    "verity/definitions/registry/linear_cut.circuit-check.json",
+    "verity/definitions/registry/linear_cut.circuit-check.py",
+    "verity/definitions/registry/linear_cut.py",
+    "verity/definitions/registry/pearl_c_tile.circuit-check.json",
+    "verity/definitions/registry/pearl_c_tile.circuit-check.py",
+    "verity/definitions/registry/pearl_c_tile.py",
+    "verity/definitions/tests/catalog_ids.json",
+    "verity/definitions/tests/test_linear_cut.py",
+    "verity/hardware/registration.py",
+    "verity/ml/circuits/population.circuit-check.py",
+    "verity/ml/circuits/tests/test_part_log.py",
+    "verity/ml/definitions/tests/test_int8_exact.py",
+    "verity/protocols/certifier/device/README.md",
+    "verity/protocols/certifier/device/lean/scripts/difftest_vectors.py",
+    "verity/protocols/certifier/device/lean/scripts/issuer_vectors.py",
+    "verity/protocols/certifier/device/program/lean/NetworkCertifier/WindowCharge.lean",
+    "verity/protocols/certifier/device/program/lean/NetworkCertifier/WindowDifftest.lean",
+    "verity/protocols/certifier/device/program/lean/scripts/difftest_vectors.py",
+    "verity/protocols/certifier/prover/window_charge.py",
+    "verity/protocols/certifier/verifier/PROTOCOL.md",
+    "verity/protocols/certifier/verifier/README.md",
+    "verity/protocols/certifier/verifier/active.py",
+    "verity/protocols/certifier/verifier/audit.py",
+    "verity/protocols/certifier/verifier/blocks.py",
+    "verity/protocols/certifier/verifier/certificate.py",
+    "verity/protocols/certifier/verifier/coin_link.py",
+    "verity/protocols/certifier/verifier/commitment.py",
+    "verity/protocols/certifier/verifier/head_check.py",
+    "verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean",
+    "verity/protocols/certifier/verifier/lean_audit.py",
+    "verity/protocols/certifier/verifier/network/tests/fixtures/select_entry.json",
+    "verity/protocols/certifier/verifier/network/tests/period_case.py",
+    "verity/protocols/certifier/verifier/network/tests/test_network_check_protocol.py",
+    "verity/protocols/certifier/verifier/network/tests/test_network_period_protocol.py",
+    "verity/protocols/certifier/verifier/network/tests/test_network_records_protocol.py",
+    "verity/protocols/certifier/verifier/network/tests/test_slot_entry_pins.py",
+    "verity/protocols/certifier/verifier/replay_step.py",
+    "verity/protocols/certifier/verifier/schedule.py",
+    "verity/protocols/certifier/verifier/tests/egress_traffic.py",
+    "verity/protocols/certifier/verifier/tests/scan_traffic.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_active.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_audit.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_certificate.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_commitment.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_period.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_salt_compact.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_service.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_warden_rows.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_warden_rows_phase11.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_warden_rows_replay.py",
+    "verity/protocols/certifier/verifier/transfer_rows.py",
+    "verity/protocols/certifier/verifier/warden.py",
+    "verity/protocols/certifier/verifier/warden_rows.py",
+    "verity/protocols/flock/agreement/README.md",
+    "verity/protocols/flock/prover/live/src/proved_scope.rs",
+    "verity/protocols/flock/prover/python/verity_flock/circuit.py",
+    "verity/protocols/flock/prover/python/verity_flock/firewall_transcript.py",
+    "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json",
+    "verity/protocols/flock/prover/tests/test_fmaxf_commit.py",
+    "verity/protocols/flock/verifier/Flock/RegBound.lean",
+    "verity/protocols/flock/verifier/Flock/Test/KsScope.lean",
+    "verity/protocols/flock/verifier/Flock/Test/RegBound.lean",
+    "verity/protocols/flock/verifier/FlockVerify.lean",
+    "verity/protocols/inference_only/verifier/README.md",
+    "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Baseline.lean",
+    "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Protocol.lean",
+    "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py",
+    "verity/protocols/interface/CoreProtocol/Period.lean",
+    "verity/protocols/interface/CoreProtocol/PeriodDifftest.lean",
+    "verity/protocols/interface/CoreProtocol/PeriodDifftestMain.lean",
+    "verity/protocols/interface/CoreProtocol/Profile.lean",
+    "verity/protocols/interface/CoreProtocol/Registration.lean",
+    "verity/protocols/interface/README.md",
+    "verity/protocols/interface/lake-manifest.json",
+    "verity/protocols/interface/lakefile.toml",
+    "verity/protocols/onsite/verifier/lake-manifest.json",
+    "verity/protocols/poub/device/live_verifier/README.md",
+    "verity/protocols/poub/verifier/PROTOCOL.md",
+    "verity/protocols/poub/verifier/audit.py",
+    "verity/protocols/poub/verifier/lean/RemoteAudit/Basic.lean",
+    "verity/protocols/poub/verifier/lean/RemoteAudit/Protocol.lean",
+    "verity/protocols/poub/verifier/lean/lake-manifest.json",
+    "verity/protocols/poub/verifier/lean/tests/test_p2.py",
+    "verity/protocols/poub/verifier/lean/tests/test_p2_case.py",
+    "verity/protocols/poub/verifier/monitoring.py",
+    "verity/protocols/poub/verifier/opening.py",
+    "verity/protocols/poub/verifier/tests/test_monitoring.py",
+    "verity/protocols/poub/verifier/tests/test_opening.py",
+    "verity/protocols/pous/device/lean/tests/test_attest.py",
+    "verity/protocols/pous/device/memory_challenger.py",
+    "verity/protocols/pous/lean/README.md",
+    "verity/protocols/pous/verifier/PROTOCOL.md",
+    "verity/protocols/pous/verifier/README.md",
+    "verity/protocols/pous/verifier/__init__.py",
+    "verity/protocols/pous/verifier/check/PousCheck/Certificate.lean",
+    "verity/protocols/pous/verifier/check/PousCheck/Run.lean",
+    "verity/protocols/pous/verifier/check/PousCheck/RunProtocol.lean",
+    "verity/protocols/pous/verifier/check/pyproject.toml",
+    "verity/protocols/pous/verifier/check/tests/test_run.py",
+    "verity/protocols/pous/verifier/period.py",
+    "verity/protocols/pous/verifier/run.py",
+    "verity/protocols/pous/verifier/schemes/band.py",
+    "verity/protocols/pous/verifier/schemes/p2.py",
+    "verity/protocols/pous/verifier/streamed_wipe.py",
+    "verity/protocols/pous/verifier/tests/test_pous_band.py",
+    "verity/protocols/pous/verifier/tests/test_pous_challenger_party.py",
+    "verity/protocols/pous/verifier/tests/test_pous_codec_api.py",
+    "verity/protocols/pous/verifier/tests/test_pous_dense.py",
+    "verity/protocols/pous/verifier/tests/test_pous_layout.py",
+    "verity/protocols/pous/verifier/tests/test_pous_period.py",
+    "verity/protocols/pous/verifier/tests/test_pous_protocol.py",
+    "verity/protocols/pous/verifier/tests/test_pous_run.py",
+    "verity/protocols/pous/verifier/tests/test_pous_wipe_parties.py",
+    "verity/protocols/pous/verifier/wipe_monitoring.py",
+    "verity/protocols/pous/verifier/wipe_parties.py",
+    "verity/protocols/pous/verifier/wipe_party.py",
+    "verity/protocols/pouw/clear/clear_work.py",
+    "verity/protocols/pouw/prover/circuit/__init__.py",
+    "verity/protocols/pouw/prover/circuit/compile.py",
+    "verity/protocols/pouw/prover/circuit/lead.circuit-check.json",
+    "verity/protocols/pouw/prover/circuit/lead.circuit-check.py",
+    "verity/protocols/pouw/prover/circuit/lead.py",
+    "verity/protocols/pouw/prover/schemes/pearl_c.py",
+    "verity/protocols/pouw/prover/schemes/pearl_c_work.py",
+    "verity/protocols/pouw/verifier/core_check.py",
+    "verity/protocols/pouw/verifier/credit.py",
+    "verity/protocols/pouw/verifier/dither/PROTOCOL.md",
+    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Difftest.lean",
+    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Inputs.lean",
+    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Lanes.lean",
+    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_credit_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_lead_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/test_difftest.py",
+    "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Bindings.lean",
+    "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Frame.lean",
+    "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Rows.lean",
+    "verity/protocols/pouw/verifier/lean/commit/lakefile.toml",
+    "verity/protocols/pouw/verifier/lean/window/PouwWindow/Public.lean",
+    "verity/protocols/pouw/verifier/tests/test_circuit_lead.py",
+    "verity/protocols/pouw/verifier/tests/test_pearl_c_tile.py",
+    "verity/protocols/pouw/verifier/tests/test_pouw_audit.py",
+    "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_debit.py",
+    "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_work.py",
+    "verity/protocols/pouw/verifier/tests/test_pouw_salt.py",
+    "verity/protocols/pouw/verifier/tests/test_weights.py",
+    "verity/protocols/pouw/verifier/weights.py",
+    "verity/protocols/pouw/verifier/window.py",
+    "verity/protocols/recursion/verifier/recursive/VStarRecursive/Sampled.lean",
+    "verity/protocols/recursion/verifier/recursive/lakefile.toml",
+    "verity/protocols/recursion/verifier/vstar_cli/tests/test_irdep_difftest.py",
+    "verity/protocols/remote/verifier/README.md",
+    "verity/protocols/remote/verifier/RemoteV1Main.lean",
+    "verity/protocols/remote/verifier/composition/README.md",
+    "verity/protocols/remote/verifier/composition/lake-manifest.json",
+    "verity/protocols/remote/verifier/composition/tests/periods.py",
+    "verity/protocols/remote/verifier/composition/tests/reference.py",
+    "verity/protocols/remote/verifier/composition/tests/test_inference_only_not_composed.py",
+    "verity/protocols/remote/verifier/composition/tests/test_registration_difftest.py",
+    "verity/protocols/spot/device/challenger.py",
+    "verity/protocols/spot/device/coins.py",
+    "verity/protocols/spot/device/remote.py",
+    "verity/protocols/spot/verifier/lean/Spot/Bound.lean",
+    "verity/protocols/spot/verifier/lean/Spot/ChallengerSession.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Draw.lean",
+    "verity/protocols/spot/verifier/lean/Spot/LinkPoints.lean",
+    "verity/protocols/spot/verifier/lean/Spot/OneStage.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Partition.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Pieces.lean",
+    "verity/protocols/spot/verifier/lean/Spot/PopOrder.lean",
+    "verity/protocols/spot/verifier/lean/Spot/PublicUnits.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Record.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Registration.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Slots.lean",
+    "verity/protocols/spot/verifier/lean/tests/test_challenger_difftest.py",
+    "verity/protocols/spot/verifier/one_stage/audit.py",
+    "verity/protocols/spot/verifier/one_stage/draw.py",
+    "verity/protocols/spot/verifier/one_stage/link_points.py",
+    "verity/protocols/spot/verifier/one_stage/registered.py",
+    "verity/protocols/spot/verifier/one_stage/registration.py",
+    "verity/protocols/spot/verifier/one_stage/verifier.py",
+    "verity/protocols/spot/verifier/profile.py",
+    "verity/protocols/spot/verifier/service.py",
+    "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json",
+    "verity/protocols/spot/verifier/tests/test_one_stage.py",
+    "verity/protocols/spot/verifier/tests/test_service.py",
+    "verity/protocols/tests/tests/test_profile.py",
+    "verity/settings.py"
+   ]
+  }
+ },
+ "pr-8462": {
+  "base": "b1409cffb0",
+  "heads": [
+   "6f4ffa9e7a"
+  ],
+  "conflicts": {
+   "6f4ffa9e7a": [
+    "GLOSSARY.md",
+    "benchmarks/spot_figures/README.md",
+    "benchmarks/spot_figures/cards.py",
+    "benchmarks/spot_figures/figure1.py",
+    "benchmarks/spot_figures/figures.py",
+    "benchmarks/spot_figures/pyproject.toml",
+    "benchmarks/spot_figures/tests/test_cards.py",
+    "benchmarks/spot_figures/tests/test_figure1.py",
+    "benchmarks/spot_figures/total_cost.py"
+   ]
+  }
+ },
+ "pr-8465": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ea98b7c1cc"
+  ],
+  "conflicts": {
+   "ea98b7c1cc": [
+    "tools/research/src/research/vqueue.py",
+    "tools/research/src/research/vqueue_loop.py",
+    "tools/research/tests/test_vqueue_loop.py"
+   ]
+  }
+ },
+ "pr-8483": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f18689974f"
+  ],
+  "conflicts": {
+   "f18689974f": [
+    "benchmarks/commitments/README.md",
+    "benchmarks/one_stage/README.md",
+    "benchmarks/one_stage/a7.sh",
+    "benchmarks/one_stage/plan_shards.py",
+    "benchmarks/verifier_cost/flock_rows.sh"
+   ]
+  }
+ },
+ "pr-8503": {
+  "base": "b1409cffb0",
+  "heads": [
+   "51fe816028"
+  ],
+  "conflicts": {
+   "51fe816028": [
+    ".agents/skills/coordinating/SKILL.md",
+    ".agents/skills/friction/SKILL.md",
+    ".agents/skills/lean-proofs/SKILL.md",
+    ".agents/skills/using-slack/registry.json",
+    "AGENTS.md",
+    "ARCHITECTURE.md",
+    "GLOSSARY.md",
+    "Security/Definitions.lean",
+    "Security/Definitions/Accounting.lean",
+    "Security/Definitions/Accounting/Guarantees.lean",
+    "Security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
+    "Security/Definitions/Accounting/RateAuditHorizon.lean",
+    "Security/Definitions/Population/DrawPressure.lean",
+    "Security/Definitions/Pouw.lean",
+    "Security/Definitions/Pouw/Assumptions.lean",
+    "Security/Definitions/Pouw/Guarantees.lean",
+    "Security/Models.lean",
+    "Security/Proofs/Accounting.lean",
+    "Security/Proofs/Accounting/RateAudit/Horizon.lean",
+    "Security/Proofs/Core.lean",
+    "Security/Proofs/Flock.lean",
+    "Security/Proofs/Flock/Bridge.lean",
+    "Security/Proofs/Flock/Bridge/PopMatches.lean",
+    "Security/Proofs/Flock/Bridge/V5/Statement.lean",
+    "Security/Proofs/Flock/C3.lean",
+    "Security/Proofs/Flock/Claims.lean",
+    "Security/Proofs/Flock/Claims/Sampling.lean",
+    "Security/Proofs/Flock/Recursive.lean",
+    "Security/Proofs/Flock/Soundness.lean",
+    "Security/Proofs/Flock/Soundness/Audit/Partitioning/Model.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/Composed.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/HiddenExec/RowsAtHP.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/HiddenExec/SitesP.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkHidden/CustodyJP.lean",
+    "Security/Proofs/Flock/Soundness/Discharge/ZkReg.lean",
+    "Security/Proofs/NetworkCertifier.lean",
+    "Security/Proofs/Population/DrawPressure.lean",
+    "Security/Proofs/Pouw.lean",
+    "Security/Proofs/Pouw/PearlC/RowCapAtGamma.lean",
+    "Security/Proofs/Properties/CertifierDevice.lean",
+    "Security/Proofs/lakefile.toml",
+    "Security/Properties/Pous/Pooled.lean",
+    "Security/Properties/Verity/Game.lean",
+    "Security/Properties/lakefile.toml",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionHeadRef_v1[SCALE_OP=div]-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionHeadRef_v1[SCALE_OP=div]-f32.json",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionHeadRef_v1[SCALE_OP=mul]-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionHeadRef_v1[SCALE_OP=mul]-f32.json",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/EagerAttentionRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/EmbeddingRef_v1+AddRef_v1+MulRef_v1+ArgmaxRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/EmbeddingRef_v1+AddRef_v1+MulRef_v1+ArgmaxRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/F32ErfRn_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/F32ExpRn_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/F32TanhRn_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/GeluRef_v1[APPROX=none]-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/GeluRef_v1[APPROX=none]-f32.json",
+    "adapters/vllm/docs/data/ref-prims/GeluRef_v1[APPROX=tanh]-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/GeluRef_v1[APPROX=tanh]-f32.json",
+    "adapters/vllm/docs/data/ref-prims/I64ToI32_v1-i32.json",
+    "adapters/vllm/docs/data/ref-prims/LayerNormRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/LayerNormRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/LinearRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/LinearRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/RMSNormRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/RMSNormRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/ReluRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/ReluRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/RoPEHeadGptJ_v1+RoPEGptJ_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/RoPEInterleavedRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/RoPEInterleavedRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/RoPERef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/RoPERef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/SiluRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/SiluRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/SoftmaxRef_v1-bf16.json",
+    "adapters/vllm/docs/data/ref-prims/SoftmaxRef_v1-f32.json",
+    "adapters/vllm/docs/data/ref-prims/ref-vocab-manifest.json",
+    "adapters/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v1.json",
+    "adapters/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v2.json",
+    "adapters/vllm/manifests/semantic-profiles/qwen2-eager-batch-invariant-v1.json",
+    "adapters/vllm/tests/acquire/fixtures/served_llama.tar.gz",
+    "adapters/vllm/tests/check/fixtures/deepseek_v4/inventory-tp8-rank0.json",
+    "adapters/vllm/tests/check/fixtures/glm_moe_dsa/config.json",
+    "adapters/vllm/tests/check/fixtures/glm_moe_dsa/inventory-tp8-rank0.json",
+    "adapters/vllm/tests/commit/serving_row_leaf_vector.json",
+    "adapters/vllm/tests/commit/test_device_pool.py",
+    "adapters/vllm/tests/commit/test_lead_rows.py",
+    "adapters/vllm/tests/commit/test_lead_rows_cuda.py",
+    "adapters/vllm/tests/engine/collectives/fixtures/tp2/collective_shard.steps03.rank0.json.gz",
+    "adapters/vllm/tests/engine/collectives/fixtures/tp2/collective_shard.steps03.rank1.json.gz",
+    "adapters/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank0.json",
+    "adapters/vllm/tests/engine/collectives/fixtures/tp2/fold_gap.shard.rank1.json",
+    "adapters/vllm/tests/engine/fixtures/glm53_tp8_moe_l3.rank0.jsonl.gz",
+    "adapters/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.jsonl.gz",
+    "adapters/vllm/tests/engine/fixtures/llama31_8b_int8_attn_l0.values.npz",
+    "adapters/vllm/tests/engine/fixtures/qwen3_235b_a22b_tp8_moe_l47.rank0.jsonl.gz",
+    "adapters/vllm/tests/engine/fixtures/qwen3_235b_a22b_tp8_moe_l47.rank7.jsonl.gz",
+    "adapters/vllm/tests/engine/fixtures/qwen3_30b_a3b_tp2_moe_l24.rank0.jsonl.gz",
+    "adapters/vllm/tests/engine/int8_producers_gpu.py",
+    "adapters/vllm/tests/engine/rope_cache_engine_gpu.py",
+    "adapters/vllm/tests/engine/rope_cache_gpu.py",
+    "adapters/vllm/tests/engine/test_int8_producers.py",
+    "adapters/vllm/tests/engine/test_int8_wgmma.py",
+    "adapters/vllm/tests/engine/test_rope_cache.py",
+    "adapters/vllm/tests/lint/test_no_research_imports.py",
+    "adapters/vllm/tests/lint/test_p11_names.py",
+    "adapters/vllm/tests/pipeline/fixtures/advice_run_a/step_trace.jsonl.gz",
+    "adapters/vllm/tests/pipeline/fixtures/llama32_1b_bi_eager_served_window_parts.json",
+    "adapters/vllm/tests/pipeline/served_rope.py",
+    "adapters/vllm/tests/pipeline/test_circuit_db.py",
+    "adapters/vllm/tests/pipeline/test_code_closure.py",
+    "adapters/vllm/tests/pipeline/test_cpu_replay.py",
+    "adapters/vllm/tests/pipeline/test_experiment_index.py",
+    "adapters/vllm/tests/pipeline/test_research_tools.py",
+    "adapters/vllm/tests/pipeline/test_serve_day.py",
+    "adapters/vllm/tests/pipeline/test_serve_offloop.py",
+    "adapters/vllm/tests/pipeline/test_serve_openai.py",
+    "adapters/vllm/tests/pipeline/test_serve_pearl.py",
+    "adapters/vllm/tests/pipeline/test_serve_release.py",
+    "adapters/vllm/tests/pipeline/test_serve_tie.py",
+    "adapters/vllm/tests/pipeline/test_source_identity.py",
+    "adapters/vllm/tests/pipeline/test_workload_file.py",
+    "adapters/vllm/tests/program/data/QWEN3_235B_A22B_FP8.config.json",
+    "adapters/vllm/tests/program/data/dsa_glm53_kslots.npz",
+    "adapters/vllm/tests/program/data/dsa_h200_logits.npz",
+    "adapters/vllm/tests/program/data/fp8_block_operands.npz",
+    "adapters/vllm/tests/program/data/fp8_production_row_l0_qkv.npz",
+    "adapters/vllm/tests/program/data/fp8_saved_operands.npz",
+    "adapters/vllm/tests/program/data/topp_split_fixture/b8_s_schedule_r15_attempt2.json",
+    "adapters/vllm/tests/program/data/topp_split_fixture/fstoch01_s16_intermediates.npz",
+    "adapters/vllm/tests/program/data/topp_split_fixture/manifest.json",
+    "adapters/vllm/tests/program/predict/fixtures/naming_traces.json",
+    "adapters/vllm/tests/program/predict/test_block_counts.py",
+    "adapters/vllm/tests/program/predict/test_weights_tie.py",
+    "adapters/vllm/tests/program/predict/test_window_circuit_pearl.py",
+    "adapters/vllm/tests/program/predict/test_window_circuit_tables.py",
+    "adapters/vllm/tests/program/predict/test_window_rows.py",
+    "adapters/vllm/tests/program/predict/weights_tie_fixture.py",
+    "adapters/vllm/tests/program/test_io_shell.py",
+    "adapters/vllm/tests/program/test_lifted_request.py",
+    "adapters/vllm/tests/program/test_lifted_tiny.py",
+    "adapters/vllm/tests/program/test_nan_conversion.py",
+    "adapters/vllm/tests/program/test_prune.py",
+    "adapters/vllm/tests/program/test_running_example.py",
+    "adapters/vllm/tests/properties/fixtures/dsv4_mhc_capture_20261013.json",
+    "adapters/vllm/tests/properties/fixtures/dsv4_q_norm_commit_20261021.json",
+    "adapters/vllm/tests/protocols/pouw_h1_gpu.py",
+    "adapters/vllm/tests/protocols/remote_bandwidth/test_registry.py",
+    "adapters/vllm/tests/protocols/test_credit_gate_outside.py",
+    "adapters/vllm/tests/protocols/test_credit_gate_writes.py",
+    "adapters/vllm/tests/protocols/test_pouw.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_answers.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_commit.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_nodes.py",
+    "adapters/vllm/tests/protocols/test_pouw_h1_prover.py",
+    "adapters/vllm/tests/protocols/test_pouw_lead.py",
+    "adapters/vllm/tests/protocols/test_pouw_lead_cuda.py",
+    "adapters/vllm/tests/protocols/test_pouw_pearl_c_window.py",
+    "adapters/vllm/tests/query/test_units_canonical.py",
+    "adapters/vllm/tests/records/data/global_program.json",
+    "adapters/vllm/tests/records/data/replay_addresses.json",
+    "adapters/vllm/tests/records/data/required_manifest.json",
+    "adapters/vllm/tests/records/data/served_tokens.json",
+    "adapters/vllm/tests/regression/checks/attempt_provenance.py",
+    "adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json",
+    "adapters/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager.json",
+    "adapters/vllm/tests/regression/fixtures.toml",
+    "adapters/vllm/tests/regression/store_io.py",
+    "adapters/vllm/tests/regression/test_attempt_resolution.py",
+    "adapters/vllm/tests/remotetie_demo.py",
+    "adapters/vllm/tests/tools/test_ratchet_gate.py",
+    "adapters/vllm/tools/retain_device_gpu.py",
+    "adapters/vllm/tools/retain_device_gpu.sh",
+    "adapters/vllm/tools/wgbench/stamp.cu",
+    "adapters/vllm/tools/wgbench/wgbench.py",
+    "adapters/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy",
+    "adapters/vllm/verity_vllm/commit/committer/device_pool.py",
+    "adapters/vllm/verity_vllm/commit/committer/native_collect.py",
+    "adapters/vllm/verity_vllm/commit/committer/native_host.py",
+    "adapters/vllm/verity_vllm/commit/committer/weights_rows.py",
+    "adapters/vllm/verity_vllm/commit/lead_rows.py",
+    "adapters/vllm/verity_vllm/commit/row_tables_device.py",
+    "adapters/vllm/verity_vllm/commit/step_rows.py",
+    "adapters/vllm/verity_vllm/commit/store_dump.py",
+    "adapters/vllm/verity_vllm/config.py",
+    "adapters/vllm/verity_vllm/engine/build.py",
+    "adapters/vllm/verity_vllm/engine/int8_producers.py",
+    "adapters/vllm/verity_vllm/engine/int8_wgmma.cu",
+    "adapters/vllm/verity_vllm/engine/int8_wgmma.py",
+    "adapters/vllm/verity_vllm/engine/int8_wgmma_acc.h",
+    "adapters/vllm/verity_vllm/engine/profiles/int8_quant_plans.py",
+    "adapters/vllm/verity_vllm/engine/rope_cache.py",
+    "adapters/vllm/verity_vllm/ops/epoch_store.sh",
+    "adapters/vllm/verity_vllm/pipeline/advice.py",
+    "adapters/vllm/verity_vllm/pipeline/cli.py",
+    "adapters/vllm/verity_vllm/pipeline/commit.py",
+    "adapters/vllm/verity_vllm/pipeline/cpu_replay.py",
+    "adapters/vllm/verity_vllm/pipeline/experiment.py",
+    "adapters/vllm/verity_vllm/pipeline/remote_session.py",
+    "adapters/vllm/verity_vllm/pipeline/research_outputs.py",
+    "adapters/vllm/verity_vllm/pipeline/research_result.py",
+    "adapters/vllm/verity_vllm/pipeline/research_tools.py",
+    "adapters/vllm/verity_vllm/pipeline/seal_stages.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_commit.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_day.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_h1.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_h1_gate.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_openai.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_pearl.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_release.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_seal.py",
+    "adapters/vllm/verity_vllm/pipeline/serve_tie.py",
+    "adapters/vllm/verity_vllm/pipeline/source_identity.py",
+    "adapters/vllm/verity_vllm/pipeline/tp/commit.py",
+    "adapters/vllm/verity_vllm/pipeline/weight_rows.py",
+    "adapters/vllm/verity_vllm/program/predict/block_counts.py",
+    "adapters/vllm/verity_vllm/program/predict/weights_tie.py",
+    "adapters/vllm/verity_vllm/program/predict/window_builder.py",
+    "adapters/vllm/verity_vllm/program/predict/window_circuit.py",
+    "adapters/vllm/verity_vllm/program/predict/window_class.py",
+    "adapters/vllm/verity_vllm/program/predict/window_cut.py",
+    "adapters/vllm/verity_vllm/program/predict/window_rows.py",
+    "adapters/vllm/verity_vllm/program/workload.py",
+    "adapters/vllm/verity_vllm/protocols/__init__.py",
+    "adapters/vllm/verity_vllm/protocols/pous.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/answers.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/commit.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/drawn.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/drawn_rows.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/live.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/names.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/nodes.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/prover.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/registered.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/h1/served.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/lead/__init__.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/ends.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/graphs.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/served_y.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole_calls.py",
+    "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/window.py",
+    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py",
+    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/registry.py",
+    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/verify.py",
+    "adapters/vllm/verity_vllm/protocols/spot.py",
+    "adapters/vllm/verity_vllm/query/required.py",
+    "adapters/vllm/verity_vllm/records/__init__.py",
+    "adapters/vllm/verity_vllm/records/block_counts.py",
+    "adapters/vllm/verity_vllm/records/pearl_served.py",
+    "adapters/vllm/verity_vllm/records/source_identity.py",
+    "adapters/vllm/verity_vllm/settings.py",
+    "benchmarks/codec_tensor/pyproject.toml",
+    "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml",
+    "benchmarks/harness/specs/prefill.toml",
+    "benchmarks/hash/dither/README.md",
+    "benchmarks/hash/dither/job.sh",
+    "benchmarks/hash/exactlin/kgate.py",
+    "benchmarks/hash/exactlin/ksweep.py",
+    "benchmarks/hash/exactlin/tensor_util.py",
+    "benchmarks/live_challenger/pyproject.toml",
+    "benchmarks/network_e2e/encodings/code_v1.py",
+    "benchmarks/network_e2e/encodings/tests/test_code_v1.py",
+    "benchmarks/network_e2e/encodings/tests/test_v1.py",
+    "benchmarks/network_e2e/encodings/v1.py",
+    "benchmarks/network_sim/records.py",
+    "benchmarks/network_traces/README.md",
+    "benchmarks/network_traces/certifier_piece.py",
+    "benchmarks/network_traces/chain_record.py",
+    "benchmarks/network_traces/compile_slice_zk.py",
+    "benchmarks/network_traces/egress_zk.py",
+    "benchmarks/network_traces/leak_bounds.py",
+    "benchmarks/network_traces/pyproject.toml",
+    "benchmarks/network_traces/replay.py",
+    "benchmarks/network_traces/scan_zk.py",
+    "benchmarks/network_traces/served_session.py",
+    "benchmarks/network_traces/tests/test_active_replay.py",
+    "benchmarks/network_traces/tests/test_chain_record.py",
+    "benchmarks/network_traces/tests/test_leak_bounds.py",
+    "benchmarks/network_traces/tests/test_negatives.py",
+    "benchmarks/network_traces/tests/test_scan_zk.py",
+    "benchmarks/network_traces/tests/test_warden_serve.py",
+    "benchmarks/network_traces/warden_serve.py",
+    "benchmarks/network_traces/warden_zk.py",
+    "benchmarks/numerical/python/verity_numerical/bench/unit_costs_prover.py",
+    "benchmarks/one_stage/README.md",
+    "benchmarks/one_stage/a0.py",
+    "benchmarks/one_stage/a5.py",
+    "benchmarks/one_stage/a5_llama1b_h200.sh",
+    "benchmarks/one_stage/a5_warden.py",
+    "benchmarks/one_stage/composite.py",
+    "benchmarks/one_stage/interfaces/README.md",
+    "benchmarks/one_stage/interfaces/pyproject.toml",
+    "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json",
+    "benchmarks/one_stage/pouw_piece.py",
+    "benchmarks/one_stage/prove_leg.py",
+    "benchmarks/one_stage/pyproject.toml",
+    "benchmarks/one_stage/replay.py",
+    "benchmarks/one_stage/served_composite.sh",
+    "benchmarks/one_stage/served_overhead.py",
+    "benchmarks/one_stage/served_pouw.sh",
+    "benchmarks/one_stage/served_shares.py",
+    "benchmarks/one_stage/served_stock.sh",
+    "benchmarks/one_stage/served_verdicts.py",
+    "benchmarks/one_stage/served_verdicts.sh",
+    "benchmarks/one_stage/tests/test_a10_rewritten.py",
+    "benchmarks/one_stage/tests/test_a5_case_v2.py",
+    "benchmarks/one_stage/tests/test_a5_outputs.py",
+    "benchmarks/one_stage/tests/test_a5_tp_gates.py",
+    "benchmarks/one_stage/tests/test_a5_wiring.py",
+    "benchmarks/one_stage/tests/test_composite.py",
+    "benchmarks/one_stage/tests/test_served_pouw.py",
+    "benchmarks/one_stage/tests/test_served_verdicts.py",
+    "benchmarks/one_stage/tests/test_v2_case.py",
+    "benchmarks/one_stage/v2_case.py",
+    "benchmarks/pous/big_case.py",
+    "benchmarks/pous/p2_v1/store.py",
+    "benchmarks/pous/served_case.py",
+    "benchmarks/pous/served_piece.py",
+    "benchmarks/pous/tests/test_pous_p2_store.py",
+    "benchmarks/pouw/contents/kernels/hashed_gemm-hgemm.toml",
+    "benchmarks/pouw/h1_prove/drawn.py",
+    "benchmarks/pouw/h1_prove/drawn.sh",
+    "benchmarks/pouw/h1_prove/h1unit.py",
+    "benchmarks/pouw/pearl_c4/fixture.py",
+    "benchmarks/pouw/pearl_c4/replay.py",
+    "benchmarks/pouw/pearl_c_sm90/glm53_passes.py",
+    "benchmarks/pouw/pearl_c_sm90/glm53_timing.py",
+    "benchmarks/pouw/pearl_c_sm90/h200.sh",
+    "benchmarks/pouw/pearl_c_vllm/served_passes.py",
+    "benchmarks/pouw/pearl_c_vllm/served_step.py",
+    "benchmarks/pouw/pearl_c_vllm/verify.sh",
+    "benchmarks/pouw/pearl_c_vllm/verify_run.py",
+    "benchmarks/pouw/pyproject.toml",
+    "benchmarks/pouw/tests/test_h1_prove.py",
+    "benchmarks/pouw/tests/test_pearl_c_sm90_glm53.py",
+    "benchmarks/pouw/tests/test_pearl_c_vllm.py",
+    "benchmarks/pouw/tests/test_price_twins_accounting.py",
+    "benchmarks/prove_path/class_size.py",
+    "benchmarks/prove_path/e2e_chains/README.md",
+    "benchmarks/prove_path/prove_path.py",
+    "benchmarks/prove_path/pyproject.toml",
+    "benchmarks/prove_path/records_audit.py",
+    "benchmarks/prove_path/run.sh",
+    "benchmarks/prove_path/tests/test_prove_path.py",
+    "benchmarks/prove_path/tests/test_records_audit.py",
+    "benchmarks/prove_path/window_cost.py",
+    "benchmarks/remote_session/tests/test_challengers.py",
+    "benchmarks/sampling_plan/README.md",
+    "benchmarks/sampling_plan/cpu_budget.py",
+    "benchmarks/sampling_plan/h200.py",
+    "benchmarks/sampling_plan/inputs.py",
+    "benchmarks/sampling_plan/int8_llama.py",
+    "benchmarks/sampling_plan/pyproject.toml",
+    "benchmarks/sampling_plan/served_window.py",
+    "benchmarks/sampling_plan/tests/test_demo_a.py",
+    "benchmarks/sampling_plan/tests/test_h200.py",
+    "benchmarks/sampling_plan/tests/test_served_window.py",
+    "benchmarks/sampling_plan/transformer.py",
+    "benchmarks/verifier_cost/README.md",
+    "demos/lifecycle/README.md",
+    "demos/lifecycle/lifecycle.py",
+    "demos/onsite_served/README.md",
+    "demos/onsite_served/served_table.py",
+    "demos/vllm/README.md",
+    "demos/vllm/placement.toml",
+    "examples/README.md",
+    "examples/dither_full_util/README.md",
+    "examples/h200/interfaces/tests/test_block_record.py",
+    "examples/h200/interfaces/verity_e2e_demo/block_record.py",
+    "examples/vllm/commit.sh",
+    "infra/control/top_watch.py",
+    "infra/ops/tests/test_top_watch.py",
+    "integrations/vllm/README.md",
+    "integrations/vllm/manifests/records.json",
+    "integrations/vllm/pyproject.toml",
+    "integrations/vllm/tests/dead_code_keep.json",
+    "integrations/vllm/tests/lint/README.md",
+    "integrations/vllm/tests/lint/allowlists/p16_cli_callers.json",
+    "integrations/vllm/tests/pipeline/test_hot_commit.py",
+    "integrations/vllm/tests/program/test_conformance_record.py",
+    "integrations/vllm/verity_vllm/pipeline/boolean_replay.py",
+    "integrations/vllm/verity_vllm/pipeline/hot.py",
+    "integrations/vllm/verity_vllm/pipeline/research_tools.py",
+    "integrations/vllm/verity_vllm/program/frontend/conformance.py",
+    "integrations/vllm/verity_vllm/program/predict/steps.py",
+    "integrations/vllm/verity_vllm/program/prune.py",
+    "integrations/vllm/verity_vllm/program/quarantine/dense/gelu_tanh_mul_bf16.py",
+    "integrations/vllm/verity_vllm/query/query_artifact.py",
+    "pyproject.toml",
+    "security/Definitions/Accounting/Assumptions/RemoteDraw.lean",
+    "security/Definitions/Accounting/Bandwidth/Game.lean",
+    "security/Definitions/Accounting/Guarantees/Bandwidth.lean",
+    "security/Definitions/Accounting/Guarantees/RateAuditDeployed.lean",
+    "security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
+    "security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
+    "security/Definitions/Accounting/Guarantees/RateAuditPooled.lean",
+    "security/Definitions/Accounting/Guarantees/RemoteBinding.lean",
+    "security/Definitions/Accounting/Guarantees/RemotePass.lean",
+    "security/Definitions/Accounting/JointPeriod.lean",
+    "security/Definitions/Accounting/RateAuditDeployed.lean",
+    "security/Definitions/Accounting/RateAuditHorizon.lean",
+    "security/Definitions/Accounting/RateAuditPooled.lean",
+    "security/Definitions/Accounting/Remote/Draw.lean",
+    "security/Definitions/Accounting/Remote/Sketch.lean",
+    "security/Definitions/Core/Assumptions/Transport.lean",
+    "security/Definitions/Core/Guarantees/Transport.lean",
+    "security/Definitions/Core/Partition.lean",
+    "security/Definitions/Core/ProofSystem.lean",
+    "security/Definitions/Core/Requirement.lean",
+    "security/Definitions/Core/Site.lean",
+    "security/Definitions/Core/Transport.lean",
+    "security/Definitions/Hash/Tree.lean",
+    "security/Definitions/Nci/Guarantees/Remote.lean",
+    "security/Definitions/NetworkCertifier/WindowCharge.lean",
+    "security/Definitions/Pous/Model/StreamedWipeServer.lean",
+    "security/Definitions/Pouw/Assumptions/Lead.lean",
+    "security/Definitions/Pouw/Dimension/Pointwise.lean",
+    "security/Definitions/Pouw/Dimension/Ssn.lean",
+    "security/Definitions/Pouw/Game/ClopperPearson.lean",
+    "security/Definitions/Pouw/Game/Defs.lean",
+    "security/Definitions/Pouw/Guarantees/Lead.lean",
+    "security/Definitions/Pouw/Guarantees/Writes.lean",
+    "security/Definitions/Pouw/PearlC/TileDraw.lean",
+    "security/Definitions/Pouw/PearlC/Unscale.lean",
+    "security/Definitions/Spot.lean",
+    "security/Definitions/Spot/Dataflow.lean",
+    "security/Definitions/Spot/Exfiltration.lean",
+    "security/Definitions/Spot/LongValue.lean",
+    "security/Definitions/Spot/Necessity.lean",
+    "security/Definitions/Spot/Oblivious.lean",
+    "security/Proofs/Accounting/Defs.lean",
+    "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean",
+    "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityPeriod.lean",
+    "security/Proofs/Accounting/MemoryShare.lean",
+    "security/Proofs/Accounting/RateAudit/Deployed.lean",
+    "security/Proofs/Accounting/RateAudit/DeployedRun.lean",
+    "security/Proofs/Accounting/RateAudit/DeployedSketch.lean",
+    "security/Proofs/Accounting/RateAudit/Horizon.lean",
+    "security/Proofs/Accounting/RateAudit/Pooled.lean",
+    "security/Proofs/Accounting/RateAudit/Session.lean",
+    "security/Proofs/Accounting/RateAudit/SketchInteractive.lean",
+    "security/Proofs/Accounting/RemoteHeld/Draw.lean",
+    "security/Proofs/Accounting/RemoteHeld/DrawMeets.lean",
+    "security/Proofs/Accounting/RemoteHeld/Line.lean",
+    "security/Proofs/Accounting/RemoteHeld/Subprotocol.lean",
+    "security/Proofs/Accounting/TS/PeriodSound.lean",
+    "security/Proofs/Core/Annotation.lean",
+    "security/Proofs/Core/Fp32.lean",
+    "security/Proofs/Core/HongKung.lean",
+    "security/Proofs/Core/ProofSystem.lean",
+    "security/Proofs/Core/Site.lean",
+    "security/Proofs/Core/Transport.lean",
+    "security/Proofs/Flock/Bridge/V5/EndToEndHidden.lean",
+    "security/Proofs/Flock/Bridge/V5/Honest.lean",
+    "security/Proofs/Flock/Bridge/V5/Transports.lean",
+    "security/Proofs/Flock/Claims/Complete.lean",
+    "security/Proofs/Flock/Claims/Complete/Replay.lean",
+    "security/Proofs/Flock/Claims/GS.lean",
+    "security/Proofs/Flock/Claims/KS.lean",
+    "security/Proofs/Flock/Claims/KS/PlainUntrim.lean",
+    "security/Proofs/Flock/Claims/KS/ZkAccepts.lean",
+    "security/Proofs/Flock/Claims/Recursion/Assumptions/HonestFixture.lean",
+    "security/Proofs/Flock/Claims/Recursion/Finders.lean",
+    "security/Proofs/Flock/Claims/Recursion/IrDep.lean",
+    "security/Proofs/Flock/Claims/Recursion/IrDepSession.lean",
+    "security/Proofs/Flock/Claims/Recursion/SeqCap.lean",
+    "security/Proofs/Flock/Claims/Recursion/SeqDeploy.lean",
+    "security/Proofs/Flock/Claims/Recursion/SeqDeployStop.lean",
+    "security/Proofs/Flock/Claims/Recursion/SeqKey.lean",
+    "security/Proofs/Flock/Claims/Recursion/SeqStop.lean",
+    "security/Proofs/Flock/Claims/Recursion/Serve.lean",
+    "security/Proofs/Flock/Claims/RootFind.lean",
+    "security/Proofs/Flock/Claims/Sampling/EndToEndDeploy.lean",
+    "security/Proofs/Flock/Claims/Sampling/Reference.lean",
+    "security/Proofs/Flock/Claims/Sampling/Reference/DeployedCode.lean",
+    "security/Proofs/Flock/Claims/System.lean",
+    "security/Proofs/Flock/Claims/ZK.lean",
+    "security/Proofs/Flock/Claims/ZK/Layout.lean",
+    "security/Proofs/Flock/Claims/ZK/PadsRoot.lean",
+    "security/Proofs/Flock/Claims/ZK/Stop.lean",
+    "security/Proofs/Flock/EndToEnd/Joint.lean",
+    "security/Proofs/Flock/Recursive/KSCoinTreeWitnesses.lean",
+    "security/Proofs/Flock/Soundness/Audit/Partitioning/Guarantees.lean",
+    "security/Proofs/Flock/Soundness/Discharge/DecodeZLJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Exec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/FailClosed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/General/Instances.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HdecCor.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Hidden/UnrolledP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenDec.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/HeadlineExecP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/PinnedCols.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Placed.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/PlacedP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/SiteHP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/HiddenExec/Sites.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainHJ.lean",
+    "security/Proofs/Flock/Soundness/Discharge/PlainReg.lean",
+    "security/Proofs/Flock/Soundness/Discharge/Tables.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkBind/AtM1.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/DefsJP.lean",
+    "security/Proofs/Flock/Soundness/Discharge/ZkHidden/NonVacuousSeg.lean",
+    "security/Proofs/NetworkCertifier/Causal.lean",
+    "security/Proofs/NetworkCertifier/Code.lean",
+    "security/Proofs/NetworkCertifier/README.md",
+    "security/Proofs/Pous/PeriodGame.lean",
+    "security/Proofs/Pous/Pooled.lean",
+    "security/Proofs/Pous/StreamedWipe/Witnesses.lean",
+    "security/Proofs/Pouw/Dimension/H100DenseProofs.lean",
+    "security/Proofs/Pouw/Dimension/H100FragProofs.lean",
+    "security/Proofs/Pouw/Lead.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/Cells.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/GrindProofs.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/Kept.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/PointwiseProofs.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/Registers.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/Revisit.lean",
+    "security/Proofs/Pouw/Lead/CoinBranch/Writes.lean",
+    "security/Proofs/Pouw/Lead/Commit.lean",
+    "security/Proofs/Pouw/Lead/Commit/Credit.lean",
+    "security/Proofs/Pouw/Lead/Commit/Hybrid.lean",
+    "security/Proofs/Pouw/Lead/Commit/Rounds.lean",
+    "security/Proofs/Pouw/Lead/Commit/RowBound.lean",
+    "security/Proofs/Pouw/Lead/Compose.lean",
+    "security/Proofs/Pouw/Lead/Compose/Deployed.lean",
+    "security/Proofs/Pouw/Lead/Compose/G.lean",
+    "security/Proofs/Pouw/Lead/Compose/Honest.lean",
+    "security/Proofs/Pouw/Lead/MH100W.lean",
+    "security/Proofs/Pouw/Lead/MH100W/Floor.lean",
+    "security/Proofs/Pouw/Lead/Network.lean",
+    "security/Proofs/Pouw/Lead/Network/Cells.lean",
+    "security/Proofs/Pouw/Lead/Network/Rot.lean",
+    "security/Proofs/Pouw/Lead/Network/Term.lean",
+    "security/Proofs/Pouw/Lead/PStar.lean",
+    "security/Proofs/Pouw/Lead/PStar/AlphabetProofs.lean",
+    "security/Proofs/Pouw/Lead/PStar/Call.lean",
+    "security/Proofs/Pouw/Lead/PStar/ExpansionProofs.lean",
+    "security/Proofs/Pouw/Lead/PStar/Lanes.lean",
+    "security/Proofs/Pouw/Lead/PStar/Marginal.lean",
+    "security/Proofs/Pouw/Lead/PStar/MassFloorProofs.lean",
+    "security/Proofs/Pouw/Lead/PStar/Stream.lean",
+    "security/Proofs/Pouw/Lead/PStar/Table.lean",
+    "security/Proofs/Pouw/Lead/PStar/Tile.lean",
+    "security/Proofs/Pouw/Lead/PStar/Walks.lean",
+    "security/Proofs/Pouw/Lead/Statement.lean",
+    "security/Proofs/Pouw/Lead/Statement/Gap.lean",
+    "security/Proofs/Pouw/Lead/Tags.lean",
+    "security/Proofs/Pouw/Lead/Tags/Distinct.lean",
+    "security/Proofs/Pouw/Lead/Tags/Exact.lean",
+    "security/Proofs/Pouw/Lead/Tags/Fold.lean",
+    "security/Proofs/Pouw/Lead/Tags/Repeats.lean",
+    "security/Proofs/Pouw/Lead/Tags/Shift.lean",
+    "security/Proofs/Pouw/Lead/Tags/SsnProofs.lean",
+    "security/Proofs/Pouw/Lead/Tags/TagProofs.lean",
+    "security/Proofs/Pouw/Lead/Tags/Tile.lean",
+    "security/Proofs/Pouw/Lead/Tail.lean",
+    "security/Proofs/Pouw/Lead/Tail/Across.lean",
+    "security/Proofs/Pouw/Lead/Tail/Blocks.lean",
+    "security/Proofs/Pouw/Lead/Tail/Chernoff.lean",
+    "security/Proofs/Pouw/Lead/Tail/Columns.lean",
+    "security/Proofs/Pouw/Lead/Tail/Fiber.lean",
+    "security/Proofs/Pouw/Lead/Tail/G.lean",
+    "security/Proofs/Pouw/Lead/Tail/Gap.lean",
+    "security/Proofs/Pouw/Lead/Tail/Nontrivial.lean",
+    "security/Proofs/Pouw/Lead/Tail/Repeats.lean",
+    "security/Proofs/Pouw/Lead/Tail/Route.lean",
+    "security/Proofs/Pouw/Lead/Tail/Slots.lean",
+    "security/Proofs/Pouw/Lead/Tail/Table.lean",
+    "security/Proofs/Pouw/Lead/Tail/Words.lean",
+    "security/Proofs/Pouw/PearlC/TileCheckWordsRev1.lean",
+    "security/Proofs/Pouw/PearlC/TileDrawGamma.lean",
+    "security/Proofs/Pouw/PearlC/TileGammaTol.lean",
+    "security/Proofs/Pouw/PearlPlus.lean",
+    "security/Proofs/Pouw/PearlPlus/Assembly.lean",
+    "security/Proofs/Pouw/PearlPlus/Atom.lean",
+    "security/Proofs/Pouw/PearlPlus/Cap.lean",
+    "security/Proofs/Pouw/PearlPlus/Debit.lean",
+    "security/Proofs/Pouw/PearlPlus/Draw.lean",
+    "security/Proofs/Pouw/PearlPlus/Factors.lean",
+    "security/Proofs/Pouw/PearlPlus/Keys.lean",
+    "security/Proofs/Pouw/PearlPlus/Noise.lean",
+    "security/Proofs/Pouw/PearlPlus/Numerics.lean",
+    "security/Proofs/Pouw/PearlPlus/Peel.lean",
+    "security/Proofs/Pouw/PearlPlus/Rho.lean",
+    "security/Proofs/Pouw/PearlPlus/Rules.lean",
+    "security/Proofs/Pouw/PearlPlus/Semantics.lean",
+    "security/Proofs/Pouw/PearlPlus/Stats.lean",
+    "security/Proofs/Pouw/PearlPlus/Words.lean",
+    "security/Proofs/Pouw/PeriodJ10R/Stratum.lean",
+    "security/Proofs/Pouw/Salt/Witness.lean",
+    "security/Proofs/Pouw/Sampling/ClopperPearson.lean",
+    "security/Proofs/Pouw/TileBound/WinogradStrassen.lean",
+    "security/Proofs/Pouw/Writes.lean",
+    "security/Proofs/Properties/Accounting/Remote/ComponentWitnesses.lean",
+    "security/Proofs/Properties/Accounting/Remote/Subprotocol.lean",
+    "security/Proofs/Properties/Core/Period.lean",
+    "security/Proofs/Properties/Core/Site.lean",
+    "security/Proofs/Properties/NetworkCertifier/Device/Late.lean",
+    "security/Proofs/Properties/NetworkPeriod.lean",
+    "security/Proofs/Properties/NetworkScan.lean",
+    "security/Proofs/Properties/NetworkScan/Causal.lean",
+    "security/Proofs/Properties/NetworkScan/Walk.lean",
+    "security/Proofs/Properties/Pous/Component.lean",
+    "security/Proofs/Properties/Pous/Run.lean",
+    "security/Proofs/Properties/Pous/RunAt.lean",
+    "security/Proofs/Properties/Pous/TimedAudit.lean",
+    "security/Proofs/Properties/Pouw/Check.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Noise.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Noise/Fa.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Noise/Fb.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Noise/Gram.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Noise/LineKey.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Open.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Verdict.lean",
+    "security/Proofs/Properties/Pouw/PearlPlus/Witnesses.lean",
+    "security/Proofs/Properties/Remote.lean",
+    "security/Proofs/Properties/Remote/Honest.lean",
+    "security/Proofs/Properties/Spot.lean",
+    "security/Proofs/Properties/Verity/Soundness.lean",
+    "security/Proofs/Properties/Verity/Subprotocols.lean",
+    "security/Proofs/Properties/Verity/Wipe.lean",
+    "security/Proofs/Spot.lean",
+    "security/Proofs/Spot/Determinacy.lean",
+    "security/Proofs/Spot/Egress.lean",
+    "security/Proofs/Spot/Exfiltration.lean",
+    "security/Proofs/Spot/ExfiltrationBound.lean",
+    "security/Proofs/Spot/ExfiltrationExamples.lean",
+    "security/Proofs/Spot/HonestCone.lean",
+    "security/Proofs/Spot/Instance.lean",
+    "security/Proofs/Spot/JointPressure.lean",
+    "security/Proofs/Spot/Leakage.lean",
+    "security/Proofs/Spot/LongValue.lean",
+    "security/Proofs/Spot/Necessity.lean",
+    "security/Proofs/Spot/NecessityMatrix.lean",
+    "security/Proofs/Spot/NecessitySkeleton.lean",
+    "security/Proofs/Spot/Oblivious.lean",
+    "security/Proofs/Spot/Transfer.lean",
+    "security/Proofs/Spot/Work.lean",
+    "security/Proofs/lake-manifest.json",
+    "security/Properties/Accounting/JointBridge/ServiceSoundOfSessions.lean",
+    "security/Properties/Accounting/RegisteredCircuit.lean",
+    "security/Properties/Accounting/Remote.lean",
+    "security/Properties/Accounting/Remote/Line.lean",
+    "security/Properties/Accounting/Remote/Line/Record.lean",
+    "security/Properties/Accounting/Remote/Pooled.lean",
+    "security/Properties/Accounting/Remote/Schedule.lean",
+    "security/Properties/Accounting/Remote/Subprotocol.lean",
+    "security/Properties/Accounting/Served.lean",
+    "security/Properties/Core/Period.lean",
+    "security/Properties/Core/Site.lean",
+    "security/Properties/NetworkPeriod.lean",
+    "security/Properties/NetworkScan.lean",
+    "security/Properties/Pous/EndToEnd.lean",
+    "security/Properties/Pous/EndToEndAt.lean",
+    "security/Properties/Pous/Period.lean",
+    "security/Properties/Pous/PeriodAt.lean",
+    "security/Properties/Pous/PeriodGame.lean",
+    "security/Properties/Pous/Wipe.lean",
+    "security/Properties/Pouw/Check.lean",
+    "security/Properties/Pouw/Lead/Commit.lean",
+    "security/Properties/Pouw/Lead/V2.lean",
+    "security/Properties/Pouw/PearlPlus.lean",
+    "security/Properties/Pouw/PearlPlus/Witnesses.lean",
+    "security/Properties/Pouw/PearlPlusDraw.lean",
+    "security/Properties/Pouw/Period.lean",
+    "security/Properties/Pouw/PeriodJ10R.lean",
+    "security/Properties/Remote.lean",
+    "security/Properties/Spot.lean",
+    "security/Properties/Spot/Draw.lean",
+    "security/Properties/Verity/Idle.lean",
+    "security/Properties/Verity/Soundness.lean",
+    "security/Properties/Verity/Subprotocols.lean",
+    "security/Properties/lake-manifest.json",
+    "security/README.md",
+    "tests/test_boundaries.py",
+    "tests/test_lean_vocabulary.py",
+    "tests/test_repository.py",
+    "tests/test_seed_ports.py",
+    "tests/test_vllm_public_api.py",
+    "tools/move/accept_prob_map.toml",
+    "tools/research/pyproject.toml",
+    "tools/research/src/research/drive.py",
+    "tools/research/src/research/merge.py",
+    "tools/research/src/research/pods/nebius/dispatch.py",
+    "tools/research/src/research/pods/nebius/sky/jobs/config-run.yaml",
+    "tools/research/src/research/queue.py",
+    "tools/research/src/research/store/kinds.py",
+    "tools/research/src/research/store/tools_registry.py",
+    "tools/research/src/research/store/vllm_tools.py",
+    "tools/research/src/research/telemetry/source_identity.py",
+    "tools/research/tests/test_drive_checked.py",
+    "tools/research/tests/test_drive_lowrisk.py",
+    "tools/research/tests/test_nebius_commit_pack.py",
+    "tools/research/tests/test_queue.py",
+    "tools/research/tests/test_store_vllm_tools.py",
+    "tools/verity/check/suites.py",
+    "tools/verity/circuit_check/pyproject.toml",
+    "tools/verity/circuit_check/src/circuit_check/by_calls.py",
+    "tools/verity/circuit_check/src/circuit_check/sidecars.py",
+    "tools/verity/cli/tests/test_run.py",
+    "tools/verity/cli/verity_cli/run.py",
+    "tools/verity/lean/check.py",
+    "tools/verity/lean/tests/test_audit.py",
+    "tools/verity/lean/tests/test_lean_changed.py",
+    "verity/README.md",
+    "verity/circuits/defs.py",
+    "verity/circuits/layout.py",
+    "verity/circuits/population.py",
+    "verity/circuits/query.py",
+    "verity/circuits/query_codec.py",
+    "verity/circuits/tests/test_boolean.py",
+    "verity/circuits/tests/test_format_spec.py",
+    "verity/circuits/tests/test_population_values.py",
+    "verity/circuits/tests/test_qcall_vectors.py",
+    "verity/circuits/tests/test_qword_vectors.py",
+    "verity/circuits/tests/test_running_example.py",
+    "verity/circuits/tests/test_template_instance.py",
+    "verity/claims/__init__.py",
+    "verity/commitments/attest/lean/Attest.lean",
+    "verity/commitments/attest/lean/Attest/FrameV3Sha512.lean",
+    "verity/commitments/crypto/transport.py",
+    "verity/commitments/gates/embedding.py",
+    "verity/commitments/gates/sha512_stream.circuit-check.json",
+    "verity/commitments/gates/sha512_stream.circuit-check.py",
+    "verity/commitments/gates/sha512_stream.py",
+    "verity/commitments/keyed.py",
+    "verity/commitments/randomness/lake-manifest.json",
+    "verity/commitments/tests/test_boolean_embedding.py",
+    "verity/commitments/tests/test_boolean_rowleaf.py",
+    "verity/commitments/tests/test_boolean_sha512_stream.py",
+    "verity/commitments/tests/test_keyed.py",
+    "verity/commitments/tests/test_transport.py",
+    "verity/commitments/windows/interface.py",
+    "verity/commitments/windows/rows.py",
+    "verity/commitments/windows/tests/test_blocks.py",
+    "verity/commitments/windows/tests/test_interface.py",
+    "verity/composite/device/live_challenger/auditor.py",
+    "verity/composite/device/live_challenger/tests/test_auditor_days.py",
+    "verity/core/attest/lean/lean-audit.json",
+    "verity/core/protocols/certifier/tests/test_network_certifier_warden.py",
+    "verity/core/protocols/composition/pyproject.toml",
+    "verity/core/protocols/composition/tests/test_composition_difftest.py",
+    "verity/core/protocols/interface/CoreProtocol.lean",
+    "verity/core/protocols/network/nci/lean/lean-audit.json",
+    "verity/core/protocols/pous/challenger_party.py",
+    "verity/core/protocols/pous/lean/TRUSTED.sha256",
+    "verity/core/protocols/pous/pyproject.toml",
+    "verity/core/protocols/pous/tests/test_pous_wipe_monitoring.py",
+    "verity/core/protocols/pouw/README.md",
+    "verity/core/protocols/pouw/lean/check/README.md",
+    "verity/core/protocols/pouw/lean/check/pyproject.toml",
+    "verity/core/protocols/pouw/lean/commit/lean-audit.json",
+    "verity/core/protocols/remote/CoreRemote.lean",
+    "verity/core/protocols/remote/RemoteMain.lean",
+    "verity/core/protocols/remote_bandwidth/README.md",
+    "verity/core/protocols/remote_bandwidth/pyproject.toml",
+    "verity/core/protocols/sampled_proofs/README.md",
+    "verity/core/protocols/sampled_proofs/one_stage/proofs.py",
+    "verity/core/protocols/sampled_proofs/optimize.py",
+    "verity/core/protocols/sampled_proofs/parties.py",
+    "verity/core/protocols/sampled_proofs/tests/test_optimize.py",
+    "verity/core/protocols/sampled_proofs/tests/test_service_window.py",
+    "verity/core/service/flock/Flock.lean",
+    "verity/core/service/flock/Flock/Desc.lean",
+    "verity/core/service/sampled_proofs/SampledProofs.lean",
+    "verity/core/service/sampled_proofs/SampledProofs/ChallengerDraw.lean",
+    "verity/core/service/sampled_proofs/SampledProofs/ChallengerTrees.lean",
+    "verity/core/service/sampled_proofs/SampledProofs/OneStageZk.lean",
+    "verity/core/service/sampled_proofs/SampledProofs/Run.lean",
+    "verity/core/service/sampled_proofs/tests/test_difftest.py",
+    "verity/definitions/circuits/census.py",
+    "verity/definitions/circuits/requirement.py",
+    "verity/definitions/circuits/requirement_units.py",
+    "verity/definitions/ops/tests/test_codec_ml.py",
+    "verity/definitions/registry/int8_exact.circuit-check.json",
+    "verity/definitions/registry/io_shell.circuit-check.py",
+    "verity/definitions/registry/io_shell.py",
+    "verity/definitions/registry/lifted.py",
+    "verity/definitions/registry/linear_cut.circuit-check.json",
+    "verity/definitions/registry/linear_cut.circuit-check.py",
+    "verity/definitions/registry/linear_cut.py",
+    "verity/definitions/registry/pearl_c_tile.circuit-check.json",
+    "verity/definitions/registry/pearl_c_tile.circuit-check.py",
+    "verity/definitions/registry/pearl_c_tile.py",
+    "verity/definitions/tests/catalog_ids.json",
+    "verity/definitions/tests/test_linear_cut.py",
+    "verity/hardware/registration.py",
+    "verity/ml/circuits/population.circuit-check.py",
+    "verity/ml/circuits/tests/test_part_log.py",
+    "verity/ml/definitions/tests/test_int8_exact.py",
+    "verity/protocols/certifier/device/README.md",
+    "verity/protocols/certifier/device/lean/scripts/difftest_vectors.py",
+    "verity/protocols/certifier/device/lean/scripts/issuer_vectors.py",
+    "verity/protocols/certifier/device/program/lean/NetworkCertifier/WindowCharge.lean",
+    "verity/protocols/certifier/device/program/lean/NetworkCertifier/WindowDifftest.lean",
+    "verity/protocols/certifier/device/program/lean/scripts/difftest_vectors.py",
+    "verity/protocols/certifier/prover/window_charge.py",
+    "verity/protocols/certifier/verifier/PROTOCOL.md",
+    "verity/protocols/certifier/verifier/README.md",
+    "verity/protocols/certifier/verifier/active.py",
+    "verity/protocols/certifier/verifier/audit.py",
+    "verity/protocols/certifier/verifier/blocks.py",
+    "verity/protocols/certifier/verifier/certificate.py",
+    "verity/protocols/certifier/verifier/coin_link.py",
+    "verity/protocols/certifier/verifier/commitment.py",
+    "verity/protocols/certifier/verifier/head_check.py",
+    "verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean",
+    "verity/protocols/certifier/verifier/lean_audit.py",
+    "verity/protocols/certifier/verifier/network/tests/fixtures/select_entry.json",
+    "verity/protocols/certifier/verifier/network/tests/period_case.py",
+    "verity/protocols/certifier/verifier/network/tests/test_network_check_protocol.py",
+    "verity/protocols/certifier/verifier/network/tests/test_network_period_protocol.py",
+    "verity/protocols/certifier/verifier/network/tests/test_network_records_protocol.py",
+    "verity/protocols/certifier/verifier/network/tests/test_slot_entry_pins.py",
+    "verity/protocols/certifier/verifier/replay_step.py",
+    "verity/protocols/certifier/verifier/schedule.py",
+    "verity/protocols/certifier/verifier/tests/egress_traffic.py",
+    "verity/protocols/certifier/verifier/tests/scan_traffic.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_active.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_audit.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_certificate.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_commitment.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_period.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_salt_compact.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_service.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_warden_rows.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_warden_rows_phase11.py",
+    "verity/protocols/certifier/verifier/tests/test_network_certifier_warden_rows_replay.py",
+    "verity/protocols/certifier/verifier/transfer_rows.py",
+    "verity/protocols/certifier/verifier/warden.py",
+    "verity/protocols/certifier/verifier/warden_rows.py",
+    "verity/protocols/flock/agreement/README.md",
+    "verity/protocols/flock/prover/live/src/proved_scope.rs",
+    "verity/protocols/flock/prover/python/verity_flock/circuit.py",
+    "verity/protocols/flock/prover/python/verity_flock/firewall_transcript.py",
+    "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json",
+    "verity/protocols/flock/prover/tests/test_fmaxf_commit.py",
+    "verity/protocols/flock/verifier/Flock/RegBound.lean",
+    "verity/protocols/flock/verifier/Flock/Test/KsScope.lean",
+    "verity/protocols/flock/verifier/Flock/Test/RegBound.lean",
+    "verity/protocols/flock/verifier/FlockVerify.lean",
+    "verity/protocols/inference_only/verifier/README.md",
+    "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Baseline.lean",
+    "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Protocol.lean",
+    "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py",
+    "verity/protocols/interface/CoreProtocol/Period.lean",
+    "verity/protocols/interface/CoreProtocol/PeriodDifftest.lean",
+    "verity/protocols/interface/CoreProtocol/PeriodDifftestMain.lean",
+    "verity/protocols/interface/CoreProtocol/Profile.lean",
+    "verity/protocols/interface/CoreProtocol/Registration.lean",
+    "verity/protocols/interface/README.md",
+    "verity/protocols/interface/lake-manifest.json",
+    "verity/protocols/interface/lakefile.toml",
+    "verity/protocols/onsite/verifier/lake-manifest.json",
+    "verity/protocols/poub/device/live_verifier/README.md",
+    "verity/protocols/poub/verifier/PROTOCOL.md",
+    "verity/protocols/poub/verifier/audit.py",
+    "verity/protocols/poub/verifier/lean/RemoteAudit/Basic.lean",
+    "verity/protocols/poub/verifier/lean/RemoteAudit/Protocol.lean",
+    "verity/protocols/poub/verifier/lean/lake-manifest.json",
+    "verity/protocols/poub/verifier/lean/tests/test_p2.py",
+    "verity/protocols/poub/verifier/lean/tests/test_p2_case.py",
+    "verity/protocols/poub/verifier/monitoring.py",
+    "verity/protocols/poub/verifier/opening.py",
+    "verity/protocols/poub/verifier/tests/test_monitoring.py",
+    "verity/protocols/poub/verifier/tests/test_opening.py",
+    "verity/protocols/pous/device/lean/tests/test_attest.py",
+    "verity/protocols/pous/device/memory_challenger.py",
+    "verity/protocols/pous/lean/README.md",
+    "verity/protocols/pous/verifier/PROTOCOL.md",
+    "verity/protocols/pous/verifier/README.md",
+    "verity/protocols/pous/verifier/__init__.py",
+    "verity/protocols/pous/verifier/check/PousCheck/Certificate.lean",
+    "verity/protocols/pous/verifier/check/PousCheck/Run.lean",
+    "verity/protocols/pous/verifier/check/PousCheck/RunProtocol.lean",
+    "verity/protocols/pous/verifier/check/pyproject.toml",
+    "verity/protocols/pous/verifier/check/tests/test_run.py",
+    "verity/protocols/pous/verifier/period.py",
+    "verity/protocols/pous/verifier/run.py",
+    "verity/protocols/pous/verifier/schemes/band.py",
+    "verity/protocols/pous/verifier/schemes/p2.py",
+    "verity/protocols/pous/verifier/streamed_wipe.py",
+    "verity/protocols/pous/verifier/tests/test_pous_band.py",
+    "verity/protocols/pous/verifier/tests/test_pous_challenger_party.py",
+    "verity/protocols/pous/verifier/tests/test_pous_codec_api.py",
+    "verity/protocols/pous/verifier/tests/test_pous_dense.py",
+    "verity/protocols/pous/verifier/tests/test_pous_layout.py",
+    "verity/protocols/pous/verifier/tests/test_pous_period.py",
+    "verity/protocols/pous/verifier/tests/test_pous_protocol.py",
+    "verity/protocols/pous/verifier/tests/test_pous_run.py",
+    "verity/protocols/pous/verifier/tests/test_pous_wipe_parties.py",
+    "verity/protocols/pous/verifier/wipe_monitoring.py",
+    "verity/protocols/pous/verifier/wipe_parties.py",
+    "verity/protocols/pous/verifier/wipe_party.py",
+    "verity/protocols/pouw/clear/clear_work.py",
+    "verity/protocols/pouw/prover/circuit/__init__.py",
+    "verity/protocols/pouw/prover/circuit/compile.py",
+    "verity/protocols/pouw/prover/circuit/lead.circuit-check.json",
+    "verity/protocols/pouw/prover/circuit/lead.circuit-check.py",
+    "verity/protocols/pouw/prover/circuit/lead.py",
+    "verity/protocols/pouw/prover/schemes/pearl_c.py",
+    "verity/protocols/pouw/prover/schemes/pearl_c_work.py",
+    "verity/protocols/pouw/verifier/core_check.py",
+    "verity/protocols/pouw/verifier/credit.py",
+    "verity/protocols/pouw/verifier/dither/PROTOCOL.md",
+    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Difftest.lean",
+    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Inputs.lean",
+    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Lanes.lean",
+    "verity/protocols/pouw/verifier/lean/check/PouwCheck/Pass.lean",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_credit_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_lead_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/test_difftest.py",
+    "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Bindings.lean",
+    "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Frame.lean",
+    "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Rows.lean",
+    "verity/protocols/pouw/verifier/lean/commit/lakefile.toml",
+    "verity/protocols/pouw/verifier/lean/window/PouwWindow/Public.lean",
+    "verity/protocols/pouw/verifier/tests/test_circuit_lead.py",
+    "verity/protocols/pouw/verifier/tests/test_pearl_c_tile.py",
+    "verity/protocols/pouw/verifier/tests/test_pouw_audit.py",
+    "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_debit.py",
+    "verity/protocols/pouw/verifier/tests/test_pouw_pearl_c_work.py",
+    "verity/protocols/pouw/verifier/tests/test_pouw_salt.py",
+    "verity/protocols/pouw/verifier/tests/test_weights.py",
+    "verity/protocols/pouw/verifier/weights.py",
+    "verity/protocols/pouw/verifier/window.py",
+    "verity/protocols/recursion/verifier/recursive/VStarRecursive/Sampled.lean",
+    "verity/protocols/recursion/verifier/recursive/lakefile.toml",
+    "verity/protocols/recursion/verifier/vstar_cli/tests/test_irdep_difftest.py",
+    "verity/protocols/remote/verifier/README.md",
+    "verity/protocols/remote/verifier/RemoteV1Main.lean",
+    "verity/protocols/remote/verifier/composition/README.md",
+    "verity/protocols/remote/verifier/composition/lake-manifest.json",
+    "verity/protocols/remote/verifier/composition/tests/periods.py",
+    "verity/protocols/remote/verifier/composition/tests/reference.py",
+    "verity/protocols/remote/verifier/composition/tests/test_inference_only_not_composed.py",
+    "verity/protocols/remote/verifier/composition/tests/test_registration_difftest.py",
+    "verity/protocols/spot/device/challenger.py",
+    "verity/protocols/spot/device/coins.py",
+    "verity/protocols/spot/device/remote.py",
+    "verity/protocols/spot/verifier/lean/Spot/Bound.lean",
+    "verity/protocols/spot/verifier/lean/Spot/ChallengerSession.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Draw.lean",
+    "verity/protocols/spot/verifier/lean/Spot/LinkPoints.lean",
+    "verity/protocols/spot/verifier/lean/Spot/OneStage.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Partition.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Pieces.lean",
+    "verity/protocols/spot/verifier/lean/Spot/PopOrder.lean",
+    "verity/protocols/spot/verifier/lean/Spot/PublicUnits.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Record.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Registration.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Slots.lean",
+    "verity/protocols/spot/verifier/lean/tests/test_challenger_difftest.py",
+    "verity/protocols/spot/verifier/one_stage/audit.py",
+    "verity/protocols/spot/verifier/one_stage/draw.py",
+    "verity/protocols/spot/verifier/one_stage/link_points.py",
+    "verity/protocols/spot/verifier/one_stage/registered.py",
+    "verity/protocols/spot/verifier/one_stage/registration.py",
+    "verity/protocols/spot/verifier/one_stage/verifier.py",
+    "verity/protocols/spot/verifier/profile.py",
+    "verity/protocols/spot/verifier/service.py",
+    "verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json",
+    "verity/protocols/spot/verifier/tests/test_one_stage.py",
+    "verity/protocols/spot/verifier/tests/test_service.py",
+    "verity/protocols/tests/tests/test_profile.py",
+    "verity/settings.py"
+   ]
+  }
+ },
+ "pr-8543": {
+  "base": "b1409cffb0",
+  "heads": [
+   "2007687fd9"
+  ],
+  "conflicts": {
+   "2007687fd9": [
+    "benchmarks/two_stage/tests/TwoGuard.lean",
+    "benchmarks/two_stage/tests/test_guard.py",
+    "fixtures/artifacts.json",
+    "security/Proofs/Flock/SpotFlock/Code.lean",
+    "security/Proofs/Flock/SpotFlock/Sessions.lean"
+   ]
+  }
+ },
+ "pr-8556": {
+  "base": "b1409cffb0",
+  "heads": [
+   "84f4431913"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 5.02s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8559": {
+  "base": "b1409cffb0",
+  "heads": [
+   "6d556aa4d3"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.88s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8578": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0a713e7caa"
+  ],
+  "conflicts": {
+   "0a713e7caa": [
+    "verity/commitments/windows/interface.py"
+   ]
+  }
+ },
+ "pr-8580": {
+  "base": "b1409cffb0",
+  "heads": [
+   "03afbdd828"
+  ],
+  "conflicts": {
+   "03afbdd828": [
+    "adapters/vllm/tests/program/predict/test_window_circuit.py",
+    "verity/commitments/windows/interface.py",
+    "verity/commitments/windows/tests/test_interface.py",
+    "verity/protocols/certifier/verifier/network/tests/test_network_period_protocol.py"
+   ]
+  }
+ },
+ "pr-8615": {
+  "base": "b1409cffb0",
+  "heads": [
+   "9b5371e8ae"
+  ],
+  "conflicts": {
+   "9b5371e8ae": [
+    "tools/verity/lean/lean_changed.py"
+   ]
+  }
+ },
+ "pr-8642": {
+  "base": "b1409cffb0",
+  "heads": [
+   "1f5fcd4a02"
+  ],
+  "conflicts": {
+   "1f5fcd4a02": [
+    "infra/control/watchers.toml"
+   ]
+  }
+ },
+ "pr-8671": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a4b42d12aa"
+  ],
+  "conflicts": {
+   "a4b42d12aa": [
+    "benchmarks/hash/README.md",
+    "benchmarks/hash/exactlin/README.md",
+    "benchmarks/hash/exactlin/exactlin.py",
+    "benchmarks/hash/exactlin/pyproject.toml",
+    "benchmarks/hash/exactlin/values.py"
+   ]
+  }
+ },
+ "pr-8701": {
+  "base": "b1409cffb0",
+  "heads": [
+   "44dd026bd6"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.75s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8708": {
+  "base": "b1409cffb0",
+  "heads": [
+   "635b2f9702"
+  ],
+  "conflicts": {
+   "635b2f9702": [
+    "security/Proofs/Properties/NetworkPeriod.lean",
+    "security/Properties/NetworkPeriod.lean",
+    "verity/protocols/certifier/verifier/network/tests/period_case.py",
+    "verity/protocols/spot/verifier/tests/test_two_stage.py"
+   ]
+  }
+ },
+ "pr-8714": {
+  "base": "b1409cffb0",
+  "heads": [
+   "338bfb2c79"
+  ],
+  "conflicts": {
+   "338bfb2c79": [
+    "tools/verity/check/check.py",
+    "tools/verity/check/guard/verity_suite_guard.py",
+    "tools/verity/check/suites.py",
+    "tools/verity/check/tests/test_guard.py"
+   ]
+  }
+ },
+ "pr-8719": {
+  "base": "b1409cffb0",
+  "heads": [
+   "076356b2f7"
+  ],
+  "conflicts": {
+   "076356b2f7": [
+    ".agents/skills/using-slack/registry.json",
+    "tools/verity/check/check.py",
+    "tools/verity/check/guard/verity_suite_guard.py",
+    "tools/verity/check/pyproject.toml",
+    "tools/verity/check/suites.py",
+    "tools/verity/check/tests/test_guard.py"
+   ]
+  }
+ },
+ "pr-8725": {
+  "base": "b1409cffb0",
+  "heads": [
+   "452a2f7967"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.67s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8731": {
+  "base": "b1409cffb0",
+  "heads": [
+   "3cb71ba075"
+  ],
+  "conflicts": {
+   "3cb71ba075": [
+    "verity/protocols/spot/verifier/lean/Spot/OneStage.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Pieces.lean",
+    "verity/protocols/spot/verifier/lean/Spot/Run.lean",
+    "verity/protocols/spot/verifier/lean/tests/test_history_difftest.py",
+    "verity/protocols/spot/verifier/service.py"
+   ]
+  }
+ },
+ "pr-8746": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a7f8fb6770"
+  ],
+  "conflicts": {
+   "a7f8fb6770": [
+    "tools/verity/check/tests/test_lean_audit.py",
+    "tools/verity/lean/lean_audit.py"
+   ]
+  }
+ },
+ "pr-8750": {
+  "base": "b1409cffb0",
+  "heads": [
+   "d9ab8212bd"
+  ],
+  "conflicts": {
+   "d9ab8212bd": [
+    "tools/verity/lean/lean_changed.py"
+   ]
+  }
+ },
+ "pr-8752": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5828ccbf04"
+  ],
+  "conflicts": {
+   "5828ccbf04": [
+    "verity/circuits/pyproject.toml",
+    "verity/commitments/windows/pyproject.toml",
+    "verity/definitions/pyproject.toml"
+   ]
+  }
+ },
+ "pr-8756": {
+  "base": "b1409cffb0",
+  "heads": [
+   "700b6dde15"
+  ],
+  "conflicts": {
+   "700b6dde15": [
+    "tools/research/src/research/drive.py",
+    "tools/research/src/research/vqueue_loop.py",
+    "tools/research/tests/test_drive_executor.py",
+    "tools/research/tests/test_vqueue_loop.py",
+    "tools/verity/graph/README.md",
+    "tools/verity/graph/tasks.toml",
+    "tools/verity/graph/tests/test_graph.py",
+    "tools/verity/graph/tests/test_lean_listing.py",
+    "tools/verity/graph/tests/test_lean_runner.py",
+    "tools/verity/graph/verity_graph/families/lean_lock.py",
+    "tools/verity/graph/verity_graph/runners/lean_lock.py",
+    "tools/verity/graph/verity_graph/runners/lean_suites.py"
+   ]
+  }
+ },
+ "pr-8763": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0e673a6ff1"
+  ],
+  "conflicts": {
+   "0e673a6ff1": [
+    "tools/verity/circuit_check/tests/conftest.py"
+   ]
+  }
+ },
+ "pr-8767": {
+  "base": "b1409cffb0",
+  "heads": [
+   "d6cf59bccf"
+  ],
+  "conflicts": {
+   "d6cf59bccf": [
+    "verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py"
+   ]
+  }
+ },
+ "pr-8772": {
+  "base": "b1409cffb0",
+  "heads": [
+   "95b4fb1236"
+  ],
+  "conflicts": {
+   "95b4fb1236": [
+    "infra/control/post_start.sh"
+   ]
+  }
+ },
+ "pr-8780": {
+  "base": "b1409cffb0",
+  "heads": [
+   "bfade2be36"
+  ],
+  "conflicts": {
+   "bfade2be36": [
+    "verity/protocols/inference_only/rho/README.md"
+   ]
+  }
+ },
+ "pr-8829": {
+  "base": "b1409cffb0",
+  "heads": [
+   "1358bfbdd1"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 5.30s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8869": {
+  "base": "b1409cffb0",
+  "heads": [
+   "df881f327a"
+  ],
+  "conflicts": {
+   "df881f327a": [
+    "verity/definitions/registry/boolean_stop_rule.circuit-check.json",
+    "verity/definitions/registry/boolean_stop_rule.circuit-check.py",
+    "verity/definitions/registry/stop_rule.circuit-check.py"
+   ]
+  }
+ },
+ "pr-8900": {
+  "base": "b1409cffb0",
+  "heads": [
+   "1c041bac78"
+  ],
+  "conflicts": {
+   "1c041bac78": [
+    "security/Proofs/Flock/Claims/NumbersFinder.lean"
+   ]
+  }
+ },
+ "pr-8942": {
+  "base": "b1409cffb0",
+  "heads": [
+   "131c1e7058"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.66s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-8945": {
+  "base": "b1409cffb0",
+  "heads": [
+   "58ceca0f05"
+  ],
+  "conflicts": {
+   "58ceca0f05": [
+    ".agents/skills/lean-proofs/SKILL.md"
+   ]
+  }
+ },
+ "pr-8950": {
+  "base": "b1409cffb0",
+  "heads": [
+   "787faa474c"
+  ],
+  "conflicts": {
+   "787faa474c": [
+    "benchmarks/spot_figures/breakeven/headline.py"
+   ]
+  }
+ },
+ "pr-8964": {
+  "base": "b1409cffb0",
+  "heads": [
+   "042bad6341"
+  ],
+  "conflicts": {
+   "042bad6341": [
+    "adapters/vllm/tests/pipeline/test_serving_rows_history.py",
+    "adapters/vllm/verity_vllm/pipeline/chunk_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/serving_rows.py"
+   ]
+  }
+ },
+ "pr-8996": {
+  "base": "b1409cffb0",
+  "heads": [
+   "186d42c930"
+  ],
+  "conflicts": {
+   "186d42c930": [
+    "tools/verity/check/slot.py"
+   ]
+  }
+ },
+ "pr-9006": {
+  "base": "b1409cffb0",
+  "heads": [
+   "af13b1991b"
+  ],
+  "conflicts": {
+   "af13b1991b": [
+    "adapters/vllm/tests/check/test_compiler_form.py",
+    "adapters/vllm/verity_vllm/check/match/program_compare.py"
+   ]
+  }
+ },
+ "pr-9015": {
+  "base": "b1409cffb0",
+  "heads": [
+   "976716c581"
+  ],
+  "conflicts": {
+   "976716c581": [
+    "tools/verity/lean/lean_changed.py"
+   ]
+  }
+ },
+ "pr-9023": {
+  "base": "b1409cffb0",
+  "heads": [
+   "6b782d972e"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.85s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9031": {
+  "base": "b1409cffb0",
+  "heads": [
+   "bd61ed3ebe"
+  ],
+  "conflicts": {
+   "bd61ed3ebe": [
+    "adapters/vllm/tests/pipeline/test_boundary_rows.py",
+    "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
+    "benchmarks/serve_tax/README.md",
+    "benchmarks/serve_tax/serve_tax.py",
+    "benchmarks/serve_tax/tests/test_serve_tax.py"
+   ]
+  }
+ },
+ "pr-9039": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f5a4a2b051"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.82s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9061": {
+  "base": "b1409cffb0",
+  "heads": [
+   "7fa9030344"
+  ],
+  "conflicts": {
+   "7fa9030344": [
+    "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml",
+    "benchmarks/harness/specs/prefill.toml",
+    "pyproject.toml",
+    "tests/test_boundaries.py",
+    "tools/research/src/research/store/moves.json",
+    "verity/protocols/certifier/device/lean/lake-manifest.json",
+    "verity/protocols/certifier/verifier/lean/lake-manifest.json",
+    "verity/protocols/flock/verifier/FlockVerify.lean",
+    "verity/protocols/inference_only/verifier/nci/lean/lake-manifest.json",
+    "verity/protocols/pous/lean/TRUSTED.sha256"
+   ]
+  }
+ },
+ "pr-9063": {
+  "base": "b1409cffb0",
+  "heads": [
+   "036c84a001"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.68s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9071": {
+  "base": "b1409cffb0",
+  "heads": [
+   "2dea0d32fd"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.79s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9075": {
+  "base": "b1409cffb0",
+  "heads": [
+   "cbe0bcdd16"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.81s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2204
+ },
+ "pr-9079": {
+  "base": "b1409cffb0",
+  "heads": [
+   "c4bdf9e1ec"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.58s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9080": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a5eb973283"
+  ],
+  "conflicts": {
+   "a5eb973283": [
+    "benchmarks/one_stage/tests/test_two_stage_second.py",
+    "benchmarks/one_stage/two_stage_small.py",
+    "benchmarks/one_stage/two_stage_small.sh",
+    "verity/protocols/spot/verifier/lean/tests/test_difftest.py"
+   ]
+  }
+ },
+ "pr-9091": {
+  "base": "b1409cffb0",
+  "heads": [
+   "bc68ae1efe"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.52s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9106": {
+  "base": "b1409cffb0",
+  "heads": [
+   "dc380f3c70"
+  ],
+  "conflicts": {
+   "dc380f3c70": [
+    "tools/verity/lean/README.md"
+   ]
+  }
+ },
+ "pr-9108": {
+  "base": "b1409cffb0",
+  "heads": [
+   "16757e1701"
+  ],
+  "conflicts": {
+   "16757e1701": [
+    "security/Proofs/Flock/Claims/KS/ZkBoundW.lean",
+    "verity/protocols/flock/verifier/Flock/ProvedScope.lean"
+   ]
+  }
+ },
+ "pr-9114": {
+  "base": "b1409cffb0",
+  "heads": [
+   "fe770e57d0"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.55s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9128": {
+  "base": "b1409cffb0",
+  "heads": [
+   "6ef9e427d6"
+  ],
+  "conflicts": {
+   "6ef9e427d6": [
+    "adapters/vllm/tests/pipeline/test_served_unit_rows.py",
+    "benchmarks/sampling_plan/glm53_blocks.json",
+    "verity/protocols/spot/verifier/lean/tests/test_difftest.py"
+   ]
+  }
+ },
+ "pr-9149": {
+  "base": "b1409cffb0",
+  "heads": [
+   "4a31b967c5"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.66s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9154": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5dcf9585f5"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.63s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9176": {
+  "base": "b1409cffb0",
+  "heads": [
+   "99f2f3ba2c"
+  ],
+  "conflicts": {
+   "99f2f3ba2c": [
+    "benchmarks/one_stage/tests/test_two_stage_second.py",
+    "benchmarks/one_stage/two_stage_small.py",
+    "benchmarks/one_stage/two_stage_small.sh",
+    "verity/protocols/spot/verifier/lean/tests/test_difftest.py"
+   ]
+  }
+ },
+ "pr-9184": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b83ec00fb5"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.79s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9195": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e9688e88d8"
+  ],
+  "conflicts": {
+   "e9688e88d8": [
+    ".agents/skills/testing/SKILL.md",
+    "benchmarks/machine_model/pyproject.toml",
+    "benchmarks/training_slowdown/pyproject.toml",
+    "tests/README.md"
+   ]
+  }
+ },
+ "pr-9209": {
+  "base": "b1409cffb0",
+  "heads": [
+   "4c8742d0d4"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.83s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9212": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f2412ec715"
+  ],
+  "conflicts": {
+   "f2412ec715": [
+    "benchmarks/one_stage/tests/test_two_stage_second.py",
+    "benchmarks/one_stage/two_stage_small.py",
+    "benchmarks/one_stage/two_stage_small.sh",
+    "verity/protocols/spot/verifier/lean/tests/test_difftest.py"
+   ]
+  }
+ },
+ "pr-9216": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e9f5475a56"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.71s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9217": {
+  "base": "b1409cffb0",
+  "heads": [
+   "47f4186109"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.58s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9222": {
+  "base": "b1409cffb0",
+  "heads": [
+   "c86747a810"
+  ],
+  "conflicts": {
+   "c86747a810": [
+    "tools/research/src/research/vqueue_loop.py"
+   ]
+  }
+ },
+ "pr-9224": {
+  "base": "b1409cffb0",
+  "heads": [
+   "58bd76f9b0"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.75s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9228": {
+  "base": "b1409cffb0",
+  "heads": [
+   "c4a83b814a"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.72s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9229": {
+  "base": "b1409cffb0",
+  "heads": [
+   "7cab9aeb44"
+  ],
+  "conflicts": {
+   "7cab9aeb44": [
+    "benchmarks/one_stage/tests/test_two_stage_second.py",
+    "benchmarks/one_stage/two_stage_small.py",
+    "benchmarks/one_stage/two_stage_small.sh",
+    "verity/protocols/spot/verifier/lean/tests/test_difftest.py"
+   ]
+  }
+ },
+ "pr-9237": {
+  "base": "b1409cffb0",
+  "heads": [
+   "db228c8966"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.61s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9240": {
+  "base": "b1409cffb0",
+  "heads": [
+   "539f04258a"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.71s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9251": {
+  "base": "b1409cffb0",
+  "heads": [
+   "8a5aebc549"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.83s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9253": {
+  "base": "b1409cffb0",
+  "heads": [
+   "cf5587e216"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.49s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9254": {
+  "base": "b1409cffb0",
+  "heads": [
+   "da87cdccfc"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.74s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2207
+ },
+ "pr-9268": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5d7e81e24b"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.63s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9275": {
+  "base": "b1409cffb0",
+  "heads": [
+   "4dfe6b1393"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.64s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9282": {
+  "base": "b1409cffb0",
+  "heads": [
+   "520a40377d"
+  ],
+  "conflicts": {
+   "520a40377d": [
+    "adapters/vllm/tests/pipeline/test_served_unit_rows.py",
+    "adapters/vllm/tools/description_sizes.json"
+   ]
+  }
+ },
+ "pr-9305": {
+  "base": "b1409cffb0",
+  "heads": [
+   "2d5f7a169d"
+  ],
+  "conflicts": {
+   "2d5f7a169d": [
+    "benchmarks/one_stage/tests/test_audit_two_members.py"
+   ]
+  }
+ },
+ "pr-9312": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b034e9d200"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.62s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9313": {
+  "base": "b1409cffb0",
+  "heads": [
+   "19474e53e4"
+  ],
+  "conflicts": {
+   "19474e53e4": [
+    "verity/hardware/README.md",
+    "verity/hardware/nodes/__init__.py",
+    "verity/hardware/nodes/h200-sxm-141gb-x1.toml",
+    "verity/hardware/nodes/rtx-pro-6000-server-x8.toml"
+   ]
+  }
+ },
+ "pr-9317": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0978f5af04"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.62s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2204
+ },
+ "pr-9318": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0e1df5b614"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.61s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9319": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0e7b13e39b"
+  ],
+  "conflicts": {
+   "0e7b13e39b": [
+    "benchmarks/one_stage/a5.py"
+   ]
+  }
+ },
+ "pr-9322": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a845a7a364"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.80s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9329": {
+  "base": "b1409cffb0",
+  "heads": [
+   "c77b01b8b7"
+  ],
+  "conflicts": {
+   "c77b01b8b7": [
+    "benchmarks/one_stage/tests/test_audit_two_members.py"
+   ]
+  }
+ },
+ "pr-9332": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5a6be198a5"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.49s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9333": {
+  "base": "b1409cffb0",
+  "heads": [
+   "2e6f1977ba"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.67s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9339": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f31e7d81d4"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.72s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9340": {
+  "base": "b1409cffb0",
+  "heads": [
+   "3aefb20f19"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.58s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9346": {
+  "base": "b1409cffb0",
+  "heads": [
+   "949c03c3a7"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.49s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9349": {
+  "base": "b1409cffb0",
+  "heads": [
+   "1125cf1008"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.65s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9350": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b782fc88d4"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.56s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9357": {
+  "base": "b1409cffb0",
+  "heads": [
+   "bb527fd2e2"
+  ],
+  "conflicts": {
+   "bb527fd2e2": [
+    "benchmarks/one_stage/tests/test_two_stage_second.py",
+    "benchmarks/one_stage/two_stage_small.py",
+    "benchmarks/one_stage/two_stage_small.sh",
+    "verity/protocols/spot/verifier/lean/tests/test_difftest.py"
+   ]
+  }
+ },
+ "pr-9363": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f3ffe4e2bb"
+  ],
+  "conflicts": {
+   "f3ffe4e2bb": [
+    "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml",
+    "benchmarks/harness/specs/prefill.toml",
+    "pyproject.toml",
+    "tools/verity/check/public_boundary.toml",
+    "verity/protocols/certifier/device/lean/lake-manifest.json",
+    "verity/protocols/certifier/verifier/lean/lake-manifest.json",
+    "verity/protocols/flock/verifier/FlockVerify.lean",
+    "verity/protocols/inference_only/verifier/nci/lean/lake-manifest.json",
+    "verity/protocols/pous/lean/TRUSTED.sha256",
+    "verity/protocols/spot/verifier/lean/tests/test_difftest.py"
+   ]
+  }
+ },
+ "pr-9364": {
+  "base": "b1409cffb0",
+  "heads": [
+   "446d8afd7a"
+  ],
+  "conflicts": {
+   "446d8afd7a": [
+    "adapters/vllm/tests/engine/test_stock.py",
+    "adapters/vllm/tests/lint/test_vllm_surface.py",
+    "adapters/vllm/tests/program/test_boolean_marlin_moe.py",
+    "adapters/vllm/tests/program/test_gemm_targets.py"
+   ]
+  }
+ },
+ "pr-9368": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0f03244a30"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.86s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9369": {
+  "base": "b1409cffb0",
+  "heads": [
+   "08740c9dfa"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.70s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9371": {
+  "base": "b1409cffb0",
+  "heads": [
+   "3da6c052b5"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.73s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9373": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e11d786b34"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.76s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9374": {
+  "base": "b1409cffb0",
+  "heads": [
+   "8e09000bff"
+  ],
+  "conflicts": {
+   "8e09000bff": [
+    "benchmarks/training_slowdown/training_slowdown/formalism.py",
+    "benchmarks/training_slowdown/training_slowdown/library.py",
+    "benchmarks/training_slowdown/training_slowdown/run.py"
+   ]
+  }
+ },
+ "pr-9375": {
+  "base": "b1409cffb0",
+  "heads": [
+   "34c5cbb370"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.57s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9376": {
+  "base": "b1409cffb0",
+  "heads": [
+   "359dd99f07"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.76s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9377": {
+  "base": "b1409cffb0",
+  "heads": [
+   "cff53eceb9"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.81s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9378": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a852289e49"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.81s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9379": {
+  "base": "b1409cffb0",
+  "heads": [
+   "450bcc4600"
+  ],
+  "conflicts": {
+   "450bcc4600": [
+    "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml",
+    "benchmarks/harness/specs/prefill.toml",
+    "pyproject.toml",
+    "verity/protocols/certifier/device/lean/lake-manifest.json",
+    "verity/protocols/certifier/verifier/lean/lake-manifest.json",
+    "verity/protocols/flock/verifier/FlockVerify.lean",
+    "verity/protocols/inference_only/verifier/nci/lean/lake-manifest.json",
+    "verity/protocols/pous/lean/TRUSTED.sha256"
+   ]
+  }
+ },
+ "pr-9380": {
+  "base": "b1409cffb0",
+  "heads": [
+   "c81daa7305"
+  ],
+  "conflicts": {
+   "c81daa7305": [
+    "tools/verity/lean/README.md",
+    "tools/verity/lean/lean_changed.py"
+   ]
+  }
+ },
+ "pr-9384": {
+  "base": "b1409cffb0",
+  "heads": [
+   "8007f9b143"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.71s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9385": {
+  "base": "b1409cffb0",
+  "heads": [
+   "cbcb6f8d45"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.78s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9389": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ac60b6b580"
+  ],
+  "conflicts": {
+   "ac60b6b580": [
+    "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml",
+    "benchmarks/harness/specs/prefill.toml",
+    "pyproject.toml",
+    "verity/protocols/certifier/device/lean/lake-manifest.json",
+    "verity/protocols/certifier/verifier/lean/lake-manifest.json",
+    "verity/protocols/flock/verifier/FlockVerify.lean",
+    "verity/protocols/inference_only/verifier/nci/lean/lake-manifest.json",
+    "verity/protocols/pous/lean/TRUSTED.sha256"
+   ]
+  }
+ },
+ "pr-9390": {
+  "base": "b1409cffb0",
+  "heads": [
+   "df3b53faac"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.91s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9394": {
+  "base": "b1409cffb0",
+  "heads": [
+   "2c2a9863bb"
+  ],
+  "conflicts": {
+   "2c2a9863bb": [
+    "tools/agent-guard/README.md",
+    "tools/agent-guard/task_hook.py",
+    "tools/agent-guard/tests/test_task_hook.py"
+   ]
+  }
+ },
+ "pr-9396": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ebbfff9915"
+  ],
+  "conflicts": {
+   "ebbfff9915": [
+    "tools/research/src/research/vqueue_loop.py"
+   ]
+  }
+ },
+ "pr-9402": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f25d5dc8b9"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.69s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9403": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a6fe271d99"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.68s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9407": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0542a4f3cd"
+  ],
+  "conflicts": {
+   "0542a4f3cd": [
+    "benchmarks/one_stage/a5_coins.py",
+    "pyproject.toml",
+    "tools/research/src/research/store/moves.json",
+    "verity/protocols/certifier/device/lean/lake-manifest.json",
+    "verity/protocols/certifier/verifier/lean/lake-manifest.json",
+    "verity/protocols/pous/lean/TRUSTED.sha256"
+   ]
+  }
+ },
+ "pr-9410": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a90b665f6d"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.78s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9413": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b5c4b65e0d"
+  ],
+  "conflicts": {
+   "b5c4b65e0d": [
+    "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml",
+    "benchmarks/harness/specs/prefill.toml",
+    "pyproject.toml",
+    "verity/protocols/certifier/device/lean/lake-manifest.json",
+    "verity/protocols/certifier/verifier/lean/lake-manifest.json",
+    "verity/protocols/flock/verifier/FlockVerify.lean",
+    "verity/protocols/inference_only/verifier/nci/lean/lake-manifest.json",
+    "verity/protocols/pous/lean/TRUSTED.sha256"
+   ]
+  }
+ },
+ "pr-9415": {
+  "base": "b1409cffb0",
+  "heads": [
+   "6567a712f1"
+  ],
+  "conflicts": {
+   "6567a712f1": [
+    "tools/research/src/research/vqueue.py",
+    "tools/research/src/research/vqueue_loop.py"
+   ]
+  }
+ },
+ "pr-9417": {
+  "base": "b1409cffb0",
+  "heads": [
+   "3b384b35f2"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.93s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2217
+ },
+ "pr-9419": {
+  "base": "b1409cffb0",
+  "heads": [
+   "1fcd520e4e"
+  ],
+  "conflicts": {
+   "1fcd520e4e": [
+    "tools/research/src/research/vqueue_loop.py"
+   ]
+  }
+ },
+ "pr-9427": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b694e1efa6"
+  ],
+  "conflicts": {
+   "b694e1efa6": [
+    "tools/verity/lean/README.md"
+   ]
+  }
+ },
+ "pr-9429": {
+  "base": "b1409cffb0",
+  "heads": [
+   "792cecd590"
+  ],
+  "conflicts": {
+   "792cecd590": [
+    "benchmarks/harness/specs/llama32-1b-1gpu-pouw-protocol-served-h200.toml",
+    "benchmarks/harness/specs/prefill.toml",
+    "pyproject.toml",
+    "verity/protocols/certifier/device/lean/lake-manifest.json",
+    "verity/protocols/certifier/verifier/lean/lake-manifest.json",
+    "verity/protocols/flock/verifier/FlockVerify.lean",
+    "verity/protocols/inference_only/verifier/nci/lean/lake-manifest.json",
+    "verity/protocols/pous/lean/TRUSTED.sha256"
+   ]
+  }
+ },
+ "pr-9430": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5db0cf321e"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.68s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9431": {
+  "base": "b1409cffb0",
+  "heads": [
+   "c131fc06f1"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.86s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9432": {
+  "base": "b1409cffb0",
+  "heads": [
+   "63cb2a6b5b"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.69s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9433": {
+  "base": "b1409cffb0",
+  "heads": [
+   "d4df5d5bf8"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 5.16s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9434": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e86d890a57"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.93s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9435": {
+  "base": "b1409cffb0",
+  "heads": [
+   "353215aef8"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.78s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9436": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ac71bfafbd"
+  ],
+  "conflicts": {
+   "ac71bfafbd": [
+    "benchmarks/compute/run.py"
+   ]
+  }
+ },
+ "pr-9439": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ddc19366a9"
+  ],
+  "conflicts": {
+   "ddc19366a9": [
+    "tools/research/tests/test_vqueue.py"
+   ]
+  }
+ },
+ "pr-9441": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ce41e7c92e"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.94s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9446": {
+  "base": "b1409cffb0",
+  "heads": [
+   "819334aea9"
+  ],
+  "conflicts": {
+   "819334aea9": [
+    "benchmarks/harness/verity_bench/exfiltration.py"
+   ]
+  }
+ },
+ "pr-9450": {
+  "base": "b1409cffb0",
+  "heads": [
+   "2e149dad14"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.71s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9451": {
+  "base": "b1409cffb0",
+  "heads": [
+   "2067e8f78e"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.70s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9452": {
+  "base": "b1409cffb0",
+  "heads": [
+   "378fcba9da"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.62s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9454": {
+  "base": "b1409cffb0",
+  "heads": [
+   "de9bd72fdd"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 5.01s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9457": {
+  "base": "b1409cffb0",
+  "heads": [
+   "259aadb07b"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.89s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9458": {
+  "base": "b1409cffb0",
+  "heads": [
+   "049c587598"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.73s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9461": {
+  "base": "b1409cffb0",
+  "heads": [
+   "3d1a6e405d"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.76s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9462": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0321d0a5a6"
+  ],
+  "conflicts": {
+   "0321d0a5a6": [
+    "tools/research/src/research/vqueue_loop.py"
+   ]
+  }
+ },
+ "pr-9463": {
+  "base": "b1409cffb0",
+  "heads": [
+   "4bfa784943"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.88s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9464": {
+  "base": "b1409cffb0",
+  "heads": [
+   "002c3a327e"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.71s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9466": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f21a30f274"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.73s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9471": {
+  "base": "b1409cffb0",
+  "heads": [
+   "befbbd5f80"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.83s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9474": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b23c853a35"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.71s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9475": {
+  "base": "b1409cffb0",
+  "heads": [
+   "871ab913c3"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.84s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9476": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f308729408"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.58s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9479": {
+  "base": "b1409cffb0",
+  "heads": [
+   "bc5299622c"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.67s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9480": {
+  "base": "b1409cffb0",
+  "heads": [
+   "496aa18354"
+  ],
+  "conflicts": {
+   "496aa18354": [
+    "benchmarks/one_stage/a5.py"
+   ]
+  }
+ },
+ "pr-9483": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ee58fefe5b"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.68s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9486": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0a13c1c90c"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.68s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9488": {
+  "base": "b1409cffb0",
+  "heads": [
+   "75bbfd755e"
+  ],
+  "conflicts": {
+   "75bbfd755e": [
+    "verity/protocols/poub/verifier/README.md"
+   ]
+  }
+ },
+ "pr-9491": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5043cff70e"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.72s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9492": {
+  "base": "b1409cffb0",
+  "heads": [
+   "6308868677"
+  ],
+  "conflicts": {
+   "6308868677": [
+    "tests/lint/test_repo_retired_terms.py"
+   ]
+  }
+ },
+ "pr-9493": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e19024da26"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.74s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9494": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ebc94575d6"
+  ],
+  "conflicts": {
+   "ebc94575d6": [
+    "tests/lint/test_repo_retired_terms.py"
+   ]
+  }
+ },
+ "pr-9495": {
+  "base": "b1409cffb0",
+  "heads": [
+   "71190382a1"
+  ],
+  "conflicts": {
+   "71190382a1": [
+    "tools/research/tests/test_vqueue_loop.py"
+   ]
+  }
+ },
+ "pr-9496": {
+  "base": "b1409cffb0",
+  "heads": [
+   "92579572dd"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.70s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9501": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ca49f22a3f"
+  ],
+  "conflicts": {
+   "ca49f22a3f": [
+    "benchmarks/exfiltration/README.md",
+    "benchmarks/harness/verity_bench/exfiltration.py"
+   ]
+  }
+ },
+ "pr-9502": {
+  "base": "b1409cffb0",
+  "heads": [
+   "9ddabfeafb"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.99s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9503": {
+  "base": "b1409cffb0",
+  "heads": [
+   "239477ccbf"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.70s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9504": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e30d38036c"
+  ],
+  "conflicts": {
+   "e30d38036c": [
+    "benchmarks/one_stage/a5.py"
+   ]
+  }
+ },
+ "pr-9508": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f9cf403205"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.71s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9509": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ec96845a54"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.91s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9510": {
+  "base": "b1409cffb0",
+  "heads": [
+   "fab8b939b7"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.84s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9513": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0f85099155"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.93s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9516": {
+  "base": "b1409cffb0",
+  "heads": [
+   "12289fa444"
+  ],
+  "conflicts": {
+   "12289fa444": [
+    "benchmarks/one_stage/tests/test_audit_two_members.py"
+   ]
+  }
+ },
+ "pr-9518": {
+  "base": "b1409cffb0",
+  "heads": [
+   "87a2856309"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.94s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9519": {
+  "base": "b1409cffb0",
+  "heads": [
+   "d7a3766726"
+  ],
+  "conflicts": {
+   "d7a3766726": [
+    "verity/protocols/inference_only/rho/tests/test_min_cut.py"
+   ]
+  }
+ },
+ "pr-9520": {
+  "base": "b1409cffb0",
+  "heads": [
+   "899017e4fc"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.77s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9521": {
+  "base": "b1409cffb0",
+  "heads": [
+   "28f686593e"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.82s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9524": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b0ec976627"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.75s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9526": {
+  "base": "b1409cffb0",
+  "heads": [
+   "6ac5043f64"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.69s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9527": {
+  "base": "b1409cffb0",
+  "heads": [
+   "07d8752351"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.86s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9530": {
+  "base": "b1409cffb0",
+  "heads": [
+   "bbb35e0b9f"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.77s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9531": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b16502a23d"
+  ],
+  "conflicts": {
+   "b16502a23d": [
+    "benchmarks/training_slowdown/tests/test_entries.py",
+    "benchmarks/training_slowdown/training_slowdown/of_record.py"
+   ]
+  }
+ },
+ "pr-9532": {
+  "base": "b1409cffb0",
+  "heads": [
+   "3b605fda0f"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.73s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9533": {
+  "base": "b1409cffb0",
+  "heads": [
+   "bd70324920"
+  ],
+  "conflicts": {
+   "bd70324920": [
+    "benchmarks/exfiltration/README.md",
+    "benchmarks/harness/verity_bench/exfiltration.py"
+   ]
+  }
+ },
+ "pr-9534": {
+  "base": "b1409cffb0",
+  "heads": [
+   "08b6352541"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.70s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9535": {
+  "base": "b1409cffb0",
+  "heads": [
+   "2135d432cb"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.82s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9536": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5e8fe717d8"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.87s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9537": {
+  "base": "b1409cffb0",
+  "heads": [
+   "44b8483921"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.72s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9539": {
+  "base": "b1409cffb0",
+  "heads": [
+   "fcf7821830"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.78s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9541": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f1b9feaa57"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.87s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9542": {
+  "base": "b1409cffb0",
+  "heads": [
+   "1d3b431248"
+  ],
+  "conflicts": {
+   "1d3b431248": [
+    "tools/move/layout_one_map.toml"
+   ]
+  }
+ },
+ "pr-9543": {
+  "base": "b1409cffb0",
+  "heads": [
+   "242de6768a"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.87s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9544": {
+  "base": "b1409cffb0",
+  "heads": [
+   "09577b4ddc"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.89s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9545": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e05a9bca9c"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.61s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9546": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ee245a981c"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.79s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9547": {
+  "base": "b1409cffb0",
+  "heads": [
+   "7c92f78ee8"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.65s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9548": {
+  "base": "b1409cffb0",
+  "heads": [
+   "40217460ba"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.69s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9549": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e0c95da403"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.84s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9551": {
+  "base": "b1409cffb0",
+  "heads": [
+   "29ff16587c"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.55s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9554": {
+  "base": "b1409cffb0",
+  "heads": [
+   "0fb0e7514f"
+  ],
+  "conflicts": {
+   "0fb0e7514f": [
+    "verity/protocols/flock/prover/tests/test_proof_server.py"
+   ]
+  }
+ },
+ "pr-9555": {
+  "base": "b1409cffb0",
+  "heads": [
+   "962bc1a88b"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.78s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9556": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e0b946eb46"
+  ],
+  "conflicts": {
+   "e0b946eb46": [
+    ".agents/skills/team/SKILL.md",
+    "tools/move/README.md",
+    "tools/research/src/research/queue.py"
+   ]
+  }
+ },
+ "pr-9558": {
+  "base": "b1409cffb0",
+  "heads": [
+   "102ad1d702"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.72s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9560": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a2f43c295c"
+  ],
+  "conflicts": {
+   "a2f43c295c": [
+    "verity/protocol.py",
+    "verity/protocols/poub/verifier/session_parties.py",
+    "verity/protocols/pous/device/README.md",
+    "verity/protocols/pous/device/challenger_party.py",
+    "verity/protocols/pous/device/challenger_session.py",
+    "verity/protocols/pous/verifier/tests/test_pous_challenger_party.py",
+    "verity/protocols/pous/verifier/tests/test_pous_wipe_store.py",
+    "verity/protocols/pous/verifier/wipe_party.py",
+    "verity/runtime/__init__.py",
+    "verity/runtime/tests/deploy_example.py",
+    "verity/runtime/tests/test_deploy.py",
+    "verity/runtime/transcript.py"
+   ]
+  }
+ },
+ "pr-9561": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b50d1bb4f0"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.65s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9563": {
+  "base": "b1409cffb0",
+  "heads": [
+   "3828c5561a"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.74s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9564": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5033e1847f"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.79s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9565": {
+  "base": "b1409cffb0",
+  "heads": [
+   "fe31b503bb"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.68s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9567": {
+  "base": "b1409cffb0",
+  "heads": [
+   "70a27d97ec"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.85s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2210
+ },
+ "pr-9569": {
+  "base": "b1409cffb0",
+  "heads": [
+   "fe800897e7"
+  ],
+  "conflicts": {
+   "fe800897e7": [
+    "benchmarks/served_units/README.md"
+   ]
+  }
+ },
+ "pr-9570": {
+  "base": "b1409cffb0",
+  "heads": [
+   "cdb26a7ce0"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.76s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9572": {
+  "base": "b1409cffb0",
+  "heads": [
+   "54819b2c86"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.67s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9573": {
+  "base": "b1409cffb0",
+  "heads": [
+   "1dd8140bdb"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.82s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9574": {
+  "base": "b1409cffb0",
+  "heads": [
+   "cecd0feb3f"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.74s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9575": {
+  "base": "b1409cffb0",
+  "heads": [
+   "18c20e0e85"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.80s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9576": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5d5c7183ca"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.65s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9577": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a53821ee25"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.66s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9578": {
+  "base": "b1409cffb0",
+  "heads": [
+   "e638267a51"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.55s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9579": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f658c8f597"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.63s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9580": {
+  "base": "b1409cffb0",
+  "heads": [
+   "96478388bf"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.73s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9581": {
+  "base": "b1409cffb0",
+  "heads": [
+   "43fde9d046"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.65s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9582": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5076cf6908"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.77s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9583": {
+  "base": "b1409cffb0",
+  "heads": [
+   "05ac714486"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.69s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "pr-9584": {
+  "base": "b1409cffb0",
+  "heads": [
+   "ae80f367e6"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.64s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9585": {
+  "base": "b1409cffb0",
+  "heads": [
+   "d4e78db1b1"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.60s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9586": {
+  "base": "b1409cffb0",
+  "heads": [
+   "c5032c4480"
+  ],
+  "conflicts": {
+   "c5032c4480": [
+    "benchmarks/torch_gpu/j10r_sm90/job.sh"
+   ]
+  }
+ },
+ "pr-9587": {
+  "base": "b1409cffb0",
+  "heads": [
+   "44216883be"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.60s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9588": {
+  "base": "b1409cffb0",
+  "heads": [
+   "a8c432d659"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.51s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9589": {
+  "base": "b1409cffb0",
+  "heads": [
+   "7e7a8b2977"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.50s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9590": {
+  "base": "b1409cffb0",
+  "heads": [
+   "334cb9c3fd"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.70s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9591": {
+  "base": "b1409cffb0",
+  "heads": [
+   "d290366271"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.61s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9592": {
+  "base": "b1409cffb0",
+  "heads": [
+   "69b38085a0"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.45s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9593": {
+  "base": "b1409cffb0",
+  "heads": [
+   "d8c696eda1"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.51s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9594": {
+  "base": "b1409cffb0",
+  "heads": [
+   "9049e2c572"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.46s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "pr-9595": {
+  "base": "b1409cffb0",
+  "heads": [
+   "5dacc95eab"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.42s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ },
+ "queue-06365af5a3b8": {
+  "base": "b1409cffb0",
+  "heads": [
+   "06365af5a3"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 5.03s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "queue-1e4d5c993c08": {
+  "base": "b1409cffb0",
+  "heads": [
+   "1e4d5c993c"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.94s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2249
+ },
+ "queue-1f93fc877266": {
+  "base": "b1409cffb0",
+  "heads": [
+   "1f93fc8772"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.79s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2249
+ },
+ "queue-4a7291116e11": {
+  "base": "b1409cffb0",
+  "heads": [
+   "4a7291116e"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.97s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2242
+ },
+ "queue-8ef93f01963c": {
+  "base": "b1409cffb0",
+  "heads": [
+   "8ef93f0196"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.74s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2249
+ },
+ "queue-b7a779f695a3": {
+  "base": "b1409cffb0",
+  "heads": [
+   "b7a779f695"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.69s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2249
+ },
+ "top-moves-c": {
+  "base": "b1409cffb0",
+  "heads": [
+   "f054fb84b3"
+  ],
+  "conflicts": {},
+  "pytest": "3 passed in 4.83s",
+  "pytest_failed": [],
+  "superseded": 239,
+  "entries": 239,
+  "new": [],
+  "gone": [],
+  "moved": [],
+  "twice": [],
+  "registered": 2203
+ }
+}

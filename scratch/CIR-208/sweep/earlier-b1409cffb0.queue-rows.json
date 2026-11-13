@@ -1,0 +1,2559 @@
+[
+ {
+  "pos": "-",
+  "pr": "9071",
+  "sha8": "2dea0d32",
+  "state": "ready",
+  "lane": "training",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "2dea0d32fdcc739da06e89cf8549345494f49b8a"
+ },
+ {
+  "pos": "-",
+  "pr": "9075",
+  "sha8": "cbe0bcdd",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "cbe0bcdd160dd54d3da6fd0ac3f52a2cc64ec703"
+ },
+ {
+  "pos": "-",
+  "pr": "9149",
+  "sha8": "4a31b967",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "4a31b967c5944e1fedec15a2f3ad2d5a0bad1652"
+ },
+ {
+  "pos": "-",
+  "pr": "9209",
+  "sha8": "4c8742d0",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "4c8742d0d449fe2d933f005ec9dc3c8ab6899686"
+ },
+ {
+  "pos": "-",
+  "pr": "9224",
+  "sha8": "58bd76f9",
+  "state": "ready",
+  "lane": "infra",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "58bd76f9b0c6d46bc6ce870ddc807930d6ebf5fc"
+ },
+ {
+  "pos": "-",
+  "pr": "9253",
+  "sha8": "cf5587e2",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "cf5587e2164237a51b7d9e52b7b8b700c33adcac"
+ },
+ {
+  "pos": "-",
+  "pr": "9332",
+  "sha8": "5a6be198",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "5a6be198a5ed1bdd592bedfc71dca639c7d018ca"
+ },
+ {
+  "pos": "-",
+  "pr": "9346",
+  "sha8": "949c03c3",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "949c03c3a7a1e3d2628b37b0c3dc0bf3ad000521"
+ },
+ {
+  "pos": "-",
+  "pr": "9375",
+  "sha8": "34c5cbb3",
+  "state": "ready",
+  "lane": "lean",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "34c5cbb3705c8be3fe0b150876e1e8d04604667a"
+ },
+ {
+  "pos": "-",
+  "pr": "9410",
+  "sha8": "a90b665f",
+  "state": "ready",
+  "lane": "soundness",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "a90b665f6dc644750c97a52ba1ae3065a2ff6940"
+ },
+ {
+  "pos": "-",
+  "pr": "9431",
+  "sha8": "c131fc06",
+  "state": "ready",
+  "lane": "memory-accounting",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "c131fc06f187a84af3fde187a7027fec4a06377f"
+ },
+ {
+  "pos": "-",
+  "pr": "9464",
+  "sha8": "002c3a32",
+  "state": "ready",
+  "lane": "infra",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "002c3a327ec527170036d3ab10ef1130d106f27a"
+ },
+ {
+  "pos": "-",
+  "pr": "9474",
+  "sha8": "b23c853a",
+  "state": "ready",
+  "lane": "training",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "b23c853a35bc566197f506851381ac04545f8e57"
+ },
+ {
+  "pos": "-",
+  "pr": "9476",
+  "sha8": "f3087294",
+  "state": "ready",
+  "lane": "benchmarks",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "f3087294083647d4e6f1cea51e1366443fb71e72"
+ },
+ {
+  "pos": "-",
+  "pr": "9496",
+  "sha8": "92579572",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "92579572ddcb8a320540f9e6d980501112ff941e"
+ },
+ {
+  "pos": "-",
+  "pr": "9510",
+  "sha8": "fab8b939",
+  "state": "ready",
+  "lane": "vllm",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "fab8b939b7edb69ff16258370bc74a0c07eb8941"
+ },
+ {
+  "pos": "-",
+  "pr": "9513",
+  "sha8": "0f850991",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "0f850991550326073f3e28cb04158eab5c62398c"
+ },
+ {
+  "pos": "-",
+  "pr": "9518",
+  "sha8": "87a28563",
+  "state": "ready",
+  "lane": "compute-accounting",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "87a2856309792fbb91398a46079e49a3f5214af8"
+ },
+ {
+  "pos": "-",
+  "pr": "9521",
+  "sha8": "28f68659",
+  "state": "ready",
+  "lane": "benchmarks",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "28f686593e435e3cd1ac4c8f6006b0593973e07c"
+ },
+ {
+  "pos": "-",
+  "pr": "9530",
+  "sha8": "bbb35e0b",
+  "state": "ready",
+  "lane": "benchmarks",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "bbb35e0b9f2f0e324c3830e3560cc6331e21a7ad"
+ },
+ {
+  "pos": "-",
+  "pr": "9537",
+  "sha8": "44b84839",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "44b84839217d06e9cc0f6b8d50cfc7cc5a27e9b6"
+ },
+ {
+  "pos": "-",
+  "pr": "9539",
+  "sha8": "fcf78218",
+  "state": "ready",
+  "lane": "top",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "fcf78218301ca8bd627bea9b1bed0e8cd25cc778"
+ },
+ {
+  "pos": "-",
+  "pr": "9543",
+  "sha8": "242de676",
+  "state": "ready",
+  "lane": "benchmarks",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "242de6768a14730f35d1e9ebd5cc3fb30929ae80"
+ },
+ {
+  "pos": "-",
+  "pr": "9546",
+  "sha8": "ee245a98",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "ee245a981c3ef02869425dd08fdd3472fbed02d7"
+ },
+ {
+  "pos": "-",
+  "pr": "9549",
+  "sha8": "e0c95da4",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "e0c95da403838c4744dcc24c325aca4979850e09"
+ },
+ {
+  "pos": "-",
+  "pr": "9551",
+  "sha8": "67b93bc7",
+  "state": "ready",
+  "lane": "benchmarks",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "29ff16587cacb79efd67952bedcd78ffa41b2440",
+  "moved_since_status": true
+ },
+ {
+  "pos": "-",
+  "pr": "9561",
+  "sha8": "b50d1bb4",
+  "state": "ready",
+  "lane": "training",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "b50d1bb4f07cd9286522b0b0369a50008dab307b"
+ },
+ {
+  "pos": "-",
+  "pr": "9563",
+  "sha8": "3828c556",
+  "state": "ready",
+  "lane": "network-accounting",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "3828c5561af4fe251b59f011b699382a92349e39"
+ },
+ {
+  "pos": "-",
+  "pr": "9567",
+  "sha8": "70a27d97",
+  "state": "ready",
+  "lane": "circuits",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "70a27d97ec6086b5fcd45b3bf936efa1bd6702e1"
+ },
+ {
+  "pos": "-",
+  "pr": "9570",
+  "sha8": "cdb26a7c",
+  "state": "ready",
+  "lane": "compute-research",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "cdb26a7ce045f2e53a6ec848699ba55c1ed7904a"
+ },
+ {
+  "pos": "-",
+  "pr": "9582",
+  "sha8": "5076cf69",
+  "state": "ready",
+  "lane": "top",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "5076cf69081949f35738fa8df4861a105fb08aa0"
+ },
+ {
+  "pos": "-",
+  "pr": "9584",
+  "sha8": "ae80f367",
+  "state": "ready",
+  "lane": "proofs",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "ae80f367e6a2f4166fa5fbd3712e4402c1527332"
+ },
+ {
+  "pos": "-",
+  "pr": "9585",
+  "sha8": "d4e78db1",
+  "state": "ready",
+  "lane": "infra",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "d4e78db1b1160eaacd431b0a8f9064cbcdccd3fb"
+ },
+ {
+  "pos": "-",
+  "pr": "9587",
+  "sha8": "44216883",
+  "state": "ready",
+  "lane": "comms",
+  "why": "admitted: the verified queue merges it into a candidate on `main` once it has a land verdict, or on its mark alone when it is low-risk",
+  "marked": true,
+  "sha": "44216883bec131107d2760d3b1b9bf056036c9f7"
+ },
+ {
+  "pos": "-",
+  "pr": "5632",
+  "sha8": "419fc713",
+  "state": "waiting",
+  "lane": "compute-research",
+  "why": "stale, idle since 2026-11-05: not marked ready at 419fc713: `research queue ready 5632 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "419fc713e87a6f2ee4e659c17332f8db192e7d6b"
+ },
+ {
+  "pos": "-",
+  "pr": "5790",
+  "sha8": "5dac3393",
+  "state": "waiting",
+  "lane": "compute-research",
+  "why": "stale, idle since 2026-11-04: not marked ready at 5dac3393: `research queue ready 5790 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "5dac339304dd33ee94fe56a267353340d7245455"
+ },
+ {
+  "pos": "-",
+  "pr": "6856",
+  "sha8": "6f4b60c9",
+  "state": "waiting",
+  "lane": "top",
+  "why": "stale, idle since 2026-11-05: not marked ready at 6f4b60c9: `research queue ready 6856 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "6f4b60c980a8156480258235324a29c22fae1fae"
+ },
+ {
+  "pos": "-",
+  "pr": "6901",
+  "sha8": "41fed65e",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "stale, idle since 2026-11-06: not marked ready at 41fed65e: `research queue ready 6901 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "41fed65e0944f5ea672d75a457f729864ca0f1eb"
+ },
+ {
+  "pos": "-",
+  "pr": "7200",
+  "sha8": "841483b0",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "stale, idle since 2026-11-04: not marked ready at 841483b0: `research queue ready 7200 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "841483b0c03965ab69a4b12fe40cb13e87079b9b"
+ },
+ {
+  "pos": "-",
+  "pr": "7375",
+  "sha8": "584cc2ae",
+  "state": "waiting",
+  "lane": "bc-629a532d-3c1f-447e-b1",
+  "why": "stale, idle since 2026-11-05: not marked ready at 584cc2ae: `research queue ready 7375 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "584cc2ae091210ac0416a5e2c841760efd05a18b"
+ },
+ {
+  "pos": "-",
+  "pr": "7378",
+  "sha8": "1027d5a6",
+  "state": "waiting",
+  "lane": "compute-research",
+  "why": "stale, idle since 2026-11-04: not marked ready at 1027d5a6: `research queue ready 7378 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "1027d5a6ced3d30f8ef88150e90de0eedea3f275"
+ },
+ {
+  "pos": "-",
+  "pr": "7442",
+  "sha8": "565e60f5",
+  "state": "waiting",
+  "lane": "bc-629a532d-3c1f-447e-b1",
+  "why": "stale, idle since 2026-11-06: not marked ready at 565e60f5: `research queue ready 7442 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "565e60f5e6ca6c48efb98ae57586b3c1f56bcdd4"
+ },
+ {
+  "pos": "-",
+  "pr": "7605",
+  "sha8": "4e11f724",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "stale, idle since 2026-11-07: not marked ready at 4e11f724: `research queue ready 7605 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "4e11f7241849b60e6f48aa947db539253c451823"
+ },
+ {
+  "pos": "-",
+  "pr": "7850",
+  "sha8": "ed27bb14",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "stale, idle since 2026-11-07: not marked ready at ed27bb14: `research queue ready 7850 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "ed27bb143d82dd9c79e3ef49019ebf70762e8ca8"
+ },
+ {
+  "pos": "-",
+  "pr": "7952",
+  "sha8": "4d3d22fd",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "stale, idle since 2026-11-08: not marked ready at 4d3d22fd: `research queue ready 7952 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "4d3d22fda080f14366e3c701709c972520997f74"
+ },
+ {
+  "pos": "-",
+  "pr": "8003",
+  "sha8": "9c329817",
+  "state": "waiting",
+  "lane": "MOESERVE-C",
+  "why": "not marked ready at 9c329817: `research queue ready 8003 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "9c32981736ee419392d24f0b84a767c0e8a651fd"
+ },
+ {
+  "pos": "-",
+  "pr": "8048",
+  "sha8": "00e8774d",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 00e8774d: `research queue ready 8048 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "00e8774d8de06289c9daef163a54c776640fc555"
+ },
+ {
+  "pos": "-",
+  "pr": "8120",
+  "sha8": "b6e0c1dc",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "stale, idle since 2026-11-08: not marked ready at b6e0c1dc: `research queue ready 8120 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "b6e0c1dc5de83f2c8d74af9578e0d0297b57f503"
+ },
+ {
+  "pos": "-",
+  "pr": "8139",
+  "sha8": "f51a277c",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at f51a277c: `research queue ready 8139 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "f51a277c6e846dda3c99f4a0001ef0b618a1bf08"
+ },
+ {
+  "pos": "-",
+  "pr": "8177",
+  "sha8": "6dd74f50",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "stale, idle since 2026-11-08: not marked ready at 6dd74f50: `research queue ready 8177 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "6dd74f50be00b6c04739b30c2934d0978a994161"
+ },
+ {
+  "pos": "-",
+  "pr": "8179",
+  "sha8": "edfbacf2",
+  "state": "waiting",
+  "lane": "top",
+  "why": "stale, idle since 2026-11-08: not marked ready at edfbacf2: `research queue ready 8179 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "edfbacf27b6ca627f7434abd596a25c49fba50ae"
+ },
+ {
+  "pos": "-",
+  "pr": "8221",
+  "sha8": "219562ad",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "stale, idle since 2026-11-09: not marked ready at 219562ad: `research queue ready 8221 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "219562ad35a59b5f42ed5ee9fe611c5c90cfb3d7"
+ },
+ {
+  "pos": "-",
+  "pr": "8327",
+  "sha8": "e7d7b2ef",
+  "state": "waiting",
+  "lane": "top",
+  "why": "stale, idle since 2026-11-09: not marked ready at e7d7b2ef: `research queue ready 8327 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "e7d7b2efa10313e41350dedbc5bbab8835138eee"
+ },
+ {
+  "pos": "-",
+  "pr": "8330",
+  "sha8": "43ef89f9",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "stale, idle since 2026-11-09: not marked ready at 43ef89f9: `research queue ready 8330 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "43ef89f9829265bba7dbe9738ce2807f9e2a4e3b"
+ },
+ {
+  "pos": "-",
+  "pr": "8363",
+  "sha8": "a81a1b11",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at a81a1b11: `research queue ready 8363 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "a81a1b11ea1d63125082cb9f97842c2a0395a041"
+ },
+ {
+  "pos": "-",
+  "pr": "8395",
+  "sha8": "06965f76",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 06965f76: `research queue ready 8395 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "06965f7613085e33feba55ce85931b19f72b092f"
+ },
+ {
+  "pos": "-",
+  "pr": "8396",
+  "sha8": "08a65ece",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 08a65ece: `research queue ready 8396 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "08a65eced1e696aa351885453fac547de45af42c"
+ },
+ {
+  "pos": "-",
+  "pr": "8406",
+  "sha8": "3d8e9aa8",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 3d8e9aa8: `research queue ready 8406 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "3d8e9aa8c0af063b57680303f8faaa620dcbb74a"
+ },
+ {
+  "pos": "-",
+  "pr": "8414",
+  "sha8": "35972405",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 35972405: `research queue ready 8414 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "359724056748523f6a4e999332f3007042d87f39"
+ },
+ {
+  "pos": "-",
+  "pr": "8415",
+  "sha8": "720ef04b",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "stale, idle since 2026-11-10: not marked ready at 720ef04b: `research queue ready 8415 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "720ef04b33979a43bfb02e84363395960ca97bcc"
+ },
+ {
+  "pos": "-",
+  "pr": "8439",
+  "sha8": "a0c7bd5a",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at a0c7bd5a: `research queue ready 8439 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "a0c7bd5aae1cf3d2a90de257b76c44291ec71d1f"
+ },
+ {
+  "pos": "-",
+  "pr": "8449",
+  "sha8": "de834106",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at de834106: `research queue ready 8449 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "de834106fd3f99d21fd6d5097e582343550d6cea"
+ },
+ {
+  "pos": "-",
+  "pr": "8455",
+  "sha8": "6d11ce6c",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 6d11ce6c: `research queue ready 8455 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "6d11ce6c56eaaea953f602eac28147fda58bddc8"
+ },
+ {
+  "pos": "-",
+  "pr": "8460",
+  "sha8": "9f323405",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "stale, idle since 2026-11-10: based on remote, and not marked ready at 9f323405",
+  "marked": false,
+  "sha": "9f32340577436034e3ab8a090463a7d39698f687"
+ },
+ {
+  "pos": "-",
+  "pr": "8462",
+  "sha8": "6f4ffa9e",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 6f4ffa9e: `research queue ready 8462 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "6f4ffa9e7a6ad9e2c82273639c9559af4ae4161d"
+ },
+ {
+  "pos": "-",
+  "pr": "8463",
+  "sha8": "f4632561",
+  "state": "waiting",
+  "lane": "circuits",
+  "why": "not marked ready at f4632561: `research queue ready 8463 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "b1409cffb06f0e1b46ca8ee97fc85c28c412523b",
+  "moved_since_status": true
+ },
+ {
+  "pos": "-",
+  "pr": "8465",
+  "sha8": "ea98b7c1",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "based on ci/vqueue-live, not main: retarget it to main",
+  "marked": true,
+  "sha": "ea98b7c1cca1ccfa51b70846ac2800a4eac60f5d"
+ },
+ {
+  "pos": "-",
+  "pr": "8483",
+  "sha8": "f1868997",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at f1868997: `research queue ready 8483 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "f18689974f7084e355bfd9c9c127cb3d66c0ed3a"
+ },
+ {
+  "pos": "-",
+  "pr": "8503",
+  "sha8": "51fe8160",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "stale, idle since 2026-11-10: based on remote, and not marked ready at 51fe8160",
+  "marked": false,
+  "sha": "51fe81602802f4ddc5127671fdec31d8b1581721"
+ },
+ {
+  "pos": "-",
+  "pr": "8543",
+  "sha8": "2007687f",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 2007687f: `research queue ready 8543 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "2007687fd9b818068e1d33bcdf40164af38462d1"
+ },
+ {
+  "pos": "-",
+  "pr": "8556",
+  "sha8": "84f44319",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 84f44319: `research queue ready 8556 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "84f44319134a2683ca2c5761488aead320b664ff"
+ },
+ {
+  "pos": "-",
+  "pr": "8559",
+  "sha8": "6d556aa4",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 6d556aa4: `research queue ready 8559 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "6d556aa4d3d0a1175dc5205ceb39a5ac2aee795f"
+ },
+ {
+  "pos": "-",
+  "pr": "8578",
+  "sha8": "0a713e7c",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 0a713e7c: `research queue ready 8578 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "0a713e7caaf60be84225d7fd4fe5678225ec5b99"
+ },
+ {
+  "pos": "-",
+  "pr": "8580",
+  "sha8": "03afbdd8",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 03afbdd8: `research queue ready 8580 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "03afbdd8287aa6d2eccb55d0f96147886dd11c6b"
+ },
+ {
+  "pos": "-",
+  "pr": "8615",
+  "sha8": "9b5371e8",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 9b5371e8: `research queue ready 8615 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "9b5371e8ae1e8f6b39a2ef76bb91bd4491c9dd76"
+ },
+ {
+  "pos": "-",
+  "pr": "8642",
+  "sha8": "1f5fcd4a",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "not marked ready at 1f5fcd4a: `research queue ready 8642 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "1f5fcd4a027cbb5486a44e0eccd2136d7d15b13e"
+ },
+ {
+  "pos": "-",
+  "pr": "8671",
+  "sha8": "a4b42d12",
+  "state": "waiting",
+  "lane": "kernels",
+  "why": "not marked ready at a4b42d12: `research queue ready 8671 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "a4b42d12aa8aca73b6c0b6a6890b3141ab91ace3"
+ },
+ {
+  "pos": "-",
+  "pr": "8701",
+  "sha8": "44dd026b",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 44dd026b: `research queue ready 8701 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "44dd026bd6dc9ca57a83941cfafa093eff158cf2"
+ },
+ {
+  "pos": "-",
+  "pr": "8708",
+  "sha8": "635b2f97",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 635b2f97: `research queue ready 8708 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "635b2f97027d25489db8591aee6df2b2290b7c37"
+ },
+ {
+  "pos": "-",
+  "pr": "8714",
+  "sha8": "338bfb2c",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "not marked ready at 338bfb2c: `research queue ready 8714 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "338bfb2c79979b55de18c831d8d5de020d48aff1"
+ },
+ {
+  "pos": "-",
+  "pr": "8719",
+  "sha8": "076356b2",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "not marked ready at 076356b2: `research queue ready 8719 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "076356b2f74c65beff2e4601825434763267cb09"
+ },
+ {
+  "pos": "-",
+  "pr": "8725",
+  "sha8": "452a2f79",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 452a2f79: `research queue ready 8725 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "452a2f7967d105806c610b792aa004539cb4afa7"
+ },
+ {
+  "pos": "-",
+  "pr": "8731",
+  "sha8": "3cb71ba0",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 3cb71ba0: `research queue ready 8731 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "3cb71ba0758cffaeb13f33a23ad85b0c6ad85cef"
+ },
+ {
+  "pos": "-",
+  "pr": "8746",
+  "sha8": "a7f8fb67",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at a7f8fb67: `research queue ready 8746 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "a7f8fb677037799997a01cd008c8cba4854af507"
+ },
+ {
+  "pos": "-",
+  "pr": "8750",
+  "sha8": "d9ab8212",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at d9ab8212: `research queue ready 8750 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "d9ab8212bda293ee0fd575dae6401fa31ef3d78d"
+ },
+ {
+  "pos": "-",
+  "pr": "8752",
+  "sha8": "5828ccbf",
+  "state": "waiting",
+  "lane": "top",
+  "why": "not marked ready at 5828ccbf: `research queue ready 8752 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "5828ccbf045b849adfec85ba0c65558ff3772f6b"
+ },
+ {
+  "pos": "-",
+  "pr": "8763",
+  "sha8": "0e673a6f",
+  "state": "waiting",
+  "lane": "circuits",
+  "why": "not marked ready at 0e673a6f: `research queue ready 8763 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "0e673a6ff18d13ca9826cf475425f93f79acaa09"
+ },
+ {
+  "pos": "-",
+  "pr": "8767",
+  "sha8": "d6cf59bc",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at d6cf59bc: `research queue ready 8767 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "d6cf59bccf21eb87fcada61ceaf8d66ba2140651"
+ },
+ {
+  "pos": "-",
+  "pr": "8772",
+  "sha8": "95b4fb12",
+  "state": "waiting",
+  "lane": "-",
+  "why": "no owner: add a `Lane {name}` line to the PR body",
+  "marked": true,
+  "sha": "95b4fb123694d7fa5159809f93f55b25d5eada21"
+ },
+ {
+  "pos": "-",
+  "pr": "8780",
+  "sha8": "bfade2be",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at bfade2be: `research queue ready 8780 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "bfade2be365fa9d4f814cdec7533d0ce24f4c496"
+ },
+ {
+  "pos": "-",
+  "pr": "8829",
+  "sha8": "1358bfbd",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 1358bfbd: `research queue ready 8829 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "1358bfbdd1b03f41f958144861cf913d255a6e1a"
+ },
+ {
+  "pos": "-",
+  "pr": "8869",
+  "sha8": "df881f32",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at df881f32: `research queue ready 8869 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "df881f327aa1a2e532168e1964d2bdc3b4232a6c"
+ },
+ {
+  "pos": "-",
+  "pr": "8900",
+  "sha8": "1c041bac",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 1c041bac: `research queue ready 8900 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "1c041bac78f5a4e4bae41d15cba950ae177793ae"
+ },
+ {
+  "pos": "-",
+  "pr": "8942",
+  "sha8": "131c1e70",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 131c1e70: `research queue ready 8942 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "131c1e7058926a9fc64edff9767f27ca466031fd"
+ },
+ {
+  "pos": "-",
+  "pr": "8945",
+  "sha8": "58ceca0f",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 58ceca0f: `research queue ready 8945 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "58ceca0f052ac9e3c053d9c59a95f86daf7aafe8"
+ },
+ {
+  "pos": "-",
+  "pr": "8950",
+  "sha8": "787faa47",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 787faa47: `research queue ready 8950 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "787faa474cbf972c1ec223ca05ca6ff442cb1395"
+ },
+ {
+  "pos": "-",
+  "pr": "8964",
+  "sha8": "042bad63",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 042bad63: `research queue ready 8964 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "042bad6341826877289db8d73ed8dc00cc4d55b2"
+ },
+ {
+  "pos": "-",
+  "pr": "8996",
+  "sha8": "186d42c9",
+  "state": "waiting",
+  "lane": "infra",
+  "why": "not marked ready at 186d42c9: `research queue ready 8996 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "186d42c930f57a3fb55e9f0a24b1c144c4c7c981"
+ },
+ {
+  "pos": "-",
+  "pr": "9006",
+  "sha8": "af13b199",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at af13b199: `research queue ready 9006 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "af13b1991b112ccc304e8dcfb1bdfeb909c2d015"
+ },
+ {
+  "pos": "-",
+  "pr": "9015",
+  "sha8": "976716c5",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 976716c5: `research queue ready 9015 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "976716c58136653fb5debe7c15ebb047f220509c"
+ },
+ {
+  "pos": "-",
+  "pr": "9023",
+  "sha8": "6b782d97",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 6b782d97: `research queue ready 9023 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "6b782d972ec4e51f283f89c854533f9f010eaa7c"
+ },
+ {
+  "pos": "-",
+  "pr": "9031",
+  "sha8": "bd61ed3e",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at bd61ed3e: `research queue ready 9031 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "bd61ed3ebec85ccb45a9fa5602e7cf5c3bc3ea6b"
+ },
+ {
+  "pos": "-",
+  "pr": "9039",
+  "sha8": "f5a4a2b0",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at f5a4a2b0: `research queue ready 9039 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "f5a4a2b0517a6193d59e5a65835633b3d6894e9f"
+ },
+ {
+  "pos": "-",
+  "pr": "9061",
+  "sha8": "7fa90303",
+  "state": "waiting",
+  "lane": "memory-accounting",
+  "why": "not marked ready at 7fa90303: `research queue ready 9061 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "7fa9030344a5c018154b8480ce47e8bc0e19a1a9"
+ },
+ {
+  "pos": "-",
+  "pr": "9063",
+  "sha8": "036c84a0",
+  "state": "waiting",
+  "lane": "memory-accounting",
+  "why": "not marked ready at 036c84a0: `research queue ready 9063 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "036c84a001137eab30dfbd1c27307a966f1a7b2e"
+ },
+ {
+  "pos": "-",
+  "pr": "9079",
+  "sha8": "c4bdf9e1",
+  "state": "waiting",
+  "lane": "kernels",
+  "why": "not marked ready at c4bdf9e1: `research queue ready 9079 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "c4bdf9e1ec4ac745c879f42284436b84102f408f"
+ },
+ {
+  "pos": "-",
+  "pr": "9080",
+  "sha8": "a5eb9732",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "contains #9176, which is refused: conflicts with `main` in benchmarks/one_stage/tests/test_two_stage_second.py, benchmarks/one_stage/two_stage_small.py, benchmarks/one_stage/two_stage_small.sh, verity/protocols/spot/verifier/lean/tests/test_difftest.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "a5eb973283eee6835e230910e7c0c7dee28d8b84"
+ },
+ {
+  "pos": "-",
+  "pr": "9091",
+  "sha8": "bc68ae1e",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at bc68ae1e: `research queue ready 9091 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "bc68ae1efece7acf89f76cafe1b29d86356d352a"
+ },
+ {
+  "pos": "-",
+  "pr": "9106",
+  "sha8": "dc380f3c",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at dc380f3c: `research queue ready 9106 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "dc380f3c7029c93d6c0365c29326827f6b78919a"
+ },
+ {
+  "pos": "-",
+  "pr": "9108",
+  "sha8": "16757e17",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 16757e17: `research queue ready 9108 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "16757e17016681171fcd04ece40925b75d690df3"
+ },
+ {
+  "pos": "-",
+  "pr": "9114",
+  "sha8": "fe770e57",
+  "state": "waiting",
+  "lane": "bc-b43da88b-5d25-4463-9b",
+  "why": "not marked ready at fe770e57: `research queue ready 9114 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "fe770e57d05d03876968b0464e6ffc59646c2194"
+ },
+ {
+  "pos": "-",
+  "pr": "9128",
+  "sha8": "6ef9e427",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 6ef9e427: `research queue ready 9128 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "6ef9e427d69b3cb4dc2047776a7f5df0e3bd9ff0"
+ },
+ {
+  "pos": "-",
+  "pr": "9154",
+  "sha8": "5dcf9585",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 5dcf9585: `research queue ready 9154 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "5dcf9585f5d3490f25571cf3ee1443213cb748b4"
+ },
+ {
+  "pos": "-",
+  "pr": "9184",
+  "sha8": "b83ec00f",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at b83ec00f: `research queue ready 9184 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "b83ec00fb5dc8e38c5cf8154efe2458a26764751"
+ },
+ {
+  "pos": "-",
+  "pr": "9195",
+  "sha8": "e9688e88",
+  "state": "waiting",
+  "lane": "top",
+  "why": "not marked ready at e9688e88: `research queue ready 9195 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "e9688e88d86b0f3d64d73cf792005ed8c59d5044"
+ },
+ {
+  "pos": "-",
+  "pr": "9212",
+  "sha8": "f2412ec7",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "contains #9176, which is refused: conflicts with `main` in benchmarks/one_stage/tests/test_two_stage_second.py, benchmarks/one_stage/two_stage_small.py, benchmarks/one_stage/two_stage_small.sh, verity/protocols/spot/verifier/lean/tests/test_difftest.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "f2412ec7156f971806998f1107defafca0fba6cd"
+ },
+ {
+  "pos": "-",
+  "pr": "9216",
+  "sha8": "e9f5475a",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at e9f5475a: `research queue ready 9216 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "e9f5475a56cddd5fe6b6f9563d4f966b79b223da"
+ },
+ {
+  "pos": "-",
+  "pr": "9217",
+  "sha8": "47f41861",
+  "state": "waiting",
+  "lane": "top",
+  "why": "not marked ready at 47f41861: `research queue ready 9217 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "47f41861093cb698d7ed1ee854ab43ee46dd96ca"
+ },
+ {
+  "pos": "-",
+  "pr": "9222",
+  "sha8": "c86747a8",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "not marked ready at c86747a8: `research queue ready 9222 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "c86747a81021f1ce5782b67f354964d68fdf73ff"
+ },
+ {
+  "pos": "-",
+  "pr": "9228",
+  "sha8": "c4a83b81",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at c4a83b81: `research queue ready 9228 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "c4a83b814a6fc1e8d3a7dfb84fd94ff2dd85d1e9"
+ },
+ {
+  "pos": "-",
+  "pr": "9229",
+  "sha8": "7cab9aeb",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 7cab9aeb: `research queue ready 9229 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "7cab9aeb44229bd32c7ec8379b47b7fb08bc5602"
+ },
+ {
+  "pos": "-",
+  "pr": "9237",
+  "sha8": "db228c89",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at db228c89: `research queue ready 9237 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "db228c8966f08b829659343e91f0a571c70192d9"
+ },
+ {
+  "pos": "-",
+  "pr": "9240",
+  "sha8": "539f0425",
+  "state": "waiting",
+  "lane": "memory-accounting",
+  "why": "not marked ready at 539f0425: `research queue ready 9240 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "539f04258acb1095bc98977e2c1b087c677f12cd"
+ },
+ {
+  "pos": "-",
+  "pr": "9251",
+  "sha8": "8a5aebc5",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 8a5aebc5: `research queue ready 9251 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "8a5aebc549a65e018ba78c728627c859ddc29721"
+ },
+ {
+  "pos": "-",
+  "pr": "9254",
+  "sha8": "da87cdcc",
+  "state": "waiting",
+  "lane": "circuits",
+  "why": "not marked ready at da87cdcc: `research queue ready 9254 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "da87cdccfcecaa8ef454313c3faf008150ca4a67"
+ },
+ {
+  "pos": "-",
+  "pr": "9268",
+  "sha8": "5d7e81e2",
+  "state": "waiting",
+  "lane": "soundness",
+  "why": "not marked ready at 5d7e81e2: `research queue ready 9268 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "5d7e81e24b1b97d4aa237974c7632d84fb4e882b"
+ },
+ {
+  "pos": "-",
+  "pr": "9275",
+  "sha8": "4dfe6b13",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at 4dfe6b13: `research queue ready 9275 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "4dfe6b139320956e9fb10b80a8e7e0c7eaf78bba"
+ },
+ {
+  "pos": "-",
+  "pr": "9282",
+  "sha8": "520a4037",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 520a4037: `research queue ready 9282 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "520a40377d41a787aded7fc5bf3afac63bacc39c"
+ },
+ {
+  "pos": "-",
+  "pr": "9305",
+  "sha8": "2d5f7a16",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 2d5f7a16: `research queue ready 9305 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "2d5f7a169d8518883f400a292c0390310124873a"
+ },
+ {
+  "pos": "-",
+  "pr": "9312",
+  "sha8": "b034e9d2",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at b034e9d2: `research queue ready 9312 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "b034e9d200b55403e2e8e0b15fdf48d6d6de12ca"
+ },
+ {
+  "pos": "-",
+  "pr": "9313",
+  "sha8": "19474e53",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 19474e53: `research queue ready 9313 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "19474e53e4f70ebdb19bf7ac02b6d279c85d43ba"
+ },
+ {
+  "pos": "-",
+  "pr": "9317",
+  "sha8": "0978f5af",
+  "state": "waiting",
+  "lane": "circuits",
+  "why": "not marked ready at 0978f5af: `research queue ready 9317 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "0978f5af04bb7a35269ce2fdf874f5a675539c97"
+ },
+ {
+  "pos": "-",
+  "pr": "9318",
+  "sha8": "0e1df5b6",
+  "state": "waiting",
+  "lane": "circuits",
+  "why": "not marked ready at 0e1df5b6: `research queue ready 9318 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "0e1df5b61417da4d057b9e1282d7948eb820fab0"
+ },
+ {
+  "pos": "-",
+  "pr": "9319",
+  "sha8": "0e7b13e3",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 0e7b13e3: `research queue ready 9319 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "0e7b13e39bd18c173d098c93ffa2c430cf8e6044"
+ },
+ {
+  "pos": "-",
+  "pr": "9322",
+  "sha8": "a845a7a3",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at a845a7a3: `research queue ready 9322 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "a845a7a364ac4e317ea53e734abc6b9a2cb7f08b"
+ },
+ {
+  "pos": "-",
+  "pr": "9329",
+  "sha8": "c77b01b8",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at c77b01b8: `research queue ready 9329 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "c77b01b8b79af859bdfd33ea7e64b150e9717977"
+ },
+ {
+  "pos": "-",
+  "pr": "9333",
+  "sha8": "2e6f1977",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 2e6f1977: `research queue ready 9333 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "2e6f1977ba4a9394a9b80995fefb85b856db6804"
+ },
+ {
+  "pos": "-",
+  "pr": "9339",
+  "sha8": "f31e7d81",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at f31e7d81: `research queue ready 9339 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "f31e7d81d46e56fa1896baf156f2137cef7684e5"
+ },
+ {
+  "pos": "-",
+  "pr": "9340",
+  "sha8": "3aefb20f",
+  "state": "waiting",
+  "lane": "circuits",
+  "why": "not marked ready at 3aefb20f: `research queue ready 9340 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "3aefb20f1941276c147a8853d9cb84328bae15d8"
+ },
+ {
+  "pos": "-",
+  "pr": "9349",
+  "sha8": "1125cf10",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 1125cf10: `research queue ready 9349 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "1125cf100807f409d4f031c196c52fc24e053ba5"
+ },
+ {
+  "pos": "-",
+  "pr": "9350",
+  "sha8": "b782fc88",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at b782fc88: `research queue ready 9350 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "b782fc88d460eef8e8f753e28a7cb8b8fef38016"
+ },
+ {
+  "pos": "-",
+  "pr": "9357",
+  "sha8": "bb527fd2",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at bb527fd2: `research queue ready 9357 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "bb527fd2e2d2df67084873dbf48eab8fef6c2dcf"
+ },
+ {
+  "pos": "-",
+  "pr": "9364",
+  "sha8": "446d8afd",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 446d8afd: `research queue ready 9364 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "446d8afd7acf997231233381646060a244493177"
+ },
+ {
+  "pos": "-",
+  "pr": "9368",
+  "sha8": "0f03244a",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 0f03244a: `research queue ready 9368 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "0f03244a309a3bfd42e4e720eef74124f777b272"
+ },
+ {
+  "pos": "-",
+  "pr": "9369",
+  "sha8": "08740c9d",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 08740c9d: `research queue ready 9369 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "08740c9dfa46d8ed8dcad843219de63749b3d417"
+ },
+ {
+  "pos": "-",
+  "pr": "9371",
+  "sha8": "3da6c052",
+  "state": "waiting",
+  "lane": "circuits",
+  "why": "not marked ready at 3da6c052: `research queue ready 9371 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "3da6c052b557a041b04d48b9fe69a511e386876b"
+ },
+ {
+  "pos": "-",
+  "pr": "9373",
+  "sha8": "e11d786b",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at e11d786b: `research queue ready 9373 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "e11d786b347704b2653fd0d04b97b0d252b40b24"
+ },
+ {
+  "pos": "-",
+  "pr": "9374",
+  "sha8": "8e09000b",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at 8e09000b: `research queue ready 9374 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "8e09000bffbbe0012afb096c711d7fe3fb092687"
+ },
+ {
+  "pos": "-",
+  "pr": "9376",
+  "sha8": "359dd99f",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 359dd99f: `research queue ready 9376 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "359dd99f073c12e90afdec78d77e1bd880fa78e8"
+ },
+ {
+  "pos": "-",
+  "pr": "9377",
+  "sha8": "cff53ece",
+  "state": "waiting",
+  "lane": "memory-accounting",
+  "why": "not marked ready at cff53ece: `research queue ready 9377 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "cff53eceb997ae416de8649a4825d24b3273a89d"
+ },
+ {
+  "pos": "-",
+  "pr": "9378",
+  "sha8": "a852289e",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at a852289e: `research queue ready 9378 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "a852289e494b172eb5f6ff0e2aa4983ff4fe612e"
+ },
+ {
+  "pos": "-",
+  "pr": "9379",
+  "sha8": "450bcc46",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at 450bcc46: `research queue ready 9379 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "450bcc46009d06f053fe61802cde1a1fabe947c7"
+ },
+ {
+  "pos": "-",
+  "pr": "9380",
+  "sha8": "c81daa73",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at c81daa73: `research queue ready 9380 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "c81daa7305df4d304f6547f4e236924647038c13"
+ },
+ {
+  "pos": "-",
+  "pr": "9384",
+  "sha8": "8007f9b1",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 8007f9b1: `research queue ready 9384 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "8007f9b1434505b6a91ec885e3922575e828a966"
+ },
+ {
+  "pos": "-",
+  "pr": "9385",
+  "sha8": "cbcb6f8d",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at cbcb6f8d: `research queue ready 9385 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "cbcb6f8d454b9284c037d7c5aca0ca1803c2cd39"
+ },
+ {
+  "pos": "-",
+  "pr": "9389",
+  "sha8": "ac60b6b5",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at ac60b6b5: `research queue ready 9389 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "ac60b6b5803eee4ad63cd3cea0549b79094bbcba"
+ },
+ {
+  "pos": "-",
+  "pr": "9390",
+  "sha8": "df3b53fa",
+  "state": "waiting",
+  "lane": "circuits",
+  "why": "not marked ready at df3b53fa: `research queue ready 9390 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "df3b53faac72130bbe18bebb32c5754ae66085a7"
+ },
+ {
+  "pos": "-",
+  "pr": "9394",
+  "sha8": "2c2a9863",
+  "state": "waiting",
+  "lane": "top",
+  "why": "not marked ready at 2c2a9863: `research queue ready 9394 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "2c2a9863bb4a9cdba77cab54dbae76120359297c"
+ },
+ {
+  "pos": "-",
+  "pr": "9402",
+  "sha8": "f25d5dc8",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at f25d5dc8: `research queue ready 9402 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "f25d5dc8b9c507d86be9e65dfefc2fcb26fc658c"
+ },
+ {
+  "pos": "-",
+  "pr": "9403",
+  "sha8": "a6fe271d",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at a6fe271d: `research queue ready 9403 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "a6fe271d9943ca611c1c9d4bdced3cf626b94e9d"
+ },
+ {
+  "pos": "-",
+  "pr": "9407",
+  "sha8": "0542a4f3",
+  "state": "waiting",
+  "lane": "top",
+  "why": "not marked ready at 0542a4f3: `research queue ready 9407 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "0542a4f3cd15dc84ea8b082ccd7e1d6568f9de2e"
+ },
+ {
+  "pos": "-",
+  "pr": "9413",
+  "sha8": "b5c4b65e",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at b5c4b65e: `research queue ready 9413 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "b5c4b65e0dd1122a4d307c18db822d762732b1ff"
+ },
+ {
+  "pos": "-",
+  "pr": "9417",
+  "sha8": "3b384b35",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at 3b384b35: `research queue ready 9417 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "3b384b35f29ece74063ed4b5987b7c1f14fa1b82"
+ },
+ {
+  "pos": "-",
+  "pr": "9419",
+  "sha8": "1fcd520e",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "contains #9396, which is refused: conflicts with `main` in tools/research/src/research/vqueue_loop.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "1fcd520e4e33d63d2943c2f4d678e2263c38359d"
+ },
+ {
+  "pos": "-",
+  "pr": "9427",
+  "sha8": "b694e1ef",
+  "state": "waiting",
+  "lane": "circuits",
+  "why": "not marked ready at b694e1ef: `research queue ready 9427 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "b694e1efa637d9a11f6fda3337d893a63b203be5"
+ },
+ {
+  "pos": "-",
+  "pr": "9429",
+  "sha8": "792cecd5",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at 792cecd5: `research queue ready 9429 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "792cecd590317bf7671ec0a208902f07c92000f5"
+ },
+ {
+  "pos": "-",
+  "pr": "9430",
+  "sha8": "5db0cf32",
+  "state": "waiting",
+  "lane": "top",
+  "why": "not marked ready at 5db0cf32: `research queue ready 9430 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "5db0cf321ed9cd4a5020b98ae69d4d9ac24bc898"
+ },
+ {
+  "pos": "-",
+  "pr": "9432",
+  "sha8": "63cb2a6b",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at 63cb2a6b: `research queue ready 9432 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "63cb2a6b5b2346cb4cd28d000861d0c11904795d"
+ },
+ {
+  "pos": "-",
+  "pr": "9433",
+  "sha8": "d4df5d5b",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at d4df5d5b: `research queue ready 9433 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "d4df5d5bf859398907f40416d7d25c341adca6ad"
+ },
+ {
+  "pos": "-",
+  "pr": "9434",
+  "sha8": "e86d890a",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at e86d890a: `research queue ready 9434 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "e86d890a57a3398abda8c7f8981904b49731e9b8"
+ },
+ {
+  "pos": "-",
+  "pr": "9435",
+  "sha8": "353215ae",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 353215ae: `research queue ready 9435 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "353215aef8ac1af60d824cf793d0152e987b9b0e"
+ },
+ {
+  "pos": "-",
+  "pr": "9436",
+  "sha8": "ac71bfaf",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at ac71bfaf: `research queue ready 9436 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "ac71bfafbdf89d840a66a751e5e9b61cbfe28e41"
+ },
+ {
+  "pos": "-",
+  "pr": "9439",
+  "sha8": "ddc19366",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "not marked ready at ddc19366: `research queue ready 9439 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "ddc19366a94c02fa0ad0b7eed9111272d3b9040d"
+ },
+ {
+  "pos": "-",
+  "pr": "9441",
+  "sha8": "ce41e7c9",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at ce41e7c9: `research queue ready 9441 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "ce41e7c92e8ee807323f6e6aec6de6606303972f"
+ },
+ {
+  "pos": "-",
+  "pr": "9446",
+  "sha8": "819334ae",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 819334ae: `research queue ready 9446 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "819334aea90d79620f9dd4552a330072f773c596"
+ },
+ {
+  "pos": "-",
+  "pr": "9450",
+  "sha8": "2e149dad",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at 2e149dad: `research queue ready 9450 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "2e149dad14b178e6ce326889ff141bfedbdc9a83"
+ },
+ {
+  "pos": "-",
+  "pr": "9451",
+  "sha8": "2067e8f7",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at 2067e8f7: `research queue ready 9451 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "2067e8f78ed7b174fa373a65f00b78684309c3d8"
+ },
+ {
+  "pos": "-",
+  "pr": "9452",
+  "sha8": "378fcba9",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 378fcba9: `research queue ready 9452 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "378fcba9dae6d4c39f5b43c214393cb976f7f790"
+ },
+ {
+  "pos": "-",
+  "pr": "9454",
+  "sha8": "e2feccf2",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at e2feccf2: `research queue ready 9454 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "de9bd72fddddaa39e83cda9a87af8a9217543090",
+  "moved_since_status": true
+ },
+ {
+  "pos": "-",
+  "pr": "9457",
+  "sha8": "259aadb0",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 259aadb0: `research queue ready 9457 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "259aadb07b66c3767d49b3950e29933c20f7e6d3"
+ },
+ {
+  "pos": "-",
+  "pr": "9458",
+  "sha8": "049c5875",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 049c5875: `research queue ready 9458 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "049c5875989caf2890b9e1dfa1578833cf3dbc4d"
+ },
+ {
+  "pos": "-",
+  "pr": "9461",
+  "sha8": "3d1a6e40",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 3d1a6e40: `research queue ready 9461 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "3d1a6e405db5647b83c07e78813bb2da7d89fdbc"
+ },
+ {
+  "pos": "-",
+  "pr": "9463",
+  "sha8": "4bfa7849",
+  "state": "waiting",
+  "lane": "soundness",
+  "why": "not marked ready at 4bfa7849: `research queue ready 9463 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "4bfa784943933ca539a829437e7ef851c2bab223"
+ },
+ {
+  "pos": "-",
+  "pr": "9466",
+  "sha8": "f21a30f2",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at f21a30f2: `research queue ready 9466 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "f21a30f274aa39eda335d44283397d0039d37dff"
+ },
+ {
+  "pos": "-",
+  "pr": "9471",
+  "sha8": "befbbd5f",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "not marked ready at befbbd5f: `research queue ready 9471 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "befbbd5f80fc685ba0279dfc58c02becb274a20e"
+ },
+ {
+  "pos": "-",
+  "pr": "9475",
+  "sha8": "871ab913",
+  "state": "waiting",
+  "lane": "soundness",
+  "why": "not marked ready at 871ab913: `research queue ready 9475 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "871ab913c39edd0711bdead643c2369a90520d3e"
+ },
+ {
+  "pos": "-",
+  "pr": "9479",
+  "sha8": "bc529962",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at bc529962: `research queue ready 9479 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "bc5299622c07c95e37d704c74befc9213ed2c858"
+ },
+ {
+  "pos": "-",
+  "pr": "9480",
+  "sha8": "496aa183",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 496aa183: `research queue ready 9480 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "496aa183544bdf647b2e98943cb1c1bc6c193210"
+ },
+ {
+  "pos": "-",
+  "pr": "9483",
+  "sha8": "ee58fefe",
+  "state": "waiting",
+  "lane": "kernels",
+  "why": "not marked ready at ee58fefe: `research queue ready 9483 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "ee58fefe5b1c86075dd690aef4307439522b5592"
+ },
+ {
+  "pos": "-",
+  "pr": "9486",
+  "sha8": "0a13c1c9",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 0a13c1c9: `research queue ready 9486 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "0a13c1c90cb3850aa132e4c4b6a790387df68f85"
+ },
+ {
+  "pos": "-",
+  "pr": "9488",
+  "sha8": "75bbfd75",
+  "state": "waiting",
+  "lane": "memory-accounting",
+  "why": "not marked ready at 75bbfd75: `research queue ready 9488 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "75bbfd755e7e44a02ef0ff06b03608986b6ca91e"
+ },
+ {
+  "pos": "-",
+  "pr": "9491",
+  "sha8": "5043cff7",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 5043cff7: `research queue ready 9491 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "5043cff70ec1c71d25f190628f888f9cce40a8f5"
+ },
+ {
+  "pos": "-",
+  "pr": "9492",
+  "sha8": "63088686",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 63088686: `research queue ready 9492 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "63088686777b1c4086483051abe2b5398a92786d"
+ },
+ {
+  "pos": "-",
+  "pr": "9493",
+  "sha8": "e19024da",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at e19024da: `research queue ready 9493 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "e19024da2624a48382603012222e0c2ec3cbe3b1"
+ },
+ {
+  "pos": "-",
+  "pr": "9494",
+  "sha8": "ebc94575",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at ebc94575: `research queue ready 9494 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "ebc94575d675358b0ef140a6b47235e2d76142b2"
+ },
+ {
+  "pos": "-",
+  "pr": "9501",
+  "sha8": "ca49f22a",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at ca49f22a: `research queue ready 9501 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "ca49f22a3f7f24c31f30d91e5de242a44391e850"
+ },
+ {
+  "pos": "-",
+  "pr": "9502",
+  "sha8": "9ddabfea",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at 9ddabfea: `research queue ready 9502 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "9ddabfeafb61018a223a4f3b6756cb0d3c3df93d"
+ },
+ {
+  "pos": "-",
+  "pr": "9503",
+  "sha8": "239477cc",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 239477cc: `research queue ready 9503 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "239477ccbfb38d112de6495c73cb5420fb9edec6"
+ },
+ {
+  "pos": "-",
+  "pr": "9504",
+  "sha8": "e30d3803",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at e30d3803: `research queue ready 9504 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "e30d38036c11d0798b78ac6fb3e6adfc1c89b581"
+ },
+ {
+  "pos": "-",
+  "pr": "9508",
+  "sha8": "f9cf4032",
+  "state": "waiting",
+  "lane": "infra",
+  "why": "not marked ready at f9cf4032: `research queue ready 9508 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "f9cf403205c7f0f84e7407b23b5e91ab119177b6"
+ },
+ {
+  "pos": "-",
+  "pr": "9509",
+  "sha8": "ec96845a",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at ec96845a: `research queue ready 9509 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "ec96845a549cf5a4ce48c6f61455e64e6d9aaf15"
+ },
+ {
+  "pos": "-",
+  "pr": "9516",
+  "sha8": "12289fa4",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 12289fa4: `research queue ready 9516 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "12289fa44400bed0143976571f0aa5ef777c71f6"
+ },
+ {
+  "pos": "-",
+  "pr": "9519",
+  "sha8": "d7a37667",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at d7a37667: `research queue ready 9519 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "d7a3766726f8d58a611f9d5c5fbb96e6661397e1"
+ },
+ {
+  "pos": "-",
+  "pr": "9520",
+  "sha8": "e7ad1877",
+  "state": "waiting",
+  "lane": "soundness",
+  "why": "not marked ready at e7ad1877: `research queue ready 9520 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "899017e4fcd83c23d1b6b1ddef5403679917037a",
+  "moved_since_status": true
+ },
+ {
+  "pos": "-",
+  "pr": "9524",
+  "sha8": "b0ec9766",
+  "state": "waiting",
+  "lane": "soundness",
+  "why": "not marked ready at b0ec9766: `research queue ready 9524 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "b0ec976627ae95967b441d82973ec41368622f1e"
+ },
+ {
+  "pos": "-",
+  "pr": "9526",
+  "sha8": "6ac5043f",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 6ac5043f: `research queue ready 9526 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "6ac5043f64936f92edf559ba41d0dce5cd0d6be0"
+ },
+ {
+  "pos": "-",
+  "pr": "9527",
+  "sha8": "07d87523",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 07d87523: `research queue ready 9527 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "07d87523518804b2a2f427416ae1d07870a5ada0"
+ },
+ {
+  "pos": "-",
+  "pr": "9531",
+  "sha8": "b16502a2",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at b16502a2: `research queue ready 9531 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "b16502a23d9fd9c8337fff81b826fbf81e128c9b"
+ },
+ {
+  "pos": "-",
+  "pr": "9532",
+  "sha8": "1e858ab4",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at 1e858ab4: `research queue ready 9532 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "3b605fda0fcb294b6d40aca8731b2dd1e754f675",
+  "moved_since_status": true
+ },
+ {
+  "pos": "-",
+  "pr": "9533",
+  "sha8": "bd703249",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at bd703249: `research queue ready 9533 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "bd70324920f448fbb94134163790c51454ff7f7e"
+ },
+ {
+  "pos": "-",
+  "pr": "9534",
+  "sha8": "08b63525",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 08b63525: `research queue ready 9534 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "08b6352541598a30a0abf9b0ae3bcfda7aa7a6dd"
+ },
+ {
+  "pos": "-",
+  "pr": "9535",
+  "sha8": "2135d432",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at 2135d432: `research queue ready 9535 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "2135d432cbbfde9ac34a5af03ccc9809fe2c27c2"
+ },
+ {
+  "pos": "-",
+  "pr": "9536",
+  "sha8": "5e8fe717",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 5e8fe717: `research queue ready 9536 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "5e8fe717d8f5d5e2fcac0a028f42606aa37f861f"
+ },
+ {
+  "pos": "-",
+  "pr": "9541",
+  "sha8": "f1b9feaa",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at f1b9feaa: `research queue ready 9541 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "f1b9feaa572646f7262cb4e7d2ee868b0ff9f5a9"
+ },
+ {
+  "pos": "-",
+  "pr": "9542",
+  "sha8": "1d3b4312",
+  "state": "waiting",
+  "lane": "kernels",
+  "why": "not marked ready at 1d3b4312: `research queue ready 9542 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "1d3b431248ad4446ad80665d0b856e5549d5c004"
+ },
+ {
+  "pos": "-",
+  "pr": "9544",
+  "sha8": "09577b4d",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at 09577b4d: `research queue ready 9544 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "09577b4ddcbe02389297377e4d662eca39a565f9"
+ },
+ {
+  "pos": "-",
+  "pr": "9545",
+  "sha8": "e05a9bca",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at e05a9bca: `research queue ready 9545 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "e05a9bca9c732201a966199d2ee40aeef594d865"
+ },
+ {
+  "pos": "-",
+  "pr": "9547",
+  "sha8": "7c92f78e",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 7c92f78e: `research queue ready 9547 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "7c92f78ee8b565339a46ad52047e3fdb34b5a975"
+ },
+ {
+  "pos": "-",
+  "pr": "9548",
+  "sha8": "40217460",
+  "state": "waiting",
+  "lane": "compute-research",
+  "why": "not marked ready at 40217460: `research queue ready 9548 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "40217460ba64bb42aa0d1cd90f4c9f2da38010b1"
+ },
+ {
+  "pos": "-",
+  "pr": "9554",
+  "sha8": "0fb0e751",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "not marked ready at 0fb0e751: `research queue ready 9554 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "0fb0e7514f8e95705efab7487e0edf77d313eef9"
+ },
+ {
+  "pos": "-",
+  "pr": "9555",
+  "sha8": "962bc1a8",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 962bc1a8: `research queue ready 9555 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "962bc1a88b4e3be883a1a0f348ae0d9554a19795"
+ },
+ {
+  "pos": "-",
+  "pr": "9558",
+  "sha8": "102ad1d7",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at 102ad1d7: `research queue ready 9558 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "102ad1d7021c7c7789c081a99752c15fcf9083d6"
+ },
+ {
+  "pos": "-",
+  "pr": "9560",
+  "sha8": "a2f43c29",
+  "state": "waiting",
+  "lane": "top",
+  "why": "not marked ready at a2f43c29: `research queue ready 9560 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "a2f43c295cc35cb868828524ffa5f7d5cddda805"
+ },
+ {
+  "pos": "-",
+  "pr": "9564",
+  "sha8": "5033e184",
+  "state": "waiting",
+  "lane": "infra",
+  "why": "not marked ready at 5033e184: `research queue ready 9564 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "5033e1847f522d17adff318e9059b6f180b1f6e0"
+ },
+ {
+  "pos": "-",
+  "pr": "9565",
+  "sha8": "fe31b503",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at fe31b503: `research queue ready 9565 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "fe31b503bb9d903acd82526e8fd9fb234e952ef7"
+ },
+ {
+  "pos": "-",
+  "pr": "9569",
+  "sha8": "fe800897",
+  "state": "waiting",
+  "lane": "circuits",
+  "why": "not marked ready at fe800897: `research queue ready 9569 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "fe800897e74ddcb476bb939a50f6564bc6f32740"
+ },
+ {
+  "pos": "-",
+  "pr": "9572",
+  "sha8": "54819b2c",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "not marked ready at 54819b2c: `research queue ready 9572 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "54819b2c86f09b99618c9af1d27e3ab163031a6f"
+ },
+ {
+  "pos": "-",
+  "pr": "9573",
+  "sha8": "1dd8140b",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 1dd8140b: `research queue ready 9573 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "1dd8140bdb5e0248b649564a9bd305e92898ec68"
+ },
+ {
+  "pos": "-",
+  "pr": "9574",
+  "sha8": "8d8015c0",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 8d8015c0: `research queue ready 9574 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "cecd0feb3f6161c67ea764e28532463ebdcfc9ac",
+  "moved_since_status": true
+ },
+ {
+  "pos": "-",
+  "pr": "9575",
+  "sha8": "18c20e0e",
+  "state": "waiting",
+  "lane": "top",
+  "why": "not marked ready at 18c20e0e: `research queue ready 9575 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "18c20e0e8573a344861577773c23ad29209d83f2"
+ },
+ {
+  "pos": "-",
+  "pr": "9576",
+  "sha8": "5d5c7183",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 5d5c7183: `research queue ready 9576 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "5d5c7183ca94ffc29e6950f76592c3810b4432f2"
+ },
+ {
+  "pos": "-",
+  "pr": "9577",
+  "sha8": "a53821ee",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at a53821ee: `research queue ready 9577 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "a53821ee255be5403ea1ada9decdd950ad66cad8"
+ },
+ {
+  "pos": "-",
+  "pr": "9578",
+  "sha8": "e638267a",
+  "state": "waiting",
+  "lane": "training",
+  "why": "not marked ready at e638267a: `research queue ready 9578 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "e638267a512233419c16668e86d42ade071c603a"
+ },
+ {
+  "pos": "-",
+  "pr": "9579",
+  "sha8": "f658c8f5",
+  "state": "waiting",
+  "lane": "compute-accounting",
+  "why": "not marked ready at f658c8f5: `research queue ready 9579 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "f658c8f597197948218e8514aa0e946604dc66a9"
+ },
+ {
+  "pos": "-",
+  "pr": "9580",
+  "sha8": "96478388",
+  "state": "waiting",
+  "lane": "ci",
+  "why": "contains #9396, which is refused: conflicts with `main` in tools/research/src/research/vqueue_loop.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "96478388bfd36ca8be72171631e1484cd8b2a1d3"
+ },
+ {
+  "pos": "-",
+  "pr": "9581",
+  "sha8": "43fde9d0",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 43fde9d0: `research queue ready 9581 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "43fde9d04680e7522e8185da61be521408d79bcc"
+ },
+ {
+  "pos": "-",
+  "pr": "9583",
+  "sha8": "05ac7144",
+  "state": "waiting",
+  "lane": "memory-accounting",
+  "why": "not marked ready at 05ac7144: `research queue ready 9583 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "05ac714486cfee4256347d17d36208646d19b144"
+ },
+ {
+  "pos": "-",
+  "pr": "9586",
+  "sha8": "c5032c44",
+  "state": "waiting",
+  "lane": "compute-research",
+  "why": "not marked ready at c5032c44: `research queue ready 9586 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "c5032c44805e1ec6fdb636c126a2e782a3be55d5"
+ },
+ {
+  "pos": "-",
+  "pr": "9588",
+  "sha8": "a8c432d6",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at a8c432d6: `research queue ready 9588 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "a8c432d6599bee096156b226fcebc37c76b4c541"
+ },
+ {
+  "pos": "-",
+  "pr": "9589",
+  "sha8": "7e7a8b29",
+  "state": "waiting",
+  "lane": "network-accounting",
+  "why": "not marked ready at 7e7a8b29: `research queue ready 9589 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "7e7a8b2977ce1492c9028b3384ae180994c4249d"
+ },
+ {
+  "pos": "-",
+  "pr": "9590",
+  "sha8": "334cb9c3",
+  "state": "waiting",
+  "lane": "benchmarks",
+  "why": "not marked ready at 334cb9c3: `research queue ready 9590 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "334cb9c3fd407f4b6b3544dbf4881fe8810b13be"
+ },
+ {
+  "pos": "-",
+  "pr": "9591",
+  "sha8": "d2903662",
+  "state": "waiting",
+  "lane": "vllm",
+  "why": "not marked ready at d2903662: `research queue ready 9591 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "d29036627162794906bed15c2d2e7198d46c7008"
+ },
+ {
+  "pos": "-",
+  "pr": "9592",
+  "sha8": "85ea0075",
+  "state": "waiting",
+  "lane": "lean",
+  "why": "not marked ready at 85ea0075: `research queue ready 9592 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "69b38085a0b3c0861117d935f4e0174c625158ac",
+  "moved_since_status": true
+ },
+ {
+  "pos": "-",
+  "pr": "9593",
+  "sha8": "d8c696ed",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at d8c696ed: `research queue ready 9593 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "d8c696eda1089f94ed8db0af93b4d067bf3a9592"
+ },
+ {
+  "pos": "-",
+  "pr": "9594",
+  "sha8": "9049e2c5",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 9049e2c5: `research queue ready 9594 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "9049e2c572ec9c90e004783f5885dcda41341663"
+ },
+ {
+  "pos": "-",
+  "pr": "9595",
+  "sha8": "5dacc95e",
+  "state": "waiting",
+  "lane": "proofs",
+  "why": "not marked ready at 5dacc95e: `research queue ready 9595 --on MACHINE` (or --local; --mark without the tier)",
+  "marked": false,
+  "sha": "5dacc95eab9eb704c24e05aa42206f864b0585eb"
+ },
+ {
+  "pos": "-",
+  "pr": "8436",
+  "sha8": "194f459e",
+  "state": "refused",
+  "lane": "ci",
+  "why": "conflicts with `main` in tools/research/src/research/vqueue_loop.py, tools/research/tests/test_vqueue_loop.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "194f459e9a1b09beeeb59e1de8a63c16f5807cea"
+ },
+ {
+  "pos": "-",
+  "pr": "8756",
+  "sha8": "700b6dde",
+  "state": "refused",
+  "lane": "ci",
+  "why": "conflicts with `main` in tools/research/src/research/drive.py, tools/research/src/research/vqueue_loop.py, tools/research/tests/test_drive_executor.py, tools/research/tests/test_vqueue_loop.py, tools/verity/graph/README.md, tools/verity/graph/tasks.toml, tools/verity/graph/tests/test_graph.py, tools/verity/graph/tests/test_lean_listing.py, tools/verity/graph/tests/test_lean_runner.py, tools/verity/graph/verity_graph/families/lean_lock.py, tools/verity/graph/verity_graph/runners/lean_lock.py, tools/verity/graph/verity_graph/runners/lean_suites.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "700b6dde159c8b576bcac4e1afedaef053f78acc"
+ },
+ {
+  "pos": "-",
+  "pr": "9176",
+  "sha8": "99f2f3ba",
+  "state": "refused",
+  "lane": "proofs",
+  "why": "conflicts with `main` in benchmarks/one_stage/tests/test_two_stage_second.py, benchmarks/one_stage/two_stage_small.py, benchmarks/one_stage/two_stage_small.sh, verity/protocols/spot/verifier/lean/tests/test_difftest.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "99f2f3ba2cf13851729be7a710c6ccc7fd5c3c70"
+ },
+ {
+  "pos": "-",
+  "pr": "9363",
+  "sha8": "f3ffe4e2",
+  "state": "refused",
+  "lane": "lean",
+  "why": "its head carries 187 merges of an old `next` that `main` doesn't hold, of PRs closed unlanded (3fc9da7a2056 (#5584), 2c2289d6355c (#6769), eb7f06d7047e (#6625) and 184 more), which would land with it: retarget the PR to the demo branch it builds on, or restack its own commits onto `main` (a branch from `origin/main` with each cherry-picked, and the branch of each open PR it needs merged, never `next`) and mark that head",
+  "marked": true,
+  "sha": "f3ffe4e2bbcbc4a5f6b66eac4b03061d6be182b3"
+ },
+ {
+  "pos": "-",
+  "pr": "9396",
+  "sha8": "ebbfff99",
+  "state": "refused",
+  "lane": "ci",
+  "why": "conflicts with `main` in tools/research/src/research/vqueue_loop.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "ebbfff9915076d62e65d8da6b41fe55a48c6e2ba"
+ },
+ {
+  "pos": "-",
+  "pr": "9415",
+  "sha8": "6567a712",
+  "state": "refused",
+  "lane": "ci",
+  "why": "conflicts with `main` in tools/research/src/research/vqueue.py, tools/research/src/research/vqueue_loop.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "6567a712f1f9337194c49991beb5b8f2c41b2750"
+ },
+ {
+  "pos": "-",
+  "pr": "9462",
+  "sha8": "0321d0a5",
+  "state": "refused",
+  "lane": "ci",
+  "why": "conflicts with `main` in tools/research/src/research/vqueue_loop.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "0321d0a5a695f9ac985a6e460877a10fff729fdd"
+ },
+ {
+  "pos": "-",
+  "pr": "9495",
+  "sha8": "71190382",
+  "state": "refused",
+  "lane": "ci",
+  "why": "conflicts with `main` in tools/research/tests/test_vqueue_loop.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "71190382a177122418a759eaa62024b83c745420"
+ },
+ {
+  "pos": "-",
+  "pr": "9556",
+  "sha8": "e0b946eb",
+  "state": "refused",
+  "lane": "ci",
+  "why": "conflicts with `main` in .agents/skills/team/SKILL.md, tools/move/README.md, tools/research/src/research/queue.py: merge `main` into the branch and re-mark it",
+  "marked": true,
+  "sha": "e0b946eb46c1b49ec5bdb76d0b585599accd6c67"
+ }
+]

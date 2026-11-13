@@ -33,12 +33,15 @@ def passed(r: dict) -> bool:
 
 
 def verdict(name: str) -> str:
-    """pass | stops-pass | stops-fail | stops-unresolved | fail"""
+    """pass | stops-pass | stops-fail | stops-unresolved | fail
+
+    stops-unresolved: the head's side of every conflict gives no tree (the merge can't be committed) or a tree whose
+    registries don't load (the test's own functions stop on an import), so there is nothing to hold to the list."""
     r = first[name]
     if not r.get("conflicts"):
         return "pass" if passed(r) else "fail"
     f = forced.get(name)
-    if f is None or "pytest" not in f:
+    if f is None or "pytest" not in f or f.get("detail_error"):
         return "stops-unresolved"
     return "stops-pass" if passed(f) else "stops-fail"
 
@@ -95,7 +98,7 @@ nm_fail = [n for n in fails if n in marked]
 p(f"**{len(nm_fail)} of the {len(marked)} marked pull requests would fail the check, and no live candidate does.** "
   f"Of the {len(unmarked)} not marked, {sum(1 for n in unmarked if n in fails)} would.")
 p()
-p("| heads | count | merged with the base, the test passes | the merge stops; with the head's side of each conflict the test passes | would fail | not resolved |")
+p("| heads | count | merged with the base, the test passes | the merge stops; with the head's side of each conflict the test passes | would fail | the merge stops, no verdict |")
 p("|---|---|---|---|---|---|")
 for g in GROUPS:
     ns = by_group[g]
@@ -165,8 +168,9 @@ if extra:
 p("## Marked pull requests whose merge with `main` stops")
 p()
 stops = [n for n in marked if first[n].get("conflicts")]
-p(f"{len(stops)} of the {len(marked)}. None stops in a file of this change; each stops against `main` without it too (the queue's own")
-p("reason for the refused ones). For these the test was run on a scratch resolution, the pull request's side of every")
+p(f"{len(stops)} of the {len(marked)}. None stops in a file of this change: each stops against `main` alone on the same files")
+p("(`git merge-tree` of `main` and the head; `sweep/conflicts-main-alone.json`), which is the queue's own reason for most of")
+p("the refused. For these the test was run on a scratch resolution, the pull request's side of every")
 p("conflict, so its verdict is of that tree and not of the merge its owner will make. \"Read by the test\" counts the")
 p(f"conflicted files among the {len(opened)} tracked files the test opens at the base: where it is 0, no file the registries")
 p("load is in conflict, and the verdict doesn't depend on the side taken.")
@@ -187,7 +191,7 @@ p()
 
 p("## The pull requests not marked (a forecast: nobody asked the queue to land these)")
 p()
-p("| lane | heads | pass | merge stops, passes with its side | would fail | not resolved |")
+p("| lane | heads | pass | merge stops, passes with its side | would fail | merge stops, no verdict |")
 p("|---|---|---|---|---|---|")
 for k, ns in sorted(collections.Counter(lane(n) for n in unmarked).items(), key=lambda kv: -kv[1]):
     c = collections.Counter(V[n] for n in unmarked if lane(n) == k)
@@ -200,4 +204,11 @@ p(f"{len(ust)} of them stop against `main`; {len(read)} of those stop in a file 
      " is weak: the owner's merge decides what the registries hold" if read else "") + ".")
 if unresolved:
     p()
-    p("Not resolved by taking the head's side (no verdict): " + ", ".join(pr(n) for n in unresolved) + ".")
+    p("No verdict, since the head's side of its conflicts gives no tree whose registries load (each is an older tree than")
+    p("the layout's move, and its side of a conflicted module imports a package that is gone):")
+    p()
+    for n in unresolved:
+        f = forced.get(n, {})
+        why = (f.get("detail_error") or f.get("force_error") or f.get("merge_error") or "no result").strip().splitlines()[-1][:140]
+        files = sum(len(v) for v in first[n]["conflicts"].values())
+        p(f"- {pr(n)} ({lane(n)}, {group(n)}): {files} files in conflict; `{why}`")

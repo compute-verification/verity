@@ -15,7 +15,7 @@ from pathlib import Path
 
 REPO = Path("/agent/repos/verity")
 WORK = Path("/tmp/cir208")
-BASE = "b1409cffb06f0e1b46ca8ee97fc85c28c412523b"
+BASE = "d9b1f18a28fef36e24a3c3d6b6f6031236c943a6"
 SP = REPO / ".venv/lib/python3.12/site-packages"
 PY = REPO / ".venv/bin/python"
 TEST = "tools/verity/circuit_check/tests/test_superseded_versions.py"
@@ -98,6 +98,9 @@ def roots() -> list[str]:
 
 #: `--resolve=ours|theirs`: take that side of each conflicting hunk (a scratch resolution, to read the registries of a union)
 RESOLVE = [f"-X{a.split('=', 1)[1]}" for a in sys.argv[1:] if a.startswith("--resolve=")]
+#: `--force`: where the merge still stops, take the merged head's side of each path and go on (out2/, never a verdict on its own)
+FORCE = "--force" in sys.argv
+OUT = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--out=")), "out")
 
 
 def git(*args: str, cwd: Path = REPO, check: bool = True) -> subprocess.CompletedProcess:
@@ -114,10 +117,23 @@ def main(name: str, heads: list[str]) -> int:
         out["heads"].append(sha[:10])
         m = git("merge", "--no-edit", "--no-ff", *RESOLVE, sha, cwd=wt, check=False)
         if m.returncode:
-            out["conflicts"][sha[:10]] = git("diff", "--name-only", "--diff-filter=U", cwd=wt).stdout.split()
+            unmerged = [f for f in git("diff", "--name-only", "-z", "--diff-filter=U", cwd=wt).stdout.split("\0") if f]
+            out["conflicts"][sha[:10]] = unmerged
             out["merge_error"] = (m.stdout + m.stderr)[-600:]
-            break
-    if not out["conflicts"]:
+            if not FORCE:
+                break
+            # a scratch resolution: the merged head's side of every path the merge stops on, or no file where it has none
+            for f in unmerged:
+                if git("checkout", "--theirs", "--", f, cwd=wt, check=False).returncode:
+                    git("rm", "-q", "-f", "--", f, cwd=wt, check=False)
+                else:
+                    git("add", "--", f, cwd=wt, check=False)
+            c = git("commit", "-q", "--no-edit", "--no-verify", cwd=wt, check=False)
+            out["forced"] = c.returncode == 0
+            if c.returncode:
+                out["force_error"] = (c.stdout + c.stderr)[-400:]
+                break
+    if not out["conflicts"] or out.get("forced"):
         env = {**os.environ, "PYTHONPATH": ":".join(r.replace(str(REPO), str(wt), 1) for r in roots())}
         env.pop("VIRTUAL_ENV", None)
         p = subprocess.run([str(PY), "-m", "pytest", "-q", "-p", "no:cacheprovider", TEST], cwd=wt, env=env,
@@ -136,12 +152,12 @@ def main(name: str, heads: list[str]) -> int:
             out["extra_error"] = x.stderr[-1500:]
         else:
             out.update(json.loads(x.stdout.splitlines()[-1]))
-    (WORK / "out").mkdir(exist_ok=True)
-    (WORK / "out" / f"{name}.json").write_text(json.dumps(out, indent=1) + "\n")
+    (WORK / OUT).mkdir(exist_ok=True)
+    (WORK / OUT / f"{name}.json").write_text(json.dumps(out, indent=1) + "\n")
     brief = {k: v for k, v in out.items() if k != "ids"}
     brief["registered"] = len(out.get("ids", {}))
     print(json.dumps(brief))
-    if not out["conflicts"] and "--keep" not in sys.argv:
+    if (not out["conflicts"] or FORCE) and "--keep" not in sys.argv:
         git("worktree", "remove", "--force", str(wt), check=False)
     return 0
 
