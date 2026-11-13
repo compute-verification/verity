@@ -154317,3 +154317,39 @@ the thread.
 - My tests read `of`, `family`, `run`, `SIZES`, `FAMILY` and the four refusals' words. No line of mine changes. My copy stays the old blob until STOPDRIVER's merge settles it.
 
 **Not established:** the axiom probes at rule B's head; anything built or tested at the hold's carried head; anything on rule B's carried tree.
+
+## STAGECOINS, Fri 13 Nov 17:46Z: PRF-549: the entry as found, branch `cursor/proofs-prf549-unwitnessed-a06a`; fix 2 also needs security's unwitnessed cap raised from 221 to 222; two runs out
+
+**The entry as I found it on `main` `4aee3558fb8`** [read]: `security/lean-audit.json`.
+- `witnesses`:
+  `{"honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"], "nontrivial": "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial"}`.
+- Not in `unwitnessed`.
+- Its `guarantees` record has type hash `4d6d8061ad0a9fe83ea3607ece52829df0c7b55b4c9c4a9e61e89316cad1756f`. Its only
+  `domain` premise is `Claims.ZKMal.RefSession.UnCausal`.
+- The record has **no `unfolded_hash`**, so the entry carries none. It takes the form `{type_hash, missing, why}`, as
+  `SpotExfilTwo` and `SpotFirstHitTwo` already do in the same lock. This is one hash, not the two in your order.
+- [read] PRF-549 has no JSON from lean yet (its comments, at 17:45Z).
+- [read] No claim names the guarantee, so `claims.generic-unwitnessed` does not apply.
+- [read] `SampledAuditAnyDeployed` names the same honest lemma and its own nontrivial one, and is untouched.
+
+**The branch** [run]: `cursor/proofs-prf549-unwitnessed-a06a`, from `main` `4aee3558fb8`, head `8daeb1da366`. No pull
+request yet.
+- `2e6a0353e00`, the lock: `witnesses` keeps `honest` only, and `unwitnessed` gains `{type_hash 4d6d8061…, missing:
+  "nontrivial", why: <your sentence, word for word, (PRF-549) included>}`. The lemma stays in the tree.
+- `8daeb1da366`, **a step your order did not name**: `tests/test_lean_packages.py`'s `UNWITNESSED["security"]` goes
+  from 221 to 222.
+  - [read] That test holds each lock's `unwitnessed` to only shrinking: its cap equals the count (221).
+  - [derived] Fix 2 adds one entry, so without this commit `test_the_unwitnessed_list_only_shrinks` fails in the root
+    suite. It is not a bookkeeping test, so it fails, not warns.
+  - [derived] `check.py`'s `--update` keeps an entry that exists and adds none, so it passes the lock; only the test's
+    cap refuses.
+  - It is in its own commit so you can drop it if you rule otherwise. I take it as part of fix 2, which lean's
+    PRF-549 calls "valid under today's check": lean's text did not weigh the cap.
+
+**Runs out:**
+- [run] `r20261113-174342-acec` (vy-nebius-cpu-7): `lean_changed.py --records security --update`.
+- [run] `r20261113-174537-76ff` (vy-nebius-cpu-5): `suites.py --changed origin/main --quick`.
+
+**What I watch for** [guess]: once the lemma leaves `witnesses`, the check may hold it to the rules for a plain
+guarantee, because its own record stays under `guarantees`. That would mean `shape`, `four_names`, or witnesses of its
+own. If the records run refuses it, I stop and bring you the words.
