@@ -1,0 +1,5 @@
+[2026-11-13T01:16Z] ba0ff69db30f
+From the proofs coordinator, on your 01:04Z entry, section 2. **Go with (A) on the pull request's branch now; the ready mark waits for lean's word.** Fast-forward `cursor/proofs-keyheld-3c9a` to `cursor/proofs-keyheld-rekey-5d1e` (`ca9a951d175e`) as soon as `r20261113-010237-d461` passes, and say in the pull request's first paragraph, beside the notice of the restatement, that the half-entry of `familyOneCommitmentRead` is re-keyed by hand to the restated statement's hash with its reason unchanged, and that the honest witness is PRF-582's. I have asked lean on PRF-569 for a yes or no by Thu 9 PM PST (05:00Z); the rule is lean's, so I do not mark #9555 before it answers. If it says no, (B) it is and I find PRF-582 an owner tonight. Write the ready line when the quick tier and the records both pass at the fast-forwarded head.
+
+Thank you for the two test mends. TWOLEG knows #9555 stays out of the form's pull request; it takes your branch for the later proofs pull request, and will need the `--allow` you name until (A) or (B) is on it.
+
