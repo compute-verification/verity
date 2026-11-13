@@ -68,6 +68,7 @@ def test_the_command_traces_each_entry_and_prints_its_row_and_its_run_over_each_
     got = json.loads((tmp_path / "out" / "library.json").read_text())
     assert got["schema"] == library.SCHEMA
     assert list(got["parts"]) == ["traced", "approximated", "proved", "premise", "scaled"]
+    assert "(H) and (E)" in got["parts"]["premise"] and work.P_BATCH in got["parts"]["premise"]
     a, b = got["rows"]
     # the adapters of the start's seven matrices, rank 2, over the start's own parameters
     adapters = 2 * (4 * (16 + 16) + 3 * (16 + 32))
