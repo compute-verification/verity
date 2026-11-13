@@ -11,7 +11,7 @@ units, both proved every window, the pool passed from window to window as a comm
 the pool between windows is one row (`row_fields`), committed as its unsalted `Sha512RowSeg_v1` digest, the root: a
 window's pool unit opens the previous root, runs CacheStep_v3's stream from the pool it opens, and commits the pool it
 leaves as the next root. Both units are proved every window, none sampled: window w + 1's ``pin`` is window w's
-``pout``, one registered row both windows read, registered before window w + 1's coins are drawn (`PoolChain` is two
+``pout``, one registered row both windows read, registered before window w + 1's coins are flipped (`PoolChain` is two
 windows so wired). The first window's ``pin`` is the empty pool's root, `genesis`. A window whose proof fails ends its
 chain, and the next starts again from `genesis`, as the first does. The window pays for its activity as CompileSlice_v5
 does: its keys are the ragged row's blocks, its RB run the addresses its calls touch.
@@ -46,7 +46,7 @@ block (every ref 0), and owners and stamps are one window's.
   the edge's R returns ``erets``.
 - ``calls`` (*registered*): the steps' and the edge's `nrec` bus records, field-major as `CompileWindow` makes them.
 - ``pin`` and ``pout`` (*registered*): the roots the window opens and leaves, 512 bits each.
-- ``coin`` (the verifier's coins): α, γ and δ, drawn live: δ once every registered row is, α and γ once ``prow``,
+- ``coin`` (the verifier's coins): α, γ and δ, sampled live: δ once every registered row is, α and γ once ``prow``,
   ``nrow`` and ``chk`` are committed.
 - ``prow`` (*opened*): the pool row under ``pin``. The unit opens it against its root, so it is ``pin``'s up to a
   SHA-512 collision, and no input is free of it.

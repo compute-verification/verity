@@ -1,4 +1,4 @@
-"""verity_vllm.pipeline.tp.wires: a tensor-parallel window's collective sites at a grain C-Flock proves. Each rank's
+"""verity_vllm.pipeline.tp.wires: a tensor-parallel window's collective sites at a grain Flock proves. Each rank's
 coordinate words are gathered into rows; one combine unit a chunk, which every rank reads, has its parts cut W ways, row p
 wired from rank p's gathered row. Each read of a combine's output is wired from the units that compute it.
 
@@ -106,7 +106,7 @@ def parts_bits(b: TB.RequestBinding, ranks: int | None = None) -> int:
 
 def proof_blocks(sites: TW.Sites) -> dict[str, str]:
     """The window's own units (gathers, combines, output gathers, norms, a token select's groups and select) whose proof
-    block C-Flock's composer refuses (`interface.check_proof_block` under the window's cuts), by template, and why."""
+    block Flock's composer refuses (`interface.check_proof_block` under the window's cuts), by template, and why."""
     fns, out = _fns(sites), {}
     own = set().union(*(_templates_at(sites, s) for s in (TW.GATHER, TW.COMBINE, TW.OUTPUT, TW.NORM)))
     own |= {t for rs in sites.consumers.values() if len(rs) == 2 for t, _a, _n in rs}
@@ -204,7 +204,7 @@ def test_every_peer_row_of_a_tp_window_is_wired_from_its_ranks_gathered_row(toy)
     ranks read, and the calls reading them. Every combine unit's parts are cut in two, each row its rank's gathered row;
     every read of a combine's output (the norms' x and residual) is wired uncut, and each rank's token select is the served
     window's four group units, each reading a gathered LM-head row of 64 words, and its select. None is left free, and each
-    of the window's own units passes C-Flock's proof block check but the select, whose 16 groups' bests and indices are no
+    of the window's own units passes Flock's proof block check but the select, whose 16 groups' bests and indices are no
     row past 111 B at the toy's 256 logits (GLM-5.3's is, `test_tp_steps`). `input_count` counts every peer bit wired; rank 0's and
     rank 1's windows alone wire only their own rows, each peer row free. Every wire runs forward in the window's public
     order, and the verifier derives the same members from the record."""
@@ -235,7 +235,7 @@ def test_a_forged_peer_row_passes_the_per_rank_window_and_fails_the_tp_windows_w
     gathered row there with one bit of one coordinate flipped. In rank 0's window alone (today's per-rank form) the row is a
     free input: the window closes and its wiring check passes. In the TP window the honest prover refuses to commit it, and
     the same committed string in the TP window's public body is caught by the verifier's wiring check, and by `check_drawn`
-    when the sample draws that combine unit, only then."""
+    when the sample samples that combine unit, only then."""
     tp = TW.sites_circuit(toy, "tp")
     values = _values(tp)
     win = _window(tp, values)
@@ -285,7 +285,7 @@ def test_the_fused_all_reduce_is_chunk_units_reading_the_residual_row_whole():
     residual row whole; one gather of the four chunks into the new residual row; one `RmsNormMnnvl_v1` reading that row
     whole. The next fused call's chunk units read the first's residual row whole and its Gemm coordinates read the normed
     row whole, so nothing is cut but the parts and the gathers, nothing is left free, every wire runs forward and each of
-    the window's own units passes C-Flock's proof block check."""
+    the window's own units passes Flock's proof block check."""
     b = TB.derive([fused_body(3, r) for r in range(3)])
     sites = TW.sites_circuit([b], "f3")
     fns = _fns(sites)

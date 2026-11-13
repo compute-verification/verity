@@ -88,7 +88,7 @@ theorem Ex_coins {Ω R C : Type} [Fintype Ω] [Nonempty Ω] [Fintype R] [Fintype
     Verity.FirstHit.ex_tape fun (r : R) (_ : C) => f r]
   exact congrArg Ex (funext fun r => Ex_const (f r))
 
-/-- Two independent draws: the average of a function at the first plus the function at the second is twice the
+/-- Two independent samples: the average of a function at the first plus the function at the second is twice the
 function's average. -/
 theorem Ex_two {β : Type} [Fintype β] [Nonempty β] (F : β → ℝ) :
     Ex (fun q : β × β => F q.1 + F q.2) = 2 * Ex F := by

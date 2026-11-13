@@ -166,7 +166,7 @@ QKᵀ and V4's indexer are served plain and uncredited.
 
 **The segment and the noise repeat length** per class of execution phase follow one rule. The pair (L, L′) maximizes
 credited value per honest second, pub_μ°/T_honest, subject to γ ≤ 10 for that class, with credited value at an output
-cell's K − L MACs (see "What is credited"): a pair at L ≥ K credits nothing, and a smaller L credits more of each call.
+output cell's K − L MACs (see "What is credited"): a pair at L ≥ K credits nothing, and a smaller L credits more of each call.
 A class with no pair at γ ≤ 10 is credited at its least-γ pair only where that adds credited value per honest second;
 otherwise it is served plain. NOFOLD-OPT's picks, all with T_S implied by O and 16 KiB rows, γ being the call's time
 over the plain s8 GEMM's at η 0.85 with the hashing overlapped, counted every MAC of a call as credited, and are to be

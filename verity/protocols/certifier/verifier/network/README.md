@@ -17,7 +17,7 @@ names `window` and `LinkWindow` until a format version (the Glossary's older nam
 ## What runs
 
 `lean/` is the Lake package `network_check` (library `NetworkCheck`). It requires five packages by path and no
-Mathlib: C-Flock's verifier (`verity/protocols/flock/verifier`), the core protocol interface
+Mathlib: Flock's verifier (`verity/protocols/flock/verifier`), the core protocol interface
 (`verity/protocols/interface`), the certifier program (`verity/protocols/certifier/device/program/lean`), the LMS port
 (`verity/commitments/lms/lean`) and core's identity hash (`verity/commitments/identity`).
 

@@ -25,7 +25,7 @@ values are to come from once an audit writes one. Until then a case that does na
 compiled check's, `Spot.OneStageZk`'s, which nothing here runs. The field says whether the audit wrote the case that
 check reads, as the audit record says it (``case_v2``, `a5.case_written`, set by the audit when it wrote its cases and
 not read from a case): ``{"written": true}``, or ``{"written": false, "why"}`` with the audit's own reason (sessions
-that aren't `--zk`, a sample of several members), where no verifier of record can be run on the window at all.
+that aren't `--zk`, a sample of several members), where no verifier can be run on the window at all.
 ``written`` true says a case file is there, not that the compiled check accepts it: `a5.write_case` writes its
 parameters without a challenger, and `Spot.OneStageZk` refuses parameters that name none. A record or a statement
 about the compiled check's accepts counts no answer here as one.

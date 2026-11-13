@@ -33,9 +33,9 @@ configs, Definitions) or advice charged at its width. A value the served hardwar
 atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
 or it is advice.
 
-Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The draw samples replay blocks.
+Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The sample samples replay blocks.
 The proof server replays them and sends the verifier their interior registration (`Interior`). Once it is in, the
-verifier draws the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
+verifier samples the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
 blocks, one session a template, and the verifier audits both stages.
 
 It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
@@ -310,8 +310,8 @@ from verity.protocols.spot.costfit import fit
   commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`. Two modes: `CostModel.commit_weight` is 0 (`PROVING_ONLY`, Lean's
   `GranularityOptimum`) or w on the serve-time commitment, paid on every proof block, sampled or not. `Grain`,
-  `grain_costs` and `grain_optimum` price n equal proof blocks under the free-compute law (`Achievability`) or the
-  exfiltration law (`ExfiltrationOptimum`, `leak_count`, `loc_bits`) with the commitment term n·b·h, and `sqrt_grain`
+  `grain_costs` and `grain_optimum` price n equal proof blocks under the free-compute sampling design (`Achievability`) or the
+  exfiltration sampling design (`ExfiltrationOptimum`, `leak_count`, `loc_bits`) with the commitment term n·b·h, and `sqrt_grain`
   is the work target's optimum √(wβhC/(oΛ)).
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
   in a public size class (`verity.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
@@ -566,7 +566,7 @@ window root are refused the same way, a reject failing `run`; a sample that read
 
 ### The window's seed salt
 
-At the window's open, before it serves, the stream draws its seed salt (`Stream.seed_salt`): the first coin of the
+At the window's open, before it serves, the stream samples its seed salt (`Stream.seed_salt`): the first coin of the
 challenger's `seed-salt` family after the open root, which no sample reads. The record names it (`window.seed_salt`), a
 certified input its circuits read, public as coins. A verifier reads it from the challenger's log (`coins.seed_salt_of`,
 Lean `Challenger.seedSaltOf`), and R6 holds the window to it (`R6-seed-salt`, `tests/test_registered.py`).

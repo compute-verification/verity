@@ -1,7 +1,7 @@
 """`stop_audit.py`'s verifier's half on a stop class's hand-off, sampled on a test's own challenger
 (`fake_challenger`): the stop stream built again from ``stage1.json`` alone, the verifier's own ``--registered`` file,
 the audit record's entries and what each refuses, and Lean's verdicts on the read across the class's two streams
-(`Record.across`) held to the Python's on twelve written cases. No input is drawn. No proof runs here: a session's
+(`Record.across`) held to the Python's on twelve written cases. No input is sampled. No proof runs here: a session's
 verdicts are stand-ins of the form `a0.lean_verify` reports, and ``stop_audit_small.sh`` is the run that proves. The
 class is the two-stage driver's tests' (`test_two_stage_driver._stop_class`)."""
 
@@ -231,7 +231,7 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     """`Record.across` (the Lean verifier's piece, as `stop_audit.across` calls it) against the Python on one
     hand-off, verdict by verdict: ``logged`` against the boundary stream's log's digests (`resume`'s test), ``order``
     against `two_stage.stop_order`, reason for reason, ``audit``, its ``accepted`` and its ``complete``, against
-    `boundary_audit` on the outcome record, and ``case`` against the four. Twelve written cases: no input is drawn,
+    `boundary_audit` on the outcome record, and ``case`` against the four. Twelve written cases: no input is sampled,
     and none is one the Lean refuses, so the two sides are held to each other on these and no further. Case 1: the
     hand-off with a boundary outcome that accepted and is complete, on the first stage's session and on one made by
     hand. Case 2: a stop record on a
