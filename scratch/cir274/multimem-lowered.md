@@ -17,3 +17,4 @@ Before: the coordinator's figures (r20261113-025656-e215 at 78). Now: r20261113-
 (78), both at 5005ee9e, read from their records. Tests: r20261113-055126-6a3b at 5005ee9e, 38 passed with the frame's,
 dense and sparse files. Value check: r20261113-053257-b863 at 26d5e1ae (same lowering; reads() was sped up after).
 - 2026-11-13T08:26Z REQBLOCK: same machine (up 24 days), no work lost; branch 5005ee9e; reading value check r20261113-073556-0a01 (launched 07:35Z, DENSE driver + multimem, 120 min cap); return by Sat 02:00Z.
+- 2026-11-13T08:28Z REQBLOCK: value check r20261113-073556-0a01 @5005ee9e: 41,695 checked, 0 mismatches; plant 1,024/1,024 caught. #9364 merged 08:15:20Z, #9627 untouched. Return posted on CIR-274 (--worker REQBLOCK).
