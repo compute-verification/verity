@@ -306,14 +306,18 @@ flock_bench = [
 # of the public tree
 nested = [
     "verity/circuits/requirement",
-    "verity/circuits/requirement",
+    # the evaluator's package sits under the public `verity/circuits` since its move: its files that no public file
+    # imports stay private, as they were under `verity/definitions`, and the rest stay public
+    "verity/circuits/evaluate/{Evaluate.lean,README.md,lean-audit.json,pyproject.toml,tests}",
+    "verity/circuits/evaluate/Evaluate/{Main,Serve,Walk}.lean",
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
     "verity/protocols/proofs/flock/sigma",
     "verity/protocols/policy/inference_only",
     "verity/protocols/accounting/poub/device/live_verifier",
     "verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py",
-    "verity/protocols/accounting/pouw/{clear,receipts}",
+    "verity/protocols/accounting/pouw/clear",
+    "verity/protocols/accounting/pouw/verifier/receipts",
 ]
 
 # Each entry: globs exported only as far as public files need them, the public groups whose files may pull them in
