@@ -13,7 +13,7 @@ public import Definitions.Accounting.Guarantees.PeriodBinding
 
 The reduction behind binding's premise at a sampled window's proofs whose openings are frame-v3-sha512 paths
 (`Accounting.TS.HashedOpenings`), for any `SampledLayer`, at J10-R's (`tileLayer`), and at every period's
-(`Declared.periodLayer`) as the guarantee `Pouw.SecurityProofs.PeriodBindingPerProver`, with its two witnesses. The
+(`Declared.monitoringPeriodLayer`) as the guarantee `Pouw.SecurityProofs.MonitoringPeriodBindingPerProver`, with its two witnesses. The
 open terms are explicit.
 
 * **A fork is a break, an unverified opening or a split** (`fork_cases`). Two accepted openings of one position
@@ -30,10 +30,10 @@ open terms are explicit.
   `SampledBindingOfFork` gives `Pr[MovedIn w] ≤ |L|·√(q/2^256 + κ)`.
 * **At J10-R** (`tile_binding`): `tileLayer`'s `BindingAt` at that bound, the binding premise of
   `H1J10RCheckedCreditPeriod`, for any relation and rightness, since `MovedIn` reads neither.
-* **At every period** (`Pouw.SecurityProofs.PeriodBindingPerProver`, `Pouw.Guarantees.PeriodBindingPerProver`): the
-  same bound at `Declared.periodLayer` for any circuit and outcomes, at `L` the period's positions
-  (`Declared.periodPositions`, which hold every slot: `periodPositions_mem`). Its honest witness is `onePeriod` under
-  `honestOutcomes`, where `κ = 0` and binding never fails; its nontrivial one is `onePeriod` under
+* **At every period** (`Pouw.SecurityProofs.MonitoringPeriodBindingPerProver`, `Pouw.Guarantees.MonitoringPeriodBindingPerProver`): the
+  same bound at `Declared.monitoringPeriodLayer` for any circuit and outcomes, at `L` the period's positions
+  (`Declared.monitoringPeriodPositions`, which hold every slot: `monitoringPeriodPositions_mem`). Its honest witness is `oneMonitoringPeriod` under
+  `honestOutcomes`, where `κ = 0` and binding never fails; its nontrivial one is `oneMonitoringPeriod` under
   `acceptAllOutcomes`, where `κ = 0` and the opened coin bit moves with every fresh sample (`acceptAll_moved`).
 
 Neither open term is bounded here: no premise ties an accepted proof's `opened` to a verified opening of its
@@ -212,9 +212,9 @@ theorem tile_binding {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] [Nonempty V] (C
   exact movedIn_le_sqrt hl _ H L q w (hL w) hcr
 
 /-- Every slot of a period's tile is at one of the period's positions. -/
-theorem periodPositions_mem {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
+theorem monitoringPeriodPositions_mem {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V) (w : Fin n) (t : Fin Np) (k : ℕ) :
-    (Cd.periodLayer hr hK pr).pos w t k ∈ Cd.periodPositions n Np := by
+    (Cd.monitoringPeriodLayer hr hK pr).pos w t k ∈ Cd.monitoringPeriodPositions n Np := by
   show (w, (Cd.slots t.val)[k]?.getD ((Cd.slots t.val).headD Cd.dag.length)) ∈ _
   refine Finset.mem_product.2 ⟨Finset.mem_univ _, Finset.mem_biUnion.2 ⟨t, Finset.mem_univ _, ?_⟩⟩
   cases h : (Cd.slots t.val)[k]? with
@@ -248,32 +248,32 @@ theorem plural_of_sp {X W : Type} [Fintype X] [Nonempty W] (sp : X → X → X) 
   unfold plural tally
   rw [h]
 
-/-- A path of `onePeriod`'s coins with coin bit `b`. -/
+/-- A path of `oneMonitoringPeriod`'s coins with coin bit `b`. -/
 def oneCoins (b : Bool) : OneCoins := (((b, ()), (1, ())), ())
 
 instance instNonemptyOneCoins_proofs : Nonempty OneCoins := ⟨oneCoins false⟩
 
 variable (o : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 1 Bool)
 
-/-- `onePeriod`'s tile reads the gate `dag.length = 0` at every slot. -/
-theorem onePeriod_pos (w t : Fin 1) (k : ℕ) : (onePeriod.periodLayer Nat.one_pos le_rfl o).pos w t k = (w, 0) := by
-  simp [Declared.periodLayer, Declared.slots, unitGates, onePeriod]
+/-- `oneMonitoringPeriod`'s tile reads the gate `dag.length = 0` at every slot. -/
+theorem onePeriod_pos (w t : Fin 1) (k : ℕ) : (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o).pos w t k = (w, 0) := by
+  simp [Declared.monitoringPeriodLayer, Declared.slots, unitGates, oneMonitoringPeriod]
 
-/-- Every position of `onePeriod` is cut before the coin bit, so its continuations are the fresh coins. -/
+/-- Every position of `oneMonitoringPeriod` is cut before the coin bit, so its continuations are the fresh coins. -/
 theorem onePeriod_cont (ℓ : Fin 1 × ℕ) (x z : OneCoins) :
-    (onePeriod.periodLayer Nat.one_pos le_rfl o).cont ℓ x z = z := by
+    (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o).cont ℓ x z = z := by
   obtain ⟨w, g⟩ := ℓ
   obtain rfl : w = 0 := Subsingleton.elim _ _
-  have hc : (((onePeriod.periodLayer Nat.one_pos le_rfl o).cut (0, g)).2 : ℕ) = 0 := by
-    simp [Declared.periodLayer, Declared.cutOf, Declared.binding, coinMark, onePeriod]
-  show spliceAt (((onePeriod.periodLayer Nat.one_pos le_rfl o).cut (0, g)).1 : ℕ)
-    (((onePeriod.periodLayer Nat.one_pos le_rfl o).cut (0, g)).2 : ℕ) x z = z
+  have hc : (((oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o).cut (0, g)).2 : ℕ) = 0 := by
+    simp [Declared.monitoringPeriodLayer, Declared.cutOf, Declared.binding, coinMark, oneMonitoringPeriod]
+  show spliceAt (((oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o).cut (0, g)).1 : ℕ)
+    (((oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o).cut (0, g)).2 : ℕ) x z = z
   rw [hc]
   rfl
 
 /-- An opening of the value `v x` by `oneOpenings v` is verified. -/
 theorem one_verified (v : OneCoins → Bool) (x : OneCoins) (w i : Fin 1) (k : ℕ) (hv : o.opened x w i k = v x) :
-    (oneOpenings v).Verified (onePeriod.periodLayer Nat.one_pos le_rfl o) zeroHash x w i k := by
+    (oneOpenings v).Verified (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o) zeroHash x w i k := by
   refine ⟨⟨?_, ?_, ?_⟩, hv.symm⟩
   · show 1 < 2 ^ 64
     norm_num
@@ -281,13 +281,13 @@ theorem one_verified (v : OneCoins → Bool) (x : OneCoins) (w i : Fin 1) (k : �
   · exact ⟨Nat.one_pos, rfl, rfl⟩
 
 theorem one_unverified (v : OneCoins → Bool) (hv : ∀ x w i k, o.opened x w i k = v x) (x : OneCoins)
-    (ℓ : Fin 1 × ℕ) : ¬ (oneOpenings v).Unverified (onePeriod.periodLayer Nat.one_pos le_rfl o) zeroHash x ℓ := by
+    (ℓ : Fin 1 × ℕ) : ¬ (oneOpenings v).Unverified (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o) zeroHash x ℓ := by
   rintro ⟨w, i, k, -, -, hn⟩
   exact hn (one_verified o v x w i k (hv x w i k))
 
 theorem one_split (v : OneCoins → Bool) (p : OneCoins × OneCoins) :
-    ¬ ∃ ℓ ∈ onePeriod.periodPositions 1 1,
-      (oneOpenings v).Split (onePeriod.periodLayer Nat.one_pos le_rfl o) p.1 p.2 ℓ := by
+    ¬ ∃ ℓ ∈ oneMonitoringPeriod.monitoringPeriodPositions 1 1,
+      (oneOpenings v).Split (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o) p.1 p.2 ℓ := by
   rintro ⟨_, -, hs⟩
   exact hs ⟨rfl, rfl, rfl⟩
 
@@ -302,7 +302,7 @@ theorem acceptAll_committed (x x' : OneCoins) (ℓ : Fin 1 × ℕ) :
 theorem acceptAll_moved : ∃ x, acceptAllLayer.MovedIn x 0 := by
   refine ⟨oneCoins (!acceptAllLayer.committed (oneCoins false) (0, 0)), 0, trivial, fun h => ?_⟩
   have h0 := congrFun h 0
-  change _ = acceptAllLayer.committed _ ((onePeriod.periodLayer Nat.one_pos le_rfl acceptAllOutcomes).pos 0 _ 0) at h0
+  change _ = acceptAllLayer.committed _ ((oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl acceptAllOutcomes).pos 0 _ 0) at h0
   rw [onePeriod_pos, acceptAll_committed _ (oneCoins false)] at h0
   have h1 : (!acceptAllLayer.committed (oneCoins false) (0, 0)) = acceptAllLayer.committed (oneCoins false) (0, 0) :=
     h0
@@ -329,15 +329,15 @@ open Accounting.Compose Accounting.Compose.PeriodBinding Accounting.TS Pouw.Rela
   Properties.Pouw.PeriodJ10R.SecurityProofs.Binding
 
 /-- **A period's binding per prover** (`movedIn_le_sqrt` at the period's positions). -/
-theorem PeriodBindingPerProver : Pouw.Guarantees.PeriodBindingPerProver := by
+theorem MonitoringPeriodBindingPerProver : Pouw.Guarantees.MonitoringPeriodBindingPerProver := by
   intro ι C Ξ V _ _ _ Cd _ n Np Kd hK pr _ hl H q hcr w
-  exact movedIn_le_sqrt hl _ H _ q w (fun j k => periodPositions_mem Cd Fact.out hK pr w j k) hcr
+  exact movedIn_le_sqrt hl _ H _ q w (fun j k => monitoringPeriodPositions_mem Cd Fact.out hK pr w j k) hcr
 
-theorem PeriodBindingPerProver_honest : Pouw.Guarantees.PeriodBindingPerProver_honest := by
+theorem MonitoringPeriodBindingPerProver_honest : Pouw.Guarantees.MonitoringPeriodBindingPerProver_honest := by
   have hU : ∀ ℓ, prob (fun x => (oneOpenings fun _ => false).Unverified honestLayer zeroHash x ℓ) = 0 :=
     fun ℓ => oneProb_zero fun x => one_unverified honestOutcomes _ (fun _ _ _ _ => rfl) x ℓ
   have hS : prob (fun p : OneCoins × OneCoins =>
-      ∃ ℓ ∈ onePeriod.periodPositions 1 1, (oneOpenings fun _ => false).Split honestLayer p.1 p.2 ℓ) = 0 :=
+      ∃ ℓ ∈ oneMonitoringPeriod.monitoringPeriodPositions 1 1, (oneOpenings fun _ => false).Split honestLayer p.1 p.2 ℓ) = 0 :=
     oneProb_zero (one_split honestOutcomes _)
   refine ⟨oneProb_one fun _ _ => trivial, ?_, ?_⟩
   · simp only [hU, hS, Finset.sum_const_zero, mul_zero, add_zero]
@@ -345,16 +345,16 @@ theorem PeriodBindingPerProver_honest : Pouw.Guarantees.PeriodBindingPerProver_h
     refine le_of_eq (oneProb_zero fun x hx => ?_)
     obtain ⟨i, -, hi⟩ := hx
     refine hi (funext fun k => ?_)
-    show false = honestLayer.committed x ((onePeriod.periodLayer Nat.one_pos le_rfl honestOutcomes).pos w _ k)
+    show false = honestLayer.committed x ((oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl honestOutcomes).pos w _ k)
     rw [onePeriod_pos]
     exact (honest_committed x w).symm
 
-theorem PeriodBindingPerProver_nontrivial : Pouw.Guarantees.PeriodBindingPerProver_nontrivial := by
+theorem MonitoringPeriodBindingPerProver_nontrivial : Pouw.Guarantees.MonitoringPeriodBindingPerProver_nontrivial := by
   intro h
   have hU : ∀ ℓ, prob (fun x => (oneOpenings coinBit).Unverified acceptAllLayer zeroHash x ℓ) = 0 :=
     fun ℓ => oneProb_zero fun x => one_unverified acceptAllOutcomes _ (fun _ _ _ _ => rfl) x ℓ
   have hS : prob (fun p : OneCoins × OneCoins =>
-      ∃ ℓ ∈ onePeriod.periodPositions 1 1, (oneOpenings coinBit).Split acceptAllLayer p.1 p.2 ℓ) = 0 :=
+      ∃ ℓ ∈ oneMonitoringPeriod.monitoringPeriodPositions 1 1, (oneOpenings coinBit).Split acceptAllLayer p.1 p.2 ℓ) = 0 :=
     oneProb_zero (one_split acceptAllOutcomes _)
   have h0 := h 0
   simp only [hU, hS, Finset.sum_const_zero, mul_zero, add_zero, Nat.cast_zero, zero_div, Real.sqrt_zero] at h0
