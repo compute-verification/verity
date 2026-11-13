@@ -130781,3 +130781,95 @@ Everything below the rule is written so that you can post it as it is. [run] is 
 - `cursor/proofs-loosemap-0917-hand-patch` `0d456883ef` (the patch file at its root).
 - `cursor/proofs-loosemap-0917-on-chain1` `edea1506d5a7` (the whole order, to read).
 - `cursor/proofs-loosemap-0917-moved` `3fa6c6c82d` is the first rehearsal's tree on `main`, with `sigma/` moved: superseded, kept only for section 8.
+
+## RELAX, Fri 13 Nov 08:44Z: RELAX: NOT TONIGHT: the import listing's order, kept by hand, needs a new row for `verity/protocols/accounting/registration`
+
+**The one thing.** Anywhere under `verity/protocols/accounting/registration/`, the registration log's Python is in the listing's bottom row, and it imports two files of later rows. The generator without `--grow` holds both back and exits 1. The mend is one line of `order`, which is kept by hand, so by your stop rule I stopped. Nothing is certified and there is nothing for TOP-398.
+
+No `research run` was made, so there is no run id. The trial ran on my VM; the tree it ran on is pushed.
+
+### What I ran
+
+- **Base:** `468878c8f37c` (`cursor/proofs-scratch-chain2-maps-on-chain1-dde5`): chain 1's head `41c1cdf99377` with our three maps beside it. No map applied, so no group map either [my VM].
+- **The map:** one row, `"verity/hardware/registration.py" = "verity/protocols/accounting/registration/verifier/registration.py"`.
+- **The mover** (`layout.py --no-lock`, 59 s): 1 file moved, 3 `__init__.py` made, 28 other files rewritten [my VM].
+- **The generator** (`tools/verity/check/import_order.py`, no `--grow`): exit 1, with these two lines held back [my VM]:
+  ~~~text
+  against verity -> verity/channel.py: verity/protocols/accounting/registration/verifier/registration.py
+  against verity -> verity/device.py: verity/protocols/accounting/registration/verifier/registration.py
+  ~~~
+- **The root tests** on that tree: `tests/test_boundaries.py` and `tests/test_tree.py`, 27 passed and 3 failed [my VM]:
+  - `test_a_file_loads_only_its_own_row_or_an_earlier_one`: the two loads above.
+  - `test_the_listing_is_what_its_generator_writes`: the same two lines.
+  - `test_every_entry_is_in_the_tree_or_on_the_not_yet_list`: `verity/protocols/accounting` is in no tree entry. That one is the base's: no group map ran on it, and its tree file is chain 1's.
+- **The trap:** I unset `PYTHONPATH` and printed `verity.__file__` before the tests. It was the scratch tree's own, `/agent/repos/wt-scratch/verity/__init__.py`.
+- **Pushed, for the record only:** `cursor/proofs-scratch-registration-trial-cd24` at `17b7c96aa23378e7be6ddd44c860f86721f29433`. Three commits on the base: the map, its `[modules]` table, and what the mover made. `move_check.py` was not run on it. It is not for top.
+
+### Why every place inside the directory stops the same way
+
+- **A file's row is the deepest directory the order lists at or above it** [read: `tests/test_boundaries.py:973-980`, `_row`].
+- **The order lists `verity` in its bottom row and each protocol's directory by name, and nothing between** [read: `tests/import_order.toml:15-44` at the base]. `verity/hardware/registration.py` has its row through `verity/hardware` today.
+- **The group map does not change that.** It renames the listed directories (`verity/protocols/pouw` to `verity/protocols/accounting/pouw`) and adds no row for `verity/protocols/accounting` [derived: its `[paths]`, read at top's `cursor/top-protocol-groups-f911` `a21f150fcce8`, still that branch's head; the branch changes no line of the listing by hand].
+- **So the stop does not depend on the place I chose, or on the group map.**
+
+### The place inside the directory: `verifier/`, and that is a reading
+
+- **The tree test reads nothing inside the directory.** It checks four levels, and a protocol inside a group is one level deeper [read: `tests/test_tree.py:60-71`, `entries`; my VM: it named only `verity/protocols/accounting`].
+- **The tree file's words give a protocol's directory** `verifier/`, `prover/`, `device/`, `README.md`, `PROTOCOL.md`, `__init__.py`, `pyproject.toml` and `tests/` [read: `tests/tree.toml`, the `verity/protocols/NAME/` entries].
+- **`verifier/` fits.** The tree file calls it "trusted code: its Lean check, and a Python verifier until the Lean replaces it". This file is the Python of the check, held to the Lean by a difftest, and the listing already marks its place `trusted` [read: `tests/import_order.toml:360-372`].
+  - Not `prover/`: that is "what its prover builds and its verifier does not read", and the auditor's side reads this file.
+  - Not `device/`: none of the auditor's devices runs it.
+- **The listing takes it there without a new place.** The mover rewrote the one `[[place]]`'s path, and the generator held back no line of a trusted place [my VM].
+- **The file's name inside `verifier/` is only a name.** I kept `registration.py`, so the module is `verity.protocols.accounting.registration.verifier.registration`.
+- **Top's page agrees on the directory** [read: #9702 at `f2a6d393ac47`, `tests/tree.toml`]: a `[[tree]]` entry `verity/protocols/accounting/registration/` marked a protocol (owner proofs, day 2026-11-20), and the not-yet line of `verity/hardware/registration.py` now says `to = "verity/protocols/accounting/registration/"` (owner top, day 2026-11-15).
+
+### With the one row added by hand, nothing else stopped it (a trial, not committed)
+
+- I added `["verity/protocols/accounting/registration"]` to `order` after recursion's row and before PoUS's, by Daniel's ruling: Flock, SPOT and recursion can't then load it, and the accounting protocols can. Which row is the listing's keeper's to say.
+- **The generator then exits 0** and holds nothing back. All it writes is one place's entry moved to its sorted position [my VM].
+- **`tests/test_boundaries.py` and `tests/test_doc_paths.py` pass**; `tests/test_tree.py` fails only on `verity/protocols/accounting`, as above (34 tests: 33 passed, 1 failed) [my VM].
+- **No shared file imports the module**, so none would import a protocol [my VM: the list below].
+- So the Python half of the split is the map, that one line of `order`, and the generator's run. I ran no importer's suite.
+
+### The importers, on chain 1's tree
+
+16 files load the module [my VM: the mover's commit, 19 import lines]. My 08:05Z count of 13 missed `benchmarks/certifier_term/tests/test_result.py`, the shell script and the string.
+
+- **Code, 5 files:**
+  - `adapters/vllm/verity_vllm/pipeline/advice.py`
+  - `adapters/vllm/verity_vllm/pipeline/serve_day.py`
+  - `benchmarks/certifier_term/run.py`
+  - `benchmarks/datacenter/datacenter/logical.py`
+  - `benchmarks/prove_path/records_audit.py`
+- **A shell script's inline Python, 1:** `benchmarks/one_stage/served_verdicts.sh`.
+- **Tests, 9 by import:**
+  - `adapters/vllm/tests/pipeline/test_serve_day.py`
+  - `adapters/vllm/tests/pipeline/test_serve_seal.py`
+  - `benchmarks/certifier_term/tests/test_result.py`
+  - `benchmarks/datacenter/tests/test_datacenter.py`
+  - `benchmarks/one_stage/tests/test_served_verdicts.py`
+  - `benchmarks/prove_path/tests/test_records_audit.py` (6 import lines)
+  - `verity/protocols/pouw/verifier/tests/test_weights.py`
+  - `verity/protocols/remote/verifier/composition/tests/test_registration_difftest.py`
+  - `verity/protocols/spot/verifier/tests/test_one_stage.py`
+- **A test by a string, 1:** `verity/hardware/tests/test_package.py:27`, which imports the module in an interpreter of its own.
+- **None of `verity/`'s own code outside tests imports it.**
+
+What else names the file or the module [my VM: the same commit]:
+
+- **The listing:** one `[[place]]` (the file alone, `trusted`, loads and reaches `verity/channel.py` and `verity/device.py`, no `loaded_by`); no row of its own in `order`.
+- **`tests/tree.toml`:** the not-yet line only. The mover leaves that file alone.
+- **Suite inputs that name the file, 3:** `benchmarks/certifier_term/pyproject.toml`, `benchmarks/pouw/pyproject.toml`, `verity/protocols/remote/verifier/composition/pyproject.toml`.
+- **Suites that cover it through `verity` whole, 5:** `adapters/vllm`, `benchmarks/one_stage`, `benchmarks/prove_path`, PoUW's verifier and SPOT's verifier [my VM: `tomllib` over every suite's inputs].
+- **Docs and lists, 7:** `benchmarks/certifier_term/README.md`, `verity/README.md`, `verity/hardware/README.md`, `verity/protocols/interface/README.md`, the docstring of `verity/protocols/spot/verifier/one_stage/registration.py`, the owners' registry (`.agents/skills/using-slack/registry.json`), and `tests/lint/allowlists/repo_retired_terms.json` (a count by path).
+- **No Lean file names the Python module.** After the move only `tests/tree.toml:331` still names the old path [my VM: `git grep` on the moved tree].
+
+### Not established
+
+- **Whether `verity/hardware`'s suite passes after the move.** Its `test_package.py` imports the module in an interpreter of its own, and the suite's inputs name neither the old file nor the new one [read: `verity/hardware/pyproject.toml:11-15`]. If the read guard follows that interpreter, the suite needs one input line by hand. It is compute-research's suite. Not run.
+- **Any importer's suite**, the move's certificate, `uv lock`, and the same trial on a tree with the group map applied: not run.
+- **Who adds `verity/protocols/accounting/` to the tree file.** Neither chain 1's tree file nor #9702's names the directory itself, and on my base the tree test fails on it. I take it to be top's, with the group map [guess].
+
+### What I need from you
+
+Nothing for tonight. For the split: who keeps the listing's `order`, so the one row goes in with the map and is not a surprise at review.
