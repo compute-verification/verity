@@ -2,7 +2,7 @@
 text of ``vectors.json``, the file beside the reference, and ``test_vllm_v1.py`` fails if the two drift apart.
 
 Every input is derived from a fixed label by SHA-256 counter expansion, so the file is a pure function of this module and
-the reference, its ``generator`` field apart (``build``).
+the reference.
 """
 
 from __future__ import annotations
@@ -42,6 +42,8 @@ from verity_vllm.commitments.vllm_v1 import (
 )
 
 VECTORS = Path(vllm_v1.__file__).with_name("vectors.json")
+#: what writes ``VECTORS`` again, run from ``adapters/vllm``; the file names it in its ``generator`` field
+GENERATOR = "python -c 'from tests.commitments import vectors as V; V.VECTORS.write_text(V.render())'"
 
 TREE_SIZES = (1, 2, 3, 4, 5, 6, 7, 8, 9, 16, 17)
 
@@ -331,11 +333,10 @@ def _layout_vectors() -> list[dict[str, Any]]:
 
 
 def build() -> dict[str, Any]:
-    """The vectors.  The ``generator`` field is carried over from the pinned file: it names the command that wrote the file of
-    record, which the package no longer has.  Every other field is generated."""
+    """The vectors, every field generated."""
     return {
         "scheme": NAME,
-        "generator": load()["generator"],
+        "generator": GENERATOR,
         "encoding": "every byte string is lowercase hex; a path entry null means the node is lifted at that level",
         "hash": _hash_vectors(),
         "id_leaf": _id_leaf_vectors(),
