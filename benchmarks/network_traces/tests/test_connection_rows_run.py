@@ -455,8 +455,10 @@ def test_a_check_that_finds_any_problem_writes_no_file(tmp_path):
     has two registrations that the check holds, with no problem of the connection rows, and the check refuses the
     run, so it writes no file, removes one that was there, and its command exits 1. So does a run whose every
     registration holds and whose client says a connection failed, a problem the check finds after its records'. A
-    run without lengths rows has no registration, so its check, which accepts it, leaves no file either; nor does a
-    check that doesn't end, of a run without its deployment record, and none leaves a part of a file beside it."""
+    run whose one execution phase isn't handed, and a run without lengths rows, have no registration, so their
+    checks, which accept them, leave no file either, not one of the first line alone; a run without lengths rows is
+    held to the session it was handed all the same. Nor does a check that doesn't end leave a file, of a run
+    without its deployment record, and none leaves a part of a file beside it."""
     out, file = tmp_path / "run", tmp_path / "out" / "registrations.jsonl"
     served(out, tmp_path / "key", params=dataclasses.replace(ROWS, queue=5))
     file.parent.mkdir()
@@ -480,6 +482,13 @@ def test_a_check_that_finds_any_problem_writes_no_file(tmp_path):
 
     problems = refused(whole, failed, file, under)
     assert problems == ["client connection 0: the connection was cut"] and not file.exists()
+    # a run with lengths rows whose one execution phase isn't handed: accepted, no registration, and so no file
+    lone = tmp_path / "lone"
+    served(lone, tmp_path / "lone-key", windows=1, prompts=PROMPTS[:1], answers=ANSWERS[:1])
+    file.write_text("an earlier check's\n")
+    result = ws.check(lone, file, handed(lone))
+    s = result["summary"]["connection_rows"]
+    assert result["accepted"] and (s["registered"], s["of"]) == (0, 0) and not file.exists()
     plain = tmp_path / "plain"
     served(plain, tmp_path / "plain-key", windows=2, params=PLAIN)
     under = handed(plain)
