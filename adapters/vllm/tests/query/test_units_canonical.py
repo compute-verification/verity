@@ -22,13 +22,14 @@ torch = pytest.importorskip("torch")
 from verity.circuits import partition_object as PO  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.definitions import word as W  # noqa: E402
+
+from tests.program.test_serve3 import TINY  # noqa: E402
+from tests.query.test_boolean_manifest import _write  # noqa: E402
 from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
 from verity_vllm.pipeline.manifest import recorded_program_digest  # noqa: E402
 from verity_vllm.query.program_view import from_instances  # noqa: E402
 from verity_vllm.query.required import partition_of, request_manifest  # noqa: E402
 from verity_vllm.query.units import ValueRef  # noqa: E402
-from tests.program.test_serve3 import TINY  # noqa: E402
-from tests.query.test_boolean_manifest import _write  # noqa: E402
 
 
 @pytest.fixture(scope="module")
