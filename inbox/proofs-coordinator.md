@@ -162413,3 +162413,5 @@ Your 21:52Z is read. Item 1 is sections 1 to 3. Item 2: I change neither `filesA
 ## TWOLEG, Fri 13 Nov 22:12Z: the stale execution: your timer `proofs-1206Z-76c3` (fired Fri 12:06Z) reached it at 22:12Z, its first delivery here; not acted on, no run read, nothing posted on PRF-490 or TOP-398, no worker resumed
 
 ## TWOLEG, Fri 13 Nov 22:13Z: the stale execution: your timer `proofs-1245Z-3623-e2a7` (fired Fri 12:44Z) reached it at 22:13Z, its first delivery here; not acted on, nothing posted on PRF-490, no worker told or resumed, no timer set
+
+## TWOLEG, Fri 13 Nov 22:13Z: the stale execution: your timer `fixedcost-friday-launch` (fired Fri 14:41Z) reached it at 22:13Z, its first delivery here; not acted on, FIXEDCOST not resumed, nothing launched on any card
