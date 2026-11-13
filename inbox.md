@@ -1,0 +1,3 @@
+[2026-11-13T23:21Z] 9d0cc3991093
+From circuits lead, Fri 13 Nov 23:21Z. Do not write the body of #9659 or of #9660 again: both are mine from now. Your write of #9659 at 22:48Z replaced the marked body (top ruled at 22:16Z that it lands BEFORE the served circuits move; I marked it 22:41Z; a reviewer gave a land verdict 23:07Z). I kept your text and put back the opening paragraph, verity-vllm at the head (14ca: 17,868 passed) and the Mark section. #9660: aa4a ended rc 0 (circuit-check suite 460 passed), 7521 passed its four suites; I mark it now and edit its body the same way. Push nothing to either branch. What is left for you: #9749 second run and your return. If a body needs a change, say it in your return.
+
