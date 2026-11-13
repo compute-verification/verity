@@ -144683,3 +144683,29 @@ def LayoutNamed : Prop :=
   `security/Proofs/Properties/Challenger/Withheld.lean`, which needs the three private imports under the
   challenger's proof files cut (PoUS's memory challenger's attest tree, PoUB's schedule, the onsite composites).
 - I wait for your word: on the texts from soundness, and "carry" with FRAME's steps, not before 15:00Z.
+
+
+## RATING, Fri 13 Nov 13:52Z: second read of #9577, the row that was running: at the tensor-clock prices the two-raiser tile at k = 65,536 still passes the rule with 0 mends on three salts, and both programs are under the bound by the figures my 13:26Z gave by arithmetic. No rated row changes
+
+**In plain words.** My 13:26Z said that pricing the SM pipes at the tensor clock moves no rated row, and gave the k = 65,536 shares by arithmetic while the runs were going. The runs have ended and print the same shares.
+
+[run] `r20261113-131834-4c35` (salt 0), `r20261113-131846-b62d` (salt 1), `r20261113-131914-2bde` (salt 2), exit 0 each in 1,763 to 1,810 s. At #9735's head `4d4950f1bb9`, the scheme's own code with `Prices.h100Tensor`'s prices, one whole 64 × 64 tile a row, two raisers a group with B's plants off-centre, 170 groups.
+
+| n | salt | tile rule | mends | debit / cap | one-atom: cost a word, share of credit | skip-only: cost a word, share of credit |
+| --- | --- | --- | --- | --- | --- | --- |
+| 8,192 | 0 | passes | 0 | 138,898 / 834,859 | 67,082.2, 82.28% | 72,522.2, 88.95% |
+| 8,192 | 1 | passes | 0 | 139,135 / 834,859 | same | same |
+| 8,192 | 2 | passes | 0 | 133,738 / 834,859 | same | same |
+| 65,536 | 0 | passes | 0 | 115,842 / 828,121 | 66,262.7, 81.94% | 71,702.7, 88.66% |
+| 65,536 | 1 | passes | 0 | 116,079 / 828,121 | same | same |
+| 65,536 | 2 | passes | 0 | 110,682 / 828,121 | same | same |
+
+- The credit here is the tensor-clock record's: 81,529 a word at n = 8,192 and 80,871 at n = 65,536. The bounds are 81,122.1 and 80,467.4, 99.50% of it.
+- The four shares are the ones my 13:26Z gave for "tensor clock, exact forming" (82.28%, 88.95%, 81.94%, 88.66%). So the arithmetic there is now a run at k = 65,536 as it already was at 8192³ (`r20261113-131807-4efd`).
+- On every row: admissible, 4,096 of 4,096 words equal for both programs, the scalar chain agrees on 64 of 64 sampled words, no flagged atom in a planted group. Salt 1 has the one planted code off design that my 13:14Z reported.
+
+**Not run:** the worst mix (the served scheme's credit at the per-clock record against a program priced at the tensor clock). Its shares in my 13:26Z stay arithmetic: 83.90% and 90.57% at n = 8,192, 83.54% and 90.27% at n = 65,536. Every one is under the bound by 8.9 points or more.
+
+**Nothing else of mine is running.** The witness waits on mend 2's form, as you ruled. #9735's ready line is in my 13:40Z; I have not marked it.
+
+Mailbox read at 13:52Z; nothing newer than your 13:29Z.
