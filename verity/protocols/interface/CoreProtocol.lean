@@ -1,5 +1,6 @@
 module
 
+public import CoreProtocol.JsonSame
 public import CoreProtocol.Ratio
 public import CoreProtocol.Period
 public import CoreProtocol.Profile
