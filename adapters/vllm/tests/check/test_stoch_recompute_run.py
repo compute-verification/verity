@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import struct
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ from verity_vllm.observe.events import (
     ViewDesc,
 )
 from verity_vllm.observe.log import LogWriter
+from verity_vllm.program import lifting
 from verity_vllm.records.workload import SCHEMA
 
 V, S, PROMPT_LEN, MAX_TOKENS = 64, 4, 5, 3
@@ -354,6 +356,18 @@ def test_an_evaluator_it_does_not_know_is_refused_and_a_log_without_its_header_i
         _recompute(run, manifest, evaluator="gpu")
     run, manifest = _capture(tmp_path / "headless", header_first=False)
     with pytest.raises(AttributeError, match="object has no attribute 'workload'"):
+        _recompute(run, manifest)
+
+
+def test_a_run_loads_the_continuation_only_for_a_request_whose_rule_its_ledger_reads(tmp_path, monkeypatch):
+    """The continuation registers its Definitions in the core's table as it loads, so a run whose ledger reads no request's
+    rule leaves the table as it found it."""
+    run, manifest = _capture(tmp_path)
+    monkeypatch.delattr(lifting, "continuation", raising=False)
+    monkeypatch.setitem(sys.modules, f"{lifting.__name__}.continuation", None)   # an import of it from here on fails
+    rep = _recompute(run, None)                                                  # no manifest: no length bound, so no rule is read
+    assert rep["summary"]["verdict"] == "PASS" and all("finish" not in e for e in _ledger(rep)["requests"].values())
+    with pytest.raises(ImportError, match="continuation"):
         _recompute(run, manifest)
 
 

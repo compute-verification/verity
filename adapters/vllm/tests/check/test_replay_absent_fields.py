@@ -250,13 +250,12 @@ def test_a_request_that_states_no_prompt_ids_declares_an_empty_prompt(left_out, 
 
 @NO_LIST
 def test_a_stop_rule_s_block_that_states_no_problems_found_none(left_out):
-    block = {"executed_prefix_len": 2, "eos_step": 1, "lag_steps": 0, "first_eos_index": 1, "served_past_first_eos": 0, "cap_exhausted": False,
-             "eos_stop": True}
+    block = {"executed_prefix_len": 2, "eos_step": 1, "lag_steps": 0, "first_eos_index": 1, "served_past_first_eos": 0, "eos_stop": True}
 
     def prefix(problems: Any) -> dict:
         return POP.executed_prefix_of_record("r0", a_r=2, lag=0, cap=4, eos_declared=True, served_len_commit=2, linked=True, lag_attested=True,
                                              a_r_source="a Match record", served=[7, 9], eos_ids=[9],
-                                             rule=lambda served, *, cap, A, eos: _with(block, "problems", problems))
+                                             rule=lambda served, **stated: _with(block, "problems", problems))
 
     record = prefix(left_out)
     assert (record["faults"], record["n_exec"], record["r3_one_mechanism"]) == ([], 2, True)
