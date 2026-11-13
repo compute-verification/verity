@@ -50,9 +50,10 @@ from verity_vllm.config import (
 )
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline.row_driver import RESEARCH
+from verity_vllm.records.schema_ids import EFFECTIVE_CONFIG_SCHEMA
 
 STAGES = "build,match,commit"
-EFFECTIVE_SCHEMA = "verity-vllm/effective-config/v1"
+EFFECTIVE_SCHEMA = EFFECTIVE_CONFIG_SCHEMA
 EFFECTIVE_NAME = "effective_config.json"
 #: The environment a row's engines inherit that can change their kernels, recorded beside the config (never a credential).
 ENGINE_ENV = ("VLLM_", "NCCL_", "CUBLAS", "TORCH_", "TORCHINDUCTOR_", "TRITON_", "FLASHINFER_", "CUDA_VISIBLE_DEVICES")
