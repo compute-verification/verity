@@ -1,6 +1,6 @@
 """Every distribution's settings registry but ``verity``'s and the vLLM integration's: each declares every environment
 variable it reads once, in its own registry, and reads them only through it.  A registry is a `Registry` of
-``verity/settings.py``, the machinery every registry in the tree is built on, which says what a `Setting` is, what its roles
+``tools/config/verity_config/verity_settings.py``, the machinery every registry in the tree is built on, which says what a `Setting` is, what its roles
 (`VALUE`, `WHERE`, `DEBUG`) mean and how a read parses; this module adds what the other distributions share: `SHARED`, the
 record schema they write (`RECORD_SCHEMA`), and `of`, which finds a distribution's registry by path.
 
@@ -31,7 +31,7 @@ PYTHONPATH) reads the environment itself; the registry still declares each varia
 (``standalone``), and `Registry.standalone_problems`, which the distribution's suite runs, holds each read to its
 declaration.
 
-Stdlib and ``verity.settings`` only.  Outside the vLLM integration the environment is read in the registries (a module named
+Stdlib and ``verity_config.verity_settings`` only.  Outside the vLLM integration the environment is read in the registries (a module named
 ``settings.py``) and in the files ``tests/lint/allowlists/repo_env_reads.json`` still lists, which only shrinks.
 """
 from __future__ import annotations
@@ -44,9 +44,9 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from verity import settings
-from verity.settings import WHERE, Setting, paths
-from verity.settings import (DEBUG as DEBUG, REDACTED as REDACTED, ROLES as ROLES, SECRET_WORDS as SECRET_WORDS, VALUE as VALUE,
+from verity_config import verity_settings as settings
+from verity_config.verity_settings import WHERE, Setting, paths
+from verity_config.verity_settings import (DEBUG as DEBUG, REDACTED as REDACTED, ROLES as ROLES, SECRET_WORDS as SECRET_WORDS, VALUE as VALUE,
                              DebugOnRecord as DebugOnRecord, UnknownSetting as UnknownSetting, choice as choice, csv as csv,
                              direct_reads as direct_reads, direct_uses as direct_uses, flag as flag, ints as ints,
                              not_zero as not_zero, one as one, present as present, stripped as stripped, words as words)
@@ -57,7 +57,7 @@ REGISTRY_FILE = "settings.py"
 
 
 class Registry(settings.EnvSettings):
-    """A distribution's registry: `verity.settings.EnvSettings`, writing `RECORD_SCHEMA`, that reads `SHARED`'s settings too
+    """A distribution's registry: `verity_config.verity_settings.EnvSettings`, writing `RECORD_SCHEMA`, that reads `SHARED`'s settings too
     (with ``shared`` false, its own alone)."""
 
     def __init__(self, path: str | os.PathLike, prefixes: Iterable[str], *declared: Setting, shared: bool = True,
