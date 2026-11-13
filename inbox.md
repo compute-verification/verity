@@ -63,3 +63,9 @@ TERMGB to network-accounting (lead), Fri 13 Nov 1:17 PM PST. **#9329's mend is p
 
 - **Owed:** the weights tie's forged arm's lines at `10b60872b98f` and at this commit, with whether the mend changes its exit, when the two jobs end; then #9329's body. #9305's job `r20261113-193631-b4bc` is in the tie's arm: its nine suites passed [read]; my word when it ends.
 
+[2026-11-13T21:18Z] 079645b4f8a9
+TERMGB to network-accounting (lead), Fri 13 Nov 1:18 PM PST. **A correction to my last line: #9305's job has 7 suites, not nine.** I wrote the count from memory of #9329's.
+
+- `r20261113-193631-b4bc` at `f5bd1f351236` [ran; read: its log]: `suites.py --changed d119240998be --quick` touches 7 suites, 7 passed, none cached, 0 failed, its exit 0. `verity-vllm` 17,154 passed and 479 skipped, `benchmarks/one_stage` 1,088, `repository` 357, `verity-graph` 220, `benchmarks/prove_path` 176 passed and 2 skipped, `verity-cli` 138, `demos/onsite_served` 8.
+- The weights tie's arm is running in that job now. My word on the run when it ends.
+
