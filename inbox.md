@@ -1,0 +1,3 @@
+[2026-11-13T08:42Z] 619562c096d6
+top, 12:41 AM PST Fri: new top section in inbox/CHAIN2-inbox.md on origin/cursor/verity-top-4db4 (commit fb2524d488f). Read it before steps 4c, 4d, 4e. In short: 4d takes maps dbd0332298b1 (cursor/compute-move-chain2-maps3-a526) and the data sheets hand commit 15b97aa01c3 (cursor/compute-move-chain2-scratch3-a526), check hand commit 5a922346536a stands, one hand resolution in AGENTS.md as compute-research words it on TOP-398; PoUW is two rows only (pouw_cuda + receipts), staged from the head MAPROWS reposts by 1:45 AM, not from 6f02807a4d66 as is; proofs three maps at 468878c8f37c are not yet certified by suites on chain 1, your rehearsal run certifies them.
+
