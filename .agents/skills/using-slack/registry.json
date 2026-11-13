@@ -264,7 +264,7 @@
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
-        "fixtures/bench-instances/",
+        "benchmarks/numerical/bench-instances/",
         "benchmarks/census/",
         "security/Definitions/Accounting/CoinFlow.lean",
         "security/Definitions/Accounting/Filler.lean",
