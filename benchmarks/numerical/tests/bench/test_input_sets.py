@@ -2,12 +2,13 @@
 
 Captured and synthetic sets are interchangeable: the eight captured row 101 manifests (``data/captured-101/manifests``)
 identify their subcircuits, whose relation, set name and ports are exactly the exporter's; slices of
-seven of them (``data/captured-101/slices``, ``input_sets.subset``) re-evaluate bit-exactly through the IR evaluator; a synthetic
+seven of them (``data/captured-101/slices``, ``input_sets.subset``) re-evaluate bit-exactly through the evaluator; a synthetic
 set of each template has the captured layout and provenance fields and verifies the same way."""
 from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -154,16 +155,16 @@ def test_evaluation_targets_equal_the_definitions():
 
     key = SY.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)
     for sub, n in ((TM.subcircuit("attention-head", D=16, BN=16, T="17:40"), 4), (TM.subcircuit("rope-head", D=8), 16)):
-        draws = [sub.draw(key, j) for j in range(n)]
-        for d in draws:
+        instances = [sub.draw(key, j) for j in range(n)]
+        for d in instances:
             st = d.instance_statics
             args = [d.inputs[p.name][None, :] for p in sub.inputs]
             ref = evaluate_batch(sub.definition(**st), *args, kernel="reference").reshape(-1)
             via = np.asarray(sub.evaluate({p.name: [d.inputs[p.name]] for p in sub.inputs}, [st])[sub.outputs[0].name][0])
             assert np.array_equal(ref, via.astype(ref.dtype))
     sub = TM.subcircuit("gemm-coordinate", K=64)
-    draws = [sub.draw(key, j) for j in range(64)]
-    x, w = np.stack([d.inputs["x"] for d in draws]), np.stack([d.inputs["w"] for d in draws])
+    instances = [sub.draw(key, j) for j in range(64)]
+    x, w = np.stack([d.inputs["x"] for d in instances]), np.stack([d.inputs["w"] for d in instances])
     from verity.definitions.registry import prims as VP
     assert VP.AmpereBF16TcDot16 is REGISTRY["AmpereBF16TcDot16_v2"]
     ref = evaluate_batch(bind(gemm.GemmCoordinate, K=64, DOT=VP.AmpereBF16TcDot16), x, w, kernel="reference")
@@ -270,6 +271,35 @@ def test_suite_digests_only(tmp_path, monkeypatch):
     assert [s["content_digest"] for s in full] == [s["content_digest"] for s in lean]
     assert sorted(p.name for p in Path(lean[0]["path"]).iterdir()) == ["index.json", "manifest.json"]
     assert set(G.SUITES["101"][0][1]) == {"K", "semantics"} and len(G.SUITES["101"]) == 10
+
+
+def test_a_suite_reports_each_finished_set_to_its_caller_and_prints_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setitem(G.SUITES, "tiny", [("rope-head", {"D": 8}, 5), ("silu-mul", {"I": 8}, 3)])
+    seen = []
+    sets = G.suite("tiny", 9, tmp_path / "said", done=seen.append)
+    assert seen == sets and len(sets) == 2
+    assert capsys.readouterr().out == ""
+    assert G.main(["--suite", "tiny", "--seed", "9", "--out", str(tmp_path / "cli")]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [json.loads(line)["content_digest"] for line in lines[:2]] == [s["content_digest"] for s in sets]
+
+
+def test_a_sets_source_commit_is_the_callers_else_the_checkouts_head_else_none(monkeypatch):
+    def git(code, out):
+        return lambda cmd, **kw: subprocess.CompletedProcess(cmd, code, stdout=out, stderr="")
+
+    head, named = "0123456789abcdef0123456789abcdef01234567", "89abcdef0123456789abcdef0123456789abcdef"
+    monkeypatch.setattr(G.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(G.subprocess, "run", git(0, head + "\n"))
+    monkeypatch.setenv("RESEARCH_SOURCE_COMMIT", named)
+    assert G._versions()["git_head"] == named
+    monkeypatch.delenv("RESEARCH_SOURCE_COMMIT")
+    assert G._versions()["git_head"] == head
+    monkeypatch.setattr(G.subprocess, "run", git(128, "HEAD\n"))
+    assert G._versions()["git_head"] is None
+    monkeypatch.setattr(G.shutil, "which", lambda name: None)
+    monkeypatch.setattr(G.subprocess, "run", None)
+    assert G._versions()["git_head"] is None
 
 
 def test_cli(tmp_path, capsys):

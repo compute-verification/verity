@@ -111,7 +111,7 @@ CHALLENGER_MODELS = "challenger-models"               # on a challenger-models/v
 CHALLENGER_MODELS_VALUES = ("head",)
 MEMORY_LINE_OF_RECORD = "memory-line-of-record"       # on a gate run's verifier run, by its lane: who computed its line of record
 MEMORY_LINE_OF_RECORD_PATTERN = r"lean conditional on [A-Z][A-Za-z]*(, [A-Z][A-Za-z]*)*"
-#: What statement C (the line's NoOutsideCompute premise) rests on in a line of record: itself, or the provider's lockdown that grounds it.
+#: What statement C (no outside device computes for the node, `NoOutsideCompute`) rests on in a line of record: itself, or the provider's lockdown that grounds it.
 MEMORY_LINE_GROUNDS = ("NoOutsideCompute", "ProviderLockdown")
 #: The file of the ref run's run record a `memory-line-of-record` label is held to (`check_line_of_record`).
 MEMORY_LINE_FILE = "out/auditor_line.json"
@@ -216,9 +216,10 @@ READY = "ready"
 REVIEWED = "reviewed"
 REVIEW_VERDICTS = ("land", "hold")
 #: Beside a ready mark or land verdict on `pr:<n>@<head>`, by its author: the Cursor identity token that authenticates it
-#: (`research.labelauth`), which drive.toml's `signed_verdicts` requires.
+#: (`research.labelauth`), which drive.toml's `signed_verdicts` requires once on.
 LABEL_AUTH = "label_auth"
-#: On an agent's `research.labelauth.delegation_target`, by a handle: that handle's holder lets the agent sign as it until a time.
+#: On an agent's `research.labelauth.delegation_target`, by a handle: that handle's holder lets the agent sign as it, or as a
+#: PR reader's name it staffs, until a time.
 LABEL_DELEGATION = "label_delegation"
 #: A `check.py --update` report (its audit.json) on a pull request at one head: a record of what its lean-audit.json change printed
 #: as. No merge needs a statement reviewer; the DM of a changed record is the check.
@@ -238,6 +239,9 @@ TASKS_GRAPH = "tasks_graph"
 VERITY_GRAPH = "verity_graph"
 #: On `task:<key>`, by the executor's worker that ran a graph/v2 task (`verity graph run`): its result/v1 document.
 TASK_RESULT = "result"
+#: On `commit:<sha>`, by the executor: the verdict of that commit's `ready:` check once none of its merge-gate tasks is still
+#: to end, a JSON object the queue's loop reads in place of asking the executor (`research.vqueue_loop`).
+READY_VERDICT = "ready_verdict"
 #: On `commit:<sha>`, by the control pod's nightly loop (infra/control/nightly_check.py): what the uncached check of that commit
 #: of `main` said; the label's ref is its run.
 NIGHTLY_CHECK = "nightly_check"
@@ -375,7 +379,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
        "Lean verifier's line, held exactly to line.py's; a line.py-only line is not of record), and the names of its conditional_on in "
-       "its order, which must name NoOutsideCompute (statement C in full, a premise of LineHeld) or ProviderLockdown (the provider's "
+       "its order, which must name NoOutsideCompute (statement C in full, which LineHeld reads from the certifiers' record) or ProviderLockdown (the provider's "
        "lockdown that grounds it); `research data label` reads the file from the ref run's record and refuses a label that isn't "
        "its (`check_line_of_record`). Labels up to gate run 10's (lean; credited-..., off-vocab) predate the rule",
        pattern=MEMORY_LINE_OF_RECORD_PATTERN),
@@ -424,10 +428,10 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        REVIEW_VERDICTS),
     _k(LABEL_AUTH, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>, beside a `ready = true` or `reviewed = land` by the same author: "
        "{for, token, delegation?}, a Cursor OIDC token whose nonce is the label's (`research.labelauth`); drive.toml's "
-       "`signed_verdicts` counts such a label only with one"),
+       "`signed_verdicts`, once on, counts such a label only with one"),
     _k(LABEL_DELEGATION, GROUP_VERIFICATION, TEXT, "on an agent's delegation target (task:<sha512>), by a handle: {schema, lane, "
-       "agent, until, token}, the handle's holder letting that agent authenticate labels as it until then (`research queue "
-       "delegate`)"),
+       "agent, until, token}, the handle's holder letting that agent authenticate labels as `lane`, the handle or a PR reader's "
+       "name it staffs, until then (`research queue delegate`)"),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer"),
@@ -444,6 +448,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        pattern=r"art:[0-9a-f]{64}"),
     _k(TASK_RESULT, GROUP_VERIFICATION, TEXT, "on task:<key>, by the executor's worker that ran a graph/v2 task (`verity graph run`): "
        "its result/v1 document, pass or fail (an error is never one); a key with any fail is failed (`research.executor.fold_results`)"),
+    _k(READY_VERDICT, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by the executor: a JSON object, the verdict of that commit's "
+       "`ready:` check once none of its merge-gate tasks is still to end ({check, state, why, counts, failed, infra, flaky: "
+       "[{task, key, why, ...}]}); the queue's loop reads it in place of asking the executor (`research.vqueue_loop`)"),
     _k(EXECUTOR_SHADOW, GROUP_VERIFICATION, TEXT, "on commit:<sha>, by drive with `executor = \"shadow\"`: a JSON object comparing "
        "the after-landing run's verdicts with the executor's ({check, graph, run, units, agree, disagree: [{unit, old, executor}], "
        "pending, missing, executor_only, error, incomplete}); `research queue shadow-report` reads it"),

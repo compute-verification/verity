@@ -20,6 +20,7 @@ P_A,i         [be_A,i[p] for p = 0..31 ‖ RN_bf16(AF_ip) for p = 0..31]
 P_B,j         [RN_bf16(RN_f32(acc_jq − BF_jq)) for q = 0..31 ‖ be_B,j[p] with its sign bit flipped, p = 0..31]
                 acc_jq = +0, then acc_jq = RN_f32(be_B,j[p]·G_pq + acc_jq) for p = 0..31 ascending (one FMA each)
 U_ij          acc = C̃_ij;  acc = k16(acc, P_A,i[16s:16s+16], P_B,j[16s:16s+16]) for s = 0, 1, 2, 3
+y_ij          RN_bf16(RN_f32(RN_f32(U_ij · RN_f32(1/α_A,i)) · RN_f32(1/α_B,j)))      (the served y: the kernels' store_y)
 ~~~
 
 **The two tensor-core steps in integers** (`grouped`; ``verity.definitions.silicon``'s ``HOPPER_E4M3_K32`` and ``HOPPER_BF16_WGMMA_K16``
@@ -53,6 +54,7 @@ from .pearl_c_device import H100, Device
 
 STATUS = "cpu-pinned"
 R, WINDOW, SLICE, PEEL_K = 32, 128, 32, 64
+ONE = 0x3F800000
 
 
 class NonFinite(ValueError):
@@ -209,3 +211,9 @@ def u(c: int, pa: Sequence[int], pb: Sequence[int], trace: list | None = None, d
         if trace is not None:
             trace.append(acc)
     return acc
+
+
+def y(u_word: int, alpha_a: int, alpha_b: int) -> int:
+    """The served BF16 y_ij from U_ij and its row's and column's α (forming v1's `s5_stats`): the kernels' epilogue
+    ``__float2bfloat16_rn(__fmul_rn(__fmul_rn(u, __frcp_rn(α_A)), __frcp_rn(α_B)))``, registry's `PearlCUnscale`."""
+    return rn_bf16(_finite(fp32.mul(_finite(fp32.mul(u_word, fp32.div(ONE, alpha_a))), fp32.div(ONE, alpha_b))))

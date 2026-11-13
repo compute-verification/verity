@@ -61,6 +61,11 @@ A move lands alone, as one commit per map on the commit it was made on. Its lead
 3. opens the move's PR from the branch, naming in its body the command `stage.py` printed for each commit, `verity check
    move PARENT COMMIT` (`move_check.py`, which exits 0 on a pure move, 1 naming what isn't).
 
+A move that makes or removes a directory an index lists (`benchmarks/README.md`, which `tests/test_benchmarks_index.py`
+holds to one row for each directory) carries the index's row as a second commit of its PR, by hand and changing the index
+alone, since no map adds a line. The PR's body says so first, and its reviewer certifies the first commit and reads the
+second.
+
 Over the whole tree `rename.py` and `move_check.py` each run for minutes, so the lead stages on a node, from a checkout at
 the window's base. The node's clone can't push and its git has no identity (`stage.py` refuses before running), so the
 run names one and bundles the branch into its outputs, and the lead pushes it from the checkout:
@@ -74,7 +79,7 @@ run names one and bundles the branch into its outputs, and the lead pushes it fr
 A move's PR, whose body says `Move: tools/move/NAME.toml`, lands on its ready mark alone, with no land verdict, whatever
 it touches: the verified queue reruns the map, from `main`, on its batch's tip, over whatever landed since, and takes it
 once `move_check.py` certifies that run (the team skill's "Landing"). It needs a land verdict while drive.toml's
-`lowrisk_lane` is off, and under `signed_verdicts` when it changes a `SIGNED_GUARDS` file. Once it lands, each open branch
+`lowrisk_lane` is off, and with `signed_verdicts` true when it changes a `SIGNED_GUARDS` file. Once it lands, each open branch
 crosses it with `restack.py`.
 
 Where a `[[words_in]]` row renames a Lean declaration that a file outside the row still spells, `move_check.py`
@@ -96,7 +101,14 @@ with each path's first offending hunk, every change its docstring doesn't list a
   pin records;
 - a lock's records (`pins`, `guarantees`, `reads`) changed, or a pin rewritten to other than its file's digest at the
   head;
-- a file added or deleted that no rename pairs, other than a new Lake package's files copied from its source package.
+- a file added or deleted that no rename pairs, other than a new Lake package's files copied from its source package;
+- the `__init__.py` of a package the range emptied, deleted though it holds more than whitespace and comments at the
+  base (a docstring is content).
+
+`layout.py` deletes an `__init__.py` left in a package its move empties only when the file holds nothing but whitespace
+and comments (`only_comments`, which `move_check.py` reads it by too). One that holds more stops the whole move (exit 1),
+dry run or not, before anything is written, naming each file; the fix is a row in the map saying where it goes (on a
+branch, in its rows file, below), or a hand commit before the move that deletes it.
 
 A certificate says that nothing but paths, modules and words changed. It does not say that every path which had to
 change did: a path no pass of the rewrite reads stays as written, and its commit is still a pure move. For Lean the mover
@@ -112,7 +124,9 @@ Once the moves have landed, each open branch crosses all of them with one comman
 It finds each move `origin/main` (`--main`; fetch it first) has and the branch lacks by its move line, oldest first, reruns that move's
 script and map on the branch, its own additions included, and merges the moved `main` last. It changes no branch: the
 result is pushed to the new branch, never over one. It reports `clean`, or where it stopped: a conflict of the branch's
-own, files of the branch with no row (`no-row`, below), a script that failed, or pins or Lean locks to regenerate. Its
+own, files of the branch with no row (`no-row`, below), a script that failed (`script-failed`, with the last lines of its
+output: an `__init__.py` with content the move would delete names each file and the fix), or pins or Lean locks to
+regenerate. Its
 first step merges each move's base into the branch, so
 a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
 merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit

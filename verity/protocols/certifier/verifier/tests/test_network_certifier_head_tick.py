@@ -199,7 +199,7 @@ def test_a_head_is_handed_back_once_for_an_execution_phase_that_was_handed_under
     with pytest.raises(ValueError, match="execution phase 1 was not handed, so no head of it is due"):
         run(SET, {1: 2 * T})
     with pytest.raises(ValueError, match="execution phase 0's head is handed back, not None"):
-        Warden(SET, None, origin=0.0, windows=PHASES).head_back(0, None)
+        Warden(SET, None, origin=0.0, windows=PHASES, clock=VirtualClock(0.0)).head_back(0, None)
     for at in (DUE[0] - 1, DUE[0] + 1):
         with pytest.raises(ValueError, match="execution phase 0's head was handed back before"):
             asyncio.run(_twice(at))
