@@ -33,7 +33,8 @@ The pieces an honest `C*` needs before the setup check's loops, none of which ev
 * `Expander.range` is its chunks, cut to `[lo, hi)` (`range_eq`);
 * the keys, or a collision (`keys_ok_or_collision`): a first `t` candidate at or above `p` is within `2^16` of `256^n`,
   so every byte but its last two is `0xFF` (`ff_of_ge`), and chunks 0 and 1, which are its first 128 bytes, are equal
-  (`chunk01_of_ge`): SHA-512 of two inputs that differ in the counter (`collision_of_ge`);
+  (`chunk01_of_ge`): SHA-512 of two inputs that differ in the counter, both among the store's key-stream inputs
+  (`storeStrings`, `collision_of_ge`); every collision below is among them;
 * the deployed parameters: `validate` accepts them by reduction (`validate_deployed`) and `packagePrefix` accepts any
   24-byte salt (`packagePrefix_ok`), its prefix whole blocks (`pad128_size`);
 * the honest block's value, the one place `PrimeP16448` enters: the code's `d` is the model's `sqE` at the identity
@@ -43,7 +44,8 @@ The pieces an honest `C*` needs before the setup check's loops, none of which ev
 * `beOfNat` writes base-256 digits (`beOfNat_get`, `beVal_digits`), so `natOfBE (beOfNat c w) = c` below `256^w`
   (`natOfBE_beOfNat`), and the honest block decodes to `beOfNat 0 2054` (`decodeBlock_honest`);
 * the decoder's loop over 65,536 honest blocks yields the zeros' payload (`decodeSegment_honest`), with every block's
-  keys a `K` and a `t < p` (`KeysOk`), which hold or SHA-512 has a collision (`keysOk_or_collision`);
+  keys a `K` and a `t < p` (`KeysOk`, the store's blocks only), which hold or SHA-512 has a collision
+  (`keysOk_or_collision`);
 * the manifest, a flat object the kernel evaluates, is under 1,000 bytes (`manifest_deployed`);
 * the run on setup's output: the table of the honest blocks' row digests (`setupDigests`, rows by `digestTable_row`)
   has setup's leaves of the honest `C*` as its row leaves (`rowLeaves_digestTable`, `leaves_flat`, `rowLeaves_setup`),
@@ -452,14 +454,26 @@ theorem suffix_ne (pre : ByteArray) (s j : Nat) (purpose : UInt8) :
     List.getElem?_append_right (by rw [suffixHead_length]; omega), suffixHead_length] at h1
   exact absurd h1 (by decide)
 
-/-- **A first `t` candidate at or above `p` is a SHA-512 collision**: chunks 0 and 1 are SHA-512 of two inputs that differ
-in the counter's last byte. -/
-theorem collision_of_ge (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) (purpose : UInt8)
-    (h : 2 ^ 16448 - 21065 ≤ natOfBE ((Keys.Expander.ofPrefix pre).range s j purpose 0 2056)) :
-    ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v :=
-  ⟨_, _, suffix_ne pre s j purpose, by
+/-- The store's key-stream inputs: for each of its blocks (`s < 8`, `j < 65,536`), the inputs whose SHA-512 digests are
+chunks 0 and 1 of the block's `t` stream. -/
+def storeStrings (pre : ByteArray) : List ByteArray :=
+  (List.range 8).flatMap fun s => (List.range 65536).flatMap fun j =>
+    [pre ++ suffix s j Keys.PURPOSE_T 0, pre ++ suffix s j Keys.PURPOSE_T 1]
+
+theorem mem_storeStrings {pre : ByteArray} {s j : Nat} (hs : s < 8) (hj : j < 65536) :
+    pre ++ suffix s j Keys.PURPOSE_T 0 ∈ storeStrings pre ∧ pre ++ suffix s j Keys.PURPOSE_T 1 ∈ storeStrings pre := by
+  have h : ∀ x, x ∈ [pre ++ suffix s j Keys.PURPOSE_T 0, pre ++ suffix s j Keys.PURPOSE_T 1] → x ∈ storeStrings pre :=
+    fun x hx => List.mem_flatMap.2 ⟨s, List.mem_range.2 hs, List.mem_flatMap.2 ⟨j, List.mem_range.2 hj, hx⟩⟩
+  exact ⟨h _ (.head _), h _ (.tail _ (.head _))⟩
+
+/-- **A first `t` candidate at or above `p` at one of the store's blocks is a SHA-512 collision among the store's
+key-stream inputs**: chunks 0 and 1 are SHA-512 of two inputs that differ in the counter's last byte. -/
+theorem collision_of_ge (pre : ByteArray) (hpre : pre.size % 128 = 0) {s j : Nat} (hs : s < 8) (hj : j < 65536)
+    (h : 2 ^ 16448 - 21065 ≤ natOfBE ((Keys.Expander.ofPrefix pre).range s j Keys.PURPOSE_T 0 2056)) :
+    ∃ x ∈ storeStrings pre, ∃ y ∈ storeStrings pre, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y :=
+  ⟨_, (mem_storeStrings hs hj).1, _, (mem_storeStrings hs hj).2, suffix_ne pre s j Keys.PURPOSE_T, by
     rw [← chunk_eq_hash, ← chunk_eq_hash]
-    exact chunk01_of_ge pre hpre s j purpose h⟩
+    exact chunk01_of_ge pre hpre s j Keys.PURPOSE_T h⟩
 
 /-! ## The deployed parameters -/
 
@@ -484,11 +498,13 @@ theorem packagePrefix_ok (q : P2.Params) {salt : ByteArray} (h : salt.size = 24)
   rfl
 
 /-- **The keys, or a collision**: block `j` of segment `s`'s keys are `K`, the stream's first 2,056 bytes, and `t`, its
-first candidate, below `p`; or that candidate is at or above `p`, and SHA-512 has a collision (`collision_of_ge`). -/
-theorem keys_ok_or_collision (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j : Nat) :
+first candidate, below `p`; or that candidate is at or above `p`, and the store's key-stream inputs hold a SHA-512
+collision (`collision_of_ge`). -/
+theorem keys_ok_or_collision (pre : ByteArray) (hpre : pre.size % 128 = 0) {s j : Nat} (hs : s < 8)
+    (hj : j < 65536) :
     (∃ t, t < P2.Params.deployed.p ∧ (Keys.Expander.ofPrefix pre).keys P2.Params.deployed s j =
         .ok (natOfBE ((Keys.Expander.ofPrefix pre).range s j Keys.PURPOSE_K 0 2056), t, 0)) ∨
-      ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
+      ∃ x ∈ storeStrings pre, ∃ y ∈ storeStrings pre, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
   by_cases h : natOfBE ((Keys.Expander.ofPrefix pre).range s j Keys.PURPOSE_T 0 2056) < P2.Params.deployed.p
   · refine Or.inl ⟨_, h, ?_⟩
     have hfuel : Keys.STREAM_BYTES / 2056 = 133695479 + 1 := by decide
@@ -497,7 +513,7 @@ theorem keys_ok_or_collision (pre : ByteArray) (hpre : pre.size % 128 = 0) (s j 
     rw [hfuel, Keys.Expander.below.eq_2]
     simp only [Nat.zero_mul, Nat.zero_add, Nat.one_mul, h, ↓reduceIte, pure_bind]
     all_goals rfl
-  · exact Or.inr (collision_of_ge pre hpre s j Keys.PURPOSE_T (by rw [← deployed_p]; exact Nat.le_of_not_lt h))
+  · exact Or.inr (collision_of_ge pre hpre hs hj (by rw [← deployed_p]; exact Nat.le_of_not_lt h))
 
 /-! ## The honest block's value, under `PrimeP16448` -/
 
@@ -691,16 +707,18 @@ theorem packagePrefix_deployed {salt : ByteArray} (h : salt.size = 24) :
     Keys.packagePrefix P2.Params.deployed salt = .ok (keyPrefix salt) :=
   packagePrefix_ok _ h
 
-/-- Every block's keys are a `K` and a `t < p`, the first candidate. -/
+/-- Every one of the store's blocks has keys a `K` and a `t < p`, the first candidate. -/
 def KeysOk (pre : ByteArray) : Prop :=
-  ∀ s j, ∃ k t, t < P2.Params.deployed.p ∧ (Keys.Expander.ofPrefix pre).keys P2.Params.deployed s j = .ok (k, t, 0)
+  ∀ s j, s < 8 → j < 65536 →
+    ∃ k t, t < P2.Params.deployed.p ∧ (Keys.Expander.ofPrefix pre).keys P2.Params.deployed s j = .ok (k, t, 0)
 
 theorem keysOk_or_collision (pre : ByteArray) (hpre : pre.size % 128 = 0) :
-    KeysOk pre ∨ ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
-  by_cases h : ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v
+    KeysOk pre ∨
+      ∃ x ∈ storeStrings pre, ∃ y ∈ storeStrings pre, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
+  by_cases h : ∃ x ∈ storeStrings pre, ∃ y ∈ storeStrings pre, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
   · exact Or.inr h
-  · refine Or.inl fun s j => ?_
-    obtain ⟨t, ht, hk⟩ := (keys_ok_or_collision pre hpre s j).resolve_right h
+  · refine Or.inl fun s j hs hj => ?_
+    obtain ⟨t, ht, hk⟩ := (keys_ok_or_collision pre hpre hs hj).resolve_right h
     exact ⟨_, t, ht, hk⟩
 
 /-- Block `j` of segment `s` of the honest `C*`: its keys' `d⁻¹(σ_K(d⁻¹ t))` in 2,056 bytes. -/
@@ -749,7 +767,13 @@ theorem decodeSegment_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : Byte
   rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_ok (fun _ out => out ++ Prim.beOfNat 0 2054)]
   · simp only [hsz, Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel, Nat.div_one, segPayload]
   · intro j hj out
-    obtain ⟨k, t, ht, hkeq⟩ := hk s j
+    have hj' : j < 65536 := by
+      have h := hj
+      simp only [List.mem_range'] at h
+      obtain ⟨i, hi, he⟩ := h
+      simp only [Std.Legacy.Range.size, hsz] at hi
+      omega
+    obtain ⟨k, t, ht, hkeq⟩ := hk s j hs hj'
     have hc := (honestC_deployed hP k ht).1
     have hge : ¬(P2.Params.deployed.p ≤ natOfBE (Prim.beOfNat (honestC P2.Params.deployed.p k t) 2056)) := by
       rw [natOfBE_beOfNat (honestC_lt hP k ht)]
@@ -840,14 +864,14 @@ theorem vk_generic {q : P2.Params} {commitment salt : ByteArray} {C : Array (Arr
 
 /-! ## The honest `C*` -/
 
-theorem any_honest {pre : ByteArray} (hk : KeysOk pre) (s : Nat) :
+theorem any_honest {pre : ByteArray} (hk : KeysOk pre) {s : Nat} (hs : s < 8) :
     (honestSegment pre s).any (fun b => b.size != P2.Params.deployed.blockBytes) 0
       P2.Params.deployed.blocksPerSegment = false := by
   rw [show P2.Params.deployed.blocksPerSegment = (honestSegment pre s).size from (honestSegment_size pre s).symm,
     Bool.eq_false_iff]
   intro h
   obtain ⟨i, hi, hp⟩ := Array.any_eq_true.1 h
-  obtain ⟨k, t, _, hkeq⟩ := hk s i
+  obtain ⟨k, t, _, hkeq⟩ := hk s i hs (by have := honestSegment_size pre s; omega)
   simp only [honestSegment_get, honestBlock_eq hkeq, beOfNat_size, deployed_blockBytes, bne_self_eq_false,
     Bool.false_eq_true] at hp
 
@@ -864,7 +888,7 @@ theorem verifierKey_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteAr
       .ok ⟨(Merkle.root (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload)
           P2.Params.deployed.segments).2).getD .empty,
         (vkRun salt st0 (honestSegment (keyPrefix salt)) (fun _ => segPayload) P2.Params.deployed.segments).2⟩ :=
-  vk_generic hst hC hCs (fun s _ => honestSegment_size _ s) (fun s _ => any_honest hk s)
+  vk_generic hst hC hCs (fun s _ => honestSegment_size _ s) (fun _ hs => any_honest hk hs)
     (fun _ hs => decodeSegment_honest hP h24 hk hs (honestSegment_size _ _) (honestSegment_get _ _)) rfl
 
 theorem honestEncoding_size (pre : ByteArray) : (honestEncoding pre).size = 8 := Array.size_ofFn
@@ -897,11 +921,12 @@ theorem check_honest (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (
 
 /-- **Setup accepts, or SHA-512 has a collision**: under `PrimeP16448`, for every 24-byte salt, the setup check at the
 deployed parameters accepts the honest `C*` (`check_honest`), or a first `t` candidate at or above `p` gives two
-different inputs with one digest (`keysOk_or_collision`). -/
+different store key-stream inputs with one digest (`keysOk_or_collision`). -/
 theorem setup_accepts_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray} (h24 : salt.size = 24) :
     (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),
         c.salt = salt ∧ SetupProtocol.check P2.Params.deployed c C = .accept pub ()) ∨
-      ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
+      ∃ x ∈ storeStrings (keyPrefix salt), ∃ y ∈ storeStrings (keyPrefix salt),
+        x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
   obtain ⟨st0, hst⟩ := commitState_deployed
   rcases keysOk_or_collision (keyPrefix salt) (pad128_size _) with hk | hcol
   · exact Or.inl ⟨⟨honestW salt st0, salt⟩, honestEncoding (keyPrefix salt), _, rfl, check_honest hP h24 hk hst⟩
@@ -1066,7 +1091,7 @@ theorem runCheck_accepts_setup' {salt : ByteArray} (h24 : salt.size = 24) (w R :
 /-- **Setup accepts, and the composed check accepts a run on what it published, or SHA-512 has a collision**: under
 `PrimeP16448`, for every 24-byte salt, the setup check accepts the honest `C*` (`check_honest`) and `Run.check`
 accepts a run against the honest blocks' row digests on its public output (`runCheck_accepts_setup`), or a first `t`
-candidate at or above `p` gives two different inputs with one digest (`keysOk_or_collision`). -/
+candidate at or above `p` gives two different store key-stream inputs with one digest (`keysOk_or_collision`). -/
 theorem setup_run_accept_sid_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {salt : ByteArray}
     (h24 : salt.size = 24) :
     (∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public),
@@ -1074,7 +1099,8 @@ theorem setup_run_accept_sid_or_collision (hP : Pous.P2.Assumptions.PrimeP16448)
         ∃ (key : ByteArray) (r : PousCheck.Run.ChallengePhaseRecord),
           PousCheck.Run.check [key] pub (setupDigests salt) r Pous.EndToEnd.SecurityProofs.Honest.honestSid =
             .ok ()) ∨
-      ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
+      ∃ x ∈ storeStrings (keyPrefix salt), ∃ y ∈ storeStrings (keyPrefix salt),
+        x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
   obtain ⟨st0, hst⟩ := commitState_deployed
   rcases keysOk_or_collision (keyPrefix salt) (pad128_size _) with hk | hcol
   · have hr : Merkle.root ((List.range' 0 8).foldl
@@ -1096,7 +1122,8 @@ theorem setup_run_accept_or_collision (hP : Pous.P2.Assumptions.PrimeP16448) {sa
         c.salt = salt ∧ SetupProtocol.check P2.Params.deployed c C = .accept pub () ∧
         ∃ (trusted : List ByteArray) (r : PousCheck.Run.ChallengePhaseRecord) (sid : ByteArray),
           PousCheck.Run.check trusted pub (setupDigests salt) r sid = .ok ()) ∨
-      ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
+      ∃ x ∈ storeStrings (keyPrefix salt), ∃ y ∈ storeStrings (keyPrefix salt),
+        x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
   rcases setup_run_accept_sid_or_collision hP h24 with ⟨c, C, pub, hc, -, hs, key, r, h⟩ | hcol
   · exact Or.inl ⟨c, C, pub, hc, hs, [key], r, _, h⟩
   · exact Or.inr hcol

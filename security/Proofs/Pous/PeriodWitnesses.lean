@@ -19,7 +19,7 @@ state and side channel (`Fits`):
   strategy against `sidAudit`, a 32-byte session id with nothing else in it, at the deployed budget
   `(RING_D, RING_Q, RING_L)`; `periodHeld_accepted`, `periodHeldDeployed_accepted`: the same against an audit that
   accepts (`acceptedAudit`: one trusted key, the honest `C*` and a run on what setup published), under `PrimeP16448`,
-  or SHA-512 has a collision.
+  or two of the store's key-stream inputs (`storeStrings`) collide.
 * `periodCapacity`: the same, on the honest period whose capacity verdict is the verifier's whole decision outside a
   break (`verdictRun`), as `PeriodCapacity` takes the joint run's wiring.
 * `obligationHeld`: the same, with the store's tags the snapshot's indices (`tag = id`) and the other tags' keys among
@@ -38,6 +38,7 @@ blocks) and of `periodHeldDemo_nontrivialDemo` (at Demo B's).
 namespace Pous.Period.SecurityProofs
 
 open Pous.EndToEnd PousCheck PousCheck.Properties
+open PousCheck.Properties.SecurityProofs.Accepts (storeStrings keyPrefix)
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000
@@ -88,12 +89,14 @@ def acceptedAudit (key : ByteArray) (c : PousCheck.SetupProtocol.Commitment) (C 
 whose trusted list is one key and whose store is the honest `C*` of eight segments, against which the honest period
 and strategy meet the device model at the deployed budget and the instantiation, the certificate fits, and the audit
 accepts (setup accepts `C*` and `Run.check` a run on what it published, `setup_run_accept_sid_or_collision`), or
-SHA-512 has a collision. -/
+two different store key-stream inputs of the salt (`storeStrings`) have one SHA-512 digest. -/
 theorem periodHeld_accepted (hP : Pous.P2.Assumptions.PrimeP16448) :
     (∃ P : Audits Unit Unit, P.trusted ≠ [] ∧ (∀ o, (P.store o).size = 8) ∧
         DeviceModel honestRun P honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates P honestStrategy ∧
         Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧ ∃ ω, P.Accepts ω) ∨
-      ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
+      ∃ x ∈ storeStrings (keyPrefix (PousCheck.Prim.zeros 24)),
+        ∃ y ∈ storeStrings (keyPrefix (PousCheck.Prim.zeros 24)),
+          x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y := by
   rcases PousCheck.Properties.SecurityProofs.Accepts.setup_run_accept_sid_or_collision hP
       (Pous.EndToEnd.SecurityProofs.Honest.zeros_size 24) with ⟨c, C, pub, -, hC, hs, key, r, h⟩ | hcol
   · have h' := periodHeld_honest honestRun
@@ -112,7 +115,9 @@ theorem periodHeldDeployed_accepted (hP : Pous.P2.Assumptions.PrimeP16448) :
     (∃ P : Audits Unit Unit, P.trusted ≠ [] ∧ (∀ o, (P.store o).size = 8) ∧
         DeviceModel honestRun P honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates P honestStrategy ∧
         Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧ ∃ ω, P.Accepts ω) ∨
-      ∃ u v : ByteArray, u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v :=
+      ∃ x ∈ storeStrings (keyPrefix (PousCheck.Prim.zeros 24)),
+        ∃ y ∈ storeStrings (keyPrefix (PousCheck.Prim.zeros 24)),
+          x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y :=
   periodHeld_accepted hP
 
 /-- **`periodCapacity`'s honest lemma at one instance**: on the honest period whose capacity verdict is the verifier's
