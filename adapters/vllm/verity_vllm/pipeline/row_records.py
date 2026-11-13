@@ -11,6 +11,7 @@ import gzip
 import json
 import os
 import time
+from collections.abc import Sequence
 from typing import Any
 
 from verity_vllm.commit.partition import word_check_refusal
@@ -140,8 +141,6 @@ FOLD_GM_SUM_RATIO = 5.5
 FOLD_SUM_RATIO = 0.6
 FOLD_PART_S_PER_GIB = 350
 FOLD_PART_MIN_S = 7200
-#: the older name of `FOLD_PART_MIN_S`, which `pipeline/row_tp.py` reads
-FOLD_LEG_MIN_S = FOLD_PART_MIN_S
 
 
 def derive_bytes(lp: int, t: int, layers: int) -> int:
@@ -222,7 +221,7 @@ def _cpus() -> int:
     return len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1)
 
 
-def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | None = None, *, derives: int | None = None,
+def build_jobs_auto(shapes: Sequence[tuple[int, ...]] | None = None, layers: int | None = None, *, derives: int | None = None,
                     peak_ratio: float = 1.0, headroom: int | None = None, cpus: int | None = None, budget_gb: float | None = None,
                     job_bytes: int | None = None) -> int:
     """``--build-jobs auto`` (the default): as many concurrent derives as 80% of the memory headroom (or of `budget_gb`, when smaller)

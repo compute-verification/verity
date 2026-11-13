@@ -308,7 +308,6 @@
     {"file": "verity_vllm/pipeline/remote_session.py", "kind": "union-attr", "symbol": "accepted", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/row_records.py", "kind": "arg-type", "symbol": "row_shape", "detail": ""},
     {"file": "verity_vllm/pipeline/row_records.py", "kind": "arg-type", "symbol": "tp_shape", "detail": ""},
-    {"file": "verity_vllm/pipeline/row_stages.py", "kind": "arg-type", "symbol": "SingleRow.derive_all", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_admit.py", "kind": "index", "symbol": "TickGate.add", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/serve_admit.py", "kind": "misc", "symbol": "ReleaseOrder._flush", "detail": ""},
     {"file": "verity_vllm/pipeline/serve_commit.py", "kind": "arg-type", "symbol": "CommitWindows._served_rows", "detail": ""},
