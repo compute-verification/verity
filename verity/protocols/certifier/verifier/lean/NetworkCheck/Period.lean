@@ -233,7 +233,7 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
   is sampled in part with a `bound` of at least one incorrect proof block (`faultyEntries`), else 0.
 * `eps` is the scans' δ summed, `m · δ`, and each tied audit's sampled in part (`chargedOf`), whose bound
   `faulty_entries` reads: the δ part of the union over the monitoring period's windows that
-  `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
+  `CommOfMonitoringPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
 
 **Profile**: the link and `m`.
 
