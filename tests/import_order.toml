@@ -33,7 +33,7 @@ order = [
     ["verity/protocols/certifier"],
     ["verity/protocols/remote"],
     ["verity/protocols/onsite"],
-    ["verity/composite"],
+    ["verity/protocols/compose"],
     ["security"],
     ["adapters"],
     ["tools"],
@@ -75,7 +75,7 @@ owner = "memory-accounting"
 reason = "PoUS's P2 prover, which runs on a GPU through torch, which `verity` never imports: loaded by path as the package `p2_store` by the vLLM adapter and by its harness in `benchmarks/`"
 
 [[distribution]]
-directory = "verity/composite/device/live_challenger"
+directory = "verity/protocols/compose/device/live_challenger"
 owner = "proofs"
 
 [[distribution]]
@@ -124,10 +124,10 @@ files = [
 ]
 
 [[against]]
-loader = "verity/composite"
+loader = "verity/protocols/compose"
 loaded = "benchmarks"
 files = [
-    "verity/composite/device/live_challenger/auditor.py",
+    "verity/protocols/compose/device/live_challenger/auditor.py",
 ]
 
 [[against]]
