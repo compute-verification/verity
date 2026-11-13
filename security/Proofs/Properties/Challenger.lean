@@ -11,6 +11,9 @@ import all Init.Data.Array.Basic
 `liveAnswer`: `Live.factors` turns `answer`'s check into `checkAt` at the coins the evidence reads, and `answerAt` runs
 the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the reader's property `DrawnByDevice`.
 `drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement.
+`FamilyOneCommitment.drawn`: `FamilyOneCommitment` says more of the same run. `familyOneCommitment_nontrivial`,
+`familyOneCommitmentRead_nontrivial`: each one's conclusion fails at the device that ran nothing and the record `null`,
+which a reader that accepts every record reads.
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
 proved about `check` (`acceptMeans_iff`) hold of what it accepts. `oneStageZk_source`: v2's coins read only under a
 challenger and a window its parameters name, so `oneStageZk_drawn`, `coinsFromLog` for v2, is never vacuous.
@@ -81,6 +84,39 @@ theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok Byte
   · simp at hs
   · rw [hnone] at hw
     cases hw
+
+/-- `FamilyOneCommitment` gives `DrawnByDevice`: the family's roots are a further conclusion about the same run. -/
+theorem FamilyOneCommitment.drawn (h : FamilyOneCommitment) : DrawnByDevice :=
+  fun dev key w label after coins ξ hr =>
+    (h dev key w label after coins ξ hr).imp (fun ⟨s, hs, ho, e, _⟩ => ⟨s, hs, ho, e⟩) id
+
+/-- **`FamilyOneCommitment`'s nontrivial lemma**: its conclusion fails at the device that ran nothing (`idle`) and the
+record `null`: no run of it released anything, and the finder finds no break in a record that holds nothing. A reader
+that accepts every record reads there, so the statement is not one every reader has. -/
+theorem familyOneCommitment_nontrivial :
+    ¬ ((∃ s ∈ idle.runs noKey.pub, OpensOn idle noKey.pub "" s.id ∧ ByteArray.empty = s.released "" ByteArray.empty ∧
+          ∀ r ∈ s.roots "", r = ByteArray.empty) ∨
+        Break idle noKey "" Lean.Json.null) := by
+  have hnone : findBreak idle noKey "" Lean.Json.null = none := rfl
+  rintro (⟨s, hs, -⟩ | ⟨w, hw, -⟩)
+  · simp [idle] at hs
+  · rw [hnone] at hw
+    cases hw
+
+/-- **`FamilyOneCommitmentRead`'s nontrivial lemma**: its conclusion fails at the record `null` for every key, since
+that record names none. A reader that gives no reason for any record gives none there. -/
+theorem familyOneCommitmentRead_nontrivial :
+    ∀ key, ¬ (Spot.Challenger.ChallengerKey.ofJson (Spot.getD Lean.Json.null "key") = .ok key ∧
+      ((∃ s ∈ idle.runs key.pub, OpensOn idle key.pub "" s.id ∧
+          (s.released "" ByteArray.empty).extract 0 ByteArray.empty.size = ByteArray.empty ∧
+          (ByteArray.empty.size + Spot.Challenger.COIN_BYTES - 1) / Spot.Challenger.COIN_BYTES =
+            (s.released "" ByteArray.empty).size / Spot.Challenger.COIN_BYTES ∧
+          ∀ r ∈ s.roots "", r = ByteArray.empty) ∨
+        Break idle key "" Lean.Json.null)) := by
+  obtain ⟨e, he⟩ : ∃ e, Spot.Challenger.ChallengerKey.ofJson (Spot.getD Lean.Json.null "key") = .error e := ⟨_, rfl⟩
+  rintro key ⟨hk, -⟩
+  rw [he] at hk
+  cases hk
 
 /-- What one-stage's protocol accepts, its coin-free `check` accepts: `checkAt` only adds the coins' refusals. -/
 theorem oneStage_check_of_accept {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
