@@ -505,6 +505,15 @@ def test_the_network_certifiers_part_is_beside_it_at_the_requests_its_calculator
         E.build(store=recorded(tmp_path / "halved").fresh(), root=REPO)
 
 
+def test_the_scan_rows_mark_is_this_commands_mark_of_that_name():
+    """The calculator marks the `scan` row's accept `run, not proved` by a string of its own, since it cannot read
+    this command's: the two are one mark, and no other row of the calculator's carries one."""
+
+    lb = term()
+    assert lb.RUN_NOT_PROVED == E.RUN_NOT_PROVED and E.RUN_NOT_PROVED in E.MARKS
+    assert {name: k.mark for name, k in lb.ROWS.items() if k.mark} == {"scan": E.RUN_NOT_PROVED}
+
+
 def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(tmp_path, monkeypatch):
     """The network certifier's figures of record are its document's at D_j = 2, held here to that document: the scan's
     over the world's year is the document's `value`, on the class its calculator assumes by default and on the class
@@ -681,13 +690,13 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
     assert (year["compute_audit"]["delta"], year["error"]) == (0.01, 0.01 + 2 ** -20)
     assert dc["eps"] == pytest.approx(2.543e-10, rel=1e-3) and dc["error"] == 0.01 + dc["eps"]
     assert doc["periods"][0]["error"] is None  # a scope no run of record holds has no sum, and so no error of one
-    # the amounts are the calculator's at its own default δ, where every one of these rows' ε is 1 or more
+    # the amounts are the calculator's at its own default δ, where the world's year's ε is 2^-20 and every other row's is less
     default = {(r["scope"], r["period"], r["row"]): r for r in lb.document(lb.inputs(response_ids=E.RESPONSE_IDS))["rows"]}
     for p in doc["periods"]:
         for name, t in p["together"].items():
             r = default[p["compute"], p["period"], name]
-            assert r["eps"] >= 1 and t["certifier_GB"] == r["term"]["2"]["GB"]
-    assert default["world", "year", "scan"]["eps"] == pytest.approx(11_012_646, abs=0.5)
+            assert r["eps"] <= 2 ** -20 and t["certifier_GB"] == r["term"]["2"]["GB"]
+    assert default["world", "year", "scan"]["eps"] == 2 ** -20
 
     text = E.render(doc)
     assert ("- the compute audit's part fails with at most δ = 0.01 over the monitoring period. The network certifier's ε "
@@ -1248,8 +1257,8 @@ def test_a_part_on_cpus_alone_adds_no_gpu_seconds_and_says_so_beside_its_0(tmp_p
 
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "d3827f13c6936a3a5f218211d4e8110abb74c4075f154a1606f99e7ea329fafa",
-               "json": "627912cb87733f1cd4036f35d27de37aad9707700b5a686d2a678b5a8e5abbf0"}
+NO_VERDICTS = {"text": "c38c0365b73bdf04a0169c97b50c7f4e1a117470d5fc396f262d04a9c071d90c",
+               "json": "73a3db53c47d38df60473bbd19134936c1b59c7f6090aff99d56899d2dad4e89"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
@@ -1351,7 +1360,8 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
 
 def test_proved_by_on_every_piece_makes_it_measured(tmp_path):
     """Only where every piece's record names the Lean guarantee that proves its verifier is the output count's 0
-    measured; it is then counted with the measured inputs and nothing prints as not proved."""
+    measured; it is then counted with the measured inputs and nothing prints as not proved but the scan's accept, in
+    the `scan` row's own line."""
 
     proved = [v | {"proved_by": f"Made.Up.{v['piece']}", "open": None} for v in complete()]
     base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
@@ -1364,7 +1374,8 @@ def test_proved_by_on_every_piece_makes_it_measured(tmp_path):
     assert count["mark"] == "measured" and "proved by `Made.Up.second_stage`" in count["source"]
     measured = sum(i["mark"] == "measured" for i in base["inputs"])
     text = E.render(doc)
-    assert f"inputs, {measured + 1} are measured, " in text and "not proved" not in text
+    assert f"inputs, {measured + 1} are measured, " in text
+    assert [line for line in text.splitlines() if "not proved" in line and term().SCAN_ACCEPT not in line] == []
     assert "| network certifier | output_count | 0 | bit/request | measured | taken at 0 " in text
 
 
