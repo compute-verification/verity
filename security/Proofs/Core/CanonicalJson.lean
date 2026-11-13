@@ -18,7 +18,8 @@ theorem states, with no hypothesis on the bytes:
 * `canonicalJson_same`: the value it returns on a printable value's canonical text is alike that value
   (`Claims.Json.Same`), so two printable values with one canonical text are read as one value;
 * `canonicalJson_iff`: it returns `j` exactly where the bytes are a text the parser reads as `j` and `canon` writes
-  back from `j`.
+  back from `j`; on a text's own bytes (`canonicalJson_toUTF8_iff`), exactly where the parser reads the text as `j`
+  and `canon` writes it back, so what it returns there is the parser's reading of the text.
 
 The steps: bytes decode to a string exactly where they are its UTF-8 (`fromUTF8?_eq_some_iff`); a text of ASCII
 without DEL has every byte below `0x7f` (`toUTF8_ascii`), and `canon` writes only such texts; the parser builds only
@@ -128,6 +129,18 @@ theorem canonicalJson_iff (b : ByteArray) (j : Json) :
     Core.canonicalJson b = .ok j ↔
       ∃ s, b = s.toUTF8 ∧ Flock.JsonParse.parse s = .ok j ∧ Flock.canon j = .ok s :=
   ⟨canonicalJson_ok, fun ⟨_, hb, hp, hc⟩ => hb ▸ canonicalJson_of hp hc⟩
+
+/-- **On a text's bytes `canonicalJson` returns the total parser's reading of the text**, where `canon` writes the
+text back from it, and refuses elsewhere. -/
+theorem canonicalJson_toUTF8_iff (s : String) (j : Json) :
+    Core.canonicalJson s.toUTF8 = .ok j ↔ Flock.JsonParse.parse s = .ok j ∧ Flock.canon j = .ok s := by
+  constructor
+  · intro h
+    obtain ⟨s', hb, hp, hc⟩ := canonicalJson_ok h
+    have hb' : s.toByteArray = s'.toByteArray := by simpa only [String.toUTF8_eq_toByteArray] using hb
+    obtain rfl : s = s' := String.toByteArray_inj.1 hb'
+    exact ⟨hp, hc⟩
+  · exact fun ⟨hp, hc⟩ => canonicalJson_of hp hc
 
 /-! ## A well-formed value that `canon` prints is printable -/
 
