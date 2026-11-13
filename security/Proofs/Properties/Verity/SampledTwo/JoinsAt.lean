@@ -50,8 +50,9 @@ there: the cut reads no log where a session's record carries a break, and a fami
 log the check read. At the kept case they speak of the accepted plays `JoinGood` holds of. There `CutReads` is
 `JoinGood`'s first part, the fresh coins' width `DevSecond` needs is its last, and `StageDraws` is asked only of those
 plays. There each stage's one root is CUT's (`oneRoot_draws`, `oneRoot_second`, at `otherRoots`), so `StageDraws`
-takes the families alone (`stageDraws_first`, `stageDraws_second`, `DrawRoots.lean`). What the pieces conclude comes back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase`
-and `secondFits_goodCase`. So `joinedOfLaw` takes no `CutReads` and no coins' premise for either stage.
+takes the families alone (`stageDraws_first`, `stageDraws_second`, `DrawRoots.lean`). What the pieces conclude comes
+back to `C` by `coinsAgree_goodCase`, `firstFits_goodCase` and `secondFits_goodCase`. So `joinedOfLaw` takes no
+`CutReads` and no coins' premise for either stage.
 
 **Not established**, each a field of `JoinsAt`:
 
