@@ -363,7 +363,8 @@ set_option linter.auxLemma false in
 /-- **`Run.templateCircuits` names the check's templates, in its order, or returns none**: the parser throws unless
 `named.map (·.1)` is `Select.templateIds`' and returns none only for no `proofs`. Its match on `#["templates"]` has
 no equations `split` can use, so that matcher is unfolded by name and its test of the key against `"templates"` is
-cased on. -/
+cased on. The proof names the matcher by its number (`Spot.Run.templateCircuits.match_9`), so it breaks when an edit
+of `Spot/Run.lean` renumbers the parser's matchers: the number to name then is the matcher's that tests the key. -/
 theorem templateCircuits_names {proofs query : Lean.Json} {cs : Array (String × String × Lean.Json × Lean.Json)}
     (h : Spot.Run.templateCircuits proofs query = .ok cs) :
     cs = #[] ∨ Spot.Select.templateIds query = .ok (cs.map (·.1)) := by
