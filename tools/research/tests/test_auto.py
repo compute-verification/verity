@@ -1570,7 +1570,7 @@ def test_a_pool_run_auto_places_carries_its_own_id_as_its_pair_and_leaves_an_ask
     what it shipped. A run `--on auto` queues on node 2, and a run named to a machine, carry none and leave none."""
     docs = {N2: share(waiters=56), CPU1: pool(slot("r0"))}
     launched, _ = _on_auto(monkeypatch, tmp_path, docs, {CPU1: None, N2: None, "m": None})
-    assert main(["run", "--on", "auto", "--mem-gb", "24", "--env", "K=V", "--", "pytest", "-q"]) == 0
+    assert main(["run", "--on", "auto", "--mem-gb", "24", "--mem-limit-gb", "300", "--as", "infra", "--env", "K=V", "--", "pytest", "-q"]) == 0
     (kw,) = launched
     opts = kw["command"][:kw["command"].index("--")]
     assert opts[opts.index("--twin") + 1] == kw["run_id"], "its pair is its own run id"
@@ -1579,8 +1579,9 @@ def test_a_pool_run_auto_places_carries_its_own_id_as_its_pair_and_leaves_an_ask
     assert (m["cpus"], m["mem_gb"], m["lean"]) == (4, 24, None), "what `auto` was asked, to ask it again"
     assert m["root"] == str(tmp_path / "runs") and m["sends"] == {}
     assert Path(m["git"]) == tmp_path / "repo" / ".git", "the repository the commit is checked out from again, not the checkout"
-    same = {k: m["launch"][k] for k in ("project", "command", "harness_args", "env", "mem_gb", "custody_ttl")}
+    same = {k: m["launch"][k] for k in ("project", "command", "harness_args", "env", "mem_gb", "custody_ttl", "mem_limit")}
     assert same == {k: kw[k] for k in same} and kw["env"]["K"] == "V", "the request as the first launch sent it"
+    assert kw["mem_limit"] == {"gb": 300.0, "by": "infra"}, "the memory limit the launch stated, which a late twin's record marks too"
     err = capsys.readouterr().err
     assert "an asker of this launch stays on this VM (pid 4242)" in err and "only while this VM is up" in err
     del launched[:], _no_asker_left[:]
