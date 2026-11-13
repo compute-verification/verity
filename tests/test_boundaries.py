@@ -60,10 +60,20 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 import pytest
-from test_integration_boundaries import KNOWN as INTEGRATION_SITES
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "verity"
+
+
+def _integration_sites() -> frozenset[tuple[str, str]]:
+    """``KNOWN`` of ``tests/test_integration_boundaries.py``, read from its source: this file is also loaded by path, where no
+    sibling imports."""
+    tree = ast.parse((ROOT / "tests" / "test_integration_boundaries.py").read_text(encoding="utf-8"))
+    return frozenset(next(ast.literal_eval(n.value) for n in tree.body
+                          if isinstance(n, ast.Assign) and [getattr(t, "id", None) for t in n.targets] == ["KNOWN"]))
+
+
+INTEGRATION_SITES = _integration_sites()
 
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
