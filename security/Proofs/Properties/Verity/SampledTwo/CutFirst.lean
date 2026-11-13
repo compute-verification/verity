@@ -34,8 +34,9 @@ on every play whose first stage's coin evidence is not `null` (`FirstCoinsShown`
   byte, or `drawCoins` reading the evidence under the run's key, window and family after the record's digest
   (`coinsReason_none`).
 * **The run's inputs** (`inputAt_ok`, `inputOf`): the run's key is the interior audit's, its window and family the
-  boundary registration's, its coin evidence the form's `coins` (`firstCoins`), its record the registration's, whose
-  digest is the commitment's (`Properties.Spot.digestIsRecord's`). These are `firstDraws`'.
+  boundary registration's, its coin evidence the form's `coins` (`firstCoins`), its record the registration's as the
+  form read it back (`readBack`), whose digest the form holds to the commitment's (`digestIs`). These are
+  `firstDraws`'.
 
 `FirstCoinsShown θ` is a hypothesis here, and `CutAccept.firstShown` proves it from the form's refusal of `null`
 first-stage coin evidence. The run of record alone passes a first stage that read no byte with `null` coin evidence,
@@ -224,23 +225,6 @@ theorem coinsCode_none {key : Option ChallengerKey} {main coins record : Json} {
 
 /-! ## The first stage's coins on an accepted play -/
 
-/-- The two-stage case's registration is a commitment the form decoded. -/
-theorem commitment_of_caseOf {s : Verity.Sent} {p : VStar.Recursive.SampledTwo.Params}
-    {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence} (h : caseOf s = .ok (p, c, e)) :
-    ∃ b, Spot.OneStage.commitmentOf b = .ok c := by
-  unfold caseOf at h
-  obtain ⟨p', -, h⟩ := bind_ok h
-  obtain ⟨ce, hce, h⟩ := bind_ok h
-  have hc : ce.1 = c := by
-    exact congrArg (fun x => x.2.1) (Except.ok.inj h)
-  subst hc
-  unfold caseIn at hce
-  simp only [bind, Except.bind, pure, Except.pure] at hce
-  repeat' split at hce
-  all_goals first
-    | (cases hce; done)
-    | (cases hce; exact ⟨_, by assumption⟩)
-
 /-- **The first stage's coin evidence is not `null`**, on every accepted play after the parameters `θ`. -/
 def FirstCoinsShown (θ : ByteArray) : Prop :=
   ∀ s : Verity.Sent, s.params = θ → Accepts s → ∀ p c e, caseOf s = .ok (p, c, e) → e.coins ≠ Json.null
@@ -257,7 +241,7 @@ theorem firstReads_of_shown (θ : ByteArray) (hS : FirstCoinsShown θ) : FirstRe
     exact h1'
   rw [← hp, ← hc, ← he] at hacc
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, hrun, -, -, hsym, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
-  obtain ⟨-, -, -, -, vs, received₂, -, rfl⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
+  obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, hdig⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
   rcases run_coins _ true run hrun with ⟨step, codes, rfl⟩ | ⟨read, hcc⟩
   · have hs := SpotFlock.str_of_jeq (SpotFlock.jeq_symm hsym)
     rw [refused_symbol] at hs
@@ -273,11 +257,9 @@ theorem firstReads_of_shown (θ : ByteArray) (hS : FirstCoinsShown θ) : FirstRe
     rw [hch] at hk'
     exact Option.some.inj hk'
   rw [hkk] at hK
-  obtain ⟨b, hb⟩ := commitment_of_caseOf h1
-  have hdc : Spot.Registration.digest c.record = .ok c.digest := Properties.Spot.digestIsRecord's b c hb
   have hac : after = c.digest := by
-    have hd' : Spot.Registration.digest c.record = .ok after := hd
-    rw [hdc] at hd'
+    have hd' : Spot.Registration.digest j₁ = .ok after := hd
+    rw [hdig] at hd'
     exact (Except.ok.inj hd').symm
   subst hac
   have hw' : p.boundary.verifier.windowRoot = some w := hw
