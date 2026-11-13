@@ -28,9 +28,9 @@ from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.commitments import advice as A
 from verity.commitments.frame_v3.vectors import expand
-from verity.definitions.ops.fp32 import Bf16Add
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import Bf16GtStrict, SelectBf16
+from verity.circuits.ops.fp32 import Bf16Add
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import Bf16GtStrict, SelectBf16
 
 PATH = Path(__file__).parent / "partition_v2_vectors.json"
 REWRITE = ("the vector differs from the tree's; a change meant to move it rewrites it with "

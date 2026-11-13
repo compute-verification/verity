@@ -307,7 +307,7 @@ tests = [
     "tests/program/predict/test_window_circuit_fa3.py",
     "tests/program/predict/test_window_circuit_int8.py",
 ]
-paths = ["verity/definitions/ops"]
+paths = ["verity/circuits/ops"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/predict/test_window_rows.py"]
