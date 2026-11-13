@@ -1,7 +1,9 @@
 """A row's setup and precheck past the tree's own checks (`Row.setup`, `prepare`, `run`): its stages' environment, the cuBLAS
 names, the release line, the target-family preflight, the Commit's session checks. A row's stages run with the run store's tool
 (`tools/research/src`) on their path, so these run only where it is beside the tree; `test_row` holds a tree without it to the
-refusal at setup, by name.
+refusal at setup, by name.  With them, each with `subprocess` stood in: how a row runs a stage and a command it reads (`run_to`,
+`output`), the signals it takes, what a signalled row leaves behind, and the commands its prechecks and its report run
+(`release_line`, `source_identity`, `target_family`, `timeline_report`).
 
 Then what the run store brings a row's stages (`pipeline/research.py`'s readers): a job's recorded inputs, an artifact's meta, an
 Attempt's outputs, tool, status and source, each for a document that leaves the block out or states it as null or empty.  The
@@ -18,6 +20,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -37,6 +40,7 @@ from tests.pipeline.test_row import (
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import research as RS
+from verity_vllm.pipeline import row_driver as RD
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
@@ -181,6 +185,45 @@ def test_a_tp_rows_target_precheck_reads_the_device_only_when_a_stage_runs_on_it
     assert e.value.rc == 99 and seen == [() if reads else ("--no-device",)]
 
 
+def test_setup_refuses_a_tree_with_no_verity_tree_above_it_and_an_interpreter_that_is_not_there(tmp_path, monkeypatch, capsys):
+    """Each is refused by name at exit 3.  The interpreter is looked for last, so the stages' environment is fixed by then."""
+    monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
+    r = _row(tmp_path)
+    r.tree = str(tmp_path / "nowhere" / "adapters" / "vllm")
+    with pytest.raises(Stop) as e:
+        r.setup({})
+    assert e.value.rc == 3
+    assert f"PRECHECK_FAIL_SOURCE_IDENTITY: no Verity tree above {r.tree} (not a shipped Verity tree)" in capsys.readouterr().err
+    py = str(tmp_path / "venv" / "bin" / "python")
+    r = _row(tmp_path, "--py", py)
+    r.child_env = {}
+    with pytest.raises(Stop) as e:
+        r.setup({"A_PIN": "1"})
+    assert e.value.rc == 3 and f"no python at {py} (run verity_vllm/ops/pod_bootstrap.sh first)" in capsys.readouterr().err
+    assert (r.child_env["VERITY_TREE"], r.child_env["A_PIN"]) == (r.tree, "1") and "VERITY_TIMELINE" not in r.child_env
+
+
+@pytest.mark.parametrize("lease, devices", [("/x/gpu-lease", ""), ("", "0,1")])
+def test_a_leased_rows_stages_see_no_cuda_device_and_any_other_rows_see_the_callers(tmp_path, monkeypatch, lease, devices):
+    monkeypatch.delenv("TRITON_CACHE_DIR", raising=False)
+    r = _row(tmp_path, environ={"GPU_LEASE": lease, "CUDA_VISIBLE_DEVICES": "0,1"})
+    r.setup({})
+    assert (r.child_env["CUDA_VISIBLE_DEVICES"], r.leased) == (devices, bool(lease))
+
+
+def test_a_toolchain_whose_cuda_header_cannot_be_read_has_no_jit_key(tmp_path):
+    """The three packages' records are there and the toolkit's header is not: no key, so the row's caches stay its tree's own."""
+    site = tmp_path / "venv" / "lib" / "python3.12" / "site-packages"
+    for name in ("triton", "torch", "vllm"):
+        (site / f"{name}-1.0.dist-info").mkdir(parents=True)
+        (site / f"{name}-1.0.dist-info" / "RECORD").write_text(f"{name}/__init__.py,sha256=x,1\n")
+    py, cuda = str(tmp_path / "venv" / "bin" / "python"), tmp_path / "cuda"
+    assert RD.jit_key(py, str(cuda), ROW, str(tmp_path)) is None
+    (cuda / "include").mkdir(parents=True)
+    (cuda / "include" / "cuda.h").write_text("#define CUDA_VERSION 12090\n")
+    assert re.fullmatch(r"[0-9a-f]{16}", RD.jit_key(py, str(cuda), ROW, str(tmp_path)) or "")
+
+
 # ---------------------------------------------------------------------------------------------------------------- cuBLAS names
 
 def test_a_rows_stages_get_the_names(tmp_path, monkeypatch, capsys):
@@ -224,6 +267,103 @@ def test_a_signal_goes_to_every_running_stage_and_one_that_has_ended_is_passed_o
     r._on_signal(signal.SIGTERM, None)
     assert r.signalled == "TERM" and sorted(sent) == [(7, 15), (9, 15)]
     assert (Path(r.d) / "row.log").read_text().count("SIGTERM received: forwarding to the running stage (timeout pid ") == 2
+
+
+def test_a_row_takes_term_int_and_hup_for_its_running_stage(tmp_path, monkeypatch):
+    r = _row(tmp_path)
+    taken: dict[int, Any] = {}
+    monkeypatch.setattr(RD.signal, "signal", lambda signum, handler: taken.update({signum: handler}))
+    r.install_signal_forwarding()
+    assert taken == {signal.SIGTERM: r._on_signal, signal.SIGINT: r._on_signal, signal.SIGHUP: r._on_signal}
+
+
+# ---------------------------------------------------------------------------------------------------------------- the stage processes
+
+class _Stage:
+    """What `subprocess.Popen` gives a row for a stage that ends with ``rc`` (a negative one: the signal that ended it)."""
+    pid = 4242
+
+    def __init__(self, rc: int, row: Any):
+        self.rc, self.row, self.running_at_wait = rc, row, set[int]()
+
+    def wait(self) -> int:
+        self.running_at_wait = set(self.row._running)
+        return self.rc
+
+
+def _stage_ends(monkeypatch, r: Any, rc: int) -> list[tuple[list[str], dict[str, Any], _Stage]]:
+    """Every stage the row starts from here on ends with ``rc`` -> each one's command line, how it was started (its stdout: the
+    file's name) and the stage."""
+    started: list[tuple[list[str], dict[str, Any], _Stage]] = []
+
+    def popen(argv: list[str], **kw: Any) -> _Stage:
+        started.append((argv, {**kw, "stdout": kw["stdout"].name}, _Stage(rc, r)))
+        return started[-1][2]
+    monkeypatch.setattr(RD.subprocess, "Popen", popen)
+    return started
+
+
+def test_a_stage_runs_under_timeout_in_the_tree_and_its_log_says_what_ended_it(tmp_path, monkeypatch):
+    """A stage a signal ended gives 128 + the signal, as a shell does, and one that `timeout` ended (124) leaves a TIMEOUT line.  The
+    row's signal handler finds the stage's `timeout` by its pid only while it runs."""
+    r = _row(tmp_path)
+    lf, cmd = f"{r.d}/stage.log", ["verity-vllm", "build"]
+    started = _stage_ends(monkeypatch, r, 0)
+    assert r.run_to(5, lf, cmd) == 0
+    argv, how, stage = started[0]
+    assert (argv, how) == (["timeout", "5", *cmd], {"stdout": lf, "stderr": subprocess.STDOUT, "cwd": r.tree, "env": r.child_env})
+    assert stage.running_at_wait == {4242} and r._running == set()
+    assert Path(lf).read_text() == "$ verity-vllm build\n"
+    _stage_ends(monkeypatch, r, -9)
+    assert r.run_to(5, lf, cmd) == 137 and Path(lf).read_text() == "$ verity-vllm build\n"
+    _stage_ends(monkeypatch, r, 124)
+    assert r.run_to(5, lf, cmd) == 124 and Path(lf).read_text() == "$ verity-vllm build\nTIMEOUT after 5s\n"
+
+
+def test_a_signalled_row_marks_its_stage_cancelled_and_stops_at_128_plus_the_signal(tmp_path, monkeypatch):
+    """Whatever the stage's own exit was (here one that took the signal and exited 1).  The stop is the main thread's: a stage a
+    worker thread waited for (a derive beside others) gives its exit and leaves the stop to the stage the row itself waits for."""
+    r = _row(tmp_path)
+    lf, cmd = f"{r.d}/stage.log", ["verity-vllm", "build"]
+    _stage_ends(monkeypatch, r, 1)
+    r.signalled = "HUP"
+    got: list[int] = []
+    worker = threading.Thread(target=lambda: got.append(r.run_to(5, lf, cmd)))
+    worker.start()
+    worker.join()
+    assert got == [1] and Path(lf).read_text() == "$ verity-vllm build\nCANCELLED by SIGHUP (stage rc=1)\n"
+    assert not (Path(r.d) / "row.log").exists() and not os.path.exists(r.timeline)
+    with pytest.raises(Stop) as stop:
+        r.run_to(5, lf, cmd)
+    assert stop.value.rc == 129 and Path(lf).read_text() == "$ verity-vllm build\nCANCELLED by SIGHUP (stage rc=1)\n"
+    assert (Path(r.d) / "row.log").read_text().splitlines()[-1].endswith("row cancelled by SIGHUP; stage ended rc=1 -> stop")
+    events = [(e["ev"], {k: e[k] for k in ("signal", "rc", "ok", "stopped_at") if k in e}) for e in _timeline(r) if e["stage"] == "row"]
+    assert events == [("cancelled", {"signal": "HUP", "rc": 1}), ("end", {"ok": False, "stopped_at": "cancel"})]
+
+
+def test_a_command_the_row_reads_runs_in_the_tree_with_the_stages_environment(tmp_path, monkeypatch):
+    """`output` gives the command's exit and what it wrote without the newlines at its end, its stderr with it unless the caller
+    sends that elsewhere."""
+    r = _row(tmp_path)
+    ran: list[tuple[list[str], dict[str, Any]]] = []
+
+    def run(argv: list[str], **kw: Any) -> subprocess.CompletedProcess:
+        ran.append((argv, kw))
+        return subprocess.CompletedProcess(argv, 3, stdout="a line\nanother\n\n")
+    monkeypatch.setattr(RD.subprocess, "run", run)
+    assert r.output(["verity-vllm", "x"]) == (3, "a line\nanother")
+    assert r.output(["verity-vllm", "x"], stderr=subprocess.DEVNULL) == (3, "a line\nanother")
+    assert ran == [(["verity-vllm", "x"], {"stdout": subprocess.PIPE, "stderr": err, "text": True, "cwd": r.tree, "env": r.child_env})
+                   for err in (subprocess.STDOUT, subprocess.DEVNULL)]
+
+
+def test_the_timeline_report_is_written_beside_the_row_under_its_id(tmp_path, monkeypatch):
+    r = _row(tmp_path)
+    ran: list[tuple[list[str], dict[str, Any]]] = []
+    monkeypatch.setattr(RD.subprocess, "run", lambda argv, **kw: ran.append((argv, kw)))
+    r.timeline_report()
+    report = r.cli("timeline", "report", r.timeline, "--json", f"{r.d}/timeline_report.json", "--md", f"{r.d}/timeline_report.md", "--title", r.row)
+    assert ran == [(report, {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL, "cwd": r.tree, "env": r.child_env})]
 
 
 # ---------------------------------------------------------------------------------------------------------------- the launch context
@@ -278,6 +418,36 @@ def test_a_rows_shipped_commit_is_the_one_its_trees_export_file_states(tmp_path)
     assert r.export_commit() == ""
 
 
+def test_the_source_identity_is_asked_of_each_interpreter_that_is_there_and_one_refusal_fails_the_precheck(tmp_path, monkeypatch):
+    """Each interpreter is asked for the tree, at the shipped tree's commit when its export file states one, with what it says in
+    row.log; one that is not there is passed over, and every one is asked even after a refusal."""
+    r = _row(tmp_path)
+    other = tmp_path / "py312"
+    other.write_text("#!/bin/sh\n")
+    other.chmod(0o755)
+    pys = [str(other), str(tmp_path / "no-such-python"), r.py]
+    refused: set[str] = set()
+    ran: list[tuple[list[str], dict[str, Any]]] = []
+
+    def run(argv: list[str], **kw: Any) -> subprocess.CompletedProcess:
+        ran.append((argv, {**kw, "stdout": kw["stdout"].name}))
+        return subprocess.CompletedProcess(argv, int(argv[0] in refused))
+
+    def out_of(py: str) -> str:
+        return f"{r.d}/source_identity.{os.path.basename(py)}.json"
+
+    def asked(*sha: str) -> list[tuple[list[str], dict[str, Any]]]:
+        return [(r.cli("source-identity", "--tree", r.tree, *sha, "--stage", "precheck", "--out", out_of(py), py=py),
+                 {"stdout": f"{r.d}/row.log", "stderr": subprocess.STDOUT, "cwd": r.tree, "env": r.child_env}) for py in (str(other), r.py)]
+    monkeypatch.setattr(RD.subprocess, "run", run)
+    monkeypatch.setattr(r, "export_commit", lambda: "")
+    assert r.source_identity(pys, out_of) == 0 and ran == asked()
+    del ran[:]
+    monkeypatch.setattr(r, "export_commit", lambda: "c0ffee")
+    refused.add(str(other))
+    assert r.source_identity(pys, out_of) == 3 and ran == asked("--sha", "c0ffee")
+
+
 def test_a_passed_source_identity_goes_into_the_runs_job_record_which_is_left_alone_when_it_does_not_read(tmp_path, monkeypatch):
     """The precheck copies the stage interpreter's identity to ``source_identity.json`` and, inside a run, into ``job.json``
     (``computation.source_identity``, its reason cleared); a job record that is no JSON object is left as it is and named in row.log,
@@ -314,6 +484,24 @@ def test_a_passed_source_identity_goes_into_the_runs_job_record_which_is_left_al
 
 
 # ---------------------------------------------------------------------------------------------------------------- the release line
+
+def test_the_release_line_is_the_release_commands_and_a_tree_it_cannot_read_is_unreleased(tmp_path, monkeypatch):
+    """`release-json line` prints the line, a tab and the record it came from; a line with no record names itself, and a command
+    that fails gives the unreleased line with the caller's words and no record."""
+    r = _row(tmp_path)
+    line = "r16-int-3|commit=a2dabe493 tree=/t"
+    answers = [(0, f"{line}\t/t/RELEASE.json"), (0, line), (1, "release_json: no record")]
+    asked: list[tuple[list[str], Any]] = []
+
+    def output(cmd: list[str], *, stderr: Any = subprocess.STDOUT) -> tuple[int, str]:
+        asked.append((cmd, stderr))
+        return answers[len(asked) - 1]
+    monkeypatch.setattr(r, "output", output)
+    assert r.release_line(" (dev)") == (line, "/t/RELEASE.json")
+    assert r.release_line(" (dev)") == (line, line)
+    assert r.release_line(" (dev)") == (f"UNRELEASED|commit=unknown tree={r.tree} (dev)", "-")
+    assert asked == [(r.cli("release-json", "line", r.tree), subprocess.DEVNULL)] * 3
+
 
 def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
     """The row's release line: from `release-json line` (tree-local first), the record USED is the one copied into the evidence, and a
@@ -352,6 +540,22 @@ def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------------------------------------------- the target-family preflight
+
+def test_the_preflight_names_the_row_its_workload_stages_and_match_phase_and_its_line_goes_to_the_rows_log(tmp_path, monkeypatch):
+    r = _row(tmp_path, "--match-phase", "cpu")
+    said = "TARGET_FAMILY_MISMATCH: the row's id says l40s and the Build came out for h200"
+    asked: list[list[str]] = []
+
+    def output(cmd: list[str], *, stderr: Any = subprocess.STDOUT) -> tuple[int, str]:
+        asked.append(cmd)
+        return 3, said
+    monkeypatch.setattr(r, "output", output)
+    out = f"{r.d}/target_family.build.json"
+    assert r.target_family("--no-device", "--build-summary", f"{r.d}/build_summary.json", out=out) == (3, said)
+    assert asked == [r.cli("target-family", "--row", r.row, "--workload", r.wl, "--stages", r.stages, "--match-phase", "cpu", "--no-device",
+                           "--build-summary", f"{r.d}/build_summary.json", "--out", out)]
+    assert (Path(r.d) / "row.log").read_text() == said + "\n"
+
 
 def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_path, monkeypatch):
     r = _row(tmp_path, "--stages", "build,match")
