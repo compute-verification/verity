@@ -537,12 +537,8 @@ def test_a_machine_that_cant_be_read_is_skipped_and_with_neither_a_pool_nor_node
 def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool(tmp_path, monkeypatch):
     """`read` as the machines run it: the payload is `python3 -` with cores.py and the tree's slot.py inlined; here both machines
     are this one, the claims a tmp dir whose files this test holds locked, and slot.py a stand-in that echoes its pool."""
-    claims = tmp_path / "claims"
+    claims = cores.CLAIMS
     claims.mkdir()
-    monkeypatch.setattr(cores, "CLAIMS", claims)
-    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")          # each CPU its own core
-    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))         # no such directory: the probe skips the disk check
-    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))   # a slot-only host (cpu-1) carries the real one
     held = [cores.locked(claims / "r1.cpus", "48-91\n"), cores.locked(claims / "wait.01.r2", "4\n")]
     (claims / "gone.cpus").write_text("92-95\n")                               # nobody holds it: a run that ended
     src = tmp_path / "src"
@@ -582,13 +578,10 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert failing == {m: "exit 1: no python here" for m in (N2, *NODES)}
 
 
-def test_the_probe_reads_a_pool_by_the_machines_own_slot_py_where_it_has_one(tmp_path, monkeypatch):
+def test_the_probe_reads_a_pool_by_the_machines_own_slot_py_where_it_has_one(tmp_path):
     """A pool's runs wait by the machine's own slot.py, so its line is read by that copy: a launcher's tree older or newer
     than the machine's copy would count the line by other rules than the ones that admit its waiters. A machine without a
     copy is read by the tree's. Here each slot.py is a stand-in that says which it is."""
-    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
-    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
-    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "no-claims")
     src, own = tmp_path / "src", Path(slot_only.NODE_SLOT)
     stand_in = "import os\ndef status_doc(now):\n    return {{'copy': {!r}, 'file': os.environ['CHECK_SLOTS'], 'slots': [], 'waiters': []}}\n"
     (src / auto.SLOT_PY).parent.mkdir(parents=True)
@@ -617,7 +610,6 @@ def test_the_probe_counts_a_pools_free_memory_as_its_slots_count_the_live_reserv
         (ramlock / f"r{i}.json").write_text(json.dumps({"gb": 32.2, "run_id": f"r{i}"}))
     monkeypatch.setenv("RESEARCH_RAMLOCK_DIR", str(ramlock))
     monkeypatch.setattr(slot_only, "POOLS", {**slot_only.POOLS, auto.SPILL_POOL: str(slots)})
-    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
     (src / auto.SLOT_PY).parent.mkdir(parents=True)
     (src / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text() + "\n\ndef memory_gb(root=None):\n    return 200\n")
 
@@ -685,9 +677,6 @@ def test_the_probe_reads_a_machines_lean_slots_with_the_trees_lean_slot_py(tmp_p
 
 def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_path, monkeypatch):
     """A node 2 carrying /etc/vy/runs-via-slot refuses a run placed on its share, so its share reads as unread."""
-    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
-    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
-    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
     marker = tmp_path / "runs-via-slot"
     marker.write_text("slot only\n")
     monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(marker))
@@ -705,14 +694,9 @@ def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_
 
 
 @pytest.fixture
-def idle(tmp_path, monkeypatch):
+def idle(tmp_path):
     """`read`: every machine's documents as the probe gives them where each machine is this one, idle: node 2's share whole
     and unheld, and a free slot in each pool, so nothing but what the probe finds of the machine keeps a job off it."""
-    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
-    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
-    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
-    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))
-    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
     src = tmp_path / "src"
     (src / auto.DESCRIPTION).parent.mkdir(parents=True)
     (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
@@ -1088,11 +1072,7 @@ def test_a_stopped_node_2_costs_its_probe_a_few_seconds_and_the_placement_says_o
 @pytest.fixture
 def node_2(tmp_path, monkeypatch):
     """(HOLD_FILE's path, `read`): the probe as an idle node 2 runs it, with the clock `read` is given (a UTC time)."""
-    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
-    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
-    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
-    hold = tmp_path / "auto-hold"
-    monkeypatch.setattr(auto, "HOLD_FILE", str(hold))
+    hold = Path(auto.HOLD_FILE)
     src = tmp_path / "src"
     (src / auto.DESCRIPTION).parent.mkdir(parents=True)
     (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
@@ -1132,7 +1112,7 @@ def test_a_held_node_2_takes_no_job_until_its_hold_ends_and_the_placement_says_u
         n2 = read("2040-01-01T00:00")
         assert n2 == {"share": {"hold": {"until": None, "why": why}}}, "a first line that names no time holds until the file goes"
         assert auto.off(n2) == f"{N2} takes no `--on auto` job while it carries {hold}" + (f": {why}" if why else "")
-    (tmp_path / "no-via-slot").write_text("")
+    Path(remote.RUNS_VIA_SLOT_FILE).write_text("")
     hold.write_text("2030-02-01T00:00Z one lane has the whole node\n")
     assert auto.off(read("2030-01-31T17:00")) == said, "the hold says more than the slot-only marker beside it"
 
