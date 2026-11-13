@@ -131915,3 +131915,38 @@ Mailbox read to line 454, your 08:55Z message [run]. No Lean slot made me wait o
 **`commitOf?`** [read: your 08:55Z]: the comparison goes on `cursor/proofs-redraw-commitof-4e9d` as a second commit, and the test over the case writer's Commit records, honest and each mutation; both next, with PoUW's difftest, through `--on auto`. Head today `9436d062bcf0`, the parser alone, not built.
 
 Fri 20 Nov holds for the two challenger entries [derived]: what is left is the records run, the pull request and its ready line. `drawWithheld` waits for the `commitOf?` head.
+
+## ADDRROW2, Fri 13 Nov 09:03Z: `RowTable.lean` COMPILES at `c9ba3542f8` (`r20261113-082753-b31c`, rc 0: "lean exit 0 in 442 s", "axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"); I am ADDRROW's successor, on `cursor/proofs-addrrow2-5e1b` at that head
+
+**In plain words.** ADDRROW's last file, the one that says a second-stage session's instances carry their slots as labels, compiles as it was pushed. HONEST2 and ASSEMBLY can read `drawn_of_ok` and `labelled_of_ok` at `c9ba3542f8` as compiled theorems. They still take one hypothesis, "the session has at most one table", which SESSIONOF2's compiled lemma gives; removing it is my next step. After it comes the mend HONEST2 carries for `RowLeaves.lean`, and then the half of the placement premise `Sits` that is not written yet: where the checked inner block sits in its part.
+
+Clock: `date -u` read 09:03Z. Agent `bc-113266f1-f774-5633-8fb9-d729a9c6681e`. Branch `cursor/proofs-addrrow2-5e1b`, made from `origin/cursor/proofs-addrrow-d318` at `c9ba3542f83693aeb418107d5d57d833be1e64d3` and pushed at that head; nothing of mine is on it yet. Pen: this machine booted 08:59:19Z (`uptime -s`), `~/wt/.pen` made 09:00:05Z, one loop. Mailbox read at 09:01Z: the file does not exist yet.
+
+**1. `b31c`** [run: `research fetch r20261113-082753-b31c --all`, its `stdout.log`, `job.json`, `status.json`].
+- State `done`, rc 0, on vy-nebius-cpu-11; `job.json`'s `source_sha` is `c9ba3542f83693aeb418107d5d57d833be1e64d3`; the command is `lean_changed.py --try security/Proofs/Flock/SpotFlock/AddressFacts/RowTable.lean`.
+- "Build completed successfully (11128 jobs)."
+- "lean-try: security/Proofs/Flock/SpotFlock/AddressFacts/RowTable.lean: lean exit 0 in 442 s".
+- "lean-try: security/Proofs/Flock/SpotFlock/AddressFacts/RowTable.lean: axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- The probe prints each of the eight by name with those three axioms: `AddressRow.ofJson?_draw`, `stmtJsonOf_draw`, `wf_of_jsonOf`, `unitIndices_of_units`, `drawn_units`, `slots_of_population`, `CheckedRun.drawn_of_ok`, `CheckedRun.labelled_of_ok`.
+- One warning names the file: an unused `simp` argument (`reduceCtorEq`) at line 181. No error line, no `sorry` in a file of this branch (the two `sorry` warnings in the log are ArkLib's own files).
+- [derived] The try ran without `--siblings`, so a name another module of the package also declares would not have shown. I add `--siblings` to my next try, which adds declarations.
+
+**2. Plan, in the brief's order.**
+1. Done above.
+2. Drop `hc1 : r.ins.read.I.count ≤ 1` from `drawn_of_ok` and `labelled_of_ok` with SESSIONOF2's `oneTable_of_sessionOk` (`d45f63a86c` of `cursor/proofs-sessionof2-7c3a`, named compiled in its 08:41Z title). I say where `t < h.ms.length` comes from, or carry it as a named hypothesis. Owed compiled, or its obstacle named, by 10:30Z.
+3. `RowLeaves.lean` line 233: take HONEST2's `da62e83b7a` byte for byte.
+4. The place half of `Sits`. Its size (files, lines, theorems left, and what can compile by Sat 14 Nov 02:00Z) is in my 10:30Z entry.
+Every try goes by `research run --on auto` on a pushed commit, with `--mem-gb` and `--timeout`.
+
+**STOP RULE.** Nothing touched: no listed guarantee, named assumption or verifier.
+
+**NEEDS.** Nothing.
+
+**To post.** Nothing.
+
+**Not established.**
+- That `RowTable.lean` declares no name a sibling module declares (no `--siblings` try yet).
+- That `security/Proofs` builds whole or passes its records audit at `c9ba3542f8`.
+- The place half of `Sits`, `PublishedRows h`, and the two theorems without `hc1`.
+
+Runs: `r20261113-082753-b31c` (done, rc 0). None of mine is out.
