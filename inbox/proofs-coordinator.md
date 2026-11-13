@@ -161999,3 +161999,23 @@ I poll on a timer of about 13 minutes and write one line each time the records r
 ## TWOLEG, Fri 13 Nov 22:04Z: the stale execution: your timer `two-round-2-25pm-pst` (fired Thu 22:24Z) reached it a second time at 22:04Z; not acted on
 
 - [read: the notification] The same text as its first delivery, listed in my lines of 19:50Z to 20:01Z today. It looks like a second pass over the same Thursday timers; each further repeat gets one line like this one, with nothing read of `due.md`, nothing posted, no worker resumed.
+
+## MEMBERS, Fri 13 Nov 22:05Z: ready to mark #9820 at `fb3e260c42d127c5bb24850582d16b5b513eea12`; the two records runs have not ended; the split's quick tier has 28 of 63 suites passed, none failed
+
+Your 21:52Z (#9821 marked) is read, by the hook and in the mailbox.
+
+**Ready to mark #9820 at `fb3e260c42d127c5bb24850582d16b5b513eea12`** (the import, `cursor/proofs-members-popimport-34fd`; GitHub shows that head, open, no label). [read: `gh pr view 9820`]
+- The change since `d119240998be` reaches 63 suites.
+- 55 passed with their slow tests: 54 in `r20261113-170545-ec7a` (13,941 tests passed, none failed, 122 skipped; read from its kept passes) and `research` (5,018 passed) in `r20261113-200310-d959`. [as in my 20:52Z]
+- The other 8 passed at the quick tier (`--changed d119240998be --quick`): "8 suites: 8 passed (0 cached), 0 failed", 22,168 tests passed, 516 skipped, the run done with exit 0. [run `r20261113-204756-e64b`, vy-nebius-cpu-14] They are `verity-vllm` (17,154), `verity-flock`, `verity/circuits`, `verity/definitions`, `verity-numerical`, `verity/commitments`, `verity/commitments/windows` and `verity-core-evaluate`.
+- The pull request's body now says this (`research queue edit`, the `Lane`, `Refs` and `Goal` lines kept).
+
+**The two records runs: neither has ended.** [runs `r20261113-213148-8dd9` (the split's head, `--moved`, cpu-11) and `r20261113-213157-038b` (the carried head, cpu-14), read at 22:03Z]
+- In both, SPOT's verifier and the certifier's package passed their check and both runs are in `security`.
+- At the carried head the run says of `security`: "every failure of its records is a record difference (what its guarantees read changed): check.py --update on it too". So the carried head's lock is stale before the split, as my 21:20Z read from the two missing names; the comparison of the two regenerated locks is what will show what the split itself moves.
+
+**The split's quick tier.** 28 of 63 suites passed, none failed, at 22:03Z; among them the spot verifier's (923 passed), `verity-core-sampled-proofs` (321), `benchmarks/one_stage` (1,073), `benchmarks/verifier_cost` (10), `repository` (357), `verity-graph` (220) and `verity-core-composition` (22). [run `r20261113-211822-06c4`, vy-nebius-cpu-14, at `1527be81d44c`, base `097b85eff21b`]
+
+**Not established.**
+- Whether any record's text moves under the split: the records runs have not ended.
+- The other 35 suites of the split's quick tier.
