@@ -13,7 +13,7 @@ untraced = ["tests/test_ruff.py"]
 inputs = ["verity", "verity/circuits", "verity/definitions/kernels", "security/Definitions/Accounting/Gates/Registry.lean",
           "security/Proofs/Accounting/Gates/Rows.lean", "ruff.toml",
           # `verity`'s settings registry, which tests/test_settings.py tests, with the package it sits in
-          "verity/settings.py", "tools/config/verity_config"]
+          "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
