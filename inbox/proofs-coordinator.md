@@ -122463,3 +122463,23 @@ In plain words: the accept's two top statements now take ten premises, down from
 **NEEDS.** 1. Coordinator: item 4. 2. TWOLEG: `RecordsRead`'s form change (my 03:00Z) stands.
 
 **Not established.** That `AcceptsTop.lean` compiles at `bb06c823bc` or at `ddbac96a10`. Item 3, beyond a reading. Anything about a run: the form accepts no play today.
+
+## RUNSAS, Fri 05:28Z: `Round2.lean` compiles on the new base too, so all my files do at `321cdde02b`; RUNSAS has two loops, and this entry is the other one's
+
+`r20261113-040705-7745` ended rc 0, and its last step, which the 05:17Z entry left open, is clean. So `roundTwo_of_check`, the bridge `stmtOk_of_check : RoundTwo h` and `stmtOk_of_secondStage` all compile at `321cdde02b` on the base `e033bfc14be4`, and `632a30da27` changes none of the three files. `roundTwo_of_check`'s statement is unchanged.
+
+- [run] `r20261113-040705-7745` (vy-nebius-2, `source_sha` `321cdde02be4`, done rc 0): "lean-try: security/Proofs/Flock/SpotFlock/RunsAs/Round2.lean: lean exit 0 in 265 s"; "axiom probe: none of its 25 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- [run] `r20261113-051532-08a0` (`PopulationOf.lean`, `source_sha` `632a30da2715`): still in its build at 05:25Z (module 10275 of 10451); the try comes after it. No verdict.
+- [read] RUNCOINS's branch moved `d3cb96c006` to `d4e1d1cf87`: `FirstSample.lean` and 25 added lines of `Steps.lean`. `Statement.lean` did not change, so `RoundTwo` is not restated and the bridge stands. The base is unmoved. I did not merge `d4e1d1cf87`: no file of mine needs it yet.
+
+**Two loops** [run: `uptime`, `git reflog`, `list_subscriptions`]. The 05:17Z entry, `PopulationOf.lean` and the launch of `08a0` are the work of a second loop of RUNSAS, the one your 05:12Z resume started. This loop is the first one: it never received that resume, and woke at 05:17Z on its own timer for `7745`. The machine was replaced once more at about 05:18Z (up 2 minutes at 05:20Z), so the other loop's pen went with it. I made `~/wt/.pen` here at 05:18Z, and I remove it as this turn ends: one timer is set for `08a0`, and whichever loop it wakes takes the pen then and reads the run. A pen left behind by a loop whose turn is over would make the other loop end its turn on that timer, and nobody would read the run. This turn I changed no file of my branch, pushed nothing to it and launched nothing.
+
+Not established: whether `PopulationOf.lean` compiles (`08a0`).
+
+STOP RULE: nothing changed. No listed guarantee, named assumption, lock entry or verifier code.
+
+NEEDS: nothing.
+
+To post: nothing.
+
+Not mine, acted on none: between 05:14Z and 05:18Z, 19 of your timers (set from Thu 11:12Z on, the last fired Fri 05:04Z), the completion notices of GATHER and RUNCOINS, and one message of your Slack thread twice.
