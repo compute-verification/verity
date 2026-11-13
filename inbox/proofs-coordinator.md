@@ -135419,3 +135419,136 @@ Nothing.
 - Whether the records run's report carries a bookkeeping warning that names a Cut file: ASSEMBLY's entry gives its failures only, and the run had not ended on `security` and `security/Properties`.
 
 Branch `cursor/proofs-cut-9323` at `1ae7e0f73d` (pushed). No run out, no timer held. The pen on my machine (`~/wt/.pen`) stays mine.
+
+## HELDOF, Fri 13 Nov 10:32Z: `descOk` is TRUE at 20 templates (`6cc3`, 100.9 s) and refuses both made cases at their own clause; the FORM REFUSES that play, so the call stays out; `be6b`'s kept case is `art:68f03bbef357f1d8d43c46201429982c11034cc9ae82e4aa9ed05ea5a32f63f3`; `CopyAt` at one statement is REDUCED at `9b026afa803` to three named premises (COMPILED, 4 theorems clean); the join's `0df461b1b2` is merged; `SampleBelow.lean` was pushed before your word reached me and is reverted
+
+In plain words: the descriptor check passes the wired play of twenty templates in 101 seconds and still refuses the two cases made to fail. The form refuses that play, as TWOLEG's 10:01Z entry explains, so by your rule the call stays out. Your three rulings are done. The bound's two lines are in `descOk`'s docstring. The join's compiled tip is merged. `CopyAt` at the cases at one statement now follows from three premises, and one of them is the reference statements'.
+
+**1. `6cc3`: the verdict at 20 templates.**
+- [run] `r20261113-091548-6cc3`, vy-nebius-cpu-9, scratch `828e59d30d`, `--inline --units 20 --v 2560 --logits`, rc 1 (the form's), ended 09:47:01Z, wall 1,836 s. Word for word:
+  - `second rc=0`
+  - `FORM_ON rc=1`, reason `two-stage: proofs: a session's verifier did not accept`; `FORM_OFF rc=1`, the same reason.
+  - `DESC rc=0`
+  - `the form refuses the play before its run of record (proofs: a session's verifier did not accept); the descriptor check reads no session`
+  - `play: descOk true on 20 templates`
+  - `play: descOk took 100929 ms`
+  - `play: descOk true, pass`
+  - `play: clauses that fail: none`
+  - templates 0 to 18, each: `unitLog 15, upv 1, inWords 16, constPos 17152, unitIns 2048, outBits 48, bound 262144, memberOk true, requests 6, cells 4, count 1, units 24`
+  - `template 19: unitLog 15, upv 1, inWords 32, constPos 21888, unitIns 4096, outBits 32, bound 262144, memberOk true, requests 6, cells 4, count 1, units 24` (the wired one)
+  - `play with template 1 named as template 0: descOk false, refused at namesOnce`
+  - `play with its interior registering a value: descOk false, refused at registersNone`
+- **Which clauses fail on the wired play of twenty: none.**
+- **The time.** 100.9 s at 20 templates, 8.7 s at 2 (`be6b`): a parse a template, as `circsOf` was written to give. `23d2`, before `circsOf`, gave no line in 18 minutes.
+- **Can TWOLEG's call to `descOk` go in: no.** The play is not an accepted play. TWOLEG's 10:01Z and 10:04Z entries name the two rules that refuse it; neither is in `descOk` or in a file of mine [read: those entries].
+
+**2. The kept cases.**
+- `be6b` (2 templates): `art:68f03bbef357f1d8d43c46201429982c11034cc9ae82e4aa9ed05ea5a32f63f3`, a `run-record/v1` of 53 files, 135,709,578 bytes, the run's whole record with `out/form` [run: `research data custody r20261113-091629-be6b`, `research data show`]. Restore: `research data fetch art:68f03bbef357f1d8d43c46201429982c11034cc9ae82e4aa9ed05ea5a32f63f3 --to DIR`.
+- `6cc3` (20 templates): `art:be8aa18c84d715ea243c6f6366a25dab3e91d3ac4fb21059d1a188e3a3a1bd5c`, 143 files, 1,229,326,674 bytes [run: the same two commands].
+- `23d2` (cancelled): no custody on the remote; `research data custody` says two files changed after its record was taken (`events.jsonl`, `status.json`). `6cc3` is the same play at the later scratch head, so nothing is lost [derived].
+- **A correction to my 09:38Z entry.** I wrote that `be6b`'s id would come when the node evicts the run. It does not wait for that: a run's custody publishes its record when the run ends, and `research data custody RUN` prints the id from any machine. Both runs are still on vy-nebius-cpu-9 as well.
+
+**3. Ruling 1, the bound: `3cae6a160d1`, a docstring only.** `descOk`'s docstring now says:
+> Its bound on a unit (`memberOk`) is stricter than `Spot.Partition`'s, which counts a unit's returned output bits alone: this one counts its input bits too, so it refuses a unit whose returned bits fit a size class and whose inputs with them pass `UNIT_CLASS_MAX`. A unit of 2,048 input bits returning 48 counts 2,096 here, and one of 4,096 returning 32 counts 4,128. What it refuses beyond `Spot.Partition` costs completeness alone.
+
+The two figures are `be6b`'s two templates. No statement changed.
+
+**4. Ruling 3, the merge: `bd2ff4df21f` is the join's `0df461b1b2` merged into my branch.**
+- [read] `0df461b1b2` is the tip ASSEMBLY's `8f29` compiled, rc 0 in all four tries (ASSEMBLY's 10:03Z entry names it; I had read the run's own `status.json` and `stdout.log` at 09:55Z). Not ACCEPTS's head and not `main`.
+- One conflict: the recursive package's `lakefile.toml`, where both sides add an executable. Both are kept (`sampled-two-on`, then `sampled-two-desc`).
+- [run] `SampledTwoDescMain.lean` at the merge: "lean exit 0 in 45 s", "axiom probe: no theorems in it" (`r20261113-095642-67ad`). So the executable builds against the join's form.
+- The join has moved on since (`75f438d9f7` compiled, by ASSEMBLY's 10:26Z entry). I merged `0df461b1b2`, as you ruled, and no later tip.
+
+**5. Ruling 3, the reduction of `CopyAt`: `9b026afa803`.** In `security/Proofs/Properties/Verity/SampledTwo/HeldOfAtDesc.lean`, which now imports `AcceptsTop`:
+
+```lean
+def DecodesAt (C : CaseOf) (P : VStar.Recursive.SampledTwo.Params) : Prop :=
+  ∀ o k p c e, FormAccepts C o → C o = some k → Decoded k p c e → p = P
+
+def RefsAt (C : CaseOf) (xs₀ : List Claims.Msg) : Prop :=
+  ∀ o k p c e xs, FormAccepts C o → C o = some k → Decoded k p c e → refStmtsOf p k.blobs = some xs → xs = xs₀
+
+def CopyOf (A : Live₂) (P : VStar.Recursive.SampledTwo.Params) (j : Lean.Json) (u : Unread) : Prop :=
+  ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : SpotFlock.Held),
+    i.params.verifier = P.boundary.verifier → i.record = j → i.rule = P.rule → i.closure = none →
+    it.params.verifier = P.interior.verifier → it.replay = P.replay → it.circuits = P.circuits →
+    heldOf i it u = some h → h = A.h
+
+theorem fields_of_accept (hA : FormAccepts C o) (hk : C o = some k) (hdec : Decoded k p c e)
+    (hi : inputOn C o = some i) (hit : i.interior = some it) :
+    ∃ j₁, VStar.Recursive.SampledTwo.readBack c.record = .ok j₁ ∧ i.record = j₁ ∧ i.params = p.boundary ∧
+      i.rule = p.rule ∧ i.closure = none ∧ it.params = p.interior ∧ it.replay = p.replay ∧
+      it.circuits = p.circuits
+
+theorem copyAt_of (u₀ : Unread) (hP : DecodesAt (atStmt C x) P) (hR : RefsAt (atStmt C x) xs₀)
+    (hj : SpotFlock.jsonMsg x = some j) (hA : CopyOf A P j { u₀ with xs := xs₀ }) : CopyAt A (atStmt C x) u₀
+
+theorem heldOfAt_at (u₀ : Unread) (hd : DescAt (atStmt C x)) (hP : DecodesAt (atStmt C x) P)
+    (hR : RefsAt (atStmt C x) xs₀) (hj : SpotFlock.jsonMsg x = some j)
+    (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAt A (atStmt C x)
+```
+
+- [run] `HeldOfAtDesc.lean` at `9b026afa803`: "lean exit 0 in 507 s", "none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", siblings: no clash in the 180 built modules it could read; 4,035 had no build to read (`r20261113-100604-7cdc`, vy-nebius-cpu-1).
+- `heldOfAt_at`'s conclusion is the join's `HeldOfAt A (atStmt C x)` word for word, the type of `JoinsAt`'s field `heldOfAt` at a case map `atStmt C x`. `DescAt`, `CopyAt` and `heldOfAt_of_desc` are unchanged, so the statement you took at 09:52Z stands.
+- **The record: no premise** [derived, compiled]. An accepted play at `x` carries the record `readBack` returns (`fields_of_accept`), whose canonical bytes are `x` (`inputOn_at`), and the proved verifier's reader reads that record back from `x` (ACCEPTS's `jsonMsg_of_readBack`). So `j` is fixed by `x` alone: `hj` is an equation, not a premise about plays.
+- **The parameters: `DecodesAt`**, as I wrote at 09:38Z. A case map over the plays at one parameters' bytes has it; which map is the assembly's.
+- **The reference statements: `RefsAt`, one premise, named in my file, in no lock, and no named assumption.** It asks exactly: at every accepted play, the blobs the parameters' digests name give the same reference statements.
+- **Do the parameters name those blobs' digests today?** [read: `HeldOfFiles.lean`'s `refRawOf`, `Core.Blobs.get`, `Blobs.ofArray`, `OneStageZk.tablesOf`, `tablesHeld`, `runMembers`]
+  - **The circuit file and the public file: yes.** `refRawOf` reads each as `bs.get m.own.circuit` and `bs.get m.own.pub`, where `m` is the parameters' member for the template. `Blobs.get` returns the blob stored under that digest, and with `k.blobs = Blobs.ofArray o.sent.blobs` (`CaseIsSent`) a blob's key is its SHA-512.
+  - **The lookup tables: not by the parameters, by the verifier.** `tablesOf bs` is the pinned tables the blobs hold, each found under the SHA-512 the verifier pins (`Flock.MUFU_TABLES`). A held table's bytes are fixed by its pin. Which of the pinned tables a play's blobs hold is not named by any digest: it is fixed where the check `tablesHeld` runs, which holds the held tables' names to the lookups the member's circuit file names. The per-member form runs it first for each member a statement names (`statementOf`, called from `runMembers`).
+  - **Everything else a reference statement holds is the parameters'** (the member's partition, program and registered reads).
+  - **So** two accepted plays at one `P` with different reference statements give a collision of SHA-512 at a digest the registration or the verifier fixes, PROVIDED each play's check ran `tablesHeld` at a member [derived, not compiled]. That second half is a fact about the form's accept I have not proved: it needs "an accepted play's second stage names a statement", which should follow from a count of at least 1 in each template.
+- **`CopyOf`: what the session of record must be.** `A.h` is the copy `heldOf` builds from `P`, `j` and `xs₀`, at whatever input carries them in the seven fields `heldOf` reads. It is stated over every such input so that `copyAt_of` needs no lemma about `heldOf`.
+- **`CopyOf` from one input: compiled.** `security/Proofs/Properties/Verity/SampledTwo/CopyOfOne.lean`, a new file (its roots lines are on lines of their own):
+
+```lean
+theorem heldOf_congr {i i' : Spot.Run.Input} {it it' : Spot.Run.Interior} (u : Unread)
+    (h1 : i.params.verifier = i'.params.verifier) (h2 : i.record = i'.record) (h3 : i.rule = i'.rule)
+    (h4 : i.closure = i'.closure) (h5 : it.params.verifier = it'.params.verifier) (h6 : it.replay = it'.replay)
+    (h7 : it.circuits = it'.circuits) : heldOf i it u = heldOf i' it' u
+
+theorem copyOf_of_one (g1 : i₀.params.verifier = P.boundary.verifier) (g2 : i₀.record = j) (g3 : i₀.rule = P.rule)
+    (g4 : i₀.closure = none) (g5 : it₀.params.verifier = P.interior.verifier) (g6 : it₀.replay = P.replay)
+    (g7 : it₀.circuits = P.circuits) (h₀ : heldOf i₀ it₀ u = some A.h) : CopyOf A P j u
+```
+
+  - [run] "lean exit 0 in 1035 s", "none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", siblings: no clash in the 2,730 built modules it could read; 1,486 had no build to read (`r20261113-100604-79c6`, vy-nebius-cpu-1).
+  - So `CopyOf` asks only that the session of record's copy is the one that one input and interior with `P`'s and `j`'s fields build. `heldOf` reads no other field of either [compiled: `heldOf_congr`].
+- **ASSEMBLY's row 11** (`heldOfAt`, in its 10:26Z table) says the reference-statements part of `CopyAt` is "a premise nobody states today" and that `68dc23428a` is not compiled. Both are now out of date: the part is `RefsAt`, and `68dc23428a` compiled (item 7).
+- [run] On the VM at the head: the root suite's `test_lean_packages`, `test_lean_vocabulary`, `test_repository`, `test_verifier_cost` and `test_doc_paths` pass. `test_boundaries::test_spot_never_imports_the_network_certifier_in_lean` and `test_public_boundary` (9 edges) fail, and neither names a file I changed (`RunsAs/Proved.lean`, `AddressFacts/RowTable.lean`, `OwnReads.lean`, `ReadsCheck.lean`, `RunsAs/Coins.lean`, `RunsAs/OfCheck.lean`, `RunsAs/Statement.lean`).
+- The head `96b2def6e27` differs from `9b026afa803` by `HeldOfAtDesc.lean`'s module docstring alone (it now names `copyOf_of_one`). Its try is running (`r20261113-102551-a97b`, vy-nebius-cpu-3).
+- The try of the same file at the merge, before the reduction (`r20261113-095643-3716`): its client stopped waiting at 20 minutes (exit 79) on a cold build of the join's tree, and the run is still going on the node. `7cdc` supersedes it.
+
+**6. Your item 4: I had already written it, and it is reverted.**
+- At 09:52Z, three minutes before your word reached me, I pushed `security/Proofs/Flock/SpotFlock/SampleBelow.lean` at `ce04b3ca624` ("not compiled") and sent its try. The name is HONEST2's file's name too.
+- On reading your word I cancelled the try after 1 minute (`r20261113-095230-2bea`) and reverted the commit (`bae50b921f3`, whose tree is `68dc23428a`'s). Nothing of it compiled, nothing reads it, and it is in no later commit's tree. The join does not hold it: I merged the join into my branch, not the other way.
+
+**7. `68dc23428a`'s compiles, promised at 09:38Z.** [run] `HeldOfAtDesc.lean`: "lean exit 0 in 370 s", 1 theorem, clean (`r20261113-093200-9085`). `HeldOfDesc.lean`: "lean exit 0 in 278 s", "none of its 47 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" (`r20261113-093854-89b1`).
+
+## STOP RULE
+
+None. `RefsAt` needs no named assumption: it is a premise of my theorem and in no lock.
+
+## NEEDS
+
+- Your and ASSEMBLY's decision on which field of `JoinsAt` carries `RefsAt`, or whether it is to be proved from `CaseIsSent`, SHA-512's collision resistance and the `tablesHeld` step. I start neither until you say.
+- Nothing else. `memberRaw` and `HeldOfFiles` are untouched, so SESSIONOF2 reads what it read.
+
+## To post
+
+The descriptor check passes Friday's wired play of twenty templates in 101 seconds and refuses both cases made to fail; it stays out of the form because the form itself refuses that play. That each accepted play's held copies are the ones the model builds now follows, at one statement, from the descriptor check's verdict and three named premises. One of them says the plays' blobs give one set of reference statements; it should reduce to a SHA-512 collision at digests the registration and the verifier fix, and that is not yet proved.
+
+## Not established
+
+- That any accepted play passes `descOk`: no accepted wired play exists (TWOLEG's), and the form does not call the check.
+- `DecodesAt`, `RefsAt` and `CopyOf` at any case map or session of record.
+- That `RefsAt` follows from a collision: not compiled, and its `tablesHeld` half is not proved.
+- That the model's check passing gives `descOk` (the other direction): not proved, nothing reads it.
+- The sibling checks covered the built modules the tries could read (180 and 2,730), not the whole package.
+- A compile at the head `96b2def6e27` (a docstring past `9b026afa803`): its try is running.
+- No records run, by your word: the lock at my head is stale.
+
+## Branches
+
+- `cursor/proofs-heldof-4c7b` at `96b2def6e27` (pushed): `68dc23428a` → `ce04b3ca624` (SampleBelow, reverted by `bae50b921f3`) → `3cae6a160d1` (the docstring) → `bd2ff4df21f` (the join's `0df461b1b2` merged) → `9b026afa803` (the reduction, compiled) → `96b2def6e27` (a docstring).
+- `cursor/proofs-heldof-logitsrun-f684` at `828e59d30d` (scratch, no pull request).
