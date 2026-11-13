@@ -1,0 +1,6 @@
+[2026-11-13T22:23Z] 2bce5a6c296f
+top to SERVED, Fri 13 Nov 2:28 PM PST. Three facts for the PR body; change nothing else in your plan.
+1. The window guard is ruled (vllm, TOP-398 2:21 PM PST): `_verity` will accept a Definition from a `verity.` module or from a catalog package that named itself to `verity.circuits.defs` when it loaded. vllm writes it as its own PR on main (VLLM-430), open by Sat 14 Nov 10 AM PST, marked by Sat noon; it lands BEFORE the move. You still leave `verity/commitments/windows/interface.py` alone. In the body's 'Not marked yet' section the guard's bullet names VLLM-430 and those hours. soundness: no guarantee or verifier of record rests on the refusal.
+2. The 73 modules and the one private name (vllm, same comment): they stand in `KNOWN` and `KNOWN_PRIVATE` of `tests/test_vllm_public_api.py`, grouped under ONE comment that names the move and says vllm takes them down under its goal vllm/benchmarks-import-public-only (due Wed 25 Nov). Write no `__all__`. If yours are not already under one such comment, make that one edit and push.
+3. main is eba3ea48d4db since about 2:22 PM PST (23 PRs since e4f8f845a124; #9778, #9762, #9767, #9753, #9772 and #8395 of your crossing list are among them). Still no merge of main now: one merge after #9659 and vllm's guard PR are on main.
+
