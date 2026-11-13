@@ -17,8 +17,8 @@ from typing import Any
 
 from verity.circuits.defs import bind
 from verity.circuits.refs import runs
-from verity.definitions.registry import linear_cut as LC
 from verity.commitments.windows import interface as IF
+from verity.definitions.registry import linear_cut as LC
 
 from .build import Unexpressible
 from .window_builder import Row
@@ -35,8 +35,8 @@ class Linears:
 
 
 def _hands_on(N: int, W: int, rows: int, provable: bool) -> bool:
-    """Whether `LinearOut_v1{N, W}` is within ``rows`` rows and, unless not ``provable``, a proof block C-Flock proves."""
-    if N // W + 1 > rows:
+    """Whether `LinearOut_v1{N, W}` is within ``rows`` rows and, unless not ``provable``, a proof block Flock proves."""
+    if rows < N // W + 1:
         return False
     if provable:
         try:
@@ -48,7 +48,7 @@ def _hands_on(N: int, W: int, rows: int, provable: bool) -> bool:
 
 def linears(fn: Any, words: int, rows: int, provable: bool = True) -> Linears:
     """The class Program ``fn``'s `Linears`, each call's W the least of ``words`` doubled that divides its N and leaves its
-    `LinearOut_v1` within ``rows`` rows and, unless not ``provable``, a proof block C-Flock's composer proves
+    `LinearOut_v1` within ``rows`` rows and, unless not ``provable``, a proof block Flock's composer proves
     (`interface.check_proof_block`; a call's y row is read whole). Refused where it has an int8 linear, a position's
     linears aren't the first position's, an N has no such W, or there is none to cut."""
     nodes = fn.body.nodes
