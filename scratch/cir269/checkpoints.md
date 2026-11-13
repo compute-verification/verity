@@ -4,3 +4,4 @@
 - correction: the line above was written at 08:38Z (00:38 PST), not 08:46Z
 - 09:01Z (01:01 PST): f36b done (#9660 1333bd53: verity/definitions 1137p 3s, repository 359p; declared 32, bound 38.9 / pss 18.7). e586 cancelled by stage timeout in verity/definitions (old head). 560e vllm at 70.4 GiB scope, ffde/667c/d445 running. Pass 2.
 - correction: the line above was written at 08:59Z (00:59 PST), not 09:01Z
+- 09:26Z (01:26 PST): 560e passed (vllm at 3d484ece: 17864p 565s; declared 96, bound 74.7). ffde 3 of 5 passed, verity-flock next. 667c waiting on ffde's Lean tree lock (same node, cpu-5), up to 14400 s, left as is. d445 running. Pass 3.
