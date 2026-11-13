@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -1439,6 +1440,68 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen == want
+
+
+def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says_it_forges(written, tmp_path, monkeypatch, capsys):
+    """`audit` is told what a window that must be refused forges, ``--forged`` a false unit or ``--forged-read`` a
+    registered read that opens no pinned root, and passes it on that kind's check alone (`forged_outcome`). The sessions
+    (`a5.audit`) are stubbed and leave the record of a window of no false unit whose read opens no root: its proof left,
+    and Lean refused its session at setup on a row of the read. As a forged read it passes, its prover run as an honest
+    window's; as a forged unit it fails, its prover run with its self-check skipped; told neither it fails as any
+    rejected audit does, and told both the command refuses its arguments before any session. The summary of a window
+    that passes as a forged read carries that verdict under ``forged``, as a forged unit's does, so no reader of it
+    takes the pass for an accepting audit (the weights tie's pins refuse a summary that holds it)."""
+    import a5 as A5
+    import a5_coins as AC
+
+    why = "setup: registered reads: port w: table row 0 does not open weights's registered root at position 0"
+    self_checks = []
+
+    def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
+        self_checks.append(os.environ["FC_ZK_SELF_CHECK"])
+        (out / "session-m0" / "sessions" / "l0000").mkdir(parents=True)
+        (out / "session-m0" / "sessions" / "l0000" / "session.json").write_text(json.dumps({"proof_sha512": [{"stream": "circuit/rep0"}]}))
+        verdicts = {"lean-verify/m0": {"accepted": False, "why": why, "of_record": True, "digest": "ab" * 64}}
+        (out / "audit.json").write_text(json.dumps({"accepted": False, "verdicts": verdicts}))
+        (out / "registration.json").write_text("{}")
+        (out / "receipt.json").write_text(json.dumps({"registration": RA.R.digest({}), "verifier": A5.CHALLENGER}))
+        return {"draw": [0], "firewall": a.firewall, "checks_before_draw": {"registration": True},
+                "audit": {"accepted": False, "why": {"lean-verify/m0": why}}}, False
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    monkeypatch.setenv("FC_ZK_SELF_CHECK", "stop")
+    args = ["audit", "--window", str(written.dir), "--law", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--skip-negatives", "--challenger", "local",
+            "--main", "m.txt"]
+
+    def run(*told: str) -> tuple[int, dict]:
+        capsys.readouterr()
+        rc = RA.main([*args, "--out", str(tmp_path / ("out" + "".join(told))), *told])
+        (line,) = (x for x in capsys.readouterr().out.splitlines() if x.startswith("RECORDS "))
+        return rc, json.loads(line.removeprefix("RECORDS "))
+
+    rc, row = run("--forged-read")
+    assert rc == 0 and row["ok"] is True and row["accepted"] is False, row
+    assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (True, "read_refused"), row
+    assert row["forged"]["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": False,
+                                       "lean_refused": None, "read_refused": True}, row
+    summary = json.loads((tmp_path / "out--forged-read" / "summary.json").read_text())
+    assert summary["ok"] is True and summary["forged"] == row["forged"] and summary["audit"]["accepted"] is False, summary
+    rc, row = run()
+    assert rc == 1 and row["ok"] is False and "forged" not in row, row
+    assert "forged" not in json.loads((tmp_path / "out" / "summary.json").read_text())
+    rc, row = run("--forged")
+    assert rc == 1 and row["ok"] is False, row
+    assert (row["forged"]["ok"], row["forged"]["passes_on"]) == (False, "no_proof_released"), row
+    assert row["forged"]["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": False,
+                                       "lean_refused": None, "read_refused": True}, row
+    assert self_checks == ["stop", "stop", "skip"]
+    with pytest.raises(SystemExit) as refused:
+        RA.main([*args, "--out", str(tmp_path / "both"), "--forged", "--forged-read"])
+    assert refused.value.code == 2 and len(self_checks) == 3
 
 
 def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_window_figure_with_its_premise(

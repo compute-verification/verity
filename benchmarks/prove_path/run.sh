@@ -40,9 +40,12 @@
 #     SHA-512, the run root, the registered entries and its supplied values), audits the window against it under the
 #     tie's own design, work:N over its N units in members of PP_TIE_CAP units (default 16), which the audit's rule
 #     samples at the rate N/N, so every unit is proved and no output class is passed, and pins the roots only on an
-#     accepting audit whose sample holds every unit. Two refused arms: a
-#     committer serving checkpoint Y's words as X's (its last units' digest reads open no root), and the same with those
-#     digests forged to X's (those units aren't their Definition's); each must be refused, and pin nothing.
+#     accepting audit whose sample holds every unit. Two refused arms, each audited as holding what it forges and passing
+#     on that one refusal, never on the other's. weights-tie-other: a committer serving checkpoint Y's words as X's, whose
+#     units are their Definition's and whose last units' digest reads open no root (records_audit.py's --forged-read): it
+#     passes on the Lean verifier refusing a session at setup on a row of such a read, its proofs free to leave.
+#     weights-tie-forged: the same with those digests forged to X's, so those units aren't their Definition's (--forged):
+#     it passes on the ZK server releasing no proof of a false member. Each must be refused, and pin nothing.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256},
 #     8 units a rank: honest rate:1/2 (4 of them sampled), forged rate:1/1 (every unit sampled); with PP_PLAIN=1,
 #     stratified-rate:1/2 and stratified-rate:1/1.
@@ -254,12 +257,14 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   WT="$PY -m verity_vllm.pipeline.cli weights-tie"
   tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
            # as X's; --forge-digest: its ends' digests forged to X's), the verifier's tie of X, the records audit of the window
-           # against it, and the pins, which only an accepting audit writes. Each arm is a run (and a root) of its own
+           # against it, and the pins, which only an accepting audit writes. Each arm is a run (and a root) of its own.
+           # The audit is told what a refused window forges: --served, a registered read that opens no pinned root
+           # (--forged-read); --forge-digest after it, a false unit (--forged)
     local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 commit=() c run units rc pinned; shift
     for x in "$@"; do
       case $x in
-        --served) forged=--forged; commit+=(--served-dir $F/y/snap --served-manifest $F/y/checkpoints.json);;
-        --forge-digest) commit+=(--forge-digest);;
+        --served) forged=--forged-read; commit+=(--served-dir $F/y/snap --served-manifest $F/y/checkpoints.json);;
+        --forge-digest) forged=--forged; commit+=(--forge-digest);;
       esac
     done
     local common=(--phi $F/phi.json --checkpoint-dir $F/x/snap --manifest $F/x/checkpoints.json
