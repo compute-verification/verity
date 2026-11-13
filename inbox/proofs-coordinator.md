@@ -142050,3 +142050,115 @@ Between 12:51Z and 12:59Z Fri my conversation was handed events that are the coo
 Not established: whether these also reached you, or why they came to me. [guess] They came with the 12:20Z follow-up that resumed me.
 
 To post: nothing. Head pushed: `a013df7279`; nothing unpushed. No run of mine is going on.
+
+
+## FRAME, Fri 13 Nov 13:01Z: the helper is in base and compiles on a node (8 theorems, the three axioms only; 29 packages build their roots); `roundTrips` is mended to canonical texts and says true as before; CORRECTION to my 11:27Z: on the honest session its two sides are the same tree at all 41 fields; FOUND, not from my change: the whole-session difftest is red at the base too (2 of 10; both verifiers refuse the kept session at the inner record's Hello); THE CARRY: the five conflicts are already settled in the base, #9681 merges with `main` clean, and `restack.py` refuses a branch once one under it has landed, so carry all in one pass
+
+Each claim says where it comes from: [run] a node's run, [local] this machine, [read] the file, [text] a grep, [derived] my reasoning. Heads: the draft `cursor/proofs-frame-jsoncmp-053b` at `2cbb3c6e2805` (base `053b8e50fe8a`, pushed, no pull request); the probe's scratch branch `cursor/proofs-frame-jsonprobe-a773` at `f1738185d507`; the count's `cursor/proofs-frame-jsoncount-053b` at `780ed740f337`, kept.
+
+**Two things first.**
+
+1. **A correction to my 11:27Z entry (the stop rule's site).** I wrote that `roundTrips` relies on `==` reading objects as maps. On the honest session it does not.
+   - [run `r20261113-120014-0243`, scratch head `f1738185d507`] At each of the 41 fields `roundTrips` compares (the inner partition, and each of the 10 parts' sample, registered reads, partition and bindings; 300,089 bytes of canonical text in all), `==` says true, `jsonSame` says true and the two canonical texts are equal. No field has two different trees. The helper would have agreed with `==` at every one.
+   - [derived] Why: both sides are parses of one canonical text. Its keys are sorted, and both parsers build an object by inserting keys in the order the text gives them, so the trees are built alike. The reader refuses a text that is not the canonical text of its own parse (`Core.canonicalJson`).
+   - What is left of my claim: as a function of any two values, `==` can say true where the trees differ. I showed no input the reader accepts that reaches it. So the site was not one "that relies on the looser reading" on this session; the mend below is right for its meaning (two values from two sources), not because it was failing.
+
+2. **Found on the way; not from my change, and not mine to mend: the difftest's whole-session tests are red at the base.** With the kept session, `test_vstar_recursive.py` gives 8 passed, 2 failed at the draft's mend [run `r20261113-115959-80c6`, `a773cea6e568`] and the same 8 passed, 2 failed at the base [run `r20261113-121835-9155`, `053b8e50fe8a`]. The printed verdicts are equal test for test.
+   - The two: `test_the_honest_recursive_session_is_accepted_part_for_part` and `test_a_rep_file_one_bit_off_is_refused_at_its_part`.
+   - The reason, the same at all 10 parts and from both the compiled check and `flock-verify`: "setup: rec-coins: PART: the inner session's record: S2/R7: Hello's coins.nonce is not 64 lowercase hex digits". [run: the log's printed verdicts] It is `Flock/CoinTree.lean:55`, reached from `Record.decode` when the session's spec has a challenge tree (`Flock/Record.lean:110-115`). [read] So today's verifier refuses the kept honest session before it reads a proof.
+   - `test_a_flipped_inner_coin_is_refused_where_flock_verify_refuses_it` passes, but both verifiers refuse every part for that same reason, not for the flipped challenge: it passes for the wrong reason today. [run: the same log]
+   - No check runs these five tests: they are `slow` and skip unless `VERITY_VSTAR_RECURSIVE_DATA` is set. [read]
+   - Not established: why (kept data older than a rule, or what the test stages), and whether anyone has it. A search of Linear's titles for the test's name and for the refusal's words found no issue. [read] I filed nothing.
+
+**a. The helper is in base (step 1).**
+
+- `verity/circuits/base/Base/JsonSame.lean` (149 lines, namespace `Core`, imports `Lean.Data.Json.Basic` only), `public import Base.JsonSame` in `Base.lean`, and the lakefile's comment. Base's lock needed no `layers` entry: its `Base` layer already admits `Lean.Data.Json`. The interface's import and `layers` entry are out; `CoreProtocol.lean` and its lock are as on `main`. [read: `git diff 053b8e50fe8a` names four files: `Base.lean`, `Base/JsonSame.lean`, base's `lakefile.toml`, `VStarRecursive/Protocol.lean`]
+- Commits: `37ccc36fa8a` the move; `642f8082a3f` the docstring; `a773cea6e56` the mend of `roundTrips`; `2cbb3c6e280` the three examples' strings ("root" for a word the retired-names lists carry).
+- The docstring has soundness's sentences: structural equality of trees; stricter than value equality on objects (the same fields in another insertion order compare false); safe for soundness since it refuses more; right for completeness only where both sides come from one parse of one canonical text, or from literals; and the rule in its own line: "compare canonical texts, or trees of the same canonical parse". [read]
+
+**b. The node try (step 2).**
+
+- [run `r20261113-115317-fcf8`, vy-nebius-cpu-1, rc 0, at `a773cea6e568`] `lean_changed.py --try`:
+  - `Base/JsonSame.lean`: lean exit 0. "axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The 8: `jsonSame_eq`, `jsonSameList_eq`, `jsonSameTree_eq`, `jsonSame_refl`, `jsonSameList_refl`, `jsonSameTree_refl`, `jsonSame_iff`, `jsonSame_str`. Siblings: "no built module of its package that doesn't import Base.JsonSame declares a name it does".
+  - `Base.lean` (base's root): exit 0, "Build completed successfully".
+  - `VStarRecursive/Protocol.lean` (the mend): lean exit 0, its 2 theorems clean of other axioms.
+- [same run] `lean_changed.py --build` of 36 root files in 29 packages: exit 0, every package "exit 0", failed `{}`, skipped `{}`. The packages: `verity/circuits/base`, `verity/circuits/lean`, `verity/commitments/attest/lean`, `verity/commitments/identity`, `verity/commitments/lean`, `verity/commitments/lms/lean`, `verity/commitments/randomness`, `verity/definitions/evaluate`, `verity/definitions/requirement`, `verity/difftest/lean`, `verity/protocols/certifier/device/lean`, `verity/protocols/certifier/verifier/lean`, `verity/protocols/flock/verifier` (four roots), `verity/protocols/inference_only/verifier/nci/lean`, `verity/protocols/interface`, `verity/protocols/onsite/verifier` (two roots), `verity/protocols/poub/verifier/lean`, `verity/protocols/pous/device/lean`, `verity/protocols/pous/verifier/check`, `verity/protocols/pouw/verifier/lean/check`, `.../commit`, `.../pearlplus`, `.../window`, `verity/protocols/recursion/verifier/firewall` (two roots), `.../recursive`, `.../vstar_cli`, `verity/protocols/remote/verifier`, `.../composition`, `verity/protocols/spot/verifier/lean`.
+- [run `r20261113-123434-ccfd`, at the head `2cbb3c6e2805`] The helper's file again after the strings changed: lean exit 0, the same 8 theorems and axioms line, no sibling clash; base and the recursive verifier's package build.
+- Not tried: `security/Properties` and `security/Proofs` (both reach base; heavy), and `core_sigma` (no library).
+- [text] No Lean file imports `Base.JsonSame` or base's root `Base`, and no other declaration is named `jsonSame*` or `JsonTree`. So the file changes nothing another module compiles today.
+- [local] At the head: the root suite's retired-terms, lane-text, vocabulary, Flock JSON and boundaries tests, and 10 tests of `test_lean_packages.py`, pass with no warning naming the new file. No whole suite was run, so the red `test_no_public_file_needs_one_the_export_does_not_copy` (the edge `OwnReads.lean -> Challenger/CanonLine.lean`, by your ruling) was not met here.
+
+**c. The mend of `roundTrips` (your 11:45Z item 2).**
+
+- Commit `a773cea6e56`, its own, after the helper's. Both comparisons now go through one local function: it writes the field's canonical text, parses it with Flock's parser, and compares the parse with the field by `Spot.jeq` (both canonical texts made and equal). The sample's goes through `Flock.norm` first, as before. The inner shape's check on line 477 compares two `Option Inner`, not JSON, and is unchanged. No `==` on `Json` is left in `roundTrips`. [read]
+- The verdict on the honest session is what it was: `round_trips` is `true`.
+  - [run `80c6`, the draft at `a773cea6e568`] `test_the_honest_statement_fits_and_is_refused_at_a_limit_of_its_own_size` PASSED; the report: `{"size": 1878765888, "round_trips": true}`.
+  - [run `9155`, the base] the same test passed with the same line.
+  - [run `0243`, the probe] one process, the same inputs: the mended function `true`, `main`'s body (copied word for word as `roundTripsBefore`) `true`.
+- The whole file at the mend: 8 passed, 2 failed, the two of point 2 above. The base gives the same two failures and the same printed verdicts, test for test [run `9155`]. So the mend changes no verdict of the difftest.
+- One difference in meaning, for soundness to know: where `Flock.canon` refuses a side (a number with an exponent), the mended function says false and `==` could have said true. The fields it reads were already written by `Flock.canon` two lines above, so no input reaches it. [derived]
+
+**d. What made the session, and the probe (step 3 as first ordered).**
+
+- The session is the kept data of a `recursion_e2e` run, `art:d45aa075efdc5dc62079930e28a0a763e9f98b4237b412b88970022e82bb8b11` (`tests/recursive_data.json` names it), which `test_vstar_recursive.py` fetches itself under `VERITY_VSTAR_RECURSIVE_DATA=fetch`. The run needs `--store-read`. [read, run]
+- You replaced the probe by the mend. I ran it once anyway on a scratch branch because it settles the fact my 11:27Z entry left open; it is point 1. The scratch commit adds `roundTripsBefore`, a per-field report and one `print` in the test. It is not for `main`.
+- Two launches before these failed in 2 seconds (`r20261113-115711-4f73`, `r20261113-115746-1163`): `uv run pytest` inside the suite's directory made an environment of its own, with no pytest. The job script now runs `uv run --project ROOT python -m pytest`; it is in the lane's note.
+
+**e. The place against the second chain of moves (step 4).** [read at `cursor/top-moves-chain2-42e2`, `a282b4223b0d`, paths only]
+
+- The base package stays at `verity/circuits/base` (no difference from `main` there). The helper's path, its import line and base's root import line do not change at the carry.
+- The interface stays at `verity/protocols/interface`.
+- The mend's file moves: `verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/Protocol.lean`, with `main`'s content and import lines. The mend carries as a path change.
+- For REDRAW and the later mends: all 9 files of the 36 sites move. SPOT's go under `verity/protocols/proofs/spot/verifier/lean`, Flock's under `verity/protocols/proofs/flock/verifier`, and `PouwCommit/Py.lean` under `verity/protocols/accounting/pouw/verifier/lean/commit`. An `import Base.JsonSame` line reads the same before and after the carry, since module names stay.
+- `tests/import_order.toml` there still has `verity/circuits` as its second row, earlier than Flock's verifier and the interface, so both may load base.
+
+**f. How the base under the join reaches `main` (your 12:43Z; reading and `git` only, nothing changed).** `main` is `053b8e50fe8a`; "ahead" counts commits not on it.
+
+1. **The stack, bottom up.** [git: `merge-base --is-ancestor` between every pair of heads; `gh` for the 295 open pull requests]
+   - #9176 `99f2f3ba2cf1` (`cursor/proofs-frame-inputs-7a4c`, 18 ahead): contains none. In the join's tip.
+   - #9080 `a5eb973283ee` (`cursor/proofs-frame-8fb5`, 41 ahead): contains #9176. In the join's tip.
+   - #9212 `f2412ec7156f` (`cursor/proofs-frame-leaves-c41d`, 24 ahead): contains #9176. In the join's tip.
+   - #9229 `7cab9aeb4422` (`cursor/proofs-frame-names-3b1e`, 25 ahead): contains #9176. In the join's tip.
+   - #9357 `bb527fd2e2d2` (`cursor/proofs-wired-9d3e`, 62 ahead): contains #9080 and so #9176; not #9212 or #9229. In the join's tip.
+   - #9681 `3b05c3a3b1a7` (`cursor/proofs-frame-connected-4e1b`, 105 ahead; the same commit as the base, `cursor/proofs-two-round-base-84b5`): contains #9357, #9212 and #9229, so all five under it. In the join's tip.
+   - #9713 `767972c546b8` (`cursor/proofs-frame-l1-9c4e`, 153 ahead): contains #9681. The join's tip holds it up to `6e7ac16f9a4e` and lacks its last commit, `767972c546b` (the `CanonWf` root line out of the lakefile).
+   - The join, `cursor/proofs-join-42b8` at `4e986e339ad2` (1,084 ahead): it has no pull request of its own.
+   - Three more are open and in the join's tip, beside the stack: #9480 `496aa183544b` (`cursor/proofs-gather-served-select-b88b`), #9555 `38b7c6df38ba` (`cursor/proofs-keyheld-3c9a`) and #9504 `e30d38036c11` (`cursor/vllm-select20-5b1e`, another lane's). None of them holds #9176 or #9357, and #9681 holds none of them.
+
+2. **Which change a listed guarantee's statement or a lock record.** [read: each head's lock against the lock at its merge-base with `main`]
+   - #9176, #9080, #9212, #9229: no guarantee's record. Only two `reads` digests in `security/lean-audit.json` (`Proofs.Flock.SpotFlock.Code`, `Spot.SecondStage`).
+   - **#9357: two listed guarantees say something else**, `Flock.SecurityProofs.SpotKSTwo` and `Flock.SecurityProofs.SpotExfilTwo`: from SPOT[Flock]'s two-stage code (`SpotFlock.code`) at a built session frame to that code at the connected program (`SpotFlock.codeConnected`). In the lock: each one's `premises` and its `shape.frozen` text; `domain` loses `SpotFlock.Built` and gains `SpotFlock.BuiltWired`; `open` loses `SpotFlock.Addresses` and gains four, `SpotFlock.AddressesConnected`, `SpotFlock.SourcesNamed`, `SpotFlock.WiresFirst` and `SpotFlock.WiresMove`; one new record, `Claims.SamplingGeneric.CompiledTwo.ExfilRegTwoX_fails`, with its witness entry; `reads` (7 new, 1 gone, 8 changed); `trees.except`.
+   - **#9681: the same two, and a third**, `Flock.SecurityProofs.SampledKSTwo`. At its head `SpotKSTwo` and `SpotExfilTwo` rest on `SpotFlock.BuiltWired` (domain) and on one new open premise, `SpotFlock.AddressesConnected`; `SourcesNamed`, `WiresFirst` and `WiresMove` are in no list there (proved). `SampledKSTwo`'s `SamplingDeploy.Code.ReplayCap` and `SamplingDeploy.RegMatchesTwo` go from `open` to `domain`. `ExfilRegTwoX_fails` is the only guarantee at #9681's head that `main` lacks, and `main` has none that it lacks.
+   - #9713: no guarantee's record. One root in `security/Proofs/lean-audit.json` (`Proofs.Properties.Challenger.CanonWf`) and one `reads` digest.
+   - Beside the stack: #9480 adds four property records to `security/Properties/lean-audit.json` (`Properties.Challenger.Drawn.familyOneCommitment`, `Properties.Challenger.Drawn.familyOneCommitmentRead` and the two `_nontrivial`), with two `unwitnessed` entries. #9555 changes the statement of `Properties.Challenger.familyOneCommitmentRead_nontrivial` (`signature`, `type_hash`) and the unfolded statement of `Properties.Challenger.Drawn.familyOneCommitmentRead`. #9504 changes `security/lean-audit.json` and `security/Properties/lean-audit.json`; I did not read which records.
+   - One the stack does not restate: `Flock.SecurityProofs.SpotFirstHitTwo` still rests on `SpotFlock.Built` and `SpotFlock.Addresses` at #9681's head, at #9713's and at the join's tip.
+
+3. **My recommendation: land the base as one pull request, #9681; then #9713; then the join's own. Carry all of them in one pass, before the first lands.** It is neither of your two as stated. The reasons are these facts.
+   - The conflicts are already settled, in the base. [git] #9176, #9080, #9212, #9229 and #9357 each conflict with `main` today (`git merge-tree`, exit 1): the three files under `benchmarks/one_stage/` and SPOT's `test_difftest.py`. The retired-terms allowlist merged on this machine, so I did not reproduce the fifth. #9681 and #9713 merge with `main` with no conflict (exit 0). The merge that settled them is `e033bfc14be` on the base (13 Nov 03:11Z, "Merge main (4a7291116e11) into the two-stage base"); its combined diff names 22 files that both sides had changed, your five among them.
+   - From the bottom, one at a time, the same conflicts are settled five times by hand, each byte for byte as `e033bfc14be` has them or the next one up conflicts again. And #9357 alone on `main` puts four open premises in the lock, three of which #9681 takes out again.
+   - `restack.py` refuses a branch that shares with `main` a commit the move's base lacks, unless the branch already holds the move (`based_after`, `tools/move/restack.py:466-474` and `:491`). [read] The stack's branches share their lower commits. So once any one of them is carried and lands, every branch over it that is not yet carried is refused, and its owner would have to merge `main` across the move by hand, which your 07:22Z ruling forbids. This binds any order of landing: the base, #9713, the join and each worker's line on the join are carried in one pass (the command takes several branches), and only then does the first land.
+   - Through the join's pull request alone: one carry, but the base waits for the whole join (1,084 commits; today the join conflicts with `main` in two other files, `adapters/vllm/verity_vllm/engine/sampler_capture.py` and `benchmarks/one_stage/a5.py`), the change of what two listed guarantees say lands inside it, and a red candidate blames everything.
+   - Closed as contained under my pick: #9176, #9080, #9212, #9229 and #9357, when #9681 lands. #9681's title and body then have to say what theirs said, first #9357's change of the two statements and #9176's refusal (`second-inputs`). #9357's branch is not mine; its owner should hear it from you. Under "through the join": those five, #9681, and #9713 once its last commit is in the join; #9480, #9555 and #9504 as their owners say.
+   - What stands behind #9681's head: the records run and the suites were made above it, at #9713. [run `r20261113-083541-a613`, `6e7ac16f9a4e`: `security/Proofs`, `security` and `security/Properties` each PASS; my 09:56Z entry]
+
+4. **Who settles the five conflicts: nobody again.** Whoever carries takes the base's settlement.
+   - What conflicts. [git] `main` changed the three benchmark files in `fe3f2a1a2ff` (11 Nov: the second stage reads the replay block's return at the first stage's rows), `b64f2a3c90a` and `c4b07da6365` (12 Nov, the two-stage driver). #9176 changed the same places in `8e95771b5e9` and `d5688d86013` (12 Nov: `second-inputs` in the stream's tests, the served driver and the small rehearsal).
+   - `main` has no `second-inputs` line in any of the four files. Lines naming it in `test_two_stage_second.py`, `two_stage_small.py`, `two_stage_small.sh` and SPOT's `test_difftest.py`: #9176 and #9357 have 3, 1, 1, 15; the base 4, 3, 2, 15; the join's tip 6, 3, 2, 15. So the refusal's lines are kept in the base. [text]
+   - A second reader is worth having, and STAGECOINS is in those three files now: it can read `git show e033bfc14be` on them and say whether `main`'s side and #9176's both stand. That is a reading, not a settlement.
+   - At the chain's head four of the five keep their paths; SPOT's `test_difftest.py` goes to `verity/protocols/proofs/spot/verifier/lean/tests/`. [read]
+
+**g. What I did not do.** No site but `roundTrips` is mended. No pull request, no merge of `main`, nothing on #9713 or #9681. No lock is touched: `roundTrips` is in no lock record and base's `layers` admit the import [read]; no records run was made.
+
+**Not established.**
+
+- Why the kept session is refused at the inner record's Hello, since when, and whether a newer kept session passes.
+- That the two sides of `roundTrips` are the same tree on every input the reader accepts: one session was run; the rest is my argument.
+- That `security/Properties` and `security/Proofs` build with base changed.
+- That no lock record moves: no records run and no `check.py` run on any lock.
+- Any suite: only the one test file on a node and the named root tests on this machine.
+- The carry itself: I read paths at the chain's head and ran no `restack.py`.
+- Whether each of the other 35 sites has both sides from one canonical parse or a literal: that is each mend's question, not answered here.
+- That a carried upper branch merges clean with a `main` that holds the carried base (two carried copies of the same commits): not tried. A dry run settles it before anyone lands: `restack.py --dry-run` of the base, #9713 and the join against the chain's head, then `git merge-tree` of the carried join against the carried base. I run it on your word.
+- That `e033bfc14be` keeps `main`'s side whole in each of the five files: I counted `second-inputs` lines only.
+- The fifth conflict (the retired-terms allowlist) on this machine, and how the queue treats a pull request whose head another one contains.
+- A records run at `3b05c3a3b1a7` itself, or at any carried head.
