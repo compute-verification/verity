@@ -40,3 +40,6 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:42 AM PST: NET-427 job 4,
 [2026-11-13T10:44Z] 05ee96a63108
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:44 AM PST: NET-427 job 4, the second one-file run ended: r20261113-104304-e305 on 4564d769de39c587b72df2849b3fa92f73efae24, lean exit 0, the 21 guards pass with the changed facts removed. Two of the three runs are used; no run of mine is going. The report follows on NET-427.
 
+[2026-11-13T10:51Z] e911786d734a
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:51 AM PST: NET-427, the third and last one-file run is launched on 05ce1c29075736c46cdc928d410ec2cff8ad4f41: three guards more, on what the row prints for an answer that counts and names no span (the clock form). Its id and exit follow when it ends.
+
