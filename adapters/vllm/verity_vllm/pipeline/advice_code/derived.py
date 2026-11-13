@@ -1,4 +1,4 @@
-"""The derived rules: the fields of advice v0 (I1, `verity.protocols.certifier.verifier.advice`) that cost zero bits,
+"""The derived rules: the fields of advice v0 (I1, `verity.protocols.accounting.certifier.verifier.advice`) that cost zero bits,
 because the certified I/O, the committed values, the registered config or the advice's own history already fix them, and
 the advice that remains.
 
@@ -54,7 +54,7 @@ import hashlib
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
-from verity.protocols.certifier.verifier.advice import RequestAdvice, Row, Source, StepAdvice
+from verity.protocols.accounting.certifier.verifier.advice import RequestAdvice, Row, Source, StepAdvice
 
 __all__ = ["CertifiedRequest", "Config", "Holdings", "pool_bound", "PREFIX_ROOT", "Prefixes", "Residual", "stop_rule",
     "tie_fields", "TOKEN_BYTES", "unit_key", "Walk", "walk_steps"]

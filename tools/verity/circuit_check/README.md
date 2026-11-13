@@ -10,7 +10,7 @@ modifies a circuit puts its report in the PR, and `check` runs `circuit-check --
   names) and `structural` are imported as modules too.
 - **Loaded by:** `check`, which runs the command and plans it by target (`tools/verity/check/plan.py`); the benchmarks
   that stage or lower a catalog target (`benchmarks/one_stage`, `benchmarks/proof_throughput`, `benchmarks/served_units`,
-  `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/flock/prover/pod/catalog.py`); and a migration tool under
+  `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/proofs/flock/prover/pod/catalog.py`); and a migration tool under
   `adapters/vllm/tools`.
 - **Loads:** every Definition module's sidecar and pins, and the module each belongs to, `verity.circuits`,
   `verity.definitions` and Flock (`verity_flock`). It imports no integration by name: a package under `adapters/`
