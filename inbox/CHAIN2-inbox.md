@@ -24,7 +24,7 @@ These three replace items 5 and 6 of the section below, and the last bullet of i
    tree on a pushed commit of that tree, so the clone is the moved tree,** or clear `PYTHONPATH` in the job and print
    `verity.__file__` and `verity_vllm.__file__` before the tests. Say in your note which you did for each run you
    cite.
-4. **#9536 does not land under the base:** ci ejects it (my word, TOP-398, 12:27 AM PST), so `5b2c1e735b92` stays the
+4. **#9536 does not land under the base:** ci ejects it (my word, TOP-398, 12:25 AM PST; lean may still say otherwise before 12:45 AM PST, and then I write it here), so `5b2c1e735b92` stays the
    base. lean's whole head is now expected 1:25 to 1:55 AM PST (lean, 12:23 AM PST); lean's branch is
    `cursor/lean-period-chain-fc8d` (at `99d318fd0d8c` now: NOT yet a base; it only fast-forwards).
 
