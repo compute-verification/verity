@@ -92,14 +92,15 @@ def folded(monkeypatch):
     return stand_in
 
 
-def test_the_summary_states_the_fold_s_result_its_roots_by_class_its_steps_and_each_request_s_tokens(tmp_path, profiles, folded):
+def test_the_summary_states_the_fold_s_result_its_roots_by_class_its_steps_and_each_request_s_tokens(tmp_path, profiles, folded, monkeypatch):
     profiles("stand_in", PROFILE=_profile(Linear()))
+    monkeypatch.setattr(MF, "_max_rss_gb", lambda: 1.23456)
     result, log = _result(), _log(tmp_path)
     calls = folded(result)
     doc, live = MF.fold_summary_result(log, "stand_in")
     assert live is result and len(calls) == 1
     assert calls[0]["events"] == list(LOG.read_log(log)) and (calls[0]["strict"], calls[0]["with_program"]) == (None, True)
-    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", doc.pop("utc")) and doc.pop("seconds") >= 0 and doc.pop("max_rss_gb") > 0
+    assert re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", doc.pop("utc")) and doc.pop("seconds") >= 0 and doc.pop("max_rss_gb") == 1.235
     assert doc == {
         "schema": G.FOLD_SUMMARY_SCHEMA, "log": str(log), "profile": "stand_in", "profile_id": "prof-1", "with_program": True, "digest": "d1",
         "spec": SUMMARY["spec"], "moe_construction": None, "moe_scope_pattern": None, "sampler_construction": None, "registered_values": False,
