@@ -1,1 +1,1 @@
-2026-11-13T20:21Z GEMMCALL: waiting on r20261113-165939-b78b (vy-nebius-cpu-14, running; pins clean, circuit-check 10/0/7 done, suites 120+ passed, last finishing). research.carry exit 0 (carries). Left: suites' final line, PR body, CIR-258 comment, return.
+2026-11-13T20:43Z GEMMCALL: still waiting on r20261113-165939-b78b (vy-nebius-cpu-14, running): 122 suites passed, tools/verity/circuit_check suite (catalog rebuild) running since 20:09Z. Left: its line, PR body, CIR-258 comment, return.
