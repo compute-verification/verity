@@ -483,7 +483,8 @@ def test_a_trace_runs_a_step_only_in_its_passs_window_and_none_before_the_first_
     """`Serving.advance` refuses a pass's step while the store's open window is not the pass's, or is closed, and a
     step before the first window once a window has begun, open or closed.  No refused step runs the engine."""
     s, b = served(())
-    trace, asked = b.trace, []
+    trace = b.trace
+    asked: list[int] = []
     b.engine = asked.append
     with pytest.raises(RuntimeError, match="the pass is in window 0, the store's open window is -1"):
         trace.advance(0)
