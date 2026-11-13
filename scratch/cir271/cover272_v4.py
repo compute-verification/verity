@@ -124,8 +124,15 @@ for R in RUNS:
                 if not st:
                     texts.append(f"stager: {err[-1] if err else ''}")
                 r.update(outcome="refused", text=texts)
-        assert tag not in seen or seen[tag]["outcome"] == "not-run" and seen[tag]["why"] == "not-reached", tag
-        seen[tag] = r
+        reached = not (r.get("why") == "not-reached" or r.get("text") == "not started")
+        if tag in seen:
+            assert not (reached and seen[tag]["_reached"]), f"{tag} staged in two runs: {seen[tag]['run']} and {R['run']}"
+            if not reached and (seen[tag]["_reached"] or R["list"] != plan[tag].get("list")):
+                continue
+        seen[tag] = {**r, "_reached": reached}
+
+for r in seen.values():
+    r.pop("_reached")
 
 for tag, p in plan.items():
     old = T[tag]
