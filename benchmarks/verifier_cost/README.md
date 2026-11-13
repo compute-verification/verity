@@ -134,6 +134,19 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd
   bash benchmarks/verifier_cost/population.sh 20 50 100000 1000000 6963296
 ~~~
 
+`members_parse.sh N...` times the per-member form's parse of its members (`OneStageZk.membersOf`) against their count:
+`members_parse/Main.lean`, built in a scratch Lake package against the checkout's verifier, makes N members of one range
+of units each, no unit in two, and times the parse on them, then on the same members with one more whose range starts
+inside the last member's. It fails where the parse gives back other members than those made, name by name and unit by
+unit, or accepts the unit in two. The parse reads each member once and sorts the members' ranges, so its time must grow
+no faster than N log N: a time that quadruples where N doubles is work in the members squared. `$OUT` gets
+members_parse.jsonl, one row per N and case (members, milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone -- \
+  bash benchmarks/verifier_cost/members_parse.sh 1000 25000 100000 1000000
+~~~
+
 `whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
 `whole_run.py` writes, per N, an accepted `run` input (`run`: a v1 audit on challenger coins with N/8 more ports) or the
 program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's three templates,
