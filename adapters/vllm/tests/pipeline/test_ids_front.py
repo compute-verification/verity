@@ -5,12 +5,16 @@ framed, and a stream that doesn't reach ``[DONE]`` ends without the trailer or a
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import gc
 import http.client
 import itertools
 import json
 import re
 import socket
+import struct
 import threading
+import weakref
 from typing import Any
 
 import pytest
@@ -89,6 +93,30 @@ class Scripted(threading.Thread):
                     c.sendall(self.answer)
 
 
+class Paused(threading.Thread):
+    """A server of one connection that sends ``first`` once it has the request's head, ``rest`` only once ``go`` is
+    set, and closes."""
+
+    def __init__(self, first: bytes, rest: bytes) -> None:
+        super().__init__(daemon=True)
+        self.sock = socket.create_server(("127.0.0.1", 0))
+        self.address = self.sock.getsockname()[:2]
+        self.first, self.rest, self.go = first, rest, threading.Event()
+        self.start()
+
+    def run(self) -> None:
+        with self.sock:
+            c, _ = self.sock.accept()
+            with c:
+                got = b""
+                while b"\r\n\r\n" not in got and (more := c.recv(65536)):
+                    got += more
+                c.sendall(self.first)
+                self.go.wait()
+                with contextlib.suppress(OSError):       # a front that has closed its side takes no more
+                    c.sendall(self.rest)
+
+
 class Echo(threading.Thread):
     """A server that sends one connection's bytes back as they come, and closes when the client's side ends."""
 
@@ -112,10 +140,10 @@ class Fronted:
 
     address: tuple[str, int]                 # where the front listens, known once `__enter__` returns
 
-    def __init__(self, upstream: tuple[str, int], payload: int = P) -> None:
+    def __init__(self, upstream: tuple[str, int], payload: int = P, front: type[F.Front] = F.Front) -> None:
         ticks = itertools.count(1)
         self.log: list[dict] = []
-        self.front = F.Front(tuple(upstream), payload, log=self.log.append, clock=lambda: float(next(ticks)))
+        self.front = front(tuple(upstream), payload, log=self.log.append, clock=lambda: float(next(ticks)))
         self.ready = threading.Event()
 
     def __enter__(self) -> Fronted:
@@ -277,6 +305,47 @@ def test_a_stream_that_does_not_reach_done_ends_without_the_trailer(answer, sent
     server.join()
     assert raw == b"".join(IT.id_event(t, P) for t in sent) and IT.TRAILER not in raw
     assert [(r["ids"], r["ended"], r["why"]) for r in f.log] == [(len(sent), False, why)]
+
+
+def test_a_handler_whose_client_reset_its_connection_outlives_a_collection():
+    """asyncio holds a connection's handler only until the client's side is lost, and a handler that then waits on the
+    server's stream is held by nothing but itself. A collection during that wait must not destroy it: when the
+    server's stream goes on it still reads it, and the request gets its record, which says the connection broke."""
+    handlers: list[weakref.ref[asyncio.Task[Any]]] = []
+    writers: list[asyncio.StreamWriter] = []
+
+    class Seen(F.Front):
+        async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+            task = asyncio.current_task()
+            assert task is not None
+            handlers.append(weakref.ref(task))
+            writers.append(writer)
+            await super().handle(reader, writer)
+
+    async def collect_once_the_reset_is_seen() -> None:
+        with contextlib.suppress(OSError):
+            await writers[0].wait_closed()
+        gc.collect()
+
+    server = Paused(STREAM + chunked(event(choice([7], " a")))[:-5], chunked(event(choice([8], " b")), event(b"[DONE]")))
+    try:
+        with Fronted(server.address, front=Seen) as f:
+            with socket.create_connection(f.address) as c:
+                c.sendall(released())
+                got = b""
+                while len(got) < P:
+                    got += c.recv(65536)
+                assert got == IT.id_event(7, P)
+                c.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))    # its close is a reset
+            asyncio.run_coroutine_threadsafe(collect_once_the_reset_is_seen(), f.loop).result()
+            handler = handlers[0]()
+            assert handler is not None, "the collection destroyed the handler while it waited on the server's stream"
+            server.go.set()
+            asyncio.run_coroutine_threadsafe(asyncio.wait([handler]), f.loop).result()
+    finally:
+        server.go.set()
+    server.join()
+    assert [(r["ids"], r["ended"], r["why"]) for r in f.log] == [(2, False, "a connection broke (ConnectionResetError)")]
 
 
 def test_a_server_that_is_not_there_closes_the_connection():
