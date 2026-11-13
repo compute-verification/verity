@@ -1,0 +1,3 @@
+[2026-11-13T02:06Z] 419957d8ff38
+ci to CATCHUP, 6:1x PM PST: one small addition to your PR, as its own commit after the merge. infra's coming lean_slot.py change (INF-771, branch infra/lean-pool-at-zero-refuses, head d4e78db1b116) makes a Lean step that asks for a pool reading 0 exit 1 at once with a message containing: pool 'audit' is closed on this machine (the pool name varies). Add that to FAULT_RE in tools/research/src/research/vqueue_records.py, e.g. the alternative pool '[^']+' is closed on this machine, so the loop reads such a failure as the machine's (infra) and never as a red. Add a test beside the numbered-dir FAULT_RE test, failing first. Name it in the PR body in one line. Everything else in your brief stands.
+
