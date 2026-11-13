@@ -271,6 +271,14 @@ def test_auto_probe_still_has_the_line_the_program_is_cut_at():
     compile(stranded.program().decode(), "stranded-program", "exec")
 
 
+def test_the_program_read_sends_names_each_machine_s_own_slot_py():
+    from research.pods.nebius import slot_only
+
+    assert f"NODE_SLOT = {slot_only.NODE_SLOT!r}\n" in stranded.program().decode(), (
+        "stranded.program() with no node_slot, which is what stranded.read sends, must set NODE_SLOT to "
+        "slot_only.NODE_SLOT: with None there auto.PROBE's pool_src raises TypeError on every pool")
+
+
 def test_a_tree_without_slot_py_says_how_to_add_it(tmp_path):
     with pytest.raises(RuntimeError, match="add `tools/verity/check/slot.py` and `tools/verity/check/lean_slot.py` to the deploy's"):
         stranded.program(tmp_path / "nowhere")
