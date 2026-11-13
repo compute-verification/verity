@@ -159790,3 +159790,90 @@ word to this agent reaches the other execution, not me, unless you say it is for
 - Quick suites at that head: `r20261113-203250-d651` on vy-nebius-cpu-5 (research pool, as proofs), launched 20:33Z, `suites.py --changed origin/main --quick`. Its exit code is the suites' this time (the last one ended in an `echo`). The last one took 26 minutes after its slot, so I expect it by about 21:15Z if a slot is free [guess].
 - No second records run.
 - Next: read `d651`; open the pull request with the body you ordered (the three `reads` records with their definitions, and the sentence on what it costs); link it to PRF-549; the ready line, before 23:00Z.
+
+## ASSEMBLY, Fri 13 Nov 20:34Z: THE JOIN MOVED: `86874e0e53145a6d4bca109a9058e3d4934a5ce5`, TWOLEG's rule B merged and built, its form passing the accept test and the small play; and for MESSAGES, two answers, both no; beyond the carried `a61b7adf0d83` the tip holds MESSAGES's `2658eaf78153` and replay line `24f63f743de2`, HONEST2's `552a41cb4df8`, the tool's pin, the mend, SESSIONOF2's `6b274de57993`, HELDOF's couples line `02e3d5f39ec1` and now rule B `7635c47d68cf`
+
+Your 20:19Z is read. Its five items are in section 6.
+
+**1. The merge** [git]
+
+- `ce20e42ba47a` to `86874e0e5314` by a fast-forward, pushed at 20:27Z. Two commits:
+
+| Commit | What |
+|---|---|
+| `25eb041e52a8` | the line: `7635c47d68cf` into the join, no conflict; the 8 files TWOLEG names, 1,086 lines added and 3 removed |
+| `86874e0e5314` | mine: seven roots in the lock for the seven new files, which no root reached; the lakefile's root `Proofs.Flock.SpotFlock.RunsAs` already covers them |
+
+- The eight files: `OwnReadsForm`, `OwnReadsHeld`, `OwnReadsOfCheck`, `OwnReadsOut`, `SecondUnits`, `StampedReads`, `VerdictsWf` under `security/Proofs/Flock/SpotFlock/RunsAs/`, and the form, `VStarRecursive/SampledTwo.lean`.
+
+**2. Its runs, at the merged tree** [run, each rc 0]
+
+- The build, `r20261113-192310-8e89`, cpu-8, ended 20:24Z: the form's package `lake` exit 0 in 142 s; `security/Proofs` (every `RunsAs` and `SampledTwo` file) exit 0 in 2,075 s; nothing failed.
+- A try of each of the seven, each `lean exit 0`, no theorem using an axiom beyond `propext`, `Classical.choice` and `Quot.sound`:
+
+| File | Theorems | File | Theorems |
+|---|---|---|---|
+| `OwnReadsForm.lean` | 1 | `SecondUnits.lean` | 4 |
+| `OwnReadsHeld.lean` | 9 | `StampedReads.lean` | 15 |
+| `OwnReadsOfCheck.lean` | 1 | `VerdictsWf.lean` | 14 |
+| `OwnReadsOut.lean` | 8 | | |
+
+- The accept test, `r20261113-192342-a8c1`, cpu-3: `verity-core-composition` 66 passed.
+- `sampled_two_small.sh`, `r20261113-192411-add1`, cpu-14: the same three verdicts as at the mended head (`0332`). The fresh play is accepted with the switch on, the shipped switch refuses it, and the negative play is refused by the same line.
+
+**3. On this machine at `86874e0e5314`** [run on this machine]
+
+- The five root test files 84 passed, the certifier's boundary among them. `pins.py --stale` silent, `lock_roots.py --check` clean, `dup_names.py` the same 17.
+- `check.py`'s source scan: no compile-time code in the seven. The scoped-words search over the 1,086 added lines: 0 hits.
+
+**4. The eleven edges across the public boundary at this tip** [run on this machine: `public_boundary.py`]
+
+Each is a file under `security/Proofs/Flock/SpotFlock/` importing a file the export does not copy. Three are new with rule B, marked.
+
+| File and line | Imports | |
+|---|---|---|
+| `OwnReads.lean:9` | `Proofs.Properties.Challenger.CanonLine` | |
+| `OwnReads.lean:10` | `Proofs.Properties.Challenger.CanonWf` | |
+| `ParamsWf.lean:5` | `Proofs.Properties.Spot.Units` | |
+| `ReadsCheck.lean:3` | `Proofs.Properties.Challenger.CanonRead` | |
+| `RunsAs/Coins.lean:4` | `Proofs.Properties.Challenger.Drawn` | |
+| `RunsAs/OfCheck.lean:5` | `Proofs.Properties.Verity.SampledTwo.Steps` | |
+| `RunsAs/OwnReadsHeld.lean:5` | `Proofs.Properties.Verity.SampledTwo.RecordNames` | new |
+| `RunsAs/OwnReadsHeld.lean:9` | `Proofs.Properties.Spot` | new |
+| `RunsAs/Proved.lean:4` | `Proofs.Properties.Spot.Credited` | |
+| `RunsAs/SecondUnits.lean:3` | `Proofs.Properties.Spot` | new |
+| `RunsAs/Statement.lean:6` | `Properties.Challenger` | |
+
+**5. For MESSAGES: both answers are no** [read, at this tip]
+
+- **Is the join's session reading `SessionMsgs.sessionReading`? No.**
+  - The join's reading is `joinSessions A C Ms tab ℓ₁ ℓ₂` (`JoinsAt.lean:118`), which is `SessionCoins.withCoins` over any `Ms : SessionReading`. `withCoins` keeps `Ms`'s `stmts` and `msg` and sets the coins and their agreement.
+  - What the join needs of that reading it takes as fields of `JoinsAt`: `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun`, `sessionMsgs` and `digestBefore`.
+  - `SessionMsgs.sessionReading` is defined (`SessionMsgs.lean:129`) and no file names it. One file imports `SessionMsgs`, your `SessionReplay.lean`, and it reads `msgsAtCase`, `msgAtCase`, `sessionMsgs` and `replayProver`.
+  - So the join can be read at it, and none of those fields is proved at it.
+- **Does any file on the join tie template `t`'s session to the `t`-th of the statements' sessions? No.** The join has both ways of naming a session and no theorem between them:
+  - By position: `SessionCoins.sessionRecords` is every statement's sessions' records in the evidence's order. The coins' piece is proved there: `located_own_accepted` (`SessionHeld.lean:424`) gives the `t`-th tree the `t`-th record's coins.
+  - By name: `SessionMsgs.filesAt` is the first session of the statement naming template `t`'s member, the first member whose circuit the params name for `t`.
+  - `SetupsOfTemplates` (`LastSlot.lean:153`) states the nearest thing at the `t`-th record. It is not proved and nothing reads it.
+  - `stmtAt_stmtsMsg` only reads `stmtsMsg` back: its `t`-th statement is `stmtAtCase k t` by how it is built.
+  - So `RecordsCover` and the order part of `MsgsOfRecords` stay hypotheses of your piece.
+- One thing that may shorten the tie, from the code and not from a theorem: `Spot/OneStageZk.lean`'s per-member step refuses a statement that is not named, not in the members' order, or not of exactly one session (its docstring at line 71, the refusal near line 896). I did not check that the members' order is the templates'.
+
+**6. Your 20:19Z items**
+
+1. GATHER at `462ef981d91e`: I merge it after `r20261113-195725-db6b` is back green, not before. With it: `test_a5_wiring.py` and the one-stage suite.
+2. The parser switch: I merge #9776's final head when SESSIONOF2 writes its ready line. Not from `3a7fe4d0b1af` as it stands.
+3. The blob line merges on top when FRAME names its carried head.
+4. Answered in 5.
+5. Noted for the merges they meet: `ReadsCheck.lean`'s line 3 becomes `public import Proofs.Flock.Claims.CanonRead` once the join holds FRAME's move, which also removes one of the eleven edges; and the split of `Spot/OneStageZk.lean` at line 1604.
+
+**7. Out at this tip** [launched, not back]
+
+- The records run: `r20261113-202750-6706`, cpu-3. It is the first to read the thirteen roots of HELDOF's and rule B's files.
+- `two_stage_small.sh`: `r20261113-202818-f2b7`, cpu-5, since rule B changes the form.
+
+**Not established**
+
+- That the lock is right at this tip: `6706` is out.
+- That the one-stage suite and the adapter's tests pass with rule B's form. The adapter's tests last passed at `7aeba81f536e`, the one-stage suite at the carried head.
+- A kernel replay at any head of the join.
