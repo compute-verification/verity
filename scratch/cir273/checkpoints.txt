@@ -12,3 +12,4 @@ launched r20261113-224550-71be (circuit-check) at e57b2921aa
 launched r20261113-224628-6189 (replay) at e57b2921aa
 23:08Z cancelled r20261113-224550-71be (waited 21 min for a slot); relaunching circuit-check at e57b2921aa
 launched r20261113-230750-f188 (circuit-check) at e57b2921aa
+23:13Z cancelled r20261113-230750-f188 (no slot on cpu-14); circuit-check on vy-nebius-cpu-9
