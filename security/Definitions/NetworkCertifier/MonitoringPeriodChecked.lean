@@ -1,7 +1,7 @@
 module
 
 public import Definitions.NetworkCertifier.Checked
-public import Definitions.NetworkCertifier.Period
+public import Definitions.NetworkCertifier.MonitoringPeriod
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,10 +37,10 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A monitoring period of sampled audits with checked inputs: the run the check is held to, and the leak relation there
 
-Definitions only. `Definitions.NetworkCertifier.Period`'s leak relation with each statement's checked inputs left out
+Definitions only. `Definitions.NetworkCertifier.MonitoringPeriod`'s leak relation with each statement's checked inputs left out
 of the count (`Definitions.NetworkCertifier.Checked`): the leak relation at the network certifier's rows, with a valid
-run. The window's good event with it (`WindowGoodChecked`) is stated with the guarantee
-(`Definitions.NetworkCertifier.Guarantees.PeriodChecked`), since it reads a named premise.
+run. The window's good event with it (`ExecutionPhaseGoodChecked`) is stated with the guarantee
+(`Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked`), since it reads a named premise.
 
 **The run.** The relation at the network certifier's rows accepts the network certifier's records on the run that
 reads the trace's inputs, takes its ingress from the operator's moves on those records, and holds an incorrect proof

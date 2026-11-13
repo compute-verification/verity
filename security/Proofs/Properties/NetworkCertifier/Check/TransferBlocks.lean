@@ -1,6 +1,6 @@
 module
 
-public import Properties.NetworkCertifier.Check.LinkWindow
+public import Properties.NetworkCertifier.Check.TransferBlocks
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 public import Aesop.BuiltinRules
@@ -47,29 +47,29 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # N2's link-window verdict: what an acceptance establishes
 
-The proof of `Properties.NetworkCertifier.LinkWindowAcceptMeans`: `verdict`'s accept bit is `acceptedOf` of its four
+The proof of `Properties.NetworkCertifier.TransferBlocksAcceptMeans`: `verdict`'s accept bit is `acceptedOf` of its four
 checks (`verdict_shape`), and each check that holds is its predicate (`proved_spec`, `opened_spec`, `certified_spec`,
 `synced_spec`).
 
 Its two lemmas:
 
-* honest: `linkWindowAcceptMeans_honest`, the converse, that a link-window proved, opened, certified and synced is
+* honest: `transferBlocksAcceptMeans_honest`, the converse, that a link-window proved, opened, certified and synced is
   accepted with the property's outputs and digest (each predicate is its check, `proved_of` … `synced_of`, and the
-  verdict's digest always computes, `verdictDigest_ok`); and `linkWindowAcceptMeans_honest_certifier`, that on a warden
+  verdict's digest always computes, `verdictDigest_ok`); and `transferBlocksAcceptMeans_honest_certifier`, that on a warden
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
   completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
-  the findings of its run of Flock's verifier (`WindowProved`) and the statement's public file holding the sampled
-  proof block's row commitments (`WindowOpened`, whose header line `commitments` reads through Flock's JSON parser, which no proof
+  the findings of its run of Flock's verifier (`ExecutionPhaseProved`) and the statement's public file holding the sampled
+  proof block's row commitments (`ExecutionPhaseOpened`, whose header line `commitments` reads through Flock's JSON parser, which no proof
   here evaluates, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
-* nontrivial: `linkWindowAcceptMeans_nontrivial`, that a verifier accepting every link-window doesn't have the property
-  (`LinkWindowAcceptMeansBy`, which is the property at the verdict, `linkWindowAcceptMeans_by`): it accepts a warden
+* nontrivial: `transferBlocksAcceptMeans_nontrivial`, that a verifier accepting every link-window doesn't have the property
+  (`TransferBlocksAcceptMeansBy`, which is the property at the verdict, `transferBlocksAcceptMeans_by`): it accepts a warden
   link-window with no findings, which isn't proved.
 -/
 
 @[expose] public section
 
-open NetworkCheck NetworkCheck.LinkWindow
+open NetworkCheck NetworkCheck.TransferBlocks
 open Lean (Json toJson)
 
 namespace Properties.NetworkCertifier
@@ -79,7 +79,7 @@ local instance instLawfulBEqByteArray_linkWindow : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-theorem proved_spec {c : Case} (h : proved c = true) : WindowProved c := by
+theorem proved_spec {c : Case} (h : proved c = true) : ExecutionPhaseProved c := by
   unfold proved at h
   split at h
   · cases h
@@ -149,7 +149,7 @@ theorem signs_spec {lms : Lms.Params} {key session : ByteArray} {x : NetworkChec
     | ok b => rw [hv] at h; cases b <;> first | rfl | cases h
   · cases h
 
-theorem certified_spec {c : Case} (h : certified c = true) : WindowCertified c := by
+theorem certified_spec {c : Case} (h : certified c = true) : ExecutionPhaseCertified c := by
   unfold certified at h
   simp only [Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at h
   obtain ⟨hs, hall⟩ := h
@@ -164,12 +164,12 @@ theorem certified_spec {c : Case} (h : certified c = true) : WindowCertified c :
     exact ⟨x, by rw [Array.getElem?_eq_getElem hd', hcx], hl, hdir, hw, signs_spec hv⟩
   · cases hx
 
-theorem synced_spec {c : Case} (h : synced c = true) : WindowSynced c := by
+theorem synced_spec {c : Case} (h : synced c = true) : ExecutionPhaseSynced c := by
   cases hk : c.kind with
-  | warden => simp only [WindowSynced, hk]
+  | warden => simp only [ExecutionPhaseSynced, hk]
   | plain | served =>
     simp only [synced, hk] at h
-    simp only [WindowSynced, hk]
+    simp only [ExecutionPhaseSynced, hk]
     split at h
     · rename_i s hs
       simp only [Bool.and_eq_true, Array.contains_iff_mem, Array.any_eq_true', beq_iff_eq] at h
@@ -177,7 +177,7 @@ theorem synced_spec {c : Case} (h : synced c = true) : WindowSynced c := by
       exact ⟨s, hs, hd, r, hr, he⟩
     · cases h
 
-theorem linkWindowAcceptMeans : LinkWindowAcceptMeans := by
+theorem transferBlocksAcceptMeans : TransferBlocksAcceptMeans := by
   intro c h
   cases hv : verdict c with
   | error e => rw [hv] at h; cases h
@@ -199,7 +199,7 @@ theorem linkWindowAcceptMeans : LinkWindowAcceptMeans := by
 
 /-! ## The honest lemma: each predicate is its check -/
 
-theorem proved_of {c : Case} (h : WindowProved c) : proved c = true := by
+theorem proved_of {c : Case} (h : ExecutionPhaseProved c) : proved c = true := by
   obtain ⟨hg, fs, hf, hne, hall⟩ := h
   unfold proved
   rw [hf]
@@ -212,7 +212,7 @@ theorem opens_of {row : ByteArray} {bits : Nat} {salt : Option ByteArray} {bc : 
   simp only [opens, Bool.and_eq_true, beq_iff_eq]
   exact ⟨hs, he⟩
 
-theorem opened_of {c : Case} (h : WindowOpened c) :
+theorem opened_of {c : Case} (h : ExecutionPhaseOpened c) :
     ∃ row, pubRow c = .ok (some row) ∧ opened c (some row) = some 3 := by
   obtain ⟨hw, row, file, u, bcPub, bcWit, bcOut, hr, hf, hu, hb, h1, h2⟩ := h
   refine ⟨row, hr, ?_⟩
@@ -227,7 +227,7 @@ theorem signs_of {lms : Lms.Params} {key session : ByteArray} {x : NetworkCheck.
   rw [hm, hs]
   simp [hk, hv, Except.toOption]
 
-theorem certified_of {c : Case} (h : WindowCertified c) : certified c = true := by
+theorem certified_of {c : Case} (h : ExecutionPhaseCertified c) : certified c = true := by
   obtain ⟨hs, hall⟩ := h
   unfold certified
   simp only [Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range]
@@ -239,11 +239,11 @@ theorem certified_of {c : Case} (h : WindowCertified c) : certified c = true := 
   simp only [Bool.and_eq_true, beq_iff_eq]
   exact ⟨⟨⟨hl, hdir⟩, hw⟩, signs_of hk hm hsig hv⟩
 
-theorem synced_of {c : Case} (h : WindowSynced c) : synced c = true := by
+theorem synced_of {c : Case} (h : ExecutionPhaseSynced c) : synced c = true := by
   cases hk : c.kind with
   | warden => simp only [synced, hk]
   | plain | served =>
-    simp only [WindowSynced, hk] at h
+    simp only [ExecutionPhaseSynced, hk] at h
     obtain ⟨s, hs, hd, r, hr, he⟩ := h
     simp only [synced, hk, hs, Bool.and_eq_true, Array.contains_iff_mem, Array.any_eq_true', beq_iff_eq]
     exact ⟨hd, r, hr, he⟩
@@ -340,10 +340,10 @@ theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true acceptedOutput
   simp only [ht, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
-/-- **A link-window proved, opened, certified and synced is accepted** (the honest lemma of `LinkWindowAcceptMeans`,
+/-- **A link-window proved, opened, certified and synced is accepted** (the honest lemma of `TransferBlocksAcceptMeans`,
 its converse): the verdict accepts it, with the outputs and digest the property states. -/
-theorem linkWindowAcceptMeans_honest :
-    ∀ c : Case, WindowAccepted c → (verdict c).map Verdict.accepted = .ok true ∧ WindowVerdict c := by
+theorem transferBlocksAcceptMeans_honest :
+    ∀ c : Case, ExecutionPhaseAccepted c → (verdict c).map Verdict.accepted = .ok true ∧ ExecutionPhaseVerdict c := by
   intro c ⟨hp, ho, hc, hs⟩
   obtain ⟨row, hr, hrow⟩ := opened_of ho
   obtain ⟨d, hd⟩ := verdictDigest_ok c
@@ -354,27 +354,27 @@ theorem linkWindowAcceptMeans_honest :
       Bool.and_self, Option.getD_some, hout, hd, bind, Except.bind, pure, Except.pure]
   exact ⟨by rw [hv]; rfl, _, hv, rfl, hd⟩
 
-/-- **An honest warden link-window is accepted** (the honest lemma of `LinkWindowAcceptMeans` on a warden link): one
+/-- **An honest warden link-window is accepted** (the honest lemma of `TransferBlocksAcceptMeans` on a warden link): one
 proved and opened whose two certificates the certifier's device signed under its key (a key `Lms.key` derives at
 parameters `Lms.Params.make` admits, the link's), whatever syncs it declares. -/
-theorem linkWindowAcceptMeans_honest_certifier :
+theorem transferBlocksAcceptMeans_honest_certifier :
     ∀ (c : Case) (w : ByteArray) (N W H : Nat) (toy : Bool) (I seed : ByteArray) (k : Lms.PrivateKey),
       c.kind = .warden w → Lms.Params.make N W H toy = .ok c.lms → Lms.key c.lms I seed = .ok k →
-      CertifierSigned c k → WindowProved c → WindowOpened c →
-      (verdict c).map Verdict.accepted = .ok true ∧ WindowVerdict c := by
+      CertifierSigned c k → ExecutionPhaseProved c → ExecutionPhaseOpened c →
+      (verdict c).map Verdict.accepted = .ok true ∧ ExecutionPhaseVerdict c := by
   intro c w N W H toy I seed k hk hmake hkey ⟨hpub, hsize, hall⟩ hp ho
   obtain ⟨-, hI, -, hIs, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hkey
   have hid : c.key.extract 0 16 = k.I := by
     rw [hpub, Lms.PrivateKey.publicKey]
     exact ByteArray.extract_append_eq_left (hI ▸ hIs).symm
-  refine linkWindowAcceptMeans_honest c ⟨hp, ho, ⟨hsize, fun d hd => ?_⟩, by simp only [WindowSynced, hk]⟩
+  refine transferBlocksAcceptMeans_honest c ⟨hp, ho, ⟨hsize, fun d hd => ?_⟩, by simp only [ExecutionPhaseSynced, hk]⟩
   obtain ⟨x, m, q, sig, hx, hl, hdir, hw, hxk, hm, hsig, hsx⟩ := hall d hd
   obtain ⟨hv, hdec⟩ := Properties.CertifierDevice.Proofs.Lms.lmsCorrect N W H toy c.lms I seed k q m sig hmake hkey hsig
   exact ⟨x, hx, hl, hdir, hw, hxk.trans hid.symm, m, sig, hm, hsx ▸ hdec, hpub ▸ hv⟩
 
 /-! ## The nontrivial lemma -/
 
-theorem linkWindowAcceptMeans_by : LinkWindowAcceptMeans ↔ LinkWindowAcceptMeansBy verdict := Iff.rfl
+theorem transferBlocksAcceptMeans_by : TransferBlocksAcceptMeans ↔ TransferBlocksAcceptMeansBy verdict := Iff.rfl
 
 /-- A warden link-window with no findings, on an empty grid: no verifier's acceptance of it means it was proved. -/
 def unproved (w : ByteArray) : Case where
@@ -405,9 +405,9 @@ def unproved (w : ByteArray) : Case where
   ingress := ⟨⟨0, 0, 0, 0, 0⟩, none⟩
   kind := .warden w
 
-/-- **No verifier that accepts every link-window has `LinkWindowAcceptMeans`' property** (its nontrivial lemma): such a
-verifier accepts a warden link-window with no findings (`unproved`), which isn't `WindowProved`. -/
-theorem linkWindowAcceptMeans_nontrivial : ∀ v, AcceptsAll v → ¬ LinkWindowAcceptMeansBy v := by
+/-- **No verifier that accepts every link-window has `TransferBlocksAcceptMeans`' property** (its nontrivial lemma): such a
+verifier accepts a warden link-window with no findings (`unproved`), which isn't `ExecutionPhaseProved`. -/
+theorem transferBlocksAcceptMeans_nontrivial : ∀ v, AcceptsAll v → ¬ TransferBlocksAcceptMeansBy v := by
   intro v hall h
   obtain ⟨-, fs, hf, -⟩ := (h (unproved .empty) (hall _)).1.1
   cases hf
