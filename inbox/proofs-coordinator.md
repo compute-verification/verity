@@ -113135,3 +113135,52 @@ In both rehearsals the interior registers no value of its own for the select's i
 **So.** Confirmed, for everything my side can run: serving can take `5ad83c84ef5e` for the second try. I withdraw it only if `b025` fails for a reason in the tree. The design (`--replay rate:1/1 --k 4`) is a separate word, and it waits on `b025`, which is in its stand-in serve at Friday's shape since 01:28Z; I expect it to end between 03:25Z and 03:50Z, and I write the word then, or at 05:00Z if it has not ended. [derived; guess for the end]
 
 **Serving's 180 minutes for the second try.** My estimate for 8 of 8 and k = 4 on a CPU node is 85 to 110 minutes for the two commands, after about 6 minutes of builds; it is scaled from `b876`, not measured, and `b025` measures it. [derived from `b876`'s phases; guess until `b025` ends]
+
+
+## RUNCOINS, Fri 01:57Z: compiled and proved: the run's accept (`spotRunAcceptsPlay`) and the run's coins (`runCoinsFromDevice`), each with a clean axiom probe
+
+Two theorems are now proved, and every file of the leg compiles.
+- The first says: a two-stage audit that the running verifier accepts, with the two-stage form allowed, is a play that SPOT[Flock]'s two-stage verifier accepts. That holds at held copies that agree with what the run reads, and on coins that start with the bytes each stage read. It shows the first stage's sample of outer blocks and the second stage's sample of inner blocks are the model's.
+- The second says: the bytes each stage read are the challenger device's coins, released after that stage's record, or the evidence shows a break.
+
+Both rest on named hypotheses, listed below; none is new tonight except the evidence-key one, which was asked for. Branch `cursor/proofs-runcoins-2d88`, pushed head `d4bb4a6585` (`b1659aa34d` is the proof commit; the rest are the `Coins` fix and a base merge that touches only `EntryRoots.lean`). Nothing is left unpushed.
+
+1. Runs [run]
+   - `r20261113-012930-0e4e` (`RunsAs/Top.lean` at `b1659aa34d`): lean exit 0. Axiom probe: "none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". It names `spotRunAcceptsPlay` and `resolve_ne_all` with `[propext, Classical.choice, Quot.sound]`. Its build compiled `Statement`, `Statements`, `Released`, `Outcome`, `Steps` and `Proved`.
+   - `r20261113-015039-2f49` (`RunsAs/Coins.lean` at `a1de888b9c`): lean exit 0, same probe line. Its four theorems are `coinsHold_read`, `fromDevice_of_reason`, `fromDevice_of_hold` and `runCoinsFromDevice`.
+   - Failed along the way, all fixed:
+     - `r20261113-010741-bf55` and `r20261113-012930-800a`: tactic slips in `Proved` and `Coins`.
+     - `r20261113-010741-ea36`: `Coins`'s digest conjunct.
+     - `r20261113-010741-49c5`: RUNSAS's `RoundTwoOf.lean`. It doesn't build because RUNSAS's `Round2.lean` fails on the current base: line 44 has a `cases` dependent-elimination failure on `Stmt.ofJson?`'s `registered` match; line 147 has `check_ok_interior hc` at `core own` against `own`; line 178 has `find?_first`'s predicate not unified. RUNSAS's to fix.
+   - Lean slots: the 01:07Z tries waited about 15 minutes for a slot; the 01:29Z one started within minutes.
+2. What `spotRunAcceptsPlay` rests on: the named premises of `SpotRunAcceptsPlay`, all decided or carried outside it [read: `RunsAs/Statement.lean`].
+   - `HeldMatches i it h`, with `parts` now at the run's replay sample (HELDOF's `PartsAt`, text in my 01:10Z entry) and `refs` as before.
+   - `TwoHolds h`, `NamesDistinct h`, `RecordsHeld h x m₁` and `RegistersNone it.record` (RUNSAS's definitions). `RegistersNone` holds at the second try's design only.
+   - `jsonMsg x = some i.record` and `jsonMsg m₁ = some it.record`.
+   - `RoundTwo h`. RUNSAS's `RoundTwoOf.stmtOk_of_check` proves it once `Round2.lean` builds.
+   - `SessionsAccept`: the session statements and each template's Flock session accepted.
+   - `PlayCoins`: the play's coins start with the bytes each stage read.
+3. What `runCoinsFromDevice key` rests on [read: `RunsAs/Coins.lean`]: `CheckReadsDraw key`, now at the parameters' key, and `EvidenceKeyIs key i.coins` and `EvidenceKeyIs key it.coins`. Its conclusion keeps `∃ label` (the base's reading).
+4. Next [guess]
+   - `acceptedTwo_of_check` is about 40 lines on TWOLEG's `Properties.Verity.SampledTwo.accepted_steps` (at `99da2b9189`: `checkBlobsAtWith form … = .accept` gives `form = true` and `Spot.Run.run i true = .ok run` with `jeq (getD run "symbol") (str "accept")`). It needs `jeq` to equality at a string, `i.rule` two-stage, and `i.interior = some _` from `inputOf`.
+   - It can't be written on my base, which doesn't hold `SampledTwo` (the base `7984747798` has none). It is for whoever's base holds both: ACCEPTS, or me once the base takes TWOLEG.
+5. Size [derived]: the leg is 1,218 lines in seven files (`Statement` 222, `Released` 310, `Steps` 237, `Proved` 137, `Top` 121, `Outcome` 119, `Coins` 72).
+
+STOP RULE
+- Before: no `lean-audit.json` touched; the verifier accepts what it accepted.
+- After: the same.
+
+NEEDS
+1. RUNSAS: `Round2.lean` on the base at `1f049180cd` or later (errors above), so `RoundTwoOf` discharges `RoundTwo`.
+2. TWOLEG, or the coordinator: `SampledTwo` on the two-stage base for `acceptedTwo_of_check`.
+
+To post: none.
+
+Not established
+- `RoundTwo` as a lemma (RUNSAS's file doesn't build).
+- `acceptedTwo_of_check`.
+- FRAME's five clauses and `TwoHolds` as lemmas.
+- `HeldMatches.refs` (HELDOF's `RefsAre`).
+- That the family is the verifier's: `∃ label` until #9555 is on the base.
+- That a replayed earlier-period signature is excluded; it counts as a forgery.
+- That `lean_changed --records` agrees: no lock touched, so none was run.
