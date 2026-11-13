@@ -7,7 +7,8 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
   served_passes.py same A.json B.json --out same.json
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
   served_passes.py volunteer-needed [--over-cap reject|uncredited] [--verdict run|pass]
-  served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...] [--window-record W]
+  served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...]
+                          [--window-record W [--previous-record FILE]]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W [--class S,P,O]] --out verify.json [--answer answer.json]
                           [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
   served_passes.py lean --passes DIR --verify verify.json --exe pouw-pearlplus --out pearlplus-lean.json [--check C]
@@ -73,7 +74,9 @@ pass that step didn't finish or left over a cap.  A dropped pass credits nothing
 declared.  It refuses once the coin is flipped.  With ``--window-record W`` (a tied run) it drops the warm-up's rounds too
 (``timed`` false), which a tied run's W doesn't list, and after ``DIR/retention.json`` writes Pearl+'s window record W
 over the rounds it retains, each under its round (`pearl_c.window.write`), for ``verify --tie W`` and the one-stage
-audit tied to it.
+audit tied to it.  With ``--previous-record FILE`` W is chained after that registration record (its ``previous`` the
+record's digest): the record a serve's registration log holds before W, as the deployment's first, which registers the
+weights (``prove_path.py weights-registration --deployment-record``); without it W is chained after nothing.
 
 ``verify`` is Pearl+'s PoUW verdict on the run (`verify_run.verify_passes`): the passes ``--manifest`` names (a capture's
 ``prefill/`` and ``decode/`` beside its ``coins.json``), else those with calls that ``DIR/served.json`` names, each at its
@@ -260,7 +263,7 @@ def serve(args: argparse.Namespace) -> int:
         raise SystemExit(SEEDED_ALONE)
     from verity_bench.vllm import arms as A
     from verity_bench.vllm import presets as P
-    from verity_bench.vllm import runner as RN
+    from verity_bench.vllm import engine as RN
     from verity_vllm.engine import env as engine_env
 
     spec = P.resolve_spec(args.spec)
@@ -541,12 +544,14 @@ def retain(args: argparse.Namespace) -> int:
         from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
         try:
-            w = PWR.write(args.window_record, served["passes"], rounds)
+            before = REG.digest(json.loads(Path(args.previous_record).read_text())) if args.previous_record else None
+            w = PWR.write(args.window_record, served["passes"], rounds, before)
         except (KeyError, OSError, ValueError) as e:
             print(f"retain FAIL: W: {type(e).__name__}: {e}", flush=True)
             return 1
         print(f"retain W: {args.window_record}, rounds {rounds[0]}..{rounds[-1]} ({len(rounds)}), {len(w['registered'])} "
-              f"values, digest {REG.digest(w)[:16]}…", flush=True)
+              f"values, digest {REG.digest(w)[:16]}…, chained after "
+              f"{'nothing' if before is None else before[:16] + '…'}", flush=True)
     return 0
 
 
@@ -878,6 +883,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="drop this round (its place among served.json's passes with calls), repeated")
     r.add_argument("--window-record", metavar="W", help="a tied run: drop the warm-up's rounds too and write Pearl+'s window "
                    "record W over the rounds retained, after the retention (pearl_c.window), for verify --tie W")
+    r.add_argument("--previous-record", metavar="FILE", help="with --window-record: the registration record W is chained "
+                   "after, its `previous` that record's digest (default: W is chained after nothing)")
     v = sub.add_parser("verify")
     v.add_argument("--passes", required=True)
     v.add_argument("--manifest", action="append", type=Path,
@@ -924,6 +931,8 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     if args.cmd == "verify" and args.cls is not None and not args.tie:
         p.error("verify --class holds the passes --tie W ties to its class's fixed load: it is read only beside --tie")
+    if args.cmd == "retain" and args.previous_record and not args.window_record:
+        p.error("retain --previous-record names the record W is chained after: it is read only beside --window-record")
     return {"serve": serve, "same": same, "volunteer": volunteer, "volunteer-needed": volunteer_needed, "retain": retain,
             "verify": verify, "lean": lean, "case": case, "arm": arm, "uncredited": uncredited}[args.cmd](args)
 
