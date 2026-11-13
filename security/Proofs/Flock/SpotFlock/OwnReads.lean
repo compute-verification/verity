@@ -7,7 +7,7 @@ public import Proofs.Flock.SpotFlock.Opens
 public import Proofs.Flock.Claims.Complete.Json.Parse
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Proofs.Properties.Challenger.CanonLine
-public import Proofs.Properties.Verity.Sampled.RecordDraw
+public import Proofs.Properties.Challenger.CanonWf
 import all Lean.Data.Json.Basic
 
 /-!
@@ -164,8 +164,8 @@ theorem canon_of_jeq {a b : Json} (h : Spot.jeq a b = true) : ∃ s, Flock.canon
 /-- **A field of one of two equivalent well-formed values** is, up to equivalence, the other's. -/
 theorem field?_of_equiv {a b : Json} (ha : Wf a) (hb : Wf b) (h : FlockDeploy.JsonEquiv a b) {k : String} {x : Json}
     (hx : Spot.field? a k = some x) : ∃ y, Spot.field? b k = some y ∧ FlockDeploy.JsonEquiv x y := by
-  have he := Properties.Challenger.CanonLine.field?_equiv (Verity.Sampled.sortedKeys_of_wf a ha)
-    (Verity.Sampled.sortedKeys_of_wf b hb) h k
+  have he := Properties.Challenger.CanonLine.field?_equiv (Properties.Challenger.CanonRead.sortedKeys_of_wf a ha)
+    (Properties.Challenger.CanonRead.sortedKeys_of_wf b hb) h k
   rw [hx] at he
   cases hy : Spot.field? b k with
   | none =>
@@ -273,8 +273,8 @@ theorem value_of_jeq {own : Spot.SecondStage.Own} {t : String} {S R : Json} (hS 
   by_cases hRo : ∃ kR, Spot.getD R "ports" = .obj kR
   · obtain ⟨kR, hkR⟩ := hRo
     obtain ⟨hwR, hwB, hfB⟩ := blankReads_spec own t hR hkR
-    have hE := Properties.Challenger.CanonLine.canon_inj (Verity.Sampled.sortedKeys_of_wf _ hwA)
-      (Verity.Sampled.sortedKeys_of_wf _ hwB) hsA hsB
+    have hE := Properties.Challenger.CanonLine.canon_inj (Properties.Challenger.CanonRead.sortedKeys_of_wf _ hwA)
+      (Properties.Challenger.CanonRead.sortedKeys_of_wf _ hwB) hsA hsB
     obtain ⟨y, hy, hEy⟩ := field?_of_equiv hwA hwB hE hfA
     rw [hfB] at hy
     cases hy
@@ -306,8 +306,8 @@ theorem value_of_jeq {own : Spot.SecondStage.Own} {t : String} {S R : Json} (hS 
     have hB : Spot.SecondStage.blankReads own t R = R :=
       blankReads_not_obj own t fun kR hk => hRo ⟨kR, hk⟩
     rw [hB] at hsB
-    have hE := Properties.Challenger.CanonLine.canon_inj (Verity.Sampled.sortedKeys_of_wf _ hwA)
-      (Verity.Sampled.sortedKeys_of_wf _ hR) hsA hsB
+    have hE := Properties.Challenger.CanonLine.canon_inj (Properties.Challenger.CanonRead.sortedKeys_of_wf _ hwA)
+      (Properties.Challenger.CanonRead.sortedKeys_of_wf _ hR) hsA hsB
     obtain ⟨y, hy, hEy⟩ := field?_of_equiv hwA hR hE hfA
     have hfo : FlockDeploy.jsonForm y = .obj _ :=
       (Eq.symm hEy).trans (FlockDeploy.jsonForm_obj (Std.TreeMap.Raw.ofList (blankList own t kS) compare))

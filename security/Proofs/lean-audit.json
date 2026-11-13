@@ -179,6 +179,7 @@
   "Proofs.Properties.Verity.Sampled.RecursiveRefused",
   "Proofs.Properties.Verity.Sampled.MemberForm",
   "Proofs.Properties.Verity.Recursive.Audit",
+  "Proofs.Properties.Challenger.CanonWf",
   "Proofs.Flock.SpotFlock.AddressFacts.Width",
   "Proofs.Flock.SpotFlock.AddressFacts.WidthOf",
   "Proofs.Flock.SpotFlock.AddressFacts.BitsIn",
