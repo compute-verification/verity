@@ -145140,3 +145140,127 @@ None out.
 - Whether `LastSlot.lean` at `fa617b298f8f` compiles is MESSAGES's to say; I only read its header and its declarations' names.
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `250278de6bdc09a71bade7bc821206dc6c1c21f8`, pushed; nothing unpushed.
+
+## WINDOWAT, Fri 13 Nov 14:12Z: B is taken on the scratch with soundness's three docstrings; the records run is in flight, with no verdict yet; the proposed words and the pull request's body are below; one new point: `Joint/V5/Ends.lean` is read by nothing under B
+
+**In plain words.** Your 13:29Z order is read (mailbox at `9f1e617f27e`; nothing newer for me) and each of its parts is done or running.
+
+1. **The records run** is `r20261113-134731-7bef`, the fast path on the scratch at `edd98b08dba`. It is in flight: `security`'s facts are written and it is building `security/Proofs`. It has no verdict yet, so your question is not answered in this entry.
+2. **The docstrings** soundness and MEMBERS asked for are on the scratch, four commits, quoted below. They are not yet compiled: the records run holds my one run, and a build follows it.
+3. **The proposed words** for the lock's three reasons are below. I wrote them into no lock.
+4. **The pull request's body** is below as a draft.
+5. **One new point for you.** `Joint/V5/Ends.lean`, the proof that a stream of zeros ends the sample, is read by nothing under B, and its docstring names the field `hend`, which B removes. I leave it out of the pull request unless you say keep.
+
+### STOP RULE
+
+This entry restates nothing on a branch a pull request reads. The draft branch `cursor/proofs-windowat-hcls-b2b4` is at `a5b8ce506db`, unchanged, and nothing is carried onto it before #9520 lands. `cursor/proofs-windowat-5e4b` is at `e977fbc96f`, unchanged. The text is only on the scratch `cursor/proofs-windowat-hcls-snd-probe-b2b4`, now at `dea72a0f1f7`, which is never to merge. No lock is edited, no pull request is open or marked, and #9576 waits for "carry".
+
+### 1. The records run
+
+[run: `r20261113-134731-7bef`, observed running at 14:11Z] The command is the README's fast-path line, `research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records security --update`, with `--as proofs`. It took 32 GB, not my builds' 16, because that is the line as written. It says it audits `security` with `security/Proofs`, then `security/Properties`, on the slot path. It was launched at 13:47Z on the tree at `edd98b08dba`, before the docstring commits; docstrings change no statement, so its records are those of `dea72a0f1f7` too [derived].
+
+When it ends it tells three things: whether the three `unfolded_hash` values change, which codes fail, and whether the three records' `premises` stay as my reading (ii) has them. I report its printout as it stands, in the next entry.
+
+**The draft at `a5b8ce506db`** is another tree, so the scratch's run cannot answer for it. I launch that run when this one ends, one run at a time. If soundness's choice of B closes the question for you, say so and I do not spend it.
+
+### 2. The docstrings [not compiled]
+
+Four commits on the scratch, listed by whose file it is:
+
+- **`WeightSecurity/Deployed.lean`, ours** (`3ce8e8d40a6`, `dea72a0f1f7`), soundness's point, added to the module docstring: "The two SHA-512 premises are asked only of a window where some outcome of its stream ends its sample. Where none does, the window's audit rejects every run (`JointAuditV5.prob_accepts_of_not_ends`) and the window has no incorrect proof block on record (`JointAuditV5.wrongSet` is empty there, so `servedRec`'s `incorrect` is `0`). `Served.Local` then allows that window's release no changed slot, so any change there is counted in the bound's last term, the probability that the releases are not local: at such a window the bound is weaker, never stronger." I read `Served.Local` for this (`security/Definitions/WeightSecurity/Served.lean`): it asks `(changed …).card ≤ E * w.incorrect`, which is `≤ 0` there [read]. The same docstring named `accepted_drawnWrong_le`; it now names `accepted_drawnWrong_le_of_ends`, the lemma `servedRec_accepted_le` uses.
+- **`Window/Instance.lean`, soundness's** (`b52cc90121a`), added to `extractOf`'s docstring: "No proof reads the zero trace, which only makes the extractor total: where no outcome ends the sample the window's audit rejects every run (`JointAuditV5.prob_accepts_of_not_ends`), and the claim's transfer is asked only where one does (`ClaimTransfers`, whose proof reads the extractor by `extractOf_some`)."
+- **`Window/Read.lean`, soundness's** (same commit), not asked for but stale on sight: `WindowRead`'s docstring said the play "has the sessions of the window's sample at `ω`"; the field now also gives that the sample ended, so it says "the window's sample at `ω` ended (`Flock.Guarantees.sampleEnded`) and the play has its sessions". Soundness reads it with the rest of the diff.
+- **`MemberForm/Reads.lean`, MEMBERS's** (`bffa619080f`), the clause MEMBERS suggested, in the opening docstring's second paragraph: "At coins whose bytes are the window's, the window's draw ends on them, so its sample ended (`joint_drawUnits_of_drew`), and the sample is the units v1's check proved (…)". "Coins" is the file's word in that sentence; I left it.
+
+### 3. Proposed words for the three `shape.frozen` reasons
+
+Each is a replacement of a phrase inside the reason; the rest of each reason stays. For `JointSampledV5` and `JointShareV5`:
+
+- "at one link-point count per member, hcls" becomes "at one link-point count per member at every outcome that ends the sample, hcls".
+- "with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone" becomes "with A3 for the draw's bytes and, where some outcome of the stream ends the sample, TableCRZAt and LinkCRZCAt at each member's session played alone".
+- "it bounds the event that every session accepts with" becomes "it bounds the event that the sample ends and every session accepts with". This is a third phrase, beyond the two my 13:23Z entry named: `Accepts` has said so since the draft.
+
+For `JointHorizonV5`:
+
+- "under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays)" becomes "under A3 at every window and, at each window where some outcome of the stream ends the sample, TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays)".
+
+Its "every window accepts" I leave: it is the period's event in its own words, and it reads the window's `Accepts`.
+
+### 4. The pull request's body, as a draft
+
+Title: `Joint/V5: a window's audit asks its link points where the sample ended, and takes no premise that an outcome ends it`
+
+> Lane proofs
+>
+> This restates three listed guarantees of `security/lean-audit.json`: `Flock.SecurityProofs.JointSampledV5`, `JointShareV5` and `JointHorizonV5`. Their premises get weaker and every conclusion keeps its text. None is deployed. This pull request's own Lean check is red on `witnesses.unwitnessed-changed` for the three, and that is the rule acting as written: each sits in `unwitnessed` at the hash of its statement, its statement changed, and its `shape.frozen` reason says why it has no witnesses yet (its acceptance is fixed to flock-verify's `AcceptsZKP`). The candidate's records run lists the three again at their new hashes. No `unwitnessed` entry is edited by hand.
+>
+> ## What this changes
+>
+> A window's audit over several members (`JointAuditV5`) took, as a field, a fact about every outcome of the verifier's byte stream: each member's part of the sample has its session's link points (`hcls`). The verifier's check gives that fact only where the sample ended, and an accept is only there (`joint_drawUnits_of_drew`). So the audit could be built only for windows where the fact also held at outcomes no accept reaches. Now:
+>
+> 1. `hcls` is asked only where the sample ended (`Flock.Guarantees.sampleEnded src law nJ ω = true`).
+> 2. The game's outcome says whether the sample ended, and `Accepts` is "the sample ended and every session accepts".
+> 3. A member's session played alone samples only the outcomes at which the sample ended (`JointAuditV5.EndΩ`).
+> 4. The audit exists at every window. Nothing asks that some outcome ends the sample. Where none does, every run is rejected (`prob_accepts_of_not_ends`) and `wrongSet` is empty.
+> 5. The two SHA-512 premises (`TableCRZAt`, `LinkCRZCAt`) stand under `∀ _ : Nonempty w.EndΩ`. Of a window with no outcome that ends its sample they ask nothing, and the guarantee holds there with no premise.
+>
+> ### The three guarantees
+>
+> `JointSampledV5`, before and after; the other two change the same way (`JointHorizonV5`'s binder is `∀ _ : Nonempty (W t).EndΩ`, after `Plays`):
+>
+> ```lean
+> -- before
+>     (∀ k ω j, Assumptions.TableCRZAt execArith hs512 …) →
+>     (∀ k, Assumptions.LinkCRZCAt execArith hs512 …) →
+>     ∀ W : Finset (Fin w.nJ),
+>       prob (fun o => w.Accepts o ∧ W ⊆ w.wrongSet τ) w.game τ ≤ ENNReal.ofReal (w.pa W) + w.eps
+> -- after
+>     (∀ _ : Nonempty w.EndΩ, ∀ k ω j, Assumptions.TableCRZAt execArith hs512 …) →
+>     (∀ _ : Nonempty w.EndΩ, ∀ k, Assumptions.LinkCRZCAt execArith hs512 …) →
+>     ∀ W : Finset (Fin w.nJ),
+>       prob (fun o => w.Accepts o ∧ W ⊆ w.wrongSet τ) w.game τ ≤ ENNReal.ofReal (w.pa W) + w.eps
+> ```
+>
+> What "keeps its text" covers and what it does not: the bound is the same expression, `P_a(W)` plus the members' terms, and `pa`, `eps` and `design` are untouched. The event reads the changed definitions: it is now "the sample ended, every session accepts, and `W` is incorrect", with `wrongSet` taken at the outcomes that end the sample.
+>
+> ## The files
+>
+> - **`Flock/EndToEnd/Joint/V5/`** (ours): `Statement.lean`, `Member.lean`, `Bound.lean`. One lemma does the split, `accepted_drawnWrong_le_of_ends`.
+> - **Soundness's files**, which soundness read before the mark: `Joint/V5/Layout.lean`, `Sampled/Window.lean`, `Members/Widen.lean` and nine files under `Window/`. `Window.hcls` is asked only where the sample ended, `Window.ks` splits by cases, the vocabulary's extractor is the zero trace where no outcome ends the sample (no proof reads it), and "the sample ended" travels from the read to the window's coupling as one conjunct or field.
+> - **`MemberForm/ClaimReads.lean`** (ours), two lines, and **`MemberForm/Reads.lean`**, one line, a commit of its own: the read owes that the sample ended, which `joint_drawUnits_of_drew` gives.
+> - **`WeightSecurity/Deployed.lean` and `Pressure.lean`** (ours), a commit of their own: the same binder before the two premises. Where no outcome ends a window's sample its record has no incorrect proof block, so `Served.Local` allows its release no changed slot: the bound is weaker there, never stronger.
+>
+> ## The lock
+>
+> - The three records change in `signature`, `unfolded_hash` and the `reads` digests of `Joint/V5/Statement.lean`'s definitions. `premises.assumptions` stays `SHA512CRExpected`, `SHA512CRStrict`, `UniformRandomBytes`; `domain` and `open` stay empty. The printout of the records run is pasted here: PRINTOUT.
+> - `shape.frozen`: the three reasons' words say what the statements now say (three phrases, a hand edit, recorded by the fast path).
+>
+> ## What it deletes
+>
+> The audit's law is replaced in place; no second form is kept beside it. It adds one lemma and one branch per split, and removes nothing else: the old text has no other reader.
+>
+> ## Verified
+>
+> `lean_changed.py --build` on a node, over `MemberForm`, `Members`, every file under `Window/`, `WeightSecurity` and `Joint/V5`: RUNS. The records run: RECORDS.
+>
+> ## Not covered
+>
+> No accept changes: the per-member form still accepts nothing. The three guarantees take their witnesses only when restated over a verifier record.
+
+Three places of that draft wait on a measurement and say so in capitals. The diff's size waits on the carry onto `main` after #9520. Today's figures [run: `git diff --numstat`]: the scratch against the draft is 19 files, 235 lines added and 94 removed; the draft's own five `Joint/V5` files against `e977fbc96f` are 501 added and 115 removed, `Ends.lean`'s 211 among them.
+
+**Two corrections to my file lists.** `Joint/V5/Layout.lean` is soundness's, not mine as my 12:53Z entry said: it was written on soundness's branch (`18838728dec`), is not on `main`, and arrives with #9520. So soundness reads twelve files, not eleven; `Layout.lean`'s change against #9520's head is 23 lines added and 9 removed. And `MemberForm/ClaimReads.lean` is mine (`cbed6a42df5`), though my 13:23Z entry listed it among soundness's.
+
+### 5. `Joint/V5/Ends.lean` under B
+
+[read, run: `rg`] Nothing imports `Proofs.Flock.EndToEnd.Joint.V5.Ends` and nothing names `hend_of_zeros`. Its eleven theorems proved the field `hend` from A3 and the stream's length, for the draft where `hend` was a field. Under B there is no field, and the guarantee needs no such fact: where no outcome ends the sample it holds outright. The file still compiles (its last theorem concludes `∃ ω, sampleEnded src law nJ ω = true`), but its docstring names `JointAuditV5.hend`, and unread Lean counts against `unread-caps.json`. So I leave it out of the pull request. It stays in the draft branch's history at `a5e72f55d12`. If you want it kept, as the fact that a deployed window whose stream holds the design's first reads is on the split's first side, I restate its last theorem to conclude `Nonempty w.EndΩ` and mend the docstring.
+
+### Not established
+
+- Everything the records run is to tell: it has no verdict yet. Until it has, (i) and (ii) of my 13:23Z entry are readings.
+- The four docstring commits are not compiled.
+- The compile once #9520 has merged `main`. #9520's head is `e2865001c41`, open, and conflicts with `main` [run: `gh pr view 9520`, 14:06Z].
+
+### State
+
+Scratch at `dea72a0f1f7`, pushed. One run in flight or just ended, as said under 1. Next: the build of the docstring commits, then the draft's records run if you want it. I carry nothing onto the draft branch before #9520 is on `main`.
