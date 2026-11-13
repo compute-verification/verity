@@ -54,7 +54,7 @@ def _host() -> ctypes.CDLL:
 def _device(lib: ctypes.CDLL) -> ctypes.CDLL:
     vp = ctypes.c_void_p
     lib.rt_hist_init.argtypes = [vp, _hp, vp]
-    lib.rt_hist_append.argtypes = [vp, _hp, ctypes.c_uint64, ctypes.c_uint32] + [vp] * 6
+    lib.rt_hist_append.argtypes = [vp, _hp, ctypes.c_uint64, ctypes.c_uint32, *[vp] * 6]
     lib.rt_hist_paths.argtypes = [vp, _hp, vp, vp, ctypes.c_uint32, vp]
     for f in (lib.rt_hist_init, lib.rt_hist_append, lib.rt_hist_paths):
         f.restype = ctypes.c_int
