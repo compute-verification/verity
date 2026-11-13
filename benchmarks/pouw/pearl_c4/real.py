@@ -34,11 +34,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
+from verity_config.settings import of
+
 from verity.protocols.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
-from verity_config.settings import of
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
 
 settings = of(__file__)
 TILE, ROWS_PER_TASK, ALIGN = 64, 2048, 128
@@ -80,7 +81,7 @@ def npz_manifest(path: Path) -> dict:
     return {"model": path.name, "npz": str(path), "inputs": inputs}
 
 
-def capture_sha256(job: "Job") -> str:
+def capture_sha256(job: Job) -> str:
     """The capture's identity: its manifest's sha256, or an npz's own (hashed once, kept in the output directory)."""
     if not job.npz:
         return sha256(job.capture / "manifest.json")
@@ -181,7 +182,6 @@ def tile(job: Job, name: str, t: int) -> dict:
     rows, cols = list(range(ti * TILE, (ti + 1) * TILE)), list(range(tj * TILE, (tj + 1) * TILE))
     fast = settings.PEARL_C4_F1 == "fast"
     if fast:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
         import f1_fast
     s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None, hashing="h0")
     unit = Matmul(0, Shape(m, k_unit, n), 0)

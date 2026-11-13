@@ -8,8 +8,8 @@ server's memory with labels it derives itself and flips its coins once the fill 
 receipt time on its own clock and signs the run's records once, under LMS over SHA-512. The verifier checks a signed run
 against the commitment published before it and publishes the verdict, and for a wipe the survivor bound it certifies.
 
-This directory holds the device's verdicts as executable Lean, the package `lean/` (its README lists the API). The
-device's Python is in `verity/protocols/pous` (below), the reference the Lean is difftested against.
+This directory holds the device's Python, which is the reference, and its verdicts as executable Lean, the package
+`lean/` (its README lists the API), difftested against that Python.
 
 ## Interface
 
@@ -21,9 +21,33 @@ What code outside this directory may use. Everything else here is internal.
 | `python verity/protocols/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [OPTIONS]` | The verifier process of the harness's timed audit: a client of a responder that runs `protocol.TimedAudit`'s audits against it (PoUS's `protocol.py`) and writes each audit's record and verdicts to `AUDIT.json`. With `--strict` it refuses a `k` or a limit the certificate doesn't cover. It exits 0 when every audit accepted and 1 otherwise. `--calibrate-only` measures the round trip and writes the limit instead. |
 | The Lean package `lean/` (`core_memory_challenger`) | The verdicts on what the device signed, as executables, Lean modules and two Python callers. `lean/README.md` states its interface. |
 
-The device's Python, which this directory imports, is PoUS's: `memory_challenger.py`, `streamed_wipe.py`, the messages of
-a run of timed rounds (`challenger_session.py`) and the wipe's process (`wipe_party.py`) are entry points of
-`verity/protocols/pous/verifier/README.md`.
+From Python there are four modules, each imported by its path.
+`memory_challenger` is the timed rounds' device and its records: the device and its coin tree (`MemoryChallenger`,
+`CoinTree`, `CoinOpening`, `verify_coin`), what it publishes and signs (`SessionCommitment`, `SignedSession`, `Round`,
+`records_root`, `message`), the check of a signed run (`verdict`, `Verdict`), its two logs (`SessionLog`, `SaltLog`), its
+signature schemes (`Signer`, `Verify`, `LmsSigner`, `SCHEMES`, `LMS`, `TEST_PREFIX`) and a block's digest
+(`block_digest`), with the formats' names and constants. `challenger_session` is a run of timed rounds between a node and
+the challenger's host: the two sides and their frames, the request and its ids (`request_of`, `session_id`, `placement`,
+`side_of`), the node's calls (`salt`, `session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
+`challenger_party` is the challenger's side of that run: `serve`, `give_salt`, `designate`, `keep`, `report`, `Refusal`,
+`PROTOCOL` and `SOURCE_BYTES`, the byte length of a salt's source. `timed_audit` is the timed audit's client and its
+record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `verdict`
+and `lean_verdict`, and the clocks, counters and parameters a harness reads beside them.
+
+Two files are named `timed_audit.py`, and they are two things. This directory's is the timed audit as the memory
+challenger runs it: the client of a responder's wire, the record it writes and `verdict`, the verdict on that record in
+Python, which is the reference. `verity/protocols/pous/verifier/check/timed_audit.py` is the Python beside PoUS's Lean
+check: its `lean_verdict` gives the same verdict by the Lean executable `pous-timed-audit`, and its two commands hold
+the Lean to the reference, `--generated` on records it builds and `--replay RUN_DIR` on a run's. This directory's
+`lean_verdict` calls that one and loads its file by path (`pous_check`), the one load of a file by path in the device's
+modules. An import by name cannot reach it: the Lean check is a tree with an import root of its own (`SEPARATE` in
+`tests/test_boundaries.py`) that reads `verity_difftest`, and `verity` imports no other distribution. The check's other
+Python is `verity/protocols/pous/verifier/check/interop.py --all`, which holds the Lean to the P2 wire's Python
+reference on every vector, and `verity/protocols/pous/verifier/check/scripts/difftest_vectors.py`, which writes the
+difftest's instances with the Python's answers on them and which the Lean check runs.
+
+The streamed-label wipe's Python (`streamed_wipe.py`, and the wipe's process `wipe_party.py`) is PoUS's verifier's, an
+entry point of `verity/protocols/pous/verifier/README.md`.
 
 ## Top statements
 
@@ -47,9 +71,12 @@ The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryC
 
 ## Where to look
 
-- `verity/protocols/pous/device/memory_challenger.py`: the timed rounds' device (`MemoryChallenger`, `CoinTree`,
-  `SessionLog`, `LmsSigner`, `verdict`); its module docstring is the record formats' spec.
-- `verity/protocols/pous/verifier/streamed_wipe.py`: the streamed-label wipe's device (`Challenger`) and `verdict`.
-- `verity/protocols/pous/device/challenger_party.py` and `wipe_party.py`: each as a party of its own on the challenger's
-  host; `wipe_parties.py`, the wipe's parties on the party runtime (`verity/configuration/deploy`).
+- `memory_challenger.py`: the timed rounds' device (`MemoryChallenger`, `CoinTree`, `SessionLog`, `LmsSigner`,
+  `verdict`); its module docstring is the record formats' spec.
+- `challenger_session.py` and `challenger_party.py`: a run of timed rounds, from the node's side and as the challenger's
+  party on its own host.
+- `timed_audit.py`: the timed audit's client, its record and the two verdicts on it.
+- `verity/protocols/pous/verifier/streamed_wipe.py`: the streamed-label wipe's device (`Challenger`) and `verdict`;
+  `wipe_party.py` beside it, the wipe as a party of its own on the challenger's host, and `wipe_parties.py`, the wipe's
+  parties on the party runtime (`verity/configuration/deploy`).
 - `lean/tests/`: the difftests of both verdicts and of the record formats against the Python.
