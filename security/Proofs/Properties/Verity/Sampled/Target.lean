@@ -189,8 +189,8 @@ theorem sqrt_le_twoRun {f : Claims.Finder} (hf : Claims.StrictBirthday Verity.sh
 at the deployment's sessions `S` (`Deployed`), which cover the one-stage form (`Covers`), meets SPOT's target
 at composite `k`, from the coupling at each session (`CouplingTarget`). Off the one-stage form SPOT accepts nothing
 (`recursiveForm_refused`). -/
-theorem spotSound_of_targets {K : Constructions V} {S : ByteArray → Array ByteArray → Option Live}
-    (hD : Deployed V K S) (hCov : Covers V k S) (hC : ∀ θ F A, S θ F = some A → CouplingTarget V k K A θ F) :
+theorem spotSound_of_targets {T : Pinned} {K : Constructions V} {S : ByteArray → Array ByteArray → Option Live}
+    (hD : Deployed V T K S) (hCov : Covers V k S) (hC : ∀ θ F A, S θ F = some A → CouplingTarget V k K A θ F) :
     V.SpotSound k := by
   intro θ F c σ
   by_cases hP : ∃ p, ParamsAt θ p

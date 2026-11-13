@@ -287,7 +287,7 @@ theorem remote_soundness_deployedReady_honest :
       (Instance.Honest.inst ⊤ fun _ => none).LogOpensRecorded .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .remote :=
-  ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.registeredFiles ⊤ _,
+  ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.registeredFiles_none ⊤,
     Instance.Honest.sessionRegistered_none ⊤ .remote, Instance.Honest.logOpensRecorded_none ⊤ .remote,
     Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
 

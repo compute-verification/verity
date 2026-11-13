@@ -48,9 +48,10 @@ coins `srcCoinsAt MAX_COINS`. It holds wherever:
   `MAX_COINS` frames' bytes (`hL`);
 * the device's log opens only the record's rounds at every accepted play whose log v2 read is the device's (`hO`,
   `OpenedRecorded`). -/
-theorem movesReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
-    {A : Live} (reg : Option Claims.Msg → A.Reg) (record : ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
+theorem movesReachAt {V : Vocab d α} {T : Pinned} {k : Verity.Registration.Composite} {θ : ByteArray}
+    {F : Array ByteArray} {A : Live} (reg : Option Claims.Msg → A.Reg)
+    (record : ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V T θ)
     (hL : A.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64)
     (hO : ∀ c (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ),
       V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
@@ -59,7 +60,8 @@ theorem movesReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) :
     MovesReach V θ F c k
-      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
+      (fun o =>
+        (Binding.Logged Binding.readsV2 o ∧ TablesSent T o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A
       (readingAt A.tables A.layout (record c) (recordDigest c)) σ (decodersAt reg A.layout)
       (sampleMap fieldEnc V θ F c A (readingAt A.tables A.layout (record c) (recordDigest c)) σ (labelAt θ)
         (afterAt V k θ F c σ) (srcCoinsAt _root_.Spot.Challenger.MAX_COINS A))
