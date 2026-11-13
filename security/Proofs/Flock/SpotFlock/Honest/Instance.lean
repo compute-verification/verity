@@ -70,7 +70,7 @@ def HonestExists : Prop := ∃ h : Held, Premises h ∧ InScope h ∧ Accepts h
 
 /-- **One unit's boundary layout**: a population of one stratum of one proof block, unit `0` at the gates `gs`, and an
 empty input class. -/
-def oneLayout (gs : ℕ × ℕ) : Spot.Slots.Layout := ⟨#[#[#[⟨some 0, gs⟩]], #[]]⟩
+def oneLayout (gs : ℕ × ℕ) : Spot.Slots.SlotOrder := ⟨#[#[#[⟨some 0, gs⟩]], #[]]⟩
 
 /-- **The first stage's design** `subset:1`: one unit of the population, and every input slot. -/
 def design1 : Design := ⟨[.subset 1, .all]⟩
