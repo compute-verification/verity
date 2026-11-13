@@ -140738,3 +140738,77 @@ None out. Ended and read this turn: `r20261113-122159-ce10` (rc 0).
 - `5eb57387af`'s lemmas (`locates_logged` and the rest) are still on no branch but mine; MESSAGES's `logRising_of` does that step itself.
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `3222236de4e`, pushed; nothing unpushed. Mailbox read at 12:32Z: nothing after the coordinator's 09:14Z.
+
+## GATHER, Fri 13 Nov 12:33Z: `second-inputs` on `241e`'s kept plays is NOT rule A (NO): `241e`'s tree has no `second-inputs` check and no `--logits`; the scripts' default play still makes that shape (YES); the difftest passes whole at `9d1718a32d6` (`cb1d`); the records run `f5e2` FAILED on the base's `FirstCoins.lean:262`, not on R3, so there is no records printout yet (rerun `3f16` over the join's mend, in a scratch tree, is running); the `wiresOk` clause moves ONE `reads` record and its refusal stays `second-wires`
+
+`cursor/proofs-gather-second-try-5a28` at `984cb027efa30548bd370a1f0e04830e8d12be1a` is the head I stand behind for Friday, unmoved, and #9480's branch is at `496aa183544b` [run: `git ls-remote origin` at 12:31Z]. The trial branch `cursor/proofs-gather-wired-layout-6a9b` is at `9d1718a32d6fd997200954e8fdd8da96565a7f54`, as in my 12:00Z entry; no other worker has pushed on it [run: the same `ls-remote`]. Your 12:05Z and 12:18Z messages are read [run: by the hook at 12:16Z and 12:20Z].
+
+**1. Your two lines (12:18Z item 3) and the yes or no (12:05Z item 3).**
+
+- **Is `second-inputs` on `241e`'s kept plays rule A's refusal, which the wired layout cures? NO.** [run: `git` on my VM, 12:25Z]
+  - `241e` ran at `9425ffd35b`. That tree has no `second-inputs` at all: no line of `Spot/SecondStage.lean` or of `second_stage.py` holds the word, and its `two_stage_small.py` has no `--logits` flag [run: `git show 9425ffd35b:FILE | rg -c`, each 0].
+  - The second-inputs change (`fe488f7e092` the Python, `122832e6a1f` the Lean, merged as `80c00895e20`) is an ancestor of the join's `701559cfdc` and is not an ancestor of `9425ffd35b` or of `1e20910586` [run: `git merge-base --is-ancestor`].
+  - So `241e`'s kept cases were made by a play that could not commit the select's inputs, and accepted by a verifier that did not have the check [derived]. At the join the check is there and refuses them, for the reason it was written: `logits` is a value the interior registers after the first stage's sample [read: `two_stage.py:75-83`].
+  - It is not `4f52809539` (STAGECOINS's guess): in the running verifier that commit changes docstrings only; its code change is the model's `readsOk` in `security/Proofs/Flock/SpotFlock/Code.lean` [run: `git show 4f52809539 -- Spot/SecondStage.lean second_stage.py`].
+  - Rule A is another refusal: a member's public file not held to its slice of the registration ("proofs: a session's verifier did not accept"), which the wired layout cures [run: `9a9e`, my 11:22Z entry]. The layout does nothing for `second-inputs`; `--logits` does.
+- **Line 1: is a play made today at the wired layout with `--logits` accepted at the join's tip?** Its `second-inputs` passes; the form accepts it only with B.
+  - `ROUND_TWO {"codes": [], "detail": {}, "ok": true}` on an interior of two members and on one of twenty [run: `r20261113-104757-9a9e` at `70ca0eda5df`, each leg's `play.log`].
+  - The form refuses both, switch on and off, with "two-stage: the interior's audit: the audit's checks failed: registered", which is B and not `second-inputs` [run: the same logs].
+  - The join's tip gives the same verdict on those files [derived]: outside `security/`, `701559cfdc` differs from the trial's base `654e34d42be` only in `benchmarks/one_stage/a5.py`, its test and the PoUS pin, so the form's executables are built from the same Lean [run: `git diff --stat 654e34d42be 701559cfdc -- . ':!security'`]. I did not run the join's tip on them.
+  - With B picked on the layout the play of twenty is accepted, switch on [relayed: TWOLEG, 11:57Z, `e8f4`].
+  - An interior of one member has no wired port, so the layout changes nothing there; that play with `--logits` is accepted at `a013df7279` [relayed: STAGECOINS, 11:56Z, `7c7e`].
+- **Line 2: can an honest run still produce the refused shape with the scripts as they are? YES.** [read]
+  - `sampled_two_small.sh` with `SMALL_ARGS` unset, its default, serves without `--logits`, hands `second` no `--kept`, and the interior registers `logits` [read: lines 62-66 and 74-78 of the script]. Its header says `--logits` is what makes "the interior then registers no value of the prover's".
+  - `two_stage_small.sh` without `--logits` does the same, and holds that run to the refusal: it passes `--inputs`, and `expect --inputs` asks for `second-inputs` alone [read: lines 91-94; `two_stage_small.py`'s docstring].
+  - So a kept case for the join's tests has to be made with `--logits` in `SMALL_ARGS`.
+- **The kept case that replaces `241e`'s:** `r20261113-114033-7c7e`'s `out/form` (STAGECOINS's: `SMALL_ARGS='--inline --units 1 --logits'`, an interior of one member), accepted with the switch on at `a013df7279` [relayed]. STAGECOINS's commit adds one comparison and removes nothing, so the same case passes at `701559cfdc` [derived; STAGECOINS says not run]. For an interior with wires: `9a9e`'s `out/twenty/form`, once B is on the join [derived].
+- On cpu-8 `9a9e`'s kept cases are no longer whole (`evidence.json` is gone from both, `params.json` from the one of twenty) [run: `ls`, 12:27Z]. A run of the join's tip on them needs the files from the store. Say if you want it.
+
+**2. `cb1d`: the difftest passes whole at `9d1718a32d6`.** `r20261113-115924-cb1d`, vy-nebius-cpu-7, `done rc=0`; `out/rc.txt` word for word [run: read 12:19Z]:
+
+- `the Lean package of the sampled proofs verifier, whole, rc=0` (`Build completed successfully (530 jobs).`)
+- `the recorded fixtures fetched, rc=0` (`fetch-fixtures: 6 entries: 6 fetched`)
+- `the difftest of the sampled proofs verifier, rc=0` (`125 passed, 2 skipped in 183.98s (0:03:03)`)
+- The two skips are the ones `b99b` had, at the same places in the progress line: the two cases of `test_the_unit_gates_by_range_are_the_walks_on_real_templates`, skipped unless `VERITY_SPOT_REAL_TEMPLATES=1` ("about 18 minutes and 34 GB") [run: both logs; read: `test_difftest.py:6219`].
+
+**3. `b99b`'s last three lines** (`r20261113-114214-b99b`, at `779ee6ea60b`, `out/rc.txt` and each log's last line) [run: read 12:30Z]:
+
+- `windows and wiring tests, rc=0`: `93 passed in 134.97s (0:02:14)`
+- `the registration and per-member form Python tests, rc=0`: `85 passed in 1.05s`
+- `the toy tests, rc=0`: `10 passed in 16.30s`
+
+**4. The records run `f5e2` FAILED, and the failure is the base's.** `r20261113-114241-f5e2`, vy-nebius-cpu-8, 11:44:02Z to 12:08:20Z, `failed rc=1`, at `779ee6ea60b` [run: `stdout.log`, 19,323 bytes, kept whole at `/opt/cursor/artifacts/wired-audit/f5e2/stdout.log`].
+
+- **There is no records printout to give you.** The run never reached `security`'s records, so no line of it names a guarantee or a `reads` record [run]. Which guarantees read the three records: not known; known when `3f16` (below) ends, about 12:55Z [guess].
+- Its verdict lines, word for word, paths shortened to the package:
+  - `AUDIT …/verity/protocols/spot/verifier/lean: PASS  6145 declarations in 57 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees; … built in the sandbox; inline debt 0 (0 premises)`
+  - `lean-records: verity/protocols/spot/verifier/lean: check.py exit 0 in 102 s … (6 files changed there), without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse`
+  - `AUDIT …/verity/protocols/certifier/verifier/lean: PASS  1582 declarations in 11 modules; axioms propext, Classical.choice, Quot.sound; 4 guarantees; …`
+  - `AUDIT …/security/Proofs: FAIL; built in the sandbox` / `build: exit 1` / `Some required targets logged failures:` / `- Proofs.Properties.Verity.SampledTwo.FirstCoins` / `error: build failed`
+  - `AUDIT …/security: FAIL; built in the sandbox` / `proved_in: Proofs's build did not pass (its report says why), so its facts are not read: …`
+  - `lean-records: security: check.py exit 1 in 1127 s …` / `lean-records: security requires verity/protocols/spot/verifier/lean, and its records fail on this build, not only on record differences, which take a person`
+  - The same two lines for `security/Properties` (`check.py exit 1 in 186 s`), then `lean-records: OUTCOME {"outcome": "failed", …}` with `pass` for the verifier's package and the certifier's and `failed` for `security`, `security/Proofs` and `security/Properties`.
+- **The one error** [run: `lean-audit/requirer-security/audit-Proofs/build.log:2967`]: `error: ../Proofs/Properties/Verity/SampledTwo/FirstCoins.lean:262:40: Tactic `subst` failed: invalid equality proof, it is not of the form (x = t) or (t = x)`.
+- **It is the base's, not R3's** [run: `git`; relayed: TWOLEG, 10:40Z item 4]. Line 262 takes `inputAt_ok` apart in the shape it had before the read-back records. The file is unchanged since `244bca07939` and is in TWOLEG's scratch `654e34d42b`, which my branch is on; my seven commits touch neither it nor `Steps.lean`. The join mended it in `07319646f70` (with `StageCut.lean:209`), which is not an ancestor of my branch. TWOLEG met the same line at `80ced2eac7d` (`ef92`) and said then that `654e34d42b` itself does not compile `FirstCoins`.
+- **What did build at `779ee6ea60b`** [run]: every other target of `security/Proofs`, to `[14738/14739] Built Proofs.Accounting`, `Proofs.Properties.Spot` among them. Ten modules behind `FirstCoins` were not built ("10 reads a module not restored (first Proofs.Properties.Verity.SampledTwo.SecondCoins)").
+- `Spot/Registration.lean` keeps the one heartbeat override it had (1,600,000, on `check_eq_checkRef`; not in my diff), and its module built in 64.0 s [run: the printout's `heartbeats` line; `git diff 6174ac309a7..HEAD`].
+- **Rerun, in a scratch tree:** `r20261113-122806-3f16` on vy-nebius-cpu-1, launched 12:28:02Z, the same command, at `e4ab33e4db287e7fbf3d29d9a420db53566b0899` [run]. That commit is `9d1718a32d6` plus the pick of the join's `07319646f70`, in a detached worktree on my VM, pushed to no branch [run]. After the pick the two files are the join's tip's blobs (`cde5d6418a5`, `b54f8b315eb`) [run: `git rev-parse`]. The trial branch is not touched.
+- **NEEDS, one word from you:** should `07319646f70` be picked onto the trial branch itself? Without it no head of the branch builds `security/Proofs` whole. It is the join's own commit, so the restack drops it [guess]. I have not done it: TWOLEG is to write on that branch and you named its head.
+
+**5. The clause in `SecondStage.wiresOk`, before any Lean** (12:18Z item 1).
+
+- **The refusal word:** the code stays `second-wires`, the one `wiresOk` already refuses by, so no reader of codes changes [read: `designFailures`, `SecondStage.lean:1320`]. Its reason, `WIRES_WHY`, gains seven words after "or it reads an output the replay block returns": "or a link names the port that reads it". The Python's `WIRES_WHY` gains the same.
+- **The lock records it moves: ONE, not the three of R3** [run: a script over every `lean-audit.json` at the trial's head, 12:24Z, and over the three of `security/` at the join's `e9346a9e704`].
+  - `security/lean-audit.json`, `reads["Spot.SecondStage"]`: the hash under `Spot.SecondStage.wiresOk` and the module's `digest`. The record lists 132 definitions; `wiresOk`, `designOk` and `linkOf` are among them, so the clause adds no name [run].
+  - `designOk`'s own hash should not move: a definition's hash names what it calls and does not hash its body [read: `check.py`, `read_groups`; guess until the records run prints].
+  - `security/Properties/lean-audit.json` and `security/Proofs/lean-audit.json` have no record of `Spot.SecondStage` and name neither `wiresOk` nor `designOk`; nor does the verifier package's lock [run].
+  - No guarantee's own record names `wiresOk` [run: the word occurs once in the three locks, in that `reads` record]. Which guarantees read it: not known; the records run prints it.
+- **Where it goes.** `wiresOk`'s third term becomes a pair, `((linkOf own w.writer w.wport).isNone && (linkOf own w.template w.port).isNone)`, so the clause is beside the writer's and the two proofs that take `wiresOk` apart read their terms where they did: `wiresOk_writer` (`InsideOf.lean:72`, `h1.1.1.2`) and `wiresOk_reader` (`RowLeaves.lean:149`, `h1.1.1.1`) [read; guess until tried that both compile unchanged].
+- **One lemma with it,** in the verifier's file beside `designFailures_ne_nil`: `wiresOk_unlinked : wiresOk ps own = true → w ∈ own.wires.getD #[] → (linkOf own w.template w.port).isNone = true`. It is what ADDRROW2's `wiresUnlinked` needs from the check, so the join reads the clause by a name and not by its place [read: ADDRROW2, 12:08Z item 1].
+- **Files** [read]: `Spot/SecondStage.lean` (the term, `wiresOk`'s docstring, the module docstring's `second-wires` line, `WIRES_WHY`, the lemma), `Spot/SecondStageExamples.lean` (one `#guard`), `second_stage.py` (`_wires_ok`, `WIRES_WHY`, the module docstring), the difftest, and the verifier's README if it lists the clauses.
+- **No play we run should trip it** [run: a script on my VM that builds the class's layout as `two_stage_small.py` does and reads `second_stage.replay_links` and `replay_wires`; no session, under a second]. The greedy select at 20 units derives 21 links and 19 wires, at 2 units 3 and 1, at 1 unit 2 and 0. The wires' reader ports are `r0` to `r18`; the links' ports are `logits` and `o0`; no wire's reader port and no wire's writer port is one a link names. The play of twenty and the toy through the compiled clause are still to run.
+- I start the Lean and the Python twin now, on the trial branch, as its own commit. The two negative cases wait for the name of ADDRROW2's scratch branch.
+
+**Standing.** Neither of Friday's branches moved; no `main` merged; nothing rebased; no pull request, no mark; nothing on Linear or Slack; nothing launched with `--interior-trees`. One run of mine is out: `3f16`. The pull request's body draft now says the audit's difference from the form (your 12:05Z item 1) [run: the draft file].
+
+**Not established:** which guarantees read R3's three records and `wiresOk`'s one (no records run has reached `security`'s records); the join's tip on a wired-layout case by run; that `FirstCoins` and the ten modules behind it build over my R3 change (first at `3f16`); the clause in Lean (not written yet).
