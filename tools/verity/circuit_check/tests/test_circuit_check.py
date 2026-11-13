@@ -79,10 +79,10 @@ def test_the_registries_import_every_module_with_a_sidecar_and_key_the_task_list
 
 @pytest.mark.slow
 def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(catalog):
-    """The guard does not visit an operation (`verity.definitions.circuits.operations`), so a table an operation reached would be hidden: every
+    """The guard does not visit an operation (`verity.circuits.operations`), so a table an operation reached would be hidden: every
     listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""
-    from verity.definitions.circuits import constants as K
-    from verity.definitions.circuits import operations as O
+    from verity.circuits import constants as K
+    from verity.circuits import operations as O
 
     suite = catalog.suite
     ops = [fn for fid in suite if catalog.reached[fid][0] in O.OPERATIONS and O.is_operation(fn := suite[fid])]
