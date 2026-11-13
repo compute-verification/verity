@@ -112805,3 +112805,37 @@ STOP RULE: nothing here changes a listed guarantee or what the verifier accepts 
 Not established: `BlockSize.lean` is not written yet; nothing in this entry has been compiled.
 
 To post: nothing.
+
+## CUT, Fri 13 Nov 01:46Z: `Cut.lean` and `CutPrints.lean` COMPILE at `6c782c1022`, all theorems on the three standard axioms, `first_session` among them; `CutHeld.lean` is in a try at `bb96dbb00a`, which merged TWOLEG's compiling `Steps.lean`
+
+Plain words. The cut is the step of the two-stage audit's proof that says the challenger's log the evidence carries, for the first stage's and the second stage's sessions, is what the auditor's device released, unless the prover forged the device's signature or found a SHA-512 collision. Its statement and its reduction to what the device's history prints now compile, with no `sorry`. The one file left, which shows that the form's check itself holds the second stage's records to the device's coin trees, is in a try.
+
+What compiled, in try 5 `r20261113-010822-a348` on vy-nebius-cpu-12 at `6c782c1022` [run]:
+- `Cut.lean`: `lean exit 0`. Axiom probe: "none of its 7 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The 7 are `atDeployed_eq`, `keyOf_deployed`, `readFinder_out`, `mem_forgeryFinds`, `finders_of_break`, `finder_of_open` and `cutBound`.
+- `CutPrints.lean`: `lean exit 0`. Axiom probe: "none of its 23 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Among them are `first_session` (one session's log, owed by 03:00Z), `second_session`, `paramsAt_of_caseOf` and `binds_of_prints`.
+- The sibling check passed for both: no module that doesn't import them declares one of their names.
+- Warnings only: deprecated `if_pos`/`if_neg`, unused simp arguments, and `first` fallbacks never taken. A later commit cleans them; they don't change a statement.
+
+So HISTORY's `binds_dev₂` and `cut_dev₂` can merge `6c782c1022`, or my head `bb96dbb00a`, which is the same plus TWOLEG's `99da2b9189` [derived]. All three premises they need are proved: `binds_of_prints`, `paramsAt_of_caseOf` and `finders_of_break`.
+
+Still running [run]:
+- Try 5's last step tries `CutHeld.lean` at `6c782c1022`. That head carries TWOLEG's old `Steps.lean`, so this step is expected to fail in `Steps.lean`, not in my file [derived].
+- Try 6, `r20261113-014528-6f45` on vy-nebius-cpu-12 at `bb96dbb00a`, 24 GB, tries `CutHeld.lean` with siblings against TWOLEG's compiling `Steps.lean` (`99da2b9189`). Its only change from `7fed11bb74` is docstrings [read]. I expect it to end by about 02:15Z [guess].
+
+`CutReads` (from the 01:11Z entry): I give the lemma `reads_of_accepts`. One premise I now know it needs [read]. In this base, `Spot.Challenger.coinsReason` takes the key from the evidence (`ChallengerCoins.lean` 105–118), so an accepted check doesn't by itself give `drawCoins` under the parameters' key. RUNCOINS takes this same fact as the premise `CheckReadsDraw key` (`SpotFlock/RunsAs/Statement.lean` 203). So I take RUNCOINS's `CheckReadsDraw` rather than state a second one, and ONE_KEY ties the evidence's key to the interior's. I give the statement and the hour at 03:00Z.
+
+STOP RULE
+- Nothing [read].
+
+NEEDS
+- Nothing new.
+
+To post
+- Nothing.
+
+Not established
+- That `CutHeld.lean` elaborates; try 6 decides it.
+- `reads_of_accepts`: not written.
+- The earlier-signature hole: at a history of one play, an earlier period's genuine signature in the evidence makes the error ⊤. Soundness's change of Tue 17 Nov closes it.
+
+Pushed head: `bb96dbb00a`. Nothing is left unpushed.
