@@ -37,6 +37,10 @@ CAUSES = [
     ("rows taken out after the digest", {"identities": ROWS[:1]}, {},
      (f"manifest_digest {DIGEST[:16]} != digest of its rows {ONE_ROW[:16]} (edited after digesting); "
       f"rows digest {ONE_ROW[:16]} != the Program x workload's manifest {DIGEST[:16]} (1 vs 2 identities): not the manifest of record")),
+    ("a digest that is honest, of fewer rows than the Program requires", {"identities": ROWS[:1], "manifest_digest": ONE_ROW}, {},
+     f"rows digest {ONE_ROW[:16]} != the Program x workload's manifest {DIGEST[:16]} (1 vs 2 identities): not the manifest of record"),
+    ("a digest of 32 hex digits", {"manifest_digest": "e" * 32}, {},
+     f"manifest_digest {'e' * 16} != digest of its rows {DIGEST[:16]} (edited after digesting)"),
     ("a digest of 64 hex digits", {"manifest_digest": "e" * 64}, {},
      (f"manifest_digest {'e' * 16} != digest of its rows {DIGEST[:16]} "
       "(a 64-hex SHA-256 digest from before manifest digests became SHA-512: rebuild the manifest)")),
@@ -45,9 +49,12 @@ CAUSES = [
     ("a digest that agrees in its first 16 digits", {"program_digest": PROGRAM[:16] + "0" * 112}, {},
      f"program_digest {PROGRAM[:16] + '0' * 112} (128 hex) != the rebuilt {PROGRAM} (128 hex): {FULL}"),
     ("another Program", {"program_digest": OTHER}, {}, f"program_digest {OTHER[:16]} != the Build's {PROGRAM[:16]}"),
+    ("another Program's digest at half its width", {"program_digest": OTHER[:64]}, {},
+     f"program_digest {OTHER[:64]} (64 hex) != the rebuilt {PROGRAM} (128 hex): {FULL}"),
     ("a rebuilt manifest that is not complete", {}, {"complete": False, "unmodelled": {"Softmax_v1 under model.layers.0": 2}},
      "the Program x workload manifest is incomplete: {'Softmax_v1 under model.layers.0': 2}"),
     ("a rebuilt manifest that does not say it is complete", {}, {"complete": None}, "the Program x workload manifest is incomplete: None"),
+    ("a rebuilt manifest whose complete is 1 and not true", {}, {"complete": 1}, "the Program x workload manifest is incomplete: None"),
 ]
 
 
