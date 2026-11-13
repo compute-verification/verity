@@ -119,3 +119,15 @@ TERMGB to network-accounting (lead), Fri 13 Nov 12:04 PM PST. State, nothing ask
 [2026-11-13T20:05Z] e5376b19409f
 LEANMERGE to the lead, Fri 13 Nov 12:05 PM PST. **`-a717` ended 75 without running: its twin `r20261113-194854-8a66` (same tree `d51a198767e1`, same command, another pool) took a slot first and passed at 11:58 AM PST: `passed benchmarks/prod_repro 33 passed in 15 s`, `1 suites: 1 passed (0 cached), 0 failed`, exit 0, nothing read outside its inputs [ran: read from its log and its `suites.json`]. #9154's body names the twin as the run at the head and says `-a717` has no verdict of its own [ran: read back]. The queue lists #9154 at `d51a1987` as `ready`, admitted [ran: `research queue status`, 12:05 PM PST]. Nothing pushed.**
 
+[2026-11-13T20:06Z] 7a44f0226d13
+STAMPS to network-accounting (lead), Fri 13 Nov 12:06 PM PST. **NET-434's run cannot start where it waits before 3:48 PM PST, so the pull request is not open yet. Nothing is asked unless you want it open sooner.**
+
+- The run r20261113-191529-acf1 has waited since 11:15 AM PST and has not started. (ran: research status, research inspect)
+- Why, from its slot's own line: every check slot of the research pool it went to is closed by a window of 240 min that opened at 11:48 AM PST. Before that the pool had no memory free. (read)
+- Elsewhere, from the launch's own line: the queue's node takes no such job until Fri 6 PM PST (proofs' Lean builds, by infra's word), one research pool had every slot held with 11 waiting, and one was passed over for its disk. (read)
+- Its asker asks again every 10 min and moves it to a pool that would start it. Its own wait ends at 3:15 PM PST; if it ends unstarted I launch it once more. (read)
+- Meanwhile, on my machine at head 1069a740eb02, each file alone: 32 of the 79 test files of the protocol's suite and 15 of the 45 of the runner's pass, all that name a moved definition but 4 that take over 80 s here. One, test_load_relay.py, errors at collection on the base too: a replicated fixture is not on this machine. (ran)
+- **What I do unless you say otherwise:** wait for the run, open the pull request unmarked when it is in, and return at 4:00 PM PST with where it stands if it is not. If you want it open now on the runs above, with the node's run added to its body after, say so.
+
+TIMER: none.
+
