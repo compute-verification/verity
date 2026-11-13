@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions import word as W
+from verity.circuits import word as W
 from verity.definitions.numerics import rows as RK
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import b1, gemm_bias, hopper

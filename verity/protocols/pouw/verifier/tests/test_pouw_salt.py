@@ -587,7 +587,7 @@ def test_a_certified_window_credits_only_units_that_read_its_salt():
     from verity.protocols.pouw.prover.circuit import h1tile as H
     from verity.protocols.pouw.prover.circuit import pc8
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
 
     side = pc8.side_tile(128)
     why = PS.unit_reason(side)

@@ -15,8 +15,8 @@ statics (`elementwise.on_bits`; a `DOT` static, a Boolean e4m3 step, read as its
                                                                     the same over the step DOT (the word versions 3)
 
 Every word is its bits (`verity.circuits.boolean.word_type`): bf16 `Array<16, Value<1>>`, f32 `Array<32, Value<1>>`, e4m3
-`Array<8, Value<1>>`. The callees are the Boolean versions of the word bodies': `verity.definitions.ops.boolean.scalar`'s f32 arithmetic,
-max / min and casts, `verity.definitions.ops.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` (or `DOT`, such as `BlackwellE4m3QmmaDot32_v2`) and
+`Array<8, Value<1>>`. The callees are the Boolean versions of the word bodies': `verity.circuits.ops.boolean.scalar`'s f32 arithmetic,
+max / min and casts, `verity.circuits.ops.boolean.gemm`'s `HopperE4m3QgmmaDot32_v2` (or `DOT`, such as `BlackwellE4m3QmmaDot32_v2`) and
 `F2fpBf16_v2`; the word constants (+0, 448, -448, the minimum scale, the group quantiser's eps) are written with the constant
 bits.
 """
@@ -26,9 +26,9 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.refs import Coll, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.boolean import scalar as SC
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import scalar as SC
 from verity.definitions.registry import fp8 as F8
 from verity.definitions.registry.boolean_attention import _Bits
 from verity.definitions.registry.prims import bits_of
