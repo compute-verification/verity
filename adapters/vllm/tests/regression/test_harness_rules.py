@@ -232,7 +232,8 @@ def test_two_processes_rebuilding_one_row_share_no_scratch(tmp_path, monkeypatch
 def test_a_rows_batch_is_its_workloads_whether_or_not_the_workload_was_fetched_before(tmp_path, monkeypatch):
     """The digest of record is the workload's from two requests up, so the lift counts the row's requests.  It reads the workload
     as every other check does (`row.workload()`, which fetches one the store keeps), so it lifts the same in a tree nothing has
-    fetched into.  Only a row whose workload the tree does not hold has no batch."""
+    fetched into.  Only a row whose workload the tree does not hold has no batch: a stored one that cannot be fetched is the
+    fetch's refusal."""
     root = tmp_path / "vllm"
     (root / "workloads").mkdir(parents=True)
     doc = json.dumps({"requests": [{"request_id": "r0"}, {"request_id": "r1"}]})
@@ -257,6 +258,13 @@ def test_a_rows_batch_is_its_workloads_whether_or_not_the_workload_was_fetched_b
     assert PD.expected(row) == exp and fetched == ["k.json"], "on disk now: the same lift, and nothing fetched again"
     unheld = PD.expected(resolver.Row("unheld", {"row": 10}, fixtures={}))
     assert (unheld["batch"], unheld["program_digest_of_record"], fetched) == (None, "request-d", ["k.json"])
+
+    def refuse(paths):
+        raise RuntimeError(f"{[p.name for p in paths]}: stored workloads, not here, and not fetched")
+    monkeypatch.setattr(config, "_fetch", refuse)
+    (root / "workloads" / "k.json").unlink()
+    with pytest.raises(RuntimeError, match=r"\['k.json'\]: stored workloads, not here"):
+        PD.expected(row)
 
 
 def test_a_rows_manifest_flags_replace_the_policies_off():
