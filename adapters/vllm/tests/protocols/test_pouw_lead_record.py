@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+
 from verity_vllm.protocols.pouw.lead import record as LR
 from verity_vllm.protocols.pouw.lead.feed import Call
 

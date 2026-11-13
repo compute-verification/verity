@@ -16,16 +16,23 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-
-from verity.definitions.ops.prims import const
 from verity.circuits.refs import Affine, Coll, Concat, Strided, broadcast, concat
 from verity.circuits.types import Array, Value
+from verity.definitions.ops.prims import const
+
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import RuleInfo, ViewRule
 from verity_vllm.program.frontend.rules.patterns import _constant_tensor
-from verity_vllm.program.frontend.strided_views import (_EXPLICIT_LIMIT, _constant_run, _expand, _permute, _row_major, _strided_refs,
-                                                        _tensor_type)
+from verity_vllm.program.frontend.strided_views import (
+    _EXPLICIT_LIMIT,
+    _constant_run,
+    _expand,
+    _permute,
+    _row_major,
+    _strided_refs,
+    _tensor_type,
+)
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 
 aten = torch.ops.aten
@@ -56,7 +63,7 @@ class _Box:
 
 
 def _box(space, idx, lo, hi, leaf0, st) -> _Box:
-    return _Box(space, idx, tuple(lo), tuple(hi), int(leaf0), tuple(s if h - l > 1 else 0 for l, h, s in zip(lo, hi, st)))
+    return _Box(space, idx, tuple(lo), tuple(hi), int(leaf0), tuple(s if high - low > 1 else 0 for low, high, s in zip(lo, hi, st)))
 
 
 def _spend(budget: list[int], n: int, where: str) -> None:
@@ -105,7 +112,7 @@ def _boxes(refs, shape, where: str) -> list[_Box]:
 
     def run(space, idx, leaf, factor, a, b):
         for lo, hi in _range_boxes(a, b, shape):
-            f = sum(l * s for l, s in zip(lo, rm))
+            f = sum(low * s for low, s in zip(lo, rm))
             out.append(_box(space, idx, lo, hi, leaf + (f - a) * factor, [factor * s for s in rm]))
 
     pos = 0
@@ -114,25 +121,25 @@ def _boxes(refs, shape, where: str) -> list[_Box]:
         if isinstance(p, Affine):
             run(p.space, p.idx, p.base, 1, pos, pos + n)
         elif isinstance(p, Strided):
-            I, O, s = p.inner, p.outer_stride, p.inner_stride
-            if I == 1:
-                run(p.space, p.idx, p.base, O, pos, pos + n)
-            elif n <= I or O == I * s:
+            inner, outer, s = p.inner, p.outer_stride, p.inner_stride
+            if inner == 1:
+                run(p.space, p.idx, p.base, outer, pos, pos + n)
+            elif n <= inner or outer == inner * s:
                 run(p.space, p.idx, p.base, s, pos, pos + n)
             else:
-                k = next((k for k in range(len(shape)) if math.prod(shape[k:]) == I), None)
-                if k is not None and pos % I == 0 and n % I == 0:
+                k = next((k for k in range(len(shape)) if math.prod(shape[k:]) == inner), None)
+                if k is not None and pos % inner == 0 and n % inner == 0:
                     lead, tail = shape[:k], shape[k:]
                     rl, rt = _row_major(lead), _row_major(tail)
-                    for lo, hi in _range_boxes(pos // I, (pos + n) // I, lead):
-                        f = sum(l * st for l, st in zip(lo, rl))
-                        out.append(_box(p.space, p.idx, lo + (0,) * len(tail), hi + tail, p.base + (f - pos // I) * O,
-                                        [O * st for st in rl] + [s * st for st in rt]))
+                    for lo, hi in _range_boxes(pos // inner, (pos + n) // inner, lead):
+                        f = sum(low * st for low, st in zip(lo, rl))
+                        out.append(_box(p.space, p.idx, lo + (0,) * len(tail), hi + tail, p.base + (f - pos // inner) * outer,
+                                        [outer * st for st in rl] + [s * st for st in rt]))
                 else:
-                    rows = -(-n // I)
+                    rows = -(-n // inner)
                     _spend(budget, rows, where)
                     for j in range(rows):
-                        run(p.space, p.idx, p.base + j * O, s, pos + j * I, pos + min((j + 1) * I, n))
+                        run(p.space, p.idx, p.base + j * outer, s, pos + j * inner, pos + min((j + 1) * inner, n))
         else:
             _spend(budget, n, where)
             for i, (space, idx, leaf) in enumerate(p):
@@ -173,10 +180,11 @@ def _refs(shape, boxes: list[_Box], where: str, budget: list[int] | None = None)
     if len(boxes) == 1:
         b = boxes[0]
         _spend(budget, 1, where)
-        return _strided_refs(b.space, b.idx, b.leaf0, [h - l for l, h in zip(b.lo, b.hi)], b.st, where)
+        return _strided_refs(b.space, b.idx, b.leaf0, [high - low for low, high in zip(b.lo, b.hi)], b.st, where)
     order = sorted(boxes, key=lambda b: b.lo[0])
     cuts = sorted({b.lo[0] for b in boxes} | {b.hi[0] for b in boxes})
-    parts, active, i = [], [], 0
+    parts, i = [], 0
+    active: list[_Box] = []
     for c0, c1 in zip(cuts, cuts[1:]):
         active = [b for b in active if b.hi[0] > c0]
         while i < len(order) and order[i].lo[0] <= c0:
@@ -186,7 +194,7 @@ def _refs(shape, boxes: list[_Box], where: str, budget: list[int] | None = None)
             b = active[0]
             _spend(budget, 1, where)
             parts.append(_strided_refs(b.space, b.idx, b.leaf0 + (c0 - b.lo[0]) * b.st[0],
-                                       [c1 - c0] + [h - l for l, h in zip(b.lo[1:], b.hi[1:])], b.st, where))
+                                       [c1 - c0] + [high - low for low, high in zip(b.lo[1:], b.hi[1:])], b.st, where))
             continue
         for c in range(c0, c1):
             parts.append(_refs(shape[1:], [_Box(b.space, b.idx, b.lo[1:], b.hi[1:], b.leaf0 + (c - b.lo[0]) * b.st[0], b.st[1:])
@@ -398,9 +406,8 @@ class StaticFloats(ViewRule):
             return True if not v.numel() or float(v.abs().max()) <= 2 ** 24 else "numerics_unregistered: an integer past 2^24"
         if t in _SCATTER and not all(isinstance(ctx.val(a), StaticFloat) for a in node.args[:2]):
             return "an operand is not a static float tensor"
-        if t is aten.where.self:
-            if not all(isinstance(self._static(ctx, a), (torch.Tensor, int, float)) for a in node.args[:3]):
-                return "where.self of a value"
+        if t is aten.where.self and not all(isinstance(self._static(ctx, a), (torch.Tensor, int, float)) for a in node.args[:3]):
+            return "where.self of a value"
         if t is aten._to_copy.default:
             src = self._static(ctx, node.args[0])
             if not isinstance(src, torch.Tensor):

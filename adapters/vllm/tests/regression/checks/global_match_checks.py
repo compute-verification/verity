@@ -61,7 +61,7 @@ def expected(row: resolver.Row) -> dict:
 def actual(row: resolver.Row) -> dict:
     cand = row.candidate("global_match.json")
     if cand is not None:
-        return dict(lift(json.load(open(cand))), source="candidate")
+        return dict(lift(resolver.read_json(cand)), source="candidate")
     gm = row.json("global_match.json")
     out = dict(lift(gm), source="record")
     statuses = [v["status"] for v in out["checks"].values()]
