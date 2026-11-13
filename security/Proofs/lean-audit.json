@@ -213,6 +213,7 @@
   "Proofs.Properties.Verity.SampledTwo.CutRoots",
   "Proofs.Properties.Verity.SampledTwo.SessionLogged",
   "Proofs.Properties.Verity.SampledTwo.SessionCut",
+  "Proofs.Properties.Verity.SampledTwo.SessionTreeless",
   "Proofs.Flock.SpotFlock.RunsAs.PopulationOf",
   "Proofs.Properties.Verity.Majority",
   "Proofs.Properties.Verity.SampledTwo.Accepts",

@@ -25,9 +25,9 @@ sessions (`LogRead`) and every log it read is the device's (`LogIsDevice`).
 The event has to be `ReadIsDevice`: `LogIsDevice` alone holds of any log on a play whose logs the cut didn't read, and
 says nothing of the interior's there.
 
-Not established here: `FirstTreeless`. No step of the form's check refuses a first session's log that holds a coin
-tree's line (`SessionLogged`), so it is a premise: of the device's first session, or of a refusal the form doesn't
-make today (`firstTreeless_of_plain` is what such a refusal would give).
+`FirstTreeless` is not proved here. The form's check refuses, on two windows, a first session's log that holds a
+tree's line (`VStar.Recursive.SampledTwo.firstTreeless`), and `SessionTreeless.firstTreeless_of_check` proves
+`FirstTreeless` from that refusal through `firstTreeless_of_plain`.
 -/
 
 @[expose] public section
@@ -160,7 +160,8 @@ theorem interiorLogged_read (C : CaseOf)
 
 /-- **`FirstTreeless`, from a first session's log of no coin tree's line**: where, on a play the form accepts on two
 windows, no line of the first session's log is a coin tree's (`Spot.Challenger.treeLine`), its read shows only fresh
-coins (`readLog_plain`). It is what a refusal of such a log by the form's check would give. -/
+coins (`readLog_plain`). The form's check refuses any other log on two windows, which is how
+`SessionTreeless.firstTreeless_of_check` reaches this. -/
 theorem firstTreeless_of_plain (C : CaseOf)
     (h : ∀ o, FormAccepts C o → ∀ p c e key d₁ d₂ ls, caseOf o.sent = .ok (p, c, e) →
       keyOf o.sent.params = some key → firstDraws key p c e = some d₁ → secondDraws p e = some d₂ →
