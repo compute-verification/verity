@@ -264,6 +264,12 @@ class ScaledQuant(Codec):
         q = codebook.float()[codes.long()].view(scales.numel(), -1) * scales.float()[:, None]
         return (base.float() + q.view(base.shape)).to(base.dtype)
 
+    def encode_trained(self, codebook, scales, codes):
+        if codebook.numel() != 2 ** self.bits:
+            raise Unencodable(f"scaledquant: a codebook of {codebook.numel()} levels for {self.bits}-bit codes")
+        return lzma.compress(pack({"n": codes.numel()}, [codebook.detach().half().cpu(), scales.detach().half().cpu(),
+                                                         pack_bits(codes.cpu(), self.bits)]), **self.XZ)
+
     def encode(self, target, base):
         d = (target.detach().float() - base.float()).reshape(-1).cpu()
         if not d.numel():

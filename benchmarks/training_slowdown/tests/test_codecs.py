@@ -137,6 +137,20 @@ def test_scaled_quant_groups_divide_the_tensor_and_keep_the_bases_dtype():
             ScaledQuant(bits)
 
 
+def test_scaled_quant_packs_trained_codes_and_decodes_what_apply_gives():
+    """A program that keeps its weights in the codec's codes hands over its codebook, scales and codes, packed as
+    they are: decode is `apply` on them, bit for bit, and a codebook of another width than the codes' is refused."""
+    base = torch.randn(4, 16, generator=torch.Generator().manual_seed(4)).bfloat16()
+    codebook = torch.zeros(256, dtype=torch.float16)
+    codebook[:255] = (torch.arange(255) - 127) / 127
+    scales = torch.tensor([0.5, 0.0, 1.5, 0.25, 2.0, 1.0, 0.125, 3.0]).half()
+    codes = torch.randint(0, 255, (8, 8), generator=torch.Generator().manual_seed(5)).to(torch.uint8)
+    c = ScaledQuant(8, group=8)
+    assert same(c.decode(c.encode_trained(codebook, scales, codes), base), ScaledQuant.apply(base, codebook, scales, codes))
+    with pytest.raises(Unencodable, match="16 levels for 8-bit"):
+        c.encode_trained(codebook[:16], scales, codes)
+
+
 def test_sparse_ternary_keeps_the_sign_of_a_groups_largest_magnitudes_at_their_mean():
     """The rounding by hand: of eight entries at keep 0.5 the four largest magnitudes keep their sign, at the mean
     of the four; an entry that ties the least of them is kept beside it; a zero is never kept, however many keep
