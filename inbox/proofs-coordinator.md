@@ -115197,3 +115197,49 @@ Still one Python process at 5.5 GiB, 39 minutes into its second command, no prov
 - The second try's design at Friday's shape: `b025` has not reached its prover.
 - That `c6bd`'s outcome prints again from its kept files: `3243` has not started.
 - The accept.
+
+## REDRAW, Fri 13 Nov 02:38Z: board: #9555 at `962bc1a88b4e` has its Lean and its records passed with no allowance, two Python failures found and mended, 17 suites still to report; #9237 at `db228c8966f0` waits on the last 3 suites of `454d`, none red; #9373 waits on #9375
+
+Mailbox read to its 02:26Z message before writing [run]. Nothing waited over ten minutes for a Lean slot since my last entry [run].
+
+### 1. #9555, the verifier's key: `cursor/proofs-keyheld-3c9a` at `962bc1a88b4e3be883a1a0f348ae0d9554a19795`
+
+- **One pull request, as lean asked.** The branch was fast-forwarded to the side branch's lock commit `ca9a951d175e`, and two mends sit on top: `7234a9153c7a` (`benchmarks/one_stage/a5.py`) and `962bc1a88b4e` (`benchmarks/verifier_cost/whole_run/Main.lean`) [run: `git merge --ff-only`, two commits, push].
+- **Lean and records, no `--allow`: passed.** `r20261113-010237-d461` at `ca9a951d175e`, exit 0, outcome `pass`: `security/Proofs` passes (198,535 declarations, 3,967 modules), `security/Properties` passes (3,281 declarations, 95 modules, 470 guarantees), `security` passes; nothing regenerated; the lock the run wrote is byte-equal to the committed one [run: its log, `audit.json`, `sha256sum` of both locks].
+- **Records at the head itself:** `r20261113-021532-deb5` at `962bc1a88b4e`, exit 0, outcome `pass`, no `--allow`. Its log: "reused, nothing built: its records passed on the same Lean inputs in r20261113-010237-d461 at ca9a951d175e" [run]. The head differs from `ca9a951d175e` in the two files above only [run: `git diff --stat`]. Whether a reused pass meets lean's "exactly that commit" is lean's or yours to say [derived]; a rebuilt one (`--rebuild`) is about 65 minutes on vy-nebius-2 [guess, from `d461`'s length], and I launch it on your word.
+- **Quick tier at `9fd601fbb177`:** `r20261113-005641-0e0d` (68 suites), at 02:38Z: 57 passed, 3 failed, 8 not reported, the spot verifier's own suite (`verity/protocols/spot/verifier`) and `verity-core-sampled-proofs` among the 8 [run]. The three:
+  - `research`: the two tests of `tests/test_auto.py` that fail on vy-nebius-2 under a check slot [run]; the node's, as you say.
+  - `benchmarks/one_stage`, 648 passed, 3 failed: the three tests of `test_audit_two_members.py`, `KeyError: 'key'` at `a5.py:487` [run]. A line that came with `main`'s merge still read the challenger's key from the evidence to write the record's `verified`; the check itself was right. It now takes the key and `main` the stream holds [run: `7234a9153c7a`]. My machine's tests could not see it: that path builds Lean [derived].
+  - `benchmarks/verifier_cost`, 7 passed, 1 failed: `whole_run/Main.lean`, the timing main, called `Run.coinsCode` without the key and `main` [run]. It now passes the run input's own, parsed as the run piece parses them [run: `962bc1a88b4e`].
+- **The two mended suites at the head, same selection as the tier** (`--changed 4f0154e42026 --quick`, slow tests of the nine test modules the change reaches included): `r20261113-021456-8116`, first part: `benchmarks/verifier_cost` 8 passed; `benchmarks/one_stage` 651 passed, none failed [run]. 651 is the 648 and the 3 [derived].
+- **Every suite the files changed since `9fd601fbb177` touch**, at the head (`--changed 9fd601fbb177 --quick`, 9 suites): the same run's second part, running at 02:35Z [run].
+- **The negative test** (`second` refuses first-stage evidence under another key, and evidence that names a key): `test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers_key`, `benchmarks/one_stage/tests/test_two_stage_driver.py:693`, not marked slow [read]. It is in the one-stage suite that passed whole at the head [derived: the suite's line names failures only, and names none].
+- **A wrong turn, so you do not read it as more than it is:** `r20261113-020255-55f4` (one-stage suite at `7234a9153c7a`, 647 passed) did not test the first mend: `--quick` without `--changed` leaves the slow tests out, the three failing ones among them [run, read: `suites.py`'s help]. `8116` did.
+- **Lean's question: yes, that is the test.** In `test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several_frames` (`verity/protocols/spot/verifier/tests/test_challenger_coins.py:348`) the challenger's own session code serves one withheld session on a loopback port, its ledger lines and record signed with LMS under the test's key (`test_remote.Host`, `signer`) [read: `test_remote.py:80-85, 153-169`]. The stream holds that key and its copy of `main` (`fake_challenger.Stream`) and its outcome's whole run is the compiled `Run.run`'s (`service.py:2423-2436`, `verifier.run` with `key=self.key`, `main=self.main`); the test asserts the outcome accepted with no `run` failure (line 394) [read]. It also refuses the evidence under another key, with a `key` field, and under four other copies of `main` (lines 386-391) [read]. On the real prover and verifier the same acceptance is `test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier`, which asserts the record names the stream's key; it failed in `0e0d` and passes in `8116` [run].
+- **The body** is rewritten: the restatement's notice; the re-key's notice with both values (`unfolded_hash` `efc27f98…` to `0c9cd9cc…3b58f286`, and `why`: "the evidence's key from LMS key generation" to "under the verifier's key: a key from LMS key generation"), `type_hash` and `missing` unchanged, 185 entries, the witness PRF-582's; the two tests by name; a table of the runs above [run: `research queue edit 9555`; the lock's entry read at #9237's head, at `9fd601fbb177` and at the head].
+- **Ruling 6, what has compiled and the hour.** Lean: every module, and all three packages' audits, passed [run: `d461`, read done at 02:11Z]. Records: passed at the head [run: `deb5`, read at 02:25Z]. The negative test: passed at the head [run: `8116`, read at 02:35Z]. Python: all that is left is 8 suites of `0e0d` and 9 of `8116`; both could have passed by about 03:15Z [guess], unless one of the 8 shows a third miss of the kind above.
+- **TWOLEG can take the branch now** [derived]: its Lean has its verdict, and since the head holds the re-keyed entry, a records run of a branch holding it needs no `--allow` while the statement's hash stays `0c9cd9cc…` [derived from `deb5`].
+- **Waits on:** the 17 suites; then the ready line. And your word on the reused records pass.
+
+### 2. #9237, the family rule: `cursor/proofs-redraw-cc71` at `db228c8966f08b829659343e91f0a571c70192d9`
+
+- Records: `r20261113-002053-fe73` at `0bafa486510c`, exit 0, outcome `pass`, nothing regenerated; no Lean file, lock, lakefile, manifest or toolchain differs between that commit and the head [run, as in my 01:40Z entry].
+- Quick tier at the head: `r20261113-004445-454d` (vy-nebius-cpu-11, 68 suites): 65 passed, none failed, 3 not reported at 02:38Z (`verity-numerical`, `verity-core-evaluate` and a circuit-check suite) [run]. The spot verifier's own suite and `benchmarks/one_stage` are among the passed [run].
+- `git merge-tree` with `main` at `8c11a1d5abff`: no conflict [run]. `9d4aec0111fb` is an ancestor [run]. No third merge of `main` before the line, as you say.
+- **Waits on:** the last 3 suites of `454d`; then the ready line at this head.
+
+### 3. #9373, the rate: `cursor/proofs-redraw-rate-5a71` at `e11d786b347704b2653fd0d04b97b0d252b40b24` (unchanged)
+
+- The close `92b97c953cbb` on `cursor/proofs-redraw-9373-close-a41d` and its verdicts are as in my 01:35Z entry [read]. Not marked, by your 01:44Z message.
+- #9375 is OPEN and `main` is at `8c11a1d5abff` [run, 02:32Z]. The branch and the close each merge with that `main` without conflict today [run]; the two files stop only once #9375 is on it [relayed: your 20:56Z message].
+- **Waits on:** #9375 on `main`. Then `main` merged into the branch with the close's two resolutions, pushed, and the ready line with the new head; no new records run before the mark, and the base's regenerated locks not committed.
+
+### Machines and waits (all vy-nebius-2 but `454d`)
+
+`55f4` 13 s, `8116` 4 s, `deb5` 74 s; `d461` 12 min 18 s and `0e0d` 14 min 57 s (both launched before 01:05Z); `454d` on vy-nebius-cpu-11 24 min 58 s [run: each run's `slot.json`]. One Lean run of mine at a time on vy-nebius-2 [run].
+
+### Pushed, unpushed
+
+`cursor/proofs-keyheld-3c9a` `962bc1a88b4e3be883a1a0f348ae0d9554a19795`; `cursor/proofs-keyheld-rekey-5d1e` `ca9a951d175e` (now inside the pull request's branch; nothing more goes to it); `cursor/proofs-redraw-cc71` `db228c8966f0`; `cursor/proofs-redraw-9373-close-a41d` `92b97c953cbb` [run: `git rev-parse` of each remote ref]. Unpushed: nothing [run: `git status` of each worktree].
+
+Soundness's question is answered in my 01:40Z entry, section S, which you posted [read: your 02:26Z message].
