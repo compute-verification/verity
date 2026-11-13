@@ -5,12 +5,11 @@ probe's noise is `test_gen_ov_sampling_of_record`."""
 from __future__ import annotations
 
 import json
-import sys
-import types
 from pathlib import Path
 
 import pytest
 
+from tests import fake_vllm
 from tests.observe.test_gen_sampling import _adapter_fn
 
 PROFILES = Path(__file__).resolve().parents[2] / "workloads"
@@ -88,9 +87,7 @@ def test_sampling_params_prefers_the_request_params(monkeypatch):
     class SP:
         def __init__(self, **kw):
             calls.append(kw)
-    fake = types.ModuleType("vllm")
-    fake.SamplingParams = SP
-    monkeypatch.setitem(sys.modules, "vllm", fake)
+    fake_vllm.install(monkeypatch).set("vllm:SamplingParams", SP)
     samp = {"temperature": 1.0, "top_p": 1.0, "top_k": 0, "seed": 0, "n": 1}
     fn({"max_tokens": 16, "seed": None, "n": 1, "temperature": 0.0, "top_p": 1.0, "top_k": 0}, samp)   # the pinned greedy workload
     fn({"max_tokens": 16, "seed": 0, "n": 1}, samp)                                                     # the sampled workload
@@ -126,6 +123,7 @@ def _evaluate_gumbel(V: int, seed: int, pos: int, words: list[int]) -> int:
 
 def _oracle(V: int, seed: int, pos: int, words: list[int]) -> int:
     import numpy as np
+
     from tests.engine.gumbel_oracle import gumbel_noise_exact
     logits = (np.asarray(words, dtype=np.uint32) << 16).view(np.float32)
     y = logits + gumbel_noise_exact(seed, pos, V)      # f32 add, round-to-nearest (the kernel's `logits + gumbel`)
@@ -156,9 +154,12 @@ def test_gumbel_argmax_definition_is_a_function_of_the_seed_and_position():
 
 def _lane_ctx(events, start, sampling, seed=None, sample=None):
     import dataclasses
-    from verity_vllm.observe.fold.resolver import StepContext
+
     from tests.observe import test_patterns_synthetic as S
-    from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
+    from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import (
+        ov_sampling_patterns,
+    )
+    from verity_vllm.observe.fold.resolver import StepContext
     hdr = S.header(sampling)
     if seed is not None:
         hdr.workload["requests"][0]["seed"] = seed
@@ -173,8 +174,13 @@ SAMPLED = {"greedy": False, "temperature": 1.0, "top_p": 1.0, "top_k": 0, "logpr
 
 
 def test_seeded_gumbel_row_is_one_gumbel_argmax_compute():
-    from verity_vllm.observe.fold.resolver import Compute, PerRow, Unsupported, resolve_step
     from tests.observe import test_patterns_synthetic as S
+    from verity_vllm.observe.fold.resolver import (
+        Compute,
+        PerRow,
+        Unsupported,
+        resolve_step,
+    )
     from verity_vllm.observe.fold.tree import step_events
     events, start = S.decode_step(sampler="gumbel")
     se = step_events(events)
@@ -194,8 +200,8 @@ def test_seeded_gumbel_row_is_one_gumbel_argmax_compute():
 
 
 def test_greedy_rows_are_left_to_the_pinned_token_select():
-    from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
     from tests.observe import test_patterns_synthetic as S
+    from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
     from verity_vllm.observe.fold.tree import step_events
     events, start = S.decode_step(sampler="gumbel")
     se = step_events(events)
@@ -206,8 +212,8 @@ def test_greedy_rows_are_left_to_the_pinned_token_select():
 
 
 def test_unseeded_sampled_row_is_unsupported_not_a_constant():
-    from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
     from tests.observe import test_patterns_synthetic as S
+    from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
     from verity_vllm.observe.fold.tree import step_events
     events, start = S.decode_step(sampler="gumbel")
     se = step_events(events)
@@ -223,8 +229,8 @@ def test_unseeded_sampled_row_is_unsupported_not_a_constant():
     ({**SAMPLED, "top_p": 0.9}, "top_k/top_p"),
 ])
 def test_filtered_or_tempered_rows_are_unsupported(sampling, needle):
-    from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
     from tests.observe import test_patterns_synthetic as S
+    from verity_vllm.observe.fold.resolver import Unsupported, resolve_step
     from verity_vllm.observe.fold.tree import step_events
     events, start = S.decode_step(sampler="gumbel")
     se = step_events(events)
@@ -238,9 +244,15 @@ def test_tempered_row_is_gumbel_argmax_temp_over_the_bf16_source():
     """A `_temperature_kernel` launch on the float32 widening ahead of the sampler (T=0.7): the launch is a claimed noop and
     the sampled row is `GumbelArgmaxTempBf16_v1{V,SEED,POS,T}` over the bf16 logits (T = the request's temperature, fp32 bits)."""
     import numpy as np
-    from verity_vllm.observe.events import TritonLaunch
-    from verity_vllm.observe.fold.resolver import Compute, PerRow, Unsupported, resolve_step
+
     from tests.observe import test_patterns_synthetic as S
+    from verity_vllm.observe.events import TritonLaunch
+    from verity_vllm.observe.fold.resolver import (
+        Compute,
+        PerRow,
+        Unsupported,
+        resolve_step,
+    )
     from verity_vllm.observe.fold.tree import step_events
     events, start = S.decode_step(sampler="gumbel", f32_logits=True)
     k = next(i for i, e in enumerate(events) if isinstance(e, TritonLaunch) and e.fn.endswith("_gumbel_sample_kernel"))
@@ -275,6 +287,7 @@ def test_gumbel_argmax_temp_definition_matches_the_div_full_oracle():
     from verity.circuits.evaluation.reference import evaluate_region
     from verity.definitions.registry import prims as P
     from verity.definitions.registry.sampling import GumbelArgmaxTempBf16
+
     from tests.engine.gumbel_oracle import gumbel_noise_exact
     V, seed, pos = 80, 11, 5
     for T in (0.7, 1.3):
@@ -287,7 +300,7 @@ def test_gumbel_argmax_temp_definition_matches_the_div_full_oracle():
         t = dict(zip([g for _, _, g in Pg.input_coll(0).refs], words))
         evaluate_region(C, C[0:C.size], t)
         steps = [c for c in C.root_calls() if not c.is_primitive and c.fn.name == "GumbelArgmaxTempStep"]
-        rcp = np.uint32(P.DivFullRcp.evaluate(tb)).view(np.float32)
+        rcp: np.float32 = np.uint32(P.DivFullRcp.evaluate(tb)).view(np.float32)
         x = (np.asarray(words, dtype=np.uint32) << 16).view(np.float32)
         y = (x * rcp).astype(np.float32) + gumbel_noise_exact(seed, pos, V)
         assert int(t[steps[-1].returns[1]]) == int(np.argmax(y))
