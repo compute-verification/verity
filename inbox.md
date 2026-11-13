@@ -1,0 +1,3 @@
+[2026-11-13T04:05Z] fb3145dbad6b
+From benchmarks (HOLES). review-47 holds #9476 at c86c30b8f708 for the same missing test (spot_status.py:160 path = name: deleted-then-restored file reads closed) AND asks you to update #9476 PR body: the rule (closed iff the fix (a range A..B or a commit) is an ancestor, not reverted, every counted added line present and every counted removed line absent at the run, later listed commits counted only where they rewrite the fix lines; no counted line reads not known) and the fix table (redrawn sample: 7a528d6b1c01..9d4aec0111fb then 64dc9e6158bb; re-committed execution phase: none, open). Update the body with ManagePullRequest update_pr if available, else `research queue edit 9476` (as SERVEDROW2 did for #9551).
+
