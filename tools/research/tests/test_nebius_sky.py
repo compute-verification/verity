@@ -1316,7 +1316,7 @@ def test_retention_gc_runs_hourly_on_the_nodes_outside_a_timed_window(tmp_path):
     assert gate() == 0
 
 
-CLEAN_UP_UNITS = ("store_evict.service", "store_evict_research.service", "retention_gc.service")
+CLEAN_UP_UNITS = ("store_evict.service", "store_evict_research.service", "retention_gc.service", "launcher_copies_gc.service")
 
 
 def _copies(tmp_path: Path) -> dict[str, Path]:
@@ -1432,6 +1432,65 @@ def test_the_collector_takes_unpreserved_runs_on_node_2_alone(tmp_path):
                          ({"VY_GC_UNPRESERVED_RUNS": ""}, []), ({"VY_GC_UNPRESERVED_RUNS": "--force"}, [])):
         r = subprocess.run(["sh", "-c", script], env={**env, **extra}, capture_output=True, text=True)
         assert r.returncode == 0 and json.loads(w["out"].read_text())["argv"] == ["retention", "gc", "--apply", *flags], (extra, r.stderr)
+
+
+def test_the_checkers_copies_of_its_runs_are_collected_hourly_on_cpu_7_alone_and_only_while_it_says_which_it_needs(tmp_path):
+    """Root's runs root on vy-nebius-cpu-7 holds the checker's copy of every run it launches, which the node's collector can't
+    read and gives no record. Its own unit runs there alone, as root, with --launcher-copies over that directory. A pass deletes
+    by what the remote says and keeps the copies the checker lists, so it refuses, running nothing, without a list written in
+    the last 15 minutes (a checker that is down or doesn't write one would have every copy look unneeded), without the store
+    key to ask the remote with, and without main's copy of the code."""
+    import shlex
+    import subprocess
+    import tomllib
+    unit, timer = (SKY / "launcher_copies_gc.service").read_text(), (SKY / "launcher_copies_gc.timer").read_text()
+    files = {f["path"]: f for f in tomllib.loads((SKY.parent / "deploy.toml").read_text())["file"]}
+    for u, path in (("launcher_copies_gc.service", "vy-launcher-copies-gc.service"), ("launcher_copies_gc.timer", "vy-launcher-copies-gc.timer")):
+        f = files[f"/etc/systemd/system/{path}"]
+        assert f["src"] == f"tools/research/src/research/pods/nebius/sky/{u}" and f["run"] == ["systemd:vy-launcher-copies-gc.timer"]
+        assert f["nodes"] == ["vy-nebius-cpu-7"] and f["owner"] == "infra"
+    assert "User=" not in unit, "root's: the directory is root's, and so is the store key"
+    assert "OnUnitActiveSec=1h\n" in timer and "Environment=VY_LAUNCHER_RUNS=/workspace/research/root-runs\n" in unit
+    line = re.search(r"^ExecStart=(.*)$", unit, re.M)[1]
+    assert "${" not in line and "%" not in line, "systemd would expand it before the shell reads it"
+    argv = shlex.split(line)
+    assert argv[:2] == ["/bin/sh", "-c"] and len(argv) == 3
+
+    w = _copies(tmp_path)
+    runs, named, key = tmp_path / "root-runs", tmp_path / "named-runs", tmp_path / "r2.env"
+    named.mkdir()
+    (named / "runs").write_text("r20261001-000000-aaaa\n")
+    key.write_text(f"FAKE_OUT={w['out']}\n")
+    env = {"PATH": f"{w['bin']}:/usr/bin:/bin", "VY_RESEARCH_TOOL": str(w["link"]), "VY_LAUNCHER_RUNS": str(runs),
+           "VY_LAUNCHER_NAMED": str(named), "VY_LAUNCHER_STORE_ENV": str(key)}
+
+    def gc(**extra):
+        return subprocess.run(["sh", "-c", argv[2]], env={**env, **extra}, capture_output=True, text=True)
+
+    r = gc()
+    assert r.returncode == 0 and f"vy-launcher-copies-gc: research from {w['v1']}\n" in r.stderr, r.stderr
+    ran = json.loads(w["out"].read_text())                # written where the key file's variable says: the pass exported it
+    assert (ran["from"], ran["pythonpath"], ran["cwd"]) == (str(w["v1"]), str(w["v1"]), str(w["v1"]))
+    assert ran["argv"] == ["retention", "gc", "--root", str(runs), "--launcher-copies", "--force", "--low-pct", "0", "--jobs-dir", str(named),
+                           "--apply"]
+    w["out"].unlink()
+
+    def refused(why: str, **extra) -> None:
+        r = gc(**extra)
+        assert r.returncode == 1 and why in r.stderr and r.stderr.rstrip().endswith("nothing was deleted"), r.stderr
+        assert not w["out"].exists(), "nothing ran"
+
+    os.utime(named / "runs", (0, 0))
+    refused("is missing or was written over 15 min ago")
+    (named / "runs").unlink()
+    refused("is missing or was written over 15 min ago")
+    (named / "runs").mkdir()
+    refused("is missing or was written over 15 min ago")
+    (named / "runs").rmdir()
+    (named / "runs").write_text("")
+    refused("no store key at VY_LAUNCHER_STORE_ENV", VY_LAUNCHER_STORE_ENV=str(tmp_path / "absent.env"))
+    refused("no research package at VY_RESEARCH_TOOL", VY_RESEARCH_TOOL=str(tmp_path / "copy" / "absent"))
+    assert gc().returncode == 0 and w["out"].exists(), "an empty list written just now is a list: the checker needs none"
 
 
 @pytest.mark.parametrize("unit", ["the eviction", "the collector"])
