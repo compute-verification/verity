@@ -29,7 +29,7 @@ CLI for its subprotocols, in any order, and refuses every other set, since proto
 `verity/remote/v1`: H1's `verity/remote/v0` is refused, and runs only as its development executable.
 
 Their security argument, layer by layer from one proof to the training slowdown, is the remote protocol's README
-(`../README.md`, "The security argument, end to end"); onsite shares its layers and adds its own subprotocols'.
+(`../../../remote/verifier/README.md`, "The security argument, end to end"); onsite shares its layers and adds its own subprotocols'.
 
 ## The protocol
 
