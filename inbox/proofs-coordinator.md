@@ -154195,3 +154195,95 @@ The error, in the log of `df47` (read on its node by `r20261113-172220-aa2f`) an
 
 - My entry on the whole build when `4205` is back, as you ordered. Before it, one line when `46e8` and `0332` are back, since they say whether the verifier's code builds.
 - Then your 16:40Z order, each from its carried head as FRAME names it. None of the three is named yet: GATHER stopped at a conflict (FRAME, 17:17Z), and MESSAGES's and SESSIONOF2's are in FRAME's dry run `627b`.
+
+
+## ADDRROW2, Fri 13 Nov 17:43Z: the lookup: one listed guarantee reads `fileWith` and `registeredOf`, an honest lemma, inside a definition; the file finders are read by one listed statement, at the instance's own registered files, under `ecr/sha-512`; no listed premise is taken at the files built by choice
+
+**In plain words.** The files built by choice are in the tree in one place that a lock lists: the honest lemma of
+`remote_soundness_deployedReady`, which builds its example instance from them. The statement that lemma witnesses is
+for every instance, and its two file finders take the registered files from the instance, as a field, so no listed
+statement assumes anything of a finder that holds a file taken from existence. It still matters: the one instance the
+tree builds is the one built by choice, and at that instance the file finder's premise says something no one can
+check. Your two mails of 16:50Z and 16:59Z are read whole, with this message. My machine is a new one: the pen and the
+worktrees are rebuilt from the pushed branches, and the graph and the facts are fetched again from their runs.
+
+Every path and line is at the pin `053b8e50fe8a`, under `security/`. I read statements and definitions, no proofs.
+The graph is `r20261113-155322-edca`'s, at the pin's own facts, and it holds the properties package's constants
+(`Properties.Verity.Game` is one of its modules) [run]. `Instance.lean` is the same file at `origin/main`
+(`4aee3558fb88`) and at the join's tip, and `Game.lean` differs from the pin in four docstring lines [run: `git diff`,
+`git grep` at the three commits].
+
+**(a) Who reads `fileWith` or `registeredOf`** [run: the graph, and the facts' reads of both security locks].
+- 15 declarations reach `fileWith` and 13 reach `registeredOf`, all in three modules,
+  `Proofs/Properties/Verity/Sampled/{Instance,OpensAt,SessionAt}.lean`.
+- **One is listed: `Verity.Sampled.remote_soundness_deployedReady_honest`** (`Proofs/Properties/Verity/Sampled/OpensAt.lean:284`),
+  in `security/lean-audit.json`. It is not deployed. No guarantee of `security/Properties/lean-audit.json` reads
+  either (that package cannot import `Proofs/`), and none of the two `verity/` locks whose facts I hold.
+- **It reads them only inside a definition.** Its statement names neither. It has no hypothesis: it is six facts joined
+  by `∧`, each about the instance `Instance.Honest.inst ⊤ fun _ => none`, whose base (`Instance.Honest.base`,
+  `Instance.lean:754`) has the field `registered := registeredOf` (`:760`). The fact that turns on it is the second,
+  `RegisteredFiles`.
+- The theorem it witnesses, `Verity.Sampled.remote_soundness_deployedReady` (`OpensAt.lean:270`, listed, same lock, not
+  deployed), reads neither `fileWith` nor `registeredOf`. It is stated for every instance `I`, and the registered files
+  in it are the field `I.base.registered`.
+
+**(b) The finders, and the assumption id** [run for the readers, read for the definitions].
+- `Vocab.fileFinder θ F := namedFinder (V.programDigest θ) F (V.registered θ)` and `Vocab.publicFinder`, the same at
+  the public file's digest (`Properties/Verity/Game.lean:870,875`). `namedFinder h F R` (`:560`) has one coin and
+  outputs the pair (the first file of `F` with digest `h`, the first file of `R` with digest `h`) when the two differ.
+- **One listed statement reads them: `remote_soundness_deployedReady`**, and only inside definitions: the sampled
+  subprotocol's further finders at an instance's stage begin with `Instance.fileSpecs` (`Instance.lean:185`), the two
+  file finders, each at a budget of 2 calls, each under the default claim `.ecr`. So the assumption id is
+  **`ecr/sha-512`**, in the form `FinderSpec.CR` gives it (`Game.lean:639`):
+  `(fileFinder θ F).Pr sha512Msg ≤ 2 / 2^256`, and the same for `publicFinder`.
+- Where it sits in the statement: inside the conclusion, as a condition of the bound. `Vocab.error` (`Game.lean:918`)
+  is the published bound where `finderCR ∧ premises ∧ FinderCR ∧ Unforgeable` hold of this strategy, and `⊤` (no
+  bound) elsewhere.
+- **Neither finder is taken at `registeredOf` in any listed statement.** The theorem takes them at `I.base.registered`
+  for every `I`. The honest lemma is at the instance built from `registeredOf`, but its six facts are the theorem's six
+  hypotheses, and none of them is a finder's premise.
+- The structure `Verity.Sampled.FinderCR` (`Proofs/Properties/Verity/Sampled.lean:598`), which asks the strict
+  birthday bound (`cr/sha-512`) of the same two finders, is read by no listed statement.
+
+**(c) One family, and what the premise then asks** [read: the statement and the definitions it reads; derived].
+There is one family: remote soundness at a deployed one-stage instance (`remote_soundness_deployedReady` with its
+honest and nontrivial lemmas). In plain words it says: for every instance whose sessions are ready, whose registered
+files pass the file check wherever some committed files do (`RegisteredFiles`), and so on for the other four
+hypotheses, and for every prover, the chance that the remote verifier accepts while a claim fails is at most the sum
+of the subprotocols' errors. The sampled error is a number only where, among other conditions, each file finder
+outputs a collision with probability at most `2/2^256`. A file finder has one coin, so its success is 0 or 1, and the
+condition says it is 0 (`Instance.fileCR`, `pr_unit`). Where the committed files and the registered files each hold a
+file with the digest, that is: **the file the prover committed under the registered digest is the registered file**
+(`namedFile_eq`, `Instance.lean:112`).
+- At an instance whose `registered θ` is the files the registration holds, as data, that is the right premise: the
+  finder has the registered file built in, which is registered information, and it finds a collision exactly when the
+  prover commits another file with the same digest.
+- At `registeredOf`, the registered file is `hx.choose`: some file with the digest, taken from the bare fact that one
+  exists. A digest has many files (by counting), and nothing says choice gives the one that was registered. So the
+  condition becomes: the prover committed the very file that choice gives. For a prover that commits the true circuit
+  file it holds only if choice happens to give that file, which Lean can neither prove nor refute. Where it fails the
+  finder's success is 1 (`namedFinder_collides`), the error is `⊤`, and the bound says nothing. Nothing false follows.
+- So it is the same kind as the finders of my 16:42Z entry, one step removed: a finder one of whose two strings is
+  taken from existence. Today it sits only in the honest lemma's instance, where it does no harm to what that lemma
+  says: that instance runs no session and its errors are all `⊤` already (`Instance.Honest.error_top`, `:823`).
+- **What to watch.** `Instance.Honest.inst` is the only instance the tree builds [run: the one user of `Instance.mk`].
+  `RegisteredFiles` is an open premise of the theorem in the lock, and the one lemma that discharges it,
+  `registeredFiles_of` (`:534`), does so only for `registered = registeredOf`. A deployed instance built by that route
+  would carry the choice-built file into its file finders. An instance that is to say something takes `registered` as
+  data (the registration's files), and then `RegisteredFiles` is a fact about the registration, not one a lemma gives
+  for nothing.
+
+**STOP RULE.** Not touched. No listed guarantee is empty by this, and no listed premise is taken at a finder built
+from existence. I change nothing here; it is HELDOF's file.
+
+**Not established.**
+- I read no proofs, as ordered: "the fact that turns on it is `RegisteredFiles`" is from the graph (`registeredFiles_of`
+  is the one theorem below the honest lemma that uses `fileWith`) and from the definitions.
+- The graph is at the pin. That the file is unchanged at `origin/main` and the join's tip is a text comparison; no
+  graph was made there. A run that would: `tools/verity/lean/unread.py`'s facts at that commit (the records run of the
+  join's check keeps them), read by my `dep_graph.py`.
+- Whether any pull request in flight builds a second instance: not looked at.
+- "A digest has many files" is the counting fact; no Lean proof of it was looked for.
+
+**Pushed.** This entry only. **Runs.** None new. **To post.** Sections (a) to (c) as they stand, if you want them on
+the thread.
