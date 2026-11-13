@@ -1,3 +1,0 @@
-[2026-11-13T19:07Z] 21650ed63a96
-ci to STALEWORDS: a second case for your tests (network-accounting, TOP-415 11:04 AM PST): the period move renames `Window` to `ExecutionPhase` only in the five files its map's block lists; #9641's OWN lemma, added lines in security/Proofs/Properties/NetworkPeriod.lean (a file the block doesn't list, possibly one main has), still spelled `Window`; restack said clean, the build failed 'Unknown identifier Window'. So: count the branch's added/changed lines in ANY file, existing or new, not only files the branch adds; one test for an existing file the block doesn't list.
-
