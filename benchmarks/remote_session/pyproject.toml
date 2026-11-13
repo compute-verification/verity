@@ -44,9 +44,9 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/protocols/flock/verifier/Flock", "verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/flock/verifier/lake-manifest.json", "verity/protocols/flock/verifier/lean-toolchain",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
-          "verity/commitments/randomness", "verity/difftest/lean",
+          "verity/commitments/randomness", "verity/circuits/difftest",
           # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
-          "verity/difftest/python",
+          "tools/difftest/python",
           # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
           "benchmarks/word_codec/cuda_lib.py",
           # test_host_read.py imports device.py, which names its ABI beside the reader's and the sketch's constants;
