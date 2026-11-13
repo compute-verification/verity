@@ -662,8 +662,8 @@ def test_a_head_based_after_a_move_that_isnt_the_last_is_mapped_across_the_rest_
 
 def test_a_head_based_after_the_moves_base_maps_to_none_as_restack_refuses_it(world):
     """A PR based on a commit `main` took after the move's base, before the move landed, is one `restack.py` refuses
-    (`based-after`: its merge of the move's base would bring that commit in a second time), and its owner merges `main`
-    instead: `mapped_change` maps it to nothing either, and says why."""
+    (`based-after`: its merge of the move's base would bring that commit in a second time), and its owner carries it against
+    the move's own commit (`--main MOVE`) before merging `main`: `mapped_change` maps it to nothing either, and says why."""
     move = _move(world)
     _push_main(world, other := world.change({"c.txt": "c landed meanwhile\n"}))
     world.gh.put(1, old := world.change({"b.py": B + "Y = old_proto.a.g()\n"}), ready=False)

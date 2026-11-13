@@ -202,6 +202,21 @@ def test_restack_runs_with_mains_drivers_and_without_the_queues_credentials_or_t
     assert seen["GIT_CONFIG_PARAMETERS"] == drivers["GIT_CONFIG_PARAMETERS"]
 
 
+def test_a_store_with_no_remote_is_refused_before_any_pr_is_listed_and_the_refusal_names_the_read_only_key(world, monkeypatch):
+    """A machine's run has no store secrets: its store has no remote, so no mark or land verdict can be read.  The run is refused
+    before it lists or fetches a PR, naming the read-only key a machine's run takes."""
+    monkeypatch.setattr(world.gh, "open_prs", lambda: pytest.fail("listed the PRs"))
+    monkeypatch.setattr(Q, "GitHub", lambda slug: world.gh)
+    monkeypatch.setattr(Q, "PublicGitHub", lambda slug: world.gh)
+    _git(world.tmp, "clone", "-q", str(world.origin), str(node := world.tmp / "node"))
+    monkeypatch.chdir(node)
+    (cfg := world.tmp / "no-remote.toml").write_text("")
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    with pytest.raises(SystemExit) as refused:
+        Q.main(["cross", "--remote", str(world.origin), "--repo", Q.REPO, "--store", str(world.tmp / "node-store")])
+    assert f"--store-read -- research queue cross --repo {Q.REPO}`" in str(refused.value)
+
+
 def test_the_push_never_pushes_main_checked_or_next_whatever_a_pr_names(tmp_path):
     """A crossing whose PR names `main`, `checked`, `next` or a full ref as its branch is never pushed, before any git runs."""
     report = {"main": "0" * 40, "moves": [], "crossed": [
