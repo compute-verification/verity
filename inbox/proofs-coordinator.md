@@ -127478,3 +127478,43 @@ wake on your message.
 **Not established.** What the model's own `wiresMoveRows` says of Friday's files; the axiom probes of the five changed files; which lock records move; the guard's test file's verdict.
 
 NEEDS: resume me when either run ends.
+
+## [2026-11-13T07:27Z] ACCEPTS: plays at `x`: NO existing statement changes (`PlayAccepts`, `HeldOfAt`, `OfRun.playAccepts_of_run` stay as they are); new `atStmt`, `acceptsRun_at`, `reachedAccepts_at`, `caseCommits_at`, `acceptsRun_form_at`, `reachedAccepts_form_at` at `4fb1fffdf2` (not compiled)
+
+**I did not edit `PlayAccepts`, `HeldOfAt` or `OfRun.playAccepts_of_run`. I restricted the case map, which does the same for every premise at once.** This departs from your words "name every statement that changes": none does. ASSEMBLY and HELDOF merge nothing new unless they want the restricted form.
+
+- **Why not the edit.** `HeldOfAt` is not the only premise that names the one session of record `A`. `HeldAt`, `StmtsRead`, `RoundsHeldAt`, `ScopeHeldAt`, `PinHeldAt`, `SessionsRun`, `SessionMsgs` and `RecordsHeldAt` do too. [read] Each is false at a `C` whose accepted plays carry two boundary records, for the same reason. Restricting two of them leaves the join saying nothing of that `C` still.
+- **What I wrote.** `atStmt C x : CaseOf` keeps `C`'s case of a play where the check reads the statement `x` of it (`stmtOfCase k = some x`, the boundary record's bytes) and has none elsewhere. A premise at `atStmt C x` then speaks only of the accepted plays at `x`.
+- **The bridge.** `AcceptsRun A x Rd Acc` looks only at plays with `Acc o` and `Rd.stmt o = some x`. Such a play is one `atStmt C x` accepts, with the same input (`at_of_stmt`), and the reading reads `C` only through that input (`formReading_at`). So:
+  - `acceptsRun_at : AcceptsRun A x (formReading A (atStmt C x) S dev) (FormAccepts (atStmt C x)) → AcceptsRun A x (formReading A C S dev) (FormAccepts C)`
+  - `reachedAccepts_at`: the same with `ReachedAccepts`.
+  - `caseCommits_at x : CaseCommits C → CaseCommits (atStmt C x)`.
+  - `acceptsRun_form_at`, `reachedAccepts_form_at`: `acceptsRun_form` and `reachedAccepts_form` with each premise at `atStmt C x` and the conclusion at `C`.
+- **Who reads what.** ASSEMBLY: use `acceptsRun_form_at` / `reachedAccepts_form_at` in place of the two without `_at`; the conclusion's type is the same, so `ProjectionOf`'s side is untouched. HELDOF: `heldOfAt_of_desc` is wanted at `HeldOfAt A (atStmt C x)`, the same statement at another case map, so its proof for a general `C` serves if it has one. `inputOn_at` gives it `recordMsg i.record = some x` at each such play.
+- **Where.** New module `SampledTwo/AtStmt.lean` (imports `Reading` only; its lakefile root and its lock root at the end of `roots`, same commit). The four `_at` theorems that need `Reached` or `Accepts` are in `AcceptsTop.lean`.
+- **Checked.** [run] The scripts of `atStmt_some`, `atStmt_of`, `formAccepts_of_at`, `inputOn_at`, `formReading_at`, `at_of_stmt` and `reachedAccepts_at` pass in a local toy with stand-ins for `Case`, `Input` and `formReading` of the same shape (Lean v4.34.0, core only). [guess] They pass against the real definitions; the tree's files are not compiled.
+
+**The read you asked for first: the interior's held fields do NOT agree across plays at one `x` by anything read.** [read]
+- `heldOf i it u` reads the form's parameters (`boundary`, `rule`, `interior`, `replay`, `circuits`, through `inputOf`) and the commitment's record `i.record` (its population in `firstOf`, its links in `replayLinks`). It reads nothing of `it.record`, the evidence or the blobs.
+- The interior's fields (`names`, `wires`, `rows`, `interiorNames`, `refReads`, `refHeaders`, the cells and counts) are functions of the parameters alone. The boundary's are functions of the parameters and the record.
+- So two accepted plays at one `x` agree on all of `A.h` only if they also carry the same parameters' bytes. `x` pins the record, not the parameters. No premise pins a case's parameters: `CaseCommits` pins only the commitment.
+- **This is the join's choice of `C`.** `ProjectionOf` asks `Acc` only of plays with `o.params = θ`. A `C` that decodes only the plays whose parameters are θ makes the plays at `x` share the parameters too. Then `HeldOfAt A (atStmt C x)` is a statement about one record and one set of parameters, which is what `A.h` is built from. I wrote no map for θ: `C` is the assembly's.
+
+**The keys' refusal (your 07:22Z): read. I write nothing for it before you say.**
+
+**Prose words (your 07:22Z item 5): taken** from this entry on. No merge of `main` into my branch.
+
+**Lock:** the `compile_time` listing for `JpWalk` is in `2696074472` (the `why` and the digest the script writes). At `4fb1fffdf2` the lock also gains `AtStmt`'s root at the end. Nothing else in the lock changed.
+
+**Tries:** `b383` failed in `JpWalk` at two lemmas only (`applyOutputs_fst`, `applyOutputs_values`: `split` took the outer match first). Fixed. The engine and the two loop lemmas raised no error there. `r20261113-071622-6cf5` (RecordNames at `2696074472`) is running.
+
+## NEEDS
+- Nothing.
+
+## STOP RULE
+I stop when RecordNames, RunChecks and AcceptsTop compile with their premises named in a title, or at 02:00Z. No head of mine is named for the join while a `sorry` stands in it: two stand in `RecordNames` (`checkRegistered_pass`, `checkFacts_of_check`).
+
+## Not established
+- That `AtStmt.lean` and the `_at` theorems compile.
+- The two walks' pass paths (the trace from `6cf5`) and their glue to `ValuesHold` and `CheckFacts`.
+- That `RunChecks` compiles.
