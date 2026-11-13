@@ -103,3 +103,30 @@ soon after.
   there ends (about 19:15Z to 19:40Z), on my word.
 - `launch.sh`'s own end is still 17:30Z; the 12-minute lease is what bounds you. Do not edit
   the launcher for this.
+
+## Fri 13 Nov 03:06Z: #9375 IS ON `main`. Piece 2 now: #8671's branch takes `main`, as your brief has it; and one question for Friday's go
+
+**By me:** GitHub has #9375 merged at 03:01Z; the queue's commit is `66dce017d86b`, its locks
+are regenerated in `06365af5a3`, and `main` is `4a7291116e11`. #8671 is still at `a4b42d12aa8a`
+on `cursor/kernels-exactlin-one-kernel-7c3e`, open and unmarked.
+
+**Piece 2, as the 21:08Z brief words it:** #8671's own branch takes `origin/main` with KSLICE's
+closes (its note's "How it was built" and "The six files git stopped on"); a merge, no
+force-push; fetch first and say which `main` you took. The suites the change touches at the new
+head, on a CPU node you name after reading its slots (not one inside an infra window; proofs
+builds Lean on `vy-nebius-2` tonight, which is not yours anyway), none from a cached pass.
+#8671's body brought up to date: the new head, the merge, the run, and what Friday's gate will
+add. **Tell me the head: I mark it after vllm's read (VLLM-264, due Fri 20:00Z), not before.**
+
+**One question, for Friday's go.** Your job runs from a worktree at `e1534673e8ec`. For every
+file the five gates and the replay load (the kernel's sources, the evaluators, `sbench`, your
+own job files aside): **are its bytes at #8671's new head the same as at `e1534673e8ec`?** A
+table of file and yes or no (`git diff --stat` between the two over those paths is enough).
+All the same: Friday's line stands as it is and the gate's verdict is about the head I mark.
+Any different: say which and what changed; I decide the head in the go, and you change no job
+file before that.
+
+**Still not yours:** the three helpers' rename and `exactlin.py`'s deletion; `dither_a.py`'s
+quantizer; any mark. One worker comment on HASH-61 (at most 80 words).
+
+Return by Fri 13 Nov 06:30Z.

@@ -325,3 +325,35 @@ then by a build if reading leaves a doubt:**
 4. One line of the result in the pull request's body and in your comment on HASH-125. **If it
    is an objection to lean's stage 5 itself (not to ours), tell me before 15:00Z: I say it on
    LEAN-80 before lean's 16:00Z.**
+
+## Fri 13 Nov 03:06Z: #9375 IS ON `main`, with its locks regenerated. The 01:01Z ruling's point 5 is now the judgement: your branch takes `main`, the records run once, the diff against `main`'s locks is names only. The pull request's base is `main`
+
+**By me:** GitHub has #9375 merged at 03:01Z; the queue's commit is `66dce017d86b` ("Queue: #9375
+The remote branch merged into main"), the next is `06365af5a3` ("Lock records regenerated for
+#9375"), and `main` is `4a7291116e11`. `git merge-base --is-ancestor 34c5cbb3705c origin/main`:
+yes. So the base's drift is in `main`'s locks now, written by the landing as lean said it would be.
+
+**What changes for you:**
+1. **No L0 is needed any more** (point 5 of 01:01Z). Do not wait for `r20261113-021456-d3e3`.
+   If it has ended, its L0 → L1 diff goes in your note as a second witness, in three lines;
+   if it is still running, let it end and read it later. Launch nothing more on `34c5cbb3705c`.
+2. **Your branch takes `origin/main`** (a merge, no rebase, no force-push; fetch first and say
+   which commit). If the merge stops on a file, say which and how you closed it. If a name of
+   the 45 no longer exists on `main` or was renamed there by someone else, stop and tell me.
+3. **The records once, on the merged head with the seven-entry moves file,** on a CPU node
+   outside an infra window that you name after reading its slots. **The judgement: every
+   difference of the regenerated locks from `main`'s locks is one of the 45 names, as a key
+   or as a name a record reads; `check.py` says "moved" for the guarantee and "changed" for
+   nothing of the move's; every analysis package passes.** Anything else: stop and say so.
+   The diff whole in the note, its count in the body.
+4. The 02:03Z item (lean's stage 5 and our three short names) still comes before the pull
+   request opens.
+5. **The pull request: base `main`, unmarked.** Its body's first lines: zero errors at the
+   merged head; the move's records are names only against `main`'s locks (the run's id);
+   seven moves and why the seventh is by hand; the line for `rename.py`'s owner under "Seen
+   and not changed"; what is not shown. Lean's sentence about the base's stale locks is no
+   longer needed in the body: the base is `main`.
+6. One comment on HASH-125 (at most 100 words). **Tell me the number and the head: I ring
+   proofs and lean, and the mark waits for proofs' read.**
+
+Return by Fri 13 Nov 06:30Z.
