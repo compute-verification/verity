@@ -346,7 +346,9 @@
   "Fwd.step": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.summarize": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.taintReason": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
-  "Fwd.walk": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds"
+  "Fwd.walk": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "SpotFlock.RecordNames.jpBody": "partial def of jp_body and jp_close (Proofs.Properties.Verity.SampledTwo.JpWalk, under `compile_time`): elaborator code that takes one step down a registration check's do block and runs again on each goal the step leaves; no statement reads it, and the kernel checks every proof it builds",
+  "SpotFlock.RecordNames.walkGoal": "partial def of jp_walk (Proofs.Properties.Verity.SampledTwo.JpWalk, under `compile_time`): elaborator code that walks one goal's hypothesis down the path of a registration check on which no code is added; no statement reads it, and the kernel checks every proof it builds"
  },
  "compile_time": {
   "Proofs.Flock.Claims.Complete.CostWalk": {
