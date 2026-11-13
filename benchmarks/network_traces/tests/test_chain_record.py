@@ -707,7 +707,7 @@ def test_free_inputs_hold_to_the_period_count_on_wires_and_registered_reads():
 
 def test_the_faulty_sets_bits_are_the_powers_without_computing_it():
     """`power_bits` is ``(m^f - 1).bit_length()``: computed on small cases, and read off the logarithm (forced with
-    ``exact_below=0``) it agrees with the power everywhere; at keep-591e's draw (``m`` 6,963,297, ``f`` 96,531,780) it
+    ``exact_below=0``) it agrees with the power everywhere; at keep-591e's sample (``m`` 6,963,297, ``f`` 96,531,780) it
     finishes, within one bit of ``f·log2 m``."""
     for m in [*range(1, 40), 1 << 20, 6_963_297, 10 ** 9 + 7]:
         for f in [*range(0, 12), 97, 1000, 4097]:

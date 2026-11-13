@@ -58,7 +58,7 @@ def test_size_classes_admit_rows_and_tiles_and_prune_past_the_widest():
 
 
 def test_a_shape_past_c_flocks_block_is_never_a_proof_block():
-    """A shape of cap 0 (its block past C-Flock's 2^K_MAX) is descended into, never proved whole, and gives no width hint;
+    """A shape of cap 0 (its block past Flock's 2^K_MAX) is descended into, never proved whole, and gives no width hint;
     with nothing to descend into it has no legal cut, which says why."""
     tile = Shape("Tile2", 2 * 32 * 4190, 2048, 64, out_gates=2, rows=(1024, 1024, 1024, 8), commit_bits=64, cap=0,
                  parts=((DOT, 2),))

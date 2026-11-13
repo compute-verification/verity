@@ -3,9 +3,9 @@ Llama 3.2 1B's head (its tied embedding), (16, 2,048, 128,256) with 4 real rows,
 scheme the H200 runs, its weight's 128,256 vocabulary rows committed as ``pearl-b/64`` and one of them all +0, excluded.
 The call has 2,004 column tiles and its y rows are 501 segments of 256 words.
 
-Only the tiles the verifier opens are proved (the scheme's reference, on `fast_tile`'s batch forms): the draw is fixed to
+Only the tiles the verifier opens are proved (the scheme's reference, on `fast_tile`'s batch forms): the sample is fixed to
 the call's first, a middle and its last column tile (``clear_work.draw`` patched), and the exclusion tile of the +0 row
-opens beside them. Every other transcript leaf and y word is +0, which no opened tile reads. The Lean verifier draws from
+opens beside them. Every other transcript leaf and y word is +0, which no opened tile reads. The Lean verifier samples from
 its own record of the coins, so this pass is the Python's alone; a fully proved one is `head_pass`'s with ``prove=None``
 (all 2,004 tiles proved, ``jobs`` processes at a time).
 
@@ -42,7 +42,7 @@ SCHEME = "pearl-c-h100-v1-h3"
 M16, K, N, REAL, WEIGHT, INDEX = 16, 2_048, 128_256, 4, 64, 0
 #: the vocabulary row that is all +0 (it fails liveness, so it is declared excluded), in column tile 2,001
 ZERO_ROW = 128_100
-#: the column tiles the draw is fixed to: the first, one in the middle and the last
+#: the column tiles the sample is fixed to: the first, one in the middle and the last
 DRAWN = (0, 1_002, 2_003)
 EXCLUSION = ZERO_ROW // 64
 KEY = bytes([1]) * 32
@@ -172,7 +172,7 @@ def verdict(path: Path, **kw) -> dict:
 @pytest.mark.slow
 def test_the_verifier_accepts_the_heads_call_opens_its_last_column_tile_and_credits_it_at_the_linears_rate(head, fixed_draw):
     """An honest head call is accepted, tied to a W that registers its A, its y of 4 rows of 128,256 words and its weight
-    of 128,256 rows; it opens the drawn tiles and the +0 row's exclusion tile, holds y's words in the last column tile to
+    of 128,256 rows; it opens the sampled tiles and the +0 row's exclusion tile, holds y's words in the last column tile to
     its U, and credits the call's 4 real rows at |K| over every column but the +0 row's block of 64 (the band rule,
     `UnitRecord.credited`: its tile credits nothing), less ε and ρ. The first
     and the last column tile are replayed on the scalar reference too, whose verdict the batch forms' must be."""

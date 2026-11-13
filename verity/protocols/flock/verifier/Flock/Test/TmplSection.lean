@@ -4,7 +4,7 @@ template's `n` lines off the file's head alone, so bytes past the section that a
 file without the section, with a malformed header or with fewer lines than its header names gives none.
 `HmRow.tmplLines`, what `HmRow.parse` passes over before the sections, is the header and those lines under the templated
 tags, and nothing under any other's or in a file without the section. `HmOut.parseTmpl` refuses a META `definition`, a
-unit class's, before it reads the template. `HmOut.tmplOfView` reads the same template, and the same errors, off an
+size class's, before it reads the template. `HmOut.tmplOfView` reads the same template, and the same errors, off an
 ASCII file's line view, and the template's parse through the view (`View.tmplLine`, `View.tmplNums`) prints
 `Flock.Test.Tmpl`'s template as its parse of the lines does, and refuses a row that isn't numbers with the same error.
 -/
