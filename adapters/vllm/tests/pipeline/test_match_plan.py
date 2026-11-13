@@ -177,6 +177,10 @@ def test_a_dry_run_prints_each_stage_s_line_in_the_phase_s_order_and_writes_noth
     assert RC.main(_options(wl, *given, "--phase", "cpu", "--laptop", out=str(run))) == 0
     assert capsys.readouterr().out.splitlines() == [
         f"# run_config --dry-run  RUN_DIR={run}  phase=cpu  snapshot_steps=[0, 1, 2, 3]  laptop=True", *cpu]
+    assert RC.main(_options(wl, *given, "--phase", "gpu", out=str(run))) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"# run_config --dry-run  RUN_DIR={run}  phase=gpu  snapshot_steps=[0, 1, 2, 3]  laptop=False",
+        line("capture"), line("control"), line("census"), "[nonint] SKIP (--skip)", f"[gpu_done] write {run}/gpu_done.json with per-stage timings"]
     assert not run.exists()
 
 
@@ -200,8 +204,58 @@ def test_a_gpu_phase_takes_its_lease_first_runs_every_stage_though_one_fails_and
             (st, "failed" if st in failing else "ok", 3 if st in failing else 0) for st in RC.GPU_STAGES]
         done = json.loads((run / "gpu_done.json").read_text())
         assert sorted(done) == ["config_id", "seconds", "stages", "utc"] and done["config_id"] == "cid"
+        assert (run / "gpu_done.json").read_text() == json.dumps(done, indent=1) + "\n" and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", done["utc"])
         assert done["stages"] == {s["stage"]: {"status": s["status"], "seconds": s["seconds"]} for s in stages}
         assert sorted(p.name for p in (run / "logs").iterdir()) == sorted(f"{st}.log" for st in RC.GPU_STAGES)
+
+
+def _stages_stood_in(monkeypatch, events):
+    """The lease, each stage's run and the gates stage stood in: `events` takes the lease's word and then each stage's run whole."""
+    def run_stage(stage, cmd, log, *, max_rss_gb, timeout_s):
+        events.append((stage, cmd, log, max_rss_gb, timeout_s))
+        return {"stage": stage, "status": "ok", "returncode": 0, "seconds": 0.25, "log": str(log), "cmd": shlex.join(cmd), "reason": None}
+
+    def gates_stage(plan, a):
+        events.append("gates")
+        return {"stage": "gates", "status": "ok", "returncode": 0, "seconds": 0.5, "log": None, "cmd": "in-process", "reason": None}
+
+    monkeypatch.setattr(RC, "profile_config", lambda name: None)
+    monkeypatch.setattr(RC.GL, "acquire", lambda: events.append("lease"))
+    monkeypatch.setattr(RC, "run_stage", run_stage)
+    monkeypatch.setattr(RC, "gates_stage", gates_stage)
+
+
+@pytest.mark.parametrize("given, limits", [
+    ((), (None, None)), (("--laptop",), (RC.LAPTOP_MAX_RSS_GB, RC.LAPTOP_STAGE_TIMEOUT_S)), (("--max-rss-gb", "3", "--stage-timeout", "9"), (3.0, 9.0)),
+    (("--laptop", "--max-rss-gb", "0", "--stage-timeout", "0"), (0.0, 0.0))])
+def test_each_stage_runs_its_command_under_the_limits_given_a_laptop_s_when_none_is_and_none_otherwise(tmp_path, monkeypatch, given, limits):
+    events: list = []
+    _stages_stood_in(monkeypatch, events)
+    run = tmp_path / "run"
+    a = _options(_workload(tmp_path), "--phase", "gpu", *given, out=str(run))
+    assert RC.main(a) == 0
+    plan = RC.Plan(a)
+    assert events == ["lease", *((st, plan.cmd(st), run / "logs" / f"{st}.log", *limits) for st in RC.GPU_STAGES)]
+    assert (RC.LAPTOP_MAX_RSS_GB, RC.LAPTOP_STAGE_TIMEOUT_S) == (1.5, 180.0)
+
+
+def test_a_whole_run_takes_the_lease_times_the_gpu_s_stages_alone_and_records_a_skipped_stage_whole(tmp_path, monkeypatch):
+    events: list = []
+    _stages_stood_in(monkeypatch, events)
+    run = tmp_path / "run"
+    assert RC.main(_options(_workload(tmp_path), "--skip", "census,golden,replay_a", out=str(run))) == 0
+    ran = ["capture", "control", "nonint", "resolve", "nonint_compare", "compare", "fold", "fold_2", "gates"]      # `census` names two stages
+    assert [e if isinstance(e, str) else e[0] for e in events] == ["lease", *ran]
+    stages = json.loads((run / "stages.json").read_text())["stages"]
+    assert [(s["stage"], s["status"]) for s in stages] == [
+        ("capture", "ok"), ("control", "ok"), ("census", "skipped"), ("nonint", "ok"), ("resolve", "ok"), ("census_reconcile", "skipped"),
+        ("nonint_compare", "ok"), ("compare", "ok"), ("fold", "ok"), ("fold_2", "ok"), ("golden", "skipped"), ("replay_a", "skipped"), ("gates", "ok")]
+    assert [s for s in stages if s["status"] == "skipped"] == [
+        {"stage": st, "status": "skipped", "returncode": None, "seconds": 0.0, "log": None, "cmd": None, "reason": "--skip"}
+        for st in ("census", "census_reconcile", "golden", "replay_a")]
+    done = json.loads((run / "gpu_done.json").read_text())
+    assert done["stages"] == {"capture": {"status": "ok", "seconds": 0.25}, "control": {"status": "ok", "seconds": 0.25},
+                              "census": {"status": "skipped", "seconds": 0.0}, "nonint": {"status": "ok", "seconds": 0.25}}
 
 
 def test_a_stage_name_without_a_command_leaves_no_record_and_a_gates_stage_that_raises_is_a_failed_stage(tmp_path, monkeypatch):

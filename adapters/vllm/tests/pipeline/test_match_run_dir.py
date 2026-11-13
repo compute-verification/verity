@@ -4,7 +4,8 @@ command, the census's and the manifest.  Its CPU phase with every stage skipped 
 realized shape of its capture.  What the driver says of a run goes to the log: a stage's command and status, and each record it
 could not write.  The phase's last word on the realized shape, the shape or that it was not written, is a line on stderr as it is
 written, which a pod's script shows.  A run directory with no run.json, and a recorded workload this checkout lacks, are refused
-by name.  A checkpoint's configuration is the file `--hf-config` names, else its directory's, else the hub's newest snapshot's."""
+by name.  A re-run takes its checkpoint, its family and its engine arguments from run.json unless they are given.  A
+checkpoint's configuration is the file `--hf-config` names, else its directory's, else the hub's newest snapshot's."""
 from __future__ import annotations
 
 import json
@@ -297,7 +298,7 @@ def test_an_hf_config_that_is_no_checkpoint_s_reads_as_none_and_the_log_warns(tm
     a = cli.parse("match", ["--hf-config", str(tmp_path / "config.json")], {})
     assert RC._hf_config_of(a, None) is None
     (said,) = _said(caplog, "WARNING")
-    assert said.startswith(f"{tmp_path / 'config.json'}: no configuration read, so provenance falls back to \"hand\" (")
+    assert re.fullmatch(re.escape(f"{tmp_path / 'config.json'}: no configuration read, so provenance falls back to \"hand\" (") + r"\w+: .+\)", said)
     assert RC._hf_config_of(cli.parse("match", [], {}), None) is None and len(_said(caplog)) == 1      # none named: nothing to say
 
 
@@ -315,6 +316,27 @@ def test_a_run_dir_with_no_run_json_and_a_recorded_workload_this_checkout_lacks_
     a = cli.parse("match", ["--run-dir", str(run)], {})
     RC._defaults_from_run_dir(a)
     assert (a.workload, a.out) == ("workloads/gone.json", str(run))
+    (tmp_path / "unnamed").mkdir()
+    a = cli.parse("match", ["--run-dir", str(_run_dir(tmp_path / "unnamed", workload_path=None))], {})
+    RC._defaults_from_run_dir(a)                                                # a run.json that names no workload: `main` asks for one
+    assert a.workload is None
+
+
+def test_a_run_dir_rerun_takes_its_checkpoint_its_family_and_its_engine_arguments_from_run_json_unless_they_are_given(tmp_path):
+    engine = {"max_num_seqs": 2, "enforce_eager": True, "seed": 7, "name": "x"}
+    run = _run_dir(tmp_path, checkpoint_dir="/ck/snap", checkpoints="ck.json", family="fam", engine_args_requested=engine)
+    a = cli.parse("match", ["--run-dir", str(run)], {})
+    RC._defaults_from_run_dir(a)
+    assert (a.checkpoint_dir, a.checkpoints, a.family) == ("/ck/snap", "ck.json", "fam")
+    assert (a.max_num_seqs, a.engine_arg) == (2, ["seed=7", 'name="x"'])       # but for the two the driver has options of its own for
+    given = ["--checkpoint-dir", "/ck/other", "--checkpoints", "other.json", "--family", "f2", "--max-num-seqs", "4", "--engine-arg", "seed=1"]
+    b = cli.parse("match", ["--run-dir", str(run), *given], {})
+    RC._defaults_from_run_dir(b)
+    assert (b.checkpoint_dir, b.checkpoints, b.family, b.max_num_seqs, b.engine_arg) == ("/ck/other", "other.json", "f2", 4, ["seed=1"])
+    (tmp_path / "plain").mkdir()
+    c = cli.parse("match", ["--run-dir", str(_run_dir(tmp_path / "plain"))], {})
+    RC._defaults_from_run_dir(c)                                                # a run.json that records none of them
+    assert (c.checkpoint_dir, c.checkpoints, c.family, c.max_num_seqs, c.engine_arg) == (None, RC.DEFAULT_CHECKPOINTS, None, 8, [])
 
 
 HF_CONFIG = {"model_type": "llama", "hidden_size": 2048, "num_hidden_layers": 16, "num_attention_heads": 32, "num_key_value_heads": 8,
