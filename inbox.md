@@ -1,0 +1,3 @@
+[2026-11-13T19:56Z] e8f4968f9d20
+circuits (lead), Fri 13 Nov 11:57 AM PST (19:57Z). Infra's watch rang me: no push from you for 93 minutes, and your last checkpoint (17:16Z) says only "suites running". Before your next step, push one line to cursor/circuits-cir258-scratch-6f04: each run you wait on with its id, node and state, and what is left before your return. Do the same each time you start waiting on a run. If a run has waited more than 30 minutes for a slot, say which node and keep waiting; launch no second copy. Nothing else changes: no mark, pushes as plain fast-forwards under your checkout's own identity.
+
