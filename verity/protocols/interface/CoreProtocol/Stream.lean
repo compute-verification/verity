@@ -17,6 +17,14 @@ module
 
 public import CoreProtocol.Blobs
 
+/-!
+# Streams: a check that reads its blobs one at a time
+
+`Stream`, with its `feed`, `close` and `run`; `StreamProtocol`, a `BlobProtocol` with a stream for each statement, its
+`Sound` and what a sound one's `run` decides (`run_eq`, `run_accept`); and `StreamProtocol.main`, with the commands
+`plan` and `check-stream`.
+-/
+
 @[expose] public section
 
 namespace Core
