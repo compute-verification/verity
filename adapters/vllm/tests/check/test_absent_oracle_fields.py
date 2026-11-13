@@ -4,7 +4,8 @@
 instances.  Each test takes the complete record of `tests/check/test_oracle_compare.py`, leaves one field out of one
 file (absent, null, empty, or any other value that tests false: `left_out`) and states what the oracle then
 answers: which requests, steps and ids it knows, and what it says of a member it cannot read.  A workload and a
-required manifest's row, which a caller hands in, are held the same way.
+required manifest's row, which a caller hands in, are held the same way.  A view's allocation and offset are held
+beside them: where the oracle needs the number, a view that states none, or one that is no number, is refused by name.
 """
 from __future__ import annotations
 
@@ -17,10 +18,12 @@ from typing import Any
 
 import pytest
 
-from tests.check.test_absent_commit_fields import put
+from tests.check.test_absent_commit_fields import ABSENT, put
 from tests.check.test_absent_link_fields import NOTHING, left_out
-from tests.check.test_oracle_compare import U0, U1, H, make_match
+from tests.check.test_oracle_compare import U0, U1, H, make_bmap, make_match, reader
 from verity_vllm.check import match_oracle as MO
+from verity_vllm.check import oracle_compare as OC
+from verity_vllm.records.fields import RecordError
 
 EMBED, NORM = "model.embed_tokens", "model.layers.0.post_attention_layernorm"
 #: the record's files: its path under the Match directory, and whether it holds a document a line
@@ -30,6 +33,8 @@ RUN_HEADER, STEP_START, SAMPLE_END = 0, 1, 2      # the log's first three lines;
 DECLARED = {"requests": [{"request_id": U0, "index": 0, "prompt_len": 5, "max_tokens": 1}, {"request_id": U1, "index": 1, "prompt_len": 3, "max_tokens": 1}]}
 NO_VIEW = "instance has no view for member {!r}"
 NOT_RESOLVED = "no fold instance of producer X_v1 whose output the consumers ['model.embed_tokens'] read at this step (promoted member)"
+#: what a view states under `alloc` or `offset` that is no number: the first three test false
+NO_NUMBER = ["", [], {}, "thirteen", "2.5", [1], {"a": 1}, float("nan"), float("inf")]
 
 
 def oracle(tmp_path: Path, file: str | None = None, change: Callable[[Any], object] | None = None) -> MO.MatchOracle:
@@ -171,6 +176,115 @@ def test_the_range_of_a_view_that_states_no_shape_is_one_element(stated):
 def test_the_range_of_a_view_that_states_no_stride_is_its_whole_shape(stated):
     view = {"alloc": 1, "offset": 2, "dtype": "bfloat16", "shape": [3, 2], "strides": [4, 1]}
     assert MO.MatchOracle._view_bytes_range(put(view, ("strides",), stated)) == (1, 4, 16)
+
+
+# ------------------------------------------------------------------------------------------------------------ a view's allocation and offset
+
+def refused(e: pytest.ExceptionInfo[RecordError], field: str, stated: Any) -> bool:
+    """Whether the refusal names the view's `field` and what the view states there (None where it leaves the field out)."""
+    said = None if stated is ABSENT else stated
+    return (e.value.where, e.value.field) == (MO.VIEW, field) and e.value.why.startswith(f"is {said!r}, not a number (the view: {{")
+
+
+def first_view(views: str, field: str, stated: Any) -> Callable[[list[dict[str, Any]]], None]:
+    """The first view of `views` of the embedding's first instance (request r1's first row), with `stated` under `field`."""
+    return lambda lines: put(embed_instances(lines)[0][views][0], (field,), stated)
+
+
+@pytest.mark.parametrize("field", ["alloc", "offset"])
+@pytest.mark.parametrize("stated", [ABSENT, None, *NO_NUMBER])
+def test_a_member_whose_view_states_no_allocation_or_offset_or_one_that_is_no_number_is_refused_by_name(tmp_path, field, stated):
+    o = oracle(tmp_path, "instances", first_view("output_views", field, stated))
+    with pytest.raises(RecordError) as e:
+        o.member_bytes(0, EMBED, "out", "r1")
+    assert refused(e, field, stated)
+    assert o.member_bytes(0, EMBED, "out", "r0")[1:] == (None, 5)      # the other request's rows are still read
+
+
+def test_a_compare_leaves_by_the_refusal_of_a_view_one_of_its_members_reads(tmp_path):
+    bmap, committed = make_bmap(make_match(str(tmp_path / "values"))[1])
+    assert OC.oracle_compare(oracle(tmp_path / "whole"), bmap, reader(committed))["result"] is True
+    o = oracle(tmp_path / "no_number", "instances", first_view("output_views", "alloc", "thirteen"))
+    with pytest.raises(RecordError) as e:
+        OC.oracle_compare(o, bmap, reader(committed))
+    assert refused(e, "alloc", "thirteen")
+
+
+@left_out(0)
+def test_instances_whose_first_view_states_no_offset_are_ordered_by_their_position_alone(tmp_path, stated):
+    whole = oracle(tmp_path / "whole").member_bytes(0, EMBED, "in", "r0")
+    o = oracle(tmp_path / "left_out", "instances", lambda lines: [put(m["output_views"][0], ("offset",), stated) for m in embed_instances(lines)])
+    assert whole[0] is not None and len(whole[0]) == 5 * 4
+    assert o.member_bytes(0, EMBED, "in", "r0") == whole               # the ids are the operand view's bytes, and it states its offset
+
+
+@pytest.mark.parametrize("stated", [x for x in NO_NUMBER if x])
+def test_an_instance_whose_first_view_states_an_offset_that_is_no_number_is_refused_by_name_where_it_is_ordered(tmp_path, stated):
+    o = oracle(tmp_path, "instances", first_view("output_views", "offset", stated))
+    with pytest.raises(RecordError) as e:
+        o.member_bytes(0, EMBED, "in", "r1")                           # the ids again: no line but the order reads the output view
+    assert refused(e, "offset", stated)
+
+
+def two_whole_producers_a_row(views: str | None = None, field: str = "", stated: Any = None) -> Callable[[list[dict[str, Any]]], None]:
+    """Each instance of the embedding twice in its row's group; with `views`, the first view of `views` of the first one states
+    `stated` under `field`."""
+    def change(lines: list[dict[str, Any]]) -> None:
+        for m in embed_instances(lines):
+            lines.insert(lines.index(m) + 1, dict(copy.deepcopy(m), event=m["event"] + 1))
+        if views is not None:
+            first_view(views, field, stated)(lines)
+    return change
+
+
+@pytest.mark.parametrize("views", ["output_views", "operand_views"])
+@pytest.mark.parametrize("field", ["alloc", "offset"])
+@pytest.mark.parametrize("stated", [ABSENT, None, *NO_NUMBER])
+def test_of_two_producers_a_row_the_one_an_operand_names_is_looked_up_by_views_that_state_their_allocation_and_offset(tmp_path, views, field, stated):
+    fed_by = {"spec": "X_v1", "operand": "X_v1"}
+    whole = oracle(tmp_path / "whole", "instances", two_whole_producers_a_row()).member_bytes(0, EMBED, "out", "r1", producer=fed_by)
+    assert whole[0] is None and whole[1].startswith("producer_operand X_v1: 0 of 2 X_v1 instances in a row's group") and whole[2] == 6
+    o = oracle(tmp_path / "stated", "instances", two_whole_producers_a_row(views, field, stated))
+    with pytest.raises(RecordError) as e:
+        o.member_bytes(0, EMBED, "out", "r1", producer=fed_by)
+    assert refused(e, field, stated)
+
+
+def read_through_the_second_view(field: str | None = None, stated: Any = None) -> Callable[[list[dict[str, Any]]], None]:
+    """The embedding's instances read the norm's second output view; with `field`, the norm's first output view states `stated`
+    under it."""
+    def change(lines: list[dict[str, Any]]) -> None:
+        norms = [m for m in lines[1:] if m["hint"].startswith(NORM + "/")]
+        for m, norm in zip(embed_instances(lines), norms):
+            m["operand_views"] = [dict(norm["output_views"][1])]
+            if field is not None:
+                put(norm["output_views"][0], (field,), stated)
+    return change
+
+
+PROMOTED = {"promoted": True, "spec": "X_v1", "consumers": [EMBED]}
+
+
+@pytest.mark.parametrize("field", ["alloc", "offset"])
+@pytest.mark.parametrize("stated", [ABSENT, None])
+def test_a_promoted_member_found_through_its_producers_second_view_is_refused_by_name_for_the_first_it_reads(tmp_path, field, stated):
+    whole = oracle(tmp_path / "whole", "instances", read_through_the_second_view()).member_bytes(0, "top", "out", "r1", producer=PROMOTED)
+    assert whole[0] is not None and len(whole[0]) == 3 * 2 * H and whole[1:] == (None, 3)
+    o = oracle(tmp_path / "stated", "instances", read_through_the_second_view(field, stated))
+    assert len(o._step_outputs(0)[13]) == 8 and 12 not in o._step_outputs(0)        # the first view is no storage; the second still is
+    with pytest.raises(RecordError) as e:
+        o.member_bytes(0, "top", "out", "r1", producer=PROMOTED)
+    assert refused(e, field, stated)
+
+
+@pytest.mark.parametrize("field", ["alloc", "offset"])
+def test_a_producer_whose_first_view_leaves_its_allocation_or_offset_out_is_found_and_one_that_states_null_is_refused_by_name(tmp_path, field):
+    left_out = oracle(tmp_path / "left_out", "instances", read_through_the_second_view(field, ABSENT))
+    assert left_out.member_bytes(0, "top", "in", "r1", producer=PROMOTED) == (None, NO_VIEW.format("in"), 3)     # found; it has no operand
+    null = oracle(tmp_path / "null", "instances", read_through_the_second_view(field, None))
+    with pytest.raises(RecordError) as e:
+        null.member_bytes(0, "top", "in", "r1", producer=PROMOTED)
+    assert refused(e, field, None)
 
 
 # ------------------------------------------------------------------------------------------------------------ the capture's log
