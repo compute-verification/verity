@@ -69,7 +69,11 @@ verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] 
 The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. Under `research run` the run's
 `result.json` names the report's two files and the replay's record among its artifacts, so a reader finds them as the
 run's files; the rest of `out/` is in the run's record whole. A job with no result of the benchmark's cost (one that
-served ours alone) gets one whose validation is the tokens line.
+served ours alone) gets one whose validation is the tokens line. For GLM-5.3 at the recipe's settings (`prod-record`
+over `prod`) the result also holds the cost line's figure as the measurement `vllm/prod-serving-cost-glm53`, in
+percent of stock's serving time, the number `benchmarks/metrics.toml` holds the goal to: only where it stands as the
+benchmark's own measurement (a sessions load, a value, the same work on both sides; `serve_tax.result_of`) and the
+two arms are at the same settings. Otherwise the result holds no entry under that id.
 
 The job fails where an arm or the replay fails, where a replay was asked for and its tokens were not compared, and
 where a replayed token or step differs from the served one. One kind of served step is no difference, and the report
