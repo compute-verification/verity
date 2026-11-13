@@ -135552,3 +135552,69 @@ The descriptor check passes Friday's wired play of twenty templates in 101 secon
 
 - `cursor/proofs-heldof-4c7b` at `96b2def6e27` (pushed): `68dc23428a` → `ce04b3ca624` (SampleBelow, reverted by `bae50b921f3`) → `3cae6a160d1` (the docstring) → `bd2ff4df21f` (the join's `0df461b1b2` merged) → `9b026afa803` (the reduction, compiled) → `96b2def6e27` (a docstring).
 - `cursor/proofs-heldof-logitsrun-f684` at `828e59d30d` (scratch, no pull request).
+
+## RATING, Fri 13 Nov 10:31Z: `Cap.lean` compiles whole (58 of its 58 theorems) and so do the other four files; the four floor lemmas are restated, not deleted, and compile; 7 AM PST holds: yes
+
+In plain words. The mend adds two terms to the debit of Pearl-C's rev1 accounting, and five proof files had to compile against the new definitions. They all do now, at my branch's commit `f1ddbaa74c5`, with no statement of the five changed apart from the four small lemmas compute-accounting ruled on. None of the lemmas that `Cap.lean`'s header listed as missing turned out false. What is left is not proof work: the records run, the test suites and the three new slow tests are running, and then the pull request.
+
+### What compiled [run]
+
+Run `r20261113-102226-71f5` (vy-nebius-cpu-9, ended with exit code 0) at `f1ddbaa74c5a57088c2d0b451355804be687e19c`, three tries in one run, each with the axiom probe's line read:
+
+| File | Lean | The axiom probe's line |
+|---|---|---|
+| `security/Proofs/Pouw/PearlPlus/Cap.lean` | exit 0 in 35 s | none of its 58 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound` |
+| `security/Proofs/Pouw/PearlC/DeviceSm120Gap.lean` | exit 0 in 20 s | none of its 38 theorems, the same |
+| `security/Proofs/Pouw/PearlC/RowSeedGap.lean` | exit 0 in 31 s | none of its 108 theorems, the same |
+
+The other three of the five stand as entry 12 gave them: `DeviceRev1Gap.lean` and `PearlPlus/Verdict.lean` compiled as they stood (`r20261113-094537-ae0a`), and `Rev1Witness.lean` compiles at `78d74ea7955` (`r20261113-095329-3369`). Nothing in them changed since.
+
+`Cap.lean` took two tries. The first (`r20261113-101747-6b1d`, at `d7e13e63541`) had 56 of 57 theorems through and one timeout, in `cutFold_toDef`, from a `congr` that tried to decide the two models' cut flags equal by unfolding them. The second replaced it by a one-line lemma on one group's flags (`cutMap_toDef`).
+
+### What `Cap.lean` now holds [read: the file at `f1ddbaa74c5`]
+
+The bridge says that the mends the check counts cover the mends the game's debit counts, so the check's cap implies the game's cap with the two new terms in it. In order:
+
+- `MendSim.cutFold_toDef`, `cuts_eq`, `cutStep_eq`, `wordCuts_eq`: the check's cut flags of a word (`Rule.wordCuts`, on the evaluator's model of the H100 atom) are the Definitions' (`Mend.chainCuts hopperE4m3K32 4`). This one is an equality, as the header states it.
+- `MendSim.row_ends`: for a row that passes the rules, what the check's `Rule.rowEnds` returns is the row's codes at both ends of the noise support as `Mend.endRow` defines them, and its flags cover the game's salt-dead elements.
+- `MendSim.wordMend_le`: the game's count of a word's mends is at most the check's (`wordMend devH100 … ≤ Rule.wordMend ea eb`). The header's inequality.
+- `Cap.bound_glue_mend`: the arithmetic with the mend term.
+- `tile_bound`: now bounds the chain's debit plus the forming plus the mends by `1/400` of the credit times the tile's share. It is a lemma of the proofs tree that no lock records. Its two corollaries `tilePassGivesTheChainCap` and `tilePassGivesTheCap` keep their statements; the second is the one that is `tileDebitRev1`.
+
+### Which of order 1 I took: restated [run, the table's second line]
+
+One try. `devAt_step` now reads: for two pipelines of one step, `{ devAt p G pr with pipe := p' } = devAt p' G pr`. That is the record with its `pipe` set to the other pipeline, so the equation is over the six maps the record had before the mend, as order 3 allows. Its proof is the one it had. `devAt_sm120_floor`, `devSm120v1_floor` and `devSm120v2_floor` follow it in the same form, with `pipe := sm120E4m3`. The module's sentence is order 2's. No `cutFold` lemma and no new field (order 4).
+
+Order 5: `DeviceRev1.lean`'s text now says that at the H100 atom neither term occurs on an honest workload's tiles (the measurement the text already named), and that at sm_120's step the honest cost of the two terms has not been measured and is owed. `tileDebitRev1` stays one total definition; I wrote no sm_120 figure. [read: my commit `f6898491762`]
+
+One thing for compute-accounting to know, theirs to decide: that text names the measured tiles ("the 614b tiles"), which is a measured result cited in the tree. The sentence was there before my edit and order 5 asks for it; AGENTS.md's "Where writing goes" keeps such citations out of the tree, and the check only warns on it. I kept their wording.
+
+### The `RowSeedGap.lean` binder, said plainly
+
+Your 10:04Z message asked for the binder "in the run's clone only". The binder change was already a commit on my branch, `8ed674764de`, when that message arrived; only the removal of the four lemmas was ever clone-only. With the stop lifted the question is moot: the file compiles on the branch as it is, with no clone-only edit (the table's third line). If you want the binder change out, it is one revert.
+
+### What is left, in runs
+
+| What | Run | State at 10:30Z |
+|---|---|---|
+| The records, `lean_changed.py --records security --update` (the Definitions package and its requirers, Properties and Proofs) | `r20261113-102754-9a9a`, cpu-9 | running; expected end about 11:30Z |
+| The sibling check of the files that add declarations (`Cap.lean`, both `Mend.lean`) | `r20261113-102939-3ff6`, cpu-5 | running; expected end about 10:50Z |
+| The ported test file whole, its slow tests included | `r20261113-102603-6b5c`, cpu-5 | running; expected end not known (the k = 65,536 tiles took 16 to 18 minutes each in my rating's runs) |
+| PoUW's verifier suites and the difftest | not launched | after the records run shows the whole packages build |
+
+The slow tests: the branch had two at k = 65,536 already (compute-accounting's two variants). I added the three for my own classes, each the 8,192 test at k = 65,536 with liveness's whole allowance planted: dead pairs (9 groups), the raised adder (170 groups) and the planted skips (170 groups), commit `930ae673181`. None of the five has reported yet, so nothing is claimed of them.
+
+My estimate of what is left in tries of Lean: none, unless the records run finds a module outside the five that the new definitions break. That is the one thing a try of single files cannot show.
+
+### Does 7 AM PST (15:00Z) hold: yes [guess]
+
+The reason: the proof work is done at 10:25Z. The three runs above and the suites are each under about an hour, and the pull request's body is short. What could move it: a module the records run finds broken, or a slow test at k = 65,536 that fails, which would be a finding for compute-accounting and not a repair of mine. I will say so in an entry the moment either happens.
+
+### Not established
+
+- That the whole packages build: only the five files, `DeviceSm120Gap.lean` and `Mend.lean` were tried one by one.
+- That no recorded statement moved: the records run's `--update` printout will say; I expect the guarantees that read `tileDebitRev1`, `unitDebitRev1` and the device record to show a changed definition and an unchanged statement.
+- The five slow tests' verdicts, and the suites.
+- Nothing here rates the mend. The rating comes after the pull request, at its head.
+
+Branch `cursor/proofs-rating-debit-4ba7` at `930ae67318100c10d1a0547679fbb9a0f1b983f8`, pushed. Mailbox read at 10:30Z (111 lines, last change 10:19Z): the 10:04Z and 10:11Z messages are read and acted on.
