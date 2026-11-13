@@ -120150,3 +120150,51 @@ So of A28: `WindowAt` (row's first half) and `WindowReads` (second half) are bot
 STOP RULE: nothing done (no lock, no `Sampled.lean`, no switch).
 
 ## ACCEPTS, Fri 04:29Z, checkpoint: waiting on `r20261113-042027-7fb2` (Within, AcceptsTop; expected about 05:15Z), `r20261113-042540-6f86` (RuleTwo), `r20261113-042055-897c` and `r20261113-033021-8be7`; head `66e1ede150` pushed; turn ended
+
+## ONSITE, Fri 13 Nov 04:28Z: #9602 at `c0ebc52445e2` certifies on `main`'s tree; two failures the moved tree had are fixed in it; To post; its ready line waits on one run
+
+**Your four answers.**
+
+1. **The PR:** #9602, branch `cursor/proofs-compose-lists-map-6c1e`, head `c0ebc52445e29770af76e108d33759ec6259295a`, open, unmarked. `main` (`8ef93f01963c`) is in it [read: `git log`, `git ls-remote origin main` at 04:20Z].
+2. **Does the move check certify it on `main`: yes** [run: `r20261113-041056-ac16`].
+   - `compose_map.toml`: `c0ebc52445e2..4d3f76cff236` is a pure move, 19 renames and 33 path-only edits; run again it changes nothing; `resolve_check.py` 0 issues.
+   - `configurations_map.toml`: `4d3f76cff236..605cf342d5d1` is a pure move, 13 renames and 33 path-only edits; run again, nothing; 0 issues.
+   - On base and on each commit: 36 lakefiles, 402 Lake paths, 0 unresolved; 0 `__init__.py` deleted [run on my VM].
+   - The moved tree passes the layout of record: `tests/test_tree.py` over `605cf342d5d1`, rc 0, stale lines only [run: same].
+3. **What it must come after in the chain:** nothing of top's. Order inside ours: `compose_map.toml`, then `configurations_map.toml` on the commit the first makes. Both before top's `difftest_map.toml`, as top ruled at 03:39Z. If a map that moves `verity_config` runs first, the `[roots]` line is reset by hand first; with that, ours certify (below).
+4. **The hour it is ready:** the ready line waits on `r20261113-041521-46a8`, the 13 changed suites' quick tier on this head, started 04:16Z. The same tier of 11 suites took 91 min on Thursday, so about 06:00Z (Thu 10 PM PST) [derived]. Everything else a ready line needs is in: gate passed, maps' tests 10 passed, `main` in the head [run on my VM].
+
+**To post** (TOP-398; each line is mine to stand behind):
+
+- **The certificate at the new path**, item 2 above. The certificate you posted at 03:42Z (`r20261113-032249-91f3`) and the one I gave at `197e83675b2a` (`r20261113-034657-11a1`, rc 0) are both of heads this one replaces.
+- **Our maps after top's chain of tonight, with `compose/` already there** [run: `r20261113-040311-2736`, one rehearsal for both questions]. Base: #9602 at `efcc3368e45b` plus #9486's two commits, top's four preparation commits and its three maps picked on, and `verity/protocols/compose/` holding two empty `__init__.py`. After top's `config_map.toml`, `settings_map.toml` and `bench_instances_map.toml` (each certified) and one hand commit setting `verity_config = "tools/config/verity_config"` in our three maps:
+  - `compose_map.toml`: pure move, 19 renames, 33 path-only edits, 0 issues.
+  - `configurations_map.toml`: pure move, 13 renames, 33 path-only edits, 0 issues.
+  - `world_map.toml`: pure move, 6 renames, 12 path-only edits, 0 issues.
+  - The base is one commit behind #9602's head: it lacks the exclusion of `tests/test_tree.py` and one README line, which change no row.
+- **For top, about its own test.** `tests/test_tree.py::test_each_check_names_its_fix` uses real paths of the tree as its examples (`verity/protocols/remote/verifier/R.lean` beside the expected stray `verity/protocols/remote`; also `verity/claims/`, `verity/party.py`, `verity/protocols/flock/pod/`, `verity/protocols/flock/verifier/`). A map that moves one rewrites the example and not what the test expects, and the test fails on the moved tree. Our second map now excludes the file. Any other map that moves one of those paths meets the same [read: `tests/test_tree.py:176-184`; run on my VM: the test failed on `1c7f33178dde`, passes on `605cf342d5d1`].
+- **`world_map.toml`'s hand commit:** after its move, `CERTIFIER_LEAN` in `tests/test_boundaries.py` gains `"verity/protocols/certifier/device/world"`. No test is red without it; `tests/test_boundaries.py` passes on the moved tree either way (151 passed without; `-k certifier` 5 passed with) [run on my VM, on `63c2b83609da`]. It is in #9486's body under "The hand commit after the move", since #9486's head must not change now.
+- **One line of `tests/tree.toml` says more than the tree does:** the line for `verity/hardware/world/` calls it "a Lake package the certifier's device and the memory challenger require". On `main` only the certifier's device requires it [read: the lakefiles]. If the memory challenger is to require it later, its place inside the certifier's device is worth a second look before Sunday.
+
+**What the moved tree broke, and the fix in #9602** (none of it changes what a guarantee says):
+
+| Found | Where | Fix |
+|---|---|---|
+| Three demos fail on their protocol: `remote` and `onsite` are no longer directories of `verity/protocols/` | `tests/test_examples.py`, `demos/vllm`, `demos/onsite_served`, `demos/lifecycle` | `tools/verity/cli/verity_cli/examples.py` names each composite's Lake package by path (`COMPOSITES`), which the mover rewrites; two tests [run on my VM: 12 passed before the move and on the moved tree] |
+| The layout test's own example | `tests/test_tree.py::test_each_check_names_its_fix` | the second map excludes that file from its rewrite |
+| A doc path left naming nothing (a warning, not a failure) | `demos/lifecycle/README.md` | the line names each composite's package directory |
+
+The first of these was true of my 03:30Z path as well; I had not run that test on a moved tree then.
+
+**#9486:** its body no longer says "Not marked ready" and names the hand commit [run: `research queue edit 9486`]. Head unchanged, `93817fbb2f8a`.
+
+**Not established.**
+
+- #9602's quick tier on its head (`46a8`, above).
+- Any whole suite or Lean build on the moved tree. I ran named root test files only: the demos', the layout's and the doc paths' pass on `605cf342d5d1` [run on my VM]. A run of 17 suites on the moved tree goes out when the pins commit is in; I name it in a short entry below this one.
+- That the pins commit on this staged tip is clean: `ac16`'s pins step ends about 04:27Z. On the two heads before, it rewrote the same four files and `pins.py --stale` was then clean [run: `11a1`, `bab1`].
+- That ours certify on `main` once top's chain is actually on it; the rehearsal used picks of top's commits.
+
+**Runs out:** `r20261113-041521-46a8` (ETA 06:00Z). `r20261113-041056-ac16` (its pins step, ETA 04:30Z). I set no timer; resume me for the ready line when `46a8` ends.
+
+Scratch branches of mine on the remote, to delete when the move is staged on `main`: `cursor/proofs-scratch-chain-verifier-7c3e` (the rehearsal's base), `cursor/proofs-scratch-carve-staged-on-main-ff60` (the old path's staged commits).
