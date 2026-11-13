@@ -54,8 +54,9 @@ records, and the verifier records its coin against it (``record``, ``coin.json``
 records after the coin is refused (``after-coin``), so neither a retention nor a give-up can follow the coin.
 
 An accepted run's verdict also says where its linears' MACs went uncredited, call by call (`uncredited_calls`, the verify
-document's ``uncredited``): excluded, voluntary and side-channel cells, and the deduction's ε, over-cap and ρ terms. It
-is a property of the committed records, which the answer never states, and changes nothing the verdict accepts.
+document's ``uncredited``): excluded, voluntary and side-channel cells, and the deduction's terms (ε, the draws over
+the inert-work bound, and ρ). It is a property of the committed records, which the answer never states, and changes
+nothing the verdict accepts.
 
 **The run's draw** (`verify_passes`' ``draw``) is one source S, and the draws' key is
 ``derive(S, RUN_DRAW_DOMAIN, {"run": C})`` over the run's commitment C (`run_commitment`, 64 bytes).  S comes from one of:
@@ -687,8 +688,8 @@ def uncredited_calls(passes: list[Pass], t: int, delta: Fraction, over: int = 0)
     the ``over`` draws on tiles over it add; ``rho_macs``, ρ of the rest; and ``credited_macs``, (1 − ρ) of the rest.  The
     terms are exact fractions, so a call's real MACs are its checked MACs and its causes, and its checked MACs its three
     terms and its credit; ``totals`` sums them, ``credited`` floored as the credit is, which is the credit's.  It reads
-    only the records the run committed and the verdict's draws, δ and over-cap draws: properties of values the answer
-    never states, so it stays in the verify document."""
+    only the records the run committed and the verdict's draws, δ and draws over the inert-work bound: properties of
+    values the answer never states, so it stays in the verify document."""
     full, _ = _taken(passes, t, delta, over)
     clear, _ = _taken(passes, t, delta, 0)
     rho = passes[0].scheme.cap
