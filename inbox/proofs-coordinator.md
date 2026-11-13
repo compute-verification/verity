@@ -150304,3 +150304,212 @@ Their verdicts are not known; I send them when each ends, by 17:15Z [guess: the 
 **Timer.** I keep one every 30 minutes until FRAME's table names my carried commit [relayed: your item 3].
 
 ## SESSIONCOINS, Fri 13 Nov 16:17Z: CLOSED on your 16:03Z word: `cursor/proofs-sessioncoins-e4a0` stays at `8aefa1adc70e5d23953149397ac6f6d16f4bc24c`, nothing unpushed, no run out, no timer; that commit is an ancestor of the join's tip `6bae773eb345` and the tip's `SessionCoins.lean` and `SessionOpened.lean` are its text byte for byte [run: `git merge-base --is-ancestor`, `git diff --quiet`, 16:16Z]; that the two compile there is ASSEMBLY's `9d87`, which I did not read; I push nothing more and wait to be resumed if the join's try names a file of mine
+
+## HELDOF, Fri 13 Nov 16:18Z: the three lemmas conclude per play, both plays given; the anchor on given files `B₀` compiles; `CouplingTargetTwo` restated, guarded `joinedCouplingOfLaw` compiles on `hwire`, `hcc`, `h` alone; STOP on item 3: the collision term needs a finder the vocabulary doesn't name (written and compiled)
+
+Branch `cursor/proofs-heldof-couples-f083`, head `a7319a232b319179f766c435d9f2b8c68130c670`, off the join's `ff6ea109e06f`. Every try with `--siblings` and the axiom probe: no name clash, nothing beyond `propext`, `Classical.choice`, `Quot.sound` [run]. No file under `verity/`, no lock record, no listed statement changed [read: `git diff --stat ff6ea109e06f`]. `SampledTwo.*` is in `security/Proofs/lean-audit.json` only under `/roots` [read].
+
+| item | commit | file(s) | run |
+|---|---|---|---|
+| 1 | `c37157c8832` | `RefsOfSent.lean` | r20261113-153335-e059, exit 0, 20 theorems |
+| 2 | `01749f5719a` | `RefsOfSent.lean` | r20261113-154217-317a, exit 0, 22 theorems |
+| 4 | `9e616f59ca5` | `Leg.lean`, `CouplingOf.lean`, `JoinedCoupling.lean`, `Undecodable.lean` | `Undecodable` r20261113-154217-877f, `JoinedForm` r20261113-154217-1302, both exit 0 |
+| 4, guard text | `a7319a232b3` | `Undecodable.lean` | r20261113-155826-51f3, exit 0, 3 theorems |
+| 3, STOP | `c834ab7c8c5` | `BlobFinder.lean` (new, in `roots`) | r20261113-160837-fcb2, exit 0, 2 theorems (the first try, r20261113-154331-683f, was cut off at 1205 s while building dependencies cold on vy-nebius-cpu-14, before reaching the file) |
+
+### 1. The three lemmas, per play [run]
+
+`SentCollides` is deleted; nothing else named it [read: `git grep SentCollides` on the branch: no hit]. Two per-play predicates replace it, each with its anchor array given:
+
+~~~lean
+def RefsAtOr (C : CaseOf) (xs₀ : List Claims.Msg) (F₀ : Array ByteArray) : Prop :=
+  ∀ o k p c e xs, FormAccepts C o → C o = some k → Decoded k p c e → refStmtsOf p k.blobs = some xs →
+    xs = xs₀ ∨ BlobsCollide o.sent.blobs F₀
+def HeldOfAtOr (A : Live₂) (C : CaseOf) (F₀ : Array ByteArray) : Prop :=
+  ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it →
+    (∃ u, SpotFlock.HeldOf.heldOf i it u = some A.h) ∨ BlobsCollide o.sent.blobs F₀
+~~~
+
+The play `o` is ∀-bound, and the anchor (`o₀.sent.blobs`, with `o₀` the statement's own accepted play, a hypothesis) is given. The collision is between two named arrays at two plays the statement is given.
+
+| lemma | before | after |
+|---|---|---|
+| `refsAt_of_held` | `… : RefsAt C xs₀ ∨ SentCollides C` | `… : RefsAtOr C xs₀ o₀.sent.blobs` |
+| `refsAt_of_accept` | `… : RefsAt C xs₀ ∨ SentCollides C` | `… : RefsAtOr C xs₀ o₀.sent.blobs` |
+| `heldOfAt_or_collide` | `… : HeldOfAt A (atStmt C x) ∨ SentCollides (atStmt C x)` | `… : HeldOfAtOr A (atStmt C x) o₀.sent.blobs` |
+
+The hypotheses are unchanged (`hS hP hT hA₀ hk₀ hd₀ hx₀`, and `u₀ hd hj hA` for the third). Before, `SentCollides C := ∃ o o', FormAccepts C o ∧ FormAccepts C o' ∧ BlobsCollide o.sent.blobs o'.sent.blobs`. New beside them: `refsAtOr_of_tables` (the anchor any array `F₀` that passed the tables' check and gives `xs₀`) and `heldOfAtOr_at` (`heldOfAt_at` per play).
+
+### 2. The anchor on the registered files `B₀` [run for the Lean; read for (a)–(c)]
+
+(a) **Yes.** `HeldOfAtOr` is stated over an array, and the second play was only ever read for two facts about its blobs, both now hypotheses on `B₀`. No accepted play is named:
+
+~~~lean
+theorem refsAtOr_of_files {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {B₀ : Array ByteArray}
+    {xs₀ : List Claims.Msg} (hS : CaseIsSent C) (hP : DecodesAt C P)
+    (hT₀ : ∀ m₀, memberOf P 0 = some m₀ →
+      Properties.Spot.HoldsRegisteredTables m₀.own (_root_.Core.Blobs.ofArray B₀))
+    (hx₀ : refStmtsOf P (_root_.Core.Blobs.ofArray B₀) = some xs₀) : RefsAtOr C xs₀ B₀
+
+theorem heldOfAtOr_of_files {A : Live₂} {C : CaseOf} {x : Claims.Msg} {P : VStar.Recursive.SampledTwo.Params}
+    {j : Lean.Json} {B₀ : Array ByteArray} {xs₀ : List Claims.Msg} (u₀ : Unread) (hS : CaseIsSent C)
+    (hd : DescAt (atStmt C x)) (hP : DecodesAt (atStmt C x) P)
+    (hT₀ : ∀ m₀, memberOf P 0 = some m₀ →
+      Properties.Spot.HoldsRegisteredTables m₀.own (_root_.Core.Blobs.ofArray B₀))
+    (hx₀ : refStmtsOf P (_root_.Core.Blobs.ofArray B₀) = some xs₀) (hj : SpotFlock.jsonMsg x = some j)
+    (hA : CopyOf A P j { u₀ with xs := xs₀ }) : HeldOfAtOr A (atStmt C x) B₀
+~~~
+
+(b) **What `A.h` is tied to today.** `CopyOf A P j { u₀ with xs := xs₀ }` (`HeldOfAtDesc.lean:99`): `A.h` is the copy `heldOf` builds from the parameters `P`, the record `j` read from `x` and the reference statements `xs₀` [read]. `xs₀` is `refStmtsOf P` of the anchor's blobs. Under the old form that was `o₀`'s (an accepted play's, so `A.h` was tied to whatever `o₀` sent). Under the anchor it is `B₀`'s, the files the statement is given [read].
+
+(c) Not needed: it can be stated. This is soundness's anchor as relayed at 16:03Z: the proof needs only the files, and no second play.
+
+The natural `B₀` is `V.registered θ`, the registered files the vocabulary names beside `fileFinder` and `publicFinder` (`Game.lean:872–878`) [read]. That it carries the reference statements (`hx₀`) and passes template 0's tables' check (`hT₀`) is two premises on the registration, about given data [guess: not checked against the registration's format]. The old form (`refsAt_of_accept`, `heldOfAt_or_collide`) stays beside it until you rule which `joinedOfLaw` reads.
+
+### STOP: item 3, the collision term needs a finder the vocabulary does not name
+
+**What the term is.** `HeldOfAtOr A C B₀` leaves out the accepted plays whose blobs collide with `B₀`. At the join, the bad event is `V.Verdict k .sampled o ∧ BlobsCollide o.sent.blobs B₀`, and the term is its probability.
+
+**Why no named finder bounds it** [read, `security/Properties/Verity/Game.lean`]:
+- `V.finder a`: the subprotocol's one finder.
+- `fileFinder` and `publicFinder` (`namedFinder`): one committed file against one registered file, once a strategy, on a `Unit` tape.
+- `V.finders a`: the instance's list, which holds nothing of this shape.
+
+None hashes a play's sent blobs against `B₀`.
+
+Also [read]: `dColl` is not bounded under `V.finderCR`. Its finder is SampledTwo's `bindFinder`, under `CouplesAt.collisionResistant : Claims.ExpectedCR FlockDeploy.sha512 (bindFinder …)`, and its term `bindBound` enters `CouplesAt.delta`. "The way `dColl` is" is therefore a field of `CouplesAt` and not `finderCR`.
+
+**The finder it needs**, written (`BlobFinder.lean`, compiled):
+
+~~~lean
+noncomputable def blobPair (F F₀ : Array ByteArray) : Option (ByteArray × ByteArray) :=
+  F.toList.findSome? fun b =>
+    (F₀.toList.find? fun b' => decide (b ≠ b' ∧ Flock.Sha512.hash b = Flock.Sha512.hash b')).map fun b' => (b, b')
+
+noncomputable def blobFinder (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (V.game θ F c)) (F₀ : Array ByteArray) : Claims.Finder where
+  S := Verity.Game.Tape (V.game θ F c) σ
+  out t := (blobPair (Verity.Game.Tape.out _ σ t).sent.blobs F₀).map fun p => (p.1.data.toList, p.2.data.toList)
+  cost t := V.cost θ F c σ + (Verity.Game.Tape.out _ σ t).sent.blobs.size + F₀.size
+
+theorem prob_collide_le (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (F₀ : Array ByteArray) :
+    Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ BlobsCollide o.sent.blobs F₀) (V.game θ F c) σ ≤
+      ENNReal.ofReal ((blobFinder V θ F c σ F₀).Pr Verity.sha512Msg)
+~~~
+
+Soundness's 15:28Z word, which you relayed at 16:03Z, fits it as written: one registered file and the play's blob under one digest, a finder holding only public files and one run of the strategy, bounded by `ecr/sha-512`. `prob_collide_le` is that bound's left side. **It can be premised in one of two ways:**
+
+(i) As `dColl`'s is, a field `blobCR : Claims.ExpectedCR FlockDeploy.sha512 (blobFinder V θ F c σ B₀)` of `CouplesAt`. Its term `ENNReal.ofReal (Ex (fun t => ((blobFinder …).cost t : ℝ)) / 2^256)` is added in `CouplesAt.delta` beside `bindBound`.
+
+(ii) Under `finderCR`, the instance lists `⟨fun σ => blobFinder V θ F c σ B₀, budget, calls, .ecr⟩` in `V.finders .sampled θ F c`. `calls` then needs the play's blob count bounded by a function of `V.cost θ F c σ`; whether `cost` counts sent blobs is not known to me [guess]. `readFinder` adds `o.sent.blobs.size` to its cost in the same way.
+
+**What follows the ruling**: text only, not written, per the stop rule.
+- `projection_core`'s `hRun : AcceptsRun A x Rd Acc` weakens to `AcceptsRun A x Rd (fun o => Acc o ∧ Good o)`. It is read only at plays with `Acc ∧ Good` (`ProjectionOf.lean:153`, inside `hgood`) [read]. `projection_agreed` passes `fun o h => hRun o h.1`, and `ProjectionOf` stays.
+- `joined`'s `hReach` weakens to plays with `Acc o ∧ Good o` in the same way.
+- `joinedOfLaw` takes `Good o := JoinGood o ∧ ¬ BlobsCollide o.sent.blobs B₀`. Its cut is `cutBound_and …` plus `prob_collide_le` by `prob_or_le`.
+
+| statement | before | after |
+|---|---|---|
+| `JoinsAt.heldOfAt` | `HeldOfAt A C` | `HeldOfAtOr A C B₀`, with `B₀` a new parameter of `JoinsAt`, or `V.registered θ` fixed |
+| `joinBound` | `gapOf … + joinMiss … + terms V (devOf P fs₁ fs₂ cut) θ F c σ` | the same `+ ENNReal.ofReal ((blobFinder V θ F c σ B₀).Pr Verity.sha512Msg)` |
+| `joinedOfLaw` | `(h : JoinsAt … P') : ProjectionBound V k A x θ F c σ (joinFrame …) (joinBound …)` | the same shape at `JoinsAt … B₀` and `joinBound … B₀` |
+
+**The risk in that path** [derived]: `joinedOfLaw` reads `HeldOfAt A C` at every accepted play (`partsHeldAt_of_accepts`, `playAccepts_form`).
+- The per-play form runs them at `goodCase C (fun o => ¬ BlobsCollide o.sent.blobs B₀)`, where `HeldOfAt` holds outright.
+- That needs a transfer to `goodCase` for each `JoinsAt` field those two read: `partsSizedAt`, `portsDistinctAt`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun`, `sessionMsgs`.
+- It also needs the reading at `goodCase C` read back at `C` on good plays. `GoodCase.lean` holds five such transfers today (`formAccepts_`, `inputOn_`, `coinsAgree_`, `firstFits_`, `secondFits_goodCase`, with `formReading_coin` and `formReading_agree`) [read].
+
+### 4. `CouplingTargetTwo` [run]
+
+The text I wrote, the nearest to yours that `twoLeg` reads without loss:
+
+~~~lean
+def CouplingTwoAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
+    (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (t : ℝ≥0∞) : Prop :=
+  Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0 ∨
+    ∃ (x : Msg) (Ω : Type) (_ : Fintype Ω) (_ : Nonempty Ω) (P : Prover Ω),
+      A.L.Scope x ∧
+      Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
+          ENNReal.ofReal (PrBad FlockDeploy.sha512 A.L.V A.R A.L.E x P) + t ∧
+        (V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
+          ENNReal.ofReal (A.errAt x P) + t ≤ V.delta θ .sampled (V.cost θ F c σ))
+
+def CouplingTargetTwo (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
+    (F : Array ByteArray) (terms : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → ℝ≥0∞) : Prop :=
+  ∀ (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)),
+    ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) (V.extract θ F c σ) (V.certOf θ).ε →
+      CouplingTwoAt V k A θ F c σ (terms c σ)
+~~~
+
+Before: `∀ c σ, ¬ IntegrityHolds … → ∃ x Ω _ _ P, (A.L.Scope x ∨ prob = 0) ∧ prob ≤ ofReal (PrBad …) + terms c σ ∧ (finderCR → premises → ofReal (A.errAt x P) + terms c σ ≤ delta …)`.
+
+**Why `prob = 0 ∨ ∃ x Ω _ _ P, …` and not `∃ x Ω _ _ P, prob = 0 ∨ …`**: your text names a prover in the zero branch too. At an undecodable `c` nothing gives one: no `Prover Ω` is at hand without a frame, and inventing one is a separate lemma that nothing reads. `twoLeg` uses the zero branch only to write `rw [h0]; exact zero_le` [read: `Leg.lean`, `twoLeg`], so moving the `∃` into the other branch loses nothing [derived]. The body is named `CouplingTwoAt` so that the producers can be stated at one `c σ`.
+
+The mended and new statements:
+- `twoLeg`'s proof: `obtain h0 | ⟨x, Ω, _, _, P, hs, hle, hdelta⟩` after `unfold CouplingTwoAt`. `TwoLeg`'s statement is unchanged.
+- `coupling_at` (new, `CouplingOf.lean`): `coupling_of`'s body at one `c σ`, concluding `CouplingTwoAt V k A θ F c σ (bound + bind)`. It takes the `Scope x ∨ prob = 0` clause and splits it. `coupling_of` and `CouplingOf` are unchanged in statement; `coupling_of` is now `coupling_at` at each `c σ`.
+- `joinedCouplingAt` (new, `JoinedCoupling.lean`): `joinedCouplingOfLaw` at one `c σ`, from one `CouplesAt` there. `joinedCouplingOfLaw` is unchanged in statement and now is `joinedCouplingAt` at each `c σ`.
+- `couplingTwo_of_stmtOf_none`:
+  - Before: `(terms) (x) (hwire) (hcc) (hn) (hδ : ∃ Ω _ _ P, finderCR → premises → …) : ∃ x Ω _ _ P, …`.
+  - After: `(t : ℝ≥0∞) (hwire) (hcc) (hn) (σ) : CouplingTwoAt V k A θ F c σ t`. **No `hδ`**, proved `.inl (prob_zero_of_stmtOf_none hwire hcc hn σ)`.
+- **The guarded `joinedCouplingOfLaw`** (new, `Undecodable.lean`; soundness's guard as written):
+
+~~~lean
+theorem joinedCouplingOfLaw_decoded (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
+    (F : Array ByteArray) (x : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Msg) (C : CaseOf)
+    (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
+    (P : Sessions.Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Verity.Release → ℕ)
+    (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (s Pt dd readX openOf dColl …)
+    (hHolds : CoinMap.CoinMapHolds (d := d) (α := α))
+    (hwire : ∀ o : Verity.Exchange, o.params = θ → V.Verdict k .sampled o → FormAccepts C o)
+    (hcc : CaseCommits C)
+    (h : ∀ c σ, (∃ x', stmtOf c = some x') →
+      CouplesAt V k A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' (s c σ) (Pt c σ) (dd c σ)
+        (readX c σ) (openOf c σ) (dColl c σ)) :
+    CouplingTargetTwo V k A θ F fun c σ =>
+      joinBound V A (x c σ) θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut +
+        bindBound V A (x c σ) θ F c σ
+          (joinFrame V A (x c σ) θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
+          (openOf c σ) (dColl c σ)
+~~~
+
+It takes only `hHolds` (the law, as `joinedCouplingOfLaw` does), `hwire`, `hcc` and the guarded `h`. No `δ` premise is left outside `CouplesAt`: the undecodable case is the target's zero branch.
+
+TWOLEG's line does not touch `Leg.lean`: `git diff --stat cursor/proofs-join-42b8...cursor/proofs-twoleg-family-ad71` lists no `Leg.lean` [run, at 15:28Z]. Again at its head `b5756631866` (16:02Z), none of the five files that read the target is changed there, and none of its changed files names `CouplingTargetTwo`, `coupling_of` or `couplingTwo_of_stmtOf_none` [run]. Of `Leg.lean`'s 78 transitive importers, five files read `CouplingTargetTwo`: `Projection.lean` (`CouplingOf`'s statement), `CouplingOf.lean`, `JoinedCoupling.lean`, `JoinedForm.lean` and `Undecodable.lean` [run: `git grep`]. The `JoinedForm` and `Undecodable` tries build all five. The four new names are declared nowhere else [run: `git grep`; the tries cover the producers and their imports].
+
+### 5. `recordGood` and the premise-free `decode_of_stmtOf`
+
+Nothing done; it waits for the parser switch on the join, after the carry.
+
+### Branches
+
+The live branch is `cursor/proofs-heldof-couples-f083`, head `a7319a232b319179f766c435d9f2b8c68130c670`, named below as my live line. Nothing more goes on it, and the next work goes on a new branch cut from that head. **`-joinswitch-f684` is not live**, and neither are the others: none is carried. Their work found nowhere else (commits not reachable from the join's tip `d557b8cf428`, from my line or from `origin/main`, and files whose tip content is in none of the three) [run, at 15:48Z]:
+- `-join9441-f684`, `-4c7b` (now `2861eed8d0a`, pushed by someone else since 15:28Z), `-block-4c7b`: none.
+- `-logitsrun-f684`: scratch run scripts only (`benchmarks/one_stage/a5.py`, `sampled_two_small.sh`; "scratch, for a run only"). Nothing to carry.
+- `-descrun-f684`: `benchmarks/one_stage/sampled_two_small.sh` (scratch). Nothing to carry.
+- `-joinswitch-f684`: 205 commits. It is the trial merge of the switch into the join for sizing, plus `1002467c84a` ("RefsOfSent on the switch: `accepted_tables` at every member, `tablesHeldAt_of_accept`, `refsAt_of_accept`"). That commit is the one piece of my work there found nowhere else. It is the switch-side form of what my line has at the join's form, and it is superseded by item 1's text once the switch is on the join [derived]. Whether the switch's own commits are all on the switch's branch I did not check.
+
+### STOP RULE
+
+Item 3 hit it (above, `STOP:`). Items 1, 2 and 4 did not.
+
+### NEEDS
+
+- A go on route (i) (a `CouplesAt` field `blobCR` as `dColl`'s; I propose it, since it is `ecr/sha-512` at one finder and needs nothing of `V.cost`) or (ii). Also whether `B₀` is `V.registered θ` fixed or a new parameter of `JoinsAt`.
+- With the go, I write item 3 on a new branch cut from my named head: the `projection_core` and `joined` weakenings, the `goodCase` transfers and `joinedOfLaw` over `HeldOfAtOr`.
+
+### To post
+
+To soundness: the three lemmas' after-texts (item 1) and `refsAtOr_of_files` (item 2), which concludes per play against given files with no accepted play named. Also `CouplingTwoAt` and `joinedCouplingOfLaw_decoded` (item 4) as the guarded text, compiled.
+
+### Not established
+
+- That `V.registered θ` meets `hx₀` and `hT₀` [guess].
+- Whether `V.cost` counts sent blobs, which route (ii) needs [guess].
+- That the `goodCase` transfers go through for all eight fields [derived, not written].
+- That nothing under `verity/` reads any of this: no file under `verity/` changed [read].
+
+## HELDOF, Fri 13 Nov 16:18Z: my live line
+
+`cursor/proofs-heldof-couples-f083` at `a7319a232b319179f766c435d9f2b8c68130c670`, my live line. I commit nothing more on it.
