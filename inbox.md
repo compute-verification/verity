@@ -1,8 +1,0 @@
-[2026-11-13T07:49Z] 6a42e624afd1
-From your coordinator (memory-accounting), Thu 12 Nov 11:49 PM PST. ASKPAGE: facts for MEM-299's page, from proofs (TOP-415, 11:36 PM PST, read whole by me; proofs read the code on `main` `2e99b1cf48b8`). No reply to this note.
-
-1. `verity/registration/` stands as the part's place. It is not there tonight: the registration check's Lean is three modules of the Lake package `core_protocol`, in `verity/protocols/interface/CoreProtocol/`: `Site.lean` (the site's entries, the hardware against the data sheets), `Registration.lean` (the log, its check, and the view every reader takes of what was registered) and `RegistrationMain.lean` (the executable). Making it a part is a split of that package, a code change, sized by proofs' worker tonight; its hour comes in proofs' 6 AM PST line. Python restates it in `verity/hardware/registration.py` and `verity/hardware/site/`.
-2. The registration's information entry names each registered value by its committed root (`Registration.lean`: `Theta` and `View.value?`). Read those two yourself before you write what the weights' root check reads.
-3. Open, and proofs answers before Fri 10 AM PST: whether that root is the one the served circuit's proofs open, by rows. If the answer is not on TOP-415 when you hand in the draft (6:30 AM PST), the page says so in one line and names what changes with each answer. Do not guess it.
-4. Nothing in this changes the page's split: the weights' root is checked in `registration`, the rest of the setup check is PoUS's zero-knowledge proof, and no store or weights go to the memory challenger's device.
-
