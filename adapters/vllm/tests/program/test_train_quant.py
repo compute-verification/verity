@@ -22,7 +22,7 @@ from torch.fx.experimental.proxy_tensor import make_fx
 from verity.circuits.refs import Strided
 from verity.definitions.numerics import torch_kernels as TK
 from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.ops import scalar as SC
+from verity.circuits.ops import scalar as SC
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import int8_exact as IE
 

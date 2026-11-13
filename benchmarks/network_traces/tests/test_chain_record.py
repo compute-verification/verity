@@ -644,7 +644,7 @@ def _gemm_window(external: bool = True) -> dict:
     units 2 and 3 read units 0 and 1's ``o0`` through a wire and units 0 and 1's ``x`` are free."""
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as G
+    from verity.circuits.ops import gemm as G
     from verity.commitments.windows import interface as I
 
     gemm = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
@@ -673,7 +673,7 @@ def test_free_inputs_take_out_a_cut_ports_wired_rows_as_the_period_counts_them()
     wires filling one row are refused."""
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
-    from verity.definitions.ops import gemm as G
+    from verity.circuits.ops import gemm as G
     from verity.commitments.windows import interface as I
 
     gemm, g8 = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)

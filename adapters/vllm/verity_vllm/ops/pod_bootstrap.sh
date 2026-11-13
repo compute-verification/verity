@@ -211,7 +211,7 @@ SPOT = "verity.protocols.spot.verifier.one_stage.partition"   # the program test
 check("spot_from_tree", lambda: under(SPOT, os.path.join(core, *SPOT.split(".")[:-1])))
 def distributions_from_tree():
     # the catalog and the kernels, distributions of their own before the platform layout, and the verifiers, now in verity
-    mods = {"catalog": "verity.definitions.ops", "kernels": "verity.definitions.kernels", "core": "verity.protocols.spot.verifier"}
+    mods = {"catalog": "verity.circuits.ops", "kernels": "verity.circuits.kernels", "core": "verity.protocols.spot.verifier"}
     return {d: under(m, os.path.join(core, *m.split("."))) for d, m in mods.items()}
 check("distributions_from_tree", distributions_from_tree)
 check("numpy_import", lambda: __import__("numpy").__version__)
