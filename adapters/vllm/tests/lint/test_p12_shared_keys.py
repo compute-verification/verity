@@ -11,7 +11,7 @@ Checked today, against ``allowlists/p12_shared_keys.json``:
   ``verity/protocols/...``, ``tools/research/...`` or paths under them), which is
   how code identity gets defined outside the one ``code_identity()``.
 
-The owners, ``config.py`` (row-id grammar) and ``pipeline/identity.py`` (code identity), do not exist yet; the modules
+The row-id grammar's owner is ``config.py``; code identity's, ``pipeline/identity.py``, does not exist yet.  The modules
 that become them (``target_family.py`` into ``config.py``; ``pipeline/source_identity.py`` and
 ``pipeline/release_json.py`` into ``identity``) are already exempt.  Not linted: the dtype vocabulary and ``RowSpec``
 (no single literal shape to scan for), and the rule's test that editing a core file in a temp tree changes the identity.
