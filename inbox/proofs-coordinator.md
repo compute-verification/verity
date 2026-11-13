@@ -132306,3 +132306,56 @@ For the table:
 - Your word "carry": then `tools/move/restack.py` on #9621's branch, the fix's one commit on it, the changed suites on a node, and the ready line.
 - #9621 on `main`, then the guard's pull request.
 - Still open from 08:19Z, each a veto if you want it: names left out of the section's verdict record where they were null; no class named from the second stage's files alone; the guard's "not all true" line; the guard opened unmerged.
+
+## ADDRROW2, Fri 13 Nov 09:16Z: the one-table hypothesis is GONE and it COMPILES: `d2cae2a309` on `cursor/proofs-addrrow2-5e1b` (`r20261113-090552-1d81`, rc 0): `drawn_of_ok` and `labelled_of_ok` take only an accepted run; the head holds SESSIONOF2's `d45f63a86c` (so the join's `42bba26494` and FRAME's line) and HONEST2's mend of `RowLeaves.lean`, and all eleven row files build there
+
+**In plain words.** The half of the placement premise that says a session's instances carry their slots as labels no longer assumes "the session has one table": that now comes from SESSIONOF2's compiled lemma, and the result compiled in one run. To use that lemma I merged SESSIONOF2's head, which sits on the join, so my branch is now on the same line as the join and as FRAME's newer wiring check. On that line ADDRROW's leaf-count file needed HONEST2's two-line mend; I took HONEST2's bytes, and the file compiles. Every row file was rebuilt on the new line in the same run. What is left of the placement premise is the other half: that the checked inner block sits in its part at the place the row theorem reads. I have read what it takes and it needs one fact that no check of the design gives; it is stated below as a named premise with its owner.
+
+Clock: `date -u` read 09:16Z. Branch `cursor/proofs-addrrow2-5e1b` at `d2cae2a309d600a0b4d32e627ad13df0cd28f053`, pushed; nothing unpushed. Mailbox read at 09:13Z: no file yet.
+
+**1. What compiled** [run: `r20261113-090552-1d81`, `--on auto`, placed on vy-nebius-cpu-10, 09:06Z to 09:13Z, `done rc=0`; its `stdout.log`, each line quoted from it], at `d2cae2a309`:
+- `RowTable.lean`: "lean exit 0 in 298 s"; "axiom probe: none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; with `--siblings`: "no built module of its package that doesn't import Proofs.Flock.SpotFlock.AddressFacts.RowTable declares a name it does (3810 imported in 9 s, peak 5308 MB); 388 unchecked, with no build of their source as it is or importing a module with none". So the name check covers the 3810 modules that slot tree had built, not the 388 it had not.
+- `RowLeaves.lean` (with the mend): "lean exit 0 in 26 s", 10 theorems, probe clean.
+- `RowKind.lean`: exit 0, 7 theorems, probe clean. `RowLeaf.lean`: exit 0, 8 theorems, probe clean. `RowInstance.lean`: exit 0, 2 theorems, probe clean.
+- Built as imports on this line, each a "Built" line of the log: `Row`, `RowRead`, `RowParse`, `RowDraw`, `RowOf`, `RowGive`, and SESSIONOF2's `SampledTwo.OneTable`. Their probes are the earlier runs' (`9095`, `1051`, `1851`, `0c37`); the files are unchanged.
+- One warning names a file of mine: the unused `simp` argument at `RowTable.lean:185`, as in `b31c`.
+
+**2. STATEMENT CHANGE (HONEST2, ASSEMBLY)** [run: compiled in `1d81`], in `AddressFacts/RowTable.lean`, namespace `SpotFlock.CheckedRun`:
+- New: `one_table (hr : r.Ok h) : r.sts.size = 1 ∧ r.ins.read.I.count ≤ 1`.
+- `drawn_of_ok (hr : r.Ok h) : ∃ dj D draw, …` (the conclusion is unchanged; the hypothesis `hc1 : r.ins.read.I.count ≤ 1` is gone).
+- `labelled_of_ok (hr : r.Ok h) : LabelledAt (drawSlot (partOf h r) r.ins.read.draw) r.sts` (`hc1` gone).
+- Where `t < h.ms.length` comes from [read: `SpotFlock/Opens.lean:399` at `d2cae2a309`]: `templateOf_lt_of_checked h hx hu`, at the run's own checked unit. So no hypothesis is carried. The other three inputs of `oneTable_of_sessionOk` are fields of `r.Ok h` (`two h r.s = some d`, the setup) and the session clause of `stmtOkAt_unit`.
+
+**3. What the head holds** [run: `git rev-parse` of each blob].
+- The merge of `d45f63a86c` (SESSIONOF2's 08:41Z title names it compiled) went through with no conflict; `OneTable.lean` is SESSIONOF2's blob byte for byte. It brings the join's `42bba26494`, which holds FRAME's `013955525dbe`. I merged nothing from `main`.
+- `RowLeaves.lean` is HONEST2's `da62e83b7a` blob byte for byte (`c481e58210`, the same blob as at HONEST2's `0faf5b2084`), taken by cherry-pick, so my commit id for it differs (`115b9540f2`) and the bytes agree.
+- `RowTable.lean` now imports `Proofs.Properties.Verity.SampledTwo.OneTable`. No lock or lakefile line of mine changed in this step.
+
+**4. The place half of `Sits`: what it takes, and its size** [read, with the file and declaration; nothing written yet].
+- The clauses left are the first and the last four of `AddressRow.Sits` (`RowOf.lean`): the instance is counted; its unit is below `q · n_t`; its cell is the outer block's place in the first stage's record; the sample's block there is the inner block's own outer block; and its place in the cell is the inner block's.
+- The route, each step on a lemma that exists on this head:
+  1. Every unit the second stage proves lies in a cell `(t, i, p)` with `t` a template, `i` below the sample's size and `p < n_t`. [derived] From `sum_proved_selectSecond_le` (`Claims/Sampling/Select/SecondStrata.lean`) with a weight that is 0 on the cells and 1 elsewhere. This is the first of the two facts ADDRROW had not found.
+  2. In a cell, the registration's block is `blockOf sample[i] t p` (`RegTwo.blockAt_cell`), and where `sample[i]` is a slot of the layout naming itself that is `unitBase t + (sample[i] · n_t + p)` (`filesOk_sound`'s last clause), whose template is `t` (`templateOf_unitBase`).
+  3. The checked inner block is `unitBase t + (r.ρ · n_t + p)` for its own outer block `r.ρ` (`member_of_replayOf`), so the two agree on the outer block and the place; the first stage's sample lists each block once (`selectSecond_sample`), which gives the place in the record (`blocks_of_ok`, `placeOf_irootsOf`).
+  4. The instance is the first drawn unit the registration maps to the inner block (`rankAt`), and the drawn units are the second draw's units in the part (`drawn_of_ok`).
+- **The one fact no check gives** [derived: `two` and `filesOk`, `SpotFlock/Code.lean:339` and `:758`]: step 2 needs each block of the first stage's sample to be a slot of the layout that names itself. `filesOk` holds `blockOf ρ t p` to the members' block only at such slots, and the design's evaluation never asks that the first stage draws only such slots. Without it `blockOf` at a sampled block is any number, and `Sits` is false at such a registration. It holds wherever the population check `Slots.popOk` passes and the first stage draws below the population. I state it as a named premise on the auditor's copies, no run in it:
+  `def SampleSlots (h : Held) : Prop := ∀ l, (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption = some l → ∀ c, ∀ ρ ∈ h.reg.sample c, ∃ b, l.blocks[ρ]? = some b ∧ b.unit = some ρ`
+  Its owner should be HELDOF: `HeldOf.block_of_popOk` (`SpotFlock/HeldOfRun.lean:95`) gives the slot from `ρ < n` under the run's population check, and what is missing is that every unit `Spot.Select.select` proves is below `n`.
+- The theorem I will state first: `sits_of_slots (hna : ∀ v, h.reg.always v = false) (hSS : SampleSlots h) : AddressRow.Sits h`. The first hypothesis is ADDRROW's 06:26Z limit: an always-checked inner block that the second stage did not draw has no instance, so `Sits` is false with it.
+- Size [guess]: one new file, `AddressFacts/RowPlace.lean`, about 300 lines, 7 to 9 theorems, none written. I expect it written by 10:30Z and compiled by 12:30Z, two or three tries; that depends on nothing but my own errors. All of it can compile well before Sat 14 Nov 02:00Z. If time is left after it, I try to prove `SampleSlots` from `popOk` and say so first.
+
+**STOP RULE.** Nothing touched: no listed guarantee, named assumption or verifier; no file of FRAME's.
+
+**NEEDS.**
+- **HONEST2:** `Sits` at your instance will come from `sits_of_slots`, so the instance needs two facts: no inner block always checked, and `SampleSlots` at `held R B desc q c₀`. Say if either is false there.
+- **HELDOF (through the coordinator):** is "every unit the first stage proves is below the population" proved anywhere? If it is, `SampleSlots` follows from the run's population check and your `block_of_popOk`.
+
+**To post.** Nothing.
+
+**Not established.**
+- The place half: nothing of it is written or compiled.
+- `SampleSlots h` at any registration, and whether a check should decide it.
+- `PublishedRows h` (not started; empty at HONEST2's instance by its 07:39Z entry, which I have not checked).
+- A whole build of `security/Proofs`, or its records audit, at `d2cae2a309`. The sibling check left 388 modules unchecked.
+
+Runs: `r20261113-082753-b31c` (done, rc 0), `r20261113-090552-1d81` (done, rc 0). None out.
