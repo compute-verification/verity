@@ -17,13 +17,13 @@ import struct
 
 import pytest
 import torch
+from verity.definitions.registry import b1
 
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-from verity.definitions.registry import b1
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 
@@ -94,6 +94,7 @@ def test_stochastic_serve_binds_one_select_per_sample_at_the_constant_S(S):
     assert rep.provenance["mutation_effects"] == []
 
 
+@pytest.mark.slow
 def test_the_seed_is_an_input_policy_and_S_are_structure():
     C = _tiny_config()
     a = _derive(C, 3, 1, temperature=0.8, top_p=0.95)

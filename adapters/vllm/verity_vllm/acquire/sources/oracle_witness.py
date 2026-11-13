@@ -14,7 +14,8 @@ summary counts both).
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 #: one align call's committed members, `<experts>/<member>`
 MEMBERS = ("align.rank", "align.start", "align.blk", "align.par")
