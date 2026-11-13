@@ -44,9 +44,9 @@ sys.modules["ttout_tile_h100_rev1"] = T
 spec.loader.exec_module(T)
 PC, H100, C = T.PC, T.H100, T.C
 
-from verity.definitions.silicon import fp32  # noqa: E402
-from verity.protocols.pouw.prover.schemes.pearl_c_device import SM120  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile  # noqa: E402
+from verity.circuits.silicon import fp32  # noqa: E402
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile  # noqa: E402
 
 #: the H100's tensor clock over its SM clock (the H200 card file's clock.tensor and clock.sm; Lean's
 #: `h100TensorMHz / h100SmMHz`)
@@ -290,11 +290,11 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
     that are not the designed ones at the salt drawn. A row's `fires` is TT_OUT's event for its program, and None where
     the program's words are not all the scheme's: a program that outputs other words is no program of the class."""
     sys.path.insert(0, str(HERE / "pearl_c_vllm"))
-    sys.path.insert(0, str(HERE.parents[1] / "verity" / "protocols" / "pouw" / "clear"))
+    sys.path.insert(0, str(HERE.parents[1] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
     import clear_work as CW
     import fast_tile as FT
-    from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
-    from verity.protocols.pouw.prover.schemes.pearl_c_work import UnitRecord
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+    from verity.protocols.accounting.pouw.prover.schemes.pearl_c_work import UnitRecord
 
     dev, atom, records = DEVICES[device]
     assert dev.g == T.G, "the programs promote every T.G atoms"
