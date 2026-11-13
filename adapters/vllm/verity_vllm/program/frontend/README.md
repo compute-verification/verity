@@ -23,7 +23,7 @@ Definition and check (`program`, `check`, `pipeline`); what a build needs of vLL
 `marlin_moe_leaf.mxfp4_marlin_layers` (`acquire`). From outside the adapter: `benchmarks/network_sim` reads
 `derive.derive_report` and `derive_examples.GreedyServe`, `benchmarks/harness` reads `kernel_readback.int8_exact_of`,
 `benchmarks/one_stage`, `benchmarks/spot_proved` and `tools/verity/circuit_check` read specs of `targets`, and
-`archive/benchmarks/training_slowdown` reads `derive.derive_report`. `target_profile` also passes on four names of
+`benchmarks/pouw` reads `target_profile.TargetProfile`. `target_profile` also passes on four names of
 `kernel_readback` that its own list leaves out: `applied_kernels`, `fp8_block_gemm_kernel_of`, `int8_exact_of` and
 `moe_experts_class_of`. The rule files and the tests also read private names of `derive`, `strided_views` and
 `outcomes`; those are not part of what the package offers. `rules/` and `train_step` are imported from outside the

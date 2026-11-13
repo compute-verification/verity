@@ -1,4 +1,4 @@
-"""WP2: the auxiliary-witness checker Check(x, y, h) for the frozen target's transition unit and, by chaining,
+"""The auxiliary-witness checker Check(x, y, h) for the frozen target's transition unit and, by chaining,
 for the proof block.
 
 This is a REFERENCE: Python ints, clarity over speed, no field.  Its decomposition into gadgets, its hint layout
@@ -118,8 +118,8 @@ mutation: no alternative hint value is accepted.  z3 at the real widths per gadg
 differs from the reference"; SAT as soon as any one of the named bounds (``attained``, ``onehot``, ``rem``,
 ``window``, the range of v, ``zero_sign``, ``clamp_proof``, ``ovf_proof``) is dropped, i.e. each of them is
 load-bearing.  One full group step at the real widths with two independent hint copies on one concrete input:
-UNSAT.  The negative tests mutate each gadget's hints in the handoff's named ways and check the rejecting
-predicate.
+UNSAT.  The negative tests mutate each gadget's hints in the ways ``tests/checker/test_negative.py`` names and check the
+rejecting predicate.
 
 --------------------------------------------------------------------------------------------------------------------
 2. Unresolved obligations
