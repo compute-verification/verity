@@ -91,8 +91,9 @@ of `check.py` unless it says otherwise, or the lock's section below.
 - **The kernel accepts every declaration again** (`replay_step`, `Replay.lean`), and the axioms the replay finds are
   the ones the `.olean` files recorded; a replay killed by a signal is a kill, not a verdict (`killed`). `--closure`
   checks the whole import closure the same way, reusing each module that passed under its key, whichever package
-  checked it (`closure_plan`, `replay_keys`, `build_roots_over`); the audit prints `closure: N modules checked, M
-  reused` under each package's line.
+  checked it, wherever it was compiled: a key reads a module's `.olean` files without the source's path a message keeps
+  (`closure_plan`, `replay_keys`, `replay_digest`, `olean_graph.canonical`, `build_roots_over`); the audit prints
+  `closure: N modules checked, M reused` under each package's line.
 - **`--build` recompiles a sample** of the modules the build didn't compile and compares the outputs
   (`sampled_recompile`, `olean_graph.py`).
 - **Each test under `runs` passes** on the data whose SHA-256 the record holds (`tests`, `run_paths`).
@@ -258,6 +259,8 @@ The auditor:
   replay and its cache, the report.
 - `Facts.lean`: the facts `check.py` judges, from the `.olean` files as data; the canonical texts the hashes are of.
 - `Replay.lean`: the kernel replay of a package's declarations, and of its import closure.
+- `replay-first.json`: the modules a package's replay checks first, each in a step of its own at its stated threads
+  (`replay_first`).
 - `Graph.lean`: the import graph of some modules, from their `.olean` headers.
 - `Unread.lean`: what each declaration mentions, for `unread.py` and the audit.
 - `sandbox.sh`: the build sandbox. `setup.sh`: Lean and a package's dependencies on a Linux machine.

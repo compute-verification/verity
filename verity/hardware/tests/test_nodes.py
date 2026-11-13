@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import math
 import re
+import shutil
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -364,6 +366,45 @@ def test_a_ceiling_is_no_less_than_the_measured_rate() -> None:
 def test_an_unknown_node_names_the_nodes() -> None:
     with pytest.raises(KeyError, match="h200-sxm-141gb-x1.*rtx-pro-6000-server-x8"):
         nodes.load("rtx-pro-6000-server")
+
+
+def sheets(tmp_path: Path) -> tuple[Path, Path]:
+    """The node files and the card files, copied to directories of their own."""
+    there = tmp_path / "nodes", tmp_path / "cards"
+    for source, copy in zip((nodes.NODES, cards.CARDS), there, strict=True):
+        shutil.copytree(source, copy, ignore=shutil.ignore_patterns("*.py", "__pycache__"))
+    return there
+
+
+def test_a_copy_of_the_node_files_elsewhere_loads_as_they_do(tmp_path) -> None:
+    """The node files and the cards copied to other directories, named as ``directory`` and ``cards_directory``, give
+    the same kinds, tables, leaves and ways out as the default."""
+    there, card_files = sheets(tmp_path)
+    assert sorted(p.name for p in there.iterdir()) == [f"{kind}.toml" for kind in nodes.kinds()]
+    assert nodes.kinds(directory=there) == nodes.kinds()
+    for kind in nodes.kinds():
+        node = nodes.load(kind, directory=there, cards_directory=card_files)
+        assert node == nodes.load(kind)
+        assert nodes.leaves(node, HOST, cards_directory=card_files) == nodes.leaves(node, HOST)
+        assert nodes.ways_out(node, HOST, cards_directory=card_files) == nodes.ways_out(node, HOST)
+
+
+def test_a_directory_without_the_sheet_names_itself(tmp_path) -> None:
+    """A node file missing from the directory given is refused as one missing from the default is, naming that
+    directory and the kinds in it; a card missing from the cards' directory given refuses the node file that names it
+    and its leaves, and the leaves' refusal names that directory."""
+    there, card_files = sheets(tmp_path)
+    kind = "rtx-pro-6000-server-x8"
+    (there / "h200-sxm-141gb-x1.toml").unlink()
+    with pytest.raises(KeyError, match=re.escape(f"the nodes are ['{kind}'] ({there}/<kind>.toml)")):
+        nodes.load("h200-sxm-141gb-x1", directory=there)
+    node, host = nodes.load(kind), nodes.load(kind)["host"]["sku"]
+    (card_files / f"{host}.toml").unlink()
+    with pytest.raises(InvalidArtifact, match=re.escape(f"host.sku = '{host}'; name a host card, one of ['xeon-p")):
+        nodes.load(kind, directory=there, cards_directory=card_files)
+    for read in (nodes.leaves, nodes.ways_out):
+        with pytest.raises(InvalidArtifact, match=re.escape(f"no card '{host}'") + ".*" + re.escape(f"({card_files}/")):
+            read(node, HOST, cards_directory=card_files)
 
 
 COUNT = 'count = { value = 2, unit = "card", mark = "measurement", source = "s (art:0123456789ab)" }'

@@ -224,7 +224,7 @@ def test_a_dead_output_passes_the_check_only_as_unreturned_and_listed(tmp_path):
     assert attn["query"]["word_check"]["ok"] and dead and {r["spec"] for r in dead} == {"Gemm_v1"}
     assert {r["step"] for r in dead} == set(attn["steps"])
     assert not [r for r in attn["identities"] if "o_proj" in r["op_path"] and r["family"] != "weights"]
-    assert attn["populations"]["unreturned_calls"] == sum(r["rows"] for r in dead) and len(attn["unreturned_digest"]) == 64
+    assert attn["populations"]["unreturned_calls"] == sum(r["rows"] for r in dead) and len(attn["unreturned_digest"]) == 128
     with pytest.raises(W.QueryRuleViolation, match="RMSNormFusedCuda_v2.*output-not-committed"):
         M.build(_program_dir(tmp_path, attn=True), request_id="r0", word="16/32", return_slots=False)
 

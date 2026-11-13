@@ -21,10 +21,12 @@ from verity.protocols.spot.verifier import parties as P
 from verity.protocols.spot.verifier.one_stage import registration as R
 from verity.configuration.wire import Refused
 
-SP, POUW = P.SUBPROTOCOLS["verity/remote/v0"]["sampled-proofs"], P.SUBPROTOCOLS["verity/remote/v0"]["pouw"]
+SP, WORK = P.SUBPROTOCOLS["verity/remote/v1"]["sampled-proofs"], P.SUBPROTOCOLS["verity/remote/v1"]["pearl-plus"]
+POUW = P.SUBPROTOCOLS["verity/onsite/v0"]["pouw"]
 CERT = P.IDS["certifier"]
 NCI = P.IDS["inference-only"]
-REMOTE = ("sampled-proofs", "pouw", "inference-only")
+REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
+REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
 ROLES = [P.CHALLENGER, P.FIREWALL, P.VERIFIER, P.WORKERS]
 SHA = "5a" * 64
 CASE = {"commitment": "01", "evidence": "02", "params": {"k": 8}}
@@ -83,7 +85,7 @@ class Machine:
         empty = [i for i in ids if cases[i] == P.NO_CASE]
         rejected = [i for i in ids if i == SP and not self.accept]
         bad = empty + rejected
-        return {"product": "verity/remote/v0" if len(ids) == 3 else "verity/onsite/v0",
+        return {"product": next(c for c, subs in P.SUBPROTOCOLS.items() if sorted(subs.values()) == sorted(ids)),
                 "verdict": "reject" if bad else "accept",
                 "reason": "; ".join(f"{i} reject" for i in bad) or None}
 
@@ -106,13 +108,13 @@ def test_an_honest_run_audits_each_block_in_order_and_accepts():
     lines = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
     assert [x["block"] for x in lines] == [0, 1]
     assert lines[0] == {"block": 0, "coins": "simulated", "components": dict.fromkeys(REMOTE, "accept"),
-                        "product": "verity/remote/v0", "reason": None,
+                        "product": "verity/remote/v1", "reason": None,
                         "registration": R.digest(json.loads(registration(0))), "verdict": "accept"}
     audits = [c for c in m.calls if c[0] == "audit"]
     assert audits == [("audit", i, registration(i), "127.0.0.1:4242", SHA) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "product"][0][1:] == (
-        [SP, POUW, NCI], {SP: CASE, POUW: OTHER[1], NCI: OTHER[1]},
-        {SP: lines[0]["registration"], POUW: OTHER[0]["commitment"], NCI: OTHER[0]["commitment"]})
+        [SP, WORK, NCI], {SP: CASE, WORK: OTHER[1], NCI: OTHER[1]},
+        {SP: lines[0]["registration"], WORK: OTHER[0]["commitment"], NCI: OTHER[0]["commitment"]})
     assert m.host.events == ["start", "stop"]
     outputs = [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "output"]
     assert outputs == lines
@@ -122,10 +124,10 @@ def test_a_listed_subprotocol_with_no_answer_is_absent_and_the_composite_rejects
     m = Machine(other=None)
     r = go(m)
     (line,) = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
-    assert line["components"] == {"sampled-proofs": "accept", "pouw": P.ABSENT, "inference-only": P.ABSENT}
-    assert line["verdict"] == "reject" and line["reason"] == f"{POUW} reject; {NCI} reject"
+    assert line["components"] == {"sampled-proofs": "accept", "pearl-plus": P.ABSENT, "inference-only": P.ABSENT}
+    assert line["verdict"] == "reject" and line["reason"] == f"{WORK} reject; {NCI} reject"
     _, ids, cases, digests = next(c for c in m.calls if c[0] == "product")
-    assert ids == [SP, POUW, NCI] and cases[POUW] == P.NO_CASE and digests[POUW] == ""
+    assert ids == [SP, WORK, NCI] and cases[WORK] == P.NO_CASE and digests[WORK] == ""
 
 
 def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
@@ -137,6 +139,13 @@ def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
     _, ids, _, digests = next(c for c in m.calls if c[0] == "product")
     assert ids == [P.SUBPROTOCOLS["verity/onsite/v0"][c] for c in onsite] and digests[CERT] == "cd" * 64
     assert POUW == "verity/pouw/period/v1" and POUW in ids and P.IDS["pouw"] not in ids
+
+
+def test_remotes_development_composite_is_refused():
+    """H1's development composite (PoUW's period as remote's work) is no composite: its parameters are refused."""
+    with pytest.raises(ValueError, match="components lists one composite's subprotocols"):
+        P.ids_of(list(REMOTE_V0))
+    assert "verity/remote/v0" not in P.SUBPROTOCOLS and P.ids_of(list(REMOTE))["pearl-plus"] == WORK
 
 
 def test_an_accepting_audit_of_another_registration_rejects():
