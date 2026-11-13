@@ -368,10 +368,7 @@ def gate_status(a: argparse.Namespace, keep: Path, run: str) -> dict | None:
         got = got if rc == 0 else None
     else:
         got = SS.status(a, run)
-    try:
-        return None if got is None else json.loads(got)
-    except ValueError:
-        return None
+    return None if got is None else json.loads(got)
 
 
 def waited(a: argparse.Namespace, keep: Path, run: str, done: Callable[[dict], bool], every: float,
