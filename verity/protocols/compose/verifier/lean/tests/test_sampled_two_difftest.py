@@ -180,7 +180,7 @@ def test_the_form_accepts_one_honest_play_with_its_switch_on() -> None:
     d = Path(opt.get("VERITY_SAMPLED_TWO_CASE") or CASE)
     assert (d / "params.json").is_file(), (
         f"{d} is not fetched: `uv run research data fetch-fixtures "
-        "verity/protocols/remote/verifier/composition/tests/fixtures/sampled-two-case`")
+        "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case`")
     files = [str(d / f) for f in ("params.json", "commitment.json", "evidence.json")]
     files += [str(b) for b in sorted((d / "blobs").iterdir())]
     exes = [D.build(PORT.package, exe) for exe in ("sampled-two-on", "sampled-two")]
