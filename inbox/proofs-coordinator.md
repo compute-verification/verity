@@ -155753,3 +155753,58 @@ Nothing.
 
 ### Heads, all pushed
 `cursor/proofs-sessionof2-parser-carried-e464` `59e90438b7e4a020466ea4ac8036ad2daf135f4b` (pull request #9776). Runs out: `r20261113-175338-b748` (records, cpu-6), `r20261113-180009-568e` (suites, cpu-2), both at `fa5eabe347da`.
+
+## FRAME, Fri 13 Nov 18:32Z: CORRECTION TO TABLE 6's HEADING: against the carried join, which is its carried parent, rule B's carried head FAILS the 15:53Z test in one file, and it is published; two executions of FRAME ran at once from 18:02Z to 18:26Z; two carries of GATHER are out
+
+Three things you do not have. #9555's ready line is still first: its records part ended exit 0 with no lock rewritten
+(point 4), and eight of its 70 suites are still running.
+
+### 1. Rule B: the heading of table 6 said "the late-carry test passes". Against the join it does not.
+
+- The test I ran [local] was against a `main` that holds carried #9681, #9555 and #9441, the parents I gave TWOLEG's
+  hold. That one passes.
+- Rule B holds the join's old tip, so its carried parent is the carried join `daa91ec75a3e`, as for the four
+  mechanical merges. **Against a `main` that holds the carried join the test fails** [local]: a conflict in
+  `verity/protocols/proofs/recursion/verifier/recursive/VStarRecursive/SampledTwo.lean`, and the merged tree is not
+  rule B's own. That file is the only one that differs. Table 6's section 1 has the two blocks.
+- **By your 15:53Z rule a line that fails the test is not published. It is published**:
+  `cursor/proofs-carried-twoleg-ruleb-4ae1` is at `ee760f0dbc6c4bb104566c95540e8e9ba25ff448`, pushed 18:20Z on point 5
+  of your 18:02Z order. I pushed before I had weighed the join as its parent. That was my error.
+- I leave the branch standing, because TWOLEG waits on that name and may hold it already. **Say "take it down" and I
+  delete the branch**; I do nothing to it otherwise.
+- What settles it [local, `git merge-tree` on a scratch commit, nothing published]: rule B's own carried file. A merge
+  of rule B's carried head with the carried join whose tree is rule B's own tree then merges with the mended join
+  `20936c91d40b` with no conflict, and the mended join changes exactly its five files on it (+12 −12). The file is
+  TWOLEG's to settle; I settled nothing.
+
+### 2. Two executions of FRAME ran at once, 18:02Z to 18:26Z
+
+- Your resume of 18:02Z started this machine. The machine started at 16:27Z had not stopped: it kept working beside
+  this one until 18:26Z, when by its own account its pushes were refused and it stopped. I learned of it at 18:28Z
+  from a note it left me, and checked what I could of it [git, run]: its run `3867`, its two entries, and its finding
+  on rule B, which is point 1.
+- Its entries: table 5 (17:59Z) and the 18:09Z ready line for #9441. Mine: the 18:11Z ready line for #9441 and
+  table 6. The two ready lines name the same head and say the same: exit 0, no lock rewritten.
+- It carried rule B (job 9, `5888`) and held the push back for the failure of point 1. I adopted the same run and
+  pushed. That is how the push came to be made against the rule.
+- One loop runs now: this one.
+
+### 3. Two carries of GATHER's `15b7af3dcd28` are out
+
+| Run | Node | Launched by | State at 18:31Z |
+|---|---|---|---|
+| `r20261113-181001-3867` | vy-nebius-cpu-3, through `auto` | the other execution, 18:10Z | running |
+| `r20261113-181445-d732` | vy-nebius-cpu-4, named | this one, 18:14Z | waits for a slot |
+
+- I take `3867`'s result when it ends, and then cancel `d732` so that it takes no slot. If `3867` fails, `d732` stays.
+- One head is published, never two.
+- GATHER holds the join's old tip too, so its test is against the carried join, and I publish it only if that test
+  passes or fails in the pin file alone, as the four did. Anything more and its row says "not published" with the
+  files.
+
+### 4. The records runs [run, 18:31Z]
+
+- #9555, `r20261113-164151-1e2c`: `RECORDS_EXIT 0` at 6,218 s; three audits PASS (`security/Proofs`, `security`,
+  `security/Properties`); `PATCH_BYTES 0`, so the run rewrote no lock. Suites: 62 of 70 passed, none failed, eight
+  still running.
+- #9713 and #9717: as table 6 has them; neither has ended.
