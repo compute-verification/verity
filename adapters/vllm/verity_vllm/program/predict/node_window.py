@@ -9,7 +9,7 @@ family on and what is left is always listed (`NodeWindow.census`). Every other r
 a request input (the prompt) are free inputs the same way, listed by name; the census lists every ``peers_*`` input with
 the nodes that read it, lowered or not.
 
-A lowering is ``lower(w, j, node)``: it allocates units (``w.b.unit``), feeds their ports from the rows the frame hands it
+A lowering is ``lower(w, j, node)``: it allocates units (`NodeWindow.unit`), feeds their ports from the rows the frame hands it
 (`NodeWindow.take`, `NodeWindow.feed`), reads weights from the weights record (``w.b.read``, at `NodeWindow.weight`'s word),
 and states the node's output as the rows that hold it (`NodeWindow.out`, `Piece`). A port whose rows are all wired is fed;
 a port any of whose rows is free is left free whole (`NodeWindow.feed` records it).

@@ -31,12 +31,14 @@ ENGINE = {"max_num_batched_tokens": 2048, "max_model_len": 4096, "long_prefill_t
 LP, LAYERS = 32, 1
 
 
-def glm_request(LP: int, layers: int, rank: int = 0):
+def glm_request(LP: int, layers: int, rank: int = 0, moe: bool = False):
     """Rank ``rank``'s request Program of one greedy request of ``LP`` prompt ids and 2 outputs (its prefill, then one
-    decode), GLM-5.3 at TP8 on H200 cut to its first ``layers`` decoder layers, class G's engine, in the registered rank form."""
+    decode), GLM-5.3 at TP8 on H200 cut to its first ``layers`` decoder layers (with ``moe``, every one an MoE layer), class
+    G's engine, in the registered rank form."""
     hf = json.loads(pinned_hf_config(GLM53["repo"], GLM53["revision"]).read_text())
-    hf = {**hf, "num_hidden_layers": layers, "first_k_dense_replace": min(layers, hf["first_k_dense_replace"]),
-          **{k: hf[k][:layers] for k in ("indexer_types", "mlp_layer_types")}}
+    dense = 0 if moe else min(layers, hf["first_k_dense_replace"])
+    hf = {**hf, "num_hidden_layers": layers, "first_k_dense_replace": dense, "indexer_types": hf["indexer_types"][:layers],
+          "mlp_layer_types": ["dense"] * dense + ["sparse"] * (layers - dense)}
     phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target=TARGET, execution="eager",
               tp={"world": 8, "rank": rank}, engine=dict(ENGINE))
     reg = Registered.of(phi, default_seed=DEFAULT_SEED)
@@ -117,6 +119,14 @@ def test_partial_families(program):
     circuit, w = NW.node_window(program, families=norms)
     assert "DeepGemmFp8Linear" in w.census(circuit)["free"]
     assert not any("ScaledMm" in t for t in circuit.units)
+
+
+def test_moe_layer():
+    """Over an MoE layer the shared expert's linears are lowered and the router's and experts' rows are free inputs."""
+    circuit, w = NW.node_window(glm_request(LP, 1, moe=True).program.fn)
+    census = w.census(circuit)
+    assert {"MoeExpertFp8Gemm", "MoeRouterSigmoidBias", "MoeSum"} <= set(census["unlowered"])
+    assert any(re.fullmatch(r"ScaledMmFp8BlockSharedScale_v1\{K=256,N=1,G=128\}", t) for t in circuit.units)
 
 
 def test_no_lowering_refused(program):
