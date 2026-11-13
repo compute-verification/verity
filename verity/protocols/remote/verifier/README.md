@@ -63,7 +63,7 @@ soundness theorem covers and no configuration names. Pearl+'s run names its reco
 read that record yet. The policy and sampled proofs commit to the run's record, which names the registered circuit; once
 the cases fit, two different records reject remote whatever the subprotocols answer (`Core.Composition.same`). v0's
 period commitment is the auditor's ledger, not the record, so it joins by a tie (`Core.Remote.windows`): every window of
-the period must name the policy's record as its Commit record (`windowRecords`), and a window on another record rejects
+the period must name the policy's record as its Commit record (`executionPhaseRecords`), and a window on another record rejects
 remote unless it rejects already. Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
 (`RemoteMain.lean`). The Lake package `core_remote` is code: no Mathlib, no `security/` (`lean-audit.json`). The
 product's rule and its difftest are the composition's ([README](composition/README.md),
