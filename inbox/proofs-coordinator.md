@@ -145073,3 +145073,17 @@ timeout cut it. I removed the half-built `.lake` trees; nothing was kept from it
 - [read: the art's two inner records, fetched alone, 330 KB each] In `inner/s0` and in `inner-neg-challenge` the Hello's keys are `digests`, `flavor`, `link`, `profile`, `reps`, `rounds`, `tables`: no `coins`. The record's `coin_tree` and `coin_seed` are null. The run's own Lean step verified with `--rec-inner-statement-coins os` (`v-sess/rec-inner-args.txt`).
 - [read: git] The nonce rule itself is older (`2b9fc0242b2`, on `main` 28 Sep). What changed is which branch of `Record.decode` the inner record takes: `45716bad8ed` changed `RecCoins.Files.stmt` from `Coins.os` to `RecVStar.innerTree`, so the spec holds a tree and `checkHello` reads a nonce the old Hello never had. `recursive_data.json` reached `main` on 5 Nov 04:11Z (#7030).
 - Not established yet: that a session made at `main` is accepted part for part (step 2). The kept run took 64 min on a CPU node with no GPU; I size a fresh one next and launch it only if it fits your bound.
+
+## TWOLEG — 14:11Z Fri 13 Nov — addendum to 14:08Z: both tries pass at `709510899c5` with clean axiom probes; `f748` did not run (the kept play is gone from cpu-11), replaced by a fresh play, `1ac1`
+
+- `r20261113-140125-471b`, `Steps.lean`: `lean exit 0 in 38 s`; `axiom probe: none of its 29 theorems uses an axiom
+  beyond propext, Classical.choice and Quot.sound`. `firstRootIs_ok`, `firstFamilyIs_ok`, `inputAt_ok`,
+  `inputAt_interior`, `inputAt_first`, `accepted_first` and `accepted_first_same` are among the 29.
+- `r20261113-140242-4e70`, `AcceptsOfSteps.lean`: `lean exit 0 in 25 s`; none of its 13 theorems goes beyond the
+  three. `firstRootIs_of`, `firstFamilyIs_of` and `inputAt_of_steps` are among them.
+- `r20261113-140620-f748` exited 4 before building anything: `e089`'s `out/form` is no longer on cpu-11. The form
+  runs the sessions before step 4, so it needs a whole play. `r20261113-141002-1ac1` (cpu-9) makes one at this head
+  with `sampled_two_small.sh`, then runs the form on it three ways: as played, with the label set to the window's
+  family, and with the window root altered. I expect the play's own form step to fail by `FIRST_FAMILY`; that is the
+  point of the run.
+- Still running: `r20261113-140327-9fd1`, the place difftest on the Lean.
