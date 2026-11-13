@@ -1019,6 +1019,29 @@ def test_the_figure_is_the_plan_of_records_row_and_row_i_is_only_under_its_label
         E.build(store=s.store, root=REPO)
 
 
+def test_a_note_the_figure_s_rows_carry_is_printed_beside_it_where_it_has_no_label(tmp_path):
+    """The planner's driver writes on a row what a reader must know beside its figure (`note`): the figure's line
+    prints the note of the row at the pinned budget nearest its β, and the document holds it on the scope; the
+    figure's label stands in its place, and rows that carry none print as they did."""
+
+    said = "row `(ii) honest` with the Lean verifier's seconds scaled x0.25 and nothing else"
+    s = Store(tmp_path)
+    s.label(s.ran(ROWS, [r | {"note": said} for r in mine()]))
+    doc = E.build(store=s.store, root=REPO)
+    head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
+    assert head["note"] == said and doc["value"] == pytest.approx(YEAR_GB)
+    assert f"- **the compute audit's part, {said}: 14,240 GB** (modeled)" in E.render(doc)
+
+    s = Store(tmp_path / "labelled")
+    s.label(s.ran(ROWS, [as_assumed(r) | {"note": "at the planner's prices, not the table's"} for r in mine()]))
+    own = E.build(store=s.store, root=REPO, row=E.ASSUMED_ROW)
+    assert "- **the compute audit's part, at the planner's assumed prices: 17,800 GB** (modeled)" in E.render(own)
+
+    bare = E.build(store=recorded(tmp_path / "bare").fresh(), root=REPO)
+    assert not any("note" in p for p in bare["compute_audit"])
+    assert "- **the compute audit's part: 14,240 GB** (modeled)" in E.render(bare)
+
+
 def test_what_prices_the_rows_proving_is_printed_by_source_or_not_recorded(tmp_path):
     """Beside each row printed, the share of its proving each source prices, as its own plan records it: its `sources`,
     else its `basis` by source, each of own row, family row and the planner's price at 0 where it prices none, and the

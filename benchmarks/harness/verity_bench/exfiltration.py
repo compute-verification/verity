@@ -41,6 +41,9 @@ store, with no GPU and no node.
 * **Row `ASSUMED_ROW`** prices its proving at the planner's assumed prices. Beside another row it is read at the
   world's year and printed only under `ASSUMED_LABEL`, never as the figure, and the document holds it as its own field
   (`at_assumed_prices`); as the row read, its figure carries the label.
+* **A row's note**, which the planner's driver writes on a row from the row's own data (that no table's row priced
+  its proving, or what its scale reaches over the unscaled row of its case), is printed beside the figure where the
+  figure carries no label, from the row at the pinned budget nearest the one it is read at.
 * **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/network_traces/leak_bounds.py`:
   `inputs`, `document`, whose document is `TERM_SCHEMA`): the schedules, the fail cells and the jitter of each of its
   rows, at the same scopes, for a class of at most `RESPONSE_IDS` ids a response. Its figure of record is the term
@@ -452,7 +455,8 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
     the pinned budgets bracket it, the bound there at λ = 1 and λ times it, each part of the total, and what the
     rows hold fixed (λ, δ, the most bits a request's output holds, the scope's GPU-seconds, the requests they are
     priced over and the weights). How its proving is priced is ``plan``'s account, a run and the scope's plan it
-    holds (`_held`); without one the rows' own plan's at the pinned budget nearest (`_own`), or None."""
+    holds (`_held`); without one the rows' own plan's at the pinned budget nearest (`_own`), or None. The row at
+    that budget's `note`, where it carries one, is the scope's."""
 
     rows = sorted(rows, key=lambda r: r["b10"])
     if len(kinds := sorted({str(r[VARIANT]) for r in rows if r.get(VARIANT) is not None})) > 1:
@@ -477,6 +481,7 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
                          f"brings the total to {share:.2%}")
     lam = fixed["lambda"].pop()
     bits = _between(rows, "bound_bits", beta, log=True)
+    near = min(rows, key=lambda r: abs(r["b10"] - beta))
     compute, _, period = scope.rpartition(" ")
     return {"scope": scope, "compute": compute, "period": period, "run": run, "step": rows[0]["step"],
             "mix": rows[0].get("mix"), "pinned": [r["b10"] for r in rows], "beta": beta,
@@ -485,8 +490,8 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
             **{k: v.pop() for k, v in fixed.items() if k != "lambda"}, "lambda": lam, "requests": counts[0],
             "bound": {"bits": bits, "GB": bits / GB}, "bits": bits * lam, "GB": bits * lam / GB,
             "parts": {p: _between(rows, p, beta) for p in PARTS if all(r.get(p) is not None for r in rows)},
-            "priced": _held(scope, run, rows, counts[0], *plan) if plan
-            else _own(run, min(rows, key=lambda r: abs(r["b10"] - beta)))}
+            "priced": _held(scope, run, rows, counts[0], *plan) if plan else _own(run, near),
+            **({"note": near["note"]} if near.get("note") else {})}
 
 
 # ---- the stop class's verdicts ---------------------------------------------------------------------------------------
@@ -1163,7 +1168,7 @@ def render(doc: Mapping[str, Any]) -> str:
     outside = "" if head["inside"] else ", outside the pinned budgets: extrapolated"
     what = ", the plan of record's row, with every modeled lever at its measured value" if doc["row"] == ROW else ""
     what += f", in its variant `{doc['variant']}`" if doc["variant"] else ""
-    label = f", {doc['label']}" if doc["label"] else ""
+    label = f", {doc['label'] or head.get('note')}" if doc["label"] or head.get("note") else ""
     sources = head["priced"] and head["priced"]["sources"]
     plan = f" (its own plan at β = {_part(head['priced']['beta'])}, {head['priced']['run']})" if sources else ""
     a = doc["at_assumed_prices"]
