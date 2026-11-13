@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The remote demo's minutes from its first command to its verdict, read off its finished runs' records: the metric
-``vllm/remote-demo-minutes`` (`benchmarks/metrics.toml`). Standard library only; the onsite demo's reader
+``vllm/remote-demo-minutes`` (`demos/vllm/metrics.toml`). Standard library only; the onsite demo's reader
 (`demos/onsite_served/minutes.py`) is this one with its own verdict.
 
     research run --cwd source -- python3 demos/vllm/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN [--runs-dir DIR] [--main REF]
