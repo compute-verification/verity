@@ -14,9 +14,9 @@ SILICON = ROOT / "verity/circuits/silicon"
 #: The directories the checker's rule covers, the circuit language's and the catalog's. Each is a path from the root that
 #: names the directory, or a module in it, so that `tools/move/layout.py` rewrites it to where that goes: the language's
 #: own directory is named by two modules, the language's and the library's, which a move may put in two directories.
-CIRCUITS = ((ROOT / "verity/circuits/__init__.py").parent, (ROOT / "verity/definitions/circuits/library.py").parent,
+CIRCUITS = ((ROOT / "verity/circuits/__init__.py").parent, (ROOT / "verity/circuits/library.py").parent,
             ROOT / "verity/circuits/evaluation", ROOT / "verity/circuits/ops", SILICON,
-            ROOT / "verity/definitions/circuits/targets", ROOT / "verity/circuits/tests")
+            ROOT / "verity/circuits/targets", ROOT / "verity/circuits/tests")
 FROM_VERITY = ("verity.errors", "verity.circuits.boolean.forms")
 #: the checker, which the catalog's modules import no more than core's do (`tests/test_boundaries.py`); its
 #: ``*.circuit-check.py`` sidecars, circuit-check's bindings of its Definitions, may (`circuit_check.sidecars`)

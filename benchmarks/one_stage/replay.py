@@ -2126,7 +2126,7 @@ def a7(run: Run) -> Iterator[Case]:
     (`check3/`) is outside (`A7_CHECK3`)."""
     from types import SimpleNamespace
 
-    from verity.definitions.circuits import requirement_units as RU
+    from verity.circuits import requirement_units as RU
     from verity.circuits.defs import bind
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
     base, tag = "out/a7", "verity/flock-circuit/binding/v2"
