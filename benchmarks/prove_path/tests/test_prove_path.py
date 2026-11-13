@@ -368,12 +368,10 @@ def test_a_plain_forged_rank_passes_on_lean_refusing_the_proof_it_read(tmp_path,
     assert row["sessions"] == {"m0": {"proofs": kw.get("proofs", 0), "prover_stopped": None}}
 
 
-def test_a_forged_window_of_several_members_passes_on_the_one_whose_proof_was_held(tmp_path):
-    """The records audit knows no forged member, so it reads every sampled member's session: the honest member's proof
-    left and Lean accepted it, the false member's was held back, and Lean's refusal for want of its files is the only
-    one, so ``lean_refused`` has no value."""
-    import records_audit as RA
-
+def _two_members(tmp_path: Path) -> tuple[dict, Path]:
+    """A forged window of two sampled members under ``tmp_path/window``, each session a process pair's (`_forged`): member
+    0 honest, its proof left and Lean accepted it; member 1 false, its proof held back by the ZK server -> a5's summary of
+    it for `records_audit.forged_outcome`, and the window's audit directory."""
     _forged(tmp_path / "honest", None, zk_server=True, proofs=2)
     false = _forged(tmp_path / "false", NO_FILE, zk_server=True, stopped=HELD)
     d = tmp_path / "window"
@@ -383,13 +381,72 @@ def test_a_forged_window_of_several_members_passes_on_the_one_whose_proof_was_he
     verdicts = {f"{k.split('/')[0]}/m{i}": v for i, w in enumerate(("honest", "false"))
                 for k, v in json.loads((tmp_path / w / "audit.json").read_text())["verdicts"].items()}
     (d / "audit.json").write_text(json.dumps({"accepted": False, "verdicts": verdicts}))
-    row = RA.forged_outcome({**false, "audit": {"accepted": False, "why": {}}}, d)
+    return {**false, "audit": {"accepted": False, "why": {}}}, d
+
+
+def test_a_forged_window_of_several_members_passes_on_the_one_whose_proof_was_held(tmp_path):
+    """The records audit knows no forged member, so it reads every sampled member's session: the honest member's proof
+    left and Lean accepted it, the false member's was held back, and Lean's refusal for want of its files is the only
+    one, so ``lean_refused`` has no value."""
+    import records_audit as RA
+
+    s, d = _two_members(tmp_path)
+    row = RA.forged_outcome(s, d)
     assert row["ok"] is True and row["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True,
                                                    "lean_refused": None}, row
     assert row["sessions"] == {"m0": {"proofs": 2, "prover_stopped": None}, "m1": {"proofs": 0, "prover_stopped": HELD}}
     assert row["no_value"] == {"lean_refused": "the Lean verifier read no proof: lean-verify/m1: " + NO_FILE.splitlines()[0]}
     (d / "session-m1" / "prove.log").write_text((d / "session-m0" / "prove.log").read_text())
-    assert RA.forged_outcome({**false, "audit": {"accepted": False, "why": {}}}, d)["ok"] is False
+    assert RA.forged_outcome(s, d)["ok"] is False
+
+
+def test_a_session_the_audits_proof_server_proved_has_its_stop_in_that_servers_provers_log(tmp_path):
+    """Behind the ZK server an audit's sessions are proved by its proof server's one prover where the members' statements
+    agree on its setup (`a5.proof_server`). No session directory then holds a prover's log: every session's ``LIVE`` line
+    is in that prover's log beside the sessions, between the lines of its stderr, each labelled with its session's
+    directory. The false member's stop is the line under its own label, and the window passes as one of process pairs
+    does. A stop under another label is not its stop: another window's session of the same name, the honest member's, or
+    no line of its own at all. Nor is a line of another form than the prover's: one not opened ``LIVE`` and a tab, or
+    holding JSON that is no object, gives no stop, and one opened so that holds no JSON raises, so in neither case does
+    the window pass. A session directory that holds a prover's log was a process pair's, and that log is read."""
+    import records_audit as RA
+
+    s, d = _two_members(tmp_path)
+    m0, m1 = ((d / f"session-m{k}").resolve() for k in (0, 1))
+    for session in (m0, m1):
+        (session / "prove.log").unlink()
+
+    def served(*lives: tuple[Path, str | None]) -> dict:
+        """The verdict with the proof server's prover's log holding one ``LIVE`` line a (label, stop) of ``lives``."""
+        (d / "proof-server").mkdir(exist_ok=True)
+        (d / "proof-server" / "prover-cpu.log").write_text("".join(
+            f"prove: a line of the prover's stderr\nLIVE\t"
+            f"{json.dumps({'accepted': stop is None, 'label': str(label), **({'prover_stopped': stop} if stop else {})})}\n"
+            for label, stop in lives))
+        return RA.forged_outcome(s, d)
+
+    assert RA.forged_outcome(s, d)["ok"] is False, "a window with no prover's log anywhere"
+    row = served((m0, None), (m1, HELD))
+    assert row["ok"] is True and row["checks"] == {"checks_before_draw": True, "rejected": True, "no_proof_released": True,
+                                                   "lean_refused": None}, row
+    assert row["sessions"] == {"m0": {"proofs": 2, "prover_stopped": None}, "m1": {"proofs": 0, "prover_stopped": HELD}}
+    for lives in (((m0, None), (tmp_path / "other" / "session-m1", HELD)), ((m0, HELD), (m1, None)), ((m0, None),)):
+        row = served(*lives)
+        assert row["ok"] is False and row["checks"]["no_proof_released"] is False, (lives, row)
+        assert row["sessions"]["m1"] == {"proofs": 0, "prover_stopped": None}, (lives, row)
+    line = json.dumps({"accepted": False, "label": str(m1), "prover_stopped": HELD})
+    for other in (f"LIVE {line}", f"live\t{line}", f" LIVE\t{line}", f"SESSION\t{line}", f"LIVE\t[{line}]",
+                  f"LIVE\t{json.dumps(line)}"):
+        (d / "proof-server" / "prover-cpu.log").write_text(f"{other}\n")
+        assert RA.forged_outcome(s, d)["sessions"]["m1"] == {"proofs": 0, "prover_stopped": None}, other
+    for other in (f"LIVE\t{line[:-1]}", f"LIVE\t{line} and more"):
+        (d / "proof-server" / "prover-cpu.log").write_text(f"{other}\n")
+        with pytest.raises(ValueError):
+            RA.forged_outcome(s, d)
+    (d / "proof-server" / "prover-cpu.log").write_bytes(b"\xff\xfe a line that is no text\nLIVE\t" + line.encode() + b"\n")
+    assert RA.forged_outcome(s, d)["sessions"]["m1"] == {"proofs": 0, "prover_stopped": HELD}
+    (m1 / "prove.log").write_text(f"LIVE\t{json.dumps({'accepted': False})}\n")
+    assert served((m0, None), (m1, HELD))["sessions"]["m1"] == {"proofs": 0, "prover_stopped": None}
 
 
 @pytest.fixture(scope="module")

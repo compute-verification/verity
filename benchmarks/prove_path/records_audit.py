@@ -912,11 +912,24 @@ def session_proofs(sdir: Path) -> dict[str, Any]:
     """What member session ``sdir`` (a5's ``session-m<k>``) records of its proofs leaving the prover: ``proofs``, how many
     proof streams the verifier's record of the session lists (``session.json``'s ``proof_sha512``; None where the session
     has no record, or its record no such list), and ``prover_stopped``, why the prover's record says it stopped short (its
-    ``LIVE`` line, in `a0.session`'s ``prove.log``; None where it didn't, or printed no such line)."""
+    ``LIVE`` line; None where it didn't, or printed no such line). A session that was a process pair of its own has the
+    line in its ``prove.log`` (`a0.session`). One the audit's proof server proved (`a5.proof_server`) has none: its line
+    is in that server's prover's log, ``proof-server/prover-*.log`` beside the sessions, among every session's of that
+    prover, and is the one whose ``label`` is the session's directory, as a5 submits it. A ``LIVE`` line is one that
+    opens ``LIVE`` and a tab and holds a JSON object from there to its end. A line not opened so, or holding JSON that
+    is no object, is none and gives no stop; one opened so that holds no JSON raises, as the proof server's own read of
+    it does."""
     recs = sorted((sdir / "sessions").glob("*/session.json"))
     listed = json.loads(recs[-1].read_text()).get("proof_sha512") if recs else None
-    log = sdir / "prove.log"
-    live = next((json.loads(x[5:]) for x in (log.read_text().splitlines() if log.is_file() else ()) if x.startswith("LIVE\t")), {})
+
+    def lines(log: Path) -> list[dict]:
+        found = [json.loads(x[5:]) for x in (log.read_text(errors="replace").splitlines() if log.is_file() else ())
+                 if x.startswith("LIVE\t")]
+        return [v for v in found if isinstance(v, dict)]
+    own = lines(sdir / "prove.log")
+    served = [v for log in sorted((sdir.parent / "proof-server").glob("prover-*.log")) for v in lines(log)
+              if v.get("label") == str(sdir.resolve())]
+    live = next(iter(own or served), {})
     return {"proofs": None if listed is None else len(listed), "prover_stopped": live.get("prover_stopped")}
 
 
