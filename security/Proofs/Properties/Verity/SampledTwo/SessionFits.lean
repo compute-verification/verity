@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.SessionHeld
+public import Proofs.Properties.Verity.SampledTwo.SessionAgrees
 public import Proofs.Properties.Verity.Sampled.RoundsRead
 
 /-!
@@ -17,6 +17,10 @@ line opening a round only where its `n` is at most its tree's block.
 * `readFits`: on a play the two-stage form accepts, each opening in the log the check read is of at most 65536 coins
   (`ReadFits`): the opening is a line of the log `coinTreesOf` accepted, with that line's `n`
   (`Verity.Sampled.readLog_round`).
+* `sessionsFit_of`: on a play the form accepts whose log the check read is the device's, the releases the
+  session-round locator puts on a session's round carry at most 65536 elements (`SessionsFit`): it puts at most one
+  release of the log the check read on each round (`located_one_accepted`), and that one is an opening `readFits`
+  bounds. The check bounds an opening, not the device's game.
 -/
 
 @[expose] public section
@@ -160,5 +164,47 @@ theorem readFits_of {C : CaseOf} (h : MembersNamed C) : ReadFits C := by
 /-- **`ReadFits` at the form's acceptance** (`membersNamed`). -/
 theorem readFits (C : CaseOf) (hsz : HeldSize) : ReadFits C :=
   readFits_of (membersNamed C hsz)
+
+/-! ## The releases on a session's round -/
+
+/-- **The releases on each session's round fit in one coin**: on an accepted play whose log is the device's, the
+releases the session-round locator puts on a session's round carry at most 65536 elements. -/
+def SessionsFit (A : Live₂) (tab : ℕ → String) (Acc Good : Exchange → Prop) : Prop :=
+  ∀ o, Acc o → Good o → ∀ n, groupOf A n = .sessions →
+    ((located (locOf A tab) n [] o.log).map fun y => widthOf y.1).sum ≤ 65536
+
+/-- **`SessionsFit` at the form's acceptance**: the session-round locator puts at most one release of the log the
+check read on each round (`located_one_accepted`), the play's log puts releases of the same frames there
+(`located_widths`), and the read's one is an opening of at most one coin's elements (`readFits`). -/
+theorem sessionsFit_of (A : Live₂) (C : CaseOf) (tab : ℕ → String) (Good : Exchange → Prop) (hsz : HeldSize)
+    (hlog : InteriorLogged C Good) : SessionsFit A tab (FormAccepts C) Good := by
+  intro o hA hG n hg
+  obtain ⟨l, hl⟩ := interiorReads C hsz o hA
+  obtain ⟨q, l', hlog', hq, hR⟩ := hlog o hA hG l hl
+  have hF : List.Forall₂ (fun r r' => r.frame = r'.frame) l l' :=
+    (List.forall₂_map_left_iff.1 hR).imp fun _ _ h => (of_ofV2 h).1
+  have hS : Same [] q := by simpa using same_append (pre := []) hq
+  have e : ((located (locOf A tab) n [] o.log).map fun y => widthOf y.1).sum =
+      ((located (locOf A tab) n [] l).map fun y => widthOf y.1).sum := by
+    unfold locOf
+    rw [hlog', located_append, located_none q (fun y hy => (hq y hy).1) []]
+    simp only [List.nil_append]
+    exact located_widths hF hS
+  rw [e]
+  have h1 := located_one_accepted A C tab hsz o hA l hl n
+  cases hx : located (locOf A tab) n [] l with
+  | nil => simp
+  | cons x t =>
+    cases t with
+    | cons y t =>
+      rw [hx] at h1
+      simp at h1
+    | nil =>
+      obtain ⟨a, r, b, he, hloc, rfl⟩ := mem_located (show x ∈ located (locOf A tab) n [] l by rw [hx]; simp)
+      simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+      cases hfr : r.frame with
+      | opening i s c => exact readFits C hsz o hA l hl r (by rw [he]; simp) i s c hfr
+      | fresh _ => rw [hfr] at hloc; simp [locOf, sessLoc] at hloc
+      | hello _ => rw [hfr] at hloc; simp [locOf, sessLoc] at hloc
 
 end Verity.SampledTwo.SessionCoins

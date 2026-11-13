@@ -2,30 +2,29 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.SessionAgrees
 public import Proofs.Properties.Verity.SampledTwo.SessionFits
-public import Proofs.Properties.Verity.SampledTwo.CoinStages
+public import Proofs.Properties.Verity.SampledTwo.CoinMap
 
 /-!
 # The coin map's release at the second stage's sessions
 
 The coin map reads the device's release for a run's round through a locator (`CoinMap.Locate`, `CoinMap.dev`). The
-two-stage audit's locator for the stages (`CoinMap.stageLocate`) puts the stages' families' fresh coins on the first
-and second stages and nothing else. The run's locator (`runLocate`) adds the second stage's sessions: an opening goes
-where the session-round locator puts it (`locOf`), a fresh coin where the stages' locator puts it, up to the second
-stage's last round. At it:
+run's locator (`runLocate`) is a locator for the stages, `Ls`, with the second stage's sessions added: an opening goes
+where the session-round locator puts it (`locOf`), a fresh coin where `Ls` puts it, up to the second stage's last
+round. The two-stage audit's `Ls` is the stages' locator, which puts the stages' families' fresh coins on the first
+and second stages and nothing else. At `runLocate`, for any `Ls`:
 
 * `locates_run`: it agrees with the session-round locator at every session's round (`LocatesSessions`);
 * `devLocal_of`: at any locator that does, the coin map's release for a session's round is a function of the releases
   the session-round locator puts there (`DevLocal`), the elements they carry and their bits in order
   (`usedOf_located`, `devBits_located`);
 * `devElems_of`: the coin map's agreement (`CoinMap.ElemAgrees`) gives the sessions' (`DevElems`), where the releases
-  on each session's round fit in one coin (`SessionsFit`): below 65536 elements the coin map's count of the releases
-  that fit (`CoinMap.fitOf`) is the count of all of them (`fitOf_eq_usedOf`);
-* `sessionsFit_of`: on a play the form accepts, the session-round locator puts at most one release on each round
-  (`located_one_accepted`), and every opening the check read is of at most one coin's elements (`readFits`), so
-  `SessionsFit` holds: the check bounds an opening, not the device's game.
+  on each session's round fit in one coin (`SessionsFit`, which `sessionsFit_of` proves at the form's acceptance):
+  below 65536 elements the coin map's count of the releases that fit (`CoinMap.fitOf`) is the count of all of them
+  (`fitOf_eq_usedOf`).
 
-At the stages' rounds the run's locator puts what the stages' locator puts, so `CoinMap.devFirst_stage` and
-`CoinMap.devSecond_stage` read the same release there (`dev_congr`).
+At a stage's round the run's locator puts what `Ls` puts, where `Ls` puts no opening on a round
+(`locAt_run_stage`; the session-round locator puts a release only past the statements' round, `locOf_past`), so the
+coin map reads the same release there at either (`dev_congr`, `dev_run_stage`).
 -/
 
 @[expose] public section
@@ -34,13 +33,13 @@ namespace Verity.SampledTwo.SessionCoins
 
 /-! ## The run's locator -/
 
-/-- **The run's locator** at the first stage's family `ℓ₁`, the second stage's `ℓ₂` and the sessions' tables `tab`:
-an opening on the session's round the session-round locator gives, a fresh coin on the stage the stages' locator gives
-where that is at most the second stage's last, nothing else. -/
-def runLocate (A : Live₂) (ℓ₁ ℓ₂ : String) (tab : ℕ → String) : CoinMap.Locate := fun pre fr b =>
+/-- **The run's locator** at the stages' locator `Ls` and the sessions' tables `tab`: an opening on the session's
+round the session-round locator gives, any other frame on the stage `Ls` gives where that is at most the second
+stage's last, nothing else. -/
+def runLocate (A : Live₂) (Ls : CoinMap.Locate) (tab : ℕ → String) : CoinMap.Locate := fun pre fr b =>
   match fr with
   | .opening _ _ _ => locOf A tab pre fr
-  | _ => (CoinMap.stageLocate ℓ₁ ℓ₂ pre fr b).filter fun n => decide (n ≤ A.h.stage)
+  | _ => (Ls pre fr b).filter fun n => decide (n ≤ A.h.stage)
 
 theorem stage_lt_of_sessions {A : Live₂} {n : ℕ} (hg : groupOf A n = .sessions) : A.h.stage + 1 < n := by
   unfold groupOf at hg
@@ -48,8 +47,8 @@ theorem stage_lt_of_sessions {A : Live₂} {n : ℕ} (hg : groupOf A n = .sessio
   omega
 
 /-- **The run's locator agrees with the session-round locator at the sessions' rounds.** -/
-theorem locates_run (A : Live₂) (ℓ₁ ℓ₂ : String) (tab : ℕ → String) :
-    LocatesSessions A tab (CoinMap.locAt (runLocate A ℓ₁ ℓ₂ tab)) := by
+theorem locates_run (A : Live₂) (Ls : CoinMap.Locate) (tab : ℕ → String) :
+    LocatesSessions A tab (CoinMap.locAt (runLocate A Ls tab)) := by
   intro pre fr b n hg
   have hn := stage_lt_of_sessions hg
   cases fr with
@@ -61,6 +60,46 @@ theorem locates_run (A : Live₂) (ℓ₁ ℓ₂ : String) (tab : ℕ → String
     obtain ⟨-, hle⟩ := Option.filter_eq_some_iff.1 h
     have := of_decide_eq_true hle
     omega
+
+/-- The session-round locator puts a release only on a round past the statements'. -/
+theorem locOf_past {A : Live₂} {tab : ℕ → String} {pre : List Release} {fr : Verity.Frame} {n : ℕ}
+    (h : locOf A tab pre fr = some n) : A.h.stage + 1 < n := by
+  cases fr with
+  | fresh _ => simp [locOf, sessLoc] at h
+  | hello _ => simp [locOf, sessLoc] at h
+  | opening i s c =>
+    simp only [locOf, sessLoc] at h
+    obtain ⟨j, -, hif⟩ := Option.bind_eq_some_iff.1 h
+    have hc : (treesOpened pre).idxOf i < A.h.ms.length ∧ j < SpotFlock.k₀ A.h ((treesOpened pre).idxOf i) := by
+      by_contra hc
+      rw [if_neg hc] at hif
+      cases hif
+    rw [if_pos hc] at hif
+    have hle := SpotFlock.stage_le_off A.h ((treesOpened pre).idxOf i)
+    have hn := Option.some.inj hif
+    omega
+
+/-- **At a stage's round the run's locator puts what the stages' locator puts**, where the stages' locator puts no
+opening on a round: at a round `n` at most the second stage's last. -/
+theorem locAt_run_stage (A : Live₂) (Ls : CoinMap.Locate) (tab : ℕ → String)
+    (hLs : ∀ pre i s c b, Ls pre (.opening i s c) b = none) {n : ℕ} (hn : n ≤ A.h.stage) (pre : List Release)
+    (fr : Verity.Frame) (b : ByteArray) :
+    CoinMap.locAt (runLocate A Ls tab) pre fr b = some n ↔ CoinMap.locAt Ls pre fr b = some n := by
+  cases fr with
+  | hello sp => exact Iff.rfl
+  | opening i s c =>
+    constructor
+    · intro h
+      have := locOf_past (show locOf A tab pre (.opening i s c) = some n from h)
+      omega
+    · intro h
+      have h' : Ls pre (.opening i s c) b = some n := h
+      rw [hLs] at h'
+      cases h'
+  | fresh l =>
+    show (Ls pre (.fresh l) b).filter (fun n => decide (n ≤ A.h.stage)) = some n ↔ Ls pre (.fresh l) b = some n
+    rw [Option.filter_eq_some_iff]
+    exact ⟨fun h => h.1, fun h => ⟨h, decide_eq_true hn⟩⟩
 
 /-! ## The release a locator reads, from the releases it puts on the round -/
 
@@ -133,6 +172,13 @@ theorem dev_congr {L L' : CoinMap.Locate} {n : ℕ}
   unfold CoinMap.dev
   rw [hu, hb]
 
+/-- **The coin map's release at a stage's round is the same at the run's locator as at the stages'**, where the
+stages' locator puts no opening on a round. -/
+theorem dev_run_stage (A : Live₂) (Ls : CoinMap.Locate) (tab : ℕ → String)
+    (hLs : ∀ pre i s c b, Ls pre (.opening i s c) b = none) {n : ℕ} (hn : n ≤ A.h.stage) (log : List Release) :
+    CoinMap.dev (runLocate A Ls tab) log n = CoinMap.dev Ls log n :=
+  dev_congr (fun pre fr b => locAt_run_stage A Ls tab hLs hn pre fr b) log
+
 /-- The session-round locator puts only openings on a round, and the coin map gives an opening its count of coins. -/
 theorem widthOf_locOf {A : Live₂} {tab : ℕ → String} {n : ℕ} :
     ∀ pre fr, locOf A tab pre fr = some n → CoinMap.widthOf fr = widthOf fr
@@ -176,12 +222,6 @@ theorem fitOf_eq_usedOf (L : CoinMap.Locate) (n : ℕ) :
       rw [if_pos ⟨hl, by omega⟩, if_pos hl]
     · rw [if_neg (fun h' => hl h'.1), if_neg hl]
 
-/-- **The releases on each session's round fit in one coin**: on an accepted play whose log is the device's, the
-releases the session-round locator puts on a session's round carry at most 65536 elements. -/
-def SessionsFit (A : Live₂) (tab : ℕ → String) (Acc Good : Exchange → Prop) : Prop :=
-  ∀ o, Acc o → Good o → ∀ n, groupOf A n = .sessions →
-    ((located (locOf A tab) n [] o.log).map fun y => widthOf y.1).sum ≤ 65536
-
 /-- **`DevElems` from the coin map's agreement**: at a locator that agrees with the session-round locator at the
 sessions' rounds, reading every round the run's verifier reads, where the releases on each session's round fit in one
 coin. -/
@@ -197,39 +237,5 @@ theorem devElems_of (A : Live₂) (x : Claims.Msg) (tab : ℕ → String) (L : C
     exact hfit o hA hG i.val hg
   rw [fitOf_eq_usedOf L i.val [] o.log hle, hu]
   exact he
-
-/-- **`SessionsFit` at the form's acceptance**: the session-round locator puts at most one release of the log the
-check read on each round (`located_one_accepted`), the play's log puts releases of the same frames there
-(`located_widths`), and the read's one is an opening of at most one coin's elements (`readFits`). -/
-theorem sessionsFit_of (A : Live₂) (C : CaseOf) (tab : ℕ → String) (Good : Exchange → Prop) (hsz : HeldSize)
-    (hlog : InteriorLogged C Good) : SessionsFit A tab (FormAccepts C) Good := by
-  intro o hA hG n hg
-  obtain ⟨l, hl⟩ := interiorReads C hsz o hA
-  obtain ⟨q, l', hlog', hq, hR⟩ := hlog o hA hG l hl
-  have hF : List.Forall₂ (fun r r' => r.frame = r'.frame) l l' :=
-    (List.forall₂_map_left_iff.1 hR).imp fun _ _ h => (of_ofV2 h).1
-  have hS : Same [] q := by simpa using same_append (pre := []) hq
-  have e : ((located (locOf A tab) n [] o.log).map fun y => widthOf y.1).sum =
-      ((located (locOf A tab) n [] l).map fun y => widthOf y.1).sum := by
-    unfold locOf
-    rw [hlog', located_append, located_none q (fun y hy => (hq y hy).1) []]
-    simp only [List.nil_append]
-    exact located_widths hF hS
-  rw [e]
-  have h1 := located_one_accepted A C tab hsz o hA l hl n
-  cases hx : located (locOf A tab) n [] l with
-  | nil => simp
-  | cons x t =>
-    cases t with
-    | cons y t =>
-      rw [hx] at h1
-      simp at h1
-    | nil =>
-      obtain ⟨a, r, b, he, hloc, rfl⟩ := mem_located (show x ∈ located (locOf A tab) n [] l by rw [hx]; simp)
-      simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
-      cases hfr : r.frame with
-      | opening i s c => exact readFits C hsz o hA l hl r (by rw [he]; simp) i s c hfr
-      | fresh _ => rw [hfr] at hloc; simp [locOf, sessLoc] at hloc
-      | hello _ => rw [hfr] at hloc; simp [locOf, sessLoc] at hloc
 
 end Verity.SampledTwo.SessionCoins
