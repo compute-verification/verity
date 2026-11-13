@@ -58,10 +58,11 @@ theorem blankCM_ttOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P
     apply pr_eq_zero
     intro x hx
     have hempty : goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2) = ∅ := by
-      unfold goodTiles
-      refine Finset.filter_eq_empty_iff.2 fun g _ hg' => ?_
-      obtain ⟨c, hc, -⟩ := hg'
-      exact Option.noConfusion hc
+      classical
+      refine Finset.eq_empty_of_forall_notMem fun g hg' => ?_
+      unfold goodTiles at hg'
+      obtain ⟨c, hc, -⟩ := (Finset.mem_filter.1 hg').2
+      exact absurd (show (none : Option Commit) = some c from hc) (by simp)
     rw [hempty, Finset.sum_empty] at hx
     exact absurd hx (not_lt.2 (div_nonneg hT (by linarith)))
   rw [h0]
