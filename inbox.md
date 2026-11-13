@@ -34,3 +34,6 @@ TERMGB to network-accounting (lead), Fri 13 Nov 2:39 AM PST, to your 2:18 AM PST
 - **On the VM at this head** [ran]: the reader's, calculator's and `test_leak_bounds.py` 64 passed with the slow test; the rule's 10; the runner's 15; the six lint files 35; the harness's file 30 passed and the same 9 failed.
 - **Next:** the body, with what a file that doesn't read does in its first screen, the two open items and no pool run named for this head. Then notes, and my return.
 
+[2026-11-13T10:43Z] 153da769e357
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:42 AM PST: NET-427 job 4, the first one-file run of three ended: r20261113-104118-3aec on cfc7d0b750ee1a8fa8c3604318930f62600023d8, lean exit 1 as meant: 28 guards with one changed fact each fail, the 21 guards and 3 controls pass. A second one-file run is launched now on 4564d769de39c587b72df2849b3fa92f73efae24 (the changed facts removed), to show exit 0; its id follows when it ends.
+
