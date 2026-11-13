@@ -157529,3 +157529,82 @@ Pushed at 19:05Z, a fast-forward `927258036e8..462ef981d91`, nothing forced [run
 - Still out at the head: JoinedForm `r20261113-182607-da8b` (running, cpu-3); Undecodable and CopyOfOne, a copy each on cpu-3 and cpu-8, waiting in the check lines since 18:26Z and 18:56Z. Their three files did not change since they passed at `2020fb28815`, and nothing they import that changed fails to build; the carry line still waits on them, as ordered.
 - Correction to 18:28Z: with my side taken in the hunks, `JoinsAt.lean` differs from my head's by eight docstring lines, not seven.
 - STOP RULE: not hit. NEEDS: none.
+
+## FRAME, Fri 13 Nov 19:22Z: WAY (b) ON #9713 IS SIZED AND NOT WRITTEN: 109 declarations (about 1,250 lines) leave five files for five new modules under `Flock/Claims`, names kept, so `OwnReads.lean` changes two import lines; IT IS MORE THAN A MOVE IN TWO PLACES AND I STOP FOR YOUR WORD: `canon_inj` itself stands on 16 lemmas of PoUW's public `LiveSalt/Canon.lean`, and the lock's `roots` loses the line #9713 added; `ReadsCheck.lean` is not at #9713's head
+
+**In plain words.** `OwnReads.lean` uses seven lemmas of the challenger's private files. I followed what those seven stand on. It is not two lemmas and a base in one place: it is most of three private files, one section of a fourth, and sixteen general lemmas that today sit in a public file of PoUW's. All of it is facts about Flock's canonical text, so all of it can go under `Flock/Claims` with every name kept, and then nothing but import lines changes anywhere else. Two things are not a plain move, so I have written nothing: the sixteen lemmas of PoUW's file either move too or Flock's proofs import PoUW's file, and one `roots` line of the proofs' lock goes. No listed statement's text changes and no `reads` record moves.
+
+### 1. What moves: 109 declarations of five files
+
+[run: `public_boundary.py` at `8637beb2fe6af5efc7f47ef4daabfd971467aaf8`] "2 edges, 2 new": `OwnReads.lean:9 -> Properties/Challenger/CanonLine.lean` and `OwnReads.lean:10 -> Properties/Challenger/CanonWf.lean`. [read] `OwnReads.lean` names seven declarations of them, each by its full name: `CanonLine.canon_inj`, `CanonLine.field?_equiv`, `CanonLine.field?_obj`, `CanonLine.field?_of_not_obj`, `CanonRead.sortedKeys_of_wf`, `CanonRead.form_obj`, `CanonRead.equiv_str`.
+
+| File (under `security/Proofs/Properties/`) | Public today | Declarations | Move | Stay | What stays |
+| --- | --- | --- | --- | --- | --- |
+| `Challenger/CanonLine.lean` | no | 35 | 28 (lines 36 to 385: `unescLow_lt` to `field?_equiv`) | 7 | `equiv_num`, `jsonStrIs_equiv`, `int?_equiv`, `nat?_equiv`, `event_ok`, `event_equiv`, `event_getD`: the release log's reader, which reads `Spot.Challenger.event` |
+| `Challenger/CanonRead.lean` | no | 65 | 49 | 16 | `toList_lit`, `sortedKeys_null`, `getD_obj`, `getD_of_not_obj`, `getD_lookup`, `getD_equiv`, `sorted_getD`, `equiv_bool`, `unsigned_obj`, `filter_keys`, `distinct_of_keys`, `lookup_none`, `get?_ofList`, `lookup_filter`, `getD_unsigned`, `sorted_unsigned` |
+| `Challenger/CanonWf.lean` (a file #9713 added) | no | 1 | 1 (`sortedKeys_of_wf`) | 0 | the file goes |
+| `Composition.lean`, its section `Esc` (lines 353 to 544) | no | 17 of the file's 51 | 15 (`esc` to `unesc_esc`) | 2 | `escs_inj`, `canonStr_split`, which only `bindCollision` reads, and the file's other 34 |
+| `Pouw/LiveSalt/Canon.lean` | **yes** (`pouw`) | 37 | 16 | 21 | the coins' binding: the three keys' sort, `canon_str`, `canon_nat`, the families, `binding_inj` |
+
+- [read] The 16 of PoUW's file are `canon_arr`, `canon_obj`, its whole section "Escaped strings" (11: `esc`, `foldl_esc`, `canonStr_toList`, `nib`, `unhexL`, `hex4_ok`, `unesc2`, `unesc`, `unesc_esc`, `escs_inj`, `canonStr_split`) and its whole section "Numbers" (3: `digits_split`, `toString_toList`, `nat_split`). None names a coin, a layout or a salt: they say how `Flock.canonUtf8` prints a list, an object, a string and a numeral.
+- [read] **Your 08:36Z question, answered: `CanonLine.lean`'s imports of `Composition` and `LiveSalt/Canon` are not for other lemmas.** `canon_inj` is proved by turning `Flock.canon`'s text into `Flock.canonUtf8`'s (`utf8_canon`), and that reads `Composition.Esc.{esc, unesc, unesc2, unescLow, unesc_esc, u_toList, canonStr_toList}` and `LiveSalt.Canon.{esc, canon_arr, canon_obj, canonStr_toList}` on 27 lines of its proofs. Then it ends in `CanonRead.canon_inj`, whose file opens `LiveSalt.Canon (canon_arr canon_obj canonStr_split canonStr_toList nat_split)`. So nothing of either import stays behind for free.
+- [read] `lookup_toList` (of `CanonRead.lean`, twelve lines, standing on nothing of the file) is one of the 49 for `ReadsCheck.lean` alone; the seven lemmas do not need it (section 4).
+- [read] **The file cannot leave the path instead** (your 08:36Z question): at this head `wiring_of_wiringOk` (`AddressesGive.lean:66`) reads `ownReads_of`, and `AddressesGive.lean:91` and `AddressesHeld.lean:47` read `wiring_of_wiringOk`.
+- [read] Also read, and staying where they are: `Proofs/Core/QSort.lean` (19 of its 21 declarations; `Core` goes out to any public file) and `Accounting/Remote/Sort.lean` (all 7; section 4).
+
+### 2. To which modules
+
+Five new files under `security/Proofs/Flock/Claims/`, public by the `flock` group's own glob (`security/*/Flock`), one for each source so that each is a cut and a paste:
+
+| New module | Holds | Imports (of this repository) |
+| --- | --- | --- |
+| `Proofs.Flock.Claims.CanonText` | the 16 of `LiveSalt/Canon.lean` | `Flock.Canon`, `Base.Canon` |
+| `Proofs.Flock.Claims.CanonEsc` | the 15 of `Composition.lean`'s `Esc` | `CanonText` |
+| `Proofs.Flock.Claims.CanonRead` | the 49 of `Challenger/CanonRead.lean` | `CanonText`, `Proofs.Flock.Claims.JsonEq`, `Proofs.Core.QSort`, `Proofs.Properties.Accounting.Remote.Sort`, `Spot.Json` |
+| `Proofs.Flock.Claims.CanonWf` | `sortedKeys_of_wf` | the new `CanonRead`, `Proofs.Flock.Claims.JsonNorm` |
+| `Proofs.Flock.Claims.CanonLine` | the 28 of `Challenger/CanonLine.lean` | the new `CanonRead`, `CanonEsc`, `Proofs.Flock.Claims.CanonEq` |
+
+- **Every declaration keeps its full name** (`Properties.Challenger.CanonRead.canon_inj`, `Properties.Composition.Esc.esc`, `Properties.Pouw.LiveSalt.Canon.esc`, and so on): each new file opens the namespace its declarations have today. So no file that names one changes, on this line or on any other. Giving them Flock's namespaces is a rename of 109 names in every file that uses one, and I do not propose it here.
+- [read] Nine files of `Flock/Claims` import `Spot.*` today, so `Spot.Json` (where `sortedKeys` and `field?` are) is no new kind of import there.
+
+### 3. Which files import them, and what else changes
+
+- `Flock/SpotFlock/OwnReads.lean`: lines 9 and 10 become `Proofs.Flock.Claims.CanonLine` and `Proofs.Flock.Claims.CanonWf`. Nothing else in the file.
+- The four old files that stay each gain one `public import` of their new counterpart and lose the moved text: `Challenger/CanonRead.lean`, `Challenger/CanonLine.lean`, `Composition.lean`, `Pouw/LiveSalt/Canon.lean`. Their importers then compile as they stand: `Challenger/Window.lean`, `Challenger/Commitment.lean`, `Pouw/LiveSalt/Coin.lean`, `Verity/Sampled/{Binding,Lines,SpecTie}.lean`, and on the join `Verity/SampledTwo/{FirstCoins,CutOrder}.lean`.
+- `Verity/Sampled/RecordDraw.lean:5`: `CanonWf`'s new module, since `Challenger/CanonWf.lean` goes.
+- `Flock/Claims.lean` (the aggregator): five lines, as `JsonEq` and `CanonEq` have.
+- `tools/verity/check/public_boundary.toml`: no change. `tests/public_boundary_allowed.txt`: no line added.
+- [run: the lint's own `sites`] The five source files hold no retired term at this head, so the new files bring no entry to `repo_retired_terms.json`.
+- [run: `git diff` of the eleven files] The carried join `daa91ec75a3e`, the mended join `20936c91d40b`, GATHER's `927258036e83` and rule B's `ee760f0dbc6c` hold these files as #9713's head does, so the change merges into each with no conflict in them. `main` (`4ae17f7eafd7` and today's `f479876a8758`) holds the four old files as #9713 does.
+
+### 4. Where it is more than a move
+
+1. **PoUW's file.** The 16 general lemmas sit in `Pouw/LiveSalt/Canon.lean`, public, PoUW's, on `main`. Two ways, and the first is what I sized above:
+   - **(i) they move** to `Proofs.Flock.Claims.CanonText`, and PoUW's file imports it. Flock's proofs then import nothing of PoUW's. PoUW's proofs import Flock's in ten files already (`Properties/Pouw/LiveSalt.lean`, `Properties/Pouw/PearlPlus/Draw.lean`, eight under `Proofs/Pouw/`), so the direction is not new. It edits a file that is not mine: about 180 of its 404 lines leave it.
+   - **(ii) they stay**, and the new `CanonRead` and `CanonEsc` import `Proofs.Properties.Pouw.LiveSalt.Canon`. The test passes, since that file is public. But then Flock's claims import PoUW's `LiveSalt/Canon.lean`, and through it `Properties.Pouw.LiveSalt` and `Spot.Challenger`: the coupling your 08:36Z ruling named and refused. [run: `grep`] No file under `security/Proofs/Flock` imports `Proofs.Properties.Pouw.*` today but `OwnReads.lean`, through the two private imports.
+   - I would do (i).
+2. **A record other than a `reads` record.** `security/Proofs/lean-audit.json`'s `roots` loses `Proofs.Properties.Challenger.CanonWf`. #9713 itself added that line; with it gone, `roots` is `main`'s again. No other section of the three locks names a moved module or declaration: [run: `grep`] `security/lean-audit.json` and `security/Properties/lean-audit.json` name none of them, and the proofs' lock names the modules in `roots` only (`LiveSalt.Canon`, `Composition`, `CanonLine`, which stay).
+3. **No listed statement's text changes.** What moves is 88 theorems and 21 definitions of the proofs' tree (1,198 lines of declarations by the scan, about 1,250 with their headings), each with its text and its name as it is.
+4. **`Accounting/Remote/Sort.lean`.** The new `CanonRead` imports it, as the private one does. It is public (the boundary file lists it by name), 87 lines, "`Array.qsort` permutes its input", and imports Batteries and Lean's core only; ten files of Nci, Spot, PoUW and Accounting import it. So a file of `Flock/Claims` would import a file under `Properties/Accounting` for the first time, though it holds nothing of accounting. Moving it beside `Core/QSort.lean` changes ten import lines in files that are not mine. I would leave it and import it; say if you want it moved.
+5. **`ReadsCheck.lean`'s edge does not go with #9713, and I cannot cut it there.** [run: `git ls-tree`] `security/Proofs/Flock/SpotFlock/ReadsCheck.lean` is not at #9713's head. It is on the carried join, the mended join, GATHER's line and rule B's. Its line 3 imports `Proofs.Properties.Challenger.CanonRead`, and it opens five names of it: `sortedKeys_arr`, `sortedKeys_obj`, `sorted_toList`, `get?_lookup`, `lookup_toList`. All five are among the 49. So once a line holds both this change and that file, the edge is cut by one line there: `public import Proofs.Flock.Claims.CanonRead` in place of line 3. That line is the join's, not #9713's.
+6. **The unread count of `Proofs/Flock`, which only the build tells.** Every declaration of a module under `Proofs.Properties` is read by rule (`unread.py`'s `SEEDED_PREFIXES`); under `Proofs.Flock` it is read only if something read reaches it. `canon_inj` and `sortedKeys_of_wf` are read from `Verity/Sampled/SpecTie.lean`. `field?_equiv`, `field?_obj` and `field?_of_not_obj` are read by `OwnReads.lean` alone, so they count as unread if `ownReads_of` does. #9713's entry in `unread-caps.json` is 265 modules and 2,046 declarations for `Proofs/Flock`; if the count rises I set the entry to the check's count, as the skill says, and name the declarations.
+
+### How the lists were made
+
+- [mine] A text scan (`closure.py`, in the store): each file cut at its top-level declarations, each name a declaration mentions resolved to its own file first and then to the files it imports, from the seven names outward; then read by hand where two files give one name (`esc`, `unesc`, `canonStr_toList` are in both `Composition.Esc` and `LiveSalt.Canon`). It is not Lean's answer. A declaration the scan missed shows at the build as an unknown name in a new file, and moves too; one it took in error only moves needlessly. `utf8_nil`, a `simp` lemma the scan did not see used, is counted among the 28 by hand. The final lists come with the build.
+- [run] `r20261113-164900-8a62`'s facts hold the modules' import graph and no per-declaration reads, so they could not replace the scan.
+
+### Runs out, at 19:22Z
+
+| Run | Node | What | State |
+| --- | --- | --- | --- |
+| `r20261113-185123-71a9` | vy-nebius-cpu-3 | the eight suites at #9555's head `38e1ad9938f6` | running (it had a slot by 19:12Z, after waiting from 18:51Z); its verdict in one entry |
+| `r20261113-190254-b325` | vy-nebius-cpu-12 | job 12, MESSAGES's word line | running |
+| `r20261113-164151-1e2c` | vy-nebius-cpu-5 | #9555's records and suites | ended by its slot at 19:12Z, as you expected ("cancelled", "STAGE_TIMEOUT") |
+
+**Not established.**
+- That the 109 compile where I put them, and that no 110th is needed: nothing is written.
+- That `test_no_public_file_needs_one_the_export_does_not_copy` passes after it. [run: `public_boundary.py --public` at #9713's head] Each file the five new modules would import is in the public set today (`Accounting/Remote/Sort.lean`, `Core/QSort.lean`, `Spot/Json.lean`, `Flock/Claims/{JsonEq,CanonEq,JsonNorm}.lean`, and `Pouw/LiveSalt/Canon.lean` for way (ii)); `Challenger/CanonRead.lean` and `Composition.lean` are not. The check itself I have not run on files that do not exist.
+- The unread count after the move.
+
+NEEDS: your word on two points before I write a line. (1) PoUW's 16 lemmas: (i) move them, or (ii) leave them and import PoUW's file. (2) The `roots` line going, which is a record other than a `reads` record. If (i) and yes: five new files, six files edited, one deleted, then the build and one records run on a node I name, the quick suites and the ready line.
