@@ -58,8 +58,8 @@ theorem expect_optG_neg {γ : Type} (F : γ → ℝ) (c : Prop) (g : c → Game 
   | .isTrue h => absurd h hn
   | .isFalse _ => rfl
 
-theorem periodGood_true {β : ℕ → Type} (G : (i : ℕ) → Game (β i)) (i T : ℕ) (s : Strategy (periodG G i T)) :
-    PeriodGood G (fun _ _ => True) i T s :=
+theorem periodGood_true {β : ℕ → Type} (G : (i : ℕ) → Game (β i)) (i T : ℕ) (s : Strategy (monitoringPeriodG G i T)) :
+    MonitoringPeriodGood G (fun _ _ => True) i T s :=
   periodGood_of_plays G _ T i s fun _ _ _ => trivial
 
 end FlockSoundness.Game
@@ -531,7 +531,7 @@ theorem carry_le (I : Finset ℕ)
 theorem integrity_on (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     (hqt : ∀ t ∈ I, q ≤ ((S.W t).kd : ℝ) / (S.W t).n)
     (hA3 : ∀ t ∈ I, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src)
-    (hs : PeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s)
+    (hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s)
     (hA2 : ∀ x, Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
       (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M)
       (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
@@ -621,7 +621,7 @@ open scoped ENNReal
 theorem IntegrityHorizonCarried : Flock.Guarantees.IntegrityHorizonCarried := by
   intro S q δ hq hδ hqt hA3 s hT hL hA2
   classical
-  have hs : PeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
+  have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
     periodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   set M : ℕ := ⌈Real.log (1 / δ) / q⌉₊
   set xq : ℝ≥0∞ := ENNReal.ofReal (1 - q)
@@ -667,7 +667,7 @@ theorem IntegrityHorizonCarried : Flock.Guarantees.IntegrityHorizonCarried := by
 /-- **The integrity audit of one server-time block, with carried state.** -/
 theorem IntegrityBlockCarried : Flock.Guarantees.IntegrityBlockCarried := by
   intro S b q δ hq hδ hqt hA3 s hT hL hA2
-  have hs : PeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
+  have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
     periodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   refine (value_mono (fun l hl => ⟨hl.1, Nat.ceil_le.2 hl.2⟩) _).trans
     ((S.integrity_on s (S.sessions b) hq hqt hA3 hs hA2 ⌈Real.log (1 / δ) / q⌉₊).trans ?_)
