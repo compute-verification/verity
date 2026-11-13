@@ -37,6 +37,11 @@ files = ["benchmarks/circuit_properties/**", "benchmarks/inference_only/**", "ve
          "verity/protocols/inference_only/slowdown/**"]
 words = { "rho.theorem" = "slowdown.theorem", "rho.instances" = "slowdown.instances", "rho.min_cut" = "slowdown.min_cut", "rho.lean" = "slowdown.lean", "rho.params" = "slowdown.params", "rho.classes" = "slowdown.classes" }
 
+# where "rho's" opens a sentence, the calculator's name does too
+[[words_in]]
+files = ["benchmarks/spot_figures/figure1.py", "benchmarks/spot_figures/tests/test_figure1.py"]
+words = { "\"\"\"rho's" = "\"\"\"The slowdown calculator's", "rho's references are" = "The slowdown calculator's references are" }
+
 [[words_in]]
 files = ["benchmarks/**", "verity/protocols/inference_only/nci/**", "verity/protocols/inference_only/slowdown/**"]
 words = { "rho's" = "the slowdown calculator's", "`rho`'s" = "the slowdown calculator's" }
