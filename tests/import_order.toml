@@ -60,6 +60,16 @@ owner = "memory-accounting"
 reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside `benchmarks/pous`: its difftest generator, which its `lean-audit.json` runs, and `interop.py`, which holds it to the wire's Python reference through `verity_difftest`"
 
 [[distribution]]
+directory = "verity/protocols/accounting/poub/prover"
+owner = "memory-accounting"
+reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never imports: loaded by path under its own names (`prover`, `device`, `kv`, `paged`) by the vLLM adapter and by its harness in `benchmarks/`"
+
+[[distribution]]
+directory = "verity/protocols/accounting/pous/prover/p2"
+owner = "memory-accounting"
+reason = "PoUS's P2 prover, which runs on a GPU through torch, which `verity` never imports: loaded by path as the package `p2_store` by the vLLM adapter and by its harness in `benchmarks/`"
+
+[[distribution]]
 directory = "verity/protocols/compose/device/live_challenger"
 owner = "proofs"
 
@@ -447,6 +457,12 @@ reaches = [
 ]
 loaded_by = [
     "verity/commitments/tests/test_block_check.py",
+    "verity/protocols/accounting/poub/prover/codec_tensor/reader.py",
+    "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py",
+    "verity/protocols/accounting/poub/prover/remote_session/device.py",
+    "verity/protocols/accounting/poub/prover/remote_session/prover.py",
+    "verity/protocols/accounting/poub/prover/word_codec/kv.py",
+    "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py",
 ]
 
 [[place]]
@@ -533,6 +549,11 @@ reaches = [
     "verity/periods",
     "verity/protocols/reporting.py",
     "verity/runtime",
+]
+loaded_by = [
+    "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
+    "verity/protocols/accounting/pous/prover/p2/p2_store/load.py",
+    "verity/protocols/accounting/pous/prover/p2/p2_store/store.py",
 ]
 
 [[place]]

@@ -11,10 +11,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # imports); test_sketch_receipt and test_redteam_impl the GEMM's and attention's blocks under the remote bandwidth
 # driver's receipts (and its commitments); test_step_plan the step's pass (step.py, which imports word_codec's kv
 # modules) under the driver's block layout.
-inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "benchmarks/word_codec/kv_exhaust.py",
+inputs = ["verity/protocols/accounting/poub/prover/codec_tensor/reader.py", "verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py",
+          "verity/protocols/accounting/poub/prover/codec_tensor/sketching.py", "verity/protocols/accounting/poub/prover/codec_tensor/reader.cu", "verity/protocols/accounting/poub/prover/codec_tensor/sha512.cuh",
+          "verity/protocols/accounting/poub/prover/word_codec/kv.py", "verity/protocols/accounting/poub/prover/word_codec/kv_bench.py", "benchmarks/word_codec/kv_exhaust.py",
           "verity/hardware/record.py",
           "benchmarks/word_codec/kv_twin.py",
-          "benchmarks/word_codec/cuda_lib.py",  # the loader step.py's kernels open through (bench.py, kv_bench.py)
+          "verity/protocols/accounting/poub/prover/word_codec/cuda_lib.py",  # the loader step.py's kernels open through (bench.py, kv_bench.py)
           "verity/__init__.py", "verity/errors.py", 
           "verity/protocols/accounting/poub/verifier",
           "verity/protocols/proofs/spot/verifier/profile.py",  # with verity/circuits, what store.store_salt's audit import reads

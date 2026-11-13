@@ -167,7 +167,7 @@ MODEL_PINS = Path("verity/protocols/accounting/pouw/verifier/lean/check/models.j
 PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.verifier.wipe_party", 47611),
            "challenger_party": ("pous", "verity.protocols.accounting.pous.device.challenger_party", 47610),
            "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_party", 47612)}
-PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
+PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
 which `bw_party --fixture` holds."""
 SESSION_ID = re.compile(r"[0-9a-f]{64}")
