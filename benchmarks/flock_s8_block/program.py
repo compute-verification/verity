@@ -21,7 +21,7 @@ def _settings():
 
 def template():
     from verity.circuits.defs import bind
-    from verity.definitions.ops import s8 as S8
+    from verity.circuits.ops import s8 as S8
 
     s = _settings()
     return bind(S8.S8Matmul, N=s.rows(), **S8.SMOKE_PLAIN | {"K": s.k(), "L": s.k()})
