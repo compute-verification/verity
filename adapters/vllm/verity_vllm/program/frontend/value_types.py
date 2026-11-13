@@ -4,13 +4,15 @@ numerical interpretation belongs to functions."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 import torch
-
 from verity.circuits.refs import Coll, Refs, concat
-from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
+from verity.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.types import Tuple as TupleT
+
 from verity_vllm.program.frontend.errors import FrontendError
 
 WIDTH_OF_DTYPE = {torch.bool: 1, torch.uint8: 8, torch.int8: 8, torch.int16: 16, torch.uint16: 16, torch.bfloat16: 16,
@@ -146,3 +148,7 @@ def join_coll(T: Type, flats: Sequence[Coll]) -> Coll:
     if next(it, None) is not None:
         raise FrontendError("E_SHAPE", f"more tensor chunks than {T!r} has leaves", "join")
     return Coll(T, refs)
+
+
+__all__ = ["WIDTH_OF_DTYPE", "CARRIER", "Alloc", "width_of", "type_of_tensor", "type_of", "is_tensor_type", "shape_of",
+           "flat_types", "tensors_of", "unflatten", "split_coll", "join_coll"]

@@ -37,7 +37,6 @@ REFERENCE = {"tag": "v1-reference", "release": "r19-int-21", "commit": "89af272a
 SNAPSHOT_NAME = "r19-reference-v1"
 PROGRAM_RE = re.compile(r"(^|/)build(_request[^/]*|/rank\d+/build_request[^/]*)/instances\.json\.gz$")
 FOLD_RE = re.compile(r"^match/(program\.json|instances\.jsonl|accesses\.jsonl\.gz)$|^commit/binding_map_p\d+\.json$")
-LIVE_ROOT = "/workspace/cp/sweep"
 
 
 def _toml_str(s: str) -> str:
@@ -230,7 +229,7 @@ def main(argv=None) -> int:
     ap.add_argument("--append", action="store_true", help="add the index's rows to fixtures.toml and files.toml (existing text untouched), lift expected/ for them")
     ap.add_argument("--roles", default="record,manifest,program", help="roles to index (default: record,manifest,program; fold adds the multi-GB pins)")
     a = ap.parse_args(argv)
-    index = json.load(open(a.index))
+    index = resolver.read_json(a.index)
     oracle = Path(a.oracle)
     if a.append:
         dup = sorted(set(index["rows"]) & set(existing_rows()))
