@@ -276,7 +276,7 @@ theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} 
         publicFile := hf.publicFile
         count := hf.count
         tables := hf.tables
-        partition := rfl
+        partition := .inl rfl
         program := hf.program
         work := by rfl
         stratified := hf.stratified
