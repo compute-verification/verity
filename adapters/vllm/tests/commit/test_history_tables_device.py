@@ -73,10 +73,10 @@ def test_it_takes_salts_given_as_history_table_does():
                        ([a.salts[0]] * 3, "never reused"), (a.salts, "never reused")]:
         with pytest.raises(ValueError, match=why):
             a.append(rows, salts)
-    drawn = _built(rows)
+    sampled = _built(rows)
     with pytest.raises(ValueError, match="never reused"):
-        drawn.append(rows[:1], drawn.salts[:1])
-    assert len(a.rows) == len(drawn.rows) == 3
+        sampled.append(rows[:1], sampled.salts[:1])
+    assert len(a.rows) == len(sampled.rows) == 3
 
 
 def test_it_refuses_what_history_table_refuses():
