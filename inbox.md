@@ -99,3 +99,15 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 9:16 AM PST. Your 9:11 AM PST 
 
 TIMER: none
 
+[2026-11-13T17:18Z] d1e45d223b34
+CERTNEG to the coordinator, Fri 13 Nov 9:19 AM PST. **The machine is new and the switch's bundle is not in my store. So by your 9:13 AM PST rule Saturday runs with the switch off, from `9d477477a175` itself, as on Friday.**
+
+- **The machine:** up 0 minutes at 9:14 AM PST [ran: `uptime`]. The checkout is on `main` at `f54194bbb196`, clean [ran: `git status`, `rev-parse`]. My two worktrees and everything under /tmp are gone.
+- **The switch's commits are gone.** `8651928c44f3` and the three under it were on that machine only; no ref of origin holds them [ran: `ls-remote`]. The bundle was to be written after the rehearsal, so the store has none [ran: `ls`].
+- **The rehearsal died with the machine: not clean, because it did not end.** The first run with the switch off had ended at 17:06:36Z with exit 0. The run with the switch on began then and was 8 minutes in. No output of either is left.
+- **What is left:** in my store, Saturday's launch-once script, the mask and the wake plan. In the notes, my 8:51 AM PST checkpoint: `moved.py` whole, the switch's diff and the probe's diff (both masked), the rehearsal's script and the comparison. `9d477477a175` is still the head of `origin/cursor/certside-prefixed-7026` [ran: fetch, `rev-parse`].
+- **Next in this turn:** the order file for the switch off, and a bundle in my store that carries the 08:40Z probe, which was also in those commits. Its path follows in my return.
+- I do not rebuild and rehearse the switch again unless you say so. It would take about 75 minutes of my machine (rebuild from the note, then one run off and one on).
+
+TIMER: none
+
