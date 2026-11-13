@@ -514,3 +514,20 @@ def test_an_attention_rows_stratum_key_reads_its_statics_as_int_reads_them():
         assert key(bn) == f"Attention_v3{{T=20,NH=32,KVH=8,D=64,BN={bn}}}"
     for fam, spec in (("Gemm_v1", "Gemm_v1{K=4,N=8}"), ("Attention_v3", "Attention_v3{T=20,NH=32}"), ("Attention_v3", "Attention_v3{NH=32,BN=16}")):
         assert POP._stratum_spec(fam, spec, RM.spec_statics(spec)) == spec          # no rows of blocks, or a spec that states no T or no BN
+
+
+def test_a_served_list_of_another_length_than_the_record_s_faults_and_the_rule_s_count_over_it_is_not_taken():
+    """Two served tokens, the second the EOS, beside a record that says three were served: the rule finds nothing wrong with the
+    list it is handed and counts three executed steps over it; the arithmetic over the record's length counts four."""
+    def prefix(a_r: int) -> dict:
+        return POP.executed_prefix_of_record("r0", a_r=a_r, lag=1, cap=4, eos_declared=True, served_len_commit=a_r, linked=True, lag_attested=True,
+                                             a_r_source="the Match record", served=[7, EOS], eos_ids=[EOS])
+
+    other = prefix(3)
+    assert other["by_rule"]["problems"] == [] and other["by_rule"]["executed_prefix_len"] == 3
+    assert other["faults"] == ["served list of 2 token(s) != a_r 3 (the Match record): the recurrence would run over another prefix than the record's"]
+    assert (other["n_exec"], other["steps_not_executed"], other["r3_one_mechanism"]) == (4, None, False)
+    assert other["mechanism"] == "not classified: 1 fault(s) -- the class is not applicable to this request"
+    same = prefix(2)
+    assert (same["faults"], same["n_exec"], same["steps_not_executed"], same["r3_one_mechanism"]) == ([], 3, [3, 4], True)
+    assert same["mechanism"] == POP.MECH_RECURRENCE

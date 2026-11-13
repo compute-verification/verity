@@ -3,9 +3,10 @@ an instances document without supplied inputs (`verity_vllm.check.replay.index`,
 and `driver`), a binding map without entries and an entry without an identity or an encoding (`verity_vllm.check.replay.opening`),
 a manifest without a query, aliases or a cross-check's counts, an engine schedule without observed arrive steps and a workload
 request without steps or prompt ids (`verity_vllm.check.replay.linkage`), a population without reasons
-(`verity_vllm.check.replay.replay_codes`), a row's description without statics and a stop rule's block without problems
-(`verity_vllm.check.replay.population`), a step's geometry without a plane row's module.  Each field is given absent, null and
-empty, and the answer is the same for the three; where a document can state the field, the stated answer stands beside them."""
+(`verity_vllm.check.replay.replay_codes`), a row's description without statics, a stop rule's block without problems and an
+executed prefix without its lag (`verity_vllm.check.replay.population`), a step's geometry without a plane row's module.  Each
+field is given absent, null and empty, and the answer is the same for the three; where a document can state the field, the stated
+answer stands beside them."""
 from __future__ import annotations
 
 import copy
@@ -135,6 +136,28 @@ def test_plane_entries_without_an_identity_are_no_committed_plane(left_out):
     assert (fact["result"], fact["compared"], fact["per_layer"]) == (None, 0, {})
 
 
+def test_a_plane_whose_entry_states_no_encoding_is_named_unread_and_its_layer_is_not_compared():
+    """The store knows no dtype for such an entry, so the check reads no words of the plane.  It names the first `ALIAS_NAMED`,
+    as it does of the pairs it reads and finds identical: here every pair, the store's bytes being zeros."""
+    bf16 = {"dtype": "bf16"}
+
+    def check(layers: int, up: Any = ABSENT, down: Any = ABSENT) -> dict:
+        entries = [_entry(up if mem == "up" else down, op_path=f"moe/L{layer}", output_member=mem, element_range=[0, 8])
+                   for layer in range(layers) for mem in ("up", "down")]
+        return POP.moe_plane_alias_check(OP.CommittedStore({"entries": entries}, _committed))
+
+    fact = check(1, up=bf16)
+    assert (fact["result"], fact["compared"], fact["read_errors_n"]) == (None, 0, 1)
+    assert fact["read_errors"] == [{"request_id": "r0", "step": 0, "layer": 0, "plane": "down",
+                                    "why": "unknown dtype '' of (r0, step 0, moe/L0/down)"}]
+    many = check(POP.ALIAS_NAMED + 1)
+    assert many["compared"] == 0 and [e["layer"] for e in many["read_errors"]] == list(range(POP.ALIAS_NAMED))
+    assert {e["plane"] for e in many["read_errors"]} == {"up"}
+    stated = check(POP.ALIAS_NAMED + 1, up=bf16, down=bf16)
+    assert (stated["result"], stated["compared"], stated["identical_n"], stated["read_errors"]) == (False, POP.ALIAS_NAMED + 1, POP.ALIAS_NAMED + 1, [])
+    assert [pair["layer"] for pair in stated["identical"]] == list(range(POP.ALIAS_NAMED))
+
+
 @NO_LIST
 def test_a_binding_map_whose_entries_state_no_rank_is_rank_0s(left_out, monkeypatch):
     class Reached(Exception):
@@ -261,6 +284,18 @@ def test_a_stop_rule_s_block_that_states_no_problems_found_none(left_out):
     assert (record["faults"], record["n_exec"], record["r3_one_mechanism"]) == ([], 2, True)
     assert record["by_rule"]["problems"] == (None if left_out is ABSENT else left_out)
     assert prefix(["the last served token is no declared EOS"])["faults"] == ["Continuation_v1 rule: the last served token is no declared EOS"]
+
+
+@pytest.mark.parametrize("left_out", [ABSENT, None, 0], ids=["absent", "null", "zero"])
+def test_an_executed_prefix_that_states_no_lag_anchors_its_last_phase_under_lag_0(left_out):
+    """A request whose prefix stops a step short of its cap of four, and one whose prefix reaches the cap after three served tokens."""
+    short = POP.phase_anchor(4, _with({"n_exec": 3, "cap": 4, "a_r": 3}, "lag", left_out))
+    assert (short["last_step"], short["anchor"], short["lag_step"]) == (2, "n_exec - 1", None)
+    assert short["why"].startswith("the request stopped at a_r 3 under LAG 0: ") and "is the EOS step (LAG 0: no lag step)" in short["why"]
+    at_cap = POP.phase_anchor(4, _with({"n_exec": 4, "cap": 4, "a_r": 3}, "lag", left_out))
+    assert (at_cap["last_step"], at_cap["anchor"], at_cap["lag_step"], at_cap["why"]) == (3, "cap - 1", None, "the request ran to its cap")
+    stated = POP.phase_anchor(4, {"n_exec": 4, "cap": 4, "a_r": 3, "lag": 1})
+    assert stated["lag_step"] == 3 and stated["why"].endswith("the cap anchors and its last step 3 is the lag step")
 
 
 @NO_DICT
