@@ -20,8 +20,10 @@ stage's last round. At it:
   on each session's round fit in one coin (`SessionsFit`): below 65536 elements the coin map's count of the releases
   that fit (`CoinMap.fitOf`) is the count of all of them (`fitOf_eq_usedOf`);
 * `sessionsFit_of`: on a play the form accepts, the session-round locator puts at most one release on each round
-  (`located_one_accepted`), so `SessionsFit` holds where every opening the device releases is of at most one coin's
-  elements (`OpensFit`).
+  (`located_one_accepted`), so `SessionsFit` holds where every opening the check read is of at most one coin's elements
+  (`ReadFits`). The check gives that bound, not the device: `Spot.Challenger.coinTreesOf` refuses a tree whose block
+  is above `Spot.Challenger.MAX_BLOCK` and an opening of more coins than its tree's block, where the device's game
+  samples a tree of any block up to `Verity.maxTreeCoins` (`Verity.TreeSpecOk`).
 
 At the stages' rounds the run's locator puts what the stages' locator puts, so `CoinMap.devFirst_stage` and
 `CoinMap.devSecond_stage` read the same release there (`dev_congr`).
@@ -99,7 +101,8 @@ theorem dev_located (h : ∀ pre fr b, CoinMap.locAt L pre fr b = some n ↔ loc
     (hw : ∀ pre fr, loc pre fr = some n → CoinMap.widthOf fr = widthOf fr) (log : List Release) :
     CoinMap.dev L log n =
       if ((located loc n [] log).map fun y => widthOf y.1).sum = 0 then none
-      else some fun j => CoinMap.elemOfBits fun b => ((located loc n [] log).flatMap (·.2)).getD (128 * j.val + b) false := by
+      else some fun j => CoinMap.elemOfBits fun b =>
+        ((located loc n [] log).flatMap (·.2)).getD (128 * j.val + b) false := by
   unfold CoinMap.dev
   rw [usedOf_located h hw, devBits_located h]
   rfl
@@ -190,30 +193,24 @@ theorem devElems_of (A : Live₂) (x : Claims.Msg) (tab : ℕ → String) (L : C
   intro o hA hG r hAg i hr hg c hc e he
   have hu := usedOf_located (fun pre fr b => hL pre fr b i.val hg) widthOf_locOf [] o.log
   refine hAg i (hreads _ hr) c hc e ?_
-  rw [fitOf_eq_usedOf L i.val [] o.log (by rw [hu, show CoinMap.usedOf L i.val [] [] = 0 from rfl, Nat.zero_add]; exact hfit o hA hG i.val hg), hu]
+  have hle : CoinMap.usedOf L i.val [] [] + CoinMap.usedOf L i.val [] o.log ≤ 65536 := by
+    rw [hu, show CoinMap.usedOf L i.val [] [] = 0 from rfl, Nat.zero_add]
+    exact hfit o hA hG i.val hg
+  rw [fitOf_eq_usedOf L i.val [] o.log hle, hu]
   exact he
 
-theorem frame_mem {l l' : List Release} (h : List.Forall₂ (fun r r' => r.frame = r'.frame) l l') :
-    ∀ r ∈ l, ∃ r' ∈ l', r.frame = r'.frame := by
-  induction h with
-  | nil => intro r hr; exact absurd hr List.not_mem_nil
-  | cons hab _ ih =>
-    intro r hr
-    rcases List.mem_cons.1 hr with rfl | hr
-    · exact ⟨_, by simp, hab⟩
-    · obtain ⟨r', hr', e⟩ := ih r hr
-      exact ⟨r', List.mem_cons_of_mem _ hr', e⟩
-
-/-- **Every opening the device releases is of at most one coin's elements**: on a play whose log is the device's, an
-opening of `n` coins has `n ≤ 65536`. -/
-def OpensFit (Good : Exchange → Prop) : Prop :=
-  ∀ o, Good o → ∀ r ∈ o.log, ∀ i s n, r.frame = .opening i s n → n ≤ 65536
+/-- **Every opening the check read is of at most one coin's elements**: on a play the form accepts, an opening of `n`
+coins in the log the check read has `n ≤ 65536`. It is stated of the read, at the form's acceptance, since the device's
+game alone bounds an opening only by its tree's block, and a tree's block only by `Verity.maxTreeCoins`. -/
+def ReadFits (C : CaseOf) : Prop :=
+  ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l →
+    ∀ r ∈ l, ∀ i s n, r.frame = .opening i s n → n ≤ 65536
 
 /-- **`SessionsFit` at the form's acceptance**: the session-round locator puts at most one release of the log the
-check read on each round, the play's log puts releases of the same frames there, and each is an opening of at most one
-coin's elements. -/
+check read on each round (`located_one_accepted`), the play's log puts releases of the same frames there
+(`located_widths`), and the read's one is an opening of at most one coin's elements (`ReadFits`). -/
 theorem sessionsFit_of (A : Live₂) (C : CaseOf) (tab : ℕ → String) (Good : Exchange → Prop) (hsz : HeldSize)
-    (hlog : InteriorLogged C Good) (hfit : OpensFit Good) : SessionsFit A tab (FormAccepts C) Good := by
+    (hlog : InteriorLogged C Good) (hfit : ReadFits C) : SessionsFit A tab (FormAccepts C) Good := by
   intro o hA hG n hg
   obtain ⟨l, hl⟩ := interiorReads C hsz o hA
   obtain ⟨q, l', hlog', hq, hR⟩ := hlog o hA hG l hl
@@ -237,13 +234,9 @@ theorem sessionsFit_of (A : Live₂) (C : CaseOf) (tab : ℕ → String) (Good :
       simp at h1
     | nil =>
       obtain ⟨a, r, b, he, hloc, rfl⟩ := mem_located (show x ∈ located (locOf A tab) n [] l by rw [hx]; simp)
-      obtain ⟨r', hr', hrr'⟩ := frame_mem hF r (by rw [he]; simp)
-      have hr'o : r' ∈ o.log := by rw [hlog']; exact List.mem_append_right _ hr'
       simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
       cases hfr : r.frame with
-      | opening i s c =>
-        rw [hfr] at hrr'
-        exact hfit o hG r' hr'o i s c hrr'.symm
+      | opening i s c => exact hfit o hA l hl r (by rw [he]; simp) i s c hfr
       | fresh _ => rw [hfr] at hloc; simp [locOf, sessLoc] at hloc
       | hello _ => rw [hfr] at hloc; simp [locOf, sessLoc] at hloc
 
