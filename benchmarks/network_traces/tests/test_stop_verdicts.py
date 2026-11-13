@@ -1114,12 +1114,16 @@ def run_files() -> dict[str, dict[str, str]]:
     return {"the four": held_files(first, four(first)),
             "a tie refused": held_files(first, tie_but(first, accepted=False)),
             "a tie not complete": held_files(first, tie_but(first, complete=False)),
+            "a tie withheld": held_files(first, tie_but(first, accepted=False, withheld=FORM)),
+            "a tie stopped": held_files(first, tie_but(first, accepted=False, stopped="session")),
             "three verdicts": held_files(first, four(first)[1:]), "another head": held_files(other, four(other)),
             "another execution phase": held_files(second, four(second)), "no record": held_files(first, []),
             "no registration": {"out/the-verdicts.jsonl": jsonl(four(first))}, "nothing": {"out/another.json": "{}"},
             "a record that doesn't read": held_files(first, [{CC.VERDICT: {}}]),
             "the four and no control": held_files(first, four(first), controls=[]),
             "the four and a control accepted": held_files(first, four(first), controls=control_but(accepted=True, codes=[])),
+            "the four and a control withheld": held_files(first, four(first), controls=control_but(withheld=FORM)),
+            "the four and a control stopped": held_files(first, four(first), controls=control_but(stopped="session")),
             "the four and a control refused for another reason": held_files(first, four(first), controls=reason_but("parse")),
             "the four and a control that doesn't read": held_files(first, four(first), controls=[{CC.VERDICT: {}}]),
             "the four and no serve's registration": held_files(first, four(first), served=[]),
@@ -1243,7 +1247,7 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
                 got = SV.of_runs(store, ["old", "new"], superseded).held
                 assert got <= both, (a, b, superseded)
                 seen, lowered, most = seen + 1, lowered + (got < both), max(most, both)
-    assert (seen, most) == (3 * len(kept) ** 2, 2) == (2523, 2) and lowered
+    assert (seen, most) == (3 * len(kept) ** 2, 2) == (3267, 2) and lowered
 
 
 #: run ids in the order of their launch; `RUN` and `TWIN` state one second
@@ -1782,7 +1786,7 @@ def stating(files: dict[str, str], how: str) -> dict[str, str]:
     def restated(record: object) -> object:
         if not CC.reads(record):
             return record
-        verdict = record[CC.VERDICT] | {CC.WITHHELD: None, CC.CODES: []}
+        verdict = {k: v for k, v in record[CC.VERDICT].items() if k != CC.STOPPED} | {CC.WITHHELD: None, CC.CODES: []}
         if how == "stopped" and verdict.get(CC.ACCEPTED) is not True:
             verdict |= {CC.STOPPED: "session"}
         elif how != "nothing" and verdict.get(CC.ACCEPTED) is not True:
@@ -1797,13 +1801,18 @@ def test_withheld_and_codes_move_no_charge(tmp_path):
     """The charge reads neither field. Over each pair of the kinds of run files, with neither, the one, the other
     or both superseded, the verdict records are restated in each way that reads (`stating`): what is held is as it
     was, and so is every line, but for the word of a verdict that is not accepted, "withheld" or "stopped" where
-    it states the word and "refused" where it doesn't. The word ``stopped`` moves none either."""
-    kinds = run_files()
+    it states the word and "refused" where it doesn't. The word ``stopped`` moves none either. The two kinds whose
+    verdict records state a word themselves are left out: a tie refused, restated, is each of them."""
+    kinds = {kind: files for kind, files in run_files().items() if kind not in ("a tie withheld", "a tie stopped")}
     ways = ("nothing", "codes", "withheld", "stopped")
     restated = {how: {kind: stating(files, how) for kind, files in kinds.items()} for how in ways}
     fields = (*CC.SAID, CC.STOPPED)
     seen = 0
     said = dict.fromkeys(ways, 0)
+
+    def worded(why: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(line.replace(WITHHELD, CC.REFUSED).replace(STOPPED, CC.REFUSED) for line in why)
+
     for i, a in enumerate(kinds):
         for j, b in enumerate(kinds):
             for superseded in ([], ["old"], ["new"], ["old", "new"]):
@@ -1812,13 +1821,13 @@ def test_withheld_and_codes_move_no_charge(tmp_path):
                 for how in ways:
                     store = Store(tmp_path / f"{i}-{j}-{how}", {"old": restated[how][a], "new": restated[how][b]})
                     got = SV.of_runs(store, ["old", "new"], superseded)
-                    lines = tuple(line.replace(WITHHELD, CC.REFUSED).replace(STOPPED, CC.REFUSED) for line in got.why)
-                    assert (got.held, lines) == (was.held, was.why), (a, b, superseded, how)
+                    lines = worded(got.why)
+                    assert (got.held, lines) == (was.held, worded(was.why)), (a, b, superseded, how)
                     assert [{k: v for k, v in x.items() if k not in fields} for x in got.verdicts] == [
                         {k: v for k, v in x.items() if k not in fields} for x in was.verdicts]
-                    said[how] += lines != got.why
+                    said[how] += got.why != was.why
                 seen += 1
-    assert seen == 4 * len(kinds) ** 2 == 3364
+    assert seen == 4 * len(kinds) ** 2 == 3844
     assert said["withheld"] == said["stopped"] > 0 == said["nothing"] == said["codes"]
 
 
@@ -1848,7 +1857,7 @@ def test_superseding_a_run_raises_what_is_held_only_on_a_serve_launched_after_it
                     serves = {r[CC.SERVE] for r in handed[1] + handed[5] if CC.reads(r)}
                     assert any(SV.launched_after(s, run) for run in handed[6] for s in serves), (a, b, superseded)
                     raised[serve] += 1
-        assert seen == 3 * len(kinds) ** 2 == 2700
+        assert seen == 3 * len(kinds) ** 2 == 3468
     assert raised[EARLY] == 0 and raised[LATE]
 
 
@@ -1990,7 +1999,7 @@ def test_leaving_a_thing_out_raises_what_is_held_only_where_it_stood_against_one
     kinds = run_files()
     # the things one run's files can be left without: the run, each file and each record, over the kinds
     cases = sum(1 + len(list(less_by_one(files))) for files in kinds.values())
-    assert (len(kinds), cases) == (29, 451)
+    assert (len(kinds), cases) == (33, 519)
     seen, ways, files = left_out(tmp_path, kinds, {name: kinds[name] for name in ("nothing", "the four")})
     assert (seen, ways) == (2 * 3 * cases, set(STANDS)) and files
 
@@ -2000,4 +2009,4 @@ def test_leaving_a_thing_out_of_any_two_runs_raises_what_is_held_only_where_it_s
     """The same over every pair of the kinds of run files, with neither, the one or the other superseded."""
     kinds = run_files()
     seen, ways, files = left_out(tmp_path, kinds, kinds)
-    assert (seen, ways) == (3 * 451 * len(kinds), set(STANDS)) and files
+    assert (seen, ways) == (3 * 519 * len(kinds), set(STANDS)) and files
