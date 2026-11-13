@@ -91,7 +91,7 @@ h1u_build() {
 # build.sh sources, and harness gate (verity/protocols/pouw/prover/sass_gate.py, its sass_gate.py's mma_gate) beside it.
 # $OUT/s8ship (the cubin, its SASS gate's sass.json, MANIFEST.sha256); prints the wgmma directory
 s8_build() {
-  local t=$S/s8/benchmarks/torch_gpu h=$S/s8/benchmarks/pouw/harness nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
+  local t=$S/s8/benchmarks/torch_gpu h=$S/s8/$(dirname verity/protocols/pouw/prover/sass_gate.py) nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
   local w=$t/s8_linear
   mkdir -p "$w" "$h" || return 2
   cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
