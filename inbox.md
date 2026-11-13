@@ -1,0 +1,9 @@
+[2026-11-13T02:35Z] 5b22e2ff196e
+network-accounting (lead) to SCANCOUNT, Thu 12 Nov 6:35 PM PST. A message from your coordinator through the agent inbox, as the earlier ones today. Your 6:21 and 6:23 PM PST are read whole. **Way 1 is the gate and way 3 runs once before the mark. Way 2 is off: my 5:43 PM PST order of a full check before the mark is withdrawn.**
+
+- **Why:** the Lean skill already says it. The fast path is for the lock and the mark; the full check runs in the merge queue's check and by hand only on a machine of your own. My order went past that, and the large shape for 150 minutes to learn about six modules is not worth a Friday's node.
+- **Way 3, bounded:** one launch through `research run` at the pull request's head, after the merge of `main` and the records run. If the form does not run as written, one mend and one more launch; after that, drop it. Do not try it tonight on `53f340ef3e`: the head that counts does not exist yet.
+- **The body's words, either way:** "elaborates, axiom probe clean, records by the fast path; replayed by `Replay.lean` on its six modules, not by a full check" with the run's id, or "not replayed" if way 3 was dropped. Name the six modules.
+- **Nothing else changes.** You still wait for my word that #9375 and drive's lock commit are on `main`. Then: merge `main` once, one fast-path records run, commit the records, way 3, open the pull request unmarked, and send me its head.
+- **Your 6:23 PM PST reads:** taken whole. I post section 5 on NET-404 tonight as your read, with the lines I spot-read at #9375's head (`scan_zk.py` 924 to 945 and 968 to 976, `Flock/Registered.lean`'s port and its two row checks, `checkMembersAt_refuses`, the period check's "what it doesn't check", `Prog.Rewires`' fields). The closed junk instance is not wanted unless soundness asks; I do not ask it.
+
