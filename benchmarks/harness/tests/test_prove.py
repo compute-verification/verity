@@ -31,15 +31,25 @@ from pathlib import Path
 
 import pytest
 
+from verity_bench import kit
 from verity_bench import lean_verify as L
 from verity_bench import prove as P
 from verity_bench import prove_records as R
+from verity_bench import spot_status
 from verity_bench import steady as S
 from verity_bench.cli import main
 
 REPO = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).parent / "fixtures" / "prove"
 W = R.WORKLOADS["glm53"]
+RUNNER = REPO / "benchmarks" / "prove" / "run.py"
+
+
+@pytest.fixture(autouse=True)
+def _outside_a_research_run(monkeypatch):
+    """No test of the command writes into the result of a research run the suite itself runs under."""
+
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
 
 # ---- the rules, on small tables ------------------------------------------------------------------------------------------------
 
@@ -2160,6 +2170,9 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
     shutil.rmtree(tmp_path / "producer")
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    # spot's holes block over the fixture runs, with no git and the fixture lock: test_spot_status.py decides the holes
+    monkeypatch.setattr(spot_status, "commit_known", lambda root, commit: False)
+    monkeypatch.setattr(spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lock.json")
 
     def run(*argv: str) -> tuple[int, str, str]:
         monkeypatch.setattr(sys, "argv", ["run.py", *argv])
@@ -2189,6 +2202,7 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
     code, out, _ = run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.SAMPLING], "--json")
     doc = json.loads(out)
     assert code == 0 and doc["schema"] == P.SCHEMA and doc["totals"]["gpus_per_serving_gpu"] == pytest.approx(0.5420038985704952)
+    assert doc["spot_holes"]["label"] == "SPOT"
     code, _, err = run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.CENSUS], "--local-only")
     assert code == 2 and f"{arts[R.CENSUS]} isn't a sampling plan of record" in err
     with pytest.raises(SystemExit):
@@ -2225,3 +2239,119 @@ def test_verity_bench_prove_lean_verify_is_the_lean_verifiers_runner_and_the_tab
     t = json.loads(out)["totals"]
     assert (t["lean_verifier_seconds_per_token"]["status"], t["proof_bytes_per_token"]["status"]) == ("modeled", "modeled")
     assert t["lean_verify"][0]["seconds"] == [9.0] and t["lean_verify"][0]["proof_bytes"] == 500
+
+
+def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_same_table(tmp_path, monkeypatch, capsys):
+    """Under a research run, `verity bench prove --system spot` writes run.py's metrics into the run's result through
+    the kit: each total of SPOT's table at the plan of record in its unit with its mark first among its inputs, the Lean
+    verifier's seconds and the proof's bytes with no value and why until a Lean verifier run of record measures a type
+    and then modeled with what its accept holds, the six checks as the validation and the table as its evidence. What
+    it prints is the same in a run as outside one, where it writes nothing; with every block proved it records
+    nothing."""
+
+    s, arts = recorded(tmp_path)
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261112-000000-0000")
+    # spot's holes block over the fixture runs, with no git and the fixture lock: test_spot_status.py decides the holes
+    monkeypatch.setattr(spot_status, "commit_known", lambda root, commit: False)
+    monkeypatch.setattr(spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lock.json")
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
+                                                    "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi on PATH"})
+    writers, writer = [], kit.writer
+    monkeypatch.setattr(kit, "writer", lambda out: writers.append(out) or writer(out))
+    metrics = runpy.run_path(str(RUNNER))["METRICS"]
+    spot = ("--system", "spot", "--workload", "glm53")
+
+    def run(*argv: str, within: Path | None = None) -> str:
+        if within is None:
+            monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+        else:
+            monkeypatch.setenv("RESEARCH_RUN_DIR", str(within))
+        monkeypatch.setattr(sys, "argv", ["run.py", *argv])
+        with pytest.raises(SystemExit) as done:
+            runpy.run_path(str(RUNNER), run_name="__main__")
+        assert done.value.code == 0
+        return capsys.readouterr().out
+
+    def result(within: Path) -> dict:
+        return json.loads((within / kit.RESULT).read_text())
+
+    outside, doc = run(*spot), json.loads(run(*spot, "--json"))
+    assert outside.startswith(R.render(doc)) and writers == []
+    first = tmp_path / "run-1"
+    assert run(*spot, within=first) == outside and writers == [str(first)]
+    got, kept = result(first), json.loads((first / R.TABLE).read_text())
+    assert got["run_id"] == "r20261112-000000-0000" and kept["rows"] and kept.items() <= doc.items()
+    assert got["workload_fingerprint"] == {"source_sha": None, "benchmark": "prove", "system": "spot[flock]",
+                                           "workload": "glm53", "sampling": arts[R.SAMPLING], "provers": 1, "cores": 10}
+    assert got["measurement_files"] == [R.TABLE] and got["artifacts"] == []
+    by = {m["name"]: m for m in got["measurements"]}
+    assert list(by) == list(metrics) == [
+        "benchmarks/prover-gpus-per-serving-gpu", "benchmarks/prover-gpu-seconds-per-token",
+        "benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token"]
+    assert [m["unit"] for m in by.values()] == [R.FIGURES[f] for f in metrics.values()]
+    t, targets = doc["totals"], [*dict.fromkeys(x for i in doc["inputs"] for x in i["targets"])]
+    assert arts[R.SAMPLING] in targets
+    head, seconds = by["benchmarks/prover-gpus-per-serving-gpu"], by["benchmarks/prover-gpu-seconds-per-token"]
+    assert head["value"] == pytest.approx(0.5420038985704952, rel=1e-12) and seconds["value"] == t["gpu_seconds_per_token"]
+    assert head["inputs"][0] == (f"modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
+                                 f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}")
+    assert head["inputs"][1].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][2:] == targets
+    assert seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == targets
+    assert "why" not in head and head["ci95"] is None and head["host"]["node"] == "cpu-node-0"
+    for name in ("benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token"):
+        assert by[name]["value"] is None and by[name]["inputs"] == targets
+        assert by[name]["why"] == "not measured: no Lean verifier run of record measures a block type " \
+                                  "(`run_of_record=prove-glm53-lean-verify`)"
+    steady = next(x["block_types"] for x in doc["sources"] if x["source"] == P.STEADY)
+    assert got["validation"] == {
+        "status": "passed", "checker": "verity_bench.prove_records.CHECKS", "evidence": [R.TABLE],
+        "detail": f"{steady} block type(s), {t['steady_time_share']:.1%} of the proving time, priced from steady-state "
+                  "rows that each passed `accepted`, `exits`, `not_void`, `flat`, `no_throttling`, "
+                  "`every_prover_warmed`; a row that didn't prices nothing and is named on its type's row"}
+
+    lean_ran(s, tmp_path, "r20261110-000000-0001", lean_record("r20261110-000000-0001"))
+    second = tmp_path / "run-2"
+    run(*spot, within=second)
+    lean = {m["name"]: m for m in result(second)["measurements"]}
+    t = json.loads((second / R.TABLE).read_text())["totals"]
+    for name, key, unit in (("benchmarks/lean-verifier-seconds-per-token", "lean_verifier_seconds_per_token", "s an AND gate"),
+                            ("benchmarks/proof-bytes-per-token", "proof_bytes_per_token", "bytes a witness bit")):
+        v = t[key]
+        assert lean[name]["value"] == v["value"] and "why" not in lean[name]
+        own, family, fitted = (v["sources"][k] for k in ("measured", "family", "fitted"))
+        assert own["block_types"] == 1 and fitted["block_types"] > 0 and v["fitted_rate"] > 0
+        assert lean[name]["inputs"][0] == (
+            f"modeled, not measured: own {own['share']:.1%} (1 block types), family {family['share'] or 0.0:.1%} "
+            f"({family['block_types']} block types), fitted {fitted['share']:.1%} ({fitted['block_types']} block types) "
+            f"(fitted rate {v['fitted_rate']:.4g} {unit}); measured on one block type, `{RMSNORM}` ({L.COVER_LABEL}, run "
+            f"r20261110-000000-0001): {v['basis']}")
+        assert "r20261110-000000-0001" in lean[name]["inputs"][1:]
+
+    every = tmp_path / "run-3"
+    run("--system", "flock", "--workload", "glm53", within=every)
+    assert not every.exists()
+
+
+def test_the_proving_totals_marks_give_the_plans_own_prices_where_its_record_states_them(tmp_path):
+    mix = fixture("mix.json")
+    s, _ = recorded(tmp_path, cells=[c | {"prove_s": 0.002 * c["taken"]} for c in mix["cells"]])
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    marks = [m["inputs"][0] for m in R.measurements(doc, {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"})]
+    planned = doc["totals"]["planned"]
+    assert [m.rsplit("; ", 1)[1] for m in marks] == [
+        f"at the sampling plan's own prices, which its planner sized the sample at: {planned[k]:.6g}"
+        for k in ("gpus_per_serving_gpu", "gpu_seconds_per_token")]
+
+
+def test_the_validation_fails_where_no_steady_state_row_prices_a_type_or_a_total_leaves_a_type_out():
+    sources = [{"source": P.STEADY, "block_types": 3}, {"source": P.SINGLE, "block_types": 2}]
+    doc = {"sources": sources, "totals": {"steady_time_share": 0.25, "missing": []}}
+    assert R.validation(doc)[0] == "passed"
+    status, detail = R.validation(doc | {"totals": {"steady_time_share": 0.25, "missing": [{"block": "X"}]}})
+    assert status == "failed" and detail.endswith("; 1 block type(s) have no figure, and every total leaves them out")
+    status, detail = R.validation(doc | {"sources": [{"source": P.STEADY, "block_types": 0}]})
+    assert status == "failed" and detail.startswith("no steady-state row passed `accepted`, ")
+    with pytest.raises(ValueError, match="no total of the table is named blocks_per_token"):
+        R.measurements(doc, {"benchmarks/x": "blocks_per_token"})
