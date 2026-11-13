@@ -149207,3 +149207,58 @@ without your word. Entry by 17:30Z.
 - Heads unchanged, nothing unpushed [run: `git ls-remote`, 15:27Z]. No run in flight. No code written.
 - Mailbox: 560 lines at 15:28Z; your 15:31Z came by the hook. No timer is set: I am working, and read the mailbox
   each 30 minutes in the turn. If I end the turn waiting, I set one and name it.
+
+## MEMBERS, Fri 13 Nov 15:35Z: the mend compiles as an equality at `aeeced7cdd69`; t = 0.82 s on Thursday's program; (a) is still running, and so far Thursday's kept window reads whole
+
+Answer first. The strata are now kept once a program in the compiled files' pass, as an equality: no statement moved, no lock changed, and none of `stepMember`, `runMembers`, `membersRun`, `Member.files`, `membersRun_files`, `statementOf`, `Member.statement` changed. It compiles on a node. One evaluation of the partition's query's strata on Thursday's program takes t = 0.82 s, so before the mend the pass would have spent 23.4 hours on that one step over Thursday's 102,781 members; after it, 0.82 s. Job (a) has not ended: Thursday's key is at the deployed parameters, every member is named and has its roots, and the parameters parse in the per-member form, but that parse takes 13 minutes, and the population's check did not end in 12 minutes on the first try. The row's second axis, as I first wrote it, does not vary the program's size; I say why below and what would.
+
+### 1. The mend (item 1)
+
+- [read] Branch `cursor/proofs-members-switch-34fd`, four commits on top of `caaeae611728`: `752844fb0760` (the mend, not compiled), `a0284027d861` and `aeeced7cdd69` (two repairs), `f2ec7e7e3905` (the row), then `2fe933688cb9` (the row's text corrected). Head pushed: `2fe933688cb9`.
+- [run `r20261113-150400-4d09`, vy-nebius-cpu-8, 44 s] `verity lean try Spot/OneStageZk.lean --siblings` at `aeeced7cdd69`: Lean exit 0; no built module of the package that does not import the file declares a name it does (37 imported, 16 not checked for lack of a build); none of its 51 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. This is the first compiled commit. The two tries before it failed (`r20261113-145826-b3b0` on cpu-3, `r20261113-150118-4f15` on cpu-14), both on the same thing, below. No try waited more than 40 s for a slot.
+- [read] What is written, in `Spot/OneStageZk.lean`: `strataOn`, `ProgramKept` (now holding the partition, the strata and a proof `held` that the strata are the partition's query's on the parsed program), `programRead`, `programOf b partition`, `ProgramKept.under`, `ProgramKept.next prog b partition`, `Member.populationOn`, `Member.population_on`, and `Member.filesOn`, `Member.files_on`, `keptFiles`, `keptFiles_eq` restated to carry the partition. `membersFiles_eq_kept`'s statement is as it was.
+- [read] One thing you should know of, because it is not in my 14:05Z sizing. `Lean.Json` has no decidable equality, so "is this member's partition the one the strata were kept under" cannot be asked by `=`. I ask it with core's `withPtrEq` (the same object in memory answers yes at once; otherwise the strata are computed and compared, which is the old cost and the right answer). To prove the answer is what the comparison says, the file needs `import all Init.Util`, because the toolchain does not expose `withPtrEq`'s body to a `module` file. `withPtrEq` is already on Flock's verifier path (`Flock/KnownRead.lean`, `Flock/Statement.lean`, allowed in Flock's lock under `verifier.allow`); `import all` of a toolchain `Init` module is what `security/Proofs/Flock/Soundness/TmplReads.lean` does. Spot's lock has no `verifier` rule, so no lock line moves. If you would rather the file not read `withPtrEq`, the other way is to compare the two partitions' printed text, which costs the partition's size once a member.
+- [derived] Every member of a window reads the parameters' one partition object (`membersOf` copies `shared` into each), so the fast answer is the one taken; on a member whose partition is another object the pass is still right and pays one evaluation.
+- [read] No file other than `Spot/OneStageZk.lean` and the row's reads a declaration I changed (grep over the tree). HELDOF's three stay: `membersRun_files`' statement, the two explicit binds, `inputAt`'s call.
+
+### 2. Job (a), reading Thursday's kept window in place (item 2)
+
+Run `r20261113-144844-74bf` (cancelled by me, by id, at 15:21Z after 33 minutes: it reached the population's check before timing t, and that check did not end in 12 minutes), then `r20261113-152216-f68f` (the same job with t timed first; launched 15:22Z through the queue with `--mem-gb 30`, limit 90 minutes, so it ends by 16:52Z at the latest, before vllm's 17:30Z). Both on vy-nebius-cpu-6, read-only, scratch in a `mktemp -d` directory removed at exit; nothing written or removed under vllm's directory; only counts, sizes, key names and timings printed.
+
+- [run `74bf`] First line: the key is Thursday's own, at the deployed parameters (W = 1, H = 20). It is in one place of what the audit kept, under the challenger's session directory; the two summaries name no challenger. No stand-in key was needed.
+- [run `74bf`] The registration holds 820,193 roots. The kept window has 102,781 members of 298 templates. Every member's name follows one rule (`template/c<j>`, j from 0 with no gap, in all 298 templates), every root belongs to exactly one member's name, and none is left over.
+- [run `74bf`] 87,000 members have a registered file (159,557,454 bytes in all); 15,781 have none. All 298 circuit pins are 128 hex characters; the three smallest circuit files hash to their template's pin (the rest were not hashed: 55 MB and more each).
+- [run `74bf`] The parameters written in the per-member form are 556,784,097 bytes (the members' part 189,830,155). **`paramsEitherOfJson` accepts them: 102,781 members, in 792 s**, peak 11.2 GB. `commitmentOf` accepts the kept commitment (18 s). **`rootsOf`: all 102,781 members have a root, 820,193 roots, 2.6 s.**
+- [run `f68f`] Thursday's program: 183,870,812 canonical bytes, 8,429 definitions, 931 root nodes; `Program.parse` 24.6 s. Its partition's query gives 298 strata over 1,109,804 units.
+- [run `f68f`] **t = 819,653 µs**: one evaluation of the partition's query's strata (`Partition.strata`) on Thursday's program. The query's ranges alone (`Partition.evaluate`) take 700 ms.
+- [derived] Before the mend the files' pass made that evaluation once a member: 102,781 × 0.82 s = 84,245 s = 23.4 hours on Thursday's window, for that step alone. After the mend: once, 0.82 s.
+- [run `f68f`] v1's parse of the same parameters without `proofs` takes 33 s. [derived] So about 759 s of the 792 s is in the per-member part or in what `membersParamsOfJson` adds, 7.4 ms a member.
+- Still to come from `f68f`: the laid-out and class checks, whether the program reads registered values (15,781 members hold none), `Member.sizes` over every member, and the population's check last.
+
+### 3. The row (item 1's second axis)
+
+- [run `r20261113-150731-f81f`, after the mend, cpu-14; `r20261113-150758-7b67`, before the mend with the same scripts, cpu-1; both done, rc 0] The guard passes at 300 and at 1200 members: the audit's case is accepted by v2's check (12.4 to 13.6 s), and at N = 1, 16, 150 the kept pass's result has the same digest as the stated pass's. The six digests are the same before and after the mend.
+- [run, same] One more member of a circuit file in the kept pass, (N=150 − N=16)/134: before 1,013 µs at 300 members and 726 µs at 1200; after 990 µs and 752 µs. The stated pass: about 1.0 s a member in all four.
+- [run, same] **The second axis as I wrote it is not the program's size.** A stand-in window's program is 8,328 bytes with 10 root nodes at 300 members and 8,333 bytes with 10 root nodes at 1200: its root holds the two templates' nodes, not a node a member. One evaluation of the strata on it takes 47 to 78 µs, which the timing cannot resolve. So the rows across `MEMBERS` vary the window's members and show nothing about the mend. The tree said otherwise in three places at `f2ec7e7e3905`; `2fe933688cb9` corrects them. Each case's row now carries its program's bytes, root nodes and the microseconds of one evaluation, which is true as it stands.
+- [derived] What the program's size does to the pass is therefore known only from two points: the stand-in (10 root nodes, about 60 µs) and Thursday's (931 root nodes, 0.82 s).
+- What would make the axis real: a stand-in window with more templates (its program grows by a node a template), at a fixed count of members handed. That knob is in `benchmarks/one_stage/members_standin.py` (`KS`), which is FIRSTACCEPT's, so I have not touched it. Or (b) on Thursday's files, which has the program at its real size.
+
+### 4. Cost beyond the mend, found on the way
+
+- [run `74bf`, `f68f`] The per-member parse takes 792 s for 102,781 members where v1's part is 33 s. [guess] The sort of the members' ranges in `membersOf` (`qsort` on ranges that arrive nearly in order) is the likeliest; I have not timed it apart.
+- [run `74bf`] The population's check (`popHeld`, `Slots.popOk`: the whole slot layout of the program's 1,109,804 units) did not end in 12 minutes. It runs once a window, not once a member, so it is not under the mend; `f68f` times it last, with what is left of its 90 minutes.
+- [read, `Spot/OneStageZk.lean`] Per member the kept pass still does, besides the member's own files: `printedSize` of the partition object (in `fitsWhy`), and for a member with no registered file a scan of the program's definitions' names (`readsRegistered`). Both grow with the program or the partition and are done once a member. Not timed. They can be kept once a program the same way, as equalities.
+
+### Not established
+
+- That (a) ends: the population's check on Thursday's window, the class check and `Member.sizes` have not printed.
+- Where the 759 s of the per-member parse goes.
+- That the first run's scratch directory is gone from cpu-6. The cancel was a SIGTERM to the job's group, which runs its exit trap; the second run looked for a leftover under the node's temporary directory and printed none. I did not list the directory.
+- Anything about (b): no member's circuit file was parsed, no public file's header read.
+- The mend's effect in a timing: the stand-in cannot show it. That the mend returns the same result is shown on the stand-in's cases only (equal digests), and for every input by the compiled equality.
+- A records run of `security/Proofs` at this head: not made. The switch has no ready line and no pull request.
+- Whether Spot's package may keep `import all Init.Util`: I read the rule as allowing it; no check of the whole tree ran at this head.
+
+### State
+
+Head pushed: `2fe933688cb9` on `cursor/proofs-members-switch-34fd`. Nothing unpushed in the tree. The job's three files are in the runs' `inputs/`. Waiting on `r20261113-152216-f68f` (ends by 16:52Z); I write the one line when it ends. (b), the carry, the name's map and the index around `Blobs.get` wait for your word.
