@@ -283,7 +283,10 @@ Lean's job in `check` and the tools around the audit:
   The sibling check leaves out, and counts as unchecked, a module whose build, or an import's, is not of its source
   as it is (by the hash Lake's trace states).
 - `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's caps, and the queue's
-  landing gate on its seeds (drive.toml's `landing_gates`).
+  landing gate on its seeds (drive.toml's `landing_gates`). A PR that adds proof modules no guarantee reads yet sets
+  its area's entry in the JSON file to the check's count in its own diff, with no room, and lists in its body each
+  module, the guarantee that will read it and the date that guarantee is listed by (`ratchet`, whose failure prints
+  the entry).
 - `trusted_size.py`: the size of a package's spec, per area.
 - `tool.py`: the store's declarations of the scheduled runs.
 - `tests/`: the suite `verity-lean-audit`, the controls' fixtures among it.

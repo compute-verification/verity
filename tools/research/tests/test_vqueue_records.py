@@ -6,14 +6,18 @@ records commit of what it regenerated, a lock commit (`lock_message`) vouched fo
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 
 import pytest
 
 from research import merge
 from research.landing import CI, LAUNCH_LOST_S, LEAN_STEP, LOST_AFTER_S, NOT_STARTED
+from research.queue import IDENTITY, QueueError
 from research.vqueue import FAIL, INFRA, PASS, PENDING, RecordsRun
-from research.vqueue_records import LOCK_SUBJECT, commit, judge, lock_message, start
+from research.vqueue_records import LOCK_SUBJECT, commit, judge, lock_message, same_inputs, start
+from research.vqueue_slim import lean_key
 from test_landing import Harness, _live_run, _steps_run
 from test_queue import World, _git
 
@@ -326,6 +330,48 @@ def test_the_records_commit_is_a_lock_commit_on_the_candidate_which_the_merge_ga
     assert _git(wd, "log", "-1", "--format=%an <%ae>", made) == "research queue <queue@research.invalid>"
     assert _vouched(h, made, rid) == rid
     assert (_git(wd, "rev-parse", "HEAD"), _git(wd, "status", "--porcelain"), _git(wd, "for-each-ref")) == (head, status, refs)
+
+
+def _on(repo, parent: str, files: dict[str, str]) -> str:
+    """A commit on ``parent`` writing ``files``, made in a scratch index."""
+    index = {**os.environ, "GIT_INDEX_FILE": str(repo.parent / "scratch-index"), **IDENTITY}
+    run = lambda *a, **kw: subprocess.run(["git", "-C", str(repo), *a], env=index, check=True, capture_output=True,  # noqa: E731
+                                          text=True, **kw).stdout.strip()
+    run("read-tree", parent)
+    for path, text in files.items():
+        run("update-index", "--add", "--cacheinfo", f"100644,{run('hash-object', '-w', '--stdin', input=text)},{path}")
+    return run("commit-tree", run("write-tree"), "-p", parent, "-m", "another member")
+
+
+def test_lean_key_is_one_across_trees_differing_outside_their_lean_inputs_only(world, monkeypatch):
+    """A file outside every Lean input leaves the key as it is; one in a Lean package's directory, or a Lean file, changes it."""
+    h, sha = _harness(world, monkeypatch)
+    wd = h.q.workdir
+    plain, lean, notes = (_on(wd, sha, f) for f in ({"b.txt": "b\n"}, {"other/B.lean": "-- b\n"}, {"pkg/notes.txt": "n\n"}))
+    assert lean_key(wd, sha) == lean_key(wd, plain) and same_inputs(wd, sha, plain)
+    assert len({lean_key(wd, c) for c in (sha, lean, notes)}) == 3 and not same_inputs(wd, sha, notes)
+    assert lean_key(wd, "0" * 40) is None and not same_inputs(wd, "0" * 40, "0" * 40)
+
+
+def test_a_records_commit_carried_onto_another_base_holds_the_same_records_on_it_and_none_onto_other_lean_inputs(world,
+                                                                                                             monkeypatch):
+    """The records commit is made on the staged tree and vouched for there, then its files, byte for byte, are committed on
+    top of ``onto``, whose Lean inputs are the staged tree's, its message saying where they were regenerated; onto a tree
+    whose Lean inputs differ it raises, carrying nothing."""
+    h, sha = _harness(world, monkeypatch)
+    rid = start(h.d, sha)["ids"][0]
+    _passes(h, rid, sha)
+    wd = h.q.workdir
+    onto = _on(wd, sha, {"b.txt": "b\n"})
+    made, files, told = commit(h.d, sha, rid, (1,), onto=onto)
+    assert files == ["pkg/lean-audit.json"] and _git(wd, "rev-parse", f"{made}^@") == onto and told is None
+    assert _git(wd, "diff", "--name-only", onto, made) == "pkg/lean-audit.json"
+    assert _git(wd, "show", f"{made}:pkg/lean-audit.json") == REGENERATED.strip()
+    body = _git(wd, "log", "-1", "--format=%B", made)
+    assert body == lock_message("#1", rid, f"queue/{sha[:12]}", sha, [], files, onto=onto).strip(), body
+    assert f"Carried from {sha[:12]} onto {onto[:12]}" in body and re.search(rf"^Checked: {rid} ", body, re.M)
+    with pytest.raises(QueueError, match="Lean inputs aren't"):
+        commit(h.d, sha, rid, (1,), onto=_on(wd, sha, {"pkg/notes.txt": "n\n"}))
 
 
 def test_a_records_commit_carries_the_bookkeeping_its_records_run_repaired_and_tells_its_owners(world, monkeypatch):

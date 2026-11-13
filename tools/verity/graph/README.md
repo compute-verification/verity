@@ -39,7 +39,7 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 | `verity_graph/runners/__init__.py` | dispatch by kind, `call` (a command, logged and bounded by the task's timeout) and `execute` |
 | `verity_graph/local.py` | the serial reference executor |
 | `verity_graph/families/build.py` and its kinds' runners (`runners/lean_build.py`, `lean_unit_cut.py`, `lean_agreement.py`, `lean_suites.py`, `flock_circuit_build.py`, `flock_rust_tests.py`) | the build family (below) |
-| `tasks.toml` | `[env.<name>]` and `[family.<name>]` tables |
+| `tasks.toml` | `[slot]`, `[env.<name>]` and `[family.<name>]` tables |
 | `tests/key_vectors.json` | the vectors Verity and the executor both reproduce |
 
 In a module's name a family's or kind's `-` is written `_`: family `test-file` is `families/test_file.py`, kind
@@ -213,7 +213,8 @@ train.sh run beside the executor's check (`research.landing.SLIM_STEPS`, `resear
 A family's lister returns graph/v2 tasks without `priority` and `key`, for the tree at `root`, reading nothing but files under
 `root` (its `files` is the tree's file list). The core fills what a task leaves out from its table, `about` from the table's
 template over the task's `id`, `kind`, `name` (the id after `<kind>:`) and `vars`, and refuses a field outside graph/v2, an
-input that isn't a file of the tree, a read of a task or output that doesn't exist, a cycle, and a path two things land on.
+input that isn't a file of the tree, a read of a task or output that doesn't exist, a cycle, a path two things land on, and
+resources (a table's or a task's) past `[slot]`, the largest slot an executor leases a task, which no slot would ever take.
 `graph.covered(root, family, files)` is the files the table's `files` globs cover. Test it on a toy checkout
 (`tests/conftest.py`'s `toy_tree`, which writes a `tasks.toml`, runner stubs and files into a fresh git repository), and the
 whole tree's invariants (`tests/test_invariants.py`) cover it once it lists.

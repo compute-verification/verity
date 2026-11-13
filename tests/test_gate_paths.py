@@ -296,7 +296,7 @@ def _anchors():
 
 def path_constants(rel: str, text: str, tops: frozenset[str]) -> list[tuple[int, str, str]]:
     """(line, the path, how it's written) for each repository path a module-level assignment of ``rel`` names: a string
-    whose first segment is one of ``tops``, or a join anchored on `__file__` (`tools/verity/check/anchors.py` evaluates it)."""
+    whose first segment is one of ``tops``, or a join anchored on the file's place (`tools/verity/check/anchors.py` evaluates it)."""
     anchor = _anchors().anchor
     out, names = [], {}
     for node in ast.parse(text).body:

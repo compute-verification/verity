@@ -36,12 +36,41 @@ from verity_vllm.pipeline.boundary_stop import Stop, filed
 
 #: vLLM's RequestStatus names (past ``finished_``) for a `FINISH` name; its FinishReason names are `FINISH`'s own
 _STATUS = {"stopped": "stop", "length_capped": "length", "aborted": "abort"}
+#: the most instances of the check template the replay blocks one serve keeps hold in all, and the most counts of spans
+#: one of them keeps its programs for (`_built`)
+KEEP, COUNTS = 1 << 12, 64
+#: the parts of a `Layout` that read its replay block and its count of spans alone, and a stop class's more of them
+_PARTS, _STOP_PARTS = ("program", "grain", "partition"), ("stop_program", "stop_query", "stop_partition")
 
 
 def _finish(reason: Any) -> str:
     name = str(getattr(reason, "name", reason)).lower().removeprefix("finished_")
     name = _STATUS.get(name, name)
     return name if name in FINISH else "error"
+
+
+def _built(layout: Layout, kept: dict[int, tuple[SpecializedDefinition, dict[int, dict[str, Any]]]]) -> Layout:
+    """``layout`` holding the parts of it that read no run, from ``kept`` where an earlier layout built them: its replay
+    block, which reads its class through ``n_rho`` alone, by ``n_rho``; and its program, grain and partition, and in a
+    stop class its stop population's, by that and its count of spans. So only the run and what binds it (each value's
+    domain) are a window's own. ``kept`` is one serve's, whose layouts differ in class, whether it is a stop class,
+    spans and run alone: its stop rule is one. It holds the replay blocks used last whose instances sum to `KEEP` at
+    most, the least recently used leaving first, and for each its programs at the `COUNTS` counts of spans used last; a
+    replay block of more than `KEEP` instances is built for its layout alone."""
+    if layout.n_rho > KEEP:
+        return layout
+    replay, counts = kept.pop(layout.n_rho, None) or (layout.replay, {})
+    kept[layout.n_rho] = replay, counts
+    while sum(kept) > KEEP:
+        del kept[next(iter(kept))]
+    vars(layout)["replay"] = replay
+    names = _PARTS + _STOP_PARTS if layout.stopped else _PARTS
+    parts = counts.pop(layout.spans, None) or {}
+    vars(layout).update({k: parts[k] for k in names if k in parts})
+    counts[layout.spans] = parts | {k: getattr(layout, k) for k in names}
+    while len(counts) > COUNTS:
+        del counts[next(iter(counts))]
+    return layout
 
 
 class BoundaryWindows:
@@ -161,6 +190,7 @@ class BoundaryWindows:
         self.thread.join()
 
     def _run(self) -> None:
+        kept: dict = {}
         while (job := self.jobs.get()) is not None:
             window, opened, closed, carried, spans = job
             rule = self.stop_rule
@@ -170,9 +200,9 @@ class BoundaryWindows:
             for (p, o, held), mine in classes.items():
                 unheld = rule is not None and not held
                 try:
-                    layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
-                                    run_root(self.serve, window), self.inline, self.layers, self.capacity, stop=rule,
-                                    held=held)
+                    layout = _built(Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
+                                           run_root(self.serve, window), self.inline, self.layers, self.capacity,
+                                           stop=rule, held=held), kept)
                     c = commit(mine, layout, window, tables=self._tables(window, layout, mine))
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}{'-nostop' if unheld else ''}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried,
@@ -196,14 +226,17 @@ class BoundaryWindows:
     def install(self, sched: Any, hooks: Any) -> BoundaryWindows:
         """Wrap ``sched``'s ``add_request``, ``update_from_output``, ``finish_requests`` and ``schedule`` through ``hooks``
         (an `engine.hooks.Hooks`), and stop at the process's exit: at exit and at a `multiprocessing` child's, which runs
-        no `atexit` hook (vLLM's engine core is one). Refused while the scheduler caches prefixes: a hit would read
-        another request's rows, across the replay blocks' boundary. Refused under a stop rule whose model length is not
-        the scheduler's ``max_model_len``: the engine ends a response at its own length and the stop block at the
-        rule's, so every such response would be filed without a stop block. An honest serve's guard, which no verifier
-        relies on: the verifier holds its own copy of the rule (`boundary_rows.layout_of`)."""
-        if getattr(getattr(sched, "cache_config", None), "enable_prefix_caching", False):
-            raise ValueError("the boundary commitment needs prefix caching off (--no-enable-prefix-caching): a cache hit "
-                             "reads another request's rows")
+        no `atexit` hook (vLLM's engine core is one). A scheduler that caches prefixes commits the same rows: a span's
+        boundary is its own prompt ids and the ids it was served, whichever KV pages its prefill read. With history
+        tables it is refused: a table holds its request's latent rows from position 0 (`boundary_tables.Latents`), and
+        a request served from the cache computes none before its hit's end. Refused under a stop rule whose model
+        length is not the scheduler's ``max_model_len``: the engine ends a response at its own length and the stop block
+        at the rule's, so every such response would be filed without a stop block. An honest serve's guard, which no
+        verifier relies on: the verifier holds its own copy of the rule (`boundary_rows.layout_of`)."""
+        if self.tables is not None and getattr(getattr(sched, "cache_config", None), "enable_prefix_caching", False):
+            raise ValueError("the boundary commitment's history tables need prefix caching off "
+                             "(--no-enable-prefix-caching): a table holds its request's latent rows from position 0, "
+                             "and a request served from the cache computes none before its hit's end")
         served = getattr(sched, "max_model_len", None)
         if self.stop_rule is not None and served != self.stop_rule.max_model_len:
             raise ValueError(f"the stop rule's model length is {self.stop_rule.max_model_len} and the scheduler's "

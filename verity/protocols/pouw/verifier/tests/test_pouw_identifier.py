@@ -11,10 +11,10 @@ import json
 import pytest
 
 import identifier_vectors as V
+from verity.protocols.pouw.prover.schemes import SCHEMES, get
 from verity.protocols.pouw.verifier import identifier as I
 from verity.protocols.pouw.verifier.audit import Epoch, Workload
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import SCHEMES, get
 
 PINNED = json.loads(V.OUT.read_text())
 BY_CASE = {c["case"]: c for c in PINNED["cases"]}

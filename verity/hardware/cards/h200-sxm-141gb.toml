@@ -1,8 +1,8 @@
 # The NVIDIA H200 SXM 141 GB: the one source of its numbers (verity/hardware/README.md).
-# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
-# model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). Per-SM rates are a SM-clock's. security/Definitions/Core/Accel/H200.lean is held to this file. The
-# host the card sits in is its own card (xeon-platinum-8468-2s.toml on our nodes).
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU exceeds it, whatever firmware it
+# runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
+# "placeholder" (neither, open). Per-SM rates are a SM-clock's. security/Definitions/Core/Accel/H200.lean is held to
+# this file. The host the card sits in is its own card (xeon-platinum-8468-2s.toml on our nodes).
 
 kind = "gpu"
 sku = "h200-sxm-141gb"
@@ -25,7 +25,8 @@ tensor = { value = 1830, unit = "MHz", mark = "ceiling", source = "the tensor's 
 memory = { value = 3201, unit = "MHz", mark = "ceiling", source = "art:72daa20de42c, art:28ff838a63c9 (max and application memory clock 3201 MHz); art:d10829e5b08e (offset range [0, 0])" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes. smem is the pool of L1 and shared memory, and
-# smem_carveout the most of that pool a kernel can make shared memory: a part of smem, not a store of its own.
+# smem_carveout the most of that pool a kernel can make shared memory: a part of smem, not a store of its own. dram is
+# the device memory a program gets and dram_installed the memory on the board, a second reading of the same store.
 [store]
 reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'Register File Size / SM 256 KB', 64 Ki 32-bit registers" }
 reg_extra = { value = 4494, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and the uniform predicates (7 bits a warp, 14 words)" }
@@ -33,6 +34,7 @@ smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "H100 whitepa
 smem_carveout = { value = 233472, unit = "B/SM", mark = "ceiling", source = "shared memory alone, the most of store.smem's pool a kernel can configure as shared memory, inside the pool and not added to it: CUDA C++ Programming Guide 12.9 section 18.2 Table 28, CC 9.0, 'Maximum amount of shared memory per SM 228 KB' (the table's KB is 1024 bytes); H100 whitepaper V1.04 Table 3, 'Shared Memory Size / SM Configurable up to 228 KB'" }
 l2 = { value = 52428800, unit = "B", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'L2 Cache Size 50 MB', taken as 50 MiB" }
 dram = { value = 151397597184, unit = "B", mark = "ceiling", source = "H200 data sheet, 'GPU Memory 141GB', taken as 141 GiB, above the 143,771 MiB the driver reports" }
+dram_installed = { value = 154618822656, unit = "B", mark = "ceiling", source = "144 GiB, the memory on the board, six HBM3e stacks (memory.bus) of 24 GB, of which store.dram is what a program gets. No NVIDIA document read states 144. Micron's press release of 26 Feb 2024 on its HBM3E: 'Micron's 24GB 8H HBM3E will be part of NVIDIA H200 Tensor Core GPUs'. ServeTheHome's report of that release, the same day: 'six packages of 24GB to increase memory to 141GB with 144GB physically on the card'. AnandTech, 'NVIDIA at SC23: H200 Accelerator with HBM3e and Jupiter Supercomputer for 2024', 13 Nov 2023, in the Internet Archive's copy: the memory 'physically has a capacity of 144GB', 'six 24GB stacks', and 'NVIDIA is holding back some of that capacity for yield reasons'" }
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x clock.sm, the tensor's x clock.tensor).
 [rate]
@@ -50,6 +52,7 @@ l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the 
 bus = { value = 6144, unit = "bit", mark = "ceiling", source = "six HBM3e stacks of 1024 bits; no data-sheet figure" }
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "HBM3e is double data rate: two transfers a clock of the 3201 MHz nvidia-smi reports" }
 bandwidth = { value = 4.916736e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, above the data sheet's 'GPU Memory Bandwidth 4.8TB/s' (measured 4.26e12, 88.75% of 4.8, art:df775b659979)" }
+read = { value = 4.26e12, unit = "B/s", mark = "measurement", source = "streaming 16-B loads of 24.08 GB of device memory in 5.65 ms on one card, 4261.2 GB/s rounded down, 86.6% of memory.bandwidth: a stand-in calibrated to a decode step's time, not a peak probe (art:df775b659979)" }
 
 # The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
 [weight]

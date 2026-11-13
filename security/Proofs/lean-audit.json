@@ -169,7 +169,7 @@
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
-   "why": "every generated FP8 step and FP32 add, with red-team R1's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers (29 Sep 01:10Z, granted by R1)",
+   "why": "every generated FP8 step and FP32 add, with red-team R1's 166,000 differential steps: the vectors that left the kernel when Pouw.Fp8Atom.Proofs.conformance and addConformance were narrowed to covers",
    "args": ["{conformance/steps.txt}", "176549", "{conformance/adds.txt}", "5000"],
    "data": {
     "conformance/adds.txt": "517e190bae67fd64ae9273eba6e52be524038f17cdcc1821b759311ca72b8a6b",
@@ -257,7 +257,7 @@
   ],
   "watch": {
    "loomis-whitney": {
-    "about": "Nci.SecurityProofs.loomis_whitney: the discrete Loomis-Whitney inequality, proved by hand",
+    "about": "the discrete Loomis-Whitney inequality, proved by hand",
     "mentions": ["Finset.card", "Finset.image", "HPow.hPow"],
     "ack": [
      "Finset.card_pow_quotient_mul_pow_inter_subgroup_le",
