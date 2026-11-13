@@ -16,6 +16,7 @@ from itertools import product
 from typing import Any
 
 import pytest
+from verity.protocols.certifier.verifier.arith_encode import CW
 
 from verity_vllm.pipeline.advice_code import by_class as BC
 from verity_vllm.pipeline.advice_code import codec as V
@@ -437,3 +438,45 @@ def test_a_second_segment_is_charged_to_its_window_and_none_leaves_the_string_as
     for coder in (CV.Encoder(book), CV.Decoder(b"", 0, book)):
         with pytest.raises(ValueError, match="^a second segment of window 0, and 0 windows are coded: call window\\(\\) first$"):
             coder.segment(0)
+
+
+def test_a_windows_charge_of_2_to_the_20_with_its_kept_segment_is_refused_by_name(monkeypatch):
+    """The certifier counts a window's charge in `arith_encode.CW` = 20 bits, so a charge is under 2^20, its second
+    segment counted. One window's kept counts take 24 bits. Where its first segment and length terms come to
+    2^20 − 25 the window is charged 2^20 − 1 and its string decodes; where they come to 2^20 − 24, which alone is taken,
+    `window_code.encode` refuses the window by name, and so does the decoder, on the string a coder with a wider count
+    writes, where it ends the kept segment. A tail that alone reaches 2^20 is refused at the field that reaches it."""
+    assert CW == 20 and CV.CW is CW
+    book, K = CV.Book.uniform(), 3
+    cs = [(7 * j) % (K + 1) for j in range(40)]
+    terms = KP.Terms((sum(cs) + len(cs),), (tuple((0, c) for c in cs),))
+
+    def tail(last: int) -> list[tuple[int, int]]:
+        return [(0, 32)] * 32766 + [(0, last)]
+
+    def read(string: CV.Encoded, last: int) -> tuple[list[int], list[int]]:
+        d, counts = CV.Decoder(string.bits, string.nbits, book), KP.Counts(K, terms.outputs)
+        assert CV.decode_windows(d, [[n for _, n in tail(last)]])[0] == [CV.Window()]
+        d.segment(0)
+        got = [counts.get(d, 0) for _ in cs]
+        d.finish()
+        return got, d.lens
+
+    under = CV.encode([CV.Window()], book, [tail(18)], KP.coder(K, terms))
+    assert CV.encode([CV.Window()], book, [tail(18)]).lens == ((1 << CW) - 25,) and under.lens == ((1 << CW) - 1,)
+    assert read(under, 18) == (cs, [(1 << CW) - 1])
+    assert CV.encode([CV.Window()], book, [tail(19)]).lens == ((1 << CW) - 24,)
+    said = (f"^window 0: its charge is {1 << CW} bits, and the certifier counts a window's charge in 20 bits, so it is under "
+            f"{1 << CW}; register a shorter window, so that less is charged to one$")
+    with pytest.raises(ValueError, match=said):
+        CV.encode([CV.Window()], book, [tail(19)], KP.coder(K, terms))
+    with monkeypatch.context() as wider:
+        wider.setattr(CV, "CW", CW + 1)
+        at = CV.encode([CV.Window()], book, [tail(19)], KP.coder(K, terms))
+        assert at.lens == (1 << CW,) and read(at, 19) == (cs, [1 << CW])
+    with pytest.raises(ValueError, match=said):
+        read(at, 19)
+    with pytest.raises(ValueError, match=said):
+        CV.encode([CV.Window()], book, [tail(19 + 24)])
+    with pytest.raises(ValueError, match=f"^window 0: its charge is {(1 << CW) + 13} bits, "):
+        CV.encode([CV.Window()], book, [tail(19 + 24 + 13)])
