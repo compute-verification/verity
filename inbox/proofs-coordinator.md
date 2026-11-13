@@ -158942,3 +158942,347 @@ Mailbox read at 20:04Z; nothing newer than your 17:07Z.
   - Five depend on no axiom at all; `hSelfScan_kernel` depends on `propext` alone. No `native_decide` was used.
   - So plain `decide` settles way (i)'s count at the deployed schedules, `Nat.log` included, in seconds.
   - What the try doesn't cover is the two facts my 19:15Z names, that every table `planZHJ` admits has `T.q = 168` and `T.N ≤ 8192`, and the step from `planZHJ`'s tables to `Zk.schedule m`.
+
+## SESSIONCOINS, Fri 13 Nov 20:07Z: route (a) sized whole, its core compiled (`AlignedX`, 3 theorems, standard axioms); the plain chain aligned too, read by none of the deployed; the nine and the pickers; part A items 3 to 5
+
+All files at `main` `3f4af5f89966`, under `security/Proofs/` unless I say otherwise. Abbreviations: `StrictZ` is
+`Flock/Soundness/Discharge/ZkLink/StrictZ.lean`, and `StrictCR` is `Flock/Soundness/StrictCR.lean`. This sizing covers
+the `--zk` session that V3 and V5 state, `lockSessZ` at `planZHJ`'s tables. The plain sessions (`plurSL`, `plurCL`)
+need the same change; section 7 reads their chain.
+
+**Answer.** Route (a) keeps `ksStrictZ` and the form of V3's and V5's δ. It does not keep their statements untouched,
+for one reason. Soundness's cost condition makes the finders' cost a function of their outcome. `SHA512CRStrict` then
+needs that cost to be at most `qF = 2(t′+v)` on every outcome (`Definitions/Assumptions/Flock.lean:52`). So `v` must
+bound one run's opening hashes, and today nothing in Lean ties `v` to them (`StrictZ:94–96`, "Lean doesn't tie `qF` and
+`qS` to the finders' real evaluations"). There are two ways to close it:
+- (i) V3 and V5 take one more hypothesis, that `v` bounds those hashes at every table of the plan. δ and `ksStrictZ`
+  stay as stated.
+- (ii) `v` is replaced by a computed count. That moves δ's argument.
+
+Neither is written, under your 19:03Z order. My 19:11Z and 19:15Z entries carry the ask's four items. The third way
+(the cost model already charging the openings to `v`) needs a text change too, because `v` is constrained only by
+`0 ≤ v`. So it comes to (i), which soundness set at 19:06Z as a `domain` hypothesis that the deployed instance proves in
+the kernel. The largest count at the deployed plans is 19 calls per compared opening and 23,830 per run's openings. The
+only figure that evaluates `v` holds for every `v ≤ 2^80`, so the figures don't change. [derived]
+
+### 1. The constant, and what it reaches
+
+The generic definitions take a parameter `O₀ : Oracle F` (`Oracle F := ℕ → ℕ → F`, `Definitions/Flock/Ligerito.lean:30`).
+V3 and V5 instantiate it at `F := GF128` (`execArith : Arith GF128 GF256`, `Flock/Soundness/Instance.lean:25`) with
+this term:
+
+```lean
+def zeroTab : Oracle FlockLevel3.GF128 := fun _ _ => FlockLevel3.GF128.of Flock.F128.zero
+```
+
+The chooser is `fun _ _ _ _ => O₀`. [read] What the term reaches:
+- `GF128.of` is `def of (a : F128) : GF128 := a` (`Level3/GF128Field.lean:199`).
+- `F128` is `structure F128 where lo : UInt64; hi : UInt64`, and its `zero` sits beside `instance : OfNat F128 0 := ⟨zero⟩`
+  (`verity/circuits/base/Base/Field.lean:13–26`).
+
+[derived] So the term reaches `F128.mk` and UInt64 literals, and no choice. Lean's walk is not run; that is lean's to
+run.
+
+The term must not be `(0 : GF128)`. [read] `GF128` has one instance, `instFieldGF128 := equivAdj.field`
+(`GF128Field.lean:193–195`). Its inverse is `Ideal.Quotient`'s `Classical.choose (exists_inv …)`. A walk on constants
+that doesn't reduce projections reaches choice through `(0 : GF128)`.
+
+**A second `default` at a function type, already in the finders' data.** [read] All three fork finders build their lock
+as `lockSessZ A Hs T pre post default cap₀` (`StrictZ:55, 64, 73`). The same holds for `advRSZ`, `advPadsSZ` and
+`advTauSZ` (`ZkLink/SessionZ.lean:157, 164, 171`). The `default` there is the level-0 oracle `C₀ : Oracle F`. That is
+the `default` at a function type that REDRAW found elaborating to a VCVio instance, and I have not checked which
+instance it is here. Route (a) replaces it with `O₀` as well. [derived] That costs nothing, because the lemmas already
+vary `C₀` (`aligned_lockSessZ`, `ZkLink/LockRep.lean:406`, aligns two different `C₀`).
+
+**Not read:** the `default`s of `[Inhabited D] [Inhabited Sl]` in `dfltOutZC`. `D` and `Sl` are the digest and salt
+types, and I don't know whether either is a function type.
+
+### 2. The new lemma, as I would state it
+
+This goes in `Proofs/Core/Game/Lock.lean`, beside `Aligned.refl` (`:239`) and `forkE_congr` (`:247`). It does not
+touch the definitions tree. First a relation, `Aligned` (`Definitions/Core/Game/Lock.lean:266–287`) with its table case
+quantified over two tables:
+
+```lean
+inductive AlignedX {I : Type} {get : I → ℕ → Option (T × D)} {R₁ R₂ : I → α → β → Prop} :
+    {i₁ i₂ : I} → {g₁ g₂ : Game α} → {g' : Game β} →
+      Lock T D get R₁ i₁ g₁ g' → Lock T D get R₂ i₂ g₂ g' → Prop
+  | ret …  | coin …  | send …                     -- as `Aligned`'s
+  | table {i₁ i₂ : I} (slot : ℕ) {upd₁ upd₂ …} {k₁ k₂ : T → Game α} {k' : D → Game β} {hf₁ hs₁ hk₁ hf₂ hs₂ hk₂}
+      {L₁ : (t : T) → (d : D) → Lock T D get R₁ (upd₁ t d) (k₁ t) (k' d)}
+      {L₂ : (t : T) → (d : D) → Lock T D get R₂ (upd₂ t d) (k₂ t) (k' d)} :
+      (∀ t₁ t₂ d, AlignedX (L₁ t₁ d) (L₂ t₂ d)) →
+        AlignedX (Lock.table slot upd₁ hf₁ hs₁ hk₁ L₁) (Lock.table slot upd₂ hf₂ hs₂ hk₂ L₂)
+
+theorem AlignedX.toAligned : AlignedX L₁ L₂ → Aligned L₁ L₂
+
+/-- The fork measure does not read the chooser on aligned locks: at the slot both sides are
+`expect₂ (Φ d) (k' d) σ`, and at any other table node each side may take any table. -/
+theorem forkE_alignedX (plur₁ plur₂ : Chooser T D β) (slot : ℕ) (Φ : D → β → β → ℝ) :
+    ∀ {i₁ i₂ : I} {g₁ g₂ : Game α} {g' : Game β}
+      {L₁ : Lock T D get R₁ i₁ g₁ g'} {L₂ : Lock T D get R₂ i₂ g₂ g'},
+      AlignedX L₁ L₂ → ∀ σ' : Strategy g', forkE plur₁ slot Φ L₁ σ' = forkE plur₂ slot Φ L₂ σ'
+```
+
+[derived] The proof is one induction on `AlignedX`, against forkE's cases (`Definitions/Core/Game/Lock.lean:258–260`):
+- `ret`: the same constant on both sides;
+- `coin`: an average of equal terms;
+- `send`: the induction hypothesis at `σ'.1`;
+- `table` at the slot: both sides are `expect₂ (Φ σ'.1) (k' σ'.1) σ'.2`, and `k'` is shared;
+- `table` elsewhere: the hypothesis at `t₁ := plur₁ s σ'.1 (k' σ'.1) σ'.2` and `t₂ := plur₂ …`.
+
+It compiles [run: `r20261113-184926-3df8`, scratch commit `3115692c3fb5`: lean exit 0 in 20 s; `toAligned`, `forkE_alignedX` and `forkE_const` each depend on `[propext, Classical.choice, Quot.sound]` only]. The proof of `forkE_alignedX` is 15 lines.
+
+The ZK instance goes in `StrictZ`. There is one of these per finder: `advRSZ`, `advPadsSZ` and `advTauSZ`.
+
+```lean
+theorem advRSZ_eq_zero (O₀ : Oracle F) (r ℓ : ℕ) (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) :
+    advRSZ A Hs T pre post cap₀ r ℓ σ =
+      Lock.forkE (fun _ _ _ _ => O₀) (slotOf r ℓ + 4) (ΦRZ Hs T pre r ℓ)
+        (lockSessZ A Hs T pre post O₀ cap₀) (pushStrat A Hs T cap₀ pre post σ) :=
+  forkE_alignedX _ _ _ _ (alignedX_lockSessZ A Hs T pre post default O₀ cap₀) _
+```
+
+`alignedX_lockSessZ` is `aligned_lockSessZ` restated over `AlignedX`; my 18:40Z entry has why it holds at every table
+node.
+
+### 3. The declarations restated
+
+1. **The alignment chain, over `AlignedX`.** Each lemma keeps its `Aligned` form as a one-line corollary through
+   `toAligned`, so the existing callers don't change. [run: a local count, declaration to next declaration, bodies
+   only] The lemmas:
+   - `Core/Game/Lock.lean`: `bind`, `embedLeft`, `embedRight`, `lockWith`, `interleaveLock`. That is 5 of the 6 lemmas
+     and 125 lines; `refl` stays, since `AlignedX L L` is not free.
+   - `Core/Game/Batch.lean`: 9 lemmas, 158 lines.
+   - `CompiledAlign.lean`: `aligned_lockFold` and `aligned_lockTwoOod`, 31 lines (`:28–58`).
+   - `ZkLink/AlignLevel.lean`: 5 lemmas, 137 lines.
+   - `ZkLink/LockRep.lean`: 7 lemmas, 90 lines.
+
+   Two of them need their statements generalized, as in my 18:40Z entry: `Aligned.reindex` to two embeddings, and
+   `aligned_lockInnerZ` to two pads oracles `O₁ O₂`. `Aligned.refl` is used only at table-free locks (`Lock.same`,
+   `lockFoldZK`), which need an `AlignedX` of their own for table-free locks (about 10 lines).
+2. **The finder record and the cost.** This is in `StrictCR:80–150`. `Finder` gains the outcome it is costed on.
+   `twoRuns` and `forkFinder` keep `(d, b, b')` in the outcome and read the pair through `out`. A new `Finder.CRc`
+   states `SHA512CRStrict H g s out cost q` at the cost below, where today's `Finder.CR` has `fun _ => q` (`:97`).
+   `forkE_le_ev`, `expect_one_le` and `expect₂_conflict_le` are adjusted to the new outcome.
+3. **The finders.** At `StrictZ:50, 59, 68`, `advRSFinderZ`, `advPadsSFinderZ` and `advTauSFinderZ` change twice:
+   `plurSZ Hs T pre.length` becomes `fun _ _ _ _ => O₀`, and `lockSessZ … default` becomes `lockSessZ … O₀`.
+   - Their pickers, and those of `adv₀SFinderZ` and `selfSFinderZ` (`:77, :84`), lose `collOf`'s
+     `Classical.choose`. That change is the pickers' row of the whole entry (a search over the openings' authentication
+     paths, as `findColl` does at `ZK/GK/Extract.lean:49`). It is needed for "no exception in lean's walk", and its
+     size is separate.
+4. **The premises.** `SessCRZ` (`:97`) and `TableCRZ` (`:195`) take `O₀` and are stated at `Finder.CRc`.
+   `advRSZ_le_strict`, `advPadsSZ_le_strict` and `advTauSZ_le_strict` (`:105–129`) go through `advRSZ_eq_zero` and its
+   siblings. `epsSZ_le_strict`, `ksBoundAccZ_le_strict` and `ksAvgZC_le_strict` keep their conclusions, which are
+   `ksStrictZ` and `ksAvgStrictZ` at `qF qS`, unchanged.
+5. **V3 and V5.** V3's premise at `Bridge/ScopeGate.lean:168`,
+   `TableCRZAt execArith hs512 (planZHJ …) j (zcStrat …) (2 * (t' + v)) (t' + v)`, gains the argument `zeroTab`. So
+   does V5's `TableCRZ execArith hs512 (planZHJP …) j (zcStrat …) qF qS` (`Bridge/V5/Statement.lean:386–387`).
+   `zeroTab` goes beside `execArith` (`Flock/Soundness/Instance.lean:25`). Under way (i), V3 also gains
+   `_hvOpen : ∀ S R, ∀ T ∈ planZHJ … S R, (runOpenCalls T : ℝ) ≤ v` (my 19:15Z). V5 gains a `v` binder and the same
+   hypothesis, with `qF qS` tied to `t′ + v`, because V5 has no `v` today.
+6. **The opening counts.** These are new functions: `hOpenRZ`, `hOpenPadsZ`, `hOpenTauZ`, `hOpen₀Z` and `hSelfZ`. Each is
+   the SHA-512 evaluations of opening the compared commitment in one run's outputs, computed from those outputs (leaf
+   hashes plus path nodes, at the schedule's queries and `logLen`). Under way (i), each comes with a lemma that it is at
+   most `runOpenCalls T`, the per-table bound V3 and V5 then assume (my 19:15Z). `runOpenCalls` reads only `T.sch`,
+   `T.q` and `T.N`. At the deployed schedules it is at most 23,830, and the largest compared opening is at most 19.
+   Both close by `decide` in the kernel [run: `r20261113-191149-e50b`, 6 theorems, 19 s for the file].
+
+### 4. Cost, as soundness set it
+
+For a rewinding finder at outcome `(d, b, b′)`, the cost is `2·t′ + hOpen(d, b) + hOpen(d, b′)`:
+- `2·t′` is two runs of the prover from the slot, charged at the stated per-run `t′`, since the prover's own SHA-512
+  evaluations are not visible in the game;
+- `hOpen(d, b) + hOpen(d, b′)` is the hashes of the two openings it compares;
+- the plurality costs nothing, because the chooser is the constant.
+
+The self-clash finder's cost is `t′ + hSelfZ(b)`. Against `qF = 2(t′+v)` and `qS = t′+v`, which are unchanged,
+`SHA512CRStrict`'s `∀ b, cost b ≤ q` reduces to `hOpen ≤ v` and `hSelf ≤ v` on every outcome. That is way (i)'s
+hypothesis. [derived]
+
+**Whether soundness accepts `t′` as the charge for "two runs of the prover"** is theirs to say. Under their earlier
+ruling, `t′` is a number the statement quantifies. Nothing in the game model counts the prover's evaluations, so I see
+no computed alternative. [derived]
+
+### 5. Lines
+
+Estimates, not counts, except where marked [run]:
+
+| Part | Lines |
+|---|---|
+| `AlignedX`, `toAligned`, `forkE_alignedX` | about 50 new |
+| The chain over `AlignedX` | about 540 touched, each `.table _ fun t d` becoming `fun t₁ t₂ d`, plus about 40 lines of corollaries (the chain's current size, 541 lines, is [run]) |
+| `Finder`, `forkFinder`, `Finder.CRc` and the three expectation lemmas | about 60 changed |
+| The five finders, the premises and the three `_le_strict` lemmas, with `advRSZ_eq_zero` and its two siblings | about 80 changed, 20 new |
+| The opening counts and their lemmas | 100 to 200 new [guess] |
+| V3, V5 and their proofs passing `zeroTab` and the hypothesis | about 40 changed |
+
+The total is about 950 to 1,050 lines touched, more than half of it mechanical. The pickers' restatement is not in
+this count.
+
+### 6. Lock records that move
+
+[derived: a text reach over `security/` from the restated declarations to the guarantees whose statements read them
+(`up2.py`, two-way ambiguity, namespaces)] The finders (`advRSFinderZ`, `SessCRZ`) reach 39 guarantees, and their
+`unfolded_hash` moves:
+- `Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock` and `…MonitoringPeriod`;
+- `Flock.SecurityProofs`: `EndToEnd`, `EndToEndDrawn`, `EndToEndHidden`, `EndToEndHiddenDrawn`,
+  `EndToEndHiddenDrawnFlat`, `EndToEndHiddenFlat`, `EndToEndRegistered`, `EndToEndRegisteredDrawn`,
+  `EndToEndRegisteredDrawnFlat`, `EndToEndRegisteredFlat`, `EndToEndRegisteredRows`, `EndToEndRegisteredRowsFlat`,
+  `IntegrityBlock`, `IntegrityBlockCarried`, `IntegrityBlocks`, `IntegrityHorizon`, `IntegrityHorizonBlocks`,
+  `IntegrityHorizonCarried`, `IntegrityPeriod`, `IntegrityPeriodLog`, `JointHorizonV5`, `JointSampledV5`,
+  `JointShareV5`, `JointStratified`, `JointStratifiedHorizon`, `JointStratifiedHorizonMT`, `JointStratifiedMT`,
+  `PublicAudit`, `RecursiveRanRegistered`, `RecursiveRanRegisteredExec`, `SampledKSLivePub`, `SampledKSLiveStated`,
+  `SampledKSLiveV2`, `SampledKSLiveV3`, `SampledKSLiveV5` and `SoundAtBridge`;
+- `FlockSoundness.Discharge.FailClosed.flock_verify_sound`.
+
+The pickers' restatement (`collOf`) adds two more, `Flock.SecurityProofs.RecursiveAuditC3` and
+`FlockSoundness.Discharge.FailClosed.flock_verify_sound_205`, for 41 in all.
+
+**A correction to my 18:23Z part C,** which gave `plurSZ` and the three `adv*SFinderZ` 35 readers. They have 39. The
+18:23Z count missed four guarantees [read]:
+- `PublicAudit`, `RecursiveRanRegistered` and `RecursiveRanRegisteredExec`, through `SessForkZ`
+  (`Recursive/Finds.lean:125`), which reads the five session finders through `Finder.Finds`;
+- `SoundAtBridge`, through its `CR` (`SoundAtBridge/Session.lean:184`), which takes `TableCRZ`.
+
+So restating the finders' outcome type also touches `Finder.Finds` and `sessCRZ_of_not_fork` (`Finds.lean:133`).
+
+Under way (i), the statements that gain the hypothesis are V3's and V5's, and every guarantee that states their
+premise list again. The text reach can't separate those from the ones that only unfold it. `check.py --update` gives
+the exact list. No `assumptions`, `open` or `trust_gap` entry changes: the premise is still `SHA512CRStrict`
+(`cr/sha-512`) at the same finders. The new hypothesis is a `domain` entry, with a one-line reason, which soundness
+classed at 19:06Z. Each record that gains it needs an honest witness that concludes it, at the deployed plan, by the
+kernel lemma in my 19:15Z entry.
+
+### 7. The plain session's chain, with two tables (`plurSL`, `plurCL`)
+
+**Yes at every table node.** [read] The plain locks hold table nodes only at the levels, with no pads and no τ:
+- **Level 1** is in `lockLig`. Its proof is `aligned_lockLig`, `Flock/Soundness/CompiledAlign.lean:130`; its
+  `.table _ fun C' cap =>` is at `:147`.
+- **Levels 2 and up** are in `lockRec`. Its proof is `aligned_lockRec`, `CompiledAlign.lean:71`; its `.table` is at
+  `:110`.
+
+Each continues through `lockTwoOod`, `lockQuery` and `lockRec`. The table enters only the index and the oracle state
+(`prev`), and the compiled state takes only the cap. The lemmas called after the `.table` each take two indices and two
+oracle states:
+- `aligned_lockTwoOod` (`:48`);
+- `aligned_lockQuery` (`:59`: `i₁ i₂`, `st₁ st₂`);
+- `aligned_lockRec` (`:71`: `i₁ i₂`, `st₁ st₂`).
+
+[derived] So the body after the `.table` proves the cross-table case unchanged, as for `--zk`.
+
+The rest of the chain holds no table node:
+- `lockRep` (`Flock/Soundness/CompiledLock.lean:563`) binds `Lock.same` of `zerocheck`, `lincheck` and `opening` before
+  `lockLig`. `Lock.same` holds no table node, which is why `aligned_lockRep`'s `Aligned.refl` steps
+  (`CompiledAlign.lean:168–197`) carry over.
+- `lockFold` and `lockTwoOod` are only `.coin`, `.send`, `.ret` and `bind` (`:33–58`).
+- `lockAfterL`, `lockSessL` and `lockTableL` (`Discharge/Exec/SessionSoundL.lean:84, 120`, `CompiledTableL.lean:28`)
+  are `interleaveLock` of the two `lockRep`s, then `bind`, `mapL`, `batchLock` and `mono`. These are the same
+  combinators as `--zk`.
+
+[read] The plain finders use the same `default` for `C₀`: `lockSessL … default cap₀` (`Discharge/Exec/StrictCRL.lean:152`).
+`advRFinderL` (`:53`) builds its lock at `C0starL …`, a level-0 table computed from the strategy, which I have not
+read.
+
+**Which of the 35 guarantees read it.** [derived: the same text reach from `plurSL`, `plurCL`, `plurS` and `plurC`]
+- `plurSL` (through `advRSFinderL`, `SessCRL` and `TableCRL`) reaches two guarantees.
+  `FlockSoundness.Discharge.FailClosed.flock_verify_sound` is one of the 35, through `SoundExecJ`.
+  `flock_verify_sound_205` is not one of the 35; it is reached through `SoundExec205` and `TableCRAt`.
+- `plurCL` reaches none.
+- `plurS` reaches none.
+- `plurC` reaches `Verity.SecurityProofs.ProbBatchInduced` (through `advR` and `InducedWithL`), which is not one of
+  the 35.
+
+**The two deployed ones, `SampledKSLiveV3` and `SampledKSLiveV5`, do not read the plain chain.** [read] Their statement
+files (`Bridge/ScopeGate.lean`, `Bridge/V5/Statement.lean`) name `TableCRZAt` and no `TableCRL`, `SessCRL`, `TableCRAt`,
+`plurSL` or `plurCL`. `TableCRAt := @Discharge.Exec.TableCRL` is read only through `flock_verify_sound_205`'s path
+(`Flock/Soundness/Finders.lean:27`). None of the 14 deployed guarantees is among the plain chain's three readers.
+
+### The nine definitions and the four output pickers, one row each
+
+All files at `main` `3f4af5f89966`, under `security/Proofs/`. Rulings used:
+- `Multiset.toList` and `Finset.toList` pass;
+- `Classical.propDecidable` passes as a filter if the cost covers every candidate;
+- a search must be over a finite list the finder holds;
+- a search with no bound is refused.
+
+| Definition | What it chooses | Unique and computable, or a search over a held list | What restating costs |
+|---|---|---|---|
+| `capOfRoot` (`Flock/Soundness/Discharge/Exec/Decode.lean:98`) | the array of 64-byte entries that concatenate to `root_B` | **Unique**: the lemma just before it, and `capOfRoot_eq` (`:103`). **Computable** by slicing `root_B` into 64-byte pieces, with no hashing. [read] | The definition becomes the slicing, plus one lemma that it satisfies the property, so the uniqueness lemma gives `capOfRoot_eq`. About 20 lines. The cost is 0 SHA-512 evaluations. [derived] |
+| `outBitOf` (`Discharge/Layout/OutPin.lean:85`) | the wire `x` with `(instC …).wire x = g` | **A search over `Fin w`**, the instance's finite wires (`Const/Inst.lean:59`). I have not read whether `.wire` is injective; the search returns the first match either way. [read, derived] | `List.find?` over `List.finRange w`, plus a lemma that it finds a match when one exists. About 15 lines. The cost is at most `w` comparisons per output bit and no hashing. [derived] |
+| `tableZJ` (`Composed/DefsJ.lean:165`) | `Classical.choice` of `Nonempty (DrawSetupZJ …)` | **Unique** [derived from what I read]. The record's data (`DefsJ.lean:80–94`) is fixed by its equations, and the rest are Props: `hz : Zk.schedule x.st.m = .ok (sch, tPad)`; inside `DrawSetup` (`Integrate/Sites.lean:55–71`), `st` by `setupH … = .ok st`, `D` by `ofJson`, and `(m, k0, levels, ext)` by `fast100`. So the type is a subsingleton. **Computable** by running those functions and testing the Props with `Classical.propDecidable`, which the ruling admits as a filter. | A `Subsingleton (DrawSetupZJ …)` lemma, and the definition rewritten as "run the setup functions, check, return". The callers that read `tableZJ`'s fields through `choice_spec` take the lemma instead. About 60 to 100 lines [guess]. The cost is the verifier's setup work, which no SHA-512 term charges today; the soundness ruling decides whether setup work counts. |
+| `tableZHJ` (`ZkHidden/DefsJ.lean:322`) | the same, for `DrawSetupZHJ` | **Unique** for the same reason, with `hzk : shapeOk` added. `DrawSetupZHJ` is at `DefsJ.lean:210–225`; `DrawSetupH`, at `HiddenExec/Tables.lean:58–75`, uses `setupHidden`. [read, derived] | As for `tableZJ`, about 60 to 100 lines [guess]. |
+| `Rows.ofNet` (`Properties/Flock/Circuit/Rows.lean:170`) | rows `ra`, `rb` with `RowOrder` and `Sparse.ofRows ra = .ok net.a` (and the same for `b`) | **Unique if every column index is below 2^32**, since `Comp.lean:188–198` stores each column as 4 bytes, little-endian. **Computable** by decoding `net.a` and `net.b`. [read, derived] **Not established:** that `Built` bounds the width below 2^32. Without that, two row lists could serialize alike and the witness is not unique. | A decoder `Sparse.toRows` and the lemma `ofRows (toRows s) = .ok s` under the width bound. About 80 lines [guess]. If `Built` does not give the bound, this row becomes a search over the decodings, which is still finite (the bytes fix the length). |
+| `outCL` (`Recursive/Compile.lean:81`) | the outcome of `PlaysT (tableCL …) (schedSteps …)` | **Unique** by `playsT_det` (`Claims/KS/ZkDecodeW.lean:203`). **Computable as a replay** of the steps against the game. [read] I have not established whether the replay can be written over today's step type, since `Step` carries a Σ-type (`Refine/LiveSim.lean:42`). [guess] | A replay function, plus a lemma that it gives the `PlaysT` outcome. About 50 lines if the steps replay as typed [guess]. The cost is one replay of the verifier's steps. |
+| `outCL` (`FlockLinkL.lean:141`) | `outOf rdTL opOfVL` | No choice of its own. It reads `LinkFinder.outOf` and `opOfVL`, the picker rows below. [read] | Follows those rows. |
+| `bindReveal` (`Sampled/Digest.lean:183`) | the revealed digests at a binding | **Unique** by `BindsAt.unique` (`:48`). **Computable**: `BindsAt` (`:43`) is a parse equation and `digests = some ds`. [read] | The parse, plus one lemma. About 20 lines. The cost is the parse, with no hashing. [derived] |
+| `rowsOutZC` (`ZkLink/Rows.lean:51`) and `outRegZC` (`Recursive/ZkReg/RegLink.lean:149`) | a value `v ∈ rdTZC` with `v ≠` the registrant's value | **A search over the held `Finset`** `rdTZC`, through `Finset.toList`, which passes. That `Finset` comes from `readsAtZC`, below. [read] | `List.find?` over `(rdTZC …).toList`, plus a lemma that it is found when one exists. About 15 lines each. The cost is at most `|rdTZC|` comparisons. |
+
+| Picker | What it chooses | Unique and computable, or a search over a held list | What restating costs |
+|---|---|---|---|
+| `StrictCR.collOf` (`Flock/Soundness/StrictCR.lean:53`) | a collision pair, by `Classical.choose` of `Merkle.Collision H` | **Not unique.** A search over the two authentication paths' same-level inputs, `findColl` (`ZK/GK/Extract.lean:49`, with `findColl_isColl`), finds a pair with `IsColl`. [read] | See the next table. |
+| `LinkFinder.outOf` (`LinkFinder.lean:349`) | the position `p.1` and two read values `v₁ ≠ v₂` | `p.1` is determined. `v₁` and `v₂` are a **search over the held `rd` `Finset`s**, through `Finset.toList`. [read] | Two nested `List.find?`, plus a lemma that they are found when two distinct values exist. About 30 lines. The cost is at most `s_c²` comparisons, with no hashing. |
+| `opOfVZC` (`CompiledLink.lean:125`, `Classical.epsilon`) | the opening that gives a value `v` | **A search over `(L.draw ω).toList`**, the sampled units: the unit `u` with `M = cand u` and `o = vb.opening`. [read] | `List.find?` over the sample, plus a lemma. About 20 lines. The candidates are the sample's units, which the cost already pays for through the decoding of each one. |
+| `opOfVL` (`FlockLinkL.lean:135`) | the same, plain | The same search. [read] | About 20 lines. |
+| `readsAtZC` (`CompiledLink.lean:90`), the `Finset` the two above search | the values read at `c`, as a filter of `Finset.univ` of `Val` | Under the ruling, a `Classical.propDecidable` filter passes only if the cost covers every candidate. Here the candidates are all of `Val`, so the cost would have to cover `|Val|` tests. [read, derived] | Restate it as an image over the draw, `(L.draw ω).filter (ReadsZ · c) |>.image (cand ·)`. Its candidates are then the sample's units, which the cost already counts. About 20 lines. [derived] |
+
+**`collOf`, `onePick` and `conflictPick` against a search over the messages hashed, through `Multiset.toList`.** [read, derived]
+- **The output is not the same.** `collOf` picks some pair by `Classical.choose`, and `findColl` picks a definite one, the first level where the two paths' inputs differ and their hashes agree. When there are several collisions they can differ.
+- **The bounds don't need the same output.** They use only `ind_le_onePick` (`StrictCR.lean:65`): when the event holds, the output is a collision. The search gives that by `findColl_isColl`. So the event bounded and the bound are the same, and only the pair differs.
+- **`onePick`** (`:62`) is `collOf` applied to the event's witness. The search form needs the event's collision in a constructive form: the two messages (or the two authentication paths) as data, not only `Merkle.Collision H` as a Prop. Each `*_conflict_collision` lemma (`opRZ_…`, `opPadsAtZ_…`, `opTauZ_…`, `op₀Z_…` and `SelfClashZ.collision`) needs a version that returns the pair through a search over the run's openings. About 30 to 60 lines each [guess].
+- **`conflictPick`** (`:75`) adds a search over the opened positions `p` with `ConflictAt op x p`. The positions are finite and are the openings the two runs hold, so that is a held list.
+- **A search over "the messages the finder hashed" as one `Multiset`** gives a pair with the same event, by the birthday argument's own form. But no Lean object holds that multiset today: the game does not record its hash calls. The authentication paths are the list the finder holds. So I'd state the search over the paths, not over a hash log.
+
+### Part A, items 3 to 5: `candZC` and `candL`
+
+**3. The decoder in Lean: the pieces exist, but none passes ruling B as written, and the proved cost is too loose to charge.**
+- The masked decoder is `zkDecodeR i os := gsDecode (flockZkLevelZero i) rf128 (flockZkReader i) (zkAgreeR i) (fillPts (2^zkLen i) os)` (`Claims/GS/ZkRadius.lean`): Guruswami–Sudan per row with Gaussian elimination (`interpCoeffs`, `GS/Interp.lean:247`, a computable `kernel`), Roth–Ruckenstein with the trace root finder `rf128` (`GS/Flock.lean:81`), joint pruning across rows (`kept`, `GS/Decode.lean:122`), and read-back. `listWithin_zkDecodeR` (`ZkRadius.lean:259`) lists within exactly `padRadius`. The plain one is `flockDecode` (`GS/Flock.lean:191`, `mem_flockDecode` at `:223`). [read]
+- The bridge from a `CommittedPad`-close table to the decoder's format exists, for Claims' deployed record: `good_of_close_zk` and `good_of_close_zkJ` (`Claims/KS/Trace.lean:327`, `Claims/KS/ZkBoundJ.lean:405`) through `zkEnc_eq_encAt` (`Trace.lean:162`) and `zkReadD_eq_padWit` (`Trace.lean:178`). [read] Its counterpart for the compiled link's `TabZK` and `extractTableZ` does not exist. [read: no such lemma found]
+- Four places reach a refused choice [read]:
+  - every GF(2^128) division. `GF128`'s field is `equivAdj.field` (`Level3/GF128Field.lean:195`), carried from `AdjoinRoot`, whose inverse is Mathlib's `Ideal.Quotient` inverse, `Classical.choose (exists_inv ha)` (Mathlib `RingTheory/Ideal/Quotient/Basic.lean:121`, used by `RingTheory/AdjoinRoot.lean:616`). The elimination divides by each pivot (`GS/Elim.lean:68,84`);
+  - the readers' inverses `novelInv` and `padInv`, through `LinearEquiv.ofInjectiveEndo` (`GS/Flock.lean`, `GS/ZkRadius.lean`), which inverts by `Function.surjInv`;
+  - the threshold `⌈agree·N⌉₊` over ℝ (`Claims/Decode.lean:235`), whose ceiling on ℝ is classical. The radius is not rational: `padRadius l t = 1 − √(padRate l t) − η` (`Definitions/Flock/Accounting/Padded.lean:35`) and `zkAgreeR i = √((2^cols + pad)/2^len) + 1/200` (`Claims/GS/ZkRadius.lean:205`). The square root is irrational unless `(2^cols + pad)·2^len` is a perfect square, which it is not at m = 25 (ρ ≈ 0.568). Its ceiling is still computable exactly over ℕ: `a = ⌈agree·N⌉` is the least `a` with `200a ≥ N` and `(200a − N)² ≥ 40000·(2^cols + pad)·N`, since `ρN² = (2^cols + pad)·N`. So the radius stays a real number in the statements, and the decoder computes its threshold this way, with a lemma that it equals `⌈agree·N⌉₊`. The radius itself does not have to change. [derived]
+  - `basis128` and `pack` (`RootFindGF128.lean:69`, `Level3/ArithFacts.lean:69`), built through `AdjoinRoot.mk` and `equivAdj.symm`.
+- What removes each, as soundness requires (removed, not excused) [derived]:
+  - **A computed field on `GF128`.** The executable `F128` operations, with the inverse computed as a^(2^128−2) by repeated squaring, are proved equal to `equivAdj.field`'s; `GF128Field.lean:202,207` already prove that + and × agree with `toAdj`. The decoders, and the finder's constant (route (a)), then reach `F128`'s operations and not `instFieldGF128`.
+  - **The readers' inverses `novelInv` and `padInv`.** These become elimination over the field in place of `LinearEquiv.ofInjectiveEndo`. The decoder's own `interpCoeffs` kernel step is that elimination already.
+  - **The threshold.** It becomes the integer threshold above.
+  - **`basis128` and `pack`.** These become literal bit patterns.
+- The cost unit. Assumptions count SHA-512 evaluations, and the decoder counts GF(2^128) operations (`gsCost`, `GS/Decode.lean:152`). Charging needs a stated rate, at most one evaluation per field operation, which is conservative but is a statement the soundness ruling must accept. [derived; the rate is not established]
+- The charge per decode, D_m, counting only elimination, the dominant step: per row, about (2/3)·n³ operations with n = N·(k+1)(k+2)/2 unknowns at multiplicity k+1 (`GS/Interp.lean:176,185`; `GS/Elim.lean:91`), N = 2^d positions, k = 2^cols + 2·q0, times 2^k0 rows. [derived]
+  - masked: D_m ≈ 2^114.5 (m = 25), 2^122.9 (26), 2^131.7 (27), 2^156.4 to 2^158.4 (28 to 30), 2^167.4 (31), 2^176.4 (32), 2^185.4 (33), 2^194.4 (34), 2^203.4 (35);
+  - plain: 2^86.4 (m = 22) up to 2^203.4 (35);
+  - the proved bound `zkPolyR` (`zkDecodeR_complexity`), at X = 2·2^d·2^k0·128, is at least 2^247.3 at m = 25 and above 2^256 from m = 26 on, so the bound as proved cannot be charged. A tight count needs a new lemma.
+- **These numbers are for you before any statement changes, under your 18:35Z rule.** [derived] With the proved bound charged, the link term's decoder part is at least 2^−8.7 per unit read at m = 25, and above 1 from m = 26 on. So V3's and V5's stated δ fails at every deployed m ≥ 26. Even with the real elimination count D_m charged, it fails from m = 28 on (2^−99.6 per unit read at m = 28 and 2^−52.6 at m = 35, each many orders above the rest of the link term, as item 4 says). Only the low-multiplicity decoder of item 5 keeps it, at D_m/2^256 ≤ 2^−148 at every m.
+- The finder decodes once per sampled unit that reads c, per trial: `readsAtZC` (`CompiledLink.lean:90`) reads `candZC` for each u ∈ L.draw ω with `ReadsZ u c`. So the charge per trial is t′·(runs) plus s_c·D_m, with s_c the number of such units. [read, derived]
+
+**4. What changes, and the hardest lemma.** [derived; sizes are guesses where marked]
+- Definitions:
+  - `candZC` (`CompiledLink.lean:76`) and `candL` (`FlockLinkL.lean:85`) become "decode the extracted table, return the first listed message whose witness satisfies S". They are generic in F and the arithmetic while the decoders are at GF(2^128), so each takes a decoder argument (its function, its completeness at the radius, its cost), which V2, V3 and V5 instantiate with `zkDecodeR`, and `flock_verify_sound` with `flockDecode`.
+  - `readsAtZC` becomes an image over the sample's units, not a filter over all values. Under the `Classical.propDecidable` ruling, the filter passes only if the cost covers its candidates, and those are all of `Val`. The image's candidates are the sample's units, which the cost already pays for; `opOfVZC` and `opOfVL` (`Classical.epsilon`, `CompiledLink.lean:125`, `FlockLinkL.lean:135`) become a search over that image; `LinkFinder.outOf` (`LinkFinder.lean:349`) a search over the trials and their readings.
+  - `cTZC` and the plain `cT` gain s_c·D_m; `linkBoundZC` and the plain link bound gain 2·s·D_m/2^256 inside their bracket (s the sample's units reading a position).
+  - The four decoder fixes in item 3.
+- Proofs: the five places that unfold `candZC` and use `Classical.choose_spec` (`CompiledLink.lean:153,579`, `ZkLink/RowsSound.lean:247`, `Recursive/ZkReg/RegLink.lean:306`, `Recursive/Transfer.lean:211`), and `candL`'s in `FlockLinkL.lean`, take one new lemma instead: Committed implies the decoder-based candidate is `some M` with M's `CommittedPad` facts.
+- Statements and records: `LinkCRZC` and `LinkCRL` (finder output and cost), so the records of the 35 and 2 guarantees in part C, and the stated δ of V3 and V5 in its link term.
+- Bounds: at m = 25 the decoder term is 2^−141.5 per unit read, negligible; at m = 35 it is 2^−52.6 per unit read, which exceeds the rest of the link term by many orders, so **V3's and V5's stated δ would not hold at m ≥ 28 with the decoder as written** (2^−99.6 per unit read at m = 28). [derived]
+- The hardest lemma [guess]: the completeness of the decoder at the compiled tables, that `TabZK.Committed A S (extractTableZ …)` puts the satisfying message in `zkDecodeR`'s list for every table V3's and V5's plans hold (each a `fast100` masked schedule, t = 2·q0). It is `good_of_close_zkJ` again, for `TabZK` instead of Claims' record. The cost lemma (a closed form for `gsCost` at multiplicity k+1, including the pruning's list sizes at every row prefix) is the second hardest.
+
+**5. The smallest alternative, since the decoder as written is large.** A Guruswami–Sudan decoder at a small fixed multiplicity r instead of k+1. At the margin η = 1/200, the Johnson condition (√ρ + η)² > ρ·(1 + 1/r) needs r > ρ/(2η√ρ + η²), about 71 at ρ = 1/2 and 76 at m = 25's ρ ≈ 0.568. Then n ≈ N·r(r+1)/2 and D_m ≈ 2^78 (m = 25) to 2^108 (m = 35), so D_m/2^256 ≤ 2^−148 at every m and the link term changes negligibly. [derived; that the existing proofs generalize from k+1 to r is a guess] ArkLib's `GuruswamiSudan.decoder`, which `rowList` already calls (`Claims/Decode.lean:226`), takes a general multiplicity; `GS/Interp.lean`'s regime `Reg` and its equation count are the k+1 case and would be restated for r.
+
+### Not established
+
+- **The restated chain.** That it compiles over `AlignedX`. Only its core is tried.
+- **`zeroTab`.** That it reaches no choice in lean's own walk. I read the definitions and did not run the walk. Soundness
+  took the term at 19:06Z, and lean adds it to its walk's tests. It stays a row here, as does the level-0 `default`.
+- **The `default`s.** Which instance the `default` in `lockSessZ … default cap₀` elaborates to. Whether `D` or `Sl` is a
+  function type, which decides whether `dfltOutZC`'s `default`s are another such reach.
+- **`Rows.ofNet`.** That `Built` bounds a column below 2^32.
+- **`outCL`.** That its steps replay as typed.
+- **`tableZJ` and `tableZHJ`.** Whether setup work counts in the cost.
+- **The pickers.** That each `*_conflict_collision` lemma has a version with the collision as data.
+- **Soundness's rulings.** How soundness rules on charging the prover's runs at the stated `t′`. On `v`, soundness
+  set (i) at 19:06Z as a `domain` hypothesis; it is not written, and it goes to Daniel as its own ask.
+- **Way (i)'s two table facts.** That every table `planZHJ` admits has `T.q = 168` and `T.N ≤ 8192`, and comes from
+  `Zk.schedule m`. The count itself closes by `decide` at the deployed schedules [run: `r20261113-191149-e50b`].
+- **The decoder at multiplicity r.** That the decoder's proofs generalize from multiplicity k+1 to r.
+- **The records.** The exact list of records that move. That is `check.py --update`'s; mine is a text reach.
