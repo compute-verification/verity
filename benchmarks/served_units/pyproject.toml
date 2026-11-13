@@ -12,5 +12,5 @@ untraced = ["tests/test_names.py", "tests/test_window.py"]
 # stage.py's imports (verity, verity_flock under it, circuit_check's targets), a census type's serving-row template
 # (verity_vllm), ks_form.py's mirror (verity.core's one-stage proofs), and the break-even planner's reader, whose
 # required fields prove_rows.py's rows are held to.
-inputs = ["verity", "adapters/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_check",
+inputs = ["verity", "hardware/cards", "adapters/vllm/verity_vllm", "tools/verity/circuit_check/src/circuit_check",
           "benchmarks/spot_figures/breakeven/reprice.py"]
