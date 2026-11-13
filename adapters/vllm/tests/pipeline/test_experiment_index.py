@@ -54,6 +54,13 @@ def test_a_specs_initial_state_is_a_fresh_engine():
         "kind": "fresh", "note": "fresh engine, empty KV cache; any prefix reuse happens inside this run's own requests"}
 
 
+def test_a_spec_states_the_initial_state_its_caller_hands_it_and_the_fresh_engines_for_none_or_an_empty_one():
+    warm = {"kind": "warm", "note": "a KV cache another run left"}
+    fresh, stated = _spec(), _spec(initial_state=warm)
+    assert stated["initial_state"] == warm and stated["digest"] != fresh["digest"]
+    assert _spec(initial_state=None) == _spec(initial_state={}) == fresh
+
+
 def test_spec_dtype_is_the_served_dtype():
     """`configuration.dtype`: explicit driver value > engine-argument override (`engine.args.dtype`) > HF torch_dtype."""
     assert _spec()["configuration"]["dtype"] == "bfloat16"                                              # HF fallback (no override)

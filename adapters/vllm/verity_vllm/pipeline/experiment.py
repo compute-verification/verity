@@ -111,7 +111,7 @@ def code_version(repo: Path) -> dict:
 def build_spec(*, config_id: str, case: str, profile: str | None, workload_path: str | None, workload_doc: dict | None,
                checkpoint: dict | None, checkpoint_dir: str | None, hf_config: dict | None, engine_args: dict, max_num_seqs: int,
                sampling: dict, tp: int = 1, dtype: str | None = None, snapshot_steps: list[int] | None, snapshot_max_bytes: int | None,
-               harness: dict | None = None) -> dict:
+               initial_state: dict | None = None, harness: dict | None = None) -> dict:
     """Everything known before execution, in the three blocks (configuration / workload / initial state).  The concrete requests are
     copied out of the workload file (text prompts, per-request max_tokens, arrival steps, request ids); their token ids come from the
     capture process's `spec_tokens.json` (same information, produced by the tokenizer before the first engine step)."""
@@ -154,7 +154,7 @@ def build_spec(*, config_id: str, case: str, profile: str | None, workload_path:
             "n_requests": len(reqs), "requests": reqs,
             "tokens": "capture/spec_tokens.json",     # the same prompt token ids as the capture process saw them before its first engine step
         },
-        "initial_state": {"kind": "fresh", "note": "fresh engine, empty KV cache; any prefix reuse happens inside this run's own requests"},
+        "initial_state": initial_state or {"kind": "fresh", "note": "fresh engine, empty KV cache; any prefix reuse happens inside this run's own requests"},
     }
     spec["digest"] = digest_doc({k: v for k, v in spec.items() if k != "digest"})
     return spec

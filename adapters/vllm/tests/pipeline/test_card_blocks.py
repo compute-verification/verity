@@ -391,6 +391,23 @@ def test_the_top_sections_nine_counts_pass_at_zero_fail_at_another_number_and_ar
             **{each: "0     PASS" for each in ZERO_PASSES}, label: "1     FAIL"}, key
 
 
+def test_a_count_that_passes_only_above_zero_reads_the_other_way_and_one_not_stated_is_n_a_either_way():
+    assert [CARD._pf(n, zero_passes=False) for n in (None, 0, 3)] == ["n/a", "FAIL", "PASS"]
+    assert [CARD._pf(n) for n in (None, 0, 3)] == ["n/a", "PASS", "FAIL"]
+
+
+def test_a_card_built_with_an_hf_config_cites_it_for_c_and_the_manifests_only_when_handed_none(tmp_path):
+    C = {"model": "org/m", "H": 8, "NL": 2, "QKV": 24}
+    hand = {"model": "hand", "H": "hand", "NL": "hand", "QKV": "derived"}
+    run_dir = _run(tmp_path, {"run.json": {"C": C, "hf_config": {"H": 8}}}).run_dir
+
+    def provenance(**given: Any) -> dict[str, str]:
+        return {k: v["provenance"] for k, v in CARD.build_card(run_dir, _results(), **given).C.items()}
+    assert provenance() == provenance(hf_config=None) == {**hand, "H": "hf-config"}
+    assert provenance(hf_config={"NL": 2}) == {**hand, "NL": "hf-config"}
+    assert provenance(hf_config={}) == hand                                           # an empty one is the caller's, not the manifest's
+
+
 def _line(md: str, starts: str) -> str:
     return next(ln for ln in md.splitlines() if ln.startswith(starts))
 
