@@ -310,7 +310,8 @@ class _Check:
 
 
 def _committer(steps: dict[int, dict[str, torch.Tensor]], rows: dict[int, Any]) -> SimpleNamespace:
-    """A committer that retained ``steps``' values, each step's in one block of bytes at the offsets its layout names."""
+    """A committer that retained ``steps``' values, each step's in one block of bytes at the offsets its layout names, and
+    recorded the row order of the steps in ``rows``."""
     layouts, blocks = {}, {}
     for s, values in steps.items():
         metas, raw, off = [], [], 16
@@ -330,7 +331,7 @@ def test_the_check_walks_the_committed_steps_in_order_each_with_its_values_words
     monkeypatch.setattr(served_check, "ServedCheck", _Check)
     hidden, ids = torch.tensor(VALUES, dtype=BF16), torch.tensor([4, 9], dtype=torch.int64)
     com = _committer({2: {"h": hidden * 2, "ids": ids + 1}, 0: {"ids": ids, "h": hidden}, 1: {"h": hidden}},
-                     {0: [("req-b-0123abcd", 0, 1), ("req-a", 1, 2)], 1: None, 2: [("a stranger", 0, 2)]})
+                     {0: [("req-b-0123abcd", 0, 1), ("req-a", 1, 2)], 2: [("a stranger", 0, 2)]})
     build, weight, prompts = {"program_digest": "d"}, (lambda name: name), {"r0": [1, 2]}
     report = sm.check_committed(build, com, weight, prompts, {"req-a": "r0", "req-b": "r1"}, seed=11, **given)
     check, = _Check.made
