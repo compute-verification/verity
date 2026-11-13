@@ -42,8 +42,9 @@ port `q` over its table's `counts[q]` rows instead, and unit `u` reads leaf `ref
 The verifier checks the tables (`HmRow.loadPublic`: every count is positive, every ref is below its port's count, the
 digests are the tables' rows), so the leaf map is the verifier's, at every accepted public file.
 
-* `LeafMap`: per port its leaf count `cnt q`, per unit its leaf `ref q u`, per leaf its `b ‖ c` digest `dig q r`, and the
-  path levels `d` the opening's data reserves (the deepest port's).
+* `LeafMap`: per port its leaf count `cnt q`, per unit its leaf `ref q u`, per leaf its `b ‖ c` digest `dig q r`, the
+  path levels `d` the opening's data reserves (the deepest port's), and per port its frame-v3 domain `dom q`, the
+  public file's published one (`domOf`).
 * `LeafMap.ident c pub nl`: one leaf per unit, `nl` leaves, the map `rootsOf`/`commitDep` read;
   `LeafMap.ofTables c pub t`: the tables'; `LeafMap.ofPublic c pub nl`: the public file's own.
 * `rootsOfL c L`, `portsOfL c L roots`, `pathOfL C rows L`, `commitDepL C rows c L roots`: `rootsOf`, `portsOf`,
@@ -68,29 +69,39 @@ open Claims Claims.Sampling
 open Properties.NetworkCertifier.Bytes (bs)
 
 /-- **A registration's leaf map**: per port `q` its leaf count `cnt q`, unit `u`'s leaf `ref q u` there, leaf `r`'s
-`b ‖ c` digest `dig q r`, and the path levels `d` an opening's data reserves before the row's bits. -/
+`b ‖ c` digest `dig q r`, the path levels `d` an opening's data reserves before the row's bits, and port `q`'s frame-v3
+domain `dom q`. -/
 structure LeafMap where
   cnt : ℕ → ℕ
   ref : ℕ → ℕ → ℕ
   dig : ℕ → ℕ → ByteArray
   d : ℕ
+  dom : ℕ → ByteArray
 
-/-- **One leaf per unit**: `nl` leaves at every port, unit `u` at leaf `u`, the public file's digest there. -/
+/-- **One leaf per unit**: `nl` leaves at every port, unit `u` at leaf `u`, the public file's digest there, under the
+published domains. -/
 def LeafMap.ident (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : LeafMap :=
-  ⟨fun _ => nl, fun _ u => u, fun q u => pub.digest u q c.ports.size, Flock.log2ceil nl⟩
+  ⟨fun _ => nl, fun _ u => u, fun q u => pub.digest u q c.ports.size, Flock.log2ceil nl, domOf c pub⟩
 
 /-- **A `shared_rows` file's leaf map**: port `q` has its table's `counts[q]` rows, at the digests from `starts[q]`;
-unit `u` reads row `refs[u · np + q]`; the data reserves the deepest table's levels. -/
+unit `u` reads row `refs[u · np + q]`; the data reserves the deepest table's levels; the domains are the published
+ones. -/
 def LeafMap.ofTables (c : Flock.Circuit) (pub : Flock.Public) (t : Flock.Tables) : LeafMap :=
   ⟨fun q => t.counts.getD q 0, fun q u => t.refs.getD (u * c.ports.size + q) 0,
     fun q r => pub.digests.getD (t.starts.getD q 0 + r) ByteArray.empty,
-    (List.range c.ports.size).foldr (fun q m => max (Flock.log2ceil (t.counts.getD q 0)) m) 0⟩
+    (List.range c.ports.size).foldr (fun q m => max (Flock.log2ceil (t.counts.getD q 0)) m) 0, domOf c pub⟩
 
 /-- **The public file's leaf map**: its tables', else one leaf per unit. -/
 def LeafMap.ofPublic (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : LeafMap :=
   match pub.tables with
   | some t => LeafMap.ofTables c pub t
   | none => LeafMap.ident c pub nl
+
+/-- **The public file's leaf map is under its published domains.** -/
+theorem LeafMap.ofPublic_dom (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :
+    (LeafMap.ofPublic c pub nl).dom = domOf c pub := by
+  unfold LeafMap.ofPublic
+  cases pub.tables <;> rfl
 
 theorem LeafMap.ofPublic_none {c : Flock.Circuit} {pub : Flock.Public} (nl : ℕ) (h : pub.tables = none) :
     LeafMap.ofPublic c pub nl = LeafMap.ident c pub nl := by
@@ -113,27 +124,28 @@ theorem LeafMap.dig_ref (c : Flock.Circuit) (pub : Flock.Public) (nl q u : ℕ) 
       simp only [Flock.Public.digest, h]
     exact e.symm
 
-/-- Port `q`'s leaves at `L`: leaf `r` is the frame-v3 leaf, at the port's schema (`schemaOf`), of the tree leaf of
-`L.dig q r`. -/
+/-- Port `q`'s leaves at `L`: leaf `r` is the frame-v3 leaf, at the port's schema (`schemaOf`) and domain (`L.dom q`),
+of the tree leaf of `L.dig q r`. -/
 def leavesL (c : Flock.Circuit) (L : LeafMap) (q : ℕ) : Array ByteArray :=
   (Array.range (L.cnt q)).map fun r =>
-    Flock.Registered.leafAs (schemaOf c q) (domOf c q) r (Flock.Hm96.Default512.treeLeaf (L.dig q r))
+    Flock.Registered.leafAs (schemaOf c q) (L.dom q) r (Flock.Hm96.Default512.treeLeaf (L.dig q r))
 
 /-- **The registration's frame-v3 roots at a leaf map**: per port, the root over its `L.cnt q` leaves. -/
 def rootsOfL (c : Flock.Circuit) (L : LeafMap) : List Msg :=
-  (List.range c.ports.size).map fun q => bs (Flock.FV3.root (domOf c q) (leavesL c L q) Sha512.hash)
+  (List.range c.ports.size).map fun q => bs (Flock.FV3.root (L.dom q) (leavesL c L q) Sha512.hash)
 
 theorem rootsOfL_ident (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :
     rootsOfL c (LeafMap.ident c pub nl) = rootsOf c pub nl := rfl
 
-/-- **The registered ports at a leaf map**: `portsOf` with port `q`'s `L.cnt q` leaves, each at its own schema. -/
+/-- **The registered ports at a leaf map**: `portsOf` with port `q`'s `L.cnt q` leaves, each at its own schema and
+`L`'s domain. -/
 def portsOfL (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) : Array Flock.Registered.Port :=
   (Array.range c.ports.size).map fun q =>
     { name := (c.ports[q]?.map (·.name)).getD "", value := "", root := bytes (roots.getD q []), leaves := L.cnt q,
-      words := none, wordBits := 0, domain := domOf c q, readsRel := #[], schema := schemaOf c q }
+      words := none, wordBits := 0, domain := L.dom q, readsRel := #[], schema := schemaOf c q }
 
 theorem portsOfL_ident (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) (roots : List Msg) :
-    portsOfL c (LeafMap.ident c pub nl) roots = portsOf c nl roots := rfl
+    portsOfL c (LeafMap.ident c pub nl) roots = portsOf c pub nl roots := rfl
 
 /-- The port index of the row at claims position `i` (`0` where none). -/
 def portIdxOf (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (i : ℕ) : ℕ :=
@@ -156,7 +168,7 @@ noncomputable def commitDepL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Op
 
 theorem commitDepL_ident (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) :
-    commitDepL C rows c (LeafMap.ident c pub nl) roots = commitDep C rows c nl roots := rfl
+    commitDepL C rows c (LeafMap.ident c pub nl) roots = commitDep C rows c pub nl roots := rfl
 
 /-- **`commitDepL` binds, at every `H`**, as `commitDep` does: at a circuit file with no segmented port. -/
 theorem commitDepL_binds (H : Msg → Msg) (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt)
@@ -191,7 +203,7 @@ theorem rowDep_v2 (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt)
 /-- **At a `RowsV2` file a port's leaves are `hm96-sha512/row/v2` leaves.** -/
 theorem leavesL_v2 {c : Flock.Circuit} (h : RowsV2 c) (L : LeafMap) {q : ℕ} (hq : q < c.ports.size) :
     leavesL c L q = (Array.range (L.cnt q)).map fun r =>
-      Flock.Registered.leafAs Flock.HmRow.ROW_SCHEMA_V2 (domOf c q) r (Flock.Hm96.Default512.treeLeaf (L.dig q r)) := by
+      Flock.Registered.leafAs Flock.HmRow.ROW_SCHEMA_V2 (L.dom q) r (Flock.Hm96.Default512.treeLeaf (L.dig q r)) := by
   simp only [leavesL, schemaOf_v2 h hq]
 
 /-- **At a `RowsV2` file `commitDepL` hashes every row as a `sha512/row/v2` row.** -/
@@ -211,11 +223,11 @@ def LayoutIsL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c 
 
 theorem layoutIsL_ident (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) (cd : SamplingDeploy.Code) :
-    LayoutIsL C rows c (LeafMap.ident c pub nl) roots cd ↔ LayoutIs C rows c nl roots cd := Iff.rfl
+    LayoutIsL C rows c (LeafMap.ident c pub nl) roots cd ↔ LayoutIs C rows c pub nl roots cd := Iff.rfl
 
-/-- **Equal roots at a leaf map have one domain**: `PortRoots.RootFixesDomain` at `rootsOfL`. -/
+/-- **Equal roots at a leaf map have one domain**: `PortRoots.RootFixesDomain` at `rootsOfL` and `L`'s domains. -/
 def RootFixesDomainL (c : Flock.Circuit) (L : LeafMap) : Prop :=
-  ∀ q q', q' < q → q < c.ports.size → (rootsOfL c L).getD q' [] = (rootsOfL c L).getD q [] → domOf c q' = domOf c q
+  ∀ q q', q' < q → q < c.ports.size → (rootsOfL c L).getD q' [] = (rootsOfL c L).getD q [] → L.dom q' = L.dom q
 
 theorem rootFixesDomainL_ident (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) :
     RootFixesDomainL c (LeafMap.ident c pub nl) ↔ PortRoots.RootFixesDomain c pub nl := Iff.rfl
@@ -246,7 +258,7 @@ def _root_.Flock.Bridge.TransportsLiveCR : Prop :=
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
-    (_hdup : Flock.Registered.dupName D.unroll = none)
+    (_hdup : Flock.PortRoots.dupId D.unroll pub = false)
     (_hroots : Bridge.RootFixesDomainL D.unroll (Bridge.LeafMap.ofPublic D.unroll pub n))
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)

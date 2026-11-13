@@ -1,4 +1,4 @@
-"""Certified share of int8 tensor capacity for Llama-3.1-8B serving, from dcap.cu's measurements.
+"""Verified compute as a share of int8 tensor capacity for Llama-3.1-8B serving, from dcap.cu's measurements.
 
 Reads one run's dcap.jsonl and prints its tables: τ for the honest kernels,
 nominal ÷ capacity over the decode grid, and the serving mixes with and without certified filler. Writes them as JSON.
@@ -39,14 +39,23 @@ Constants not measured by dcap.cu, each from a note of record:
 - KV pool: 80 GB of int8 KV (64 KiB a token), 1.22 M tokens.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import math
 import pathlib
+from collections.abc import Iterable, Mapping, Sequence
+
+#: what the scorer and the tests read
+__all__ = [
+    "ATT_TOK_L", "CERT", "DEC_OTHER_MS", "FA2_MS_8192", "F_MAX", "LAYERS", "LIMIT", "LIN_TOK", "LM_TOK", "PER_SM",
+    "PRE_OTHER_MS_TOK", "SMS", "StepFiller", "afw_name", "causal", "decode_n", "fstep_pick", "fstep_points",
+]
 
 SMS, PER_SM, F_MAX = 188, 1024, 2430e6
 A_V99 = 0.2424 / (300.08 / 256)
-A_LADDER = [  # (what changes, A), rs-price-99.py's LP re-solved (note §1)
+A_LADDER = [  # (what changes, A), rs-price-99.py's LP re-solved
     ("V99 as frozen", A_V99),
     ("u5 design only", 0.3478),
     ("and no W′ head credits", 0.5108),
@@ -68,11 +77,11 @@ COMMIT = 1.09  # T2: committing X every 4 steps on a high-priority stream costs 
 MIXES = [("chat", 1024, 256), ("RAG", 8192, 256), ("code / agents", 24576, 512), ("reasoning", 1024, 8192)]
 
 
-def causal(p):
+def causal(p: int) -> float:
     return LAYERS * NQ * HD * 2 * p * (p + 1) / 2
 
 
-def interp(xs, ys, x):
+def interp(xs: Sequence[float], ys: Sequence[float], x: float) -> float:
     """Log-log interpolation; linear in x past the last point."""
     if x <= xs[0]:
         return ys[0]
@@ -86,13 +95,13 @@ def interp(xs, ys, x):
 
 
 class Model:
-    def __init__(self, rows):
+    def __init__(self, rows: list[dict]) -> None:
         bw = [r for r in rows if r["mode"] == "bw"]
         self.bw = max(r["gb_per_s"] for r in bw) * 1e9
         lin = sorted((r for r in rows if r["mode"] == "lin"), key=lambda r: r["M"])
         self.mhz = sorted(r["mhz"] for r in rows if r["mode"] != "gate")[len(rows) // 2]
-        self.cap = PER_SM * SMS * self.mhz * 1e6
-        self.cap_max = PER_SM * SMS * F_MAX
+        self.capacity = PER_SM * SMS * self.mhz * 1e6
+        self.capacity_max = PER_SM * SMS * F_MAX
         lm = [(r["M"], next(a["ms_alone"] for a in r["algos"] if a["name"] == "lm_head")) for r in lin if r["M"] <= 256]
         self.lm_m, self.lm_ms = [m for m, _ in lm], [t for _, t in lm]
         self.lin_m = [r["M"] for r in lin]
@@ -106,39 +115,39 @@ class Model:
         slope = sum((x - mx) * (y - my) for x, y in pts) / sum((x - mx) ** 2 for x, _ in pts)
         self.att_bw, self.att_c0 = 1e3 / slope, my - slope * mx
         self.delta = sum(r["ms"] - self.lin(b) - self.att[(b, l)]["ms"] for (b, l), r in self.step.items()) / len(self.step)
-        self.eta_fa2 = causal(8192) / (FA2_MS_8192 * 1e-3 * self.cap)
+        self.eta_fa2 = causal(8192) / (FA2_MS_8192 * 1e-3 * self.capacity)
 
-    def lm(self, b):
+    def lm(self, b: float) -> float:
         return interp(self.lm_m, self.lm_ms, b)
 
-    def lin(self, m, heads=None):
+    def lin(self, m: int, heads: int | None = None) -> float:
         """32 layers of linears at m rows plus lm_head for `heads` rows (m when m ≤ 256)."""
         heads = (m if m <= 256 else 0) if heads is None else heads
         return interp(self.lin_m, self.lin_body, m) + (self.lm(heads) if heads else 0.0)
 
-    def att_ms(self, b, l):
+    def att_ms(self, b: int, l: float) -> float:
         return self.att_c0 + b * l * KV_TOK / self.att_bw * 1e3
 
-    def step_ms(self, b, l, measured=True):
+    def step_ms(self, b: int, l: int, measured: bool = True) -> float:
         r = self.step.get((b, l))
         core = r["ms"] if (measured and r) else self.lin(b) + self.att_ms(b, l) + self.delta
         return core + max(DEC_OTHER_MS, PRE_OTHER_MS_TOK * b)
 
-    def prefill_ms(self, p, eta_fa):
+    def prefill_ms(self, p: int, eta_fa: float) -> float:
         """One prompt of p tokens, its linears in a prefill batch of max(p, 8192) tokens (k prompts packed)."""
         k = max(1, 8192 // p)
-        return (self.lin(k * p, heads=k) / k + causal(p) / (eta_fa * self.cap) * 1e3 + PRE_OTHER_MS_TOK * p)
+        return (self.lin(k * p, heads=k) / k + causal(p) / (eta_fa * self.capacity) * 1e3 + PRE_OTHER_MS_TOK * p)
 
-    def row(self, n, ms, fill=0.0):
+    def row(self, n: float, ms: float, fill: float = 0.0) -> dict[str, float]:
         """n nominal MACs (fill of them filler) in ms: the table's ratios."""
-        nc, nc_max = n / (self.cap * ms * 1e-3), n / (self.cap_max * ms * 1e-3)
+        nc, nc_max = n / (self.capacity * ms * 1e-3), n / (self.capacity_max * ms * 1e-3)
         tau = A_V99 * nc_max
         return {"nominal/capacity": nc, "nominal/capacity_2430": nc_max, "certified/nominal": CERT, "tau": tau,
                 "certified/capacity": CERT * nc, "forced_share": CERT * tau, "hidden": hidden(tau, A_V99),
                 "filler_share": fill}
 
 
-def hidden(tau, a):
+def hidden(tau: float, a: float) -> float:
     """The share of tensor peak (at 2430 MHz) that undeclared MMAs may take while the guarantee holds.
 
     Priced work in a window is at most the window (Σθ = 1, no row busier than real time). Undeclared MMAs at a share u
@@ -146,7 +155,7 @@ def hidden(tau, a):
     return min(1.0, (1 - CERT * tau) / a)
 
 
-def decode_n(b, l):
+def decode_n(b: int, l: float) -> float:
     return b * (LIN_TOK + LM_TOK + ATT_TOK_L * l)
 
 
@@ -155,7 +164,8 @@ class Filler:
     interpolated in log batch. `dsms`: the decode partition's SMs, for the linears' compute floor a batch ≤ 32 run never
     reached (W11's); None when the points were measured at every batch used."""
 
-    def __init__(self, pts, dsms=None, step=False):
+    def __init__(self, pts: Iterable[tuple[int, float, float]], dsms: int | None = None,
+                 step: bool = False) -> None:
         pts = sorted(pts)
         self.lb = [math.log(b) for b, _, _ in pts]
         self.f = [f for _, f, _ in pts]
@@ -163,7 +173,7 @@ class Filler:
         self.dsms = dsms
         self.step = step  # between points, the next larger batch's point (an adaptive split's choice there)
 
-    def at(self, b, l=None):
+    def at(self, b: int, l: float | None = None) -> tuple[float, float]:
         x = math.log(b)
         if self.step:
             i = next((j for j, lb in enumerate(self.lb) if lb >= x - 1e-12), len(self.lb) - 1)
@@ -184,10 +194,10 @@ class PointFiller:
 
     dsms = None
 
-    def __init__(self, pts):
+    def __init__(self, pts: Mapping[tuple[int, int], tuple[float, ...]]) -> None:
         self.pts = dict(pts)
 
-    def at(self, b, l=None):
+    def at(self, b: int, l: float | None = None) -> tuple[float, ...]:
         l = 2048 if l is None else l
         bs = sorted({pb for pb, _ in self.pts})
         pb = next((x for x in bs if x >= b), bs[-1])
@@ -202,12 +212,12 @@ class StepFiller(PointFiller):
     time alone; the pump on a split's other SMs runs through the non-GEMM time too, which a split charges max(1, slowdown)
     (those kernels then have fewer SMs) and which is unchanged without one."""
 
-    def apply(self, m, b, l, ms):
+    def apply(self, m: Model, b: int, l: float | None, ms: float) -> tuple[float, float]:
         fused, pump, slow = self.at(b, l)
         other = max(DEC_OTHER_MS, PRE_OTHER_MS_TOK * b)
         tc = (ms - other) * slow
         to = other * (max(1.0, slow) if pump else 1.0)
-        return tc + to, ((fused + pump) * tc + pump * to) * m.cap * 1e-3
+        return tc + to, ((fused + pump) * tc + pump * to) * m.capacity * 1e-3
 
 
 FILLER = {  # W11: 0.70 x the SM share, worst slowdown at batch ≤ 32
@@ -216,7 +226,7 @@ FILLER = {  # W11: 0.70 x the SM share, worst slowdown at batch ≤ 32
 }
 
 
-def measured_fillers(rows, shape="big"):
+def measured_fillers(rows: list[dict], shape: str = "big") -> dict[str, Filler]:
     out = {}
     for sms in sorted({r["fill_sms"] for r in rows if r["shape"] == shape}):
         pts = [(r["B"], r["window"]["fill_share"] / COMMIT, r["slowdown"]) for r in rows
@@ -225,11 +235,11 @@ def measured_fillers(rows, shape="big"):
     return out
 
 
-def dfill_name(r):
+def dfill_name(r: dict) -> str:
     return f"{r['shape']} {r['fill_sms']} SMs"
 
 
-def dfill_points(rows, tuned):
+def dfill_points(rows: list[dict], tuned: bool) -> dict[tuple[str, int, int], tuple[float, float]]:
     """{(name, B, L): (share, slowdown)}, each averaged over the runs that measured it. `tuned`: a split's arm with
     cuBLASLt re-tuned on the decode partition."""
     acc = {}
@@ -241,7 +251,7 @@ def dfill_points(rows, tuned):
     return {k: (sum(s for s, _ in v) / len(v), sum(s for _, s in v) / len(v)) for k, v in acc.items()}
 
 
-def dfill_fillers(rows):
+def dfill_fillers(rows: list[dict]) -> dict[str, PointFiller]:
     """FILL's DRAM-free filler (dfill.sh): one filler per (shape, SMs) over its measured (B, L) points, on a split also
     the arm with cuBLASLt re-tuned on the decode partition (" tuned"), and the adaptive split. Its whole output is an
     8-byte receipt a tile of NC·S MMAs, so it has no commitment factor (COMMIT applies to T2's X only)."""
@@ -260,7 +270,7 @@ def dfill_fillers(rows):
 LIMIT = 1.05  # the decode slowdown the adaptive split may cost
 
 
-def adaptive_pick(rows, tuned):
+def adaptive_pick(rows: list[dict], tuned: bool) -> dict[tuple[int, int], tuple[int, float, float]]:
     """Per measured (B, L), the split whose filler share is largest among those whose decode slowdown is ≤ LIMIT:
     {(B, L): (filler SMs, share, slowdown)}, (0, 0.0, 1.0) where no split met it (decode keeps the whole GPU).
     `tuned`: the arms with cuBLASLt re-tuned on the decode partition."""
@@ -274,16 +284,16 @@ def adaptive_pick(rows, tuned):
     return best
 
 
-def fstep_key(r):
+def fstep_key(r: dict) -> tuple:
     return (r["B"], r["L"], r["FW"], r["NC"], r.get("AFW", 0), r.get("fill_sms", 0), r.get("lt_mask", 0), r["pdl"],
             r.get("fatt_pdl", 0), r["thr"], r.get("ANC", 4), r.get("APS", 0), r.get("ALZ", 0))
 
 
-def afw_name(afw, anc, aps=0, alz=0):
+def afw_name(afw: int, anc: int, aps: int = 0, alz: int = 0) -> str:
     return (f"{afw}" if anc == 4 else f"{afw} NC {anc}") + (" persistent" if aps else "") + (f" lazy {alz}" if alz else "")
 
 
-def fstep_points(rows):
+def fstep_points(rows: list[dict]) -> dict[tuple, tuple[float, ...]]:
     """{config: (fused share, pump share, slowdown)}, each averaged over the runs that measured it (fstep_key)."""
     acc = {}
     for r in rows:
@@ -291,7 +301,7 @@ def fstep_points(rows):
     return {k: tuple(sum(x[i] for x in v) / len(v) for i in range(3)) for k, v in acc.items()}
 
 
-def fstep_pick(rows, split):
+def fstep_pick(rows: list[dict], split: bool) -> dict[tuple[int, int], tuple]:
     """Per measured (B, L), the fstep configuration with the largest filler share (fused, plus the pump's when `split`)
     among those whose core-step slowdown is ≤ LIMIT: {(B, L): (config, fused share, pump share, slowdown)}; whole-GPU
     configurations only unless `split`."""
@@ -305,7 +315,7 @@ def fstep_pick(rows, split):
     return best
 
 
-def fstep_fillers(rows):
+def fstep_fillers(rows: list[dict]) -> dict[str, StepFiller]:
     """FILL's fused filler (flin.sh's fstep): the adaptive choice at ≤ LIMIT on the whole GPU, and with the dfill pump on
     a split's other SMs. Receipts are 8 bytes a tile of NC·S MMAs, as dfill's, so no commitment factor."""
     out = {}
@@ -321,8 +331,8 @@ HEADLINE = [("decode", 1, 2048), ("decode", 32, 8192), ("decode", 128, 2048), ("
             ("reasoning", 132, None)]
 
 
-def headline(res, names):
-    """Rows of note §0's table: N/C, cert/C and the time factor, without filler and with each named filler."""
+def headline(res: dict, names: Iterable[str]) -> list[dict]:
+    """The headline table's rows: N/C, cert/C and the time factor, without filler and with each named filler."""
     out = []
     for what, b, l in HEADLINE:
         if what == "decode":
@@ -340,29 +350,30 @@ def headline(res, names):
     return out
 
 
-def with_filler(m, b, ms, lin_ms, name, l=None):
+def with_filler(m: Model, b: int, ms: float, lin_ms: float, name: str,
+                l: float | None = None) -> tuple[float, float]:
     fl = FILLER[name]
     if isinstance(fl, StepFiller):
         return fl.apply(m, b, l, ms)
     share, slow = fl.at(b, l)
     t = ms * slow
     if fl.dsms:
-        floor = b * (LIN_TOK + LM_TOK) / (0.88 * m.cap * fl.dsms / SMS) * 1e3
+        floor = b * (LIN_TOK + LM_TOK) / (0.88 * m.capacity * fl.dsms / SMS) * 1e3
         t += max(0.0, floor - lin_ms * slow)
-    return t, share * m.cap * t * 1e-3
+    return t, share * m.capacity * t * 1e-3
 
 
-def tau_table(m):
+def tau_table(m: Model) -> list[dict]:
     out = []
     r8k = next(r for r in m.lin_rows if r["M"] == 8192)
     for a in r8k["algos"]:
         if a["name"] in LIN:
             k, n = LIN[a["name"]]
             macs = 8192 * k * n
-            eta = macs / (a["ms_alone"] * 1e-3 * m.cap)
+            eta = macs / (a["ms_alone"] * 1e-3 * m.capacity)
             out.append({"kernel": f"{a['name']} m = 8192 (cuBLASLt int8, one layer)", "eta": eta,
-                        "tau": A_V99 * macs / (a["ms_alone"] * 1e-3 * m.cap_max)})
-    eta = r8k["macs"] / (r8k["ms"] * 1e-3 * m.cap)
+                        "tau": A_V99 * macs / (a["ms_alone"] * 1e-3 * m.capacity_max)})
+    eta = r8k["macs"] / (r8k["ms"] * 1e-3 * m.capacity)
     out.append({"kernel": "32 layers of linears, m = 8192 (measured)", "eta": eta, "tau": A_V99 * eta * m.mhz * 1e6 / F_MAX})
     # T1's unfused attention at s = 8192, η at its read clock
     for name, eta_t1 in [("QKᵀ s = 8192, materialized (T1)", 0.121), ("P·V s = 8192 (T1)", 0.443),
@@ -377,7 +388,7 @@ def tau_table(m):
     return out
 
 
-def grid(m):
+def grid(m: Model) -> list[dict]:
     out = []
     pairs = sorted(set([(b, l) for b in (1, 8, 32, 64, 128, 256) for l in (2048, 8192, 32768)] + list(m.step)))
     for b, l in pairs:
@@ -386,12 +397,12 @@ def grid(m):
         r = {"B": b, "L": l, "fits": b * l <= POOL_TOK, "measured": (b, l) in m.step, "ms": ms, **m.row(n, ms)}
         for name in FILLER:
             t, f = with_filler(m, b, ms, m.lin(b), name, l)
-            r[f"filler {name}"] = {"ms": t, **m.row(n + f, t, f / (m.cap * t * 1e-3))}
+            r[f"filler {name}"] = {"ms": t, **m.row(n + f, t, f / (m.capacity * t * 1e-3))}
         out.append(r)
     return out
 
 
-def mixes(m):
+def mixes(m: Model) -> list[dict]:
     out = []
     for name, p, d in MIXES:
         bmax = min(256, POOL_TOK // (p + d))
@@ -409,7 +420,7 @@ def mixes(m):
                     t, f = with_filler(m, b, step, m.lin(b), fname, lbar)
                     td = d * t / b
                     fm = f * d / b
-                    r[f"filler {fname}"] = {**m.row(n + fm, t_pre + td, fm / (m.cap * (t_pre + td) * 1e-3)),
+                    r[f"filler {fname}"] = {**m.row(n + fm, t_pre + td, fm / (m.capacity * (t_pre + td) * 1e-3)),
                                             "time": (t_pre + td) / (t_pre + t_dec)}
                 out.append(r)
                 c = b * p / d
@@ -417,21 +428,21 @@ def mixes(m):
                 if mrows > 8192:
                     continue
                 st = (m.lin(int(mrows), heads=b) + m.att_ms(b, lbar) + m.delta
-                      + (b / d) * causal(p) / (eta_fa * m.cap) * 1e3 + max(DEC_OTHER_MS, PRE_OTHER_MS_TOK * mrows))
+                      + (b / d) * causal(p) / (eta_fa * m.capacity) * 1e3 + max(DEC_OTHER_MS, PRE_OTHER_MS_TOK * mrows))
                 out.append({**base, "schedule": f"chunked, M = {mrows:.0f}", "prefill_time_share": None,
                             **m.row(n, st * d / b)})
     return out
 
 
-def fmt(x):
+def fmt(x: float | None) -> str:
     return "–" if x is None else f"{x:.3f}" if x < 10 else f"{x:.1f}"
 
 
-def fmt_in(r, key):
+def fmt_in(r: dict | None, key: str) -> str:
     return fmt(r[key]) if r else "–"
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("out", type=pathlib.Path)
     ap.add_argument("--fill", type=pathlib.Path)
@@ -468,7 +479,7 @@ def main():
                        {f"{b}:{l}": v for (b, l), v in adaptive_pick(dfill_rows, t).items()} for t in (False, True)}
     res["fstep_pick"] = {("fused + pump" if s else "fused"): {f"{b}:{l}": v for (b, l), v in fstep_pick(fstep_rows, s).items()}
                          for s in (False, True)}
-    print(f"read clock {m.mhz:.0f} MHz, C = {m.cap / 1e12:.1f} TMAC/s (C_2430 = {m.cap_max / 1e12:.1f}); "
+    print(f"read clock {m.mhz:.0f} MHz, C = {m.capacity / 1e12:.1f} TMAC/s (C_2430 = {m.capacity_max / 1e12:.1f}); "
           f"DRAM read {m.bw / 1e9:.0f} GB/s; attention fit {m.att_bw / 1e9:.0f} GB/s + {m.att_c0:.3f} ms; "
           f"step δ {m.delta:.3f} ms; FA2 η {m.eta_fa2:.3f}; A(V99) {A_V99:.4f}; pool {POOL_TOK} tokens")
     worst = max(abs(c["model"] / c["measured"] - 1) for c in res["model_check"])

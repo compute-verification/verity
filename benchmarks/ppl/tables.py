@@ -10,6 +10,8 @@ import models
 import report
 import spec
 
+__all__ = ["BASELINE", "SECTIONS", "render"]
+
 BASELINE = Path(__file__).resolve().parent / "baseline.json"
 
 

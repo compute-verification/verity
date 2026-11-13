@@ -14,6 +14,7 @@ public import Definitions.Core.Guarantees.Expand.Witnesses
 public import Definitions.Core.Guarantees.Rec
 public import Definitions.Core.Guarantees.ValueSalts
 public import Definitions.Core.Guarantees.MemCheck
+public import Definitions.Core.Guarantees.Transport
 
 /-!
 # Core's guarantees

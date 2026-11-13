@@ -31,6 +31,10 @@ name = "pouw_commit"
 path = "../../verity/protocols/pouw/verifier/lean/commit"
 
 [[require]]
+name = "pouw_pearlplus"
+path = "../../verity/protocols/pouw/verifier/lean/pearlplus"
+
+[[require]]
 name = "nci_check"
 path = "../../verity/protocols/inference_only/verifier/nci/lean"
 
@@ -87,28 +91,31 @@ name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
   "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.PeriodJ10RStrata",
   "Properties.Pouw.ServedFreed", "Properties.Pouw.ServedWork", "Properties.Pouw.ServedValues", "Properties.Pouw.Strata",
-  "Properties.Pouw.Credit",
-  "Properties.Nci", "Properties.Nci.Threads", "Properties.NetworkCertifier.Device", "Properties.Pous",
+  "Properties.Pouw.Credit", "Properties.Pouw.Lead.Commit", "Properties.Pouw.Lead.V2", "Properties.Pouw.PearlPlus",
+  "Properties.Pouw.PearlPlusDraw", "Properties.Pouw.PearlPlus.Witnesses", "Properties.Nci", "Properties.Nci.Threads",
+  "Properties.NetworkCertifier.Device", "Properties.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.Wipe", "Properties.Pous.EndToEnd",
   "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",
-  "Properties.Accounting.JointBridge.SpaceOfPeriodHeld", "Properties.Attest", "Properties.Pous.Component",
-  "Properties.NetworkCertifier.Check", "Properties.NetworkCertifier.Check.LinkWindow", "Properties.NetworkCertifier.DeviceOutput",
-  "Properties.NetworkCertifier.DeviceOutput.Runs", "Properties.Hash.Identity", "Properties.Annot", "Properties.Nci.Desc",
+  "Properties.Pous.Pooled", "Properties.Pous.PeriodGame", "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
+  "Properties.Pous.Component",
+  "Properties.NetworkCertifier.Check", "Properties.NetworkCertifier.Check.LinkWindow",
+  "Properties.NetworkCertifier.DeviceOutput", "Properties.NetworkCertifier.DeviceOutput.Runs",
+  "Properties.Hash.Identity", "Properties.Attest", "Properties.Annot", "Properties.Nci.Desc",
   "Properties.Nci.Desc.Verdict", "Properties.Nci.Desc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count",
-  "Properties.Spot", "Properties.Spot.Draw", "Properties.Spot.Bits",
-  "Properties.Spot.Interval", "Properties.Spot.FactorUpper", "Properties.Spot.TwoStageCheck",
-  "Properties.Spot.Halt", "Properties.Spot.Second", "Properties.Spot.Wires", "Properties.Spot.Members",
-  "Properties.Spot.Tables", "Properties.Spot.HistoryTable", "Properties.Core.Evaluate",
-  "Properties.NetworkCertifier.Records", "Properties.Spot.PlanCheck", "Properties.NetworkPeriod",
-  "Properties.NetworkScan", "Properties.Accounting.Requirement", "Properties.Accounting.Compose",
-  "Properties.Accounting.Remote",
+  "Properties.Spot", "Properties.Spot.Draw", "Properties.Spot.Bits", "Properties.Spot.Interval",
+  "Properties.Spot.FactorUpper", "Properties.Spot.TwoStageCheck", "Properties.Spot.Halt", "Properties.Spot.Second",
+  "Properties.Spot.Wires", "Properties.Spot.Members", "Properties.Spot.Tables", "Properties.Spot.HistoryTable",
+  "Properties.Core.Evaluate", "Properties.NetworkCertifier.Records", "Properties.Spot.PlanCheck",
+  "Properties.NetworkPeriod", "Properties.Core.Period", "Properties.NetworkScan", "Properties.Accounting.Requirement",
+  "Properties.Accounting.Compose", "Properties.Accounting.Remote",
   "Properties.Accounting.Remote.Coins", "Properties.Accounting.Remote.Pooled", "Properties.Accounting.Served",
-  "Properties.Accounting.RegisteredCircuit", "Properties.Accounting.Remote.Line", "Properties.Accounting.Remote.Schedule",
-  "Properties.Accounting.Remote.Shared", "Properties.Accounting.Remote.Live", "Properties.Accounting.Remote.Subprotocol",
+  "Properties.Accounting.RegisteredCircuit", "Properties.Accounting.Remote.Line",
+  "Properties.Accounting.Remote.Schedule", "Properties.Accounting.Remote.Shared", "Properties.Accounting.Remote.Live",
+  "Properties.Accounting.Remote.Subprotocol", "Properties.Accounting.Remote.SubprotocolDeployed",
   "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Flock.Circuit", "Properties.Nci.Protocol",
-  "Properties.Verity.Soundness", "Properties.Verity.Game", "Properties.Verity.Sha512", "Properties.Verity.Idle",
-  "Properties.Remote",
-  "Properties.Verity.Subprotocols", "Properties.Verity.Coupling", "Properties.Flock.Nets", "Properties.Pous.WipeSigned",
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Accounting.JointBridge.ServiceSoundOfSessions",
+  "Properties.Flock.Circuit", "Properties.Nci.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game",
+  "Properties.Verity.Sha512", "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Verity.Coupling",
+  "Properties.Flock.Nets", "Properties.Remote", "Properties.Nci.Record", "Properties.Pous.WipeSigned",
   "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.ReadNet",
   "Properties.Assumptions"]

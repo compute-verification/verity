@@ -1,0 +1,9 @@
+# One card's sustained int8 rate per operand class. Not a package: class_rate.cu and run.sh run on an H200 under
+# gpu-lease, and the suite holds summarize.py's reading to made-up arms and wgmma_i8.cuh to its generator.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.verity.tests]
+# summarize.py and gen_wgmma.py read the standard library alone, so the suite's inputs are its own directory.
+inputs = []

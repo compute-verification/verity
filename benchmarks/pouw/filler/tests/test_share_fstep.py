@@ -3,20 +3,12 @@ pump on a split's other SMs also through the non-GEMM time, and the pick keeps o
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-
 import pytest
-
-_spec = importlib.util.spec_from_file_location("share", Path(__file__).resolve().parents[1] / "share.py")
-S = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = S
-_spec.loader.exec_module(S)
+import share as S
 
 
 class _M:
-    cap = 1e15
+    capacity = 1e15
 
 
 def _row(b, l, fw, afw, fsm, fused, pump, slow):
@@ -29,7 +21,7 @@ def test_filler_warps_are_not_credited_in_non_gemm_time():
     other = S.DEC_OTHER_MS
     t, macs = f.apply(_M, 32, 2048, 10.0)
     assert t == pytest.approx((10.0 - other) * 0.9 + other)
-    assert macs == pytest.approx(0.5 * (10.0 - other) * 0.9 * 1e-3 * _M.cap)
+    assert macs == pytest.approx(0.5 * (10.0 - other) * 0.9 * 1e-3 * _M.capacity)
 
 
 def test_pump_runs_through_non_gemm_time_which_takes_the_split_slowdown():
@@ -38,7 +30,7 @@ def test_pump_runs_through_non_gemm_time_which_takes_the_split_slowdown():
     t, macs = f.apply(_M, 32, 2048, 10.0)
     tc, to = (10.0 - other) * 1.04, other * 1.04
     assert t == pytest.approx(tc + to)
-    assert macs == pytest.approx(((0.2 + 0.5) * tc + 0.5 * to) * 1e-3 * _M.cap)
+    assert macs == pytest.approx(((0.2 + 0.5) * tc + 0.5 * to) * 1e-3 * _M.capacity)
     t_fast, _ = S.StepFiller({(32, 2048): (0.2, 0.5, 0.95)}).apply(_M, 32, 2048, 10.0)
     assert t_fast == pytest.approx((10.0 - other) * 0.95 + other)
 

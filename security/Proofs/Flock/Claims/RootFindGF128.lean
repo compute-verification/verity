@@ -1,6 +1,5 @@
 module
 
-public import Proofs.Flock.Claims.RootFind
 public import Proofs.Flock.Level3.ArithFacts
 public import Proofs.Flock.Claims.Counted
 public import Proofs.Flock.Claims.RootFindAlg
@@ -46,6 +45,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.RootFindCorrect
 import Proofs.Flock.Claims.RootFindCost
 import Std.Tactic.BVDecide.Normalize.Prop
+public import Proofs.Flock.Claims.RootFindCost
+public import Proofs.Flock.Claims.RootFind
 
 /-!
 # The root finder over GF(2^128)

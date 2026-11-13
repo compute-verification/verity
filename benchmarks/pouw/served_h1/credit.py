@@ -215,5 +215,6 @@ def proof_plan(n_calls: int, t: int, steps: int, sites: Sequence[str], populatio
                       "prefix [1] * m + [0] * (T - m) in every call)"}
 
 
-__all__ = ["bits_of", "hollow", "junk", "live_blocks", "live_units", "nonempty", "proof_plan", "published", "queue_admit",
-           "queue_leaves", "queue_of", "queue_select", "scale_only", "scales", "tally", "tile_words", "word_rows", "words"]
+__all__ = ["LIMB", "WORD", "bits_of", "hollow", "junk", "live_blocks", "live_units", "nonempty", "proof_plan",
+           "published", "queue_admit", "queue_leaves", "queue_of", "queue_select", "scale_only", "scales", "tally",
+           "tile_words", "word_rows", "words"]

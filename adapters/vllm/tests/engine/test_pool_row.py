@@ -31,25 +31,32 @@ class Block:
         self.block_hash = self.block_hash_num_tokens = None
 
 
-def pool(free=(3, 1, 5, 2, 4), cached=None, held=(), nb=6, B=4):
+def pool(free=(3, 1, 5, 2, 4), cached=None, held=(), nb=6, B=4, by_id=False):
     """A pool of ``nb`` blocks, block 0 null: the free queue in ``free``'s order, ``cached`` = {key: blocks, first copy
-    first} under group 0, ``held`` holding one reference each."""
+    first} under group 0, ``held`` holding one reference each. ``by_id``: the hash map as vLLM 0.34 keeps it, the id of
+    the block a hit takes under each key and, for a key cached by several blocks, their ids in ``_dup_ids``."""
     cached = {KA: (1,), KB: (5, 2)} if cached is None else cached
     blocks = [Block(i) for i in range(nb)]
     head, tail = Block(-1), Block(-1)
     chain = [head, *(blocks[b] for b in free), tail]
     for a, b in zip(chain, chain[1:]):
         a.next_free_block, b.prev_free_block = b, a
-    cache = {}
+    cache, several = {}, {}
     for k, ids in cached.items():
         for b in ids:
             blocks[b].block_hash, blocks[b].block_hash_num_tokens = k + G0, B
-        cache[k + G0] = blocks[ids[0]] if len(ids) == 1 else {b: blocks[b] for b in ids}
+        if by_id:
+            cache[k + G0] = ids[0]
+            if len(ids) > 1:
+                several[k + G0] = dict.fromkeys(ids)
+        else:
+            cache[k + G0] = blocks[ids[0]] if len(ids) == 1 else {b: blocks[b] for b in ids}
     for b in held:
         blocks[b].ref_cnt = 1
     p = SimpleNamespace(blocks=blocks, null_block=blocks[0], hash_block_size=B, num_gpu_blocks=nb,
                         free_block_queue=SimpleNamespace(fake_free_list_head=head, fake_free_list_tail=tail, num_free_blocks=len(free)),
-                        cached_block_hash_to_block=SimpleNamespace(_cache=cache), cached_block_hashes_by_block={})
+                        cached_block_hash_to_block=SimpleNamespace(_cache=cache, **({"_dup_ids": several} if by_id else {})),
+                        cached_block_hashes_by_block={})
 
     def reset_prefix_cache() -> bool:                  # vLLM's: only with every block but the null one free
         if nb - p.free_block_queue.num_free_blocks != 1:
@@ -68,10 +75,12 @@ WANT = R.PoolRow(3, 4, prev=(3, 5, 0, 2, 1), next=(5, 4, 1, 0, 2), cprev=(0, 5, 
                  mlast=(1, 0, 0, 0, 2), key=(KA, KB, R.NOKEY, R.NOKEY, KB))
 
 
-def test_the_row_is_the_free_queue_and_each_key_s_copies_in_vllm_s_order(tmp_path) -> None:
+@pytest.mark.parametrize("by_id", [False, True])
+def test_the_row_is_the_free_queue_and_each_key_s_copies_in_vllm_s_order(tmp_path, by_id) -> None:
     """The free queue 3 1 5 2 4 links ``prev``/``next`` with 0 at its ends; KB's copies 5 then 2 (5 the one a hit takes)
-    link ``cprev``/``cnext``, and ``mlast`` names each key's last copy at its first, KA's one copy naming itself."""
-    p = pool()
+    link ``cprev``/``cnext``, and ``mlast`` names each key's last copy at its first, KA's one copy naming itself. The row
+    is the same whether the hash map holds blocks or, as vLLM 0.34's does, their ids."""
+    p = pool(by_id=by_id)
     snap = PR.snapshot(p, 4)
     assert snap.free == (3, 1, 5, 2, 4) and snap.copies == {KA: (1,), KB: (5, 2)} and snap.ref == (0,) * 6
     assert PR.row(snap) == WANT
@@ -116,6 +125,19 @@ def _bad(change):
 def test_what_the_row_can_t_hold_is_refused_by_name(change, match) -> None:
     with pytest.raises(Refused, match=match):
         PR.snapshot(_bad(change))
+
+
+def test_a_map_of_ids_whose_hit_is_not_its_key_s_first_copy_is_refused() -> None:
+    """vLLM 0.34 keeps the block a hit takes apart from a key's list of copies: the row's order is the list's, so the two
+    must begin alike."""
+    p = pool(by_id=True)
+    p.cached_block_hash_to_block._cache[KB + G0] = 2
+    with pytest.raises(Refused, match="block 2 is the one a hit takes, and its key's copies begin with block 5"):
+        PR.snapshot(p)
+    p = pool(by_id=True)
+    p.cached_block_hash_to_block._cache[KA + G0] = 3
+    with pytest.raises(Refused, match="lists blocks \\[3\\]"):
+        PR.snapshot(p)
 
 
 def test_a_held_block_or_a_pool_of_another_block_size_is_refused() -> None:

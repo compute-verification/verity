@@ -2183,6 +2183,16 @@
         "Security/": "security/",
         "tools/verity/lean/tests/fixtures/unread/Security/": "tools/verity/lean/tests/fixtures/unread/security/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/machine_model/": "benchmarks/machine_model/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/specs/": "benchmarks/harness/specs/"
+      }
     }
   ]
 }

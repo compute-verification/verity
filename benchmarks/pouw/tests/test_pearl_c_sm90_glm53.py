@@ -1,6 +1,7 @@
 """GLM-5.3's linears under pearl-c-h100-v1-h3 (benchmarks/pouw/pearl_c_sm90/glm53.py): one TP8 rank's shapes from the
-checkpoint's config, the sm_90a kernels' domain verdict on each, the gap's formula against a Lean price twin, the H200
-session's shapes the table's, glm53_timing's --whole over a stand-in card, and glm53_passes' full check of a retained pass."""
+checkpoint's config, the sm_90a kernels' domain verdict on each, the gap's formula against a Lean price twin, Llama-3.2-1B's
+(llama32_1b.py) beside them, the H200 session's shapes each model's table's, glm53_timing's slowdowns and --whole over a
+stand-in card, and glm53_passes' full check of a retained pass."""
 
 from __future__ import annotations
 
@@ -8,7 +9,10 @@ import contextlib
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 from dataclasses import replace
 from fractions import Fraction
@@ -164,17 +168,104 @@ def test_the_stamps_give_each_phase_since_its_ctas_start_and_the_tail_since_the_
     assert s["tail_us"] == {"start": 37.0, "level1": 40.0, "seed_a": 50.0} and s["tail_cta"] == [1, 7]
 
 
+def _llama():
+    """llama32_1b.py, which imports glm53 by its own name from its directory."""
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    spec = importlib.util.spec_from_file_location("pearl_c_sm90_llama32_1b", HERE / "llama32_1b.py")
+    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_llama_linears_are_one_cards_and_all_in_the_domain():
+    """Llama-3.2-1B at TP 1: qkv (32 + 2 · 8 heads of 64), o, the merged gate and up, down; every one in the sm_90a kernels'
+    domain, with γ at both FADD readings (the data sheet's above the record's) by glm53's formula, and the decode M
+    demos/vllm serves at (8) among DECODE_M."""
+    L = _llama()
+    rows = {r["name"]: r for r in L.table()}
+    assert {x: (r["n"], r["k"]) for x, r in rows.items()} == {
+        "self_attn.qkv_proj": (3072, 2048), "self_attn.o_proj": (2048, 2048), "mlp.gate_up_proj": (16384, 2048),
+        "mlp.down_proj": (2048, 8192)}
+    assert not any(r["refused"] for r in rows.values())
+    for name, r in rows.items():
+        assert 0 < r["gamma"]["record"] < r["gamma"]["sheet"] < 0.011, name
+        assert r["gamma"]["record"] == float(G.gamma(G.scheme(G.FADD_READINGS["record"]), r["n"], r["k"]))
+    assert set(L.in_domain()) == {(r["n"], r["k"]) for r in rows.values()}
+    assert 8 in L.DECODE_M and 2048 in L.PREFILL_M and L.SCHEME == G.SCHEME
+
+
 def test_h200_session_runs_the_tables_shapes():
-    """h200.sh's run.py SHAPES are every in-domain (n, k) (`in_domain`), at decode's 64 and prefill's 8192; it times decode's
-    forward whole (--whole, every in-domain shape) and prefill under the h3 chain beside the default one, and checks the
-    captured passes' outputs in full after every lease."""
+    """h200.sh's run.py SHAPES are every in-domain (n, k) of its MODEL (`in_domain`, each model's list), at decode's 64 and
+    prefill's 8192; every step after the check runs at MODEL's linears; it times each linear under the serial schedule,
+    graphed and eager, and deferred-a, decode's forward whole (--whole, every in-domain shape) over llama32_1b's every layer
+    and one of glm53's, and prefill under the h3 chain beside the default one (TIMING=0: none of it), and after every lease
+    gives up the passes' rows over a debit cap, then verifies them at the verdict's draws and checks their outputs in full.
+    With LOCK_MHZ the timing runs at the card's locked clock, reset when the lease ends, the lock's outcome kept out of
+    rc.txt."""
     sh = (HERE / "h200.sh").read_text()
-    listed = re.search(r"for nk in ([\dx ]+); do", sh).group(1).split()
-    assert {tuple(map(int, x.split("x"))) for x in listed} == set(G.in_domain())
-    assert 'SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh
-    assert '"$D/glm53_timing.py" --whole --out "$O/whole"' in sh
-    assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --out "$O/timing-h3" --m 2048 8192' in sh
+    listed = {m: (nks, int(layers)) for m, nks, layers in
+              re.findall(r'^\s*(\w+)\) NKS="([\dx ]+)"; LAYERS=\$\{LAYERS:-(\d+)\} ;;$', sh, re.M)}
+    T, llama = _timing(), _llama()
+    assert set(listed) == set(T.MODELS) and "MODEL=${MODEL:-glm53}" in sh
+    for model, mod in (("glm53", G), ("llama32_1b", llama)):
+        assert {tuple(map(int, x.split("x"))) for x in listed[model][0].split()} == set(mod.in_domain()), model
+    assert listed["llama32_1b"][1] == llama.CONFIG["L"] and listed["glm53"][1] == 1
+    assert 'for nk in $NKS; do\n  SHAPES="$SHAPES 64x$nk 8192x$nk"' in sh
+    assert '"$D/glm53_passes.py" capture --model "$MODEL" --out "$O/passes"' in sh
+    assert '"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs --schedule serial deferred-a >' in sh
+    assert '"$D/glm53_timing.py" --model "$MODEL" --whole --layers "$LAYERS" --out "$O/whole"' in sh
+    assert 'PEARLC_CHAIN=h3 "$PY" "$D/glm53_timing.py" --model "$MODEL" --out "$O/timing-h3" --m 2048 8192' in sh
     assert sh.index('"$D/glm53_passes.py" full --out "$O/passes" --jobs "$(nproc)"') > sh.index('echo "lease rc $?"')
+    lease, volunteer = sh.index('echo "lease rc $?"'), sh.index('"$D/glm53_passes.py" volunteer --out "$O/passes" --jobs "$(nproc)"')
+    verify = sh.index('"$D/glm53_passes.py" verify --out "$O/passes" --fast --draws "${DRAWS:-459}"')
+    assert lease < volunteer < verify and _served_passes().DRAWS == 459
+    assert sh.index('"$D/glm53_passes.py" capture') < sh.index('[ "$TIMING" = 1 ] || exit 0') < sh.index('"$D/glm53_timing.py"')
+    lock, trap = sh.index('sudo -n nvidia-smi -i "$U" -lgc "$LOCK_MHZ,$LOCK_MHZ"'), sh.index('trap "sudo -n nvidia-smi -i $U -rgc')
+    assert trap < lock < sh.index('"$D/glm53_timing.py" --model "$MODEL" --out "$O" --graphs')
+    assert '-lgc exit $?" > "$O/clock.txt"' in sh and "kill \"$smi\"'" in sh
+
+
+@pytest.mark.parametrize("needed, volunteer, step, rc", [
+    ("yes reject", None, "1", "ship rc 2"), ("yes reject", "device", "device", "ship rc 2"),
+    ("yes reject", "0", "0", "volunteer refused rc 2"), ("no uncredited", None, "0", "ship rc 2"),
+    ("no uncredited", "1", "1", "ship rc 2"), ("", None, None, "volunteer-needed rc 2")])
+def test_h200_session_gives_rows_up_exactly_while_the_verdict_rejects_one_over_its_cap(tmp_path, needed, volunteer, step, rc):
+    """h200.sh asks ``served_passes.py volunteer-needed --verdict pass`` (a stand-in here) before the ship is unpacked:
+    while the verdict glm53_passes.py verify takes rejects a pass on a drawn row over its cap, VOLUNTEER defaults to 1 and
+    one that skips the give-up stops the session; once that verdict credits such a row nothing it defaults to 0, and any
+    other answer stops the session too.  The stand-in ship is missing, so a session the guard lets through stops there."""
+    tree, out = tmp_path / "tree", tmp_path / "out"
+    (tree / "benchmarks" / "pouw" / "pearl_c_sm90").mkdir(parents=True)
+    shutil.copy(HERE / "h200.sh", tree / "benchmarks" / "pouw" / "pearl_c_sm90")
+    (sp := tree / "benchmarks" / "pouw" / "pearl_c_vllm" / "served_passes.py").parent.mkdir(parents=True)
+    sp.write_text('import os, sys\nassert sys.argv[1:] == ["volunteer-needed", "--verdict", "pass"], sys.argv\n'
+                  'print(os.environ["NEEDED"])\nsys.exit(0 if os.environ["NEEDED"] else 2)\n')
+    (tree / "venv" / "bin").mkdir(parents=True)
+    (tree / "venv" / "bin" / "python").symlink_to(sys.executable)
+    out.mkdir()
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "OUT": str(out), "RESEARCH_RUN_DIR": str(tmp_path / "run"),
+           "VERITY_BENCH_VENV": str(tree / "venv"), "NEEDED": needed, **({} if volunteer is None else {"VOLUNTEER": volunteer})}
+    r = subprocess.run(["bash", "benchmarks/pouw/pearl_c_sm90/h200.sh"], cwd=tree, env=env, capture_output=True, text=True,
+                       check=False)
+    lines = (out / "rc.txt").read_text().splitlines()
+    assert r.returncode == 2 and len(lines) == 1 and lines[0].startswith(rc), r.stdout + r.stderr
+    said = out / "volunteer-needed.txt"
+    assert (said.read_text() if said.exists() else None) == (step and f"volunteer-needed: {needed}; VOLUNTEER={step}\n")
+
+
+def test_slowdowns_divide_by_the_fastest_stock_call_its_graph_and_the_plain_gemm_apart():
+    """A row's slowdowns: over the fastest stock arm that ran eagerly, over the fastest of their graphs, and over the fastest
+    plain arm, eager or graphed; a plain arm is never the stock divisor, and a divisor no arm of its kind ran is None."""
+    T = _timing()
+    med = {"pearlc": 6.0, "pearlc-nohash": 4.0, "deepgemm": 3.0, "cublaslt": 2.0, "deepgemm-graph": 1.5,
+           "cublaslt-gemm": 1.2, "cublaslt-gemm-graph": 1.0}
+    got = T.slowdowns(med, {"pearlc": None}, ["deepgemm", "cutlass", "cublaslt"], {"cublaslt-gemm": None})
+    assert got == {"fastest_stock": "cublaslt", "slowdown": 3.0, "slowdowns": {"pearlc": 3.0}, "slowdown_nohash": 2.0,
+                   "fastest_stock_graphed": "deepgemm-graph", "slowdowns_graphed": {"pearlc": 4.0},
+                   "fastest_plain": "cublaslt-gemm-graph", "slowdowns_plain": {"pearlc": 6.0}}
+    none = T.slowdowns({"pearlc": 6.0, "pearlc-nohash": 4.0}, {"pearlc": None}, [], {"cublaslt-gemm": None})
+    assert none["fastest_stock"] is none["slowdown"] is none["fastest_plain"] is none["slowdowns_graphed"] is None
 
 
 def _timing():
@@ -182,6 +273,13 @@ def _timing():
     T = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(T)
     return T
+
+
+def _served_passes():
+    spec = importlib.util.spec_from_file_location("pearl_c_vllm_served_passes", HERE.parent / "pearl_c_vllm" / "served_passes.py")
+    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 class Card:
@@ -241,24 +339,28 @@ def _card(monkeypatch, torch) -> Card:
 
 class Run:
     """`PearlCDeviceRun`'s whole-capture surface over a `Card`: a call is 1 ms of GEMM and, with hashing, 0.5 ms of tile
-    hashing, which a deferred capture runs beside the next call, and 0.25 ms more when made alone (its own graph's slot and
-    launch).  A pass commits the calls its GPU work ran, in order; `leak` makes the deferred work leave a call's leaves
-    unwritten ("deferred"), or the poison in them ("poison")."""
+    hashing, which a deferred capture runs beside the next call, less 0.25 ms where it also defers A's tree
+    (``whole_defer_a``), and 0.25 ms more when made alone (its own graph's slot and launch).  A pass commits the calls its
+    GPU work ran, in order; `leak` makes the deferred work leave a call's leaves unwritten ("deferred"), or the poison in
+    them ("poison")."""
 
     def __init__(self, card: Card, order: dict):
         self.card, self.order, self.device = card, order, "cuda"
-        self.graphs, self.hashing, self.whole_defer, self.leak = True, True, False, None
+        self.graphs, self.hashing, self.whole_defer, self.whole_defer_a, self.leak = True, True, False, False, None
         self.log, self._whole, self.units, self.ran, self.poisoned = [], None, 0, [], False
         self.repeat_at = None
+
+    def options(self):
+        return tuple(sorted(k for k, v in vars(self).items() if k.startswith("whole_") and v is True))
 
     def epoch_calls(self):
         return self.units
 
     def whole_key(self):
-        return (self.hashing, self.whole_defer and self.hashing) if self.graphs else None
+        return (self.hashing, self.options() if self.hashing else ()) if self.graphs else None
 
     def whole_capture_begin(self, key):
-        self.log.append(("begin", key, self.hashing, self.whole_defer))
+        self.log.append(("begin", key, self.hashing, self.options()))
         self._whole = []
 
     def whole_capture_end(self):
@@ -274,7 +376,7 @@ class Run:
         else:
             self.log.append(("call", w, m, self._whole is not None))
             self.units += 1
-        cost = 1.0 + 0.5 * (self.hashing and not deferred) + 0.25 * (not captured)
+        cost = 1.0 + 0.5 * (self.hashing and not deferred) + 0.25 * (not captured) - 0.25 * (deferred and self.whole_defer_a)
         hashing = self.hashing
 
         def work():
@@ -323,34 +425,101 @@ def _whole_setup(monkeypatch):
     return T, run, weights, xs, {"cutlass": stock(0.25), "triton": stock(0.5, refuse=True), "deepgemm": stock(0.25, fail=True)}
 
 
-def test_whole_times_decodes_forward_captured_serial_and_deferred_beside_the_calls_one_at_a_time(monkeypatch):
-    """--whole's row: each capture sets its pass's hashing and deferral before `whole_capture_begin`, warms up outside the
-    capture and captures every weight once in slot order; each pearlc sample is a fresh pass of `INNER` replays (slots, graph,
-    records); a stock forward torch can't capture runs eagerly, one whose warm-up fails is left out; and the hashing arms'
-    passes, and one of each from poisoned outputs, commit alike."""
+def test_whole_times_decodes_forward_captured_serial_deferred_and_as_served_beside_the_calls_one_at_a_time(monkeypatch):
+    """--whole's row: each capture sets its pass's hashing and whole-capture options before `whole_capture_begin`, warms up
+    outside the capture and captures every weight once in slot order; each pearlc sample is a fresh pass of `INNER` replays
+    (slots, graph, records); a stock forward torch can't capture runs eagerly, one whose warm-up fails is left out; and the
+    hashing arms' passes, and one of each from poisoned outputs, commit alike."""
     T, run, weights, xs, stock = _whole_setup(monkeypatch)
     row = T.whole(run, weights, xs, stock, reps=3)
-    assert row["ms"] == {"pearlc-calls": 3 * 1.75, "pearlc-whole": 3 * 1.5, "pearlc-deferred": 3.0, "pearlc-whole-nohash": 3.0,
-                         "cutlass": 0.75, "triton": 1.5}
+    assert row["ms"] == {"pearlc-calls": 3 * 1.75, "pearlc-whole": 3 * 1.5, "pearlc-deferred": 3.0,
+                         "pearlc-served-unsplit": 3.0, "pearlc-served": 2.25, "pearlc-served-shared": 2.25,
+                         "pearlc-whole-nohash": 3.0, "cutlass": 0.75, "triton": 1.5}
     assert row["ms_per_call"]["pearlc-deferred"] == 1.0 and row["calls"] == 3 and row["m"] == 16
+    assert row["layers"] == 1 and row["ms_per_layer"] == row["ms"]
     assert row["shapes"] == [[24, 4], [8, 4], [16, 4]]
-    assert row["deferred_saving"] == {"vs_calls": 1 - 3 / 5.25, "vs_whole": 1 - 3 / 4.5}
+    assert row["saving"] == {nm: {"vs_calls": 1 - row["ms"][nm] / 5.25, "vs_whole": 1 - row["ms"][nm] / 4.5} for nm in T.SAVING}
     assert row["fastest_stock"] == "cutlass" and row["slowdown"]["pearlc-deferred"] == 4.0
+    assert row["slowdown"]["pearlc-served"] == row["slowdown"]["pearlc-served-shared"] == 3.0
     assert row["stock_graphed"] == {"cutlass": True, "triton": False, "deepgemm": False}
     assert set(row["stock_errors"]) == {"triton", "deepgemm"} and len(row["runs"]["triton"]) == 3
-    assert row["pass_end_ms"] == {"pearlc-calls": 0.125, "pearlc-whole": 0.125, "pearlc-deferred": 0.125, "pearlc-whole-nohash": 0}
+    assert row["pass_end_ms"] == {**dict.fromkeys(list(T.WHOLE)[:-1], 0.125), "pearlc-whole-nohash": 0}
     assert row["commitments_equal"] and row["poisoned_equal"] and "commitments" not in row
     assert row["commitment"]["units"] == 3 * T.INNER and row["commitment"]["screened_rows"] == 16 * 3 * T.INNER
     begins = [e for e in run.log if e[0] == "begin"]
-    assert begins == [("begin", (True, False), True, False), ("begin", (True, True), True, True),
-                      ("begin", (False, False), False, False)]
+    unsplit, served = ("whole_defer", "whole_fork_stats"), tuple(sorted(T.SERVED))
+    shared = tuple(sorted((*T.SERVED, "whole_pd_shared")))
+    assert begins == [("begin", (True, ()), True, ()), ("begin", (True, ("whole_defer",)), True, ("whole_defer",)),
+                      ("begin", (True, unsplit), True, unsplit), ("begin", (True, served), True, served),
+                      ("begin", (True, shared), True, shared), ("begin", (False, ()), False, ())]
     at = run.log.index(begins[1])
     assert run.log[at - 1][0] == "end_pass" and run.log[at + 1:at + 4] == [("call", w, 16, True) for w in (7, 5, 6)]
     assert run.log[at + 4] == ("end", ((7, 16), (5, 16), (6, 16))) and run.log[at + 5][0] == "end_pass"
     poisons = [i for i, e in enumerate(run.log) if e == ("poison",)]
-    assert len(poisons) == 3 and all(run.log[i - 1][0] == "end_pass" for i in poisons)
+    assert len(poisons) == 6 and all(run.log[i - 1][0] == "end_pass" for i in poisons)
     assert run.log[poisons[1] + 1:poisons[1] + 1 + T.INNER] == [("replay", ((7, 16), (5, 16), (6, 16)))] * T.INNER
-    assert (run.hashing, run.whole_defer) == (True, False)
+    assert (run.hashing, run.options()) == (True, ())
+
+
+def test_whole_nvtx_ranges_each_arms_forwards_in_a_pass_of_their_own_after_the_timed_reps(monkeypatch):
+    """--whole --nvtx: after the timed reps, every arm, pearlc and stock, makes `NVTX_FORWARDS` forwards, each in its own
+    range ``call whole ARM mM #i`` holding that forward's work alone, a pearlc arm's in a fresh pass ended after them; the
+    row's times and commitments are the row without it."""
+    torch = pytest.importorskip("torch")
+    T, run, weights, xs, stock = _whole_setup(monkeypatch)
+    keys = ("ms", "pass_end_ms", "commitment", "commitments_equal", "poisoned_equal")
+    plain = T.whole(run, weights, xs, stock, reps=3)
+    T, run, weights, xs, stock = _whole_setup(monkeypatch)
+    pushed, ranges = [], []
+    monkeypatch.setattr(torch.cuda.nvtx, "range_push", lambda x: pushed.append((x, run.card.t, len(run.log))))
+    monkeypatch.setattr(torch.cuda.nvtx, "range_pop", lambda: ranges.append((*pushed.pop(), run.card.t, len(run.log))))
+    row = T.whole(run, weights, xs, stock, reps=3, nvtx=True)
+    assert {k: row[k] for k in keys} == {k: plain[k] for k in keys} and not pushed
+    names = [*T.WHOLE, "cutlass", "triton"]
+    assert [r[0] for r in ranges] == [f"call whole {nm} m16 #{i}" for nm in names for i in range(T.NVTX_FORWARDS)]
+    for nm in names:
+        rs = [r for r in ranges if r[0].startswith(f"call whole {nm} ")]
+        assert all(r[3] - r[1] == pytest.approx(row["ms"][nm]) for r in rs)
+        if nm in T.WHOLE:
+            assert run.log[rs[0][2] - 1][0] == "end_pass" and run.log[rs[-1][4]][0] == "end_pass"
+            assert all(e[0] != "end_pass" for e in run.log[rs[0][2]:rs[-1][4]])
+
+
+def test_whole_served_arm_captures_as_the_served_arm_does_on_this_kernel():
+    """--whole's ``pearlc-served`` captures with the whole-capture options pearl_c_vllm's served arm runs on pearl_c_sm90
+    (`PearlCWholeArm.run_options` less its pearl_c_sm120-only ones), and `OPTIONS` names every whole-capture option
+    `whole_options` takes but the pass end's and pearl_c_sm120's B̃ prefetch, so a new served option fails here."""
+    import inspect
+
+    from verity_vllm.protocols.pouw.pearl_c.lanes import whole_options
+    spec = importlib.util.spec_from_file_location("pearl_c_vllm_bench_arm", HERE.parent / "pearl_c_vllm" / "bench_arm.py")
+    B = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(B)
+    T, arm = _timing(), B.PearlCWholeArm
+    takes = set(inspect.signature(whole_options).parameters) - {"entry", "kernel"}
+    assert set(T.OPTIONS) == takes - {"lag_ends", "aside_ends", "whole_prefetch_b"}
+    assert {o for o in arm.run_options if o in takes - {"lag_ends", "aside_ends"} and o not in arm.RTX_ONLY} == set(T.SERVED)
+    assert T.WHOLE["pearlc-served"] == (True, T.SERVED) and set(T.SAVING) <= set(T.WHOLE)
+
+
+def test_whole_runs_layers_of_the_models_linears_in_the_layers_order(tmp_path, monkeypatch):
+    """--whole --layers L calls L layers' linears, each its own weights, in the layer's order (`in_domain`'s), and --layers
+    and --nvtx are refused without --whole."""
+    pytest.importorskip("torch")
+    T, got = _timing(), []
+
+    def device_run(shapes, *args):
+        got.append(shapes)
+        raise SystemExit(3)
+    monkeypatch.setattr(T, "device_run", device_run)
+    with pytest.raises(SystemExit) as e:
+        T.main(["--whole", "--model", "llama32_1b", "--layers", "16", "--out", str(tmp_path / "out")])
+    layer = list(_llama().in_domain())
+    assert e.value.code == 3 and len(layer) == 4 and got == [layer * 16]
+    for args in (["--layers", "2"], ["--nvtx"]):
+        with pytest.raises(SystemExit) as e:
+            T.main([*args, "--out", str(tmp_path / "calls")])
+        assert e.value.code == 2 and not (tmp_path / "calls").exists()
 
 
 @pytest.mark.parametrize("leak", ["deferred", "poison"])
@@ -361,14 +530,17 @@ def test_whole_names_a_deferred_capture_that_commits_otherwise(monkeypatch, leak
     run.leak = leak
     row = T.whole(run, weights, xs, stock, reps=2)
     assert row["commitments_equal"] is (leak == "poison") and row["poisoned_equal"] is False
-    assert row["commitments"]["pearlc-deferred"][0] != row["commitment"] or leak == "poison"
-    assert row["poisoned"]["pearlc-whole"] == row["commitment"] != row["poisoned"]["pearlc-deferred"]
+    for nm in T.SAVING:
+        assert row["commitments"][nm][0] != row["commitment"] or leak == "poison"
+        assert row["poisoned"]["pearlc-whole"] == row["commitment"] != row["poisoned"][nm]
 
 
-@pytest.mark.parametrize("args", [["--m", "512"], ["--schedule", "deferred"], ["--shapes", "512:6144", "512:6144"]])
+@pytest.mark.parametrize("args", [["--m", "512"], ["--schedule", "deferred"], ["--shapes", "512:6144", "512:6144"],
+                                  ["--shapes", "512:6144", "--layers", "2"], ["--layers", "0"],
+                                  ["--model", "llama32_1b", "--m", "8192"], ["--model", "gpt2"]])
 def test_whole_refuses_what_it_cant_capture(tmp_path, args):
-    """--whole runs the serial schedule at M up to GRAPH_ROWS over distinct shapes (a deferred call joins at once after its
-    own shape's), and refuses anything else before it touches a card."""
+    """--whole runs the serial schedule at M up to GRAPH_ROWS over shapes no two consecutive alike (a deferred call joins at
+    once after its own shape's), and refuses anything else before it touches a card."""
     pytest.importorskip("torch")
     with pytest.raises(SystemExit) as e:
         _timing().main(["--whole", "--out", str(tmp_path / "out"), *args])
@@ -527,6 +699,28 @@ def test_full_fails_on_one_served_y_word_or_one_activation_row_and_names_it(reta
     assert dec["failed"] == 1 and "served y differs at 1 of 256 words, first row 3 column 17" in dec["failures"][0]["reason"]
     assert pre["failed"] == 1 and pre["failures"] == [{"tile": 0, "reason": "activation opening"}]
     assert not res["ok"]
+
+
+def test_volunteer_leaves_each_pass_no_tile_over_a_cap_and_its_transcript_as_captured(retained, tmp_path):
+    """`volunteer` runs `volunteer_pass` on prefill's and decode's passes: each pass's records then leave no tile over a
+    debit cap, its commitment is the capture's, its manifest's records root is the one written, and every tile passes the
+    verifier's check under it."""
+    from verity.protocols.pouw.verifier.coins import CoinCommitment
+
+    out = _copy(retained, tmp_path)
+    before = {n: json.loads((out / n / "manifest.json").read_text()) for n in retained.GP.FULL}
+    assert retained.GP.main(["volunteer", "--out", str(out), "--jobs", "1"]) == 0
+    import verify_run as VR
+
+    res, coins = json.loads((out / "volunteer.json").read_text()), CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
+    for name in retained.GP.FULL:
+        r, man = res[name], json.loads((out / name / "manifest.json").read_text())
+        assert r["ok"] and r["left"] == [] and r["tiles"] == retained.count, r["line"]
+        assert man["commitment"] == before[name]["commitment"] and man["records_root"] == r["records_root"]["after"]
+        p = VR.load(out / name / "manifest.json", coins)
+        got, _ = VR.replay([p], [(0, ref.matmul, ref.id) for ref in p.verifier.refs], 1)
+        assert [reason for _, _, ok, reason, *_ in got if not ok] == []
+    assert res["ok"]
 
 
 def test_full_requires_the_served_y_unless_told_the_pass_has_none(retained, tmp_path):

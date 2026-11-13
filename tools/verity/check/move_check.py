@@ -8,7 +8,8 @@ Every path git sees changed must be one of:
 - an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root, also
   after a variable such as `$REPO/`) is rewritten to where it is now or, in a line, left as it was (a top-level directory's
   name is also a word: `examples` in prose, a JSON key, a function's name), in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
-  the file's own directory first (in a `*.md` file, one in backticks or a link's target), in a `*.py` file a pathlib
+  the file's own directory first (in a `*.md` file, one in backticks or a link's target; in a Lake file, a requirement's
+  `path` and a path package's `dir` also where written with no leading dot, `"composition"`), in a `*.py` file a pathlib
   chain `ROOT / "a" / "b"` read as `"a/b"`. A changed line may also, the rest of it kept byte for byte, rewrite each
   place it names from the file's own to name, from where the file now is, where that place moved (`placed`): a relative path from the file's directory (`../../verity/x/`, in a
   comment, prose or code), a path below a moved directory the file is in and stays in (`rho/circuits.py` in a file of
@@ -61,8 +62,10 @@ Every path git sees changed must be one of:
   not run by path (`tests/`, `lean/`), and no higher than the root of that file's package after the move (`[roots] new`
   of a path map under `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by
   its new name. And a
-  deleted `__init__.py` of a package the range's moves took away: files left its directory by a rename and HEAD has none
-  at or below it (`rules`'s `emptied` in the `--json` report);
+  deleted `__init__.py` of a package the range's moves took away (files left its directory by a rename and HEAD has none
+  at or below it; `rules`'s `emptied` in the `--json` report) that holds nothing but whitespace and comments at BASE, read
+  by the mover's own `only_comments`: one with a docstring, code, or text that doesn't parse is refused, and it gets a row
+  in the map saying where it goes or a hand commit before the move that deletes it;
 - an edit to a shell script that recounts a path after a variable the script sets once to its own directory
   (`here=$(cd "$(dirname "$0")" && pwd)`, then `$here/../..`), as a path from its own directory is (`rules`'s `anchor`);
 - a list of paths rewritten as a cover (`rules`'s `cover`): a list `tools/move/layout.py` reads as one (its `lists`: a
@@ -414,7 +417,9 @@ def module_sub(text: str, mods: dict[str, str]) -> str:
 
 def resolve_relative(text: str, path: str, pmap: dict[str, str]) -> str:
     """Each quoted relative path (in Markdown, in backticks or a link's target), as `<root>/` and the repository path it names
-    from `path`'s directory, mapped by `pmap`."""
+    from `path`'s directory, mapped by `pmap`. In a Lake file, a path to another package is one with no leading dot too
+    (`path = "composition"`, a package inside the requiring one): Lake reads it from the package's directory, and
+    `tools/move/layout.py` rewrites it as one (its `lake_spans`)."""
     here = posixpath.dirname(path)
 
     def rooted(rel: str) -> str | None:
@@ -422,6 +427,9 @@ def resolve_relative(text: str, path: str, pmap: dict[str, str]) -> str:
         return None if p.startswith("..") else f"<root>/{map_path(p, pmap)}"
     if path.endswith(".md"):
         return MD_RELATIVE.sub(lambda m: rooted(m.group(0)) or m.group(0), text)
+    for a, b in reversed(_rename().L.lake_spans(posixpath.basename(path), text)):
+        if not text[a:b].startswith(".") and (r := rooted(text[a:b])):
+            text = text[:a] + r + text[b:]
     return RELATIVE.sub(lambda m: (r := rooted(m.group(2))) and f"{m.group(1)}{r}{m.group(1)}" or m.group(0), text)
 
 
@@ -1407,7 +1415,7 @@ TOKEN_CHAR = re.compile(r"[^\s\"'`()\[\]{}<>,;=]")
 
 def scoped_map(base: Tree, head: str, cwd: str | None, path: str | None = None) -> tuple[str, dict] | None:
     """The word map a move with `scope = "prose"` renames by (``path``, else the `Move:` line of HEAD's message), as BASE has
-    it; None for any other move."""
+    it, its words in `[words]` or all scoped to files (`[[words_in]]` under an empty `[words]`); None for any other move."""
     if path is None:
         m = MOVE_LINE.search(git("log", "-1", "--format=%B", head, cwd=cwd).decode(errors="replace"))
         path = m and m.group(1)
@@ -1415,7 +1423,7 @@ def scoped_map(base: Tree, head: str, cwd: str | None, path: str | None = None) 
         data = tomllib.loads(base.text(path) or "") if path else {}
     except tomllib.TOMLDecodeError as e:
         raise SystemExit(f"move-check: the move's word map {path} doesn't parse at BASE: {e}") from e
-    return (path, data) if data.get("scope") == "prose" and data.get("words") else None
+    return (path, data) if data.get("scope") == "prose" and (data.get("words") or data.get("words_in")) else None
 
 
 class Terms:
@@ -1707,7 +1715,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
     def emptied(d: str) -> bool:
         """Whether the range's moves took the package at `d` away: files left it by a rename, and HEAD has none at or below
-        it, so the `__init__.py` that marked it has nothing to mark (the mover deletes it)."""
+        it, so the `__init__.py` that marked it has nothing to mark (the mover deletes it if it holds nothing but comments
+        and whitespace, and refuses the move otherwise)."""
         return not H.has_dir(d) and any(o.startswith(d + "/") for o, _ in renamed)
 
     went, created = dict(renamed), {e["new"] for e in entries if e["status"] == "A"}
@@ -1856,6 +1865,11 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             report["rules"].setdefault("drop", []).append(old)
             continue
         if st == "D" and posixpath.basename(old) == "__init__.py" and emptied(posixpath.dirname(old)):
+            if not _rename().L.only_comments(B.text(old)):
+                refuse(e, "deleted: the `__init__.py` of a package the range emptied, which holds more than comments and "
+                          "whitespace at BASE: give it a row in the map saying where it goes, or delete it in a hand commit "
+                          "before the move")
+                continue
             report["edits"].append({"path": old, "kind": "emptied package"})
             report["rules"].setdefault("emptied", []).append(old)
             continue

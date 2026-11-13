@@ -109,8 +109,9 @@ KEPT_DIR = "~/.cache/verity-check/restack-generated"
 #: this file, it reads nothing of the machine's and leaves nothing on it: the suites give each test a `$CHECK_CACHE` of its
 #: own, which this file doesn't read
 KEEP = False
-#: the clone's worktree lock, in its git directory, under the name `research.queue.WORKTREES_LOCK` gives it: a scratch
-#: worktree is added and forgotten holding it alone, and every fetch the queue runs holds it shared
+#: the clone's worktree lock, in its git directory, under the name `research.gates.WORKTREES_LOCK` gives it: a scratch
+#: worktree is added and forgotten holding it alone, and every fetch the queue and `research merge` run holds it shared.
+#: Nothing here takes train.lock, which `research.queue.worktrees_locked` takes before this lock, never after
 WORKTREES_LOCK = "research-worktrees.lock"
 #: the options the command that confirms a skip takes from its run, where given (`confirming`): every one that names no move
 CARRIED = ("main", "python", "push_to", "remote", "kept", "dry_run", "no_pins", "json")

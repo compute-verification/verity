@@ -18,7 +18,7 @@ record's s8 binding and refuses a contraction outside the record's domain.
   sm_120's record states no domain: its execution phases keep the Definitions' own refusals, as before records existed.
 * **The sheet.** Each record holds the device's data-sheet facts with their sources: SMs, the clock its tensor peaks are
   quoted at, f_max, the dense s8 MACs an SM clock, and the data sheet's dense INT8 figure (None where no data sheet states
-  one). sm_90's are the machine model's H200 sheet (`benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, whose
+  one). sm_90's are the machine model's H200 sheet (`benchmarks/machine_model/data/devices/sm_90/sheet.toml`, whose
   Lean is `security/Definitions/Accounting/Sheets/H200.lean`), sm_120's its RTX PRO 6000 sheet
   (`Accounting.TS.Headline.Sm120.ds120`).
 """
@@ -87,7 +87,7 @@ SM90 = Device(
     arch="sm_90", gpu="H200 SXM (sm_90a)", step=HOPPER_SM90_S8_K32,
     instruction="sm90.mma.m16n8k32.s8", domain=(Z.LEAST_K, 512),
     sms=132, tensor_mhz=1830, fmax_mhz=1980, s8_macs=4096, sheet_s8_tops=1979,
-    source="the machine model's H200 sheet (benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml): H200 data sheet "
+    source="the machine model's H200 sheet (benchmarks/machine_model/data/devices/sm_90/sheet.toml): H200 data sheet "
            "(nvidia.com/en-us/data-center/h200, Technical Specifications, H200 SXM): 'INT8 Tensor Core 3,958' TOPS, footnote "
            "2 'With sparsity', so 1,979 dense; H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5 (the H200 "
            "data sheet states no clock or SM count, its peaks equal H100 SXM5's): 'Peak INT8 Tensor TOPS 1978.9/3957.8', "

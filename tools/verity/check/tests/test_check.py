@@ -961,7 +961,8 @@ def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypat
         return pt[1][pt[1].index("--mem-gb") + 1]
 
     assert mem(None) == mem(["circuit-check", "pytest"]) == "175", "halved: lean-suites runs beside pytest with the same share"
-    assert mem(["pytest"]) == "280"
+    assert mem(["pytest", "lean-build"]) == "280", "halved beside a Lean step"
+    assert mem(["pytest"]) == "560", "a shard of pytest alone (the 5-pod plan's 4/5) halved the slot for a lean-suites it lacks"
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV)
     [pt] = [s for g in CHECK.groups(tmp_path, 16) for s in g if s[0] == "pytest"]
     assert "--mem-gb" not in pt[1]
@@ -1060,10 +1061,61 @@ def test_the_agreement_is_not_required_for_docs_alone():
     assert rule_touches(rule, docs) == []
     assert rule_touches(rule, [*docs, "verity/protocols/flock/agreement/ci.py"]) == ["verity/protocols/flock/agreement/"]
     assert rule_touches(rule, ["verity/protocols/flock/agreement/DESIGN.md"]) == ["verity/protocols/flock/agreement/"]  # only the two names are left out
-    for f in ("ci.py", "agree.py", "fuzz.py", "redigest.py", "transcript_check.py", "selftest_records.py"):   # cited, never read
-        reads = [line for line in (ROOT / "verity" / "protocols" / "flock" / "agreement" / f).read_text().splitlines()
-                 if any(r in line for r in ("open(", "read_text", "read_bytes")) and any(d in line for d in ("README", "PROTOCOL"))]
-        assert not reads, f"{f} reads a doc the agreement trigger leaves out: {reads}"
+
+
+def _lean_code(text: str) -> str:
+    """A Lean file's text without its comments (`--` lines, nested `/- -/` blocks), its string literals kept whole."""
+    out, i, depth = [], 0, 0
+    while i < len(text):
+        if text.startswith("/-", i):
+            depth, i = depth + 1, i + 2
+        elif depth:
+            depth, i = (depth - 1, i + 2) if text.startswith("-/", i) else (depth, i + 1)
+        elif text.startswith("--", i):
+            i = text.find("\n", i) if "\n" in text[i:] else len(text)
+        elif text[i] == '"' and text[i - 1:i] != "'":
+            j = i + 1
+            while j < len(text) and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out)
+
+
+def test_nothing_the_agreements_key_covers_reads_the_markdown_it_leaves_out():
+    """`agreement_closure` leaves out every `.md` of the agreement's directory and the verifier's packages, so no file it keeps
+    may read one: no Python string but a docstring, no shell text but a comment and no lakefile names a doc, and the Lean
+    code, comments aside, has no `include_str` (the one way a Lake build reads a file it doesn't compile) and names a doc
+    only to cite a section of it (`PROTOCOL.md §1` in an error message)."""
+    import ast
+
+    files = CHECK.tracked_files()
+    kept = CHECK.agreement_closure(files)
+    dirs = {f.rsplit("/", 1)[0] + "/" for f in kept}
+    dropped = [f for f in files if f.endswith(".md") and f.rsplit("/", 1)[0] + "/" in dirs]
+    assert "verity/protocols/flock/agreement/README.md" in dropped and not any(f.endswith(".md") for f in kept)
+    doc = re.compile(r"\.md\b|README|PROTOCOL")
+    reads = []
+    for f in kept:
+        text = (ROOT / f).read_text(errors="replace")
+        if f.endswith(".py"):
+            tree = ast.parse(text)
+            docs = {id(n.body[0].value) for n in ast.walk(tree)
+                    if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.body
+                    and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant)}
+            reads += [f"{f}: {n.value[:80]!r}" for n in ast.walk(tree) if isinstance(n, ast.Constant)
+                      and isinstance(n.value, str) and id(n) not in docs and doc.search(n.value)]
+        elif f.endswith(".sh"):
+            reads += [f"{f}: {line}" for line in text.splitlines() if doc.search(re.sub(r"(^|\s)#.*", "", line))]
+        elif f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean"):
+            reads += [f"{f}: names a doc"] if doc.search(text) else []
+        elif f.endswith(".lean"):
+            code = _lean_code(text)
+            reads += [f"{f}: {m.group(0)!r}" for m in re.finditer(r"include_str|\S*(\.md\b(?! §)|README|PROTOCOL(?!\.md §))", code)]
+    assert not reads, f"a file the agreement's key covers reads Markdown the key leaves out; key it in agreement_closure: {reads}"
 
 
 def test_the_agreement_scripts_import_only_the_standard_library_and_each_other():
@@ -1116,6 +1168,29 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     assert CHECK.agreement_closure(nested) == nested[:1]
     (tmp_path / nested[0]).write_text('[[require]]\nname = "x"\n')
     assert CHECK.agreement_closure(nested) == nested
+
+
+def test_a_doc_edit_keeps_the_agreements_key_and_a_script_or_source_edit_moves_it(tmp_path, monkeypatch):
+    """Neither Lake nor a script of the agreement reads Markdown (`test_the_agreement_is_not_required_for_docs_alone` holds
+    the scripts to it), so `agreement_key` leaves it out: a README edit keeps the stored pass, which a recorded check then
+    reuses, while an edit to a script or to the verifier's Lean moves the key."""
+    agree, lean = "verity/protocols/flock/agreement/", "verity/protocols/flock/verifier/"
+    files = {agree + "README.md": "# the job\n", agree + "ci.py": "x = 1\n", lean + "lakefile.toml": "",
+             lean + "README.md": "# the verifier\n", lean + "PROTOCOL.md": "# its wire\n", lean + "Flock.lean": "def a := 1\n"}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text)
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECK, "tracked_files", lambda *_: sorted(files))
+    assert CHECK.agreement_closure(sorted(files)) == [agree + "ci.py", lean + "Flock.lean", lean + "lakefile.toml"]
+    key = CHECK.agreement_key({})
+    for doc in (agree + "README.md", lean + "README.md", lean + "PROTOCOL.md"):
+        (tmp_path / doc).write_text("# rewritten\n")
+        assert CHECK.agreement_key({}) == key, f"{doc}: a doc edit keeps the agreement's pass"
+    for code in (agree + "ci.py", lean + "Flock.lean"):
+        (tmp_path / code).write_text("changed\n")
+        assert CHECK.agreement_key({}) != key, f"{code}: what the job runs moves its key"
+        key = CHECK.agreement_key({})
 
 
 def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, monkeypatch):
@@ -2032,7 +2107,10 @@ _POST_STUB = ('case "$*" in *"msg reply"*) f=; p=; for a; do [ "$p" = --file ] &
 
 def _train_repo(tmp_path):
     """A clone of a local origin with a root commit on main, and train.sh's environment with `uv` and `sleep` stubbed: `uv` records
-    its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock."""
+    its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock.  Each call of
+    ``train`` has its own launch (`launched.$TEST_CALL`): train.sh returns once it reads the launch line, so a launcher can
+    still be running, and mark its launch, after a later call has begun, whose 720 polls would each return at once on that mark
+    and could all end before its own launcher writes (on a loaded node)."""
     import os
     import subprocess
 
@@ -2052,19 +2130,20 @@ def _train_repo(tmp_path):
     bin_, done, argv = tmp_path / "bin", tmp_path / "launched", tmp_path / "argv"
     bin_.mkdir()
     (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}printf '%s\\n' \"$@\" > {argv}\n"
-                             "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n" f"touch {done}\n")
-    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done} ]; do :; done\n")
+                             "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n"
+                             f"touch {done}.$TEST_CALL\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done}.$TEST_CALL ]; do :; done\n")
     for f in bin_.iterdir():
         f.chmod(0o755)
     env = {**os.environ, **git_env, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
            "R2_ENDPOINT": "dummy"}
     for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
         env.pop(k, None)
+    calls = iter(range(1, 1000))
 
     def train(*a, **extra):
-        done.unlink(missing_ok=True)      # else `sleep` returns at once on an earlier call's launch, before this one's
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
-                              cwd=tmp_path / "repo", env={**env, **extra})
+                              cwd=tmp_path / "repo", env={**env, "TEST_CALL": str(next(calls)), **extra})
 
     return git, train, argv
 
@@ -2132,6 +2211,19 @@ def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_pa
                        (["--shard", "auto:0/3", "--shard-plan-file", str(plan)], "--shard needs K/N or auto:K/N")):
         p = train("HEAD", "vy-x", "--deferred", "pytest", *flags)
         assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
+def test_train_sh_gives_every_check_a_timeout_so_its_run_extends_the_nodes_lease(tmp_path):
+    """Only a `research run` with a --timeout extends its node's lease (`remote.lease_extend_s`): without one a node that runs
+    nothing but checks stops two hours after its boot, so every check train.sh launches carries one."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    for flags in ((), ("--deferred", "lean-audit"), ("--cc-records",)):
+        p = train("HEAD", "vy-x", *flags)
+        args = argv.read_text().split()
+        assert p.returncode == 0 and args[args.index("--timeout") + 1] == "36000", (flags, p.stderr, args)
 
 
 def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(tmp_path):
@@ -2239,20 +2331,59 @@ def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
     git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
+    git("push", "-q", str(tmp_path / "origin.git"), "HEAD:main")       # by its path: no ref of the clone's says origin has it
     origin, gone, sleeps = tmp_path / "origin.git", tmp_path / "gone.git", tmp_path / "sleeps"
     origin.rename(gone)
     # the first backoff gives origin back; a poll for the launch waits on it, not on a clock
     (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\nif [ -e {gone} ]; then mv {gone} {origin}; '
-                                            f'else while [ ! -e {tmp_path / "launched"} ]; do :; done; fi\n')
+                                            f'else while [ ! -e {tmp_path / "launched"}.$TEST_CALL ]; do :; done; fi\n')
     p = train("HEAD", "vy-x")
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
     assert sleeps.read_text().split()[0] == "5"
     sleeps.unlink()
+    (tmp_path / "repo" / "a").write_text("c\n")
+    git("commit", "-q", "-am", "another")
+    git("push", "-q", str(origin), "HEAD:main")
     origin.rename(gone)
     (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\n')
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "git fetch origin failed" in p.stderr and sleeps.read_text().split() == ["5", "15"], p.stderr
+
+
+def _counting_git(tmp_path):
+    """A `git` ahead of the real one on train.sh's PATH that appends each call's subcommand to the file it returns."""
+    import shutil
+
+    calls = tmp_path / "git-calls"
+    (tmp_path / "bin" / "git").write_text(
+        f'#!/bin/sh\nfor a; do case $a in -*|*/*) ;; *) echo "$a" >> {calls}; break;; esac; done\nexec {shutil.which("git")} "$@"\n')
+    (tmp_path / "bin" / "git").chmod(0o755)
+    return calls
+
+
+def test_train_sh_fetches_only_a_commit_no_ref_of_origin_holds(tmp_path):
+    """The queue launches each shard of a candidate it has just built and pushed from the same clone: a branch of origin
+    points at it, so the launch fetches nothing (a fetch per shard held the clone's lock for each); a commit origin holds but
+    no ref of the clone's says so is fetched, then launched; one origin lacks is refused."""
+    git, train, argv = _train_repo(tmp_path)
+    calls = _counting_git(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "candidate")
+    git("push", "-q", "origin", "HEAD:refs/heads/queue/c1")
+    for shard in ("1/2", "2/2"):
+        p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", shard)
+        assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert "fetch" not in calls.read_text().split(), calls.read_text()
+    (tmp_path / "repo" / "a").write_text("c\n")
+    git("commit", "-q", "-am", "pushed by its path")
+    git("push", "-q", str(tmp_path / "origin.git"), "HEAD:refs/heads/queue/c2")
+    calls.unlink()
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 0 and calls.read_text().split().count("fetch") == 1, (p.stderr, calls.read_text())
+    (tmp_path / "repo" / "a").write_text("d\n")
+    git("commit", "-q", "-am", "local")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
 
 
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):

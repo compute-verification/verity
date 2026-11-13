@@ -5,6 +5,8 @@ attention products, with the gate's verdict for the arm.
 python3 etable.py BENCH.jsonl GATE.jsonl > table.md
 """
 
+from __future__ import annotations
+
 import json
 import math
 import re
@@ -17,16 +19,19 @@ ROWS = [("no edit, custom mainloop", "{rc}"), ("edit, separate pass", "sep_{rc}"
         ("edit, fused, overlapped", "fov_{rc}")]
 
 
-def gate_verdicts(path):
+def gate_verdicts(path: str) -> dict[str, list[bool]]:
+    """Every boolean check of the gate's JSON lines, by name: its verdict at each gate shape."""
     checks = {}
-    for line in open(path):
-        for key, v in json.loads(line).items():
-            if isinstance(v, bool) and key not in ("ok", "receipts"):
-                checks.setdefault(key, []).append(v)
+    with open(path) as f:
+        for line in f:
+            for key, v in json.loads(line).items():
+                if isinstance(v, bool) and key not in ("ok", "receipts"):
+                    checks.setdefault(key, []).append(v)
     return checks
 
 
-def arm_gate(name, checks):
+def arm_gate(name: str, checks: dict[str, list[bool]]) -> str:
+    """The gate's verdict for one arm: pass, FAIL or unchecked, over every check the arm rests on, at every gate shape."""
     fmt = name.rsplit("_", 1)[1]
     keys = [key for key in checks if re.fullmatch(rf"(U|R|XA|XB)_{re.escape(name)}(_nonzero)?", key)]
     if not keys:
@@ -37,14 +42,17 @@ def arm_gate(name, checks):
     return "pass" if all(key in checks and all(checks[key]) for key in keys) else "FAIL"
 
 
-def geo(by, shapes, name, base):
+def geo(by: dict[str, dict], shapes: list[str], name: str, base: str) -> float:
+    """The arm's time over ``base``'s, as a geometric mean over ``shapes`` (NaN unless every shape timed both)."""
     xs = [by[s]["arms"][name]["ms"] / by[s]["arms"][base]["ms"] for s in shapes
           if s in by and name in by[s]["arms"] and base in by[s]["arms"]]
     return math.exp(sum(map(math.log, xs)) / len(xs)) if len(xs) == len(shapes) else float("nan")
 
 
-def main(bench, gate):
-    rows = [json.loads(line) for line in open(bench) if line.strip()]
+def main(bench: str, gate: str) -> None:
+    """Print the table of one bench file and one gate file."""
+    with open(bench) as f:
+        rows = [json.loads(line) for line in f if line.strip()]
     by = {j["shape"]: j for j in rows}
     checks = gate_verdicts(gate)
     names = sorted({a for j in rows for a in j["arms"]})

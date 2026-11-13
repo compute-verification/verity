@@ -1,10 +1,6 @@
-"""Two n = 8 keys that FOLD's reduced key_ok_r11 admits break K_R = K_1 = P/X/N; KJ19 scaled as at 32 bits rejects both."""
+"""theory/fold_open_shape_check.py: two n = 8 keys that FOLD's reduced key_ok_r11 admits break K_R = K_1 = P/X/N; KJ19
+scaled as at 32 bits rejects both."""
 from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "theory"))
 
 import fold_kernel_check as fk
 import fold_open_shape_check as fo

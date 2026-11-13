@@ -13,7 +13,7 @@ constructs its instance, and each quantifies over every session's parameters, de
 under the properties' namespace, proved by the `SecurityProofs` theorem of its name in lower camel case, and audited
 with the proofs: no record pins it.
 
-* `WipeSurvivorBoundHonest`: an honest session's parameters of at most `MAX_READS` reads with no egress are certified
+* `WipeSurvivorBoundHonest`: an honest session's parameters of 1 to `MAX_READS` reads with no egress are certified
   at the published pair, and the honest strategy (`honest`: the labels written into the store, each read answered from
   it) meets the observed event on every run, with its fill the `n · 512` bits of the labels and its egress in a set of
   `2^0` strings.
@@ -29,12 +29,12 @@ open Verity
 open scoped ENNReal
 
 /-- **The honest lemma of `WipeSurvivorBound`: its hypotheses hold for an honest session.** The parameters of a session
-of at most `MAX_READS` reads, with no egress, are certified at `eps = 2^-128` and `foreign_bits` the threshold
-`foreignBits` at `r = ratio k`, with their reads, `memory_bits` and ratio. The honest strategy on any device whose store
-holds the fill has its fill the labels' `n · 512` bits, its egress in a set of `2^0` strings, and meets the observed
-event on every run at the count of no egress. -/
+of 1 to `MAX_READS` reads (`NeZero q.k`, as `WipeSurvivorBound` takes the labels' count), with no egress, are certified
+at `eps = 2^-128` and `foreign_bits` the threshold `foreignBits` at `r = ratio k`, with their reads, `memory_bits` and
+ratio. The honest strategy on any device whose store holds the fill has its fill the labels' `n · 512` bits, its egress
+in a set of `2^0` strings, and meets the observed event on every run at the count of no egress. -/
 def WipeSurvivorBoundHonest : Prop :=
-  (∀ q : StreamedWipe.Params, q.k ≤ WipeProtocol.MAX_READS →
+  (∀ (q : StreamedWipe.Params) [NeZero q.k], q.k ≤ WipeProtocol.MAX_READS →
       WipeProtocol.certify q 0 = ⟨true, 0, WipeProtocol.EPS, WipeProtocol.foreignBits q (WipeProtocol.ratio q.k), q.k,
         WipeProtocol.memoryBits q, WipeProtocol.ratio q.k⟩) ∧
     ∀ {ι : Type} (d : Accounting.Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) (n k : ℕ)

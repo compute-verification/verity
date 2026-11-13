@@ -1,4 +1,4 @@
-"""The certified share σ of a GPU's capacity, from a scored filler run's measured entries.
+"""The share σ of a GPU's capacity that is verified compute, from a scored filler run's measured entries.
 
 Each entry of a run's score.json is one served step beside its filler: the step's time, the served and filler MACs in
 it, and the SM clock. Their certified load, pooled over the step and the GPU's 4 × SMs SMSPs (a receipt attests no
@@ -23,9 +23,12 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "machine_model"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "machine_model"))
 from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
+
+#: what the tests read
+__all__ = ["E", "dfill_rows", "fstep_rows", "lfill_rows", "main"]
 
 F_MAX_MHZ = 2430.0  # sm_120's maximum SM clock, the credit's
 SMS = 188
@@ -44,7 +47,7 @@ def load(serving_macs: float, filler_macs: float, ms: float, mhz: float, sms: in
     return w
 
 
-def sigma(pi, entry: dict, mhz: float | None = None, **kw) -> C.Cell:
+def sigma(pi: E.Machine, entry: dict, mhz: float | None = None, **kw: float | str) -> C.Cell:
     w = load(entry["serving_macs"], entry["filler_macs"], entry["t1_ms"], mhz or entry["mhz"], **kw)
     return C.cell(pi, [(1.0, w)])
 
@@ -66,7 +69,7 @@ def lfill_load(rec: dict, arm: str, mhz: float, fold: str = "duo", served_fold: 
     return w
 
 
-def lfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
+def lfill_rows(pi: E.Machine, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
     rows = []
     for r in recs:
         for arm in ("pump", "lane"):
@@ -83,7 +86,7 @@ def lfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
     return rows
 
 
-def dfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
+def dfill_rows(pi: E.Machine, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
     """dcap dfill lines: the step beside the pump on its split's SMs (split_fill) or on every SM at the lowest priority
     beside the step at the highest (co_fill), pooled over the GPU."""
     rows = []
@@ -106,7 +109,7 @@ def dfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
     return rows
 
 
-def fstep_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
+def fstep_rows(pi: E.Machine, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
     """dcap fstep lines: the step through flin and dcap's attention beside the pump, on a split or co-scheduled on every
     SM (place co), its filler warps' MMAs (if any) with the pump's. Shares in a line are of the whole GPU's tensor peak at
     its run clock, so at `mhz` they scale by run clock / mhz. A line's own "fold" (the probe's tag for its build) wins over
@@ -134,10 +137,10 @@ def fstep_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
     return rows
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="capacity_of.py", description=__doc__.split("\n")[0])
     ap.add_argument("out", type=Path, nargs="?", help="a scored run's arm dir (its score.json)")
-    ap.add_argument("--lfill", type=Path, help="dcap lfill lines (capfill_probe.sh's lfill.jsonl)")
+    ap.add_argument("--lfill", type=Path, help="dcap lfill lines (capfill_fold_probe.sh's lfill.jsonl)")
     ap.add_argument("--dfill", type=Path, help="dcap dfill lines, split or co (capfill_co_probe.sh's co.jsonl)")
     ap.add_argument("--fstep", type=Path, help="dcap fstep lines (capfill_fstep_probe.sh's fstep.jsonl)")
     ap.add_argument("--fold", default="duo")

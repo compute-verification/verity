@@ -3,6 +3,7 @@ import json
 import math
 
 import pytest
+import torch
 from synthetic import SHAPE, tiny_registry, write_config
 
 from training_slowdown import as_math, codecs, config, library, of_record, starts
@@ -43,6 +44,12 @@ def test_a_steps_rows_a_forward_are_divided_out_of_its_token_shapes_and_their_ma
                              ("other", "param", "mm", [[D, 3], [3, D]], 7, 7 * 3 * D * D))
     with pytest.raises(ValueError, match="not one whole number of rows of 1024"):
         of_record.per_row(struct | {"updated": [*struct["updated"], [D, 0, CTX * D, CTX, 16]]}, SHAPE)
+    # a row that names its op's dtype, a seventh field, is read as the row of six: the dtype is no part of an entry,
+    # so an op at one shape in two dtypes is one entry of both rows' counts
+    product, *others = struct["log"]
+    named = struct | {"log": [[*row, "bfloat16"] for row in struct["log"]]}
+    in_two = struct | {"log": [[*product[:4], 1, macs, "bfloat16"], [*product[:4], 1, macs, "float32"], *others]}
+    assert of_record.per_row(named, SHAPE) == of_record.per_row(in_two, SHAPE) == got
 
 
 def attention(rows: int, calls: int) -> tuple:
@@ -304,13 +311,16 @@ def test_the_routes_average_of_its_trained_tensors_is_expected_for_a_programs_of
         assert got["expected"] == [] and any("_foreach_lerp_" in d for d in got["differences"])
 
 
-def test_32_bits_for_the_records_16_is_expected_and_any_other_use_differs():
+def test_a_use_of_an_updated_weight_is_the_records_by_its_bits_too():
+    """A route casts to bf16 on a CPU as on CUDA, so a use that reads its weight at other bits than the record's is
+    a difference, 32 for the record's 16 as much as 16 for its 32."""
     record = [(D * D, D, 16), (D * D, D, 16), (D, 0, 32)]
     same = log(*BOTH)
+    got = of_record.compare(step(same, record), step(same, record), SHAPE)
+    assert got["differences"] == got["expected"] == [] and got["uses"] == 3
     got = of_record.compare(step(same, [(D * D, D, 32), (D * D, D, 32), (D, 0, 32)]), step(same, record), SHAPE)
-    assert got["differences"] == [] and got["uses"] == 3
-    assert [e["rule"] for e in got["expected"]] == ["width"] and got["expected"][0]["what"].startswith("2 of the uses")
-    assert of_record.compare(step(same, record), step(same, record), SHAPE)["expected"] == []
+    assert got["expected"] == [] and got["uses"] == 0 and got["differences"] == [
+        "updated, the weights' bits: the config's (256, 16) at 32 x2; the record's (256, 16) at 16 x2"]
     got = of_record.compare(step(same, [(D * D, D, 16), (D * D, D, 16), (D, 0, 16)]), step(same, record), SHAPE)
     assert got["expected"] == [] and got["differences"] == [
         "updated, the weights' bits: the config's (16, 0) at 16 x1; the record's (16, 0) at 32 x1"]
@@ -382,12 +392,14 @@ def count(*more, updated=((D * D, D),), macs=None) -> dict:
 
 def as_cuda(struct: dict, rows: int) -> dict:
     """A CPU step's structure as the records hold CUDA's step: attention one fused kernel a call at torch's formula
-    (`fused`), the norm one fused kernel counted at its updated gains alone, the weights read at 16 bits. The step's
-    every attention backward asks for q's, k's and v's, or this refuses to write it."""
+    (`fused`), the norm one fused kernel counted at its updated gains alone, each weight read at the bits this step
+    reads it at (a route casts on a CPU as on CUDA). The step's every attention backward asks for q's, k's and v's,
+    or this refuses to write it. Its rows name no dtype, as those records' don't, whether the step's rows name one
+    (the counter's do, a seventh field) or not."""
     x, s = [rows, CTX, D], [rows, CTX, 1]
     kernel = {(*e[:3], json.dumps(e[3])): e[4] for e in attention(rows, calls=1)}
     calls, out = {}, []
-    for phase, kind, op, shapes, count, macs in struct["log"]:
+    for phase, kind, op, shapes, count, macs, *_ in struct["log"]:
         at = json.loads(shapes)
         if (phase, kind, op, shapes) in kernel:
             calls[phase, op, shapes] = count // kernel[phase, kind, op, shapes]
@@ -399,8 +411,21 @@ def as_cuda(struct: dict, rows: int) -> dict:
         out.append([phase, kind, op, json.dumps(at), count, macs])
     forward, backward = ({n for (phase, *_), n in calls.items() if phase == which} for which in ("fwd", "bwd"))
     assert len(calls) == len(kernel) and len(forward) == len(backward) == 1  # every row of the kernel's, of one count
-    return {"updated": [[*u[:4], 16] for u in struct["updated"]],
-            "log": out + fused(rows, forward.pop(), backward.pop())}
+    return {"updated": struct["updated"], "log": out + fused(rows, forward.pop(), backward.pop())}
+
+
+def test_a_made_up_record_is_written_from_a_step_whose_rows_name_a_dtype_or_none():
+    """`as_cuda` reads a counted step's rows as the counter writes them, each naming its op's dtype in a seventh
+    field, and rows of six, and writes the same record from either: rows of six, the norm one fused kernel and
+    attention one row a kernel."""
+    x = [2, CTX, D]
+    bare = a_step(2, *attention(2, calls=1), ("fwd", "updated", "mul", [x, G], 1, 2 * CTX * D),
+                  ("fwd", "act", "mul", [x, [2, CTX, 1]], 3, 3 * 2 * CTX * D))
+    named = bare | {"log": [[*row, "bfloat16"] for row in bare["log"]]}
+    record = as_cuda(bare, rows=2)
+    assert {len(row) for row in bare["log"]} == {6} and {len(row) for row in named["log"]} == {7}
+    assert as_cuda(named, rows=2) == record and {len(row) for row in record["log"]} == {6}
+    assert [row[2] for row in record["log"]] == ["mm", "_fused_rms_norm", FLASH, FLASH + "_backward"]
 
 
 def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None):
@@ -422,7 +447,7 @@ def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = N
 def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp_path, capsys):
     """A made-up run of record: the config's own counted step at two rows a forward, written as the records hold CUDA's
     step, attention one fused row a kernel and no trace. With the ask stated, the command writes that kernel as the
-    counter does, divides the rows out, counts the config at one row a forward and names the two expected differences.
+    counter does, divides the rows out, counts the config at one row a forward and names the expected difference.
     With no ask stated the entry is refused, naming the key; with a wrong one, a call for q's alone where the step's
     every call asks for all three, it differs. A config that trains another set, beside a record of another start and
     length, differs and exits 1. It counts and traces a route's steps, so slow; what the rules' own tests can't show is
@@ -446,9 +471,8 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
     argv = ["--records", str(records), "--held", str(held), "--starts", str(reg)]
     assert of_record.main([str(path), *argv, "--out", str(tmp_path / "out")]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 2 expected differences\n")
-    for rule in ("width: ", "norm: "):
-        assert f"  expected  {rule}" in out
+    assert out.startswith("a, held to r-made-up (out/run/run.json): equal, 1 expected difference\n")
+    assert "  expected  norm: " in out and out.count("  expected  ") == 1
     assert "  attention the record holds a fused kernel as one row: compared as the ops the math kernel" in out
     assert "`none` at [4, 1024, 8], of_record.toml's word (`partial`) and not the record's" in out
     assert "2 forwards of one row" in out and "2 of its 3 steps have, 2 rows a forward divided out" in out
@@ -491,18 +515,24 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
 def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path, capsys, monkeypatch):
     """The command on a count made up here, so no step is counted: a step equal to its record's exits 0, and so does
     one whose record has a line more that the data file names; a product the record lacks, which no rule names, is
-    printed as a difference and exits 1; so does a step the capture refused, which is compared with nothing."""
+    printed as a difference and exits 1; so does a step the capture refused, which is compared with nothing. The step
+    is counted at the CPU thread count its record states, and at a job's default (held at one by the suite's
+    fixture) where the record names none, as the output says."""
     reg = tiny_registry(tmp_path / "reg")
     path = write_config(tmp_path / "a.toml")
     cfg = config.load(path, starts.registry(reg))
-    mine = count()
-    monkeypatch.setattr(of_record, "counted", lambda *a: mine)
+    mine, at = count(), []
+    monkeypatch.setattr(of_record, "counted", lambda *a: at.append(torch.get_num_threads()) or mine)
     rec = {"start_record": {"name": "tiny", "digest": cfg.start.digest}, "structures": dict(mine["structures"]),
            "steps": [{"struct": "s"}] * cfg.budget["steps"], "checkpoints": [{"format": "full", "e_bytes": 20}]}
+    records, held = held_to(tmp_path / "counted", "a", rec | {"threads": 3})
+    assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 0
+    assert "\n  threads   3, the record's\n" in capsys.readouterr().out and at.pop() == 3
     records, held = held_to(tmp_path, "a", rec)
     argv = [str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]
     assert of_record.main(argv) == 0
     out = capsys.readouterr().out
+    assert at.pop() == 1 and "\n  threads   1, a job's default: the record names no count\n" in out
     assert out.startswith("a, held to r-made-up (out/run/run.json): equal\n") and "DIFFERS" not in out
     assert ("  step      the config's step 2, 2 forwards of one row, counted on a CPU, beside the record's modal "
             "structure, which 3 of its 3 steps have, 1 row a forward divided out\n") in out

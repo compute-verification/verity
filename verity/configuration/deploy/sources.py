@@ -144,5 +144,4 @@ def seeded(seed: bytes, *labels: str) -> SeededCoins:
     return SeededCoins(hashlib.sha512(SEEDED_TAG + seed + "/".join(labels).encode()).digest())
 
 
-__all__ = ["ANSWERS", "ASKS", "CLOCK", "COINS", "OWNER", "SEEDED_TAG", "OsCoins", "RealClock", "SeededCoins",
-           "VirtualClock", "VirtualTime", "seeded"]
+__all__ = ["OWNER", "SeededCoins", "VirtualClock", "VirtualTime", "seeded"]

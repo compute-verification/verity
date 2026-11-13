@@ -776,6 +776,7 @@ theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array Byte
       ((firstStop V θ F c A rd σ M ω).rewrite (M.link (firstStop V θ F c A rd σ M ω) pts)).consume o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
+    (ht : TablesSent (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hfirst : ∀ pre r post, (CoinTape.run (V.game θ F c) σ o.2).log = pre ++ r :: post → ∀ i s n,
       r.frame = .opening i s n → (∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') →
         ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.Spot.Challenger.TREE_SESSION)
@@ -802,7 +803,7 @@ theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array Byte
         Flock.Record.decode spec text = .ok sess → ∀ j r, reps j r = repRounds spec sess j.val r.val := by
   have hθ := (play_ends V θ F c σ o.2).1
   obtain ⟨text₀, proofs₀, spec₀, sts₀, hrec₀, -, hs₀, spec', sts', hs', -, hver⟩ :=
-    accepts_sent hA hθ hv (filesOn_play hA hDg hv)
+    accepts_sent hA hθ hv (filesOn_play hA hDg hv ht)
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj (hs₀.symm.trans hs'))
   obtain ⟨sess₀, hd₀⟩ := zkVerify_decode hver
   obtain ⟨label', after', ξ, lines, lr, trees, Jr, tabsB, hV, hread, hct, h1, hJt, hJ⟩ :=

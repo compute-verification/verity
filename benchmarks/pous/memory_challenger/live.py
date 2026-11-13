@@ -13,10 +13,11 @@ against C's leaf).
 - **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (P2's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
   calibration (`--calibrate-only`) still measures the loopback round trip and records whether its p99.9 fits under the cap.
 - **A session** samples a fresh session id (the auditor's designation: here the harness is the auditor) and challenger
-  secret and commits its coin tree, every session's before the first round of any; it runs `k` rounds (the certificate's
-  `k`) after `WARMUP_PINGS` pings, signs once and opens its coins.  `--strict` refuses a `k` or limit no
-  certificate covers (`covering_certificate`) before any round.  Every session's binding is `setup_root`, the root the setup
-  publishes for the `C*` of these digests under READY's salt (`VerifierKey.from_row_digests`), recorded as `setup_root`.
+  secret and commits its coin tree, every session's before the first round of any, and keeps it; it runs `k` rounds (the
+  certificate's `k`) after `WARMUP_PINGS` pings, signs once, and only then releases its commitment and opens its coins.
+  `--strict` refuses a `k` or limit no certificate covers (`covering_certificate`) before any round.  Every session's
+  binding is `setup_root`, the root the setup publishes for the `C*` of these digests under READY's salt
+  (`VerifierKey.from_row_digests`), recorded as `setup_root`.
 - **The coins.** A session's indices are a function of its coin source, its session id, the store's block count and `k`
   (`CoinTree.draw`), and both come from `os.urandom`.  `--seed HEX` derives them from the seed instead (`seeded_session`),
   so a CPU test's samples, and with them its controls' verdicts, are the same on every run: a control's gate is a

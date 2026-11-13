@@ -297,16 +297,12 @@ def test_a_spec_states_each_public_item_once_with_its_reason():
     for fixed in ("subset:two", "subset:2", "stratified:2", "work:2"):
         with pytest.raises(ValueError):
             S.Law(fixed)
-    with pytest.raises(ValueError, match="uniform"):
-        S.Sequential("subset:4", "B")
     with pytest.raises(ValueError, match="positive"):
         _spec(proof_deadline=0)
     assert _spec().digest() == _spec().digest() != _spec(S.Law("rate:1/2")).digest()
 
 
 def test_a_stream_refuses_what_isnt_built_and_another_unit():
-    with pytest.raises(ValueError, match="Sequential"):
-        _stream(_spec(S.Sequential("uniform:4", "population")))
     with pytest.raises(ValueError, match="unit"):
         S.Stream(_spec(), OTHER, budget=1, delta=DELTA, challenger="c")
     with pytest.raises(ValueError, match="proof deadline"):

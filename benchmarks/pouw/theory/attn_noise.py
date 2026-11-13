@@ -31,28 +31,25 @@ import hashlib
 import json
 import math
 import sys
-from pathlib import Path
 
 import numpy as np
 
 from verity.protocols.pouw.verifier.credit import DELTA
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from checked_strip import W_RE, CellGrid, cross_ranks  # noqa: E402
-from exact_kit.checks import Checks  # noqa: E402
-from narrow_u import NarrowBlock, planes  # noqa: E402
+from checked_strip import W_RE, CellGrid, cross_ranks
+from exact_kit.checks import Checks
+from narrow_u import NarrowBlock, planes
 
 INSTANCES = ("zero", "P = 0", "V = 0", "one-hot P", "uniform P", "random")
 #: SHA-512's output bits a compression in counter mode (one block a counter value).
 SHA_BITS = 8 * hashlib.sha512().digest_size
-#: The NS 1 patch: 4 rows × 128 columns of 1-bit noise a compression (sha_noise.cuh, cgemm_ref.patch_bits).
-PATCH_ROWS, PATCH_COLS = 4, 128
+#: The NS 1 patch's columns: 4 rows × 128 columns of 1-bit noise a compression (sha_noise.cuh, cgemm_ref.patch_bits).
+PATCH_COLS = 128
 #: A sampled proof block's seed: 2 compressions (SHA-512 of the window coin and the two roots).
 SEED = 2
 
 
-def operands(B: CellGrid, kind, rng):
+def operands(B: CellGrid, kind: str, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
     """(P, V) of one block at instance `kind`; P in Lean coordinates, a probability row as P_prob − 64."""
     P = rng.integers(-63, 63, (B.n, B.k))
     V = rng.integers(-128, 127, (B.k, B.n2))
@@ -73,18 +70,18 @@ def operands(B: CellGrid, kind, rng):
     raise ValueError(kind)
 
 
-def ranks(B: CellGrid, rng):
+def ranks(B: CellGrid, rng: np.random.Generator) -> dict[str, tuple[int, int, int]]:
     return {kind: cross_ranks(B, *operands(B, kind, rng), mod=1) for kind in INSTANCES}
 
 
-def h_table(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
+def h_table(L: int, d: int = 128, u_bits_qk: int = 64 * 5, u_bits_pv: int = 32 * 7) -> dict[str, float]:
     """GRIND's h a form and operand: the bits of one operand row's noise over the units that read it (every unit of
     a row, or of a column, of one A·B with its own seed), at the worst row (key 0 or query L − 1: L units)."""
     return {"QKᵀ, K row (b)": d / L, "QKᵀ, Q row (c and U)": (d + u_bits_qk) / L,
             "P·V, V column (b)": L / L, "P·V, P row (U)": u_bits_pv / d}
 
 
-def h_decode(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
+def h_decode(L: int, d: int = 128, u_bits_qk: int = 64 * 5, u_bits_pv: int = 32 * 7) -> dict[str, float]:
     """h at a decode step of one query against L keys, K and V noised afresh by the step's matmuls: Q's row is read by
     the step's L units, each K row by one, P's row by d units and each V column's L bits by one."""
     return {"QKᵀ, K row (b)": d, "QKᵀ, Q row (c and U)": (d + u_bits_qk) / L,
@@ -95,8 +92,8 @@ def h_decode(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
 DELTA_LOG2 = DELTA.denominator.bit_length() - 1
 
 
-def grind_eps(L, delta_log2=DELTA_LOG2, t_log2=128, d=128):
-    """Decision 112's (iv): a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
+def grind_eps(L: int, delta_log2: int = DELTA_LOG2, t_log2: int = 128, d: int = 128) -> dict[str, float]:
+    """GRIND's term: a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
     the N units the seed covers, one seed a matmul (one head). Prefill: QKᵀ covers the causal L(L + 1)/2 scores,
     P·V L·d outputs; decode: L scores and d outputs."""
     bits, hp, hd = t_log2 + delta_log2, h_table(L, d), h_decode(L, d)
@@ -106,7 +103,7 @@ def grind_eps(L, delta_log2=DELTA_LOG2, t_log2=128, d=128):
             "decode P·V": bits / (min(hd["P·V, V column (b)"], hd["P·V, P row (U)"]) * d)}
 
 
-def unit_compressions(k, d=128):
+def unit_compressions(k: int, d: int = 128) -> dict[str, tuple[int, int]]:
     """SHA-512 compressions a sampled proof block spends on its noise: (deployed patch layout, contiguous layout). QKᵀ's unit
     reads Q's row (c in one patch, U from its tag-11 digest) and K's row (one patch); P·V's reads P's row's U (one
     digest a row pair) and V's column of b over k keys, which the patch layout over Vᵀ serves 128 keys a compression."""
@@ -115,7 +112,7 @@ def unit_compressions(k, d=128):
     return {"QKᵀ": qk, "P·V": pv}
 
 
-def main():
+def main() -> None:
     checks = Checks()
     rng = np.random.default_rng(20261018)
     out = {}
@@ -171,7 +168,7 @@ def main():
                  all(w_ == "QKᵀ, K row (b)" for w_ in worst.values()) and h["L=2048"]["QKᵀ, K row (b)"] == 1 / 16
                  and h["L=32768"]["QKᵀ, K row (b)"] == 1 / 256 and h["L=8192"]["P·V, V column (b)"] == 1
                  and h["L=2048"]["P·V, P row (U)"] == 1.75, str(out["h"]))
-    checks.check("G2 the noise per drawn unit: QKᵀ 5 compressions (4 contiguous); P·V 3 + k/128 on the "
+    checks.check("G2 the noise per sampled proof block: QKᵀ 5 compressions (4 contiguous); P·V 3 + k/128 on the "
                  "patch layout over Vᵀ (19, 67, 259 at k = 2K, 8K, 32K) against 2 + ⌈(224 + k)/512⌉ contiguous (7, 19, "
                  "67)", comp["k=2048"] == {"QKᵀ": (5, 4), "P·V": (19, 7)} and comp["k=8192"]["P·V"] == (67, 19)
                  and comp["k=32768"]["P·V"] == (259, 67), str(comp))

@@ -79,7 +79,7 @@ theorem units_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.O
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.Spot.OneStageZk.evidenceOf b = .ok ev)
     (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
-    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.design)
     {cs : List Coin} (hξ : ∃ t, drawBytes cs = ξ ++ t) {v : Seen} (hlen : DRAW_ROUNDS < v.msgs.length)
     (hshow : Shows A o ev bs v) :
     provedOf A (drawOf v) = some ((drawn A (drawBytes cs)).toArray.qsort (· < ·)) := by
@@ -117,9 +117,9 @@ theorem drawUnits_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sp
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.Spot.OneStageZk.evidenceOf b = .ok ev)
     (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
-    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.design)
     {cs : List Coin} (hξ : ∃ t, drawBytes cs = ξ ++ t) :
-    ∃ u rd, _root_.Spot.Draw.drawUnits A.law A.n (drawBytes cs) = .ok (u, rd) := by
+    ∃ u rd, _root_.Spot.Draw.drawUnits A.design A.n (drawBytes cs) = .ok (u, rd) := by
   obtain ⟨s, pubB, B, record, law, n, units, read, hs, hpB, hB, hr, hder, hn', hd, hc⟩ :=
     _root_.Properties.Spot.Credited.unitsAt_of_checkBlobsAt he hacc
   have hpb : pubB = A.I.publicFile := Except.ok.inj (hpB.symm.trans hn.pub)
@@ -155,7 +155,7 @@ theorem units_of_pass (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.OneS
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.Spot.OneStageZk.evidenceOf b = .ok ev)
     (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
-    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.design)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V A o).k (xOf A o)) → Coin)
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
     (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen
@@ -175,7 +175,7 @@ theorem refOk_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.O
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.Spot.OneStageZk.evidenceOf b = .ok ev)
     (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
-    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.design)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V A o).k (xOf A o)) → Coin)
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
     (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen
@@ -235,7 +235,7 @@ theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Spot.On
     {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.Spot.OneStageZk.evidenceOf b = .ok ev)
     (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
-    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.design)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V A o).k (xOf A o)) → Coin)
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
     (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen

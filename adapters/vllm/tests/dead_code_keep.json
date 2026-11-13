@@ -2,6 +2,8 @@
  "schema": "vllm-dead-code-keep/v1",
  "dynamic_record": "art:a265fc569719ee1a410f0863416416af91c66d02b1ed8703a9f60fd19e614f2f",
  "modules": {
+  "verity_vllm.commitments.vllm_v1.vectors": "the generator of the vllm-v1 conformance vectors (vectors.json), run as a module by hand and held to its file by tests/commitments/test_vllm_v1.py",
+  "verity_vllm.commitments.vllm_v1.vectors_sha512": "the generator of the vllm-v1-sha512 conformance vectors (vectors_sha512.json), run as a module by hand and held to its file by verity/commitments/tests/test_sha512_framings.py",
   "verity.definitions.numerics.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
   "verity_vllm.program.lifting.lifted_compose": "the lifted fixed workload Program (GP-01's compose over lifted components) of tests/program/test_lifted_mixed.py / test_lifted_r17.py (LIVE registry.lifted)",
   "verity_vllm.program.frontend.derive_examples": "source modules of the derivation tests (LIVE frontend.derive)",
@@ -30,7 +32,6 @@
   "verity.definitions.tiny": "the tiny whole-model configurations (TINY, TINY_NOBIAS, TINY_FP8) at which the registry's circuit-check sidecars (verity/definitions/registry/*.circuit-check.py) and circuit_check.targets bind whole-model roots; neither is a vLLM entry point",
   "verity_vllm.program.predict.template_counts": "n_t(c), each template's instances in a request unit's Program read off its key, held to the built Programs' template partitions by tests/program/predict/test_template_counts.py ahead of the compile that reads it (LIVE predict.step_needs)",
   "verity_vllm.log": "the logger every library module logs through (init_logger), checked by tests/test_log.py ahead of the first module that converts its prints",
-  "verity_vllm.commitments.vllm_v1.vectors": "the generator of the vllm-v1 conformance vectors (vectors.json), run as a module by hand and held to its file by tests/commitments/test_vllm_v1.py",
-  "verity_vllm.commitments.vllm_v1.vectors_sha512": "the generator of the vllm-v1-sha512 conformance vectors (vectors_sha512.json), run as a module by hand and held to its file by verity/commitments/tests/test_sha512_framings.py"
+  "verity_vllm.pipeline.long_row": "the check template of a two-stage window over one of DSA's long rows (DsaTopKReadRowsCut_v1, which layout registers over the window's class), read by its circuit-check sidecar and held to DsaTopKReadRows_v1 by tests/pipeline/test_long_row.py and tests/pipeline/test_serving_rows_bits.py; it stands in for the request Definition that will hold the row"
  }
 }

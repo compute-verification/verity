@@ -7,10 +7,10 @@ and the SM's scalar issue slots (priced by q*, `scalar_route.py`). NOSUM is the 
 outside the issue slots -- can make such a word more cheaply, so the ε_machine LP need not give the cheater a side route
 for the committed words themselves.
 
-An assumption is replaced by a measured cap or a mechanical check wherever the hardware allows. This script does both.
+An assumption is replaced by a measured rate or a mechanical check wherever the hardware allows. This script does both.
 For every non-issue unit it records (1) the arithmetic it can do, (2) whether that arithmetic can yield an exact fresh
 committed s32 sum-of-products (precision, range, rounding, freshness), and (3) its measured rate beside a saturated
-honest kernel (the data sheet, machine_model's rows.csv). The checkable physics is verified here; the measured caps are
+honest kernel (the data sheet, machine_model's rows.csv). The checkable physics is verified here; the measured rates are
 cited; and the machine model's floors (floors.csv: every root-write ≥ 32 MACs a word, every copy/load ≥ 16) are
 cross-checked to confirm no side unit is priced below honest's per-word cost.
 
@@ -34,17 +34,19 @@ from __future__ import annotations
 
 import csv
 import sys
+from collections.abc import Iterator, Sequence
+from fractions import Fraction
 from pathlib import Path
 
 from exact_kit.checks import Checks
 
 M32 = 0xFFFFFFFF
-FLOORS = Path(__file__).resolve().parents[1] / "machine_model" / "data" / "floors.csv"
+FLOORS = Path(__file__).resolve().parents[2] / "machine_model" / "data" / "floors.csv"
 
 
 # ---- the unit enumeration (how the hardware works) -----------------------------------------------------------------------
 # Each unit: its class, the arithmetic it performs, whether it can yield an exact fresh committed s32 (and why not), the
-# measured beside-honest cap (words/SM/clk) with its source, and the ε-LP route it becomes. "fresh words" is the capacity
+# measured beside-honest rate (words/SM/clk) with its source, and the ε-LP route it becomes. "fresh words" is the capacity
 # for *fresh committed sum-of-products* words, which is 0 for every non-issue unit (the uniform datapath aside, priced).
 
 UNITS = [
@@ -54,7 +56,7 @@ UNITS = [
         "exact": False,
         "why": "FP32 intersection math with fixed semantics; the result is a hit record, not a free-operand dot product, "
                "and it is a fixed function of the scene geometry (existing values) -- not exact s32, not fresh",
-        "cap": "n/a (no compute-kernel route to a free dot product)", "fresh_words": 0,
+        "rate": "n/a (no compute-kernel route to a free dot product)", "fresh_words": 0,
         "route": "not a committed-word route; 0 fresh words",
     },
     {
@@ -65,7 +67,7 @@ UNITS = [
         "why": "weights are convex (≥0, sum 1) on a 256-level lattice over ≤ 8 taps, rounded -- a convex combination of "
                "existing texels, so bounded in their hull and not a free int8 dot product; convex ⇒ not fresh, low "
                "precision + rounding ⇒ not exact",
-        "cap": "TEX bilinear 1.54, TLD 8.38 words/SM/clk beside honest (the data sheet)", "fresh_words": 0,
+        "rate": "TEX bilinear 1.54, TLD 8.38 words/SM/clk beside honest (the data sheet)", "fresh_words": 0,
         "route": "copy/interp route, priced TEXBIL/TLD at 16-32 MACs/word (floors.csv); 0 fresh words",
     },
     {
@@ -75,7 +77,7 @@ UNITS = [
         "why": "multiply-add but clamped to the format range ([0,1] UNORM) and rounded at 8-bit/fp16 -- cannot be a "
                "wrapping exact s32 over a 20-bit dot-product range; also driven by the graphics pipeline, not reachable "
                "from a compute kernel without interop",
-        "cap": "n/a (graphics-only; not measured as a compute route)", "fresh_words": 0,
+        "rate": "n/a (graphics-only; not measured as a compute route)", "fresh_words": 0,
         "route": "not a committed-word route; 0 fresh words",
     },
     {
@@ -86,7 +88,7 @@ UNITS = [
         "why": "SAD is a sum of |differences|, not of products; the DCT basis is fixed, not free int8; all quantized and "
                "in a narrow format -- no free-operand exact s32 dot product, and these are separate engines driven by "
                "driver APIs, not by a compute kernel over committed buffers",
-        "cap": "n/a (separate engines; not a compute route)", "fresh_words": 0,
+        "rate": "n/a (separate engines; not a compute route)", "fresh_words": 0,
         "route": "not a committed-word route; 0 fresh words",
     },
     {
@@ -95,7 +97,7 @@ UNITS = [
         "exact": True,  # the ADD is exact, but there is no multiply
         "why": "exact integer ADD only -- no multiply, so it can at most sum words that already exist (a one-op function "
                "of other committed words), which is not fresh; it cannot form a product",
-        "cap": "≤ 1.9 words/SM/clk (every L2 reduction form tops out near 1.9, the data sheet)", "fresh_words": 0,
+        "rate": "≤ 1.9 words/SM/clk (every L2 reduction form tops out near 1.9, the data sheet)", "fresh_words": 0,
         "route": "add route, priced RED32/ATOMG32 at 32 (root) / 16 (landed word) MACs/word (floors.csv); 0 fresh words "
                  "(no multiply)",
     },
@@ -104,7 +106,7 @@ UNITS = [
         "arith": "exact int32 add reduction of a bulk tile from shared to global",
         "exact": True,
         "why": "as L2 reductions: exact ADD, no multiply; sums existing words, not fresh",
-        "cap": "≤ 1.9 words/SM/clk beside honest (the data sheet)", "fresh_words": 0,
+        "rate": "≤ 1.9 words/SM/clk beside honest (the data sheet)", "fresh_words": 0,
         "route": "add route, priced TMAred512 at 32 MACs/word (floors.csv); 0 fresh words (no multiply)",
     },
     {
@@ -112,7 +114,7 @@ UNITS = [
         "arith": "store (move) or exact int32 add into a peer CTA's shared memory",
         "exact": True,
         "why": "store is a copy; red.add is an exact ADD with no multiply -- a copy or a sum of existing words, not fresh",
-        "cap": "st.v4 0.40, red.add 0.35 words/SM/clk beside honest (the data sheet)", "fresh_words": 0,
+        "rate": "st.v4 0.40, red.add 0.35 words/SM/clk beside honest (the data sheet)", "fresh_words": 0,
         "route": "copy/add route, priced ATOME32P 32/16, DSMST4P 32 MACs/word (floors.csv); 0 fresh words",
     },
     {
@@ -120,7 +122,7 @@ UNITS = [
         "arith": "data movement only (global<->shared<->peer, host<->device); no arithmetic",
         "exact": True,  # a moved word is bit-exact -- but it is a copy
         "why": "no arithmetic at all; the output word equals an existing word, so it is a copy, never fresh",
-        "cap": "TMA copy 2.36, LDGSTS 6.09 words/SM/clk beside honest (the data sheet); DMA bounded by PCIe 0.056 TB/s",
+        "rate": "TMA copy 2.36, LDGSTS 6.09 words/SM/clk beside honest (the data sheet); DMA bounded by PCIe 0.056 TB/s",
         "fresh_words": 0,
         "route": "copy route, priced UBLKCP4K/LDGSTS16 at 16-32 MACs/word (floors.csv, copy16/loads16); 0 fresh words",
     },
@@ -132,7 +134,7 @@ UNITS = [
                "an instruction (32× fewer than a vector lane), sits on the issue slots (priced), and "
                "ptxas keeps loop-carried warp-uniform chains in vector registers so a program cannot aim fold/word work "
                "at it (the data sheet). NOSUM holds for it by pricing, not exactness",
-        "cap": "≤ 0.766 uniform words/SM/clk alone; on issue at 0.74 of a vector slot", "fresh_words": 0,
+        "rate": "≤ 0.766 uniform words/SM/clk alone; on issue at 0.74 of a vector slot", "fresh_words": 0,
         "route": "scalar route on issue (UNI), 1 word/instruction, priced at 32 MACs/word (floors.csv); no free capacity",
     },
 ]
@@ -140,23 +142,22 @@ UNITS = [
 
 # ---- the checkable physics ------------------------------------------------------------------------------------------------
 
-def bilinear(texels, alpha, beta):
+def bilinear(texels: Sequence[int], alpha: int, beta: int) -> Fraction:
     """A bilinear filter's convex 8-bit-weighted sum of 4 texels (alpha, beta in {0..255}/256). Returns the exact rational
     value before the output rounding; its point is that the weights are convex."""
-    from fractions import Fraction
     a, b = Fraction(alpha, 256), Fraction(beta, 256)
     w = [(1 - a) * (1 - b), a * (1 - b), (1 - a) * b, a * b]
     assert sum(w) == 1 and all(wi >= 0 for wi in w)
     return sum(wi * ti for wi, ti in zip(w, texels))
 
 
-def blend_u8(src, dst, sf, df):
+def blend_u8(src: int, dst: int, sf: int, df: int) -> int:
     """An 8-bit UNORM blend: round((src*sf + dst*df)/255), clamped to [0,255]. src,dst,sf,df in 0..255."""
     v = (src * sf + dst * df + 127) // 255
     return max(0, min(255, v))
 
 
-def lcg(seed: int):
+def lcg(seed: int) -> Iterator[int]:
     s = seed & M32
     while True:
         s = (1664525 * s + 1013904223) & M32
@@ -169,7 +170,6 @@ def main() -> int:
     # enumeration coverage: every candidate unit is present.
     needed = ["RT core", "Texture", "ROP", "Video", "L2 reduction", "TMA bulk reduce", "DSMEM", "TMA bulk copy",
               "Uniform datapath"]
-    joined = " | ".join(u["unit"] for u in UNITS)
     for n in needed:
         checks.check(f"enumerated: {n}", any(n.split()[0] in u["unit"] or n in u["unit"] for u in UNITS))
 

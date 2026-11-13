@@ -6,6 +6,7 @@ Recomputed independently of the device: the noised operands A~ = Q(A) + E_A F_A^
 W = B~ F_A and V = A~ F_B - E_A G in two s8 limbs), U = Q(A) Q(B)^T exactly (int64, then checked to fit s32), and every
 receipt chain over the running sums T_s = A~[:, :32 s] B~[:, :32 s]^T in the kernel's canonical order (fgemm.cu's header).
 """
+from __future__ import annotations
 
 import json
 import sys
@@ -13,10 +14,13 @@ from pathlib import Path
 
 import numpy as np
 
-M32 = np.uint32(0xFFFFFFFF)
+#: what the later kernels' references and diff.py import
+__all__ = ["BASE", "CHAINED", "TB", "TBC", "emit_key", "key_mul", "key_xor", "mix32", "rot_of", "rotl", "tb_key", "tb_operand",
+           "tb_receipts", "tbc_receipts", "u8bytes"]
 
 
-def mix32(x):
+def mix32(x: np.ndarray | np.uint32) -> np.ndarray | np.uint32:
+    """fgemm.cu's mix32 on u32 words: two multiply-xorshift rounds."""
     x = np.asarray(x, dtype=np.uint32)
     with np.errstate(over="ignore"):
         x = x ^ (x >> np.uint32(16))
@@ -30,22 +34,25 @@ R1 = [15, 18, 20, 5, 29, 25, 4, 9, 1, 6, 12, 28, 8, 7, 31, 19, 10, 17, 3, 11, 27
 R2 = [6, 23, 7, 19, 4, 14, 10, 12, 9, 28, 11, 20, 26, 2, 22, 17, 5, 16, 15, 3, 25, 8, 13, 29, 30, 27, 21, 24, 18]
 
 
-def rot_of(duo2, lane, t):
+def rot_of(duo2: bool, lane: int, t: int) -> int:
     """fgemm.cu's rot_of: duo's rotation, else duo2's R1 (lane 0) and R2 (lane 1)."""
     if not duo2:
         return ((t * 7 + 5) % 31) + 1
     return R1[t % 31] if lane == 0 else R2[t % 29]
 
 
-def key_mul(lane, t):
+def key_mul(lane: int, t: int) -> int:
+    """The odd multiplier key of chain `lane` at position t."""
     return int(mix32(np.uint32(0xA0000000 + 2 * (lane * 16 + t)))) | 1
 
 
-def key_xor(lane, t):
+def key_xor(lane: int, t: int) -> int:
+    """The xor key of chain `lane` at position t."""
     return int(mix32(np.uint32(0xB0000000 + 2 * (lane * 16 + t) + 1)))
 
 
-def rotl(x, r):
+def rotl(x: np.ndarray, r: int) -> np.ndarray:
+    """u32 words rotated left by r, 0 < r < 32."""
     return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
 
 
@@ -55,7 +62,7 @@ BASE = {5: 5, 6: 6, 7: 7, 8: 5, 9: 7, 10: 10, 11: 11, 12: 10, 13: 11}
 CHAINED = set(TBC.values())
 
 
-def emit_key(base, mi, ni, NI=4):
+def emit_key(base: int, mi: int, ni: int, NI: int = 4) -> int | None:
     """The key position of the receipt IMMA issued after tile (mi, ni)'s MMA, or None when none is."""
     if base in (5, 6):
         return mi * NI + ni
@@ -64,12 +71,12 @@ def emit_key(base, mi, ni, NI=4):
     return mi if ni == NI - 1 else None
 
 
-def key_tb(kind, t, lane, j):
+def key_tb(kind: int, t: int, lane: int, j: int) -> int:
     """fgemm.cu's key_tb: register j of key t's B fragment in lane `lane`."""
     return int(mix32(np.uint32((0xC0000000 + ((kind * 64 + t) * 32 + lane) * 2 + j) & 0xFFFFFFFF)))
 
 
-def tb_key(kind, t):
+def tb_key(kind: int, t: int) -> np.ndarray:
     """K_t as an s8 matrix (k x 8): B fragment register j of lane 4 n + q holds K[16 j + 4 q + i, n] as byte i. A chained
     kind's K_R is t = 63 (k = 32)."""
     kb = 2 if BASE[kind] in (5, 10, 11) or t == 63 else 1
@@ -84,7 +91,7 @@ def tb_key(kind, t):
     return K
 
 
-def tb_operand(kind, blk, mi, ni):
+def tb_operand(kind: int, blk: np.ndarray, mi: int, ni: int) -> np.ndarray:
     """The receipt IMMA's A operand (16 x k, u8) for accumulator tile (mi, ni) of a warp tile's bytes blk [WM, 32, 4]."""
     kind = BASE[kind]
     b = blk[16 * mi : 16 * mi + 16, 8 * ni : 8 * ni + 8]
@@ -103,7 +110,7 @@ def tb_operand(kind, blk, mi, ni):
     return np.stack([x, y], axis=2).reshape(16, 16)   # k 4q + c: tile ni - 1's word (r, 2q + c); 4q + 2 + c: tile ni's
 
 
-def tb_receipts(kind, SB, TM, BN, WM, NCT, tiles_m, tiles_n):
+def tb_receipts(kind: int, SB: np.ndarray, TM: int, BN: int, WM: int, NCT: int, tiles_m: int, tiles_n: int) -> np.ndarray:
     """Every thread's R fragment, [tile, ctid, 8] (R0..R3, then four zeros), from SB = the bytes of every word summed over
     the checkpoints: R = sum over checkpoints and positions t of A_t K_t, and K_t doesn't depend on the checkpoint."""
     MI, NI, warps_n = WM // 16, 4, BN // 32
@@ -129,13 +136,14 @@ def tb_receipts(kind, SB, TM, BN, WM, NCT, tiles_m, tiles_n):
     return out
 
 
-def u8bytes(x):
+def u8bytes(x: np.ndarray) -> np.ndarray:
     """The 4 u8 bytes of s32/u32 words, [..., 4] int64."""
     u = np.asarray(x, dtype=np.int64) & 0xFFFFFFFF
     return np.stack([(u >> (8 * j)) & 0xFF for j in range(4)], axis=-1)
 
 
-def tbc_receipts(kind, Ts, TM, BN, WM, NCT, tiles_m, tiles_n):
+def tbc_receipts(kind: int, Ts: list[np.ndarray], TM: int, BN: int, WM: int, NCT: int, tiles_m: int,
+                 tiles_n: int) -> np.ndarray:
     """The chained kinds: at each checkpoint R = bytes(R) K_R (R's 16 x 8 in TB4's operand layout), then
     R += sum over positions of A_t K_t on that checkpoint's words; R wraps mod 2^32."""
     MI, NI, warps_n = WM // 16, 4, BN // 32
@@ -167,7 +175,7 @@ def tbc_receipts(kind, Ts, TM, BN, WM, NCT, tiles_m, tiles_n):
     return out
 
 
-def f_matrix(own, k):
+def f_matrix(own: np.ndarray, k: int) -> np.ndarray:
     """F (k x 32) from the own-side descriptors."""
     f = np.zeros((k, 32), dtype=np.int64)
     cols = np.arange(k)
@@ -179,18 +187,20 @@ def f_matrix(own, k):
     return f
 
 
-def limbs(y):
+def limbs(y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """y as two s8 limbs (hi, lo): y = 256 hi + lo, lo in [-128, 127]."""
     lo = ((y & 0xFF) ^ 0x80) - 0x80
     hi = (y - lo) >> 8
     return hi, lo
 
 
 def main(d: Path) -> int:
+    """Check the gate dump in d, print the checks as one JSON line, and return 0 only if every one passed."""
     meta = json.loads((d / "meta.json").read_text())
     m, n, k, seed = meta["m"], meta["n"], meta["k"], meta["seed"]
     TM, BN, WM, NCT = meta["TM"], meta["BN"], meta["WM"], meta["NCT"]
 
-    def ld(name, dt, shape):
+    def ld(name: str, dt: type, shape: tuple[int, ...]) -> np.ndarray:
         return np.fromfile(d / name, dtype=dt).reshape(shape)
 
     QA = ld("QA.bin", np.int8, (m, k)).astype(np.int64)

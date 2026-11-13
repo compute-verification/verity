@@ -45,7 +45,7 @@ def Reg.query (g : Reg) : Json := g.verifier.query
 def Reg.table (g : Reg) : Option Json := g.verifier.workTable
 
 /-- The registration's layout (`Slots.layout`), empty where its query doesn't apply. -/
-def Reg.layout (g : Reg) : Spot.Slots.Layout :=
+def Reg.layout (g : Reg) : Spot.Slots.SlotOrder :=
   match Spot.Slots.layout g.program g.query with
   | .ok l => l
   | .error _ => default
