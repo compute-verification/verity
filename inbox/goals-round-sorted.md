@@ -325,7 +325,7 @@ L10, R11, R12, R14, R15, R22, R23, R24 (L = a not-yet line of the layout file, R
 | L6 | `verity/claims/` | not ruled, with soundness: it defines the assumption ids that Lean and the locks name, so it is not deleted | top | 2026-11-17 |
 | L7 | `verity/periods/` | verity/protocol.py | top | 2026-11-15 |
 | L8 | `fixtures/` | beside its reader, each file | proofs | 2026-11-18 |
-| L9 | `verity/protocols/accounting/pouw/clear/` | verity/protocols/accounting/pouw/verifier/ | compute-accounting | 2026-11-19 |
+| L9 | `verity/protocols/accounting/pouw/clear/` | verity/protocols/accounting/pouw/prover/clear/ (corrected by compute-accounting this morning) | compute-accounting | 2026-11-16 |
 | L10 | `verity/protocols/proofs/flock/sigma/` | its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which | proofs | 2026-11-18 |
 
 ## R: the architecture file's rows of code still to be written (`ARCHITECTURE.md` section 7 at #9702's head)
@@ -356,5 +356,3 @@ L10, R11, R12, R14, R15, R22, R23, R24 (L = a not-yet line of the layout file, R
 | R22 | A memory-read session is proved in zero knowledge | Each span's openings go to the verifier as they are |
 | R23 | PoUS's setup is a proof about the store | The check reads the whole store |
 | R24 | PoUS's session is checked inside a proof | The check reads the memory challenger's signed record as it is: for each round, which block was asked, when it was sent and answered, and the block's … |
-
-# Each lead's open goals, with my first sort
