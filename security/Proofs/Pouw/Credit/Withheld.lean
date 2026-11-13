@@ -212,7 +212,7 @@ theorem key_read {pub : ByteArray} (hs : pub.size = 80) :
   have hm : Lms.Params.make 64 Lms.deployed.W Lms.deployed.H false = .ok Lms.deployed := rfl
   unfold ChallengerKey.ofJson
   rw [hk, hH, hW, hp, beq_self_eq_true]
-  simp only [hm, hs, PUBLIC_BYTES, beq_self_eq_true, bind, Except.bind, pure, Except.pure]
+  simp only [hm, hs, PUBLIC_BYTES, beq_self_eq_true, ite_true, bind, Except.bind, pure, Except.pure]
 
 /-- A key `Lms.key` derives at the deployed parameters has a public key of 80 bytes. -/
 theorem pub_size {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k) :
@@ -236,7 +236,6 @@ theorem root_ok {key salt commit draw : Json} {k : ChallengerKey} {s rc : ByteAr
   unfold Internal.creditedRoot
   simp only [hk, hs, hc, ho, hr, Except.mapError, bind, Except.bind, pure, Except.pure, List.zipIdx_nil,
     List.forIn_nil, Option.elim, ite_true, List.append_nil]
-  rfl
 
 /-- **`creditedDraw` on a sample whose session released its one challenge after the sample root.** -/
 theorem draw_ok {ledger pins main draw : Json} {k : ChallengerKey} {root : ByteArray} {c : LiveCommitment}
