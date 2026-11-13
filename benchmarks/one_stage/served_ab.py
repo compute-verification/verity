@@ -22,10 +22,10 @@ listens and for the later, warm loads apart, gives each arm's median, least and 
 Beside the first loads it gives ``listen_s`` over the arm's lifetimes, where every one recorded it: a cost moved from a
 load to the server's start shows there.
 
-Arms are ordered stock, commit, pearl, live, ahead, each one part more than the one before (`PARTS`), so a part's cost is
-its arm's median less the arm before's (less than nothing where the part saves): in seconds, as a share of the last arm's
-wall, and over stock's. `table` writes
-``table.json`` and ``table.md`` to ``--out`` and prints the Markdown.
+Arms are ordered stock, commit, pearl, deferred, live, ahead, each one part (`PARTS`) more than the arm it is made from
+(`FROM`: the arm before it, except that ``deferred`` and ``live`` are both made from ``pearl``), so a part's cost is its
+arm's median less that arm's (less than nothing where the part saves): in seconds, as a share of the last arm's wall, and
+over stock's. `table` writes ``table.json`` and ``table.md`` to ``--out`` and prints the Markdown.
 """
 from __future__ import annotations
 
@@ -38,9 +38,12 @@ from typing import Any
 
 LIFE = "verity-bench/served-ab-life/v0"
 TABLE = "verity-bench/served-ab-table/v0"
-ORDER = ("stock", "commit", "pearl", "live", "ahead")
-#: what each arm serves beyond the arm before it
+ORDER = ("stock", "commit", "pearl", "deferred", "live", "ahead")
+#: the arm each arm is made from
+FROM = {"commit": "stock", "pearl": "commit", "deferred": "pearl", "live": "pearl", "ahead": "live"}
+#: what each arm serves beyond the arm it is made from
 PARTS = {"commit": "the Commit", "pearl": "Pearl+ under the Commit, its coins in-process",
+         "deferred": "Pearl+'s deferred schedule in place of the serial one",
          "live": "each window's salt coin from a live session",
          "ahead": "that session reserved and opened ahead of its window"}
 MEASURES = ("wall_s", "first_token_s", "decode_step_s", "close_after_s")
@@ -126,9 +129,10 @@ def _kind(by_arm: dict[str, list[dict[str, float]]]) -> dict[str, Any]:
         out["parts"].append({"part": "the stock step", "arm": "stock", "wall_s": med("stock", "wall_s"),
                              "share_of_top": med("stock", "wall_s") / med(top, "wall_s"), "over_stock": 1.0,
                              "first_token_s": med("stock", "first_token_s"), "decode_step_s": med("stock", "decode_step_s")})
-    for prev, a in zip(arms, arms[1:]):
-        if ORDER.index(a) != ORDER.index(prev) + 1:
-            continue                              # an arm left out between them: their difference is more than one part
+    for a in arms:
+        prev = FROM.get(a)
+        if prev not in arms:
+            continue                              # stock, or an arm made from one that did not run
         add = med(a, "wall_s") - med(prev, "wall_s")
         out["parts"].append({"part": PARTS[a], "arm": a, "wall_s": add, "share_of_top": add / med(top, "wall_s"),
                              "over_stock": add / med("stock", "wall_s") if base == "stock" else None,
