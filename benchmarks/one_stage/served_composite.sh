@@ -85,6 +85,12 @@ if [ "$PRODUCT" = onsite ]; then
   . "$ONSITE_PIECES"
 fi
 mkdir -p "$P" && chmod 700 "$D/private" "$P"
+package() {  # the Lake package directory of product $1
+  case $1 in
+    remote | remote-v1) echo verity/protocols/remote/verifier ;;
+    onsite) echo verity/protocols/onsite/verifier ;;
+  esac
+}
 exe() {  # Lean executable $1 of package dir $2, built, its path printed
   (cd "$TREE/$2" && lake build "$1") >> "$P/lean-build.log" 2>&1 \
     || { say "COMPOSITE: $1 doesn't build in $2 (its log on the node)" >&2; return 1; }
@@ -116,7 +122,7 @@ fi
 
 bad=0
 for x in "${products[@]}"; do
-  e=$(exe "$x" "verity/protocols/${x%-v1}/verifier") || { bad=1; continue; }
+  e=$(exe "$x" "$(package "$x")") || { bad=1; continue; }
   cases=()
   while IFS= read -r c; do cases+=(--cases "$c"); done < <("$TPY" - "$D/private" "$x" "$P" "$D/private/pouw" \
     "$D/private/compose" "$D/private/deferred" ${ONSITE_SKIP[@]+"${ONSITE_SKIP[@]}"} <<'EOF'
