@@ -5,15 +5,16 @@ public import Proofs.Properties.Verity.Sampled.OpensAt
 /-!
 # An honest instance that runs a session
 
-`Instance.Honest.inst` runs no session, so `remote_soundness_deployedReady`'s premises hold of it vacuously. Here the
-idle deployment at v2's reading is generalized to coin families `fs` and registered files `R` (`HonestAt.base`,
+`Instance.Honest.inst` runs no session, so `remote_soundness_deployedReady`'s session premise holds of it vacuously.
+Here the idle deployment at v2's reading is generalized to coin families `fs` and a registration `R` (`HonestAt.base`,
 `HonestAt.inst`), and specialized to one session `A₀` at the parameters `θ₀` (`HonestAt.instOne`): one coin family of
-`MAX_COINS` coins there, the registered files `files` there and the parameters' digests' (`registeredOf`) elsewhere.
+`MAX_COINS` coins there, the registration's files `files` there and the parameters' digests' (`registeredOf`)
+elsewhere.
 
-`HonestAt.premises_one`: at `instOne`, `remote_soundness_deployedReady`'s six premises hold wherever the session's
-files give its openings (`Live.OpensReady`), v2 sets it up on `files` (`SetsUp`), `files` pass the file check
-(`Vocab.Registered`) and the device's log opens only the record's rounds (`LogOpensRecorded`). PoUW's and the
-inference-only policy's targets hold at `⊤`, as at `Instance.Honest`.
+`HonestAt.premises_one`: at `instOne`, `remote_soundness_deployedReady`'s premises hold wherever v2 sets `A₀` up on
+the registered files at `θ₀` (`SetsUp`) on parameters it reads, given a play on files naming the same circuit and public
+files that `remote`'s sampled verdict accepts; PoUW's and the inference-only policy's targets hold at `⊤`, as at
+`Instance.Honest`.
 -/
 
 @[expose] public section
@@ -37,7 +38,7 @@ noncomputable def cost (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     Binding.breakCalls (dev fs (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
       (Verity.Game.Tape.out _ σ t).sent.blobs.size
 
-/-- **`Honest.base` at the coin families `fs` and the registered files `R`.** -/
+/-- **`Honest.base` at the coin families `fs` and the registration `R`** (`registeredFrom`). -/
 noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
   { Verity.Idle.vocab δ 1 with
     families := fs
@@ -45,7 +46,7 @@ noncomputable def base (δ : ℝ≥0∞) : Vocab Verity.Idle.device Unit :=
     read := readOf
     programDigest := programDigestOf
     publicDigest := publicDigestOf
-    registered := R
+    registered := registeredFrom R
     place := fun θ F _ g => placeOfRead (readOf θ F) g
     extract := fun _ _ _ _ _ => 0
     finder := fun _ _ _ _ _ => Verity.Idle.finder
@@ -76,8 +77,8 @@ theorem costs (δ : ℝ≥0∞) : CostsRead (base fs R δ) (dev fs) := fun θ F 
     Binding.breakCalls (dev fs (Verity.Game.Tape.out _ σ t)) (Verity.Game.Tape.out _ σ t).sent +
       (Verity.Game.Tape.out _ σ t).sent.blobs.size) (Finset.mem_univ t)
 
-/-- **The instance at `base fs R δ` and the session `session`**, where each family `fs` names samples `MAX_COINS`
-coins. -/
+/-- **The instance at `base fs R δ`, the registration `R` and the session `session`**, where each family `fs` names
+samples `MAX_COINS` coins. -/
 noncomputable def inst (δ : ℝ≥0∞) (hfs : ∀ θ l m, (l, m) ∈ fs θ → m = _root_.Spot.Challenger.MAX_COINS)
     (session : ByteArray → Option Live) : Instance Verity.Idle.device Unit where
   base := base fs R δ
@@ -87,6 +88,8 @@ noncomputable def inst (δ : ℝ≥0∞) (hfs : ∀ θ l m, (l, m) ∈ fs θ →
   programDigest _ := rfl
   publicDigest _ := rfl
   place _ _ _ _ := rfl
+  registration := R
+  registered _ := rfl
   costs := costs fs R δ
   coins := hfs
   session := session
@@ -103,40 +106,6 @@ theorem target_top (k : Verity.Registration.Composite) (a : Subprotocol) : (base
   rw [error_top]
   exact le_top
 
-variable {fs R}
-
-/-- **The registered files pass the file check wherever some files do**, where at each parameters they are the
-parameters' digests' (`registeredOf`) or pass it. -/
-theorem registeredFiles {δ : ℝ≥0∞} {hfs : ∀ θ l m, (l, m) ∈ fs θ → m = _root_.Spot.Challenger.MAX_COINS}
-    {session : ByteArray → Option Live}
-    (h : ∀ θ, R θ = registeredOf θ ∨ (base fs R δ).Registered θ (R θ)) : (inst fs R δ hfs session).RegisteredFiles := by
-  intro θ F _ hF
-  show (base fs R δ).Registered θ (R θ)
-  rcases h θ with he | hR
-  · obtain ⟨⟨f, -, hc⟩, ⟨g, -, hp⟩⟩ := hF
-    have hc' : programDigestOf θ = some (Verity.sha512 f.data.toList) := hc
-    have hp' : publicDigestOf θ = some (Verity.sha512 g.data.toList) := hp
-    obtain ⟨x, hx, hxe⟩ := fileWith_mem ⟨f, hc'⟩
-    obtain ⟨y, hy, hye⟩ := fileWith_mem ⟨g, hp'⟩
-    unfold Vocab.Registered
-    rw [he, registeredOf]
-    exact ⟨⟨x, Array.mem_append_left _ (Array.mem_append_left _ hx), hxe⟩,
-      ⟨y, Array.mem_append_left _ (Array.mem_append_right _ hy), hye⟩⟩
-  · exact hR
-
-/-- **Every session is `OpensReady`** where every session the instance runs is. -/
-theorem sessionsReady {δ : ℝ≥0∞} {hfs : ∀ θ l m, (l, m) ∈ fs θ → m = _root_.Spot.Challenger.MAX_COINS}
-    {session : ByteArray → Option Live} (h : ∀ θ A, session θ = some A → A.OpensReady) :
-    (inst fs R δ hfs session).SessionsReady :=
-  fun θ _ A hA _ => h θ A hA
-
-/-- **v2 sets each session up on the registered files** where it does at every session the instance runs. -/
-theorem sessionRegistered {δ : ℝ≥0∞} {hfs : ∀ θ l m, (l, m) ∈ fs θ → m = _root_.Spot.Challenger.MAX_COINS}
-    {session : ByteArray → Option Live} (k : Verity.Registration.Composite)
-    (h : ∀ θ A, session θ = some A → SetsUp (base fs R δ) θ (R θ) A) :
-    (inst fs R δ hfs session).SessionRegistered k :=
-  fun θ A hA _ _ => h θ A hA
-
 /-! ## One session -/
 
 section One
@@ -149,10 +118,8 @@ noncomputable def fsOne (θ : ByteArray) : List (String × ℕ) :=
   if θ = θ₀ then [(label, _root_.Spot.Challenger.MAX_COINS)] else []
 
 open Classical in
-/-- The registered files `files` at `θ₀`; the parameters' digests' (`registeredOf`) elsewhere. -/
+/-- The registration's files `files` at `θ₀`; the parameters' digests' (`registeredOf`) elsewhere. -/
 noncomputable def ROne (θ : ByteArray) : Array ByteArray := if θ = θ₀ then files else registeredOf θ
-
-theorem ROne_self : ROne θ₀ files θ₀ = files := by simp [ROne]
 
 theorem fsOne_coins : ∀ θ l m, (l, m) ∈ fsOne θ₀ label θ → m = _root_.Spot.Challenger.MAX_COINS := by
   intro θ l m h
@@ -170,44 +137,41 @@ noncomputable def instOne (A₀ : Live) : Instance Verity.Idle.device Unit :=
 theorem instOne_session (A₀ : Live) : (instOne θ₀ label files A₀).session θ₀ = some A₀ := by
   simp [instOne, inst]
 
+/-- **The registered files at `θ₀` are `files`** where `files` hold a file with each digest the parameters name. -/
+theorem registered_one (h : (base (fsOne θ₀ label) (ROne θ₀ files) ⊤).Registered θ₀ files) :
+    registeredFrom (ROne θ₀ files) θ₀ = files := by
+  have hR : ROne θ₀ files θ₀ = files := by simp [ROne]
+  unfold registeredFrom
+  rw [hR]
+  exact ite_eq_left h
+
 variable {θ₀ label files}
 
-/-- **`remote_soundness_deployedReady`'s premises at the instance that runs `A₀` at `θ₀`**, wherever `A₀`'s files
-give its openings, v2 sets it up on `files`, `files` pass the file check, and the device's log opens only the
-record's rounds. -/
-theorem premises_one {A₀ : Live} (hR : A₀.OpensReady)
-    (hS : SetsUp (base (fsOne θ₀ label) (ROne θ₀ files) ⊤) θ₀ files A₀)
-    (hF : (base (fsOne θ₀ label) (ROne θ₀ files) ⊤).Registered θ₀ files)
-    (hO : (instOne θ₀ label files A₀).LogOpensRecorded .remote) :
-    (instOne θ₀ label files A₀).SessionsReady ∧ (instOne θ₀ label files A₀).RegisteredFiles ∧
-      (instOne θ₀ label files A₀).SessionRegistered .remote ∧
-      (instOne θ₀ label files A₀).LogOpensRecorded .remote ∧
+/-- **`remote_soundness_deployedReady`'s premises at the instance that runs `A₀` at `θ₀`**, wherever v2 sets `A₀` up
+on the registered files at `θ₀` on parameters it reads, given a play on files naming the same circuit and public files,
+which `remote`'s sampled verdict accepts and whose prover sent the tables (`SessionRegistered`'s hypotheses there). -/
+theorem premises_one {A₀ : Live}
+    (hS : (∃ p, ParamsAt θ₀ p) →
+      (∃ F c o, (instOne θ₀ label files A₀).base.circuitFile θ₀ F =
+          (instOne θ₀ label files A₀).base.circuitFile θ₀ ((instOne θ₀ label files A₀).base.registered θ₀) ∧
+        (instOne θ₀ label files A₀).base.publicFile θ₀ F =
+          (instOne θ₀ label files A₀).base.publicFile θ₀ ((instOne θ₀ label files A₀).base.registered θ₀) ∧
+        Verity.Game.Reaches ((instOne θ₀ label files A₀).base.game θ₀ F c) o ∧
+        (instOne θ₀ label files A₀).base.Verdict .remote .sampled o ∧ TablesSent o.sent) →
+      SetsUp (instOne θ₀ label files A₀).base θ₀ ((instOne θ₀ label files A₀).base.registered θ₀) A₀) :
+    (instOne θ₀ label files A₀).SessionRegistered .remote ∧
       (instOne θ₀ label files A₀).base.PouwSound .remote ∧
       (instOne θ₀ label files A₀).base.InferenceOnlySound .remote := by
   classical
-  have hsess : ∀ θ A, (if θ = θ₀ then some A₀ else none) = some A → θ = θ₀ ∧ A = A₀ := by
-    intro θ A h
-    by_cases hθ : θ = θ₀
-    · rw [ite_eq_left hθ] at h
-      exact ⟨hθ, (Option.some.inj h).symm⟩
-    · rw [ite_eq_right hθ] at h
-      cases h
-  refine ⟨sessionsReady fun θ A h => ?_, registeredFiles fun θ => ?_, sessionRegistered .remote fun θ A h => ?_, hO,
-    target_top _ _ .remote .pouw, target_top _ _ .remote .inferenceOnly⟩
-  · obtain ⟨-, rfl⟩ := hsess θ A h
-    exact hR
-  · by_cases hθ : θ = θ₀
-    · subst hθ
-      right
-      rw [ROne_self]
-      exact hF
-    · left
-      unfold ROne
-      rw [ite_eq_right hθ]
-  · obtain ⟨rfl, rfl⟩ := hsess θ A h
-    show SetsUp _ _ (ROne _ files _) _
-    rw [ROne_self]
+  refine ⟨fun θ A h => ?_, target_top _ _ .remote .pouw, target_top _ _ .remote .inferenceOnly⟩
+  have h' : (if θ = θ₀ then some A₀ else none) = some A := h
+  by_cases hθ : θ = θ₀
+  · rw [ite_eq_left hθ] at h'
+    cases Option.some.inj h'
+    subst hθ
     exact hS
+  · rw [ite_eq_right hθ] at h'
+    cases h'
 
 end One
 
