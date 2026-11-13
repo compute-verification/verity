@@ -156502,3 +156502,85 @@ Your 18:44Z is read: the join takes the move as my commit `1bdb77ac7d99`, after 
   slot at 18:52Z. If `1e2c` prints its suites' exit first, I cancel it by its id.
 - The ready line goes when one of the two has all eight. **If you would mark on the Lean result and the 62 suites
   alone, say so**: the head, the audits and the lock paragraph are written and wait only on the suites' count.
+
+## REDRAW, Fri 13 Nov 18:57Z: #9717 is ready at `890a84bf6067caadc9dbdf7bcc87b05cb76a294b` (its `pass` is a reused one, nothing built); `commitOf?` is ready at `a669fecb7e221a8d23445c6fdbb90a092281fe08`
+
+### #9717: the ready line
+
+**Ready: `890a84bf6067caadc9dbdf7bcc87b05cb76a294b`** on `cursor/proofs-honest-draw-5b2f`, one commit over the carried head
+`ec2749859711f4cd3220ab0efca142ceb1cc5039`, pushed as a plain fast-forward. [git]
+
+1. **The commit is the two locks and nothing else.** `security/lean-audit.json` (sha256 `5a85c213a142619c…`) and
+   `security/Properties/lean-audit.json` (`e8d12e3b8e63efdf…`), byte for byte the files `r20261113-165128-71b3` kept under
+   `lean-audit/record/`. [local]
+2. **As JSON, the commit changes these entries and no other.** [local]
+   - `security/lean-audit.json`, 7 places, all under `reads/Spot.ChallengerSession`: the records of `Spot.Challenger.auditedOpen`,
+     `challengePhaseNamed`, `challengePhaseOf`, `verifyLedger`, the private `isBodyOf` and `isOutcome`, and the entry's `digest`
+     (`d4f27e2c…` to `7975b3d9…`).
+   - `security/Properties/lean-audit.json`, 10 places: the same six records and the `digest` (`375920ad…` to `7975b3d9…`); the
+     records under `Spot.Challenger.sessionNamed` and `Spot.Challenger.sessionOf` dropped; and
+     `trust_gap/Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` in another order, the same 12 premises.
+   - Against my 17:18Z list: the six records, the digest and the two retired names are that list. **The `trust_gap` entry's
+     order is beyond it**: no premise added or dropped, one line moved.
+3. **The records run did not rewrite `layers` or `witnesses`.** In both locks each is equal as JSON and in the same order before
+   and after, so the carry's order stands as it was, and I wrote no reorder commit. [local]
+4. **The records run at the new head: outcome `pass`, with no `--update`, and no `record/` in its reports.**
+   `r20261113-184949-7856` on vy-nebius-cpu-8, `python3 tools/verity/lean/lean_changed.py --records security/Proofs`, at
+   `HEAD_AT 890a84bf6067caadc9dbdf7bcc87b05cb76a294b`. [run] Its lines, word for word:
+   - `lean-records: security/Proofs: reused, nothing built: its records passed on the same Lean inputs in r20261113-165128-71b3 at ec2749859711`
+   - the same line for `security` and for `security/Properties`
+   - `lean-records: OUTCOME {"outcome": "pass", "package": "security/Proofs", "passes": {}, "records": {"security": {… "outcome": "pass", "reused": …}, "security/Proofs": {… "outcome": "pass", …}, "security/Properties": {… "outcome": "pass", …}}}`
+   - `RECORDS_EXIT 0 at 3s`. The run's reports hold no `lean-audit/` directory at all.
+5. **What that `pass` is, so you weigh it as it is: a reuse in 3 s, not a second build.** The run keyed each package on the
+   content of every file its records read, the committed locks among them, and found each key among the passes `71b3` kept
+   for the tree as `--update` left it. [read: `lean_changed.py`'s `inputs_key`, `passed`, `kept`] I checked the keys from git's
+   objects (`--inputs-key`): at `890a84bf` they are `7beb6b7f…` (`security`), `39e2cb09…` (`security/Properties`) and
+   `3f59f0c9…` (`security/Proofs`), each in `71b3`'s `passes`; at `ec274985` the first two were `b2499b47…` and `db823c39…`,
+   which `71b3` kept no pass under. [local] So it shows the commit holds exactly the locks `check.py --update` passed on and
+   that no other Lean input moved. It does not show `check.py` run again without `--update`: for that the same command with
+   `--rebuild` runs all three, about an hour of a Lean slot. I did not launch it: the candidate's own records run rebuilds
+   every record. Say so and it goes on vy-nebius-cpu-8 at once.
+6. **Suites beside it** (quick, those whose inputs changed since `ec274985`): 7 passed, none failed, still going at 18:56Z.
+   [run] I write when they end only if one fails.
+
+### `commitOf?`: the ready line
+
+**Ready: `a669fecb7e221a8d23445c6fdbb90a092281fe08`**, the carried head `5d3a350b8f40ddcd569154da24ee5b59b93201d4` and one
+commit of regenerated records over it. `cursor/proofs-redraw-commitof-4e9d` is fast-forwarded to it (from `779936dea335`), as
+is `cursor/proofs-redraw-commitof-carried-4de2`. No pull request. [git]
+
+1. **Records, `r20261113-170726-4267` (vy-nebius-cpu-9), at `5d3a350b8f40`: outcome `regenerated`.** [run] Word for word:
+   - `lean-records: verity/protocols/accounting/pouw/verifier/lean/check: check.py exit 0 in 69 s`: `pass`
+   - `security/Proofs`: `AUDIT … PASS  204314 declarations in 4051 modules; axioms propext, Classical.choice, Quot.sound`: `pass`
+   - `lean-records: security: check.py --update exit 0 in 3522 s`: `regenerated`
+   - `lean-records: security/Properties: check.py --update exit 0 in 1326 s`: `regenerated`
+   - Before `--update`, `security` and `security/Properties` each failed with "every failure of its records is a record
+     difference (what its guarantees read changed)".
+2. **Suites, `r20261113-170942-cb9f` (vy-nebius-cpu-14):** `59 suites: 59 passed (0 cached), 0 failed; 187.9 min of test time`
+   (quick, those whose inputs changed since `5eb1231b2558`). [run]
+3. **The records commit, as JSON: 2 places in each lock and no other.** `reads/PouwCheck.Credit/definitions/PouwCheck.Credit.commitOf?`
+   (`94e511b0…` to `ee767cbf…`) and `reads/PouwCheck.Credit/digest`, in `security/lean-audit.json` (now sha256
+   `671268616a00…`) and `security/Properties/lean-audit.json` (`2443f8536f1e…`). `layers` and `witnesses` untouched. [local]
+4. **What the `--update` printout says changed:** one definition, `PouwCheck.Credit.commitOf?`, "changed", no statement.
+   Read in `security` by `Flock.SecurityProofs.RecursiveAuditC3` and the three `Verity.Sampled.remote_soundness_deployedReady`
+   guarantees; in `security/Properties` by 32, among them `drawWithheld`, `servedWork`, `servedFreed`, `rightValues`,
+   `acceptComplies` and the `Verity.soundness_of_subprotocols` family. [run] This is the "stricter only" the pull request's
+   body is to state.
+
+### Not established
+
+- **No records run at `a669fecb`.** Its keys there: the check package, `security` and `security/Properties` are each in
+  `4267`'s `passes`, so they would be reused; `security/Proofs` (`1ecea038…`) is not, so a run there audits `security/Proofs`
+  once more against the new locks. [local] I run it at the head the pull request will carry, when you say to open it, since
+  `main` moves under it meanwhile.
+- **Neither head is on `main`'s head.** `main` is at `ff95b899ecf8`. Both merge into it with no conflict
+  (`git merge-tree`, the lock driver not in play), and `main` changed neither lock since either base. [git] Not restacked.
+- **#9717's `pass` without a build**, as item 5 says.
+
+### State
+
+- **Names run** `r20261113-182631-21be` (vy-nebius-cpu-5): still waits for a Lean slot of pool build, since 18:26Z; 2 ahead in
+  line at 18:46Z. Nothing to report from it yet. [run]
+- **The table**: the columns you ordered at 17:46Z are computed for all 48 rows, and the row for the ten `default`s; the last
+  two columns wait on the names run. Due Sat 14 Nov 18:00Z, as ordered.
+- #9728's branch and the credit branch: nothing pushed. Y2: nothing written.
