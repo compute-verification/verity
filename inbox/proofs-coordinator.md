@@ -127690,3 +127690,34 @@ Two more warnings at the stack's top [run, on this machine: the root suite's Lea
 ## Checkpoint
 
 Nothing of mine is running, and I end this turn. Heads, all pushed: #9537 `44b84839217d`, #9595 `41a71836c348`, #9581 `e230e76f6342`, #9625 `2f3c3e6022e1`, #9665 `5edf7e30ee80`. Scratch `cursor/proofs-prf600-periodread-scratch-0b7e` at `4b77b02917` holds the five bodies and NOTES.
+
+## TWOLEG, Fri 13 Nov 07:39Z: head `1874fb25cc` on `cursor/proofs-twoleg-c5e5`: one run compiles all fifteen proof files, the executables and the difftest there (`r20261113-071953-dab4`), and the replay at it accepts the kept play and a new honest play and refuses the first-tree play (`r20261113-070213-fc64`); the form's pull request #9574 is at `b7949765a0` with that form, main merged, its runs out
+
+In plain words: this is the head to merge once. It is `870cc9da1b` plus the two refusals you answered at 06:40Z, RUNCOINS's exposure of four names, and one file renamed. Everything on it that is Lean compiled in one run at this exact commit, and the plays ran at this exact commit.
+
+**The head** [run]. `r20261113-071953-dab4` on vy-nebius-cpu-9 at `1874fb25cc`, rc 0: `BUILD rc=0` (`lake build sampled-two sampled-two-on`); fifteen lines `twoleg-try: F rc=0`, each file's axiom probe "none of its N theorems uses an axiom beyond propext, Classical.choice and Quot.sound": `Steps` 13, `ClaimInner` 4, `DevAgrees` 8, `Refused` 2, `Leg` 3, `Claim` 3, `SecondRead` 4, `Ordered` 2, `Shown` 4, `Deployed` 4, `InputMap` 5, `FirstSample` 6, `AcceptsOfSteps` 8 (`Reading` and `Projection` hold no theorem); `DIFFTEST rc=0`, "65 passed, 1 skipped". The same job passed at `1583a8d3f2`, the commit before the rename (`r20261113-065543-50df`).
+
+**The plays at this head** [run]. `r20261113-070213-fc64` on vy-nebius-cpu-1 at `1874fb25cc`, rc 0, each an interior of one member: the kept play (`r20261113-053625-2556`'s case) `KEPT_ON rc=0`, `KEPT_OFF rc=1`; a new honest play on two windows `FORM_ON rc=0`, `FORM_OFF rc=1`; the first-tree play `FORM_TREE rc=1` with `FIRST_TREE`'s text. Friday's line can name `r20261113-070213-fc64`: accepted by the compiled check with its switch on, a play on two windows, an interior of one member. The shipped check refuses both honest plays by the switch.
+
+**Statements that changed since `870cc9da1b`** (detail and before/after in my 07:27Z entry):
+- `inputAt_ok`: last conjunct is `∃ vs received₂ j₁ j₂, stamped p e bs r.out = .ok vs ∧ i = inputOf p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs ∧ readBack c.record = .ok j₁ ∧ readBack e.record = .ok j₂`. CUT's `CutFirst.lean:277` reads this one.
+- `accepted_secondLaw`: gains `j₁` and `readBack c.record = .ok j₁`; the population is `getD j₁ "population"`.
+- `inputAt_of_steps` (two more hypotheses, `readBack` of each record), `prepare_of_steps`, `accepts_of_steps` (one more, `firstTreeless p e = .ok ()`), `accepts_iff_steps` (one more conjunct, after `stagesOrdered`).
+- New: `readBack_ok`, `accepted_treeless`, `firstTreeless_lines` (`Steps.lean`); `readBack_of`, `firstTreeless_of_lines` (`AcceptsOfSteps.lean`).
+- Unchanged in statement: every theorem of the other ten files, and `accepted_steps`, `accepted_ordered`, `accepted_fits`.
+- File names: `SampledTwo/AcceptsOfSteps.lean` (module `Proofs.Properties.Verity.SampledTwo.AcceptsOfSteps`); no `SampledTwo/Accepts.lean` on this branch. `FirstSample.lean` has no `import all` of an in-tree module.
+
+**The form's pull request, #9574** [run: `git push`]. `cursor/proofs-twoleg-e0ff` at `b7949765a0`: `6e40edd98e` merges `1874fb25cc` and takes the fifteen proof files and their roots out again (the form's tree differs from the work branch's by exactly those, [run: `git diff --stat`]); `b7949765a0` merges `main` (`2e99b1cf48`). One conflict, `benchmarks/one_stage/a5.py`: the relay line keeps `tree_coins(a)` and takes main's summary line and `proof_server` arguments. It holds #9555 and #9237 through the work branch, both still open. Out at `b7949765a0`, none ended:
+- `r20261113-073130-3ed6` on vy-nebius-cpu-4: the play script with the kept case, then the difftest with `SAMPLED_TWO_CASE` set, so the accept test runs and builds `sampled-two-on`. This is the first run of the driver after main's merge.
+- `r20261113-073209-a1b0` on vy-nebius-cpu-14: the records run of the recursive package (`--update`), on Lean slot `build/0` since 07:34Z.
+- `r20261113-073349-9ee4` on vy-nebius-cpu-7: the quick tier, `suites.py --changed 2e99b1cf48 --quick`.
+
+**STOP RULE.** Nothing new.
+
+**NEEDS.** One answer: is the recursive package's records run the one you mean by "the records run" for #9574's ready line, or do you want `verity/protocols/spot/verifier/lean`'s too (the branch holds #9555's and RUNCOINS's changes to it)? I go on with the recursive one and launch spot's when a slot is free unless you say no.
+
+**Runs.** `r20261113-071953-dab4` (rc 0), `r20261113-070213-fc64` (rc 0), `r20261113-065543-50df` (rc 0); out: `r20261113-073130-3ed6`, `r20261113-073209-a1b0`, `r20261113-073349-9ee4`; `r20261113-062449-8db6` (records of `security/Proofs` at `870cc9da1b`) still running, not read.
+
+**To post.** Nothing.
+
+**Not established.** A records pass at any head with `SampledTwo/` files. Anything at `b7949765a0`: its build, difftest, play, records and quick tier are out. That an evidence file reaches `RECORD_READ`. A play of two members.
