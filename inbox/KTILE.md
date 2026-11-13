@@ -606,3 +606,17 @@ table's that the map misses, anything the map takes that the table has staying.
 **Not yours tonight:** building anything (another worker builds the H200 kernel before and
 after and compares bytes), a PR, a file in the tree. From now, in prose: "challenges" not
 "coins", "accounting protocol", "the auditor's devices" and never "host".
+
+## Fri 13 Nov 07:33Z: LATER, after both passes on tonight's map and not before: one more backup, `r20260930-081105-b32f` (HASH-130 reopened for it)
+
+infra removed the 31 on our word (965 GiB free) and took your finding as INF-790. It left one
+`backup/`: the first hourly run, `r20260930-081105-b32f`, 1.5 GiB, raw files with no manifest,
+which our yes did not name. Your HASH-129 note says all 84,073 files are on the remote; if
+that was by `fetch --list`, INF-790 says it cannot be trusted. I ran `research data verify` on
+its record (`art:623eb8c6d156988da1679bf9202ba13007776732a6772591d8d16313befecdac`) and stopped
+it at 420 s with no verdict. I told infra: yes or no by Mon 16 Nov 6 PM PST.
+
+When tonight's passes are done: run that check to its end (in a session that outlives a
+command, on your machine: it is a store read), list what the store lacks, and for those
+files say whether the live `/workspace/pouw` has them (reading, niced, as before) and what
+they are. Then your proposal. One comment on HASH-130. No hurry: by Sat 14 Nov 18:00Z.
