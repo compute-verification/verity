@@ -62,4 +62,4 @@ The replacements are the ones CIR-259's first part staged and verified bound (CE
 - **The steady head block at `FIRST=true`** was not staged here. Only the `FIRST=false` row's pin was compared with `main`'s.
 - **The new `MAIN_ZK` and `MAIN_M0` were taken on sm_120**, where `main`'s were taken with `SM=90`. The prover's transcripts are device-independent, but no sm_90 run of the new default was made [inferred from `gpu_proofs_match_cpu`].
 - **`SparseMlaHeadEnd_v2`** was not staged bound here. `sparse-mla-head`'s end block stays `SparseMlaHeadEnd_v1`.
-- **Whether `DsaIndexerQ_v1{H=32,D=128,ROPE=64}` has Lean's verdicts** is the open question of run `r20261112-183158-1477`, still running when this opened. Its rows go on CIR-259. `dsa-q`'s replacement stays `dsa-q-row` until circuits says otherwise.
+- **`DsaIndexerQ_v1{H=32,D=128,ROPE=64}`, the census's own `dsa-q`, now verifies bound with all four verdicts at N = 1, and so does `sparse-mla-head`'s block at 64 keys (`r20261112-183158-1477`, posted on CIR-259). This PR still stages `dsa-q-row` in `dsa-q`'s place, until circuits' lead says otherwise.
