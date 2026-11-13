@@ -20,11 +20,11 @@ import pous_fakes
 import pous_test_signer as ts
 import pytest
 
-from verity.configuration.deploy import sources as S
-from verity.configuration.deploy.party import Send
-from verity.configuration.deploy.runtime import run as deploy_run
-from verity.configuration.deploy.stream import Side
-from verity.configuration.wire import Message
+from verity.runtime import sources as S
+from verity.party import Send
+from verity.runtime.runner import run as deploy_run
+from verity.runtime.stream import Side
+from verity.channel import Message
 from verity.protocols.pous.device import challenger_party as CP
 from verity.protocols.pous.device import challenger_session as CS
 from verity.protocols.pous.device import memory_challenger as mc
