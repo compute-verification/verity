@@ -57,7 +57,7 @@ untraced = [
 # imports dither_one (and forms.py through dither_fused) on the CPU. test_contents reads the README,
 # which holds no table (`contents.py` prints them). test_dither_zy_h1zy imports int8_exact, which imports
 # verity_vllm.program.frontend's kernel_readback (the program files named below), and its CUDA tests import dither-a
-# (benchmarks/hash/dither's dither_a.py and the modules it imports, and exactlin.py): its files alone, not their kernels'
+# (benchmarks/hash/dither's dither_a.py and the modules it imports, int8_fused's among the engine's): its files alone, not their kernels'
 # CUDA sources, and dither's registry (settings.py), which they read their variables through. test_served_h1_producer's
 # H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose ChaCha20 is verity.commitments.windows.rows'
 # (the commit files named below: serving_rows and what it imports).
@@ -172,7 +172,7 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "benchmarks/torch_gpu/s8_linear/sass_gate.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
-          "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
+          "benchmarks/hash/dither/settings.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/settings.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py",
