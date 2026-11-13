@@ -249,7 +249,10 @@ def chain_group_orbit(n: int, a0: int, a1: int, w, R: int, drop_n: bool = False)
     P_p = (c_p ⊕ t, z_p + t), X_p = (z_p + t, c_(p+1) ⊕ rotl(t, r_(p+1))), N_p = (¬c_p, a_p − 1 − z_p, ¬c_(p+1))."""
     r1, r2 = sw.ROT[n]
     m, t, S = (1 << n) - 1, 1 << (n - 1), 2 * R
-    rot = lambda x, r: ((x << r) | (x >> (n - r))) & m
+
+    def rot(x: int, r: int) -> int:
+        return ((x << r) | (x >> (n - r))) & m
+
     gens = [("P", p) for p in range(S)] + [(k, p) for p in range(S - 1) for k in ("X",) + (() if drop_n else ("N",))]
     out = set()
     for bits in range(1 << len(gens)):
