@@ -412,4 +412,28 @@ theorem chal0_link_uncertified :
         !decide ((Site.ofLog [onsite]).Certified k)).map fun k => (k.id, k.β)) = [("chal0-link", 100000)] := by
   decide +kernel
 
+/-- The places at or under `node0` on the example onsite site, two levels down, are the seven the two statements
+beside this one list by hand. -/
+theorem node0_places :
+    ((((Site.ofLog [onsite]).locs.filter fun x =>
+          x.id == "node0" || x.parent == some "node0" ||
+            (x.parent.bind fun p => ((Site.ofLog [onsite]).loc? p).bind (·.parent)) == some "node0").map
+          (·.id)).all (fun j => decide (j ∈ ["node0", "gpu0", "hbm0", "gpu1", "hbm1", "dram0", "nvme0"])) &&
+      ["node0", "gpu0", "hbm0", "gpu1", "hbm1", "dram0", "nvme0"].all fun j =>
+        decide (j ∈ ((Site.ofLog [onsite]).locs.filter fun x =>
+          x.id == "node0" || x.parent == some "node0" ||
+            (x.parent.bind fun p => ((Site.ofLog [onsite]).loc? p).bind (·.parent)) == some "node0").map
+          (·.id))) = true := by
+  decide +kernel
+
+/-- With the challenger read as one of the auditor's devices beside the certifier, no registered link with exactly
+one end in the node `node0` of the example onsite site is without one at an end. -/
+theorem node0_links_at_auditor :
+    (((Site.ofLog [onsite]).links.filter fun k =>
+        decide (k.ends.1 ∈ ["node0", "gpu0", "hbm0", "gpu1", "hbm1", "dram0", "nvme0"] ↔
+          k.ends.2 ∉ ["node0", "gpu0", "hbm0", "gpu1", "hbm1", "dram0", "nvme0"]) &&
+        !(((Site.ofLog [onsite]).kind? k.ends.1).any Site.Kind.auditor ||
+          ((Site.ofLog [onsite]).kind? k.ends.2).any Site.Kind.auditor)).map fun k => k.id) = [] := by
+  decide +kernel
+
 end Verity.Registration.Example
