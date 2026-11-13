@@ -13,7 +13,7 @@ and a Hypothesis strategy of inputs, invalid ones included. There are two kinds,
   not compared. `verity_difftest.protocol` is the interface's case framing in Python, for references to build on.
 
 `run` keeps one server process open, feeds both sides every input the strategy samples, and fails with a `Mismatch` on the
-first difference, shrunk by Hypothesis to a minimal input (as it was drawn under `shrink=False`); a reference that raises
+first difference, shrunk by Hypothesis to a minimal input (as it was sampled under `shrink=False`); a reference that raises
 something it doesn't declare, and a server that faults or dies, are differences too. A run is deterministic: Hypothesis
 samples from `seed` (`derandomize`, no example database, no deadline) and from its own constants alone
 (`_no_local_constants`), so `run(port, examples=N, seed=S)` finds the same minimal input again whatever modules the
@@ -409,7 +409,7 @@ def run(port: Port | ProtocolPort, examples: int = 100, seed: int = 0, server: S
     """Sample `examples` inputs from `port.inputs` (deterministically, from `seed`) and compare Lean and Python on each. Raises
     `Mismatch` with a report of the minimal input Hypothesis shrank to and how to reproduce it, or `Vacuous`. The `Stats`
     count the outcomes of the side of record by kind.  Hypothesis is imported here, so the server, `build` and `replay` run
-    without it. Without `shrink` the `Mismatch` is of the first input the sides differ on, as it was drawn: for a run that
+    without it. Without `shrink` the `Mismatch` is of the first input the sides differ on, as it was sampled: for a run that
     expects one, on inputs of megabytes that Hypothesis would compare many times more to shrink."""
     from hypothesis import HealthCheck, Phase, given, settings
     from hypothesis import seed as use_seed

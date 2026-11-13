@@ -487,7 +487,7 @@ def test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_co
 
 #: The cases of an agreement test's short form (`..._on_fewer_cases`), which a check that leaves the test out still
 #: runs. A case is megabytes that both sides decode layer by layer, so its thousand take a test many minutes. The short
-#: form draws from the same generator, and gives up the cases it draws seldom: a disagreement that one case in a hundred
+#: form samples from the same generator, and gives up the cases it samples seldom: a disagreement that one case in a hundred
 #: shows escapes 150 cases about one time in five, and a thousand almost never. `product IDS serve` is a composite's own
 #: `serve` behind a choice by the ids, which fewer cases show.
 FEWER, FEWER_OF_PRODUCT = 150, 100
@@ -513,16 +513,16 @@ def test_remote_agrees(remote_server):
     whole cases hold: `remote serve`, the three subprotocols' own Lean behind the composition's framing, takes a case
     of megabytes (hex in JSON in hex) without failing, decodes it as the reference does (the rejection carries the
     commitment exactly when the case, the params and the commitment decode) and rejects it. A subprotocol's own
-    difftest never passes its case through that framing. Sampled proofs' refusal alone rejects every case here (the
+    difftest never passes its case through that framing. SPOT's refusal alone rejects every case here (the
     module's docstring), so the outcome doesn't show what remote's record check found. Its thousand cases reach what
-    `test_remote_agrees_on_fewer_cases` draws too seldom (`FEWER`)."""
+    `test_remote_agrees_on_fewer_cases` samples too seldom (`FEWER`)."""
     _agree(REMOTE, remote_server, SEEN["remote"], 1000, (R.REJECT, "one record", "two records"))
 
 
 @pytest.mark.slow
 def test_remote_agrees_on_fewer_cases(remote_server):
     """`test_remote_agrees` on `FEWER` cases: what it holds, which only whole cases through `remote serve` can, of the
-    cases the generator draws often."""
+    cases the generator samples often."""
     _agree(REMOTE, remote_server, SEEN["remote"], FEWER, (R.REJECT, "one record", "two records"))
 
 
@@ -730,7 +730,7 @@ def test_onsite_agrees(onsite_server, recorded):
     subprotocols' own Lean, decodes a case as the reference does (`test_remote_agrees`) and rejects it where a
     subprotocol is undecided beside a rejection, which the trial's rule would leave undecided
     (`test_a_reference_without_reject_dominance_is_caught`). Its thousand cases reach what
-    `test_onsite_agrees_on_fewer_cases` draws too seldom (`FEWER`)."""
+    `test_onsite_agrees_on_fewer_cases` samples too seldom (`FEWER`)."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, "reject, a component undecided", "one record",
                                                        "two records", "one store", "two stores"))
 
@@ -738,7 +738,7 @@ def test_onsite_agrees(onsite_server, recorded):
 @pytest.mark.slow
 def test_onsite_agrees_on_fewer_cases(onsite_server, recorded):
     """`test_onsite_agrees` on `FEWER` cases: what it holds, which only whole cases through `onsite serve` can, of the
-    cases the generator draws often."""
+    cases the generator samples often."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], FEWER, (R.REJECT, "reject, a component undecided", "one record",
                                                          "two records", "one store", "two stores"))
 
@@ -746,8 +746,8 @@ def test_onsite_agrees_on_fewer_cases(onsite_server, recorded):
 @pytest.mark.slow
 def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, recorded):
     """PoUB-P2's case named as the generic bandwidth audit's, under a commitment that binds it, names no component of
-    onsite: refused, in Lean as in Python, on every drawn case (`generic-bandwidth` on each, a break that
-    `test_onsite_agrees`'s seeded draw needn't reach)."""
+    onsite: refused, in Lean as in Python, on every sampled case (`generic-bandwidth` on each, a break that
+    `test_onsite_agrees`'s seeded sample needn't reach)."""
     seen = collections.Counter()
     p = RejectingPort("onsite", reference(R.ONSITE, seen), composite(R.ONSITE, "generic-bandwidth"),
                       package=ONSITE_PACKAGE, need_rejects=False)
@@ -787,7 +787,7 @@ def test_product_names_only_the_two_composites():
 def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
     """`product IDS serve` over remote's subprotocols, which `verity run`'s verifier runs, is held to the reference as
     `remote serve` is (`test_remote_agrees`): only its own run on whole cases shows that executable to be remote. Its
-    thousand cases reach what `test_product_over_remotes_subprotocols_is_remote_on_fewer_cases` draws too seldom."""
+    thousand cases reach what `test_product_over_remotes_subprotocols_is_remote_on_fewer_cases` samples too seldom."""
     _agree(PRODUCT[R.REMOTE.id], product_remote_server, SEEN["remote"], 1000, (R.REJECT, "one record", "two records"))
 
 
@@ -870,7 +870,7 @@ class Trial(R.TiedSame):
 def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded):
     """The difftest tells the composition's rule from the trial's: the first case they differ on has a subprotocol that
     rejects and one that is undecided, under a commitment that binds their digests. It is not shrunk: a case is
-    megabytes, and what is asserted of it holds as it was drawn."""
+    megabytes, and what is asserted of it holds as it was sampled."""
     trial = Trial(R.ONSITE.id, R.ONSITE.components, R.ONSITE.same, R.ONSITE.ties)
     with pytest.raises(D.Mismatch) as e:
         D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=ONSITE_PACKAGE), examples=1000,

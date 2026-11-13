@@ -89,7 +89,7 @@ def test_a_wrong_reference_is_caught_and_shrunk(server):
 
 
 def test_a_wrong_reference_is_caught_unshrunk(server):
-    """Without `shrink` the same wrong reference is caught on the first input the sides differ on, as it was drawn, and
+    """Without `shrink` the same wrong reference is caught on the first input the sides differ on, as it was sampled, and
     nothing is compared after it but that input once more, for the report."""
     seen = []
 
