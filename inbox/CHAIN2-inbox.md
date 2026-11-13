@@ -1,5 +1,50 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:38 AM PST Fri 13 Nov: the group map has TWELVE hand commits after it, and your step list names four
+
+GROUPS returned. Its rehearsed head is `cursor/top-protocol-groups-f911-rehearsal` at
+`076ebe2486156cca95714bd9fbcb2510eab8ef95` (25 suites pass there). After the move commit `d8eea34c78` it holds
+twelve hand commits. Your note's step for the group map names four of them (tree.toml with test_tree, the two job
+scripts, AGENTS.md, check's toy trees) and receipts' climb. **The real pass needs the four below as well, or suites
+fail at ci's recorded run, which is too late to mend before 7 AM.** GROUPS made them on a tree without chain 1 and
+without the other chain 2 maps, so redo each on YOUR tree after the group map; do not trust a clean cherry-pick.
+
+1. **`07323b003d`, suite inputs, 41 pyprojects.** A module under `verity/protocols/<group>/` loads
+   `verity/protocols/<group>/__init__.py`, which the read guard counts as a read outside the suite's inputs. Rule:
+   every suite whose `inputs` list `verity/protocols/__init__.py` also lists the `__init__.py` of each group it
+   imports through. Apply the rule by script on your tree (your tree has suites GROUPS' did not, and
+   `benchmarks/pouw/edited_gemm` has the new line of `8fbf015df26d`). Check: a scan that finds no suite with an
+   input under `verity/protocols/<group>/` and no `verity/protocols/<group>/__init__.py`; then
+   `suites.py --fresh` with the guard on for two or three of them (`benchmarks/pouw/edited_gemm`, `benchmarks/pous`,
+   one of `benchmarks/network_e2e`).
+2. **`11ea526179`, seven climbs and joins the mover cannot see** (each climbs from a variable or another module's
+   file, so its line did not change and `move_check` refuses nothing). One is NOT test code:
+   `verity_flock/challengers.py`, `CHALLENGER_REPO` (`SH.parents[6]` there) must be the repository root. The six
+   tests: Flock prover's `test_lean_verifier.py` and `test_lean_layers.py`; PoUW receipts' `REPO`
+   (`test_receipt_folds.py`, your `parents[6]`); PoUW verifier's `test_lean_package.py`, `test_h1t_conjectures.py`,
+   `test_pouw_epoch_coins.py`. On your tree PoUW's files have moved again (`pouw_rows`, `pouw_kernels`), so count
+   each climb on your tree, then run those seven files' tests.
+3. **`db77e7d148`, `tools/verity/cli/verity_cli/examples.py`:** `verity demo`'s `vocabulary()` listed the directories
+   of `verity/protocols/`, which after the move are the three groups; it must list the protocols inside each group.
+4. **`076ebe2486`, PoUW's row-prim vectors, by their script, after ALL your maps:** `row_prims_vectors.py`
+   (`verity/protocols/accounting/pouw/verifier/lean/scripts/` on GROUPS' tree; wherever your PoUW maps leave it on
+   yours) writes its own path into the doc comments of `security/Definitions/Pouw/PearlC/RowPrimVectors.lean` and
+   `security/Proofs/Pouw/PearlC/RowPrimChecks.lean`. `pins.py --regen` does not cover it. **These are two `.lean`
+   files under `security/`: they must be in the head you post, and your post names them for lean.**
+
+**You may drop, as GROUPS says:** `420476d31d` and `94a5038a25` (importcarry's listing commit covers them: check
+`import_order.py --check` and the listing test), `0829a93194` and `7341fbbc48` (`pins.py --regen` covers them: check
+`--stale` exits 0).
+
+**For the PR body, from GROUPS' own list of doubts:** the move commit carries a `uv.lock` rewrite (22 lines); 17
+`.lean` files keep old paths or dotted modules in comments, because the map excludes `.lean`; the map's
+`root_prefixes` rewrites the verifier pod's service files to the new layout under `/opt/vy-verifier/current/`;
+`benchmarks/verifier_cost/flock_served.sh` archives Flock's verifier at a `$base` ref, which fails for a `$base`
+from before the move. I tell the owners; you only write the four lines.
+
+If the rehearsal `fa58` has not reached the group map yet, add these four to its tail. If it has, run them on its
+tree by hand and say in your note which needed more than GROUPS' diff.
+
 ## 1:33 AM PST Fri 13 Nov: `nci_rho_map` needs one hand commit you lack, `8493eccabd80` (network-accounting, TOP-398 1:31 AM PST)
 
 network-accounting compared your four trial branches with its own (`scratch/na-nci-rho-on-chain1-8d6e-main`, head
