@@ -1,7 +1,7 @@
 Lane circuits
 Refs CIR-259
 
-`benchmarks/served_units/stage.py` no longer stages its 18 `PARTS` types, the `Q_word` classes of word Definitions whose statements claim proof blocks the Lean verifier cannot derive. In their place each caller stages a whole Definition, bound by default to the Program of its instances and that Program's partition object, with `partition.json` and `program.json` written beside the statement. `stage.py` refuses a retired name and says what to stage instead, or that nothing does. `--bind` is gone, and `--unbound` stages the old way for the two callers that hand Lean neither file. This PR holds the `--bind` commits from `cursor/circuits-cir245-census-bind-6f04` (head `31b1b56aec2a`) and merges `origin/main` at `5f0c008aa040`.
+`benchmarks/served_units/stage.py` no longer stages its 18 `PARTS` types, the `Q_word` classes of word Definitions whose statements claim proof blocks the Lean verifier cannot derive. In their place each caller stages a whole Definition, bound by default to the Program of its instances and that Program's partition object, with `partition.json` and `program.json` written beside the statement. `stage.py` refuses a retired name and says what to stage instead, or that nothing does. `--bind` is gone, and `--unbound` stages the old way for the two callers that hand Lean neither file. The head is `fe800897e74ddcb476bb939a50f6564bc6f32740`. This PR holds the `--bind` commits from `cursor/circuits-cir245-census-bind-6f04` (head `31b1b56aec2a`) and merges `origin/main` at `5f0c008aa040`.
 
 ## What `parse()` says for each retired name
 
@@ -18,7 +18,7 @@ Refs CIR-259
 | `dsa-topk` | stage census:DsaTopKShortRow_v1{TOPK=2048} in its place (the census's Definition) |
 | `s8-linear` | stage s8-coord in its place (its block, the W8A8 coordinate) |
 | `router` | stage router-row or router-slots in its place (the router's Boolean version, its row form or its slots form) |
-| `dsa-q` | stage dsa-q-row in its place (the indexer query's Boolean version) |
+| `dsa-q` | stage census:DsaIndexerQ_v1{H=32,D=128,ROPE=64} or dsa-q-row in its place (the census's whole Definition of the indexer query, or its Boolean version) |
 | `rmsnorm-cuda` | stage rmsnorm-v8 in its place (the fused RMSNorm the census serves) |
 | `sparse-mla-head` | stage census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}} and census:SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}} in its place (the census's cut, its key block (the Boolean version, whose reads are in gates: the census's own reads in lookup slots, which `verify --zk` refuses) and its end block) |
 | `token-select` | stage census:GreedyChunk_v1{N=16384,FIRST=false} and census:GreedyCombine_v1{V=154880,N=16384} in its place (the census's cut, a chunk and the combine) |
@@ -26,7 +26,14 @@ Refs CIR-259
 | `rmsnorm-triton` | nothing stages in its place (the census has no Definition of it) |
 | `silu-quant` | nothing stages in its place (the census has no Definition of it) |
 
-The replacements are the ones CIR-259's first part staged and verified bound (CENSUSBIND's table on CIR-259). For the three with nothing in their place, that table and proofs found no Definition of the census to stage. `sparse-mla-head`'s key block is the Boolean version `SparseMlaHeadBlock_v2`: the census's own v1 block at 64 keys reads its exponentials in lookup slots, a form `verify --zk` refuses, and `chunk_rows.zk_refusal` names the v2 block as the one to stage. A test holds each replacement to `parse()` and each census replacement to `zk_refusal` being empty.
+The replacements are the ones CIR-259's first part staged and verified bound (CENSUSBIND's table on CIR-259). For the three with nothing in their place, that table and proofs found no Definition of the census to stage. `dsa-q`'s first choice, the census's own `DsaIndexerQ_v1{H=32,D=128,ROPE=64}`, has its verdicts from run `r20261112-183158-1477` (source `31b1b56aec2a`, one block, bound):
+
+- `ks-form` passes;
+- `statement` with the Program held derives the units;
+- `verify --zk` accepts one CPU session;
+- `verify --zk` is refused with another Definition's Program and with none.
+
+`dsa-q-row`, its Boolean version, is named second. `sparse-mla-head`'s key block is the Boolean version `SparseMlaHeadBlock_v2`: the census's own v1 block at 64 keys reads its exponentials in lookup slots, a form `verify --zk` refuses, and `chunk_rows.zk_refusal` names the v2 block as the one to stage. A test holds each replacement to `parse()` and each census replacement to `zk_refusal` being empty.
 
 ## What each caller hands the Lean verifier now
 
@@ -47,19 +54,19 @@ The replacements are the ones CIR-259's first part staged and verified bound (CE
 
 ## Checks
 
-- **Suites** (`suites.py --changed 5f0c008aa040`, without `--quick`): at `4dff5ca9743`, 9 of 9 passed, none cached (`r20261112-201917-61b8`). At the head: 9 of 9 passed, none cached (`r20261112-234331-2cc5`, source `9b280baba610`).
+- **Suites** (`suites.py --changed 5f0c008aa040`, without `--quick`): at `4dff5ca9743`, 9 of 9 passed, none cached (`r20261112-201917-61b8`). At `9b280baba610`: 9 of 9 passed, none cached (`r20261112-234331-2cc5`). At the head `fe800897e74d`: 9 of 9 passed, none cached, 0 failed (`r20261113-011713-d278`).
 - **`--unbound` against `main`'s staging**, with four stagings each (head `--unbound`, `main`'s `stage.py`, `31b1b56aec2a`'s `stage.py`, head bound): `fp8-coord:K=256` and `census:SiluMul_v2{I=256}` at N=2 (`r20261112-201828-47ac`, source `4dff5ca9743`); `--public-weights` (`r20261112-202406-85e0`, source `4aafb2af879`).
 - **Bound `SiluMul_v2{I=256}` at N=2**, the Lean verifier with the partition object: `statement` with the Program held derives the units; with another Definition's Program, `statement` and `verify --zk` give "setup: partition: the verifier's program is not the one the partition object names"; `verify --zk` with the Program held accepts one CPU session; `verify --zk` with no Program gives "refused: a session without the verifier's program (--program): …". Staged `--unbound`, `verify --zk` gives the same no-Program refusal (`r20261112-201828-47ac`).
 - **GPU** (vy-nebius-2, one RTX PRO 6000, `SM=120`, `phase_profile.sh AS=base` with setup, build and stage outside the lease, then `ident` under `gpu-lease`): under Flock ZK and under Flock's circuit prover, proofs and transcripts are byte-identical across sessions, and `gpu_paths_agree` passes under both (`r20261112-233111-2abf`, source `b7d44e418ab`).
-- **Ratchet gate** at the head: 0 failed.
+- **Ratchet gate** at the head: `failures` is `[]`.
 - **Local**, one file at a time: `benchmarks/served_units/tests/test_stage_census.py` and `test_names.py`, `benchmarks/harness/tests/test_steady_point.py`, `benchmarks/one_stage/tests/test_zk_cost.py`, `benchmarks/pouw/tests/test_served_units_summarize.py`, and the tree's retired-term, doc-path and module-string tests.
-- **`git merge-tree`** at the head: clean against `origin/main` (`7e70df68bd18`) and against `origin/cursor/lean-remote-merge-onmain-fc8d` (`67b2c6791982`). `main` since the merge base adds no caller of a retired name or of `--bind`.
+- **`git merge-tree`** at `9b280baba610`: clean against `origin/main` `7e70df68bd18` and against `origin/cursor/lean-remote-merge-onmain-fc8d` (`67b2c6791982`). At the head against `origin/main` `e86d9204135c`: one conflict, in `benchmarks/served_units/README.md`'s file list. `main`'s `3dc5aae4d90` adds `prove_rows.py`'s entry and rewrites the `tests/` line this PR also rewrites. The branch does not merge `main` until its restack. `main` since the merge base adds no caller of a retired name or of `--bind`.
 
 ## Not done, or not established
 
-- **No session at a full statement's count** for any replacement on CPU or with Lean. Every Lean accept here and in CENSUSBIND's table is at 1 or 2 units. The one full statement, W13 at 2,048 units, ran on the GPU without Lean.
+- **No replacement has a Lean accept at a full statement's count.** Every Lean accept here and in CENSUSBIND's table is at 1 or 2 units. The one full statement, W13 at 2,048 units, ran on the GPU without Lean.
 - **`--packed --public-weights` at `K=256`** stages on none of the three: "public inputs: leaf 132 reads a row word inside word 16, which holds a public word". `main`'s `stage.py` refuses it the same way, so this change doesn't cause it (`r20261112-202406-85e0`).
 - **The steady head block at `FIRST=true`** was not staged here. Only the `FIRST=false` row's pin was compared with `main`'s.
 - **The new `MAIN_ZK` and `MAIN_M0` were taken on sm_120**, where `main`'s were taken with `SM=90`. The prover's transcripts are device-independent, but no sm_90 run of the new default was made [inferred from `gpu_proofs_match_cpu`].
 - **`SparseMlaHeadEnd_v2`** was not staged bound here. `sparse-mla-head`'s end block stays `SparseMlaHeadEnd_v1`.
-- **`DsaIndexerQ_v1{H=32,D=128,ROPE=64}`, the census's own `dsa-q`, now verifies bound with all four verdicts at N = 1, and so does `sparse-mla-head`'s block at 64 keys (`r20261112-183158-1477`, posted on CIR-259). This PR still stages `dsa-q-row` in `dsa-q`'s place, until circuits' lead says otherwise.
+- **The Lean verifier took 147,217,100 kB (about 147 GB) resident** on `DsaIndexerQ_v1{H=32,D=128,ROPE=64}` at one block (`r20261112-183158-1477`). Its `circuit.txt` is 35,924,397,430 bytes. Lean's memory at a full statement of it is not known.
