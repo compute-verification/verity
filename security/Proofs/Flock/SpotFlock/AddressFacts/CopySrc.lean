@@ -91,9 +91,7 @@ theorem rowBit_facts {c : _root_.Flock.Circuit} {n g : ℕ} {r : Spot.Bits.RowPo
       not_le] at hc
     obtain ⟨p, byte, bit, hk, -, -⟩ := srcPos_msg hr
     refine ⟨by omega, by omega, by omega, ?_, srcPos_leaf hr, p, byte, bit, hk⟩
-    first
-    | exact hc.2
-    | simp_all
+    exact hc.2
 
 /-- A source bit is a member's source gate with Bits' commitment position, at the gate's position. -/
 theorem sourceBits_mem {h : Held} {x t : ℕ} {r : Spot.Bits.RowPos} (hs : (x, t, r) ∈ sourceBits h.ms) :
