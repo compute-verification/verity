@@ -10,17 +10,18 @@ public import Proofs.Pouw.PearlC.Cap.SaltDead
 The bound the game reads is `TileGood`'s first conjunct, `capOK` of `pearlCTilesDevRev1 devH100` at the deployed
 semantics and `ρ = 1/400`: the tile's replayed inert work (`tileDebitRev1`: its flagged atom-words, its later promotions
 into a +0 total, its forming and its words' mends) on its rows that pass the rules and all its columns is at most
-`ρ·creditDevRev1` times their share. Acceptance doesn't read it: `Draw` puts a sampled tile with good words in `goodDeclTiles` within the bound
-and in `overCapTiles` over it. The credit does: the tolerant audit's deduction grows with the samples on
-`overCapTiles`, and a passed tile within the bound keeps those to the samples the check finds over its own bound.
+`ρ·creditDevRev1` times their share. Acceptance doesn't read it: `Draw` puts a sampled tile with good words in
+`goodDeclTiles` within the bound and in `overCapTiles` over it. The credit does: the tolerant audit's deduction grows
+with the samples on `overCapTiles`, and a passed tile within the bound keeps those to the samples the check finds over
+its own bound.
 
 The check's bound (`Rule.capCheck`, as `TileKeepsTheCap` states it) is on the record's credited rows and columns under
 the band rule (`UnitRecord.credited`: a real row neither excluded nor in a 64-row band with a voluntary A row, and a
 column whose 64-column block holds no excluded or voluntary B row). It counts `n` times each credited word's replayed
-inert work and mends (`Rule.wordMend`) and `64·|cc|` per forming element of a credited row (`Rule.rowElements`). A tile that keeps a row and a
-column carries a ticket (`CarriesATicket`). Such a tile has no voluntary row and no excluded or voluntary column, its
-filler rows are zero and fail the rules, and its excluded rows fail them, so the check's credited rows are the tile's
-`passRows` and its credited columns all its columns.
+inert work and mends (`Rule.wordMend`) and `64·|cc|` per forming element of a credited row (`Rule.rowElements`). A tile
+that keeps a row and a column carries a ticket (`CarriesATicket`). Such a tile has no voluntary row and no excluded or
+voluntary column, its filler rows are zero and fail the rules, and its excluded rows fail them, so the check's credited
+rows are the tile's `passRows` and its credited columns all its columns.
 
 * `tilePassGivesTheCap`: a passed tile that carries a ticket is within the bound. The check's inert work per word is
   the game's chain (`wordFlagsIsTheReplay`, `codes_eq`) on rows that pass the rules exactly when the game's do
