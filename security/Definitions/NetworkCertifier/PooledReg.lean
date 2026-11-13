@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Claims.SamplingGenericX
-public import Definitions.NetworkCertifier.Period
+public import Definitions.NetworkCertifier.MonitoringPeriod
 public import Definitions.NetworkCertifier.PooledLeak
 public import Definitions.NetworkCertifier.SampledReg
 public import Definitions.NetworkCertifier.TapRows
