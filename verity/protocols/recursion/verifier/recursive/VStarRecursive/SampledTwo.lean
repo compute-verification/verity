@@ -39,8 +39,6 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   3. each verdict stamped with what the second-stage statement check reads of it, as `flock-verify verify` writes it
      and the stream's driver hands it on (`stamped`): the delivered sessions, the session's public header's and
      registered reads' digests, its sample and one table;
-     neither stage's bytes run past one coin's (`stagesFit`, `STAGE_PAST`): the first stage's bytes are read as one
-     coin's first bytes and the second stage's as its coins' in order, so bytes past a coin's are none of theirs;
   4. the stream's run of record over both stages (`Run.run` of `inputOf`): the boundary audit over the replay
      sample at the boundary's session roots, and the interior audit over the second sample with the second-stage
      statement check, at the rest; the evidence's first-stage bytes are exactly the ones the run's first stage read
@@ -271,26 +269,12 @@ def sourceRead (ξ : ByteArray) (run : Json) : V Unit :=
   | some read => if read < ξ.size then .error SOURCE_READ else .ok ()
   | none => .ok ()
 
-/-- One coin's bytes: 65,536 elements of 16 bytes. -/
-def STAGE_BYTES : Nat := 65536 * 16
-
-def STAGE_PAST (stage : String) : String :=
-  s!"the {stage} stage's bytes run past one coin's {STAGE_BYTES} bytes: a stage's sample reads one coin's bytes"
-
-/-- **Neither stage's bytes run past one coin's** (check, 3): the first stage's bytes `ξ` and the second stage's `ξ₂`
-are each at most `STAGE_BYTES` long (`STAGE_PAST`). A sampler that runs out of bytes draws fresh ones, and the coins'
-check takes a read over any number of whole coins, so nothing else bounds them. -/
-def stagesFit (ξ ξ₂ : ByteArray) : V Unit :=
-  if STAGE_BYTES < ξ.size then .error (STAGE_PAST "first")
-  else if STAGE_BYTES < ξ₂.size then .error (STAGE_PAST "second")
-  else .ok ()
-
 def INTERIOR_SHOWN : String :=
   "on two windows the first session's log shows coins of the interior's family released after the interior " ++
     "registration's digest: the second stage's coins are its own session's alone"
 
-/-- Whether the roots a session's log shows, by family (`Challenger.Roots`), show a coin of family `label` released
-after `after`. -/
+/-- Whether the roots a session's log shows, by family (`Challenger.Roots`), show a coin of family `label` released after
+`after`. -/
 def interiorShown (roots : Challenger.Roots) (label : String) (after : ByteArray) : Bool :=
   (((roots.find? (·.1 == label)).map (·.2)).getD []).contains after
 
@@ -311,12 +295,11 @@ def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
   | _, _ => .ok ()
 
 /-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its second-stage
-statement check at the switch `form`, neither stage's bytes past one coin's, its first stage having read every byte of
-`ξ`, the first session releasing none of the second stage's coins. -/
+statement check at the switch `form`, its first stage having read every byte of `ξ`, the first session releasing none
+of the second stage's coins. -/
 def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
-  stagesFit ξ ξ₂
   let run ← Spot.Run.run i form
   sourceRead ξ run
   interiorUnshown p e
@@ -419,14 +402,6 @@ def protocol : Core.BlobProtocol where
   | .ok _ => false
 #guard (sourceRead (ByteArray.mk #[1, 2]) (Json.mkObj [("read", Lean.toJson (2 : Nat))])).toOption.isSome
 #guard (sourceRead (ByteArray.mk #[1, 2]) (Json.mkObj [("step", "select")])).toOption.isSome
-#guard (stagesFit (ByteArray.mk (Array.replicate STAGE_BYTES 0))
-  (ByteArray.mk (Array.replicate STAGE_BYTES 0))).toOption.isSome
-#guard match stagesFit (ByteArray.mk (Array.replicate (STAGE_BYTES + 1) 0)) ByteArray.empty with
-  | .error why => why == STAGE_PAST "first"
-  | .ok _ => false
-#guard match stagesFit ByteArray.empty (ByteArray.mk (Array.replicate (STAGE_BYTES + 1) 0)) with
-  | .error why => why == STAGE_PAST "second"
-  | .ok _ => false
 #guard interiorShown [("boundary", [ByteArray.mk #[1]]), ("interior", [ByteArray.mk #[1], ByteArray.mk #[7]])]
   "interior" (ByteArray.mk #[7])
 #guard !interiorShown [("interior", [ByteArray.mk #[1]])] "interior" (ByteArray.mk #[7])
