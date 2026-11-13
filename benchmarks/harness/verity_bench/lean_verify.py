@@ -329,7 +329,7 @@ def measure(a: Any, out: Path, *, run: Callable[[Sequence[str], Path], tuple[int
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--lean", required=True, help="the Lean verifier's executable, as `lake build` leaves it in verity/protocols/flock/verifier")
+    parser.add_argument("--lean", required=True, help="the Lean verifier's executable, as `lake build` leaves it in verity/protocols/proofs/flock/verifier")
     parser.add_argument("--proof", required=True, metavar="TREE", help="the kept proof: a session directory and its statement")
     parser.add_argument("--out", type=Path, default=None, help="where lean-verify.json and the logs go (default: $OUT)")
     parser.add_argument("--repeat", type=int, default=3, help="runs of the verifier, each recorded (default: 3)")

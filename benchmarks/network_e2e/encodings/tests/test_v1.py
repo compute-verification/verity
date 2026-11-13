@@ -36,8 +36,8 @@ def _load(name: str):
 
 
 V, R, C, CV = _load("v1"), _load("replay"), _load("code"), _load("code_v1")
-from verity.protocols.certifier.verifier import advice as I1  # noqa: E402
-from verity.protocols.certifier.verifier import replay_chain as RC  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import advice as I1  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import replay_chain as RC  # noqa: E402
 from verity_vllm.pipeline.advice_code import kept as KP  # noqa: E402
 from verity_vllm.pipeline.advice_code import schedule_code as SC  # noqa: E402
 

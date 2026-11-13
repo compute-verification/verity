@@ -26,7 +26,7 @@
 #   the select's inputs beside the ids, kept in the scratch serve's private/ (boundary_logits.load), which `second`
 #   takes as --kept: the honest play in 20 units, which takes no negative case's name
 #   SMALL_GPU=1 builds flock-circuit with its device prover (on CUDA 13.3's toolkit: CUDA_TK, the node's own, or the one
-#   verity/protocols/flock/prover/pod/cuda-13.3.sh finds or unpacks beside flock-circuit's build) and runs `second` with
+#   verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks beside flock-circuit's build) and runs `second` with
 #   --devices, so its sessions prove on a card: the cards the run already holds (the indices in CUDA_VISIBLE_DEVICES, as
 #   research run --gpus N sets them), else one that gpu-lease hands `second` alone, for at most SMALL_LEASE_MIN minutes
 #   (30), so the builds and the first stage hold none
@@ -52,8 +52,8 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
-{ (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) \
-    && (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
+{ (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) \
+    && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 FW=${SMALL_FLOCK_WORK:-$W}
@@ -61,9 +61,9 @@ GPU=0; ON_CARDS=()
 if [ -n "${SMALL_GPU:-}" ]; then
   # the unpacking runs in a subshell, under its own shell options; sourced again, the script only names the toolkit it
   # finds. With the toolkit named, the build installs nothing on the node, and the prover finds its runtime beside it
-  ( set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/flock/prover/pod/cuda-13.3.sh ) > "$O/cuda.log" 2>&1 \
+  ( set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh ) > "$O/cuda.log" 2>&1 \
     || { tail -20 "$O/cuda.log"; echo "SMALL_GPU=1: the node has no CUDA 13.3 toolkit and none could be unpacked" >&2; exit 8; }
-  set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/flock/prover/pod/cuda-13.3.sh >> "$O/cuda.log" 2>&1; set -euo pipefail
+  set +euo pipefail; FLOCK_WORK=$FW . verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh >> "$O/cuda.log" 2>&1; set -euo pipefail
   TK=${CUDA_TK:-/usr/local/cuda-13.3}
   [ -x "$TK/bin/nvcc" ] || { echo "SMALL_GPU=1: no nvcc under $TK" >&2; exit 8; }
   export CUDA_TK=$TK LD_LIBRARY_PATH=$TK/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
@@ -76,14 +76,14 @@ if [ -n "${SMALL_GPU:-}" ]; then
   fi
   echo "toolkit $TK" | tee -a "$O/machine.txt"
 fi
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=$GPU bash verity/protocols/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=$GPU bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-verify
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
 sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256"
 
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
 export RAYON_NUM_THREADS=$(nproc) PYTHONPATH=$M0PATH
 # a local challenger session's pin is held to main's first-parent line: a run's clone has the shipped tree as its origin,
 # which holds main as its own main or origin/main

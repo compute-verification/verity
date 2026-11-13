@@ -22,7 +22,7 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.windows import interface as I
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows import wiring as WI
-from verity.protocols.spot.verifier.one_stage import registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a5
