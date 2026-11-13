@@ -69,7 +69,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parent
 #: a run's file of verdict records, one JSON object a line

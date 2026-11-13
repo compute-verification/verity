@@ -14,7 +14,7 @@ pun). Refusing an attack is always sound. An honest case's ``allow`` is the most
 
 Primitives are the registry's, the two IMMA steps among them: `BlackwellS8ImmaDot32_v1` (the exact s8 step) and
 `BlackwellU8S8ImmaDot32_v1` (the s8 family's u8·s8 step without .satfinite). A case that binds the s8 family
-(`verity.definitions.ops.s8`: `S8Dot_v1`, `S8Matmul_v1`, `LimbSplit_v1`) names it in ``needs``.
+(`verity.circuits.ops.s8`: `S8Dot_v1`, `S8Matmul_v1`, `LimbSplit_v1`) names it in ``needs``.
 Every honest case does, since property/v1 refuses a bare IMMA. The receipt fold (`PouwDuoAbsorb_v1`) is
 registered nowhere yet, so ``fold-reused`` uses its LOP3+IMAD step (`benchmarks/pouw/edited_gemm/receipt_folds_r9.py`) as a
 Definition of its own.
@@ -26,13 +26,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-import verity.protocols.pouw.prover.circuit.words  # noqa: F401  (PouwNoiseByte)
+import verity.protocols.accounting.pouw.prover.circuit.words  # noqa: F401  (PouwNoiseByte)
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Value
 from verity.circuits.types import Tuple as TupleT
-from verity.definitions.ops import (
+from verity.circuits.ops import (
     prims,
     s8,
     scalar,  # noqa: F401  (I32Add, SelectI32, F32Fmaxf, F32Fminf register on import)
@@ -45,10 +45,10 @@ from verity.definitions.registry import (  # noqa: F401
     topp_word_gates,
 )
 from verity.definitions.registry.ref_prims import gather_f32
-from verity.definitions.silicon.integer import S32_MAX, s32_word
+from verity.circuits.silicon.integer import S32_MAX, s32_word
 
 CLASSES = ("roundings", "compare_select", "gathers", "products", "other")
-NEEDS_FAMILY = "verity.definitions.ops.s8"
+NEEDS_FAMILY = "verity.circuits.ops.s8"
 M32 = (1 << 32) - 1
 S8, S32, F32 = Value(8), Value(32), Value(32)
 A32 = Array(32, S8)
@@ -290,7 +290,7 @@ def gather_table(V: int = 128) -> Program:
     return Program(_fn("RedteamGatherTable", [("i", S32)], F32, body))
 
 
-# ---- the s8 family (verity.definitions.ops.s8) ----------------------------------------------------------------------------
+# ---- the s8 family (verity.circuits.ops.s8) ----------------------------------------------------------------------------
 
 
 def _dot(**kw: Any) -> Any:

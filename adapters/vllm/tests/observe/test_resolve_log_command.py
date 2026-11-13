@@ -44,7 +44,7 @@ check_header = Q3.check_header
 DOT = "HopperBF16WgmmaDot16_v1"
 #: specialization -> (rows of the prefill step, rows of the decode step, the module that defines it)
 SPECS = {"AllReduce2_v1{N=2048}": (256, 1, "verity.definitions.registry.b1_tp2"),
-         f"Gemm_v2{{K=2048,N=128,DOT={DOT}}}": (256, 1, "verity.definitions.ops.gemm"),
+         f"Gemm_v2{{K=2048,N=128,DOT={DOT}}}": (256, 1, "verity.circuits.ops.gemm"),
          f"MoeExpertGemmW_v2{{E=128,K=384,N=2048,DOT={DOT}}}": (2048, 8, "verity.definitions.registry.moe"),
          f"MoeExpertGemm_v2{{E=128,K=2048,N=768,DOT={DOT}}}": (2048, 8, "verity.definitions.registry.moe"),
          "MoeRouterTopKOrderedNorm_v1{E=128,TOPK=8,VPT=8}": (256, 1, "verity.definitions.registry.moe"),

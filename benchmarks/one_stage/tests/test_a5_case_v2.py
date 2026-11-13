@@ -18,7 +18,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import a5  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import proofs as PF  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF  # noqa: E402
 
 
 @pytest.fixture
@@ -235,7 +235,7 @@ def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carrie
     """v2 reads a sample's coins under the challenger its parameters name, on the window's root, from the evidence's
     coins: the case of an audit sampled on the challenger's coins holds all three, the key in the parameters alone, and
     its SPOT form is that case's. Its proofs, commitment and blobs are the unnamed case's."""
-    write(tmp_path, {}, coins=COINS, window_root=WINDOW_ROOT)
+    write(tmp_path, {}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY)
     got = json.loads((tmp_path / "case-v2.json").read_text())
     named = {"challenger": {"key": COINS["key"], "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
     assert got["params"] == {**zk["params"], **named}
@@ -251,7 +251,7 @@ def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carrie
 def test_an_audit_on_the_challengers_coins_with_no_window_root_has_no_v2_case(tmp_path, zk):
     """v2 reads the challenger's session as the one its ledger opens on the window's root: with no root to name, no
     case is written, the error file says why, and the v1 case stays."""
-    write(tmp_path, {}, coins=COINS, window_root=None)
+    write(tmp_path, {}, coins=COINS, window_root=None, family=a5.AC.FAMILY)
     assert not (tmp_path / "case-v2.json").exists() and not (tmp_path / "case-sampled.json").exists()
     assert "no window root" in (tmp_path / "case-v2-error.txt").read_text()
     assert (tmp_path / "case.json").exists()
@@ -265,7 +265,7 @@ def test_the_per_member_case_names_the_challenger_only_where_its_sessions_ran_on
     where they ran there."""
     pm = {**zk, "params": {"proofs": {"members": []}}}
     monkeypatch.setattr(a5, "case_members", lambda case, **k: pm)
-    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, member_trees=trees)
+    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY, member_trees=trees)
     named = {"challenger": {"key": COINS["key"], "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
     assert json.loads((tmp_path / "case-v2.json").read_text())["params"] == {**zk["params"], **named}
     assert json.loads((tmp_path / "case-v2-members.json").read_text())["params"] == {**pm["params"], **(named if trees else {})}
@@ -299,10 +299,10 @@ def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions
 
 def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     """`a5.link_points` over the staged members, each its units at its circuit's units a proof block: under `subset:20`
-    over 40 units a draw that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
-    so it is recorded refused, and not at four; one of 8, or of 4 at two a proof block, is not. Under `subset:2` a draw
+    over 40 units a sample that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
+    so it is recorded refused, and not at four; one of 8, or of 4 at two a proof block, is not. Under `subset:2` a sample
     that ends holds at most 2 of it, so it is not refused (one that runs out of coins fails the window:
-    `a5.draw_ran_out`). A law that doesn't apply refuses every member, recorded with why."""
+    `a5.draw_ran_out`). A sampling design that doesn't apply refuses every member, recorded with why."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
         return {"k": k, "m": SimpleNamespace(template=template, base=base, n=n), "st": {"meta": {"vus_per_block": g}}}
 
@@ -316,10 +316,10 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
 
 
 def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
-    """`a5.link_points` records the registration's refusal of a law no draw of which ends (`link_points.NEVER_ENDS`),
-    which `coins.law_problem` refuses first for every law it reads: past it, `subset:41` over 40 units is refused for
+    """`a5.link_points` records the registration's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
+    which `coins.law_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
     every member."""
-    from verity.protocols.spot.verifier.one_stage import link_points as LP
+    from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
 
     monkeypatch.setattr(a5.CC, "law_problem", lambda law, population: None)
     m = {"k": 0, "m": SimpleNamespace(template="t", base=0, n=40), "st": {"meta": {"vus_per_block": 1}}}
@@ -329,7 +329,7 @@ def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
 def test_a5_records_whether_the_draw_ran_out_of_the_challengers_coins():
     """`a5.draw_ran_out`, which fails the window: `subset:9` over 10 units first reads a stream
     of 226 bytes (`2 k · width(n) + 64`), so it runs out of one coin's 64 bytes and not of 256 zero bytes, which reject
-    no word; a law that doesn't apply records why."""
+    no word; a sampling design that doesn't apply records why."""
     law = {"k": 9, "law": "subset"}
     assert a5.draw_ran_out(law, 10, bytes(64)) is True
     assert a5.draw_ran_out(law, 10, bytes(256)) is False

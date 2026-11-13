@@ -63,9 +63,9 @@ import jsonschema
 import pytest
 from verity import device as SITE
 from verity.hardware import registration as RL
-from verity.protocols.pous.verifier import wipe_period as W
-from verity.protocols.spot.verifier.one_stage import registration as REG
-from verity.protocols.poub.verifier import ledger
+from verity.protocols.accounting.pous.verifier import wipe_period as W
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.accounting.poub.verifier import ledger
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -970,7 +970,7 @@ def test_an_edit_to_the_served_nodes_sampled_proofs_answer_leaves_the_row_recomp
     record the case commits to: the summary and audit record the served node wrote don't enter it, so editing or deleting
     them leaves the row as it was, while without --sampled-lean the row follows them. The row and the line name its
     source, and PoUW's, still read from its piece's answer file, as the served node wrote it, which its edit changes."""
-    from verity.protocols.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
     argv, _exe = _lean_handed(tmp_path)
@@ -1277,11 +1277,11 @@ DSID = "s20261104T090000Z-dr01"
 
 
 def _draw(after: str = "c1" * 64, seed: int = 7) -> dict:
-    """A challenger draw as the coin record carries it (`bench_arm.LiveDraw`): a real draw session's commitment and its
+    """A challenger sample as the coin record carries it (`bench_arm.LiveDraw`): a real sample session's commitment and its
     coin ``pouw/draw`` 0 opened after ``after``, reserved as `DSID`."""
     import random
 
-    from verity.protocols.pouw.verifier import window as Wd
+    from verity.protocols.accounting.pouw.verifier import window as Wd
 
     ch = Wd.draw_challenger(0, random.Random(seed).randbytes)
     opening = ch.open(Wd.DRAW, 0, bytes.fromhex(after))
@@ -1298,7 +1298,7 @@ NODE = {"from": "node", "claim": "uniform/io-getrandombytes"}
 
 def _coin_record(source: str = "5e" * 32, draw: dict | None = None, commitment: str = "c1" * 64) -> bytes:
     """The verifier's coin record as ``served_passes.py verify`` writes it before any replay (``DIR/coin.json``), its
-    draw the node's unless ``draw`` names a challenger's."""
+    sample the node's unless ``draw`` names a challenger's."""
     return (json.dumps({"schema": S.COIN_KIND, "commitment": commitment, "source": source, "passes": ["p0", "p1"],
                         "draw": draw or NODE}, indent=1) + "\n").encode()
 
@@ -1368,7 +1368,7 @@ def test_coin_refuses_a_record_not_the_verifiers_and_a_second_coin_in_one_piece(
 
 
 def test_the_coin_command_says_where_the_verifiers_coin_went(tmp_path, capsys, monkeypatch):
-    """``served_verdicts.py coin`` prints one COIN line, the run commitment the coin was drawn on, the record's digest and
+    """``served_verdicts.py coin`` prints one COIN line, the run commitment the coin was flipped on, the record's digest and
     where it went: preserved, in the node's store alone (and the put of the run's custody copy that preserves that id),
     or in no store; a record that isn't the verifier's is refused, exit 1."""
     (rec := tmp_path / "coin.json").write_bytes(raw := _coin_record())
@@ -1408,9 +1408,9 @@ def test_the_coin_names_the_runs_attempt_as_its_custody_off_the_node(tmp_path, c
 
 
 def test_a_pearlplus_piece_holds_its_accept_to_the_coin_it_published(tmp_path, capsys, live):
-    """``--coin`` (`coin`'s ``coin-put.json``) holds Pearl+'s accept to the coin published at its draw: the piece and its
+    """``--coin`` (`coin`'s ``coin-put.json``) holds Pearl+'s accept to the coin published at its sample: the piece and its
     line carry the coin's store id, whether the put preserved it and the record's digest, and an accept whose run
-    commitment or draw source isn't the published record's, a copy that isn't the one put, or a coin never published
+    commitment or sample source isn't the published record's, a copy that isn't the one put, or a coin never published
     rejects, while a verdict that rejects keeps its own reasons. The piece names its load."""
     served, verified = _pearlplus_run()
     served.update(requests=16, engine={"max_num_batched_tokens": 8192})
@@ -1503,9 +1503,9 @@ def test_a_pearlplus_piece_holds_each_pass_salt_to_the_live_session_the_gate_hol
     its own manifest and to main's first-parent line, so the piece accepts; the first refusal names its pass and no pass
     after it is checked, and a key other than the pin's, no gate, key pin or line, a run that names no session or has no
     pass with calls, and a gate that refuses the fetch each reject, naming why."""
-    from verity.protocols.pouw.verifier import core_check as CC
-    from verity.protocols.spot.device import challenger as Ch
-    from verity.protocols.spot.device import remote
+    from verity.protocols.accounting.pouw.verifier import core_check as CC
+    from verity.protocols.proofs.spot.device import challenger as Ch
+    from verity.protocols.proofs.spot.device import remote
 
     files = {remote.KEY: json.dumps({"H": 5, "W": 4, "public": PUBLIC.hex()}), remote.RELEASES: '{"event": "root"}\n',
              remote.CLOSE: "{}"}
@@ -1665,7 +1665,7 @@ def _pearlplus_piece(tmp_path: Path, monkeypatch, live, case: str = "of record")
     published, Pearl+'s verdict tied to W, the window's registration R chained after W and its audit tied to W, and the
     Lean verdict on the same run. Returns the pieces dir, the sampled
     proofs dir, the compose's key pin and lane."""
-    from verity.protocols.spot.device import remote
+    from verity.protocols.proofs.spot.device import remote
 
     served, verified = _pearlplus_run()
     draw = {"node draw": NODE, "draw off C": _draw("c2" * 64)}.get(case, DRAW)
@@ -1848,7 +1848,7 @@ def test_pearlpluss_accepted_piece_that_fails_a_condition_of_record_stays_a_deve
 
 
 def _draw_answers(calls: list, public: bytes = PUBLIC):
-    """The gate's answers for the run's draw session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
+    """The gate's answers for the run's sample session, as `pearlplus_draw` asks them: its tree for ``fetch`` (its key),
     the ledger (its reserve and its open on the run's commitment) and the pins."""
     def ask(*words: str) -> bytes:
         calls.append(words)
@@ -1884,13 +1884,13 @@ def _draw_answers(calls: list, public: bytes = PUBLIC):
     ("other source", "ValueError: the record's source is not its draw session's coin"),
 ])
 def test_the_pearlplus_piece_holds_the_verifiers_draw_to_its_draw_session(tmp_path, monkeypatch, case, reason):
-    """`pearlplus_draw`: a challenger draw's session fetched through the gate with the ledger and pins, its key held to
+    """`pearlplus_draw`: a challenger sample's session fetched through the gate with the ledger and pins, its key held to
     the pin, the ledger opening it alone on the run's commitment C (`challenger.trusted_session_of`, its signed session),
     withheld, its signed commitment the record's, its log showing C as its coin's one root, and the record's opening its
-    coin after C with the record's source that coin; a node's draw is checked by none of it. Each failure names why, and
+    coin after C with the record's source that coin; a node's sample is checked by none of it. Each failure names why, and
     the piece rejects on it."""
-    from verity.protocols.pouw.verifier import window as Wd
-    from verity.protocols.spot.device import challenger as Ch
+    from verity.protocols.accounting.pouw.verifier import window as Wd
+    from verity.protocols.proofs.spot.device import challenger as Ch
 
     other = _draw(seed=8)
     signed = {"other commitment": other["commitment"]}.get(case, DRAW["commitment"])
@@ -2087,7 +2087,7 @@ def test_the_tied_close_waits_for_the_ledger_to_end_each_windows_salt_session(tm
 @pytest.mark.parametrize("case", ["held", "between", "open", "node"])
 def test_the_rule_line_reads_whether_the_draw_was_the_lanes_first_reserve_after_the_close(tmp_path, monkeypatch,
                                                                                           capsys, case):
-    """``pearlplus-period rule``, once the coin is drawn: HELD where the coin record's draw session is the lane's first
+    """``pearlplus-period rule``, once the coin is flipped: HELD where the coin record's sample session is the lane's first
     reserve after the period in DIR's period.json closed (`pouw_h1_window.after_close`), else BROKEN, exit 1, saying
     why; kept as period.json's ``rule``. A reserve of another lane between them leaves it held."""
     ledger = [{"kind": "period-open", "session": None, "body": {"period": "pp-r1", "lane": "vllm"}},
@@ -2336,7 +2336,7 @@ print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 se
       "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
       "(no count published: n is judged on the blocks' exact count, held on the node)")
 '''
-NCI_CHECK = "verity/protocols/inference_only/verifier/nci/lean/.lake/build/bin/nci-check"
+NCI_CHECK = "verity/protocols/policy/inference_only/verifier/nci/lean/.lake/build/bin/nci-check"
 
 
 def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str) -> tuple[int, list[str], list[list[str]]]:
@@ -2483,7 +2483,7 @@ else:
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
         w = json.load(open(tail[1]))
         if "--pearl-passes" in a:
-            from verity.protocols.spot.verifier.one_stage import registration as REG
+            from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
             r = {{"format": "toy", "previous": "ef" * 64 if os.environ.get("BREAK_CHAIN") else REG.digest(w)}}
         else:
             r = {{"format": "toy", "after": w}}
@@ -2535,13 +2535,13 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     alone off the node (``extra`` adds to the environment, None unsetting; ``lease`` False, no gpu-lease on the PATH): the
     exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
-    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "protocols" / "flock" / "verifier",
-              tree / "verity" / "protocols" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "flock" / "pod", bin_, venv,
+    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "protocols" / "proofs" / "flock" / "verifier",
+              tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
-    (tree / "verity" / "protocols" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
+    (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w7" / "private" / "advice.bin", tmp_path / "row" / "manifest.json",
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")
@@ -2704,7 +2704,7 @@ def test_under_h1_tie_each_h1_windows_close_writes_its_advice_and_commits_it_cha
 def test_a_tie_whose_advice_is_pending_or_whose_commit_is_refused_writes_no_record_r(tmp_path, extra, rc, steps, said):
     """A request carried past the window's close has no Commit record until a later close, so its advice can't be written
     before the window's sample coin: the tie fails at once, never polls; a refused window-commit fails it too. Either way
-    no R, so `serve_tie` refuses the window's record and H1 draws no sample coin."""
+    no R, so `serve_tie` refuses the window's record and H1 samples no sample coin."""
     run, order = _tie(tmp_path, **extra)
     assert (run.returncode, order, run.stdout.splitlines()[-1]) == (rc, steps, said), run.stderr
     assert not (tmp_path / "serve" / "h1" / "w7" / "record.json").exists()
@@ -3333,7 +3333,7 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
 def test_under_pearlplus_tie_with_a_gate_the_window_serve_runs_inside_a_pearl_c_period_on_its_circuit_record(tmp_path):
     """With a gate, serve() opens the lane's Pearl-C period on PEARLPLUS-CIRCUIT's record (``pearlplus-period open
     --circuit-record``) once it is built and before serve-openai starts, so the window's salt session joins it, and
-    closes it once serve-openai is done, here when it never listens: before Pearl+'s piece draws, its reserves first
+    closes it once serve-openai is done, here when it never listens: before Pearl+'s piece samples, its reserves first
     held to the windows' salt sessions (``--lane``, ``--windows`` the serve dir's pearl/), once the ledger ends them
     (``--wait`` PEARLPLUS_CLOSE_WAIT, default 300 s). Between the record and the
     open the inference-only policy is written, before serve-openai's start, from serve-phi's φ. In-process coins
@@ -3479,7 +3479,7 @@ def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, 
 def test_the_preflight_refuses_a_step_3_partition_that_leaves_out_the_served_compilers_transfer_gates(
         tmp_path, given, tie, refusal):
     """Under PEARLPLUS_TIE the served BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of
-    which step 3 proves beside the drawn rest (`serving_rows.work_table_of`), so step 3's partition defaults to a work:2
+    which step 3 proves beside the sampled rest (`serving_rows.work_table_of`), so step 3's partition defaults to a work:2
     one holding them, and the preflight refuses another law or a partition without them, before anything runs. The int8
     checkpoint's compiler lists none, so its subset:2 partition passes."""
     (pp := tmp_path / "tree" / "benchmarks" / "prove_path").mkdir(parents=True)
@@ -3981,7 +3981,7 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
     """PREFLIGHT_ONLY=1 runs the preflight and stops there, exit 0, with one line: the serve's lease (under H1_TIE 150
     minutes capped at 160 GB, the serve's 128 and window-commit's peak, within a 196 GB node), on a node short of V3c's
     audit's memory its deferral, and under COMPOSE_OFF_NODE=1, the default, what is composed off the node. Nothing runs,
-    and neither the serve root nor C-Flock's work dir is made."""
+    and neither the serve root nor Flock's work dir is made."""
     rc, lines, order, limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", **extra)
     assert (rc, lines, order, limits) == (0, [f"PREFLIGHT passed on vy-dc-h200-2, {said}. {ONLY}"], [], [])
@@ -4540,7 +4540,7 @@ sys.exit(H.gate(["--ssh", " ".join(sys.argv[1:]), "--key", "vllm"], host, sink=s
 '''
 GATE_PIN = "c0" * 20
 #: the compose gate's directory (its `host.py`), which the driver imports from
-LIVE_VERIFIER = HERE.parents[2] / "verity" / "protocols" / "poub" / "device" / "live_verifier"
+LIVE_VERIFIER = HERE.parents[2] / "verity" / "protocols" / "accounting" / "poub" / "device" / "live_verifier"
 
 
 def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
@@ -4969,6 +4969,18 @@ if __name__ == "__main__":
 '''
 
 
+def test_served_composite_builds_each_product_in_a_lake_package_of_this_tree():
+    """served_composite.sh writes out each product's Lake package directory (`package`), and each is a package this tree
+    has. A directory built from the product's name follows no move of the packages, and the stand-in trees of the tests
+    below would go on agreeing with it."""
+    script = (HERE.parent / "served_composite.sh").read_text()
+    packages = re.findall(r"\) echo (verity/[\w/]+) ;;", script)
+    assert len(packages) >= 2 and 'exe "$x" "$(package "$x")"' in script, (
+        "served_composite.sh: write each product's package directory out in `package`, as a path a layout move rewrites")
+    gone = [d for d in packages if not (HERE.parents[2] / d / "lakefile.toml").is_file()]
+    assert not gone, f"served_composite.sh's `package` names {gone}: no Lake package of this tree"
+
+
 def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
     """served_composite.sh with a stand-in lake, served_cases.py and composite.py: PoUS's case, which its piece wrote
     under the serve dir's private dir beside its Lean's answer, is composed as written, with no card asked for and no
@@ -5000,8 +5012,8 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     (out / "pieces" / "pous").mkdir(parents=True)
     (out / "pieces" / "pous" / "pous.json").write_text(json.dumps(
         {"window": 0, "verdict": "accept", "decided_by": {"program": "pous-run-protocol", "host": "the-served-node"}}))
-    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
-        (tree / "verity" / pkg).mkdir(parents=True)
+    for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
+        (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
     v2 = d / "private" / "sampled-proofs-v2"
@@ -5167,8 +5179,8 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
-    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
-        (tree / "verity" / pkg).mkdir(parents=True)
+    for pkg in ("verity/protocols/compose/verifier/remote", "verity/protocols/compose/verifier/onsite"):
+        (tree / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
 
@@ -5231,7 +5243,7 @@ def test_the_composite_takes_no_case_from_the_certifier_pieces_private_directory
     (tmp_path / "lean").chmod(0o755)
     _script(bin_ / "lake", f'mkdir -p .lake/build/bin && cp {tmp_path}/lean ".lake/build/bin/$2"')
     _script(bin_ / "systemd-run", "exit 1")
-    for pkg in ("protocols/remote/verifier", "protocols/onsite/verifier"):
+    for pkg in ("protocols/compose/verifier/remote", "protocols/compose/verifier/onsite"):
         (tree / "verity" / pkg).mkdir(parents=True)
     (tree / "benchmarks" / "one_stage").mkdir(parents=True)
     shutil.copy(HERE.parent / "composite.py", tree / "benchmarks" / "one_stage")
@@ -5276,9 +5288,9 @@ DIGEST = "5e" * 64
 
 
 def _auditor():
-    """Infra's gate, ``verity/composite/device/live_challenger/auditor.py``, as a module of its own."""
+    """Infra's gate, ``verity/protocols/compose/device/live_challenger/auditor.py``, as a module of its own."""
     import importlib.util
-    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module
@@ -5307,7 +5319,7 @@ def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credi
     commits the Program digest serve-openai wrote, its T, the sample K, the fixed length and the circuit files, each read
     back by core's credit as the window's period commits it; a stratum with no ``k<K>`` file yet is named and left out.
     It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity.commitments.crypto import lms
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
@@ -5464,7 +5476,7 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
     from types import SimpleNamespace
 
     torch = pytest.importorskip("torch")
-    from verity.protocols.pouw.prover.circuit import h1tile as HT, h1window as HW
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT, h1window as HW
     from verity_vllm.pipeline import serve_h1 as SH
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.pouw import h1 as PH

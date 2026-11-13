@@ -27,7 +27,7 @@ untraced = ["tests/bench/test_input_sets.py", "tests/bench/test_lowerings.py", "
 # Test-only: the bench spine's tests drive Flock's lowerings over the repository's fixtures and census; test_unit_costs_menu.py
 # holds the Lean menu (VStar.Menu.Pinned) to the pinned menu.json it is generated from; test_census_data.py reads each census
 # workload's regression expectations, most of them fetched fixtures.
-inputs = ["verity/protocols/flock/verifier/VStar/Menu/Pinned.lean", "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py", "benchmarks/census", "fixtures",
+inputs = ["verity/protocols/proofs/flock/verifier/VStar/Menu/Pinned.lean", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "benchmarks/census", "fixtures",
           "adapters/vllm/tests/regression/expected",
           "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/regression/__init__.py"]
 parallel = true
@@ -37,7 +37,7 @@ parallel = true
 
 [[tool.verity.tests.reads]]
 tests = ["tests/bench/test_bench_contract.py"]
-paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols/flock/prover/python/verity_flock"]
+paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/protocols/proofs/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -46,8 +46,8 @@ tests = [
     "tests/bench/test_subcircuit_catalog.py",
     "tests/bench/test_unit_costs.py",
 ]
-paths = ["verity/protocols/flock/prover/python/verity_flock/templates"]
+paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/bench/test_lowerings.py"]
-paths = ["verity/commitments", "verity/commitments/crypto", "verity/protocols/flock/prover/python/verity_flock"]
+paths = ["verity/commitments", "verity/commitments/crypto", "verity/protocols/proofs/flock/prover/python/verity_flock"]

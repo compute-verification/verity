@@ -2,7 +2,7 @@
 memory wipe's session [t0, t1), read off the gate's network certifier run (`vy-challenger-gate warden-rehearse`,
 `wipe_gate.sh`), as a ``wipe-egress/v1`` record, ``covered`` or not ("What it reads"). The record is all this script
 writes: what the wipe's reader does with one is its own function, `wipe_monitoring.counted`
-(`verity/protocols/pous/verifier/wipe_monitoring.py`), and is stated there.
+(`verity/protocols/accounting/pous/verifier/wipe_monitoring.py`), and is stated there.
 
     python wipe_egress.py RUN --t0-ns T0 --t1-ns T1 [--pad-ms 1000] [--out FILE]
 
@@ -38,9 +38,9 @@ from fractions import Fraction
 from pathlib import Path
 
 import certifier_serve as cs
-from verity.protocols.certifier.verifier.certificate import Direction
-from verity.protocols.certifier.verifier.warden import WardenParams
-from verity.protocols.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.certifier.verifier.certificate import Direction
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 
 FORMAT = "wipe-egress/v1"
 #: how far the wipe challenger host's clock and the network certifier host's may disagree

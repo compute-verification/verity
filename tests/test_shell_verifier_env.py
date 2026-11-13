@@ -21,23 +21,23 @@ import subprocess
 import pytest
 from test_repository import ROOT, _tracked
 
-from verity.protocols.spot.verifier.one_stage import proofs
+from verity.protocols.proofs.spot.verifier.one_stage import proofs
 
-HELPER = "verity/protocols/spot/verifier/one_stage/verifier_env.sh"
+HELPER = "verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh"
 USE = "$(verifier_env)"
 FIX = (f"start it as `{USE} VERIFIER verify ...` in a script that sources {HELPER}; another tool's `verify` goes in "
        "OTHER_TOOLS with its script and what the variable it starts with is set to")
 #: Flock's pod jobs, which start the verifier under the allocator's default
 ALLOWED = frozenset({
-    "verity/protocols/flock/pod/76-read-gadget.sh",
-    "verity/protocols/flock/pod/85-rec-reprice.sh",
-    "verity/protocols/flock/pod/86-zk-cpu-steps.sh",
-    "verity/protocols/flock/pod/89-served-registered.sh",
-    "verity/protocols/flock/pod/90-tmpl-unit.sh",
-    "verity/protocols/flock/pod/91-plain-hidden-tables.sh",
-    "verity/protocols/flock/pod/91-plain-hidden.sh",
-    "verity/protocols/flock/pod/92-zk-sessions.sh",
-    "verity/protocols/flock/pod/93-zk-tree-from.sh",
+    "verity/protocols/proofs/flock/prover/pod/76-read-gadget.sh",
+    "verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh",
+    "verity/protocols/proofs/flock/prover/pod/86-zk-cpu-steps.sh",
+    "verity/protocols/proofs/flock/prover/pod/89-served-registered.sh",
+    "verity/protocols/proofs/flock/prover/pod/90-tmpl-unit.sh",
+    "verity/protocols/proofs/flock/prover/pod/91-plain-hidden-tables.sh",
+    "verity/protocols/proofs/flock/prover/pod/91-plain-hidden.sh",
+    "verity/protocols/proofs/flock/prover/pod/92-zk-sessions.sh",
+    "verity/protocols/proofs/flock/prover/pod/93-zk-tree-from.sh",
 })
 #: (script, another tool's `verify` as the script writes it): what the script sets the command's first word to. An entry
 #: whose command its script doesn't hold lets nothing through.

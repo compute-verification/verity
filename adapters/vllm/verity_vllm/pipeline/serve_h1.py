@@ -58,7 +58,7 @@ own Commit.
   release, once H1 has closed the window and before its sample coin, waits for the window's seal, writes the window's
   registration W and runs CMD, V3c's window-commit, whose record R reuses H1's tables from W; R is the window's Commit
   record in the tap's place (`pouw_h1_commit.bind`), its outcome's ``commit_record``. It never runs with
-  ``--release-after pouw``, whose seal waits for this release's draw.
+  ``--release-after pouw``, whose seal waits for this release's sample.
 
 Each window's outcome (`H1Windows.close`) is its ``windows.jsonl`` line's ``pouw_h1``: ROOTS1's verdict, the requests'
 admission and gaps, the credit gate, the coins, the commitment's calls root, its gate session (the reserve, the open's
@@ -101,7 +101,7 @@ AT = "127.0.0.1:7811"
 #: the subprotocol H1's sample of each window is put under in serve-openai's draw-gated release (``--release-after``)
 DRAWER = "pouw"
 #: the ``release`` of a window on in-process coins that served no step (async scheduling's last call, which only returns
-#: outputs, can open one at the stop): its option stays unclosed, so its S steps aren't padded and nothing is drawn, as it
+#: outputs, can open one at the stop): its option stays unclosed, so its S steps aren't padded and nothing is sampled, as it
 #: holds no session, credits nothing and seals nothing
 UNSERVED = "none: the window served no step and holds no session"
 #: an s_a's bytes a row (f32)
@@ -349,7 +349,7 @@ class H1Windows:
         ``receipts`` noise.cu loaded too), the Lean verifier built (the in-process coins' entropy and each
         release's verdicts) and window 0's reserve ended (`GateSessions.settled`, made here unless made ahead already);
         ``readied``, with where each part's time went (``seconds``)."""
-        from verity.protocols.pouw.verifier import verifier
+        from verity.protocols.accounting.pouw.verifier import verifier
         from verity_vllm.protocols.pouw.h1 import hooks as PHK, receipts as RC
         from verity_vllm.protocols.pouw.h1 import tables_device as TD
 
@@ -572,7 +572,7 @@ class H1Windows:
     def layout(self) -> dict[str, Any]:
         """The window Program's layout as core's credit reads it from its descriptor (`credit.layout_of`), once."""
         if self._layout is None:
-            from verity.protocols.pouw.verifier import credit as CR
+            from verity.protocols.accounting.pouw.verifier import credit as CR
 
             from verity_vllm.protocols.pouw.h1 import served as SV
 
@@ -587,7 +587,7 @@ class H1Windows:
         ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
         window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.draw_k`) and its calls_root.
         ValueError when the session joined no period or the ledger commits it no K."""
-        from verity.protocols.pouw.verifier import credit as CR
+        from verity.protocols.accounting.pouw.verifier import credit as CR
 
         from verity_vllm.protocols.pouw.h1 import challenger as PHC
 

@@ -127,10 +127,10 @@ import certifier_serve as cs  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 import negatives as N  # noqa: E402
 import warden_serve as ws  # noqa: E402
-from verity.protocols.certifier.verifier import io_tie as IT  # noqa: E402
-from verity.protocols.certifier.verifier import release as REL  # noqa: E402
-from verity.protocols.certifier.verifier.active import DATA, PAD, id_request  # noqa: E402
-from verity.protocols.certifier.verifier.warden import END, FAIL, WardenParams, read_cell  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import io_tie as IT  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import release as REL  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.active import DATA, PAD, id_request  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.warden import END, FAIL, WardenParams, read_cell  # noqa: E402
 
 #: the classes in the order they are tried: the control first, and the one with the longest try last
 CLASSES = ("honest", "tokens", "length", "fail", "extra", "bucket")
@@ -247,7 +247,7 @@ class Deviation:
 
 
 def bits_of(seed: int | None = None) -> Callable[[], int]:
-    """The planted string, a bit a call: `seed`'s (None: drawn from the system's randomness)."""
+    """The planted string, a bit a call: `seed`'s (None: sampled from the system's randomness)."""
     rng = random.Random(secrets.randbits(64) if seed is None else seed)
     return lambda: rng.getrandbits(1)
 

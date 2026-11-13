@@ -9,11 +9,11 @@ public import Mathlib.Tactic.LinearCombination
 /-!
 # The affine coin expansion: two steps' offsets are uniform on a prime modulus (proofs)
 
-A column's step offsets `w_t = u + t·v` expand two coins `u, v ∈ ℤ/q` drawn after the data.
+A column's step offsets `w_t = u + t·v` expand two coins `u, v ∈ ℤ/q` sampled after the data.
 
 * **Prime `q`** (`pair_card`, `pair_mem_card`): for steps `t ≠ t'` the map `(u, v) ↦ (w_t, w_t')` is a bijection of
-  `(ℤ/q)²`, so each pair of offsets has exactly one preimage, and for any target sets `X, Y` fixed before the draw the
-  events `w_t ∈ X` and `w_t' ∈ Y` hold together on `|X|·|Y|` of the `q²` draws: independent, each at its marginal
+  `(ℤ/q)²`, so each pair of offsets has exactly one preimage, and for any target sets `X, Y` fixed before the sample the
+  events `w_t ∈ X` and `w_t' ∈ Y` hold together on `|X|·|Y|` of the `q²` samples: independent, each at its marginal
   (`step_mem_card`, `|X|·q`).
 * **Composite `q`** (`pair_card_255`): at `q = 255` and steps 0 and 3, the offsets `(0, 0)` have three preimages, three
   times the independent share, because `3` is no unit mod 255.
@@ -105,7 +105,7 @@ variable {S : ℕ}
 def hitSteps (t : Fin S → ZMod q) (X : Fin S → Finset (ZMod q)) (uv : ZMod q × ZMod q) : Finset (Fin S) :=
   univ.filter fun i => offset (t i) uv ∈ X i
 
-/-- **First moment**: if each step's target holds at most `P` residues, the hit steps summed over the `q²` draws are at
+/-- **First moment**: if each step's target holds at most `P` residues, the hit steps summed over the `q²` samples are at
 most `S·P·q`, so `E[C] ≤ S·p*` with `p* = P/q`. -/
 theorem sum_hitSteps [NeZero q] (t : Fin S → ZMod q) (X : Fin S → Finset (ZMod q)) (P : ℕ)
     (hX : ∀ i, (X i).card ≤ P) : ∑ uv, (hitSteps t X uv).card ≤ S * P * q := by
@@ -119,7 +119,7 @@ theorem sum_hitSteps [NeZero q] (t : Fin S → ZMod q) (X : Fin S → Finset (ZM
     _ = S * P * q := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul, Nat.cast_id, mul_assoc]
 
 /-- **Second moment**: for distinct steps on a prime modulus, the ordered pairs of distinct hit steps summed over the
-draws are at most `(S² − S)·P²`, so `E[C(C − 1)] ≤ S(S − 1)·p*²`, the pairwise term a second-moment tail reads. -/
+samples are at most `(S² − S)·P²`, so `E[C(C − 1)] ≤ S(S − 1)·p*²`, the pairwise term a second-moment tail reads. -/
 theorem sum_hitPairs [Fact q.Prime] (t : Fin S → ZMod q) (ht : Function.Injective t) (X : Fin S → Finset (ZMod q))
     (P : ℕ) (hX : ∀ i, (X i).card ≤ P) : ∑ uv, (hitSteps t X uv).offDiag.card ≤ (S * S - S) * (P * P) := by
   have hoff : ∀ uv, (hitSteps t X uv).offDiag = (univ : Finset (Fin S)).offDiag.filter

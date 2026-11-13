@@ -21,9 +21,9 @@ import numpy as np
 import pytest
 
 from verity.commitments.merkle import tree_levels
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.verifier import audit
-from verity.protocols.pouw.verifier.audit import ROW_SCHEMA, rows_domain
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.verifier import audit
+from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, rows_domain
 
 HERE = Path(__file__).resolve().parent
 POUW = HERE.parent

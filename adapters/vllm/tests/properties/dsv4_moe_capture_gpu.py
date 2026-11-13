@@ -67,7 +67,7 @@ from verity.definitions.numerics.dsv4_moe_twin import (
     router_twin,
     score_words,
 )
-from verity.definitions.ops import mufu as MU
+from verity.circuits.ops import mufu as MU
 from verity.definitions.registry import dsv4_moe as D
 from verity.definitions.registry import mla_check as MC
 
