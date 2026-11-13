@@ -556,7 +556,7 @@ theorem shows_of_logged {V : Vocab d α} {k : Verity.Registration.Composite} (hR
 /-- **A sampled verdict that accepts is sampled proofs' case accepting** (`composite_readsV2`). -/
 theorem verdict_case {V : Vocab d α} {k : Verity.Registration.Composite} {o : Verity.Exchange}
     (h : V.Verdict k .sampled o) : Verity.CaseAccepts k VStar.Recursive.Sampled.protocol o.sent := by
-  obtain ⟨-, -, P, hP, hc⟩ := h
+  obtain ⟨-, -, -, P, hP, hc⟩ := h
   have hk' : Verity.component k .sampled = some VStar.Recursive.Sampled.protocol := composite_readsV2 k
   rw [hk'] at hP
   cases hP
