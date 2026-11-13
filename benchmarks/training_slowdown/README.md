@@ -17,15 +17,15 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
 | `screen.py` | the screen of a route's source: the names a route may not contain (`FORBIDDEN`), read before the route is imported |
 | `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set, over /run and over the user's tmux directory (`enter`), and what a process can still reach of them (`refusals`) |
-| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`; under Muon and Shampoo the gains, and the embedding unless the config puts it among the matrices, train under AdamW beside it), a rate each for the matrices, the gains and the embedding, on a linear, cosine or constant schedule, AdamW in torch's default step or its fused kernel, E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights, at one decay or reaching back a share of the steps so far; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in; `qat`, quantization-aware training, each matrix a pattern names read as the start's plus the sparse ternary rounding of a latent that Muon trains straight through, its gradient passed as row-scaled codes of a few bits or as computed, the latents and Muon's momentum low-width (bf16, and int8 codes) or float32, the codes in `_codes`, the output the start with the last codes, handed over as codes: E is each matrix's scales and codes as one xz stream of its own, at xz's strongest preset and no other |
+| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`): `subset` (a pattern's parameters under the optimizer its `opt` dial names), `ema`, `lora` and `qat`, each route's module docstring saying what it trains and what its E keeps |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
-| `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions, in the dtype its record names for it (`kind_of`); a dtype no Definition prices is refused (`Unpriced`), and a record that names none is priced by `ASSUMED`. The counter writes torch's dtype, so a float32 GEMM is priced as the exact one; a row whose dtype reads `tf32` is priced as the TF32 one, which holds only for a GEMM outside the term's M, since a trace names no TF32 (`grade.priced_apart`); a record of a run with the TF32 switch on that names a GEMM float32 is refused |
+| `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions, in the dtype its record names for it (`kind_of`); a dtype no Definition prices is refused (`Unpriced`), and a record that names none is priced by `ASSUMED`; its docstring has the TF32 rule |
 | `annotate.py` | a record's maximal annotation: per step U and D_t, the depth profile and the cut |
 | `capture/` | one training step traced on fake tensors (`capture_step` traces any PyTorch step, `capture_steps` a step among the steps before and after it, with its step circuit): |C|, the update's dependence and the cuts (`capture.circuit`) and the step's matrix products as rows (`capture.products`) |
 | `work.py` | the work a step's record states for the theorem of record: M, the products whose two operands both depend on the update, from a trace's product rows (`priced`, `products_of_trace`, `he_of_rows`), and each reason a record states none. It computes no slowdown |
 | `formalism.py` | a record's quantities (`of_record`, `measure`), Fit at (c, k) (`at`), the one bound's products term, which is the entry point's, and its sensitivities, Slowdown's token form among them (`bound`), and the published ρ with what it rests on (`published`) |
-| `as_math.py` | a record that holds a fused attention kernel as one row, rewritten as the counter writes the kernel: `python -m training_slowdown.as_math SRC DST [--partial none\|SUBSET:CALLS]`. Which gradients a backward call asked for is read from the record's trace; where the trace doesn't show it the rewrite is refused unless `--partial` says, and a `--partial` the trace contradicts is refused. One case the trace leaves open: k's gradient alone in c calls leaves the products of k's with q's, or with v's, in 2c, so there the rewrite is refused naming the readings and `--partial` picks one. Such a record names no dtype and its rewritten rows name none; a fused row that names one is refused, since the counter that names dtypes writes the kernel's ops itself |
+| `as_math.py` | a record that holds a fused attention kernel as one row, rewritten as the counter writes the kernel: `python -m training_slowdown.as_math SRC DST [--partial none\|SUBSET:CALLS]`; which gradients a backward call asked for is read from the record's trace or given by `--partial`, and the module's docstring has the cases it refuses |
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
 | `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the entry point's on that step) and what binds, and its planned run over each fleet and period |
@@ -210,29 +210,18 @@ before its next checkpoint. A stall is no failure, since the job it continues en
 but the command continues a stalled job only under `--continue-stalled`, for three more such stops. The job
 continues from the state when it is its own (the same
 config digest, seed, split and `training_slowdown` VERSION, a model that hashes to the record's last checkpoint) and
-refuses any other, naming what differs. The job's own process states in the record so far, for the segment that
-kept the state, the SHA-512 of each of its parts (the model, its buffers outside its state dict, the optimizers'
-state, the stream's position, the generators); the job that continues hashes them again, in the state directory and
-as the route's process holds them before it imports the route, and refuses a state a part of which hashes to
-anything else. That record lies beside
-the tensors, so the command ties it to the stopped run's record on the store, which no job writes: it tells the
-job the sha256 the store lists for that record's `state.json` (`--continues`), or that it found none, and the job
-continues from no other state (a state on a node's disk has no such copy, and none is checked). The record lists
+refuses any other, naming what differs. The job's own process states the SHA-512 of each part of the state it kept, and the job that continues
+hashes them again and refuses a state a part of which differs; the command ties that record to the stopped run's
+record on the store (`--continues`, `run.py`'s docstring). The record lists
 the segments
 the job ran in, and its count is their sum: every step once, and each segment's `build`. What a stopped segment
 computed after its last kept checkpoint is run again and is in no record. A route's `output` at the checkpoint a job
-stopped at is counted outside the steps (`setup`), where an unbroken job counts it in the step after. A job with
-updated MACs or tokens outside a step is invalid, so an `output` that computed on token data with an updated weight
-would make a continued job invalid: it makes the unbroken job invalid too, whose last checkpoint's output is counted
-after its last step, unless it computes so at an earlier checkpoint and not at the last. That is a limit, and no
-route here meets it: `ema`'s output computes nothing and `lora`'s multiplies each adapter's two matrices. A state is
+stopped at is counted outside the steps (`setup`), where an unbroken job counts it in the step after. A state is
 a cache: the command keeps it with the stopped run's output on the store, the next run fetches it on whichever
 machine it gets, beside its output and into it once whole, so a stop while it fetches leaves no part of one
 (`NODE_STATE` in `run.py` here places it on the node's disk instead), and losing it costs a start from θ. The state directory is
-hidden from the route's process as a final set is, and only the job's own process writes it. A state is at most three
-times its model (the weights and two buffers of the optimizer for each), and a run holds three states at once while
-it keeps one, and a fourth, the store's own copy, when it fetched the one it continues from: the command asks the
-queue for that much disk from the start's parameters, and 20 GB for the rest (`run_disk_gb` in `run.py` here).
+hidden from the route's process as a final set is, and only the job's own process writes it. The command asks the queue for the
+disk a job's states take (`run_disk_gb` in `run.py` here).
 
 Which windows of the start's data a job is served is the harness's, and a config's to ask for, never a route's. By
 default a job is served every window, in its seed's order. A config with `windows = "fresh"` is served that order
@@ -241,8 +230,7 @@ names (`provenance.data.parts`, each part by the sha256 the stream's manifest li
 the start read where its training stopped inside a part, and never less. The job refuses the config, saying what to
 write where, on a start whose `start.json` names no part or names one the stream doesn't hold, and where fewer
 windows are fresh than a step takes. Its record states what it was served (`windows`): the parts left out, by
-sha256 with the ids of their windows, the ids of the windows of each step (a window's id is its place in the stream,
-part by part in the manifest's order), and how many times the fresh windows ran out and their order started again,
+sha256 with the ids of their windows, the ids of the windows of each step, and how many times the fresh windows ran out and their order started again,
 so whether a job read a window its start read is a comparison of ids. A stopped job that continues is served the
 windows the unbroken job is, and its record states them over every segment. `windows` is in a config's digest only
 where the config asks, so a config that doesn't is the job it was, under the same label.
@@ -269,11 +257,8 @@ two products, and in the backward the products and scalings of the gradients the
 backward computes the scores again, a fifth product: this count, and the library's table with it, holds six of the
 kernel's seven products, and a circuit of the kernel as it runs holds seven. A job's record is the same under either
 kernel in its ops, their shapes and their MACs (`tests/test_run.py`). Each row of a record's op log names the dtype its
-op computed in, its result's (`flops.dtype_of`): its first operand's for an op that returns nothing (a fused
-optimizer step, an op of a fused kernel, on a stand-in in the kernel's operands' dtype) and for `_scaled_mm`, whose
-result is cast out of the FP8 it computes in; for an in-place form (`flops.in_place`), its tensor operands' promoted
-dtype, torch's `result_type`, which it computes in before it writes its first operand's (`bf16.mul_(f32)` is
-float32). The op's gates are priced in that dtype, never by its phase or its class (`gates.kind_of`). A job on a GPU
+op computed in (`flops.dtype_of`, whose docstring has the cases: an op that returns nothing, `_scaled_mm`, an
+in-place form). The op's gates are priced in that dtype, never by its phase or its class (`gates.kind_of`). A job on a GPU
 runs attention under a fused kernel, in its operands' dtype, bf16 under the routes' autocast, and its rows name that;
 a job under the math kernel, as every job on a CPU is (`run.cpu_attention`), which casts half-width operands to
 float32, names float32. The trace's circuit prices each node by the same rule, and the ops of an attention call in the
@@ -283,11 +268,8 @@ dtype no Definition prices has no price and none is assumed for it:
 float64, an integer product, a list op over tensors of two dtypes. The grade refuses a record that holds such an op and
 the capture a step that does (`unpriced_dtype`), each naming the op and the dtype. A fused optimizer kernel is one op,
 priced at a constant per parameter (`opnames.FUSED_OPTIMIZER_MACS`, which the counter and the trace both read). Choosing
-a fused kernel never lowers a step's count, at any setting of the optimizer's options (`tests/test_flops.py`): AdamW
-counts 8 multiplications a parameter and Adam 7, where their unfused steps make 6 at most, and SGD and Adagrad count 4,
-their unfused steps' largest (SGD's with momentum, weight decay and either Nesterov momentum or dampening; Adagrad's
-foreach step with weight decay). The one exception is at most one multiplication a step: Adagrad's unfused step with a
-tensor learning rate and weight decay divides the rate itself. A route that names anything of `training_slowdown` but
+a fused kernel never lowers a step's count, at any setting of the optimizer's options (`tests/test_flops.py`,
+`opnames.FUSED_OPTIMIZER_MACS`' comment has the counts). A route that names anything of `training_slowdown` but
 the codecs and the model, or a route around the dispatcher (`screen.FORBIDDEN`), is refused, and one that uses an op the
 counter can't price, reads token data out of torch, starts a thread or a process, or imports a module the screen refuses
 makes its run invalid (`screen.py` has the screen).
@@ -316,10 +298,7 @@ its other products are bf16. On the card a fused kernel computes the call at tha
 products stand in for the kernel's and are priced as the kernel's, on the premise `capture.products.ATTENTION_PREMISE`,
 which the library's premises and what a grade's S rests on name: the capture states the dtype of each call (a row's
 `attention`), refuses a call that returns in another, and |C| and the rows read it (`capture.products.priced_dtype`,
-which names the premise's edges: a call the card serves on its math path is priced low by the trace, and the job's
-count sees it; attention written by hand, and a call made through a builtin bound before the capture inside a function
-torch hands it, are no call the capture marks and are priced as traced; and a causal or masked call's products are
-whole rectangles, so it is priced high by the tiles a kernel skips). A trace of a capture before
+whose docstring names the premise's edges). A trace of a capture before
 `capture.products.PRICED_AS_TRACED_FROM` holds the same float32 products and states no call, and that capture's
 rule prices every forward or backward product wider than bf16 in bf16; the rule goes when the stored records it
 reads are traced again. The
