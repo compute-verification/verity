@@ -3017,7 +3017,7 @@ def _fixture_tree(world: World) -> tuple[dict[str, str], str]:
     (src / "other.json").write_bytes(b"{}\n")
     art = F.fixture_id(src / "big.json")
     files = {".gitignore": f"__pycache__/\n{BIG_PATH}\nother/data/other.json\n",
-             "fixtures/artifacts.json": json.dumps({art: BIG_PATH, F.fixture_id(src / "other.json"): "other/data/other.json"}),
+             "artifacts.json": json.dumps({art: BIG_PATH, F.fixture_id(src / "other.json"): "other/data/other.json"}),
              "pyproject.toml": PREFLIGHT_FILES["pyproject.toml"].replace('["pkg"]', '["pkg", "other"]'),
              "other/pyproject.toml": PREFLIGHT_FILES["pkg/pyproject.toml"].replace('"pkg"', '"other"'),
              "other/tests/test_other.py": "def test_other():\n    pass\n",
