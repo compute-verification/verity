@@ -113265,3 +113265,27 @@ Nothing is red of mine now. What is open is the properties lock: no record is re
 Not established: both locks (`cc14`); anything at a head holding `main`; the certifier's suite at lean's `34c5cbb3705c` (not run by me).
 
 For the table: RELAX | R7 | real `df7342a16519`, side (A) `3c020f77568d` | four suites pass; A's two tries pass, axioms clean | records `cc14` out, about 03:35Z | PR not open | ready line Fri 06:00Z holds if the final records start by 03:45Z
+
+## PERIODREAD, Fri 01:55Z: all five of the period's statements now have proofs that elaborate with the three axioms only; one question for you on how the lock lists them (I took the default that adds no guarantee entry)
+
+**The result.**
+
+- **`ledgerLinesOfDevice : LedgerLinesOfDevice` and `ledgerOfDevice : LedgerOfDevice` elaborate**, each `depends on axioms: [propext, Classical.choice, Quot.sound]`; so do all 12 theorems of `Challenger/Lines.lean` and all 4 of `Spot/PeriodLedger.lean` [run `r20261113-014041-b335`, vy-nebius-2, tree `493e1bf652`; logs saved]. `ledgerOfDevice` takes `Numbered dev p.key.pub` as its statement says and nothing else.
+- **With `3281` (01:45Z entry): `ledgerMeans`, `acceptMeans`, `committedOnce`, `ledgerLinesOfDevice`, `ledgerOfDevice`** all elaborate, none with an axiom past the three [run `3281` for the first three, `b335` for the last two].
+- **Records run of the whole stack** (PR 4's tree, which holds PRs 1 to 3): `r20261113-015344-d333`, vy-nebius-2, launched 01:53:44Z at `36dc4d568ff4`, `--records verity/protocols/spot/verifier/lean --update`, so it audits SPOT's verifier and each package that requires it. `ddb2`, the same command on PR 1, took 1 h 50 min after its slot, so I expect it by about **04:00Z**. It also says which records PR 2's split of `auditedOpen` regenerates, which you asked PR 2's body to name.
+
+**The question: how the lock lists the five. My default is in; say if you want the other.**
+
+- **What the check requires of PR 3** [read: `tools/verity/lean/check.py:3450-3465`, code `shape.unstated`, which fails and is not bookkeeping]: every `def … : Prop` of the properties tree is the statement of a listed guarantee or is under `shape.frozen` with a reason that opens `unstated:`. So PR 3 now carries its first lock entries: the two modules under `roots`, a layer for `PeriodLedger` (it imports `Properties.Challenger`, outside `Properties.Spot`'s layer), and five `unstated` lines. Pushed at `06ac8f46e7`; `tests/test_lean_packages.py` 34 passed on it [run on the VM, 11 s].
+- **Why not guarantee entries** [read: `check.py:2006-2017` `witness_scope`, `:2294-2336`]: a guarantee that is a property of a function's acceptance is held to an honest witness (a concrete input the function accepts) and a nontrivial one, and `unwitnessed` adds none. An honest witness of `checkWith` or `read` is a ledger whose LMS signatures the kernel verifies by evaluation. I have not written one and do not know that the kernel can.
+- **The precedent I followed** [read: `security/Properties/lean-audit.json`, `shape.frozen`]: the challenger's three statements (`LiveAnswer`, `DrawnByDevice`, `CoinsFromLog`) are `unstated`, each naming the theorem that proves it, "a draft statement, which gets a guarantee entry once the one theorem reads it". The five get the same, and PR 4 adds "proved with no premise in security_proofs by `Properties.Spot.Period.committedOnce`" to each line.
+- **What that leaves.** After PRs 3 and 4 land, `CommittedOnce` is proved and replayed by the candidate's check, and it is **not a listed guarantee**: by "list what you cite", no table or page may cite it as one. If Sat 02:00Z needs a guarantee entry, the missing part is the two witnesses for each, which is new work I have not sized by a run.
+- **`LedgerOfDevice`'s line names `Numbered`.** Its `unstated` line says it takes `Numbered`, "a hypothesis of this statement alone that no guarantee takes", and that it gets no guarantee entry while it does. You ruled that no lock entry reads `Numbered`; I read that as no guarantee's record. If you meant no line at all, the way out is to state `LedgerOfDevice` in the proofs tree only. Say, and I move it.
+
+**`CommittedOnce`'s hour**, as it stands: elaborated 01:36Z [run]; records on the fast path by about 04:00Z; kernel replay only in a candidate's check (the fast path has none); a second reader is yours to assign.
+
+**Machines and waits** [read: `slot.json`]: `b335` vy-nebius-2, 35 seconds. `d333` vy-nebius-2, in line since 01:54Z. `r20261112-232219-a005` (PR 2's quick tier) has held its slot since 00:56:36Z and has printed nothing yet.
+
+**Not established.** No kernel replay. No second reader. The records run has not returned, so I do not know that the lock edits satisfy the check or that `Window.lean`'s refactor moves no record. PR 3's own records run (its lock without the proofs) is not sent yet; it goes when `d333` shows the edits are right. The last four cleanups in PR 4 (closers the linter said never ran) are compiled only by `d333`.
+
+I can pause: yes once `d333` is the only thing I wait on, which is after PR 2's quick tier ends and I open PR 2 and PR 3; I say so in the entry that does it. Mailbox read at `23c3e423be` (01:55Z), nothing new. Pushed: PR 3 `06ac8f46e700`, PR 4 `36dc4d568ff4`; nothing unpushed.
