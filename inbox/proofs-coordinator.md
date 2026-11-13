@@ -121326,3 +121326,125 @@ Nothing.
 - An earlier period's genuine challenger signature still makes the cut's forger term `⊤`.
 
 **Heads** [run]: `cursor/proofs-join-42b8` at `792359daab`, nothing unpushed. Try `r20261113-050456-a4b0` (vy-nebius-2: `JoinedForm.lean`, then `GoodCase.lean`): next in the Lean line at 05:07Z; first verdict about 05:30Z [guess].
+
+## GATHER, Fri 13 Nov 05:08Z: the second try's head is now `e20b7c981b46` (`671dd73cce63` plus one entry of a test's list; the test file passes); both reruns ended exit 0 and every changed copy is refused at Friday's size; TWOLEG's flag is in neither of Friday's trees and cannot be taken alone, left off it writes no byte by my reading, and it is the kept challenger under the flag, not the flag, that puts both sessions under one key and in one ledger
+
+Second try: `cursor/proofs-gather-second-try-5a28` at `e20b7c981b46753384469814784e1f3a9e3cc260`, the head I stand behind: `671dd73cce63` plus five lines of one test file, so the code `7b90` and `b025` rehearsed is its code. First try: `cursor/proofs-gather-served-select-b88b` at `496aa183544bdf647b2e98943cb1c1bc6c193210`, rehearsed by `c6bd`, not moved. Both pushed. [run: `git ls-remote`, 04:57Z]
+
+**In plain words.** Three things. The reruns over the two Friday-size rehearsals' kept files both finished: each printed the try's own outcome again, and each of three deliberately changed copies was refused, for a different reason each. The second try's head did fail the test STOPDRIVER named, so I took its one-line fix and pushed; nothing Friday's run executes changed. And I read TWOLEG's flag against Friday's driver: it is not in Friday's trees, it could not be added to them by itself, and Friday's launch is untouched.
+
+Marks: [run] a command I ran this turn, with the time I read; [read] a file I read this turn, with the place; [relayed]; [derived] my reasoning, tested by nothing; [guess]. Mailbox read to its last heading, your 03:32Z, at 04:55Z [run]; your 04:53Z message came as this turn's task.
+
+### 0. The standing lines
+
+- **The pen:** `~/wt/.pen` did not exist, nor did `~/wt`. I made it with `mkdir` at 04:54:44Z and wrote one `owner` line in it naming this agent and the entries this loop wrote. [run]
+- **It does not outlive the machine.** This VM was replaced again between 04:43Z and 04:54Z: it was 2 minutes up at 04:56Z and `/tmp` and `~/wt` were empty. So a pen in the home directory tells two loops apart only while both are on one machine; after a replacement the next loop finds no pen. Nothing was lost: everything was pushed and the notes were synced. [run: `uptime`; derived]
+- No event that was not mine was acted on; the 05:07Z timer I had set is closed, since this entry does its work. [run]
+
+### A. The reruns over the kept files (vy-nebius-2, both exit 0)
+
+- **`r20261113-033702-b73a`, over `b025`'s kept files** (second try's design: 8 of 8 outer blocks, 4 of 64 inner blocks a cell), at `671dd73cce`: slot 03:58:24Z after a 21-minute wait, ended 04:52:19Z, peak 10.4 GiB. [run: `research status`, `slot.json`, `job-memory.py`, 04:56Z]
+- **`r20261113-033712-d94c`, over `c6bd`'s** (first try's design: 4 of 8, 1 a cell), at `496aa183`: slot 03:59:53Z after 22 minutes, ended 04:57:54Z, peak 10.0 GiB. [run, 05:03Z]
+- **The first print of each is the try's own outcome,** with the same outcome record digest, both registrations and both samples the same, and the second stage's coins following the interior registration's digest. [run]
+
+`b73a`'s lines, word for word [run: its `out/again.txt`]:
+
+~~~text
+FIRST {"printed_again": {"accepted": false, "interior": ["statements"], "record": "7b8b21788a48278970088a5a3ede018e4fc5d7f10f2ec14b2c795f8cb2227bd53e25d6607d96e0ff5c9adeb19f1cd3f0018a947253141a8ef65739e8bc76a36f", "replay_sample": [], "statements": ["two-stage-form"], "symbol": "reject"}, "refused_by_form_alone": true, "same": {"coins_follow_interior": true, "first_registration": true, "first_sample": true, "outcome": true, "record": true, "second_registration": true, "second_sample": true}, "seconds": 1031.8}
+NEG {"a verdict of record not accepted": {"accepted": false, "interior": ["statements"], "record": "265c405b75baf4feaaf2b54078fc8ddf9ef74aab4e1c230fa9ff05e4f68c5debaabf794fbaeb661c80fae133c17726d95bf26e93585b88b13aed16f0af36498f", "replay_sample": [], "statements": ["second-verified"], "symbol": "reject"}, "seconds": 1771.4}
+NEG {"seconds": 2501.3, "the second stage's bytes changed": {"accepted": false, "interior": ["run", "statements"], "record": "3bc0a646f44128efd3fd2589842632d5ac19ba472027f39cbf24faaeec56132832f02386999bd386a47c3d22c927a4fcebbf39e614a18b6cec75fb3a4dd1770c", "replay_sample": ["run"], "statements": ["two-stage-form"], "symbol": "reject"}}
+NEG {"a statement dropped": {"accepted": false, "interior": ["statements"], "record": "20e3db27777d36ba2ab0d7bf5b1eeedce7dbbde36f46d465bb202707d46604a2e4a1bc75f37dde842c816d5ac854813a19157cca9aeb320748014ee237344698", "replay_sample": [], "statements": ["second-order", "second-cover"], "symbol": "reject"}, "seconds": 3229.1}
+~~~
+
+`d94c`'s lines, word for word [run: its `out/again.txt`]:
+
+~~~text
+FIRST {"printed_again": {"accepted": false, "interior": ["statements"], "record": "8f7a563d64c089723f5583164032e9f663338c6f0be93cc377b781be2408fd5cacd00392c239293bd5101b2d914983ed4de6fc16edc1193b29b155868eeee829", "replay_sample": [], "statements": ["two-stage-form"], "symbol": "reject"}, "refused_by_form_alone": true, "same": {"coins_follow_interior": true, "first_registration": true, "first_sample": true, "outcome": true, "record": true, "second_registration": true, "second_sample": true}, "seconds": 1081.2}
+NEG {"a verdict of record not accepted": {"accepted": false, "interior": ["statements"], "record": "30afe1569095a3acb6432bd3139c048b0bb0ea4abf19a162811a8d14d086773ebd9be75c0bf77595ffa1d13ce54bf595f7c8d6ea74621d6111c5e94ebd95abef", "replay_sample": [], "statements": ["second-verified"], "symbol": "reject"}, "seconds": 1999.0}
+NEG {"seconds": 2746.7, "the second stage's bytes changed": {"accepted": false, "interior": ["run", "statements"], "record": "c06d79886be47e8cd5a977a6c719224d91e740c875af9a8e4905f6e8a40ccbcc429c78b5523a8760028c4a50c22d37028b2dd307255401cd7d5c5212c496d874", "replay_sample": ["run"], "statements": ["two-stage-form"], "symbol": "reject"}}
+NEG {"a statement dropped": {"accepted": false, "interior": ["statements"], "record": "cc711424f4c6b3002d5902e4f9ff987fa550cfc2dc4846c8dbd98226d0c09dfdb24bd4a0a73bdf9b9e3d0a37b5fbfa7f23004b8371175040f29cd54dd248701e", "replay_sample": [], "statements": ["second-order", "second-cover"], "symbol": "reject"}, "seconds": 3475.5}
+~~~
+
+What the lines say, the same in both designs [run]:
+
+| The kept file changed, in memory | Refused by | Outcome record digest |
+|---|---|---|
+| nothing | `two-stage-form` alone, the withheld accept | the try's own |
+| one session's verdict of record set to not accepted | `second-verified` | another |
+| one bit of the second stage's bytes | `run`, in both stages' audit records | another |
+| one statement dropped | `second-order` and `second-cover` | another |
+
+- **In the first and the last changed copy the form's own code is not in the list:** the second stage's check refuses the statements first. [run: the lines above]
+- **The class's figure, printed under "not established: the accept is withheld"** [run: each `out/second-again.json`]:
+
+| Design | At most incorrect of 10,240 inner blocks, δ = 1/2 | δ = 1/10 |
+|---|---|---|
+| Second try: 8 of 8 outer blocks, 4 of 64 inner blocks a cell (640 proved) | 219 (2.1%) | 710 (6.9%) |
+| First try: 4 of 8 outer blocks, 1 of 64 a cell (80 proved) | 1,699 (16.6%) | 5,122 (50.0%) |
+
+- Both rows equal my 01:50Z table. They are the verifier's own profile on the stream rebuilt from kept files: made-up logits, a CPU node, nothing served. [run; read: my 01:50Z entry]
+- **Serving's `second_form_check.py` exits 0 on both reprinted summaries,** all six of its checks true. [run, 05:04Z: serving's notes' copy, sha256 `421029c76827f0e7…`]
+- **What a reprint takes as it stands:** each session's verdict of record. It verifies no session's proof again. [read: the script's docstring]
+- **Each print is one whole run of the Lean verifier over the try's records: 12 to 18 minutes at Friday's size,** so four prints take 54 to 58 minutes. A rerun on Friday that prints once needs about 20 minutes and 12 GiB. [run: the `seconds` above; derived]
+
+### B. Item 1: the test, and the new head
+
+- **It fails at `671dd73cce63`:** `tests/test_vllm_public_api.py`, 1 failed and 3 passed, on the three imports of `verity_vllm.pipeline.boundary_logits` (`two_stage.py:138`, `two_stage_small.py:48`, `servetax_plugin.py:410`). STOPDRIVER's reading was right. [run on this VM, 04:42Z and 04:56Z]
+- **Taken:** the five lines of the cards branch's `08b5d4b3c0a6`, one entry of `PUBLIC`, as one commit of mine with hooks on. With it the file is 4 passed and ruff passes. Pushed 04:57Z: `e20b7c981b46753384469814784e1f3a9e3cc260`. [run]
+- **Nothing Friday's run executes differs:** the diff from `671dd73cce63` is that one test file. `9d4aec0111fb` is still an ancestor, and the new head merges with the cards branch's head without a conflict. [run: `git diff --stat`, `merge-base --is-ancestor`, `merge-tree`]
+- **The first try's head passes the file as it is** (4 passed): it has no logits import. [run, 04:42Z]
+- **Not run by me: the rest of the root suite at the new head.** STOPDRIVER's suites run on the join of both branches had this as the root suite's one red. [relayed: its 04:16Z entry, run `4995`] My rehearsals ran the package's tests and never the root suite, which is how this was missed. [derived]
+- **For VLLM-300:** serving holds `671dd73cce63` as the second try's head. Whether it is told the new one now or with the final head at Fri 11:00Z is yours.
+
+### C. Items 2 and 3, by reading only
+
+What I read: commit `783248625814` on `cursor/proofs-twoleg-c5e5` (its four files), TWOLEG's `two_stage.py`, `a5.py`, `a5_coins.py`, `two_stage_small.py` and `two_stage_small.sh` at that commit, and the same files at `e20b7c981b46`. I ran no code of TWOLEG's. The branch's tip is now `03072eb90b`, two commits on, which add `--deployed-key` and `--form-case` to the driver and a script of TWOLEG's own (`sampled_two_small.sh`). [read, 05:00Z to 05:05Z]
+
+**Both findings hold in Friday's trees.**
+- **Finding 2 holds.** The second stage's audit runs on no challenger session: `two_stage.py:881` sets `a.coins = None`, `:884` calls `a5.audit(..., drawn=second)`, and `write_case` in that branch is handed no coins, key, family or window root (`a5.py:1035–1045`). [read at `e20b7c981b46`]
+- **The kept case agrees:** the params of `240a`'s `second/audit/case-v2-members.json` have no `challenger`, `family` or window root among their 13 keys. A correction to my 03:38Z wording: the key is absent, not present with `null`. [run: the fetched file, 05:07Z]
+- **Finding 3 holds.** In `240a`'s kept coins each stage's sample is on the family `draw/0` of its own session, and `stage1.json` names `draw/0`. The first session also reserves `draw/1`, the stop blocks' rank; the second reserves `draw/0` alone. [run: `second/coins.json`, 05:07Z]
+
+**(i) Does the flag, left off, change any byte Friday's run writes? No, twice over.**
+- **Friday's trees do not hold the commit,** and nothing merges into them before Friday's run ends. [read: your 00:30Z rule]
+- **It cannot be taken alone.** `git apply --check` of the commit on the second try's head fails in three of its four files (`a5_coins.py`, `two_stage.py`, the test). Its `a5.py` part applies as text but would not run with the flag on: it hands `member_trees` and `challenger_key` to a `write_case` that takes neither at my head, and asks a session for `held()`, which my head's sessions lack. [run: `git apply --check`, nothing written; read: `a5.py`'s `write_case` at both commits]
+- **What the flag stands on, none of it in Friday's trees:** the challenger that `first` keeps and `second` reopens (`--challenger-host`, commit `b02c895d94`), the stream holding its challenger's key, and the case naming its challenger. `--challenger-host` is not on `main` nor on the families branch either. [run: `git log -S`, `git grep`]
+- **Inside TWOLEG's own tree, with the flag off, three places run new code and none writes anything** [read; run by nobody: the commit says "not run"]:
+  - `RankCoins` asks its session for its stage tag once (`draws.stage()`), gets "", and names its family `draw/<rank>` as before. `first` reaches this too, as do `benchmarks/two_stage/audit.py` and `network_traces/scan_zk.py`; each hands it a session made by `a5_coins.start`, which has the new method.
+  - `second` calls `draws.release(0)` after the sessions. The session closed when the sample ended (`drawn`), so `_close` returns at once.
+  - `second` sets `a.stage = None`; then `drawn_trees` is false, no relay is made and `write_case` gets the arguments it got before. Nothing dumps or copies that namespace.
+
+**(ii) What a rehearsal with the flag ON at my small size (8 of 8, 32 a cell, V = 2,560) would need from me, and how long.**
+- **A merge first, on a new branch, not Friday's.** TWOLEG's tree cannot make my small class: its stand-in serve has no `--units`, `--stop` or `--logits`, so no greedy select in 20 units. My tree cannot hold the flag. [read: both `two_stage_small.py` option lists]
+- **The merge's size:** my head with `783248625814` conflicts in four places, one each in `two_stage.py` (7 lines), `two_stage_small.sh` (8), `Spot/Run.lean` (13) and the spot verifier's `test_difftest.py` (16); the rest merges by itself, the driver's second command among it, which I would read line by line. It brings in `main` since `b39caa2b3e01` and the families branch. [run: `git merge-tree --write-tree`, which writes no ref and no worktree]
+- **The launch:** `240a`'s command with `FLOCK_CHALLENGER=1` exported and `SMALL_SECOND="--interior-trees"`. Neither rehearsal script sets `FLOCK_CHALLENGER`; without it the flag falls back, and the case gets coins but `member_trees` false. The merged script passes `second` the challenger `first` kept. [read: `a0.own_challenger`, `a5.drawn_trees`, both scripts]
+- **What I would change beside the merge:** the checks by name expect 20 more verdicts, one `challenger/m<k>` a session, and `two_stage_small.py expect` may need the same. [read: `a5.py`'s `window_trees_held` use; guess: `expect`]
+- **How long:** about 90 minutes to a first result if the merged Lean builds the first time. That is 40 to 60 minutes of my work on the merge and its named tests, a wait for a slot (16 to 22 minutes tonight), and the run (`240a` took 9 minutes 12 seconds from its slot; with the sessions' coin trees going through the challenger it is longer by an amount I cannot read). A Lean conflict that does not build adds a turn. [run: `240a`'s `status.json` and `slot.json`; guess]
+- **Two risks I can name without running:**
+  - No rehearsal of mine has run with `FLOCK_CHALLENGER=1`, so the sessions' coin trees on a challenger are untried on the 20-unit class. [run: both job commands]
+  - Not read: whether a held session spends one of the challenger's one-time keys for each coin tree. A development key has 32, and two sessions spend 10 by my count; if each of 20 trees spent one, the run would fail at the key. [derived]
+- **Launched: nothing.**
+
+**(iii) Is my 03:06Z finding changed by the flag? Not by the flag; by what is under it.**
+- **In Friday's trees it stands as written:** two sessions on two windows, two local challengers, two keys, two ledgers. [run: the kept files, 03:13Z]
+- **The flag by itself leaves "two sessions on two windows" as it is:** `second` still opens a session of its own on the interior window's root. What the flag changes in that session: its family is `draw/second/0`; it stays open until the interior's sessions have closed, so its `end` comes after them; and its coins, key, family and window root go into the case. [read: `two_stage.py:1098–1125` at `783248625814`]
+- **"No one ledger holds both" is changed by `--challenger-host`, which TWOLEG's driver requires with or without the flag.** There `second --challenger local` is refused unless it names the directory `first` kept its challenger in, and reopens it: the same key, "its ledger and its pins log are kept". So both sessions would be under one key and in one ledger chain, with the first's `end` before the second's `reserve`, since `first` has exited before `second` starts. [read: `a5_coins.py`'s `Local` and `local_key`, `two_stage.py:1008–1030, 1085`; derived; run by nobody that I know of]
+- **This needs no standing process.** It is a different way to one challenger than the `loopback:` one I sized at 03:19Z: the challenger's directory outlives the first command, not its process. Both commands must still see that directory, so they run on one machine, or the directory is carried. [read; derived]
+- **The key's size:** at `783248625814` the driver never asks for a deployed key, so that one key is still at W = 4, H = 5, and the form's `KEY_PARAMS` would refuse it by my 03:19Z reading. TWOLEG's tip adds `--deployed-key` to both commands. [read]
+- **One thing for TWOLEG, read and not run:** `a5_coins.local_key` reads a kept challenger's key as W = 4, H = 5 whatever it was made at (`a5_coins.py:429–437`). The driver's second command does not use it for its coins (it takes the key from the session it opens), but the stop audit does (`stop_audit.py:535`), so a stop audit over a `--deployed-key` run would hold the wrong parameters. [read at the tip `03072eb90b`]
+
+### Runs
+
+- None of mine is running. `b73a` and `d94c` ended; their prints are kept under each run's `out/` on vy-nebius-2. I wait on nothing.
+
+### Not established
+
+- That TWOLEG's flag runs, on or off: nobody has run it.
+- Anything in C beyond reading; the merge's conflicts are counted, not resolved.
+- The root suite at the new head, beyond the one file.
+- A class count from a serve (serving's one launch tonight is 06:00Z to 06:13Z); anything on the engine or on cards in my runs.
+
+### Still due
+
+- VLLM-412 after 06:15Z, for serving's serve on cards.
+- The cards branch merged when STOPDRIVER says ready (by Fri 10:00Z) and rehearsed; the second try's final head by Fri 11:00Z.
