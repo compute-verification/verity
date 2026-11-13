@@ -12,7 +12,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import core_check as CC
 
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.pouw import pearl_c as PPD

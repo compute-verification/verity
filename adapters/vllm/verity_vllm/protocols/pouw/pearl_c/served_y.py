@@ -12,13 +12,13 @@ from typing import Any
 import numpy as np
 from verity.commitments import CommitmentDomain
 from verity.commitments.merkle import tree_levels
-from verity.protocols.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     ROW_SCHEMA,
     hm96_salt,
     rows_domain,
 )
-from verity.protocols.pouw.verifier.protocol import tagged
+from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
 from verity_vllm.protocols.pouw.pearl_c.host import (
     _bytes,

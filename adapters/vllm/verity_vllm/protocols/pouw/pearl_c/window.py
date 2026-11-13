@@ -38,15 +38,15 @@ from typing import Any
 import numpy as np
 from verity.commitments import CommitmentDomain
 from verity.commitments.merkle import tree_levels
-from verity.protocols.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     activation_binding,
     hm96_salt,
     rows_domain,
     weight_binding,
 )
-from verity.protocols.spot.verifier.one_stage import registered as G
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
@@ -87,7 +87,7 @@ def coins_of(option: Any, reserved: Any = None) -> dict[str, Any]:
     weights' root, `salt.epoch_open_root`; the weights' root for a coin held in-process), its salt, how its session closed
     (``details.challenger``, once the engine has closed) and the session head a retained pass's manifest names
     (``manifest_head``, `pearl_c.manifest.session_head`); ``reserved`` the gate's reserve answer, when one was taken."""
-    from verity.protocols.pouw.verifier import salt as PS
+    from verity.protocols.accounting.pouw.verifier import salt as PS
 
     from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
 

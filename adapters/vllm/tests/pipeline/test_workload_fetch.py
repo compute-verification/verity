@@ -1,4 +1,4 @@
-"""`verity-vllm workload-file` fetches a stored workload by the path the registry (fixtures/artifacts.json) gives it, from whatever
+"""`verity-vllm workload-file` fetches a stored workload by the path the registry (artifacts.json) gives it, from whatever
 directory it runs in: `research data fetch-fixtures` reads a relative PATH from its working directory, not from --repo."""
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def test_the_fetch_resolves_the_same_registry_entries_from_the_integration_and_f
         remote.put(manifest_key(art.split(":", 1)[1]), origin.manifest_path(art.split(":", 1)[1]))
         registry[art] = f"adapters/vllm/workloads/{n}"
     (repo / "fixtures").mkdir()
-    (repo / "fixtures" / "artifacts.json").write_text(json.dumps(registry))
+    (repo / "artifacts.json").write_text(json.dumps(registry))
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
     monkeypatch.setattr(fetchset, "sources", lambda st, **kw: [remote])
     monkeypatch.setattr(F, "tracked", lambda repo: None)

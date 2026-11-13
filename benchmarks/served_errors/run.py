@@ -54,7 +54,7 @@ RHO = Fraction(1, 400)
 H100 = {"r": 32, "G": 4, "add": 32, "bf16": 2, "fs": 64, "qa": 4, "c": 0}
 G0 = Fraction(1, 400)
 
-# The deployed PoUW window (`verity/protocols/spot/verifier/profile.py` WINDOW_DELTA) and the served run's sampling δ.
+# The deployed PoUW window (`verity/protocols/proofs/spot/verifier/profile.py` WINDOW_DELTA) and the served run's sampling δ.
 WINDOW_DELTA = Fraction(1, 2**40)
 SERVED_DELTA = Fraction(1, 100)
 # A K_d that `security/Definitions/Accounting/Guarantees/Compose.lean`'s docstring takes as its example; not served.
@@ -62,7 +62,7 @@ COMPOSE_KD = 96000
 # The Sm120 headlines' window (`security/Definitions/Accounting/Guarantees/Headline.lean`): checks·(√δ_fork + n_π·δ_ZK) ≤ 2^-41.
 SM120_CHECKS, SM120_BUDGET = 48000, -41.0
 
-# Dither's design point (`verity/protocols/pouw/verifier/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
+# Dither's design point (`verity/protocols/accounting/pouw/verifier/dither/PROTOCOL.md`; q at `Guarantees/Dither.lean`).
 DITHER = {"delta_coin": 1e-6, "G": 1.15e7, "q": 13816}
 
 # SPOT's binding error ε_bind as its one-stage audit states it, at k = ⌈2^24/e⌉ and M, R_w at 2^192.
@@ -129,7 +129,7 @@ def integrity_ks(sz: dict[str, float], t: float) -> float:
 
 
 def link(w: float, t: float = T) -> float:
-    """SPOT's link term at `2^w` input and output bits: W·(2t(1+k)/2^256 + 1/(eM) + k/(eR_w))."""
+    """SPOT's binding error at `2^w` input and output bits: W·(2t(1+k)/2^256 + 1/(eM) + k/(eR_w))."""
     return l2sum(w + 1 + t + lg(1 + LINK_K) - 256 + 2, w - lg(math.e) - 192 + 1, w + lg(LINK_K) - lg(math.e) - 192 + 1)
 
 

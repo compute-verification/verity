@@ -1,5 +1,5 @@
 """PoUB, run over the node's `NodeMemory` end to end on the CPU: `remote.prove` (the prover's side, the
-Commit's hook) connects over localhost TCP to PoUB's verifier (`verity/protocols/poub/verifier/session`),
+Commit's hook) connects over localhost TCP to PoUB's verifier (`verity/protocols/accounting/poub/verifier/session`),
 registers the store, records its memory map against the registration, and runs each pass after an engine step of a
 serving-like trace (pages written over two steps, held, freed and reused, and one long-lived page re-keyed under L = 2
 windows).  The honest audit run is
@@ -29,10 +29,10 @@ from xml.etree import ElementTree
 
 import numpy as np
 import pytest
-from verity.protocols.poub.verifier import audit, memory_map
-from verity.protocols.poub.verifier import codec as rcodec
-from verity.protocols.poub.verifier import receipts as rb
-from verity.protocols.poub.verifier.session import verifier, wire
+from verity.protocols.accounting.poub.verifier import audit, memory_map
+from verity.protocols.accounting.poub.verifier import codec as rcodec
+from verity.protocols.accounting.poub.verifier import receipts as rb
+from verity.protocols.accounting.poub.verifier.session import verifier, wire
 
 from verity_vllm.protocols.remote_bandwidth import binder, remote
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
