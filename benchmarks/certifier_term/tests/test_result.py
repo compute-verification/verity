@@ -373,13 +373,22 @@ def test_the_metric_follows_the_world_s_year_whatever_rows_the_command_asks_for(
 
 
 def test_the_result_of_record_s_command_bounds_every_row(tmp_path, capsys):
-    """The command the README gives for the result of record: the class given and no δ. Each execution phase's scan is
-    then at the calculator's error over a monitoring period divided by the world year's execution phases, as the
-    calculator's own document counts them and states it. Every row carries its amounts, the world's year's error is
-    that error and no other row's is more, and the amounts are those of the same command with that δ given."""
+    """The command the README gives for the result of record: the class given, the head's time its schedule sets,
+    and no δ. Each execution phase's scan is then at the calculator's error over a monitoring period divided by the
+    world year's execution phases, as the calculator's own document counts them and states it. Every row carries
+    its amounts, the world's year's error is that error and no other row's is more, and the amounts are those of
+    the same command with that δ given. The result is the scan's rows, which read no head: its amounts are those
+    of the command with no head's time, and under the head's time the document beside it holds the design apart."""
     ids = str(LB.RESPONSE_IDS // 2)
-    asked = ["--commit", "c0ffee", "--response-ids", ids]
+    unset = ["--commit", "c0ffee", "--response-ids", ids]
+    asked = [*unset, "--head-offset", "600", "--head-wait", "0"]
+    bench(capsys, "--out", str(tmp_path / "unset"), "--registration", str(log(tmp_path)), *unset)
     bench(capsys, "--out", str(tmp_path / "none"), "--registration", str(log(tmp_path)), *asked)
+    assert ({name: m["value"] for name, m in result(tmp_path / "unset").items()}
+            == {name: m["value"] for name, m in result(tmp_path / "none").items()})
+    apart = {given: {r["row"] for r in document(capsys, *argv)["stop"]["with_verdicts"]}
+             for given, argv in (("unset", unset), ("asked", asked))}
+    assert apart == {"unset": {"lengths", "all three"}, "asked": {"lengths", "all three", "design"}}
     got, doc = result(tmp_path / "none"), document(capsys, *asked)
     year = scans(doc)["world", "year"]
     assert Fraction(year["phases"]) == PHASES["world", "year"]

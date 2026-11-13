@@ -14,7 +14,9 @@ verity bench certifier_term --scope world --period year  only those rows (each f
 verity bench certifier_term --requests census            the census's request in place of the sampling plan's
 verity bench certifier_term --out DIR                    also its result, for DIR: the amounts of the term of record's row
 verity bench certifier_term --out DIR --registration F   with its capacity and verified, read from the registration log F
-verity bench certifier_term --response-ids 1024 --out DIR   the result of record (The result, below)
+verity bench certifier_term --head-offset N --head-wait W   the head's time the schedule sets (The terms, below)
+verity bench certifier_term --response-ids 1024 --head-offset N --head-wait 0 --out DIR
+                                                         the result of record (The result, below)
 verity bench certifier_term --scan-delta D               each execution phase's scan at δ = D, in place of the default
 verity bench certifier_term --help                       every parameter and its default
 ```
@@ -74,11 +76,17 @@ sources, the registration read, and the measurements it is a difference of. Ever
 the most ids a response holds, and the scan's δ its error is at, as the document states them: terms at two classes
 don't compare, and neither do errors at two δ.
 
-The command of record passes its class, whatever the calculator's default is, and no δ:
+The command of record passes its class, whatever the calculator's default is, the head's time its schedule sets,
+and no δ:
 
 ```text
-verity bench certifier_term --response-ids 1024 --out DIR
+verity bench certifier_term --response-ids 1024 --head-offset N --head-wait 0 --out DIR
 ```
+
+`N` is the offset the monitoring period's schedule sets for the head of a link's execution phase, in buckets, and
+0 its wait bound; both are marked assumed. No term reads `N`, and the result, which is the scan's row, reads
+neither. They are there for what the command prints beside it, the design's two rows: with neither given, `design`
+is printed at its whole schedules (The terms, below).
 
 ### The scans' δ
 
@@ -133,14 +141,15 @@ and each row says where it stands:
 - `design, no stop block` (no run behind it): the design, below, before a stop block has been sampled on a served
   audit. The lengths unit holds a response's length to its Program's output count, but until a stop block holds that
   count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
-  Its failed connections' charge, its jitter, its count and its entries are the design's.
+  Its failed connections' charge, its jitter, its count, its head's tick and its entries are the design's.
 - `design` (no run behind it): head checks, a lengths unit on the network certifier's records, and a stop block
   sampled on a served audit. How its stop class is charged is read from a served run's verdict records and from
   nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths are held, the stop block
-  holding a response's output count to its ids, and its term is the jitter, the failed connections' charge and the
-  count. With no record read, or one verdict lacking, each connection is charged its schedule and the row is the
-  one before it; so is each connection of an execution phase no registration was read for. The entries are the
-  compute audit's either way.
+  holding a response's output count to its ids, and its term is the jitter, the failed connections' charge, the
+  count and the head's tick. With no record read, or one verdict lacking, each connection is charged its schedule
+  and the row is the one before it; so is each connection of an execution phase no registration was read for, and
+  every connection where the schedule sets no offset for the head or the records were held under another head's
+  time than it sets. The entries are the compute audit's either way.
 
 ### The stop class's verdicts
 
@@ -178,6 +187,15 @@ The calculator takes the answer as an argument (`document`'s and `table`'s `stop
 and no input holds it, and it reads no store itself: run alone it reads no record, charges the rows their whole
 schedules and says so. A caller that reaches the store names the runs and passes the answer.
 
+One rule holds for every row read from verdict records. The head's time is the monitoring period's schedule's, one
+a row, given to the command (`--head-offset`, `--head-wait`) and never read from the registrations a run kept. A
+row takes the answer only where its execution phases were held under the head's time its schedule sets
+(`leak_bounds.takes`, the answer's `head`): registrations held under another offset, another wait bound or none
+hold no execution phase of `lengths`, of `all three` or of `design`. The reader's answer names no head's time,
+since it holds its registrations to no schedule's. So it holds an execution phase only under a schedule that sets
+no offset, and there only of `lengths` and `all three`: `design` is then charged its whole schedules whatever the
+records say (The terms, below).
+
 The lines print how the rows are charged, one line for each class of each head read, and each verdict read under the
 mark `run, not proved`: a verifier judged it on a run, and no proof of that verifier is read here, whatever the
 record's `proved_by` says. A head is read as its registration lists it, held to the digest its certificate names; its
@@ -185,9 +203,12 @@ signature is not checked here. Nothing but verdicts that name a head's digest ho
 registration nobody signed holds none.
 
 Where some execution phase is charged its whole schedule, the document holds apart what each row would be with every
-one held: its `stop`'s `with_verdicts`, in a row's own fields, and one line over the world's year. No record read
-supports those figures, and no row, sum or measurement holds them. The `stop`'s `below` is whether every execution
-phase of every scope and monitoring period is held, where nothing is held apart.
+one held under its schedule: its `stop`'s `with_verdicts`, in a row's own fields, and one line over the world's
+year. No record read supports those figures, and no row, sum or measurement holds them. Under a schedule that sets
+no offset for the head they hold none of `design`: nothing in the document then shows it below its whole schedules.
+The `stop`'s `every_phase` is whether the records hold every execution phase of every scope and monitoring period;
+its `whole` lists the rows charged their whole schedules whatever the records say, each with why; and its `below`
+is whether every row is charged below its schedule on every execution phase, where nothing is held apart.
 
 Nothing a check counts by capacity is scaled by requests: twice the requests are twice the scan's schedules and fail
 cells, and nothing else. The count is by capacity too: with the lanes given it does not move with the requests, and
@@ -226,10 +247,24 @@ with none given it moves only as the least lanes that serve them do.
     charge.
   - The rows `lengths` and `all three` are charged no count, and each says so in its own line: its tables are of
     the lengths rows' form 1, the schedule's rows whatever the load, so the head states none.
-  - The count's line is the count alone. The head's time is not held to a tick: nothing holds when the head of a
-    link's execution phase leaves, so the line says so, and prints no charge for a head that leaves late, of 0 or
-    of anything else.
-- **term**: the four summed, the network certifier's own term, at each D_j. The term of record is the one at
+  - The count's line is the count alone: when the head is accepted is charged apart, as the head's tick.
+- **head's tick**: on the design's two rows, log2(W + 1) bits for each execution phase on each link, whatever it
+  serves and whether its head is on time or late, and 0 on every other row. A schedule may set when the head of a
+  link's execution phase is accepted: its offset, the buckets from the close that hands the head to the tick it is
+  due at, and its wait bound W, the most ticks after that one at which it is still accepted. So a head is accepted
+  at one of W + 1 ticks, or it is no head.
+  - The offset and W are inputs with no default, marked assumed and given together (`--head-offset N --head-wait
+    W`): either without the other is refused by name. W = 0 is allowed and costs 0 bits: a late head is then no
+    head.
+  - The charge is the schedule's, a fixed number a phase. It reads neither the offset nor a run: not the tick a
+    run's files note for a head, and no count of late heads.
+  - An execution phase with no head accepted is not held: each of its classes is charged its whole schedule, as in
+    an execution phase no registration was read for.
+  - With neither given the schedule sets no offset, and the head's time is held to no tick. The two rows then
+    print no charge for it, at 0 or at any figure (`not held` in the tables, null in the document), and `design`
+    is charged each connection's whole schedule whatever the verdict records say, in its row and in what the
+    document holds apart.
+- **term**: the five summed, the network certifier's own term, at each D_j. The term of record is the one at
   D_j = 2. The one at D_j = 1 is printed beside it only as "with a simulated set-time card", never as the
   term.
 - **entries**: the slot entries, which are the compute side's and not part of the term. The scan's check charges
@@ -245,17 +280,17 @@ with none given it moves only as the least lanes that serve them do.
   file and key it is read from, the parameter that gave it, or for the card the clause its figures rest on. No run
   has certified a class for GLM-5.3, so the class is assumed: the most ids a response holds
   (`--response-ids`), an id's bits (`--id-bits`), an execution phase's buckets and their seconds
-  (`--phase-buckets`, `--bucket-s`), and the schedule the count is at (`--lanes`, `--classes`, `--delay`,
-  `--ingress-buckets`).
+  (`--phase-buckets`, `--bucket-s`), the schedule the count is at (`--lanes`, `--classes`, `--delay`,
+  `--ingress-buckets`), and the head's time the schedule sets (`--head-offset`, `--head-wait`).
 - **The scopes**: the compute each row covers, which is all its scope serves: machines, GPU-seconds, requests and
   execution phases, the δ each execution phase's scan is at with the error it is taken from, and ε, those δ summed
   (The scans' δ, above). ε is a union bound, so at 1 or more it bounds nothing.
 - **request count**: a column of every table, and `request_count` on every row of the document and at its top:
   `plan`, `census` or `given`, the request the row's requests are counted of. One table holds one request count;
   rows of two don't compare.
-- **The terms in GB**: schedules, cells, the count, the jitter at each D_j, and the term at each D_j with its
-  multiple of the target (`x target`, `--target-gb`) and of one copy of the weights in FP4 (`x weights`); then the
-  entries. The columns at D_j = 2, the term of record, come before those at D_j = 1. Every column at D_j = 1, the
+- **The terms in GB**: schedules, cells, the count, the head's tick, the jitter at each D_j, and the term at each
+  D_j with its multiple of the target (`x target`, `--target-gb`) and of one copy of the weights in FP4
+  (`x weights`); then the entries. The columns at D_j = 2, the term of record, come before those at D_j = 1. Every column at D_j = 1, the
   multiples too, has the label in its header, as `simulated set-time card`, and so has the name of a row whose
   release times are taken once, in the `row` column: `timing, simulated set-time card`.
 - **The terms in bits**: the same pooled totals in bits, beside the term for one execution phase of one link
@@ -266,18 +301,24 @@ rows that carry the label, each row's rule, one link's execution phase (its requ
 schedules, the jitter at each D_j, a slot entry's bits), the count (its rows, its bits a link's execution phase, R
 and the schedule R is of: its lanes, given or the least, and its classes, delay and ingress buckets, the cost
 runner's or as given; and the same rule at the cost runner's own schedule, 16 lanes and an execution phase of 600
-buckets, which is that runner's and not these rows'), and the target as bits a link's execution phase and a request
-over the world's year. Then they say
+buckets, which is that runner's and not these rows'), the head's tick where the schedule sets the head's time (its
+rows, the ticks a head is accepted at, its bits a link's execution phase and its charge over the world's year),
+and the target as bits a link's execution phase and a request over the world's year. Then they say
 what the design's term over the world's year is with the release times taken once by a network certifier whose
-network card releases at a set time (simulated), the failed connections' charge and the count: the largest failure
-rate at which it meets the target, the document's `failure_rate_at_target`, or, where the count alone is over the
-target, that no failure rate meets it, and the document's rate is null. Last they give what the jitter alone is
-without that card, at D_j = 2 over the world's year, in GB and as a multiple of the target.
+network card releases at a set time (simulated), the failed connections' charge, the count and the head's tick:
+the largest failure rate at which it meets the target, the document's `failure_rate_at_target`, or, where the
+count and the tick alone are over the target, that no failure rate meets it, and the document's rate is null. Last
+they give what the jitter alone is without that card, at D_j = 2 over the world's year, in GB and as a multiple of
+the target.
 
 The document's `count` holds how the count is counted: its rows, the schedule (`classes`, `lanes` and whether they
 were given, `delay`, `ingress_buckets`), R as `releases`, the bits a class and a link's execution phase, its charge
 over the world's year beside the target, and the cost runner's own schedule with its R and bits (`cost_runner`).
-Each row holds its own `count`, in bits and GB.
+Each row holds its own `count`, in bits and GB. The document's `head` holds how the head's tick is charged: its
+rows, the schedule's `offset` and `wait`, the `ticks` a head is accepted at, the bits a link's execution phase and
+its charge over the world's year beside the target, each null under a schedule that sets no offset, and `time`, the
+line that says which. Each row holds its own `head`, in bits and GB, null where its check reads a head whose
+schedule sets no offset.
 
 ## Where the scale comes from
 
