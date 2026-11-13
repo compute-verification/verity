@@ -27,7 +27,7 @@ inputs = ["verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifi
           "verity/protocols/pous",
           "verity/protocols/pous/prover",
           # the deployment layer and its wire, which the session's parties run on (`session_parties.py`)
-          "verity/configuration/wire", "verity/configuration/deploy",
+          "verity/channel.py", "verity/runtime", "verity/tests/tests/test_channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and
           # test_gate_ranges.py recompute from codec.encode_word, the f32 evaluators and property/v1's rules, and
           # Exp2Lut127's table, which test_gate_ranges.py holds to vLLM's (fixtures/exp2_lut127.json)
@@ -46,4 +46,4 @@ inputs = ["verity/protocols/spot/device/coins.py", "verity/protocols/spot/verifi
           "verity/protocols/pouw/verifier/window.py", "verity/protocols/spot/verifier/one_stage/__init__.py",
           "verity/protocols/spot/verifier/one_stage/partition.py",
           "verity/protocols/spot/verifier/one_stage/registered.py",
-          "verity/configuration/__init__.py", "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]
+          "verity/definitions/__init__.py", "verity/definitions/circuits", "verity/definitions/ops", "verity/definitions/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py"]
