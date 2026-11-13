@@ -151,13 +151,13 @@ def test_the_composed_run_gives_the_piece_time_for_its_leans(tmp_path, env, want
     ("verity-int8/Llama-3.2-1B-INT8", "0" * 40, 3),
     ("nobody/no-model", "0" * 40, 3),
 ])
-def test_the_preflight_asks_the_piece_itself_whether_it_pins_a_checkpoint(repo, revision, rc):
+def test_the_preflight_asks_the_piece_itself_whether_it_pins_a_checkpoint(tmp_path, repo, revision, rc):
     """`onsite_pous_pins REPO REVISION` is served_verdicts.sh's preflight question, answered by the piece's own lookup
     (served_piece.py's `_pin` over its `PINS`) and by no list of its own: 0 for a checkpoint the piece pins at that
     revision, 3 with the piece's refusal for one it doesn't, before a run serves a window the piece would then not
     answer. It runs as the piece does, here under this suite's Python."""
     got = subprocess.run(["bash", "-uc", f'. {SCRIPT.parent / "onsite_pieces.sh"}; onsite_pous_pins "$1" "$2"', "_",
-                          repo, revision], env={"PATH": os.defpath, "HOME": os.environ["HOME"], "TREE": str(ROOT),
+                          repo, revision], env={"PATH": os.defpath, "HOME": str(tmp_path), "TREE": str(ROOT),
                                                 "PY": sys.executable},
                          check=False, capture_output=True, text=True)
     assert got.returncode == rc, got.stderr[-600:]

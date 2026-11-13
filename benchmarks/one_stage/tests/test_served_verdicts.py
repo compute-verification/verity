@@ -3140,7 +3140,7 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
 def test_under_pouw_pearlplus_the_challenger_peer_takes_its_default_only_where_there_is_a_gate(tmp_path, live, peer,
                                                                                               exported):
     """Under POUW=pearlplus the run's steps read Pearl+'s gate and peer from its environment as a pair, and what reads
-    them (`bench_arm.live_coins`, `bench_arm.live_draw`) refuses a peer with no gate: with PEARLC_CHALLENGER_GATE empty the
+    them (bench_arm.py's live coins, at the serve and at the verify) refuses a peer with no gate: with the gate empty the
     run exports no peer, where H1_PEER as its default had Pearl+'s verify refuse before its coin; with a gate the peer is
     H1_PEER unless PEARLC_CHALLENGER_PEER names another. Here step 0's `predict row` says the pair it was started
     under, then fails."""
@@ -3199,7 +3199,7 @@ def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tm
 ])
 def test_the_preflight_refuses_a_pearlplus_challenger_peer_with_no_gate(tmp_path, extra, refused):
     """Under POUW=pearlplus a peer set with PEARLC_CHALLENGER_GATE empty is a pair Pearl+'s serve and verify refuse
-    (`bench_arm.live_coins`, `bench_arm.live_draw`), the verify only once the window is served and tied: the preflight
+    (bench_arm.py's live coins), the verify only once the window is served and tied: the preflight
     refuses it before anything runs, naming both ways out. A peer with a gate, no peer, and the pair under H1, which
     reads neither, pass."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
@@ -3211,9 +3211,8 @@ def test_the_preflight_refuses_a_pearlplus_challenger_peer_with_no_gate(tmp_path
                         check=False).returncode
     said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
     line = ("PREFLIGHT: PEARLC_CHALLENGER_PEER is vy-peer and PEARLC_CHALLENGER_GATE is empty, which leaves Pearl+'s coins "
-            "in-process, and Pearl+'s serve and verify refuse a peer with no gate (bench_arm.live_coins, "
-            "bench_arm.live_draw): unset PEARLC_CHALLENGER_PEER, or set PEARLC_CHALLENGER_GATE (unset, it is the lane's "
-            "gate)")
+            "in-process, and Pearl+'s serve and verify refuse a peer with no gate (bench_arm.py's live coins): unset "
+            "PEARLC_CHALLENGER_PEER, or set PEARLC_CHALLENGER_GATE (unset, it is the lane's gate)")
     assert (rc, said) == ((3, [line]) if refused else (0, []))
 
 

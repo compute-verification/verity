@@ -432,8 +432,8 @@ LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMod
 if [ "$POUW" = pearlplus ]; then
   H1_GATE=${H1_GATE-}
   PEARLC_CHALLENGER_GATE=${PEARLC_CHALLENGER_GATE-$LANE_GATE}
-  # the peer is the gate's: with the gate empty it takes no default, since what reads the pair (`bench_arm.live_coins`,
-  # `bench_arm.live_draw`) refuses a peer with no gate
+  # the peer is the gate's: with the gate empty it takes no default, since what reads the pair (bench_arm.py's live
+  # coins, at the serve and at the verify) refuses a peer with no gate
   export PEARLC_CHALLENGER_GATE PEARLC_CHALLENGER_PEER=${PEARLC_CHALLENGER_PEER:-${PEARLC_CHALLENGER_GATE:+$H1_PEER}} \
     PEARLC_CHALLENGER_LANE=${PEARLC_CHALLENGER_LANE:-${H1_LANE:-vllm}}
   # shellcheck disable=SC2016
@@ -480,7 +480,7 @@ case $POUW in h1 | pearlplus) ;; *) say "PREFLIGHT: POUW is h1 or pearlplus, not
 [ "$POUW" = h1 ] || [ -z "$H1_GATE" ] \
   || { say "PREFLIGHT: POUW=pearlplus is PoUW's piece, so the endpoint serves no H1, and H1_GATE is set: set it empty"; exit 3; }
 [ "$POUW" != pearlplus ] || [ -n "$PEARLC_CHALLENGER_GATE" ] || [ -z "$PEARLC_CHALLENGER_PEER" ] \
-  || { say "PREFLIGHT: PEARLC_CHALLENGER_PEER is $PEARLC_CHALLENGER_PEER and PEARLC_CHALLENGER_GATE is empty, which leaves Pearl+'s coins in-process, and Pearl+'s serve and verify refuse a peer with no gate (bench_arm.live_coins, bench_arm.live_draw): unset PEARLC_CHALLENGER_PEER, or set PEARLC_CHALLENGER_GATE (unset, it is the lane's gate)"; exit 3; }
+  || { say "PREFLIGHT: PEARLC_CHALLENGER_PEER is $PEARLC_CHALLENGER_PEER and PEARLC_CHALLENGER_GATE is empty, which leaves Pearl+'s coins in-process, and Pearl+'s serve and verify refuse a peer with no gate (bench_arm.py's live coins): unset PEARLC_CHALLENGER_PEER, or set PEARLC_CHALLENGER_GATE (unset, it is the lane's gate)"; exit 3; }
 case $PRODUCT in
   onsite) ;;
   remote)
