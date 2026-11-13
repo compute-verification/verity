@@ -37,7 +37,12 @@
 # LEASE_ON names the GPUs the prover leases (`gpu-lease --on`, default any ENGINES free ones) and LEASE_MEM_GB its host
 # memory (default 32 GB an engine and HOST_GIB more). HOST_GIB (whole GiB, default 0: none) is the store's host part,
 # the node's `--host-gib`: host memory the prover holds beside the cards' and reads in every pass, split among the
-# engines' cards in whole 1 GiB chunks, the first cards taking what is left over. LEASE_BY (a UTC time) is when the
+# engines' cards in whole 1 GiB chunks, the first cards taking what is left over. LEAF_CTAS (a positive integer, default
+# unset: today's pass) asks the node for the leaf pass on that many reading CTAs, the node's `--leaf-ctas`: each card's
+# shard is hashed by the warps that read it (`rs_leaf_pass`), a host part still by today's pass, and the prover's gate
+# checks it before the first coin; the store refuses it where h0 is over 8. BIND (default 1) binds the verifier's
+# store to ROLE's pinned checkpoint (gate.sh's MODEL); BIND=0 binds it to none, so the verifier holds no checkpoint and
+# the store is the developer's choice. LEASE_BY (a UTC time) is when the
 # prover must hold its GPUs, or nothing runs: the prover asks through gate_lease.sh (sent beside) from LEASE_FROM
 # (default now) and gives up a minute before LEASE_BY, and fire opens no period for a lease that began after it.
 # ARENA_GIB (default 62) is each engine's weights arena
@@ -81,6 +86,12 @@ case $HOST_GIB in
   *[!0-9]*) echo "HOST_GIB is $HOST_GIB: the store's host part in whole GiB, 0 for none"; exit 3 ;;
 esac
 HOST_GIB=$((10#$HOST_GIB))
+LEAF_CTAS=${LEAF_CTAS:-}
+case $LEAF_CTAS in
+  '' | [1-9] | [1-9][0-9] | [1-9][0-9][0-9]) ;;
+  *) echo "LEAF_CTAS is $LEAF_CTAS: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass"; exit 3 ;;
+esac
+BIND=${BIND:-1}
 bash "$HERE/gate.sh" form || exit 3
 LEASE_ON=${LEASE_ON:-} LEASE_MEM_GB=${LEASE_MEM_GB:-$((32 * ENGINES + HOST_GIB))} LEASE_BY=${LEASE_BY:-}
 LEASE_FROM=${LEASE_FROM:-}
@@ -139,7 +150,7 @@ launch() {
 }
 
 GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" ${GATE_KEY:+--env "GATE_KEY=$GATE_KEY"}
-  --env "MODEL=$ROLE" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
+  --env "MODEL=$ROLE" --env "BIND=$BIND" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
   ${PROVER_SSH:+--env "PROVER_SSH=$PROVER_SSH"} ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"}
   ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"} --env "ARENA_BLOCKS=$((ARENA_GIB * 262144))" ${PACED:+--env "PACED=$PACED"}
   ${PACE_PASS_MS:+--env "PACE_PASS_MS=$PACE_PASS_MS"} ${SESSIONS:+--env "SESSIONS=$SESSIONS"}
@@ -208,6 +219,7 @@ fi
 echo "== 3. prover on $PROVER_NODE"
 NODE_ARGS="--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
 [ "$HOST_GIB" = 0 ] || NODE_ARGS+=" --host-gib $HOST_GIB"
+[ -z "$LEAF_CTAS" ] || NODE_ARGS+=" --leaf-ctas $LEAF_CTAS"
 PROVER=(--on "$PROVER_NODE" --cwd source --custody-ttl 12h
   --env ROLE=prover --env "PORT=$PORT" --env SERVE=node --env "PLAN=$PLAN" --env "MODEL=$SNAP"
   --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib $ARENA_GIB --util $UTIL"
