@@ -20,11 +20,28 @@ from verity.definitions.silicon.cast import f32_to_bf16_word
 from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16, tc_dot, tc_dot_chain
 from verity_numerical.checker import REAL, Reject
 from verity_numerical.checker.ctx import IntCtx
+from verity_numerical.checker.search import GOLDILOCKS, M31
 from verity_numerical.checker.step import step_output as step_output_v1
 from verity_numerical.checker.v2 import step as v2
+from verity_numerical.checker.v2.gadgets import (
+    OpDecode,
+    Product,
+    SignedSum,
+    StateDecode,
+)
 from verity_numerical.checker.v2.params import V2, check_widths
-from verity_numerical.checker.v2.search import SPECS_V2, table_selfcheck
-from verity_numerical.checker.v2.tables import all_tables
+from verity_numerical.checker.v2.search import (
+    SPECS_V2,
+    table_selfcheck,
+    wrapfree_queries_v2,
+)
+from verity_numerical.checker.v2.tables import (
+    all_tables,
+    op_table,
+    shift_table,
+    sshift_hi_table,
+    sshift_lo_table,
+)
 
 PIPE = AMPERE_BF16_M16N8K16
 P = REAL
@@ -136,18 +153,6 @@ def test_group_max_excessive_or_deficient_E_is_rejected() -> None:
 def _forge_E(c, a, b, h, g: int, delta: int) -> dict:
     """The witness with group ``g``'s E shifted by ``delta`` and every downstream hint of that group recomputed
     honestly for the forged E (the aligned terms are what the tables give for it)."""
-    from verity_numerical.checker.v2.gadgets import (
-        OpDecode,
-        Product,
-        SignedSum,
-        StateDecode,
-    )
-    from verity_numerical.checker.v2.tables import (
-        shift_table,
-        sshift_hi_table,
-        sshift_lo_table,
-    )
-
     assert g == 0, "the forged group must be the first (its incoming state is the decoded word)"
     bad = copy.deepcopy(h)
     E = bad["groups"][g]["E"] + delta
@@ -201,7 +206,6 @@ def test_widths_and_tables() -> None:
 
 
 def test_op_table_has_no_row_for_nan_or_inf() -> None:
-    from verity_numerical.checker.v2.tables import op_table
     t = op_table(P)
     for w in (0x7F80, 0xFF80, 0x7FC0, 0x7F81):
         with pytest.raises(KeyError):
@@ -230,9 +234,6 @@ def test_field_reading_is_wrap_free_for_the_hint_splitting_gadgets() -> None:
     """Over Goldilocks and M31 no congruence of ``state_shift``, ``signed_sum`` or ``normalise`` can hold with a
     non-zero multiple of p (so the integer UNSATs transfer to the field).  ``state_shift`` needs the halves' own
     range checks for this: keyed through M_hi R + 2dt + s alone it is SAT over M31 (z3, 53 s on vy-cpu2)."""
-    from verity_numerical.checker.search import GOLDILOCKS, M31
-    from verity_numerical.checker.v2.search import wrapfree_queries_v2
-
     rows = wrapfree_queries_v2(REAL, timeout_ms=20_000, names=("state_shift", "signed_sum", "normalise"),
                                moduli=((GOLDILOCKS, "F_goldilocks"), (M31, "F_m31")))
     assert [r.status for r in rows] == ["unsat"] * 6, [(r.gadget, r.query, r.status) for r in rows]
