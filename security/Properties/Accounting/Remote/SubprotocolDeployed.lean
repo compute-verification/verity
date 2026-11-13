@@ -73,7 +73,8 @@ def PublishedEps : Prop :=
             (node.delta : ℚ) + ((∑ _c : Fin node.samples, node.params.samples : ℕ) : ℚ) / 2 ^ 64)
 
 /-- **What the subprotocol's check gives of the `q_bytes` it publishes.** Whenever bytes that play record `rec` on the
-node are accepted publishing `pub` (`Publishes`), `q_bytes` and `BLOCK_BYTES` times the pooled bound at
+node are accepted publishing `pub` (`Publishes`, spelled out: the bytes decode to parameters `p`, the registration and a
+log `ev` whose session is the record's, and the check accepts them with `pub`), `q_bytes` and `BLOCK_BYTES` times the pooled bound at
 `RemoteAudit.Protocol.DELTA` of the record's samples (`Accounting.Remote.Draw.pooled`) are together at most
 `BLOCK_BYTES · U`, over the reals. The samples' sizes and counts are `recordSample`'s: sample `c` holds the receipts its
 windows have in the state the record's run reaches (`Record.sampleReceiptsAt`), capped at `receiptMax`, and opens
@@ -82,8 +83,13 @@ windows have in the state the record's run reaches (`Record.sampleReceiptsAt`), 
 and it holds what the code gives and the bound reads, that the samples the code pooled are the record's, each opening
 `min(s, U_c)`, and that the cap at `receiptMax` raises no bound. -/
 def PublishedQBytes : Prop :=
-  ∀ (node : Node) (rec : Record) (a b e : ByteArray) (pub : RemoteAudit.Protocol.Public),
-    Publishes node rec a b e pub →
+  ∀ (node : Node) (rec : Record) (a b e : ByteArray) (pub : RemoteAudit.Protocol.Public)
+    (p : RemoteAudit.Protocol.Params) (ev : RemoteAudit.Protocol.Evidence) (prof : Lean.Json),
+    (Core.canonicalJson a >>= RemoteAudit.Protocol.decodeParams) = .ok p →
+    RemoteAudit.Protocol.decodeCommitment b = .ok node.reg → RemoteAudit.Protocol.decodeEvidence e = .ok ev →
+    RemoteAudit.Protocol.sessionOf p ev =
+      .ok (node.params, node.groupsPerCoin, rec.coins, rec.appendCoins, rec.notBeforeNs, rec.events) →
+    RemoteAudit.Protocol.check p node.reg ev = .accept pub prof →
     (pub.qBytes : ℝ) + (RemoteAudit.Codec.BLOCK_BYTES : ℝ) *
         Accounting.Remote.Draw.pooled node.samples (fun c => min (rec.sampleReceiptsAt node c) receiptMax)
           (fun c => min node.params.samples (min (rec.sampleReceiptsAt node c) receiptMax))
