@@ -147275,3 +147275,73 @@ read from the check's code, not shown by a run.
 - Mailbox read 14:44Z: 560 lines, to the 14:39Z message (A yes, B no). No "carry" yet.
 - Next: wait for "carry"; then the restack by FRAME's steps, then point 4 with `PinnedOnMain` and `FamilyAlone`,
   both proved.
+
+## ASSEMBLY, Fri 13 Nov 14:53Z: THE FORM AT THE JOIN'S TIP ACCEPTS THE KEPT PLAY OVER #9441 (the accept test in its suite, 66 passed, at `4824a13de87`); `1520` PASSES in all three packages AT `757ef18fdc`, the batch of five, not the tip; the tip is now `d557b8cf428` (STAGECOINS's scripts, then ACCEPTS's commit: `JoinsAt` has 20 fields); the one records run is OUT: `r20261113-144939-e37f`, expected end about 15:35Z
+
+**1. The accept test at the tip, the line you asked for first** [run `r20261113-144242-108f`, vy-nebius-cpu-2, 14:43:06Z to 14:46:30Z, rc 0; its `job.json` names `4824a13de878`]
+
+- What ran, in a clean clone, as STAGECOINS ran it: `uv run tools/verity/check/suites.py verity-core-composition --fresh -- tests/test_sampled_two_difftest.py`.
+- Its lines: `fixtures: 29 registry entries checked, 8 blobs (60.7 MB) downloaded`, then `passed  verity-core-composition      66 passed in 84 s; 66 outcomes recorded`, then `1 suites: 1 passed (0 cached), 0 failed`.
+- [local] The file collects 66 tests, `test_the_form_accepts_one_honest_play_with_its_switch_on` among them. So 66 passed means it ran and passed, and none was skipped. I did not see its own line: the suite's per-test log stays on the node.
+- **So the form compiled at `4824a13de87`, which holds #9441, accepts STAGECOINS's kept case with its switch on, and the shipped form refuses that case by the switch alone.** The test asserts both.
+- What it does not say: the kept case is one play of one member (`--inline --units 1 --logits`, made before #9441). A play of two templates is refused on the join by rule A, as STAGECOINS wrote at 13:48Z.
+
+**2. `1520`, word for word** [run `r20261113-135551-1520`, vy-nebius-cpu-2, 13:56:24Z to 14:40:39Z, rc 0; its `job.json` names `757ef18fdc67`]
+
+- **It ran at `757ef18fdc`, the batch of five. That is not the tip:** the tip moved to `ff6ea109e06` at 14:11Z, while it ran.
+- `AUDIT security/Proofs: PASS  210385 declarations in 4236 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`, then `check.py exit 0 in 891 s`.
+- `AUDIT security: PASS  27782 declarations in 731 modules; axioms propext, Classical.choice, Quot.sound; 1138 guarantees`, then `check.py exit 0 in 669 s`.
+- `AUDIT security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 540 guarantees`, then `check.py exit 0 in 1083 s`.
+- `OUTCOME {"outcome": "pass", …}`. Each of the three `audit.json` files: `passed: true`, `failed: []`, `regenerated: {}`, `kind: lean-fast/v1`. No lock record was regenerated.
+- The other lines of its audit of `security/Proofs`:
+  - One note: `1 definitions of the spec (Proofs.Pouw.Dimension.Lifting) are read by no guarantee`, `Pouw.Dimension.Lifting.grid`. Not the join's.
+  - `heartbeats: 574 overrides, 337 without a reason`. In files the join adds: 15, and the same 3 without a reason (`RunsAs/Steps.lean:160`, `:209`, `SampledTwo/RecordNames.lean:370`).
+  - 5231 of its 5467 keyed modules came from the artifact cache, and 105 of those were recompiled as a sample. No bookkeeping line.
+- It is a `lean-fast/v1` result: no kernel replay, no tests.
+
+**3. The tip's moves since my last entry** [read: `git log --first-parent`; pushed]
+
+- `4824a13de87`, pushed 14:42Z: STAGECOINS's `761e99eaeb9`. No conflict. On the VM: 119 passed in the five named files, `tests/test_repository.py` 17 passed.
+- `d557b8cf428`, pushed 14:49Z, after the accept test passed: ACCEPTS's `dd528bb7b6d3`, which ACCEPTS named compiled at 14:38Z. No conflict. `partsSizedAt` is out and `JoinsAt` has 20 fields.
+- At `d557b8cf428` on the VM: 119 passed, the same 7 public edges, `lock_roots.py --check` clean, 17 names, no pin stale.
+- **For HELDOF and whoever writes off the join: the tip is `d557b8cf4282`.**
+
+**4. Runs out, all at `d557b8cf428`**
+
+| Run | What | Machine | Expected end |
+|---|---|---|---|
+| `r20261113-144939-e37f` | the batch's one records run: `security/Proofs`, then `security`, then `security/Properties` | cpu-2 | about 15:35Z [guess, from `1520`'s 44 minutes] |
+| `r20261113-145015-c23d` | tries of `JoinsAt`, `JoinedCoupling`, `JoinedForm`, for their axiom probes over the merged tree | cpu-2 | about 15:10Z |
+| `r20261113-145120-2fe7` | SPOT's verifier's package's own Lean check, since #9441 changed `Spot/OneStageZk.lean` | cpu-5 | its own line within minutes |
+
+- The records run does not audit SPOT's verifier's package, the recursive verifier's or Flock's verifier's (`Flock/KsScope.lean`, which #9441 also changed).
+- Flock's verifier's package has had only a `lake build` at the tip, by the suite's first step in `108f`. The recursive verifier's package's own check last ran at `757ef18fdc`; its own files have not changed since.
+
+**5. The fields of `JoinsAt` now, 20**
+
+`ledgerInOrder`, `distinctFamilies`, `family₁`, `family₂`, `otherRoots`, `msgOpens`, `digestBefore`, `heldOfAt`, `portsDistinctAt`, `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun`, `sessionMsgs`, `wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`.
+
+**6. The body's draft, with your 14:28Z and 14:39Z**
+
+- What the join rests on, in this order:
+  1. **`units`** (`CouplesAt.units`, `UnitsAreReplay`), first, as the leg's real remaining gap: nothing ties the registered circuit's units to the held copies' replay blocks.
+  2. The first stage's root and family are its record's: a named premise, no field yet. The refusal stays off the join until B's driver and a remade kept case are under it.
+  3. `HeldOfAt`'s descriptor premise (`DescAt`); a non-empty sample at an accepted run; HONEST2's `0 < units (base h) x` and challenges that `SeqCoinsRead` describes.
+  4. The 20 fields above. `portsDistinctAt` leaves when TWOLEG's parser lemma compiles.
+- One sentence, as soundness ruled: the form alone says nothing about whose key signed; the challenger's key is the composite's to pin and is no premise of the join.
+- Open, each a line of the body:
+  - **`joinedCoupling`'s own statement changes.** As stated it asks `∀ c σ, CouplesAt …`, and `JoinsAt.stmtX` is false at bytes that do not decode, so no instance exists (HELDOF, 14:22Z). The guarded text is ruled and taken by soundness; I write nothing until you send HELDOF's two texts with soundness's answer.
+  - The three heartbeat overrides without a reason.
+  - `LastSlotFree`: no field; it waits on SESSIONCOINS's bound and MESSAGES's restated head.
+- The kept plays, as you worded it at 13:04Z, with one change: the kept case `check` now reads is STAGECOINS's (`art:ed3b2d96…`, registered in `fixtures/artifacts.json`), and `check` runs the accept test, which no longer skips.
+
+**7. Not established**
+
+- A whole build of `security/Proofs` at the tip: `e37f`.
+- That `JoinsAt`, `JoinedCoupling` and `JoinedForm` compile over the merged tree: `c23d`. ACCEPTS compiled them at `757ef18fdc` plus its commit; the build at `ff6ea109e06` compiled them without it.
+- An accepted play of more than one member on the join.
+- Any play through the form with TWOLEG's refusal, which is not on the join.
+
+My last entry was titled 14:26Z and sent at 14:24Z; this one's stamp is read at sending.
+
+To post: nothing. Head pushed: `d557b8cf428`; nothing unpushed. Runs going on: `e37f`, `c23d`, `2fe7`. My timer is set for 15:12Z, for the tries, and again for the records run.
