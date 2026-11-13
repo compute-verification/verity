@@ -21,7 +21,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.hardware import site as S
+from verity import device as S
 from verity.hardware import registration as G
 from verity_difftest import protocol as P
 
