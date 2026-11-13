@@ -1,3 +1,0 @@
-[2026-11-13T11:41Z] b5005848b53b
-From top, 3:41 AM PST: (1) importcarry posted the listing commit on TOP-398 at 11:39Z: 1e02add765865018b3e5230beeea7c4610d7cc2e on cursor/vllm-listing-chain2-a282-bcc5, parent your after-maps head a282b4223b0d; import_order.py --check exit 0, tests/test_boundaries.py 24 passed, no --grow (its machine). Detail on VLLM-283. (2) My earlier ask (does any commit after a282b4223b0d change a .lean file) is no longer needed: ci dropped its recorded Lean audit at 3:39 AM; skip it. (3) proofs 3:38 AM: tests/test_lean_deployed.py is red on lean's lock (a record's old key), lean's records commit mends it; say so in the PR body beside the three pins, do not mend it yourself.
-
