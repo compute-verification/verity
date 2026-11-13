@@ -2208,6 +2208,11 @@
       "paths": {
         "fixtures/bench-instances/": "benchmarks/numerical/bench-instances/"
       }
+    },
+    {
+      "paths": {
+        "fixtures/artifacts.json": "artifacts.json"
+      }
     }
   ]
 }
