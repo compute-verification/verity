@@ -123512,3 +123512,60 @@ SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": tr
 
 - VLLM-412 after 06:15Z.
 - The final head in an entry's title when `1822` ends, with a reprint over its kept files at that head.
+
+## TWOLEG, Fri 05:54Z: the compiled check, switch on, accepted the honest play of the two-stage form (`r20261113-053625-2556`, head `b53983fdab`, an interior of one member, two windows); the shipped check refused it by `two-stage-form`; `FirstSample.lean` and `SecondRead.lean` compile, `Ordered.lean` does not yet
+
+No Lean-slot wait over 10 minutes since the last entry. The pen: the machine was replaced again before 05:48Z; this loop took `~/wt/.pen` at 05:48Z. Nothing pushed was lost.
+
+**STOP RULE.** Not reached. Nothing in the verifier changed since `03072eb90b`; the two fixes since then are in the driver (`benchmarks/`).
+
+**The play, word for word.** [run] `r20261113-053625-2556` on vy-nebius-cpu-14, at `b53983fdab`, rc 0:
+```
+second rc=0
+INTERIOR [{"base": 0, "key": "TokenSelect_v4{V=128}", "n": 8}]
+FORM_ON rc=0 {"commitment":"2a24eca471690f23a8c89aa90b2edcaab50c9739116166784f0fefb6b703021bc3b10453a79c80f71cb685ee80bd61d127d88e7a24b6edbe654dbc6bb1c7fc29","profile":{"covered":[],"delta":"1/2","drawn":{"unit":2},"levels":[{"draw":{"law":"stratified","strata":[{"k":1,"name":"3/0","size":4},{"k":1,"name":"4/0","size":4}]},"name":"unit","query":"a3d9d6e548ff852a7217f629fc7ff81642d4412fc271b814851e0a4b93007a99647d79b3d792a5e5cf7f40ab86d02db7406d3f5b3847593f9065ec9b62f16d0b","size":8}],"linked":false,"prescribed":[],"programs":["51811adaff130ec467af1b75f5634120c7ee5a9cb4bbae670a5f077cd30a337cae90c1aaeed9dc9caa12cdf78c5848f14aed8b6c6da2a6941891e205bd5f1ab7"]},"protocol":"verity/sampled-proofs/two-stage/v1/switch-on","public":{"bound":2,"drawn":[2,4],"per_template":{"3/0":2,"4/0":2},"proved":[2,4]},"reason":null,"verdict":"accept"}
+FORM_OFF rc=1 {"commitment":"2a24eca471690f23a8c89aa90b2edcaab50c9739116166784f0fefb6b703021bc3b10453a79c80f71cb685ee80bd61d127d88e7a24b6edbe654dbc6bb1c7fc29","profile":null,"protocol":"verity/sampled-proofs/two-stage/v1","public":null,"reason":"two-stage: the run of record: {\"audit\":\"{\\\"accepted\\\":true,\\\"checks\\\":{\\
+```
+- The last line is cut here. The script prints only the first 2,000 bytes of the answer. [read, from the run's `out/form/off.json`] Its verdict is `reject`. Its reason is the run of record, whose symbol is `reject` and whose interior's `statements` check has the one code `two-stage-form`: "refused: a two-stage run, its second-stage sessions over an interior registration: a statement form the soundness proof does not cover".
+- So `sampled-two-on check` accepted and `sampled-two check` (the shipped binary, switch off) refused the same files by the form's own code. That is what the script's rc 0 asserts.
+
+**What the run shows, and what it does not.**
+- [derived, from the run's `params.json`] The play is on two windows: the boundary's window root and the interior's differ, and the families are `draw/0` and `draw/second/0`. So the two steps that act only on two windows (`interiorUnshown`, `stagesOrdered`) ran their checks on it and passed.
+- An interior of one member (`TokenSelect_v4{V=128}`, one statement, 8 cells, 2 drawn). It does not show several members under one challenger session.
+- The values are the small fixture's (`two_stage_small.py serve`: seeded logits, on a CPU node). No model served anything.
+- It is a run of compiled code. The kernel has shown no play accepted; `accepts_of_steps` is not written.
+- The accepting binary is `sampled-two-on`, which nothing ships. The accept stays off.
+
+**The tries.** [run] `r20261113-052211-9393`, at `dd230ef7e2`:
+```
+lean-try: security/Proofs/Properties/Verity/SampledTwo/FirstSample.lean: lean exit 0 in 429 s
+lean-try: security/Proofs/Properties/Verity/SampledTwo/FirstSample.lean: axiom probe: none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SecondRead.lean: lean exit 0 in 293 s
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SecondRead.lean: axiom probe: none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound
+lean-try: security/Proofs/Properties/Verity/SampledTwo/Ordered.lean: lean exit 1 in 248 s
+twoleg-try: Ordered rc=1
+twoleg-try: Shown rc=1
+```
+- `Ordered.lean` failed at 61:30 and 61:34: the case split had rewritten the goal's two ledger equations, so they are `rfl`, and I had handed them the hypotheses. Fixed at `e03a1aff6f` (not compiled). `Shown.lean` failed only because its build includes `Ordered`.
+- `FirstSample.lean`'s `accepted_secondLaw` is the lemma soundness's condition names. [read] It says: where the check accepts, the run's first stage drew its sample with `Select.select` on the first stage's bytes, and the law the last step holds the interior's draw to is `Select.secondLaw` of that sample's proved units, over the replay block's cells at the rule's counts. It compiled at `dd230ef7e2`. At my head the file imports `InputMap` instead of holding its own copies of three lemmas; that text is in `r20261113-055249-141d`.
+- Until `141d` passes I keep to "the bound under the law `secondLawOf` computes". After it I write "under the proved law", unless you say the join with RUNCOINS's `firstSample` must compile first.
+
+**For STAGECOINS:** not yet. The title that names a head comes when `Ordered` and `Shown` (`r20261113-055128-5143`) and `FirstSample` (`141d`) pass.
+
+**Next, in your 05:37Z order.** `accepts_of_steps`; the refusal of a coin tree's line in the first session's log on two windows, with its lemma and a negative case in the script; `RecordsRead`'s two lines; then the play again at the head that holds them. I add the line that builds `sampled-two-on` in the difftest's module with the same commit as the negative case. I list nothing in a lock.
+
+**NEEDS.** Nothing.
+
+**Runs.**
+- [run] `r20261113-053625-2556`: the play, accepted with the switch on, rc 0.
+- [run] `r20261113-052211-9393`: rc 1 (above).
+- [run] `r20261113-055128-5143` (vy-nebius-2, `Ordered` and `Shown` at `e03a1aff6f`): on a Lean slot since 05:51Z. I expect it about 06:05Z.
+- [run] `r20261113-055249-141d` (vy-nebius-2, `FirstSample` at `e03a1aff6f`): launched 05:52Z.
+- [run] `r20261113-044424-14a0`: J5's remaining tries, still running, on a Lean slot since 05:40Z.
+
+**To post.** Nothing.
+
+**Not established.**
+- That the check accepts a play of two or more members.
+- That `Ordered.lean`, `Shown.lean` and the head's `FirstSample.lean` compile.
+- That any test in `check` runs the accepting play: the fixture is the run's `out/form`, and the difftest that reads it is opt-in (`SAMPLED_TWO_CASE`).
