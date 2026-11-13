@@ -92,7 +92,7 @@ h1u_build() {
 # directory it stages, empty: its row_table build is skipped (no Python at PY). $OUT/s8ship (the cubin, its SASS
 # gate's sass.json, MANIFEST.sha256); prints the wgmma directory
 s8_build() {
-  local t=$S/s8/benchmarks/torch_gpu h=$S/s8/benchmarks/pouw/harness nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
+  local t=$S/s8/benchmarks/torch_gpu h=$S/s8/verity/protocols/pouw/prover nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc}
   local w=$t/s8_linear
   mkdir -p "$w" "$h" "$S/s8/adapters/vllm/verity_vllm" || return 2
   cp "$LIBS"/{build.sh,s8_wgmma.cu,s8_acc.h,sass_gate.py,wgmma.py,configs.py} "$w/" || return 2
