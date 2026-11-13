@@ -12,18 +12,43 @@ request's count times ``requests``, its work its own ANDs (the planner credits B
 outputs committed, a statement at most `cap` of them (Flock's m = k_log + nbl <= 35, and at most 2^20), and its replay
 grain the request, which holds one request's count of it (``n_rho``).
 
-    uv run python benchmarks/sampling_plan/glm53.py [--card PATH] [--requests N]
+**A stop class's two populations** (`response_blocks`). Under a registered stop rule a response of a stop class adds two
+proof blocks beside the card's, one of each a response whatever its length. Its stop block computes where the response
+ends and why from its T committed ids: here the rule's Boolean Definition, `StopRule16_v2{T, NSTOP}` at the registered
+model's stop ids, taken as a block of its own. That is the leaf holding every gate of the served block but its
+``ignore_eos`` choice, and its rows are the rule's five parameters and its word, six rows, where the served block opens
+three: its ids, one request row for two of the parameters, and its word, the stop ids and the model's length being its
+statics. Its response tie (`ResponseTieStop_v1{O}`, O = T) holds the response row the network certifier released to
+those ids and that stop word. Each is a candidate as the card's are, with its ANDs, its rows and its output bits read
+from its Definition and a statement's `cap` of it from its block as Flock's composer sizes it.
+
+Both populations are registered at ``rate:1/1``, every block proved. `charged` says what a draw of a population leaves:
+the most of its blocks an accepted sample leaves incorrect at δ (the integrity profile's count bound, in exact
+arithmetic), that count over the population (ε), and those blocks' output bits, 16 a stop word. Where every block is
+drawn no incorrect block escapes, so all three are 0 at every δ; a smaller draw is charged what its bound gives. These
+rows are the plan's: they read no verdict, and say what a sampling design charges, nothing of a served class.
+
+    uv run python benchmarks/sampling_plan/glm53.py [--card PATH] [--requests N] [--stop T [--delta D]]
 """
 from __future__ import annotations
 
 import argparse
 import json
+from fractions import Fraction
 from pathlib import Path
 
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits
+from verity.commitments.windows.interface import proof_block_k_log
+from verity.definitions.registry.boolean_stop_rule import StopRule16V2
+from verity.protocols.certifier.prover import response_tie
 from verity.protocols.spot.optimize import Candidate
+from verity.protocols.spot.verifier.profile import WINDOW_DELTA, Stratified, Stratum
 
 CARD = Path(__file__).with_name("glm53_blocks.json")
 QUANTITIES = ("blocks", "out_bits", "ands", "macs", "row_bytes")
+#: GLM-5.3's stop ids, which a stop block reads beside its response's ids
+STOP_IDS = 3
 
 
 def load(path: Path = CARD) -> dict:
@@ -46,6 +71,33 @@ def candidates(card: dict, requests: int = 1) -> list[Candidate]:
     return out
 
 
+def response_blocks(outputs: int, responses: int = 1, stop_ids: int = STOP_IDS) -> list[Candidate]:
+    """A stop class's two populations over ``responses`` of its responses, each of at most ``outputs`` ids: the stop
+    block and the response tie, one a response, each a candidate whose ANDs are its Definition's Boolean circuit's, whose
+    rows are a row a parameter and a row an output, and whose replay grain is the request, which holds one."""
+    out = []
+    for d in (bind(StopRule16V2, T=outputs, NSTOP=stop_ids), response_tie.block(response_tie.Shape(outputs, True))):
+        params, ret = d.signature()
+        ins = [-(-sum(t.leaf_widths()) // 8) for _name, t in params]
+        outs = [sum(t.leaf_widths()) for t in getattr(ret, "fields", (ret,))]
+        rows, ands = (*ins, *(2 * -(-b // 16) for b in outs)), bits.compile(d).counts["and"]
+        k_log = proof_block_k_log(ins, rows[len(ins):], ands, packed=False)
+        out.append(Candidate(d.id, d.id, responses, ands, sum(outs), out_gates=-(-sum(outs) // 16), ands=ands, rows=rows,
+                             commit_bits=sum(outs), cap=cap(k_log), grain="request", n_rho=1))
+    return out
+
+
+def charged(c: Candidate, delta: float, draw: int | None = None) -> dict:
+    """What a draw of ``draw`` of a population's proof blocks, uniform without replacement, leaves at ``delta``; every
+    block by default, ``rate:1/1``. ``incorrect``: the most of its blocks an accepted sample leaves incorrect except with
+    probability delta (`Stratified.count_bound`); ``eps``: that count over the population; ``bits``: those blocks'
+    output bits."""
+    k = c.units if draw is None else draw
+    w = Stratified((Stratum(c.template, c.units, k),)).count_bound(delta)
+    return {"population": c.units, "draw": k, "rate": "{}/{}".format(*Fraction(k, c.units).as_integer_ratio()),
+            "incorrect": w, "eps": w / c.units, "bits": w * c.out_bits}
+
+
 def totals(card: dict) -> dict[str, dict[str, float]]:
     """Proof blocks, output bits, ANDs, served MACs and opened row bytes per prefill token, per decode token and per request."""
     def of(d: dict, n: int) -> dict[str, int]:
@@ -63,6 +115,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--card", type=Path, default=CARD)
     ap.add_argument("--requests", type=int, default=1)
+    ap.add_argument("--stop", type=int, metavar="T", help="the requests are a stop class's, of at most T ids a response: "
+                    "print its stop blocks and its response ties, and what proving every one leaves charged")
+    ap.add_argument("--delta", type=float, default=WINDOW_DELTA, help="the delta the charges are read at")
     a = ap.parse_args()
     card = load(a.card)
     cs = candidates(card, a.requests)
@@ -73,6 +128,11 @@ def main() -> int:
     for fam, g in card["gaps"].items():
         print(f"  gap {fam}: {g['definitions']} Definitions, {g['prefill']:,} prefill and {g['decode']:,} decode rows, "
               f"{g['ands']:.4g} ANDs; {g['why']}")
+    for c in response_blocks(a.stop, a.requests) if a.stop else ():
+        x = charged(c, a.delta)
+        print(f"  stop class {c.template}: {c.units:,} proof block(s), one a response, {c.ands:,} ANDs and {c.out_bits:,} "
+              f"output bits each, {sum(c.rows):,} row bytes opened, at most {c.cap:,} a statement; rate:{x['rate']} leaves at "
+              f"most {x['incorrect']:,} incorrect at delta {a.delta:.3g} (eps {x['eps']:.3g}), {x['bits']:,} bits charged")
     return 0
 
 
