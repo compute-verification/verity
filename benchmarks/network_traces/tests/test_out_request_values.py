@@ -114,7 +114,7 @@ def test_n2_zk_publishes_the_runs_public_files_and_none_of_their_request_values(
         "calibration.json", "honest/deployment.json", "honest/certified.jsonl", "honest/check.json"))
 
 
-def test_scan_zk_copies_six_files_of_its_own_warden_rehearsal_and_not_its_traffic_or_responses(tmp_path):
+def test_scan_zk_copies_six_files_of_its_own_rehearsal_and_not_its_traffic_or_responses(tmp_path):
     """The six files the scan's job copies of its own rehearsal hold no request value. They are not public files:
     `cells.jsonl` holds each registration whole with its cost, which a gate's run keeps on its private side (the
     wiring and the cost's two times are private), and `certified.jsonl`, `check.json`, `warden.json` and `serve.log`

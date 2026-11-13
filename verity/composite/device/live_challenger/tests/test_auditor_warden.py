@@ -207,8 +207,8 @@ CHECK = {"accepted": True, "problems": [], "summary": {
     "wire_bits": {"ingress": 18432, "egress": 63488}, "cells_in_their_bucket": [31, 31], "tick_lateness_ms": {"n": 9},
     "data_bytes": {"egress": 4242}, "completion_tokens": 77, "prompt_tokens": [16, 99], "arrival_lag_ms": {"n": 31},
     "finish_reasons": {"length": 4}}, "connections": [{"ordinal": 1, "outcome": "end", "text_bytes": 300}]}
-#: the rehearsal's last line of output, as `warden_serve.table` prints the check: it ends with the costs' two times
-LAST_LINE = ("ACCEPTED: 4/4 ended, 0 refused, failed []; cell rows 4/4 link-windows registered, [600] rows a window, "
+#: the rehearsal's last line of output, in the form its check is printed in: it ends with the costs' two times
+LAST_LINE = ("ACCEPTED: 4/4 ended, 0 refused, failed []; cell rows 4/4 registered, [600] rows a window, "
              "commit ms {'n': 4, 'max': 41.375}, sign ms {'n': 4, 'max': 7.125}")
 #: what the rehearsal says on its stderr: free text
 STDERR = "the endpoint closed connection 3 early"
