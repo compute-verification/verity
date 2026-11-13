@@ -26,8 +26,9 @@ longer holds the name and noted where it holds it only because it reads it itsel
 The script edits ROOT's working tree and commits nothing. It refuses, changing nothing and naming the fix, where a
 name of the table is not a top-level definition of its file, where two definitions of one name meet in a module, where
 a moved definition reads one that stays, where a module under ``verity/`` would import a file of ``bare``, where an
-edit does not match once, where a file still names the path of one that moves whole, and where a ``pyproject.toml``
-names a file by its path and not the new file it comes to import. It imports and runs none of the tree's code.
+edit does not match once, where a file still names the path of one that moves whole, where a ``pyproject.toml``
+names a file by its path and not the new file it comes to import, and where a moved definition is named by a string
+(``getattr(module, "NAME")``, a patch of it, ``"package.module.NAME"``). It imports and runs none of the tree's code.
 ``allow.py``, run after it, moves the counted lints' entries with the findings the definitions took along."""
 from __future__ import annotations
 
@@ -1025,6 +1026,41 @@ for rel in sorted({r for r in subprocess.run(["git", "-C", str(ROOT), "grep", "-
     (new_modules if rel in new_modules else CHANGED)[rel] = PROSE.sub(
         lambda m: f"`{STEMS[(m.group(1), m.group(2))]}.{m.group(2)}" if (m.group(1), m.group(2)) in STEMS else m.group(0), text)
     prose[rel] = len(hits)
+
+# ---- a moved definition named by a string: getattr(module, "NAME"), a patch of it, "package.module.NAME"
+def _module_of(f: File, expr: ast.AST) -> str | None:
+    """The tracked file a name stands for as a module, by the file's imports or its loads by path, whatever the scope."""
+    if not isinstance(expr, ast.Name):
+        return None
+    by_path = f.loaded(expr.id, expr.lineno)
+    if by_path:
+        return by_path[1]
+    for stmt, _inside in f.imports:
+        for a in stmt.names:
+            if (a.asname or a.name).split(".")[0] == expr.id:
+                target = alias_target(stmt, a, f.rel)
+                if target and target[1] is None:
+                    return target[0]
+    return None
+
+
+DOTTED = re.compile(r"(?:[A-Za-z_]\w*\.)*(" + "|".join(sorted({re.escape(s) for s, _ in STEMS}, key=len, reverse=True)) + r")\.([A-Za-z_]\w*)")
+BY_STRING = {"getattr", "setattr", "hasattr", "delattr", "object"}
+for rel, text in sorted(TEXT.items()):
+    f = file(rel) if any(Path(src).stem in text for src in MOVED_FROM) else None
+    if f is None:
+        continue
+    for n in ast.walk(f.tree):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and (m := DOTTED.fullmatch(n.value)) \
+                and (m.group(1), m.group(2)) in STEMS:
+            problems.append(f"{rel}:{n.lineno}: names `{n.value}` by a string, and `{m.group(2)}` moves to "
+                            f"{STEMS[(m.group(1), m.group(2))]}: write the string as it should be after the cut in an `edits` row")
+        elif isinstance(n, ast.Call) and (getattr(n.func, "id", None) or getattr(n.func, "attr", None)) in BY_STRING \
+                and len(n.args) > 1 and isinstance(n.args[1], ast.Constant) and isinstance(n.args[1].value, str):
+            src = _module_of(f, n.args[0])
+            if src in MOVED_FROM and n.args[1].value in MOVED_FROM[src]:
+                problems.append(f"{rel}:{n.lineno}: takes or sets `{n.args[1].value}` of {src} by a string, and it moves to "
+                                f"{where[(src, n.args[1].value)]}: write the line as it should be after the cut in an `edits` row")
 
 for old, new in WHOLE.items():
     named = subprocess.run(["git", "-C", str(ROOT), "grep", "-l", "-z", "-F", "-e", old, "--", "."], capture_output=True,
