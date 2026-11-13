@@ -2,10 +2,26 @@
 `TargetProfile`, fail-closed refusal of unregistered geometry/targets, and Bet A's pins following the registry."""
 from __future__ import annotations
 
-import pytest
+import dataclasses
+import json
+import sys
+import types
 
-from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile, profile_mismatches
+import pytest
+from verity.definitions.registry import b1
+from verity.definitions.silicon.instructions import INSTRUCTIONS
+from verity.definitions.silicon.models import (
+    HOPPER_BF16_M16N8K16,
+    HOPPER_BF16_WGMMA_K16,
+)
+
 from verity_vllm.program.frontend import gemm_targets as GT
+from verity_vllm.program.frontend import targets as TG
+from verity_vllm.program.frontend.target_profile import (
+    DEFAULT_TARGET,
+    TargetProfile,
+    profile_mismatches,
+)
 
 AMPERE_TP = TargetProfile(compute_capability=(8, 0), num_sms=108)
 HOPPER_TP = TargetProfile(compute_capability=(9, 0), num_sms=132)
@@ -52,9 +68,6 @@ def test_sm120_is_the_default_tiling_on_the_hopper_k16_step():
     """cc 12.0 (the RTX PRO 6000): vLLM has no tuned family for it, so a Triton launch takes the default tiling (the pinned vLLM keeps
     the bf16 linear on cuBLASLt there), and the k16 step is `mma.sync.m16n8k16`, whose sm_120 model is core's HOPPER_BF16_M16N8K16: the
     Definition is Hopper's `Gemm_v2`."""
-    from verity.definitions.silicon.instructions import INSTRUCTIONS
-    from verity.definitions.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16
-
     bw = GT.REGISTERED["blackwell_consumer"]
     assert bw.compute_capabilities == ((12, 0),) and bw.vllm_arch_family is None and GT.vllm_tuned_gemm_arch_family((12, 0)) is None
     assert bw.dot == GT.REGISTERED["hopper"].dot and bw.kind == GT.REGISTERED["hopper"].kind
@@ -77,9 +90,6 @@ def test_sm120_binds_the_hopper_gemm_and_hopper_step_fa2():
     of the compute_80 PTX on the Hopper step, so its attention is the H100 forced-FA2 chain (`BN=fa2_kblock_n(D)`,
     `DOT=HopperBF16WgmmaDot16_v1`, `INV=Fa2InvSum_v1`) with FA2's own `Check_inf` placement, `Attention_v5`; never the Ampere-step
     `Attention_v3`; a declared FA3 is refused by name."""
-    from verity.definitions.registry import b1
-    from verity_vllm.program.frontend import targets as TG
-
     assert PRO6000_TP.tensor_core_family == "blackwell_consumer" and PRO6000_TP.effective_flash_attn_version() == 2
     assert TargetProfile(compute_capability=(12, 1)).tensor_core_family == "unregistered:12.1"
     assert TG.tensor_core_dot(PRO6000_TP) is TG.tensor_core_dot(HOPPER_TP) and not TG.uses_accepted_kinds(PRO6000_TP)
@@ -177,7 +187,9 @@ def test_ada_table_pins_every_vllm_key_verbatim():
     for (n, k) in ((75968, 2048), (2560, 2048), (128, 2048), (5120, 2048)):
         assert ada.launch_config(2, n, k)[3] == "default[ada]"
     try:
-        from vllm.model_executor.determinism.batch_invariant_configs import _BATCH_INVARIANT_MATMUL_TUNED_CONFIGS as VT
+        from vllm.model_executor.determinism.batch_invariant_configs import (
+            _BATCH_INVARIANT_MATMUL_TUNED_CONFIGS as VT,
+        )
     except Exception:  # noqa: BLE001
         pytest.skip("pinned vLLM not importable here: the verbatim check runs on the construction/capture hosts")
     vt = VT["ada"]
@@ -209,11 +221,34 @@ def test_profile_mismatches_checks_the_applied_family():
     assert any("tuned_gemm_arch_family" in m for m in profile_mismatches(DEFAULT_TARGET, {**ada_applied, "tuned_gemm_arch_family": None}))
 
 
+def test_a_tagged_build_is_held_to_its_commit_through_the_read_back(monkeypatch):
+    """A tagged vLLM's version carries no commit. The read-back's version has it (`config.vllm_revision`), so a profile at
+    that commit is not refused for its revision, one at another commit is, and the bare version still is."""
+    pytest.importorskip("torch")
+    from verity_vllm.program.frontend.export_compat import read_back_applied
+    root, scm, envs = types.ModuleType("vllm"), types.ModuleType("vllm._version"), types.ModuleType("vllm.envs")
+    root.__version__, root.envs, scm.__commit_id__, envs.VLLM_BATCH_INVARIANT = "0.34.0rc1", envs, "g52aeb5806", True
+    for name, mod in {"vllm": root, "vllm._version": scm, "vllm.envs": envs}.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+    got = read_back_applied()
+    assert got["vllm_version"] == "0.34.0rc1+g52aeb5806" and got["batch_invariant"] is True
+
+    def refused(revision: str, running: str) -> list[str]:
+        applied = {"compute_capability": [8, 0], "num_sms": 108, "batch_invariant": True, "vllm_version": running}
+        return [m for m in profile_mismatches(dataclasses.replace(AMPERE_TP, vllm_revision=revision), applied) if m.startswith("vllm_revision")]
+
+    assert refused("52aeb5806", got["vllm_version"]) == []
+    assert refused("d9105ea80", got["vllm_version"]) == ["vllm_revision declared 'd9105ea80', running vllm '0.34.0rc1+g52aeb5806'"]
+    assert refused("52aeb5806", "0.34.0rc1") == ["vllm_revision declared '52aeb5806', running vllm '0.34.0rc1'"]
+    scm.__commit_id__, root.__version__ = "g000000000", "0.28.1rc1.dev472+gd9105ea80"   # the pin: its version, as it is
+    assert read_back_applied()["vllm_version"] == "0.28.1rc1.dev472+gd9105ea80"
+
+
 # -- Bet A: the GEMM rule's pins follow the registry (needs torch) ----------------------------------------------------------
 
 torch = pytest.importorskip("torch")
-from verity_vllm.program.frontend.rules import vllm_bindings as VB  # noqa: E402
 from tests.program.test_vllm_bindings_pins import _gemm_meta  # noqa: E402
+from verity_vllm.program.frontend.rules import vllm_bindings as VB  # noqa: E402
 
 
 @pytest.fixture
@@ -250,7 +285,6 @@ def test_bet_a_refuses_every_gemm_on_an_unregistered_target(observed):
         VB.gemm_pins_for(32, 2048, 2048)
     assert VB.tuned_gemm_table_sha256() is None
     rule = VB.TritonGemmRule()
-    import json
 
     class _Node:  # the rule reads the launch through launch_meta(node) = json.loads(node.args[2])
         target = VB.triton_launch.default

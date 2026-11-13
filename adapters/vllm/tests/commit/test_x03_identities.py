@@ -11,7 +11,11 @@ torch = pytest.importorskip("torch")
 
 from verity_vllm.acquire.sources.call_boundary_source import CallBoundarySource  # noqa: E402
 from verity_vllm.check.commit_pass import commit_verdict  # noqa: E402
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, NativeHostCommitter, TensorMeta  # noqa: E402
+from verity_vllm.commit.committer.native_host import (  # noqa: E402
+    GPU_CHUNK_BYTES,
+    NativeHostCommitter,
+    TensorMeta,
+)
 from verity_vllm.commit.committer.plan_cache import PlanMetas  # noqa: E402
 
 

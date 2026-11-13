@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassAt
 import Proofs.Flock.Claims.Prob
+import Proofs.Flock.SamplingGeneric.RegTrace
 
 /-!
 # The two off-trace masses by class of gates, at a budget a run
@@ -26,6 +27,9 @@ So none of the three masses is a premise of its own: each follows from the linea
 
 The budget `T` need not be a hypothesis either: `Compiled.runCalls` is the most calls of `H` a run of the prover
 makes, and every run stays within it (`Compiled.runCalls_le`), so each bound holds at `T = runCalls`.
+
+At one stage the event has the first two masses only (`Compiled.event_le_of_off` at the trace read at the statement),
+so it is at most `κ_s + √(k·γ_s·Pr[B]) + (2·runCost + 2·firstHitCost)/2^256` (`Compiled.eventX_le_cls_at`).
 -/
 
 @[expose] public section
@@ -94,6 +98,45 @@ theorem pr_offRegX_le_cls_at {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.
   have hc := ex_calls_le_at_cls hS hopen hs P needs cls T hT hNs hKs hKm
   exact h.trans (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hc (by norm_num : (0 : ℝ) ≤ 2))
     (by positivity : (0 : ℝ) ≤ 2 ^ (256 : ℝ)))
+
+set_option synthInstance.maxSize 1024 in
+/-- **The one-stage event at the trace read at the statement, by class, at a budget `T` a run**: on a statement in
+scope, under `pr_offRegX_le_cls_at`'s premises and the linear expected-time bound at `B_conf,X`, an accepted run
+samples a proof block of `FregX` with probability at most
+
+`κ_s + √(k·γ_s·Pr[B]) + (2·(T·(1 + e_s·N_s) + n_PU·openCalls) + 2·(T·(1 + e_s·N_s + K_s + e_s·K_m)`
+`+ (1 + K_s)·n_PU·openCalls))/2^256`:
+
+`event_le_of_off` at the trace read at the statement, with one run's own disagreement at `B_conf,X`
+(`bconfX_le_at`) and the gates opened off the trace at the by-class finders (`pr_offRegX_le_cls_at`), where `εregX`
+has `Pr[B_conf,X]` and `N·√Pr[B_conf,X]`. -/
+theorem eventX_le_cls_at {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    (hSK : L.SessionKS H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : Sampling.InScope Pt s) {Ω : Type} [Fintype Ω]
+    [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (cls : Fin (L.nG x) → Fin (L.nG x))
+    (hallX : ∀ (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g g' : Fin (L.nG x)), cls g = cls g' →
+      (L.opensAt H P x a.1 a.2.1 a.2.2 g).isSome → (L.opensAt H P x a.1 a.2.1 a.2.2 g').isSome)
+    (T : ℕ) (hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T) {Ns Ks Km : ℝ}
+    (hNs : Ex (fun r : Fin (L.V.k x) → Coin => ((L.firstSlots x (L.checked x r)).card : ℝ)) ≤ Ns)
+    (hKs : Ex (fun r : Fin (L.V.k x) → Coin =>
+      (((L.sampleNeeds x needs (L.checked x r)).image cls).card : ℝ)) ≤ Ks)
+    (hKm : Ex (fun r : Fin (L.V.k x) → Coin =>
+      (L.sessCountIn x needs (fun l => (L.sampleNeeds x needs l).image cls) (L.checked x r) : ℝ)) ≤ Km)
+    (hB : ExpectedCR H (BconfX H L Ω P x))
+    (hX : ∀ K : ℕ, ExpectedCR H (L.finderXCls H P x s needs cls K)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregX H P x) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) +
+        (2 * L.runCost x T Ns + 2 * L.firstHitCost x T Ns Ks Km) / 2 ^ (256 : ℝ) := by
+  have hI := (pr_inConfX_le hbind hs P).trans (bconfX_le_at hS.toCostContract hopen x P T hT hNs hB)
+  have hO := (Pr_mono (p := fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      (run H P L.V x q.1 q.2.1).out = .acc ∧ L.OffRegX H P x q.1 q.2.1 q.2.2) fun _ h => h.2).trans
+    (pr_offRegX_le_cls_at hbind hS.toCostContract hopen hs P needs hpos cls hallX T hT hNs hKs hKm hX)
+  simp only [FregX_eq_FregAt]
+  refine (event_le_of_off hS hSK hs hPt hin P (fun _ _ => L.regValX H P x) hI hO).trans ?_
+  rw [add_div]
+  linarith
 
 end Compiled
 

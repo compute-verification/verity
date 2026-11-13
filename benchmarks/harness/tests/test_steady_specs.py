@@ -1,4 +1,4 @@
-"""The steady-state specs of `benchmarks/specs` and the setup they name: what each spec's points are, that a row's pin and
+"""The steady-state specs of `benchmarks/harness/specs` and the setup they name: what each spec's points are, that a row's pin and
 its stored statement are the spec's alone (another pin is planned and launched by the same code), and the setup under
 the launcher on a made-up tree, with stand-ins for the prover's build, the toolkit's script and uv. No GPU, no node, no
 store and no clock."""
@@ -77,8 +77,8 @@ def real(tmp_path: Path, **changes: str) -> tuple[Path, str]:
     for old, new in changes.items():
         assert old in text, old
         text = text.replace(old, new)
-    path = f"benchmarks/specs/{HEAD}.toml"
-    root, _ = tree(tmp_path, files={path: text, SETUP: (ROOT / SETUP).read_text(), "benchmarks/specs/steady.toml": None})
+    path = f"benchmarks/harness/specs/{HEAD}.toml"
+    root, _ = tree(tmp_path, files={path: text, SETUP: (ROOT / SETUP).read_text(), "benchmarks/harness/specs/steady.toml": None})
     return root, path
 
 
@@ -247,7 +247,7 @@ def test_the_setup_builds_the_prover_and_leaves_the_environment_a_point_runs_in(
     assert path.split(":")[0] == f"{toolkit}/bin", "the toolkit the prover is built with is first on PATH"
     assert libraries == f"{toolkit}/lib64", "the toolkit's own libraries, and no compat library over the node's driver"
     assert pythonpath.split(":") == [
-        f"{root}/benchmarks/harness", f"{root}/verity/configuration/config", str(root), f"{root}/tools/research/src",
+        f"{root}/benchmarks/harness", f"{root}/tools/config", str(root), f"{root}/tools/research/src",
         str(root), f"{root}/verity/protocols/flock/prover/python", f"{root}/adapters/vllm",
         f"{root}/tools/verity/circuit_check/src", f"{root}/benchmarks/numerical/python"]
     setup = launcher.run_dir / "out" / "setup"

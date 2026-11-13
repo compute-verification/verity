@@ -237,7 +237,7 @@ def unit_reason(unit: Any) -> str | None:
             "its proof passes on rows formed under any salt")
 
 
-# TODO: an execution phase's credit is its outcome's verdict within a credit period: the credit period's cap and circuit recorded before
+# TODO: an execution phase's credit is its outcome's verdict within a credit period: the credit period's bound and circuit recorded before
 # execution phase 0's first coin, each execution phase's first coin after the previous execution phase's sample, closed at the first refused execution phase.
 # `WindowOpens` is none of that.
 class WindowOpens:

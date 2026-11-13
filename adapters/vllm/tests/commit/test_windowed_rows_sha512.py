@@ -19,10 +19,14 @@ import hashlib
 import os
 from dataclasses import replace
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or not os.environ.get("NATIVE_COLLECT_BUILD"),
                                 reason="needs a GPU and the JIT-built native_collect extension (NATIVE_COLLECT_BUILD)")
@@ -32,7 +36,7 @@ from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 from verity_vllm.commit.committer import native_host as nh  # noqa: E402
 
 RUN_ID = "windowed-rows"
-PD, GEO = hashlib.sha256(b"program").digest(), hashlib.sha256(b"geo").digest()
+PD, GEO = hashlib.sha512(b"program").digest(), hashlib.sha512(b"geo").digest()
 LAYERS, H, BN, VOCAB = 3, 1000, 16, 1003
 WINDOW_MB = str(8 / 1024)                                       # 8 KiB: two rows a window
 ENV = ("VERITY_RETAIN", "VERITY_WINDOW_MB", "VERITY_WINDOW_SLOTS", "VERITY_STAGING_BOUNDED", "VERITY_LEARN_HOST_BUDGET_MB",
@@ -41,9 +45,11 @@ ENV = ("VERITY_RETAIN", "VERITY_WINDOW_MB", "VERITY_WINDOW_SLOTS", "VERITY_STAGI
 
 
 class _Runner:
+    committer: Any                                              # the committer under test, once `committer()` has built it
+
     def __init__(self) -> None:
         self.committer = None
-        self.tensors: list[tuple[str, object]] = []
+        self.tensors: list[tuple[str, torch.Tensor]] = []
         self.input_batch = None
 
     def execute_model(self, scheduler_output, *a, **kw):
@@ -59,7 +65,7 @@ class _Sched:
         self.req_ids = [f"r{i}" for i in range(len(kv))]
         self.num_scheduled_tokens = dict.fromkeys(self.req_ids, 1)
         self.total_num_scheduled_tokens = len(kv)
-        self.scheduled_new_reqs = []
+        self.scheduled_new_reqs: list[object] = []
         self.scheduled_cached_reqs = SimpleNamespace(req_ids=self.req_ids, num_computed_tokens=list(kv))
 
 
@@ -85,7 +91,7 @@ def step_tensors(kv: tuple[int, ...]) -> list[tuple[str, torch.Tensor]]:
     """One decode step's tensors, odd-sized so window boundaries fall inside them; the hidden plane is sized by every request's KV
     blocks, so steps differ in length. The values are a function of the geometry."""
     ntok, seed = len(kv), sum(kv)
-    shapes = [("model.embed_tokens/in", torch.int32, (ntok,))]
+    shapes: list[tuple[str, torch.dtype, tuple[int, ...]]] = [("model.embed_tokens/in", torch.int32, (ntok,))]
     for layer in range(LAYERS):
         shapes += [(f"model.layers.{layer}.self_attn.qkv_proj", torch.bfloat16, (ntok, 3 * H)),
                    (f"fa2.m1/L{layer}/acc", torch.float32, (sum(-(-k // BN) for k in kv), 4)),
@@ -130,7 +136,6 @@ SCHED = schedule(40, 6)
 def rows_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes) -> bytes:
     """step_rows's step root over the step's packed stream (each tensor at the next ALIGN offset, zero-padded to a row), its layout
     counted in rows."""
-    ref = nh.NativeHostCommitter(None, run_id=RUN_ID, program_digest=PD, geo_digest=GEO, retain_values=False, gpu_tree=True)
     stream, metas, first_leaf = bytearray(), [], 0
     for i, (name, t) in enumerate(tensors):
         raw = t.cpu().contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
@@ -143,9 +148,9 @@ def rows_root(step: int, tensors: list[tuple[str, torch.Tensor]], ks: bytes) -> 
         first_leaf += n_leaves
     stream.extend(b"\0" * (-len(stream) % R.ROW_BYTES))
     rows = [bytes(stream[o:o + R.ROW_BYTES]) for o in range(0, len(stream), R.ROW_BYTES)]
-    ctx = ref._ctx_digest(step)
+    ctx = R.ctx_digest(RUN_ID, step)
     tree_root = R.levels(R.domain(PD, ctx, GEO, len(rows)), rows, ks, 8 * R.ROW_BYTES)[-1][0]
-    return R.step_root(PD, ctx, GEO, ref.layout_digest(metas), len(rows), tree_root)
+    return R.step_root(PD, ctx, GEO, R.layout_digest(metas), len(rows), tree_root)
 
 
 def reference(keys: dict[int, bytes]) -> list[bytes]:

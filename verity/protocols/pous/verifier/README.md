@@ -36,16 +36,16 @@ What code outside this directory may use. Everything else here is internal.
 | `challenger_session.session(side: Side, request: Mapping[str, Any], respond: Callable[[int], bytes]) -> dict[str, Any]`, with `side_of`, `request_of`, `session_id` and `placement` (`challenger_session.py`) | The timed rounds from the node's side: it starts the memory challenger's side where `side_of(period: Mapping[str, Any], node: str, device: str \| Path) -> Side` puts it, sends the request, answers each index with `respond(index)` and returns the side's report. The module also holds the messages both sides speak (`MANIFEST`, `Frames`), which the memory challenger's party imports. |
 | `streamed_wipe` (`streamed_wipe.py`) and `wipe_period.run(node: str, params: sw.WipeParams \| None = None, *, ...) -> Wipe` (`wipe_period.py`) | The streamed-label wipe. `streamed_wipe` is its Python, the reference its Lean verdict is held to: the memory challenger's side (`Challenger`), the honest server (`Prover`), the records (`WipeParams`, `WipeCommitment`, `SignedWipe`) and `verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] \| set[bytes], schemes: Mapping[str, Verify] = SCHEMES) -> Verdict`. `wipe_period.run` is one wipe of one node with the verifier's answer as `verity/wipe/v0` (`wipe_period.PROTOCOL`) and the case the Lean replays to it. |
 | `python -m verity.protocols.pous.verifier.wipe_period --period DIR --out DIR [--node NAME] [--expect VERDICT]` | One wipe of this node as `period.json`'s `wipe` says. It writes `wipe.json` and `wipe.case.json` under `--out`, prints a summary, and exits 0 when the verdict is the expected one. |
-| `python -m verity.protocols.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--egress-bits N] [--streamer build\|PATH [--threads T]]` | The wipe's memory challenger as a process of its own, for the challenger host. It reads the request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover and prints its report. `wipe_parties.MANIFEST` declares the same two parties to the deployment layer (`verity.configuration.deploy`). |
+| `python -m verity.protocols.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--egress-bits N] [--streamer build\|PATH [--threads T]]` | The wipe's memory challenger as a process of its own, for the challenger host. It reads the request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover and prints its report. `wipe_parties.MANIFEST` declares the same two parties to the deployment layer (`verity.runtime`). |
 | `verity.protocols.pous.prover` (`verity/protocols/pous/prover/`) | PoUS's circuits, each a Definition with its parts in its module's `__all__`: `answer_circuit.PousAnswerOpens` (a round's answer and the store's hiding leaf open to the same label), `decode_circuit.PousP2Decode` (P2 v4's decode of one label), `verdict_circuit.PousVerdict` (the verdict over the timed rounds as one proof block) and `circuit.PousModSquare` (a square modulo P2's prime). |
 
 ## The lifecycle in code
 
 ~~~python
 from verity.protocols.pous.verifier import audit, band, codec, setup
-from verity.protocols.pous.verifier.layout import Layout, decode_tensor
+from verity.protocols.pous.verifier.layout import TensorLayout, decode_tensor
 
-layout = Layout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
+layout = TensorLayout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
 params, prims = layout.params, band.reference(layout.params)
 w = layout.pack({"w1": b1, "w2": b2})
 commitment = setup.commit(params, w)                                   # server, before any salt exists
@@ -122,8 +122,8 @@ prior content, with no named assumption, for the sequential reveal, the only one
 2.6 TB and `k = 74,000`, the egress plus 1.075 GB at `2^-40` (`StreamedWipeMeets2600GB`); at `k = 2152`, for every
 fill of a 32 MiB segment or more, the egress plus `⌈M/19⌉` bits at `2^-128` (`StreamedWipeMeetsFamily`, with
 `StreamedWipeMeets96GiB` and `StreamedWipeMeets141GB`); at any `k` with `(1 − 1/r)^k ≤ 2^-129`, the egress plus
-`512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` bits and the memory outside the fill (`StreamedWipeMeetsReads`), an H200 at
-`k = 5231` within 5 GB with its driver reserve (`StreamedWipeMeets141GB5`); with the count of the missing labels in
+`512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` bits and the memory outside the fill (`StreamedWipeMeetsReads`), an H200's
+whole memory at `k = 2906` within 5 GB (`StreamedWipeMeetsH200`); with the count of the missing labels in
 place of `n`, per server against its assumed memory capacity `M_s` over every tier (`StreamedWipeMeetsReadsTight`,
 `StreamedWipeMeetsServer`), and at 5 GB a server (`StreamedWipeMeetsServer5GB`): one H200 as measured at its deployed `k = 5500`, and a whole
 8×H200 server, HBM, 2 TB of RAM and 12 TB of disk, at `k = 1,268,143` with 3.9 GB outside the fill
@@ -136,7 +136,7 @@ streamed-label wipe") has the messages, the bound, the measured fill and round t
 from verity.protocols.pous.verifier import streamed_wipe as sw
 
 p = sw.WipeParams(labels=n, k=sw.DEPLOYED_K, batch=1, limit_ns=limit, tiers=(("hbm", a), ("dram", b), ("nvme", c)))
-c = sw.Challenger(secret, server_id, session_id, p, signer, log=log)          # the id claimed; the commitment published
+c = sw.WipeMemoryChallenger(secret, server_id, session_id, p, signer, log=log)  # the id claimed; the commitment published
 for start, data in c.fill(chunk=1 << 20):                                     # the labels, streamed to the server
     send(start, data)
 c.run(lambda indices: ask(indices))                                           # one batch at a time; no retry
@@ -157,7 +157,7 @@ undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's run in the all
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
 meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
-`wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.configuration.deploy`), the
+`wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.runtime`), the
 reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes
 `wipe_party.serve` signs.
 On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: the CUDA driver through ctypes, gated
@@ -216,7 +216,7 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `P2RingAuditSecureOfReduces`, `P2RingAuditSecureOfRoundSecure` and `P2RingGradedOfRoundSecure`; `P2ContentAbsorbs`
   (`Guarantees/Obligation.lean`); above `2^23` blocks, `Pous.Period.SecurityProofs.periodHeldAt`. The named
   assumptions (`Assumptions/P2.lean`): `PrimeP16448`, `P2RingAuditSecure`, `P2RingReducesToM1p`, `P2RingRoundSecure`,
-  `P2RingRoundSecureWide` and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
+  and `P2RingRoundSecureWide`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
   rests on.
 - **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
   `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `sha512_keys_indexed`,

@@ -819,7 +819,7 @@ is the session's. -/
 theorem recordDraw_of_drew {k : Verity.Registration.Composite} (hH : DrawHeld k) {s : Verity.Sent} {dr : Draws}
     {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
     (hd : Drew k s dr L n ξ units) (A : Live)
-    (hL : A.law = L) (hn : A.n = n) {record : String}
+    (hL : A.design = L) (hn : A.n = n) {record : String}
     (hr : sentRecord s = some record) :
     FlockSoundness.Discharge.Exec.recordDraw record =
       some (A.dj (Finset.univ.filter fun u : Fin A.n => u.val ∈ units)) := by
@@ -845,7 +845,7 @@ theorem coins_size_le {bs : Core.Blobs} {a b e : ByteArray} {p : _root_.Spot.One
     Properties.Challenger.Limits.withinAt_spec (Properties.Challenger.Limits.evidenceOf_within hb')
   obtain ⟨raw, hraw, rfl⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   obtain ⟨cm, roots, -, hstream⟩ := drawCoins_ok hraw
-  obtain ⟨l, start, openings, os, -, -, hop, -, -, hr⟩ := Properties.Challenger.Coins.stream_ok hstream
+  obtain ⟨l, start, openings, os, -, -, hop, -, -, hr, -⟩ := Properties.Challenger.Coins.stream_ok hstream
   rw [challengerStream_ok hstream, ← zipIdx_filter_length, hr, List.length_range']
   rw [hop] at hops
   exact Nat.mul_le_mul (le_refl _) hops
