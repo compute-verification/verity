@@ -63,7 +63,6 @@ pouw = [
 # device, and its part of the security analysis
 certifier = [
     "verity/protocols/certifier",
-    "verity/protocols/inference_only/verifier/nci",
     "verity/protocols/certifier/prover",
     "verity/protocols/certifier/device",
     "security/*/NetworkCertifier{,.lean}",
@@ -371,7 +370,7 @@ paths = [
     "adapters/vllm",
     "benchmarks/one_stage",
 ]
-until = "PRF-285: the v3 ledger names a period's prover `prover`"
+until = "the v3 ledger names a period's prover `prover`"
 
 [[residue]]
 what = "a Lean lock's reason names PoUW's clear audit by its directory, which the export leaves out"

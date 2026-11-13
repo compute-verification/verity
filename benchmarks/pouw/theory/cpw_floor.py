@@ -2,12 +2,12 @@
 per-set checkpoint adds to the floor of every program `PouwWarpCheck_v2` accepts at fold fx1.
 
 The bound is `Accounting.Guarantees.TS.Sm120SheetHeadline`'s, read from `lean_headline.instance()`, the data
-`Definitions/Accounting/Headline/Sm120.lean` is written from (`lean_headline.py --check` holds the two equal). It reads
-a cheater's floor a unit as N_w (w* + φ*) at the certificate π*, which prices an issue slot at c, its issue weight: an
-IMMA.16832 writes 128 words a slot (w* = c/128), and fx1's fold is 8 ALU + 8 IMAD lane instructions a unit (φ* = c/8),
-so the floor is 17c. ♭'s bound B is its issue count: the MMA and the fold, the operand floor (LDSM_X4 a 39th of a unit)
-and ε_skip's NOROW. The bound is its unfolded branch 1 − Y (1 − 41/S), Y = N_w (w* + φ*) / B, at most the
-statement's ε, so it fails for a floor below B (1 − ε) / (1 − 41/S), a hair under 17c.
+`Definitions/Accounting/Headline/Sm120.lean` is written from (`machine-model lean-headline --check` holds the two
+equal). It reads a cheater's floor a unit as N_w (w* + φ*) at the certificate π*, which prices an issue slot at c, its
+issue weight: an IMMA.16832 writes 128 words a slot (w* = c/128), and fx1's fold is 8 ALU + 8 IMAD lane instructions a
+unit (φ* = c/8), so the floor is 17c. ♭'s bound B is its issue count: the MMA and the fold, the operand floor (LDSM_X4 a
+39th of a unit) and ε_skip's NOROW. The bound is its unfolded branch 1 − Y (1 − 41/S), Y = N_w (w* + φ*) / B, at most
+the statement's ε, so it fails for a floor below B (1 − ε) / (1 − 41/S), a hair under 17c.
 
 CP-W commits, after every set (32 words a lane, 8 units a warp), the XOR over the warp's 32 lanes and 8
 chains of y and of z (`segment.warp_checkpoint`), and `PouwWarpCheck_v2` reads both words of every set. Neither ♭ nor
@@ -40,16 +40,14 @@ route (each lane's y XOR and z XOR as one word pair, XORed over lanes) is `warp_
 from __future__ import annotations
 
 import functools
-import importlib.util
 import json
 import random
 import sys
 from fractions import Fraction
-from pathlib import Path
+
+from verity_machine_model import lean_headline
 
 from verity.protocols.pouw.prover.circuit import segment as SG
-
-POUW = Path(__file__).resolve().parents[1]
 
 UNITS_A_SET = 8
 LANES = 32
@@ -63,13 +61,9 @@ EGRESS = 8
 @functools.cache
 def headline() -> tuple:
     """`lean_headline`, its sm_120 instance, and w* and φ* at the instance's π*."""
-    spec = importlib.util.spec_from_file_location("cpw_floor_lean_headline", POUW / "lean_headline.py")
-    lh = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = lh
-    spec.loader.exec_module(lh)
-    i = lh.instance()
-    w, phi = lh.stars(i, i.cert, i.writers, i.folds)
-    return lh, i, w, phi
+    i = lean_headline.instance()
+    w, phi = lean_headline.stars(i, i.cert, i.writers, i.folds)
+    return lean_headline, i, w, phi
 
 
 def issue_price() -> Fraction:

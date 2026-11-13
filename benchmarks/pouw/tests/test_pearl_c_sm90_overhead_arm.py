@@ -7,36 +7,25 @@ from __future__ import annotations
 import ast
 import hashlib
 import importlib
-import importlib.util
 import json
 import re
 import subprocess
 import sys
 from pathlib import Path
 
+import arm as A
+import baselines as B
+import overhead_arm as OA
 import pytest
+from verity_bench import overhead as DOOR
+from verity_vllm.protocols.pouw import pearl_c as PPD
+
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.protocol import Shape as Unit
+from verity.protocols.spot.verifier.profile import WINDOW_DELTA
 
 POUW = Path(__file__).resolve().parents[1]
 ROOT = POUW.parents[1]
-sys.path.insert(0, str(POUW / "harness"))
-
-import arm as A  # noqa: E402
-import baselines as B  # noqa: E402
-from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Shape as Unit  # noqa: E402
-from verity.protocols.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
-from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
-
-
-def _load(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-OA = _load("pearl_c_sm90_overhead_arm", POUW / "pearl_c_sm90" / "overhead_arm.py")
-DOOR = _load("verity_bench_overhead_door", ROOT / "benchmarks" / "harness" / "verity_bench" / "overhead.py")
 LINEARS = DOOR.MODELS[DOOR.KERNEL_MODEL]
 CTX = {"device": None, "arch": "sm_90a"}
 

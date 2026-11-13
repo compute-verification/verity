@@ -1,4 +1,4 @@
-"""Every pinned preset under ``benchmarks/specs`` resolves as an engine spec (`verity_vllm.engine.spec`) to its
+"""Every pinned preset under ``benchmarks/harness/specs`` resolves as an engine spec (`verity_vllm.engine.spec`) to its
 checkpoint pin (`verity_vllm.config.EnginePin`)."""
 from __future__ import annotations
 

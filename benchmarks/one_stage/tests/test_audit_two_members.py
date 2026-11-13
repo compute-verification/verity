@@ -141,7 +141,9 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     """Both members are sampled, each one's session is accepted by the prover's own verifier and by Lean's, the audit
     record accepts with every negative refused, and the record holds the files the later steps read. The stream's rule is
     the rate the audit makes of the window's design (`records_audit.rule_of`), which the service takes where it refuses the
-    design's fixed count, and the stream sampled by it accepts its outcome on the challenger's coins."""
+    design's fixed count, and the stream sampled by it accepts its outcome on the challenger's coins. The audit record
+    names whose coins those are, the key and the session the challenger's ledger opens on the run's root, and says it
+    wrote no case for the compiled check; sampled proofs' answer on the audit accepts with both in its public outputs."""
     window = _window(tmp_path / "window")
     assert RA.rule_of(D.parse_design(DESIGN), len(TEMPLATES)) == RULE and S.Law(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
@@ -156,6 +158,20 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
     outcome = row["coins"]["outcome"]
     assert (outcome["accepted"], outcome["codes"], row["coins"]["coins_reason"]) == (True, [], None), row["coins"]
     assert row["coins_session"]["error"] is None and row["coins_session"]["trusted"]["pinned_session"] is None
+    # whose coins: the one session the local challenger's own ledger opens on the run's root, under that session's key,
+    # as the coins' check verified them; sampled proofs' answer carries them, and that the audit, of two members, wrote
+    # no case for the compiled check
+    opened, = (e for e in map(json.loads, (out / "challenger" / "windows.jsonl").read_text().splitlines())
+               if e["kind"] == "open")
+    whose = {"key_sha512": opened["body"]["key_sha512"], "session": opened["session"]}
+    assert opened["body"]["window"] == {"root": RUN} and len(whose["key_sha512"]) == 128
+    assert row["coins"]["verified"] == whose
+    record = json.loads((out / "window" / "audit.json").read_text())
+    assert record["coins"]["verified"] == whose
+    assert record["case_v2"]["written"] is False and "this audit drew 2 members" in record["case_v2"]["why"]
+    answer = _answer(out)
+    assert (answer["verdict"], answer["public"]["coins"]) == ("accept", whose), answer
+    assert answer["public"]["case_v2"] == record["case_v2"]
     assert row["fixed_before_draw"]["ok"] is True
     for k in range(len(TEMPLATES)):
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
@@ -219,9 +235,18 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
     assert rc == 0 and row.get("ok") is True, said
     assert row["forged"]["checks"] == {"checks_before_draw": True, "rejected": True, "lean_refused": True}, row["forged"]
     assert row["draw"] == [0, 1] and row["audit"]["accepted"] is False
+    assert _answer(out)["verdict"] == "reject"
     assert row["audit"]["verdicts"] == {f"{v}/m{k}": k == 0 for v in VERDICTS for k in (0, 1)}, row["audit"]
     assert sorted(row["audit"]["why"]) == sorted(f"{v}/m1" for v in VERDICTS), row["audit"]["why"]
     for k, proofs in ((0, True), (1, False)):
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
         record = json.loads(session.read_text())
         assert (record["verdict"]["accepted"], bool(record["proof_sha512"])) == (proofs, proofs), session
+
+
+def _answer(out: Path) -> dict:
+    """Sampled proofs' answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
+    certifier's period read it), its registration the one the audit registered."""
+    import served_integrity as SI  # beside a5, on the path `records_audit` put there
+
+    return SI.answer(out, json.loads((out / "window" / "registration.json").read_text()))
