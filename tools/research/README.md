@@ -224,10 +224,13 @@ or running file changed, once the node is `quiet`. A `hold` entry is reported, n
 `missing`), every process running a file replaced since it started (`restart`, unless its entry says `no_restart`),
 and every file in a managed directory that no entry lists (`stray`); the monitors relay's hourly `drift` monitor opens
 one incident per node and kind. A `whole` tree's copy (the clean-up units' `research`) may be behind main
-between installs, so its stale files are not the node's: they are an incident of their own once a week of readings has
-found the copy behind. A new loop or script goes into the repository and the manifest before it runs; a backup of a replaced file is
-`.deploy-prev/`, which `install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ...
---by WHO --apply` (`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it.
+between installs, so what it differs from main by is not the node's: its stale files, the files main has added since and
+those main has dropped (`dropped`, never a stray) are one incident of their own once a week of readings has found that copy
+behind, and only a file of it that a branch or no commit has (`ahead`, `unknown`) is the node's at once. A new loop or
+script goes into the repository and the manifest before it runs; a backup of a replaced file is `.deploy-prev/`, which
+`install` keeps, never a `*.bak-*` beside it. A stray leaves through `research deploy attic NODE PATH ... --by WHO --apply`
+(`--backups` for every backup), which moves it under the record's directory, recorded, so `sudo mv` restores it; it refuses
+a path inside a `whole` tree, where the tree's next install drops what main lacks.
 A Lean build kept from node 1's credentials (the Lean cache's daily one) runs in `vy-lean-sandbox` (`lean_sandbox.py`).
 
 Monitors (`research monitors list|check|run|relay`, `research/monitors.py`) wake their owners: node 1's `vy-monitors.timer`

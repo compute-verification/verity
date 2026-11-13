@@ -623,6 +623,27 @@ def test_attic_refuses_every_path_inside_a_whole_tree_and_moves_nothing(world, c
     assert _files(first) == held and not bak.exists()
 
 
+def test_the_drift_monitor_reads_a_copy_main_changed_added_to_and_dropped_from_as_one_finding_and_no_drift_of_the_node(world):
+    """Drift's own report of a whole tree's copy behind main, as the relay's `drift` monitor reads it: one finding, the
+    copy's, counting the file main changed, the one it added and the one it dropped since the install, and none of the
+    node's (no `stray`, no `stale`). The install the finding names leaves nothing to find."""
+    from research import monitors
+
+    def findings() -> list:
+        reps = json.dumps({"n": deploy.drift(n, "origin/main", local, world["repo"])})
+        return monitors.deploy_drift(monitors.Ctx(now=0.0, run=lambda argv, **kw: subprocess.CompletedProcess(argv, 1, reps, "")))
+
+    n, path, first, _ = _behind(world)
+    _push(world["repo"], {"a.py": "a2\n", "new.py": "n1\n"})
+    (found,) = findings()
+    assert found.key == f"n:copy-behind:{path}@{first.name}" and found.for_s == monitors.COPY_BEHIND_S
+    assert "is behind main* by 3 files: 1 stale, 1 of main's missing, 1 main has dropped (an incident" in found.text
+    assert found.text.endswith(f" Install main's: `research deploy install n --by WHO --apply {path}`.")
+    assert deploy.main(["install", "n", "--by", "lane-x", "--apply", "--no-fetch", str(path)], run=local, manifest=world["manifest"],
+                       repo=world["repo"]) == 0
+    assert Path(os.readlink(path)) != first and findings() == []
+
+
 @pytest.mark.parametrize("names", ["cwd", "environ", "cmdline"])
 def test_a_directory_of_a_whole_tree_stays_as_it_was_while_a_process_that_started_in_it_runs(world, names):
     """What resolved the link when it started finishes on the directory it started on: no install writes into a directory
