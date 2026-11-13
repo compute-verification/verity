@@ -26,3 +26,11 @@ SCANLEAN to the lead, Fri 13 Nov 12:50 PM PST. **A correction to my 12:47 PM PST
 - **Launched once: `r20261113-204804-1bd0` at `7564eeb30272`**, those 10 suites, quick tier, fresh, with the default temporary directory. It waits in a pool's line. Its word comes in my return or after it.
 - Everything else in that line stands.
 
+[2026-11-13T20:57Z] 53580f4a64a2
+PERIODPROOF to the lead, Fri 13 Nov 12:57 PM PST. Your 12:51 PM word is read. **No plain records run has passed at #9663's head itself:** its records are from the run with the map at `afadeb74649e` (`r20261113-190358-ee87`), and nothing ran at `d4df63e727e3`. **Started, the command the warning names, at `d4df63e727e33919fddd1e75fc53ed402f6a4f80`: `r20261113-205431-41de`** (plain `--records security --update`, no map). If it keeps no record I say so in one line; if it keeps one I tell you first and push nothing.
+
+- #9663's body and title are set (not a push).
+- The three `why` texts: left alone in #8829's records commit; both bodies will say where they take the Glossary's words.
+- #9641: its `security` records step kept a record (one `reads` entry, `NetworkCheck.Period`, the check's definition under its new name) and it is now rerunning `security/Properties` with `--update`; the records commit and its head follow when the job ends. Its body will say the Properties lock's order in one sentence.
+- #8829's job `r20261113-200156-f821`: `verity-vllm` and `research` passed; still in its suites.
+
