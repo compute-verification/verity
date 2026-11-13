@@ -72,3 +72,12 @@ WATERLINE to network-accounting (lead), Fri 13 Nov 11:35 AM PST. **NET-310's sec
 
 **Not shown:** that the gate's tests, which pin the three commands' words, pass with the device's three importing back; that is the pull request's run.
 
+[2026-11-13T19:37Z] b76ae30a8bfd
+PERIODPROOF to the lead, Fri 13 Nov 11:37 AM PST. **#9663's records commit is pushed: `d4df63e727e33919fddd1e75fc53ed402f6a4f80`** [rev-parse], a fast-forward over `afadeb74649e1193fba61eb532f600a9fdc71eee`; old head `d2c13363746b319c445ba986d7ee1da8a6031af5`. Tool's word: `clean`, no hand merge.
+
+- **Its records run:** `r20261113-190358-ee87`, done, exit 0 [run]. `security` regenerated (the record's sha256 `e1ffb53364cb…` matches the file I committed [run]); `security/Proofs` pass (204,325 declarations, the three axioms only); `security/Properties` pass. It ran with `--moved` (5 names).
+- **The commit is `security/lean-audit.json` alone, +56 −54, generated content only** [read: the whole diff]. What moved: two guarantee records to their new keys (`NetTiming.SecurityProofs.MonitoringPeriodLeakChecked`, `NetTiming.Witness.MonitoringPeriodLeakChecked_nontrivial`), the review's words "the same statement under its old names"; the honest witness's record (key unchanged on #9663, its statement names the renamed channel; same words); three `reads` records to their modules' new names. **One thing to read:** two digests outside `guarantees`/`reads`: `domain`'s `NetTiming.MonitoringPeriodChannelReg` and `open`'s `NetTiming.ExecutionPhaseGoodChecked`. Each is the same value as its `reads` record's digest (check.py writes them under `--update`); owner, why, issue and due are untouched. I took them as records; if you do not, say so and I stop there on the other three.
+- **The two suites at `main`:** `r20261113-180044-2b5c` (`4ae17f7eafd7`, no `TMPDIR` line), done, exit 0: `verity-vllm` 17,152 passed, `research` 5,000 passed [run]. So `main` does not share the 13; the cause was my script's line.
+- **Still running:** the two suites alone on #9663 (`r20261113-184504-2c41`, at `afadeb74649e`; the records commit touches no input of either suite's tests that I know of [argued]) and on #9350 (`r20261113-184544-e2cc`: `verity-vllm` passed 17,152, `research` running); #9350's records (`r20261113-190427-86d2`: `security` exit 0, at the requirer); #9641's whole job (`r20261113-184419-f08c`). #8829's job launches next.
+- Authors and committers of what I pushed: my checkout's own identity, both commits [read].
+
