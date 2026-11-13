@@ -8,29 +8,42 @@ This file is the round's working copy: every lead's sort of its own open goals, 
 
 259 open goals. 41 sat at the top level: 15 put there by hand, 26 only because nothing waits on them. 79 were due today. 129 had had their date moved.
 
-## Tier 1, as proposed
+## Tier 1, as proposed (second form, 8:55 AM)
 
-A tier-1 goal is a state of the whole system that you named, that one command or one page shows true or false, and that other goals wait on. Only your word adds one, and there are at most five. Every other goal sits under one of them, is parked with the state it stopped in, or is dropped.
+Daniel, 8:47 AM PST: "I don't think we need the (at most 5) rule -- I'm fine with there being like 10 or smth. And note there's also like 'when are demos' and 'when do we hit certain performance targets on particular benchmarks'".
 
-| Goal | Holder | What shows it | Today |
+A tier-1 goal is one you named and watch: a state of the whole system, a demo with its date, or a dated target on a named benchmark. One command or one page shows it true or false. Only your word adds one, and there is no cap. Every other goal sits under one of them, is parked with the state it stopped in, or is dropped. Structure keeps first call on people: when that moves a demo's or a target's date, its lead says so the same day.
+
+| Goal | Holder | What shows it, or its target | Where it stands, and its date on the Goals page |
 | --- | --- | --- | --- |
-| 1. The repository has the architecture's layout | top | The layout test's "not yet" lines at zero | 10 lines, the last dated Tue 24 Nov |
+| 1. The repository has the architecture's layout | top | The layout test's "not yet" lines at zero, and the architecture file's rows of files that only change place | 10 lines, the last dated Tue 24 Nov |
 | 2. The architecture is implemented | top holds it, one lead per row | The architecture file's rows of code still to be written at zero, and each area's count of known lint failures (the bar) | 24 rows in the file's draft (#9702, recounted against today's `main` by 11 AM) |
-| 3. One dashboard shows every number | console | Every maintained row wired and fresh, with the numbers of goals 1, 2 and 4 on it | 19 numbers declared, 13 with a value |
-| 4. A change lands within two hours | ci, with infra's platform under it | ci's daily row: 90% of plain changes within two hours of their mark, and the same for Lean | Thursday: 42% of plain changes |
+| 3. One dashboard shows every number | console | Every maintained row wired and fresh, with the numbers of the other goals on it | 19 numbers declared, 13 with a value. Wed 18 Nov |
+| 4. A change lands within two hours | ci, with infra's platform under it | ci's daily row: 90% of plain changes within two hours of their mark, and the same for Lean | Thursday: 42% of plain changes. Plain Tue 17 Nov, Lean Thu 19 Nov |
+| 5. Remote demo | vllm | Every verifier accepts in Lean on one served run from `main` | No run served from `main` yet. Fri 20 Nov, off track |
+| 6. Onsite demo | vllm | The same run with the network verdict and memory's three verdicts | No onsite run since Sun 8 Nov's. Tue 24 Nov, off track |
+| 7. Production vLLM's serving cost, GLM-5.3 under an agentic load | vllm | Under 1% of serving time against stock vLLM, with the replay reproducing the served tokens | +6.66% on one pair of runs, with no interval (Thu 12 Nov). Was due today 9 AM |
+| 8. Network accounting on GLM-5.3 | proofs | Under 300 GB a world-year at 10% compute, over 100 bits | Never run end to end. Modeled: 2,670 GB, and 68 bits by `main`'s bound. End to end today 6 PM, off track; fully proved Mon 30 Nov |
+| 9. Proof-system performance, GLM-5.3 under SPOT | benchmarks | Prover GPUs per serving GPU within proofs' share of the 10% compute budget | 0.0364, modeled. Tue 17 Nov |
+| 10. Verified compute share, Llama 3.2 1B | compute-accounting | 97% on a run whose verdict accepts from `main` | 95.44% on a development run. Wed 2 Dec |
+| 11. Uncertified memory share, Llama 3.2 1B on eight cards | memory-accounting | 0.14 | 0.199 (Thu 12 Nov). Wed 18 Nov |
+| 12. Training slowdown the inference-only check proves, Llama 3.2 1B | training | 1,000 | 1. Wed 2 Dec |
+
+Goals 5 to 12 are as the Goals page stated them at 8:06 AM. Each holder was asked at 8:58 AM for the benchmark's command, the target, today's figure with its run, and the day it can hold with structure first. The tables below are still each lead's sort under the first form, which had goals 1 to 4 only: the parked table's last column is my first sort of what comes back under 5 to 12, for each lead to confirm.
 
 ## What is yours
 
-1. **Is that list right?** Name any goal that stays at tier 1, or any of the four that goes.
-2. **Security posture** (infra): it was a project in your own words and nothing in goal 4 measures it. A fifth goal, or parked?
-3. **Runs booked under parked goals** (vllm): the noon serving-cost sweep runs as booked. The tick arm (5 PM) and the production command's first run from `main` (9:45 PM) are released once you confirm the park, which frees five workers for carrying 25 open pull requests over the move. Say "run them" if you want tonight's numbers anyway.
-4. **One kept change touches a guarantee** (lean): it states two parts of the inference-only policy as named open premises of the remote theorem, in place of the one premise `InferenceOnlySound`. My recommendation is yes: it makes the list of open premises say what is open. It opens unmarked Tue 17 Nov, and you see the record's change when it lands. Say no and it parks with the policy.
+1. **Is that list right?** Are 7 to 12 the benchmarks and targets you meant, and is one missing?
+2. **Security posture** (infra): it was a project in your own words and nothing in goal 4 measures it. With no cap I would keep it at tier 1, as a thirteenth. Say if not.
+3. **One kept change touches a guarantee** (lean): it states two parts of the inference-only policy as named open premises of the remote theorem, in place of the one premise `InferenceOnlySound`. My recommendation is yes: it makes the list of open premises say what is open. It opens unmarked Tue 17 Nov, and you see the record's change when it lands. Say no and it parks with the policy.
+
+Withdrawn: the question about tonight's runs. The serving-cost runs (5 PM and 9:45 PM) go ahead as booked, since goal 7 is theirs.
 
 ## What the leads changed in the frame, and I took
 
 - A finding that a verifier accepts what it should not is never parked. It stays under goal 2, on the row "Python never returns accept or reject" (soundness).
 - The audit's second round on served data, and proofs' two-stage goals, are the architecture's and not results (vllm).
-- Parked does not mean closed: a pull request that is built lands as built, and nothing new starts for a parked goal (network-accounting).
+- Parked does not mean closed: a pull request that is built lands as built, and nothing new starts for a parked goal (network-accounting). That stands for what stays parked after the second form.
 - The bar gets a number: each area's count of known lint failures, on the dashboard (compute-research).
 - A dashboard row whose goal is parked shows "parked" and leaves the wired count, or goal 3 could never finish (console).
 - A row with two owners gets one goal per owner (kernels and compute-accounting on PoUW's GPU code).
@@ -40,18 +53,19 @@ A tier-1 goal is a state of the whole system that you named, that one command or
 - One goal marked done this morning was not: "Lean code uses the Glossary's names". Declarations' own names still spell seven older words (session 739, window 228, escape 150, pin 123, wrong 100, transcript 50, horizon 13, of 101,108 declaration lines), not yet sorted into the senses the Glossary keeps. lean gives each lead its list Sat 14 Nov 6 PM PST (lean).
 
 
-**State:** 14 of 16 leads have answered; still to come: circuits, proofs. Nothing on the Goals page's top level changes before Daniel's word. Each lead's own table is on TOP-416.
+**State:** 15 of 16 leads have answered; still to come: proofs. Nothing on the Goals page's top level changes before Daniel's word. Each lead's own table is on TOP-416.
 
 compute-research's six goals that were parked before today are one row of its table, so the parked count is five short.
 
-**Counts so far:** kept 137 (goal 1: 21, goal 2: 77, goal 3: 7, goal 4: 32), parked 57, dropped 23, new goals written for lines and rows that had none: 21.
+**Counts so far:** kept 148 (goal 1: 22, goal 2: 87, goal 3: 7, goal 4: 32), parked 55, dropped 24, new goals written for lines and rows that had none: 21.
 
 ## Each lead's sort of its own goals
 
 | Lead | Goal 1 | Goal 2 | Goal 3 | Goal 4 | Parked | Dropped | Open goals sorted |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | benchmarks |  | 1 | 2 |  | 2 | 1 | 6 |
-| ci |  |  |  | 10 | 2 | 1 | 13 |
+| ci | 1 |  |  | 10 | 1 | 1 | 13 |
+| circuits |  | 10 |  |  |  |  | 10 |
 | comms | 1 |  |  | 2 | 1 | 1 | 5 |
 | compute-accounting | 1 | 5 |  |  | 10 | 1 | 17 |
 | compute-research | 2 | 4 |  |  | 1 | 5 | 12 |
@@ -60,17 +74,18 @@ compute-research's six goals that were parked before today are one row of its ta
 | kernels |  | 7 |  |  | 6 |  | 13 |
 | lean | 2 | 7 |  | 4 | 2 | 3 | 18 |
 | memory-accounting | 2 | 7 |  |  | 4 | 2 | 15 |
-| network-accounting | 2 | 10 |  |  | 8 | 4 | 24 |
+| network-accounting | 2 | 10 |  |  | 7 | 5 | 24 |
 | soundness | 1 | 12 |  |  | 5 |  | 18 |
 | training | 2 | 12 |  |  | 7 |  | 21 |
 | vllm | 3 | 8 |  |  | 5 | 1 | 17 |
 | top | 5 | 3 |  | 4 | 1 | 1 | 14 |
-| all | 21 | 77 | 7 | 32 | 57 | 23 | 217 |
+| all | 22 | 87 | 7 | 32 | 55 | 24 | 227 |
 
 ## Goal 1. The repository has the architecture's layout
 
 | Lead | Goal, as its lead restates it, and its check | Closes or serves | Day |
 | --- | --- | --- | --- |
+| ci | Stops with the check at `tools/verity/check`: no layout line or architecture row names `tools/check`, and nothing waits on it | the architecture file's row "the check: `tools/verity/check/` to `tools/check/`" | held under goal 1 until top's 11 AM word on whether that row stays (ruling 11) |
 | comms | "Daniel's term device used everywhere". Check: on `main`, `git grep -c 'auditor host'` and `trusted-host` give 0 outside recorded runs, and the locks name `TrustedDevice`. | none (the architecture's term) | Sat 14 Nov (its Lean slot follows proofs' four) |
 | compute-accounting | **PoUW's GPU code and serving entry in its package.** Check: no PoUW kernel source under `benchmarks/` or the vLLM adapter, and the adapter reaches PoUW by one call. Waits on kernels' Pearl-C split and vllm's adapter | R4 | 11/24 (was 11/19: the Pearl-C split follows chain 2) |
 | compute-accounting | NEW. **PoUW's `clear/` under its prover.** Check: L9's line gone from `tests/tree.toml`. | L9 | Mon 16 Nov |
@@ -103,6 +118,16 @@ compute-research's six goals that were parked before today are one row of its ta
 | --- | --- | --- | --- |
 | benchmarks | **Benchmarks' code meets the bar.** Check: the bar read of benchmarks' six directories (harness, overhead, prove, exfiltration, recursion_e2e, recursion_figures) run again at `main` finds zero findings, with one harness kit as every benchmark's writer. Of last night's 47 findings, five pull requests are on `main` or marked. | each area's code at the bar | **Wed 18 Nov** for all we fix alone; **Sat 21 Nov** for the retired names, which wait on @proofs' renames and two of @vllm's identifiers |
 | benchmarks | NEW. **Every benchmark module reaches the adapter through its public interface only.** Check: `tests/test_vllm_boundary.py`'s exceptions list holds no `benchmarks/` module. | R5 (benchmarks' share) | Wed 18 Nov, if vllm names the interface today |
+| circuits | **Circuits' code meets the bar.** Check: circuits' entries in the lists of known lint failures at zero (ruling 9), and the test that stops superseded definition versions growing is on `main` with no version in its list that nothing reaches. The lint count is not known: I read it once compute-research names the lists, and say then whether zero holds for this day | the bar | Fri 20 Nov (kept) |
+| circuits | **A GLM-5.3 request's whole computation builds on `main` as pieces wired to each other.** Check: one command builds the request of 43 prompt tokens and 2 outputs for all eight GPUs with no input left unwired, and both structure checks pass | serves R13, circuits' half | Fri 20 Nov (was Thu 19, for the same reason) |
+| circuits | **Every kind of piece in a GLM-5.3 request has a statement the Lean verifier accepts.** Check: one command on `main` reads the cover record from the store, checks it, and prints the count of kinds without an accepted statement: 0. Today it prints 77 of 254, and the command is on a branch | closes R15 | The command on `main`: Tue 17 Nov. The count at zero: not known. At noon today I say what each family left needs, and a day |
+| circuits | **Served programs name the compact versions of the long attention row and the norm.** Check: the size test on `main` lists 7 served units past 4 MiB (33 of 105 on Thu). Which of R15's 77 kinds the compact form brings within one Lean call is in my noon line. The timings beside today's form park | serves R15, in part | Tue 17 Nov (kept) |
+| circuits | **The request builder on `main` builds one GPU's share of a GLM-5.3 request.** Check: its command builds the share at all 78 layers and both structure checks pass. Today on a branch, with 6,978 of 6,979 rows | serves R13 | Tue 17 Nov (was Mon 16: on `main`, not only built) |
+| circuits | Title kept. **Check:** a test in the checker's suite on `main` fails if the checker's package imports the adapter or holds a circuit's name. Today its code names them, and its list of heavy circuits holds 45 names. The two changes in review take the code's. A third hands over the list and adds the test | closes R12 | Tue 17 Nov (was Sat 14: the list and the test are new in the check). The first two changes are on `main` Sat 14 Nov |
+| circuits | **Every kernel the production settings serve has a circuit on `main` held to its kernel on an H200.** Check: the five circuits are on `main`, each with a kept comparison record in the store in which no word differs. Today three of five | closes R14 | Wed 18 Nov (was Mon 16, which was "in review") |
+| circuits | as titled: the cache's write and two reads on `main`, each agreeing with its kernel at the code that merged | serves R14 | today 6 PM |
+| circuits | **Checker's hand-over changes in review.** as titled: today's step | serves R12 | today 6 PM, if this morning's carry of both changes over chain 2 is clean, which I read by 9:30 AM. If not, Sat noon |
+| circuits | **Long-row serving change waiting to merge.** as titled: today's step of the goal above | serves R15 | today 6 PM, on the same carry |
 | compute-accounting | **PoUW states its parties.** Check: `verity/protocols/accounting/pouw/verifier/parties.py` on `main` (#9704, carried across chain 2 now) | R1 | 11/16 |
 | compute-accounting | **PoUW's code meets the code rules.** Check: the code-quality bar's audit of `verity/protocols/accounting/pouw/` finds nothing | each area's code at the bar | 11/17 |
 | compute-accounting | **PoUW's Lean reads its device figures from a data sheet parameter.** Check: no Lean table under `security/` restates the H100, H200 or RTX PRO 6000 sheets (R17's row deleted) | R17, serves L4 and R10 | 11/18 (was 11/16) |
@@ -247,69 +272,69 @@ compute-research's six goals that were parked before today are one row of its ta
 
 ## Lines and rows with no goal yet
 
-L10, R11, R12, R14, R15 (L = a not-yet line of the layout file, R = a row of the architecture file's code still to be written; the numbering is in the sheet on TOP-416.)
+L10, R11 (L = a not-yet line of the layout file, R = a row of the architecture file's code still to be written; the numbering is in the sheet on TOP-416.)
 
-## Parked: results, climbs, and work the architecture does not need now
+## Parked under the first form: results, climbs, and work the architecture does not need now
 
-| Lead | Goal | The state it stops in |
-| --- | --- | --- |
-| benchmarks | Proof system performance benchmarked | Parked at: `verity bench prove --system spot` prints 0.0364 prover GPUs a serving GPU, 4.60 × 10^-4 Lean verifier seconds and 4.08 proof bytes a token, all modeled, from labelled runs on `main`, and the dashboard shows all four. |
-| benchmarks | Head key blocks priced as served units | Parked at: the driver prices the head as units under `--partition head-scores-values` on `main`; values units verified, scores at 64 keys and @circuits' key-row writer not yet. |
-| ci | Check lives in tools/check | Stops with the check at `tools/verity/check`: no layout line or architecture row names `tools/check`, and nothing waits on it |
-| ci | Platform repository lands through the queue | Stops with the infra repository's loop stopped since Tue 10 Nov; INF-639 settles on Mon whether it's a second instance or a mode. Park, unless you want the platform repository held to two hours now |
-| comms | SPOT draft's differences on the page | Parks with the SPOT post. State: comms' part done (the $57$ placed, $36$ ready); proofs posts them when Daniel says yes. |
-| compute-accounting | Remote demo's proof covers Pearl+ | Stops at: Pearl+'s Lean check accepts on the prover's side; TT_OUT open (ASK-296); the composite's tie is proofs' (PRF-596) |
-| compute-accounting | Onsite demo's proof covers Pearl+ | Stops at: not started for onsite |
-| compute-accounting | Twice the sampled tiles a window | Stops at: design written, not measured |
-| compute-accounting | Massive-activation rows credited | Stops at: channel swaps #9518 marked |
-| compute-accounting | Pearl+ check runs on the auditor's machine | Stops at: CMP-370's answer (which form of the case an auditor's host may hold) by Fri 20 Nov |
-| compute-accounting | LM head credited by Pearl+ | Stops at: not started |
-| compute-accounting | Small model's verified compute share reaches 97% | Stops at: 614b's figures |
-| compute-accounting | Daniel's page on H200 accounting | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) |
-| compute-accounting | Pearl-C's debit closes red team's breaks | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) |
-| compute-accounting | 97% of H200 capacity accounted for | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) |
-| compute-research | Paused work resumed or dropped | As they are, each with the state Daniel paused it in on Mon 9 Nov: `accounting/silicon-logs-all-compute`, `accounting/useful-weights-hard`, `compute-research/chain-premise-probed`, `chain-round-pinned`, `first-four-layers-numbers`, `hardness-train-at-point`. |
-| console | Each bound shows per week, month and year | Stops with the README contract naming a bound's `period` and `over` keys; the tab has no per-period code. Bounds are results, and results are parked. |
-| infra | Infra repository merges without Daniel | Stops with: no change there has waited for Daniel since Tue, each merges on a verdict from a reader who is not its owner; the queue lands nothing there; its author fix is on `main`; the second change is ci's, which ci parks as `ci/platform-repo-queue` |
-| infra | Checker slot starts its next task at once | Stops with: the change on since Wed; the executor runs every submission in shadow on its own machine; twelve test files end each submission with no verdict (CI-526, infra's five being mended today); how many tasks run at once on a slot not read from the machine. I keep it instead if ci puts the executor under goal 4: ci's table names no goal for it |
-| kernels | Steady-state proving cost measured | stops with rows 1 and 2 timed again from `main` today and labelled |
-| kernels | Deep blocks' witness built on GPU | stops measured on a card twice (Thu, today); its code is on a branch, not on `main` |
-| kernels | Flock's wide leaf measured on a GPU | stops timed on a card today, not of record; #9079 open behind proofs' #9108 |
-| kernels | Overhead benchmark passes its GPU check | stops with the arm's first card run today; #9489 and #9550 open |
-| kernels | PoUW overhead counts the output's commitment | stops with no timed row of record |
-| kernels | Row commitment takes LM-head rows | stops with the wide kernel built and stored, pinned only in #9550 |
-| lean | Inference-only policy proved for served traffic | stops at: not true on `main`; its 25 parts listed with owners, lean's five dated; network-accounting holds the policy and takes the goal Mon 16 Nov |
-| lean | Honest signed session's proof sized | stops at: one worker's read, which builds nothing. I let it finish Sun 15 Nov 6 PM and send soundness the sizes Mon noon |
-| memory-accounting | Memory verdicts on the onsite record | Stops at: all three audits accepted in a rehearsal on one H200 over the `bf16` store, each decided by its Lean verifier (Thu 12 Nov); the onsite record lists no memory verdict; @vllm's setting and your word on where Lean runs are not in |
-| memory-accounting | Uncertified memory share reaches its target | Stops at: 0.199 at the data sheet's rate, Thu 12 Nov, the session accepted by Lean; the target 0.14 for Wed 18 Nov is not reached |
-| memory-accounting | Uncertified memory share at most 0.17 | Stops at: 0.233 and 0.199 over the cards' memory alone; the store with the host's memory has not been run served |
-| memory-accounting | Cost of a 100-bit memory audit measured | Stops at: the 64-row session passes its check on one H200; its cost on the eight-card node is not measured. The bandwidth audit's error stays 2^-15 a session. If that is a hole under your ruling 1, the five changes that need no new version are kept under goal 2: say so |
-| network-accounting | Benchmark reports network certification's exfiltration capacity | Stops at: the benchmark prints on `main`; the simulated card's label is not printed; #9501 and #9533 are open |
-| network-accounting | Network certification adds no exfiltration capacity | Stops at: the figure of record prints on `main`. A worker started on the certifier's stamps this morning and stops at its plan |
-| network-accounting | Network check ties responses to committed outputs | Stops at: a one-token change is refused on a served try; #9491 and #9541 are open; the exchange with vllm and proofs on the two classes stops at Monday's reads |
-| network-accounting | Certifier turns away arrivals at a run's end | Stops at: built, #9457 open |
-| network-accounting | Run record reports the tighter exfiltration capacity | Stops at: the check prints the ruled value on Monday's data; #9656 and #9741 are open |
-| network-accounting | Network bound counts only unchecked inputs | Stops at: the statement is on `main`; #9663 is reviewed; #9350, #9641 and #8829 are open |
-| network-accounting | Scan count statements restated as soundness amended | Stops at: #9639 is reviewed |
-| network-accounting | Onsite exfiltration capacity proved in Lean | Stops at: four statements, none proved; #8708 is open. #9664 and #9736 change the Lean check and land under `network/onsite-port-staged` |
-| soundness | Sampled proofs sound as deployed | stops at: the deployed remote theorem listed, five open premises, the sample-choice and device-key mends in flight |
-| soundness | Remote demo's soundness fully proved | stops at: the open list on PRF-579, with owners and days |
-| soundness | Served weights proved to be the registered ones | stops at: VLLM-424 (the proofs read the registered rows), the checkpoint match a completeness note |
-| soundness | Linear layers tied into inference-only check | stops at: #9669 open, `Shared` and the A-row home proved, the `theta` rewrite after #9463 |
-| soundness | Deployed remote theorem's honest witness runs a session | stops at: `cursor/soundness-remote-witness-8fb2` at `beebe2ec45`, sized at 4,500 to 7,500 lines, its worker blocked three times |
-| training | Library holds standard algorithms and most frontier points | parked at: all 83 points have an entry on `main` held to its run; the command prints a slowdown for 39 of 62 entries; the rule for the other 23 is decided, not built |
-| training | Every search frontier point runs from the library | parked at: 99 of 139 points on `main`; the open drafts (#9531, #9711, #9731, #9733) land or close as they are; no new route starts |
-| training | Training circuits match GPU kernels | parked at: forward attention's circuit matches the card on every captured word, on `main`; the backward kernel is captured, its circuit drafted and not matched |
-| training | Training slowdown results final and proved | parked at: three plots on the bound of record; of three corrections one is published, two are not; each raises the plotted figures |
-| training | Inference-only accounting on a small model | parked at: 1 as served |
-| training | Small model's proved slowdown reaches 1,000 | parked at: 1 of 1,000 |
-| training | Slowdown plotted against model size | 17 of 22 configs on `main`, none run on a GPU |
-| vllm | Production vLLM reproducible under 1% serving overhead | stops in: the run of record reproduced 5,700 of 5,700 tokens and read +2.31% [+0.68%, +3.94%], under 1% not shown; the command is marked to merge; which change loses the drafts not known |
-| vllm | vLLM serving cost benchmarked | stops in: the command on `main`, the calibration, one value on the dashboard |
-| vllm | Serving cost measured on GLM-5.3 | stops in the same state |
-| vllm | Serving cost's tick arm measured behind certifier | stops in: not run; booked tonight 5 to 8 PM PST |
-| vllm | Long-context request served and committed | stops in: one request of 131,072 tokens served with one layer's table committed, no draw on it; the code that carries its keys between windows on an old branch |
-| top | Paused work resumed or dropped | **Results resume after the architecture.** It holds every parked goal with the state it stopped in |
+The last column is top's first sort after Daniel's word of 8:47 AM (demos and benchmark targets are tier 1 again): K5 to K12 name the goal of the second form a row would serve. Each lead confirms or corrects it on TOP-416.
+
+| Lead | Goal | The state it stops in | Under the second form |
+| --- | --- | --- | --- |
+| benchmarks | Proof system performance benchmarked | Parked at: `verity bench prove --system spot` prints 0.0364 prover GPUs a serving GPU, 4.60 × 10^-4 Lean verifier seconds and 4.08 proof bytes a token, all modeled, from labelled runs on `main`, and the dashboard shows all four. | is goal 9 |
+| benchmarks | Head key blocks priced as served units | Parked at: the driver prices the head as units under `--partition head-scores-values` on `main`; values units verified, scores at 64 keys and @circuits' key-row writer not yet. | K9 |
+| ci | Platform repository lands through the queue | Stops with the infra repository's loop stopped since Tue 10 Nov; INF-639 settles on Mon whether it's a second instance or a mode. Park, unless you want the platform repository held to two hours now | stays parked |
+| comms | SPOT draft's differences on the page | Parks with the SPOT post. State: comms' part done (the $57$ placed, $36$ ready); proofs posts them when Daniel says yes. | stays parked |
+| compute-accounting | Remote demo's proof covers Pearl+ | Stops at: Pearl+'s Lean check accepts on the prover's side; TT_OUT open (ASK-296); the composite's tie is proofs' (PRF-596) | K5 |
+| compute-accounting | Onsite demo's proof covers Pearl+ | Stops at: not started for onsite | K6 |
+| compute-accounting | Twice the sampled tiles a window | Stops at: design written, not measured | K10 |
+| compute-accounting | Massive-activation rows credited | Stops at: channel swaps #9518 marked | K10 |
+| compute-accounting | Pearl+ check runs on the auditor's machine | Stops at: CMP-370's answer (which form of the case an auditor's host may hold) by Fri 20 Nov | K10 |
+| compute-accounting | LM head credited by Pearl+ | Stops at: not started | K10 |
+| compute-accounting | Small model's verified compute share reaches 97% | Stops at: 614b's figures | is goal 10 |
+| compute-accounting | Daniel's page on H200 accounting | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) | its lead says |
+| compute-accounting | Pearl-C's debit closes red team's breaks | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) | its lead says |
+| compute-accounting | 97% of H200 capacity accounted for | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) | its lead says |
+| compute-research | Paused work resumed or dropped | As they are, each with the state Daniel paused it in on Mon 9 Nov: `accounting/silicon-logs-all-compute`, `accounting/useful-weights-hard`, `compute-research/chain-premise-probed`, `chain-round-pinned`, `first-four-layers-numbers`, `hardness-train-at-point`. | stays parked |
+| console | Each bound shows per week, month and year | Stops with the README contract naming a bound's `period` and `over` keys; the tab has no per-period code. Bounds are results, and results are parked. | K3 |
+| infra | Infra repository merges without Daniel | Stops with: no change there has waited for Daniel since Tue, each merges on a verdict from a reader who is not its owner; the queue lands nothing there; its author fix is on `main`; the second change is ci's, which ci parks as `ci/platform-repo-queue` | stays parked |
+| infra | Checker slot starts its next task at once | Stops with: the change on since Wed; the executor runs every submission in shadow on its own machine; twelve test files end each submission with no verdict (CI-526, infra's five being mended today); how many tasks run at once on a slot not read from the machine. I keep it instead if ci puts the executor under goal 4: ci's table names no goal for it | stays parked |
+| kernels | Steady-state proving cost measured | stops with rows 1 and 2 timed again from `main` today and labelled | K9 |
+| kernels | Deep blocks' witness built on GPU | stops measured on a card twice (Thu, today); its code is on a branch, not on `main` | K9 |
+| kernels | Flock's wide leaf measured on a GPU | stops timed on a card today, not of record; #9079 open behind proofs' #9108 | K9 |
+| kernels | Overhead benchmark passes its GPU check | stops with the arm's first card run today; #9489 and #9550 open | K10 |
+| kernels | PoUW overhead counts the output's commitment | stops with no timed row of record | K10 |
+| kernels | Row commitment takes LM-head rows | stops with the wide kernel built and stored, pinned only in #9550 | K10 |
+| lean | Inference-only policy proved for served traffic | stops at: not true on `main`; its 25 parts listed with owners, lean's five dated; network-accounting holds the policy and takes the goal Mon 16 Nov | K5 |
+| lean | Honest signed session's proof sized | stops at: one worker's read, which builds nothing. I let it finish Sun 15 Nov 6 PM and send soundness the sizes Mon noon | K5 |
+| memory-accounting | Memory verdicts on the onsite record | Stops at: all three audits accepted in a rehearsal on one H200 over the `bf16` store, each decided by its Lean verifier (Thu 12 Nov); the onsite record lists no memory verdict; @vllm's setting and your word on where Lean runs are not in | K6 |
+| memory-accounting | Uncertified memory share reaches its target | Stops at: 0.199 at the data sheet's rate, Thu 12 Nov, the session accepted by Lean; the target 0.14 for Wed 18 Nov is not reached | is goal 11 |
+| memory-accounting | Uncertified memory share at most 0.17 | Stops at: 0.233 and 0.199 over the cards' memory alone; the store with the host's memory has not been run served | K11 |
+| memory-accounting | Cost of a 100-bit memory audit measured | Stops at: the 64-row session passes its check on one H200; its cost on the eight-card node is not measured. The bandwidth audit's error stays 2^-15 a session. If that is a hole under your ruling 1, the five changes that need no new version are kept under goal 2: say so | stays parked |
+| network-accounting | Network certification adds no exfiltration capacity | Stops at: the figure of record prints on `main`. A worker started on the certifier's stamps this morning and stops at its plan | K8 or K6, its lead says |
+| network-accounting | Network check ties responses to committed outputs | Stops at: a one-token change is refused on a served try; #9491 and #9541 are open; the exchange with vllm and proofs on the two classes stops at Monday's reads | K8 or K6, its lead says |
+| network-accounting | Certifier turns away arrivals at a run's end | Stops at: built, #9457 open | K8 or K6, its lead says |
+| network-accounting | Run record reports the tighter exfiltration capacity | Stops at: the check prints the ruled value on Monday's data; #9656 and #9741 are open | K8 or K6, its lead says |
+| network-accounting | Network bound counts only unchecked inputs | Stops at: the statement is on `main`; #9663 is reviewed; #9350, #9641 and #8829 are open | K8 or K6, its lead says |
+| network-accounting | Scan count statements restated as soundness amended | Stops at: #9639 is reviewed | stays parked |
+| network-accounting | Onsite exfiltration capacity proved in Lean | Stops at: four statements, none proved; #8708 is open. #9664 and #9736 change the Lean check and land under `network/onsite-port-staged` | K8 or K6, its lead says |
+| soundness | Sampled proofs sound as deployed | stops at: the deployed remote theorem listed, five open premises, the sample-choice and device-key mends in flight | K5 |
+| soundness | Remote demo's soundness fully proved | stops at: the open list on PRF-579, with owners and days | K5 |
+| soundness | Served weights proved to be the registered ones | stops at: VLLM-424 (the proofs read the registered rows), the checkpoint match a completeness note | K8 |
+| soundness | Linear layers tied into inference-only check | stops at: #9669 open, `Shared` and the A-row home proved, the `theta` rewrite after #9463 | K12 |
+| soundness | Deployed remote theorem's honest witness runs a session | stops at: `cursor/soundness-remote-witness-8fb2` at `beebe2ec45`, sized at 4,500 to 7,500 lines, its worker blocked three times | K5 |
+| training | Library holds standard algorithms and most frontier points | parked at: all 83 points have an entry on `main` held to its run; the command prints a slowdown for 39 of 62 entries; the rule for the other 23 is decided, not built | K12 or parked, its lead says |
+| training | Every search frontier point runs from the library | parked at: 99 of 139 points on `main`; the open drafts (#9531, #9711, #9731, #9733) land or close as they are; no new route starts | K12 or parked, its lead says |
+| training | Training circuits match GPU kernels | parked at: forward attention's circuit matches the card on every captured word, on `main`; the backward kernel is captured, its circuit drafted and not matched | K12 or parked, its lead says |
+| training | Training slowdown results final and proved | parked at: three plots on the bound of record; of three corrections one is published, two are not; each raises the plotted figures | K12 or parked, its lead says |
+| training | Inference-only accounting on a small model | parked at: 1 as served | folds into goal 12 |
+| training | Small model's proved slowdown reaches 1,000 | parked at: 1 of 1,000 | is goal 12 |
+| training | Slowdown plotted against model size | 17 of 22 configs on `main`, none run on a GPU | K12 or parked, its lead says |
+| vllm | Production vLLM reproducible under 1% serving overhead | stops in: the run of record reproduced 5,700 of 5,700 tokens and read +2.31% [+0.68%, +3.94%], under 1% not shown; the command is marked to merge; which change loses the drafts not known | is goal 7 |
+| vllm | vLLM serving cost benchmarked | stops in: the command on `main`, the calibration, one value on the dashboard | K7 |
+| vllm | Serving cost measured on GLM-5.3 | stops in the same state | K7 |
+| vllm | Serving cost's tick arm measured behind certifier | stops in: not run; booked tonight 5 to 8 PM PST | K7 |
+| vllm | Long-context request served and committed | stops in: one request of 131,072 tokens served with one layer's table committed, no draw on it; the code that carries its keys between windows on an old branch | K8 |
+| top | Paused work resumed or dropped | **Results resume after the architecture.** It holds every parked goal with the state it stopped in | stays parked |
 
 ## Dropped: done, duplicates, steps that are not a state of main
 
@@ -332,6 +357,7 @@ L10, R11, R12, R14, R15 (L = a not-yet line of the layout file, R = a row of the
 | lean | Refused lemma's answer read | a read, not a state of `main`; it is a step of `lean/witness-held-to-its-guarantee` |
 | memory-accounting | PoUS grader moved out or deleted | True on `main` since chain 2: `tools/pous_grader/` holds its 11 files and none is under `verity/` [ran on `5eb1231b2558`]. I mark it done. Whether the package is deleted is my read of Mon 16 Nov noon on MEM-306, not a goal |
 | memory-accounting | Verifier tests stop loading benchmark code | It is two of the five entries in the row above. Its change (MEM-259) keeps its issue and lands the day after #9061 |
+| network-accounting | Benchmark reports network certification's exfiltration capacity | Done (network-accounting's correction, 8:44 AM) |
 | network-accounting | Check prints the ruled value on Monday's data | Done as a run: the check prints 26,400 bits on Monday's data. Its change lands under `network/onsite-port-staged` |
 | network-accounting | Onsite port recounted and first changes built | Done: the count, the list of 14, and the first changes open |
 | network-accounting | Six cheating servers tried against a served run | Done: the six tries ran Thu night; the table is on NET-340 |
