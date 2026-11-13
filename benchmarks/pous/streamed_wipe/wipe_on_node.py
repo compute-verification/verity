@@ -6,7 +6,7 @@ from __future__ import annotations
 import sys
 
 from verity.runtime.stream import Side
-from verity.protocols.pous.verifier import wipe_period
+from verity.protocols.accounting.pous.verifier import wipe_period
 
 if __name__ == "__main__":
     sys.exit(wipe_period.main(side_of=Side.of))
