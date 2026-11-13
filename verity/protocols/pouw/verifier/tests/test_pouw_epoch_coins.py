@@ -173,6 +173,8 @@ def test_a_served_window_flips_every_coin_from_its_entropy_and_none_from_the_os(
 OS_RANDOMNESS = {
     "protocols/pouw/prover/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named "
                                             "by A5's uniform/python-secrets",
+    "protocols/pouw/prover/clear/clear_audit.py": "the reference prover's hm96 hiding key when its caller gives none "
+                                                   "(`Prover.salt_key`), the committer's secret and no coin",
     "protocols/spot/verifier/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
                                                            "(`_dumps`), no coin",
 }
