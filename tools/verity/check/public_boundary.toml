@@ -94,7 +94,8 @@ shared = [
     # the hardware cards, the data sheets' numbers, which the integration's served device reads, and the node files, which
     # say which cards a kind of node carries and what its host holds (the Lean tables' test reads Accounting's B200 sheet
     # and the node files' test reads the Site, so each stays private)
-    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards,nodes,tests/test_cards.py}",
+    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards.py,nodes.py,tests/test_cards.py}",
+    "hardware/{cards,nodes}",
     # the vLLM endpoint's load generator, which the served run's requests come from
     "demos/vllm/serve_load.py",
     "security/Properties/Spot/{Draw,Bits}.lean",
