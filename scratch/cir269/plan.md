@@ -162,3 +162,142 @@ Where they meet the work in flight [read: `git diff origin/main...HEAD` of each 
   landings it would have narrowed. They meet in `cache.py`'s `version`/`key`, which 2b doesn't edit.
 - **The move** (top's, Sunday night): with 2a and 2b on `main`, it edits the adapter's sidecar's imports, `heavy.json`'s
   23 keys and prose, and no versioned circuit-check file [inferred].
+
+## 6. The sweep (CIR-205, `circuits/slice-clean` step 8), sized
+
+Added Thu 12 Nov 6:13 PM PST [02:13Z]. Counts only; nothing fixed.
+
+### (a) The four counts on `main` `636d15d041b5`, by file of `src/circuit_check` [ran]
+
+| File | Lines | Function-level imports | mypy errors | `Any` | Capital aliases |
+| -- | --: | --: | --: | --: | --: |
+| `cache.py` | 3063 | 38 | 54 | 62 | 6 |
+| `checks.py` | 1856 | 60 | 24 | 90 | 28 |
+| `cli.py` | 1635 | 13 | 75 | 5 | 10 |
+| `units.py` | 1362 | 24 | 46 | 38 | 5 |
+| `targets.py` | 1074 | 37 | 8 | 64 | 17 |
+| `bodies.py` | 615 | 0 | 48 | 22 | 1 |
+| `structural.py` | 592 | 9 | 3 | 16 | 7 |
+| `sidecars.py` | 360 | 7 | 4 | 8 | 4 |
+| `by_calls.py` | 334 | 2 | 2 | 20 | 6 |
+| `vectors.py` | 276 | 1 | 4 | 3 | 0 |
+| `ambient.py` | 245 | 12 | 4 | 9 | 6 |
+| `structural_slots.py` | 196 | 1 | 0 | 3 | 3 |
+| `shard.py` | 182 | 0 | 2 | 0 | 1 |
+| `ranges.py` | 177 | 0 | 0 | 0 | 2 |
+| `block_held.py` | 101 | 0 | 0 | 0 | 0 |
+| `entries.py` | 37 | 0 | 0 | 0 | 0 |
+| `__init__.py` | 18 | 0 | 0 | 0 | 0 |
+| `__main__.py` | 5 | 0 | 0 | 0 | 0 |
+| **all 18** | **12128** | **204** | **274** | **340** | **96** |
+| **per 1,000 lines, now** | | **16.82** | **22.59** | **28.03** | **7.92** |
+| the note, Mon 9 Nov `7af4d24fca` (the coordinator's reading) | 11,531 | 18.65 | 26.6 | 27.2 | 8.93 |
+| **vLLM's rates, to reach** | | **2.51** | **0** | **3.16** | **0.12** |
+
+How each count was made (the scripts are `scratch/cir269/counts.py` and `detail.py`):
+
+- **Lines:** newlines per file (`text.count("\n")`), blank lines, comments and docstrings included.
+- **Function-level imports:** `ast.Import` and `ast.ImportFrom` statements inside a `def` or `class` body, one per
+  statement (`import a, b` is one).
+- **`Any`:** every `ast.Name` with id `Any` and every `ast.Attribute` with attr `Any`, in annotations and code alike.
+- **Capital aliases:** import aliases matching `^[A-Z][A-Z0-9_]*$` (`as TG`, `as CC`, `as W`).
+- **mypy:** mypy 1.18.2, in a venv with only numpy (2.5.4) installed, run from a directory with an empty config:
+  `mypy --config-file empty.ini --python-executable <that venv> --check-untyped-defs --follow-imports=silent
+  --ignore-missing-imports --no-incremental --show-error-codes tools/verity/circuit_check/src/circuit_check`. It took
+  5.0 s and 236 MB (so it ran here, not remotely), and printed 274 `error:` lines and 1 `note:`.
+- **Where my method may differ from the note's:** I can't read the note (this machine has no `~/.research/notes`), so I
+  don't know how it counted lines (11,531 against my 12,128 may be non-blank lines, or `main` grew 597 lines since Mon 9
+  Nov), nor whether it counted `Any` the same way. The 30 imports of `verity_flock` and the 13 CIR-269 sites my
+  classifier finds match the brief's counts, which is my only calibration.
+
+### (b) The 204 function-level imports, by why they're lazy [ran the classifier; the reasons are inferred]
+
+| Kind | Count | Where |
+| -- | --: | -- |
+| CIR-269's pull requests remove them (the 13 sites; PR 2b replaces each with a hook lookup, which is no import) | 13 | `targets.py` 11, `sidecars.py` 1, `units.py` 1 |
+| of `verity_flock` | 30 | `ambient`, `checks`, `sidecars`, `structural`, `targets` (`CIRCUIT_CHECK_IMPORTS`' five files) |
+| **lazy on purpose: they stay, or need a design** | **22** | |
+| ↳ `cache.py`'s imports of the tree: its rule is that it "imports nothing of the tree at its import" (`cache.py:176`) | 9 + 2 intra-package | `cache.py` |
+| ↳ one side of an import cycle inside the package (kept by a greedy pass that hoists each edge unless it closes a cycle with what is top-level so far) | 10 | `targets→sidecars` 4, `checks→by_calls` 2, `units→cli` 2, `targets→checks` 1, `structural→structural_slots` 1 |
+| ↳ an optional module: `try: from verity.definitions import cross_call` / `except ImportError` | 1 | `checks.py:1707` |
+| **a plain hoist** | **139** | |
+| ↳ the standard library | 51 | 27 of them in `cache.py`, the one file to check by hand: its hooks may want a module loaded late [inferred] |
+| ↳ `verity.circuits.*`, outside `cache.py` (`checks.py` already imports `evaluation`, `boolean` and `defs` at its top [read]) | 59 | |
+| ↳ inside the package, no cycle (the greedy pass's other 21 edges) | 21 | `checks→targets` 8, `ambient` 4, `checks→vectors` 2, … |
+| ↳ `verity.definitions.word` / `cross_call`, which import `verity.circuits` and `call_scope` only (`word.py:49-55` [read]) | 7 | `checks.py` 5, `targets.py` 2 |
+| ↳ `numpy.random` | 1 | `ambient.py:84` |
+
+**After every plain hoist and CIR-269: 52 left, 4.29 per 1,000 at today's length, against vLLM's 2.51.** The 30 of
+`verity_flock` are 2.47 per 1,000 alone. Reaching 2.51 needs a design for Flock (Flock's package handing circuit-check
+what it needs in a sidecar, as section 2's A does for the served part: proofs' files, and "not yours" for CIR-269) and for
+`cache.py`'s rule. Parallel workers don't change that.
+
+### (c) The mypy errors [ran]
+
+The ten most frequent codes: `arg-type` 72, `attr-defined` 52, `misc` 36, `assignment` 32, `union-attr` 28, `index` 17,
+`var-annotated` 10, `operator` 6, `list-item` 6, `return-value` 5 (then `dict-item` 3, `call-arg` 3,
+`func-returns-value` 2, `syntax` 1: `ambient.py:93`, an invalid `type: ignore` comment). By file: `cli.py` 75, `cache.py`
+54, `bodies.py` 48, `units.py` 46, `checks.py` 24, `targets.py` 8, seven files 23 together.
+
+What fixes them, by a classifier over the messages:
+
+- **107: an `Optional` used as its value** (`FrameType | None` assigned to `FrameType`, `Plan | None`'s `.entries`,
+  `Path | None` passed as a `Path`). Fixed by a narrowing (an `assert`, an early return), not by a type.
+- **39: `Body` attributes set outside the class** (`bodies.py`: `.P` 15, `.ret` 7, `.traffic` 5, `.pad` 4, …). Fixed by
+  declaring them on the class.
+- **20: need an annotation** (`var-annotated` 10, "Cannot infer type of lambda" 10).
+- **19: an `except` variable read after its block** ("Trying to read deleted variable `e`" 13, "Assignment to `e`
+  outside except" 6). Fixed by a rename.
+- **89: the rest**, real mismatches: an AST node used without `isinstance` (`stmt` has no `.value`), `Path` against
+  `str`, `ndarray` against `Sequence[int]`, `set.add`'s value. 42 of these name an `Any` in the message (`Any | None`,
+  `dict[Any, Any]`).
+
+**How many go when the `Any` they come from is typed: none.** An `Any` suppresses errors and never causes one, so
+typing one can only add errors. The 42 that name an `Any` do so inside a union with `None`, or in a container, and stay
+until the `None` is narrowed. At these settings every `verity.*` and `verity_flock` import is `Any` too (they're
+missing imports, ignored), so typing an annotation as a `verity` type changes nothing mypy sees.
+
+### (d) One ordered list: CIR-269, #9340, the move, and the sweep
+
+✱ = changes a file under `src/circuit_check` that `cache.version` holds (any file but `targets.py`, `shard.py`,
+`heavy.json`, `pins/`: `cache.py:2075-2099` [read]). † = changes `targets.py`'s code, whose `common` unit every record
+holds (`cache.py:1939,1943` [read]): as costly as ✱. An annotation is in the AST that `_code` hashes, so a typing-only
+edit moves the key as much as a code edit does.
+
+| # | Landing | Files | ✱/† | Can be one landing with |
+| -- | -- | -- | -- | -- |
+| 0 | #9375 (tonight, lean's) | `by_calls.py`, `cache.py`, `sidecars.py`, … | ✱ | — |
+| 0 | #9340 (expected tonight) | `cache.py`, `cli.py`, `units.py`, `tests/conftest.py`, … | ✱ | — |
+| 1 | CIR-269 PR 1 | `call_scope.py` and its callers | — | — |
+| 2 | CIR-269 PR 2a | the adapter's sidecar | — | — |
+| 3 | CIR-269 PR 2b | `targets.py`, `sidecars.py`, `units.py`, `cache.py`, `cli.py` | ✱† | — |
+| 4 | sweep S1: `targets.py`, `sidecars.py` (hoists, aliases, 12 mypy, 72 `Any`) | the same files as 3 | † ✱ | **3**: the same candidate, so one cold build |
+| 5 | sweep S2: `units.py` (46 mypy, 24 imports, 38 `Any`) | | ✱ | **3** |
+| 6 | sweep S3: `cache.py`, `cli.py` (129 mypy, 51 imports, 67 `Any`) | after #9340 | ✱ | **3**, if ready by then |
+| — | the move (top's, Sunday night) | no versioned circuit-check file once 3 is in [inferred] | — | — |
+| 7 | sweep S4: `checks.py` (24 mypy, 60 imports, 90 `Any`, 28 aliases) | | ✱ | 8 |
+| 8 | sweep S5: `bodies.py` (48 mypy, mostly the `Body` attributes) and the eleven small files | | ✱ | 7 |
+
+Separately that's 6 sweep landings that move the key (each one cold whole-catalog build), and with 3, 7 of ours. The
+fewest it can be: **2**, with S1 to S3 in PR 2b's candidate and S4 and S5 in one candidate after it.
+
+### (e) Two days for the sweep's last landing
+
+- **One worker, after CIR-269's change (2b on `main` Sat 14 to Sun 15 Nov): last sweep landing Fri 20 Nov, range Thu 19
+  to Mon 23 Nov.** What sets it is the worker's own throughput on the `Any` typing (340 to at most 38) and the
+  `Optional` narrowings, file by file, with `checks.py` and `cache.py` the longest. Each landing, if not batched, adds
+  one cold catalog build to its candidate. This is the least defensible number here: it's my estimate of editing work I
+  haven't timed.
+- **Workers in parallel by file from Fri 13 Nov morning: Tue 17 Nov at the earliest (range Mon 16 to Wed 18 Nov). It
+  is not much earlier than one worker, and here is why.** The files aren't independent in time: `targets.py`,
+  `sidecars.py` and `units.py` wait on CIR-269's 2b (the same lines), and `cache.py`, `cli.py` and `units.py` on #9340.
+  `checks.py` and `cache.py` are one worker each and can't be split. Every PR moves `cache.version`, so parallel
+  landings in separate candidates each pay a cold build, and a red in a shared candidate bisects all of them. What makes
+  it earlier instead:
+  1. **Batching:** all sweep PRs marked for the same candidate as PR 2b, and the rest in one more (2 cold builds, not 7).
+  2. **CIR-234's narrower key first:** a sweep landing then misses only the targets that loaded the edited module.
+  3. **A version that hashes annotations as one constant.** Typing and annotation-only edits would then move no key. No
+     file of `src/circuit_check` reads annotations at run time (no `get_type_hints`, `__annotations__`, `ClassVar` or
+     `InitVar`; 16 of 18 files use `from __future__ import annotations` [read]), but a `@dataclass` reads its fields'
+     annotations, so this is CIR-234's to decide, with a test.
+- Neither day reaches vLLM's function-import rate (section (b): Flock's 30 and `cache.py`'s rule need designs).
