@@ -367,6 +367,87 @@ theorem statementAt_of {slice : Member → Json} {bs : Core.Blobs} :
           simp only [List.lookup, hn'] at hs ⊢
           exact hs
 
+/-- A loop that pushes each entry's value is the fold that pushes it. -/
+theorem forIn_push {α γ : Type} {f : α → Array γ → V (ForInStep (Array γ))} {g : α → V γ} :
+    ∀ (l : List α) (acc : Array γ), (∀ a ∈ l, ∀ r, f a r = (fun v => ForInStep.yield (r.push v)) <$> g a) →
+      forIn l acc f = l.foldlM (fun r a => (r.push ·) <$> g a) acc
+  | [], _, _ => rfl
+  | a :: l, acc, h => by
+    rw [List.forIn_cons, List.foldlM_cons, h a List.mem_cons_self]
+    cases g a with
+    | error e => rfl
+    | ok v => exact forIn_push l (acc.push v) fun b hb r => h b (List.mem_cons_of_mem a hb) r
+
+/-- A fold over the places `[i, i + l.length)` is the fold over `l`'s entries, where each place's value is its entry's. -/
+theorem foldlM_range' {α γ : Type} {gL : Nat → V γ} {gR : α → V γ} :
+    ∀ (l : List α) (i : Nat) (acc : Array γ), (∀ (k : Nat) (x : α), l[k]? = some x → gL (i + k) = gR x) →
+      (List.range' i l.length).foldlM (fun r k => (r.push ·) <$> gL k) acc =
+        l.foldlM (fun r x => (r.push ·) <$> gR x) acc
+  | [], _, _, _ => rfl
+  | x :: l, i, acc, h => by
+    have h0 := h 0 x rfl
+    rw [Nat.add_zero] at h0
+    rw [List.length_cons, List.range'_succ, List.foldlM_cons, List.foldlM_cons, h0]
+    cases gR x with
+    | error e => rfl
+    | ok v =>
+      exact foldlM_range' l (i + 1) (acc.push v) fun k y hk => by
+        rw [show i + 1 + k = i + (k + 1) by omega]
+        exact h (k + 1) y hk
+
+/-- **The trees' check on what was kept is `membersTreesHeld` on all the blobs**, where each statement has one session
+and the stream kept it, by its place, as it reads on all the blobs. -/
+theorem treesKept_eq {ts : Array Challenger.LoggedTree} {log : List String} {S : State} {full : Core.Blobs}
+    {sts : Array (StatementFiles × Member)}
+    (hk : ∀ (k : Nat) (st : StatementFiles) (m : Member), sts[k]? = some (st, m) →
+      ∃ s a, st.sessions = #[s] ∧ S.sessions[k]? = some (some (SessionKept.of m a full s))) :
+    treesKept ts log sts.size S = membersTreesHeld ts log sts full := by
+  unfold treesKept membersTreesHeld
+  dsimp only
+  congr 1
+  rw [Std.Legacy.Range.forIn_eq_forIn_range', ← Array.forIn_toList]
+  rw [forIn_push (g := fun k => match S.sessions[k]? with
+      | some (some sk) => sk.trees
+      | _ => throw "a statement's session came in no blob")]
+  · rw [forIn_push (g := fun x => match x.1.sessions[0]? with
+        | some s => (SessionKept.of x.2 (throw "") full s).trees
+        | none => throw "")]
+    · have hn : (Std.Legacy.Range.size [0:sts.size]) = sts.toList.length := by
+        simp [Std.Legacy.Range.size]
+      simp only [hn]
+      refine foldlM_range' sts.toList 0 #[] fun k x hx => ?_
+      rw [Nat.zero_add]
+      obtain ⟨st, m⟩ := x
+      rw [Array.getElem?_toList] at hx
+      obtain ⟨s, a, hs, hS⟩ := hk k st m hx
+      simp only [hS, hs, List.getElem?_toArray, List.getElem?_cons_zero]
+      rfl
+    · intro x hx r
+      obtain ⟨st, m⟩ := x
+      obtain ⟨k, hk', hx'⟩ := List.getElem_of_mem hx
+      have hx'' : sts[k]? = some (st, m) := by
+        rw [← Array.getElem?_toList, List.getElem?_eq_getElem hk', hx']
+      obtain ⟨s, a, hs, _⟩ := hk k st m hx''
+      simp only [hs]
+      rw [← Array.forIn_toList]
+      simp only [List.toList_toArray, List.forIn_cons, List.forIn_nil, List.getElem?_toArray,
+        List.getElem?_cons_zero, SessionKept.of]
+      cases hg : full.get s.record s!"session {s.name}'s record" with
+      | error e => rfl
+      | ok b =>
+        simp only [ok_bind]
+        cases String.fromUTF8? b with
+        | none => rfl
+        | some record =>
+          cases sessionEvidence full s <;> rfl
+  · intro k _ r
+    cases S.sessions[k]? with
+    | none => rfl
+    | some o =>
+      cases o with
+      | none => rfl
+      | some sk => cases sk.trees <;> rfl
+
 /-- **The fold's half of `StreamSound`, stated and not proved**: on a feed in the per-member stream's order, its
 state after every step keeps every member's files and every statement's session as they read on all the blobs fed. -/
 def StepsKept : Prop :=
