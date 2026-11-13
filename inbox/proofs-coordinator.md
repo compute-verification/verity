@@ -150161,3 +150161,56 @@ Part A's table by file and line, B.2 to B.4, and part C with its size. [derived]
 - Nothing of the compute audit was run on a row left early through the stream: that needs the Lean verifier's
   executable, which is not on this machine. The runs above are of the pure Python pieces only.
 - vllm's adapter change is unwritten. I read it as relayed.
+
+## MEMBERS, Fri 13 Nov 16:10Z: item 4 before code: the mend is one import line, no declaration changes; the readers from the facts; the cost after; how the cap is made
+
+Nothing is written yet. This is the entry you asked for before code.
+
+### What changes
+
+- [read `Spot/PopOrder.lean`, `Spot/Run.lean`, `Spot/OneStageZk.lean`] **No declaration changes.** The equality is already in the tree: `Slots.popOkRanges` decides the population's order from the query's ranges and the units' gates, building no proof block and no input gate, and `Slots.popOk_eq_popOkRanges : @popOk = @popOkRanges` is proved and marked `@[csimp]`. A `@[csimp]` equality replaces the stated function only in code compiled where the equality is imported. `Spot/Run.lean` imports `Spot.PopOrder`; `Spot/OneStageZk.lean` imports `Spot.Slots` alone. So `popHeld`, compiled in `Spot/OneStageZk.lean` and run by both of v2's checks (`checkOneAt`, and `membersStructure` under `checkMembersAt`), runs the stated `popOk`: `layout`, a proof block for every input gate of the root.
+- The mend: `public import Spot.PopOrder` in `Spot/OneStageZk.lean`, one line; `popHeld`'s docstring and `Spot/PopOrder.lean`'s header say that v2's checks run it too. `popOk`, `layout`, `popHeld`, `popOkRanges` and the equality are untouched. No statement moves and no lock record changes: a record holds a statement and the definitions it reads, and an import changes neither.
+- The stop rule is not met.
+
+### Which listed guarantees read `Slots.layout` or `popOk`, from the facts
+
+[run `r20261113-160717-ad93`: the facts documents a records run stored today on vy-nebius-cpu-3 (`lean_changed.facts_dir()`), each guarantee's own `reads`; the two newest that read these names, of 15:46Z (1,137 guarantees, the count of `security/lean-audit.json`) and 15:57Z (540, the properties' package). I do not know which head they were built at.]
+
+- `Slots.popOk` is read by 5 statements of `security`: `Flock.SecurityProofs.RecursiveAuditC3`, `Flock.SecurityProofs.SampledKSLiveV3`, and `Verity.Sampled.remote_soundness_deployedReady` with its `_honest` and `_nontrivial`. The last three and `RecursiveAuditC3` read it through `OneStageZk.popHeld` (and `checkOneAt`, `checkMembersAt`); `SampledKSLiveV3` reads `popOk` without `popHeld`.
+- `Slots.layout` is read by those 5 and 8 more of `security`: `Flock.SecurityProofs.SampledKSLivePub`, `SampledKSLiveV2`, `SampledKSLiveV5`, `SampledKSTwo`, `SampledKSTwo_honest`, `SpotExfilTwo`, `SpotFirstHitTwo`, `SpotKSTwo`.
+- In the properties' package, `popOk` and `popHeld` are read by 26 statements: `Properties.Remote.SecurityProofs.acceptComplies`, `acceptInferenceOnly`, `Properties.Spot.SecurityProofs.tablesRegistered`, and 23 of `Verity` (`coins_couple`, `remote_soundness_of_subprotocols`, `soundness_at_of_componentBounds`, `soundness_at_of_targets`, `soundness_of_subprotocols`, `soundness_of_upFront`, `target_of_periods`, each with `_honest` and `_nontrivial`, and `wipe_target`, `wipe_target_nontrivial`). `layout` is read by those and by `Properties.Spot.SecurityProofs.designWellFormed` and `drawMisses`.
+- No statement reads `popOkRanges`. None of the statements above changes: they read `popOk` as it is stated, and it stays as stated.
+
+### What the step costs after the mend
+
+[read `Spot/PopOrder.lean`] `popOkRanges p query n` is three things.
+
+- `Partition.evaluate p query`: the query's ranges, from the program's description. [run `r20261113-152216-f68f`] On Thursday's program (8,429 definitions, 931 root nodes): 298 ranges in 0.70 s.
+- `Partition.unitGates p query`: every unit's gates, read a range at a time, but returned as one pair a unit. `popOkRanges` reads only how many there are (`n ≤ gs.size`). So this part is in the population's units (1,109,804 on Thursday's window), not in gates: about a pair of numbers a unit. Not measured on Thursday's program.
+- `chain (segsOf rs) 0 n`: the strata's segments, one a range.
+- So: the program's description, plus one pair a unit of the population. No input gate and no proof block. If you want the units' term gone too, the count could be read off the ranges; that is a second equality, and I do not write it without your word.
+- Before the mend the step is in the root's input gates. [derived, not measured apart] On Thursday's program that is where the 536.6 GB and the 234.7 GB went: every other step of `layout` is a pair a unit or less.
+
+### How I show it
+
+- The try of `Spot/OneStageZk.lean` on a node, with `--siblings`.
+- A timing on a node that is not cpu-6: the row's timer gets one more line a case, `popHeld` on the case's own parameters and record, with the count of the root's input gates beside it. A stand-in window of 1200 members has millions of input gates, so before and after differ visibly there.
+- Thursday's program: [guess] it cannot be read from another node. vllm's kept directory is on cpu-6's disk and I know of no other copy; copying it off is refused. So that timing waits for vllm's yes, and runs under the cap.
+
+### The cap (your item 3)
+
+Made inside the job, by the job. The reader is started in a process group of its own (`setsid`). A watcher beside it reads `VmRSS` of every process of that group from `/proc` five times a second, sums them, and at the first sum past the figure asked for (`--mem-gb`) sends `SIGKILL` to the group and prints the figure it saw. At the 1.2 GB a second Thursday's reader grew by, it overshoots by about a quarter of a GB. The job's first step runs a small allocation (Python, 64 MB at a time, each page written) under the same watcher at a cap of 256 MB and goes on only if the watcher killed it; if the allocation ends on its own, the job stops before it reads anything. Every run of mine that reads a real window carries it from now on.
+
+### Sizing for item 7 (nothing written)
+
+- The per-member parse. [run `r20261113-153828-80b2`] `membersOf` is quadratic in the members: 53 s at 25,628 made-up members, 204 s at 51,256, and 792 to 800 s on Thursday's 102,781 [runs `74bf`, `f68f`]. The sort I guessed at 15:35Z is not it: it takes 7 ms at 102,810. [run `r20261113-154700-42a3`] Each part written apart takes milliseconds (the map 28 ms, the fold 1 ms, the sort 3 ms, the check of no unit in two ranges 0 ms, at 51,256). [run `r20261113-155355-e8de`] `membersOf` copied word for word is as slow as `membersOf` (51.4 s against 51.6 s at 25,628); the same text with its last check, the loop over the sorted ranges, in a function of its own gives the same answer in 50 ms, and in **220 ms at 102,810 members**. [derived] So inside `membersOf` the compiled loop does the fold and the sort again, or copies their result, in each turn; one turn costs what one fold and sort cost.
+- Its mend: a twin with the last check in a function of its own, proved equal and marked `@[csimp]`, about 30 lines; `membersOf` untouched, because `security/Proofs/Properties/Verity/Sampled/MemberForm/Apart.lean` unfolds it. [run `ad93`] No listed statement reads `membersOf`.
+- `printedSize` of the partition object, once a member: Thursday's partition's size was not printed by my job, so not sized. `readsRegistered`: [run `f68f`] false on Thursday's program; it scans the definitions' names (8,429) once for each of the 15,781 members with no registered file.
+
+### Not established
+
+- That the import alone makes `popHeld` run `popOkRanges`: I read how `@[csimp]` takes effect and what `Spot/PopOrder.lean`'s own header says of `Spot.Run`; no run shows it yet. The row's line will.
+- That the input gates are where Thursday's memory went: derived from the code, not measured apart.
+- The count of the root's input gates on Thursday's program, and `Partition.unitGates`' time on it.
+- Which head the facts documents were built at.
+- The first run's scratch directory: the clean-up found one directory, not two, so the first run's was removed at its cancel or by the second run's first step; I did not see which.
