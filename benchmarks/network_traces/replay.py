@@ -60,13 +60,13 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity.commitments.crypto import lms
-from verity.protocols.certifier.verifier import online
-from verity.protocols.certifier.verifier.lean_audit import Audit
-from verity.protocols.certifier.verifier.calibration import choose_syncs
-from verity.protocols.certifier.verifier.certificate import Direction, Issuer, LmsKey, parameters_digest
-from verity.protocols.certifier.verifier.commitment import commit
-from verity.protocols.certifier.verifier.grid import GridParams, BlockGrid, Certifier
-from verity.protocols.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
+from verity.protocols.accounting.certifier.verifier import online
+from verity.protocols.accounting.certifier.verifier.lean_audit import Audit
+from verity.protocols.accounting.certifier.verifier.calibration import choose_syncs
+from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsKey, parameters_digest
+from verity.protocols.accounting.certifier.verifier.commitment import commit
+from verity.protocols.accounting.certifier.verifier.grid import GridParams, BlockGrid, Certifier
+from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
 
 REPLAY_FRAME_BYTES = 8
 REPLAY_LMS = lms.Params(8, 2, 2, toy=True)
