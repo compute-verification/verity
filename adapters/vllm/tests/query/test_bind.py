@@ -236,6 +236,14 @@ def test_a_row_with_no_step_of_its_own_is_on_no_engine_step_unless_it_states_one
     assert sorted(Binder([{**every, "engine_step": 3}, {**none, "engine_step": 5}]).rows) == [3, 5]
 
 
+def test_a_row_of_no_request_stays_on_its_own_engine_step_under_a_schedule():
+    null = {**row(LIN, "out", step=1, engine_step=4), "request_id": None}
+    absent = {k: v for k, v in row(ATT, "out", step=1, engine_step=6).items() if k != "request_id"}
+    assert sorted(Binder([null, absent], arrivals={"r0": 2}).rows) == [4, 6], "no request, so no arrival moves its step"
+    assert sorted(Binder([null, absent]).rows) == [4, 6]
+    assert sorted(Binder([{**null, "request_id": "r0"}], arrivals={"r0": 2}).rows) == [3], "the same row of a request is moved"
+
+
 def test_coverage_is_of_one_ranks_rows_and_of_one_requests_when_one_is_named():
     rows = [row(LIN, "out", element_range=[0, 4]), row(ATT, "out", request_id="r1", element_range=[0, 4]),
             row(ATT, "out", inv=1, rank=1, element_range=[0, 4]), row("model.norm", "out", request_id="*", element_range=[0, 2])]

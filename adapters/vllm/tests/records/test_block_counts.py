@@ -1,6 +1,7 @@
-"""`records.block_counts`: a day's inference-block judgment reads back to what `dump` wrote, and is refused by field when it is
-no JSON object or another format, holds a day, a digest, a count, a class order, an outcome or a reason no writer writes, or
-says a gates or fresh outcome that isn't its classes' or a verdict that isn't its checks'."""
+"""`records.block_counts`: a day's inference-block judgment reads back to what `dump` wrote, its table's and its classes' counts
+in their primitives' order, and is refused by field when it is no JSON object or another format, holds a day, a digest, a
+count, a class order, an outcome or a reason no writer writes, or says a gates or fresh outcome that isn't its classes' or a
+verdict that isn't its checks'."""
 from __future__ import annotations
 
 import pytest
@@ -26,6 +27,15 @@ def test_a_judgment_reads_back_to_what_dump_wrote() -> None:
     assert BlockJudgment.of(doc, "j.json") == J
     refused = BlockJudgment.of({**doc, **REFUSED, "reason": "more than n blocks"}, "j.json")
     assert (refused.verdict, refused.reason, refused.checks["count"]) == ("refuse", "more than n blocks", "refuse")
+
+
+def test_a_judgments_counts_are_held_in_their_primitives_order_however_they_were_written() -> None:
+    doc = {**J.dump(), "table": {"xor": 1, "mux": 4, "and": 1}, **_class(1, unpriced={"sel": 2, "cmp": 1}),
+           "checks": {**J.checks, "gates": "undecided"}, "verdict": "refuse", "reason": "a block's gates are a lower bound"}
+    got = BlockJudgment.of(doc, "j.json")
+    assert list(got.table.items()) == [("and", 1), ("mux", 4), ("xor", 1)]
+    assert list(got.classes[1].unpriced.items()) == [("cmp", 1), ("sel", 2)]
+    assert [list(got.dump()["table"]), list(got.dump()["classes"][1]["unpriced"])] == [["and", "mux", "xor"], ["cmp", "sel"]]
 
 
 def test_a_judgment_that_is_no_json_object_is_refused() -> None:
