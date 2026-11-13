@@ -57,13 +57,16 @@ SWEEP = {"sampling": "greedy", "sampling_params": {"top_k": 4}, "batch": 2, "sam
 @pytest.fixture(autouse=True)
 def _the_collector_as_pytest_has_it(monkeypatch):
     """`build`, `manifest` and `global-program` tune the collector of the process their `main` runs in, which here is pytest's:
-    `tune` is stood in for, and a command that reads it from anywhere else fails the test that ran it."""
+    `tune` is stood in for, and a command that reads it from anywhere else fails the test that ran it.  Each test runs one over
+    the process's first threshold, so a command that tunes fails it in a process that is tuned already too."""
     monkeypatch.setattr(gc_tuning, "tune", lambda: None)
     before = gc.get_threshold()
+    held = (before[0] + 1, before[1], before[2])
+    gc.set_threshold(*held)
     yield
     after = gc.get_threshold()
     gc.set_threshold(*before)
-    assert after == before, "a command's `main` tuned this process's collector: it does not read `verity_vllm.gc_tuning.tune`"
+    assert after == held, "a command's `main` tuned this process's collector: it does not read `verity_vllm.gc_tuning.tune`"
 
 
 @pytest.mark.parametrize("doc, want", [
@@ -282,6 +285,28 @@ def test_the_realized_engine_steps_are_the_record_s_own_else_its_timing_s_else_n
 def test_a_run_with_no_tokens_record_has_no_realized_shape(tmp_path, monkeypatch):
     plan = _plan(tmp_path, monkeypatch)
     assert RC.write_realized(plan) is None and "realized" not in json.loads(plan.p("run").read_text())
+
+
+@pytest.mark.parametrize("control", [None, "null", "not json"])
+@pytest.mark.parametrize("empty", ["{}", "[]", "0", '""', "false", "0.0"])
+def test_an_empty_capture_document_beside_no_control_s_raises_and_leaves_no_realized_shape(tmp_path, monkeypatch, empty, control):
+    plan = _plan(tmp_path, monkeypatch)
+    (plan.capture_dir / "tokens.json").write_text(empty)
+    if control is not None:
+        plan.control_tokens_path().parent.mkdir()
+        plan.control_tokens_path().write_text(control)
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'get'"):
+        RC.write_realized(plan)
+    assert "realized" not in json.loads(plan.p("run").read_text())
+
+
+def test_an_empty_capture_document_gives_way_to_the_control_s(tmp_path, monkeypatch):
+    plan = _plan(tmp_path, monkeypatch)
+    (plan.capture_dir / "tokens.json").write_text("{}")
+    plan.control_tokens_path().parent.mkdir()
+    plan.control_tokens_path().write_text(json.dumps({"requests": [{"request_id": "r0", "first_step": 0, "finish_step": 1}]}))
+    real = RC.write_realized(plan)
+    assert real is not None and [r["request_id"] for r in real["requests"]] == ["r0"]
 
 
 @pytest.mark.parametrize("kept, steps", [

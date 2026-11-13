@@ -4,6 +4,10 @@ The row's summaries and stage lines are read off documents its stages wrote: a w
 compare's and the global Match's documents, the sampler value check, the manifest, a weights record, the Commit's verdict and
 summary.  A block of such a document may be absent, null or empty (a stage that did not run, a writer with nothing to state), and
 the record then states `None`, nothing or a named default for it.  Each test gives a block absent, null, empty and stated.
+
+The last tests are of a document that cannot be read at all, the memory and the CPUs a row's derives are sized by on a host
+without a cgroup file or an affinity mask, token records that list no requests, and a manifest built under other tap policies than
+the Commit's.
 """
 from __future__ import annotations
 
@@ -16,8 +20,8 @@ from typing import Any
 import pytest
 
 import verity_vllm.pipeline.row_records as R
-from tests.pipeline.test_row import STAGE_START, _summary_row
-from verity_vllm.config import CHECKPOINTS, WORKLOADS
+from tests.pipeline.test_row import PD, STAGE_START, _record_manifest, _summary_row
+from verity_vllm.config import CHECKPOINTS, WORKLOADS, workload_file
 from verity_vllm.pipeline import row_json
 
 SAMPLED = WORKLOADS / "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json"
@@ -52,7 +56,7 @@ def test_a_block_that_lists_nothing_is_walked_as_nothing():
 def test_a_rows_shape_reads_a_sweep_without_its_sampling_parameters_as_greedy(tmp_path):
     """Without sampling parameters, or with a temperature that is null or zero, the row keeps its envelope and snapshots two steps.  A
     row that samples counts its first request's prompt ids where the request states no prompt length."""
-    w = json.loads(SAMPLED.read_text())
+    w = json.loads(workload_file(SAMPLED).read_text())
     sweep, first = w["sweep"], w["requests"][0]
     envelope = (1024, 127, "0,1")   # the sweep's longest prompt, one step short of its longest answer, and the first two steps
     greedy = [*_left_out("sampling_params"), {"sampling_params": {"temperature": None}}, {"sampling_params": {"temperature": 0}}, {"sampling_params": {"top_p": 0.9}}]
@@ -368,3 +372,87 @@ def test_a_tp_rows_manifest_and_commit_lines_read_documents_with_blocks_left_out
     _put(tmp_path / "commit" / "summary.json", {"pass": True, **{b: {"result": i} for i, b in enumerate(blocks)}})
     assert R.tp_commit_line(d) == nothing.replace("replay None linkage None xrank None fold_binding None weights_pin None",
                                                  "replay 0 linkage 1 xrank 2 fold_binding 3 weights_pin 4")
+
+
+def test_a_record_that_cannot_be_read_gives_its_named_default_and_one_that_can_gives_what_it_states(tmp_path):
+    """The workload Program's digest and a failed compose's reason are "" where `build_workload/workload_program.json` is absent or
+    no document; the compare's exit is 3 where `match_decomp.json` is no document; a TP row's manifest is complete only where it
+    says so."""
+    d = str(tmp_path)
+    assert (R.workload_digest(d), R.compose_reason(d), R.tp_manifest_complete(d)) == ("", "", False)
+    program = tmp_path / "build_workload" / "workload_program.json"
+    _put(program, {"reason": "missing_shape", "message": "LP 8 T 3"})
+    assert R.compose_reason(d) == "missing_shape LP 8 T 3"
+    _put(program, {"reason": "missing_shape", "message": None})
+    assert R.compose_reason(d) == "missing_shape "
+    program.write_text("not a document")
+    assert (R.workload_digest(d), R.compose_reason(d)) == ("", "")
+    (tmp_path / "match_decomp.json").write_text("not a document")
+    assert R.decomp_rc(d) == 3
+    for complete, said in ((True, True), (False, False), ("yes", False), (None, False)):
+        _put(tmp_path / "manifest.json", {"complete": complete})
+        assert R.tp_manifest_complete(d) is said, complete
+
+
+def test_the_memory_headroom_without_a_cgroup_file_is_the_roots_and_the_cpus_are_those_the_process_may_run_on(tmp_path, monkeypatch):
+    meminfo, root = tmp_path / "meminfo", tmp_path / "cgroup"
+    meminfo.write_text("MemTotal:       1000 kB\nMemAvailable:    500 kB\n")
+    root.mkdir()
+
+    def head() -> int:
+        return R._memory_headroom(str(tmp_path / "no-cgroup-file"), str(root), str(meminfo))
+    assert head() == 500 * 1024
+    (root / "memory.max").write_text("204800\n")
+    (root / "memory.current").write_text("4096\n")
+    assert head() == 200704
+    monkeypatch.setattr(R.os, "sched_getaffinity", lambda pid: {0, 2, 5}, raising=False)
+    assert R._cpus() == 3
+    monkeypatch.delattr(R.os, "sched_getaffinity")
+    monkeypatch.setattr(R.os, "cpu_count", lambda: None)
+    assert R._cpus() == 1
+
+
+def test_a_match_summary_compares_token_records_that_list_no_requests_by_their_tokens_or_whole(tmp_path):
+    """A token record without `requests` is compared by its `tokens`, or whole where it has none or is a list.  Two records with
+    nothing in them are not equal tokens, and one that is neither a list nor a table says nothing."""
+    d = _summary_row(tmp_path, old=False, stage_record=True)
+
+    def equal(control: Any, capture: Any) -> Any:
+        _put(d / "match" / "control" / "tokens.json", control)
+        _put(d / "match" / "capture" / "tokens.json", capture)
+        return _match_summary(d)["control_vs_instrumented_tokens_equal"]
+    assert equal({"tokens": [1, 2, 3], "timing": 1.0}, {"tokens": [1, 2, 3], "timing": 2.0}) is True
+    assert equal({"tokens": [1, 2, 3]}, {"tokens": [1, 2, 4]}) is False
+    assert equal([1, 2, 3], [1, 2, 3]) is True and equal([1, 2, 3], {"tokens": [1, 2, 3]}) is True
+    assert equal({"timing": 1.0}, {"timing": 1.0}) is True and equal({"timing": 1.0}, {"timing": 2.0}) is False
+    assert equal([], []) is False and equal({"tokens": []}, {"tokens": []}) is False
+    assert equal(7, 7) is None
+
+
+def test_a_manifest_built_under_other_tap_policies_than_the_commits_is_not_its_manifest_of_record(tmp_path):
+    """Either way: a policy the manifest's query states that the Commit does not run, and one the Commit runs that it does not state."""
+    p, d = tmp_path / "manifest.json", str(tmp_path)
+    _record_manifest(p, R.QUERY_OF_RECORD)
+    _put(p, _read(p) | {"complete": True})
+    every = SimpleNamespace(norm_tap="1", router_tap="1", vocab_tap="1")
+    assert R.manifest_not_of_record(_read(p), PD, every) == ("", "") and R.tp_manifest_not_of_record(d, every) == ""
+    no_router = SimpleNamespace(norm_tap="1", router_tap="0", vocab_tap="1")
+    why = "disagrees with this Commit's taps on the router_softmax policy"
+    assert R.manifest_not_of_record(_read(p), PD, no_router) == ("policy-router-softmax", why)
+    assert R.tp_manifest_not_of_record(d, no_router) == why
+    doc = _read(p)
+    del doc["query"]["vocab_range"]
+    _put(p, doc)
+    why = "disagrees with this Commit's taps on the router_softmax, vocab_range policy"
+    assert R.manifest_not_of_record(doc, PD, no_router) == ("policy-router-softmax-vocab-range", why)
+    assert R.tp_manifest_not_of_record(d, no_router) == why
+
+
+def test_a_component_whose_result_cannot_be_read_is_passed_over_for_the_next(tmp_path):
+    d = str(tmp_path)
+    _put(tmp_path / "manifest.json", {"components": {"r0": {"LP": 4, "T": 1}, "r1": {"LP": 8, "T": 3}}})
+    (tmp_path / "build_request_LP4_T1").mkdir()
+    (tmp_path / "build_request_LP4_T1" / "result.json").write_text("not a document")
+    assert R.wor_component(d) == os.path.join(d, "build_request")
+    _put(tmp_path / "build_request_LP8_T3" / "result.json", {"ok": True, "LP": 8, "T": 3})
+    assert R.wor_component(d) == os.path.join(d, "build_request_LP8_T3")

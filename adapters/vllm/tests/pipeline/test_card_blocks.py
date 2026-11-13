@@ -199,6 +199,19 @@ def test_a_cards_model_takes_from_the_header_what_the_record_does_not_state(tmp_
     assert card.model["sha256"] == two
 
 
+def test_a_cards_c_cites_the_manifests_hf_config_for_a_field_it_holds_at_the_same_value(tmp_path):
+    C = {"model": "org/m", "H": 8, "NL": 2, "QKV": 24}
+    hand = {"model": "hand", "H": "hand", "NL": "hand", "QKV": "derived"}
+
+    def provenance(name: str, manifest: dict[str, Any]) -> dict[str, str]:
+        card = CARD.build_card(_run(tmp_path / name, {"run.json": {"C": C, **manifest}}).run_dir, _results())
+        assert {k: v["value"] for k, v in card.C.items()} == C, manifest
+        return {k: v["provenance"] for k, v in card.C.items()}
+    for i, manifest in enumerate(_left_out("hf_config")):
+        assert provenance(f"n{i}", manifest) == hand, manifest
+    assert provenance("stated", {"hf_config": {"H": 8, "NL": 3, "QKV": 24}}) == {**hand, "H": "hf-config"}
+
+
 def test_the_vu_partition_row_prints_n_a_for_what_g8s_detail_leaves_out():
     def text(status: str, detail: Any = None, reason: str | None = None, **g8: Any) -> str:
         return CARD.vu_partition_text({"G8": {"status": status, "reason": reason, **({} if detail is None else {"detail": detail}), **g8}})
@@ -357,6 +370,44 @@ def test_the_top_section_claims_an_unknown_sm_without_a_gpus_cc_and_no_holdouts_
     assert top[top.index("HOLDOUTS") + 1:top.index("SUPPORT CLAIM")] == [f"  {'h1':<32}PASS", f"  {'h2':<32}FAIL"]
 
 
+#: The top section's nine counts that pass only at zero: each one's key in the card's counts, by its row's label.
+ZERO_PASSES: dict[str, str] = {
+    "PROTECTED FILES MODIFIED": "protected_files_modified", "EXISTING PRIMITIVES MODIFIED": "existing_primitives_modified",
+    "NEW ROOT CLASSES": "new_root_classes", "NEW ALLOWLIST ENTRIES": "new_allowlist_entries", "OLD GOLDEN DIGEST CHANGES": "golden_digest_changes",
+    "Unsupported": "unsupported", "Ambiguous matches": "ambiguous", "Unknown/unvalidated roots": "unknown_or_unvalidated_roots",
+    "CUDA census residue": "census_residue"}
+
+
+def test_the_top_sections_nine_counts_pass_at_zero_fail_at_another_number_and_are_n_a_when_not_stated():
+    def rows(counts: dict[str, Any]) -> dict[str, str]:
+        top = _rows(_card(counts=counts))
+        return {label: top[label] for label in ZERO_PASSES}
+    for counts in _each({}, {key: None for key in ZERO_PASSES.values()}):
+        assert rows(counts) == {label: "n/a   n/a" for label in ZERO_PASSES}, counts
+    assert rows({key: 0 for key in ZERO_PASSES.values()}) == {label: "0     PASS" for label in ZERO_PASSES}
+    assert rows({key: 2 for key in ZERO_PASSES.values()}) == {label: "2     FAIL" for label in ZERO_PASSES}
+    for label, key in ZERO_PASSES.items():      # each row reads its own count
+        assert rows({**{k: 0 for k in ZERO_PASSES.values()}, key: 1}) == {
+            **{each: "0     PASS" for each in ZERO_PASSES}, label: "1     FAIL"}, key
+
+
+def test_a_count_that_passes_only_above_zero_reads_the_other_way_and_one_not_stated_is_n_a_either_way():
+    assert [CARD._pf(n, zero_passes=False) for n in (None, 0, 3)] == ["n/a", "FAIL", "PASS"]
+    assert [CARD._pf(n) for n in (None, 0, 3)] == ["n/a", "PASS", "FAIL"]
+
+
+def test_a_card_built_with_an_hf_config_cites_it_for_c_and_the_manifests_only_when_handed_none(tmp_path):
+    C = {"model": "org/m", "H": 8, "NL": 2, "QKV": 24}
+    hand = {"model": "hand", "H": "hand", "NL": "hand", "QKV": "derived"}
+    run_dir = _run(tmp_path, {"run.json": {"C": C, "hf_config": {"H": 8}}}).run_dir
+
+    def provenance(**given: Any) -> dict[str, str]:
+        return {k: v["provenance"] for k, v in CARD.build_card(run_dir, _results(), **given).C.items()}
+    assert provenance() == provenance(hf_config=None) == {**hand, "H": "hf-config"}
+    assert provenance(hf_config={"NL": 2}) == {**hand, "NL": "hf-config"}
+    assert provenance(hf_config={}) == hand                                           # an empty one is the caller's, not the manifest's
+
+
 def _line(md: str, starts: str) -> str:
     return next(ln for ln in md.splitlines() if ln.startswith(starts))
 
@@ -404,3 +455,94 @@ def test_the_cards_summary_prints_a_gate_it_has_no_result_for_as_missing():
         assert "| G8 | VU partition (structural) | n/a | record predates G8 |" in md
     md = CARD.summarize_md(_card(gates={"G3": {"name": "mine", "status": "fail", "reason": "a|b"}, "G8": {"status": "pass"}}))
     assert "| G3 | mine | **fail** | a/b |" in md and "| G8 | VU partition (structural) | **pass** |  |" in md
+
+
+def test_a_workload_file_that_is_not_there_is_summarized_as_missing(tmp_path):
+    nothing: dict[str, Any] = {"sha256": None, "n_requests": 0, "prompt_lens": [], "max_tokens": [], "requests": []}
+    gone = tmp_path / "gone.json"
+    assert CARD.workload_summary(gone) == {"path": str(gone), **nothing, "error": "missing"}
+    assert CARD.workload_summary(None) == CARD.workload_summary("") == {"path": None, **nothing}
+
+
+def test_kappa_is_the_captures_versions_then_the_censuss_which_it_names_as_its_source(tmp_path):
+    """The capture's versions document is κ when it states anything.  A census that states versions is next, and κ then names the
+    census as its source; a census that states none leaves the log header's pins."""
+    versions, census = G.ARTIFACTS["versions"], G.ARTIFACTS["census"]
+    stated = {"versions": {"torch": "2.6"}}
+    assert CARD.kappa_of(_run(tmp_path / "a", {census: stated}), {"profile": PROFILE}) == {"torch": "2.6", "source": "census.json"}
+    assert CARD.kappa_of(_run(tmp_path / "b", {versions: {}, census: stated}), None) == {"torch": "2.6", "source": "census.json"}
+    assert CARD.kappa_of(_run(tmp_path / "c", {versions: {"torch": "2.7"}, census: stated}), None) == {"torch": "2.7"}
+    for i, doc in enumerate(_each({}, {"versions": None}, {"versions": "2.6"})):
+        run = _run(tmp_path / f"n{i}", {census: doc})
+        assert CARD.kappa_of(run, None) == {} and CARD.kappa_of(run, {}) == {} and CARD.kappa_of(run, {"profile": None}) == NO_PINS, doc
+
+
+def test_a_cards_model_digest_is_the_records_own_over_the_headers(tmp_path):
+    header = {"profile": PROFILE}
+    for i, record in enumerate(_each({}, {"model_sha256": None}, {"model_sha256": ""})):
+        card = CARD.build_card(_run(tmp_path / f"n{i}", {"run.json": record}, header=header).run_dir, _results())
+        assert card.model["sha256"] == "w" * 64, record
+    record = {"model_sha256": "m" * 64}
+    card = CARD.build_card(_run(tmp_path / "both", {"run.json": record}, header=header).run_dir, _results())
+    assert (card.model["sha256"], card.model["config_sha256"]) == ("m" * 64, "c" * 64)
+    assert CARD.build_card(_run(tmp_path / "alone", {"run.json": record}).run_dir, _results()).model["sha256"] == "m" * 64
+
+
+def test_a_cards_stages_are_read_from_a_list_of_them_or_from_a_document_that_holds_them_by_name(tmp_path):
+    """The stages document lists a record a stage, bare or under `stages`, or holds them by name; the card keeps five fields of each,
+    under the stage the record names, and passes over an entry that is no record of a stage."""
+    rec = {"stage": "capture", "status": "ok", "seconds": 3, "returncode": 0, "log": "capture.log", "started": "t0"}
+    fold = {"stage": "fold", "status": "failed", "reason": "oom"}
+    kept = {"capture": {"status": "ok", "seconds": 3, "returncode": 0, "log": "capture.log", "reason": None},
+            "fold": {"status": "failed", "seconds": None, "returncode": None, "log": None, "reason": "oom"}}
+    docs: list[Any] = [[rec, fold], {"stages": [rec, fold]}, {"stages": {"a": rec, "b": fold}}, {"a": rec, "b": fold},
+                       {"stages": {"a": rec, "b": fold, "c": "not a record", "d": {"status": "ok"}}}, [rec, "not a record", {"status": "ok"}, fold]]
+    for i, doc in enumerate(docs):
+        assert CARD.build_card(_run(tmp_path / f"s{i}", {G.ARTIFACTS["stages"]: doc}).run_dir, _results()).stages == kept, doc
+    nothing: list[Any] = [[], {}, {"stages": []}, {"stages": {}}]
+    assert CARD.build_card(_run(tmp_path / "none").run_dir, _results()).stages == {}
+    for i, doc in enumerate(nothing):
+        assert CARD.build_card(_run(tmp_path / f"n{i}", {G.ARTIFACTS["stages"]: doc}).run_dir, _results()).stages == {}, doc
+
+
+def test_a_card_built_without_results_reads_the_gates_document_and_evaluates_the_gates_where_there_is_none(tmp_path, monkeypatch):
+    asked: list[Path] = []
+
+    def evaluate(run_dir: Path) -> list[GateResult]:
+        asked.append(run_dir)
+        return _results("fail")
+    monkeypatch.setattr(G, "evaluate_gates", evaluate)
+    written = {r.id: r.to_json() for r in _results("pass", G1={"n": 1})}
+    card = CARD.build_card(_run(tmp_path / "a", {G.ARTIFACTS["gates"]: {"gates": written}}).run_dir)
+    assert not asked and (card.verdict, card.gates) == ("ACCEPTED", written)
+    card = CARD.build_card(_run(tmp_path / "b", {G.ARTIFACTS["gates"]: {"schema": "s"}}).run_dir)
+    assert not asked and (card.verdict, card.gates) == ("INCOMPLETE", {})
+    for run_dir in (_run(tmp_path / "none").run_dir, _run(tmp_path / "empty", {G.ARTIFACTS["gates"]: {}}).run_dir):
+        card = CARD.build_card(run_dir)
+        assert asked == [run_dir] and card.verdict == "REJECTED" and set(card.gates) == set(GATES), run_dir
+        asked.clear()
+    card = CARD.build_card(_run(tmp_path / "given", {G.ARTIFACTS["gates"]: {"gates": written}}).run_dir, [])
+    assert not asked and card.gates == {}
+
+
+def test_the_top_sections_case_names_the_attention_by_its_class_and_flash_attention_as_fa2():
+    def case(**engine_args: Any) -> str:
+        return CARD.top_section(_card(engine_args=engine_args)).splitlines()[0]
+    assert case(attention_backend="vllm.attention.backends.flash_attn.FlashAttentionImpl").endswith(" / FA2 / batch=n/a")
+    assert case(attention_backend="FlashAttentionImpl", max_num_seqs=8).endswith(" / FA2 / batch=8")
+    assert case(attention_backend="a.b.XFormersImpl").endswith(" / XFormersImpl / batch=n/a")
+    for engine_args in _each({}, {"attention_backend": None}, {"attention_backend": ""}):
+        assert case(**engine_args).endswith(" / attention-unknown / batch=n/a"), engine_args
+
+
+def test_the_cards_summary_states_its_spend_its_mechanism_notes_and_its_notes_only_when_the_card_has_them():
+    lines = ("- spend: ", "- mechanism notes: ", "- notes: ")
+    for nothing in _each({}, {"spend": {}}, {"spend": {"pod_hours": None, "usd": None, "gpu": "L40S"}, "mechanism_notes": [], "notes": []}):
+        md = CARD.summarize_md(_card(**nothing))
+        assert not [ln for ln in md.splitlines() if ln.startswith(lines)] and md.endswith("\n") and not md.endswith("\n\n"), nothing
+    assert _line(CARD.summarize_md(_card(spend={"pod_hours": 1.5})), lines[0]) == "- spend: 1.5 pod-hours, $None"
+    assert _line(CARD.summarize_md(_card(spend={"usd": 3})), lines[0]) == "- spend: None pod-hours, $3"
+    assert _line(CARD.summarize_md(_card(spend={"pod_hours": 0, "usd": 0})), lines[0]) == "- spend: 0 pod-hours, $0"
+    assert _line(CARD.summarize_md(_card(mechanism_notes=["a.md", "b.md"])), lines[1]) == "- mechanism notes: `a.md`, `b.md`"
+    md = CARD.summarize_md(_card(notes=["one", 2]))
+    assert _line(md, lines[2]) == "- notes: one; 2" and md.endswith("- notes: one; 2\n")
