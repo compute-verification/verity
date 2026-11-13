@@ -1,4 +1,4 @@
-"""The streamed wipe as two parties of the deployment layer (`verity.configuration.deploy`): the memory challenger
+"""The streamed wipe as two parties of the deployment layer (`verity.runtime`): the memory challenger
 (`MemoryChallengerParty`) and the prover (`Prover`), the protocol `wipe_party` speaks as a byte stream, in messages.
 
 ~~~text
@@ -28,8 +28,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from verity.configuration.deploy.manifest import Channel, Manifest, Role
-from verity.configuration.deploy.party import (
+from verity.protocol import Channel, Manifest, Role
+from verity.party import (
     Finish,
     Identity,
     LogEntry,
@@ -37,8 +37,8 @@ from verity.configuration.deploy.party import (
     Send,
     Timer,
 )
-from verity.configuration.deploy.runtime import ProtocolDef
-from verity.configuration.wire import Body, Int, List, Message, Phase, Refused, Schema
+from verity.runtime.runner import ProtocolDef
+from verity.channel import Body, Int, List, Message, Phase, Refused, Schema
 
 from . import streamed_wipe as sw
 from . import wipe_party as WP
