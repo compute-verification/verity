@@ -154024,3 +154024,51 @@ PRF-599	comment		#9332, #9346 and #9513 are open; #9513 has its ready line and l
 - For PRF-306 I checked only `replay.py` and the `coin_source` mentions, not a5's `write_case` or `served_integrity.answer`.
 - The placements in F-NEXT (PRF-518, 523, 524, 528, 561) and C5 (PRF-545) follow where issues of the same subject sit; no ruling sets them. PRF-548's milestone, T4 or T5, is not settled.
 - Pull request states were read at 17:2xZ. A merge after that is not in the rows.
+
+## STOPDRIVER, Fri 13 Nov 17:30Z: B's head is `1cf9a938a3ae`: a lint failure of B's is mended; step 4's runs are out
+
+**What I found.** Before step 4 I ran the no-growth lints on B (`adapters/vllm/tools/ratchet_gate.py`), on my
+VM, in two seconds. [run] They refused B on two counts. Neither came from the carry: both are B's own lines,
+and my node run of 15:04Z did not include these lints.
+
+1. **A handler that swallows what it catches, in `service.py`.** [run] `Stream._placed` caught
+   `window_place`'s `ValueError` and returned. The repository suite's `test_repo_silent_excepts` fails on a
+   file that gains one, and it is no bookkeeping test, so the changed suites would have been red. [read]
+   - The mend is commit `e95c3a10519`: `_placed` asks a predicate first, `_names_place(window)`, 6 lines in
+     `service.py`, and calls `window_place.family` only on a window that names a place. [run]
+   - Nothing it decides changes: a window that names no place is still held to no family. [read]
+   - The lint's own count of `service.py` is 1 again, the handler `main` has. [run]
+2. **29 more uses of retired terms in five files.** [run] This lint is bookkeeping: it warns in the suite, and
+   the gate that refuses on it is off the merge gate. [read]
+   - Commit `1cf9a938a3ae` renames one local of the one test B widened, so `test_two_stage_driver.py` now
+     holds fewer than `main` (25, from 28). [run]
+   - 15 remain, in four files. [run] Each is the family's wire name `draw/<place>`, the hand-off's file name
+     `stage1.json` or its parameter in `resume`, or two names of the stream's (`S.Law`, an entry's `draw`).
+     [run: listed by line with the lint's own function] I add no new name. I leave these and say so in the
+     body.
+
+**`window_place.py` is untouched by both commits.** Its blob is still `08a834e757ab`. [run]
+
+**For TWOLEG.** `service.py` is in both lines. My change there is the 6-line predicate after `_order` and
+four lines of `_placed`. [run] Step 6's merge settles it.
+
+**Runs, both at `1cf9a938a3ae`, pushed.** [run]
+
+- `r20261113-172745-d286` on vy-nebius-cpu-8: B's tests as at 15:04Z with the carried paths, and the
+  swallowing-handler lint beside the root's two files. Due about 17:45Z.
+- `r20261113-172827-6798` on vy-nebius-cpu-10: `suites.py --changed 4ae17f7eafd7 --quick`. Due about 18:00Z.
+  [guess: I have no time for this set of suites]
+- Two earlier runs at `bd7050308d5b` (`1de3`, `b3b1`) are superseded. I do not cancel them. I expect `b3b1`'s
+  repository suite to fail on point 1. [derived]
+
+**Other checks on my VM, at the head.** [run]
+
+- `tools/verity/check/import_order.py --check`: `tests/import_order.toml: the same`.
+- `test_window_place.py` alone: 3 passed.
+
+### Not established
+
+- Every test at the head: the two runs are out.
+- Whether the mark's preflight warns on the 15 uses. The skill says the ratchet gate only warns there. I did
+  not run the preflight.
+- TWOLEG's carried hold: FRAME's 17:17Z entry says it is carrying, back 17:35Z to 17:45Z.
