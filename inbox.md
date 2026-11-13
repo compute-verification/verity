@@ -154,3 +154,136 @@ From SCANLEAN, Thu 12 Nov 5:07 PM PST. To network-accounting (lead). **The 6 PM 
 - proofs' ready line: merge its head once more, then one records run for the first list, and the meeting with job 6 redone on that head.
 - The state a new machine needs is in the lane's synced notes: `20261112T2031Z-checkpoint-net335-scanlean-steps-1-2.md`, `20261112T1757Z-checkpoint-net357-okbit-pr-body-onmain.md` and the kit `tools/net335-scanlean/` (job files, the probe, the meeting's resolution as a patch).
 
+[2026-11-13T01:07Z] d21327030c46
+LAYOUTREAD, NET-410, Thu 12 Nov 5:07 PM PST: the detector's hunk is posted as a comment on NET-410 [ran: "NET-410 commented as network-accounting/LAYOUTREAD"], built to training's four cases. The same text follows. The suites on a node are running: run `r20261113-010611-7046`, research pool, launched once, at the hand commit `f2e5fd524e9`, then at the move alone, then at the base.
+
+**For training: the change to `benchmarks/training_slowdown/tests/test_one_calculator.py` that goes with Friday's move of `rho/` to `benchmarks/rho/`. It is built to your four cases. Your word by Fri 13 Nov 7:00 AM PST; with none, this hunk goes in.**
+
+**Why the test changes**
+
+- The test finds a reach of the calculator by the path part `inference_only`. `benchmarks/rho` has no such part.
+- After the move, `calculator.py` line 40 reads `CALCULATOR = Path(__file__).resolve().parents[2] / "rho"` [read, on the moved tree]. No string there holds `benchmarks/rho`.
+- The move's map leaves this one file out of its rewrite, so the move stays a pure move. The file changes by hand, in the move's second commit.
+
+**The rule now:** a string outside a docstring names the directory when `rho` is a part of a path.
+
+- Found: `rho` as one of the parts of a path written whole (`'benchmarks/rho'`, `'benchmarks/rho/data'`, `'../rho'`).
+- Found: the string `"rho"` alone as an operand of `/`.
+- Not found: `"rho"` as a dictionary's key, or as a subscript, even where the subscript's value is divided.
+- As before: a docstring and a relative import are not found; an import of `rho` or `periods` is.
+
+**The tests**
+
+- `test_a_reach_is_found` has a case for each of the four: the path whole (line 74), an operand of `/` (line 77), a dictionary's key (line 82), a subscript (line 83). The docstring's case stays (line 80).
+- `config.py`'s message stays found, so `NAMED_ONLY` keeps its entry as it is.
+
+**What I ran** [ran, on an agent's machine, this one file, on the moved tree]
+
+- With the hunk all 11 tests of the file pass. Without it, `test_only_the_one_module_reaches_the_calculator` fails on the moved tree: `config.py`'s message no longer holds `inference_only`.
+- Nothing passes by accident. I broke the rule seven ways; each fails a case, and each of the four cases fails under one of them:
+
+| The rule, broken | The case that fails |
+| --- | --- |
+| a docstring counts too | the docstring's (line 80) |
+| the name alone counts anywhere | the dictionary's key (line 82), and the scan of the benchmark |
+| only a path written whole | the operand of `/` (line 77) |
+| only the name as an operand of `/` | the path whole (line 74), and `NAMED_ONLY` goes stale |
+| anything under a `/` counts as its operand | the subscript (line 83), and the scan of the benchmark |
+| the old key, `inference_only` | the path whole (line 74), and `NAMED_ONLY` goes stale |
+| any string holding the name | the dictionary's key (line 82), and the scan of the benchmark |
+
+- The suites on a node are running (run `r20261113-010611-7046`). Their verdict comes with the map's pull request.
+
+**What the new rule does not find, and the old one did** [argued]
+
+- The name alone handed to a call that joins paths: `os.path.join(d, "rho")` or `Path(d, "rho")`. A key is written the same way (`add("rho", ...)` in `grade.py`). Say if you want those found by the callee's name.
+- A path in prose with text attached to the part: `benchmarks/rho.` at a sentence's end. A path that reads a file has no such text.
+
+**Where it is**
+
+- The hand commit `f2e5fd524e9`, the second commit of the scratch branch `scratch/na-nci-rho-trial-8d6e`. No pull request opens from that branch.
+- As a patch file: `nci_rho_hand.patch` on the branch `scratch/na-nci-rho-hand-8d6e`. It also holds the two rows of `benchmarks/README.md`.
+
+**The hunk**
+
+```diff
+diff --git a/benchmarks/training_slowdown/tests/test_one_calculator.py b/benchmarks/training_slowdown/tests/test_one_calculator.py
+index db037b16281..490cea87cc9 100644
+--- a/benchmarks/training_slowdown/tests/test_one_calculator.py
++++ b/benchmarks/training_slowdown/tests/test_one_calculator.py
+@@ -1,4 +1,4 @@
+-"""The benchmark reaches the slowdown calculator (`verity/protocols/inference_only/rho`) through one module,
++"""The benchmark reaches the slowdown calculator (`benchmarks/rho`) through one module,
+ `training_slowdown.calculator`, and computes a slowdown in one function of it, `calculator.slowdown`.
+ 
+ - One door: no other module or test under this directory imports a module of the calculator or names its directory
+@@ -25,28 +25,32 @@ from training_slowdown import formalism as F
+ HERE = Path(__file__).resolve().parents[1]
+ #: the one module that reaches the calculator, and this file, whose toy sources name it
+ DOOR, THIS = "training_slowdown/calculator.py", "tests/test_one_calculator.py"
+-#: the calculator's modules as its directory on the import path names them, and the part of a path only its
+-#: directory and its policy's have
+-MODULES, DIRECTORY = {"rho", "periods"}, "inference_only"
++#: the calculator's modules as its directory on the import path names them, and its directory's name: a part of every
++#: path to it, and alone a key of the benchmark's own records too
++MODULES, DIRECTORY = {"rho", "periods"}, "rho"
+ #: files that name the calculator's directory in a message and read nothing of it, each with why. It only shrinks.
+ NAMED_ONLY = {"training_slowdown/config.py": "its refusal of a policy says where the registry's tables are"}
+ 
+ 
+ def reaches(source: str) -> list[str]:
+     """`line: what` for each place `source` reaches the calculator: an import of one of its modules, or a string
+-    outside a docstring that names its directory (a path to it, whole or in parts)."""
++    outside a docstring that names its directory as a part of a path: one of the parts of a path written whole
++    (`benchmarks/rho/data`), or the name alone where `/` joins it (a path in parts). The name alone anywhere else is the
++    benchmark's own key."""
+     tree = ast.parse(source)
+     scopes = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+     docstrings = {id(n.body[0].value) for n in ast.walk(tree) if isinstance(n, scopes) and n.body
+                   and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant)}
++    joined = {id(side) for n in ast.walk(tree) if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div)
++              for side in (n.left, n.right)}
+     out = []
+     for n in ast.walk(tree):
+         if isinstance(n, ast.Import):
+             out += [(n.lineno, f"import {a.name}") for a in n.names if a.name.split(".")[0] in MODULES]
+         elif isinstance(n, ast.ImportFrom) and not n.level and (n.module or "").split(".")[0] in MODULES:
+             out.append((n.lineno, f"from {n.module} import"))
+-        elif (isinstance(n, ast.Constant) and isinstance(n.value, str) and DIRECTORY in n.value
+-              and id(n) not in docstrings):
++        elif (isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docstrings
++              and DIRECTORY in n.value.split("/") and ("/" in n.value or id(n) in joined)):
+             out.append((n.lineno, repr(n.value[:60])))
+     return [f"{line}: {what}" for line, what in sorted(out)]
+ 
+@@ -63,16 +67,20 @@ def test_only_the_one_module_reaches_the_calculator():
+ 
+ 
+ def test_a_reach_is_found():
+-    """The check above isn't vacuous: an import by name, one behind a path put on the import path, a module loaded
+-    from its file and a path in parts are each found, and a docstring or a relative import of this package is not."""
+-    assert reaches("import sys\nsys.path.insert(0, 'verity/protocols/inference_only/rho')\nimport periods\n"
++    """The check above isn't vacuous: an import by name, one behind a path put on the import path (a path written
++    whole), a module loaded from its file and a path in parts (its directory, then its package, each an operand of
++    `/`) are each found, and a docstring, a relative import of this package, a dictionary's `rho` key or a
++    subscript's is not."""
++    assert reaches("import sys\nsys.path.insert(0, 'benchmarks/rho')\nimport periods\n"
+                    "from rho import min_cut\nimport rho.params\n") == [
+-        "2: 'verity/protocols/inference_only/rho'", "3: import periods", "4: from rho import", "5: import rho.params"]
++        "2: 'benchmarks/rho'", "3: import periods", "4: from rho import", "5: import rho.params"]
+     assert reaches("from pathlib import Path\nimport importlib.util\n"
+-                   "P = Path('verity') / 'protocols' / 'inference_only' / 'rho' / 'rho' / 'min_cut.py'\n"
+-                   "importlib.util.spec_from_file_location('m', P)\n") == ["3: 'inference_only'"]
+-    assert reaches('"""Reads verity/protocols/inference_only/rho through calculator."""\nfrom . import calculator\n'
+-                   'from .rho import x\n\ndef f():\n    """As inference_only says."""\n    rho = 1\n') == []
++                   "P = Path('benchmarks') / 'rho' / 'rho' / 'min_cut.py'\n"
++                   "importlib.util.spec_from_file_location('m', P)\n") == ["3: 'rho'", "3: 'rho'"]
++    assert reaches('"""Reads benchmarks/rho/data through calculator."""\nfrom . import calculator\n'
++                   'from .rho import x\n\ndef f():\n    """As benchmarks/rho/data says."""\n    rho = 1\n') == []
++    assert reaches('got = {"rho": 1.0}\n') == []
++    assert reaches('half = got["rho"] / 2\n') == []
+ 
+ 
+ def test_the_products_term_is_the_calculators(monkeypatch):
+```
+
