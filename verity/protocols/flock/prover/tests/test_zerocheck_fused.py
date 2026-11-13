@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from verity import settings
+from verity_config import verity_settings as settings
 
 SOURCE = Path(__file__).resolve().with_name("zerocheck_fused.cu")
 #: log2 of round 2's rows: per-point eq through 16, one eqhi entry per block from 17, the lookahead's grid strided at 24
