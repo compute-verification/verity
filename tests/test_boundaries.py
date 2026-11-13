@@ -102,7 +102,7 @@ HELD_AS_VERITY = ("verity/protocols/compose/device/live_challenger", "verity/pro
 SPOT_ROW = "verity/protocols/spot"
 CERTIFIER_ROW = "verity/protocols/certifier"
 SPOT_TREES = ("verity/protocols/spot", "verity/protocols/spot/verifier/lean", "verity/protocols/flock/verifier",
-              "verity/protocols/flock/prover", "verity/protocols/flock/pod", "verity/protocols/flock/agreement", "verity/protocols/flock/tool.py")
+              "verity/protocols/flock/prover", "verity/protocols/flock/prover/pod", "verity/protocols/flock/prover/agreement", "verity/protocols/flock/prover/tool.py")
 SPOT_LEAN = ("verity/protocols/spot/verifier/lean", "verity/protocols/flock/verifier")
 SPOT_SECURITY = ("security/*/Flock", "security/*/Flock.lean", "security/*/Spot", "security/*/Spot.lean",
                  "security/Definitions/Claims/Sampling*")
@@ -129,7 +129,7 @@ BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments
 BENCHMARKS_IMPORTERS = {
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
-        "verity/protocols/flock/pod/gemm_hill.py", "verity/protocols/flock/pod/read_gadget.py",
+        "verity/protocols/flock/prover/pod/gemm_hill.py", "verity/protocols/flock/prover/pod/read_gadget.py",
         "verity/protocols/flock/prover/python/verity_flock/bench.py", "verity/protocols/flock/prover/python/verity_flock/circuit_bench.py",
         "verity/protocols/flock/prover/python/verity_flock/instances.py", "verity/protocols/flock/prover/python/verity_flock/ir_bench.py",
         "verity/protocols/flock/prover/python/verity_flock/register.py",
