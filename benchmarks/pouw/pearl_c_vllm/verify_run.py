@@ -159,9 +159,9 @@ RUN_DRAW_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
 ASSUMPTION = "Pearl's Assumption 1 (pearl_kw)"
 DELTA = Fraction(1, 100)
 #: `verify_passes`' rules on an opened tile over its inert-work bound (``over_cap``): the run is rejected, or the tile is
-#: credited nothing; `served_passes.OVER_CAP` names the same two
+#: credited nothing; `served_passes.OVER_INERT_BOUND` names the same two
 REJECT, UNCREDITED = "reject", "uncredited"
-OVER_CAP = (REJECT, UNCREDITED)
+OVER_INERT_BOUND = (REJECT, UNCREDITED)
 LIMITS = VerificationLimits()
 
 
@@ -348,7 +348,7 @@ def check(job: tuple[int, tuple[int, int, int]]) -> tuple[int, int, bool, str | 
 def _check(pick: tuple[int, int, int]) -> tuple[int, int, bool, str | None, bool]:
     """One tile, (pass, record position, tile id), as `clear_work.audit` checks it: the openings and digest
     (`Verifier.check_tile`), then the tile rule, its rows and then its inert-work bound, then its y.  (pass, tile id, ok,
-    reason, over): ``over`` where the tile fails its bound (`clear_work.cap_failure`, the reason) and passes every other
+    reason, over): ``over`` where the tile fails its bound (`clear_work.inert_bound_failure`, the reason) and passes every other
     check, y included, which `verify_passes`' ``over_cap`` decides."""
     i, pos, tid = pick
     p = _JOB["passes"][i]
@@ -365,7 +365,7 @@ def _check(pick: tuple[int, int, int]) -> tuple[int, int, bool, str | None, bool
     a, b = [opened_value(h, o.value) for o in opened.a], [opened_value(h, o.value) for o in opened.b]
     record = p.records[pos]
     reason = CW.rows_failure(scheme, record, ref.tile, a, b, v.ops)
-    over = None if reason is not None else CW.cap_failure(scheme, record, ref.tile, v.ops, getattr(scheme, "r1_tolerance", 0))
+    over = None if reason is not None else CW.inert_bound_failure(scheme, record, ref.tile, v.ops, getattr(scheme, "r1_tolerance", 0))
     if reason is None and "y" in p.man["matmuls"][pos]:
         try:
             reason = check_y(p, pos, ref.tile, v, p.prover.open_y(epoch, tid))
@@ -737,7 +737,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     together (`clear_work.draw` on their records in order), and each pass opens one tile per excluded row.  It accepts iff
     every opened tile passes the tile rule, and credits the run at Pearl's assumption (`credit_at_assumption`) at δ.
 
-    ``over_cap`` is the rule on an opened tile that passes every check but its inert-work bound (`clear_work.cap_failure`):
+    ``over_cap`` is the rule on an opened tile that passes every check but its inert-work bound (`clear_work.inert_bound_failure`):
     ``uncredited`` (CMP-311 option A, the default) accepts it with its bound's reason and credits it nothing, the credit
     taking X_O, the samples that landed on such tiles; ``reject`` rejects the run.  The verdict records the rule it ran under
     (``over_cap``, and the profile's).  The run of record is ``uncredited`` over passes with no voluntary row, since one
@@ -755,8 +755,8 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     source's sample on the run's commitment C (module docstring, "The run's sample"): it calls ``asking(info)`` just before it
     asks, which marks the record (`ASKED`) so a sample that fails or is cut short is never asked again (`ASKED_ONCE`), and
     returns (S, the record's ``draw``).  A given ``source`` (a test's) is recorded as the node's."""
-    if over_cap not in OVER_CAP:
-        raise ValueError(f"over_cap {over_cap!r} is none of {', '.join(OVER_CAP)}")
+    if over_cap not in OVER_INERT_BOUND:
+        raise ValueError(f"over_cap {over_cap!r} is none of {', '.join(OVER_INERT_BOUND)}")
     named = [read(x)[2] for x in paths]
     out = {"passes": named, "verifier_commit": commit, "draws": draws, "delta": str(delta), "over_cap": over_cap,
            **({"test_instance": True} if test_instance else {}),

@@ -10,7 +10,7 @@ Twins of `Skip`'s debit (A), with the atom a parameter: `p : Pipeline` takes the
 words' promotion depth `G` that of `Params.pi.G = 4`. The chain is `Accum`'s (`Accum.groupWordP`, `Accum.totalP`,
 `Accum.chainP`). At `hopperE4m3K32` and `G = 4` every twin is today's definition (`Pouw.PearlC.FreezeP`'s `rfl`
 lemmas: `stepP_hopper`, `jointFlagsP_hopper`, `wordFlagsP_hopper`, …); at `sm120E4m3K32` they are the sm_120 chain's.
-Masks, the masked fold and the unit's debit (`Skip.foldMask`, `Skip.allMasks`, `Skip.chainDebit`, `Skip.needed`) do
+Masks, the masked fold and the unit's debit (`Skip.foldMask`, `Skip.allMasks`, `Skip.chainInertWork`, `Skip.needed`) do
 not read the atom and are reused.
 
 Without promotion (`G = 0`, `pearl-c-sm120-v2`) the debit is the pure chain's lone skips (`pureFlagsP`, one replay of

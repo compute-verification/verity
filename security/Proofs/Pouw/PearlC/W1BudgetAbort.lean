@@ -302,7 +302,7 @@ def toyP : Protocol Unit Bool Unit where
   actOK := fun _ _ => True
   fixedOK := fun _ _ _ => True
   credit := fun _ _ _ _ _ => 0
-  capOK := fun H _ _ _ _ => H () = true
+  inertBoundOK := fun H _ _ _ _ => H () = true
   Wref := fun _ _ => 0
 
 theorem toy_correct (dv : W1Device) (H : Unit → Bool) :

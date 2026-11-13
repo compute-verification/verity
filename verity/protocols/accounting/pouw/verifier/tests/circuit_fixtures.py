@@ -62,7 +62,7 @@ def layout_sha(lay) -> str:
 def check_ports(fn, ports: dict, derivations: dict, k: int, reads: dict[str, int],
                 ks: dict[str, int] | None = None) -> None:
     """``ports`` (`pc4.PORTS[role]`) lists every parameter and output of the unit template ``fn`` exactly once, as a committed
-    row's port, a public input region, advice (`pc8.PORTS`) or a public output (`cap.PORTS`), every advice port is a
+    row's port, a public input region, advice (`pc8.PORTS`) or a public output (`inert_bound.PORTS`), every advice port is a
     parameter and every public output an output.  Each committed row's port bits are exactly its schema's words
     (`leaves.ROW_WORDS`, at depth k, or ``ks[schema]`` for a segment's row), so no bit of a committed row is outside the
     unit's ports (an ok row's word too, `pc4.ok_word`): a port a unit reads ``reads[name]`` rows of counted for one row,

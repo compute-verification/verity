@@ -31,7 +31,7 @@ structure Args where
   draws : Nat := 3
   source : Option String := none
   record : Option String := none
-  overCap : OverCap := .uncredited
+  overInertBound : OverInertBound := .uncredited
   testInstance : Bool := false
   tie : Option String := none
   ofRecord : Bool := false
@@ -45,8 +45,8 @@ def parse : List String → Args → Except String Args
     | none => throw s!"--draws {v}: an integer"
   | "--source" :: v :: rest, a => parse rest { a with source := some v }
   | "--record" :: v :: rest, a => parse rest { a with record := some v }
-  | "--over-cap" :: v :: rest, a => match OverCap.ofName? v with
-    | some m => parse rest { a with overCap := m }
+  | "--over-cap" :: v :: rest, a => match OverInertBound.ofName? v with
+    | some m => parse rest { a with overInertBound := m }
     | none => throw s!"--over-cap {v}: uncredited or reject"
   | "--test-instance" :: rest, a => parse rest { a with testInstance := true }
   | "--tie" :: v :: rest, a => parse rest { a with tie := some v }
@@ -88,7 +88,7 @@ def main (argv : List String) : IO UInt32 := do
       rounds ← rows "rounds"
       dropped := (← rows "dropped").getD []
   let tie ← a.tie.mapM readJson
-  let input : Input := { coins, manifests := mans, draws := a.draws, source, held, overCap := a.overCap,
+  let input : Input := { coins, manifests := mans, draws := a.draws, source, held, overInertBound := a.overInertBound,
                          testInstance := a.testInstance, tie, rounds, dropped, ofRecord := a.ofRecord }
   let mut cache : Std.HashMap String ByteArray := {}
   let mut checked : Std.HashMap (String × String) (Except String ByteArray) := {}

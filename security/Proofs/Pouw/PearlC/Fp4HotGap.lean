@@ -41,7 +41,7 @@ theorem pearlCGapFp4HotAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]
   have hω0 : 0 < ω := div_pos hW0 hK
   have hid : wrefFp4Hot d a s = ω * K := by rw [hωdef, div_mul_cancel₀ _ hK.ne']
   have hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
-      P.actOK (U.layout.shape u) act → P.capOK H s' U u act → P.Wref U.layout u ≤ (ω : ℝ) * P.credit H s' U u act := by
+      P.actOK (U.layout.shape u) act → P.inertBoundOK H s' U u act → P.Wref U.layout u ≤ (ω : ℝ) * P.credit H s' U u act := by
     intro U hU H s' u hu act ha hcap
     obtain ⟨hw, hcr⟩ := hacc U hU H s' u hu act ha hcap
     rw [hw, hid]
@@ -63,7 +63,7 @@ theorem pearlCSampledFp4HotAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintyp
   have hω0 : 0 < ω := div_pos hW0 hK
   have hid : wrefFp4Hot d a s = ω * K := by rw [hωdef, div_mul_cancel₀ _ hK.ne']
   have hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s' : S), ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
-      TR.capOK H s' U g act → TR.Wcred U.layout g act ≤ (ω : ℝ) * TR.credit H s' U g act := by
+      TR.inertBoundOK H s' U g act → TR.Wcred U.layout g act ≤ (ω : ℝ) * TR.credit H s' U g act := by
     intro U hU H s' g hg act hcap
     obtain ⟨t, _, hw, _, hcr⟩ := hacc U hU g hg act
     rw [hw, hid]
