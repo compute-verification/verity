@@ -1,7 +1,9 @@
 """The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at four
 levels: the root, `verity/`, `verity/protocols/` and each protocol's directory. Every tracked entry at those levels is in
 the tree or on the not-yet list; every not-yet line names a path the tree still holds, with where it goes, its owner and
-its day; and an entry the tree has that main doesn't hold yet names its owner and day until it lands. The not-yet list
+its day; and an entry the tree has that main doesn't hold yet names its owner and day until it lands. A stray entry
+fails; a line or an entry whose move landed only warns (`BOOKKEEPING` in `tests/conftest.py`), so a move is never
+reverted for a line of this file: top deletes landed lines, and the metric counts them until then. The not-yet list
 only shrinks: it holds at most `NOT_YET_MAX` lines, at most `UNOWNED_MAX` of them unowned and `ARRIVING_MAX` arriving.
 No check compares a day with today.
 
@@ -22,7 +24,7 @@ LAYOUT = "tests/tree.toml"
 HANDLES = ".agents/skills/using-slack/registry.json"
 #: the not-yet list's length, its unowned lines and its arriving lines: each only shrinks, so lower it with the list
 NOT_YET_MAX = 36
-UNOWNED_MAX = 13
+UNOWNED_MAX = 0
 ARRIVING_MAX = 1
 UNOWNED = "unowned"
 #: the tree's entries under this prefix are what each protocol's directory may hold
@@ -144,6 +146,8 @@ def test_every_entry_is_in_the_tree_or_on_the_not_yet_list() -> None:
 
 
 def test_every_not_yet_line_and_coming_entry_is_still_to_come() -> None:
+    """A not-yet line whose path main no longer holds, or a coming entry main now holds: its move landed. Bookkeeping: it
+    warns, and top deletes the line or drops the entry's owner and day."""
     off = landed(layout(), _tracked())
     assert not off, f"{LAYOUT} says these are still to come, and main holds the change:\n  " + "\n  ".join(off)
 
@@ -200,8 +204,9 @@ def test_each_check_names_its_fix() -> None:
 def main(ref: str) -> int:
     out = subprocess.run(["git", "ls-tree", "-r", "-z", "--name-only", ref], cwd=ROOT, check=True, capture_output=True).stdout
     tracked, doc = [p.decode() for p in out.split(b"\0") if p], layout()
-    found = strays(doc, tracked) + landed(doc, tracked) + malformed(doc, _handles()) + longer(doc)
-    print("\n".join(found + [f"(bookkeeping) {s}" for s in still_arriving(doc, tracked)]) or f"{ref}: holds to {LAYOUT}")
+    found = strays(doc, tracked) + malformed(doc, _handles()) + longer(doc)
+    warned = landed(doc, tracked) + still_arriving(doc, tracked)
+    print("\n".join(found + [f"(bookkeeping) {s}" for s in warned]) or f"{ref}: holds to {LAYOUT}")
     return 1 if found else 0
 
 
