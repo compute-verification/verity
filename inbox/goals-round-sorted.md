@@ -24,6 +24,7 @@ A tier-1 goal is a state of the whole system that you named, that one command or
 1. **Is that list right?** Name any goal that stays at tier 1, or any of the four that goes.
 2. **Security posture** (infra): it was a project in your own words and nothing in goal 4 measures it. A fifth goal, or parked?
 3. **Runs booked under parked goals** (vllm): the noon serving-cost sweep runs as booked. The tick arm (5 PM) and the production command's first run from `main` (9:45 PM) are released once you confirm the park, which frees five workers for carrying 25 open pull requests over the move. Say "run them" if you want tonight's numbers anyway.
+4. **One kept change touches a guarantee** (lean): it states two parts of the inference-only policy as named open premises of the remote theorem, in place of the one premise `InferenceOnlySound`. My recommendation is yes: it makes the list of open premises say what is open. It opens unmarked Tue 17 Nov, and you see the record's change when it lands. Say no and it parks with the policy.
 
 ## What the leads changed in the frame, and I took
 
@@ -35,13 +36,15 @@ A tier-1 goal is a state of the whole system that you named, that one command or
 - A row with two owners gets one goal per owner (kernels and compute-accounting on PoUW's GPU code).
 - Goal 1 also counts the architecture file's rows of files that only change place, or it could read zero with GPU code still under `benchmarks/`. That count is known at 11 AM PST, when the file is recounted against today's `main` (memory-accounting).
 - A defect in a figure `main` already prints is the bar's, under goal 2. What parks is the next number, never the mend of a printed one (training).
+- The areas of `security/` take their protocols' names. It is a layout change that had no line; it is now under goal 1 for Fri 20 Nov, with a row added to the architecture file (lean).
+- One goal marked done this morning was not: "Lean code uses the Glossary's names". Declarations' own names still spell seven older words (session 739, window 228, escape 150, pin 123, wrong 100, transcript 50, horizon 13, of 101,108 declaration lines), not yet sorted into the senses the Glossary keeps. lean gives each lead its list Sat 14 Nov 6 PM PST (lean).
 
 
-**State:** 13 of 16 leads have answered; still to come: circuits, lean, proofs. Nothing on the Goals page's top level changes before Daniel's word. Each lead's own table is on TOP-416.
+**State:** 14 of 16 leads have answered; still to come: circuits, proofs. Nothing on the Goals page's top level changes before Daniel's word. Each lead's own table is on TOP-416.
 
 compute-research's six goals that were parked before today are one row of its table, so the parked count is five short.
 
-**Counts so far:** kept 124 (goal 1: 19, goal 2: 70, goal 3: 7, goal 4: 28), parked 55, dropped 20, new goals written for lines and rows that had none: 21.
+**Counts so far:** kept 137 (goal 1: 21, goal 2: 77, goal 3: 7, goal 4: 32), parked 57, dropped 23, new goals written for lines and rows that had none: 21.
 
 ## Each lead's sort of its own goals
 
@@ -55,13 +58,14 @@ compute-research's six goals that were parked before today are one row of its ta
 | console |  |  | 5 | 1 | 1 | 1 | 8 |
 | infra |  | 1 |  | 11 | 2 | 2 | 16 |
 | kernels |  | 7 |  |  | 6 |  | 13 |
+| lean | 2 | 7 |  | 4 | 2 | 3 | 18 |
 | memory-accounting | 2 | 7 |  |  | 4 | 2 | 15 |
 | network-accounting | 2 | 10 |  |  | 8 | 4 | 24 |
 | soundness | 1 | 12 |  |  | 5 |  | 18 |
 | training | 2 | 12 |  |  | 7 |  | 21 |
 | vllm | 3 | 8 |  |  | 5 | 1 | 17 |
 | top | 5 | 3 |  | 4 | 1 | 1 | 14 |
-| all | 19 | 70 | 7 | 28 | 55 | 20 | 199 |
+| all | 21 | 77 | 7 | 32 | 57 | 23 | 217 |
 
 ## Goal 1. The repository has the architecture's layout
 
@@ -72,6 +76,8 @@ compute-research's six goals that were parked before today are one row of its ta
 | compute-accounting | NEW. **PoUW's `clear/` under its prover.** Check: L9's line gone from `tests/tree.toml`. | L9 | Mon 16 Nov |
 | compute-research | **`verity/device.py` reads the cards' and nodes' data sheets.** Check: `verity/hardware/cards.py` and `nodes.py` are absent from `main`, and no file imports either. | serves L2, L3 and L4: it empties `verity/hardware/` into `verity/device.py` | Sat 14 Nov (was today noon: it is built on chain 2's head, #9742 changed the same tree file at 8:10 AM PST, so the worker merges it and runs the suites again, and then seven owners read their callers' lines) |
 | compute-research | **No Lean table restates a data sheet, and `verity/hardware/lean.py` is gone.** Check: L4's line is gone from `tests/tree.toml` and R17's row from the architecture file. | closes L4 and R17 | Tue 24 Nov, L4's day (was Wed 18: three changes in order; the first waits on proofs' word, due today 10 AM PST; the second is built and waits behind compute-accounting's #9509) |
+| lean | **Security areas named after their protocols.** as it is. Check: each area of `security/` carries the architecture's name for its protocol, and the accounting area holds one protocol's files | no line: none of L1 to L10 is under `security/` | Fri 20 Nov (was Wed 18: it is a move every open Lean branch crosses, so it follows the owners file and the tool train). If parked: nothing is renamed and no list is written |
+| lean | as it is. Check: no declaration name on `main` spells an older word outside the senses the Glossary keeps. Today 228 window, 739 session, 100 wrong, 150 escape, 123 pin, 50 transcript, 13 horizon, not yet sorted | no line: the Glossary's terms, as comms' device term | not known. Sat 14 Nov 6 PM I write lean's own day and each lead's list; the whole is the latest of the leads' days |
 | memory-accounting | Title kept. **Check:** #9061 on `main`: its 36 files sit under `verity/protocols/accounting/poub/` and `pous/`, and `BENCHMARKS_IMPORTERS` loses `adapters/vllm/verity_vllm/protocols/pous.py` and `difftest_vectors.py` | section 7's place row "GPU code", memory's part (no L line: see the frame) | **Sun 15 Nov** (was today: it crosses chain 2 today and is marked by 6 PM PST; the rest is the queue's) |
 | memory-accounting | Title kept. **Check:** `poub/prover/` exists on `main`, and `session_parties.py` and `wipe_parties.py` define no `Prover` or `Challenger` | the architecture's idea 8, "trust follows the directory": a `verifier/` holds what the auditor runs (no L line) | **Tue 17 Nov** (was Sat 14: its worker starts on #9061's crossed head, which exists tonight) |
 | network-accounting | **Network certifier published under one name.** kept. Check: in the exported tree the certifier's tests pass and no public file holds the retired name | the export, serves R20 | Fri 20 Nov |
@@ -116,6 +122,13 @@ compute-research's six goals that were parked before today are one row of its ta
 | kernels | **The exact int8 check runs the adapter's kernels, and `exactlin.py` holds no copy of them.** Check: #8671 on `main` | serves R5 | Mon 16 Nov (was Sat 14: it crosses chain 2 today and waits on vllm's read) |
 | kernels | **Each move that rewrites a kernel's sources has that kernel's SHA-256 before and after, equal.** Check: one comment a move on HASH-132. Chain 2's is there | serves R4 and L5 | Thu 19 Nov (was Tue 17: its last move is R4's, which waits for compute-accounting's Tuesday run) |
 | kernels | The plan with its days is a comment on TOP-415. It closes tonight and is not a state of `main` | serves R4 | today 6 PM PST |
+| lean | **Page lists which verifier decides each verdict.** as it is; each lead gets its rows Sat 14 Nov 6 PM | serves R7: its table is the list of verdicts Python still decides, which R7's goals close | Mon 16 Nov 10 AM |
+| lean | **Public export lists statements without proofs.** as it is. Check: #8701 marked, at a head where the export's own Lean check has run with a build | serves R20 | Sat 14 Nov 6 PM |
+| lean | **No file of `security/` falls to lean for want of a claim.** Check: the Lean check's owners at `main` leave 0 such files; 826 of 4,816 by your sheet | R21, closed with `soundness/security-areas-owned`: soundness names the leads, lean writes the file | Tue 17 Nov |
+| lean | **Each guarantee's witness is checked against that guarantee.** as it is. Check: #8945 on `main`: a guarantee that lists another case's lemma fails the Lean check | serves R17 and R19 | Tue 17 Nov if proofs restates the one lemma the rule refuses (PRF-549, its answer due today noon). If that restatement parks, I say Mon 16 Nov noon how the rule lands without it |
+| lean | **Lean check passes on public repository.** as it is. Check: on a fresh export of `main` the Lean check passes on 16 of 16 packages, against the locks the export wrote | R20, closes it | Wed 18 Nov (was Tue 17: #8701 changes the Lean check's own files, so it lands alone in ci's Lean order; then about 4 h of runs) |
+| lean | **The compiled check reads a two-stage audit and refuses it.** Check: #9738 on `main`, with its Lean proof that the check accepts none | R7, in the row's own words | in review Sat 14 Nov 10 PM; on `main` behind proofs' #9574, which it contains, so that day is proofs' |
+| lean | **The Lean check refuses a guarantee about acceptance that shows no accepted run.** Check: on `main`, the two lists held to their counts (done) and four refusals, each with a test: "accepts, or a collision" is asked for its accepted run; one audit in the event and the premises; a collision that names no inputs; a colliding pair picked by choice | R7 by your rule 1: theorems about what a verifier accepts compiled while it accepted nothing. Serves R19 | on `main` Fri 20 Nov, in review Wed 18 Nov; I say both again Mon 16 Nov 6 PM with the sizing |
 | memory-accounting | **Memory accounting's code meets the bar.** Check: the swarm's score on `main` reads zero list entries and zero findings for the nine seats outside Lean (343 and 548 on Thu 6 PM), and `BENCHMARKS_IMPORTERS` names no file of ours (five today) | each area's code at the bar | **Thu 19 Nov** (was Tue 17: 251 of its files are held by open pull requests until they cross and land) |
 | memory-accounting | Title kept. **Check:** onsite PoUB is a `ProtocolDef` on `main` and `p2_party.py` (821 lines, its own messages) is gone | closes R1's memory part | **Thu 19 Nov** (was Tue 17: it is written against the form the split above leaves) |
 | memory-accounting | Title kept. **Check:** #9240 on `main`: the challenger signs one message a wipe, naming the certifier's start mark and no egress count | serves R9, and R8 through @soundness's wipe-count tie | **Tue 17 Nov** (kept) |
@@ -163,7 +176,7 @@ compute-research's six goals that were parked before today are one row of its ta
 | training | **Slowdown count skips repeated positions.** as titled. Check: a job's record holds its measured repeats and the count leaves them out (`tests/test_repeats.py` on `main`). Counter and five tests are pushed | the bar: the one open defect that can make a printed slowdown too high | Tue 17 Nov |
 | training | **The inference-only check reads a served record** (its title says "demo done"). Check: on `main` the compiled check accepts the served Llama 3.2 1B record and refuses it with one weight unregistered | serves R7 | Tue 17 Nov for the accept and the count rule; the rate rule's refusal needs @vllm's run at the new limit |
 | training | **Record check's copied definitions removed.** as titled. Check: the check's Lean has no definition of a return's fields and no string reader of its own | the bar: one definition in Lean | Wed 18 Nov on `main` (in review Mon 16) |
-| training | **One command runs an attack config.** Check: `verity bench training-slowdown CONFIG` on `main` runs a config's missing jobs, grades them and prints the slowdown on a CPU node. Parked: its first GPU run, a sweep as one config | the bar | closes on your word |
+| training | **One command runs an attack config.** Check: `verity bench training-slowdown CONFIG` on `main` runs a config's missing jobs, grades them and prints the slowdown on a CPU node. Parked: its first GPU run, a sweep as one config | the bar | in review Mon 16 Nov (corrected 8:43 AM: on `main` the command does not grade or print a slowdown yet) |
 | training | **The calculator prints no bound a draft statement sets.** Check: #8780 on `main`; onsite then prints the bound of record | the bar | marked today 6 PM PST; on `main` Sat 14 Nov |
 | training | **Inference-only check accepts a served day.** as titled | R7 | none I can hold: it waits on @lean's joining statement, due Mon 30 Nov |
 | training | not a state of `main`: closes when #9374 is marked | a step of the row above | today 6 PM PST |
@@ -223,6 +236,10 @@ compute-research's six goals that were parked before today are one row of its ta
 | infra | **Security posture finalized.** Title unchanged. Check: each of the review's ten high findings in infra's hands has its check passing, and a fresh agent holds no token of Daniel's | none | 11/20 for infra's part; Cursor's plan, Ubuntu's kernel and Daniel's account changes are not mine to date |
 | infra | **Check finishes within 45 minutes.** As ci's table has it. ci holds it, and the page should name ci as its owner | goal 4 | ci's day, 11/16 |
 | infra | **Disk remake procedure written, first hour agreed.** Title unchanged. Check: the procedure is in infra's notes, since Thu, and the first machine's hour is on INF-732. The hour, cpu-5 on Sat 8 AM PST, is yours to rule at tonight's review | none | today, on your ruling |
+| lean | **Lean PRs carry no lock records.** as it is. Check: the queue's warning and `restack.py`'s two `locks-stale` messages tell an author to record only what the candidate's records run can't write | goal 4 | Mon 16 Nov (was today: the three messages are in ci's files, which ci took Thu; both `restack.py` lines still say "regenerate them … before marking it" [read]. I ask ci its day on CI-489, and a worker of lean's writes it Mon if ci would rather) |
+| lean | **Lean build cannot rewrite checked files.** as it is. Check: its test on `main` (a build still runs; both ways of changing a mount fail). It rides in the one pull request | goal 4 | Tue 17 Nov |
+| lean | **The Lean check does once a run what it did once a package.** Check: lean's tool train on `main`, as the one pull request ci asked for on CI-489 (six parts, marked alone) | goal 4; `ci/no-cold-lean-build` needs it | marked by Sun 15 Nov noon; on `main` Mon 16 Nov if ci's readers and its slot follow within a day |
+| lean | **Lean check finishes within 15 minutes.** as it is. Check: `research lean-times --hours 24`, 95 of 100 one-pull-request checks' Lean part within 15 minutes of work | goal 4 | no day I can hold for the bar. Tue 17 Nov gives the first measured day with the tool train; the model says 74 of 100, and the rest is the proof system's chain of about 185 files that each import the last |
 | top | **No job stranded beside a free machine.** as it is | none | Tue 17 Nov |
 | top | **Fewer changes refused for merge conflicts.** as it is; today's 6 PM review keeps, changes or drops it | none | today 6 PM |
 | top | **Research velocity scored and steered every six hours.** as it is; reviewed today 6 PM | none | today 6 PM |
@@ -261,6 +278,8 @@ L10, R11, R12, R14, R15 (L = a not-yet line of the layout file, R = a row of the
 | kernels | Overhead benchmark passes its GPU check | stops with the arm's first card run today; #9489 and #9550 open |
 | kernels | PoUW overhead counts the output's commitment | stops with no timed row of record |
 | kernels | Row commitment takes LM-head rows | stops with the wide kernel built and stored, pinned only in #9550 |
+| lean | Inference-only policy proved for served traffic | stops at: not true on `main`; its 25 parts listed with owners, lean's five dated; network-accounting holds the policy and takes the goal Mon 16 Nov |
+| lean | Honest signed session's proof sized | stops at: one worker's read, which builds nothing. I let it finish Sun 15 Nov 6 PM and send soundness the sizes Mon noon |
 | memory-accounting | Memory verdicts on the onsite record | Stops at: all three audits accepted in a rehearsal on one H200 over the `bf16` store, each decided by its Lean verifier (Thu 12 Nov); the onsite record lists no memory verdict; @vllm's setting and your word on where Lean runs are not in |
 | memory-accounting | Uncertified memory share reaches its target | Stops at: 0.199 at the data sheet's rate, Thu 12 Nov, the session accepted by Lean; the target 0.14 for Wed 18 Nov is not reached |
 | memory-accounting | Uncertified memory share at most 0.17 | Stops at: 0.233 and 0.199 over the cards' memory alone; the store with the host's memory has not been run served |
@@ -308,6 +327,9 @@ L10, R11, R12, R14, R15 (L = a not-yet line of the layout file, R = a row of the
 | console | The eleven's numbers live on the console | Superseded: the tab already lists every priority-1 goal with its number, so once the page's top holds only the tier-1 list it shows those, which `console/tier-one-numbers` covers. |
 | infra | Quick runs start within five minutes | Folded into the row above as its second number |
 | infra | Second night's check names no false disagreement | Folded into the row above as its step |
+| lean | lean/older-names-sorted | a list, not a state of `main` |
+| lean | Policy's proved and open parts listed | a list, not a state of `main` |
+| lean | Refused lemma's answer read | a read, not a state of `main`; it is a step of `lean/witness-held-to-its-guarantee` |
 | memory-accounting | PoUS grader moved out or deleted | True on `main` since chain 2: `tools/pous_grader/` holds its 11 files and none is under `verity/` [ran on `5eb1231b2558`]. I mark it done. Whether the package is deleted is my read of Mon 16 Nov noon on MEM-306, not a goal |
 | memory-accounting | Verifier tests stop loading benchmark code | It is two of the five entries in the row above. Its change (MEM-259) keeps its issue and lands the day after #9061 |
 | network-accounting | Check prints the ruled value on Monday's data | Done as a run: the check prints 26,400 bits on Monday's data. Its change lands under `network/onsite-port-staged` |
