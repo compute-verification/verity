@@ -124,7 +124,8 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     assert doc["lab"]["established"] is False
 
     cls, T = SZ.W63K4.cls, params["window"]
-    ell_a = cls.NR * (T // cls.EVERY) * IS.entry_bits(cls)
+    ell_a, entries = T * IS.view_bits(cls), cls.NR * (T // cls.EVERY) * IS.entry_bits(cls)
+    assert (onsite.READING, onsite.WITH_TIES) == ("view", "registered") and (ell_a, entries) == (25_600, 896)
     cell = math.ceil(math.log2(W63K4_CELLS + 1))
     caps = W.WardenParams(**params).caps(1)
     k = b0["K"]
@@ -134,18 +135,23 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     assert k["per_phase"]["k_sched"] == sum(math.ceil(math.log2(c + 1)) for c in caps)
     assert {x: k["per_phase"][x] for x in ("ell_a", "k_skip", "T_j", "d_jit", "jitter")} == {
         "ell_a": ell_a, "k_skip": 0, "T_j": T, "d_jit": 2, "jitter": T}
-    assert k["per_phase"]["K"] == 384 + 384 + ell_a + T
+    assert k["per_phase"]["K"] == 384 + 384 + ell_a + T == 26_400
+    assert k["per_phase"]["with_ties"] == {"reading": "registered", "conditional_on": list(onsite.TIES),
+                                           "ell_a": entries, "K": 384 + 384 + entries + T}
+    assert k["per_phase"]["with_ties"]["K"] == 1_696 and len(onsite.TIES) == 2
+    assert (k["reading"], k["bounds"]) == ("view", onsite.COUNT) and "no K here is a leak bound" in onsite.COUNT
+    assert "with_ties" not in json.dumps({"periods": k["periods"], "scopes": k["scopes"], "lab": doc["lab"]})
     assert all(z["K"]["conditional_on"] == list(onsite.OPEN_CHECKS) for z in (b0, b2))
     one = LB.link(cls, Fraction(4, 1) / (T * Fraction(1, 10)), T=T, tau=Fraction(1, 10), egress_cells=W63K4_CELLS)
     for period, t in k["periods"].items():
         m = Fraction(LB.PERIODS[period]) / (T * Fraction(1, 10))
-        assert t["m"] == pytest.approx(float(m)) and t["bound"] == pytest.approx(one.bits(period, "registered"))
+        assert t["m"] == pytest.approx(float(m)) and t["bound"] == pytest.approx(one.bits(period, "view"))
         assert sum(t[x] for x in onsite.TERMS) == pytest.approx(t["bound"], rel=1e-12)
         assert Fraction(t["eps"]) == m * LB.SCAN_DELTA and t["vacuous"] == (m * LB.SCAN_DELTA >= 1)
         assert t["delta_net"] == [{"symbol": "eps", "value": t["eps"]},
                                   *({"symbol": s, "times": t["m"]} for s in ("ε_ks", "ε_bind", "ε_tap"))]
-        assert t["pooled"]["1e-06"]["k_skip"] == pytest.approx(one.bits(period, "registered", Fraction(1, 10**6))
-                                                               - one.bits(period, "registered"))
+        assert t["pooled"]["1e-06"]["k_skip"] == pytest.approx(one.bits(period, "view", Fraction(1, 10**6))
+                                                               - one.bits(period, "view"))
     assert (k["periods"]["week"]["vacuous"], k["periods"]["year"]["vacuous"]) == (False, True)
     assert doc["lab"]["links"] == 3 and doc["lab"]["week"]["per_period"] == pytest.approx(
         3 * k["periods"]["week"]["bound"])
@@ -175,9 +181,15 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     assert "a phase of T_j = 32 buckets of τ = 100 ms (3.2 s)" in md and "| m (3.2 s phases) |" in md
     assert "each phase T_j = 32 buckets of τ = 100 ms (3.2 s), the lab's tick" in md
     assert "(vacuous)" in md and "known overcount" in md and "Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)" in md
-    assert f"ℓ_a,j = {ell_a:,} (the scan's slot entries, conditional)" in md and "Every K here is conditional" in md
+    assert f"ℓ_a,j = {ell_a:,} (the scan's view rows, as the period check charges them)" in md
+    assert ("K a phase = 26,400. Conditional on both of the scan's ties, neither checked: ℓ_a,j = 896 (its slot "
+            "entries once) and K a phase = 1,696.") in md
+    assert "Every K here bounds a count expression" in md and "so no K here is a leak bound" in md
+    assert "rests on neither of the scan's ties" in md and "no period's figure is made from it" in md
+    assert all(t in md for t in onsite.TIES) and "## K, the count the period check charges a zone's link" in md
+    assert "can send beyond its committed program" not in md and "Every K here is conditional" not in md
     assert all(c in md for c in onsite.OPEN_CHECKS) and "ℓ_a + 1" not in md
-    assert "the link figure charges the advice through the entries" in md
+    assert "the link figure charges the advice through the scan's inputs" in md
     for retired in ("D_j", "k_i", "link-window", "delta_net", "J is", "brief", "NET-", "advice width"):
         assert retired not in md, retired
     assert onsite.short("word " * 50).endswith(" …") and len(onsite.short("word " * 50)) <= 162
