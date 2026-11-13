@@ -23,6 +23,7 @@ import Proofs.Flock.SpotFlock.Depths
 import Proofs.Flock.SpotFlock.EntriesAt
 import Proofs.Flock.SpotFlock.HeaderRoots
 import Proofs.Flock.SpotFlock.Opens
+import Proofs.Properties.Verity.SampledTwo.OneTable
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import all Init.Data.Ord.String
@@ -32,9 +33,12 @@ import all Lean.Data.Json.Basic
 # The labels of a checked inner block's session
 
 `AddressRow.Sits h` (`RowOf`) asks, at an accepted run, that the session's instances be labelled by their slots
-(`LabelledAt` at `drawSlot`). This file proves that part, `CheckedRun.labelled_of_ok`, at a session of one table, from
-what the second stage checks of the session's statement and what Flock's setup computes of its public file:
+(`LabelledAt` at `drawSlot`). This file proves that part, `CheckedRun.labelled_of_ok`, from what the second stage
+checks of the session's statement and what Flock's setup computes of its public file:
 
+* the session is one table, at a table count of at most one (`CheckedRun.one_table`): the statement check holds a
+  checked unit's statement to its template's scope, where the design evaluates only at a one-table reference statement
+  (`Verity.SampledTwo.oneTable_of_sessionOk`);
 * the session's one statement is set up at the statement's draw (`setupTables_setupOne` at one table) and its public
   file is the loaded population's drawn sample (`setupHidden_spec'`), whose header's `units.indices` are the
   population's indices at the drawn units (`drawn_units`, `unitIndices_of_units`);
@@ -213,10 +217,22 @@ open AddressRow
 
 variable {h : Held} {r : CheckedRun h.stage}
 
-/-- **The session's drawn units, at one table**: the session's statement is set up at its draw, which parses to the
-second draw's units in the part counted from its first (`proved_of_wf` at the second stage's sample check), and the
-session's public file labels each drawn unit by its slot in the part (`slots_of_population`). -/
-theorem drawn_of_ok (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) :
+/-- **A checked inner block's session is one table, at a table count of at most one**: the statement check holds the
+unit's statement to its template's scope (`stmtOkAt_unit`), the checked unit's template is one of the members'
+(`templateOf_lt_of_checked`), and a statement in a template's scope sets up one table where the design evaluates
+(`Verity.SampledTwo.oneTable_of_sessionOk`). -/
+theorem one_table (hr : r.Ok h) : r.sts.size = 1 ∧ r.ins.read.I.count ≤ 1 := by
+  obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩ := hr
+  have hat := stmtOkAt_unit h hx hok hu
+  unfold stmtOkAt at hat
+  rw [hx] at hat
+  simp only [Bool.and_eq_true] at hat
+  exact Verity.SampledTwo.oneTable_of_sessionOk h2 (templateOf_lt_of_checked h hx hu) hat.1.2 hset
+
+/-- **The session's drawn units**: the session's statement is one table (`one_table`), set up at its draw, which parses
+to the second draw's units in the part counted from its first (`proved_of_wf` at the second stage's sample check), and
+the session's public file labels each drawn unit by its slot in the part (`slots_of_population`). -/
+theorem drawn_of_ok (hr : r.Ok h) :
     ∃ dj D draw, r.ins.read.draw = some dj ∧ _root_.Flock.Draw.UnitDraw.ofJson dj = .ok D ∧
       secondDraw h r.c₀ r.c₁ = some draw ∧ r.sts[0]!.pub.n = D.proved.size ∧
       D.proved = ((((Spot.Draw.proved draw).map Int.toNat).filter
@@ -224,6 +240,7 @@ theorem drawn_of_ok (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) :
       ∀ idx, _root_.Flock.Registered.unitIndices r.sts[0]!.pub = .ok idx → ∀ n < D.proved.size,
         idx.getD n 0 = (partOf h r).lo + D.proved.getD n 0 := by
   have hpos := sts_pos hr
+  have hc1 : r.ins.read.I.count ≤ 1 := (one_table hr).2
   obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩ := hr
   have hsc := sessionScoped h r.x r.m₁ (unitStmt h r.m₂ r.u) r.c₀ r.c₁ _ (stmtOkAt_unit h hx hok hu)
   have hat := stmtOkAt_unit h hx hok hu
@@ -299,10 +316,9 @@ theorem drawn_of_ok (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) :
   have e2 : D.proved.getD n 0 = D.proved[n] := by simp [hnD]
   rw [e1, e2, hslot _ hlt]
 
-/-- **A checked inner block's session labels its instances by their slots**, at one table (`drawn_of_ok`). -/
-theorem labelled_of_ok (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) :
-    LabelledAt (drawSlot (partOf h r) r.ins.read.draw) r.sts := by
-  obtain ⟨dj, D, -, hdj, hD, -, hn, -, hidx⟩ := drawn_of_ok hr hc1
+/-- **A checked inner block's session labels its instances by their slots** (`drawn_of_ok`). -/
+theorem labelled_of_ok (hr : r.Ok h) : LabelledAt (drawSlot (partOf h r) r.ins.read.draw) r.sts := by
+  obtain ⟨dj, D, -, hdj, hD, -, hn, -, hidx⟩ := drawn_of_ok hr
   intro idx hi n hlt
   rw [hn] at hlt
   rw [hidx idx hi n hlt]
