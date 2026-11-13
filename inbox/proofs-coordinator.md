@@ -120956,3 +120956,42 @@ Runs:
 To post: nothing.
 
 Not established: the last step compiles; the form accepts any play (c); the driver fix runs; `accepts_of_steps` is stated in Lean.
+
+
+## OWNREADS, Fri 13 Nov 04:50Z: `OwnReads.lean` and `ReadsCheck.lean` compile on the moved base (`r20261113-043114-0733`, at `ba8cc8ab0c`, only the three permitted axioms); `HeldOfReads.lean` was not reached there, because HELDOF's `HeldOf.lean` stops at line 136: `held₀` does not set the base's new field `refHeaders`
+
+In plain words. I asked one run to compile my three files at a head that holds HELDOF's newest commit over the moved base. Two of them passed. The third never opened: it imports HELDOF's file, and that file no longer builds on the moved base, because the base added one field to the record of what the auditor holds and HELDOF's construction of that record does not fill it in. The mend is one line in HELDOF's file, which is not mine to make. HELDOF's own try at its newest head will stop at the same line.
+
+**1. The run** [run]
+- `r20261113-043114-0733`, sent with `--on auto` at 04:31:14Z, went to **vy-nebius-cpu-6**; it took place `r3` at 04:31:31Z, so it waited 17 seconds, and ended rc 0 at 04:39:45Z.
+- `OwnReads.lean`: "lean exit 0 in 382 s"; "axiom probe: none of its 35 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; siblings clean over the 568 modules built.
+- `ReadsCheck.lean`: "lean exit 0 in 20 s"; "axiom probe: none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; siblings clean.
+- `HeldOfReads.lean`: "lake build +Proofs.Flock.SpotFlock.HeldOfReads:deps exit 1 in 73 s". The one error: "error: ../Proofs/Flock/SpotFlock/HeldOf.lean:136:52: Fields missing: `refHeaders`". The two "declaration uses `sorry`" warnings at lines 218 and 221 follow from it; the source holds no `sorry` [run: rg].
+
+**2. The cause** [read]
+- On the moved base, `Held` has the field `refHeaders : ℕ → Json` (`Code.lean` line 157: "template `t`'s reference header as the auditor's params give it"), which came with FRAME's first move.
+- HELDOF's `held₀` (`HeldOf.lean` lines 134 to 153) sets `refReads` and not `refHeaders`. It is the same text at `42fbb506b3`, which my head holds, and at HELDOF's newest `2f078771d8`. So HELDOF's try `r20261113-042956-388c` at `2f078771d8` will stop at the same line [derived].
+
+**3. Where each file of mine stands**
+- `OwnReads.lean`: compiled against the moved base [run]. Every `Proofs` module it imports (1635) has the same text at `ba8cc8ab0c` as at `cursor/proofs-ownreads-9a1c` = `aef755c9e3`, which is the base plus this one file; of the verifier's Lean, the only file that differs between the two heads and that it reaches is `Spot/Run.lean`, in a docstring [run: script and `git diff`]. So the verdict holds at `aef755c9e3` too [derived].
+- `ReadsCheck.lean`: compiled against the moved base [run]. Its eight imported `Proofs` modules are the same text as where it first compiled.
+- `Apart.lean`: compiled, `r20261113-030222-643a`, unchanged.
+- `HeldOfReads.lean`: compiled only on HELDOF's last commit over the old base (`r20261113-032403-1fd4`). On the moved base it waits on HELDOF's one line. Its text needs no change for that line: `refReadsWf_of` reads only `refReads` [read].
+
+**4. Which heads ASSEMBLY should merge** [run: git, against the join at `c09e0a203e`, which holds neither the moved base nor HELDOF's branch nor any file of mine]
+- `cursor/proofs-apart-a64c` = `9179aaea5a`: now, as at 04:32Z.
+- `cursor/proofs-ownreads-9a1c` = `aef755c9e3`: the moved base with `OwnReads.lean` and its line in `security/Proofs/Flock.lean`. FRAME's `cursor/proofs-frame-l1-9c4e` holds the same file text, so a join that takes FRAME's head needs nothing from this one.
+- **Not `cursor/proofs-refreadswf-a64c` = `ba8cc8ab0c` yet**, which corrects my 04:32Z line: `HeldOf.lean` does not build there. I merge HELDOF's head into it as soon as that head has the field, push, and send one try of `HeldOfReads.lean`.
+
+### NEEDS
+- **HELDOF** (`bc-3ddfb587-549a-5964-9ddf-80547065f684`): one line in `held₀`, beside `refReads`. My reading of what it should be, not compiled: `refHeaders := fun t => (it.circuits.map (·.2.2.1)).toList.getD t .null`. The third part of each of `it.circuits` is the header: your `RefsAre it h` is `refsOf h = it.circuits.map fun (t, _, hd, _) => (t, hd)`, and on the base `refsOf h` pairs `h.names.getD t ""` with `h.refHeaders t` (`Code.lean` line 690). With that line `RefsAre` at `held₀` should follow by the argument of your `refReads_eq`, where today it is a premise of `heldMatches_form` [guess]. Say when it is pushed.
+
+### Events that reached this session and are not mine
+Between 04:43Z and 04:46Z this session was sent 27 messages of the Slack thread you subscribe to, five task-finished notices (SESSIONS, RUNSAS, MEMBERS, COUNT, SESSIONOF) and 21 firings of your timers. I touched no file on any of them. One of the timers was set today and is about something due now: `servedcard-gonogo-0412z` (set 04:02Z; release node A 04:30Z to 06:00Z to vllm on VLLM-339 on SERVEDCARD's NO-GO). If it did not also reach you, it has not been acted on [run: I did nothing].
+
+### To post
+Nothing.
+
+Machine note [run]: at 04:46Z the machine was a fresh clone again. Nothing was lost; every head of mine was on the remote.
+
+Not established: that `HeldOfReads.lean` compiles on the moved base; that the line I suggest for `refHeaders` compiles or is the one FRAME means; `ReadsWf` at any real parameters; `OpensOwn` at any device; that any play is accepted, so that `binds_of_own` or anything composed over the form's accept is more than true and empty. The package's Lean check with its lock has run on none of my heads.
