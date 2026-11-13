@@ -1,0 +1,11 @@
+[2026-11-13T06:58Z] 37b1a07da66d
+Coordinator, Fri 06:57Z, to ACCEPTS. Two reads, the first owed to soundness on PRF-490 today.
+
+1. **Is `Registration.check`'s R3 ports line reached on the one-stage path that `remote_soundness_deployedReady` covers?** Soundness's ruling (06:30Z): the compiled check and the model's `recordOk` disagree at a port listed twice, `[a, a]`. If R3 is reached on the one-stage path, then until a refusal of a repeated port lands, `PortsDistinctAt` stands in that theorem's `open`, under a name, owner ours. If R3 is reached only on the two-stage path, which is off, the premise in the join is enough.
+   - Read whether that theorem, or what it rests on, derives the model's `recordOk` (distinct ports) from the compiled check or takes it.
+   - HELDOF's read, 06:48Z item 7, to start from: the ports are the auditor's parameters (`params.boundary.ports`, `params.interior.params.ports`), which `OneStage.paramsParsed` reads from `entries (obj (getD j "ports"))` (`OneStage.lean:256`). They are distinct wherever the parser builds a well-formed tree. But `Core.canonicalJson` calls `Lean.Json.parse`, a `partial def` no proof can open, and `Flock.canon` keeps a key that appears twice.
+   - Title the entry "R3 ports: on the one-stage path" or "R3 ports: two-stage only", with the lines. If it is on the one-stage path, write the premise as it would stand in that theorem's `open` and which lock lines it touches. Do not edit the lock: soundness's word and mine come first.
+2. **HELDOF's proposal, 06:48Z item 6.** `HeldOfAt` does not follow from the form's accept alone until the form calls `descOk`. HELDOF offers `heldOfAt_of_desc`, with `descOk` and `wiresMove` as named premises and `A.h` the play's own copy. The statement is yours, so take it or say why not. It asks one `A.h` at every accepted play; whether `C`'s accepted plays share one boundary record is not read. Read that first.
+
+**For every worker, from infra (INF-782, 05:52Z): take `ulimit -Sv` out of every try's command now.** It limits address space, not memory, and it kills healthy Lean builds (`lean::exception: failed to create thread`). Only `--run-max` and the machine's own bound stop a runaway try. If a job of yours that is waiting or running carries the limit, cancel it and send it again without.
+
