@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import runpy
 import sys
 from collections.abc import Mapping
@@ -1071,7 +1072,9 @@ def test_what_prices_the_rows_proving_is_printed_by_source_or_not_recorded(tmp_p
 SERVED = {"run": "r20261113-000000-5e7d", "serving": {"seconds": 1000.0, "gpus": 8},
           "prove": [{"seconds": 300.0, "gpus": 1}, {"seconds": 180.0, "gpus": 1}], "staging": [{"seconds": 20.0, "gpus": 1}],
           "replay": [{"seconds": 30.0, "gpus": 8}], "interior": [{"seconds": 5.0, "gpus": 4}],
-          "stock": {"seconds": 975.0, "gpus": 8}}
+          "stock": {"seconds": 975.0, "gpus": 8}, "prove_seconds_source": "busy"}
+#: what the prove part's source says of its seconds, read from the proof server's busy seconds
+BUSY = "`prove`, the proof server's busy seconds a card (`prove_seconds_source`: `busy`)"
 
 
 def test_with_no_served_run_the_share_is_not_measured_and_the_given_share_is_assumed(tmp_path):
@@ -1152,7 +1155,11 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
     assert cs["value"] is None and cs["missing"][0] == {"field": "serving", "lacks": ["serving"], "why": E.SERVING_GAP}
     assert {p["share"] for p in cs["parts"].values()} == {None}
 
-    for bad, why in (({"replay": [{"seconds": 30.0, "gpus": 0}]}, "holds replay at 30.0 seconds on 0 GPUs"),
+    # a part on 0 GPUs started no process on a card: it is read, and adds no GPU-seconds
+    cs = E.served_share(SERVED | {"staging": [{"seconds": 20.0, "gpus": 0}]})
+    assert cs["missing"] == [] and cs["parts"]["staging"]["gpu_s"] == 0.0 and cs["value"] == pytest.approx(0.1175)
+    for bad, why in (({"replay": [{"seconds": 30.0, "gpus": -1}]}, "holds replay at 30.0 seconds on -1 GPUs"),
+                     ({"serving": {"seconds": 1000.0, "gpus": 0}}, "holds the window's serving at 0.0 GPU-seconds"),
                      ({"serving": {"seconds": 0.0, "gpus": 8}}, "holds the window's serving at 0.0 GPU-seconds"),
                      ({"stock": None, "serving_cost": -1}, "holds a serving cost of -1: a fraction over -1")):
         with pytest.raises(ValueError, match=f"{SERVED['run']}'s record {why}"):
@@ -1161,12 +1168,88 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
         E.served_share([SERVED])
 
 
+def test_the_proving_seconds_source_marks_the_proving_and_the_share(tmp_path):
+    """`prove_seconds_source`: `busy`, the proof server's busy seconds a card, is measured; `session`, a session's
+    seconds with its wait included, prints the proving and the share as measured, at most (an upper bound); absent,
+    `prove` lacks it and no share is claimed; any other value is refused by name. Both read seconds held times GPUs
+    held."""
+
+    s = recorded(tmp_path)
+    busy = E.build(served=SERVED, store=s.store, root=REPO)
+    cs = busy["compute_share"]
+    assert (cs["mark"], cs["parts"]["prove"]["mark"], cs["parts"]["prove"]["source"]) == ("measured", "measured", BUSY)
+    assert f"**The audit's share of compute: 12.000% (measured)**, on {SERVED['run']}" in E.render(busy)
+
+    twice = SERVED | {"prove": [{"seconds": 150.0, "gpus": 2}, {"seconds": 180.0, "gpus": 1}]}
+    doc = E.build(served=twice | {"prove_seconds_source": "session"}, store=s.store, root=REPO)
+    cs = doc["compute_share"]
+    assert (cs["value"], cs["mark"]) == (pytest.approx(0.12, rel=1e-12), "measured, at most")
+    assert (cs["parts"]["prove"]["gpu_s"], cs["parts"]["prove"]["mark"]) == (480.0, "measured, at most")
+    assert {p["mark"] for k, p in cs["parts"].items() if k != "prove"} == {"measured"}
+    by = {i["input"]: i for i in doc["inputs"]}
+    assert (by["served_prove_gpu_s"]["mark"], by["served_compute_share"]["mark"]) == ("measured, at most",) * 2
+    text = E.render(doc)
+    assert f"**The audit's share of compute: 12.000% (measured, at most)**, on {SERVED['run']}" in text
+    assert (f"| prove | {E.SERVED_PARTS['prove'][0]} | 480 | 6.000% | measured, at most | `prove`, a session's seconds, "
+            "its wait included: an upper bound (`prove_seconds_source`: `session`) |") in text
+    assert "2 measured upper bounds" in text
+    modeled = {k: v for k, v in SERVED.items() if k != "stock"} | {
+        "serving_cost": 0.025 / 0.975, "serving_cost_source": "r20261110-000000-0000, load chat",
+        "prove_seconds_source": "session"}
+    assert E.served_share(modeled)["mark"] == "modeled, at most"
+
+    absent = E.build(served={k: v for k, v in SERVED.items() if k != "prove_seconds_source"}, store=s.store, root=REPO)
+    cs = absent["compute_share"]
+    assert (cs["value"], cs["mark"], cs["GB"]) == (None, None, None)
+    assert cs["missing"] == [{"field": "prove", "lacks": ["prove_seconds_source"], "why": E.PROVE_SOURCE_GAP}]
+    assert cs["why"] == f"not measured: {SERVED['run']}'s record lacks `prove_seconds_source` ({E.PROVE_SOURCE_GAP})"
+    assert (cs["parts"]["prove"]["gpu_s"], cs["parts"]["prove"]["mark"]) == (480.0, "missing")
+    assert f"\n\n**The audit's share of compute: {cs['why']}.** Every figure below" in E.render(absent)
+    both = E.served_share({k: v for k, v in SERVED.items() if k != "prove_seconds_source"}
+                          | {"prove": [{"seconds": 300.0}]})
+    assert both["missing"] == [{"field": "prove", "lacks": ["prove.gpus", "prove_seconds_source"],
+                                "why": f"{E.SERVED_PARTS['prove'][1]}; {E.PROVE_SOURCE_GAP}"}]
+
+    with pytest.raises(ValueError, match=re.escape(
+            f"{SERVED['run']}'s record holds `prove_seconds_source` 'timer': one of busy (the proof server's busy "
+            "seconds a card), session (a session's seconds, its wait included: an upper bound)")):
+        E.served_share(SERVED | {"prove_seconds_source": "timer"})
+
+
+def test_a_part_on_cpus_alone_adds_no_gpu_seconds_and_says_so_beside_its_0(tmp_path):
+    """The audit's driver writes 0 GPUs for a step that started no process on a card (staging, the interior commitment,
+    a session proved on a CPU): it is read and adds no GPU-seconds, and a part whose entries are all on 0 GPUs is
+    printed `ON_CPUS` beside its 0 wherever its 0 is printed, so the row doesn't read as GPU time given free. A part
+    with one entry on a GPU is not marked; a count that is not a whole number is refused."""
+
+    cpu = SERVED | {"staging": [{"seconds": 20.0, "gpus": 0}], "interior": [{"seconds": 5.0, "gpus": 0}],
+                    "prove": [{"seconds": 300.0, "gpus": 1}, {"seconds": 180.0, "gpus": 0}]}
+    doc = E.build(served=cpu, store=recorded(tmp_path).store, root=REPO)
+    cs = doc["compute_share"]
+    assert {k: (p["gpu_s"], p["on_cpus"]) for k, p in cs["parts"].items()} == {
+        "prove": (300.0, False), "staging": (0.0, True), "replay": (240.0, False), "interior": (0.0, True),
+        "serving_charge": (200.0, False)}
+    assert cs["missing"] == [] and cs["value"] == pytest.approx(740 / 8000)
+    text = E.render(doc)
+    assert (f"in parts prove 3.750%, staging 0.000% ({E.ON_CPUS}), replay 3.000%, interior 0.000% ({E.ON_CPUS}), "
+            "serving charge 2.500%.") in text
+    assert f"| staging | {E.SERVED_PARTS['staging'][0]} | 0, {E.ON_CPUS} | 0.000% | measured | `staging` |" in text
+    assert f"| prove | {E.SERVED_PARTS['prove'][0]} | 300 | 3.750% | measured | {BUSY} |" in text
+    by = {i["input"]: i for i in doc["inputs"]}
+    assert by["served_interior_gpu_s"]["source"].endswith(f"`interior`; {E.ON_CPUS}")
+    assert E.ON_CPUS not in by["served_prove_gpu_s"]["source"] and E.ON_CPUS not in E.render(
+        E.build(served=SERVED, store=recorded(tmp_path / "gpus").store, root=REPO))
+    for bad in (True, 1.0, "1"):
+        with pytest.raises(ValueError, match=re.escape(f"holds staging at 20.0 seconds on {bad!r} GPUs")):
+            E.served_share(SERVED | {"staging": [{"seconds": 20.0, "gpus": bad}]})
+
+
 # ---- the stop class's verdicts -----------------------------------------------------------------------------------------------
 
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "0b6a7352cafaf5ace94a8a09d9b1bea6c69231661d426df7b74cf7ec1ad092d0",
-               "json": "1a3f148cc6e8ce51edbfc8cb7c8209b81080f544a232e66b3c2a97d0f0d06388"}
+NO_VERDICTS = {"text": "d3827f13c6936a3a5f218211d4e8110abb74c4075f154a1606f99e7ea329fafa",
+               "json": "627912cb87733f1cd4036f35d27de37aad9707700b5a686d2a678b5a8e5abbf0"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
@@ -1408,6 +1491,9 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     s = recorded(tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    # the holes' block over the fixture runs' made-up commit, which no repository holds: test_spot_status.py decides them
+    monkeypatch.setattr(E.spot_status, "commit_known", lambda root, commit: False)
+    monkeypatch.setattr(E.spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lock.json")
 
     def run(*argv: str) -> tuple[int, str, str]:
         monkeypatch.setattr(sys, "argv", ["run.py", *argv])
@@ -1421,9 +1507,12 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     assert "- **the compute audit's part: 14,240 GB** (modeled)" in out and "## Inputs" in out
     assert "- row `(i) honest`, at the planner's assumed prices: 17,800 GB, at β = 5.542%" in out
     assert "- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response)" in out
+    assert "\n\n## SPOT's resampling holes in the code that ran\n" in out and "- label: **SPOT**\n" in out
+    assert "\n- redrawn sample: " in out and "\n- re-committed execution phase: " in out and ": closed\n" not in out
     code, out, _ = run("--json", "--share", "0.097", "--network-check-share", "0")
     doc = json.loads(out)
     assert code == 0 and doc["schema"] == E.SCHEMA and doc["value"] == pytest.approx(15053.889111429447)
+    assert doc["spot_holes"]["label"] == "SPOT" and doc["spot_holes"]["runs"] == len(doc["runs"])
     assert doc["at_assumed_prices"]["GB"] == pytest.approx(ASSUMED * doc["value"], rel=1e-12)
     code, out, _ = run("--row", "(i) honest")
     assert code == 0 and "- **the compute audit's part, at the planner's assumed prices: 17,800 GB** (modeled)" in out
@@ -1459,3 +1548,84 @@ def test_verity_bench_exfiltration_is_the_commands_runner(tmp_path, monkeypatch,
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "alone"))
     code, _, err = run("--local-only")
     assert code == 2 and "no planner rows of record: nothing in the store carries" in err
+
+
+#: a row's verification phase as the planner writes it, with its binding bound: the row's own at the world's year,
+#: but what Lean proves counted in compressions, made up so that both of Lean's cases print
+PHASE = {
+    "name": "datacenter", "seconds": 600, "machines": 12500.0, "replay_blocks": 90237979.8, "sampled": 55,
+    "sessions": 406359.6, "limit": "its largest session in tables is 4 of its type, past the GPU prover's 1",
+    "binding": {
+        "what": "the two-stage first-hit finder's bound by classes of gates", "status": "modeled",
+        "proof_blocks": 207715585.0, "tables": 4,
+        "assumed": [
+            {"input": "classes of gates a sampled proof block", "value": 4130, "unit": "class", "source": "no count gives it"},
+            {"input": "symbols of a table's level-0 codewords", "value": 8388608, "unit": "symbol", "source": "the most"},
+            {"input": "one commitment, one sample; every committed window is presented", "value": None, "unit": "",
+             "source": "what a sum over verification phases takes of the prover"}],
+        "design": {"sessions": 406360, "classes": 857865366050, "k": 49375943, "reruns": 10368948031,
+                   "calls_a_run": "2^80.00", "rounds": 1788796724, "phases": 197078976,
+                   "longest_call": {"bytes": 65536, "compressions": 513}},
+        "counted": {
+            "calls": {"phase": {"bound": "2^-101.08", "centibits": 10108}, "phases": {"bound": "2^-73.53", "centibits": 7353},
+                      "lean": {"theorem": None, "nearest": "εclsAt_le_table1", "bits": 100,
+                               "past": {"e": {"design": 10368948031, "instance": 2592237061}}}},
+            "compressions": {"phase": {"bound": "2^-92.08", "centibits": 9208},
+                             "phases": {"bound": "2^-64.52", "centibits": 6452},
+                             "lean": {"theorem": "εclsAt_le_table1_513", "bits": 100}}}}}
+
+
+def test_the_security_level_is_the_rows_binding_bound_named_by_what_it_is_over(tmp_path):
+    """Beside the GB the command prints the binding bound its row of record holds, the planner's: over one
+    verification phase and over a world-year of phases, each counted in calls and in compressions and named by what
+    it is over, marked modeled; the inputs it assumes, each listed and marked assumed; and what Lean proves of each,
+    by its theorem's name, or that nothing is proved at these sizes. It computes none of it, moves no GB, and says so
+    where the rows hold no bound."""
+
+    def built(phase: dict | None) -> dict:
+        s = Store(tmp_path / str(len(list(tmp_path.iterdir()))))
+        s.label(s.ran(PLANNED, [as_row(r) | ({} if phase is None else {"verification_phase": phase})
+                                for r in rows(PLANNED)]))
+        return E.build(store=s.fresh(), root=REPO)
+
+    bare, doc = built(None), built(PHASE)
+    assert doc["value"] == bare["value"] and len(doc["inputs"]) == len(bare["inputs"]) + 3
+    bound = next(p for p in doc["compute_audit"] if p["scope"] == "world year")["binding"]
+    assert (bound["run"], bound["beta"], bound["scope"], bound["sampled"]) == (PLANNED, 0.055, "world year", 55)
+    assert bound["counted"] == PHASE["binding"]["counted"] and bound["design"] == PHASE["binding"]["design"]
+    assert all(p["binding"] is None for p in bare["compute_audit"])
+    assumed = [i for i in doc["inputs"] if i["part"] == E.SECURITY]
+    assert [(i["input"], i["value"], i["mark"]) for i in assumed] == [
+        ("classes of gates a sampled proof block", 4130, "assumed"),
+        ("symbols of a table's level-0 codewords", 8388608, "assumed"),
+        ("one commitment, one sample; every committed window is presented", None, "assumed")]
+    assert all(i["source"].startswith(f"`{E.RECORD}` ({PLANNED}) `verification_phase.binding`: ") for i in assumed)
+
+    lines = [line for line in E.render(doc).splitlines() if E.SECURITY in line and line.startswith("- ")]
+    assert len(lines) == 3 and lines[0].startswith(
+        "- **the security level** (modeled): the probability that an accepted run opens a value off the committed "
+        "trace, by the bound Lean states of a two-stage sample counted by classes of gates "
+        "(`CompiledTwo.eventTwoX_le_cls_at_budget`), every run at 2^80.00 calls of SHA-512, at "
+        f"the row's own design at the pinned budget nearest, β = 5.500% ({PLANNED}). **Over one verification phase: at "
+        "most 2^-101.08** counted in calls, as the Lean counts, and 2^-92.08 in compressions. **Over a world-year of "
+        "phases**, 197,078,976 of them: **at most 2^-73.53** in calls and 2^-64.52 in compressions. A verification "
+        "phase is a datacenter's 600 s on 12,500 machines: its first stage samples 55 replay blocks, and its second "
+        "207,715,585 of their proof blocks in 406,360 sessions, the largest of 4 tables.")
+    assert lines[1] == (
+        "- the security level assumes: 4,130 classes of gates a sampled proof block; 8,388,608 symbols of a table's "
+        "level-0 codewords; one commitment, one sample; every committed window is presented. It counts each session's "
+        "knowledge error and the run's own opening checks as 0.")
+    assert lines[2] == (
+        "- what Lean proves of the security level: over one verification phase counted in calls, not proved at these "
+        "sizes: the nearest instance, `Claims.Flock.Numbers.εclsAt_le_table1`, at most 2^-100, has reruns a session "
+        "(e_s) at most 2,592,237,061 there and 10,368,948,031 here. Counted in compressions, "
+        "`Claims.Flock.Numbers.εclsAt_le_table1_513` holds the part of it that is linear in the prover's calls to at "
+        "most 2^-100, beside each session's knowledge error and the rewinding part. Over a world-year of phases, not "
+        "proved at these sizes: no theorem sums "
+        "a monitoring period's verification phases.")
+    # no figure of it is called bits: each is a probability over what its clause names
+    assert not any(" bits" in line for line in lines)
+    none = [line for line in E.render(bare).splitlines() if E.SECURITY in line]
+    assert none == ["- **the security level**: not read. The rows of record hold no binding bound "
+                    "(`verification_phase.binding`): the planner wrote them before it computed one. Run it again and "
+                    f"label its run (`research data label RUN {E.RUN_OF_RECORD} {E.RECORD} --by LANE`)."]

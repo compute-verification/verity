@@ -7,11 +7,10 @@ Only the tiles the verifier opens are proved (the scheme's reference, on `fast_t
 the call's first, a middle and its last column tile (``clear_work.draw`` patched), and the exclusion tile of the +0 row
 opens beside them. Every other transcript leaf and y word is +0, which no opened tile reads. The Lean verifier draws from
 its own record of the coins, so this pass is the Python's alone; a fully proved one is `head_pass`'s with ``prove=None``
-(about 2,004 tiles' proofs, ``jobs`` processes at a time).
+(all 2,004 tiles proved, ``jobs`` processes at a time).
 
-The module's weight is 525 MB of BF16, built and committed once a module (about 85 s), and the two verdicts take about
-70 s more. What it catches that the
-128-word test instances of `test_pearl_c_vllm` can't: a verifier or y check that assumes a call's n fits a smaller row
+The module's weight is 525 MB of BF16, built and committed once a module, and both tests are slow. What they catch that
+the 128-word test instances of `test_pearl_c_vllm` can't: a verifier or y check that assumes a call's n fits a smaller row
 (a 64-row tile grid, y's segments, W's weight entry at 128,256 leaves), and the head's credit at the linears' rate."""
 from __future__ import annotations
 
