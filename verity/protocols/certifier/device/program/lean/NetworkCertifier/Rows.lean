@@ -14,23 +14,37 @@ the egress record shows (`scheduleOf`: each connection's admission bucket and it
 cells carry (`egressOf`), renders the egress rows that schedule and data give (`expectedRows`, `bucketFrames` of
 `laneFrames` over the lane `laneOf`), and compares them with the record's, bucket by bucket. Besides, every record is
 complete, no connection failed (no `FAIL` cell and no reason) or was refused, the connections are ordinals `1 … N`
-admitted in ordinal order, each connection's data and `END` cells are within the cap `egress_cells`, and each
+admitted in ordinal order, each connection's data and `END` cells are within the schedule's `egress_cells`, and each
 connection's ingress is data and padding, then at most one `END` and padding to its bucket, from its admission on
 (`ingressHolds`). Each cell is decoded once and each bucket rendered once: the audit's work is linear in the records'
 cells.
 
-It accepts what `warden.audit` accepts, but for three kinds of run the network certifier never writes: a lane of no
-egress cell past its delay, unless the run's end cut it in its delay; a connection with ingress cells and no egress
-cells; and a connection of more data and `END` cells than the cap, which the network certifier fails closed (`limit`).
-The schedule's cells count a lane through its last bucket (`laneCells`), as `WardenSchedule.cells` does, so they pass
-the cap by the padding that fills the `END`'s bucket where `r` doesn't divide `egress_cells`.
+Against the reference it differs in both directions. The differences below are those found by reading the two; no
+difftest or proof holds the list complete.
+
+It refuses three kinds of run the reference accepts and the network certifier never writes: a lane of no egress cell
+past its delay, unless the run's end cut it in its delay; a connection with ingress cells and no egress cells; and a
+connection of more data and `END` cells than `egress_cells`, which the network certifier fails closed (`limit`). The
+schedule's cells count a lane through its last bucket (`laneCells`), as `WardenSchedule.cells` does, so they pass
+`egress_cells` by the padding that fills the `END`'s bucket where `r` doesn't divide it.
+
+It accepts two kinds of run the reference refuses, because it holds two things less:
+
+* **No egress form.** It reads no cell's payload against a form: `readCell` takes any `DATA` payload of `B − 9` bytes
+  and any `END` payload. Where the schedule's egress form is the id form, the reference refuses an egress `DATA` or
+  `END` cell that `io_tie.parse_cell` doesn't read (one id's event, or the response's trailer); this audit accepts a
+  run whose egress cells carry any bytes. The id form of each egress cell is the io tie's to hold, `IoTieCell` on
+  every cell; a caller that runs no io tie holds it itself.
+* **No response cap.** It holds no response to its request's `max_tokens`, as the reference does under a schedule with
+  a response cap, so it doesn't cover such a schedule; its caller refuses one (`NetworkCheck.RowsAudit.paramsOf`).
 -/
 
 @[expose] public section
 
 namespace NetworkCertifier.Rows
 
-/-- A cell's kind (`warden.KIND_NAMES`), its first byte: `PAD` 0, `DATA` 1, `END` 0x20, `FAIL` 0x21, `REFUSED` 0x22. -/
+/-- A cell's kind (the reference's `KIND_NAMES`), its first byte: `PAD` 0, `DATA` 1, `END` 0x20, `FAIL` 0x21,
+`REFUSED` 0x22. -/
 inductive Kind where
   | pad
   | data
@@ -57,7 +71,7 @@ def Kind.name : Kind → String
 def Kind.ofCode? (n : Nat) : Option Kind :=
   [Kind.pad, .data, .fin, .fail, .refused].find? (·.code == n)
 
-/-- A cell, `warden.read_cell`'s triple: its kind, its connection's ordinal and its payload. -/
+/-- A cell, the triple of the reference's `read_cell`: its kind, its connection's ordinal and its payload. -/
 structure Cell where
   kind : Kind
   conn : Nat
@@ -78,14 +92,15 @@ def beBytes (w n : Nat) : ByteArray :=
 def beAt (b : ByteArray) (i w : Nat) : Nat :=
   (List.range w).foldl (fun a k => a * 256 + (b.data.getD (i + k) 0).toNat) 0
 
-/-- `warden.cell`: the cell's `B` bytes (`active.encode_frame`), its header, its payload, then zero fill. -/
+/-- The reference's `cell`: the cell's `B` bytes (`active.encode_frame`), its header, its payload, then zero fill. -/
 def Cell.encode (B : Nat) (c : Cell) : ByteArray :=
   ⟨#[c.kind.code.toUInt8]⟩ ++ beBytes 4 c.conn ++ beBytes 4 c.payload.size ++ c.payload ++
     ⟨Array.replicate (B - headerBytes - c.payload.size) 0⟩
 
-/-- **`warden.read_cell`**: the cell whose `B` bytes are `f`, or why `f` is none: `B` bytes, a kind of `Kind`, a payload
-length within the cell, `f` exactly the cell's encoding (its zero fill exact), a `DATA` cell's payload `B − 9` bytes, an
-`END`'s at most that, and a `PAD`'s, `FAIL`'s or `REFUSED`'s none. -/
+/-- **The reference's `read_cell`**: the cell whose `B` bytes are `f`, or why `f` is none: `B` bytes, a kind of `Kind`,
+a payload length within the cell, `f` exactly the cell's encoding (its zero fill exact), a `DATA` cell's payload
+`B − 9` bytes, an `END`'s at most that, and a `PAD`'s, `FAIL`'s or `REFUSED`'s none. It reads no payload against an
+egress form (module docstring). -/
 def readCell (B : Nat) (f : ByteArray) : Except String Cell := do
   if f.size ≠ B then throw s!"a cell is {B} bytes, not {f.size}"
   let n := beAt f 5 4
@@ -99,21 +114,21 @@ def readCell (B : Nat) (f : ByteArray) : Except String Cell := do
   | k => unless n == 0 do throw s!"a {k.name} cell of {n} bytes"
   pure c
 
-/-- Why a connection fails closed (`warden.REASONS`), each a `fails` frame's one payload byte by its index. -/
+/-- Why a connection fails closed (the reference's `REASONS`), each a `fails` frame's one payload byte by its index. -/
 def reasons : List String := ["late", "limit", "upstream", "ingress", "malformed"]
 
-/-- **`warden.read_reason`**: the connection and the reason of the `fails` frame `f` of `B` bytes, a `FAIL` cell whose
-one payload byte is a reason's index; none when `f` isn't one. -/
+/-- **The reference's `read_reason`**: the connection and the reason of the `fails` frame `f` of `B` bytes, a `FAIL`
+cell whose one payload byte is a reason's index; none when `f` isn't one. -/
 def readReason (B : Nat) (f : ByteArray) : Option (Nat × String) :=
   let c : Cell := ⟨.fail, beAt f 1 4, f.extract headerBytes (headerBytes + 1)⟩
   match reasons[(c.payload.data.getD 0 0).toNat]? with
   | some why => if f.size == B && c.encode B == f then some (c.conn, why) else none
   | none => none
 
-/-- The schedule's terms the audit reads (`warden.WardenParams`): the cell's bytes `B` (`cellBytes`), a connection's
-cells a bucket each way `r` (`slots`), the buckets `D` from its admission to its first egress cell's (`delay`), the
-connections served at once (`lanes`), the buckets a record covers `T` (`window`), and the most cells a connection's
-egress lane holds (`egressCells`). -/
+/-- The schedule's terms the audit reads (the reference's `WardenParams`): the cell's bytes `B` (`cellBytes`), a
+connection's cells a bucket each way `r` (`slots`), the buckets `D` from its admission to its first egress cell's
+(`delay`), the connections served at once (`lanes`), the buckets a record covers `T` (`window`), and the most cells a
+connection's egress lane holds (`egressCells`). It reads neither the schedule's egress form nor its response cap. -/
 structure Params where
   cellBytes : Nat
   slots : Nat
@@ -157,7 +172,7 @@ def noFails (p : Params) (frames : Array (Array ByteArray)) : Except String Unit
     | none => s!"fails bucket {b}: not a reason frame"
 
 /-- Bucket `b`'s connections in a direction's row, one for each `r` cells, refused unless the row is whole groups of `r`
-cells of one connection, the groups in strictly increasing ordinal order from ordinal 1 (`warden.audit`'s "r cells a
+cells of one connection, the groups in strictly increasing ordinal order from ordinal 1 (the reference's "r cells a
 connection in ordinal order"). -/
 def connsOf (r : Nat) (what : String) (b : Nat) (row : Array Cell) : Except String (Array Nat) := do
   let conns := (List.range (row.size / r)).toArray.map fun i => (row.getD (i * r) default).conn
@@ -225,7 +240,7 @@ def ingressGroup (kinds : List Kind) : Option Bool :=
   | .fin :: rest => if rest.all (· == .pad) then some true else none
   | _ => none
 
-/-- **Each connection's ingress is the schedule's** (`warden.audit`'s ingress): from its admission `adm` on, in
+/-- **Each connection's ingress is the schedule's** (the reference's ingress): from its admission `adm` on, in
 consecutive buckets, its `r` cells a bucket are data and padding, then at most one `END` and padding to the end of its
 bucket, and it has no cells in a later one. `rows` are the ingress rows and `conns` each row's connections
 (`connsOf`). -/
@@ -251,14 +266,15 @@ structure Summary where
   ingressCells : Nat
   egressCells : Nat
 
-/-- **The audit of a run's records** (`warden.audit`, stricter as the module docstring says): its `W ≥ 1` windows'
+/-- **The audit of a run's records** (the reference's `audit`, from which it differs in both directions as the module
+docstring says: it holds no egress cell to the id egress form and no response to a response cap): its `W ≥ 1` windows'
 ingress, egress and fails records, window `w`'s at index `w` of each. Accepted when every record is complete with `T`
 left-packed rows of `lanes·r` slots (the fails record's of `lanes`), every frame of the two directions a cell and the
 fails record empty, no cell a `REFUSED` or `FAIL`, each row whole groups of `r` cells of a connection in ordinal order,
-the connections the ordinals `1 … N` admitted in ordinal order, each one's data and `END` cells within the cap and, when
-it has none, cut by the run's end in its delay, the egress rows those `expectedRows` gives from the schedule and data
-they show, bucket by bucket, and each connection's ingress the schedule's (`ingressHolds`). The refusal names the first
-finding. -/
+the connections the ordinals `1 … N` admitted in ordinal order, each one's data and `END` cells within `egress_cells`
+and, when it has none, cut by the run's end in its delay, the egress rows those `expectedRows` gives from the schedule
+and data they show, bucket by bucket, and each connection's ingress the schedule's (`ingressHolds`). The refusal names
+the first finding. -/
 def audit (p : Params) (ingress egress fails : Array BlockGrid) : Except String Summary := do
   let W := egress.size
   unless 0 < W && ingress.size == W && fails.size == W do
