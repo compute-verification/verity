@@ -159956,3 +159956,36 @@ Mailbox read at 20:35Z; nothing newer than your 20:19Z.
 - [guess] The carried head about 22:00Z, the ready line Sat 14 Nov about 03:00Z (Fri 7 PM PST). If the records run would move a listed guarantee's record, a named assumption or a statement, I stop there and write both texts.
 - The pull request's head branch must then move to the carried branch, or `cursor/proofs-twoleg-e0ff` fast-forwards to it: I say which when the head exists.
 - Stray events since your 20:19Z: none.
+
+## GATHER — 20:36Z Fri 13 Nov — the dry build is green: the join's `ParamsWf.lean` compiles over my line. But the join's tip has moved, and one of its new proofs does not compile over my line: `OwnReadsHeld.lean` takes R3's last conjunct by position. `462ef981d91e` merged into the join's tip as it stands leaves that file red; the mend is one pattern, built now on a scratch, and I name a new head when it is green
+
+`cursor/proofs-gather-wired-layout-6a9b` `462ef981d91ef258bd5ab7416fee1a8e54391d3f` my live line, unchanged
+
+Your 20:19Z reached me at 20:25Z by the hook [run].
+
+**The verdict you asked for: green, so no mend for `ParamsWf.lean`.**
+
+- The run is `r20261113-201456-a2cf`, vy-nebius-cpu-11, not `db6b` [run]. `db6b` never took a slot on cpu-8, whose memory was reserved by other live runs; I cancelled it by its id at 20:14Z and launched this one copy [run].
+- It built the scratch merge `0869e2f70646` of the join's tip `1bdb77ac7d99` over `462ef981d91e`: `lean_changed.py --build` of the join's six new Lean files, rc 0; `security/Proofs` exit 0 in 670 s, 11,863 jobs; `"failed": {}`, `"skipped": {}` [run].
+- Its log has `Built` for my line's `Spot.OneStage`, `Spot.Registration`, `Spot.SecondStage` and `Properties.Spot`, then for `ParamsWf`, `PortsOfParams`, `MessagesOpen`, `RoundPrefix` and `SessionReplay`; `DoWalk` was up to date in the slot's tree [run]. The slot's tree held my `OneStage.lean`, the keys `domain`, `leaves`, `wired`, when `ParamsWf` was built [run: read on the node at 20:26Z].
+
+**New, and it stops a clean merge: the join's tip is now `86874e0e53145a6d4bca109a9058e3d4934a5ce5`.**
+
+- It moved between 19:57Z and 20:30Z [run: `git ls-remote` at both]. Four more first-parent commits over `1bdb77ac7d99`: HELDOF's couples line and TWOLEG's rule B, each with its roots; 21 files, +1,813 −102 [run].
+- Git still merges it with my line without conflict, tree `4104f23579e2`, and the two change no file in common [run: `git merge-tree`].
+- `security/Proofs/Flock/SpotFlock/RunsAs/OwnReadsHeld.lean`, new there, proves `byPort_root_str` with `obtain ⟨-, -, -, -, -, -, hroot⟩ := h3`, where `h3` is `Properties.Spot.R3`, and then applies `hroot pw …` [read]. That takes R3's roots clause as the last of seven conjuncts [read].
+- On my line R3 has an eighth, after the roots clause: `∀ pw ∈ v.ports, WiredIs rec pw.1 pw.2` [read: `security/Properties/Spot.lean`]. So over my line `hroot` is a conjunction, `hroot pw …` is no application, and the file does not compile [derived: no build has shown it yet].
+- The mend is one pattern: `obtain ⟨-, -, -, -, -, -, hroot, -⟩ := h3` [derived]. It compiles only where R3 has the wired clause, so it cannot go on the join before my line is in it [derived].
+- I found no second one by reading [read: grep]. Of the 24 Lean files the join's eight commits change over the mended join, four name `registration_nil`, R3, `RootIs`, `Registration.check`, `wiresOk` or `paramsParsed`: `ParamsWf.lean`, green above; `OwnReadsHeld.lean`, this one; `SecondUnits.lean`, which passes `registration_nil` on whole; and the recursive verifier's `SampledTwo.lean`, which calls them. The build below settles it [derived].
+
+**What I am doing, by your 20:19Z rule read for this file** [derived].
+
+- A scratch, detached, pushed nowhere: `0ebdb1da566f`, the merge of the join's tip `86874e0e5314` over `462ef981d91e`, then `6cb34b4fbeff8cb4a1ccb2ab8cc045a03baf1436`, the one-pattern mend [run]. Over the join's tip it holds 21 files: my 20 and `OwnReadsHeld.lean` [run]. `pins.py --stale` on it: exit 0, nothing printed [run]. The join's eight commits change no Python and no test, only Lean, `security/Proofs`'s lakefile and lock, and `tools/pous_grader/TRUSTED.sha256` [run].
+- The build: `r20261113-203424-6aec`, vy-nebius-cpu-11, `--pool research`, waiting for a slot at 20:35Z [run]. It names 76 files: the 54 leaves of the 522 files that reach my six in the merged tree, the 24 Lean files the join's eight commits change, and the six [run]. After it the same run builds `OwnReadsHeld.lean` as the merge has it, alone, which shows the red or shows me wrong [run].
+- When it is green I fast-forward my branch to `6cb34b4fbeff` by a plain push and write "merge GATHER at 6cb34b4fbeff8cb4a1ccb2ab8cc045a03baf1436" [derived]. That head holds the join's tip, so ASSEMBLY's merge of it moves the join forward with nothing to settle, if the join has not moved again [derived].
+- Until then, do not have `462ef981d91e` merged into `86874e0e5314` without the one pattern [derived].
+- If you would rather ASSEMBLY put the pattern in its own merge commit, say so and I push nothing; the pattern is the whole of it [derived].
+
+**Not established.** The red itself, and that the mend is enough: `6aec` answers both [run: it is out]. The plays and the tests at the merged tree: none ran there, and none of the eight commits changes a file they read [run: `git diff --name-only`]. Any lock record at either head [run]. The recursive verifier's change of `secondChecked` to `Record.checks` at the reads `Record.lessOwnReads` leaves is HELDOF's, and whether a wired port's read under the wired layout passes it in the compiled form is not something I ran: the compiled form is STAGECOINS's [relayed: your 14:18Z].
+
+**Held to.** No pull request, no mark, nothing forced, no `main` merged by itself (the join's tip holds `main` `4ae17f7eafd7`, as my head does [run]), nothing rebased, no build on my machine, no lock committed [run]. Copies: `/opt/cursor/artifacts/wired-audit/carried/dry/a2cf.txt`, `carried/tip/lean-files.txt` [run].
