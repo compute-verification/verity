@@ -119920,3 +119920,68 @@ Pushed: L1 `a8d00d755a`; guard branch `cursor/proofs-frame-guard-friday-7d2a` `6
 - **WRONG, mine, Thursday's 19:59Z entry, line 9:** "30.4 points of the plan's proving are the Lean verifier at the driver's price". Benchmarks corrected it on PRF-456 at 21:01Z: the plan's 4.096 GPU-seconds a statement hold the row's proving scale, 1.139, which the row's 2.856 does not. So 2.856 × 1.139 = 3.252 is the row's, and 0.843 is the verifier: 20.6%, not 30.4%. I checked the arithmetic, and the run's own split says 20.86% [derived]. Where that entry says "30 points" and "69.6%", read 21 and 79.
 
 I launched no run, changed no file of the repository, wrote nothing to Linear or Slack, and pushed nothing but this entry.
+
+## RUNSAS, Fri 04:23Z: `SecondStageOf.lean` COMPILES with a clean probe (`r20261113-033103-7a57`, at `25a0f8385c`, before the base moved): a passing second stage gives the model's statement check with neither `NamesDistinct` nor `RegistersNone` assumed; RUNCOINS's head on the new base is merged (`2a9cc9cae7`) and one proof rewritten after it (`321cdde02b`, not compiled, `r20261113-040705-7745` in line); `roundTwo_of_check`'s statement is unchanged
+
+**In plain words.** My earlier theorem said: if the second stage's check passes, the model's statement check passes, provided two things nobody had proved, that the templates' names are distinct and that the first stage's interior record registers no value. Both are decided by the model's own design check on the auditor's copies. So wherever that design check passes they are no longer assumptions: the kernel has checked the theorem without them. RUNCOINS's theorem about an accepted run, and ACCEPTS's above it, can each drop the same two premises by naming two lemmas of mine; I changed neither's file. The kernel's check was at the tree before the base moved. Since then I merged RUNCOINS's head, which holds the new base, and rewrote one proof so that it also compiles after FRAME's second move; that head is in line and has not compiled. Nothing of mine is stated at the form's accept.
+
+**1. Compiled**
+- [run: `r20261113-033103-7a57`, vy-nebius-cpu-12, done rc 0, at `25a0f8385c`: the base `6c1a87cc54d3` with RUNCOINS's `976d713b44`] "lean-build: security/Proofs: exit 0 in 973 s", with "Built Proofs.Flock.SpotFlock.RunsAs.SecondStageOf", "Built Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf" and "Built Proofs.Flock.SpotFlock.RunsAs.Played" (RUNCOINS's `runAcceptsPlay`, which reads my bridge).
+- [run: same] "`SecondStageOf.lean`: lean exit 0 in 29 s"; "axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; siblings: "no built module of its package that doesn't import Proofs.Flock.SpotFlock.RunsAs.SecondStageOf declares a name it does (1310 imported in 9 s, peak 4578 MB); 2686 unchecked".
+- [run: `r20261113-023136-9f47`, vy-nebius-cpu-12, done, at `67cdd06418`, the same base] The two probes my 03:03Z entry left open. `RoundTwoOf.lean`: "lean exit 0 in 912 s", "none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound" (`SpotFlock.RunsAs.stmtOk_of_check`). `Round2.lean`: "lean exit 0 in 36 s", "none of its 25 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; siblings: "no built module of its package that doesn't import Proofs.Flock.SpotFlock.RunsAs.Round2 declares a name it does (573 imported in 10 s, peak 3705 MB); 3420 unchecked". That run's rc 0 is its last step's: its build step failed on the layout slip in `SecondStageOf.lean` that the 03:03Z entry reports.
+
+**2. The statements** [read: `security/Proofs/Flock/SpotFlock/RunsAs/SecondStageOf.lean` at `25a0f8385c`; namespace `SpotFlock.RunsAs.Round2`]
+
+```lean
+theorem namesDistinct_of_two {h : Held} (hT : TwoHolds h) : NamesDistinct h
+
+theorem registersNone_of_two {h : Held} (hT : TwoHolds h) {x m₁ : Msg} {rec : Json}
+    (hm₁ : jsonMsg m₁ = some rec) (hRec : RecordsHeld h x m₁) : RegistersNone rec
+
+theorem inputsNone_of_two {h : Held} (hT : TwoHolds h) {own : Spot.SecondStage.Own} {x m₁ : Msg} {st : Roots}
+    {rec draw : Json} {c₀ : FlockDeploy.Coin} (hm₁ : jsonMsg m₁ = some rec)
+    (hA : OwnAgrees h own st rec draw c₀) (hRec : RecordsHeld h x m₁) : InputsNone own
+
+theorem stmtOk_of_secondStage (h : Held) (own : Spot.SecondStage.Own) (ss : Array Json) (x m₁ m₂ : Msg)
+    (c₀ : FlockDeploy.Coin) (c₁ : Stage h) (st : Roots) (rec draw : Json) (hx : decode x = some st)
+    (hm₁ : jsonMsg m₁ = some rec) (hd : secondDraw h c₀ c₁ = some draw) (hA : OwnAgrees h own st rec draw c₀)
+    (hS : StmtsAre h m₂ ss) (hT : TwoHolds h) (hRec : RecordsHeld h x m₁) (hR : RoundsHeld h m₂)
+    (hSc : ScopeHeld h m₂) (hP : PinHeld h m₂) (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
+    stmtOk h x m₁ m₂ c₀ c₁ = true
+```
+
+- `stmtOk_of_secondStage` is `Round2.stmtOk_of_check` less its premises `InputsNone own` and `NamesDistinct h`.
+- `registersNone_of_two` and `inputsNone_of_two` do not take the decoded statement: `RecordsHeld` alone says `x` decodes.
+- The file imports `RunsAs.Round2` and `SpotFlock.Facts`, not `RunsAs.Statement`.
+
+**3. For RUNCOINS and ACCEPTS: the premises that drop** [derived from the statements above and a read of each call; compiled at neither call]
+- RUNCOINS, `runAcceptsPlay` (`Played.lean`): `hnd` is `namesDistinct_of_two htwo`, and `hnone` is `registersNone_of_two htwo hm₁ hrec`, at the `htwo`, `hm₁` and `hrec` it already takes. So it holds without `hnd : NamesDistinct h` and `hnone : RegistersNone it.record`.
+- RUNCOINS, `RoundTwo h` (`Statement.lean`): its `RegistersNone rec →` and `NamesDistinct h →` drop the same way, and its proof is then `stmtOk_of_secondStage`. I have not restated it: the statement is yours, and my bridge `stmtOk_of_check (h) : RoundTwo h` proves it as it stands. If you restate it, tell me and I change the bridge.
+- ACCEPTS, `playAccepts_of_run` (`OfRun.lean`, read at `2d2bf8a4d3`): three premises go. `hnd` is `namesDistinct_of_two htwo`. `RecordsAt`'s second half, `RegistersNone it.record`, is `registersNone_of_two htwo hjm hrh`, at the `hjm` that `RecordsRead` gives and the `hrh` that `RecordsAt`'s first half gives, so `RecordsAt` can say `RecordsHeld` alone. `hr2 : RoundTwo A.h` is `SpotFlock.RunsAs.stmtOk_of_check A.h` (`RoundTwoOf.lean`). `AcceptsTop.lean` and `Within.lean` carry the same `hnd` and `hr2`.
+- Both: import `Proofs.Flock.SpotFlock.RunsAs.SecondStageOf`; the lemmas are in `SpotFlock.RunsAs.Round2`.
+
+**4. What these are true of** [read; derived]
+- `TwoHolds h` stays a premise of all of them: the model's design check passing on the auditor's copies. It is false at a design whose interior registration registers a value, such as a replay block that registers its `logits`. There the lemmas say nothing, and the model's verifier accepts no run.
+- Your 03:59Z item 1: no theorem of mine is stated at the form's accept. Their hypothesis is `(Spot.SecondStage.check true own (some ss)).codes = #[]`, the second stage's own check, and RUNCOINS's `runAcceptsPlay` above them is at `Spot.Run.run i true = .ok j`. TWOLEG's finding is about the form's two readers of the coin evidence (`inputAt` and `inputOf`); neither theorem names them. So they are not empty for that reason. I have no witness that they are not empty for another: no run of mine evaluates the second stage's check on an honest play's files together with `TwoHolds` at the same copies.
+
+**5. The merge, and the change after it** [run: `git merge`, `git diff`, `git push`; read]
+- `2a9cc9cae7`: RUNCOINS's `d3cb96c006`, which holds the base `e033bfc14be4`, merged into `cursor/proofs-runsas-7e3a`. No conflict; none of FRAME's four files stopped it. Against RUNCOINS's head my branch adds `SecondStageOf.lean` and its entry among the lakefile's roots, nothing else.
+- From my last compiled head to the merge, the Lean my four files read changed in one way: `Spot.Slots.Layout` is `Spot.Slots.SlotOrder` in `Code.lean` and `Facts.lean`. None of the four names it. `Spot/SecondStage.lean` and `Spot/Json.lean` are unchanged.
+- `321cdde02b`, after the merge: `registersNone_of_two` took the clause "the interior registration registers no value" as the tenth of `wiring_of_two`'s ten. On FRAME's second move (`cursor/proofs-frame-l1-9c4e`, read at `f00922d4e9`) it is the ninth of eleven, and the proof would stop there. The new lemma `values_nil_of_two : two h s = some d → h.interiorNames.values = []` reads the clause from `wiringOk` itself, wherever it stands. No statement changed. Its tactic lines elaborate in a core-only scratch at both orders [run: my VM, not a record]; it has not compiled on the tree.
+
+**6. Runs** [run]
+- `r20261113-040705-7745` (vy-nebius-2, at `321cdde02b`): the build of `SecondStageOf`, `RoundTwoOf` and `Played`, then the tries of `SecondStageOf.lean` (with siblings), `RoundTwoOf.lean` and `Round2.lean`. Waiting, 7 checks ahead at 04:17Z. [guess] It reports by 05:20Z.
+- `r20261113-033103-7a57` waited 29 minutes for a place on vy-nebius-cpu-12 (03:31Z to 04:00Z), then ran 17 minutes. Per your item 6 the next one is on vy-nebius-2.
+- Cancelled unstarted: `r20261113-025932-9528` (cpu-12, at 03:30Z, superseded by `25a0f8385c`) and `r20261113-040302-7808` (vy-nebius-2, after 4 minutes in line, superseded by `321cdde02b`).
+
+**7. Not mine** [relayed: my conversation's record] Since my 02:00Z entry, events of yours reached my conversation: Slack events from #agent-coordination, completion notices for WINDOWAT and STOPDRIVER, and timers. I acted on none. [run: `uptime -s`] My machine was replaced at 04:10:58Z, under this turn; nothing unpushed was lost, and both pushes above were before it. [run: `ls ~/wt/.pen`, `git log` of my branch at the remote] No sign of a second loop of me: no `~/wt/.pen`, and the remote head is my commit. Your 04:19Z item 1: after this entry I only wait on `7745`, so I end the turn on one timer for it.
+
+Branch `cursor/proofs-runsas-7e3a` at `321cdde02b`, pushed. Nothing is unpushed.
+
+**STOP RULE.** Not reached. No listed guarantee, no lock and no statement the form reads is touched.
+
+**NEEDS.** None of mine. RUNCOINS and ACCEPTS: section 3 is yours to take or leave.
+
+**To post.** Nothing.
+
+**Not established.** That `321cdde02b` compiles: the new lemma, and all four files on the new base. That RUNCOINS's and ACCEPTS's theorems compile without the premises of section 3, since I changed neither. That `TwoHolds h` holds at the copies of Friday's design, or that any honest play meets `stmtOk_of_secondStage`'s premises together.
