@@ -123974,3 +123974,47 @@ Run `r20261113-060012-22d2` on vy-nebius-2, running since 06:00Z: `verity lean t
 - **Not done:** no records run of `security/Proofs` at this head, so no ready line.
 
 Next entry by 07:00Z, or when the run ends (it has until 07:00Z by its limit).
+
+## ASSEMBLY, Fri 06:04Z: c6ff PRINTED THE ONE BUILD FAILURE, WITH A THIRD FILE: `SessionMsgs` (the join's copy predated MESSAGES's `f82eb043bd`; taken); PROBE `52d1ff2738` records run `r20261113-060147-df4e` on vy-nebius-cpu-14, expected end about 06:20Z; MAJORITY `62cd4b512f` and HELDOF `02e64d44d7` merged clean; join head `ac8d23dd32`
+
+**Plain words.** The records run at the join's `7db836c5f0` stopped at the build, as I expected, but it named three failed files where I expected two. The third, `SessionMsgs.lean`, failed only because the join held MESSAGES's copy from before its 04:06Z fix; I took the copy MESSAGES compiled. The audit-only run you allowed (PROBE: the join without the five uncompiled files) is now running, so the audit's word on every other file comes back in about fifteen minutes, and I send each owner its lines then. Nothing is listed: the lock's only edit is still `roots`.
+
+**1. `r20261113-053539-c6ff`** (records run of `security/Proofs` at `7db836c5f0`, vy-nebius-cpu-14, rc 1) [run: its `stdout.log` and `lean-audit/audit-Proofs/build.log`]:
+- It printed the one build failure I expected (`AUDIT … security/Proofs: FAIL`, `build: exit 1`, then `security` and `security/Properties` FAIL because they require `security/Proofs`), with no audit lines past the build.
+- Its failed targets: `SampledTwo.CoinStages`, `SampledTwo.CoinMapAgree` (both expected) and `SampledTwo.SessionMsgs` (not expected).
+- `SessionMsgs.lean:176:45`: `rdBytes_encBytes (hb r hr)` gets `List.length r < 2 ^ 64` where `ByteArray.size _ < 2 ^ 64` is asked. MESSAGES's `f82eb043bd` (04:06Z) mends exactly that line, and its copy is the one `r20261113-042643-d2ed` compiled (rc 0, at `4157c47bf0`) [read: `git diff`: the join's copy and `4157c47bf0`'s differ in those two hunks only]. Taken on the join in `a5275754e0`: MESSAGES's file, byte for byte.
+
+**2. PROBE** (your 05:55Z NEEDS 2), branch `cursor/proofs-join-audit-probe-42b8`, head `52d1ff2738`, subject "PROBE ONLY, never to merge":
+- The join's `e7f662fcfa` with `CoinStages`, `CoinMapAgree`, `JoinsAt`, `JoinedCoupling` and `JoinedForm` removed: the five files, their five lakefile roots and their five lock roots (248 to 243). No other file imports any of them [run: `rg` over `security/`]; my roots script says nothing missing, nothing listed twice and no root without a file [run].
+- Its records run: `r20261113-060147-df4e`, `--on vy-nebius-cpu-14` (`c6ff`'s warm build tree), `--mem-gb 32`, launched 06:01:47Z, expected end about 06:20Z (`c6ff` took about 14 minutes over its three audits). One run at a time: no other run of mine is going.
+- When it ends I send each owner the audit's lines about its files, under its name, in my next entry.
+
+**3. Merged into the join** (head `ac8d23dd32`, pushed), my roots script rerun after each, lock clean (248 roots):
+- MAJORITY `62cd4b512f8e` (your 05:44Z: the same files plus its three roots). The lock merged with no name twice. My script now also keeps a name two branches both appended once (your 05:44Z), and `--check` fails on one.
+- HELDOF `02e64d44d7` directly: it is not in ACCEPTS's head (`ddbac96a10`), and it merged clean (`HeldOf.lean`, 12 lines added: `namesHeld_of`). It is not compiled at the join's head; nothing of the join reads it yet (ACCEPTS proves `RecordsHeldAt` from it).
+
+**4. Waiting, not merged** [read: the inbox's titles at 06:03Z]:
+- COINMAP: no head named yet (`CoinStages.lean` mended at `860f3a7969`, not compiled). Then I try `JoinsAt.lean` and `JoinedForm.lean`, one try at a time.
+- CUT `3b2eaa5371`: CUT's entry hasn't confirmed `CutFirst.lean` and `CutAccept.lean` yet. When it does, I take it and drop the `firstReads` and `orderShown` fields.
+- TWOLEG: its title hasn't named an all-compiling head (its 05:54Z: `Ordered.lean` doesn't compile yet).
+- HISTORY `4d5a24fe63`: only after `r20261113-053555-2f67` passes (about 06:30Z).
+- SESSIONCOINS's `firstTreeless`: only after `523c` passes.
+
+**5. MESSAGES's 05:57Z finding reads my fields** (`JoinsAt.msgOpens`, `JoinsAt.digestBefore`): it says at no `Dg` do both hold for a strategy that cheats, and offers `Opens`, `FixedBefore`, `Explains` (`MessagesOpen.lean`, not yet compiled whole) in their place. I changed nothing. The ruling is yours (MESSAGES's NEEDS 1). If you rule the first way, I take `MessagesOpen.lean` once its try (`954c`) passes, and `joinFrame`, `joinMiss` and the two fields change in one commit.
+
+**6. Your 05:49Z** [read]. My records runs ask `--mem-gb 32`. I launch neither `walk_ab.sh` nor `walk_cut.sh`. The first honest play was accepted by the compiled check (`2556`), so a statement at the form's accept is no longer about nothing, but the join lists nothing.
+
+**7. The machine was replaced at 05:57:35Z** (the second time tonight). I retook the pen at 05:58:10Z and rebuilt both worktrees from the remote. Nothing was lost, since the join was pushed at `72c589ad29`.
+
+### STOP RULE
+Kept. The lock's only edit is `roots`, appended at the end; no `unwitnessed` entry; nothing listed; no device lines; PROBE never merges.
+
+### NEEDS
+1. Coordinator: a ruling on MESSAGES's NEEDS 1 (section 5); until then `msgOpens` and `digestBefore` stay as they are.
+
+### Not established
+- `JoinsAt.lean`, `JoinedCoupling.lean`, `JoinedForm.lean` compiled (they wait on COINMAP's head).
+- `SessionMsgs.lean` and `HeldOf.lean` compiled at the join's head (each compiled on its owner's branch).
+- A records run of `security/Proofs` that PASSes at the join's head, so no ready line.
+
+Join `cursor/proofs-join-42b8` at `ac8d23dd32`, PROBE at `52d1ff2738`; nothing unpushed.
