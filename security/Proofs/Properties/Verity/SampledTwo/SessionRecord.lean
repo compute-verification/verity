@@ -67,7 +67,8 @@ theorem located_record (A : Live₂) (C : CaseOf) (tab : ℕ → String)
     (hj : j < SpotFlock.k₀ A.h t) {c : FlockDeploy.Coin} (hc : dev l (SpotFlock.off A.h t + j) = some c) :
     ∃ recs rec i s n, sessionRecords C o = some recs ∧ recs[t]? = some rec ∧
       located (locOf A tab) (SpotFlock.off A.h t + j) [] l =
-        [(.opening i s n, ((Verity.Sampled.recordRound rec (slotStream (tab t) j).1 (slotStream (tab t) j).2).map
+        [(.opening i s n, ((Verity.Sampled.recordRound rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
+          (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2).map
           Verity.bitsOfBytes).getD [])] := by
   rw [hdev _ (groupOf_off A t j) l] at hc
   have h1 := located_one_accepted A C tab hsz o hacc l hl (SpotFlock.off A.h t + j)
@@ -87,7 +88,8 @@ theorem located_record (A : Live₂) (C : CaseOf) (tab : ℕ → String)
         located_own_accepted A C tab hsz o hacc l hl t j ht hj y (by rw [hx]; exact List.mem_singleton.2 rfl)
       obtain ⟨fr, bits⟩ := y
       have hfr' : fr = .opening i s n := hfr
-      have hbits : bits = ((Verity.Sampled.recordRound rec (slotStream (tab t) j).1 (slotStream (tab t) j).2).map
+      have hbits : bits = ((Verity.Sampled.recordRound rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
+        (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2).map
           Verity.bitsOfBytes).getD [] := hy2
       exact ⟨recs, rec, i, s, n, hrecs, hrec, by rw [hfr', hbits]⟩
 
@@ -101,7 +103,8 @@ theorem coin_record (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ 
     (hc : (withCoins A C tab dev Ms).coin o t j = some c) :
     ∃ recs rec, sessionRecords C o = some recs ∧ recs[t]? = some rec ∧
       c = fun e => elem fun b =>
-        (((Verity.Sampled.recordRound rec (slotStream (tab t) j).1 (slotStream (tab t) j).2).map
+        (((Verity.Sampled.recordRound rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
+          (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2).map
           Verity.bitsOfBytes).getD []).getD (128 * e.val + b) false := by
   obtain ⟨l, hl, hd⟩ := coin_some hc
   obtain ⟨recs, rec, i, s, n, hrecs, hrec, hx⟩ := located_record A C tab dev elem hdev hsz hacc hl ht hj hd
@@ -123,7 +126,8 @@ theorem agree_record (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ
     (hc : (withCoins A C tab dev Ms).coin o t j = some c) (hag : (withCoins A C tab dev Ms).agree o t j c c') :
     ∃ recs rec n, sessionRecords C o = some recs ∧ recs[t]? = some rec ∧ 0 < n ∧
       ∀ e : Fin 65536, e.val < n → c' e = elem fun b =>
-        (((Verity.Sampled.recordRound rec (slotStream (tab t) j).1 (slotStream (tab t) j).2).map
+        (((Verity.Sampled.recordRound rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
+          (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2).map
           Verity.bitsOfBytes).getD []).getD (128 * e.val + b) false := by
   obtain ⟨l, hl, hd⟩ := coin_some hc
   obtain ⟨recs, rec, i, s, n, hrecs, hrec, hx⟩ := located_record A C tab dev elem hdev hsz hacc hl ht hj hd
@@ -137,7 +141,8 @@ theorem agree_record (A : Live₂) (C : CaseOf) (Ms : SessionReading) (tab : ℕ
   obtain rfl : l = l' := Option.some.inj (hl.symm.trans hl')
   rw [hx] at hE
   have hw : (([(Verity.Frame.opening i s n,
-      ((Verity.Sampled.recordRound rec (slotStream (tab t) j).1 (slotStream (tab t) j).2).map
+      ((Verity.Sampled.recordRound rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
+        (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2).map
         Verity.bitsOfBytes).getD [])].map fun y => widthOf y.1).sum) = n := by
     simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, widthOf, Nat.add_zero]
   rw [hw] at hE

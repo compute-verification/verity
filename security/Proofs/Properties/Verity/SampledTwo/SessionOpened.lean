@@ -32,33 +32,41 @@ open Lean (Json)
 open Verity.Sampled (helloSpecs repStreamName)
 
 /-- **A session's round's stream and round read back as the round.** -/
-theorem roundOf_slotStream (tab : String) (j : ℕ) :
-    roundOf tab (some (slotStream tab j).1) (slotStream tab j).2 = some j := by
+theorem roundOf_slotStream (tab : String) (R j : ℕ) :
+    roundOf tab R (some (slotStream tab R j).1) (slotStream tab R j).2 = some j := by
   by_cases h0 : j = 0
   · subst h0
     simp [roundOf, slotStream]
-  · have hs : slotStream tab j = (repStreamName tab ((j - 1) % 2), (j - 1) / 2) := by
-      unfold slotStream
-      rw [if_neg h0]
-    rw [hs]
-    have hne : ¬ (some (repStreamName tab ((j - 1) % 2)) = some Spot.Challenger.TREE_SESSION ∧ (j - 1) / 2 = 0) := by
-      rintro ⟨h, -⟩
-      have hb := Verity.Sampled.repStreamName_ne tab ((j - 1) % 2)
-      rw [Option.some.inj h] at hb
-      simp at hb
-    unfold roundOf
-    rw [if_neg hne]
-    rcases Nat.mod_two_eq_zero_or_one (j - 1) with h | h
-    · rw [h, if_pos rfl]
+  · by_cases hR : j - 1 < R
+    · have hs : slotStream tab R j = (repStreamName tab 0, j - 1) := by
+        unfold slotStream
+        rw [if_neg h0, if_pos hR]
+      rw [hs]
+      have hne : ¬ (some (repStreamName tab 0) = some Spot.Challenger.TREE_SESSION ∧ j - 1 = 0) := by
+        rintro ⟨h, -⟩
+        have hb := Verity.Sampled.repStreamName_ne tab 0
+        rw [Option.some.inj h] at hb
+        simp at hb
+      unfold roundOf
+      rw [if_neg hne, if_pos ⟨rfl, hR⟩]
       congr 1
       omega
-    · rw [h]
-      have hne' : ¬ some (repStreamName tab 1) = some (repStreamName tab 0) := by
-        intro e
+    · have hs : slotStream tab R j = (repStreamName tab 1, j - 1 - R) := by
+        unfold slotStream
+        rw [if_neg h0, if_neg hR]
+      rw [hs]
+      have hne : ¬ (some (repStreamName tab 1) = some Spot.Challenger.TREE_SESSION ∧ j - 1 - R = 0) := by
+        rintro ⟨h, -⟩
+        have hb := Verity.Sampled.repStreamName_ne tab 1
+        rw [Option.some.inj h] at hb
+        simp at hb
+      have hne' : ¬ (some (repStreamName tab 1) = some (repStreamName tab 0) ∧ j - 1 - R < R) := by
+        rintro ⟨e, -⟩
         have h2 := (Verity.Sampled.repStreamName_inj (t := tab) (t' := tab) (r := 1) (r' := 0)
           (Option.some.inj e)).2
         exact absurd h2 (by decide)
-      rw [if_neg hne', if_pos rfl]
+      unfold roundOf
+      rw [if_neg hne, if_neg hne', if_pos rfl]
       congr 1
       omega
 
@@ -117,7 +125,8 @@ theorem MembersHeld.opened (H : MembersHeld lines trees log records tree)
     (hM : Spot.Challenger.membersTreeReason trees lines records = none) {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String}
     {t j : ℕ} {x : String × Array (String × Option ℕ) × Json × String} (hx : records[t]? = some x) (htM : t < M)
     (hj : j < K t) {cs : ByteArray}
-    (hcs : Verity.Sampled.recordRound x.2.2.1 (slotStream (tab t) j).1 (slotStream (tab t) j).2 = some cs) :
+    (hcs : Verity.Sampled.recordRound x.2.2.1 (slotStream (tab t) (repsOf (K t)) j).1
+      (slotStream (tab t) (repsOf (K t)) j).2 = some cs) :
     ∃ pre r post, log = pre ++ r :: post ∧ sessLoc off K M tab pre r.frame = some (off t + j) := by
   have ht : t < records.size := (Array.getElem?_eq_some_iff.1 hx).1
   obtain ⟨tree', h1, -, -⟩ := Verity.Sampled.MemberForm.members_read hT hR hM
@@ -134,10 +143,11 @@ theorem MembersHeld.opened (H : MembersHeld lines trees log records tree)
   obtain rfl : ρ = u.root := Json.str.inj (hρ.symm.trans hroot)
   obtain rfl : tree t = i :=
     Option.some.inj ((H.idx t _ hused).symm.trans (Verity.Sampled.MemberForm.keyAt_idx hkey))
-  have hlt' : (slotStream (tab t) j).2 < log.countP (fun r : Release => r.frame.opensAt (tree t) si) := hlt
+  have hlt' : (slotStream (tab t) (repsOf (K t)) j).2 <
+      log.countP (fun r : Release => r.frame.opensAt (tree t) si) := hlt
   obtain ⟨pre, r, post, he, hq, hcount⟩ := Verity.Sampled.MemberForm.split_at_count log _ hlt'
   obtain ⟨n, hfr⟩ := Verity.Sampled.MemberForm.opening_of_opensAt hq
-  have hcount' : openedOf pre (tree t) si = (slotStream (tab t) j).2 := hcount
+  have hcount' : openedOf pre (tree t) si = (slotStream (tab t) (repsOf (K t)) j).2 := hcount
   have hplace := H.place hT hR he ht hfr
   obtain ⟨l₂, ρ₂, name₂, k₂, -, -, -, hname₂, -⟩ := Verity.Sampled.readLog_round hT hR he hfr
   obtain ⟨sp, hsp, -⟩ := Option.bind_eq_some_iff.1 hname₂
@@ -145,7 +155,8 @@ theorem MembersHeld.opened (H : MembersHeld lines trees log records tree)
   have hsp' : (helloSpecs log)[tree t]? = some sp := by
     rw [he, Verity.Sampled.helloSpecs_append, List.getElem?_append_left (List.getElem?_eq_some_iff.1 hsp).1, hsp]
   rw [hsp', Option.bind_some] at hnamed
-  have hname : ((helloSpecs pre)[tree t]?.bind fun sp => sp.streams[si]?) = some (slotStream (tab t) j).1 := by
+  have hname : ((helloSpecs pre)[tree t]?.bind fun sp => sp.streams[si]?) =
+      some (slotStream (tab t) (repsOf (K t)) j).1 := by
     rw [hsp, Option.bind_some]
     exact hnamed
   refine ⟨pre, r, post, he, ?_⟩
@@ -163,7 +174,8 @@ theorem located_opened (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : 
     (hacc : FormAccepts C o) {l : List Release} (hl : interiorRead C o = some l) {recs : List Json}
     (hrecs : sessionRecords C o = some recs) {t j : ℕ} (ht : t < A.h.ms.length) (hj : j < SpotFlock.k₀ A.h t)
     {rec : Json} (hrec : recs[t]? = some rec) {cs : ByteArray}
-    (hcs : Verity.Sampled.recordRound rec (slotStream (tab t) j).1 (slotStream (tab t) j).2 = some cs) :
+    (hcs : Verity.Sampled.recordRound rec (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
+      (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2 = some cs) :
     ∃ i s n, located (locOf A tab) (SpotFlock.off A.h t + j) [] l =
       [(.opening i s n, Verity.bitsOfBytes cs)] := by
   obtain ⟨label, after, ξ, lines, trees, records, hT, hR, hMR, hS⟩ :=
@@ -187,8 +199,8 @@ theorem located_opened (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hsz : 
   obtain rfl : x.2.2.1 = rec' := Option.some.inj (hrec.symm.trans hrec')
   have hfr' : r.frame = .opening i s n := hfr
   have hcoins' : r.coins = Verity.bitsOfBytes cs := by
-    have h2 : r.coins = ((Verity.Sampled.recordRound x.2.2.1 (slotStream (tab t) j).1
-        (slotStream (tab t) j).2).map Verity.bitsOfBytes).getD [] := hcoins
+    have h2 : r.coins = ((Verity.Sampled.recordRound x.2.2.1 (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).1
+        (slotStream (tab t) (repsOf (SpotFlock.k₀ A.h t)) j).2).map Verity.bitsOfBytes).getD [] := hcoins
     rw [h2, hcs]
     rfl
   refine ⟨i, s, n, ?_⟩
