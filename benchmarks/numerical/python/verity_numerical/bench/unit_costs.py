@@ -97,6 +97,7 @@ __all__ = [
     "registered",
     "render",
     "retree",
+    "reuse",
     "sample_count",
     "sample_size",
     "work",
