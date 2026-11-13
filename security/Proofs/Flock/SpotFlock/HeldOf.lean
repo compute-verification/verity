@@ -206,6 +206,11 @@ theorem ms_length_held₀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (u : Unr
     (held₀ i it u first ns ks r hz).ms.length = it.circuits.size := by
   simp [Held.ms, held₀, unitsOf]
 
+/-- The frame is not read by the members: `withFrame` sets only `frame`. -/
+theorem ms_withFrame (h : Held) (c₀ : Code) : (withFrame h c₀).ms = h.ms := by
+  unfold withFrame Held.ms
+  dsimp only
+
 /-- **The design evaluates** (RUNCOINS's `TwoHolds`) at a held copy `heldOf` builds: `heldOf` decides it, and `two`
 reads no statement. -/
 theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {h : Held}
@@ -227,7 +232,14 @@ theorem namesDistinct_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unre
 theorem nil_of_mapM_nil {α β : Type} {f : α → Option β} (l : List α) (h : l.mapM f = some []) : l = [] := by
   cases l with
   | nil => rfl
-  | cons a l => simp [List.mapM_cons] at h
+  | cons a l =>
+    simp only [List.mapM_cons, Option.bind_eq_bind] at h
+    cases hf : f a with
+    | none => simp [hf] at h
+    | some b =>
+      cases hm : l.mapM f with
+      | none => simp [hf, hm] at h
+      | some bs => simp [hf, hm] at h
 
 /-- **The first stage's record registers no value** (`RegistersNone`) where it names the interior registration's names
 (`RecordsHeld`) and `heldOf` built the held copy: `heldOf` decides that the interior registration registers none, and
@@ -328,7 +340,6 @@ theorem refReads_eq (cs : Array (String × String × Json × Json)) :
   · intro j hj₁ hj₂
     have hj : j < cs.size := by simpa using hj₁
     simp [List.getD_eq_getElem?_getD, hj]
-    all_goals (generalize cs[j] = q; rcases q with ⟨t, c, hd, r⟩; rfl)
 
 /-- **A held copy `heldOf` builds agrees with what the run reads** (`HeldMatches`), given the clauses `PartsAre` and
 `RefsAre`, which the run's input does not decide. Every other clause holds by `heldOf`'s construction. -/
@@ -338,8 +349,7 @@ theorem heldMatches_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread
   have hrr : refRegisteredOf (withFrame (held₀ i it u first ns ks (requests l) hz) u.c₀) =
       it.circuits.map fun (t, _, _, r) => (t, r) := by
     unfold refRegisteredOf
-    rw [show (withFrame (held₀ i it u first ns ks (requests l) hz) u.c₀).ms.length = it.circuits.size from
-      ms_length_held₀ i it u first ns ks (requests l) hz]
+    rw [ms_withFrame, ms_length_held₀]
     exact refReads_eq it.circuits
   unfold firstOf at hf
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
