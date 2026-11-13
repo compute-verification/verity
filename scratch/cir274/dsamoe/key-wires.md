@@ -120,7 +120,7 @@ The 4-layer per-step deltas × 75 give 134.5 MB a step. Entries at 78 layers are
 
 Fixed for every row: 78 layers, 75 MoE layers, S = 2 (the census's window), and the bytes per entry above. Each row
 gives the experts' key wires and declarations only. The window's other 38,122 wire patterns (10.8 MB at 78 layers) are
-the same in every row and left out.
+the same in every row and left out. None of the three forms touches the `g` wires, which grow by token.
 
 | form | key wires | roots / openings / tables | bytes at 78 layers, S = 2 | bytes a step added | whose file |
 |---|---|---|---|---|---|
@@ -196,8 +196,8 @@ That is about 1.6 MB. A step adds 2,400 key wires, 600 roots and 300 openings, a
 **The Lean.** `NciCheck.RecordText` (`Table`, `Opening` and `fill := .table` naming a member by digit),
 `security/Proofs/Properties/Nci/Record{Inputs,Kinds,Fresh}.lean`, and the Lean side of SPOT's registered check.
 
-**Set aside:** one table a stack keyed b E + e. It needs a new Definition, a registration change and 8 more levels of
-path in every opening.
+**Set aside:** one table a stack keyed b E + e. It needs a new Definition, a registration change and log₂ B more levels of
+path (up to 9) in every opening.
 
 ### What each form costs the readers of a window's description on main
 
