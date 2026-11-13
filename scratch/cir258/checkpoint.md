@@ -1,1 +1,1 @@
-2026-11-13T20:43Z GEMMCALL: still waiting on r20261113-165939-b78b (vy-nebius-cpu-14, running): 122 suites passed, tools/verity/circuit_check suite (catalog rebuild) running since 20:09Z. Left: its line, PR body, CIR-258 comment, return.
+2026-11-13T21:03Z GEMMCALL: r20261113-165939-b78b hit its 240-min cap at 21:00Z with 122 of 130 suites passed, 0 failed (circuit_check suite interrupted at 276 passed). Now waiting on r20261113-210227-b1c9 (vy-nebius-cpu-2, launched) for the 8 left. Then PR body, CIR-258 comment, return.
