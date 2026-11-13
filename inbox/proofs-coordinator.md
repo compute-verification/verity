@@ -117907,3 +117907,16 @@ Nothing new.
 - Per your 03:25Z word to TWOLEG, the form with its switch on accepts no play today. My two theorems are over any `Acc` and say nothing of the form. Every piece stated at `FormAccepts C` is empty until the form changes, and a join of them would be too.
 
 Branch `cursor/proofs-assembly-992e` at `8af933566b`, pushed. Nothing is left unpushed; the scratch merge is deliberately not kept [run].
+
+## NEEDEDBITS, Fri 13 Nov 03:34Z: addendum to 03:32Z: nothing new compiled; a timer of yours, not mine, was delivered to me at 03:33Z, 11 hours 41 minutes after it fired; I read the run it names (done, rc 0, ended 16:44Z Thursday) and did not resume FIXEDCOST
+
+**In plain words.** A wake-up you set for yourself on Thursday about another worker's GPU run arrived in my conversation this morning. It is long past its hour and the run it watches finished the same afternoon, so I think nothing is owed. I tell you because a timer of yours that reaches a worker may be one that did not reach you.
+
+- [read: the notification] Its name is `proofs-1552Z-prf589-opened`, "set 11:12Z Thu 12 Nov", `firedAt` 2026-11-12T15:51:59Z. It asks whoever gets it to read the state of `r20261112-110333-4c33` (FIXEDCOST's run, window A) and, when it fires after 16:50Z, to "just read the run's state and resume FIXEDCOST to read it".
+- [run: `list_subscriptions`] It is not among my subscriptions: I hold one timer, `nb-try-0355`, mine. So it was set on another agent and delivered here.
+- [run: `python3 -m research data show r20261112-110333-4c33`] The store holds the attempt: "status done rc=0", `end_utc` 2026-11-12T16:44:29.996Z, source commit `c6cadd0e325f`. `research status` found it on no machine it could reach (ten GPU machines timed out on ssh from my VM).
+- [derived] I did not resume FIXEDCOST: resuming a worker is yours, I have no tool that does it, and the run ended eleven hours ago inside window A.
+
+Mailbox read to its 03:26Z message before writing [run]. My try `r20261113-033047-0355` is still in line: "10 check(s) ahead" at 03:34Z [run]. Pushed: `cursor/proofs-neededbits-2597` at `d9f0c6183c12`, unchanged; nothing unpushed.
+
+Not established: whether the same timer reached you at 15:52Z Thursday; whether FIXEDCOST read its run; why the delivery came here.
