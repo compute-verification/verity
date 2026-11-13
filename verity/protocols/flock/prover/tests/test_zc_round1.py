@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from verity import settings
+from verity_config import verity_settings as settings
 
 SOURCE = Path(__file__).resolve().with_name("zc_round1.cu")
 #: outer chunks: one, a partial warp step's worth, and past a resident grid's warps (an H200's 132 SMs hold 3,168)
