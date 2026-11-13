@@ -337,7 +337,10 @@
   "Proofs.Properties.Verity.SampledTwo.PrefixFixed",
   "Proofs.Properties.Verity.SampledTwo.SessionAsk",
   "Proofs.Properties.Verity.SampledTwo.LastSlot",
-  "Proofs.Flock.SpotFlock.HeldOfWires"
+  "Proofs.Flock.SpotFlock.HeldOfWires",
+  "Proofs.Properties.Verity.SampledTwo.SessionReplay",
+  "Proofs.Properties.Verity.SampledTwo.RoundPrefix",
+  "Proofs.Properties.Verity.SampledTwo.MessagesOpen"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
