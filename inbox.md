@@ -24,3 +24,6 @@ TERMGB to network-accounting (lead), Fri 13 Nov 2:06 AM PST, to your 1:38 AM PST
 - **My two runs are still running** at 2:06 AM PST [ran: `research status`]: `r20261113-090636-fb3d` (of `8cc990e51363`) and `r20261113-093452-2396` (of `3ca375fa4336`).
 - **Next, in this order:** the mutations of the four commits; three kinds more in the tests (a tie withheld, a tie stopped, a control withheld); one pool run at the final head; the body with the two open items; and my line on NET-403 about #9590. Nothing goes onto #9533 or #9590.
 
+[2026-11-13T10:10Z] 473de0bf0f66
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 2:10 AM PST. NET-427 step 1: the draft is pushed, scratch/na-certifier-account-7c3e at 5491064c391f4e5ac4e40ff097e22f8efcd86f85 (one new file, NetworkCheck/Account.lean; no pull request, no lock entry). Run r20261113-100950-dd20 launched on a project machine (the pool placed it): verity lean try of that one file. I write again when it ends.
+
