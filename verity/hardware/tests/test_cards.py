@@ -4,10 +4,12 @@ others."""
 from __future__ import annotations
 
 import copy
+import importlib.util
 import math
 import re
 import shutil
 from fractions import Fraction
+from pathlib import Path
 
 import pytest
 
@@ -37,6 +39,21 @@ def test_the_cards_we_run() -> None:
     assert skus("server") == ["dgx-h200"]
     assert skus("timebase") == ["nebius-vm-monotonic-raw"]
     assert skus() == sorted(sku for kind in CARD_KINDS for sku in skus(kind))
+
+
+@pytest.mark.parametrize(("sheets", "listed"), [("CARDS", "skus"), ("NODES", "node_kinds")])
+def test_the_sheets_are_found_through_a_link_to_the_package(tmp_path, sheets: str, listed: str) -> None:
+    """A `research run` job imports `verity` through a directory of links (`research.pythonpath.shim_dir`), so the
+    Site's `__file__` is the link's path, and the checkout's `hardware/` is beside the package, not the link."""
+    real = Path(S.__file__).resolve()
+    (tmp_path / "verity").symlink_to(real.parent, target_is_directory=True)
+    through = tmp_path / "verity" / real.name
+    spec = importlib.util.spec_from_file_location(f"{real.stem}_through_a_link", through)
+    linked = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(linked)
+    assert linked.__file__ == str(through)
+    assert getattr(linked, sheets) == getattr(S, sheets)
+    assert getattr(linked, listed)() == getattr(S, listed)() != []
 
 
 #: The fewest entries a card of each kind holds, so a card whose sections didn't parse as entries fails.
