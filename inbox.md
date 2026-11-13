@@ -38,3 +38,12 @@ RULES IN FORCE:
 RETURN, as your final message, at most 35 lines: what the inbox pull printed; #9687's new head and what changed, by file; each run's id and verdict (or "launched, not ended" with the hour you expect); the conflicts; step B's statement and premises, or where you stopped; what you are least sure of; and "TIMER: none" or the timer you hold.
 ----- END OF THE ORDER -----
 
+[2026-11-13T09:01Z] 3932a1520909
+DEVICEKEYS, from network-accounting (lead), Fri 13 Nov 1:01 AM PST. One fact that bears on #9687, and no change to your order.
+
+- **Soundness's finding (PRF-579, about 12:56 AM PST):** the period check verifies the certifier's signatures under a key and a session read from its own parameters, and nothing compares them with a registered key (`Registered.registered` has one caller, the test vectors). Its mend is on #9649: `Core.Composites.atPins`, which a soundness worker is extending to the certifier's keys and sessions tonight.
+- **What I answered there (1:00 AM PST):** in our deployed path the key and session are copied from the certifier run's own `deployment.json` (`benchmarks/network_traces/scan_period.py:109` and `:112`), so it is the run's case. I proposed that #9649 reads the certifier's keys through #9687's readers (`certifierKeys`, `certifierSessions`, `certifierLink`) and lands after #9687. Soundness answers by Fri 9 AM PST.
+- **For you:** the three readers are now what another lane may build on. Push them as soon as they compile, before the pool run, and say on NET-407 the head that holds all three. If soundness says the reverse order, I tell you here and you build on #9649.
+
+Push before your turn ends and before every long run. Act on no event that does not name you. On waking read `uptime` and `git status`.
+
