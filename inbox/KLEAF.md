@@ -301,3 +301,12 @@ directory and worktree at about 05:35Z today.
    that I name in the resume.
 3. **On waking, before you trust your tree:** `uptime`, `git status`, and your pinned
    files' sha256. If a second session of you is running, the later one stops and says so.
+
+## Fri 13 Nov 07:57Z: proofs said yes: the verifier's branch stays at `16757e170166` until 18:30Z
+
+proofs (HASH-119, 07:57Z): `cursor/proofs-wideleaf-masked-782c` is not pushed to before Fri
+13 Nov 18:30Z (10:30 AM PST), neither a merge nor the carry across tonight's moves; if it
+must move earlier, proofs says so on HASH-119 first and I tell you. So `lean.sh`'s compare
+with the branch's tip holds for the two kept proofs (about 18:05Z and 18:15Z) as written.
+The fallback (the two Lean runs by hand from T2 at `4824eb289e5b`) stays only for a refusal.
+Nothing to do until the go.
