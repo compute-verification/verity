@@ -1,4 +1,4 @@
-"""PoUW's execution phases as three parties of the deployment layer (`verity.configuration.deploy`): the challenger
+"""PoUW's execution phases as three parties of the deployment layer (`verity.runtime`): the challenger
 (`ChallengerParty`) and the verifier (`Verifier`) on the auditor's devices, and the prover (`Prover`) on the developer's
 machine, one a server.
 
@@ -61,11 +61,11 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from verity.commitments.scheme import DIGEST_BYTES
-from verity.configuration.deploy.manifest import Channel, Manifest, Role
-from verity.configuration.deploy import sources
-from verity.configuration.deploy.party import Finish, Identity, LogEntry, Received, Send
-from verity.configuration.deploy.runtime import ProtocolDef
-from verity.configuration.wire import Body, Int, Json, Message, Schema, Str
+from verity.protocol import Channel, Manifest, Role
+from verity.runtime import sources
+from verity.party import Finish, Identity, LogEntry, Received, Send
+from verity.runtime.runner import ProtocolDef
+from verity.channel import Body, Int, Json, Message, Schema, Str
 from verity.protocols.proofs.spot.verifier.parties import MAX_PROOF, MAX_REGISTRATION, MAX_SAMPLE, Unavailable
 
 from . import coins as Co

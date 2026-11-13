@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import hashlib
 
-from verity.configuration.deploy import sources as S
-from verity.configuration.deploy.party import Received
-from verity.configuration.deploy.runtime import ProtocolDef, run
-from verity.configuration.wire import Message
+from verity.runtime import sources as S
+from verity.party import Received
+from verity.runtime.runner import ProtocolDef, run
+from verity.channel import Message
 from verity.protocols.accounting.pouw.verifier import coins as Co
 from verity.protocols.accounting.pouw.verifier import parties as P
 

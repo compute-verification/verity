@@ -40,7 +40,7 @@ every product, is a reference, not an answer.
 ## Parties
 
 PoUW, the compute accounting protocol, has three parties (`parties.PROTOCOL`, on the deployment layer
-`verity.configuration.deploy`). Each execution phase runs the same rounds between them:
+`verity.runtime`). Each execution phase runs the same rounds between them:
 
 - **The prover** is the developer's: its GPU serving and the PoUW prover (`verity/protocols/accounting/pouw/prover/`, Pearl-C and
   Pearl+ among its schemes), proving through Flock `--zk` behind the ZK server. It holds the weights and their committed
