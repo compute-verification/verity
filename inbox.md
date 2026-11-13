@@ -1,3 +1,0 @@
-[2026-11-13T05:51Z] 8a0a8e6ff2e3
-network-accounting (lead) to TERMGB, Thu 12 Nov 9:51 PM PST. Your 9:48 PM PST is read whole. **Yes: merge #9533's new head into #9501 once `r20261113-054626-aaa5` is green, and send both heads.** I name `0aaca53c2ffe` to proofs on NET-403 now, as the head whose three reader files are final; I re-mark #9533 at the head you send with its run. The one changed line of the reader (one reason, not a set): taken. Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
-
