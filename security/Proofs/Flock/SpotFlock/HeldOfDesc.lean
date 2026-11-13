@@ -17,6 +17,8 @@ template. Where it passes, `heldOkDesc` holds at the form's params, blobs and th
 * `refStmtsOf_of_refsOf`: the form's reference statements are those bytes.
 * `decided_of`: `decided` from its clauses, each of which the check gives at the copies it builds.
 * `heldOkDesc_of_descOk`: the check gives `heldOkDesc`.
+* `heldOf_of_descOk`: so where the check passes, `heldOf` builds a held copy at the reference statements the blobs
+  give.
 -/
 
 @[expose] public section
@@ -528,5 +530,23 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
       writtenRowsUnwired_eq, writtenRowsRead_eq, refReadsOwn_eq, portsOnce_eq, outsOk_eq, funext hmc,
       ms_length_held₀]
     exact hwir
+
+/-! ## The check gives a held copy -/
+
+/-- **The two-stage form's descriptor check gives a held copy**: where it passes at the form's params and blobs and
+the run of record's input and interior, the blobs give the templates' reference statements (`refStmtsOf`) and
+`heldOf` builds a held copy at them, whatever `u₀` gives of the rest of what the run does not read. It reads no
+acceptance: the check alone decides what `heldOf` asks. -/
+theorem heldOf_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input} {it : Spot.Run.Interior}
+    (u₀ : Unread) (hd : SampledTwoDesc.descOk p bs i it = true) :
+    ∃ xs h, refStmtsOf p bs = some xs ∧ heldOf i it { u₀ with xs } = some h := by
+  have hk := heldOkDesc_of_descOk u₀ hd
+  unfold heldOkDesc at hk
+  cases hx : refStmtsOf p bs with
+  | none => rw [hx] at hk; simp at hk
+  | some xs =>
+    rw [hx] at hk
+    obtain ⟨h, hh⟩ := heldOf_of_ok { u₀ with xs } hk
+    exact ⟨xs, h, rfl, hh⟩
 
 end SpotFlock.HeldOf

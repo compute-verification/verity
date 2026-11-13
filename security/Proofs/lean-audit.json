@@ -185,7 +185,8 @@
   "Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf",
   "Proofs.Flock.SpotFlock.RunsAs.SecondStageOf",
   "Proofs.Flock.SpotFlock.RunsAs.Statements",
-  "Proofs.Flock.SpotFlock.HeldOfDesc"
+  "Proofs.Flock.SpotFlock.HeldOfDesc",
+  "Proofs.Properties.Verity.SampledTwo.HeldOfAtDesc"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
