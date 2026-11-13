@@ -94,8 +94,8 @@ the policy's record to sampled proofs' (one record, below), so the circuit the p
 audited.
 
 A stated exception: the policy's v0 publishes the division and each inference block's profile (its gates and
-fresh-input bits) in the clear. Both products compose it, as an exception to
-everything-zero-knowledge, until v1's private form (the division committed under hiding leaves, compliance proved, a
+fresh-input bits) in the clear. Both products compose it for one run of record only, as an exception to
+everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
 padded profile) replaces it. `tests/test_inference_only_not_composed.py` refuses any protocol that publishes
 private data among the products' subprotocols unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;
 `benchmarks/one_stage/composite.py` writes the exception's line into the record it renders.
@@ -162,7 +162,8 @@ Lean to:
   that `C*`, honest, cheating and unverified, as `p2_case` answers them), whose Lean their packages' difftests hold to
   those verifiers (`../../../pous/verifier/check/tests/test_run_protocol.py`, `../../../poub/verifier/lean/tests/test_p2_case.py`).
 
-Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
+Hypothesis samples 1000 cases a product (seed 0), and fewer in the short form each thousand-case test has (`FEWER`),
+which a check that leaves the test out still runs: each subprotocol's case accepts, rejects, is undecided or fails to decode
 (one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided; the inference-only
 policy is never undecided), every case hands the subprotocols the same blobs, and the composition's inputs, its blobs or
 the case itself are often broken. Sampled proofs' cases are all refused (v1's audits, refused by name, and v1's audits

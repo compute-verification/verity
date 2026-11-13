@@ -11,8 +11,8 @@ import sys
 from pathlib import Path
 
 import test_session as T
-from verity.protocols.poub.verifier.session import verifier
-from verity.protocols.poub.verifier.session import wire
+
+from verity.protocols.poub.verifier.session import verifier, wire
 
 
 def main() -> int:

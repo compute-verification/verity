@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:  # pragma: no cover
     from verity.definitions.silicon.models import Model
 
+__all__ = ["REAL", "TINY", "TOY", "TOY_LOSSY", "Params", "Reject"]
+
 
 class Reject(Exception):
     """The checker refuses (x, y, h): the message names the first violated predicate."""
