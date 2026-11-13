@@ -194,7 +194,7 @@ theorem scopeOk_sound {C : Prog} {Pt : Partition} {d : Design.Two} (hs : scopeOk
   exact ⟨topoOk_sound htopo, partitionsOk_sound hpart, of_decide_eq_true hnd, fun v hv => hrep v hv,
     ⟨hlen, fun p hp => oneStageOk_sound (hrules p hp)⟩, hklen, fun k hk' => of_decide_eq_true (hk k hk')⟩
 
-theorem filesOk_sound {g : RegTwo} {ms : Spot.Bits.Members} {l : Spot.Slots.Layout} {k : List ℕ}
+theorem filesOk_sound {g : RegTwo} {ms : Spot.Bits.Members} {l : Spot.Slots.SlotOrder} {k : List ℕ}
     (hc : filesOk g ms l k = true) : g.ns.size = ms.length ∧ (∀ t < ms.length, k.getD t 0 = g.ks.getD t 0) ∧
       Flock.Bridge.Members.FilesFit ms g.ns l ∧ ∀ ρ b, l.blocks[ρ]? = some b → b.unit = some ρ →
         ∀ t < ms.length, ∀ p < g.ns.getD t 0, g.blockOf ρ t p = filesBlockOf ms g.ns ρ t p := by
@@ -368,22 +368,22 @@ theorem scoped_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some
 
 /-- **What the registered wiring's check decides** (`wiringOk`), clause by clause. -/
 theorem wiringOk_iff : wiringOk h = true ↔
-    namesOnce h = true ∧ writersFirst h = true ∧ sourcesNamed h = true ∧ wiresMove h = true ∧
-      wiresAlike h = true ∧ returnedWhole h = true ∧ writtenUnwired h = true ∧ writtenRead h = true ∧
-      refReadsOwn h = true ∧ h.interiorNames.values = [] := by
+    namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMove h = true ∧
+      wiresAlike h = true ∧ writtenRowsUnwired h = true ∧ writtenRowsRead h = true ∧ refReadsOwn h = true ∧
+      h.interiorNames.values = [] ∧ portsOnce h = true ∧ outsOk h = true := by
   unfold wiringOk
   simp only [Bool.and_eq_true, List.isEmpty_iff]
   constructor
-  · rintro ⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩
-    exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩
-  · rintro ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩
-    exact ⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩
+  · rintro ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩, h11⟩
+    exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩
+  · rintro ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩
+    exact ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩, h11⟩
 
 /-- **Where the design evaluates, the registered wiring passes each clause of its check.** -/
 theorem wiring_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
-    namesOnce h = true ∧ writersFirst h = true ∧ sourcesNamed h = true ∧ wiresMove h = true ∧
-      wiresAlike h = true ∧ returnedWhole h = true ∧ writtenUnwired h = true ∧ writtenRead h = true ∧
-      refReadsOwn h = true ∧ h.interiorNames.values = [] :=
+    namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMove h = true ∧
+      wiresAlike h = true ∧ writtenRowsUnwired h = true ∧ writtenRowsRead h = true ∧ refReadsOwn h = true ∧
+      h.interiorNames.values = [] ∧ portsOnce h = true ∧ outsOk h = true :=
   (wiringOk_iff h).1 (scoped_wiring_of_two h hd).2
 
 /-- **Where the design evaluates, the templates' names are distinct.** -/
@@ -430,7 +430,7 @@ theorem refusesTwo (H : Msg → Msg) :
 
 /-- **The members' replay partition has the layout's shape**: its classes' strata are the layout partition's
 (`slotPartition`), size for size. -/
-theorem shape_filesReplay (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.Layout) :
+theorem shape_filesReplay (ms : Spot.Bits.Members) (ns : Array ℕ) (l : Spot.Slots.SlotOrder) :
     (filesReplay ms ns l).classes.map strataSizes = (slotPartition l).classes.map strataSizes := by
   simp [filesReplay, slotPartition, strataSizes, Function.comp_def]
 

@@ -336,7 +336,7 @@ def scopeOkFast (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
 the design's count `k`; each population slot `ρ` of `l` is unit `ρ`, each member `t` has room for its `n_t` units,
 `ρ·n_t` to `(ρ + 1)·n_t`, and the registration's block `blockOf ρ t p` is the members' (`filesBlockOf`). One check
 per slot and proof block, none per gate. -/
-def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.Layout) (k : List ℕ) : Bool :=
+def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.SlotOrder) (k : List ℕ) : Bool :=
   g.ns.size == ms.length && (List.range ms.length).all (fun t => k.getD t 0 == g.ks.getD t 0) &&
     (List.range l.blocks.size).all fun ρ =>
       match l.blocks[ρ]? with
@@ -477,6 +477,30 @@ def writtenBits (ms : Spot.Bits.Members) : List (ℕ × ℕ × Spot.Bits.RowPos)
         | some x, some r => some (Spot.Bits.base ms m + x, m, r)
         | _, _ => none
 
+/-- **The rows one unit of circuit `c` reads its source bits at**: each input column's source's row, where the
+source is a message bit (`Bits.srcKey`, `Bits.srcPos`). A source gate's commitment position (`Bits.rowBit`) is its
+column's source at its unit, so its row is one of these whatever the unit: one unit's input columns, not the
+units'. -/
+def sourceRows (c : _root_.Flock.Circuit) : List String :=
+  let ix := Spot.Bits.Index.of c
+  (List.range ((Spot.Bits.Rows.ofNet c.unit).stack c.upv).nIn).filterMap fun b =>
+    (Spot.Bits.srcPos c 0 (Spot.Bits.srcKey c ix b)).map fun x => x.row
+
+/-- **The rows a unit of circuit `c` writes**: its output row ports' names, the rows a returned output's bit is
+given (`Bits.outPos`). -/
+def writtenRows (c : _root_.Flock.Circuit) : List String :=
+  (List.range c.outRowPorts.size).map fun o => (c.ports.getD (_root_.Flock.HmOut.nIn c + o) default).name
+
+/-- **Every returned output bit of circuit `c`'s unit sits on a computed row** of the unit net, decided
+(`Spot.Bits.check`'s clause): the column of each instance's output leaf `j`, bit `t` (`Bits.outCol`), is past the unit
+net's input columns and before its constant. A written bit's gate is then a row of its unit, never an input or the
+constant. Its cost is one reading of the unit net and sixteen comparisons an output leaf. -/
+def outsComputed (c : _root_.Flock.Circuit) : Bool :=
+  let R := Spot.Bits.Rows.ofNet c.unit
+  (List.range c.upv).all fun k => (List.range (c.leavesOut.getD k #[]).size).all fun j =>
+    (List.range 16).all fun t =>
+      decide (R.nIn ≤ Spot.Bits.outCol c j t) && decide (Spot.Bits.outCol c j t < R.nIn + R.nComp)
+
 /-- **A gate the boundary record holds**: a written bit at an output port a link names for its template, which its
 replay block returns. Every other written bit is one the interior record alone holds. -/
 def returned (x : ℕ) : Bool :=
@@ -513,12 +537,13 @@ before the first of the reader's. No unit is then wired to its own template or t
 def writersFirst : Bool :=
   (h.wires.getD #[]).all fun w => decide (heldPos h w.writer < heldPos h w.template)
 
-/-- **Every source bit is at a port a link or a wire names**, decided on what the verifier holds: each source gate
+/-- **Every source bit is at a port a link or a wire names**, on what the verifier holds: each source gate
 of a member that has a commitment position (`sourceBits`) is at a port the auditor's copies give a link or a wire
 (`heldLink`, `heldWire`). Round 2 reads any other port at its own port of the interior record
 (`SecondStage.readOk`), under the replay block's roots, while the wired program leaves its gates inputs, opened
 under the statement's roots (`CheckedRun.rootsWired`). `AddressesWired` asks the two to be one, so it is a premise
-only where this holds. -/
+only where this holds. Stated bit by bit; the design decides it once per template (`sourceRowsNamed`), which gives
+it (`sourcesNamed_of_rows`). -/
 def sourcesNamed : Bool :=
   (sourceBits h.ms).all fun s =>
     (heldLink h (h.names.getD s.2.1 "") s.2.2.row).isSome ||
@@ -549,11 +574,13 @@ def wiresAlike : Bool :=
   (h.wires.getD #[]).all fun w =>
     (List.range h.ms.length).all fun t => !(w.template == h.names.getD t "") || wireAlike h w t
 
-/-- **No gate the boundary record holds is a written bit at a port no link names**, decided. -/
+/-- **No gate the boundary record holds is a written bit at a port no link names.** Stated bit by bit; the design
+does not decide it: it holds wherever a gate is at one written position at most (`returnedWhole_of_once`). -/
 def returnedWhole : Bool :=
   (writtenBits h.ms).all fun y => (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome || !returned h y.1
 
-/-- **No wire names a port a member writes that no link names**, decided. -/
+/-- **No wire names a port a member writes that no link names.** Stated bit by bit; the design decides it once per
+template (`writtenRowsUnwired`), which gives it (`writtenUnwired_of_rows`). -/
 def writtenUnwired : Bool :=
   (writtenBits h.ms).all fun y =>
     (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome || (heldWire h (h.names.getD y.2.1 "") y.2.2.row).isNone
@@ -575,13 +602,53 @@ def refReadsOwn : Bool :=
 statement's part and a wire's writer by the template's name (`SecondWires.namesOnce`, at the parts). -/
 def namesOnce : Bool := decide ((List.range h.ms.length).map fun t => h.names.getD t "").Nodup
 
-/-- **Every port a member writes that no link names is some wire's writer port**, decided. A reader's check of that
+/-- **Every port a member writes that no link names is some wire's writer port.** A reader's check of that
 wire then holds the port's rows in the interior record to the writer's part (`SecondStage.readOk`, its wired
-arm). -/
+arm). Stated bit by bit; the design decides it once per template (`writtenRowsRead`), which gives it
+(`writtenRead_of_rows`). -/
 def writtenRead : Bool :=
   (writtenBits h.ms).all fun y =>
     (heldLink h (h.names.getD y.2.1 "") y.2.2.row).isSome ||
       (h.wires.getD #[]).any fun w => w.writer == h.names.getD y.2.1 "" && w.wport == y.2.2.row
+
+/-! ## Decided once per template
+
+The clauses above that range over every source bit or every written bit of the members' programs read only the bit's
+template and its row's name. The design decides each once per template, over the rows one unit of the template's
+circuit reads (`sourceRows`) or writes (`writtenRows`): its cost is the circuit files' and the registered wiring's,
+whatever the count of units. -/
+
+/-- **Every row a template's units read source bits at is a port a link or a wire names**, decided: `sourcesNamed`,
+once per template. -/
+def sourceRowsNamed : Bool :=
+  (List.range h.ms.length).all fun t =>
+    (sourceRows (memberCircuit h t)).all fun row =>
+      (heldLink h (h.names.getD t "") row).isSome || (heldWire h (h.names.getD t "") row).isSome
+
+/-- **No wire names a row a template's units write that no link names**, decided: `writtenUnwired`, once per
+template. -/
+def writtenRowsUnwired : Bool :=
+  (List.range h.ms.length).all fun t =>
+    (writtenRows (memberCircuit h t)).all fun row =>
+      (heldLink h (h.names.getD t "") row).isSome || (heldWire h (h.names.getD t "") row).isNone
+
+/-- **Every row a template's units write that no link names is some wire's writer port**, decided: `writtenRead`,
+once per template. -/
+def writtenRowsRead : Bool :=
+  (List.range h.ms.length).all fun t =>
+    (writtenRows (memberCircuit h t)).all fun row =>
+      (heldLink h (h.names.getD t "") row).isSome ||
+        (h.wires.getD #[]).any fun w => w.writer == h.names.getD t "" && w.wport == row
+
+/-- **Each member's circuit names its ports once**, decided: no two ports of one template's circuit have one name.
+The port found at a row's name (`portNamed`, the first of that name) is then the row's own. -/
+def portsOnce : Bool :=
+  (List.range h.ms.length).all fun t => decide ((memberCircuit h t).ports.toList.map (·.name)).Nodup
+
+/-- **Every returned output bit of each member's unit sits on a computed row** (`outsComputed`), decided once per
+template. -/
+def outsOk : Bool :=
+  (List.range h.ms.length).all fun t => outsComputed (memberCircuit h t)
 
 /-- **Every member's circuit is in the scope Flock's hidden-output proof covers** (`ProvedScope.scopeOkH`), decided:
 its unit reads one input group, among the rest, so no wire inside a template instance fills an input of the unit. -/
@@ -590,15 +657,18 @@ def membersScoped : Bool :=
 
 /-- **The registered wiring is one the connected program reads as the second stage's check does**, decided on the
 auditor's copies: each name is one template's (`namesOnce`); each wire's writer's part is before its reader's
-(`writersFirst`); every source bit is at a port a link or a wire names (`sourcesNamed`) and every wired one has a
-gate to go to (`wiresMove`); each wire's reader port is like its writer's output port (`wiresAlike`); the boundary
-record holds no written bit at a port no link names (`returnedWhole`), no wire names such a port (`writtenUnwired`)
-and some wire reads it (`writtenRead`); each reference read at a port no link or wire names reads a port of the
-interior registration (`refReadsOwn`); and the interior registration registers no value, so a run's interior record
-registers none (`recordsOk`). -/
+(`writersFirst`); every row a template's units read source bits at is a port a link or a wire names
+(`sourceRowsNamed`) and every wired source bit has a gate to go to (`wiresMove`); each wire's reader port is like its
+writer's output port (`wiresAlike`); no wire names a row a template's units write that no link names
+(`writtenRowsUnwired`) and some wire reads it (`writtenRowsRead`); each reference read at a port no link or wire
+names reads a port of the interior registration (`refReadsOwn`); the interior registration registers no value, so a
+run's interior record registers none (`recordsOk`); each member's circuit names its ports once (`portsOnce`); and
+every returned output bit of its unit sits on a computed row (`outsOk`).
+All but `wiresMove` read the circuit files and the registered wiring once per template; `wiresMove` still passes
+over every source bit of the members' programs. -/
 def wiringOk : Bool :=
-  namesOnce h && writersFirst h && sourcesNamed h && wiresMove h && wiresAlike h && returnedWhole h &&
-    writtenUnwired h && writtenRead h && refReadsOwn h && h.interiorNames.values.isEmpty
+  namesOnce h && writersFirst h && sourceRowsNamed h && wiresMove h && wiresAlike h && writtenRowsUnwired h &&
+    writtenRowsRead h && refReadsOwn h && h.interiorNames.values.isEmpty && portsOnce h && outsOk h
 
 /-- **The two-stage design**: the members' replay partition over the boundary registration's layout (`filesReplay`),
 the first stage's design and the second stage's counts, where the two-stage scope holds (`scopeOk`), the layout

@@ -156,6 +156,17 @@ def PortsOnce : Prop :=
   ∀ t < h.ms.length, ((memberCircuit h t).ports.toList.map (·.name)).Nodup
 
 variable {h} in
+/-- **Each member's circuit names its ports once**, where the design's clause holds (`portsOnce`). -/
+theorem portsOnce_of (hc : portsOnce h = true) : PortsOnce h := by
+  intro t ht
+  unfold portsOnce at hc
+  exact of_decide_eq_true (List.all_eq_true.1 hc t (List.mem_range.2 ht))
+
+/-- **Each member's circuit names its ports once**, where the second stage's design evaluates. -/
+theorem portsOnce_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : PortsOnce h :=
+  portsOnce_of (wiring_of_two h hd).2.2.2.2.2.2.2.2.2.1
+
+variable {h} in
 /-- **The address map's port at a name one of the member's ports has**: the first port of that name, one of the
 circuit's, named so. -/
 theorem portNamed_spec {t : ℕ} {name : String}

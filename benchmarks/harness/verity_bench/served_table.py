@@ -28,7 +28,7 @@ from typing import Any
 
 from verity_bench import jobs
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.presets import expand_sweep, resolve_spec
+from verity_bench.vllm.presets import FORMER_SPEC, FORMER_SPECS, SOURCE_ROOT, SPEC_ROOT, expand_sweep, resolve_spec
 from verity_bench.vllm.runner import summarize
 
 SCHEMA = "verity-bench/served-table/v1"
@@ -42,10 +42,11 @@ POINT_TOOL = "vllm_bench_point"
 
 # Validation comes from result.json alone; rc 0 rules out a run killed after writing it, and a dirty tree ran code its
 # commit doesn't name (jobs.StoreCompletion's rule, keyed here by spec and point rather than by one commit's identity).
+# The spec is named by either of its recorded paths (`spec_paths`).
 PASSING = """
 SELECT a.id, o.artifact, a.source_commit
 FROM attempts a
-JOIN attempt_params s ON s.attempt = a.id AND s.key = 'spec' AND s.value = ?
+JOIN attempt_params s ON s.attempt = a.id AND s.key = 'spec' AND s.value IN (?, ?)
 JOIN attempt_params p ON p.attempt = a.id AND p.key = 'point' AND p.value = ?
 JOIN attempt_outputs o ON o.attempt = a.id AND o.name = 'result'
 WHERE a.tool = 'vllm_bench_point' AND a.validation = 'passed' AND a.rc = 0 AND a.source_dirty IS NOT 1
@@ -108,20 +109,37 @@ class Breakdown:
 BREAKDOWNS = (Breakdown("PoUS bandwidth audit", "pous-bandwidth-audit-breakdown"),)
 
 
+#: The specs' directory from the source tree's root, which a dispatched point records its spec under
+SPECS = SPEC_ROOT.relative_to(SOURCE_ROOT).as_posix()
+
+
 def spec_path(spec: str) -> str:
     """How a dispatched point records its spec (`jobs._relative_spec`)."""
 
-    return f"benchmarks/specs/{spec}.toml"
+    return f"{SPECS}/{spec}.toml"
+
+
+def spec_paths(spec: str) -> tuple[str, str]:
+    """The two paths a run of `spec` may have recorded: where the spec is, and where it was while the specs had a
+    directory of their own (`presets.FORMER_SPEC`). A run of record keeps the path it ran under, so both are read."""
+
+    return spec_path(spec), FORMER_SPEC.format(name=spec)
 
 
 def spec_name(path: str) -> str:
-    return path.removeprefix("benchmarks/specs/").removesuffix(".toml")
+    """The spec a recorded path names, under either of its directories (`spec_paths`); any other path stays a path."""
+
+    for under in (SPECS, FORMER_SPECS):
+        if path.startswith(f"{under}/"):
+            return path.removeprefix(f"{under}/").removesuffix(".toml")
+    return path.removesuffix(".toml")
 
 
 def spec_added(root: Path, spec: str) -> int:
-    """When the commit that added the spec was committed: none of its runs can start before."""
+    """When the commit that added the spec was committed, under the earlier of its paths: none of its runs can start
+    before."""
 
-    process = subprocess.run(["git", "log", "--diff-filter=A", "--format=%ct", "--", spec_path(spec)],
+    process = subprocess.run(["git", "log", "--diff-filter=A", "--format=%ct", "--", *dict.fromkeys(spec_paths(spec))],
                              cwd=root, capture_output=True, text=True)
     times = [int(line) for line in process.stdout.split()]
     if process.returncode != 0 or not times:
@@ -182,7 +200,7 @@ def newest_passing(store: Any, spec: str, point: str, arms: Sequence[str],
     """The newest passing run of `spec` at `point` whose result isn't superseded and holds `arms`; each newer run passed
     over goes into `skipped` with why."""
 
-    for run, art, commit in store.index.sql(PASSING, (spec_path(spec), point)):
+    for run, art, commit in store.index.sql(PASSING, (*spec_paths(spec), point)):
         found, why = _judge(store, run, art, commit, arms, [point])
         if why is None:
             return found[0]
