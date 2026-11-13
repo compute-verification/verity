@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.protocols.pouw.verifier.protocol import tagged
+from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
 from verity_vllm.protocols.pouw.h1 import records as ZR
 

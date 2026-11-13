@@ -1,6 +1,6 @@
-"""Pearl+'s live draw end to end on one CPU machine, against infra's own gate code (`verity/composite/device/live_challenger/auditor.py`)
+"""Pearl+'s live sample end to end on one CPU machine, against infra's own gate code (`verity/protocols/compose/device/live_challenger/auditor.py`)
 on a scratch auditor host: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
-are the Lean verifier of record's (``sampled-proofs-verifier``, built first).
+are the Lean verifier's (``sampled-proofs-verifier``, built first).
 
     python benchmarks/one_stage/pearlplus_local_e2e.py run --out OUT [--lean build|EXE]
 
@@ -14,7 +14,7 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
    (`pouw_h1_window.reserve_salt` and ``open_session``, as `bench_arm.live_coins`' install does), its salt coin salting
    a toy pass (the pouw suite's `proved_pass`, k = 128 and 16 x 16 tiles, in place of a GPU serve), then closed.
 3. ``served_verdicts.py pearlplus-period close``, once that session has ended.
-4. ``served_passes.py verify --tie W --test-instance`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's draw a draw
+4. ``served_passes.py verify --tie W --test-instance`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's sample a sample
    session reserved withheld after the period closed and opened on the run's commitment (`bench_arm.LiveDraw`), recorded
    in coin.json. The toy isn't the served instance (k_min 1,024 at 64 x 64 tiles), so its passes are read as a
    test instance's, crediting nothing.
@@ -28,7 +28,7 @@ Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written
 registration and records audit (two files tied to W), and, unless ``--lean`` names a ``pouw-pearlplus``, the Lean
 ``PouwCheck.PearlPlus`` verdict (``pearlplus-lean.json``, copied from Pearl+'s answer); with it, `served_pearlplus.sh`'s
 Lean step writes that file (``served_passes.py lean``, both verdicts in OUT/e2e.json's ``lean``). Then, as a control, a
-second draw on the same commitment: the gate refuses its open (one session a root, ever), so no second coin exists, and
+second sample on the same commitment: the gate refuses its open (one session a root, ever), so no second coin exists, and
 the piece written after it composes the same row."""
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ WAIT_S = 300
 
 def _auditor():
     import importlib.util
-    spec = importlib.util.spec_from_file_location("e2e_auditor", TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("e2e_auditor", TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module
@@ -188,7 +188,7 @@ def run(out: Path, lean: str | None = None) -> int:
 
 
 def _run(out: Path, root: Path, lean: str | None = None) -> int:
-    from verity.protocols.pouw.verifier import salt as PS
+    from verity.protocols.accounting.pouw.verifier import salt as PS
     from verity_vllm.pipeline.commit_coins import ChallengerGate
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
@@ -196,7 +196,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     import served_verdicts as S
     import test_pearl_c_vllm as T
 
-    from verity.protocols.spot.verifier.one_stage import verifier as V
+    from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
 
     out.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="pp-e2e-"))
@@ -218,7 +218,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     gate_cmd = shlex.join([sys.executable, str(Path(__file__).resolve()), "gate", "--root", str(root)])
     piece, log = out / "pieces" / "pouw", []
     piece.mkdir(parents=True)
-    report: dict = {"gate": "verity/composite/device/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
+    report: dict = {"gate": "verity/protocols/compose/device/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
                     "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
                                   "sampled_proofs": "registration.json chained after W, a records-audit summary tied to W "
@@ -253,7 +253,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
                                   "--gate", gate_cmd]).returncode:
         return 1
 
-    # 4. Pearl+'s verdict, its draw a draw session's coin on the run's commitment
+    # 4. Pearl+'s verdict, its sample a sample session's coin on the run's commitment
     served = scratch / "served"
     served.mkdir()
     (served / "served.json").write_text(json.dumps({"run": T.RUN, "passes": [
@@ -298,7 +298,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     else:
         exe = lean
         if lean == "build":
-            pkg = TREE / "verity" / "protocols" / "pouw" / "verifier" / "lean" / "pearlplus"
+            pkg = TREE / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "pearlplus"
             b = subprocess.run(["lake", "build", "pouw-pearlplus"], cwd=pkg, capture_output=True, text=True)
             log.append({"step": "lean build", "rc": b.returncode, "stdout": b.stdout[-3000:], "stderr": b.stderr[-3000:]})
             exe = str(pkg / ".lake" / "build" / "bin" / "pouw-pearlplus") if b.returncode == 0 else "none"
@@ -326,12 +326,12 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     report["row"] = row()
     print(f"[row] {json.dumps(report['row'])[:1500]}", flush=True)
 
-    # control: a second draw session opened on the same commitment leaves a piece the compose refuses
+    # control: a second sample session opened on the same commitment leaves a piece the compose refuses
     import importlib.util
     spec = importlib.util.spec_from_file_location("e2e_bench_arm", TREE / "benchmarks" / "pouw" / "pearl_c_vllm" / "bench_arm.py")
     BA = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(BA)
-    from verity.protocols.spot.device.challenger import CoinError
+    from verity.protocols.proofs.spot.device.challenger import CoinError
     marks: list = []
     try:
         BA.LiveDraw(gate_cmd, PEER, LANE)(bytes.fromhex(record["commitment"]), marks.append)

@@ -1,5 +1,5 @@
 """`test_coverage_workloads`' generated B0 workloads (`verity_vllm/engine/profiles/workload_cov_b0_*.json`, generated on a pod and
-not tracked) against the draws they were made from. Skipped where they are absent.
+not tracked) against the samples they were made from. Skipped where they are absent.
 """
 from __future__ import annotations
 
