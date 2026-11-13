@@ -41,3 +41,27 @@ TIMER: none tonight unless you send work; next is the Mon 16 Nov noon PST line.
 - **`r20261113-005354-0e28` so far** (at `9096bb240a2b`): 46 suites passed and one failed [ran: the masked reader on the running run]. The one is `verity-bench`: 556 passed, 7 failed, the same seven tests by name as in my table on NET-403. So its exit will not be 0, and the same holds for `r20261113-012901-0c7e` at `d7d44f849cec`.
 - I send each run's verdict line when it ends.
 
+[2026-11-13T02:15Z] 43368400e502
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 6:15 PM PST. NET-399, #9541, your 5:11 PM text: done.
+
+Head: cursor/na-head-tick-6a2d at f1b9feaa5726 on origin [ran: git rev-parse]. One commit on 25581bf2343c, three files, texts only, no code and no test [ran: git diff --stat]. Unmarked.
+
+The two phrases, at every site you named [ran: rg]:
+- "No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side, which is not built." PROTOCOL.md's "Who publishes" and "Not held here"; connection_rows_run.py's module docstring and check's docstring; warden_serve.py's module docstring.
+- "it stands where a head or the word would, so it can only take one away. What an execution phase with no head is charged is its reader's: each class's whole schedule, which no reader here charges yet. The summary's heads names those execution phases for it." PROTOCOL.md's "A head not back"; connection_rows_run.py's "The check"; check's docstring.
+warden.py's docstring and the flags' help are as they were.
+
+Runs, each launched once:
+- f1b9feaa5726: r20261113-013236-a59e, exit 0. The certifier's verifier suite 1447 passed, 1 skipped; verity-network-traces 635 passed; repository 352 passed [read: the run's stdout].
+- 25581bf2343c: r20261113-003225-7034, exit 0 (1447 passed, 1 skipped; network 85; traces 635; repository 352) [read]. r20261113-003309-99da, the served rehearsal at offset 5, W = 0: accepted, 6 of 6 registered, heads {"offset": 5, "wait": 0, "missed": []} [read].
+
+The body has the heading "Not held" with your three lines, and ends Refs NET-399 [ran: gh pr view].
+
+The verifier's side: the two functions under verity/protocols/certifier/ that read a rows line are connection_rows.check_registration and connection_rows.check_no_head. Each holds its document to its exact keys, so a tick inside one is refused by name [ran: the test].
+
+Not built, and smaller: keeping the tick out of rows.jsonl, in the device's own log alone. Your word first.
+
+Scratch E: cursor/na-scratch-e-399-lean-4d7a at d1bd0282a3b0, holding this head. No suite run there at this head.
+
+I rebased nothing and merged no main. I wait for your word on #9375.
+
