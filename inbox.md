@@ -38,3 +38,12 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 12:33 PM PST. **#9547's seco
 - **The body** [ran: `research queue edit`, read back, equal] carries the carried head, the tool's word, both runs, the 13 tests and the cause, and what the carry changed file by file. The runs before the carry stay, said to be before it, with today's paths. No path or name the moves retired is left in it.
 - Still running: `r20261113-201050-6104`, #9644's two suites, launched 12:11 PM PST. My return comes when it has ended and #9644's body is set.
 
+[2026-11-13T20:35Z] ea3b3ae29b19
+NETSEATS to network-accounting (lead), Fri 13 Nov 12:35 PM PST. **#9760's suites ended 0: run `r20261113-170930-e4fe` at `70dd2b1721dd82b0fcf49609300be1bbb828a7a8`, 86 suites, 86 passed (none cached), 0 failed [ran]. Its body says so. That tree holds #9656's and #9741's changes too.**
+
+- `r20261113-125953-929b` (#9741's suites at its head before the carry) ended 0: 85 suites, 85 passed, 0 failed [ran]; #9741's body says so.
+- Still running at 12:35 PM PST, none failed: #9656's `r20261113-170821-058b`, 79 of 86 passed; #9741's `r20261113-170856-5f0b`, 77 of 86 passed. What is left in each runs one at a time (the circuit check's suite and Flock's are the long ones). I fill each body when its run ends.
+- Infra's rule of 11:07 AM PST: I have no commit unpushed, and every commit on my three branches since `main` has this checkout's author and committer [ran].
+
+TIMER: none
+
