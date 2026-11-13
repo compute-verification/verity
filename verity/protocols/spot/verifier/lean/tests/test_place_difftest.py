@@ -1,15 +1,14 @@
 """A sample's place in its window's session, its family and its run (`Spot.Place`: `place`, `family`, `run`) held to
-their Python: the ``place`` piece of the difftest's executable answers a window's place, its family and its run, or
-refuses a window that names no place, and the reference below computes the same from the window's four items as the
-two-stage driver's one definition of a place does (its ``of``, copied below rather than imported: nothing outside
-``benchmarks/`` imports its code). `PLACES` are that definition's rows, word for word: 11 windows with a place, the
-three families of a class of prompt 4 and outputs 4 among them (its spans', a stop class's spans' and a stop class's
-stop blocks'), and 17 with none (a size that is no natural number below 2^32, a ``stopped`` that is neither true nor
-false, a ``population`` that is not "stop", and the stop blocks of a class that is no stop class). One row, a size
-written 4.0, is outside the harness's canonical JSON, which holds integers only: the reference refuses it here, and
-the Lean refuses it as its reader reads that text, by a `#guard` of `Spot.Place`. Generated windows put their sizes
-on both sides of 2^32 and each other item absent, of its own kind or arbitrary JSON, and must reach each family's
-kind and each refusal.
+their Python, `window_place`, the one definition of a place: the ``place`` piece of the difftest's executable answers
+a window's place, its family and its run, or refuses a window that names no place, and the reference below is
+`window_place.of`, `family` and `run` on the same window. `PLACES` are that definition's rows, word for word: 11
+windows with a place, the three families of a class of prompt 4 and outputs 4 among them (its spans', a stop class's
+spans' and a stop class's stop blocks'), and 22 with none (a size that is no natural number below 2^32, a ``stopped``
+that is neither true nor false, a ``population`` that is not "stop", the stop blocks of a class that is no stop class,
+a window of no item and a value that is no object). One row, a size written 4.0, is outside the harness's canonical
+JSON, which holds integers only: the reference refuses it here, and the Lean refuses it as its reader reads that text,
+by a `#guard` of `Spot.Place`. Generated windows put their sizes on both sides of 2^32 and each other item absent, of
+its own kind or arbitrary JSON, and must reach each family's kind and each refusal.
 """
 
 from __future__ import annotations
@@ -22,55 +21,44 @@ from hypothesis import strategies as st
 from test_wires_difftest import PACKAGE, PIECES
 
 import verity_difftest as D
+from verity.protocols.spot.verifier import window_place as WP
 
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-#: `Spot.Place.SIZES`: a class's two sizes are each below this.
-SIZES = 1 << 32
-#: `Spot.Place.FAMILY`.
-FAMILY = "draw"
+
+def kind_of(w) -> str:
+    """The kind of `window_place`'s answer on `w`: the kind of family of a window that names a place (its ``spans``,
+    a ``stopped`` class's spans or a stop class's stop ``blocks``, the place's last two bits), or which of its four
+    refusals refuses one that names none, by the refusal's own words."""
+    try:
+        at = WP.of(w)
+    except ValueError as e:
+        why = str(e)
+        return next(k for k, words in REFUSALS.items() if words in why)
+    return {0: "spans", 2: "stopped", 3: "blocks"}[at % 4]
 
 
-def of(window, seen: dict | None = None) -> int:
-    """The place of the sample a record registers, from the record's window (the driver's ``of``, with `seen` counting
-    each kind of answer): ValueError for a size that is no natural number below 2^32, for a ``stopped`` the window
-    names that is neither true nor false, for a ``population`` it names that is not "stop", and for the stop blocks of
-    a class that is no stop class."""
-    def kind(k: str) -> None:
-        if seen is not None:
-            seen[k] = seen.get(k, 0) + 1
-
-    prompt, outputs = window.get("prompt"), window.get("outputs")
-    if not all(type(v) is int and 0 <= v < SIZES for v in (prompt, outputs)):
-        kind("size")
-        raise ValueError("a place names two sizes, natural numbers below 2^32")
-    stopped, blocks = window.get("stopped", False), "population" in window
-    if type(stopped) is not bool or (blocks and window["population"] != "stop"):
-        kind("word")
-        raise ValueError("where its window names them, stopped is true or false and population is \"stop\"")
-    if blocks and not stopped:
-        kind("no stop class")
-        raise ValueError("the class is no stop class: it has no stop blocks")
-    kind("blocks" if blocks else "stopped" if stopped else "spans")
-    return ((prompt * SIZES + outputs) * 2 + int(stopped)) * 2 + int(blocks)
+#: `window_place.of`'s four refusals, each by words only it says
+REFUSALS = {"no object": "is an object, not", "size": "names two sizes", "word": "``stopped`` is true or false",
+            "no stop class": "is no stop class"}
 
 
 def reference(w, seen: dict | None = None):
-    """`Spot.Place.piece`: the window's place, its family and its run, refused where it names no place; a value that is
-    no object names none."""
-    if not isinstance(w, dict):
-        raise D.Reject("the window names no place in its session")
+    """`Spot.Place.piece`: the window's place, its family and its run (`window_place`), refused where it names no
+    place; `seen` counts each kind of answer (`kind_of`)."""
+    if seen is not None:
+        k = kind_of(w)
+        seen[k] = seen.get(k, 0) + 1
     try:
-        n = of(w, seen)
+        n = WP.of(w)
     except ValueError as e:
-        raise D.Reject(f"the window names no place in its session: {e}") from None
-    run = w.get("run")
-    return {"place": n, "family": f"{FAMILY}/{n}", "run": run if isinstance(run, str) else None}
+        raise D.Reject(str(e)) from None
+    return {"place": n, "family": WP.family(w), "run": WP.run(w)}
 
 
 # --- the definition's rows ------------------------------------------------------------------------------------------
 
-#: the driver's rows of its one definition, a record's window and its place, None for a window that has none
+#: `window_place.of`'s rows, a record's window and its place, None for a window that has none
 PLACES = [
     ({"prompt": 4, "outputs": 4}, 68719476752),
     ({"prompt": 4, "outputs": 4, "stopped": False}, 68719476752),
@@ -100,6 +88,11 @@ PLACES = [
     ({"prompt": 4, "outputs": 4, "stopped": True, "population": "spans"}, None),
     ({"prompt": 4, "outputs": 4, "stopped": True, "population": None}, None),
     ({"prompt": 4, "outputs": 4, "stopped": True, "population": 1}, None),
+    ({"prompt": 4, "outputs": 4, "stopped": True, "population": ["stop"]}, None),
+    ({}, None),
+    (None, None),
+    ([4, 4], None),
+    ("window", None),
 ]
 
 #: what else a record's window holds, which moves no place
@@ -119,19 +112,25 @@ def _id(x) -> str:
     return D.canonical(x) if _canonical(x) else repr(x)
 
 
+def _beside(window) -> tuple:
+    """A row's window as given and, where it is an object, beside a window's other items."""
+    return (window, {**window, **MORE}) if isinstance(window, dict) else (window,)
+
+
 #: the rows the harness carries, each as given and beside a window's other items
-CARRIED = [(w, at) for window, at in PLACES if _canonical(window) for w in (window, {**window, **MORE})]
+CARRIED = [(w, at) for window, at in PLACES if _canonical(window) for w in _beside(window)]
 
 
 def test_the_rows_are_the_definitions():
-    assert len(PLACES) == 28 and sum(at is not None for _w, at in PLACES) == 11
+    assert WP.SIZES == 2**32 and WP.FAMILY == "draw"
+    assert len(PLACES) == 33 and sum(at is not None for _w, at in PLACES) == 11
     assert [w for w, _at in PLACES if not _canonical(w)] == [{"prompt": 4.0, "outputs": 4}]
     assert [at for _w, at in PLACES[:4]] == [68719476752, 68719476752, 68719476754, 68719476755]
 
 
 @pytest.mark.parametrize("window, at", PLACES, ids=_id)
 def test_the_reference_on_the_rows(window, at):
-    for w in (window, {**window, **MORE}):
+    for w in _beside(window):
         if at is None:
             with pytest.raises(D.Reject):
                 reference(w)
@@ -139,19 +138,10 @@ def test_the_reference_on_the_rows(window, at):
             assert reference(w) == {"place": at, "family": f"draw/{at}", "run": w.get("run")}
 
 
-def test_two_classes_have_two_places_and_a_stop_class_two():
-    """Every window of a few sizes, the bounds among them, that names a place names one no other names."""
-    sizes = [0, 1, 4, SIZES - 1]
-    windows = [(p, o, s, b) for p in sizes for o in sizes for s in (False, True) for b in (False, True) if s or not b]
-    places = {of({"prompt": p, "outputs": o, "stopped": s, **({"population": "stop"} if b else {})})
-              for p, o, s, b in windows}
-    assert len(places) == len(windows) == 48
-
-
 RUNS = [({"prompt": 4, "outputs": 4, "run": "ab"}, "ab"), ({"prompt": 4, "outputs": 4, "run": ""}, ""),
         ({"prompt": 4, "outputs": 4, "run": 7}, None), ({"prompt": 4, "outputs": 4, "run": None}, None),
         ({"prompt": 4, "outputs": 4}, None)]
-NO_WINDOW = [None, [4, 4], "window", 4, True]
+NO_WINDOW = [4, True, [], [{"prompt": 4, "outputs": 4}]]
 
 
 # --- the Lean -------------------------------------------------------------------------------------------------------
@@ -160,8 +150,8 @@ JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text("ab
                     lambda inner: st.lists(inner, max_size=3) | st.dictionaries(st.text("abk", max_size=2), inner,
                                                                                max_size=3),
                     max_leaves=6)
-TOP = SIZES - 1
-SIZE = st.sampled_from([0, 1, 2, 4, TOP - 1, TOP, TOP, SIZES, SIZES + 1, -1]) | st.integers(0, 6)
+TOP = WP.SIZES - 1
+SIZE = st.sampled_from([0, 1, 2, 4, TOP - 1, TOP, TOP, WP.SIZES, WP.SIZES + 1, -1]) | st.integers(0, 6)
 #: words a window's `stopped` and `population` may hold that give it no place
 WORDS = (("stopped", ["true", 1, 0, None, [True]]), ("population", ["spans", "Stop", "", None, True, 1, ["stop"]]))
 
@@ -202,8 +192,8 @@ def windows(pick):
 
 INPUTS = st.one_of(windows(), windows(), windows(), JSON)
 PLACE = D.Port(PIECES, "place", reference, INPUTS, package=PACKAGE, of_record="lean")
-#: the kinds of window the generated ones must reach: the three kinds of family, and each refusal
-KINDS = ("spans", "stopped", "blocks", "size", "word", "no stop class")
+#: the kinds of window the generated ones must reach (`kind_of`): the three kinds of family, and each refusal
+KINDS = ("spans", "stopped", "blocks", *REFUSALS)
 
 pieces = D.server_fixture(PLACE)
 

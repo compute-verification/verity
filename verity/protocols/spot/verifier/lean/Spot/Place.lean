@@ -86,8 +86,8 @@ def run (w : Json) : Option String :=
 /-- The place of the window the JSON text `s` reads as, as `Json.parse` reads it. -/
 private def placeOf (s : String) : Option (Option Nat) := (Json.parse s).toOption.map place
 
-/-! The rows the Python definition's place is held to, each a record's window as text: the windows that name a
-place. -/
+/-! The rows the Python definition's place is held to (`window_place.of`'s table), each a record's window as text: the
+windows that name a place. -/
 #guard placeOf "{\"prompt\": 4, \"outputs\": 4}" == some (some 68719476752)
 #guard placeOf "{\"prompt\": 4, \"outputs\": 4, \"stopped\": false}" == some (some 68719476752)
 #guard placeOf "{\"prompt\": 4, \"outputs\": 4, \"stopped\": true}" == some (some 68719476754)
@@ -103,7 +103,7 @@ place. -/
   some (some (2 ^ 66 - 1))
 /-! The windows that name none: a size of `2^32`, below zero, a string, a number that is not whole, a boolean, `null`
 or absent; a `stopped` that is neither `true` nor `false`; the stop blocks of a class that is no stop class; a
-`population` that is not `stop`. -/
+`population` that is not `stop`; a window of no item; and a value that is no object. -/
 #guard placeOf "{\"prompt\": 4294967296, \"outputs\": 4}" == some none
 #guard placeOf "{\"prompt\": 4, \"outputs\": 4294967296}" == some none
 #guard placeOf "{\"prompt\": 4, \"outputs\": -1}" == some none
@@ -121,11 +121,14 @@ or absent; a `stopped` that is neither `true` nor `false`; the stop blocks of a 
 #guard placeOf "{\"prompt\": 4, \"outputs\": 4, \"stopped\": true, \"population\": \"spans\"}" == some none
 #guard placeOf "{\"prompt\": 4, \"outputs\": 4, \"stopped\": true, \"population\": null}" == some none
 #guard placeOf "{\"prompt\": 4, \"outputs\": 4, \"stopped\": true, \"population\": 1}" == some none
-/-! No other item of a window moves its place, and a value that is no object names none. -/
+#guard placeOf "{\"prompt\": 4, \"outputs\": 4, \"stopped\": true, \"population\": [\"stop\"]}" == some none
+#guard placeOf "{}" == some none
+#guard placeOf "null" == some none
+#guard placeOf "[4, 4]" == some none
+#guard placeOf "\"window\"" == some none
+/-! No other item of a window moves its place. -/
 #guard placeOf "{\"prompt\": 4, \"outputs\": 4, \"run\": \"ab\", \"row\": 3, \"verdicts\": true}" ==
   some (some 68719476752)
-#guard placeOf "[4, 4]" == some none
-#guard place Json.null == none
 /-! A number written with an exponent is the whole number it denotes where it denotes one, as `Json.parse` reads it:
 `4e0` is 4. A record's canonical text writes no number so. -/
 #guard placeOf "{\"prompt\": 4e0, \"outputs\": 4}" == some (some 68719476752)
