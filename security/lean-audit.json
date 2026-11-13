@@ -333,7 +333,7 @@
   "NetTiming.PeriodChannelReg": {
    "owner": "@network-accounting",
    "digest": "23f1f033133e643e62d0c88cf1bf65dacee93d89b3ab06989c88caa72d91eea4",
-   "why": "The monitoring period's channel over registered parameters: each secret's schedule fits the record format and a registered parameter allows it, and its cells decode back to it, as PeriodChannel states it over the schedules."
+   "why": "The monitoring period's channel over registered parameters: each secret's schedule fits the record format and a registered parameter allows it, and its cells decode back to it, as PeriodChannel states it over the schedules. The honest lemma (`NetTiming.Witness.PeriodLeakChecked_honest`) concludes it at a period of no windows only, at the record format of no connection, and exhibits no period of one or more windows at which it holds together with `Compiled.KS`; the witness at one or more windows that an accepting run passes is NET-313's, due 30 Nov."
   },
   "NetTiming.PeriodEscapes": {
    "owner": "@proofs",
@@ -368,7 +368,7 @@
   "NetTiming.RecordFormat.ReadsBy": {
    "owner": "@network-accounting",
    "digest": "cb86a3cd20c63474b029430dd96a62bf8016a2174dc2ad1cd6a47faddf91d883",
-   "why": "A property of the record format and the registered parameters: the client's cells read back from the record under a parameter alone, on every schedule the parameter allows; the format's own read-back is this at each schedule as its own parameter."
+   "why": "A property of the record format and the registered parameters: the client's cells read back from the record under a parameter alone, on every schedule the parameter allows; the format's own read-back is this at each schedule as its own parameter. The honest lemma (`NetTiming.Witness.PeriodLeakChecked_honest`) concludes it at a period of no windows only, at the record format of no connection, and exhibits no period of one or more windows at which it holds together with `Compiled.KS`; the witness at one or more windows that an accepting run passes is NET-313's, due 30 Nov."
   },
   "NetTiming.ResetsIn": {
    "owner": "@proofs",
@@ -378,7 +378,7 @@
   "NetTiming.WindowsPlaced": {
    "owner": "@network-accounting",
    "digest": "49442b8de41bcaded25fc0d6c4dbd9c18fa33a57bf3a23d86b05e7e11cbcc9f8",
-   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as PeriodLeakAccepted takes them inline."
+   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as PeriodLeakAccepted takes them inline. The honest lemma (`NetTiming.Witness.PeriodLeakChecked_honest`) concludes it at a period of no windows only, where it asks nothing, and exhibits no period of one or more windows at which it holds together with `Compiled.KS`; the witness at one or more windows that an accepting run passes is NET-313's, due 30 Nov."
   },
   "Population.Dataflow.Checked": {
    "owner": "@proofs",
