@@ -38,7 +38,8 @@ fixed at the rounds a run reaches and the run reaching every round on agreeing c
 
 `Good` is one predicate across the pieces. Each piece that takes it as a hypothesis of its plays holds at any stronger
 one (`devAgrees_mono`, `coinsAgree_mono`, `messagesFixedAgreed_mono`), so the pieces may be proved at a weaker `Good`
-than the cut's.
+than the cut's. A fact every play of the game has, which a piece needs of each exchange it speaks of, joins the cut's
+`Good` at no cost (`cutBound_and`).
 
 Where `CutBound` is instantiated at the deployed composite it meets an open hole of the device's history: a strategy
 whose evidence carries a genuine challenger signature from an earlier period makes the forger's term `⊤`, because the
@@ -133,6 +134,17 @@ theorem messagesFixedAgreed_mono {V : Vocab d α} {A : Live₂} {x : Msg} {θ : 
   refine le_trans (ENNReal.ofReal_le_ofReal (Claims.Pr_mono fun s hs => ?_)) h
   obtain ⟨hA, hG', hrest⟩ := hs
   exact ⟨hA, hG _ hG', hrest⟩
+
+/-- **The cut with what every play has**: a predicate `Good'` that holds of every play of the game after `θ`, `F` and
+`c` joins the cut's `Good` at the same `terms`. -/
+theorem cutBound_and {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
+    {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {Good Good' : Verity.Exchange → Prop} {terms : ℝ≥0∞}
+    (hR : ∀ o, Verity.Game.PlayReaches (V.game θ F c) σ o → Good' o) (h : CutBound V k θ F c σ Good terms) :
+    CutBound V k θ F c σ (fun o => Good o ∧ Good' o) terms := by
+  unfold CutBound at h ⊢
+  refine le_trans (Verity.Game.prob_mono_reaches (p := fun o => V.Verdict k .sampled o ∧ ¬ (Good o ∧ Good' o))
+    (q := fun o => V.Verdict k .sampled o ∧ ¬ Good o) (V.game θ F c) σ fun o hr ho => ?_) h
+  exact ⟨ho.1, fun hg => ho.2 ⟨hg, hR o hr⟩⟩
 
 /-- **The projection's bound from the coins of accepted plays**: the wiring, the coin map's law at an agreement `Ag`,
 the messages fixed where the coins agree, the cut, the accept and the statement read give the projection's bound at
