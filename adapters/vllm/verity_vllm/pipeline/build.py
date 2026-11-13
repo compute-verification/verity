@@ -66,13 +66,13 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/common.py", "verity_vllm/program/frontend/value_types.py",
                          "verity_vllm/program/frontend/targets.py",
                          # the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
-                         "verity_vllm/program/frontend/export_ops.py", "adapters/vllm/verity_vllm/definitions/registry/b1_tp2.py",
+                         "verity_vllm/program/frontend/export_ops.py", "verity_vllm/definitions/registry/b1_tp2.py",
                          # the stochastic token-select rule (the sampler Definitions are registry digests in the descriptor); the fused-MoE rules
                          "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
                          "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
                          "verity_vllm/program/frontend/rules/vllm_dsa.py", "verity_vllm/program/frontend/rules/vllm_dsa_dense.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
-                         "adapters/vllm/verity_vllm/definitions/boolean.py",
+                         "verity_vllm/definitions/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py",
                          # the derive's report and its relabel per TP rank (`--emit-ranks`), and the tp_links.json writer
@@ -81,8 +81,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
 
 
 def _source_root(rel: str) -> str:
-    """The directory a `_CONSTRUCTION_SOURCES` path is relative to: the one holding its top-level package (`verity_vllm`, or
-    `verity` for the Definitions), which in a checkout are different directories."""
+    """The directory a `_CONSTRUCTION_SOURCES` path is relative to: the one holding its top-level package (`verity_vllm`)."""
     from importlib import resources
     from pathlib import Path
     return str(Path(str(resources.files(rel.split("/", 1)[0]))).resolve().parent)

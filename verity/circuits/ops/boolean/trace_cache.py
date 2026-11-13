@@ -6,11 +6,12 @@ its own settings name); a verifier never does, and nothing in `verity.core` name
 it (the Definition's name, version and bindings), looks the circuit up in the directory `use` named before it runs the builder,
 and writes the circuit it traced there. An entry is named by the SHA-512 of that key with the parameter and return types, ``cse``,
 Python's and numpy's versions, and a digest of the code that could change the gates (`code_digest`): every Python and JSON file
-of `verity` but tests, every file of `verity.circuits` and `verity_vllm.definitions` but tests, Markdown and TOML (so their tables), and the builder's
+of `verity` but tests, every file of `verity.circuits` but tests, Markdown and TOML (so their tables), and the builder's
 source file when it is elsewhere. So an edit anywhere in `verity` makes every entry a miss. What the digest can't see (a builder
-outside `verity` that calls a helper from another module there, a monkeypatched builder) can make an entry stale; a stale or
-tampered entry gives other gates, and so a Program digest unequal to one built without the cache. An entry whose bytes don't
-match the SHA-512 its header records, or whose header doesn't hold its key, is traced again and rewritten.
+outside `verity`, a served Definition's among them, that calls a helper from another module there, a monkeypatched builder) can
+make an entry stale; a stale or tampered entry gives other gates, and so a Program digest unequal to one built without the
+cache. An entry whose bytes don't match the SHA-512 its header records, or whose header doesn't hold its key, is traced again
+and rewritten.
 
 An entry is ``MAGIC``, a line of JSON (the key, the circuit's sizes and counts, its arrays' type code and byte order, the payload's
 SHA-512), then the payload: each gate's kind as one byte (`trace._KINDS`), each gate's first and second operand wires (a NOT's
@@ -48,7 +49,7 @@ def _covered(path: Path) -> bool:
         return False
     if any(d in _SKIP or d.startswith(".") for d in path.relative_to(_VERITY).parts[:-1]):
         return False
-    return path.suffix in (".py", ".json") or (path.suffix not in (".md", ".toml") and (path.is_relative_to(_CIRCUITS) or path.is_relative_to(_VERITY / "definitions")))
+    return path.suffix in (".py", ".json") or (path.suffix not in (".md", ".toml") and path.is_relative_to(_CIRCUITS))
 
 
 @functools.cache
