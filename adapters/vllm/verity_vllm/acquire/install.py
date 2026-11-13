@@ -18,7 +18,8 @@ value reads, no synchronisation): the GPU gate's non-interference observer.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping
+from typing import Any
+from collections.abc import Callable, Mapping
 
 from verity_vllm.engine import hooks as engine_hooks
 from verity_vllm.observe.runtime_tree import RUNNER_PATH
