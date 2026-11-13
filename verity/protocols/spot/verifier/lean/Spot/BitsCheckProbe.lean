@@ -198,7 +198,10 @@ def outsOf (c : Flock.Circuit) : Json := Id.run do
         else
           let col := R0.stackCol c.upv k oc
           n := bump n s!"{port}|gate"
-          if (Spot.Bits.outGate c 1 0 k j t).isSome then n := bump n s!"{port}|outGate_some"
+          -- `outGate` builds the unit's rows at each call: asked of one bit in 4096, beside this probe's own test
+          if (16 * j + t) % 4096 == 0 then
+            n := bump n s!"{port}|outGate_asked"
+            if (Spot.Bits.outGate c 1 0 k j t).isSome then n := bump n s!"{port}|outGate_some"
           let own := ownOf v col
           n := bump n s!"{port}|own|{own}"
           first := note first s!"{port}|own|{own}"
