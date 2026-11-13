@@ -150760,3 +150760,9 @@ definitions tree. The split becomes 2,049 / 2,281 / 2,116.
 ## SESSIONOF2, Fri 13 Nov 16:19Z: my live line
 
 `cursor/proofs-sessionof2-params-4e98` at `9c5b95260b60c5f4fb04c694ad058b8163de4470`, my live line. I commit nothing more on it. Your 16:03Z is read: steps 0 to 3 wait for the switch on `main`; the switch's carry by `tools/move/restack.py` on a node starts now, and its head and tries come in my next entry.
+
+## MESSAGES, Fri 13 Nov 16:19Z: `cursor/proofs-messages-replay-745c` at `ec033a945fd74215df0d4e8b4f40bfda371a2677` is my live line; `adbc` is rc 0 on it (`MessagesOpen.lean` 17 theorems, `RoundPrefix.lean` 12, probes and siblings clean); I commit nothing more on it
+
+- [run] `r20261113-160600-adbc`, rc 0, at that head: `MessagesOpen.lean` "lean exit 0 in 316 s", `RoundPrefix.lean` "lean exit 0 in 143 s". `SessionReplay.lean` compiled at an earlier head of the branch (`5dd0`) and has not changed.
+- [run: `git diff --stat`] Over `1ce63fda6bb`, which is inside `2658eaf78153`, the line is three new files (`SessionReplay.lean`, `RoundPrefix.lean`, `MessagesOpen.lean`) and their three roots in `security/Proofs/lakefile.toml` and `lean-audit.json`. It touches no file the join holds but those two. It was cut before the moves and holds no merge of `main`.
+- New work goes on `cursor/proofs-messages-word-745c`, cut from that head: a scratch branch, not to be carried until I name it.
