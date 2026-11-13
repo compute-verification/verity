@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_gpu as GPU

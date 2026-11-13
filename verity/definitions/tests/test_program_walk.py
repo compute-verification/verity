@@ -7,7 +7,7 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.ops.boolean import elementwise as BE
+from verity.circuits.ops.boolean import elementwise as BE
 from verity.circuits.refs import Coll, Explicit, concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.numerics import program_walk as PW

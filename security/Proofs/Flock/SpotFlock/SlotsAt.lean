@@ -25,8 +25,8 @@ an accepted run, at the port the address names in that unit's session (`Address.
   those round 2 reads the value under (`readRoots`), and the address's slot names the entry round 2 reads the value off
   (`readKeyAt`), at the read's schema, its leaf the session header's position for the row; at a one-table session's
   other ports (`ReadsInterior`), the gate is one its replay block doesn't commit, and the slot names the template's port
-  of the interior record, sized, at the published tree's schema, its units the tree's leaves and its leaf the drawn
-  unit's row.
+  of the interior record, sized, at the published tree's schema, its units the tree's leaves and its leaf the sampled
+  proof block's row.
 
 A slot reads its row off the roots, so one slot fits every replay sample: under a replay block's roots, a slot at unit
 `p` with stride `n` reads unit `i·n + p` of a tree of `q·n` units, at the `i`-th of `q` sampled replay blocks
@@ -46,7 +46,7 @@ it can't hold:
   through the session circuit's copy rows, and the place must be one for every unit that needs the gate;
 * the row (`Counted` and the slots' leaves): round 2 doesn't hold a session's population to the layout a slot reads
   off the roots, and bounds a registered read's row only to its unit's range of rows; and the unit's instance
-  (`rankAt`) is a drawn unit's, which an always-checked unit needn't have;
+  (`rankAt`) is a sampled proof block's, which an always-checked unit needn't have;
 * the entry (`ReadsRegistered`): round 2 holds a session's registered reads to its template's reference statement's but
   for the run's fields, and which entry it reads a value off (`readKeyAt`) still reads the round-1 record's port names;
 * one tree a gate: a gate one unit writes and another reads is needed by both, and the frame checks both openings at
@@ -142,7 +142,7 @@ def ReadsRegistered (S : Address) (g : ℕ) : Prop :=
 /-- **The address's port reads the interior record**: no registered read is named like the unit's port, the session has
 one table, the gate is one the unit's replay block doesn't commit, and the address's slot names the template's port of
 the interior record, sized; over any population the session's public file loads, the slot has the published tree's
-schema, and under the replay block's roots its units are the tree's leaves and its leaf (`leafAt`) the drawn unit's
+schema, and under the replay block's roots its units are the tree's leaves and its leaf (`leafAt`) the sampled proof block's
 row. -/
 def ReadsInterior (S : Address) (g : ℕ) : Prop :=
   regNamed r.ins r.sts (S.port r.u) = none ∧ r.ins.read.I.count ≤ 1 ∧ S.port r.u < r.sts[0]!.c.ports.size ∧

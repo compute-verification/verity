@@ -5,7 +5,7 @@ bytes are held to the served ones.
 The stand-in is GLM-5.3's registered config (`CONFIG`) cut to its first `LAYERS` layers, `EXPERTS` routed experts and `HEADS`
 attention heads (one rank's of tensor-parallel 8, which decides how an FP8 cache is read), served tensor-parallel 1 on one
 card from vLLM's dummy weights (``load_format="dummy"``), without a tokenizer. ``--weights dummy``
-keeps vLLM's values; ``--weights scaled`` redraws every weight at `STD` after the load (`rescale`), so a token depends on its
+keeps vLLM's values; ``--weights scaled`` resamples every weight at `STD` after the load (`rescale`), so a token depends on its
 whole context and one differing bit of a cached row shows in the tokens.
 
 Each arm of `ARMS` is one cache format, as a launch line names it (``auto`` is the bf16 cache). Each phase is a process of
@@ -148,7 +148,7 @@ def engine(model: Path, cfg: dict[str, Any], eager: bool) -> Any:
 
 
 def rescale(runner: Any) -> dict[str, int]:
-    """Redraw the model's weights from one seeded generator, in the modules' own order: a norm's gain 1, a quantization
+    """Resample the model's weights from one seeded generator, in the modules' own order: a norm's gain 1, a quantization
     scale `FP8_SCALE`, an FP8 weight uniform on [-1, 1], every other float weight normal at `STD`."""
     import torch
 
