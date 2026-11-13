@@ -40,7 +40,7 @@ root = "Spot.Main"
 name = "sampled-proofs-one-stage-zk"
 root = "Spot.ZkMain"
 
-# Sampled proofs' period (`verity/sampled-proofs/period/v1`, `Spot.Period.protocol`): every window of a lane's
+# SPOT's period (`verity/sampled-proofs/period/v1`, `Spot.Period.protocol`): every window of a lane's
 # monitoring period held to one accepting one-stage audit on its proofs.
 [[lean_exe]]
 name = "sampled-proofs-period"
