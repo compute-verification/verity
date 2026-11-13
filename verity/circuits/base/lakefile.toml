@@ -1,7 +1,9 @@
 # Bytes, hashes and parsing as executable Lean, the code every other Lean package of the tree reads: the fields
 # (`Field`), byte encodings and a total reader (`Bytes`), SHA-256, SHA-512 and BLAKE3 (`Hash`), canonical JSON
-# (`Canon`), the total JSON parser (`JsonParse`) and what recursion over its values terminates by (`Sizes`), and a
-# tree's depth and padded width (`Pow2`). Lean core only. The declarations keep the namespace `Flock`.
+# (`Canon`), the total JSON parser (`JsonParse`) and what recursion over its values terminates by (`Sizes`), the one
+# comparison of two JSON values a proof can read (`JsonSame`), and a tree's depth and padded width (`Pow2`). Lean core
+# only. The declarations keep the namespace `Flock`, but the comparison's, which every protocol's check reads as
+# `Core.jsonSame`.
 name = "core_base"
 defaultTargets = ["Base"]
 

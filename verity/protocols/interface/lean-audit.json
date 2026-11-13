@@ -11,11 +11,6 @@
   "Core.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.Example's guards cover Protocol.case, which it runs on each line"
  },
  "layers": {
-  "CoreProtocol.JsonSame": {
-   "imports": ["Lean.Data.Json"],
-   "except": [],
-   "why": "the comparison of two JSON values is spec: a property of a check that compares by `jsonSame` reads it through `jsonSame_eq` and `jsonSame_refl`, so it imports only Lean's JSON"
-  },
   "CoreProtocol.Ratio": {
    "imports": ["Base.Bytes"],
    "except": [],
