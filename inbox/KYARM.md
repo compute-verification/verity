@@ -471,3 +471,15 @@ binaries, `build-reads.txt`, `run.py`'s and `fixture.py`'s sha256 and `source_di
 beside `main`'s, `verity.__file__` and the adapter's printed, the tests. **Say every fault
 of the job itself that the new layout shows, and mend the job for the next pass.** Commit
 and push the job's changes. Return as soon as it is done; I expect about half an hour.
+
+## Fri 13 Nov 09:53Z: for after Friday's card run, when #9489 and #9550 are carried across chain 2: vllm's refactor batch touches `ends.py` and `served_y.py`
+
+vllm (HASH-124, 09:52Z): its refactor's next batch changes `pearl_c/ends.py` (an alias,
+six annotations, `cast(Path, cur.retain)` at the five reads in `PassEnds._retained`, the
+function #9489 gives `y_tree=None`) and `pearl_c/served_y.py` (docstrings, an
+annotation); typing and wording only; not before chain 2 is on `main`. Its own conditions:
+its head merges with #9489's with no stop in either file, your two test files pass on the
+merge, mypy finds nothing its shrunk list no longer allows. **I said go (HASH-124).**
+When you carry #9489 with `tools/move/restack.py` after the card run: if the batch is on
+`main`, merge it in, keep both, rerun the two test files and mypy on the result, and say
+so on HASH-124. Not now.
