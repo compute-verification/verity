@@ -128852,3 +128852,102 @@ Branch `cursor/proofs-cut-9323` at `4d24802945` (pushed, unchanged). Run out: `r
 **Runs.** Ended: `18d0`, rc 1 (above). Out: `r20261113-075556-965f`, `AcceptsTop.lean` with `--siblings` at `b63b045150`, vy-nebius-cpu-10, launched 07:56Z.
 
 **Machine** [run]: the VM built nothing; pen `~/wt/.pen` mine since 07:13:21Z; mailbox read to your 07:28Z.
+
+## ONSITE, Fri 13 Nov 07:59Z: CHAIN 2: proofs' three maps as they run on chain 1's tree, with the carve's hand patch. TWO MAPS DISAGREE ON ONE DESTINATION: the composition package, `compose/verifier/lean/` in ours, `compose/verifier/composition/` in top's worker's
+
+Everything below the first rule is written so that you can post it as it is. [run] is a run on a node, with its id; [my VM] is a command I ran on my machine; [read] names the place.
+
+**The disagreement, for you to rule. I pick nothing.**
+- **Top's worker wrote maps of its own for remote and onsite** [read: `cursor/top-tree-inventory-485d` at `18d8854a006d272c75f522799d8ab96ca9dd3744`; its note `lanes/top/20261113T0715Z-report-tree-inventory`]. That branch deletes `compose_map.toml` and `configurations_map.toml` and adds three: `compose_fix_map.toml`, `compose_fix_remote_map.toml`, `compose_fix_onsite_map.toml`. It read `main`'s copies of our maps. Neither the maps nor the note names #9602.
+- **Two of the three destinations are ours:** remote's list to `verity/protocols/compose/verifier/remote/`, onsite's to `verity/protocols/compose/verifier/onsite/`.
+- **One differs:** the rule that joins protocols (`core_composition`) goes to `verity/protocols/compose/verifier/composition/` in theirs and to `verity/protocols/compose/verifier/lean/` in #9602.
+- **Facts for the ruling:**
+  - Both places pass the tree test. Ours: [run `r20261113-074353-6cce`]. Theirs, as our two maps with that one destination changed, on chain 1's tree: `tests/test_tree.py` rc 0, and `tests/test_tree.py` with `tests/test_lean_packages.py` 41 passed [my VM].
+  - `AGENTS.md`'s Map calls a protocol's Lean verifier "its `lean/`". Today spot, the certifier and PoUB have `verifier/lean/`, PoUW `verifier/lean/check/`, the inference-only check `verifier/nci/lean/`. Flock has `verifier/`, PoUS `verifier/check/`, recursion `verifier/recursive/` [read: the lakefiles' paths].
+  - Theirs is three maps, one package each, because its header says `move_check.py` can't certify two packages with identical `.gitignore` files moving in one commit. Ours moves both lists in one commit, and it certified in each of four runs on four bases [run `r20261113-041056-ac16`, `r20261113-055430-5b8f`, `r20261113-070550-96f0`, `r20261113-074353-6cce`].
+  - Ours has certificates, suites on the moved tree and the hand patch below. I have not run theirs and have not read whether it was staged.
+- **The world on that branch** still goes into the certifier's device. #9674's map is the ruled one.
+
+---
+
+**CHAIN 2, from proofs: three maps, in this order, and one hand commit.**
+
+**1. Where the stager takes them**
+- **One branch holds all three as they run on chain 1's tree:** `cursor/proofs-scratch-chain2-maps-on-chain1-dde5` at `468878c8f37c9654a3145d71e41d93c89ecd8afc`.
+  - It is chain 1's head `41c1cdf99377cd67d0014aaaa457792df3489119`, with #9602's head and #9674's head merged in (no conflict), and one commit of two lines on top.
+  - The two lines: `world_map.toml`'s `[roots]` name `verity_config` at `tools/config/verity_config`. Chain 1's `21fb65816e` gave that root to `compose_map.toml`, `configurations_map.toml` and `sass_gate_map.toml`, and not to the world's map.
+- **The maps' own branches:**
+
+| Order | Map | Pull request, branch, head | What it moves |
+|---|---|---|---|
+| 1 | `tools/move/compose_map.toml` | #9602, `cursor/proofs-compose-lists-map-6c1e`, `c0ebc52445e29770af76e108d33759ec6259295a` | `verity/protocols/remote/verifier/composition/` to `verity/protocols/compose/verifier/lean/` (Lake package `core_composition`) |
+| 2 | `tools/move/configurations_map.toml` | the same branch and head | `verity/protocols/remote/verifier/` to `verity/protocols/compose/verifier/remote/` (`core_remote`); `verity/protocols/onsite/verifier/` to `verity/protocols/compose/verifier/onsite/` (`core_onsite`) |
+| 3 | `tools/move/world_map.toml` | #9674, `cursor/proofs-world-map-interface-4d1c`, `b446d85535be7db03b30eb9dec7cbeec564cb1cb` | `verity/hardware/world/` to `verity/protocols/interface/world/` (`core_world`) |
+
+- Map 2 runs on the commit map 1 makes. Map 3 names no path of the other two and can run anywhere after chain 1.
+- Take `compose_map.toml` and `configurations_map.toml` from #9602, not from `main`. `main`'s copy puts the package at `compose/`'s top, which is the tree test's failure in top's 11:31 PM PST line, and sends the lists to `verity/configurations/`.
+- Both pull requests stay open and unmarked.
+
+**2. The hand commit after the carve**
+- **As a patch file:** `compose_import_order_hand.patch`, at the root of `cursor/proofs-scratch-chain2-hand-patch-dde5` (`fa22eef6a2a2c90edf880e521b2b6b21ba2ab56a`). It changes `tests/import_order.toml` only, 7 lines in and 8 out. `git am` it on the commit map 2 makes. Map 3 leaves the listing alone, so after map 3 works too.
+- **Tried:** `git am` on the commit map 2 makes gives the listing byte for byte as my hand commit has it [my VM]. The node's staged tree is the tree I made the patch on (`231ac49209c9`) [run `r20261113-074353-6cce`].
+- **The same as steps, which do not go stale** when another map of the chain changes the listing first:
+  1. In `order`, the rows `["verity/protocols/remote"]` and `["verity/protocols/onsite"]` become one row `["verity/protocols/compose"]`.
+  2. The `[[place]]` whose path is `verity/protocols/remote` names `verity/protocols/compose` (it keeps `trusted = true`).
+  3. `uv run tools/verity/check/import_order.py`. It moves that place to its sorted position and changes nothing else.
+- **Without it** three tests of `tests/test_boundaries.py` fail on the moved tree: `test_a_file_loads_only_its_own_row_or_an_earlier_one`, `test_a_place_loads_only_the_places_the_listing_names`, `test_the_listing_is_what_its_generator_writes` [run `r20261113-070550-96f0`: `repository` 354 passed, 3 failed].
+- **With it**, on `main` `2e99b1cf48b8`: `repository` 357 passed, `verity-cli` 109, `demos/lifecycle` 66, and the generator's check says "the same" [run `r20261113-072631-d98f`, rc 0].
+- **The whole order on one branch, to read:** `cursor/proofs-scratch-chain2-moved-hand-dde5` at `0ada17e441368d0bfa7b2c1af11aecb109577991`: the three moves on chain 1's tree, made on my VM without the lock step, then the hand commit.
+
+**3. What each certifies**
+- **On chain 1's tree** [run `r20261113-074353-6cce`, cpu-1, base `468878c8f37c`; still running its pins and suites]:
+  - `compose_map.toml`: a pure move, 19 renames and 33 path-only edits.
+  - `configurations_map.toml`: a pure move, 13 renames and 33 path-only edits.
+  - `world_map.toml`: a pure move, 6 renames and 11 path-only edits.
+  - Each run again changes nothing. `resolve_check.py` finds 0 issues on each. `tests/test_tree.py` over the staged branch: rc 0.
+  - With the hand commit on that staged tree, `tests/test_boundaries.py`, `test_tree.py`, `test_lean_packages.py`, `test_doc_paths.py` and `test_examples.py` by name: 81 passed [my VM].
+- **On `main` `2e99b1cf48b8` with both heads merged** [run `r20261113-070550-96f0`]: the same three counts, and the pins regenerate with none stale after.
+- **Lean, the world's move only, on `main` `b843a10af48a`'s tree:**
+  - The Lean check of `core_protocol` does not count the nested `World.lean` as its own [run `r20261113-054946-0698`].
+  - The certifier's device's package passes its check, with the kernel replay [run `r20261113-061854-8b4b`].
+  - The fast path passes for `security`, `security/Properties` and `security/Proofs`, with no kernel replay [run `r20261113-054946-f77d`].
+
+**4. "Rows 7 and 12"**
+- **They are rows of top's table, not of our map** [read: TOP-398, top's table of Thu 12 Nov 1:26 PM PST and lean's line of 3:51 PM PST, "rows 7 and 12, the two Lake packages"]. Row 7 is the difftest (its Lake package to `verity/circuits/difftest/`). Row 12 is the part of `verity/definitions/` a protocol names, to `verity/circuits/`. Both are top's. Top's later lines say "`compose_map.toml` with rows 7 and 12", the maps that move a Lake package. So the ask reads: compose's map, which rides with those two, and the world's destination.
+- **In the newer table** (top's 11:31 PM PST line), rows 1 and 2 are remote and onsite into `compose/` and row 12 is the world. Row 7 there is compute-research's.
+- **Our maps answer both readings:** the carve is #9602 and the world is #9674.
+- **What top's rows 7 and 12 need of ours:**
+  - The difftest map moves the root `verity_difftest`, which our three maps' `[roots]` name. Ours run before it, or the stager gives our maps the root's new place, two lines a map.
+  - The four definitions maps (`cursor/top-moves-c-b396`, `747e26eeb168`) name no path ours name, and none of the 53 files our moves edit is under `verity/definitions/` [my VM]. Either order.
+
+**5. Chain 1 against our maps**
+- **The 4 lines chain 1 changes in each of `compose_map.toml` and `configurations_map.toml`** are the `old` and `new` lines of `[roots]`: `verity_config` from `verity/configuration/config/verity_config` to `tools/config/verity_config` [read: `git diff origin/main 41c1cdf99377`]. They agree with #9602, which changes no `[roots]` line, and the two merge with no conflict. On chain 1's tree our maps need them.
+- **`world_map.toml` did not get them.** That is the one commit on my branch above.
+- **The import listing on chain 1's head** [my VM, at `41c1cdf99377`]: every path it names holds a tracked file (28 rows, 43 places, 9 distributions), and every place holds Python. The generator's check says "the same". `tests/test_boundaries.py` and `tests/test_tree.py` by name: 30 passed. Chain 1 carries its own listing commit, so it needs nothing more.
+
+**6. The group map, an early read** [read and my VM: top's `cursor/top-protocol-groups-f911` at `a21f150fcce823ddfa39485b402d6e375d13231d`, `protocol_groups_map.toml`, run on its own base without the lock step. lean's head for the groups is not posted yet.]
+- **It moves eight directories and leaves `interface/`, `remote/` and `onsite/` where they are** (its header says so). So `verity/protocols/interface/` does not move, and the world's destination stands.
+- **Remote's and onsite's lists end where our maps put them:** `verity/protocols/compose/verifier/remote/` and `verity/protocols/compose/verifier/onsite/`, with `compose/` beside the three groups.
+- **It edits files our maps move or edit:** 11 files under remote's and onsite's directories (both lakefiles and manifests, two READMEs, the composition's `pyproject.toml` and four of its tests), and it moves the certifier's device's lakefile, whose path to the world our map rewrites.
+- **So ours run before the group map**, with destinations written flat, as top wrote for the other lanes' maps. Run after it, our maps' `[roots]` need `verity_flock`'s new place and our certificates are redone.
+- **The order:** chain 1; then `compose_map.toml`, `configurations_map.toml`, the hand commit, `world_map.toml`; then the difftest map and the group map. The definitions maps, the nci and rho map and the hardware map name no path of ours.
+- **The listing after the group map:** the mover renames the listing's rows itself, and every path the listing names still holds a file. But the generator's check then says "differs" (rc 1). Running the generator rewrites 27 lines, and its check then says "the same" [my VM]. So the generator is run after the group map too, with no hand edit, or `test_the_listing_is_what_its_generator_writes` fails.
+- **One test still fails after the group map and the generator** [my VM]: `tests/test_boundaries.py`, 23 passed and 1 failed, `test_the_listing_checks_find_what_they_refuse`. Its made-up file `verity/protocols/spot/by_path.py` is rewritten to `verity/protocols/proofs/spot/by_path.py`, and the check then finds one edge more than the test expects (`verity/protocols/proofs/spot` loading `demos`). I did not run that test on the branch before the move.
+
+**7. The exclusion of `tests/test_tree.py` in `configurations_map.toml`: harmless, leave it**
+- `tests/test_tree.py` on chain 1's head names no path the map moves (0 lines) [my VM], so the mover has nothing to rewrite in it with or without the exclusion.
+- The maps certify and the tree test passes with it [run `r20261113-074353-6cce`, `r20261113-070550-96f0`] and without it [run `r20261113-055430-5b8f`].
+- The stager needs no change, and #9602's head stays. The exclusion's comment is no longer true of `main`; I take both out after the chain lands.
+
+**8. Not established**
+- The pins and the three suites of `r20261113-074353-6cce` (it ends about 08:12Z). It has no hand commit, so I expect `repository` to fail on the three tests.
+- The patch applied on the node's staged commit, with `repository` after it, on chain 1's tree: my next run.
+- Any Lean check of the carve's moved tree. Any Lean check of the world's move on chain 1's tree. A kernel replay of `security`.
+- lean's three group maps (not posted), the difftest map and the hardware map: not read by me.
+- Why that one test fails after the group map, and its fix: top's.
+
+**For LOOSEMAP, two facts** [read]
+- Top's worker already wrote a proposal for the same eight loose files and one fixture: `tools/move/proofs_loose_map.toml` on `cursor/top-tree-inventory-485d` (`18d8854a006d`), "written and staged into nothing".
+- The import listing's `[[against]]` entries name Flock's `pod/` and `agreement/` files by path. A move of them needs the listing edited and the generator run after it.
+
+**My machine was replaced again** at 07:35Z. Nothing was unpushed. I took `~/wt/.pen` again at 07:36Z; no other loop held it.
