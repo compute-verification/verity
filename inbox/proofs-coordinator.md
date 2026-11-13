@@ -120727,3 +120727,46 @@ Branch `cursor/proofs-coinmap-8b0c` at `21830e1f9e`, pushed; nothing unpushed.
 - [derived] The order: "Beyond them, stage now … taking types in order of their share …, each only if its staging ends in time for its proof to end by 05:54Z". The first batch left 78 minutes of the card window, so the second batch takes the rest of the full statements, with the same limit.
 
 For the table: 15 types timed on H200s at 0.70 to 1.51 s a statement (median of four sessions), 89.73% of ranked proving time (`r20261113-035634-1c43`); EmbeddingRead refused (templated); 19 more statements, 6.98%, staging (`r20261113-043814-3f1e`, `r20261113-043823-9759`); cards free at 04:35Z and again at 04:36Z.
+
+## STAGECOINS, Fri 04:41Z: both stages' `CoinsAgree` pieces compile in a run with only the three axioms (statements the join reads: `coinsAgree_first_log`, `coinsAgree_second_log`, new `coinsAgree_second_matches`)
+
+In plain words: the two pieces I was given now compile in a run, with no `sorry` and no axiom beyond the three. One says the first stage's coins at the form's reading agree with what the device released. The other says the same of the second stage's coins on the interior's session. Each rests on named premises with owners, listed below. **These theorems are over the form's accept, so they are true and empty until #9555 is merged into the form and TWOLEG's honest play is accepted in a test (03:58Z item 1).** They say nothing about a run yet.
+
+Head pushed: `91de14e478` on `cursor/proofs-stagecoins-71b1`. Nothing unpushed.
+
+Run `r20261113-035813-26b7` [run], on vy-nebius-2 at `91de14e478`, leaf `StageCoins.lean` (it imports all my files): waited 19 min (03:58Z to 04:17Z) in slot p13, then `done rc=0 class=SUCCESS`. The run printed:
+- "Build completed successfully (11637 jobs)": `FirstCoins`, `SecondCoins`, `CoinBytes`, `StageLog`, `StageCut`, `StageAlone` and `StageCoins` built, with warnings only (deprecations, unused simp arguments, unreachable fallbacks).
+- `'Verity.SampledTwo.coinsAgree_first_log' depends on axioms: [propext, Classical.choice, Quot.sound]`
+- `'Verity.SampledTwo.coinsAgree_second_log' depends on axioms: [propext, Classical.choice, Quot.sound]`
+- `'Verity.SampledTwo.coinsAgree_second_matches' depends on axioms: [propext, Classical.choice, Quot.sound]`
+- "siblings: no built module of its package that doesn't import … StageCoins declares a name it does"
+
+The run before it, `r20261113-031058-caa8` [run] on vy-nebius-2 (waited 13 min), built everything but `CoinBytes`. It failed on a kernel "deep recursion" in `exists_src`: a `simp` over `List.finRange 65536` left a proof that made the kernel unfold the whole list. I reproduced it in a core-only scratch file and replaced the `simp` with `rw [List.getElem_map, List.getElem_finRange]; rfl`.
+
+What compiled [run]:
+- `coinsAgree_first_log A C S dev hC hR hD hDev : CoinsAgree A (formReading A C S dev) (FormAccepts C) LogIsDevice .first`
+- `coinsAgree_second_log … hC hR hA hDev : … .second`
+- `coinsAgree_second_matches … hC hR hM hDev : … .second`, with `SessionMatches` in place of `SecondAlone`
+
+Through them, these compiled too: `secondAlone_of : FirstUnshown C → SecondAlone C`, and `firstUnshown_of : CaseIsSent C → SessionMatches C → FirstUnshown C`, which goes through TWOLEG's `interiorUnshown_roots` and the `accepted_steps` conjunct. The byte premises `CoinsOfBytes` and `StagesOfBytes` are discharged (`coinsOfBytes`, `stagesOfBytes`), and so is `SourceRead` (`sourceRead_holds`).
+
+### STOP RULE
+Nothing here changes a listed guarantee or what it rests on. No lock is touched, the accept is not turned on, and nothing is wired into `Sampled.lean`. No guarantee is listed (03:58Z item 5). `DevAgrees.lean` is not imported.
+
+### NEEDS
+The named premises, each a `Prop` taken as a hypothesis:
+1. `CaseIsSent C`: TWOLEG or whoever instantiates `C`.
+2. `CutReads C`: CUT. Per 02:49Z item 2, a first stage that reads no byte leaves the cut no first log. If CUT restates `LogRead` in two cases, `StageCut`'s `firstShown_of` needs the read-nothing case, where the prefix is empty; I will add it on CUT's new statement.
+3. `FirstDrawn C`: REDRAW and TWOLEG, through the key change. After #9555 and `inputOf`'s new fields, `firstDraw` reads `i.family` (00:48Z) and I recompile on TWOLEG's head.
+4. `SecondAlone C`, or in its place `SessionMatches C`: TWOLEG, cc HISTORY `bc-3e1bb2d6-7c79-5a00-8b4a-12f4945146a9`. `SessionMatches` is the agreement of `interiorUnshown`'s reads with the cut's: the window, the family, the digest, the key, and the session fields of `e.coins` against those of `firstCoins e`. If `interiorUnshown` reads the parameters' key, window and family and the interior commitment's digest, only the field equality remains.
+5. `DevFirst C dev` and `DevSecond A C dev`: COINMAP.
+
+### To post
+Nothing.
+
+### Not established
+- Anything about a run: the form accepts no play today.
+- The first stage's family is the evidence segment's until the key change.
+- The known hole (an earlier period's signature passes) is noted, not worked around.
+
+Next: idle until TWOLEG's head with #9555, or CUT's two-case `LogRead`. Then I merge, recompile, and say what broke.
