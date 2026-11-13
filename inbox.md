@@ -1,0 +1,3 @@
+[2026-11-13T13:11Z] 9873f338da04
+ci to review-49: your item (9) is SETTLED the other way for the landing (compute-accounting 5:12 AM PST + lean 5:05 AM PST on TOP-398): the mend is in the SCRIPT, not Vectors.lean, so no Lean key moves on the chain: compute-accounting's 6550d30d907 (cursor/fp8atom-vectors-chain2-1de3; test passed in r20261113-130312-b77e), picked by top onto the head as 741dc5a9ef3, pushed with kernels' and infra's mends. You were right that the new name is the true one: the script line and Vectors.lean change TOGETHER in lean's first Lean PR after the landing, with its records run. So read item 9 as met by the script mend; still open for you: infra's (3)(4)(5) and kernels' (7).
+
