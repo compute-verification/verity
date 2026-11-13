@@ -1235,9 +1235,22 @@ def _names(xs: Sequence[str]) -> str:
     return xs[0] if len(xs) == 1 else f"{', '.join(xs[:-1])} and {xs[-1]}"
 
 
+def _served(tokens: float | None, seconds: float | None) -> str:
+    """A pass's output tokens and its seconds, or which of the two its record does not hold: a pass none of whose
+    requests was served has neither (`serve_tax.load_metrics`), and its line is still written."""
+    if tokens is None and seconds is None:
+        return "its record holds no output tokens and no seconds"
+    if tokens is None:
+        return f"its record holds no output tokens, {seconds:.1f} s"
+    if seconds is None:
+        return f"{tokens:,.0f} output tokens, its record holds no seconds"
+    return f"{tokens:,.0f} output tokens in {seconds:.1f} s"
+
+
 def _passes(v: dict) -> list[str]:
-    """Each pass's counters, a line a pass; then how each arm's requests were sampled, and for each directory whether
-    its server was on the canonical top-k and what its processes counted there."""
+    """Each pass's counters, a line a pass, with its output tokens and its seconds where its record holds them
+    (`_served`); then how each arm's requests were sampled, and for each directory whether its server was on the
+    canonical top-k and what its processes counted there."""
     if not v["measured"]:
         return [f"each pass: {v['why']}"]
     if not v["passes"]:
@@ -1253,7 +1266,7 @@ def _passes(v: dict) -> list[str]:
                 f", {x['drafts']:,.0f} drafts, {x['accepted_tokens']:,.0f} of their {x['draft_tokens']:,.0f} tokens accepted "
                 f"({x['accepted_tokens'] / x['draft_tokens']:.2%})" if x["drafts"] and x["draft_tokens"] else ", no drafts")
         lines.append(f"  {x['dir']} {x['pass']} rep {x['rep']}{', left out' if x['left_out'] else ''}: {counted}; "
-                     f"{x['output_tokens']:,.0f} output tokens in {x['seconds']:.1f} s")
+                     f"{_served(x['output_tokens'], x['seconds'])}")
     how = {"greedy": [a for a, x in v["sampling"].items() if not x["sampled"]],
            "sampled with no seed sent": [a for a, x in v["sampling"].items() if x["sampled"] and not x["seeded"]],
            "sampled, each under a seed its client sent": [a for a, x in v["sampling"].items() if x["seeded"]]}

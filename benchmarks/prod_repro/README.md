@@ -125,7 +125,8 @@ replay that differs, the first token that does and the first step.
   own `meta.json`; they are vLLM's own on the server's `/metrics`, so every arm's are read the same way, with a step
   trace or without, and the first line names the two the accepted share is of): its engine steps, its drafts and how
   many of the tokens they proposed the model accepted, and beside them
-  its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up. Then how each
+  its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up, and a pass whose
+  record holds no output tokens or no seconds (one none of whose requests was served) says so. Then how each
   arm's requests were sampled, and whether its client sent their seeds; and for each directory whether its server
   was started on the canonical top-k (its record's environment) and what the top-k's processes counted there.
   These lines are in no verdict. They are what an arm served beside the three is read by: two arms that differ in

@@ -1028,6 +1028,18 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
             "  the requests: greedy (prod, prod-record and prod-trace)\n"
             "  the canonical top-k, by directory: not on for prod.1, prod-record.1 and prod-trace.1 (no VERITY_DSA_TOPK in the "
             "environment their records name)\n") in (out / "prod_repro.txt").read_text()
+    # a pass none of whose requests was served has no output tokens and no seconds in its metrics (the corpus
+    # client's): its line says so, and the report is written
+    out = job(tmp_path / "unserved")
+    corpus_arm(out, "tokens", [100.0], unserved=2)
+    rc, txt, r = run(out, "--beside", "tokens")
+    assert rc == 0 and [(x["output_tokens"], x["seconds"]) for x in r["ran"]["passes"]["passes"] if x["dir"] == "tokens"] == [(None, None)]
+    assert "  tokens burst rep 1: 2 engine steps, no drafts; its record holds no output tokens and no seconds\n" in txt
+    assert "  compiled burst rep 1: 2 engine steps, no drafts; 4 output tokens in 0.0 s\n" in txt
+    # and a record that holds one of the two says which it lacks
+    lacking = [{**r["ran"]["passes"]["passes"][0], **lacks} for lacks in ({"seconds": None}, {"output_tokens": None})]
+    assert [x.partition("; ")[2] for x in P._passes(r["ran"]["passes"] | {"passes": lacking})[2:4]] == [
+        "4 output tokens, its record holds no seconds", "its record holds no output tokens, 0.0 s"]
 
 
 def test_the_first_line_says_the_limit_and_what_is_known_of_leaving_it_to_vllm(tmp_path: Path):
