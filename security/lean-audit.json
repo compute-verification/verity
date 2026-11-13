@@ -1194,12 +1194,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.ReadUnit.ExpertReadAccepted": {
-   "owner": "@proofs",
-   "digest": "2d6129c01052458a32647d26f794a61db107274b7717b368a12315721c2eb985",
-   "issue": "PRF-458",
-   "due": "2026-11-30"
-  },
   "Accounting.Remote.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "0895485d6e4a3c7610aa37c855fd729299982dbfdeeb22d75125bbb5997c1dee",
@@ -5621,8 +5615,7 @@
   }
  },
  "witnesses_assumed": {
-  "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands.",
-  "Accounting.ReadUnit.ExpertReadAccepted": "not an assumption about the world but an unproved fact about code: the Lean check `Flock.ReadNet.check 256 3072` accepts the read template at H = 3072 as its text reads back (`flock-read-tmpl 256 3072` exits 0 on it); until Lean proves it, the honest witness takes it."
+  "Claims.ExpectedCR": "ecr/sha-512 at one collision finder is a computational assumption about SHA-512 that no theorem concludes, so a witness takes it as it stands."
  },
  "layers": {
   "Definitions.Core": {

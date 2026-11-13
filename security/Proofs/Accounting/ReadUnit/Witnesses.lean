@@ -2,6 +2,7 @@ module
 
 public import Properties.Flock.ReadNet
 public import Proofs.Accounting.ReadUnit.Digests
+public import Proofs.Accounting.ReadUnit.Accepts
 public import Proofs.Accounting.ReadUnit.Guarantees
 public import Proofs.Flock.Soundness.Refine.Walk
 import Proofs.Core.Circuit
@@ -23,8 +24,7 @@ import all Init.WF
 # `TableReadBinding` says something
 
 * **Honest** (`TableReadBinding_honest`): the check accepts a template at the served expert-row read's shape, 256 rows
-  of 3072 words (the one the read's text reads back to), from the one fact witnessed outside Lean
-  (`ReadUnit.ExpertReadAccepted`).
+  of 3072 words: the read's own template, which the check accepts at every shape it admits (`Accepts.check_readTmpl`).
 * **Nontrivial** (`TableReadBinding_nontrivial`): where the check doesn't fix the read's gates, a read needn't bind: some
   unit's reads don't. The unit net `net₀` has 5 input words (640 columns), its constant on column 640 and no computed
   row, so a read at the template's columns (`portsAt`, at one row of no words) holds its index, root and the domain
@@ -498,10 +498,9 @@ namespace Accounting.SecurityProofs
 open Accounting.ReadUnit Accounting.ReadUnit.Witness
 
 /-- **`TableReadBinding`'s honest lemma**: the check accepts a template at the served expert-row read's shape, 256 rows
-of 3072 words (the one its text reads back to), from the fact witnessed outside Lean (`ExpertReadAccepted`). -/
-theorem TableReadBinding_honest (h : ExpertReadAccepted) : ∃ t, Flock.ReadNet.check 256 3072 t = true :=
-  let ⟨t, _, ht⟩ := h
-  ⟨t, ht⟩
+of 3072 words: the read's own template (`Accepts.check_readTmpl`). -/
+theorem TableReadBinding_honest : ∃ t, Flock.ReadNet.check 256 3072 t = true :=
+  ⟨Flock.ReadNet.readTmpl 256 3072, Accepts.check_readTmpl (by norm_num) (by norm_num) (by norm_num) (by norm_num)⟩
 
 /-- **`TableReadBinding`'s nontrivial lemma**: at a unit the check doesn't fix, the reads needn't bind. At `Witness.D₀`,
 a net whose read columns are inputs and the constant, every hypothesis of `ReadUnit.BindsAt` holds at no error and no

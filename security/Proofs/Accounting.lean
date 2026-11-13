@@ -42,6 +42,7 @@ public import Proofs.Accounting.ReadUnit.RowSeg
 public import Proofs.Accounting.ReadUnit.Leaf
 public import Proofs.Accounting.ReadUnit.Select
 public import Proofs.Accounting.ReadUnit.Check
+public import Proofs.Accounting.ReadUnit.Accepts
 public import Proofs.Accounting.ReadUnit.Deployed
 public import Proofs.Accounting.ReadUnit.Binding
 public import Proofs.Accounting.ReadUnit.Witnesses
