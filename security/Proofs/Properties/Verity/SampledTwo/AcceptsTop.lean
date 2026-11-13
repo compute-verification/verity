@@ -81,7 +81,7 @@ theorem recordsRead (C : CaseOf) : RecordsRead C := by
   intro o i it x m₁ hA hi hit hx hm₁
   obtain ⟨k, hk, p, cm, e, pub, prof, ⟨h1, h2, h3⟩, hacc⟩ := hA
   obtain ⟨-, c₂, ξ₂, r, i', run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
-  obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, hj₁, hj₂⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, hj₁, hj₂, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   have hik : inputOfCase k = some i' := by
     unfold inputOfCase
     rw [h1, h2, h3]

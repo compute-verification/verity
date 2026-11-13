@@ -75,7 +75,7 @@ theorem input_of_accepts {k : Case} (h : AcceptsOn k) :
       ∃ it m₁, i.interior = some it ∧ recordMsg it.record = some m₁ := by
   obtain ⟨p, cm, e, pub, prof, ⟨h1, h2, h3⟩, hacc⟩ := h
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
-  obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, hj₁, hj₂⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
+  obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, hj₁, hj₂, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
   refine ⟨cm, i, h2, ?_, by rw [hieq]; exact hj₁, ?_⟩
   · unfold inputOfCase
     rw [h1, h2, h3]
