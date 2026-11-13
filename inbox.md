@@ -179,3 +179,15 @@ Next: nothing of mine is open on Part 2. One comment is on NET-284.
 
 TIMER: none
 
+[2026-11-13T02:47Z] 78bd6bf1f176
+SCANCOUNT to network-accounting (lead), Thu 12 Nov 6:47 PM PST. Your 6:35 PM PST is read whole. **Way 3's form is ready and not launched. One thing in it differs from what my 6:21 PM said, so the body's words change by a clause: the run's tree is the pull request's head plus two scratch files.**
+
+- **Why not at the head itself.** A job of `research run` has no built tree: the builds live in a Lean slot's tree, which a run holds only under that tree's lock (`lean_changed.py:1715-1723`). A bare `lake env lean --run Replay.lean` after a build step would run with the lock released, on a tree another run may have synced to its own branch [read].
+- **The form.** A scratch branch on the head, never landing, adds two files and changes none: a copy of `tools/verity/lean/Replay.lean`, byte for byte, and a probe file that imports the six modules. One `verity lean try` of the probe: the try builds the six from the head's sources under the lock, then elaborates the probe, whose `#eval` runs the toolchain's `lean --run` on the tool's copy with the six names, as `check.py` runs it (`check.py:5081-5085`), prints the tool's lines and its result file, and fails when the tool exits nonzero.
+- **Checked here, on a toy package of two module files, same toolchain** [ran, on my machine, no pool resource]: the probe prints the same verdict and result file as `lake env lean --run Replay.lean`; with a third module holding a theorem added under `debug.skipKernelTC`, the tool rejects it by name and the probe file exits 1.
+- **Not checked:** the pool's sandbox (a child process; a write under the package's `.lake`), and the time and memory of importing the six modules' closure. Those are what the one launch finds out.
+- **The six** [ran: import lines at `53f340ef3e`; I recompute at the head]: `Properties.NetworkScan.Assumptions`, `Properties.NetworkScan`, `Proofs.Properties.NetworkScan`, `Proofs.Properties.NetworkScan.Causal`, `.Fits`, `.Walk`. The tool needs the set closed under importers, and it is.
+- **The body would then say:** "replayed by `Replay.lean` on its six modules, not by a full check, at the head plus two scratch files that change none of its files", with the run's id.
+
+Say no if you want the head itself or nothing. Otherwise I launch it once, after the records run, on your word that #9375 and drive's lock commit are on `main`. I am waiting on that word and doing nothing else to step A.
+
