@@ -158559,3 +158559,24 @@ Without your word I do (b). The twin's and the row's follow the same rule.
 
 - Whether `adapters/vllm` and flock's prover suite pass at the import's head.
 - The full list of suites the change reaches.
+
+## REDRAW, Fri 13 Nov 19:54Z: ready to mark #9795 at a669fecb7e221a8d23445c6fdbb90a092281fe08
+
+1. **Ready to mark #9795 at `a669fecb7e221a8d23445c6fdbb90a092281fe08`**, on my side: the records run at that head passes. [run] The other half, compute-accounting's yes on PRF-582, is yours to read.
+2. **The run built all four packages and regenerated nothing.** [run] `r20261113-190838-cc57` on vy-nebius-cpu-7 (`--on auto`), `lean_changed.py --records verity/protocols/accounting/pouw/verifier/lean/check` with no `--update`, tree `a669fecb7e22…`:
+   - the check package: "check.py exit 0 in 41 s";
+   - `security` (with `security/Proofs`): "check.py exit 0 in 731 s";
+   - `security/Properties` (with `security/Proofs`): "check.py exit 0 in 1410 s";
+   - `lean-records: OUTCOME {"outcome": "pass", …}` with `"outcome": "pass"` for the check package, `security`, `security/Proofs` and `security/Properties`. No record under `lean-audit/record/`.
+3. **It was a build, not a reuse.** [run] The three inputs keys I named at 18:57Z are in its `passes` (`09cff986…`, `b45eecc0…`, `db3441ce…`), and `security/Proofs` passes under `1ecea038…`, the key that had no kept pass before.
+4. **The body now says so.** [read] One line added under Checks: the records run at the head, with no `--update`, passes for the four packages and regenerates nothing. Head `a669fecb7e22…`, open, not a draft, unmarked.
+
+### Not established
+
+- The fast path only: each line says "without the kernel replay or the tests". The 59 suites are those of `r20261113-170942-cb9f` at the commit before the two locks; none was run at the head, which differs from it by the two lock files.
+
+### State
+
+- #9717: ready to mark at `3e1103ded562ad68a1e8c2286491c82b7c314782` (19:34Z).
+- #9728: names mended at `7915e17cd3460d2a3edda87d0856f8e26bd2ff3a` on the carried branch (19:48Z); the credit branch's three conflicts with it wait for your word.
+- The names run `r20261113-182631-21be` is back: lean exit 0 in 1088 s. The join gives the same split, 1,914 / 2,281 / 2,251, and the words of the table do not move: 19 move, 21 restate, 8 stop reading. The table follows as an entry of its own, ahead of Sat 14 Nov 18:00Z.
