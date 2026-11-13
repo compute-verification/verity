@@ -354,7 +354,10 @@ theorem forgerOf_signed : ∀ a θ F c σ (x : (I.forgerOf a θ F c σ).S),
 /-- **The extractor at the deployment's windows**: at a window, the seats of the window's members at the projected
 strategy, each member's transcript at its own files' circuit, side by side in the order the vocabulary reads the
 members' files (`Flock.Guarantees.tracesWith`), where some outcome of the window's stream ends its sample, and the
-zero trace where none does; elsewhere the base's. -/
+zero trace where none does; elsewhere the base's. No proof reads the zero trace, which only makes the extractor
+total: where no outcome ends the sample the window's audit rejects every run
+(`JointAuditV5.prob_accepts_of_not_ends`), and the claim's transfer is asked only where one does (`ClaimTransfers`,
+whose proof reads the extractor by `extractOf_some`). -/
 noncomputable def extractOf (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (I.base.game θ F c)) : (I.base.read θ F).circuit.Trace :=
   open Classical in

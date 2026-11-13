@@ -33,8 +33,8 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **What the verifier's acceptance gives of the play `x`, at a window**: every release of the family `label`
 answering `after` precedes every opening (`fresh`), and wherever the play's coins of that family agree with `nc`
-frames' coins `κ` whose bytes are the window's at `ω`, the play has the sessions of the window's sample at `ω`
-(`sessions`, `WindowSessions`). -/
+frames' coins `κ` whose bytes are the window's at `ω`, the window's sample at `ω` ended
+(`Flock.Guarantees.sampleEnded`) and the play has its sessions (`sessions`, `WindowSessions`). -/
 structure WindowRead (W : Window) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) (label : String) (after : ByteArray) (nc : ℕ) (x : Exchange) :
     Prop where
