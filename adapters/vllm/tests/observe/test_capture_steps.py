@@ -6,9 +6,11 @@ The runner is stood in as far as the capture reads one: `execute_model` leaves t
 sampled ids, and the request states, the block tables and the KV-cache configuration are the arrays the capture copies its
 step facts from.
 Two things of the device are stood in too, since a CPU has neither: pinned host memory (`torch.empty(pin_memory=True)`
-gives plain memory) and `torch.cuda.Event` (an event that counts what it is asked)."""
+gives plain memory) and `torch.cuda.Event` (an event that counts what it is asked).  Where a test reads a time the capture
+took, the capture's clock is stood in as well: each reading is twice the last, so no two spans between readings are equal."""
 from __future__ import annotations
 
+import itertools
 from types import SimpleNamespace
 from typing import Any
 
@@ -120,7 +122,8 @@ class _Runner:
         for r, row in STATE_ROW.items():
             self.req_states.prompt_len.np[row] = PROMPT_LEN[r]
         self.block_tables = SimpleNamespace(num_kv_cache_groups=len(groups), num_blocks=SimpleNamespace(np=np.zeros((len(groups), 4), dtype=np.int64)),
-                                            input_block_tables=[torch.zeros(2, 4, dtype=torch.int32) for _ in groups])
+                                            input_block_tables=[torch.zeros(2, 4, dtype=torch.int32) for _ in groups],
+                                            block_tables=[SimpleNamespace(gpu=torch.zeros(4, 4, dtype=torch.int32)) for _ in groups])
         self.execute_model_state: Any = None
 
     def execute_model(self, scheduler_output: Any, *args: Any, **kwargs: Any) -> str:
@@ -133,6 +136,7 @@ class _Runner:
             for i, r in enumerate(batch.req_ids):
                 self.block_tables.num_blocks.np[g, STATE_ROW[r]] = len(blocks[r])
                 self.block_tables.input_block_tables[g][i, : len(blocks[r])] = torch.tensor(blocks[r], dtype=torch.int32)
+                self.block_tables.block_tables[g].gpu[STATE_ROW[r], : len(blocks[r])] = torch.tensor(blocks[r], dtype=torch.int32)
         self.execute_model_state = SimpleNamespace(input_batch=batch, slot_mappings_by_layer={LAYER: batch.slots})
         self.prepared(batch)
         self.hidden = self.model(batch.input_ids[: batch.num_tokens]).clone()
@@ -160,6 +164,18 @@ def device(monkeypatch):
     monkeypatch.setattr(_Event, "made", [])
     monkeypatch.setattr(torch.cuda, "Event", _Event)
     return _Event.made
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """The capture's clock, stood in: its readings are 1, 2, 4 and on, so a span between two of them names both."""
+    readings = itertools.count()
+    monkeypatch.setattr(C, "time", SimpleNamespace(perf_counter=lambda: 2 ** next(readings)))
+
+
+def _span(first: int, last: int) -> int:
+    """The time between two readings of the stood-in clock, each by its number from 0."""
+    return 2 ** last - 2 ** first
 
 
 def _capture(tmp_path, config: ObserverConfig | None = None, steps: list[dict] = STEPS, header: Any = None,
@@ -192,7 +208,7 @@ def _notes(events: list) -> list[tuple[str, dict]]:
     return [(e.text, e.data) for e in events if isinstance(e, E.Note)]
 
 
-def test_a_prefill_step_and_a_decode_step_are_logged_with_their_rows_roots_links_and_sampled_ids(tmp_path, device):
+def test_a_prefill_step_and_a_decode_step_are_logged_with_their_rows_roots_links_and_sampled_ids(tmp_path, device, clock):
     capture, runner = _capture(tmp_path)
     outs = [_step(runner, 0), _step(runner, 1)]
     assert [o[0] for o in outs] == ["forward 0", "forward 1"]
@@ -227,7 +243,10 @@ def test_a_prefill_step_and_a_decode_step_are_logged_with_their_rows_roots_links
                 for a, b in zip([events.index(s) for s in starts], [events.index(e) for e in ends])]
     assert [(t["step"], t["num_tokens"], t["num_reqs"], t["phase"], t["snapshots"], t["events"]) for t in stats["step_times"]] == [
         (0, 3, 2, "prefill", 0, buffered[0]), (1, 2, 2, "decode", 0, buffered[1])]
-    assert all(t["forward_s"] > 0 and t["sample_s"] > 0 and t["wall_s"] >= t["forward_s"] + t["sample_s"] for t in stats["step_times"])
+    # a step reads the clock six times, at its start, around its forward, around its sample and at its end, and writing it two more
+    assert [(t["forward_s"], t["sample_s"], t["wall_s"]) for t in stats["step_times"]] == [
+        (_span(1, 2), _span(3, 4), _span(0, 5)), (_span(9, 10), _span(11, 12), _span(8, 13))]
+    assert stats["timing"] == {"flush_s": _span(6, 7) + _span(14, 15), "snapshot_s": 0, "sync_s": 0}
     assert isinstance(events[-1], E.RunEnd) and events[-1].stats["steps"] == 2
     assert [(e.recorded, e.synchronized) for e in device] == [(2, 1), (2, 1)]
 
@@ -283,7 +302,17 @@ def test_the_log_opens_with_the_header_the_roots_and_the_runners_buffers_and_hol
         assert step[-2].logits_view.alloc in allocs and step[-2].sampled_view.alloc in allocs
 
 
-def test_a_step_is_written_when_the_next_one_starts_or_the_capture_closes(tmp_path, device):
+def test_a_tensor_the_model_holds_as_a_parameter_and_as_a_buffer_is_one_root(tmp_path):
+    model = _Model()
+    model.register_buffer("tied", model.table)
+    capture = Capture(SimpleNamespace(runner=_Runner(model, STEPS), model=model), header=None, log_path=tmp_path / "log.jsonl",
+                      config=ObserverConfig(triton=False))
+    capture.install()
+    assert [(r.role, r.name, r.view.alloc) for r in capture.roots] == [("weight", "table", 1), ("buffer", "scale", 2)]
+    assert capture.root_allocs == {1, 2} and capture.close()["roots"] == 2
+
+
+def test_a_step_is_written_when_the_next_one_starts_or_the_capture_closes(tmp_path, device, clock):
     capture, runner = _capture(tmp_path)
     at_install = capture.events_written
     runner.execute_model(_scheduled(0))
@@ -292,12 +321,14 @@ def test_a_step_is_written_when_the_next_one_starts_or_the_capture_closes(tmp_pa
     runner.sample("hidden", runner.execute_model_state.input_batch, 0)
     assert _held(capture) == (None, 0) and capture.step_index == 1
     assert capture.events_written == at_install and device[0].synchronized == 0 and capture.step_times == []
+    first = capture._pending
+    assert first.events
     runner.execute_model(_scheduled(1))
-    assert _held(capture) == (1, None) and device[0].synchronized == 1
+    assert _held(capture) == (1, None) and device[0].synchronized == 1 and first.events == []
     written = capture.events_written
     in_the_file = list(read_log(tmp_path / "log.jsonl"))
     assert len(in_the_file) == written and in_the_file[-1] == E.StepEnd(0, capture.step_times[0]["forward_s"], capture.step_times[0]["sample_s"])
-    assert written > at_install and [t["step"] for t in capture.step_times] == [0] and capture.timing["flush_s"] > 0
+    assert written > at_install and [t["step"] for t in capture.step_times] == [0] and capture.timing["flush_s"] == _span(6, 7)
     runner.sample("hidden", runner.execute_model_state.input_batch, 1)
     assert capture.events_written == written and _held(capture) == (None, 1) and capture._pending.events
     capture.close()
@@ -321,8 +352,56 @@ def test_a_dummy_run_an_empty_step_and_a_sample_outside_a_step_pass_through(tmp_
     assert capture.rec.active is False and device == [] and capture.errors == []
 
 
+def test_what_follows_the_schedulers_output_reaches_the_runner_and_only_its_second_argument_names_a_dummy_run(tmp_path, device):
+    capture, runner = _capture(tmp_path)
+    scheduled = _scheduled(0)
+    assert runner.execute_model(scheduled, "intermediate tensors", key="a value") == "forward 0" and _held(capture) == (0, None)
+    assert runner.calls[-1] == ("execute_model", scheduled, ("intermediate tensors",), {"key": "a value"})
+    batch = runner.execute_model_state.input_batch
+    assert runner.sample("hidden", batch, 0, "an argument", key="a value")[1] == "the rest" and _held(capture) == (None, 0)
+    assert runner.calls[-1] == ("sample", "hidden", batch, 0, ("an argument",), {"key": "a value"}) and capture.errors == []
+
+
+def test_a_capture_with_no_module_hooks_has_the_whole_of_execute_model_as_the_forward(tmp_path, device):
+    capture, runner = _capture(tmp_path, ObserverConfig(triton=False, module_hooks=False))
+    assert capture.namer is None and not capture.model._forward_pre_hooks and not capture.model._forward_hooks
+    _step(runner, 0)
+    capture.close()
+    enters = [e for e in read_log(tmp_path / "log.jsonl") if isinstance(e, E.DispatchEnter)]
+    phases = [e.phase for e in enters]
+    assert [p for i, p in enumerate(phases) if i == 0 or phases[i - 1] != p] == ["forward", "sample"]
+    assert {e.module for e in enters} == {None} and capture.errors == []
+
+
+def test_a_forward_that_raised_leaves_the_sample_after_it_its_own_phase(tmp_path, device, monkeypatch):
+    capture, runner = _capture(tmp_path)
+    _step(runner, 0)
+
+    def raises(hidden):
+        raise ZeroDivisionError("the layer failed")
+
+    with monkeypatch.context() as patched:
+        patched.setattr(capture.model.attn, "forward", raises)
+        with pytest.raises(ZeroDivisionError):
+            runner.execute_model(_scheduled(1))
+    assert _held(capture) == (1, None) and capture.rec.active is False and capture.rec.phase == "other"
+
+    def a_forward_then_a_copy(output):
+        runner.model(runner.input_buffers.input_ids[:1])
+        return SimpleNamespace(sampled_token_ids=output.sampled_token_ids.clone())
+
+    runner.sampled = a_forward_then_a_copy
+    runner.sample("hidden", runner.execute_model_state.input_batch, 1)
+    capture.close()
+    enters = [e for e in read_log(tmp_path / "log.jsonl") if isinstance(e, E.DispatchEnter) and e.step == 1]
+    phases = [e.phase for e in enters]
+    assert [p for i, p in enumerate(phases) if i == 0 or phases[i - 1] != p] == ["other", "forward", "sample"]
+    assert (enters[-1].op, enters[-1].phase) == ("aten.clone.default", "sample")
+    assert [(e["where"], e["step"]) for e in capture.errors] == [("finalize", 1)]
+
+
 @pytest.mark.parametrize("mode, entered", [("none", 0), ("empty", 2)])
-def test_a_capture_that_does_not_record_times_each_step_and_logs_none(tmp_path, device, monkeypatch, mode, entered):
+def test_a_capture_that_does_not_record_times_each_step_and_logs_none(tmp_path, device, clock, monkeypatch, mode, entered):
     modes = []
 
     class Empty(C.EmptyMode):
@@ -339,8 +418,9 @@ def test_a_capture_that_does_not_record_times_each_step_and_logs_none(tmp_path, 
     assert modes == [False] * (2 * entered) and device == [] and capture.namer is None
     assert [{k: t[k] for k in ("step", "num_reqs", "events", "snapshots")} for t in stats["step_times"]] == [
         {"step": 0, "num_reqs": 2, "events": 0, "snapshots": 0}, {"step": 1, "num_reqs": 2, "events": 0, "snapshots": 0}]
-    assert all(sorted(t) == ["events", "forward_s", "num_reqs", "sample_s", "snapshots", "step", "wall_s"] and
-               t["forward_s"] > 0 and t["sample_s"] > 0 and t["wall_s"] >= t["forward_s"] + t["sample_s"] for t in stats["step_times"])
+    assert all(sorted(t) == ["events", "forward_s", "num_reqs", "sample_s", "snapshots", "step", "wall_s"] for t in stats["step_times"])
+    assert [(t["forward_s"], t["sample_s"], t["wall_s"]) for t in stats["step_times"]] == [
+        (_span(1, 2), _span(3, 4), _span(0, 5)), (_span(7, 8), _span(9, 10), _span(6, 11))]
     assert stats["steps"] == 2 and stats["recorder"]["dispatch"] == 0 and stats["errors"] == []
     assert stats["storage"]["observed"] == observed and capture.sample_ids == {} and capture.step_rows == {}
     assert _kinds(list(read_log(tmp_path / "log.jsonl"))) == [
@@ -577,11 +657,58 @@ def test_a_step_with_no_blocks_or_no_slot_mapping_has_empty_ones_whatever_an_ear
 
 def test_a_runner_with_no_kv_cache_group_reads_no_block_table(tmp_path, device):
     capture, runner = _capture(tmp_path)
-    runner.block_tables.num_kv_cache_groups = 0
+
+    def no_group(batch):
+        runner.block_tables = SimpleNamespace(num_kv_cache_groups=0, num_blocks=SimpleNamespace(np=np.zeros((0, 4), dtype=np.int64)),
+                                              input_block_tables=[], block_tables=[])
+
+    runner.prepared = no_group
     _step(runner, 0)
     events, (start,) = _logged(tmp_path, capture)
     assert start.block_tables == {"a": [], "b": []} and start.slot_mapping == [8, 9, 12] and capture.errors == []
     assert "block_tables" not in capture._pin_cache
+
+
+def test_request_ids_past_the_batchs_count_are_not_the_steps(tmp_path, device):
+    capture, runner = _capture(tmp_path)
+    runner.prepared = lambda batch: batch.req_ids.append("a row of padding")
+    runner.execute_model(_scheduled(0))
+    batch = runner.execute_model_state.input_batch
+    batch.req_ids.pop()
+    runner.sample("hidden", batch, 0)
+    events, (start,) = _logged(tmp_path, capture)
+    assert start.rows == [("a", 0), ("a", 1), ("b", 0)] and start.num_reqs == 2 and capture.errors == []
+
+
+def test_a_step_smaller_than_the_one_before_it_reads_only_its_own_part_of_each_pinned_buffer(tmp_path, device):
+    steps = [dict(STEPS[0], **{"more blocks": [{A: [12, 13], B: [14]}]}),
+             {"ids": {A: [9]}, "computed": {A: 2}, "blocks": {A: [4, 9]}, "more blocks": [{A: [12]}], "sampled": {A: 2}}]
+    capture, runner = _capture(tmp_path, steps=steps, groups=([LAYER], ["sliding"]))
+    second = {0: torch.tensor([24, 25, 28, 0], dtype=torch.int32), 1: torch.tensor([26, 0], dtype=torch.int32)}
+
+    def slots_of_the_second_group(batch):
+        runner.execute_model_state.slot_mappings_by_layer["sliding"] = second[batch.num_reqs % 2]
+
+    runner.prepared = slots_of_the_second_group
+    _step(runner, 0, steps)
+    _step(runner, 1, steps)
+    events, starts = _logged(tmp_path, capture)
+    assert (starts[0].logits_indices, starts[0].slot_mapping, starts[0].block_tables) == ([1, 2], [8, 9, 12], {"a": [4], "b": [6]})
+    assert starts[0].kv_groups[1] == {"layers": ["sliding"], "block_size": 2, "block_tables": {"a": [12, 13], "b": [14]}, "slot_mapping": [24, 25, 28]}
+    assert (starts[1].rows, starts[1].input_token_ids, starts[1].positions) == ([("a", 2)], [9], [2])
+    assert (starts[1].logits_indices, starts[1].logits_rows, starts[1].slot_mapping, starts[1].block_tables) == ([0], [("a", 2)], [18], {"a": [4, 9]})
+    assert starts[1].kv_groups[1] == {"layers": ["sliding"], "block_size": 2, "block_tables": {"a": [12]}, "slot_mapping": [26]}
+    assert [e.sampled_token_ids for e in events if isinstance(e, E.SampleEnd)] == [[9, 4], [2]] and capture.errors == []
+
+
+def test_a_step_of_a_runner_with_no_kv_cache_group_has_no_block_table_whatever_an_earlier_step_left(tmp_path, device):
+    capture, runner = _capture(tmp_path)
+    _step(runner, 0)
+    runner.block_tables.num_kv_cache_groups = 0
+    _step(runner, 1)
+    events, starts = _logged(tmp_path, capture)
+    assert starts[0].block_tables == {"a": [4], "b": [6]} and starts[1].block_tables == {"a": [], "b": []}
+    assert starts[1].slot_mapping == [18, 13] and starts[1].kv_groups is None and capture.errors == []
 
 
 def test_logits_rows_are_the_rows_the_indices_name_where_there_is_not_one_a_request(tmp_path, device):
@@ -599,7 +726,9 @@ def test_each_kv_cache_group_of_a_hybrid_runner_has_its_layers_block_tables_and_
     capture, runner = _capture(tmp_path, steps=steps, groups=([LAYER], ["sliding.0", "sliding.1"], ["unmapped"]))
 
     def slots_of_the_second_group(batch):
-        runner.execute_model_state.slot_mappings_by_layer["sliding.1"] = torch.tensor([24, 25, 0, 99], dtype=torch.int32)
+        mappings = runner.execute_model_state.slot_mappings_by_layer
+        mappings["sliding.1"] = torch.tensor([24, 25, 0, 99], dtype=torch.int32)
+        mappings["a layer of no group, with the first's mapping"] = mappings[LAYER]
 
     runner.prepared = slots_of_the_second_group
     _step(runner, 0, steps)
