@@ -210,7 +210,7 @@ def _pairs_loop() -> Program:
 def test_the_arrays_multiplied_pairwise_set_F():
     w = WK.read(_pairs_loop(), KB)
     (g,) = w.groups
-    assert g.weight == (True, True) and w.N == 3 * (T - 1) * K and WK.clique(g.edges) == 3
+    assert g.weight == (True, True) and w.N == 3 * (T - 1) * K and MC.clique(g.edges) == 3
     b = WK.bound(w, C)
     assert b.omega == 3 and b.bound.F == MC.share(3) and b.bound.statement == MC.HE_SHARED
 
@@ -819,13 +819,6 @@ def test_a_chain_deeper_than_the_recursion_limit_is_read_as_a_short_one(depth):
     assert (w.N, w.keep, w.left_out) == (plain.N, plain.keep, plain.left_out)
     assert [(g.product, g.weight, g.macs, g.reason) for g in w.groups] == \
         [(g.product, g.weight, g.macs, g.reason) for g in plain.groups]
-
-
-def test_clique():
-    tri = [frozenset(e) for e in ((1, 2), (2, 3), (1, 3), (3, 4))]
-    assert WK.clique(tri) == 3
-    assert WK.clique(tri + [frozenset(e) for e in ((1, 4), (2, 4))]) == 4
-    assert WK.clique([frozenset((1, 2))]) == 2 and WK.clique([]) == 0
 
 
 #: the suite's Programs built by name, each held to its reading in `READINGS`
