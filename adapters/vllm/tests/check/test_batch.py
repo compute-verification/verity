@@ -6,12 +6,24 @@ one whose Definition changes with the launch's row count (a split count read fro
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity_vllm.check.batch import (BATCH, SHARED, Fields, Rows, Template, check, held, invariant, own, report, separable,
-                                     structure)
+
+from verity_vllm.check.batch import (
+    BATCH,
+    SHARED,
+    Fields,
+    Rows,
+    Template,
+    check,
+    held,
+    invariant,
+    own,
+    report,
+    separable,
+    structure,
+)
 
 V16 = Value(16)
 ADD = PrimitiveDefinition("BatchTestAdd16", 1, (("a", V16), ("b", V16)), V16, lambda a, b: (a + b) & 0xFFFF, register=False)

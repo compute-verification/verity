@@ -14,13 +14,12 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.kernels import tc as CK
 from verity.definitions import boolean as SW
+from verity.definitions.kernels import tc as CK
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import flashmla_prefill_twin as T
 from verity.definitions.numerics import flashmla_twin as FT
@@ -152,7 +151,7 @@ def test_a_token_with_no_valid_row_writes_zeros():
 def test_bad_statics_are_refused_by_name(fn, kw, needle):
     extra = {k: v for k, v in (("DOT", P.HopperBF16WgmmaDot16), ("SCALE", 0.25)) if k in fn.statics}
     with pytest.raises(ValueError, match=needle):
-        bind(fn, **kw, **extra).body
+        _ = bind(fn, **kw, **extra).body
 
 
 # --- the Boolean Definitions --------------------------------------------------------------------------------------------------------

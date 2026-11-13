@@ -12,7 +12,6 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.silicon.instructions import INSTRUCTIONS
-
 from verity.protocols.pouw.prover.circuit import h1device as D
 from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import h1window as HW
