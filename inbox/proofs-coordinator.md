@@ -115243,3 +115243,51 @@ Mailbox read to its 02:26Z message before writing [run]. Nothing waited over ten
 `cursor/proofs-keyheld-3c9a` `962bc1a88b4e3be883a1a0f348ae0d9554a19795`; `cursor/proofs-keyheld-rekey-5d1e` `ca9a951d175e` (now inside the pull request's branch; nothing more goes to it); `cursor/proofs-redraw-cc71` `db228c8966f0`; `cursor/proofs-redraw-9373-close-a41d` `92b97c953cbb` [run: `git rev-parse` of each remote ref]. Unpushed: nothing [run: `git status` of each worktree].
 
 Soundness's question is answered in my 01:40Z entry, section S, which you posted [read: your 02:26Z message].
+
+## FIRSTACCEPT, Fri 02:39Z: the first accept of the one-stage audit's one-statement form is on record (`r20261113-021307-1374`: test passed, suite 19/19, compiled check accepts with unit 0 proved); no guarantee's lock record moves (`0337`); PR #9594 open, unmarked
+
+In plain words: the smallest real one-stage audit (one window of one member, its proof session on the window's own challenger session, a key at the deployed parameters, the plain random subset) now ends in the compiled Lean check's accept. The check credits the drawn unit as proved. The change that allows it is narrow: a window's registration is read as the public file names its ports only where all its roots are one member's. Every other window stays refused. No guarantee's statement or recorded premises change.
+
+**Ready line**: PR [#9594](https://github.com/compute-verification/verity/pull/9594), head `cursor/proofs-firstaccept-5a1c` at `9049e2c572`, base `main`, unmarked, `Lane proofs` in the body. It holds 320f's commits (merged at `7e8fb2a0ca`), so `cursor/proofs-firstaccept-320f` needs no PR of its own. The body has the before and after for Daniel. `Issue: none:` because the brief names no issue; add one with `research queue edit` if there is one.
+
+**Shown by `r20261113-021307-1374`** (vy-nebius-2, `7e8fb2a0ca`, done rc 0, files preserved) [run]:
+- `suites.py benchmarks/one_stage -- tests/test_composite.py tests/test_audit_one_member.py`: 19 passed under the suite's read guard. This is A2 as a suite.
+- `test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compiled_check`: PASSED (173 s).
+- The compiled check replayed on the kept case, `out/t/test_one_member_on_the_windows0/case`: exit 0, `accept`, `public` {bound 0, drawn [0], proved [0]}, protocol `verity/sampled-proofs/one-stage/v2`.
+- Provenance (`composite.provenance`):
+  - commit `7e8fb2a0ca1d9ca571ef4af9de3863c9c9c0b2a6`, clean;
+  - verifier SHA-512 `391891bc…aeb1d964`;
+  - cites `Verity.Sampled.remote_soundness_deployedReady`: listed true, deployed false;
+  - six open premises: `Instance.LogOpensRecorded`, `RegisteredFiles`, `SessionRegistered`, `SessionsReady`, `Vocab.InferenceOnlySound`, `Vocab.PouwSound`;
+  - `UNCITED` none, `NOT_ESTABLISHED` none.
+
+**Run 1262's verdict, test by test** (vy-nebius-2, `7e8fb2a0ca`, done rc 0) [run]:
+- difftest `test_a_piece_agrees[matches_public]`: PASSED;
+- difftest `test_a_piece_agrees[public_ports]`: PASSED;
+- `test_audit_one_member`: PASSED (220 s);
+- replay: accept, the same as 1374;
+- provenance: the same as 1374.
+
+Two things failed in 1262, both in my script, both fixed in 1374:
+- `suites.py one_stage` didn't run: the name matched two suites. 1374 used the path.
+- pytest's `--basetemp` left an absolute symlink in `$OUT` that breaks `research fetch --all`. 1374 deletes the links before custody.
+
+**Lock records, `r20261112-232750-0337`** (vy-nebius-2, at `ac9df926ef`, the same Lean and locks as the head) [run]:
+- Took check slot p11 at 00:38Z and Lean slot build/1 at 00:41Z, and was building throughout. It ended rc 0 at 02:37Z, about a minute inside its 7,200 s limit, with outcome `regenerated` and every package's audit passed.
+- No guarantee record changes in `security/lean-audit.json` or `security/Properties/lean-audit.json`. Only `reads` of `Spot.OneStageZk` (`publicHeld` changed; `publicPorts`, `commonMember`, `NOT_ONE_MEMBER` added) and `Spot.Record` (`matchesPublic` changed; `matchesPublicBy` added).
+- Committed as `9049e2c572`. No second records run was started.
+
+**A25** [read, my 22:34Z entry; relayed, Daniel's ruling of 5:02 PM PST]. Friday's run takes `--challenger local`. A run at vy-challenger-1 would need:
+- `--challenger gate:USER@HOST` with `--peer`, `--challenger-key` (the host's `challenger-key/v1` record) and `--main`;
+- the lane's ed25519 gate key on that gate;
+- the host's LMS key at W = 1, H = 20, which is infra's open question.
+
+**A3**: left, as ruled.
+
+**Not established**
+- That the PR's head passes the queue's check against today's `main`. `git merge-tree origin/main` is clean, but nothing has built the merge.
+- That the merged tree with WINDOWAT's `OneStageZk` change builds (text merge clean at 23:28Z only).
+- A `stratified:1` one-member case, which is to be refused by `paramsOfJson` and is not tested here.
+- The accept under a served workload on live coins under the deployed key: this is a test window.
+
+**NEEDS**: none. **To post**: none.
