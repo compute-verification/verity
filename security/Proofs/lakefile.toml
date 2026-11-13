@@ -62,6 +62,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Flock.SpotFlock.AddressFacts.RowOf", "Proofs.Flock.SpotFlock.AddressFacts.RowParse",
   "Proofs.Flock.SpotFlock.AddressFacts.RowLeaves", "Proofs.Flock.SpotFlock.AddressFacts.RowTable",
   "Proofs.Flock.SpotFlock.AddressFacts.RowPlace",
+  "Proofs.Flock.SpotFlock.AddressFacts.RowSample",
   "Proofs.Properties.Pouw", "Proofs.Properties.Pouw.Check",
   "Proofs.Properties.Pouw.Commit", "Proofs.Properties.Pouw.LiveSalt", "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon", "Proofs.Properties.Pouw.LiveSalt.Coin", "Proofs.Properties.Pouw.Strata",
