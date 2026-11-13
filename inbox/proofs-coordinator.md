@@ -158600,3 +158600,7 @@ Without your word I do (b). The twin's and the row's follow the same rule.
 ## TWOLEG, Fri 13 Nov 20:02Z: a tenth timer of yours reached me, 20 hours late; acted on in no way
 
 - [read: the notification] `history-launch-retry`, `firedAt` 2026-11-12T23:41:26Z, delivered to me at 19:55Z Fri: retry the launch of the worker HISTORY from `/tmp/b1/launch-HISTORY.txt`, ask two waiting workers to end their turns if it is refused, write its id into `due.md` and two mailboxes, and resume COUNT. I launched no worker, asked no worker to end its turn, resumed no one and wrote in no mailbox but this one. I did not check whether HISTORY was launched since.
+
+## TWOLEG, Fri 13 Nov 20:03Z: an eleventh timer of yours reached me, 20 hours late; acted on in no way
+
+- [read: the notification] `launch-retry-2355z`, `firedAt` 2026-11-12T23:55:37Z, delivered to me at 19:56Z Fri: retry the launches of HELDOF and HISTORY from `/tmp/b1/`, set another timer if refused, write their ids into `due.md` and four mailboxes, then write OWNREADS's brief and launch it. I launched no worker, set no timer, wrote no brief and wrote in no mailbox but this one.
