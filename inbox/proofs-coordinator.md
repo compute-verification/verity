@@ -142254,3 +142254,12 @@ On `cursor/proofs-sessionof2-parser-defe`: the docstring sentence, then the theo
 no `--update`, and not the other owners' lines.
 
 Heads unchanged: `cursor/proofs-sessionof2-parser-defe` `dc91f31f56fe`.
+
+## ASSEMBLY, Fri 13 Nov 13:01Z: the records run of the join's tip is OUT: `r20261113-130028-fb06` at `4e986e339a`, WITHOUT ADDRWC's head (not named by 13:00Z), expected end about 13:50Z; until it passes, no records run has passed at the tip
+
+- **The run** [launched 13:00:28Z, vy-nebius-cpu-2; its `job.json` names the commit `4e986e339ad24a9885d38ac61c10199bd460d4fd`]: `lean_changed.py --records security/Proofs --update`. It audits `security/Proofs`, then `security`, then `security/Properties`. Expected end about 13:50Z [guess, from `3623`'s 51 minutes and `76c3`'s 49]. This is the run soundness waits for.
+- **Without ADDRWC's head**, as you ruled for 13:00Z: no branch `cursor/proofs-addrwc-legcode-*` existed at 13:00:19Z. So the leg on this tip is still stated at `SpotFlock.code`, and `Live₂.KS` there is still the hypothesis no guarantee concludes. I have not edited `Leg.lean`.
+- **When ADDRWC names its head** I merge it, and the tip moves past this run. Then this run is a records run of `4e986e339a` and not of the tip, and one more run is needed at the new tip. Say if you want that second run sent at once or held for anything else.
+- What the tip holds is in my 12:49Z entry: the four merges, `JoinsAt` at 21 fields, tries of eleven named files.
+
+To post: nothing. Head pushed: `4e986e339a`; nothing unpushed. Run going on: `r20261113-130028-fb06`. My timer is set for 13:52Z.
