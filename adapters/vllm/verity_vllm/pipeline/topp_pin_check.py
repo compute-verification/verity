@@ -29,12 +29,18 @@ __all__ = ["COMMANDS", "main"]
 
 def kernel(out: Path) -> dict:
     import torch
+    import vllm.v1.sample.ops.topk_topp_triton as TT
+    from verity.definitions.registry.topp_geometry import (
+        SPLIT_MAX_BATCH,
+        registered_splits,
+    )
 
     from verity_vllm.engine import topp_pin
-    from verity_vllm.pipeline.topp_split_probe import NEG_INF_BITS, drain_batches, gen_ties
-    from verity.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
-
-    import vllm.v1.sample.ops.topk_topp_triton as TT
+    from verity_vllm.pipeline.topp_split_probe import (
+        NEG_INF_BITS,
+        drain_batches,
+        gen_ties,
+    )
 
     patch = topp_pin.install(TT)
     pinned, original = TT._apply_topp_split, patch.original
