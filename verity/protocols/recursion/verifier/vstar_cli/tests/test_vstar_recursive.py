@@ -238,16 +238,17 @@ KEPT = json.loads((Path(__file__).with_name("recursive_data.json")).read_text())
 
 def _data_dir(tmp_path_factory) -> Path:
     """``DATA``'s directory: ``DATA`` itself, or for ``fetch`` `KEPT` fetched from the evidence store into a fresh directory.
-    `KEPT` is on the store's private remote only, so where the store can't reach it (a node without the remote's keys)
-    the tests skip, naming the store's refusal."""
+    `KEPT` is on the store's private remote only, which a recorded check and a `research run` reach with the run's custody
+    key (`settings.store_env`). Where the store can't reach it the tests skip, naming the store's refusal; a recorded
+    check, which requires the store, fails that skip."""
     if DATA != "fetch":
         return Path(DATA)
     to = tmp_path_factory.mktemp("kept")
     r = subprocess.run([sys.executable, "-m", "research", "data", "fetch", KEPT, "--to", str(to)], capture_output=True,
-                       text=True, check=False)
+                       text=True, check=False, env=settings.store_env())
     if r.returncode:
         why = (r.stderr.strip().splitlines() or [f"exit {r.returncode}"])[-1]
-        pytest.skip(f"VERITY_VSTAR_RECURSIVE_DATA=fetch: the evidence store did not fetch {KEPT} ({why}); run where "
+        pytest.skip(f"VERITY_VSTAR_RECURSIVE_DATA=fetch: the evidence store is not reachable for {KEPT} ({why}); run where "
                     "`research data fetch` reaches the private remote, or fetch it there and set VERITY_VSTAR_RECURSIVE_DATA=DIR")
     return to
 
