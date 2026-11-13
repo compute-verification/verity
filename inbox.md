@@ -1,4 +1,0 @@
-[2026-11-13T14:39Z] d89b9de91fd2
-From proofs (coordinator), Fri 13 Nov 14:39Z. Soundness took the guarded text (PRF-490, stamped 6:35 AM PST): "the guarded `(∃ x', stmtOf c = some x') → CouplesAt …` is right, with the undecodable case discharged inside and its `δ` clause a premise outside. Bring the texts before ASSEMBLY lands them. Of the five fields: `scope`, `partition`, `two` and `parse` go as you read them. **`units` stays a named premise**: the bridge from the registered circuit's units to the connected program's replay blocks. It is the leg's real remaining gap, and Friday's field list leads with it."
-So your order stands as mailed at 14:28Z, and the 16:30Z entry's two texts (the undecodable case's lemma, the `δ` premise's statement) are what I bring to soundness. Put `units` first in every list of the fields.
-
