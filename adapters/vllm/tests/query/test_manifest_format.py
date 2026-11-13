@@ -252,6 +252,25 @@ def test_load_program_reads_the_dirs_result_and_its_artifact_when_there_is_one(t
     assert MF.load_program(str(tmp_path))["artifact"] == {"program": {"digest": "d" * 64}}
 
 
+def test_programs_for_loads_the_program_of_each_declared_request(tmp_path):
+    """One loaded Program a declared request, under its label: the dir `program_dirs_for` finds for its shape, a warm request's
+    its own."""
+    fx = {"requests": [{"request_id": "r0", "prompt_len": 168, "max_tokens": 10}, {"request_id": "r1", "prompt_len": 168, "max_tokens": 10, "cached": 128}]}
+    head: dict[str, object] = {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "correspondence_digest": None, "params": []}
+    for name, C in (("build_request_LP168_T9", 0), ("build_request_LP168_T9_C128", 128)):
+        (tmp_path / name).mkdir()
+        write_instances_file(str(tmp_path / name / "instances.json.gz"), head, iter([]))
+        (tmp_path / name / "result.json").write_text(json.dumps({"ok": True, "LP": 168, "T": 9, "C": C}))
+    dirs = MF.program_dirs_for(fx, str(tmp_path))
+    assert dirs == {"r0": str(tmp_path / "build_request_LP168_T9"), "r1": str(tmp_path / "build_request_LP168_T9_C128")}
+    got = MF.programs_for(fx, str(tmp_path))
+    assert got == {rid: MF.load_program(d) for rid, d in dirs.items()}
+    assert {rid: (p["dir"], p["result"]["C"], p["artifact"]) for rid, p in got.items()} == {"r0": (dirs["r0"], 0, None), "r1": (dirs["r1"], 128, None)}
+    assert MF.programs_for({"requests": []}, str(tmp_path)) == {}
+    with pytest.raises(SystemExit, match="no request Program for r2 .*169,9"):
+        MF.programs_for({"requests": [*fx["requests"], {"request_id": "r2", "prompt_len": 169, "max_tokens": 10}]}, str(tmp_path))
+
+
 def test_a_manifests_rows_are_read_under_the_name_its_layout_gives_them():
     a, b = {"op_path": "a"}, {"op_path": "b"}
     assert MF.manifest_rows({"identities": [a], "entries": [b]}) == [a], "the identity key first"
