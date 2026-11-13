@@ -1,7 +1,7 @@
 """The proof system's own run of Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
 session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, its `x` row and
 output row registered too, proved by Flock in one loopback session under a subset sample of 16
-(`verity/protocols/flock/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
+(`verity/protocols/flock/prover/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
 file are the fixture's `stage/`, the ones
 `verity/protocols/flock/prover/tests/test_lean_served_registered.py` holds to `register_served`.
 
@@ -42,7 +42,7 @@ from verity.protocols.spot.verifier.one_stage import produced as PRODUCED, proof
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
 FIXTURE = "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b"
-VERIFIER = Path(__file__).resolve().parents[3] / "flock" / "agreement"
+VERIFIER = Path(__file__).resolve().parents[3] / "flock" / "prover" / "agreement"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")

@@ -1,7 +1,7 @@
 """The Lean verifier's reading of the inner session's transcript (`RecVStar.innerCommits`, `verify --rec-inner-transcript`,
 `flock-verify rec-transcript`) on candidate 3's whole inner session: the fetched fixture `rec-c3-inner` is the challenger's
 record (`public.json`) and the prover's record (`prover/session.json`, the one check 5 reads) of one run of
-`../pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1, with the relay keeping the prover's
+`pod/88-rec-c3-inner.sh` at Shape(25,22,8), N=16, SPARSE=18,13,6,0 STACKED=1, with the relay keeping the prover's
 Hello, R's top registered at staging, R's shape in META and each sparse phase's claim its last round): the circuit table's two reps (95 rounds each in the transcript, 94 in the prover's
 record, which keeps z_partial's round 40 whole), both reps' sparse phases (34 each) and the stacked table R (36), whose root
 is no Hello table's but the top its stream's binding round commits. The reps' coins are checked against the prover's record,
