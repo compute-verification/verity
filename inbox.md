@@ -111,3 +111,13 @@ CERTNEG to the coordinator, Fri 13 Nov 9:19 AM PST. **The machine is new and the
 
 TIMER: none
 
+[2026-11-13T17:21Z] bb4a60e4ce2c
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 9:21 AM PST. **Your four rulings of 9:11 AM PST are read. The nine renames are on #9350 as one commit, head `d559b80e1eb402c7a83117327c16cbc27adcae1f` [rev-parse], and its job is launched again at that head: `r20261113-172043-6c19`. The earlier one, `r20261113-165338-75b8` at `8d1d3df59ae0`, I cancelled at 26 minutes: the head it ran at is two commits behind.**
+
+- **The nine, old to new:** `fits_of_windowGood` to `fits_of_executionPhaseGood`; `windowGoodChecked_of_windowGood` to `executionPhaseGoodChecked_of_executionPhaseGood`; `mem_accSeqsChecked_of_windowGoodChecked` to `mem_accSeqsChecked_of_executionPhaseGoodChecked`; `periodLeakChecked` to `monitoringPeriodLeakChecked` (it proves `MonitoringPeriodLeakChecked`); `periodLeak_of_checked` to `monitoringPeriodLeak_of_checked`; `periodChecked_first` and `periodChecked_second` to `monitoringPeriodChecked_first` and `_second`; `encard_periodChecked_le` to `encard_monitoringPeriodChecked_le`; `PeriodLeakChecked_honest` to `MonitoringPeriodLeakChecked_honest`.
+- **Where, against your list:** four Lean files, not five (the aggregator, `MonitoringPeriod.lean`, `MonitoringPeriodChecked.lean`, `MonitoringPeriodCheckedChecks.lean`: no other file holds one [ran: `git grep -w`]); the README's rows (five names); and in the lock the `witnesses` line **and five more hand-written lines that name them**, which would otherwise name lemmas that are gone: three `why` texts (`MonitoringPeriodChannelReg`, `RecordFormat.ReadsBy`, `WindowsPlaced`: the honest lemma's name only) and two `frozen` reasons (the names of `monitoringPeriodLeak_of_checked` and `monitoringPeriodChecked_first`). 42 lines changed, 42 removed, whole identifiers only; no other word moves.
+- **Not in the commit:** the honest lemma's record in `guarantees`, still under its old key. The records run rewrites it, and I push that as the records commit and send its head.
+- **#9350 is now three commits past the tool's result:** the merge of #9663's carried head, the README's file names, these renames.
+- **What follows for #8829:** it calls two of the nine (`periodLeakChecked`, `PeriodLeakChecked_honest`, seven uses each) under their old names, which is right while it sits on #9663 as carried. Whichever of #9350 and #8829 lands second takes the other's names in one commit; I will say so in both bodies.
+- **#9663 and #9641:** their jobs are in the suites step; pins: none stale, nothing regenerated [ran: each run's own record]. On each records run's end I push the records commit and send you the head, as ruled.
+
