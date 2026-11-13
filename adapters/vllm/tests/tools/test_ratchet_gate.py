@@ -791,6 +791,7 @@ def test_shared_lint_code_runs_every_lint_and_an_error_is_named(linted):
 
 @pytest.mark.parametrize("runner, wrote, error", [
     ("import sys\nsys.exit('the runner broke')\n", "the runner broke", ValueError),
+    ("import sys\nprint('half a document')\nsys.exit('the runner broke')\n", "the runner broke", ValueError),
     ("print('{}')\n", "{}", KeyError),
     ("print('null')\n", "null", TypeError)])
 def test_a_base_lint_run_that_ends_without_its_document_decides_no_verdict_and_names_what_it_wrote(linted, monkeypatch, runner,
