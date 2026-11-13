@@ -62,9 +62,10 @@ theorem avg_ite_subtype {C : Type} [Fintype C] (p : C → Prop) [DecidablePred p
         unfold avg
         rw [Finset.sum_filter]
         refine Finset.sum_congr rfl fun c _ => ?_
+        beta_reduce
         by_cases hc : p c
-        · rw [if_pos hc, if_pos hc]
-        · rw [if_neg hc, if_neg hc, mul_zero]
+        · rw [ite_eq_left hc, ite_eq_left hc]
+        · rw [ite_eq_right hc, ite_eq_right hc, mul_zero]
     _ = ∑ x : {c // p c}, (Fintype.card C : ℝ≥0∞)⁻¹ * f x.1 :=
         Finset.sum_subtype _ (fun c => by simp) _
     _ = _ := by
@@ -97,11 +98,11 @@ theorem prob_member (τ : Strategy w.game) (k : Fin w.ms.length)
       (ts[k.1]?).elim False (E ((w.ms.get k).part (w.L.draw ω))) ∧ w.ended ω = true) _ _ = _
     rw [prob_and_const]
     by_cases he : w.ended ω = true
-    · rw [if_pos he, if_pos he]
+    · rw [ite_eq_left he, ite_eq_left he]
       exact (prob_seqG (fun m : MemberV5 w.Reg w.nJ => m.live (m.part (w.L.draw ω)) τ.1)
         (fun x => x.elim False (E ((w.ms.get k).part (w.L.draw ω)))) w.ms k.1 k.2 _).trans
         (avg_congr_fintype _ _ _)
-    · rw [if_neg he, if_neg he]
+    · rw [ite_eq_right he, ite_eq_right he]
   have hR : prob (fun o => E o.2.1 o.2.2) ((w.ms.get k).game (w.memberLaw τ k)) (w.memberStrat τ k) =
       avg fun x : (w.memberLaw τ k).Ω => h x.1.1 (x.2 x.1) := by
     show avg (fun x => prob (fun o => E o.2.1 o.2.2) (((w.ms.get k).live ((w.memberLaw τ k).draw x) τ.1).map
@@ -141,9 +142,9 @@ theorem endShare_mul_avg_le (τ : Strategy w.game) (k : Fin w.ms.length) (G : Fi
     fun ω => G ((w.ms.get k).part (w.L.draw ω))).symm.trans_le ?_
   refine avg_mono fun ω => ?_
   by_cases he : w.ended ω = true
-  · rw [if_pos he]
+  · rw [ite_eq_left he]
     exact le_rfl
-  · rw [if_neg he]
+  · rw [ite_eq_right he]
     exact zero_le
 
 /-- **`ε_ks` reads only the member's part of the sample**: its ended share at `memberLaw` is at most `ε_ks` at
@@ -191,7 +192,9 @@ theorem card_endDesign_le (k : Fin w.ms.length) (p : (w.ms.get k).vb.Pos) :
         (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.endDesign k) p =>
       (⟨c.1.1, c.2⟩ : ΩcZ execArith (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
         (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.design k) p))
-    fun a b hab => Subtype.ext (Subtype.ext (congrArg Subtype.val hab))
+    fun a b hab => by
+      have h := congrArg Subtype.val hab
+      exact Subtype.ext (Subtype.ext h)
 
 /-- A share `cE / cL` of a binding term at shares `a p / cE` is at most the term at shares `b p / cL`, for `a ≤ b`. -/
 theorem share_scale {ι : Type} [Fintype ι] {cE cL c d : ℝ} (hcE : 0 < cE) (hcL : 0 < cL) (hc : 0 ≤ c) (hd : 0 < d)
