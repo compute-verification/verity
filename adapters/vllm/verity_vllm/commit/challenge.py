@@ -30,6 +30,9 @@ from typing import Any
 import numpy as np
 from verity.commitments.randomness import Key, derive
 
+__all__ = ["case_seed", "challenge_positions", "challenge_seed", "generator", "legacy_replay_seed",
+           "reference_rows_seed", "root_seed", "run_root_of", "stratum_picks", "stream"]
+
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
 IDENTITIES_DOMAIN = "verity/vllm-commit/opening-identities/v1"
 REPLAY_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
