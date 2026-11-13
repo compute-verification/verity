@@ -306,10 +306,10 @@ theorem twoHolds_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {n : ℕ} (
 /-- **The form's check of the held copies gives `TwoHolds`** where the run's population check passes. -/
 theorem twoHolds_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
     {it : Spot.Run.Interior} {n : ℕ} (desc : Msg) (query : Query) (c₀ : Code) (more : ℕ)
-    (hk : heldOkFiles p bs i it = true)
+    (hk : heldOkDesc p bs i it = true)
     (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) :
     ∃ u h, unreadOf p bs desc query c₀ more = some u ∧ heldOf i it u = some h ∧ TwoHolds h := by
-  unfold heldOkFiles at hk
+  unfold heldOkDesc at hk
   cases hx : refStmtsOf p bs with
   | none => rw [hx] at hk; simp at hk
   | some xs =>

@@ -119,8 +119,9 @@ theorem heldOf_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} (u : Unread) 
   exact Option.isSome_iff_exists.1 hk
 
 /-- **The form's check of the held copies**: `heldOk` at the members' reference statements on the blobs
-(`refStmtsOf`); false where one is missing. -/
-def heldOkFiles (p : VStar.Recursive.SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input)
+(`refStmtsOf`); false where one is missing. It takes a step per template and per stratum, none per unit or gate, and
+with the run's population check gives `TwoHolds` (`HeldOfRun.twoHolds_of_files`). -/
+def heldOkDesc (p : VStar.Recursive.SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input)
     (it : Spot.Run.Interior) : Bool :=
   match refStmtsOf p bs with
   | some xs => heldOk i it xs
