@@ -119,7 +119,9 @@ and each row says where it stands:
   connection is charged for its schedule and again for its fail cell, one connection a request, so these two terms
   are counted by request. The jitter is counted by link, for each of its execution phases. Its accept is run, not
   proved, whatever its bound and its δ: it rests on verdicts the scan's driver hands the compiled record check, and
-  nothing compiled ties them to the sessions' runs.
+  nothing compiled ties them to the sessions' runs. So the row carries the mark `run, not proved`, the exfiltration
+  command's mark of that name, in its legend line and in each of its rows of the document (`mark`; no other row
+  carries one).
 - `N2` (on main): the clock form. The schedules are counted by link, over its execution phases, whatever it serves.
   Its parameters list no connection, so it has no fail cell. The jitter is the scan's.
 - `lengths`, `timing`, `entries` (each a change to the scan's check) and `all three`: the scan with a response's

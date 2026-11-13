@@ -649,7 +649,8 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
     assert doc["failure_rate_at_target"] == 1.0 and "one entry a request" in doc["entries_rule"]
     assert set(doc["inputs"]) == set(small()) and all(set(i) == {"value", "unit", "mark", "source"}
                                                       for i in doc["inputs"].values())
-    assert list(doc["legend"]) == list(NAMES) and all(set(k) == {"standing", "counts"} for k in doc["legend"].values())
+    assert list(doc["legend"]) == list(NAMES) and all(
+        set(k) == {"standing", "mark", "counts"} for k in doc["legend"].values())
     assert [k["standing"] for k in doc["legend"].values()] == [
         "on main", "on main", *["a change to the scan"] * 4, *["a design with no run behind it"] * 2]
     assert "by request" in doc["legend"]["scan"]["counts"] and "by link" in doc["legend"]["N2"]["counts"]
@@ -678,6 +679,12 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
     assert (r["eps"], r["eps_target"], r["scan_delta"]) == (2 ** -20, 2 ** -20, float(Fraction(1, 2 ** 20) / 739_125))
     assert {name for name, k in LB.ROWS.items() if LB.SCAN_ACCEPT in k.counts} == {"scan"}
     assert "its accept is run, not proved" in doc["legend"]["scan"]["counts"]
+    # the scan's rows alone carry the mark, beside those words: in the legend, in each row and in the print
+    assert {name: k["mark"] for name, k in doc["legend"].items()} == {
+        name: "run, not proved" if name == "scan" else None for name in NAMES}
+    assert all(x["mark"] == doc["legend"][x["row"]]["mark"] for x in doc["rows"])
+    assert [line for line in LB.render(doc).splitlines() if line.startswith("- ") and "; run, not proved)" in line] == [
+        f"- scan (on main; run, not proved): {doc['legend']['scan']['counts']}"]
     json.dumps(doc)
     few = LB.document(small(), only=["world"], periods=["year", "week"])
     assert [(x["scope"], x["period"]) for x in few["rows"]] == [("world", "week")] * 8 + [("world", "year")] * 8

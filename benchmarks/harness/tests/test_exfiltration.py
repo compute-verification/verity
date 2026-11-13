@@ -504,6 +504,15 @@ def test_the_network_certifiers_part_is_beside_it_at_the_requests_its_calculator
         E.build(store=recorded(tmp_path / "halved").fresh(), root=REPO)
 
 
+def test_the_scan_rows_mark_is_this_commands_mark_of_that_name():
+    """The calculator marks the `scan` row's accept `run, not proved` by a string of its own, since it cannot read
+    this command's: the two are one mark, and no other row of the calculator's carries one."""
+
+    lb = term()
+    assert lb.RUN_NOT_PROVED == E.RUN_NOT_PROVED and E.RUN_NOT_PROVED in E.MARKS
+    assert {name: k.mark for name, k in lb.ROWS.items() if k.mark} == {"scan": E.RUN_NOT_PROVED}
+
+
 def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(tmp_path, monkeypatch):
     """The network certifier's figures of record are its document's at D_j = 2, held here to that document: the scan's
     over the world's year is the document's `value`, on the class its calculator assumes by default and on the class
@@ -1166,7 +1175,7 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
 NO_VERDICTS = {"text": "e50cd2fb2579ccee08267770c113fe2a1f3dd61f1e2ae280286b11eda3cfaa55",
-               "json": "77d5eea7d51a49a6b0bce83ccc020517c43e9d75b37b827da9a303ce8c254a88"}
+               "json": "1b2da6790466478d85f4acf1b57370d84a87fb548e13e75303e77f7beaf518d5"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
