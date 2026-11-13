@@ -517,10 +517,10 @@ theorem devBits_getD (r : Fin K → FlockDeploy.Coin) (i : Fin K) :
           unfold openBits
           exact List.length_ofFn
         by_cases htw : t < 128 * widthOf rl.frame
-        · rw [List.getD_append _ _ _ _ (by rw [hlen]; exact htw), hc]
+        · rw [List.getD_append rl.coins (devBits L i.val (q ++ [rl]) log) false t (by rw [hlen]; exact htw), hc]
           unfold openBits
-          rw [List.getD_eq_getElem _ _ (by rw [List.length_ofFn]; exact htw), List.getElem_ofFn]
-        · rw [List.getD_append_right _ _ _ _ (by rw [hlen]; omega), hlen,
+          rw [List.getD_eq_getElem _ false (n := t) (by rw [List.length_ofFn]; exact htw), List.getElem_ofFn]
+        · rw [List.getD_append_right rl.coins (devBits L i.val (q ++ [rl]) log) false t (by rw [hlen]; omega), hlen,
             devBits_getD log (q ++ [rl]) hgs (t - 128 * widthOf rl.frame) (by omega), hsnoc]
           congr 1
           omega
