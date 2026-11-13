@@ -118382,3 +118382,45 @@ Nothing.
 - The form with its switch on accepts no play today, so file 3 will be empty of content until it does.
 
 Branches, both pushed, nothing unpushed [run]: `cursor/proofs-join-42b8` at `79d111689f`; `cursor/proofs-assembly-992e` at `1a80621ef6`.
+
+## PERIODREAD, Fri 13 Nov 03:46Z: the refusal has run and Lean agrees with its reference (28 passed); #9595 now leaves `auditedOpen` as `main` has it with `auditedIn` its own copy tied by `rfl`, and that head's run waits in line
+
+**A Lean slot on vy-nebius-2 made me wait more than ten minutes, twice.** `r20261113-031857-3061` waited 15.5 min (03:19:19Z to 03:34:49Z, slot p21). The try `r20261113-032725-cd66` waited 16 min and never started: cancelled at 03:43Z under your 00:23Z word, and the try went to vy-nebius-cpu-11, where it had slot p0 after 26 s.
+
+**1. The refusal has a run behind it.** `r20261113-031857-3061`, vy-nebius-2, done rc 0, at `4f6a8f3d812d` [run]:
+- `LEAN-BUILD exit 0`: `lake build Spot sampled-proofs-difftest`, 501 jobs.
+- `PYTEST exit 0`: both period difftests, **28 passed in 137 s**. Lean and the Python reference agree on 30 sampled requests and on each of 34 named cases over two seeds, the five new ones among them (`another-circuit`, `in-no-period`, `no-circuit`, `never-sampled`, `params-registration`).
+- The test you named asserts the refusal: a session of the lane without the family, in a period of this registration, refuses the period with `period: session S is in a period that commits this registration's circuit … and holds no coin: its root is committed under this registration and never sampled` [read: `test_period_audit_difftest.py:635-659`].
+- The new tests are each under 5 s; the three over 5 s were already marked `slow` [run: `--durations=5`].
+
+**2. #9595's head is now `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`**, your 03:35Z word (`8401237762b7`). Pushed 03:41Z.
+- `auditedOpen` is word for word `main`'s [read: `diff` of the definition against `origin/main`'s file at `8ef93f0196` is empty]. Its docstring gained three lines saying `auditedIn` exists and why.
+- `auditedIn` is its own definition of the 24 lines after the ledger's check [read: `diff` against those lines of `main`'s `auditedOpen` is empty], placed after `auditedOpen`, so `auditedOpen` elaborates in the environment it had.
+- `auditedOpen_eq_auditedIn : auditedOpen ledger window key = (do unless isWindow …; let (wins, periods) ← checked ledger key; auditedIn wins periods window) := rfl`, beside them in `Spot/ChallengerSession.lean`.
+- The one proof line under `security/` is back to `main`'s. **Nothing under `security/` differs from #9537's head now** [read: `git diff <merge-base> --stat -- security/` is empty].
+- **No record moves** [derived]: a record hashes a read definition's type and value (`Facts.lean:1106`, `check.py:1301-1305`), a docstring is in neither, and the definition's text and everything before it in the file are `main`'s. No records run on this head says so.
+- **Not compiled in the tree yet.** `r20261113-034210-2101` (the same build and difftests at `41a71836c3`) waits on vy-nebius-2, 12 checks ahead at 03:44Z. On my VM, a core-only file with the same 26 lines and stand-ins for the helpers: `rfl` closes the lemma, and one string edited in one of the two definitions gives `Not a definitional equality` [run: VM scratch, not the tree].
+
+**3. PR 3 (#9581) is restated once, against the check that holds the refusal.** Head `a441d994760b31af1be31043257ccc00f93ff971`. Not compiled: its try was `cd66`.
+- `CommittedOnce`: under an accept, every root the lane committed in the monitoring period is on a session that a period committing a circuit lists; every such root under this registration's circuit is exactly one published window with one audit entry; each published window is such a root. No `others` clause.
+- `EveryRootAudited` (the corollary) is gone.
+- **`OthersElsewhere` is my addition, and you have not ruled on it**: the published others are exactly the roots the lane committed under another circuit, each once, by that circuit and its session. It is soundness's "'Others' must be exactly 'other registrations', and that is checked", stated. It takes the corollary's `unstated` line, so the count of the period's `unstated` lines is what it was, eight. Say if you want it out of PR 3.
+- `AcceptMeans` gained `pub.registration = p.registration` and `registeredIn p r ws = .ok pub.others`.
+
+**4. PR 4's proofs are redone and one try is running.** Branch head `4ee128adc1baa48cf16bd64d81f3e8879cd2d5fb`, not opened. `r20261113-034343-e626`, vy-nebius-cpu-11, `security/Proofs/Properties/Spot/Period.lean`: slot p0 at 03:44:09Z, building imports (4131 of 4312 at 03:44Z). It elaborates PR 3's statements on the way. New: `registeredIn_ok`, `othersElsewhere`; redone: `run_ok`, `checkWith_accept`, `acceptMeans`, `committedOnce`, `auditedSession`, `ledgerOfDevice` at the weakened `Numbered`. None of it has elaborated.
+
+**5. A23's day is unchanged: `CommittedOnce` proved in a run by Fri 22:00Z** [derived]. The two rulings cost one restatement and one rewrite of four proofs, both done. What would move it is the try failing on something that is not a tactic slip, or the node's queue.
+
+**6. Not done.** #9595's body still describes the split and two records: I rewrite it when `2101` is in, with no record moving. Its quick tier and ready line follow `2101`. The stale R8 sentence (#9375 merged 03:01Z) and (l)'s sizing are not started.
+
+**To post** (PRF-600, to soundness, your (i) to (iv) as built; the run is `r20261113-031857-3061`):
+
+> The refusal is in #9595 and has run: Lean and its Python reference agree on 34 named cases and 30 sampled ones.
+> - **This registration** is a parameter the verifier gives the check, `registration`: the SHA-512 its lane's periods commit as their `circuit`. The ledger ties a session to a digest only through the period that lists it, so that is what the check reads.
+> - **A session reserved with the sample's family** must be in a period that commits `registration`. In a period of another circuit it refuses the period (`period`). So two registrations of one lane under one family label are never accepted in one monitoring period.
+> - **A session of the lane without the family** is refused by name when its period commits `registration` (`period`: committed under this registration and never sampled), and refused when no period lists it or its period commits no circuit (`outside`: committed under no registration). When its period commits another circuit it is listed, as `{registration, session}` and nothing else.
+> - **Not closed by this check**: a lane may open a period under any digest and commit roots there without the family. They are published under that digest, so the composite must require each registration's own audit. And nothing in the check ties `registration` to the circuit `audit`'s parameters describe: the verifier supplies both.
+
+**Not established.** That the tree at `41a71836c3` builds, and that `rfl` closes the lemma there. That no record moves, by a run. That PR 3's statements or PR 4's proofs elaborate. Any quick tier on #9595's new head.
+
+**Heads pushed:** #9595 `41a71836c34823cc2f7dcc54396ed776c7c8c5a9`; #9581 `a441d994760b31af1be31043257ccc00f93ff971`; PR 4's branch `4ee128adc1baa48cf16bd64d81f3e8879cd2d5fb`; scratch `208e5bbe93`. Unpushed: nothing. I can pause at any time. Mailbox read at `4adc7e8915` (03:36:03Z).
