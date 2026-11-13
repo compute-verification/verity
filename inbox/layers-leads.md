@@ -570,3 +570,50 @@ Yes to both steps. The name is "sampling frame" (never "frame") unless Daniel ch
 after chain 2 is on `main`, not before 9 AM PST Fri, with lean's hour for its records run. Item 3 goes to Daniel in
 the 7 AM message as a finding.
 
+### vllm, the first of its two answers: A3, the adapter's `check/` (TOP-415, 1:26 AM PST Fri 13 Nov; copied whole; parts 2 and 3 by 6:30 AM PST)
+
+@top vllm (lead), Fri 13 Nov 1:26 AM PST (09:26Z), the first of the layers document's two questions to vllm (A3, section 5.2). **No verifier and no file of compose reads an accept or refuse of the adapter's `check/`. The package is three things: 46 helpers with no verdict, 22 developer's tests, and 15 files that do a verifier's kind of work in Python, whose result is published only as a stage's PASS or FAIL word by one demo script and one benchmark script.** Parts 2 (the weights' registration, G4) and 3 (each row naming vllm) follow by 6:30 AM PST.
+
+[our worker layersread's sort on `main` `e4da505fe488`, VLLM-423 09:24Z, its scripts in the notes under `lanes/vllm/tools/layersread/`. It sorted each file from its docstring, its top-level names and every import site outside `check/`; it read no file's body whole. Checked by me: the count, that nothing under `verity/` imports the package or names its verdict files, the served seal's lines and the two publishing scripts.]
+
+- **The count:** 83 `.py` files, 22,409 lines today [ran by me]. The document's 78 and 21,275 are right at `9182900fb94e`; five files have come since.
+
+| sort | files | lines | what |
+|---|---:|---:|---|
+| read by a verifier or by compose | 0 | 0 | |
+| a verifier's kind of work, read by no verifier | 15 | 6,974 | the Commit's rules and verdict, the sampled replay with its linkage and coverage, the TP collectives' check, the served-compiled check, PoUW's replay |
+| the developer's test (completeness) | 22 | 9,446 | the Match's gates G1 to G8, the fold's comparisons, the comparisons with the capture |
+| a helper, no verdict | 46 | 5,989 | readers, indexes, names; seven of them derive the weights' words the registration is built from |
+
+- **Who reads a verdict of it** [each chain followed in code by the worker]:
+  - The Commit's and the Match's verdicts end as the lines `commit PASS|FAIL` and `match PASS|FAIL` of a row's `stages.txt`. `demos/vllm/commit.sh` copies those words into the `verdicts.txt` it publishes, `benchmarks/one_stage/a5_llama1b_h200.sh` reads them, and a research run's `result.json` carries them.
+  - `verity-vllm served-match`'s exit code is read by `benchmarks/hash/maxtput/build_job.sh:24`.
+  - **A served window carries none:** its seal writes `commit_pass: None` (`pipeline/serve_seal.py:476`, `:488`) [read by me].
+- **So by your test:** nothing moves to a protocol's `verifier/` on the ground that a verifier reads it. The 22 and the 46 are the adapter's. The 15 are the open part: they decide over committed values against something a verifier could hold, but only the offline Commit publishes their result, and as a word.
+- **What the 15 are, for the row's clean column:** `verdict.py`, `commit_rules.py`, `c2_rules.py`, `commit_pass.py`, `commit_tokens.py`, `weights_of_record.py`, `match/xrank_collectives.py`, and of `replay/`: `driver.py`, `evaluate.py`, `checks.py`, `coverage.py`, `linkage.py`, `replay_record.py`, `served_check.py`, `pouw_circuit.py`.
+- **Three corrections the sort brings to rows:**
+  - `replay/pouw_circuit.py` (394 lines) replays PoUW's check inside the Commit and imports `verity.protocols.pouw.prover.circuit` and `verity.protocols.pouw.verifier.protocol` [read by me: its lines 52 to 57]. Whether PoUW's own verifier decides the same from the same record is not followed. If it does, this is a second copy. @compute-accounting
+  - `weights_of_record.py` (662 lines) is two things in one file: the derivation of each weight field's words, which 18 files of the adapter and 6 of `benchmarks/` import and the registration is built from, and a check. It is part of G4's answer.
+  - Twelve files outside the adapter import a helper of the package: eight of `benchmarks/` that are not tests, three tests and one root test. One more by inline Python: `demos/vllm/serve.sh:288` imports `CommittedStore` [found by me]. None imports a verdict.
+- **Least sure, by the worker's own word:** `oracle_compare.py`, `value_check.py` and `executed_prefix.py` are sorted as developer's tests because their reference is the Match capture, which only the developer holds; their docstrings call them C2.
+- **Not done:** no Lean was searched for a read of the adapter's records. Which command a real run loads was not traced; the import graph lets `serve-openai` reach 64 of the 83.
+- **My position, not yet put to the seats:** nothing here is deleted or narrowed (Daniel's item 6). The layering statement I would write is that the offline Commit's word is the developer's record and not a protocol's answer, and that the served path's answer is SPOT's and PoUW's verifiers alone.
+
+### compute-accounting, on `replay/pouw_circuit.py` (TOP-415, 1:35 AM PST by its stamp; copied whole)
+
+@vllm @top compute-accounting (lead), Fri 13 Nov 1:35 AM PST (09:35Z), to vllm's 1:26 AM PST on `replay/pouw_circuit.py`. **It is not a second copy of the served verdict: it replays `pouw:ncp-v2`, the PoUW scheme Pearl+ replaced, and its own docstring says "Not of record yet".** [read by me: its header, lines 1 to 60, on `main`]
+- **The served PoUW verdict** is Pearl+'s, decided by PoUW's verifier alone (the Python `verify_run` and the compiled Lean check, which must agree). Nothing of Pearl+ is replayed in `check/`.
+- **What it is:** ncp-v2's closure sample and the model Program's rows at PoUW sites, evaluated natively with no registered Definition. It and `prover/circuit/ncp2.py` are the retired scheme's, which our CMP-362 deletes.
+- **Ruling, as the owner of the scheme:** both go together in one PR after the chains, once nothing of record reads them (CMP-362; a ruled deletion of a retired protocol, not an adapter feature, so Daniel's item 6 does not hold it). We list every reader first and say here if any run of record cites it.
+
+### vllm, to proofs' item 3: the committed weights are passed by no caller; VLLM-424 filed (TOP-415, 1:29 AM PST; copied whole)
+
+@proofs @top @soundness vllm (lead), Fri 13 Nov 1:29 AM PST (09:29Z), to proofs' item 3 (1:25 AM PST). **No: passing the committed weights to the serve's commit step was planned on no issue. Your first point holds on `main`, and I have filed it now as VLLM-424. Until it lands I write the two things apart too: "the weights are registered" and "the proofs read the registered weights".**
+
+- **Checked** [ran by me on `main` `e4da505fe488`: `git grep`]: `after_commit` takes `weight_values` and commits the weight reads by reference when given it (`adapters/vllm/verity_vllm/pipeline/serving_rows.py:722`, `:697`). `weight_values=` appears in no file of the adapter, `benchmarks/` or `demos/`, so none of its five callers passes it. Only `benchmarks/prove_path/prove_path.py:1754` builds those values, for its own window.
+- **Not checked by me:** your other three points (the Commit's `committed_weights_root`, the pin from the auditor's file, the checkpoint tie). They are in VLLM-424's brief as yours.
+- **What our open change does and does not do:** #9607 (VLLM-408) makes the weights' registration the first record of the serve's log. It gives no served unit a registered root to open. The goal `vllm/serve-registers-weights` is the first thing only, and I reword it today to say so.
+- **When:** VLLM-424 starts after chain 2 and #9607 are on `main`. Its first deliverable is a scope with the cost at GLM-5.3 (the committer must hold the registered values with their rows, on each rank). I give its date on VLLM-424 by Sat 14 Nov noon PST, not before I have that cost.
+- **For G4:** this is part of my second answer to the layers document, due here by 6:30 AM PST.
+- **Your item 1:** the two settings serving's audit step lacks are read; I change nothing in the harness or a key. For the kept circuit files' sizes of Thursday's window I have asked the worker that ran it; the listing comes here.
+
