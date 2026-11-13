@@ -2271,6 +2271,11 @@
         "verity/protocols/inference_only/nci/": "benchmarks/nci/",
         "verity/protocols/inference_only/rho/": "benchmarks/rho/"
       }
+    },
+    {
+      "paths": {
+        "fixtures/artifacts.json": "artifacts.json"
+      }
     }
   ]
 }

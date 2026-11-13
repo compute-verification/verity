@@ -161,13 +161,13 @@ BY_THE_SWITCH = ("two-stage-form", "a statement form the soundness proof does no
 
 #: One honest two-stage play's case, as ``sampled_two_small.sh`` with no arguments keeps it (its ``$OUT/form``:
 #: params.json, commitment.json, evidence.json and blobs/, the play's circuit, public file and session's files). Its
-#: files are past what git holds, so `fixtures/artifacts.json` registers the directory and `suites.py` fetches it.
+#: files are past what git holds, so `artifacts.json` registers the directory and `suites.py` fetches it.
 CASE = Path(__file__).resolve().parent / "fixtures" / "sampled-two-case"
 #: What mends a kept case the form no longer accepts because an honest play changed: a play made afresh, which the
 #: script accepts before it keeps it.
 AFRESH = ("if an honest play changed, keep one made afresh: `bash benchmarks/one_stage/sampled_two_small.sh` on a "
           "node, its $OUT/form's params.json, commitment.json, evidence.json and blobs/ as a directory, `research "
-          "data put --kind fixture/v1 --tree DIR --preserve`, and its id at this path in fixtures/artifacts.json")
+          "data put --kind fixture/v1 --tree DIR --preserve`, and its id at this path in artifacts.json")
 
 
 @pytest.mark.slow
