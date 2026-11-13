@@ -90,12 +90,12 @@ NEUTRALITY_REPORT_SCHEMA = "verity-vllm/neutrality/v1"
 MATCH_RUN_SCHEMA = "verity-gen/run/v1"
 #: a Match run's `stages.json`, which `pipeline.match.save_stages` writes
 MATCH_STAGES_SCHEMA = "verity-gen/stages/v1"
-#: the realized Program's `program.json` (`pipeline.match.PROGRAM_SCHEMA`), which `persist_program` writes
+#: the realized Program's `program.json` (`pipeline.match_fold.PROGRAM_SCHEMA`), which `persist_program` writes
 REALIZED_PROGRAM_SCHEMA = "verity-gen/program/v1"
-#: the head of the realized Program's `instances.jsonl` in its record form (`pipeline.match.INSTANCES_SCHEMA`), which
+#: the head of the realized Program's `instances.jsonl` in its record form (`pipeline.match_fold.INSTANCES_SCHEMA`), which
 #: `persist_program` writes
 REALIZED_INSTANCES_SCHEMA = "verity-gen/instances/v1"
-#: the same head in the compact form, operand references as progressions (`pipeline.match.INSTANCES_SCHEMA_V2`)
+#: the same head in the compact form, operand references as progressions (`pipeline.match_fold.INSTANCES_SCHEMA_V2`)
 REALIZED_INSTANCES_PROGRESSIONS_SCHEMA = "verity-gen/instances/v2"
 
 # --- the row driver (`verity_vllm.pipeline`)
