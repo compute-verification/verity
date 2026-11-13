@@ -117,7 +117,8 @@ theorem stepWith_msg_lt (vn : List Msg → Claims.OC Out) :
         rw [← hrest]
         simp
       | succ j =>
-        have := stepWith_msg_lt vn f _ _
+        have := stepWith_msg_lt vn f (hist ++ [(((P.next x hist ω).eval H).1, mm)])
+          (as ++ [((P.next x hist ω).eval H).1])
           { t with msgs := t.msgs ++ [(((P.next x hist ω).eval H).1, .msg mm)],
                    pLog := t.pLog ++ ((P.next x hist ω).eval H).2, vLog := t.vLog ++ lo } j
           (by simp only [List.length_append, List.length_singleton] at h ⊢; omega)
