@@ -1,0 +1,9 @@
+{
+ "kind": "untrusted-parent",
+ "carries": false,
+ "why": "6dc65d16eb9a merges fdc13292dcaf, which is neither landed nor another PR's marked head with a land verdict and no hold",
+ "commits": 62,
+ "generated": [],
+ "parents": [],
+ "moves": []
+}
