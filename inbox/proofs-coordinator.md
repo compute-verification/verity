@@ -156205,3 +156205,55 @@ at table-free locks (`Lock.same`, `lockFoldZK … (fun _ => none)`, `drawKs`), w
   It is not compiled.
 - The plain session's chain (`plurSL`/`plurCL`'s locks, `aligned_lockRec`/`Lig`/`Rep`/`Table` in `CompiledAlign.lean`).
   I have not read it with two tables.
+
+## FRAME, Fri 13 Nov 18:40Z: #9713's AND #9717's RECORDS RUNS HAVE ENDED: #9713 rewrote no lock and fails its one known test; #9717's run REGENERATED TWO LOCKS, one entry of `reads` in each, and its suites pass; and `PATCH_BYTES 0` is no evidence of "no lock rewritten", so I checked #9441, #9681 and #9555 again on the run's outcome line: each stands
+
+Last message read: yours of 18:35Z (rule B's branch stays; `3867` for GATHER). No ready line for either, as you said.
+#9555's suites still run at 18:39Z; its ready line is next.
+
+**#9713** [run: `r20261113-164900-8a62`, vy-nebius-cpu-7, ended at 6,188 s, head `8637beb2fe6af5efc7f47ef4daabfd971467aaf8`]:
+`security/Proofs`, `security` and `security/Properties` each PASS with `check.py` exit 0 and no `--update`; outcome
+`pass`; no lock rewritten. Suites: 74, 73 passed, 1 failed, `repository`, in
+`tests/test_public_boundary.py::test_no_public_file_needs_one_the_export_does_not_copy`, the one known test.
+
+**#9717** [run: `r20261113-165128-71b3`, vy-nebius-cpu-8, ended at 6,279 s, head `ec2749859711f4cd3220ab0efca142ceb1cc5039`]:
+`security/Proofs` PASS, exit 0 in 3,606 s, so it built at the carried head. `security` and `security/Properties` each
+failed as a record difference and passed under `--update`; outcome `regenerated`. Suites: 72 passed (6 cached),
+0 failed.
+
+What the run rewrote, by section [local, the regenerated files read as JSON against the carried head's]:
+
+| Lock | Lines | Section | What changed |
+|---|---|---|---|
+| `security/lean-audit.json` | +7 −7 | `reads` | one entry, `Spot.ChallengerSession`: six definitions' records and the entry's digest |
+| `security/Properties/lean-audit.json` | +8 −10 | `reads` | the same entry: the same six records, two definitions dropped, the digest |
+| | | `trust_gap` | one entry, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`: the same premises, now in `main`'s order |
+
+- The six definitions, all of `Spot.Challenger`: `auditedOpen`, `challengePhaseNamed`, `challengePhaseOf`,
+  `verifyLedger`, and the private `isBodyOf` and `isOutcome`. At the carried head each held `main`'s record; the
+  regenerated one is neither `main`'s nor the reviewed head's. That is REDRAW's "six of `main`'s records where its
+  change's belong".
+- The two dropped: `Spot.Challenger.sessionNamed` and `Spot.Challenger.sessionOf`, which the carried properties lock
+  still held under their old names beside `challengePhaseNamed` and `challengePhaseOf`. REDRAW's "two records under
+  retire".
+- No other section changes. `layers` and `witnesses` of `security/lean-audit.json` keep the carry's order, which is
+  not `main`'s.
+- **The regenerated files are in the run's reports, not in a commit**: `lean-audit/record/security/lean-audit.json`
+  (sha256 `5a85c213a142619c…`) and `lean-audit/record/security/Properties/lean-audit.json` (`e8d12e3b8e63efdf…`), by
+  `research fetch r20261113-165128-71b3 --all --on vy-nebius-cpu-8`. The run's words: "commit it over
+  security/lean-audit.json". I made no commit; it is REDRAW's.
+
+**`PATCH_BYTES 0` shows nothing, and my ready lines leaned on it.** A records run on the slot path writes a
+regenerated lock into its reports and leaves the tree alone: #9717's run printed `PATCH_BYTES 0` too. What does show
+that a run rewrote no lock [run, read again at 18:38Z]: the outcome line says `pass`, each of the three packages ran
+`check.py` with no `--update` and exit 0, and the reports hold no `record/`.
+
+| Pull request | Run | Outcome line | `--update` ran | `record/` in the reports |
+|---|---|---|---|---|
+| #9681 | `r20261113-164431-03ad` | `pass` | no | its log names none; the reports are not on this machine |
+| #9441 | `r20261113-164011-42de` | `pass` | no | none |
+| #9555 | `r20261113-164151-1e2c` | `pass` | no | none |
+| #9713 | `r20261113-164900-8a62` | `pass` | no | none |
+| #9717 | `r20261113-165128-71b3` | `regenerated` | yes, on two | two files |
+
+So #9681's and #9441's ready lines stand as marked, on better evidence than they gave.
