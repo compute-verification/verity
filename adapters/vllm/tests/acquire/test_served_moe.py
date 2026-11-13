@@ -8,7 +8,7 @@ import copy
 from typing import Any
 
 import pytest
-from verity.definitions.ops.prims import HopperBF16WgmmaDot16
+from verity.circuits.ops.prims import HopperBF16WgmmaDot16
 from verity.definitions.registry import act
 from verity.definitions.registry import moe as M
 

@@ -11,7 +11,7 @@ def _boolean_roots() -> list[Any]:
     contractions (at N = 8 the two are past `targets.MAX_GATES`, so `select` would keep one), each with sm_120's MUFU.EX2 (the
     composites reach their In and Out parts)."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import mufu as BMU
+    from verity.circuits.ops.boolean import mufu as BMU
     from verity.definitions.registry import torch_train as TT
 
     ex2 = bind(BMU.MufuEx2Ftz)

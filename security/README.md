@@ -485,7 +485,7 @@ to) and build or run Lean in a package's Lake environment. No outside package re
 - Lean files importing `Proofs.*` and the programs that build or run them: the one list is in `Proofs/README.md`.
 - The NCP pin's command in `tools/verity/check/pins.py` builds and runs Lean in `security`'s environment.
 - Generators: `lean_headline.py`, `lean_headline_dc.py` and `machine_model/` (the ACCEL model; it prints `Sheets/`)
-  in `benchmarks/pouw/`; `verity/definitions/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
+  in `benchmarks/pouw/`; `verity/circuits/ops/tests/test_lean_fp32_vectors.py`; `fp8atom_vectors.py`,
   `h1t_vectors.py` and `row_prims_vectors.py` in `verity/protocols/pouw/verifier/lean/scripts/`.
 
 ## The lock

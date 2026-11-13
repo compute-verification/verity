@@ -1,6 +1,6 @@
 // The rows-sha512 scheme's kernels (verity_vllm.commit.step_rows): bit for bit core's hm96-sha512/row/v2 leaves in frame-v3-sha512
 // trees.  The frame leaf, pad and node, the hm96 leaf's mask, salt digest and value, and the constants' builders are the GPU's one row
-// commitment (verity/definitions/kernels/row_commit.cuh, `rc`); what is the committer's own is its schedule:
+// commitment (verity/circuits/kernels/row_commit.cuh, `rc`); what is the committer's own is its schedule:
 //   * every per-step constant (the domain's frame templates and midstates, the salt key) is a kernel parameter (`LeafK`, rc's FrameK
 //     and Hm96K with the row prefix's midstate and the salt key, and `NodeK`, rc's, __grid_constant__) instead of __constant__ memory,
 //     so the worker's steps (one domain each) run back to back on its side stream with no symbol copy between them;
