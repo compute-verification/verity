@@ -151555,3 +151555,78 @@ Said in section 0 of my 16:19Z entry; this is the launch, not the result.
   `1370c60b7e75`, the `commitOf?` branch `779936dea335`.
 - One run in flight: `r20261113-162220-7b85` (vy-nebius-cpu-14).
 - Timer `redraw-mailbox`, every 30 minutes, next at 16:47Z. Mailbox read 16:14Z, to your 16:03Z message.
+
+## FIXEDCOST, Fri 13 Nov 16:28Z: the one-prover pair ran inside the row, exit 0 (`r20261113-152947-ee68`): on the fused embedding-read and MoE expert GEMM block a quarter statement takes 0.835 GPU-s against 2.384 for the full one, so the fixed part is 0.318 s a statement, 13% of a full statement, host-built; on the head block it was 1.93 s and 75%; card 7 was free at 15:57:25Z
+
+Nothing here runs on the served engine: it is one prover on a staged statement, ten cores, card 7 of node A. The prover is built at commit `c6cadd0e325f`, where neither `VERITY_ROPE_CACHE_FUSED` nor `VERITY_INT8_FUSED_PRODUCERS` exists. Sources: [run] this run's files unless another run is named; [read] with its place; [derived] arithmetic on [run] figures; [relayed]; [guess].
+
+**1. Per block type: the fixed seconds a statement, and who built the units' values**
+
+| block type | run | blocks sampled, quarter and full | GPU-s a statement, quarter and full | seconds a block | fixed seconds a statement | fixed share of a full statement | the units' values |
+|---|---|---|---|---|---|---|---|
+| fused embedding-read and MoE expert GEMM, `MoeExpertFp8ReadGemmW_v1{…K=256,N=32…}`, 1,024 units, pin `1fd651999b36433d` | `r20261113-152947-ee68`, today | 256 and 1,024 | 0.8348 and 2.3842 | 0.002017 | **0.318** | **0.134** | **host-built**, walk off: each of the 361 sessions has a WITNESS line with the units' part |
+| head block, `SparseMlaHeadBlock_v2`, 64 keys, `FIRST=false`, 256 units | `r20261112-110333-4c33`, Thursday | 64 and 256 | 2.0888 and 2.5685 | 0.002498 | 1.929 | 0.751 | host-built: `units_pack` 1.92 to 1.99 s in the WITNESS lines of its sessions run alone |
+
+- Today's row is the reader's `seconds` line, exit 0. [run: `read_pair.py OUT --sizes 256,1024 --steady steady.py`, 16:22Z; the reader and the kit pass their checksums]
+- Thursday's row is my 17:17Z entry's figures put through the same two-point split. [run then; derived]
+- Both runs use the same prover binary (SHA-256 `7350f82ecf41…`), card and cores. [run: `out/host.json` of each]
+- "GPU-s a statement" is the spacing between accepted filings while one prover holds the card. The card itself is in use about a quarter of that time (section 2).
+- A quarter statement costs 0.350 of a full one here, and 0.813 on the head block. [derived]
+
+**2. Today's run by sample size**
+
+| | 256 blocks | 1,024 blocks |
+|---|---|---|
+| GPU-s a statement, the three blocks in turn | 0.8122, 0.8591, 0.8332 | 2.3996, 2.3600, 2.3931 |
+| their mean | 0.8348 | 2.3842 |
+| timed sessions, all accepted | 180 | 180 |
+| gaps between filings counted | 174 (58 a block) | 174 (58 a block) |
+| the host's build a session (`witness_s`, median) | 0.5502 s | 1.3626 s |
+| of it the units' part (`units_pack`, median) | 0.4888 s | 1.1109 s |
+| the card's proving a session (`prove_total_s`, median) | 0.3327 s | 1.7189 s |
+| card in use, share of time | 0.261 | 0.232 |
+| the card's own seconds a statement (in use × spacing) | 0.218 s | 0.553 s |
+
+- **Sessions counted:** 361, all accepted: one cold session of 42.4 s, then six blocks of 60, a quarter and a full statement in turn. Every block stands by the reader's rules and by the harness's `every_prover_warmed`. [run: the reader; `split.json`]
+- **The five pairs of successive blocks** give fixed seconds of 0.283, 0.346, 0.359, 0.324 and 0.313 s, shares of 0.118 to 0.152. [run]
+- **The fixed part is the host's.** The same split of `witness_s` gives 0.279 s fixed, 88% of the 0.318 s. The card's proving has no fixed part by this split (−0.129 s: it grows faster than the blocks). [run; derived]
+- **`units_pack` is not flat here.** It grows 2.3 times for 4 times the blocks. On the head block it was flat at 1.93 s. [run; Thursday's entry]
+- **It agrees with kernels' row.** Kernels timed this type at a full statement at one prover on card 5 at the same commit: 2.4643 GPU-s, card in use 0.23. Today's 2.3842 is 3.3% under. [relayed: my Thursday 18:59Z entry, from `r20261111-015545-617c`; derived]
+- **Thursday's unit-levels run said this in advance**: 133,712 levels, over the 2,048 at which this tree builds on the host. [run: `r20261112-221230-fb19`]
+
+Three things to hold against the figures:
+- The node was not quiet. Other lanes held cards 0, 2, 3 and 6 on their own cores; 4 to 28 of the other 86 cores were busy (mean 15). This run's cgroup was not throttled. The three blocks of a size agree within 5.6% at 256 blocks and 1.7% at 1,024. [run: `cotenants-k1-*.txt`, `cpu-load.tsv`, `split.json`]
+- The filings are uneven: at 1,024 blocks the gaps' quartiles are 1.28, 2.17 and 3.56 s in the first block. The figure is the mean over 58 gaps. [run]
+- A session's own times add to more than the spacing (1.363 + 1.719 s against 2.384 s). I take it that the host builds one session while the card proves the one before. [guess: from the figures and `verify_ahead` 2; not read in code today]
+
+**3. The lease, and what left card 7**
+
+- **Inside the row: yes for the card and the timed work.** The fetch began at 15:46:00Z and took 38 s. The start check passed at 15:46:38Z: no other run's lease and no compute process on card 7. [run: `job.log`]
+- **Before the row** the job was one sleeping shell on core 91 and a 100 GB reservation, from 15:30:13Z, in vllm's row: no card, no lock, nothing fetched. [run]
+- **The lease:** asked once for 24 minutes, held on card 7 from 15:46:39Z, released at 15:57:25Z after 10 min 46 s. Its end would have been 16:10:39Z. [run: `lease-held.txt`, the lease tool's lines]
+- **What left card 7 and when:** at 15:57:25Z the card read 0 MiB and no prover process of the run was left. Its peak on the card was 31,103 MiB. [run: `card-after.txt`, `split.json`]
+- **The run ended** at 15:57:26Z, exit 0, 17 min 34 s before the row's end. The run tool's kill (16:13:26Z) was not reached. [run: `status.json`]
+- **Read again at 16:22:18Z, read only:** card 7 at 0 MiB and 0%; `/dev/shm/proofs-headprof` holds nothing, though the empty directory itself is still there; no reservation file is left. [run]
+- **Host memory at peak:** 32.4 GiB the prover, 6.7 GiB the verifier. [run: `split.json`]
+- **The row is released** in the notes' calendar, as its text promised. [run: the notes' commit `29c9eafa4a`, 16:27Z]
+
+**4. For kernels, on HASH-123** (to post)
+
+The half hour on card 7 was used and is released. One run, `r20261113-152947-ee68`, held the card from 15:46:39Z to 15:57:25Z on cores 82-91 only, and left it at 0 MiB with no process, about 17 minutes before your card 6 run starts timing. It wrote nothing under your directories and took the node's lock only for its start check. It timed one prover on the fused embedding-read and MoE expert GEMM block, from the statement you kept (pin `1fd651999b36433d`), with the prover built at `c6cadd0e325f`. A full statement of 1,024 blocks files every 2.384 s (your card 5 row reads 2.464) and a quarter statement every 0.835 s, so the fixed part is 0.318 s, 13% of a full statement, where the head block's was 1.93 s and 75%. Every session shows the host building the units' values: `units_pack` is 0.49 s of a quarter statement's 0.55 s host build and 1.11 s of a full one's 1.36 s, and the card is in use 23% to 26% of the time. The unit has 133,712 levels, one pass, no position map and no late rows, so it meets the level walk's conditions at your walk's head, and those host seconds are what the walk on the card could remove on this type. That is not measured: this tree has no walk. Nothing here ran on the served engine.
+
+**5. For PRF-456: what it changes in the cost rows** (to post)
+
+Nothing is repriced yet: I ran no cost model. Three inputs now have a timing behind them for the heaviest block type after the head block (13.7% of the budget in proofs' model of Thu 12 Nov 17:52Z), all at one prover on ten cores at `c6cadd0e325f`, not on the served engine:
+- **Its fixed part is 13% of a full statement (0.318 s of 2.384 s), not the planner's proportion.** The model carried 4.15 of the type's 13.72 points as fixed, which is 30%. So a quarter statement costs 0.35 of a full one where 30% fixed gives 0.48. If the model prices a statement as fixed seconds plus seconds a block, this type's rows can only fall or stay, and only where a statement samples fewer than all its blocks.
+- **Its full statement does not move:** 2.384 GPU-s against kernels' 2.464 on another card.
+- **The card is in use 23% to 26% of the time**, under the 0.4 above which the model's what-if of four provers a card on every block type goes over 300 GB (291.3 GB at 0.4, 301.2 at 0.45). By the card alone four provers fit at a full statement (4 × 0.232 = 0.93) and just do not at a quarter (4 × 0.261 = 1.04).
+
+Still not timed: four loaded provers on any block type, which need forty cores a card; and the other 127 block types' fixed parts, which stay the planner's proportion. The rows change when the cost model is rerun with this type's fixed seconds at 0.318 s.
+
+**Sources for section 5, not to post:** the 13.7%, the 4.15 and 13.72 points, the 0.4 threshold and the two GB figures are relayed from SESSIONS' Thursday 17:52Z entry, section 3. The rest is this run and arithmetic on it. That the model prices fixed seconds plus seconds a block is my reading of that entry, not of the model's code.
+
+**6. Other things you should know**
+
+- `research fetch ID` without `--on` did not find the run at 16:21Z ("no machine holds run"); `--on vy-spot-glm53` did. [run]
+- My VM restarted at 16:20:36Z. What woke me at 16:20Z was not my timer's message but two Slack notifications in the lead's thread: compute-accounting on PRF-612 and network-accounting on NET-405 and PRF-616, both sent about 14:42Z. They are addressed to proofs' lead; I did nothing with them. My timer no longer shows as set.
+- Whether the run's record is in the evidence store yet: not checked. Its files are on node A under the run's directory; its record names tree `774b31eca17c1495fd4451f615540a44ab305ed2`, not dirty. The reader's output and the run's small records are in the notes under `prf589/pair/run-ee68/`.
