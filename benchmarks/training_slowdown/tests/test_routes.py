@@ -14,7 +14,7 @@ from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
 from training_slowdown.routes import ema, qat, subset
 from training_slowdown.routes._codes import row_codes, row_values
-from training_slowdown.routes._optimizers import newton_schulz
+from training_slowdown.routes._optimizers import Muon, newton_schulz
 from training_slowdown.traced import trace_step
 
 
@@ -101,6 +101,62 @@ def test_muon_takes_the_matrices_and_adamw_the_gains():
     lr = 0.01 * subset.schedule(dials, 0, 1)
     want = before["blocks.0.w_up.weight"] * (1 - lr * 0.05) - lr * 2 ** 0.5 * newton_schulz(1.95 * seen["grad"])
     assert torch.allclose(w, want, rtol=0, atol=1e-7)
+
+
+def test_muons_defaults_and_state_are_as_before_unless_it_keeps_a_low_width_state():
+    """`Muon` built without `low_state` has the defaults and, after a step, the state it had before the option: a
+    state kept under it loads as it did. With `low_state` the option is in its defaults, and its state is the
+    momentum's int8 codes and their bf16 scales, one a row, which a load keeps at their dtypes (torch's own load casts
+    a float parameter's state to the parameter's dtype)."""
+    w = torch.nn.Parameter(torch.zeros(8, 16))
+    plain = Muon([w], lr=0.1)
+    w.grad = torch.randn(8, 16, generator=torch.Generator().manual_seed(0))
+    plain.step()
+    assert plain.defaults == {"lr": 0.1, "momentum": 0.95, "weight_decay": 0.0}
+    assert set(plain.state_dict()["param_groups"][0]) == {"lr", "momentum", "weight_decay", "params"}
+    assert set(plain.state[w]) == {"buf"}
+    v = torch.nn.Parameter(torch.zeros(8, 16, dtype=torch.bfloat16))
+    low = Muon([v], lr=0.1, low_state=True)
+    v.grad = w.grad.bfloat16()
+    low.step()
+    assert low.defaults["low_state"] is True and v.dtype == torch.bfloat16
+    again = Muon([v], lr=0.1, low_state=True)
+    again.load_state_dict(low.state_dict())
+    for held in (low, again):
+        assert {k: (t.dtype, tuple(t.shape)) for k, t in held.state[v].items()} == {
+            "codes": (torch.int8, (8, 16)), "scales": (torch.bfloat16, (8, 1))}
+    assert torch.equal(again.state[v]["codes"], low.state[v]["codes"])
+
+
+def test_muons_low_width_state_steps_by_its_rule_on_the_generators_draws():
+    """`Muon`'s `low_state` against its rule written out, over two steps, on the same draws of torch's generator:
+    the momentum decoded from its codes, times 0.95, plus the gradient, coded again at one bf16 scale a row (the
+    row's largest magnitude over 127) by adding one uniform draw an entry and taking the floor; the update the
+    Nesterov sum through Newton-Schulz, scaled by the shape; the parameter plus it rounded to bf16 up in magnitude
+    exactly where the 16 bits a bf16 drops and 16 random bits overflow, else cut. The momentum's draws come first."""
+    gen = torch.Generator().manual_seed(1)
+    grads = [torch.randn(8, 16, generator=gen).bfloat16() for _ in range(2)]
+    v = torch.nn.Parameter(torch.randn(8, 16, generator=gen).bfloat16())
+    p = start = v.detach().clone()
+    opt = Muon([v], lr=0.05, low_state=True)
+    torch.manual_seed(3)
+    for g in grads:
+        v.grad = g
+        opt.step()
+    torch.manual_seed(3)
+    codes, scales = torch.zeros(8, 16, dtype=torch.int8), torch.zeros(8, 1, dtype=torch.bfloat16)
+    for g in grads:
+        buf = codes.float() * scales.float() * 0.95 + g.float()
+        scales = (buf.abs().amax(1, keepdim=True) / 127).bfloat16()
+        y = buf / torch.where(scales > 0, scales.float(), 1.0)
+        codes = (y + torch.rand(8, 16)).floor().clamp(-127, 127).to(torch.int8)
+        x = p.float() - 0.05 * newton_schulz(g.float() + 0.95 * buf)
+        word = x.view(torch.int32)
+        cut = word & -65536
+        up = (word & 0xFFFF) + torch.randint(0, 1 << 16, (8, 16), dtype=torch.int32) >= 1 << 16
+        p = torch.where(up, cut + 65536, cut).view(torch.float32).bfloat16()
+    assert torch.equal(v.detach(), p) and not torch.equal(p, start)
+    assert torch.equal(opt.state[v]["codes"], codes) and torch.equal(opt.state[v]["scales"], scales)
 
 
 @pytest.mark.parametrize("bits", [2, 4, 8])
