@@ -111394,3 +111394,78 @@ Clock: `date -u` read 01:00Z. Mailbox read from 23:27Z on, at 00:50Z. Base merge
 ### To post
 
 Nothing.
+
+## GATHER, Fri 13 Nov 01:02Z: no gate key is named for our lane and no run of ours went through the gate, but this VM's environment names gate keys for three other lanes, serving's among them; through the gate the two commands meet conditions 1, 2 and 4 only by how they are launched and how the host works, and the driver checks neither 1 nor 4; the second try ended exit 0 at the served vocabulary
+
+**The second try's branch: `cursor/proofs-gather-second-try-5a28`, head `957d763fb52498aa1e2f1b4410b50ad32f0b80a7`, now rehearsed at that head at the served vocabulary too** (`b032`'s second part, exit 0: V = 154,880, the logits committed by the serve, 40 inner blocks proved in 20 sessions, Lean accepted 20 of 20, the second stage's check clean with no code, so `second-inputs` passes; the interior registers no value of the prover's). The first try's tree is unchanged at `496aa183544b`. **On the gate:** no variable in this VM's environment names a gate key for `proofs`, and I find no run of our lane through the gate. Three variables name one for other lanes, `VY_CHALLENGER_KEY_VLLM_B64` among them, set and not empty; serving says its lane holds none, so serving should be told that name (I cannot post). I used none of them. **Against soundness's four conditions**, through the gate at the second try's head: (1) and (4) hold if both commands are launched with the same address and key record, because the host has one key and one ledger; the driver compares neither the two stages' keys nor their ledgers. (2) holds by the host's key record. (3) does not hold. **Serving's small serve of 00:25Z failed twice in its launch script, not in the tree**; it runs again at 02:40Z. The table of rate and k follows in my next entry, before 02:30Z.
+
+### 1. Does our lane hold a gate key and a peers entry for node A? Has a run of ours gone through the gate?
+
+- **No gate key named for our lane.** [run: `compgen -e` filtered for gate, challenger, peer, ssh and key, then a test of set-and-not-empty that prints no value, 00:57Z] Three variables of that kind are in this VM's environment, each set and not empty:
+  - `VY_CHALLENGER_KEY_VLLM_B64`
+  - `VY_CHALLENGER_KEY_KERNELS_B64`
+  - `VY_CHALLENGER_KEY_COMPUTE_ACCOUNTING_B64`
+  - `VY_CHALLENGER_KEY_PROOFS_B64` is not set.
+- **What those three are, I did not establish.** [read: `.agents/skills/friction/SKILL.md` 139 to 140] A lane's gate key on an auditor's gate is an ed25519 key the lane makes; infra registers its public half under that lane. [read: `benchmarks/pouw/settings.py:90`] The tree's one default for "the lane the gate key is registered for" is `vllm`. [guess] So `VY_CHALLENGER_KEY_VLLM_B64` is serving's lane's gate key for vy-challenger-1. No file in the tree reads a variable of that name [run: a search of the tree for `VY_CHALLENGER_KEY`, no match], so I cannot say from code what it opens.
+- **This corrects one line you sent serving** (VLLM-300, 00:53Z: "My VM's environment names no gate key"). Mine names three, and the first is in serving's lane's name. Serving wrote at 00:40Z that its lane holds no gate key [read: Linear VLLM-300, 00:59Z]. If the variable is what its name says, serving has one and does not know it, or its VMs are not given it.
+- **I did not use any of them, and will not without your word.** They are other lanes' keys. A session opened with one is a session in that lane's name on the auditor's host.
+- **A peers entry for node A: I cannot read it.** [read: `a5_coins.py:641` to `644`] The peers file is the host's `/etc/vy/peers`. Nothing on this VM or in the tree lists it. Infra can say which machines are in it.
+- **No run of ours through the gate.** [run: a search of your inbox file for `gate:` beside a command, 01:00Z; 10 lines match] Three describe `a5.py --challenger gate:` as the way a one-stage audit is meant to run (lines 70636, 104625, 106113); none reports a run. One (24960) is about another reader. The rest are my own 00:45Z entry. None of my runs used it.
+
+### 2. The four conditions, for `first` and `second` through the gate at the second try's head
+
+[read: `cursor/proofs-gather-second-try-5a28` at `957d763fb5`; `a5_coins.py` and the host's code under `verity/composite/device/live_challenger/` are byte for byte the first try's, by `git diff --stat` between the two heads. Nothing here ran through the gate.]
+
+| Condition | What the two commands do | Where |
+|---|---|---|
+| 1. One challenger, on the auditor's host | Each command builds its own client for the address on its own command line. One challenger only if both lines name the same `gate:USER@HOST`. The driver does not check that `second`'s challenger is the one `first` used: `second` takes the first stage's evidence from `stage1.json` as it is. | `two_stage.py:994` to `996` (`first`), `:1125` to `1126` (`second`), `:1152`; `a5_coins.py:767` to `768` |
+| 2. The key at the deployed scheme | The key is the one in the file given to `--challenger-key`, not one the command makes. For vy-challenger-1 that record says W = 1, H = 20 [relayed: infra, INF-769, in your 00:53Z message]. | `a5_coins.py:646` to `649`; `lms.py:112` |
+| 3. A key and a ledger made for this run | No. The host signs every session under its one standing key into its one ledger. Its record is valid from 20 October and the ledger holds every lane's sessions since. | `serve.py:79` to `105`, `auditor.py:855` to `872` |
+| 4. One ledger, both sessions in it, in order | Each command reserves and opens one session on the host: `first` on the window's run, `second` on the interior's run, a different root. Both land in the host's ledger in the order they were opened. Each command, at its end, copies the host's whole ledger into its own evidence. So the second stage's copy holds both sessions, and the first stage's copy is the same ledger as it stood earlier. **The driver does not check this:** each stage's sample is held to its own evidence alone, with the key and the ledger that evidence carries. | `a5_coins.py:659` to `686` (reserve and open), `:688` to `702` (the copies); `two_stage.py:1152`, `:916` to `917`; `service.py:2378`; `coins.py:332` to `357` |
+
+- **So through the gate: one session each, in the host's one ledger, under the host's one key**, as serving read it. Conditions 1, 2 and 4 then hold as facts about the run. They are not something the audit's record shows on its own: a `second` handed a `stage1.json` made under another challenger would go on. [read: every use of the evidence in `two_stage.py`, lines 480 to 488, 916 to 917, 1057 to 1076, 1150 to 1156; not run]
+- **Not established:** whether the Lean run compares the two stages' keys or ledgers. [run: a search of the verifier's Python and Lean, the device's `coins.py` and the driver for such a comparison; none found] That is HISTORY's piece as you described it.
+- **One thing the gate changes for the people who run Friday** [read: `a5_coins.py:661` to `663`]: "the gate opens a root once, ever". A `first` that fails after its session opened has spent the window's one session, and that window cannot be sampled again through the gate. The same holds for `second` on its interior. Under `local` every re-run makes a new challenger, which is why a re-run costs nothing there. Through the gate a failed command means a new serve.
+- **The session's length** [read: `a5_coins.py:85`]: a session is reserved for 240 minutes. `second` took 51 minutes at Friday's shape (`b876`), so it fits.
+
+### 3. The second try at the served vocabulary: exit 0
+
+[run: `research fetch r20261112-234433-b032 --all --on vy-nebius-cpu-8`, 00:58Z; `out/rc.txt`, `out/served/expect.txt`, `out/served/second/summary.json`; at `957d763fb5`]
+
+- `rc.txt`: "stop rehearsal, every span sampled, rc=0" and "served vocabulary rc=0".
+- `expect.txt`: `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "record": true, "round_two": true, "outcome": true}`.
+- The class: 6 spans of 2 tokens at V = 154,880, the logits committed by the stand-in serve at the first stage. First-stage sample: spans 0 and 3. 40 inner blocks of 80 proved in 20 sessions, 2 a session.
+- Lean accepted 20 of 20. 18 of 18 negatives refused. The second stage's check (`round_two` in the summary): ok, no codes. The interior registers no value (`interior.registered` is `[]`): the logits a sampled inner block reads are the ones the serve committed before the first stage's coins.
+- The outcome is refused by `two-stage-form` alone, as on the first try's tree.
+- `second` took 40.8 minutes [derived: `first.log` written 00:12:37Z, `second.log` 00:53:26Z]. Peak memory 57.9 GiB [run: `job-memory.py` on its `resources.jsonl`].
+- **What it is not:** the logits are made up by the stand-in, not a model's. The engine's own `logits` port has not served yet (section 4).
+
+### 4. Serving's small serve of 00:25Z on node A
+
+[read: Linear VLLM-412, comments of 00:37Z, 00:46Z and 00:52Z, at 00:59Z]
+
+- **Both jobs of 00:25Z stopped in serving's launch script before any weights loaded.** The first: exit 127, the boundary object was not exported to `run.sh`. The second: `serve_tax.py` refused a private directory inside the run's directory. Serving fixed both in its notes' script; it says the tree needs no change.
+- A CPU run of the whole script against a stand-in for the server ended exit 0 at `1536ba03d3` (`r20261113-004445-0fcd`) [relayed].
+- **Job 1 runs again between 02:40Z and 02:50Z** on every card of node A, off them by 03:13Z. Job 2 (the `logits` port at `8b1835d85f27`) follows only if job 1 passes with 12 minutes left; otherwise at 08:15Z Fri.
+- So at 01:00Z no served engine has yet committed the 20-unit select's class under TP 8. I read VLLM-300 and VLLM-412 again after 03:15Z.
+
+### 5. Runs and machines
+
+| Run | What | Machine | Waited | State at 00:58Z |
+|---|---|---|---|---|
+| `b032` | second try, both parts | vy-nebius-cpu-8 | 16 minutes | done, exit 0 |
+| `f58a` | first try's tree, three larger samples at V = 154,880 (30, 32 and 90 inner blocks a session), 128 GB asked | vy-nebius-cpu-11 | 18 minutes so far | waiting: "every check slot is taken", the machine's reserved memory is 131 GB over |
+| `r20261113-005324-c6bd` | first try's head `496aa18354` at Friday's shape and serving's rate: 8 requests, stop rule, 64 tokens, `rate:1/2`, k = 1; 72 GB asked | vy-nebius-2 | 5 minutes so far | waiting, 10 ahead |
+| `r20261113-005510-240a` | first try's head at V = 2,560, the largest design of the table: 8 of 8 spans, 32 of 64 a cell, 256 inner blocks a session; 40 GB asked | vy-nebius-2 | 3 minutes so far | waiting, 13 ahead |
+
+- [run: `research fetch` on each, 00:58Z] `c6bd` is the rehearsal I want behind the first try's head: `b876` ran Friday's shape at an earlier head with `rate:2/8`, and serving's line says `rate:1/2`, which is 4 of 8 spans and makes each session's statement twice as large (m = 32 and 33, against 31 and 32).
+- `240a` is there because no run has yet proved more than 6 inner blocks in one session, and the table's rows go to 256.
+- **Your 15-minute rule would send `c6bd` and `240a` to cpu-11 at 01:08Z and 01:10Z.** cpu-11 has kept `f58a` waiting 18 minutes for memory. If cpu-11 still has no room then, I leave the two on vy-nebius-2, where the line went from 15 ahead to 10 in 18 minutes, and say so.
+
+### 6. Not established
+
+- What the three `VY_CHALLENGER_KEY_*` variables open, and whether infra registered them at vy-challenger-1.
+- Whether node A or any CPU node is in the host's peers file.
+- Any run of `two_stage.py` through the gate.
+- Whether the Lean run ties the two stages' sessions to one key and one ledger.
+- The second try on a model's logits: the engine's `logits` port has not served.
