@@ -32,15 +32,18 @@ and, for the protocol, the key under which an accepted answer names the registra
 answers its own rest on (`Account.rests`): those its check read as given and did not verify.
 
 `rows` reads a site, the head of its registration, the protocols' answers and their accounts into the accounting rows.
-An answer counts only when it accepts, names that head, and rests only on accepted answers `rows` is given. Each amount
+An answer counts only when it accepts, names that head, and rests only on accepted answers `rows` is given, and for an
+amount only when it holds every key the amount's form names: an answer that names no head, or not the steps of its
+span, or not the series they are numbered in, where the form asks for them, counts for nothing. Each amount
 certified of a registered resource gets a row, at each reading of the registration its capacity can be read at: the
 capacity, the certified amount with its error, and the other, which follows.
 
 * A flow (compute, reads, a link's bits) has one row for the period. Two answers' amounts add only where both name
   their spans (`Steps`), in one series of steps, and the spans share no step: a verified amount is the largest total
-  over answers of one series whose spans are pairwise disjoint, or the largest single amount of an answer that names
-  none, whichever is more. A free amount is its answers' summed plus the capacity of the ticks no certified answer's
-  span covers, each tick's cover counted once: one series' named spans' steps, or the longest span that names none.
+  over answers of one series whose spans are pairwise disjoint, or the largest single amount of an answer whose form
+  names no steps, whichever is more. A free amount is its answers' summed plus the capacity of the ticks no certified
+  answer's span covers, each tick's cover counted once: one series' named spans' steps, or the longest span of a form
+  that names none.
   It is not held to the capacity: a sum above it is printed as it is, with nothing verified.
 * An amount at a moment (memory) has one row for each accepted answer, a session, and one for the period, which states
   the least verified (or the most free) of its sessions and counts them (`Row.sessions`). Its free amount is at most
@@ -331,8 +334,8 @@ instance instDecidableFormed (c : Account) : Decidable c.Formed := by unfold For
 
 /-- What one accepted answer certifies of one amount, in its part's unit: the place it names, whether it certifies
 anything, the amount with its share taken off, its error, the ticks its span covers, the steps it names its span by
-(the first, and the one after the last; none where it names none) with the series they are numbered in, and the
-capacity it carries. -/
+(the first, and the one after the last; none where its form names none) with the series they are numbered in, and
+the capacity it carries. -/
 structure Reading where
   place : Option String
   certified : Bool
@@ -468,9 +471,10 @@ def Steps.read (name : Steps) (a : Answer) : Option (Nat × Nat) :=
     ((first.read a).bind natOf).bind fun i => ((count.read a).bind countOf).bind fun n =>
       if 0 < n then some (i, i + n) else none
 
-/-- **An answer read by an amount's form**: none when the answer does not hold what the form names. An answer that does
-not name the steps its form asks for, or the series they are numbered in, is read as one that names no span: it covers
-no tick. -/
+/-- **An answer read by an amount's form**: none when the answer does not hold what the form names, the steps of its
+span and the series they are numbered in among them. An answer that does not name the steps its form asks for, or the
+series, is not read: it gives no row, adds no amount and no error, and what it is about is charged as what no answer
+covers. Only a form that names no steps (`Time.span`, `Time.unstated`) reads an answer as one that names none. -/
 def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   let place : Option String ← match m.place with
     | none => some none
@@ -484,12 +488,12 @@ def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   let certified : Bool ← match m.uncertified with
     | .flagged k => (k.read a).bind fun j => j.getBool?.toOption
     | _ => some true
-  let series : Option String := match m.series with
+  let series : String ← match m.series with
     | none => some ""
     | some k => (k.read a).map fun j => j.compress
-  let steps : Option (Nat × Nat) := match m.time, series with
-    | .steps name _, some _ => name.read a
-    | _, _ => none
+  let steps : Option (Nat × Nat) ← match m.time with
+    | .steps name _ => (name.read a).map some
+    | _ => some none
   let ticks : Nat ← match m.time with
     | .moment => some 0
     | .unstated => some 0
@@ -498,7 +502,7 @@ def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   let capacity : Option Nat ← match m.capacity with
     | none => some none
     | some k => (k.read a).bind fun j => (natOf j).map fun n => some (n * m.unit.base)
-  pure { place, certified, error, ticks, steps, capacity, series := series.getD "",
+  pure { place, certified, error, ticks, steps, capacity, series,
          amount := m.unit.base * ((ns.zip es).map fun x => kept x.1 x.2).sum }
 
 /-- A row's standing: an amount certified, an error of 1 or more ("no bound at this period"), or a resource no accepted
@@ -607,22 +611,23 @@ leaves it is about. None when the site holds no such leaf.
 A named span counts only where it surely lies in the period, which `origin` says for its series: a series with no
 origin, one whose device has no drift under `clock`, a link's series whose device is not the network certifier on the
 link (`Amount.timed`), a step before the period and a step that might end past its last tick count for nothing.
-`clock` gives a device's drift: the Site's own for a row that takes no premise. A span that names no steps cannot be
-placed, and that it is the period's is the caller's to hold; it covers its length less its clock's drift.
+`clock` gives a device's drift: the Site's own for a row that takes no premise. A span of a form that names no steps
+cannot be placed, and that it is the period's is the caller's to hold; it covers its length less its clock's drift.
+An answer of a form that names its steps names them, or it is not among `rs` (`Amount.read`).
 
 A flow's amounts add only over spans shown disjoint. Its verified amount is the largest total over certified answers
 whose named spans lie whole in the period, are of one series and are pairwise disjoint, or the largest amount of one
-that names no span, whichever is more: two answers of one span, or of overlapping spans, count the larger once, and an
-answer that names no span, or a span of another series, adds to none. The total is sound because each span's amount is
-a lower bound on what its own steps did, and what disjoint steps did adds: of three spans in a chain, the two ends add
-where they outweigh the middle. Its free amount is the amounts of the certified answers with a step surely in the
-period, summed, plus the capacity of the period's ticks they do not surely cover. A series' cover is its steps surely
-in the period, joined and counted once, their length less its clock's drift, rounded down once a series. Two series'
-covers add less the ticks their spans can share, each span taken at the widest its clock's drift allows (`together`).
-The longest span that names no steps counts instead where it is more. Where the registration holds no capacity for the
-ticks not covered it prints no amount. A flow's free amount is not held to the capacity: an answer's amount may count
-more than what its link sends (when it sends, and how much), so where the sum passes the capacity the row prints the
-sum, above the capacity, and verifies nothing.
+whose form names no steps, whichever is more: two answers of one span, or of overlapping spans, count the larger once,
+and an answer of such a form, or one of a span of another series, adds to none. The total is sound because each span's
+amount is a lower bound on what its own steps did, and what disjoint steps did adds: of three spans in a chain, the
+two ends add where they outweigh the middle. Its free amount is the amounts of the certified answers with a step
+surely in the period, summed, plus the capacity of the period's ticks they do not surely cover. A series' cover is its
+steps surely in the period, joined and counted once, their length less its clock's drift, rounded down once a series.
+Two series' covers add less the ticks their spans can share, each span taken at the widest its clock's drift allows
+(`together`). The longest span of a form that names no steps counts instead where it is more. Where the registration
+holds no capacity for the ticks not covered it prints no amount. A flow's free amount is not held to the capacity: an
+answer's amount may count more than what its link sends (when it sends, and how much), so where the sum passes the
+capacity the row prints the sum, above the capacity, and verifies nothing.
 
 An amount at a moment has a row for each session and one for the period: the least verified, or the most free, of its
 sessions. A moment's free amount is at most the capacity: no more is free than is there. The period's error is its
@@ -1048,14 +1053,20 @@ private def cached : Site :=
 -- a link: its checks' bits and errors summed, and the ticks no check covers charged at the link's capacity
 #guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" (some 400)]).take 1) ==
   [("sent", "up0", "registered", some 100000, some 65000, some 35000, "1/500")]
--- a tick's cover counts once: two checks of one span cover it once, two that overlap cover the steps of both once,
--- and a check that names no span covers no tick
+-- a tick's cover counts once: two checks of one span cover it once, and two that overlap cover the steps of both once
 #guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 400 "1/1000"]).take 1) ==
   [("sent", "up0", "registered", some 100000, some 35000, some 65000, "1/500")]
 #guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" (some 200)]).take 1) ==
   [("sent", "up0", "registered", some 100000, some 45000, some 55000, "1/500")]
-#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" none]).take 1) ==
-  [("sent", "up0", "registered", some 100000, some 35000, some 65000, "1/500")]
+-- a check that does not name the steps of its span is not read: beside one that names them it adds no amount and no
+-- error, and alone it gives no row, so its link is charged at capacity as what no answer covers
+#guard cells (table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" none]) ==
+  cells (table [sent] [check 3000 400 "1/1000"])
+#guard cells (table [sent] [check 2000 300 "1/1000" "h" none]) == cells (table [] [])
+-- a check that publishes no head of the registration: the same
+#guard cells (table [sent] [{ check 3000 400 "1/1000" with published := some (Json.mkObj
+    [("K", Lean.toJson (3000 : Nat)), ("eps", .str "1/1000"), ("span_ns", Lean.toJson (400 : Nat)),
+     ("start_ns", Lean.toJson (0 : Nat))]) }]) == cells (table [] [])
 -- a flow's free amount is not held to the capacity: a check whose bits pass it prints them with the ticks it does not
 -- cover charged, above the capacity, and verifies nothing
 #guard cells ((table [sent] [check 200000 400 "1/1000"]).take 1) ==
@@ -1069,10 +1080,15 @@ private def cached : Site :=
   == [(some 1200, "3/1000")]
 #guard firstVerified (audited [audit 700 (some (0, 9)), audit 1300 (some (5, 14)), audit 500 (some (10, 19))])
   == [(some 1300, "3/1000")]
--- an audit that names no span adds to none: beside one that names its span the larger counts, and of two the larger
-#guard firstVerified (audited [audit 700 (some (0, 9)), audit 500 none]) == [(some 700, "1/500")]
-#guard firstVerified (audited [audit 300 (some (0, 9)), audit 500 none]) == [(some 500, "1/500")]
-#guard firstVerified (audited [audit 300 none, audit 500 none]) == [(some 500, "1/500")]
+-- an audit that does not name the steps of its span verifies nothing, whatever amount it states: beside one that
+-- names them it adds no amount and no error, and audits that name none give no row. One that names its steps and not
+-- the session they are numbered in: the same
+#guard firstVerified (audited [audit 700 (some (0, 9)), audit 500 none]) == [(some 700, "1/1000")]
+#guard firstVerified (audited [audit 300 (some (0, 9)), audit 500 none]) == [(some 300, "1/1000")]
+#guard cells (audited [audit 300 none, audit 500 none]) == cells (audited [])
+#guard cells (audited [{ audit 700 (some (0, 9)) with profile := some (Json.mkObj []) }]) == cells (audited [])
+#guard (ranged.amounts.map fun m => (m.read tick (audit 700 (some (0, 9)))).map fun r => (r.steps, r.series)) ==
+  [some (some (0, 10), "\"s0\"")]
 -- steps numbered in two sessions cannot be shown disjoint: the larger counts once
 #guard firstVerified (audited [audit 700 (some (0, 9)), audit 500 (some (10, 19)) "s1"]) == [(some 700, "1/500")]
 -- a span named by one step, an epoch; by its first and last steps; and one whose last step is before its first
