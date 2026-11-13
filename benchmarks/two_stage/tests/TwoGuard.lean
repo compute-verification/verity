@@ -99,11 +99,12 @@ the scope Flock's hidden-output proof covers (`membersScoped`), and of `wiringOk
 wire's writer's part is before its reader's, every row a template's units read source bits at is a port a link or a
 wire names, each wire's reader port is like its writer's output port, no wire names a row a template's units write
 that no link names and some wire reads it, each reference read at a port no link or wire names reads a port of the
-interior registration, the interior registration registers no value, and each member's circuit names its ports once.
+interior registration, the interior registration registers no value, each member's circuit names its ports once, and
+every returned output bit of its unit sits on a computed row.
 Not the one clause that passes over every source bit of the members' programs (`wiresMove`). -/
 def wiringSizedOk (h : Held) : Bool :=
   membersScoped h && namesOnce h && writersFirst h && sourceRowsNamed h && wiresAlike h && writtenRowsUnwired h &&
-    writtenRowsRead h && refReadsOwn h && h.interiorNames.values.isEmpty && portsOnce h
+    writtenRowsRead h && refReadsOwn h && h.interiorNames.values.isEmpty && portsOnce h && outsOk h
 
 /-- **`two`'s conjuncts on the members' files**, at the members `ms` (`h.ms`): the replay layout and the first stage's
 design exist, the layout fits the members' files (`filesOk`), each template's reference statement reads as a
@@ -276,6 +277,7 @@ def diagFiles (h : Held) (ms : Spot.Bits.Members) : IO Unit := do
   let _ ← timed "writtenRowsUnwired" (fun _ => writtenRowsUnwired h) b
   let _ ← timed "writtenRowsRead" (fun _ => writtenRowsRead h) b
   let _ ← timed "portsOnce" (fun _ => portsOnce h) b
+  let _ ← timed "outsOk" (fun _ => outsOk h) b
   let _ ← timed "refReadsOwn" (fun _ => refReadsOwn h) b
   let _ ← timed "the interior registration registers no value" (fun _ => h.interiorNames.values.isEmpty) b
   for t in List.range ms.length do

@@ -491,6 +491,16 @@ given (`Bits.outPos`). -/
 def writtenRows (c : _root_.Flock.Circuit) : List String :=
   (List.range c.outRowPorts.size).map fun o => (c.ports.getD (_root_.Flock.HmOut.nIn c + o) default).name
 
+/-- **Every returned output bit of circuit `c`'s unit sits on a computed row** of the unit net, decided
+(`Spot.Bits.check`'s clause): the column of each instance's output leaf `j`, bit `t` (`Bits.outCol`), is past the unit
+net's input columns and before its constant. A written bit's gate is then a row of its unit, never an input or the
+constant. Its cost is one reading of the unit net and sixteen comparisons an output leaf. -/
+def outsComputed (c : _root_.Flock.Circuit) : Bool :=
+  let R := Spot.Bits.Rows.ofNet c.unit
+  (List.range c.upv).all fun k => (List.range (c.leavesOut.getD k #[]).size).all fun j =>
+    (List.range 16).all fun t =>
+      decide (R.nIn ≤ Spot.Bits.outCol c j t) && decide (Spot.Bits.outCol c j t < R.nIn + R.nComp)
+
 /-- **A gate the boundary record holds**: a written bit at an output port a link names for its template, which its
 replay block returns. Every other written bit is one the interior record alone holds. -/
 def returned (x : ℕ) : Bool :=
@@ -635,6 +645,11 @@ The port found at a row's name (`portNamed`, the first of that name) is then the
 def portsOnce : Bool :=
   (List.range h.ms.length).all fun t => decide ((memberCircuit h t).ports.toList.map (·.name)).Nodup
 
+/-- **Every returned output bit of each member's unit sits on a computed row** (`outsComputed`), decided once per
+template. -/
+def outsOk : Bool :=
+  (List.range h.ms.length).all fun t => outsComputed (memberCircuit h t)
+
 /-- **Every member's circuit is in the scope Flock's hidden-output proof covers** (`ProvedScope.scopeOkH`), decided:
 its unit reads one input group, among the rest, so no wire inside a template instance fills an input of the unit. -/
 def membersScoped : Bool :=
@@ -647,12 +662,13 @@ auditor's copies: each name is one template's (`namesOnce`); each wire's writer'
 writer's output port (`wiresAlike`); no wire names a row a template's units write that no link names
 (`writtenRowsUnwired`) and some wire reads it (`writtenRowsRead`); each reference read at a port no link or wire
 names reads a port of the interior registration (`refReadsOwn`); the interior registration registers no value, so a
-run's interior record registers none (`recordsOk`); and each member's circuit names its ports once (`portsOnce`).
+run's interior record registers none (`recordsOk`); each member's circuit names its ports once (`portsOnce`); and
+every returned output bit of its unit sits on a computed row (`outsOk`).
 All but `wiresMove` read the circuit files and the registered wiring once per template; `wiresMove` still passes
 over every source bit of the members' programs. -/
 def wiringOk : Bool :=
   namesOnce h && writersFirst h && sourceRowsNamed h && wiresMove h && wiresAlike h && writtenRowsUnwired h &&
-    writtenRowsRead h && refReadsOwn h && h.interiorNames.values.isEmpty && portsOnce h
+    writtenRowsRead h && refReadsOwn h && h.interiorNames.values.isEmpty && portsOnce h && outsOk h
 
 /-- **The two-stage design**: the members' replay partition over the boundary registration's layout (`filesReplay`),
 the first stage's design and the second stage's counts, where the two-stage scope holds (`scopeOk`), the layout

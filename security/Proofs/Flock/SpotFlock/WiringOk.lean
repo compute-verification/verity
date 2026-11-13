@@ -164,7 +164,7 @@ theorem portsOnce_of (hc : portsOnce h = true) : PortsOnce h := by
 
 /-- **Each member's circuit names its ports once**, where the second stage's design evaluates. -/
 theorem portsOnce_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) : PortsOnce h :=
-  portsOnce_of (wiring_of_two h hd).2.2.2.2.2.2.2.2.2
+  portsOnce_of (wiring_of_two h hd).2.2.2.2.2.2.2.2.2.1
 
 variable {h} in
 /-- **The address map's port at a name one of the member's ports has**: the first port of that name, one of the

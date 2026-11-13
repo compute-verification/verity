@@ -171,6 +171,34 @@ theorem writtenRead_of_rows (hc : writtenRowsRead h = true) : writtenRead h = tr
   unfold writtenRowsRead at hc
   exact List.all_eq_true.1 (List.all_eq_true.1 hc y.2.1 (List.mem_range.2 ht)) y.2.2.row hrow
 
+/-- **Every returned output bit of a circuit's unit sits on a computed row**, where the decision holds
+(`outsComputed`): its column is past the unit net's input columns and before its constant. -/
+theorem outsComputed_spec {c : _root_.Flock.Circuit} (hc : outsComputed c = true) :
+    ∀ k < c.upv, ∀ j < (c.leavesOut.getD k #[]).size, ∀ t < 16,
+      (Spot.Bits.Rows.ofNet c.unit).nIn ≤ Spot.Bits.outCol c j t ∧
+        Spot.Bits.outCol c j t < (Spot.Bits.Rows.ofNet c.unit).nIn + (Spot.Bits.Rows.ofNet c.unit).nComp := by
+  intro k hk j hj t ht
+  unfold outsComputed at hc
+  try dsimp only at hc
+  have h1 := List.all_eq_true.1 hc k (List.mem_range.2 hk)
+  have h2 := List.all_eq_true.1 h1 j (List.mem_range.2 hj)
+  have h3 := List.all_eq_true.1 h2 t (List.mem_range.2 ht)
+  rw [Bool.and_eq_true] at h3
+  exact ⟨of_decide_eq_true h3.1, of_decide_eq_true h3.2⟩
+
+/-- **Where the design evaluates, every returned output bit of each member's unit sits on a computed row**
+(`outsOk`), at the member as the partition lists it. -/
+theorem outs_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ} (ht : t < h.ms.length) :
+    ∀ k < h.ms[t].1.upv, ∀ j < (h.ms[t].1.leavesOut.getD k #[]).size, ∀ b < 16,
+      (Spot.Bits.Rows.ofNet h.ms[t].1.unit).nIn ≤ Spot.Bits.outCol h.ms[t].1 j b ∧
+        Spot.Bits.outCol h.ms[t].1 j b <
+          (Spot.Bits.Rows.ofNet h.ms[t].1.unit).nIn + (Spot.Bits.Rows.ofNet h.ms[t].1.unit).nComp := by
+  have hc : outsOk h = true := (wiring_of_two h hd).2.2.2.2.2.2.2.2.2.2
+  unfold outsOk at hc
+  have h1 : outsComputed (memberCircuit h t) = true := List.all_eq_true.1 hc t (List.mem_range.2 ht)
+  rw [memberCircuit_ms h ht] at h1
+  exact outsComputed_spec h1
+
 /-- **Where the design evaluates, every source bit is at a port a link or a wire names, no wire names a port a
 member writes that no link names, and some wire reads it.** -/
 theorem rows_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
