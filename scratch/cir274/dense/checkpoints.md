@@ -36,3 +36,4 @@
 - 23:16Z ec34 running
 - 23:32Z ec34 running
 - 23:47Z ec34 running
+- 23:48Z returning blocked: verity-vllm 2 lint failures at 03ba435a1a4, cure diff tested (4366, 16ac) not committed; ec34 (numerical, research, flock) running; no PR
