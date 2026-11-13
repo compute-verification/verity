@@ -35,8 +35,8 @@ The statements read the check that holds the refusal (#9595). The ledger ties a 
 `Numbered dev pk` says each entry of the device's ledger under the key is the line at its own number: a line of it that is an entry numbered `i` is its line `i`. It asks nothing of a line that is no entry the reader takes.
 
 - **Without it the ledger is not shown whole.** A device that wrote two lines under one number satisfies `LedgerLinesOfDevice` while the presented ledger holds only one of them.
-- **The device does number its lines.** `verity/protocols/spot/device/challenger.py` writes each line with `"seq": len(lines)`. The model of the device (`History`) does not hold that yet.
-- **It is a hypothesis of `LedgerOfDevice` alone, not a named assumption.** No lock entry reads it. Its docstring says it goes when the device's definition carries the numbering: then it is a lemma about that definition.
+- **The device does number its lines.** `verity/protocols/spot/device/challenger.py` writes each line with `"seq": len(lines)`. The model of the device (`History`) does not hold that.
+- **It is a hypothesis of `LedgerOfDevice` alone, not a named assumption.** No lock entry reads it. That is soundness's decision for the device's ledger facts (PRF-490): no law goes into `History`; the fact is taken as a hypothesis, and becomes a lemma of the modelled device once soundness's device pull request builds that device's whole ledger. The docstring says so without the issue.
 - **So "the ledger is whole" is not proved without naming `Numbered`**, here or in the next pull request.
 
 ## What the statements do not say
@@ -76,7 +76,7 @@ The statements read the check that holds the refusal (#9595). The ledger ties a 
 - **The statements build** as they stand here: `r20261113-035417-2795` on vy-nebius-cpu-11 built `Properties.Spot.Period` and `Properties.Spot.PeriodLedger`, on the proofs' branch, whose statement files and verifier are this head's.
 - **The proofs elaborate against them** (#9625): `r20261113-035213-962c` and `2795`, on `propext`, `Classical.choice` and `Quot.sound` alone.
 - **The check itself at #9595's head**: `r20261113-034210-2101`, both period difftests, 28 passed.
-- **The executable builds and the difftests pass at this head**: `r20261113-040702-87ae` on vy-nebius-2. `lake build Spot sampled-proofs-period sampled-proofs-difftest`, 504 jobs; the executable answers `id` with `verity/sampled-proofs/period/v1`; both period difftests, 28 passed in 153 s. No ready line before #9595's.
+- **The executable builds and the difftests pass at `a441d99476`**, this head less its last commit, which rewords one docstring sentence and one `unstated` line and changes no term: `r20261113-040702-87ae` on vy-nebius-2. `lake build Spot sampled-proofs-period sampled-proofs-difftest`, 504 jobs; the executable answers `id` with `verity/sampled-proofs/period/v1`; both period difftests, 28 passed in 153 s. No ready line before #9595's.
 - **No quick tier and no Lean check on this head.** The lock's eight lines are by hand; `tests/test_lean_packages.py` passes on the proofs' branch, which holds them.
 
 Refs PRF-600

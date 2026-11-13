@@ -37,7 +37,7 @@ Issue: PRF-600. The fourth of its pull requests: the proofs of the eight stateme
 
 ## What it does not do
 
-- **`Numbered` stays a hypothesis.** It goes when the model of the device carries the numbering.
+- **`Numbered` stays a hypothesis.** It becomes a lemma of the modelled device once soundness's device pull request builds that device's whole ledger (PRF-490); no law goes into `History`.
 - **Nothing is proved of one-stage v2's accept.** The statements hold for any audit of one registration.
 - **Nothing ties this registration's circuit to what `audit` describes**, and nothing is held of a root committed under another circuit.
 - **No witnesses.** That some period is accepted is shown by the difftest's stand-in audit only.
