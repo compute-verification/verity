@@ -2479,7 +2479,7 @@
     {"file": "security/Proofs/Properties/Challenger/Commitment.lean", "count": 1},
     {"file": "security/Proofs/Properties/Challenger/Drawn.lean", "count": 27},
     {"file": "security/Proofs/Properties/Challenger/Limits.lean", "count": 10},
-    {"file": "security/Proofs/Properties/Challenger/Session.lean", "count": 13},
+    {"file": "security/Proofs/Properties/Challenger/ChallengePhase.lean", "count": 13},
     {"file": "security/Proofs/Properties/Challenger/Window.lean", "count": 19},
     {"file": "security/Proofs/Properties/Firewall.lean", "count": 8},
     {"file": "security/Proofs/Properties/Nci.lean", "count": 14},
