@@ -10,16 +10,16 @@ one request. All runs are from source `30dac672d2bb682dd3a81c80bcf4915f2577fd2e`
 
 Run `r20261113-041114-3cb4`.
 
-| prompt ids, outputs | steps | key wires | by step | radix | tables | roots | openings | description |
-|---|---|---|---|---|---|---|---|---|
-| 43, 2 | 2 | **12,096** | 6,048 / 6,048 | (43,) ×6,048, (1,) ×6,048 | 756 | 1,512 | 756 | 4,417,654 B |
-| 43, 3 | 3 | **18,144** | 6,048 / 6,048 / 6,048 | (43,) ×6,048, (1,) ×12,096 | 756 | 2,268 | 1,134 | 6,291,540 B |
-| 86, 2 | 2 | **12,096** | 6,048 / 6,048 | (86,) ×6,048, (1,) ×6,048 | 756 | 1,512 | 756 | 10,098,369 B |
+| prompt ids, outputs | steps | key wires | by step | radix | w2's `g` wires by step | tables | roots | openings | description |
+|---|---|---|---|---|---|---|---|---|---|
+| 43, 2 | 2 | **12,096** | 6,048 / 6,048 | (43,) ×6,048, (1,) ×6,048 | 344 / 8 | 756 | 3,024 | 1,512 | 4,417,654 B |
+| 43, 3 | 3 | **18,144** | 6,048 / 6,048 / 6,048 | (43,) ×6,048, (1,) ×12,096 | 344 / 8 / 8 | 756 | 4,536 | 2,268 | 6,291,540 B |
+| 86, 2 | 2 | **12,096** | 6,048 / 6,048 | (86,) ×6,048, (1,) ×6,048 | 688 / 8 | 756 | 3,024 | 1,512 | 10,098,369 B |
 
-These are the number of `TableRead` (roots) and `TableOpening` (openings) entries. The counts per expert table are:
+Roots are the `TableRead` entries and openings the `TableOpening` entries, all of them the expert tables'. Each expert
+table has:
 - 4 roots at 2 steps and 6 at 3 steps, so two a step: the root and the domain id;
-- one opening a step;
-- every table read in every step.
+- one opening a step, read in every step.
 
 Bytes of the key wires: 2,721,147 at (43, 2), 4,083,283 at (43, 3) and 2,724,619 at (86, 2).
 - A decode step adds 1,362,136 B.
@@ -55,13 +55,24 @@ step**.
 
 ### The two sentences
 
-**"Counted by step, not by token": it holds for the experts.** The key wires, roots and openings are equal at 43 and at
-86 prompt ids, and grow by exactly a third from 2 steps to 3.
+**"The experts' reads are counted by step, not by token": it holds for the reads.** The key wires, roots and openings
+are equal at 43 and at 86 prompt ids, and grow by exactly a third from 2 steps to 3.
 
-It does not hold for the whole window. At 86 prompt ids the description is 10.1 MB against 4.4 MB at 43. Wire patterns
-go 13,238 → 36,100, and before `coalesce` 19,158 → 737,762, all of the growth in two of my other families:
-- BatchedGemm: 4 → 16,387 patterns;
-- SparseMlaSplit: 479 → 6,599 patterns.
+**The experts' other wires count by token.** w2's routed-weight `g` wires (a `MoeExpertFp8BlockGemmW` reader's `g`) are
+TOPK a token a MoE layer: 344 = 8 × 43 and 688 = 8 × 86 in the prefill step, and 8 in each decode step.
+- **The formula:** L_moe × TOPK × Σ_s T_s.
+- **At 78 layers:** 26,400 for 43 ids and 2 steps, as measured there.
+- **At longer prompts:** for a 2,048-token prompt this formula gives about 1.2 million patterns, more than the key wires,
+  and it is not measured.
+
+The two-digit `Piece` that wasn't built is what removes them (`reads.md`).
+
+**It does not hold for the whole window either.** At 86 prompt ids the description is 10.1 MB against 4.4 MB at 43.
+- **Wire patterns:** 13,238 → 36,100, and before `coalesce` 19,158 → 737,762.
+- **The growth, +22,862 patterns,** is all in my families:
+  - BatchedGemm: 4 → 16,387;
+  - SparseMlaSplit: 479 → 6,599;
+  - the `g` wires: +344.
 
 The cause, from a probe of those wires (`p3_tokwires.py`, run `r20261113-042057-0248`):
 - **BatchedGemm.** At 86 ids, BatchedGemm{K=512}'s `x` reads its prefill tokens from two writers:
@@ -76,7 +87,13 @@ The cause, from a probe of those wires (`p3_tokwires.py`, run `r20261113-042057-
 
 Both families are mine, and nearly all of the growth is in the prefill step. They are the non-expert half of the window
 and outside items 2 and 3. Scaled ×78 layers, the BatchedGemm part alone would be about 320,000 patterns at 86 ids. I
-haven't measured it there. TOKWIRES2
+haven't measured it there.
+
+Past 86 ids the window doesn't build (run `r20261113-042633-36c2`, same probe at 150 and 300). At 150, `ordered` refuses:
+`cycle: no order of the ranges 17631 puts wire 45 {'reader': 'AllGather_v1{WORLD=32,N=64}', 'port': 'parts', 'writer':
+'AllGather_v1{WORLD=64,N=1}', ..., 'radix': [4, 2, 150, 32], 'step': [20400, 15600, 1, 150], 'cut': [0, 32]} after its
+writers: 196 ranges wait on one another`. This is in the frame's AllGather wires, not in my families. So how the
+BatchedGemm patterns grow with longer prompts (one wire a writer, a writer a 64-token chunk?) is untested.
 
 **"About 454,000 key-wire patterns a step a rank": right** (453,600).
 
@@ -88,7 +105,10 @@ haven't measured it there. TOKWIRES2
   32.9 MB a step.
 
 The figure to give is **137 MB a step a rank plus 12 MB once a window**: 137 S + 12 MB for an S-step window, which is
-286 MB at S = 2 as measured. The bytes per entry are 78-layer measurements:
+286 MB at S = 2 as measured. This counts only the experts' key wires and their declarations. The `g` wires and the rest
+of the window come on top, and the `g` wires and BatchedGemm's grow with the prefill's tokens.
+
+The bytes per entry are 78-layer measurements:
 - a key wire 229.2 B;
 - a root 183.8 B;
 - an opening 212.8 B;
