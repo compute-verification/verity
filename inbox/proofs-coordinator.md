@@ -140879,3 +140879,40 @@ Next: the variant's run; then the second witness; then the second read of #9577 
 ## MEMBERS, Fri 13 Nov 12:35Z: line 1: YES, the tables' check already runs at every member, sampled or not, before the sessions; I write no separate check
 
 Your 12:34Z mail is read. Yes, as you read it at `ad3efc0ca19c`, and as my 12:29Z entry says: it is there since `3d03860e75a`, which is in #9441's marked head too. Beyond it, on the switch since `1c25cb14f6e`: `Properties.Spot.TablesRegistered` already has the clause for each member, sampled or not (`AcceptHoldsTables`), proved by `checkBlobsAt_members_tables`; `security/Proofs/Properties/Spot/Tables.lean` compiles at `ad3efc0ca19c` [run `r20261113-123125-2939`, vy-nebius-cpu-1, exit 0, only the three axioms]. So the two theorems my 12:29Z item 2 offered are not needed either; I drop them. Items 2, 3 and 4 and the cost row come in the 13:30Z entry; the count of `lookups` lists goes out as a job now.
+
+## REDRAW, Fri 13 Nov 12:36Z: `682b` ended exit 0: `AUDIT …/security/Properties: PASS … 543 guarantees`, `OUTCOME {"outcome": "regenerated"`; the lock takes the one-call witness `credited … = .ok [0]`, the list is at 181 without `drawWithheld`, and its records are on the credit branch at `87c3381f8f3e`
+
+Mailbox read to line 521, your 12:19Z [read]: #9728's ready line is taken, no records run at its head, the README follow-up after the carry. The pen is mine [run].
+
+**`r20261113-112700-682b`** (vy-nebius-2, pool proofs, 64 GB asked, no wait, 11:27:30Z to 12:25:02Z, 58 minutes), the credit branch at `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`, the one-call lemma [run]:
+
+- `AUDIT …/security/Proofs: PASS  205120 declarations in 4063 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`.
+- `AUDIT …/security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 543 guarantees`.
+- `security`: first `FAIL` on record differences alone ("every failure of its records is a record difference"), then `check.py --update` and `AUDIT …/security: PASS  27776 declarations in 730 modules; axioms propext, Classical.choice, Quot.sound; 1137 guarantees`.
+- `lean-records: OUTCOME {"outcome": "regenerated", "package": "security/Properties", …`, with `security/Proofs` `"outcome": "pass"`.
+
+**So `check.py` takes `= .ok [0]`** [run]: no fallback to the ∃ form was needed.
+
+**The records are on the branch** [run]: `cursor/proofs-honest-credit-9d1e` at `87c3381f8f3e4467035bb4535cfa738c67f8fc1b`, pushed. I copied the run's two regenerated files as it wrote them; each has the digest of the OUTCOME line: `security/Properties/lean-audit.json` `2d5de4f590e9501cf25866e9ab7380f8a365567ad6b72aa06d0812b8b8b8931f`, `security/lean-audit.json` `cf38d7e1ea6c88ef333cd78d1759bf2a59923fd4b91fd0b59b3bfef8572d5f16`. What they change against the lock I kept by hand [run, a comparison of the two files' JSON]:
+
+- `unwitnessed`: 182 entries to 181; the one entry gone is `Properties.Pouw.Credit.SecurityProofs.drawWithheld` (its honest half's exemption). The cap in `tests/test_lean_packages.py` is 181, and `-k unwitnessed` passes on my VM at the head.
+- `guarantees`: one record changes, `drawWithheld_honest`'s: the stub `{"owner": "@proofs"}` now holds its statement (it ends `(Except.ok (List.cons 0 List.nil))`), no premise of any kind, type hash `f4df8411b5532943a218ace2a84ce72d094f5a3d3b7abb8a2c81aaa547eafcff`. No other guarantee's record moves, in either lock.
+- `reads` in both locks: the digest of `PouwCheck.Credit.commitOf?` moves, and `Spot.Challenger.ChallengerKey.toJson` is new among what is read. The first is because this branch holds the two commits of the `commitOf?` change (the total parser, the match on the format), the same change as `cursor/proofs-redraw-commitof-4e9d`, and this is the first records run copied after them [derived].
+- `witnesses`, `roots`, `shape`, `trust`, `deployed`: unchanged.
+
+**What this branch still depends on** [derived]: `commit_read` is proved of `commitOf?` with the total parser, so the branch holds that change and its pull request lands after the `commitOf?` pull request, which you hold until after the chains [relayed, your 08:30Z]. So (d)'s third witness is compiled and listed with regenerated records on its branch, and reaches `main` after #9717, #9728 and the `commitOf?` change. I open no pull request for it now.
+
+**A check I sent at the head:** `r20261113-123455-52b2` (vy-nebius-cpu-1 by `--on auto`, 16 GB asked), the suites `repository`, `verity/protocols/pous/verifier`, `verity/protocols/pouw/verifier`, quick tier; about 12:50Z [guess]. The whole changed tier I leave for after the carry, when it must run again anyway [derived].
+
+**PRF-582's plan (a) to (d) is done on branches** [derived]: (a) #9717, (b), (c) and two of (d)'s witnesses #9728, the third witness on the credit branch. The date Fri 20 Nov holds.
+
+**Next by your order of Thu 22:41Z, point 4:** `drawCoins` taking `main` from its caller, its own pull request, mine. It changes `drawCoins`'s arguments, so it changes `familyOneCommitment`'s statement and `familyOneCommitment_honest` with it: it has to sit on #9728's head, not on `main` [derived]. I size it now by reading (the sites, the Python mirror, the records that move, which of the bridge's files change) and write the size in my next entry. **I build nothing of it until you say which**: stacked on the credit branch now (one more branch to carry), or after the carry.
+
+**Heads, all pushed, nothing unpushed** [run]:
+
+- `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d` (#9717, unmarked).
+- `cursor/proofs-honest-session-7c1e` `36d6e37cbc7b72159589fbcb72fb1d10a30068a3` (#9728, ready line 12:13Z, unmarked).
+- `cursor/proofs-honest-credit-9d1e` `87c3381f8f3e4467035bb4535cfa738c67f8fc1b` (no pull request).
+- `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e` (no pull request).
+
+**I wait on:** `r20261113-123455-52b2` (about 12:50Z [guess]); then your word on point 4's base, and "carry".
