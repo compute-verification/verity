@@ -111,7 +111,7 @@ if not a.no_plants:
     c2 = dataclasses.replace(c, registered=dataclasses.replace(
         reg, roots=tuple(dataclasses.replace(x, table=b0) if hit(x) else x for x in reg.roots),
         openings=tuple(dataclasses.replace(x, table=b0) if hit(x) else x for x in reg.openings)))
-    key = NV.draws(a.seed)
+    key = NV.sample_key(a.seed)
     picked = {t: NV.sample(ck.counts[t], key, t, a.most) for t in ck.c.ids}
     covered = sum(1 for u in picked[read] if o1.at <= u < o1.at + o1.units)
     ck2 = NV.Check(c2, w, values, tables)

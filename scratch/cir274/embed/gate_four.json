@@ -1,0 +1,90 @@
+{
+ "kind": "vllm-ratchet-gate/v2",
+ "base": "b3902993caeaef278eb966882ae5c50056d89032",
+ "top": "9ecee8af3b2b5f3f2cf48ee13cafc2836444d22a",
+ "changes": [
+  {
+   "name": "1e4d5c993c08..9ecee8af3b2b",
+   "commit": "9ecee8af3b2b5f3f2cf48ee13cafc2836444d22a",
+   "base": "1e4d5c993c08a3ceee881d8c8563246b42243ea1",
+   "pr": null,
+   "verdict": "failed",
+   "why": "adds 8 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (adapters/vllm/verity_vllm/program/predict/node_window_values.py 0 -> 8): Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) stays only where it already stands. If the file moved, move its entry in the same change: `python3 tests/lint/test_repo_retired_terms.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).",
+   "before": null,
+   "after": null,
+   "touched": [],
+   "lints": [],
+   "fix": [
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:42 'DRAW' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:647 'draws' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:649 'DRAW' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:653 'draw' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:659 'draw' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:659 'draws' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:662 'draws' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:738 'draws' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)"
+   ],
+   "noqa_added": 0,
+   "noqa_removed": 0,
+   "pooled": [],
+   "linted": [
+    "verity/commitments/windows/interface.py"
+   ],
+   "counted": {
+    "repo_env_reads": [
+     "verity/commitments/windows/interface.py"
+    ],
+    "repo_silent_excepts": [
+     "verity/commitments/windows/interface.py"
+    ],
+    "repo_lane_text": [
+     "adapters/vllm/tests/program/predict/test_node_window.py",
+     "adapters/vllm/tests/program/predict/test_node_window_dense.py",
+     "adapters/vllm/tests/program/predict/test_node_window_embed.py",
+     "adapters/vllm/tests/program/predict/test_node_window_join.py",
+     "adapters/vllm/tests/program/predict/test_node_window_multimem.py",
+     "adapters/vllm/tests/program/predict/test_node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_dense.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_embed.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_multimem.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
+     "verity/commitments/windows/interface.py"
+    ],
+    "repo_retired_terms": [
+     "adapters/vllm/tests/program/predict/test_node_window.py",
+     "adapters/vllm/tests/program/predict/test_node_window_dense.py",
+     "adapters/vllm/tests/program/predict/test_node_window_embed.py",
+     "adapters/vllm/tests/program/predict/test_node_window_join.py",
+     "adapters/vllm/tests/program/predict/test_node_window_multimem.py",
+     "adapters/vllm/tests/program/predict/test_node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_dense.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_embed.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_multimem.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_sparse.py",
+     "adapters/vllm/verity_vllm/program/predict/node_window_values.py",
+     "verity/commitments/windows/interface.py"
+    ]
+   }
+  }
+ ],
+ "failures": [
+  {
+   "commit": "9ecee8af3b2b5f3f2cf48ee13cafc2836444d22a",
+   "pr": null,
+   "why": "adds 8 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (adapters/vllm/verity_vllm/program/predict/node_window_values.py 0 -> 8): Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) stays only where it already stands. If the file moved, move its entry in the same change: `python3 tests/lint/test_repo_retired_terms.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).",
+   "fix": [
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:42 'DRAW' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:647 'draws' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:649 'DRAW' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:653 'draw' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:659 'draw' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:659 'draws' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:662 'draws' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)",
+    "adapters/vllm/verity_vllm/program/predict/node_window_values.py:738 'draws' is retired; say the sample, a sampled proof block; to sample (coins are flipped) (GLOSSARY.md)"
+   ]
+  }
+ ]
+}
