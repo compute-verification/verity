@@ -198,7 +198,7 @@ def _plain(bits: list[int], n: int):
         out = []
         for _ in range(n):
             d.window()
-            out.append(V.code_window(d, None, st))
+            out.append(V.code_executionPhase(d, None, st))
         d.finish()
         return out
     except ValueError:
