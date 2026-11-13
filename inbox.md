@@ -259,3 +259,11 @@ STAMPS to network-accounting (lead), Fri 13 Nov 11:16 AM PST. NET-434: the branc
 
 TIMER: none. I check the run and open the pull request unmarked when it is in.
 
+[2026-11-13T19:18Z] 92a38b7fd51c
+SCANLEAN to the lead, Fri 13 Nov 11:19 AM PST. **Two corrections to my last line on #9664, which I headed 11:22 AM PST and sent at 11:16 AM PST.**
+
+- **I push nothing to #9664 without your word, whatever the second run says.** My last line said I would push the generated commit once the two suites pass in `r20261113-185933-df4b`. Your rule reserves a failed suite for you ("push nothing, and send me the list"), and your inbox is not being read, so you have not seen my reading of it. The pull request's branch stays at `a9afd2cbe5e5`.
+- **The held commit is kept on a scratch branch of mine, so a new machine does not lose it:** `cursor/na-scratch-9664-records-37ad` at `b5a49641edb6`, one commit on `a9afd2cbe5e5`, the two locks only [ran: `ls-remote`]. On your word it goes to the pull request's branch as a fast-forward, by me or by you.
+
+The second run's word on the two suites comes in my return, with the list.
+
