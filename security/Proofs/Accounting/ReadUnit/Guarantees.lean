@@ -18,7 +18,7 @@ table's committed row at the index its token picks, except with probability at m
 collision finder's expected SHA-512 calls over `2^256` (`ReadUnit.BindsAt`). Nothing is assumed of the read's gates:
 the check fixes them, and the gate refinement and the rows' run are proved of every template it accepts.
 
-C-Flock's unit rows (`Flock.Bridge.copyGate`, `constGate`, `FlockSoundness.Rows.ofNet`) are still in its proofs package, so
+Flock's unit rows (`Flock.Bridge.copyGate`, `constGate`, `FlockSoundness.Rows.ofNet`) are still in its proofs package, so
 this module imports them.
 -/
 
@@ -52,10 +52,10 @@ noncomputable def portsAt (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.u
 
 /-- **The table reads at `D`'s copies bind.** In the key program of `n` units of `D`'s circuit, with every unit's
 constant registered as `true`, take reads `R` whose ports are each at a copy of its unit (`portsAt`), each table
-committed under its root and domain id with the served hm96 key (`Reads.Committed`), and any law `Ω` on the verifier's
-acceptance `acc`, its drawn units and the trace. If an accepted run draws a read's unit that is incorrect or whose rows'
+committed under its root and domain id with the served hm96 key (`Reads.Committed`), and any sampling design `Ω` on the verifier's
+acceptance `acc`, its sampled proof blocks and the trace. If an accepted run samples a read's unit that is incorrect or whose rows'
 openings aren't the registered ones with probability at most `ε` (the sampling layer's bound), and SHA-512 is collision
-resistant at the finder the reads build from the run (`SHA512CRExpected` at its one coin), then an accepted run draws a
+resistant at the finder the reads build from the run (`SHA512CRExpected` at its one coin), then an accepted run samples a
 read whose index is inside its table and whose returned row is not the table's row there with probability at most
 `ε + E[cost] / 2^256`. -/
 def BindsAt (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (V H : ℕ) : Prop :=
