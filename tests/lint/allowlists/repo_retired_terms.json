@@ -3191,7 +3191,6 @@
     {"file": "benchmarks/private_circuit/README.md", "count": 1},
     {"file": "benchmarks/private_circuit/pod.sh", "count": 4},
     {"file": "benchmarks/private_circuit/universal.py", "count": 27},
-    {"file": "benchmarks/prod_repro/metrics.toml", "count": 2},
     {"file": "benchmarks/proof_throughput/README.md", "count": 16},
     {"file": "benchmarks/proof_throughput/job.sh", "count": 13},
     {"file": "benchmarks/proof_throughput/pyproject.toml", "count": 1},
