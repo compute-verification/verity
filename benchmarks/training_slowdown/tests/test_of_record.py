@@ -168,9 +168,9 @@ def test_the_cpus_norm_is_expected_for_cudas_fused_kernel_with_one_normalisation
         ("norm", 3 * n, 3 * n + 2 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
     assert "3 multiplies by an updated gain" in got["expected"][0]["what"]
     # a normalisation with no gain's multiply, another count of updated gains, a product of the backward's the
-    # record has too: none is the norm's exact case, so each side's entries are differences
+    # record has more of: none is the norm's exact case, so each side's entries are differences
     for cpu, record in ((norms(3, 2, 6), cuda), (norms(4, 1, 5), cuda),
-                        (norms(3, 2, 5), cuda | log(("bwd", "grad", "mul", [X, X], 1, n)))):
+                        (norms(3, 2, 5), cuda | log(("bwd", "grad", "mul", [X, X], 11, 11 * n)))):
         got = of_record.compare(step(log(*BOTH, *cpu)), step(record), SHAPE)
         assert got["expected"] == [] and len(got["differences"]) >= 7
         assert any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
@@ -184,7 +184,7 @@ def test_the_cpus_norm_is_expected_for_cudas_fused_kernel_with_one_normalisation
 def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_has_nothing_of_it():
     """A step that trains no gain: CUDA's counter is shown nothing of the fused kernel, so the record has no entry of
     the norm, and the CPU's side has every gain's multiply as θ's. Expected, with one normalisation a gain; not where
-    a normalisation has no gain's multiply, where the record has one of the backward's products too, or where the
+    a normalisation has no gain's multiply, where the record has more of one of the backward's products, or where the
     config multiplies by an updated gain the record never counted."""
     n = CTX * D
     frozen = norms(0, 5, 5)[1:]
@@ -194,12 +194,34 @@ def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_
         ("norm", 0, 5 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
     assert "no gain is updated" in got["expected"][0]["what"] and "5 by θ's gains" in got["expected"][0]["what"]
     for cpu, record in ((norms(0, 5, 6)[1:], log(*BOTH)), (norms(1, 4, 5), log(*BOTH)),
-                        (frozen, log(*BOTH, ("bwd", "grad", "mul", [X, X], 1, n)))):
+                        (frozen, log(*BOTH, ("bwd", "grad", "mul", [X, X], 11, 11 * n)))):
         got = of_record.compare(step(log(*BOTH, *cpu)), step(record), SHAPE)
         assert got["expected"] == [] and len(got["differences"]) >= 5
     # a step with no norm at all on either side is equal, with no rule fired
     got = of_record.compare(step(log(*BOTH)), step(log(*BOTH)), SHAPE)
     assert got["expected"] == [] and got["differences"] == []
+
+
+def test_the_norm_takes_the_configs_excess_of_a_backward_product_the_record_has_of_its_own():
+    """A record whose program has a backward product of its own over the norm's shapes (a scale on a matrix's output
+    multiplies the stream by a vector as a gain does): where the config has more of it, at the same MACs a product,
+    the excess is the norm's and the rule says how many are on both sides; where the record has more, or its products
+    have other MACs, the rule does not fire. The forward side is as it was."""
+    n = CTX * D
+    frozen = norms(0, 5, 5)[1:]
+    own = ("bwd", "grad", "mul", [X, X], 4, 4 * n)
+    got = of_record.compare(step(log(*BOTH, *frozen)), step(log(*BOTH, own)), SHAPE)
+    assert got["differences"] == []
+    assert [(e["rule"], e["record_macs"], e["config_macs"]) for e in got["expected"]] == [
+        ("norm", 4 * n, 5 * n + 5 * n + 5 * n + 10 * n + 5 * CTX)]
+    assert ("16 products of the backward's" in got["expected"][0]["what"]
+            and "; 4 products of the backward's over the same shapes, op and MACs are on both sides"
+            in got["expected"][0]["what"])
+    for theirs in (("bwd", "grad", "mul", [X, X], 11, 11 * n), ("bwd", "grad", "mul", [X, X], 4, 8 * n)):
+        got = of_record.compare(step(log(*BOTH, *frozen)), step(log(*BOTH, theirs)), SHAPE)
+        assert got["expected"] == [] and any("bwd/grad mul [[1,1024,16] x2]" in d for d in got["differences"])
+    plain = of_record.compare(step(log(*BOTH, *frozen)), step(log(*BOTH)), SHAPE)
+    assert "on both sides" not in plain["expected"][0]["what"]
 
 
 def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch):
