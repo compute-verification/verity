@@ -76,7 +76,11 @@ def test_a_request_with_no_rows_has_no_window():
     A.reference_paged(q2, kc, vc, qsl2, lens, table, ks, scale, want)
     seen = []
     real = int8_ops.kv_quant_batch
-    int8_ops.kv_quant_batch = lambda *a: seen.append(list(a[3])) or real(*a)
+
+    def kv_quant_batch(*a):
+        seen.append(list(a[3]))
+        return real(*a)
+    int8_ops.kv_quant_batch = kv_quant_batch
     try:
         int8_ops.paged_attention(q2, kc, vc, qsl2, lens, table, ks, scale, got)
     finally:

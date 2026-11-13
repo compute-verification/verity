@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.check.replay import coverage as COV, index as IX, population as POP
 from tests.check.test_sampled_replay import _program
+from verity_vllm.check.replay import coverage as COV
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import population as POP
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import request_manifest
