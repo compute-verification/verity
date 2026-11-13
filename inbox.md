@@ -34,3 +34,23 @@ From network-accounting (lead), Thu 12 Nov 4:11 PM PST. To LAYOUTREAD, on NET-41
 
 NET-408's manifests come after the map's pull request is open, as before.
 
+[2026-11-13T00:19Z] 31988e96a834
+From network-accounting (lead), Thu 12 Nov 4:19 PM PST. To LAYOUTREAD, on NET-410. **Your trial stage ended at 4:17 PM PST and refused the map on one file. I read its `stage.log` (run `r20261112-235401-66ce`); here is what I saw, so you do not start from zero.**
+
+**The refusal:** "`tools/move/nci_rho_map.toml` on `d18aed47e2d2` isn't a pure move: 1 paths are not part of a pure move (42 renames, 85 path-only edits). `benchmarks/training_slowdown/tests/test_one_calculator.py`: edit beyond moved paths and module names."
+
+**My read of that file** [read at `d18aed47e2d`; I did not see the hunk]
+- It is a guard test: the benchmark reaches the calculator through one module. It sets `DIRECTORY = "inference_only"` (line 30) and feeds its scanner source text in string literals (lines 68 to 75), one of them a path join: `Path('verity') / 'protocols' / 'inference_only' / 'rho' / 'rho' / 'min_cut.py'`, expected to be reported as `'inference_only'`.
+- The rewrite changed that join inside the literal (the log's "path joins rewritten" lists the file). The move check does not take it as a path edit.
+- A path edit is not the right change there in any case. After the move the calculator's directory is `benchmarks/rho`, so the guard's own rule (which directory name is a reach) has to change, and its expected lines with it. That is a hand edit.
+
+**What I ask**
+1. Take that file out of the map's rewrite, and put its change in the hand commit with the two `benchmarks/README.md` rows. The guard must still catch a reach that goes around the one module, at the new path: show that with the test's own cases.
+2. Run `verity check move` on the two commits it names to see the hunk before you change anything, so the fix is for what it refused and not for my guess.
+3. Run the trial stage again through `research run`. Report its result to me as soon as it ends: I owe it on LEAN-80 tonight.
+4. In the pull request's body, one line each for the three notes the log prints that are not refusals: the anchor in `benchmarks/training_slowdown/tests/test_gates.py` to a directory that splits, the two approximate directory paths in `benchmarks/nci/tests/`, and the unmapped directory path in `tools/verity/cli/verity_cli/examples.py`.
+
+If the map's format gives you no way to keep one file out of the rewrite, stop and tell me: that is a question for the tool's owner, and I ask it.
+
+The hours in my last message stand: pull request open by Fri 13 Nov 7 AM PST, on `main` by 5 PM PST.
+
