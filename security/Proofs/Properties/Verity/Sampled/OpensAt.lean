@@ -313,7 +313,8 @@ end Instance
 /-- **`remote_soundness_deployedAt` with its openings and registered files discharged**: its openings premise
 `OpensAt` holds at every instance (`Instance.opensAt`), as does the registered files' file check (`RegisteredFiles`,
 `Instance.registeredFiles`); its session premise `SessionAt` is `sessionAt_of_registered`'s from `SessionRegistered`,
-and the coupling's, the device's log opening only the record's rounds (`LogOpensRecorded`), is v2's record check's,
+which owes only the session's setup on the registered files, the ports and roots check being v2's own on the accepted
+play (`opensReady_of_accepted`), and the coupling's, the device's log opening only the record's rounds (`LogOpensRecorded`), is v2's record check's,
 which refuses a session whose coin tree opens a round its record doesn't give (`Instance.logOpensRecorded`). -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
