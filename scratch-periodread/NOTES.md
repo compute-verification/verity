@@ -262,3 +262,28 @@ When it ends:
 3. Ask the coordinator who starts the kernel replay (a full Lean check) on the proofs' heads and who reads the statements as a second reader.
 
 (l) is done as far as a try goes: `r20261113-051324-3c1a` rc 0 at `5edf7e30ee`, 12 theorems on the three axioms; #9665 open, unmarked. The device's chain is `verity/protocols/spot/device/challenger.py:1502` with `prev_of` in `verity/hardware/record.py:71`.
+
+## State at Fri 06:00Z (read this first on a new machine)
+
+New machine at 05:48Z: worktrees rebuilt (`wt-pr0` = origin/main, `wt-inbox`, `wt-scratch`, `wt-pr3`, `wt-pr4`, `wt-l`, all detached at the pushed heads). Nothing was unpushed.
+
+Words since 05:30Z:
+
+- 05:44Z: nobody starts the kernel replay by hand (it is the queue's check on the train); soundness second-reads #9581 and #9665, asked by the coordinator on PRF-490 once the four ready lines are in; #9595's `research` red does not hold its ready line.
+- 05:50Z (the shell hook): a wait at the end of a try on vy-nebius-2 is a line for the node's artifact store, not a hang: never cancel it. Ask the memory the job holds. The roots rule: a root for each new file, appended in the commit that adds it; NO READY LINE BEFORE A RECORDS RUN OF `security/Proofs` PASSES AT THE HEAD.
+
+Done:
+
+- `r20261113-040405-1199` (#9595's quick tier) ended rc 0, `SUITES exit 1`: 60 of 61 suites passed; `research` 4769 passed, 2 failed, `tests/test_auto.py::test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool` and `::test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen`, the two tests #9596 changes (merged 05:31:48Z, `0d08286afc` on main). #9595's body has it (`pr2-body.md`, posted 05:56Z).
+
+Records runs (launch word: `research run --on vy-nebius-2 --project verity --source WT --cwd clone --pool proofs --as proofs --mem-gb 32 --timeout S --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update`):
+
+- A `r20261113-055441-2c57`: #9581's head `e230e76f63`, PKG `verity/protocols/spot/verifier/lean` (spot's lock has the hand-written `exempt` line; its requirers with a lock: certifier's verifier, `security`, `security/Properties`, `security/Proofs`). Check slot 05:56:23Z, timeout 08:56Z. `ddb2`, the same package at #9537's head, held its slot 1 h 47 min.
+- C `r20261113-055510-d3ba`: #9665's head `5edf7e30ee`, PKG `security/Properties` (then `security/Proofs`, its one requirer). Check slot 05:56:06Z, timeout 07:56Z.
+- B, NOT launched: #9625's head `2f3c3e6022`, PKG `security/Properties`, from `wt-pr4`, timeout 7200. Launch when A or C ends.
+
+Reading a records run: `result.json` (`outcome`, `records` per package), the `regenerated` and `failed` lists in each `lean-audit/audit-*/` report, stdout for `shape.`, `layers.`, `orphan.`, `roots` failures. A record kept under `lean-audit/record/<path>/lean-audit.json` is committed over the lock (it says which); that moves the head, and every head above it then merges it.
+
+Roots rule, checked: each of the eight new files has its `lakefile.toml` root (or, for `Spot/PeriodAudit.lean`, its import in `Spot.lean`) in the commit that adds it. The locks' `roots` lists got `Properties.Spot.Period`, `Properties.Spot.PeriodLedger` (in `06ac8f46e7`) and `Proofs.Properties.Challenger.Lines`, `Proofs.Properties.Spot.Period`, `Proofs.Properties.Spot.PeriodLedger` (in `36dc4d568f`) in a later commit of the same pull request; `PeriodSigned` and `PeriodMain` in the adding commit. Every head has both.
+
+Ready lines: #9595's given 06:0xZ (see the entry). #9581 after A passes; #9625 after B; #9665 after C. If a run regenerates a record: say which and why in the body before the line.
