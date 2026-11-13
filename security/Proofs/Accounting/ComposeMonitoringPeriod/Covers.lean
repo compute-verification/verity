@@ -8,13 +8,13 @@ public import Proofs.Accounting.Lemmas.Compose
 /-!
 # The period layer's covers: `ServiceCovers` with a window index
 
-`PeriodCoversStmt` is the one piece of `CircuitWorkMonitoringPeriod`'s proof (`Proofs.Accounting.ComposeMonitoringPeriod`) stated here,
-and proved here as `periodCovers`. The assembly reads it as a hypothesis (`ComposeMonitoringPeriod.circuitWorkMonitoringPeriod_of_covers`).
+`MonitoringPeriodCoversStmt` is the one piece of `CircuitWorkMonitoringPeriod`'s proof (`Proofs.Accounting.ComposeMonitoringPeriod`) stated here,
+and proved here as `monitoringPeriodCovers`. The assembly reads it as a hypothesis (`ComposeMonitoringPeriod.circuitWorkMonitoringPeriod_of_covers`).
 
 It is `CoversProof.serviceCovers`' argument with a window index. Every position, cut and writer of window `w` of the
-period layer (`Declared.periodLayer`) is window `w`'s, so a late edge (`SampledLayer.Late`) stays in its window and
+period layer (`Declared.monitoringPeriodLayer`) is window `w`'s, so a late edge (`SampledLayer.Late`) stays in its window and
 lies in the IR's late cone (`Declared.Reaches`) under `Declared.Wf` and `LayerCommitted`, as `reaches_of_late` shows
-for one window. A credited window's live tiles have its own run's modes under `periodMode`, and its dead tiles are
+for one window. A credited window's live tiles have its own run's modes under `monitoringPeriodMode`, and its dead tiles are
 skipped whole. So a live tile of words that isn't good is reached by a tile its window's run didn't pay for: either a
 live one, whose `liveCone` the window's round charges and which holds the tile's live words, or a dead one, which
 `DeadConeDead` says reaches no live words.
@@ -32,20 +32,20 @@ namespace Accounting.SecurityProofs.ComposeMonitoringPeriod
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 
 open Classical in
-/-- **The period layer's covers on a credited window's live tiles** (proved as `periodCovers`): the period layer's
+/-- **The period layer's covers on a credited window's live tiles** (proved as `monitoringPeriodCovers`): the period layer's
 writers read their positions (`SampledLayer.WriterReads`), and on every path `x`, in every credited window `w` whose dead
 tiles' cones hold no live words (`DeadConeDead`), the live words of the tiles that aren't good under the period's modes
-(`periodMode`) are at most `N_w` times the `liveCone` of the tiles window `w`'s run didn't pay for, at its rounds'
-coins. The right side is window `w`'s round's deficiency in `periodGame` at weights `liveCone` and costs `1, 1`. -/
-def PeriodCoversStmt : Prop :=
+(`monitoringPeriodMode`) are at most `N_w` times the `liveCone` of the tiles window `w`'s run didn't pay for, at its rounds'
+coins. The right side is window `w`'s round's deficiency in `monitoringPeriodGame` at weights `liveCone` and costs `1, 1`. -/
+def MonitoringPeriodCoversStmt : Prop :=
   ∀ {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
-    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V),
     Cd.Wf → LayerCommitted Cd →
-    (Cd.periodLayer hr hK pr).WriterReads ∧
+    (Cd.monitoringPeriodLayer hr hK pr).WriterReads ∧
       ∀ (x : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n), pr.Credited x w →
         DeadConeDead Sc Cd Np (Wp.liveAt x w) →
-        (∑ t : Fin Np, if (Cd.periodLayer hr hK pr).Good (periodMode Cd Wp pr) x w t then (0 : ℝ)
+        (∑ t : Fin Np, if (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t then (0 : ℝ)
           else (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ)) ≤
           (∑ u : Fin Np, if (Wp.windowAt x w).modeAt (tileStage Cd Np) (coinAt x w).1 u = .paid then 0
             else liveCone Sc Cd Np (Wp.liveAt x w) u) * (wordsOf Sc Cd : ℝ)
@@ -62,15 +62,15 @@ section Layer
 variable {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
   (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
 
-theorem periodLayer_src (ℓ : Fin n × ℕ) : (Cd.periodLayer hr hK pr).src ℓ =
+theorem monitoringPeriodLayer_src (ℓ : Fin n × ℕ) : (Cd.monitoringPeriodLayer hr hK pr).src ℓ =
     if h : ℓ.2 < Cd.dag.length ∧ Cd.binding ℓ.2 ≠ some .coin ∧ Cd.unit ℓ.2 < Np then
       some (ℓ.1, ⟨Cd.unit ℓ.2, h.2.2⟩) else none := rfl
 
 /-- **A late edge of the period layer stays in its window**, and is the one-window layer's edge there. -/
-theorem late_one {u v : Fin n × Fin Np} (h : (Cd.periodLayer hr hK pr).Late u v) :
+theorem late_one {u v : Fin n × Fin Np} (h : (Cd.monitoringPeriodLayer hr hK pr).Late u v) :
     u.1 = v.1 ∧ (Cd.layer hr hK (anyRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np)).Late (0, u.2) (0, v.2) := by
   obtain ⟨k, hsrc, hcut⟩ := h
-  rw [periodLayer_src] at hsrc
+  rw [monitoringPeriodLayer_src] at hsrc
   split at hsrc
   · rename_i hs
     obtain rfl := Option.some.inj hsrc
@@ -81,7 +81,7 @@ theorem late_one {u v : Fin n × Fin Np} (h : (Cd.periodLayer hr hK pr).Late u v
     · exact Or.inr ⟨rfl, h1.2⟩
   · cases hsrc
 
-theorem rtg_one {u v : Fin n × Fin Np} (h : Relation.ReflTransGen (Cd.periodLayer hr hK pr).Late u v) :
+theorem rtg_one {u v : Fin n × Fin Np} (h : Relation.ReflTransGen (Cd.monitoringPeriodLayer hr hK pr).Late u v) :
     u.1 = v.1 ∧ Relation.ReflTransGen
       (Cd.layer hr hK (anyRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np)).Late (0, u.2) (0, v.2) := by
   induction h with
@@ -92,14 +92,14 @@ theorem rtg_one {u v : Fin n × Fin Np} (h : Relation.ReflTransGen (Cd.periodLay
 
 /-- **The period layer's late cone lies in its window and in the IR's late cone**: under `Declared.Wf` and
 `LayerCommitted`. -/
-theorem periodLayer_cone (hw : Cd.Wf) (hc : LayerCommitted Cd) {u v : Fin n × Fin Np}
-    (h : Relation.ReflTransGen (Cd.periodLayer hr hK pr).Late u v) : u.1 = v.1 ∧ Cd.Reaches u.2.val v.2.val :=
+theorem monitoringPeriodLayer_cone (hw : Cd.Wf) (hc : LayerCommitted Cd) {u v : Fin n × Fin Np}
+    (h : Relation.ReflTransGen (Cd.monitoringPeriodLayer hr hK pr).Late u v) : u.1 = v.1 ∧ Cd.Reaches u.2.val v.2.val :=
   ⟨(rtg_one Cd hr hK pr h).1, Accounting.SecurityProofs.Compose.CoversProof.reaches_of_rtg Cd hr hK
     (anyRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np) hw hc (rtg_one Cd hr hK pr h).2⟩
 
-theorem periodLayer_writerReads : (Cd.periodLayer hr hK pr).WriterReads := by
+theorem monitoringPeriodLayer_writerReads : (Cd.monitoringPeriodLayer hr hK pr).WriterReads := by
   intro ℓ u hu
-  rw [periodLayer_src] at hu
+  rw [monitoringPeriodLayer_src] at hu
   split at hu
   · rename_i h
     obtain rfl := Option.some.inj hu
@@ -180,27 +180,27 @@ theorem sum_not_good_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : �
 end CoversProof
 
 open Classical in
-/-- `PeriodCoversStmt`: the writers from the one-window layer's (`Compose.WorkProof.writerReads`), and the covers by
+/-- `MonitoringPeriodCoversStmt`: the writers from the one-window layer's (`Compose.WorkProof.writerReads`), and the covers by
 `CoversProof.sum_not_good_le`. A tile that isn't good has a tile of its period cone that isn't paid; that cone lies in
-its window and in the IR's (`CoversProof.periodLayer_cone`), and in a credited window a tile that isn't paid is dead,
+its window and in the IR's (`CoversProof.monitoringPeriodLayer_cone`), and in a credited window a tile that isn't paid is dead,
 so reaches no live words (`DeadConeDead`), or live and not paid in the window's run. -/
-theorem periodCovers : PeriodCoversStmt := by
+theorem monitoringPeriodCovers : MonitoringPeriodCoversStmt := by
   intro ι K C Ξ V Sc Cd n Np Kd hr hK Wp pr hw hc
-  refine ⟨CoversProof.periodLayer_writerReads Cd hr hK pr, fun x w hx hdead => ?_⟩
+  refine ⟨CoversProof.monitoringPeriodLayer_writerReads Cd hr hK pr, fun x w hx hdead => ?_⟩
   refine CoversProof.sum_not_good_le Sc Cd Np (Wp.liveAt x w)
     ((Wp.windowAt x w).modeAt (tileStage Cd Np) (coinAt x w).1)
-    (fun t => (Cd.periodLayer hr hK pr).Good (periodMode Cd Wp pr) x w t) fun t hg ht => ?_
-  obtain ⟨u, hu, hb⟩ : ∃ u, Relation.ReflTransGen (Cd.periodLayer hr hK pr).Late u (w, t) ∧
-      periodMode Cd Wp pr x u ≠ .paid :=
+    (fun t => (Cd.monitoringPeriodLayer hr hK pr).Good (monitoringPeriodMode Cd Wp pr) x w t) fun t hg ht => ?_
+  obtain ⟨u, hu, hb⟩ : ∃ u, Relation.ReflTransGen (Cd.monitoringPeriodLayer hr hK pr).Late u (w, t) ∧
+      monitoringPeriodMode Cd Wp pr x u ≠ .paid :=
     Classical.byContradiction fun hno => hg fun u hu => Classical.byContradiction fun hb => hno ⟨u, hu, hb⟩
-  obtain ⟨h1, hR⟩ := CoversProof.periodLayer_cone Cd hr hK pr hw hc hu
+  obtain ⟨h1, hR⟩ := CoversProof.monitoringPeriodLayer_cone Cd hr hK pr hw hc hu
   refine ⟨u.2, fun hp => ?_, hR⟩
   cases hl : Wp.liveAt x w u.2 with
   | false => exact ht (hdead u.2 t hl hR)
   | true =>
     have h1' : u.1 = w := h1
     refine hb ?_
-    unfold periodMode
+    unfold monitoringPeriodMode
     rw [h1']
     split
     · exact hp
