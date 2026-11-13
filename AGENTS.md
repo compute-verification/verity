@@ -7,16 +7,16 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 
 ## Map and commands
 
-The tree is in the layout below. The move that made it changed paths, not code, so a line marked "Target, not yet" says
-what the layout's design has and the tree does not.
+The tree is in the layout below. `tests/tree.toml` is the layout of record, and `tests/test_tree.py` holds the tree to
+it; a line marked "Target, not yet" says what the layout of record has and the tree does not.
 
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: one directory per protocol, the list flat: `flock`, `spot`, `recursion`, `pouw`, `pous`, `poub`,
-    `certifier` and `inference_only`. Beside them, `remote` and `onsite` are configurations, not protocols: remote is
-    what an auditor with no devices at the datacenter runs, and onsite what an auditor with devices there runs. Target,
-    not yet: `compose/` (today's `remote/verifier/composition/`), a ninth protocol on top of the audits; `remote/` and
-    `onsite/` under `verity/configurations/`, which no protocol imports; and `experimental/NAME/` for a whole directory
+    `certifier` and `inference_only`. Beside them, `remote` and `onsite` are the two lists of protocols compose accepts:
+    remote is what an auditor with no devices at the datacenter runs, and onsite what an auditor with devices there
+    runs. Target, not yet: `compose/` (today's `remote/verifier/composition/`), a ninth protocol on top of
+    the audits, holding both lists; and `experimental/NAME/` for a whole directory
     no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
     auditor's device (the network certifier, the memory challenger, the challenger).
@@ -26,7 +26,7 @@ what the layout's design has and the tree does not.
     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
     `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
-    `inference_only/nci/` and `inference_only/rho/`.
+    `verity/protocols/inference_only/nci/` and `verity/protocols/inference_only/rho/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -40,11 +40,11 @@ what the layout's design has and the tree does not.
     the prover for each execution phase).
   - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU, host or server model, or time base), `nodes/` (one per kind of node), `site` (its
     types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
-    top-level `hardware/` that holds data only, and the types in one file of `verity/`.
-  - `verity/configuration/` (not `verity/configurations/`): `wire` (the wire every party speaks), `deploy` (parties,
-    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: four files
-    directly under `verity/` (what a party is, the registered hardware, what a protocol declares, the configuration)
-    and `verity/runtime/`, which runs parties over channels.
+    top-level `hardware/` that holds data only, and the types in `verity/`'s `device.py`.
+  - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
+    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
+    directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
+    reads a configuration) and `verity/runtime/`, which runs parties over channels.
   - `verity/claims/`: the security claims' ids. `verity/difftest/`: the Python held to each Lean (target, not yet: under
     `tools/`). `verity/composite/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
@@ -125,7 +125,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
-  assumption H-μ⁺ (`Accounting.Assumptions.TS.OperandHMu`).
+  assumption H-μ⁺ (`Accounting.Assumptions.TS.OperandHMu`). Transport has one more: ML-KEM-1024, for a cableless remote
+  party's sessions only, its key always XORed with a SHA-512 one (never below hash-only) and never on pair links
+  (`ind-cca/ml-kem-1024`).
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
   inside an execution phase, from its live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the execution
@@ -315,6 +317,9 @@ Landing.
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
   skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
   naming a dead path.
+- **A survey is answered at once.** A question sent to several people for their answers (a survey, a what-if, a price)
+  asks each to answer on reading it, with what they know now, and sets no later deadline. An answer that lacks a figure
+  says "not known" and the hour it will be known. Each answer is passed on as it arrives, not held for the rest.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
   `show-environment`, and an env file's with `python3 tools/agent-guard/envnames.py FILE...` (on another machine,
   `ssh HOST python3 - FILE... < tools/agent-guard/envnames.py`), never `cat`, `sed`, `cut` or `grep` on it or on a glob
