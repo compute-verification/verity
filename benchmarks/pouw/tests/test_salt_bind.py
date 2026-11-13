@@ -21,20 +21,19 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import active
 from verity.protocols.accounting.certifier.verifier.active import Proxy
 from verity.protocols.accounting.certifier.verifier.certificate import LmsKey, LmsSigner
 from verity.protocols.accounting.certifier.verifier.grid import GridParams
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.proofs.spot.device import challenger as Ch
 
 import served_commit as SC

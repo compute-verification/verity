@@ -131,7 +131,6 @@ def test_the_lean_is_given_w_and_on_live_coins_is_asked_for_a_verdict_of_record(
     `window.LIVE_SCHEME`) adds ``--of-record``; both after the rule on a tile over its inert-work bound and the test
     instance and before the passes, which stay last."""
     import shutil
-
     from verity.protocols.accounting.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.device import challenger as Ch
 

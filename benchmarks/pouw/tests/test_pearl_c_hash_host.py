@@ -20,9 +20,9 @@ import pytest
 from conftest import load
 
 from verity.commitments.merkle import tree_levels
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.verifier import audit
 from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c"
 FAST = HERE.parent / "pearl_c_sm120" / "hash_fast.cuh"

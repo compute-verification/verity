@@ -17,8 +17,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.circuits.silicon import fp32
 from verity.commitments import MerkleTree
+from verity.circuits.silicon import fp32
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
