@@ -102,6 +102,16 @@ def _ends(out: Path) -> list[str]:
 
 
 def test_a_table_read_in_the_sample(tmp_path, binaries):
+    _run(tmp_path, binaries)
+
+
+def test_a_table_read_in_the_sample_without_negatives(tmp_path, binaries):
+    """The same audit under ``--skip-negatives``: each negative re-decides the registration on the read's Program, minutes
+    apiece, and the sessions are what this run is for."""
+    _run(tmp_path, binaries, "--skip-negatives")
+
+
+def _run(tmp_path, binaries, *flags):
     window = _window(tmp_path / "window")
     doc = json.loads((window / "circuit.json").read_text())
     ids = [descriptor_id(S8), descriptor_id(READ)]
@@ -109,7 +119,7 @@ def test_a_table_read_in_the_sample(tmp_path, binaries):
     assert {k: v for k, v in doc["statements"][ids[1]].items() if k not in ("in_rows", "out_rows")} == {
         "layout": READ_LAYOUT, "structural": True}
     assert doc["statements"][ids[0]]["reads"] == "inline"
-    rc, row, out, said = _audit(tmp_path, window, binaries)
+    rc, row, out, said = _audit(tmp_path, window, binaries, *flags)
     audit = row.get("audit") or {}
     report = "\n".join([
         "TABLE-READ " + json.dumps({"rc": rc, "ok": row.get("ok"), "refused": row.get("refused"), "draw": row.get("draw"),
