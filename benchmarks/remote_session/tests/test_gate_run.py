@@ -87,6 +87,8 @@ def test_a_dry_run_prints_the_provers_run_with_the_host_part_and_hands_the_sessi
     pass. The probe and the fire get BIND and the form's variables that are set and no other."""
     p, prover, calls = dry_run(tmp_path, **given)
     assert p.returncode == 0, p.stdout + p.stderr
+    unbound = "BIND=0: nothing checks that the node serves the pin's checkpoint" in p.stdout
+    assert unbound == (given.get("BIND") == "0") != ("the host's binding still refuses" in p.stdout)
     line = " ".join(prover)
     assert f"--env NODE_ARGS={node_args} --env VERIFIER_SSH=" in line
     assert after(prover, "--mem-gb") == mem_gb

@@ -203,7 +203,11 @@ fi
 if [ "$VERB" = prover ]; then
   :
 elif [ "$CHECKPOINT" = 0 ]; then
-  echo "== 1. checkpoint skipped (CHECKPOINT=0): the host's binding still refuses a store that isn't the pin's"
+  if [ "$BIND" = 0 ]; then
+    echo "== 1. checkpoint skipped (CHECKPOINT=0), and BIND=0: nothing checks that the node serves the pin's checkpoint"
+  else
+    echo "== 1. checkpoint skipped (CHECKPOINT=0): the host's binding still refuses a store that isn't the pin's"
+  fi
 else
   echo "== 1. checkpoint on $PROVER_NODE${FETCH:+ (FETCH: what the snapshot lacks is fetched first)}"
   on_node "$CHECKPOINT_WAIT_S" 1200 bash -lc 'bash "$RESEARCH_RUN_DIR/inputs/checkpoint.sh"'
