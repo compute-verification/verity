@@ -162,8 +162,7 @@ class _Piece:
 
     def _register(self, name: str, dims: list[str], strides: list[str]) -> None:
         inner = dims[1:] if self._token(dims) else dims
-        want = ([str(_prod(inner))] if self._token(dims) else []) + _contiguous(inner)
-        if strides != want or any(not d.isdigit() for d in inner):
+        if any(not d.isdigit() for d in inner) or strides != ([str(_prod(inner))] if self._token(dims) else []) + _contiguous(inner):
             raise self.fail(f"{name} {dims} strides {strides}: not a row-major buffer of token rows or a constant shape")
         self.shape[name] = (dims, strides)
 

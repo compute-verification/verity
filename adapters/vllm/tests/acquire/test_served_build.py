@@ -446,6 +446,7 @@ class Runner:
         return (buf0, )
 """
 ROWS, WEIGHT, NEW = "(s7, 32), (32, 1), 'input'", "reinterpret_tensor(arg2_1, (32, 16), (1, 32), 0)", "(s7, 16), (16, 1), torch.bfloat16"
+STORED = "(16, 32), (32, 1), 'input'"
 HOOK = "        run_intermediate_hooks('verity|mm|buf0', buf0)\n"
 
 
@@ -464,6 +465,9 @@ def test_a_piece_returns_a_symbol_and_a_column_range_of_an_argument() -> None:
     (PIECE, "x = 1\n", "no call()"),
     ("        return (buf0, )\n", "", "call() has no return"),
     (NEW, NEW.replace("(16, 1)", "(32, 1)"), "buf0 ['s7', '16'] strides ['32', '1']: not a row-major buffer of token rows or a constant shape"),
+    (NEW, NEW.replace("(s7, 16)", "(s7, s7)"), "buf0 ['s7', 's7'] strides ['16', '1']: not a row-major buffer of token rows or a constant shape"),
+    (ROWS, ROWS.replace("(s7, 32)", "(s7, 2*s7)"), "arg1_1 ['s7', '2*s7'] strides ['32', '1']: not a row-major buffer of token rows or a constant shape"),
+    (STORED, STORED.replace("(16, 32)", "(s9, 32)"), "arg2_1 ['s9', '32'] strides ['32', '1']: not a row-major buffer of token rows or a constant shape"),
     (WEIGHT, WEIGHT.replace("arg2_1", "arg0_1"), "a view of arg0_1, itself a view or of no known shape"),
     ("mm(arg1_1,", "mm(reinterpret_tensor(arg1_1, (s7, 64), (32, 1), 0),", "view ['s7', '64'] ['32', '1'] +0 of arg1_1 ['s7', '32']: not a column range of its rows"),
     (WEIGHT, WEIGHT.replace("(32, 16), (1, 32)", "(16, 32), (32, 1)"), "view ['16', '32'] ['32', '1'] +0 of arg2_1 ['16', '32']: only a weight's transpose is modelled"),
@@ -480,9 +484,9 @@ def test_a_piece_returns_a_symbol_and_a_column_range_of_an_argument() -> None:
     (ROWS, ROWS.replace("32", "8"), "mm: activation width 8 against a weight of 32 columns"),
     (NEW, NEW.replace("(s7, 16), (16, 1)", "(s7, 8), (8, 1)"), "mm writes buf0 of width 8, the weight has 16 rows"),
     (HOOK, f"{HOOK}        triton_poi_fused_0.run(buf0, s7, stream=raw_stream0)\n", "triton_poi_fused_0.run: no async_compile.triton block defines it"),
-], ids=["no-call", "no-return", "strides", "view-of-no-shape", "view-past-the-rows", "weight-not-transposed", "written-without-tokens", "written-in-place",
-        "second-token-count", "float32", "reuse-of-no-buffer", "reuse-past-the-rows", "hooked-twice", "one-operand", "weight-as-stored", "columns",
-        "rows", "no-kernel-source"])
+], ids=["no-call", "no-return", "strides", "symbol-in-a-buffers-row", "symbol-in-an-arguments-row", "symbol-in-a-constant-shape", "view-of-no-shape",
+        "view-past-the-rows", "weight-not-transposed", "written-without-tokens", "written-in-place", "second-token-count", "float32",
+        "reuse-of-no-buffer", "reuse-past-the-rows", "hooked-twice", "one-operand", "weight-as-stored", "columns", "rows", "no-kernel-source"])
 def test_a_piece_of_another_form_is_refused(old: str, new: str, why: str) -> None:
     assert old in PIECE
     with pytest.raises(Unmodelled, match=re.escape(f"piece.py: {why}")):
