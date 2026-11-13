@@ -19,11 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.verifier import active
-from verity.protocols.certifier.verifier import warden_rows as WR
-from verity.protocols.certifier.verifier.active import DATA, VirtualClock
-from verity.protocols.certifier.verifier.certificate import Issuer
-from verity.protocols.certifier.verifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, cells, read_cell
+from verity.protocols.accounting.certifier.verifier import active
+from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.active import DATA, VirtualClock
+from verity.protocols.accounting.certifier.verifier.certificate import Issuer
+from verity.protocols.accounting.certifier.verifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, cells, read_cell
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]

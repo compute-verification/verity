@@ -26,13 +26,13 @@ untraced = ["tests/test_example_port.py", "tests/test_protocol_port.py"]
 # (`core-protocol-example`), which reads the interface package and, of Flock's verifier, which it requires by path, the
 # package's configuration, the names it imports the base modules by (`Flock.Bytes`, `Flock.Canon`, `Flock.Hash`) and
 # the packages that one requires.
-inputs = ["verity/protocols/interface", "verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/lake-manifest.json",
-          "verity/protocols/flock/verifier/lean-toolchain", "verity/protocols/flock/verifier/Flock/Bytes.lean",
-          "verity/protocols/flock/verifier/Flock/Canon.lean", "verity/protocols/flock/verifier/Flock/Hash.lean",
+inputs = ["verity/protocols/interface", "verity/protocols/proofs/flock/verifier/lakefile.toml", "verity/protocols/proofs/flock/verifier/lake-manifest.json",
+          "verity/protocols/proofs/flock/verifier/lean-toolchain", "verity/protocols/proofs/flock/verifier/Flock/Bytes.lean",
+          "verity/protocols/proofs/flock/verifier/Flock/Canon.lean", "verity/protocols/proofs/flock/verifier/Flock/Hash.lean",
           "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/__init__.py", "verity/circuits",
           # the JSON parser's port reads the recorded public files' headers (`RECORDED_FIXTURES`), fetched fixtures
-          "verity/protocols/flock/prover/tests/fixtures/forged-proofs", "verity/protocols/flock/prover/tests/fixtures/public-inputs",
-          "verity/protocols/flock/prover/tests/fixtures/public-inputs-blocks", "verity/protocols/flock/prover/tests/fixtures/rec-coins",
-          "verity/protocols/flock/prover/tests/fixtures/rec-links", "verity/protocols/flock/prover/tests/fixtures/zk-sessions",
+          "verity/protocols/proofs/flock/prover/tests/fixtures/forged-proofs", "verity/protocols/proofs/flock/prover/tests/fixtures/public-inputs",
+          "verity/protocols/proofs/flock/prover/tests/fixtures/public-inputs-blocks", "verity/protocols/proofs/flock/prover/tests/fixtures/rec-coins",
+          "verity/protocols/proofs/flock/prover/tests/fixtures/rec-links", "verity/protocols/proofs/flock/prover/tests/fixtures/zk-sessions",
           "verity/protocols/__init__.py"]
