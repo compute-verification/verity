@@ -111338,3 +111338,59 @@ Runs and machines:
 To post: nothing.
 
 Not established: that `45e4dffec3` builds. The likeliest fixes are `interiorUnshown_roots`'s `rw` into the match's discriminants and `simp only` through the bind on the pair, plus the earlier `accepted_steps` and `prefixAgree_of_bytes`. The new test by name has not run.
+
+## ADDRWC, Fri 01:01Z: `r20261112-231912-5e86` and `r20261112-231912-088b` exit 0: the copy fact from its registration condition (10 theorems) and the width fact at `RowWidths` (2 theorems) compile with only the three axioms; the width fact at the address map from FRAME's `Wiring` is written and in try `r20261113-005756-b428`
+
+**In plain words.** Two of the facts about where an inner block's values sit now compile. The copy fact says each bit a checked inner block reads is the bit its committed row holds at the address the map gives; it compiles, from a condition on the registration that I state. The width fact says that address's row is as wide as the session's port. It compiles from one condition on the registration. I have now rewritten it on FRAME's conditions for the outer block's wiring, so it asks only that every bit lie inside its own port's row. That version is written and pushed, and its build is in line on vy-nebius-2.
+
+Clock: `date -u` read 01:00Z. Mailbox read from 23:27Z on, at 00:50Z. Base merged at `1f049180cda7`.
+
+### Heads
+
+- Branch `cursor/proofs-addrwc-60f3` at `6db902dcf7`, pushed [run: `git push`]. Unpushed: nothing.
+
+### What a run has compiled
+
+- [run: `r20261112-231912-5e86`, vy-nebius-2, at `8f3c5d65f7`] `AddressFacts/Copy.lean`: lean exit 0 in 1728 s. Axiom probe: "none of its 10 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Among them are `copyFact_of_ref`, `copyHolds_of_ref`, `CheckedRun.copies_of_ref` and `CheckedRun.inBlock_of_counted`.
+- [run: `r20261112-231912-088b`, vy-nebius-2, at `8f3c5d65f7`] `AddressFacts/WidthOf.lean` as it stood then: lean exit 0 in 1845 s, with 2 theorems, `CheckedRun.memberCircuit_eq` and `widthFact_addressOf`, each "depends on axioms: [propext, Classical.choice, Quot.sound]". `Width.lean` built under both runs as their import.
+- Compiled before these: `ports_member`, `words_eq`, `widthHolds_of_ref` [run: `25a6`].
+
+### Written, in try `r20261113-005756-b428` (vy-nebius-2, waiting since 00:58Z)
+
+`AddressFacts/WidthOf.lean` at `6db902dcf7` [read]:
+
+- `widthFact_of_wiring (W : Wiring h) (hB : BitsInPorts h) : WidthFact h (addressOf h)`. FRAME's assembly asks for this fact. It follows `holds_of_wiring`'s three cases:
+  - a source bit at a linked port, and a written bit: the wiring map leaves the bit alone, so the two ports are one;
+  - a wired source bit: it goes to the same bit of the writer's `wport`, and `wiresAlike_spec` gives the words.
+- `BitsInPorts h`, a new `Prop`, a fact of the members' programs like `RowsArePorts`: each source bit's and written bit's `bit` is below `16 · words` of the first port of its row's name in `memberCircuit`. It is needed because `placeAt` falls back to a one-bit row when the bit is past the port's row, and there the width fails.
+- `CheckedRun.widthAt_of_target`, the shared step.
+- `widthFact_addressOf` and `RowWidths` keep their statements, because HONEST2's `Honest/Width.lean` calls them [read: `76846ff21b53`]. The proof is now one line from `widthAt_of_target` and the base's `portsMember`.
+- Removed: `memberCircuit_eq`, and four declarations that no run compiled and no branch I read uses: `wireWordsOk` (FRAME's `wiresAlike` covers it), `RowTargets`, `rowWidths_of` and `widthFact_addressOf_wires`.
+
+### Who discharges what
+
+- `wiresAlike h`: decided in `two h` on FRAME's L1 branch [relayed: FRAME 00:47Z]. HONEST2 answers yes at the second try [relayed: 00:10Z].
+- `BitsInPorts h`: mine, unless NEEDEDBITS takes it with `RowsArePorts`, which it sits beside. It needs three things [derived]:
+  - the scope check's key bytes inside their port (`srcPos`: `bit = 8·byte + bit`) and outputs inside theirs;
+  - `memberCircuit h t` equal to `h.ms[t].1` at every template, as `templateOk_facts` gives where `two h` holds;
+  - the first port of a row's name being that row's own port, which unique port names give. The verifier refuses duplicate names (`Spot/Bits.lean` "two row ports of the circuit file have one name") [read].
+- The copy fact at `addressOf`: `copyFact_of_ref` reduces it to `CopyRef` at each needed gate. The path to `CopyRef` at `addressOf` goes through `Flock.Bridge.BitsRowMap` (`rowBit_keyRowOf`, `outRowBit_outRowOf`) [read]. It is next, after this try.
+
+### NEEDS
+
+1. FRAME: `addressesConnected_of_runs` takes `WidthFact h (addressOf h)`. `widthFact_of_wiring` gives it from `Wiring h` and `BitsInPorts h`, so `BitsInPorts` joins the assembly's list, as a ninth fact or a field of `Wiring` (your file).
+2. `CheckedRun.ports_member` (`Width.lean`) and the base's `portsMember` state the same thing. HONEST2 calls mine. When HONEST2 moves to `portsMember`, I delete mine.
+
+### Size
+
+3 files, 724 lines. Theorems left: `CopyRef` at `addressOf` (one theorem with about four lemmas), then `BitsInPorts`. I expect `widthFact_of_wiring` compiled by about 01:45Z if `b428` starts within 15 minutes.
+
+### Not established
+
+- `widthFact_of_wiring`, `widthAt_of_target` and the new proof of `widthFact_addressOf` have not compiled.
+- `BitsInPorts` is unproved, and the copy fact at `addressOf` is not written.
+- No Lean evaluation shows that Friday's registration meets `BitsInPorts`.
+
+### To post
+
+Nothing.
