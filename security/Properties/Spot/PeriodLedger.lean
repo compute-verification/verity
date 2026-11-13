@@ -101,9 +101,9 @@ def LedgerOfDevice : Prop :=
 
 /-- **The device chains its ledger's lines**: under the key `pk`, where a line of its ledger and its next line are
 both entries, the next names as its `prev` the SHA-512 of the earlier line's whole text, its signature included, in
-hex. It asks nothing of a line that is no entry the reader takes. Like `Numbered` it is a hypothesis only while
-`History` does not define the device to write each line over the line before it: once the device's definition
-carries the chain, this is a lemma about that definition and no statement takes it. -/
+hex. It asks nothing of a line that is no entry the reader takes. Like `Numbered` it is taken as a hypothesis, not
+proved: it is a lemma of the modelled device once the model builds that device's whole ledger line by line, and no
+statement takes it then. -/
 def Chained (dev : History) (pk : ByteArray) : Prop :=
   ∀ (i : Nat) (line next : Json) (e e' : LedgerEntry), (dev.ledger pk)[i]? = some line →
     (dev.ledger pk)[i + 1]? = some next → ledgerEntry? line = some e → ledgerEntry? next = some e' →
