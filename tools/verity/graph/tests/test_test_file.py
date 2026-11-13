@@ -211,7 +211,7 @@ def test_a_task_declares_the_registry_its_closure_names_and_an_untraced_one_what
     tests read them, which no key of the graph can: a task declares the registry where a module of its closure names it (the
     store's replica map), and a task keyed on its suite's tree all of them."""
     store = {family.REGISTRY: "{}\n", family.STORE_READS[1]: "",
-             "lib/toy_lib/store.py": 'from pathlib import Path\n\nREPLICAS = Path("fixtures/artifacts.json")\n',
+             "lib/toy_lib/store.py": 'from pathlib import Path\n\nREPLICAS = Path("artifacts.json")\n',
              "s/tests/test_store.py": "from toy_lib import store\n\n\ndef test_store():\n    assert store.REPLICAS\n"}
     root = toy_tree(tmp_path / "tree", SPEC, {**WALKS, **store})
     by = {t["id"]: set(t["inputs"]) for t in family.tasks(root, graph.tracked(root))}
