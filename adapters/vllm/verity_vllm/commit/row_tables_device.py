@@ -1,4 +1,4 @@
-"""`row_tables.step_roots` on the GPU: a step's row tables hashed by `protocol_options/pouw_cuda/row_table.cu` on a side stream,
+"""`row_tables.step_roots` on the GPU: a step's row tables hashed by `row_table.cu` (in `CUDA_DIR`) on a side stream,
 behind an event on the serving stream, so the serving loop records the step's root when it is ready, without a host sync.
 
 `step_roots` takes what `row_tables.step_roots` takes, with ``codes`` and ``scales`` CUDA tensors that hold until the result is
