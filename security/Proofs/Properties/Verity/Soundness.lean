@@ -444,7 +444,7 @@ theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c 
     exact.error a θ F c σ = 0 := by
   unfold Vocab.error Accounting.condError
   rw [if_pos ⟨trivial, trivial, (finder_pr _).trans_le
-    (div_nonneg (Claims.Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)), fun _ _ => le_of_eq (forger_pr _)⟩]
+    (div_nonneg (Claims.Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)), fun _ _ _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
 
 /-- At `exact`, PoUW's claim fails on every play after the empty commitment: at onsite it certifies one gate computed,

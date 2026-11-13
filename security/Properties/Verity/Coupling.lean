@@ -274,7 +274,7 @@ end Vocab
 /-- **A subprotocol's target in the play from its bound over the coins flipped up front.** On any device, for any names
 `V` the subprotocols define, any verdict `acc`, composite `k` and subprotocol `a`: if at every resolution of the coin
 trees' coins the probability over the coins flipped up front that `acc` holds while `a`'s claim fails is at most `a`'s
-error, then so is its probability in the play, at every strategy. At `acc = ComponentAccepts k a` it gives
+error, then so is its probability in the play, at every strategy. At `acc = ComponentAccepts V.pins k a` it gives
 `Vocab.ComponentBound k a` from `Vocab.UpFrontBound k a`. -/
 def CoinsCouple : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (acc : Exchange → Prop)
@@ -287,7 +287,7 @@ trees' coins there is a period run coupled to the play (`Vocab.PeriodCoupling`) 
 (`Accounting.PeriodRun.Sound`) within `b`'s published `δ` at the strategy's calls, and whose rest of the event is
 bounded by the forger's and the finder's terms where the finder meets `FinderCR` (`BreakBound`; `Vocab.PeriodsCouple`),
 then `b`'s subprotocol
-meets its target at `acc` in the play. At `acc = ComponentAccepts k (.ofAudit b)` it is
+meets its target at `acc` in the play. At `acc = ComponentAccepts V.pins k (.ofAudit b)` it is
 `Vocab.ComponentBound k (.ofAudit b)`. -/
 def TargetOfPeriods : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (acc : Exchange → Prop)
