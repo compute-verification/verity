@@ -9,6 +9,7 @@ public import Proofs.Flock.SpotFlock.RunsAs.SecondStageOf
 public import Proofs.Properties.Verity.SampledTwo.RecordNames
 public import Proofs.Flock.SpotFlock.RunsAs.Steps
 public import Proofs.Flock.SpotFlock.HeldOfRun
+public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.RunsAs.PopulationOf
 public import Proofs.Properties.Verity.SampledTwo.AtStmt
 public import Proofs.Flock.Claims.Complete.Encode
@@ -43,7 +44,10 @@ so not asked:
 
 `HeldAt` is asked in one clause of its nine, `PartsHeldAt`: the held copies' parts are the interior program's strata's
 at the play's replay sample. A held copy `heldOf` builds has the other eight by construction (`heldAt_of_parts`,
-`HeldOf.heldMatches_of`).
+`HeldOf.heldMatches_of`). `PartsHeldAt` reads the play's bytes only through the replay sample's size, and where the
+first stage samples a uniform `K`-subset of the replay blocks (`SpotFlock.firstK`) that size is `K` at every play, so
+`PartsSizedAt` at `K`, which reads the play's parameters alone, gives it (`partsHeldAt_of_sized`). Asked at every
+size it would hold of no held copy (`HeldOf.not_partsAre`: no stratum makes a part of a sample of no block).
 
 `playAccepts_form` is `PlayAccepts` from what is left. Nothing here turns the form on, and none of the premises says
 it is off.
@@ -172,6 +176,23 @@ def PartsHeldAt (A : Live₂) (C : CaseOf) : Prop :=
 /-- `HeldAt` gives its clause `PartsHeldAt`. -/
 theorem partsHeldAt_of {A : Live₂} {C : CaseOf} (hheld : HeldAt A C) : PartsHeldAt A C :=
   fun o i it hA hi hit => (hheld o i it hA hi hit).parts
+
+/-- **The held copies' parts at a replay sample of `K` blocks are the interior program's strata's**, at each accepted
+play: `PartsHeldAt` with the size `K` in place of the play's replay sample's. It reads the play's parameters and none
+of its bytes. -/
+def PartsSizedAt (A : Live₂) (C : CaseOf) (K : ℕ) : Prop :=
+  ∀ o i it strata, FormAccepts C o → inputOn C o = some i → i.interior = some it →
+    Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata →
+    Spot.SecondStage.parts K strata = some (SpotFlock.partsAt A.h K)
+
+/-- **`PartsHeldAt` from the parts at the one size the first stage samples**: where the held copies' first stage
+samples a uniform `K`-subset of the replay blocks (`SpotFlock.firstK`), every replay sample it selects has `K` blocks
+(`SpotFlock.select_subset_size`), so the parts at `K` are the parts at the play's sample. -/
+theorem partsHeldAt_of_sized {A : Live₂} {C : CaseOf} {K : ℕ} (hK : SpotFlock.firstK A.h.reg.first = some K)
+    (hs : PartsSizedAt A C K) : PartsHeldAt A C := by
+  intro o i it hA hi hit draw rest read strata hsel hst
+  rw [SpotFlock.select_subset_size hK hsel]
+  exact hs o i it strata hA hi hit hst
 
 /-- **Held copies `heldOf` builds agree with what each accepted play's run reads** (`HeldAt`), given their parts
 (`HeldOf.heldMatches_of`). -/
