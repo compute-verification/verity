@@ -9,6 +9,8 @@
 #           serve line with no protocol)
 #   pearl   the Commit and Pearl+ under it (--protocols pouw:pearl-c-h100-v1-h3 on Pearl-C's sm_90 cubin), each window's
 #           salt coin an in-process challenger's (served_verdicts.sh's PEARLPLUS_TIE=1 with PEARLC_CHALLENGER_GATE empty)
+#   deferred  pearl under the pouw setting `schedule: deferred` (`verity.core.protocols.pouw.serving.DEFERRED`): each call's
+#           tile hashing on a side lane at the least priority, the GEMM's lane at the greatest
 #   live    pearl with each window's salt coin a live session's on the auditor host (--challenger-gate GATE --challenger-peer
 #           PEER --challenger-lane GATE_LANE): the remote demo's serve. It needs the lane's gate key on this node and this
 #           node among the gate's peers; without GATE the preflight refuses the arm. Each lifetime opens the lane's Pearl-C
@@ -23,7 +25,7 @@
 #           window's before the endpoint listens
 # Pearl+ refuses --no-commit and a live session is Pearl+'s, so neither is served alone: the Commit's cost is commit less
 # stock, Pearl+'s pearl less commit, the live session's live less pearl, and what a session made ahead saves live less
-# ahead.
+# ahead. `deferred` is beside that line, not on it: what its schedule costs over the serial one is deferred less pearl.
 #
 # Rounds are interleaved: WARM warm rounds, then REPS rounds, each round one lifetime of every arm in ARMS, the order rotated
 # by one a round, under one lease of the card (LEASE_MIN minutes at most; the builds below hold no card). A lifetime takes
@@ -101,8 +103,12 @@ serve_args() {  # arm $1's serve-openai arguments beyond the engine's, one a lin
     --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --window-gb 32 \
     --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0
   [ "$arm" = commit ] && return
+  local config schedule=   # the pouw setting `schedule`, which only an arm off the serial one names
+  [ "$arm" = deferred ] && schedule=deferred
+  config='import json, sys; pouw = {"device": "cuda", "kernel": sys.argv[1], "cubin": sys.argv[2]}'
+  config+='; print(json.dumps({"pouw": pouw | dict(zip(("schedule",), sys.argv[3:]))}))'
   printf '%s\n' --protocols "$PEARL_ARM" --protocols-config \
-    "$(python3 -c 'import json, sys; print(json.dumps({"pouw": {"device": "cuda", "kernel": sys.argv[1], "cubin": sys.argv[2]}}))' "$PEARLC_KERNEL" "$PEARLC_CUBIN")"
+    "$(python3 -c "$config" "$PEARLC_KERNEL" "$PEARLC_CUBIN" ${schedule:+"$schedule"})"
   live_arm "$arm" && printf '%s\n' --challenger-gate "$GATE" --challenger-peer "$PEER" --challenger-lane "$GATE_LANE"
   [ "$arm" = ahead ] && printf '%s\n' --challenger-ahead
 }
@@ -210,7 +216,7 @@ prep() {  # on CORES, no card held: the Build of record, the taps, the cubin, th
   rc=$?
   say "PREP norm tap (exit $rc): $(tail -1 "$OUT/prep/norm_tap.log" | cut -c1-300)"
   [ "$rc" = 0 ] && [ -f "$NORM_TAP_SO" ] || { cp "$STAGE/norm_tap/logs/build.log" "$OUT/prep/norm_tap_build.log" 2>/dev/null; return 5; }
-  has pearl || has live || has ahead || return 0
+  has pearl || has deferred || has live || has ahead || return 0
   ( export RESEARCH_RUN_DIR=$STAGE/pearlplus-cubin VERITY_BENCH_VENV=$VENV CUDA_HOME=$CUBIN_CUDA
     if [ ! -x "$CUBIN_CUDA/bin/nvdisasm" ]; then  # cuobjdump -sass runs nvdisasm, which node A's 12.9 lacks: the venv's Triton's
       for d in "$VENV"/lib/python*/site-packages/triton/backends/nvidia/bin; do [ -x "$d/nvdisasm" ] && PATH=$PATH:$d; done
@@ -222,7 +228,7 @@ prep() {  # on CORES, no card held: the Build of record, the taps, the cubin, th
   [ "$rc" = 0 ] && [ -s "$PEARLC_CUBIN" ] \
     || { say "PREP Pearl-C cubin: pearl_c_sm90.sh failed (exit $rc, $CUBIN_CUDA): $(tail -1 "$OUT/prep/pearlplus_cubin.log" | cut -c1-400)"; return 6; }
   say "PREP Pearl-C cubin ($CUBIN_CUDA): sha256 $(sha256sum "$PEARLC_CUBIN" | cut -c1-16)"
-  has pearl || return 0   # the in-process challenger's entropy; a live session's coins need none
+  has pearl || has deferred || return 0   # the in-process challenger's entropy; a live session's coins need none
   (cd "$TREE/verity/core/protocols/pouw/lean/check" && lake build pouw-check-difftest) > "$OUT/prep/lean.log" 2>&1
   rc=$?
   say "PREP Lean verifier of record (exit $rc): $(tail -1 "$OUT/prep/lean.log" | cut -c1-300)"
@@ -234,13 +240,13 @@ if [ "${1:-}" = round ]; then round "$2" "$3"; exit $?; fi
   cat /sys/fs/cgroup/cpu.max 2>/dev/null; echo "stage $STAGE serve dirs $SERVE_ROOT arms $ARMS reps $REPS loads $LOADS warm $WARM"; } > "$OUT/machine.txt"
 for f in "$PY" "$TAP_CUDA/bin/nvcc" "$HF_HOME"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
 for a in $ARMS; do
-  case $a in stock | commit | pearl) ;;
+  case $a in stock | commit | pearl | deferred) ;;
     live | ahead)
       [ -n "${GATE:-}" ] && [ -n "${PEER:-}" ] && [ -n "${GATE_LANE:-}" ] \
         || { say "PREFLIGHT: the $a arm needs GATE (the lane's gate command), PEER (this node's name among the gate's peers) and GATE_LANE"; exit 3; }
       [ "$LOADS" = 1 ] \
         || { say "PREFLIGHT: the $a arm's lifetime is one window, its period's cap, and a second window's reserve is refused: run it with LOADS=1, not $LOADS"; exit 3; } ;;
-    *) say "PREFLIGHT: an arm is stock, commit, pearl, live or ahead, not $a"; exit 3 ;;
+    *) say "PREFLIGHT: an arm is stock, commit, pearl, deferred, live or ahead, not $a"; exit 3 ;;
   esac
 done
 LEASE=$TREE/tools/research/src/research/pods/sh/gpu_lease.sh

@@ -1,7 +1,8 @@
 """`served_ab.py` on toy serve dirs and records: a lifetime's record keeps the aggregate, each load's step times and only the
 numbers of a window's and a seal's parts; `table` takes each rep round's first load apart from its warm ones, leaves a warm
-round out, gives each part as its arm's median less the arm before's, and refuses loads of different shapes. And
-`served_ab.sh`'s live arms on the CPU, with a stub interpreter: the lane's period around each lifetime."""
+round out, gives each part as its arm's median less the median of the arm it is made from, and refuses loads of different
+shapes. And `served_ab.sh`'s arms on the CPU, with a stub interpreter: the lane's period around each live lifetime, and
+the deferred arm's schedule in its pouw settings."""
 from __future__ import annotations
 
 import json
@@ -137,6 +138,29 @@ def test_a_part_is_left_out_when_the_arm_before_it_did_not_run(tmp_path):
     assert "didn't pass: rep-1 pearl window 0" in AB.markdown(t)
 
 
+def test_the_deferred_and_the_live_arms_parts_are_each_over_the_pearl_arm(tmp_path):
+    """``deferred`` and ``live`` are both made from ``pearl``, so each one's part is its arm less pearl's (less than nothing
+    where it saves) and neither is taken from the other, though they are neighbours in the table."""
+    out = tmp_path / "out"
+    w = {"window": 0, "passed": True, "seconds": {"open": 0.1, "on_loop": 0.0}}
+    _record(out, "rep-1", "stock", _dir(tmp_path / "stock", _load(10.0, 1.0, 0.5)))
+    for arm, first, step in (("pearl", 9.0, 2.0), ("deferred", 8.0, 1.5), ("live", 12.0, 2.0)):
+        _record(out, "rep-1", arm, _dir(tmp_path / arm, _load(10.0, first, step, window=0), [w]))
+    t = AB.table(out)
+    first = t["first"]
+    assert list(first["arms"]) == ["stock", "pearl", "deferred", "live"] and first["top"] == "live"
+    parts = {p["arm"]: p for p in first["parts"]}
+    assert list(parts) == ["stock", "deferred", "live"]      # pearl's own part needs the commit arm, which did not run
+    assert parts["deferred"]["part"] == AB.PARTS["deferred"]
+    assert parts["deferred"]["wall_s"] == pytest.approx(11.0 - 13.0) and parts["deferred"]["first_token_s"] == pytest.approx(-1.0)
+    assert parts["deferred"]["decode_step_s"] == pytest.approx(-0.5) and parts["deferred"]["over_stock"] == pytest.approx(-1.0)
+    assert parts["live"]["wall_s"] == pytest.approx(16.0 - 13.0) and parts["live"]["decode_step_s"] == pytest.approx(0.0)
+    md = AB.markdown(t)
+    assert "| Pearl+'s deferred schedule in place of the serial one | -2 | -12.5% | -100% | -1 | -0.5 |" in md
+    assert "| deferred | 1 |" in md
+    assert set(AB.FROM) == set(AB.PARTS) == set(AB.ORDER) - {"stock"} and set(AB.FROM.values()) <= set(AB.ORDER)
+
+
 def test_the_table_refuses_no_record_and_loads_of_different_shapes(tmp_path):
     out = tmp_path / "out"
     with pytest.raises(ValueError, match="no rep-<i>/<arm>.json"):
@@ -224,6 +248,39 @@ def test_a_live_arm_whose_endpoint_does_not_come_up_closes_its_period_and_one_wi
     p, lines, said = _ab(tmp_path / "b", "round", "rep-1", "0", ARMS="ahead", NO_PERIOD="1")
     assert p.returncode == 10 and "rep-1 ahead: PERIOD refused: the gate" in said and "nothing is served" in said
     assert not [x for x in lines if " serve-openai " in x or "pearlplus-period close" in x]
+
+
+def test_the_deferred_arm_is_the_pearl_arm_with_the_deferred_schedule_in_its_pouw_settings(tmp_path):
+    """`deferred` serves as `pearl` does, its coins in-process and no period around it, and differs in one pouw setting:
+    its settings name the schedule ``deferred``, one of the protocol's, where the pearl arm's name none, so the pearl
+    arm's settings are what they were before there was a deferred arm."""
+    from verity.core.protocols.pouw.serving import SCHEDULES
+
+    p, lines, said = _ab(tmp_path, "round", "rep-1", "0", ARMS="pearl deferred")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert not [x for x in lines if "pearlplus-period" in x or "--challenger-gate" in x]
+    kernel = f"{HERE.parents[2]}/benchmarks/pouw/pearl_c_sm90"
+    cubin = f"{tmp_path}/stage/pearlplus-cubin/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"
+    for arm, schedule in (("pearl", []), ("deferred", ["deferred"])):
+        serve = _at(lines, f"--run-id t-rep-1-{arm} ")
+        words = lines[serve].split()
+        assert words[words.index("--protocols"):][:4] == ["--protocols", "pouw:pearl-c-h100-v1-h3", "--protocols-config",
+                                                         "0123456789abcdef"]
+        made, tail = lines[serve - 1], " ".join([kernel, cubin, *schedule])   # the call that wrote the settings, just before
+        assert made.startswith("-c ") and made.endswith(" " + tail)
+        ran = subprocess.run([sys.executable, "-c", made[len("-c "):-len(tail) - 1], kernel, cubin, *schedule],
+                             capture_output=True, text=True, check=True)
+        assert json.loads(ran.stdout) == {"pouw": {"device": "cuda", "kernel": kernel, "cubin": cubin}
+                                          | dict(zip(("schedule",), schedule))}
+        assert f"rep-1 {arm}: listening" in said
+    assert "deferred" in SCHEDULES
+
+
+def test_an_arm_the_wrapper_does_not_serve_is_refused_and_a_deferred_arms_lifetime_takes_several_loads(tmp_path):
+    p, lines, said = _ab(tmp_path / "a", ARMS="pearl nonesuch")
+    assert p.returncode == 3 and "an arm is stock, commit, pearl, deferred, live or ahead, not nonesuch" in said
+    p, lines, said = _ab(tmp_path / "b", ARMS="deferred", LOADS="3")
+    assert "PREFLIGHT" not in said and "start: arms deferred, " in said and "3 loads a lifetime" in said
 
 
 def test_a_run_with_a_live_arm_is_refused_more_than_one_load_a_lifetime(tmp_path):
