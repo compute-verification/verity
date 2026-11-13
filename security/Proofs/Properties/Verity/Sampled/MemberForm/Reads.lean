@@ -27,8 +27,8 @@ log to (`sessionRead_logged`), and whose proof files are the evidence's (`statem
 as many trees as statements (`members_place_logged`), each tree's streams named once and each opening of a tree
 opened before the last tree's (`Accepted.specs`, `Accepted.opensLast`).
 
-It takes two statements besides the play: `FormAccepts`, which holds of the check as it is and which a check that
-accepts the form proves of its own accepts, and `RegisteredHolds`, the registration's.
+It takes two statements besides the play: `FormAccepts`, which holds of the check's accepts (`formAccepts`), and
+`RegisteredHolds`, the registration's.
 -/
 
 @[expose] public section

@@ -21,9 +21,8 @@ The window's theorem takes three facts of the deployment's windows at accepted p
 * **`WindowReads`** (`windowReads_members`): the read at a play (`windowRead_members`) at each play of the period's
   game, whose parameters are the game's.
 
-It takes three statements besides the play: `FormAccepts` and `FormApart`, which hold of the check as it is and
-which a check that accepts the form proves of its own accepts and its own parse, and `RegisteredHolds`, the
-registration's.
+It takes three statements besides the play: `FormAccepts` and `FormApart`, which hold of the check's accepts and
+its parse (`formAccepts`, `formApart`), and `RegisteredHolds`, the registration's.
 -/
 
 @[expose] public section

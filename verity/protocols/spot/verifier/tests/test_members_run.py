@@ -4,8 +4,8 @@ after its evidence; the verifier's verdict and its check of a member's files' fo
 and the read of the auditor's ledger (`challenger.trusted_session_of`, which its own tests hold) is taken as passed.
 The run holds every member's files before any session, a member with no statement as one with a session, and refuses a
 member whose public file is not its slice of the registration; it credits each accepted session its member's units,
-refuses proved units other than the evidence's and a verdict naming another program, and accepts nothing: what a run of
-sessions that all accepted maps to is the form's refusal."""
+refuses proved units other than the evidence's and a verdict naming another program, and is no verdict: a run of
+sessions that all accepted is what v1's check at the coins then reads."""
 
 from __future__ import annotations
 
@@ -124,10 +124,10 @@ def ledger(monkeypatch):
     monkeypatch.setattr(C, "trusted_session_of", lambda *a: None)
 
 
-def test_a_run_of_accepted_sessions_credits_each_members_units_and_maps_to_the_forms_refusal(tmp_path):
+def test_a_run_of_accepted_sessions_credits_each_members_units_and_names_no_refusal(tmp_path):
     """Each session is verified on its member's own files, with the program and partition every member reads, and
-    credited the units of its member's public file its record drew; the run accepts nothing, and what the audit above
-    it answers is the form's refusal."""
+    credited the units of its member's public file its record drew; the run is no verdict, and it names no refusal
+    for the audit above it."""
     w = Window(tmp_path)
     seen = []
 

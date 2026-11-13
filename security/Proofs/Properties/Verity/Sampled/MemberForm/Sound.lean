@@ -31,8 +31,8 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-- **SPOT's soundness at the per-member form's accepts** (`WindowInstance.spotSound`, at `claimReads`,
 `windowAt_form` and `windowReads_members`): where the window is the parameters' members on the registered files,
 the form's accepts hold `MembersAccept` with members that share no unit, the registered files hold each member's
-file and each member's commitment is ready for its openings. The check as it is accepts no parameters that name
-members, so the statement is empty until the per-member form accepts such parameters. -/
+file and each member's commitment is ready for its openings. The check's accepts hold the second
+(`formAccepts`, `formApart`). -/
 theorem spotSound_form (I : WindowInstance d α) (K₀ : WindowConstructions I.base)
     (k : Verity.Registration.Composite) (reg : Option Claims.Msg → ByteArray)
     (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)
@@ -46,8 +46,7 @@ theorem spotSound_form (I : WindowInstance d α) (K₀ : WindowConstructions I.b
 
 /-- **Remote's soundness over windows of several members, at the per-member form's accepts**
 (`remote_soundness_window`, at `claimReads`, `windowAt_form` and `windowReads_members`): under `spotSound_form`'s
-premises and the base's PoUW and inference-only targets. The check as it is accepts no parameters that name
-members, so the statement is empty until the per-member form accepts such parameters. -/
+premises and the base's PoUW and inference-only targets. -/
 theorem soundnessAt_form (I : WindowInstance d α) (K₀ : WindowConstructions I.base)
     (reg : Option Claims.Msg → ByteArray)
     (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)

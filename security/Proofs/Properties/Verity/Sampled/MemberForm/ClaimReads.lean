@@ -126,9 +126,7 @@ each window the verifier sets up is laid out, with the published share and the c
 the window's members in order (`WindowOn.reads_toV5`), each `Checked` (`MembersSetUp.checked`), under the
 vocabulary's openings, which hold wherever each member's deployed commitment opens (`MembersSetUp.opensWith`, at
 the instance's places) and at each member's constants (`constsWith_read`), at the seats' traces side by side. It
-takes each member's commitment ready for its openings (`Commit.Ready`). The parameters the verifier parses name no
-members, so it sets up no window of members and the statement is empty until the per-member form accepts
-parameters that name members. -/
+takes each member's commitment ready for its openings (`Commit.Ready`). -/
 theorem claimReads (I : WindowInstance d α) (K : WindowConstructions I.base)
     (hready : ∀ θ F W, I.windows θ F = some W → ∀ m ∈ W.ms, Commit.Ready m.D m.hU m.n {} m.pub) :
     I.ClaimReads K where
