@@ -1463,10 +1463,8 @@ def less_by_one(files: dict[str, str]):
 
 
 def _head(doc: object) -> C.Head | None:
-    try:
-        return SV.head_of(doc)
-    except ValueError:
-        return None
+    """The head a registration of connection rows lists, or None where the reader says it doesn't read."""
+    return None if SV._lack(SV.REGISTRATIONS_FILE, doc) else SV.head_of(doc)
 
 
 def _counts(control: dict) -> bool:
