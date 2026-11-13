@@ -27,11 +27,13 @@ theorem key_unique {α β : Type} : ∀ {l : List (α × β)}, (l.map (·.1)).No
   | [], _, _, _, hx, _, _ => by cases hx
   | a :: l, hn, x, y, hx, hy, h => by
     rw [List.map_cons, List.nodup_cons] at hn
-    rcases List.mem_cons.1 hx with rfl | hx <;> rcases List.mem_cons.1 hy with rfl | hy
-    · rfl
-    · exact absurd (by rw [h]; exact List.mem_map_of_mem (f := fun z : α × β => z.1) hy) hn.1
-    · exact absurd (by rw [← h]; exact List.mem_map_of_mem (f := fun z : α × β => z.1) hx) hn.1
-    · exact key_unique hn.2 hx hy h
+    rcases List.mem_cons.1 hx with hxa | hx' <;> rcases List.mem_cons.1 hy with hya | hy'
+    · rw [hxa, hya]
+    · subst hxa
+      exact absurd (by rw [h]; exact List.mem_map_of_mem (f := fun z : α × β => z.1) hy') hn.1
+    · subst hya
+      exact absurd (by rw [← h]; exact List.mem_map_of_mem (f := fun z : α × β => z.1) hx') hn.1
+    · exact key_unique hn.2 hx' hy' h
 
 /-- **A search of a sublist finds what a search of the list finds**, where at most one entry of the list matches and
 every entry that matches is in the sublist. -/
@@ -50,6 +52,14 @@ theorem find?_sublist {α : Type} {p : α → Bool} {l₁ l₂ : List α} (hs : 
     | some y =>
       exact congrArg some (hu y (hs.subset (List.mem_of_find?_eq_some h₁)) x hx (List.find?_some h₁) hp)
 
+/-- `==` on bytes is equality. -/
+theorem bytes_beq {a b : ByteArray} : (a == b) = true ↔ a = b := by
+  constructor
+  · intro h
+    exact ByteArray.ext (eq_of_beq (show (a.data == b.data) = true from h))
+  · rintro rfl
+    exact (show (a.data == a.data) = true from beq_self_eq_true _)
+
 /-- **The blob held under a digest is the blob fed under it**, where the blobs held are a sublist of those fed, their
 SHA-512 distinct, and the entry fed under the digest, if any, is held; a refusal of the digest is the same refusal. -/
 theorem Blobs.get_sublist {held full : Core.Blobs} (hs : held.entries.toList.Sublist full.entries.toList)
@@ -64,6 +74,7 @@ theorem Blobs.get_sublist {held full : Core.Blobs} (hs : held.entries.toList.Sub
       (if (d.size != 64 || Flock.hexOf d != digest) = true then _ else _)
     by_cases hc : (d.size != 64 || Flock.hexOf d != digest) = true
     · rw [if_pos hc, if_pos hc]
+      rfl
     · rw [if_neg hc, if_neg hc]
       have hd : Flock.hexOf d = digest := by
         simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Decidable.not_not] at hc
@@ -71,14 +82,21 @@ theorem Blobs.get_sublist {held full : Core.Blobs} (hs : held.entries.toList.Sub
       have hf : held.entries.find? (·.1 == d) = full.entries.find? (·.1 == d) := by
         rw [← Array.find?_toList, ← Array.find?_toList]
         refine find?_sublist hs (fun x hx y hy hpx hpy => key_unique hn hx hy ?_) (fun x hx hpx => hin x hx ?_)
-        · exact (beq_iff_eq.mp hpx).trans (beq_iff_eq.mp hpy).symm
-        · rw [beq_iff_eq.mp hpx, hd]
+        · exact (bytes_beq.mp hpx).trans (bytes_beq.mp hpy).symm
+        · rw [bytes_beq.mp hpx, hd]
       rw [hf]
+
+theorem filterMap_congr' {α β : Type} {f g : α → Option β} :
+    ∀ {l : List α}, (∀ x ∈ l, f x = g x) → l.filterMap f = l.filterMap g
+  | [], _ => rfl
+  | a :: l, h => by
+    rw [List.filterMap_cons, List.filterMap_cons, h a List.mem_cons_self,
+      filterMap_congr' fun x hx => h x (List.mem_cons_of_mem _ hx)]
 
 /-- Two digests with one hex are one. -/
 theorem hexOf_inj {a b : ByteArray} (h : Flock.hexOf a = Flock.hexOf b) : a = b := by
-  have ha := Flock.unhex_hexOf a
-  rw [h, Flock.unhex_hexOf b] at ha
+  have ha := Flock.Hex.unhex_hexOf a
+  rw [h, Flock.Hex.unhex_hexOf b] at ha
   exact (Except.ok.inj ha).symm
 
 /-- **The pinned tables held are the pinned tables fed**, where the blobs held are a sublist of those fed, their
@@ -89,13 +107,16 @@ theorem tablesOf_sublist {held full : Core.Blobs} (hs : held.entries.toList.Subl
       x ∈ held.entries.toList) :
     tablesOf held = tablesOf full := by
   unfold tablesOf
-  congr 1
-  funext t
+  refine filterMap_congr' fun t ht => ?_
   rw [← Array.find?_toList, ← Array.find?_toList]
-  by_cases ht : t ∈ Flock.MUFU_TABLES
-  · rw [find?_sublist hs (fun x hx y hy hpx hpy => key_unique hn hx hy (hexOf_inj
-      ((beq_iff_eq.mp hpx).trans (beq_iff_eq.mp hpy).symm))) (fun x hx hpx => hin x hx ⟨t, ht, beq_iff_eq.mp hpx⟩)]
-  · rfl
+  refine congrArg _ (find?_sublist hs (fun x hx y hy hpx hpy => ?_) (fun x hx hpx => ?_))
+  · rcases x with ⟨dx, bx⟩
+    rcases y with ⟨dy, by_⟩
+    dsimp only at hpx hpy
+    exact key_unique hn hx hy (hexOf_inj ((beq_iff_eq.mp hpx).trans (beq_iff_eq.mp hpy).symm))
+  · rcases x with ⟨dx, bx⟩
+    dsimp only at hpx
+    exact hin _ hx ⟨t, ht, beq_iff_eq.mp hpx⟩
 
 /-- **`verdictOf` is the session's proof files, its key's freshness, then the rest** (`restOf`), the files read once
 for the rest's proofs: the split `StepKept` keeps. -/
@@ -115,9 +136,11 @@ theorem StepKept.step_of (a : StepAt) (bs : Core.Blobs) (s : RunFiles) (r : Run)
   cases hg : bs.get s.record s!"session {s.name}'s record" with
   | error e => rfl
   | ok rb =>
+    simp only [ok_bind]
     cases hu : String.fromUTF8? rb with
     | none => rfl
     | some record =>
+      dsimp only
       cases hd : drawFitsWhy WORD (Flock.Witness.recordDraw record) with
       | some what => rfl
       | none =>
