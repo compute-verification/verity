@@ -6,7 +6,14 @@ import json
 import pytest
 
 from verity_vllm.properties import fa_tap_exactness, golden, holdout, quarantine_lint
-from verity_vllm.properties.record import BY_SCHEMA, REGISTRY, PropertyRecord, digest_of, records_of, seal
+from verity_vllm.properties.record import (
+    BY_SCHEMA,
+    REGISTRY,
+    PropertyRecord,
+    digest_of,
+    records_of,
+    seal,
+)
 
 NI = REGISTRY["noninterference"].schema
 
@@ -42,9 +49,9 @@ def test_the_registry_names_each_harness_schema_once():
         glm53_bf16_gemm_capture_gpu,
         glm53_block_fp8_capture_gpu,
         glm53_dsa_capture_gpu,
-        glm53_tp8_allreduce_capture_gpu,
         glm53_fa3_prefill_capture_gpu,
         glm53_fused_rmsnorm_capture_gpu,
+        glm53_tp8_allreduce_capture_gpu,
         sigmoid_router_capture_gpu,
         tp4_nccl_tree_replay,
     )

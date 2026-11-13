@@ -28,11 +28,11 @@ from typing import Any
 import pytest
 import torch
 
-transformers = pytest.importorskip("transformers")
-
-from verity_vllm.program.frontend.derive import DERIVE_VERSION, derive_report
 from tests.program import test_derive_hf5_heldout as HO
 from tests.program import test_derive_realhf as RH
+from verity_vllm.program.frontend.derive import DERIVE_VERSION, derive_report
+
+transformers = pytest.importorskip("transformers")
 
 H, NL, NH, KVH, V, I, MAXPOS, EPS = RH.H, RH.NL, RH.NH, RH.KVH, RH.V, RH.I, RH.MAXPOS, RH.EPS
 HEAD_DIM = H // NH
