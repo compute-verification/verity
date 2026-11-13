@@ -117445,3 +117445,59 @@ Branch `cursor/proofs-accepts-7d08` at `02c26ad4d9`, pushed. Nothing is unpushed
 **Ready for soundness's reading:** `Accepts.lean` (compiled, probed). `AcceptsProof.lean`, `Cover.lean`, `ReadsOnly.lean` compiled at `ce21628a5f`; `ReadsOnly`'s probe is clean, the other two's probes are running, and `AcceptsProof.lean` has the refactor of section 2 since.
 
 **Not established.** `Reached.lean`, `OfRun.lean`, `Fits.lean`: not compiled. Every premise in section 3's table. An earlier period's genuine challenger signature still makes the error ⊤.
+
+## PERIODREAD, Fri 13 Nov 03:22Z: #9596's ready line; the refusal is written into #9595 at `4f6a8f3d812d` and not yet run (its run waits behind 13 checks); the split moves 53 records' reads, not four
+
+**Ready line: #9596 at `7764f46a6233e908a76ed22307a63439ec687b89`**, https://github.com/compute-verification/verity/pull/9596, unmarked, `Lane proofs`.
+
+- [run `r20261113-024735-2bee`, vy-nebius-2, waited 2.0 min for slot p21] `suites.py research --quick --fresh` at that head: "4849 passed, 3 skipped", "1 suites: 1 passed (0 cached), 0 failed", with the node's hold still on it.
+- [run `r20261113-023857-2380`] `tests/test_auto.py` at that head on the held node: 76 passed. [runs `7179`, `b5e6`] without the two lines the same two tests fail there, on PR 2's tree and on `main`'s.
+- Two lines of one test file. No Lean, no record.
+- Not run: the suite's slow tests, and any other suite at this head.
+
+**Your 03:00Z word, by its numbers.** I can pause. Mailbox read at `2eb6a3202d` (03:00:36Z).
+
+**1. The refusal is in #9595's branch at `4f6a8f3d812d71522afab2cfd9ed251e0e34cb7b`, pushed. It has not compiled or run:** `r20261113-031857-3061` (build of `Spot` and both period difftests, vy-nebius-2) has waited since 03:19Z with "13 check(s) ahead in line". The messages and the three refusals were run on my VM in a core-only scratch file, nothing more.
+
+How I read "this registration's digest", which is the part you may want to overrule:
+
+- [read] The ledger ties a session to one digest only: the `circuit` its period's open commits. A v2 open names a root, a host, a pin, a key, a lane and a layout, no registration (`challenger.py:104-105`). The device's own words: "the period's `circuit` is the registered circuit's SHA-512" (`challenger.py:145-146`; `ChallengerSession.lean:478-488`, `:641-647`). So a session is committed under this registration's digest when the period that lists it committed that digest.
+- **The check (`registeredIn`, step 2 of `run`, after the ledger's half):**
+  - every window's period commits this registration's circuit, else `period`;
+  - a session of the lane that holds no coin of the family, and that no period committing a circuit lists (in no period, or in a period opened with no circuit), is refused under `outside`, by its session's name;
+  - one that a period of this registration lists is refused under `period`, by name: "its root is committed under this registration and never sampled";
+  - what is left is listed by a period that commits another circuit, and is published as `{registration, session}`, that circuit and its session, nothing else. The accept also publishes this registration's circuit.
+- The test at `:544-563` now asserts the refusal for the session in no period, in a period with no circuit and in a period of this registration, each with its exact reason, through Lean and the reference; the accept is asserted only with the session in a period of another circuit. Five named cases join the sampled ones.
+- The ledger's half (#9537's files' code) is unchanged: one docstring sentence and the codes' docstring in `Spot/Period.lean`.
+
+Decided by me, yours or soundness's to overrule:
+
+- **(i) This registration's circuit is a new parameter of the check, `registration`, the verifier's own.** It is not read from the ledger and not derived from `audit`. [read] One-stage v2 reads no period's circuit: `Audited.circuit` is read only by `creditedSession` (`ChallengerSession.lean:920-924`), which PoUW's credit calls and SPOT does not. So the check holds every window to a period of that digest and does not hold the digest to `audit`'s program or `proofs`. Holding it to the verifier's descriptor, as `creditedSession` does with one hash, would be one more refusal; I did not write it, because I have not established that one-stage v2's `program` is the bytes a period's `circuit` hashes.
+- **(ii) A window in a period of another circuit refuses the period**, rather than being listed among the others. It accepts less. The cost: two registrations of one lane that share the family's label are never accepted in one monitoring period.
+- **(iii) No new code:** `period` and `outside`.
+- **(iv) What a reader no longer sees of another registration's session:** its root, layout, place and period's name.
+
+What it does not close [derived]: a lane may open a period under any digest it likes and commit roots there without the family. They are published under that digest, and nothing here says the digest is a registration. Soundness's words put that on the composite ("the composite requires each registration's own audit").
+
+**2. PR 3 (#9581)** is at `8ba1af434e178696012f1c408987d51479aeba03`, pushed before your word: the statements of your 02:43Z rulings, uncompiled, with the corollary. I restate it against `4f6a8f3d812d` once that has run: `CommittedOnce` over every root the lane committed in the run on a session of a period of this registration, no `others` clause, the corollary gone. `DecodedMeans`, `AuditedSession`, the weaker `Numbered` and the "does not say" sentences stay.
+
+**3. The split moves 53 guarantee records' reads, not four** [run `r20261113-015344-d333`, at `36dc4d568f`, before I cancelled it]:
+
+- 4 in `security`: `Flock.SecurityProofs.RecursiveAuditC3`, `Verity.Sampled.remote_soundness_deployedReady`, its `_honest` and `_nontrivial`.
+- 49 in `security/Properties`, among them PoUW's deployed `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`, `Verity.remote_soundness_of_subprotocols` and its two, `Verity.soundness_of_subprotocols`, `Verity.coins_couple`, `Verity.wipe_target`, `Properties.Remote.SecurityProofs.acceptComplies` and `acceptInferenceOnly`, `Properties.Spot.SecurityProofs.tablesRegistered`, and PoUW's `Check`, `Credit`, `LiveSalt`, `Period`, `PeriodJ10R`, `Served` records. The whole list is in the run's log, one line.
+- One reason for all 53, in the check's words: "definitions in Spot.ChallengerSession that … read changed (changed: Spot.Challenger.auditedOpen; new: Spot.Challenger.auditedIn)". The check said of both packages "every failure of its records is a record difference".
+- **Each statement means the same.** No statement's text is in the diff: #9595 touches nothing under `security/Definitions` or `security/Properties`. [read, by a script over `main`'s file and the branch's] `auditedOpen`'s first three lines are unchanged, and the 24 lines after them are `auditedIn`'s body word for word; the file's other changed lines are the two docstrings. So `auditedOpen` unfolds to the term it was.
+- **There is no lemma that says "equal to what it was"**, and there cannot be one in the tree: the old constant is gone. The nearest thing is `auditedOpen_ok` (`security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean:479`): its statement is unchanged, its proof names `auditedIn` in one more place, and its two users are unchanged. If you want it run rather than read: one scratch file that pastes `main`'s body beside the new one and proves them equal by `rfl`. Say so and I run it.
+- If 53 is too many records for a change of cost: the other way is to leave `auditedOpen` alone and give the period's check its own copy of the 24 lines, with a lemma tying the two. It moves no record and keeps one thing twice. I have not done it.
+
+**4.** Above.
+
+**5. A23's day.** The proofs passed at the old statements (`r20261113-…-3281`, 47 of 47). What the refusal adds: one step in `run` and its lemmas, `CommittedOnce` restated, `acceptMeans` and `committedOnce` proved again through the new step, and the two lemmas of your rulings 2 and 3. I still expect a run by Fri 22:00Z. The word due at 12:00Z stands; what would move it is the node: one build and difftest now waits behind 13 checks.
+
+**Runs.** I cancelled two of mine to free slots p4 and p8: `efae` (a quick tier of `43fde9d046`, 70 min in) and `d333` (a records run of `36dc4d568f`, 88 min in, after it had named the records). Both read trees that are being restated.
+
+**Heads pushed.** #9595 `4f6a8f3d812d` (not run). #9581 `8ba1af434e17` (not compiled). PR 4's branch `ce4e8ecdf2d2` (work in progress, not compiled, to be redone). #9596 `7764f46a6233`. #9537 `44b84839217d`, #9546 `ee245a981c3e` unchanged. Nothing unpushed.
+
+**Not established.** That the refusal compiles or that Lean and the reference agree on it. That a served SPOT run opens periods with a circuit at all, or which bytes its digest would hash. That one-stage v2's `program` is what a period's `circuit` hashes. The four checks of "proved" for any of PR 3's statements.
+
+**#9375 is merged** (03:01Z) [`gh pr view`]; the R8 sentence's pull request is now due from me, after #9595's run.
