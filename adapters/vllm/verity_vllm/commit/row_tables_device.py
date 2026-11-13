@@ -28,12 +28,11 @@ import tempfile
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from functools import cache, lru_cache
+from functools import cache
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import row_table as RT
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
@@ -42,8 +41,8 @@ from verity.definitions.kernels import ROW_COMMIT, SHA512
 
 from . import row_tables as RTB
 
-__all__ = ["DeviceLibrary", "Pending", "Plan", "device_lib", "host_lib", "host_step", "plan", "record_ready", "side_stream", "step_roots",
-           "table_domain_id"]
+__all__ = ["CFLAGS", "DEVICE_SOURCES", "NVCC_FLAGS", "SEG_BYTES", "TAB_WORDS", "Args", "DeviceLibrary", "Pending", "Plan", "built",
+           "device_lib", "host_lib", "host_step", "nvcc", "plan", "record_ready", "side_stream", "step_roots", "table_domain_id"]
 
 CUDA_DIR = Path(__file__).resolve().parents[1] / "protocols" / "pouw" / "pouw_cuda"
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
@@ -138,7 +137,7 @@ def device_lib(arch: str) -> ctypes.CDLL:
 
 # --- the host's part: domains, rank order, layout ---------------------------------------------------------------------------
 
-@lru_cache(maxsize=None)
+@cache
 def _domain_frame(n: int) -> tuple[bytes, bytes]:
     """``domain_message`` of an ``n``-row table on either side of its 64-byte binding."""
     positions = RangeIndexedDomain(0, n).identity_sha512()

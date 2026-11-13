@@ -159,15 +159,35 @@ def test_a_job_whose_ticket_names_no_ask_is_placed_as_asking_what_a_run_gets_by_
     assert stranded_jobs(docs) == [], f"{stranded.NO_ASK_GB} GB is 15 GiB"
 
 
-def test_twins_are_one_job_and_its_move_is_a_late_twin_where_the_machine_can_claim_on_its_home():
+def test_a_queue_shards_twins_are_one_job_with_no_place_off_their_lines_and_the_same_shard_without_a_twin_is_stranded(tmp_path):
+    """The loop launches a shard as one run on each machine of its list, in one twin group, so a machine where the group has
+    no line is one the list leaves out: a free check slot there is no place, and the watch rings no one."""
     home = machine(check=pool(slot("t", "0-95", held=True, trains=True, mem=520), waiters=(shard(twin="p1", run="r-a"),)))
     away = machine(check=pool(slot("t", "0-95", held=True, trains=True, mem=520), waiters=(shard(twin=f"p1@{A}", run="r-b"),)))
     free = machine(check=pool(slot("t", "0-95", trains=True, mem=400)))
-    doc = stranded.analyse({A: home, B: away, C: free}, T0, CPUS)
+    docs = {A: home, B: away, C: free}
+    doc = stranded.analyse(docs, T0, CPUS)
     (w,) = doc["waits"]
     assert w["job"] == "p1" and w["twin"] == "p1" and w["runs"] == ["r-a", "r-b"] and [ln["machine"] for ln in w["lines"]] == [A, B]
-    assert w["move"] == {"how": "late twin", "to": [A, B, C], "why_not": None}
-    assert stranded.moves(doc) == [{"job": "p1", "pool": "check", "how": "late twin", "to": [A, B, C], "why_not": None}]
+    assert not w["stranded"] and w["places"] == [] and stranded.moves(doc) == []
+    assert w["move"] == {"how": "none", "to": [], "why_not": "a queue shard runs only where the loop launched a copy of it, "
+                                                             "and no machine off its lines has one"}
+    assert doc["pools"]["check"]["stranded"] == 0 and doc["pools"]["check"]["places"] == 1
+    assert [e for e in watch(tmp_path, [(T0 + t, docs) for t in (0, 600, 1200)]) if e[1].startswith("stranded|check|")] == []
+    alone = machine(check=pool(slot("t", "0-95", held=True, trains=True, mem=520), waiters=(shard(run="r-a"),)))
+    (w,) = stranded.analyse({A: alone, B: machine(), C: free}, T0, CPUS)["waits"]
+    assert w["job"] == "r-a" and w["stranded"] and [p["machine"] for p in w["places"]] == [C]
+    assert w["move"] == {"how": "at launch", "to": [A, C], "why_not": None}
+
+
+def test_a_lane_pools_twins_are_one_job_and_its_move_is_a_late_twin_where_the_machine_can_claim_on_its_home():
+    home = machine(research=pool(slot("r0", held=True), waiters=(waiter(30, "r-a", twin="p1"),)))
+    away = machine(research=pool(slot("r0", held=True), waiters=(waiter(30, "r-b", twin=f"p1@{A}"),)))
+    free = machine(research=pool(slot("r0", "16-31")))
+    doc = stranded.analyse({A: home, B: away, C: free}, T0, CPUS)
+    (w,) = doc["waits"]
+    assert w["job"] == "p1" and w["runs"] == ["r-a", "r-b"] and [p["machine"] for p in w["places"]] == [C]
+    assert stranded.moves(doc) == [{"job": "p1", "pool": "research", "how": "late twin", "to": [A, B, C], "why_not": None}]
     short = {A: home, B: away, C: {**free, "peers": [B]}}
     (w,) = stranded.analyse(short, T0, CPUS)["waits"]
     assert w["stranded"] and w["move"]["how"] == "none" and f"names {A} in its /etc/vy/peers" in w["move"]["why_not"]

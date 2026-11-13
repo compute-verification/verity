@@ -15,11 +15,28 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.dsv4_model import CMAP, CSA, ENV, HCA_R, HOOKED, L, STEPS, TP, dsv4_model, metadata, run_step
+from tests.acquire.dsv4_model import (
+    CMAP,
+    CSA,
+    ENV,
+    HCA_R,
+    HOOKED,
+    STEPS,
+    TP,
+    L,
+    dsv4_model,
+    metadata,
+    run_step,
+)
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TP_PARTIAL_RE, NativeHostCommitter, TensorMeta
+from verity_vllm.commit.committer.native_host import (
+    GPU_CHUNK_BYTES,
+    TP_PARTIAL_RE,
+    NativeHostCommitter,
+    TensorMeta,
+)
 
 #: nearly every test here builds and serves a DeepSeek-V4 stand-in, seconds to minutes each, so the whole module is slow
 pytestmark = pytest.mark.slow

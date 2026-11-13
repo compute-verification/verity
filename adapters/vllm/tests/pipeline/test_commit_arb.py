@@ -3,14 +3,15 @@ seeded and in arrival order; a run passes only when every request and every wind
 rows-sha512 committer."""
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
+from tests.pipeline import predicted
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_arb as CA
 from verity_vllm.pipeline import serve_seal as SS
-
-from tests.pipeline import predicted
 
 
 def encode(text):
@@ -68,7 +69,7 @@ def test_shared_prefix_traffic_opens_with_system_prompts_and_goes_on_in_turns():
 
 def test_a_turn_is_its_last_turns_prompt_and_stream_then_its_suffix():
     parent = {"request_id": "a", "prompt": [0, 1, 2]}
-    q = {"request_id": "a.t1", "follows": "a", "gap": 2, "suffix": [7, 8], "sampling": {"max_tokens": 4}}
+    q: dict[str, Any] = {"request_id": "a.t1", "follows": "a", "gap": 2, "suffix": [7, 8], "sampling": {"max_tokens": 4}}
     assert CA.next_turn(q, parent, [5, 6], 10, max_model_len=64)
     assert q["prompt"] == [0, 1, 2, 5, 6, 7, 8] and q["arrive_step"] == 13
     long = {**q, "sampling": {"max_tokens": 60}}
@@ -77,7 +78,16 @@ def test_a_turn_is_its_last_turns_prompt_and_stream_then_its_suffix():
 
 
 def three_turn_checks(flip=None):
-    from tests.commit.test_served_record import A_OUT, A_PROMPT, B_OUT, B_PROMPT, C_OUT, C_PROMPT, SEED, three_turns
+    from tests.commit.test_served_record import (
+        A_OUT,
+        A_PROMPT,
+        B_OUT,
+        B_PROMPT,
+        C_OUT,
+        C_PROMPT,
+        SEED,
+        three_turns,
+    )
     rec = three_turns(flip)
     served = {"a": (A_PROMPT, A_OUT), "b": (B_PROMPT, B_OUT), "c": (C_PROMPT, C_OUT)}
     checks = [({"request_id": r, "prompt": p, "sampling": {"seed": SEED}}, None, rec.check(r, p, o, seed=SEED))
