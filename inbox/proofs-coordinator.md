@@ -140812,3 +140812,66 @@ Branch `cursor/proofs-sessioncoins-e4a0` at `3222236de4e`, pushed; nothing unpus
 **Standing.** Neither of Friday's branches moved; no `main` merged; nothing rebased; no pull request, no mark; nothing on Linear or Slack; nothing launched with `--interior-trees`. One run of mine is out: `3f16`. The pull request's body draft now says the audit's difference from the form (your 12:05Z item 1) [run: the draft file].
 
 **Not established:** which guarantees read R3's three records and `wiresOk`'s one (no records run has reached `security`'s records); the join's tip on a wired-layout case by run; that `FirstCoins` and the ten modules behind it build over my R3 change (first at `3f16`); the clause in Lean (not written yet).
+
+
+## RATING, Fri 13 Nov 12:36Z: pull request #9735 is open, unmarked, at `4d4950f1bb9`; the head's records pass without `--update`; at that head the three salts at k = 65,536 put every tile over its cap by its mends alone; one class I derived by reading the term is not run yet
+
+**In plain words.** The debit mend's pull request is up: https://github.com/compute-verification/verity/pull/9735, opened at 12:32Z, not marked, no `main` merged. Its Lean records pass at its head as committed. I then ran my rating's own command at that head. On the question my rows raised, the answer is no: the raised adder and the skip-only class no longer beat the bound on a tile the scheme accepts, because the scheme's tile rule now refuses each of those tiles, about 80 times over its cap. I do not give the mend a grade yet. Reading the forced-zero term I see one variant it may not charge; that is a reading, not a run, and I run it next.
+
+### 1. The pull request [run]
+
+- #9735, head `4d4950f1bb99a696bb1fb63a72aca13983ff0f1d`, base `main`, open, not a draft, no label, linked to PRF-612. `research queue open` warned that PRF-612 carries no label naming a live goal; I changed nothing on the issue.
+- Its first paragraph names the recorded change as you ordered; "Not established" says the witness does not reach the mend term.
+- **Records at the head, no `--update`:** `r20261113-115604-4837`, exit 0 in 1,960 s, outcome pass. security PASS, 1,137 guarantees; security/Proofs PASS; security/Properties PASS, 536 guarantees, "0 files changed there". So the two committed locks are what the head regenerates. It is the fast path: no kernel replay.
+- **The deployed guarantee that reads the changed check:** `Verity.remote_soundness_of_subprotocols` reads `PouwPearlPlus.Rule`'s changed definitions (one of 35 that do; the only deployed one). Its statement and premises are unchanged [read: the lock diff]. The body says so under "The locks".
+
+### 2. The two skipped difftest cases: they wait for Tuesday's slot [read]
+
+`POUW_PEARLPLUS_RECORDED` does not take 614b's kept words. The test wants whole retained passes named `prefill`, `decode` and `control` with `passes/coins.json` and the Python's `verdicts/{run,control}.json` (`test_pearlplus_lean.py:563-580`); 614b kept its case's parts (`parts.json` and `blobs/`: four manifests and only the files its opened tiles read, `served_passes.py:765-816`), with no control pass. The body says this.
+
+### 3. The second witness, sized in one line (not written)
+
+Two `Words.Formed` literals for a 1 × 128 × 1 tile with live raisers taken from the Python's forming, three or four `decide +kernel` lemmas (flags, forming, both rows' ends, the mends counted) and one theorem of `tileKeepsTheCap_nontrivial`'s shape plus a line that the cap holds with the mends left out: about 100 lines over the two `Witnesses.lean`, one new guarantee entry in the Properties lock, one records run; not known: whether a live-raiser word fits at k = 128 with no flagged atom and no salt-dead element, which a short Python search on one word settles first.
+
+### 4. The rating's three salts at the pull request's head
+
+**I compiled the mend's proofs** (`Cap.lean`, `Rev1Witness.lean`, `RowSeedGap.lean`, `DeviceRev1Gap.lean`, `Verdict.lean`, the four restated floor lemmas), so this is not an independent rating of the Lean; the second rater's is.
+
+The command is the one that produced the rows of 07:40Z, on the pull request's tree: `dead_pairs_sweep.py --raised-pearlc 65536:8192+65536:170:gauss,65536:8192+65536:170:zero --salts 1 --salt-from i --units 1`, i = 0, 1, 2 (the script from my rating branch at `080f8167511`, laid over a clone of `4d4950f1bb9`). The debit is the scheme's own: `pearl_c_debit.tile_debit` and `debit_units` at that head, and the verdict is `clear_work.check_opened`'s. Runs, each exit 0 in 759 to 765 s: `r20261113-115722-08f9`, `r20261113-115735-5845`, `r20261113-115803-1c4b`. 24 rows: three salts, two fills, n = 8,192 and 65,536, two programs. [run]
+
+| | n = 8,192 | n = 65,536 |
+|---|---|---|
+| Rows admitted, planted codes as designed | 12 of 12 | 12 of 12 |
+| Both programs' words equal the scheme's | 4,096 of 4,096 on each | 4,096 of 4,096 on each |
+| One-atom program, cost a word against the bound | 68,305.7 against 82,370.6 | 67,490.8 against 81,702.0 |
+| Skip-only program, cost a word against the bound | 73,745.7 against 82,370.6 | 72,930.8 against 81,702.0 |
+| The tile's cap | 847,708 | 840,827 |
+| The tile's debit | 67,733,503 to 69,087,560 | 67,704,943 to 69,059,000 |
+| Of it, mends | 67,569,503 to 68,935,680 | the same |
+| Debit over cap | 79.9 to 81.5 times | 80.5 to 82.1 times |
+| The tile rule's verdict | refused, 12 of 12: "the replayed debit … exceeds the cap …" | refused, 12 of 12 |
+
+- **The programs are as cheap as they were** (82.5% and 89.1% of the credit at n = 8,192). What changed is the tile: it is refused, so it is not a good tile and the conjecture does not range over it.
+- **The mends alone do it:** 79.7 to 82.0 times the cap. Without them each debit is 117,400 to 168,440, under the cap, as on 07:40Z.
+- The rule's own message carries the same debit as `debit_units` on `tile_debit`'s counts, on all 24 rows.
+- The replay still flags no atom in a planted group (2,833 to 3,395 flagged a tile, all outside).
+
+**Not covered by these rows:** the dead-pair class and the two live-raiser variants (the pull request's five slow tests hold those at k = 65,536 on one seed, by the census's forming and not the scheme's: `r20261113-102603-6b5c`); the scalar reference of the mended rule at this depth; anything at sm_120's step.
+
+### 5. One variant the forced-zero term may not charge [inference; a light local probe; not run on a tile]
+
+`word_mend` charges a product only when it is cut on both end chains, the two salts at which every element's noise is at one extreme. A product that is cut at the salt drawn but kept at one end is not charged.
+
+- [run, locally, one row at k = 1,024] The support's ends are about ±6.19 in code units (flat code 0.0703, F at ±11/4). A zero element's code is +6 at one end and −6 at the other.
+- [inference] So the product of two zero-filled elements is 36 at both ends. With two top-code raisers a group in place of three (2·448² = 401,408, under 2^19) the adder's cut in the later atoms is below 32, not 64: the product is kept at both ends and is no forced zero. At a drawn salt the codes are noise alone (largest seen in the 24 rows: 5.0, so a product of at most 25) and the same adder cuts them. The one-atom program then skips as before.
+- [inference] Such a tile would take 5 mends a planted group-word (its dead pairs) where the three-raiser tile takes 99. At 32 groups and k = 65,536 that is about 160 units a word of mends, and with the background's 29 to 41 about 190 to 201 against a cap of 207, with 96 atoms a word skipped, which is under the bound by about 1%.
+- [guess] The dead-pair term may be dodged the same way: an entry 4 off its cell's centre is not salt-dead by its ends but has one code at nearly every drawn salt.
+- What would falsify it: the tile is refused, or the program's words differ. I am adding the variant to the same command and running it at the pull request's head with `--on auto`; entry when it reports. Until then the mend has no grade from me, and none of this is a finding.
+
+### Not established
+
+- A grade for the mend.
+- Whether the variant of section 5 holds on a whole tile through the scheme's own code.
+- The kernel replay of the Lean at the head; the two recorded-run difftest cases; the honest cost beyond the 614b count.
+
+Next: the variant's run; then the second witness; then the second read of #9577 at `e36ebbe9677`. Mailbox read at 12:33Z: nothing after your 12:00Z.
