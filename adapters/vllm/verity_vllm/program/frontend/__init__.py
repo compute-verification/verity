@@ -1,13 +1,14 @@
-"""verity_vllm.program.frontend — authoring frontends to `Program`.
+"""verity_vllm.program.frontend: the Torch-to-circuit translator.
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
     Commitment positions -> physical authentication locations for those values,
                             not semantic components of gate outputs.
 
-`torch_frontend` (needs torch) is the PyTorch authoring frontend. `correspond` (program correspondence across
-reference encodings) and `provenance` (export/derivation provenance records) are pure `verity.circuits` and import
-without torch. Dead gates are `verity.circuits.liveness`.
+`derive` (needs torch) turns a traced torch model into a `Program`. `correspond` (program correspondence across
+reference encodings) and `provenance` (the registry's version, which a derivation's provenance holds) are pure
+`verity.circuits` and import without torch. Dead gates are `verity.circuits.liveness`. The package re-exports nothing:
+a name is imported from the module that defines it, and importing a module loads only what that module imports.
 
 What the translator imports from the rest of the adapter. Its modules are those directly in this directory but
 `train_step`, which derives a training step on top of it; `rules/` is not counted here. Every import they make of
@@ -21,6 +22,7 @@ What the translator imports from the rest of the adapter. Its modules are those 
     verity_vllm.config.VLLM                                   the pinned vLLM revision, a target's default
     verity_vllm.config.DEFAULT_ROW_PROTOCOLS                  the protocol set a target runs when it declares none
     verity_vllm.config.parse_protocols                        a protocol set's one spelling
+    verity_vllm.config.vllm_revision                          the installed vLLM's version with its commit, for the read-back
     verity_vllm.program.inputs                                what may fill a served Program's input, for a rule's run inputs
     verity_vllm.program.inputs.run_field                      the same, for one field a registration reads
     verity_vllm.program.prune.kept_records                    a derivation's body in the registered compiler's form
@@ -33,39 +35,3 @@ Of vLLM itself, the modules that turn a graph into a Program make one read, and 
 and answers by the pinned revision's rule where it does not. The modules that stand a vLLM model up for the export
 (`export_compat`, `export_ops`, `loader_parity`, `vllm_meta`) import vLLM inside the functions that need it.
 """
-
-from verity_vllm.program.frontend.correspond import CorrespondenceReport, correspond  # noqa: F401
-from verity_vllm.program.frontend.provenance import (  # noqa: F401
-    DerivationRule,
-    RuleApplication,
-    registry_version,
-)
-
-try:
-    import torch as _torch
-except ImportError:  # pure-circuit use (no torch): the analyses above are still available
-    _torch = None
-else:
-    from verity_vllm.program.frontend.errors import (  # noqa: F401
-        CODES,
-        DeadGateWarning,
-        FrontendError,
-    )
-    from verity_vllm.program.frontend.program_identity import check_identity  # noqa: F401
-    from verity_vllm.program.frontend.schemas import Arr, Dep, Tup  # noqa: F401
-    from verity_vllm.program.frontend.torch_frontend import (  # noqa: F401
-        Bound,
-        ExportReport,
-        Function,
-        Ops,
-        Prim,
-        Registered,
-        batch,
-        bind,
-        export,
-        export_report,
-        function,
-        ops,
-        scan,
-    )
-    from verity_vllm.program.frontend.value_types import type_of  # noqa: F401

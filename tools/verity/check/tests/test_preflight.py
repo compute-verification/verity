@@ -228,7 +228,7 @@ def test_avx512f_is_required_only_when_the_run_carries_a_build_that_needs_it(tmp
 
 
 def test_too_little_disk_is_refused(tmp_path, path):
-    """TO3's check ran out of space on a pod that started with 36 GB free."""
+    """A check runs out of space on a pod that starts with 36 GB free."""
     _, fails = _run(tmp_path, _tree(tmp_path), inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE), free_gb=36)
     assert len(fails) == 1 and fails[0].startswith("disk: 36 GB free") and "needs 45 GB" in fails[0] and "larger pod" in fails[0]
 

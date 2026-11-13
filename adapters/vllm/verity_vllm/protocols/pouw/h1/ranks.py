@@ -46,7 +46,10 @@ from verity.protocols.pouw.verifier.audit import Epoch, Workload, weights_root
 from verity.protocols.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.spot.device.challenger import LiveRecord
 
-from verity_vllm.engine import int8_ranks  # noqa: F401  (a worker registers the int8 parts before it builds its model)
+from verity_vllm.engine import (
+    handle,
+    int8_ranks,  # noqa: F401  (a worker registers the int8 parts before it builds its model)
+)
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
@@ -227,7 +230,7 @@ class RankExtension:
                     rc = com.finalize()
                     errors = rc.extra.get("errors")    # None from a committer whose finalize states none
                     out = {"lo": st["run"].lo, **CT.committed(com, rc, ("expected_tensors", "committed_tensors", "errors_n")),
-                           "errors": [] if errors is None else [str(e)[:300] for e in errors][:8]}
+                           "errors": [str(e)[:300] for e in errors][:8] if errors else []}
                 finally:
                     com.close()
                     tap.untap()
@@ -239,13 +242,8 @@ class RankExtension:
 
 def executor_of(llm: Any) -> Any:
     """The in-process engine core's executor (``VLLM_ENABLE_V1_MULTIPROCESSING=0``), whose ``collective_rpc`` reaches every
-    worker."""
-    core = getattr(llm.llm_engine, "engine_core", None)
-    inner = getattr(core, "engine_core", None) or core
-    executor = getattr(inner, "model_executor", None)
-    if executor is None or not callable(getattr(executor, "collective_rpc", None)):
-        raise RuntimeError("pouw_h1_ranks: no in-process executor with collective_rpc (is VLLM_ENABLE_V1_MULTIPROCESSING=0?)")
-    return executor
+    worker (`engine.handle.executor`)."""
+    return handle.executor(llm)
 
 
 def _runner(decode_query_len: int) -> Any:
@@ -283,7 +281,7 @@ class Holder:
         tap = None if self.run.served is None else self.run.served.tap
         if tap is not None:
             # a rank with no Commit answers with no "acquired" (`h1rank_rows`): nothing of it, and it keeps its place
-            got = [[] if (a := o.get("acquired")) is None else a for o in outs]
+            got = [a if (a := o.get("acquired")) else [] for o in outs]
             if len(steps := {int(x[1]) for a in got for x in a}) > 1:
                 tap.refused.append(f"one pull held engine steps {sorted(steps)}: the window's tap keeps one step a site")
             for i, a in enumerate(got):

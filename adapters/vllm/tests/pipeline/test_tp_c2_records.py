@@ -72,6 +72,16 @@ def test_a_replay_record_counts_its_strata_and_leaves_them_and_its_trace_off_the
     assert cblock["sampled_replay"] == {"result": True, "grade": "complete", "strata_n": 3}
 
 
+@pytest.mark.parametrize("record", [None, {}], ids=["a null record", "an empty record"])
+def test_a_gate_handed_no_record_records_none_and_decides_nothing_where_nothing_requires_one(record):
+    """`commit_replay.fold` hands `replay_gates` a replay's records as its result file has them, so a gate reads a null record as it
+    reads an empty one: with the replay off and no manifest required, neither gate decides anything on it."""
+    cblock: dict = {}
+    assert C2.replay_gates(cblock, record, record, True, None, rank=1, replay_on=False, required=False, xrank_families=None) == (True, None)
+    assert C2.pin_gate(cblock, record, True, None, rank=1, required=False) == (True, None)
+    assert cblock == {"sampled_replay": None, "boundary_linkage": None, "weights_pin": None}
+
+
 @pytest.mark.parametrize("f", [{}, {"weights_pin": None}], ids=["no pin block", "a null pin"])
 def test_a_deferred_rank_with_no_pin_is_decided_unpinned_when_a_manifest_is_required_and_pending_when_none_is(f):
     f = dict(f, sampled_replay={"sampled_replay": {"grade": "deferred"}, "boundary_linkage": None})
@@ -206,6 +216,16 @@ def test_two_ranks_replays_add_their_populations_by_family_and_join_their_strata
                             "steps": {"early": [0, 1, 2], "late": [5]}, "lifetime": {"values": {"fresh-window": 6, "ring": 5}, "ring_slots": 8},
                             "key": "spec | request", "unevaluated": ["s9"]}
     assert sr["unreplayable"] == [{"family": ALL_REDUCE, "n": 3, "why": "no registered evaluator", "ranks": [0]}] and sr["mismatch"] == [{"step": 1, "rank": 0}]
+
+
+@pytest.mark.parametrize("size, refusal", [("x", ValueError), (["x"], TypeError)], ids=["a word", "a list"])
+def test_a_size_that_is_no_number_is_what_the_fold_refuses_whatever_a_later_ranks_population_is(size, refusal):
+    """The fold reads every rank's size before any rank's families, so the first rank's size is refused, not the second's population."""
+    first = dict(REPLAY, population={"vus": size, "strata_n": 3, "by_family": {"Gemm_v1": 7}})
+    rows = [_run({"0": {"sampled_replay": first, "boundary_linkage": LINKAGE},
+                  "1": {"sampled_replay": dict(REPLAY, rank=1, population="no table"), "boundary_linkage": LINKAGE}})]
+    with pytest.raises(refusal, match=r"int\(\)"):
+        C2.sampled_replay_components(rows, {"sampled_replay": {"of_record": {}}})
 
 
 def test_a_rank_with_no_replay_record_is_not_a_deferred_one():
@@ -356,3 +376,19 @@ def test_a_commit_equal_to_a_failed_match_runs_capture_is_compared_and_is_no_pas
     comp = C2.oracle_compare_component(_both(cblock, {"attribution": ATTRIBUTION, "match_oracle": differs}),
                                        {"match_record": {"path": "/match", "tp2_match_verdict": False}}, MANIFEST)
     assert comp["result"] is False and comp["oracle_is_failed_match_run"] is True
+
+
+# the Commit driver's readers of a document's block and list
+
+@pytest.mark.parametrize("doc", [{}, {"name": None}, {"name": {}}, {"name": []}, {"name": 0}, {"name": ""}],
+                         ids=["none", "a null one", "an empty block", "an empty list", "zero", "an empty string"])
+def test_a_block_or_a_list_a_document_does_not_hold_reads_empty(doc):
+    assert (C2.block_of(doc, "name"), C2.list_of(doc, "name")) == ({}, [])
+
+
+def test_a_block_or_a_list_a_document_holds_is_handed_on_as_it_is():
+    block, listed = {"result": None}, [0]
+    doc = {"block": block, "list": listed}
+    assert C2.block_of(doc, "block") is block and C2.list_of(doc, "list") is listed
+    # neither reader types what it hands on: a list in a block's place is the caller's to read
+    assert C2.block_of(doc, "list") is listed and C2.list_of(doc, "block") is block

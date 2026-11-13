@@ -1349,6 +1349,7 @@ PRODUCER = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "served
 def producer() -> Any:
     """Kernels' producer module (`PRODUCER`), loaded by path: it is a benchmark's, outside this package."""
     spec = importlib.util.spec_from_file_location("served_h1_producer", PRODUCER)
+    assert spec is not None and spec.loader is not None, f"{PRODUCER} is not a file Python loads as a module"
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -1472,7 +1473,6 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     its tree), from which its sampling coin is read (none refuses it)."""
     from verity.protocols.spot.device import remote
 
-    from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
@@ -1719,7 +1719,8 @@ def main(argv: list[str] | None = None) -> int:
         main = None if a.main is None else remote.main_lines(a.main)
         statements = json.loads(Path(a.statements).read_text()) if a.statements else ()
         live = json.loads(Path(a.live_evidence).read_text()) if a.live_evidence else None
-        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
+        calls_file, directory = a.check_challenger
+        return 0 if check_challenger(calls_file, directory, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
                                      a.pins, main, statements, live, a.draw_dir)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
