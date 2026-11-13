@@ -1855,7 +1855,7 @@ def certifier_cells(text: str | None, loads: dict[str, tuple[int, ...]]) -> dict
 
 def certifier_schedule(cells: dict[str, int]):
     """The network certifier's own parameters for a schedule, in the id form; a ValueError where they are none."""
-    from verity.protocols.certifier.verifier.warden import WardenParams
+    from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 
     return WardenParams(**cells, egress="id")
 
