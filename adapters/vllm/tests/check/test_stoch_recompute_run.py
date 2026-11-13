@@ -54,14 +54,15 @@ def _launch(event: int, step: int, kernel: str, args: dict, constexprs: dict) ->
 def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple[str, int] | None = None, without_logits: tuple[int, ...] = (),
              without_arg: str | None = None, masked_xor: int | None = None, device_seed: int | None = None, header_seeds: dict | None = None,
              manifest_seeds: dict | None = None, header_first: bool = True, attested_lag: bool = True,
-             header_sampling: Any = HEADER_SAMPLING, top_p_arg: str = "P", masked_dtype: str = "float32") -> tuple[Path, Path]:
+             header_sampling: Any = HEADER_SAMPLING, top_p_arg: str = "P", masked_dtype: str = "float32",
+             manifest_top_k: int | None = None) -> tuple[Path, Path]:
     """Write the capture under `root/capture` and its workload manifest; return (the run directory, the manifest).  The keywords
     each change one thing: the served token of step `served_xor`'s first row, a launch that is absent (`(kernel, step)`), steps whose
     logits rows were not snapshotted, a small buffer of the Gumbel launch that was not, one word of step `masked_xor`'s masked row,
     the seed the kernels consumed for the first request, the seeds the header or the manifest declares, a log without its header, a
     header that does not attest the scheduler's profile, the sampling the header's workload states (`ABSENT`: it states none), the
     name the mask launch gives its top-p buffer, the dtype the Gumbel launch states for its masked rows (under `bfloat16` the
-    snapshot holds each word's upper half)."""
+    snapshot holds each word's upper half), the top-k the manifest's variant declares (none: it declares none)."""
     capture = root / "capture"
     (capture / "values").mkdir(parents=True)
     entries = []
@@ -126,7 +127,8 @@ def _capture(root: Path, *, served_xor: int | None = None, without_launch: tuple
     manifest.write_text(json.dumps({"schema": SCHEMA, "model": "m", "engine": {}, "sampling": {"variant": "stoch"},
                                     "requests": [{"request_id": r, "prompt_len": PROMPT_LEN, "max_tokens": MAX_TOKENS, "seed": declared[r]}
                                                  for r, _ in REQUESTS],
-                                    "variants": {"stoch": {"temperature": TEMPERATURE, "top_p": TOP_P}}}))
+                                    "variants": {"stoch": {"temperature": TEMPERATURE, "top_p": TOP_P}
+                                                 | ({} if manifest_top_k is None else {"top_k": manifest_top_k})}}))
     return root, manifest
 
 
@@ -364,6 +366,12 @@ def test_a_seed_is_held_to_the_header_s_as_an_integer(tmp_path):
     """Two seeds that round to one fp32 disagree: only the temperature and the top-p are held at that width."""
     rep = _recompute(*_capture(tmp_path, manifest_seeds={"b": 2 ** 24}, header_seeds={"b": 2 ** 24 + 1}))
     assert rep["header_vs_manifest"] == ["b: manifest declares seed=16777216 but the run's header records seed=16777217"]
+
+
+def test_a_top_k_is_held_to_the_header_s_as_an_integer(tmp_path):
+    """As a seed is: two top-k values that round to one fp32 disagree."""
+    rep = _recompute(*_capture(tmp_path, manifest_top_k=2 ** 24, header_sampling=HEADER_SAMPLING | {"top_k": 2 ** 24 + 1}))
+    assert rep["header_vs_manifest"] == [f"{r}: manifest declares top_k=16777216 but the run's header records top_k=16777217" for r, _ in REQUESTS]
 
 
 def test_a_header_whose_temperature_and_top_p_are_the_manifest_s_as_fp32_agrees_with_it(tmp_path):
