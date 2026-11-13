@@ -233,7 +233,7 @@ unchanged.
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
 only fully checked commits: the verified queue's loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
-verdict, or are low-risk, onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
+verdict, are low-risk or are certified moves onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
 ratchet-gate run beside them; under `--gate check`, every job in shards), and fast-forwards `main` only to a candidate with
 no new failure: each gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or
 fails on its base too. A failure the candidate's base shares blames none of its PRs;

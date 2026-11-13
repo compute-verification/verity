@@ -1,6 +1,7 @@
-"""The node files: every number an entry under the cards' rules, each naming a GPU card and a host card. A node whose
-host's DRAM and disks a run has read gives a log accepted for `remote` against the auditor the card files give, and
-refused for `onsite` until a memory challenger is registered; a node whose host no run has read gives no entry."""
+"""The node files: every number an entry under the cards' rules, each naming a GPU card and a host card and no
+machine, address or provider. A node whose file states its host's DRAM and disks gives a log accepted for `remote`
+against the auditor the card files give, and refused for `onsite` until a memory challenger is registered; a file
+without them gives no entry."""
 
 from __future__ import annotations
 
@@ -20,7 +21,10 @@ CHALLENGER = "challenger0"
 READ = [kind for kind in nodes.kinds()
         if {"dram", "disk"} <= {leaf["tier"] for leaf in nodes.load(kind).get("memory", {}).values()}]
 """The nodes whose file states the host's DRAM and a disk: the ones an entry can be built of."""
-UNREAD = sorted(set(nodes.kinds()) - set(READ))
+NAMED = re.compile(r"\bvy-[a-z0-9-]+|\bcomputeinstance-\w+|\b(?:\d{1,3}\.){3}\d{1,3}\b|\b(?:nebius|runpod)\b", re.I)
+"""What a node file never holds: a machine's name or instance id, an address, or a provider's name. A machine's name
+is matched by the prefix every one of the team's machines carries, and a provider by the names of the two that host
+them."""
 
 
 def entries(table: dict, at: str = "") -> dict[str, dict]:
@@ -47,9 +51,8 @@ def log_of(kind: str, composite: str) -> Registration:
 
 
 def test_the_nodes_we_run() -> None:
-    """A node moves from the second list to the first with the rows a run read on it, and the acceptance tests below
-    then hold its log."""
-    assert READ == ["rtx-pro-6000-server-x8"] and UNREAD == ["h200-sxm-141gb-x1"]
+    """Each states its host's DRAM and disks, so the acceptance tests below hold each one's log."""
+    assert nodes.kinds() == READ == ["h200-sxm-141gb-x1", "rtx-pro-6000-server-x8"]
 
 
 @pytest.mark.parametrize("kind", nodes.kinds())
@@ -69,17 +72,33 @@ def test_a_node_file_states_what_no_card_does(kind: str) -> None:
 
 @pytest.mark.parametrize("kind", nodes.kinds())
 def test_every_number_is_sourced_as_a_cards_is(kind: str) -> None:
-    """The cards' rules: a mark and a source on every number, evidence cited by its `art:` id and a node by its kind,
-    never by a run id or a host name, and a measurement citing the record of the run that measured it."""
+    """The cards' rules: a mark and a source on every number, evidence cited by its `art:` id, never by a run id, and
+    a measurement citing the record of what measured it."""
     numbers = entries(nodes.load(kind))
     assert all(e["mark"] in MARKS and e["source"].strip() for e in numbers.values())
     text = (nodes.NODES / f"{kind}.toml").read_text(encoding="utf-8")
-    assert not re.findall(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b|\bvy-[a-z0-9-]+", text), \
-        "cite the run's record (`research data show RUN`: outputs.run_record) as art:<12 hex>, and name the node by its kind"
+    assert not re.findall(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b", text), \
+        "cite the run's record (`research data show RUN`: outputs.run_record) as art:<12 hex>"
     uncited = sorted(key for key, e in numbers.items()
                      if e["mark"] == "measurement" and not re.search(r"\bart:[0-9a-f]{12}", e["source"]))
-    assert not uncited, (f"{kind}: marked `measurement` with no run cited: {uncited}; add the record of the run that "
-                         "measured each to its source as art:<12 hex>, or leave the leaf out until a run reads it")
+    assert not uncited, (f"{kind}: marked `measurement` with no record cited: {uncited}; add the record of the run "
+                         "or the read that measured each to its source as art:<12 hex>, or leave the leaf out until "
+                         "one reads it")
+
+
+@pytest.mark.parametrize("kind", nodes.kinds())
+def test_a_node_file_names_no_machine_address_or_provider(kind: str) -> None:
+    """The node files are in the public tree, and a kind of node is not a machine: a file says "a VM of this kind" and
+    "the node", and cites what read it by its `art:` id."""
+    text = (nodes.NODES / f"{kind}.toml").read_text(encoding="utf-8")
+    assert not NAMED.findall(text), (f"{kind}.toml names {sorted(set(NAMED.findall(text)))}; name the node by its "
+                                     "kind and the read by its art:<12 hex>, and leave the machine, its address and "
+                                     "its provider out")
+
+
+@pytest.mark.parametrize("text", ["read on vy-example-9", "computeinstance-e00example", "ssh 192.0.2.7", "a Nebius VM"])
+def test_what_a_node_file_never_holds_is_matched(text: str) -> None:
+    assert NAMED.search(text)
 
 
 @pytest.mark.parametrize("kind", READ)
@@ -112,20 +131,12 @@ def test_onsite_refuses_a_nodes_log_until_a_challenger_is_registered(kind: str) 
         log_of(kind, "remote"), auditor()).units
 
 
-@pytest.mark.parametrize("kind", UNREAD)
-@pytest.mark.parametrize("composite", ["remote", "onsite"])
-def test_a_node_whose_host_no_run_has_read_gives_no_entry(kind: str, composite: str) -> None:
-    """Its file states the card, the count and the host card. An entry of those alone would pass `check` for `remote`
-    with a host holding no DRAM and no disk, so the builder refuses it and says what to read."""
-    assert not nodes.load(kind).get("memory")
-    with pytest.raises(Malformed, match="no dram and no disk leaf.*lsmem -b --summary=only; lsblk -b -d -n -o NAME,SIZE"):
-        log_of(kind, composite)
-
-
 def test_the_quoted_bytes() -> None:
-    """The eight-card node's tiers, so a changed entry is a changed number here."""
+    """Each node's tiers, so a changed entry is a changed number here."""
     assert check(log_of("rtx-pro-6000-server-x8", "remote"), auditor()).tiers(HOST) == {
         "hbm": 8 * 103_079_215_104, "dram": 1_872_605_741_056, "disk": 274_877_906_944 + 1_048_576 + 5_991_479_377_920}
+    assert check(log_of("h200-sxm-141gb-x1", "remote"), auditor()).tiers(HOST) == {
+        "hbm": 151_397_597_184, "dram": 214_748_364_800, "disk": 274_877_906_944 + 1_048_576 + 499_289_948_160}
 
 
 def test_an_unknown_node_names_the_nodes() -> None:
@@ -159,3 +170,22 @@ def test_a_node_file_within_the_rules_loads(tmp_path, monkeypatch) -> None:
     (tmp_path / "x.toml").write_text(f'node = "x"\n{DEVICE}{HOST_TABLE}', encoding="utf-8")
     monkeypatch.setattr(nodes, "NODES", tmp_path)
     assert nodes.load("x")["device"]["count"]["value"] == 2 and nodes.kinds() == ["x"]
+
+
+DRAM = '[memory.dram]\ntier = "dram"\nbytes = { value = 1, unit = "B", mark = "measurement", source = "s (art:0123456789ab)" }\n'
+
+
+@pytest.mark.parametrize(("leaves", "refusal"), [
+    ("", "no dram and no disk leaf.*lsmem -b --summary=only; lsblk -b -d -n -o NAME,SIZE"),
+    (DRAM, "no disk leaf"),
+])
+@pytest.mark.parametrize("composite", ["remote", "onsite"])
+def test_a_node_file_without_its_hosts_memory_gives_no_entry(tmp_path, monkeypatch, composite: str, leaves: str,
+                                                             refusal: str) -> None:
+    """A file may state the card, the count and the host card alone, before anything has read its host: it loads. An
+    entry of it would pass `check` for `remote` with a host holding less than the node has, so the builder refuses it
+    and says what to read."""
+    (tmp_path / "x.toml").write_text(f'node = "x"\n{DEVICE}{HOST_TABLE}{leaves}', encoding="utf-8")
+    monkeypatch.setattr(nodes, "NODES", tmp_path)
+    with pytest.raises(Malformed, match=refusal):
+        log_of("x", composite)

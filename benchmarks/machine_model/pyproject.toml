@@ -26,5 +26,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # for each of), the perplexity arms the designs name, the README, which holds no table (`machine-model render` prints
 # them), and the Lean sheets `machine-model sheet --lean` prints. θ and the opcode table read the card files through
 # `verity.hardware.cards`, which the workspace environment brings.
-inputs = ["benchmarks/ppl/specs", "benchmarks/pouw/machine_model/README.md", "security/Definitions/Accounting/Sheets",
+inputs = ["benchmarks/ppl/specs", "benchmarks/machine_model/README.md", "security/Definitions/Accounting/Sheets",
           "verity/__init__.py", "verity/errors.py", "verity/hardware/__init__.py", "verity/hardware/cards"]
