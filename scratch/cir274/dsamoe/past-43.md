@@ -225,7 +225,7 @@ Its value check at 86 ids, 4 layers [ran, `r20261113-060524-d1f6`]: 134 of 135 t
 are member-slowest. With the stand-in taught the form's order (scratch only, `p3_bgform.py`), the same window (`c08b1dd17424ad2d…`)
 checks clean: 135 templates, 46,671 units checked, 0 mismatches, none undeclared, 7.8 GiB at peak
 (`r20261113-070239-36f1`) [ran]. So the form computes what the tree's lowering does at 86 ids; landing it would also change
-that stand-in, in `node_window_values.py` (DENSE's, not REQBLOCK's) [inferred].
+that stand-in, in `node_window_values.py`, a file the brief does not reserve [inferred].
 
 The alternative is a frame change: `_whole` gathering the mixed members by one step per template. That is REQBLOCK's file.
 
