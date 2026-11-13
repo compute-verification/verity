@@ -30,8 +30,9 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.certifier.verifier.warden`, the network certifier
   as a relay in front of any TCP server and checks what it published offline: `serve` releases only the egress
   record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
-  `connection_rows_run.py` is a run's connection rows (`--lengths 1 [--content P,O,ROWS ...]`: the schedule's flags,
-  the publisher's keep of each execution phase's tables, their check, and `cost`, which measures a close);
+  `connection_rows_run.py` is a run's connection rows (`--lengths 1|2 [--content P,O,ROWS ...]`: the schedule's flags,
+  the publisher's keep of each execution phase's tables, or under `--lengths 2` of the network certifier's word that
+  it has none, their check, and `cost`, which measures a close);
   `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
   system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean ZK server
@@ -121,17 +122,21 @@ admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` 
 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
 form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted, every
-request of the audited window is a certified one inside that execution phase, and the Lean check accepts; beside that
-answer goes
-its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window). Only the protocol
+request of the audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
+`case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window), is witness, as every
+case's evidence and params are: it is kept in the serve dir's `private/pieces/certifier` (0700, the file 0600) and is
+never in the piece's directory, which the run publishes. The certificates of its evidence, the link-window's three
+records' and its two row registrations', which the network certifier signed where the check accepts them, are
+published beside the answer as `certificates.json`, each certificate with its own fields alone. Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
 profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
 on the developer's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
-does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers):
-report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
-bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory. Split in two around V3c
+does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
+other keys and the steps' summaries count the window's requests and outputs and the advice's bits, and the scan's
+answers are the case's evidence less its certificates. The leak guard (`--public`) moves any file the piece doesn't
+declare out of its directory. Split in two around V3c
 (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window
 (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
 consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
