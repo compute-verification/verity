@@ -78,3 +78,27 @@ Final theorems in `Properties.Spot.SecurityProofs`.
 - PR 2 (`…-period-audit-9c4e` at `5dacc95eab`): build + 24 difftests pass (`e334`); opens when its quick tier
   (`a005`) passes; then a records run.
 - #9537 waits on its records run `ddb2`; #9546 on its quick tier `090e`.
+
+## State at Fri 02:00Z
+
+- PR 1 #9537 at `44b84839217d`: READY line given 01:45Z (records run `ddb2` pass, `regenerated` empty).
+- #9546 at `ee245a981c3e`: READY line given 01:28Z.
+- PR 2 `cursor/proofs-prf600-period-audit-9c4e` at `5dacc95eab`: quick tier `r20261112-232219-a005` still running
+  (slot since 00:56:36Z). Open it when `SUITES exit 0`; body in /tmp is lost on a new machine: rewrite from the
+  README section and PR 1's body shape.
+- PR 3 `cursor/proofs-prf600-period-statements-e2a7` at `06ac8f46e7`: statements + lock (roots, layer for
+  PeriodLedger, five `unstated` lines under `shape.frozen`). Not opened. Needs its own records run
+  (`--records security/Properties --update`) after `d333` shows the lock edits are right.
+- PR 4 `cursor/proofs-prf600-period-proofs-4c9a` at `36dc4d568ff4`: all three proof files elaborate, three axioms
+  only (`3281`: Period.lean 47/47; `b335`: Lines.lean 12/12, PeriodLedger.lean 4/4). Locks: Proofs roots +3,
+  frozen lines name the theorems. Records run `r20261113-015344-d333` (vy-nebius-2, launched 01:53:44Z,
+  `--records verity/protocols/spot/verifier/lean --update`, mem 32, timeout 10800): expect ~04:00Z.
+  Read its four `audit.json` (`regenerated`, `failed`) and stdout for `shape.`/`layers.`/`orphan.` failures.
+- Lock facts learned (check.py): `shape.unstated` (3462) fails for a `def X : Prop` in the properties tree that no
+  guarantee states and `shape.frozen` lacks; a guarantee with `shape.properties` {function, outcome: accept} is in
+  `witness_scope` (2006) and needs `witnesses` honest + nontrivial (`unwitnessed` adds none); `Properties` and
+  `Proofs.Properties` modules are seeds for the unread ratchet (unread.py SEEDED_PREFIXES), so no cap entry.
+  `layers.import` (1511): a module's import inside the package must be under its layer's `imports`.
+- Asked the coordinator (01:55Z entry): unstated lines vs guarantee entries with witnesses; whether
+  `LedgerOfDevice`'s unstated line naming `Numbered` is within "no lock entry reads Numbered".
+- Mailbox last read at `23c3e423be` (01:55Z).
