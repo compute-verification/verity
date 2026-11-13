@@ -124204,3 +124204,49 @@ To soundness (PRF-490), three lines:
 - The twin's row for the link-first refusal waits on soundness merging `1ca22d7e7e`. Your note on the twin branch (`af8682dc824e`, keep both paragraphs) is taken; `338c4ad877` already holds that resolution.
 
 I go on with the two records runs and the tier. If nothing is left to write when I reach them, I checkpoint and end the turn with one timer.
+
+## SESSIONOF, Fri 06:08Z: ALL THREE FILES COMPILE, each with its dependencies built, no thread failure and no watchdog kill, with no `ulimit -Sv` in the job: `ParamsProgram.lean` and `AcceptedChecks.lean` at `826344e2c7` (`r20261113-051428-7214`), `MemberChecks.lean` at `98ba037e04` (`r20261113-051449-dfaa`); ACCEPTS, merge `98ba037e04`; the partition congruence is mine and I start it now
+
+For INF-786: yes, each try built its dependencies and gave its file a verdict. `r20261113-051428-7214`: "Build completed successfully (10616 jobs)." then "lean-try: security/Proofs/Properties/Verity/Sampled/ParamsProgram.lean: lean exit 0 in 402 s" and "lean-try: security/Proofs/Properties/Verity/Sampled/ParamsProgram.lean: axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"; "Build completed successfully (10885 jobs)." then "lean-try: security/Proofs/Properties/Verity/Sampled/AcceptedChecks.lean: lean exit 0 in 1329 s" and "lean-try: security/Proofs/Properties/Verity/Sampled/AcceptedChecks.lean: axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". `r20261113-051449-dfaa`: "Build completed successfully (11590 jobs)." then "lean-try: security/Proofs/Properties/Verity/SampledTwo/MemberChecks.lean: lean exit 0 in 2127 s" and "lean-try: security/Proofs/Properties/Verity/SampledTwo/MemberChecks.lean: axiom probe: none of its 11 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". Neither log holds "failed to create thread" or a watchdog line [run].
+
+In plain words. Everything I had written has now compiled. The verifier's program is read back from the parameters without a hypothesis, the accepted-checks theorem no longer takes the descriptor as a hypothesis, and the per-member lemma holds as stated at 04:24Z. The jobs that died on cpu-9 ran this time without my address-space limit and built everything. That fits the limit being the cause, but it is not a controlled test, because the node changed too (see below). The base of my first branch moved and I have not merged it yet. Next I write the partition lemma you handed me at 05:55Z.
+
+**What compiled** [run]
+
+| Run (vy-nebius-2, rc 0) | Head | File | Verdict |
+|---|---|---|---|
+| `r20261113-051428-7214` | `cursor/proofs-sessionof-5c1e` `826344e2c7` | `Sampled/ParamsProgram.lean` | lean exit 0; 5 theorems, three axioms only: `paramsParsed_program`, `paramsOfJson_program`, `zkParams_program`, `params_program`, `params_desc` |
+| same | same | `Sampled/AcceptedChecks.lean` | lean exit 0; 8 theorems, three axioms only; `sessionChecks_of_verdict` among them, now without `hdesc` |
+| `r20261113-051449-dfaa` | `cursor/proofs-sessionof-9b17` `98ba037e04` | `SampledTwo/MemberChecks.lean` | lean exit 0; 11 theorems, three axioms only; `memberSession_checks` and `memberSession_ok` among them |
+
+- `SessionOf.lean` was built as a dependency of `AcceptedChecks.lean` in `7214` ("Built Proofs.Properties.Verity.Sampled.SessionOf"), not probed there [run]; it was probed in an earlier run of mine.
+- The times are from the try's start, dependencies included [read: `lean_changed.py`], so they say nothing about one proof's cost.
+- Warnings, no errors [run]: `ParamsProgram.lean` 109 and 113 (`intros` and `cases hq` do nothing) and `MemberChecks.lean` 272, 281 and 283 (three tactics after `<;>` that are never reached). They are dead tactic lines, not gaps. I remove them in the next commit of each file.
+- Memory: the pod's sampled peak was 13.0 GB during `7214` and 20.9 GB during `dfaa` [run: `failure.json`, the pod's shared group, so an upper bound on mine]. Both asked `--mem-gb 24`. I keep 24.
+
+**Was the cpu-9 failure my `ulimit -Sv`?** Most likely yes; not proved.
+- With the cap, on cpu-9: `8403` and `b01d` both died in the dependency build with "failed to create thread: Resource temporarily unavailable" [run, 04:2xZ].
+- Without the cap, on vy-nebius-2: the same two jobs built 10616, 10885 and 11590 targets with no such line [run].
+- Two things changed between them, the cap and the node. No run of mine tried cpu-9 without the cap or vy-nebius-2 with it [derived]. The mechanism is the usual one: under an address-space limit a thread's stack cannot be mapped and `pthread_create` returns exactly that error [guess: not read in Lean's source].
+- If infra wants it settled, one small job on cpu-9 with and without the cap would do it. I have not sent it; say so and I will.
+
+**MERGE.** ACCEPTS / ASSEMBLY: `cursor/proofs-sessionof-9b17` at `98ba037e04` compiles on its base (`cursor/proofs-accepts-7d08` at `d169ce4c52`). It adds one file and one lakefile root. It has NO lock root yet (lean's rule, your 05:49Z): I append `Proofs.Properties.Verity.SampledTwo.MemberChecks` in the next commit, with the partition work. If you would rather merge now, take `98ba037e04` and add that root on the join.
+
+**Not merged: the moved base.** `cursor/soundness-prf579-8fb2` went from `871ab913c3` to `d2a507cb1b` (two merges of `main`, 05:12Z and 05:38Z, then a lock regeneration at 05:58Z) [run: `git log`]. `826344e2c7` is on the old one. Across the move `paramsParsed` is unchanged and `Spot/OneStage.lean` only gains `ranOut` [read: the diff]; `Slots.Layout` was renamed `SlotOrder` and `Core.Draw` `SamplingDesign`, which my four files may name. I merge it, mend any renamed name, add the four lock roots (`SessionOf`, `AcceptedChecks`, `ParamsProgram`, `ZkHiddenM1P`), and send one try. Until then "compiles" above means on the old base.
+
+**The partition congruence (your 05:55Z).** I take it. What I know so far [read]:
+- `SessionMatch` is read in three files only: `Sampled/Record/Session.lean` (its definition and the four theorems under it), `Sampled/Record/Accepts.lean` (`ins_sess` builds it) and my `MemberChecks.lean`. The join's `SessionMatches`, with an s, is `StageAlone`'s own and unrelated. The three files are byte-identical on `main`, both bases and the join, so the change is independent of the base.
+- MESSAGES wrote none of it (its 05:57Z entry, item 5: "I found none ... I hand the question back"), so nothing is written twice.
+- I have not yet read RecVStar's `checkStmt` at `inner = none`. I read it first and say in the next entry.
+- It goes on `-9b17`, which is the branch the join takes, as a new file that `Record/Session.lean` imports.
+
+**STOP RULE.** Nothing done yet. The partition work WILL change a statement on the base: `SessionMatch.partition` from equality to "equal or the same up to tree shape". It changes no listed guarantee, no lock record's statement that I know of, and nothing the verifier accepts; I give the exact before and after, and each site that builds a `SessionMatch`, in the entry that pushes it.
+
+**NEEDS.** None.
+
+**To post.** For INF-786: "proofs' two jobs that died on cpu-9 with 'failed to create thread' (`8403`, `b01d`) carried the job's own `ulimit -Sv 48000000`. Sent again without it on vy-nebius-2 (`r20261113-051428-7214`, `r20261113-051449-dfaa`), both built their dependencies and ended rc 0. Most likely the cap; not a controlled test, since the node changed as well."
+
+**Not established:** that the cap caused the thread failure (the node changed too); that my four files of `-5c1e` build on the moved base; the partition congruence, which is unwritten; that RecVStar's `checkStmt` leaves the partition unread at `inner = none`; `ReadsBack` and the reference's shape, which stay hypotheses of `memberSession_ok`.
+
+**Not mine, acted on in no way:** some twenty-five coordinator timers that fired here between 05:20Z and 05:23Z.
+
