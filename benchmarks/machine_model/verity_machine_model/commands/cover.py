@@ -1,11 +1,11 @@
 """machine-model cover [--card sm_NN] [--holes|--check]
-                                          the opcode table (data/cover/): each opcode of NVIDIA's family tables and
-                                          the SASS corpus on the H200 and the RTX PRO 6000, its ACCEL op (Accel.Op,
-                                          or a proposed one) and pipe, units, rate against ρ, mark, argument
-                                          and source; the counts by mark (opcodes, corpus forms, corpus instructions),
-                                          with the proposed entries and on Accel.Op alone, the rows resting on proposed
-                                          entries, and every hole with its severity; --holes prints the counts and holes
-                                          only; --check prints what fails the table and exits 1 if anything does"""
+                                          the opcode table (data/cover/): each opcode of NVIDIA's family tables and the
+                                          SASS corpus on the H200 and the RTX PRO 6000, its ACCEL op (Accel.Opcode, or a
+                                          proposed one) and pipe, units, rate against ρ, mark, argument and source; the
+                                          counts by mark (opcodes, corpus forms, corpus instructions), with the proposed
+                                          entries and on Accel.Opcode alone, the rows resting on proposed entries, and
+                                          every hole with its severity; --holes prints the counts and holes only;
+                                          --check prints what fails the table and exits 1 if anything does"""
 from __future__ import annotations
 
 import argparse
@@ -75,7 +75,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"The ACCEL ops: {c.envelope['source']}: {accel}; proposed: {', '.join(new)} (data/cover/envelope.toml)")
     for dev in devs:
         print(f"{dev}: {_counts(c, dev, True)}")
-        print(f"{dev} on Accel.Op alone (a row resting on a proposed entry a hole): {_counts(c, dev, False)}")
+        print(f"{dev} on Accel.Opcode alone (a row resting on a proposed entry a hole): {_counts(c, dev, False)}")
     print("\nRows resting on a proposed entry:")
     for r in c.rows:
         if r.mark in C.DOMINATED and (rests := C.rests_on(c, r)) and any(d in r.devices for d in devs):

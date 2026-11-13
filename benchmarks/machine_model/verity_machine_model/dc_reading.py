@@ -71,7 +71,8 @@ from verity_machine_model.lean_headline import Q, exact
 from verity_machine_model.model import device
 
 #: What other files read of it: `verity_machine_model.lean_headline_dc`, which writes the readings as Lean and also
-#: takes the private `_Exact` and `_and`.
+#: takes the private `_Exact` and `_and`, and two tests in `benchmarks/pouw/tests/` (the data-centre exporter's and
+#: the census cover's).
 __all__ = ["CATCH_ALL", "CATCH_ALLS", "EPS_DEN", "FAMILIES", "JOINT_ISSUE", "SCALAR_REF", "SM90", "Family", "Reading",
            "reading"]
 
