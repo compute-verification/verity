@@ -24,8 +24,8 @@ import replay as RP
 import replay_input as RI
 import replay_vectors as RV
 
-from verity.protocols.certifier.verifier import compile_slice as CS
-from verity.protocols.certifier.prover import cache_step_v3 as V3S, compile_slice_v4 as V4
+from verity.protocols.accounting.certifier.verifier import compile_slice as CS
+from verity.protocols.accounting.certifier.prover import cache_step_v3 as V3S, compile_slice_v4 as V4
 
 
 def trace_of(path: Path) -> tuple[RP.Trace, dict[int, tuple[int, ...]]]:

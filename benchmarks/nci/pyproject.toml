@@ -19,7 +19,7 @@ inputs = [
   "verity/circuits/ops/boolean/gemm.py",
   # tiers.CARD pins the ACCEL model's sm_120 card table, and CREDITED_CLOCK_HZ PoUW's H1 record (test_tiers.py)
   "security/Definitions/Core/Accel/Sm120.lean",
-  "verity/protocols/pouw/prover/circuit/h1device.py",
+  "verity/protocols/accounting/pouw/prover/circuit/h1device.py",
   # the slowdown D is the slowdown calculator's (statement.py, fit.py, imported by path)
   "benchmarks/rho/rho/__init__.py",
   "benchmarks/rho/rho/theorem.py",
@@ -31,5 +31,5 @@ inputs = [
   "verity/__init__.py",
   "verity/errors.py",
   "verity/protocols/reporting.py",
-  "verity/protocols/spot/verifier/profile.py",
-          "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/circuits/ops/__init__.py", "verity/protocols/inference_only/__init__.py", "verity/protocols/pouw/__init__.py", "verity/protocols/spot/__init__.py", "verity/circuits/ops/boolean/__init__.py", "benchmarks/rho/__init__.py", "verity/protocols/pouw/prover/__init__.py", "verity/protocols/spot/verifier/__init__.py", "verity/protocols/pouw/prover/circuit/__init__.py"]
+  "verity/protocols/proofs/spot/verifier/profile.py",
+          "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/circuits/ops/__init__.py", "verity/protocols/policy/inference_only/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/circuits/ops/boolean/__init__.py", "benchmarks/rho/__init__.py", "verity/protocols/accounting/pouw/prover/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/accounting/pouw/prover/circuit/__init__.py"]

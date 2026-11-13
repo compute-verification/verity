@@ -11,8 +11,8 @@ import leaf as RN
 import numpy as np
 import pytest
 
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.pouw.verifier import leaf_lanes as LL
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 
 U = RN.U
 

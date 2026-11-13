@@ -359,8 +359,8 @@ if [ -n "$GO" ] && [ -s "$P/verify.json" ]; then
   t=$(date +%s)
   LX=${PEARLPLUS_LEAN_EXE:-}
   if [ -z "$LX" ]; then
-    LX=$TREE/verity/protocols/pouw/verifier/lean/pearlplus/.lake/build/bin/pouw-pearlplus
-    (cd verity/protocols/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
+    LX=$TREE/verity/protocols/accounting/pouw/verifier/lean/pearlplus/.lake/build/bin/pouw-pearlplus
+    (cd verity/protocols/accounting/pouw/verifier/lean/pearlplus && lake build pouw-pearlplus) > "$Q/pouw-pearlplus-build.log" 2>&1 || {
       say "lean: pouw-pearlplus doesn't build (its log in the serve dir's private/pearlplus), so no Lean answer is written"
       LX=; }
   fi
