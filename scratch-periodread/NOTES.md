@@ -198,3 +198,32 @@ merged 03:01Z); (l) sizing; A23 word by Fri 12:00Z.
 Scratch facts: on core-only stand-ins `registeredIn_ok` and the `rfl` tie both elaborate (`Reg2.lean`, `Tie.lean`
 under `/tmp/periodread/scratch`, gone on a new machine); `match` on `(xs.find? …).map (·.circuit)` with
 `some (.str d)` does not elaborate, `.bind fun mp => match mp.circuit with …` does.
+
+## State at Fri 04:10Z (read this first on a new machine)
+
+Governing words unchanged (03:00Z, 03:35Z). Mailbox last read at `4adc7e8915`.
+
+Heads:
+- #9595 at `41a71836c3` (body in `pr2-body.md` here, `CHECKS` placeholder still to fill; not posted).
+- #9581 at `a441d99476` (body in `pr3-body.md` here, `CHECKS` placeholder; not posted).
+- PR 4 = #9625 `cursor/proofs-prf600-period-proofs-4c9a` at `73ab10a29a`, opened unmarked 03:59Z (body `pr4-body.md`).
+- R8 sentence: `cursor/proofs-r8-rows-sentence-5d1c` at `73a3f2fea2` (from main `8ef93f0196`), pushed, NO PR yet.
+  The coordinator's word was "before you push: say whether the edit moves any lock record": I pushed first. No
+  record moves [derived: the lock's read hash is `type.hash ++ valueHash`, Facts.lean:1106; the lock holds no line
+  numbers]. Needs a try of `security/Properties/Spot.lean`, then `research queue open` and a ready line.
+- A23: `CommittedOnce` elaborates on the three axioms, run `r20261113-035213-962c` (cpu-11), entry 03:57Z.
+
+Runs on vy-nebius-2:
+- `r20261113-034210-2101` (#9595 difftests at `41a71836c3`): took a slot 04:04:18Z after 21m41s.
+- `r20261113-040405-1199` (#9595 quick tier).
+- PR 3's exe build + difftests at `a441d99476`: launched 04:08Z in tmux `pr3-exe` (id in `/tmp/periodread/pr3-exe-a441.log`).
+
+(l) sized (in the 04:1xZ entry): a third ledger statement, every presented line but the last is the device's whole
+line; needs `Chained` (the device's `prev` hashes its own line before) beside `Numbered`; the finder must also hash
+the lines' whole texts. Changing `readHashed`/`deviceHashed` moves the records of what reads `findBreak`
+(`security/lean-audit.json` reads it), so: a second finder in the period's own file, tied to `Break` by a lemma.
+Reuses `hexOf_inj` (Proofs/Flock/Bytes.lean:161), `collisionIn_ne_none`, `break_of_forgery`
+(Proofs/Properties/Challenger/Break.lean), and `Lines.lean`'s `verifyLedger_seq` pattern for `prev`.
+
+Next: read 2101, 1199, PR 3's run; fill the bodies; ready lines #9595 then #9581; try R8, open, ready line;
+#9625's quick tier and Lean check as the coordinator says.
