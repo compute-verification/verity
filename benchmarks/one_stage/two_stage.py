@@ -974,10 +974,9 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     its layout's and no order of the directories or word of a ``commit.json`` moves it. A class with no
     layout has no place, and two directories of one place would be one class sampled twice: either refuses the whole
     window before any session opens (`_unopened`). A stop class's stop blocks are a rank more of the session
-    (`stop_first`), at their own place, planned
-    with the class's own and sampled on the class's thread after its first stage: its ``stop``. Once the session has
-    closed, each stop sample's order is read from the challenger's signed log (`stop_order`), and a window where one
-    does not hold is refused whole."""
+    (`stop_first`), at their own place, planned with the class's own and sampled on the class's thread after its first
+    stage: its ``stop``. Once the session has closed, each stop sample's order is read from the challenger's signed log
+    (`stop_order`), and a window where one does not hold is refused whole."""
     import a5_coins as AC
 
     root = pubs[0]["run"]
