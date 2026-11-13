@@ -156,6 +156,34 @@ def test_a_role_two_pins_carry_is_refused_with_both_revisions(tmp_path) -> None:
     assert prof.checkpoint_for("ROLE_Y", m) == dict(second, role="ROLE_Y")
 
 
+def test_a_fixed_case_whose_repo_is_pinned_at_two_revisions_is_refused_with_both(tmp_path) -> None:
+    """A fixed case reads its checkpoint by repo.  Pins of that repo whose revisions differ are refused, each named by its
+    revision's first twelve characters, where the later pin's snapshot would have been served.  The second pin's own role still
+    resolves, two pins at one revision resolve to the later as before, and another repo at two revisions refuses no fixed case."""
+    import json
+
+    from verity_vllm.engine import engine_profile as prof
+
+    repo = prof.CASES["B0"]["repo"]
+    for name in ("first", "second", "other"):
+        (tmp_path / name).mkdir()
+    first = {"repo": repo, "role": "B0", "revision": "9535bd9b1d1d" + "0" * 28, "downloaded": True,
+             "local_path": str(tmp_path / "first")}
+    second = dict(first, role="B0_NEXT", revision="4e20de362430" + "1" * 28, local_path=str(tmp_path / "second"))
+    (m := tmp_path / "checkpoints.json").write_text(json.dumps({"checkpoints": [first, second]}))
+    with pytest.raises(SystemExit) as refused:
+        prof.checkpoint_for("B0", m)
+    assert str(refused.value) == (f"case 'B0': 2 pins of {repo} differ in revision (9535bd9b1d1d, 4e20de362430); a fixed case "
+                                  "reads its checkpoint by repo, so the manifest pins one revision of that repo")
+    assert prof.checkpoint_for("B0_NEXT", m) == second
+    same = dict(second, revision=first["revision"])
+    m.write_text(json.dumps({"checkpoints": [first, same]}))
+    assert prof.checkpoint_for("B0", m) == same
+    other = {"repo": "org/other", "role": "OTHER", "revision": "a" * 40, "downloaded": True, "local_path": str(tmp_path / "other")}
+    m.write_text(json.dumps({"checkpoints": [first, other, dict(other, role="OTHER_NEXT", revision="b" * 40)]}))
+    assert prof.checkpoint_for("B0", m) == first
+
+
 def test_serving_and_the_build_put_a_shared_expert_on_one_stream() -> None:
     """A Build orders a shared expert on the main stream, so a served run must run it there too: on two streams, its log's order
     is not the execution order the fold takes it to be."""

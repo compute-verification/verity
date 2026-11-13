@@ -60,7 +60,15 @@ def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:
 
 def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
     if case in CASES:
-        cp = load_checkpoints(checkpoints_path)[CASES[case]["repo"]]
+        repo = CASES[case]["repo"]
+        cp = load_checkpoints(checkpoints_path)[repo]
+        # read by repo, the later of two pins wins: a second revision of the case's repo would be served without a word.
+        # Pins at one revision (a repo under two roles) are one checkpoint and pass.
+        revisions = [str(c.get("revision")) for c in checkpoint_entries(checkpoints_path) if c.get("repo") == repo]
+        if len(set(revisions)) > 1:
+            raise SystemExit(f"case {case!r}: {len(revisions)} pins of {repo} differ in revision "
+                             f"({', '.join(r[:12] for r in revisions)}); a fixed case reads its checkpoint by repo, "
+                             "so the manifest pins one revision of that repo")
     else:
         # a role of the manifest (an entry added to `manifests/checkpoints.json` by hand, or by `fp8-checkpoint pin` or
         # `int8-checkpoint pin` for a recipe pin) carries `role == case`
