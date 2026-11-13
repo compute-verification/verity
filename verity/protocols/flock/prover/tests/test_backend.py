@@ -67,7 +67,7 @@ def test_a_spine_input_set_is_written_on_its_chain_and_refused_when_its_y_differ
     import json
 
     import numpy as np
-    from verity.definitions.silicon.cast import f32_to_bf16_word
+    from verity.circuits.silicon.cast import f32_to_bf16_word
 
     from verity_flock import instance_file
 
