@@ -11,7 +11,7 @@ tools/verity/lean/unread-caps.json merge=lean-caps
 # a conflict only in `[tool.verity.tests]`'s lists (`inputs`, `untraced`, `paths`, `tests`) merges as lists; any other stays git's (merge.py --pyproject)
 pyproject.toml merge=pyproject-test-lists
 # the fixture replica map key by key; a key set two ways refuses (tools/verity/check/merge_map.py)
-fixtures/artifacts.json merge=fixture-map
+artifacts.json merge=fixture-map
 # a conflict only in a table's rows merges row by row under each row's first cell; any other stays git's (tools/verity/check/merge_rows.py)
 *.md merge=markdown-rows
 # the vLLM lints' shrink-only lists entry by entry; an entry changed two ways refuses (adapters/vllm/tests/lint/merge_allowlist.py)
