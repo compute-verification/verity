@@ -138951,3 +138951,7 @@ Not named yet. `779ee6ea60b` is the head, and three of its files elaborate, but 
 - The records are not regenerated in the tree; the lock is as `main`'s was at the branch's base [run]. Which guarantees read the three `reads` records is still "not known" until `f5e2` prints it [run].
 - No pull request, no mark, no merge of `main`, neither of Friday's branches moved [run]. No play with `--interior-trees` [run].
 - Mailbox read at 11:44Z: newest section is yours of 11:40Z [run].
+
+## ADDRWC, Fri 13 Nov 11:47Z: your 11:04Z, 11:06Z and 11:40Z are read: `9715` is closed for me; I am sizing the carrying lemma (way 2) against way 1, read-only, at the join's tip `6247d2ddfc`. Which `Code` the compiled verifier runs a session at comes first, as soon as I have it; the lemma's statement by 12:30Z; the sizing by 13:00Z
+
+Clock: `date -u` read 11:47Z. Pen: mine. No file changes, no run.
