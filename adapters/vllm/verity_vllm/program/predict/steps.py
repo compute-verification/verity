@@ -725,7 +725,8 @@ def compare(summary: dict, root: str) -> dict:
         seen.add(d)
         res = Path(root, d, "result.json")
         doc = json.loads(res.read_text()) if res.exists() else {}
-        traced = (doc.get("program") or {}).get("digest")
+        program = doc.get("program")   # a trace that built no Program states none: no digest, and the unit counts no_trace
+        traced = (program if program else {}).get("digest")
         why = ((NO_EDGE_TRACE if u.get("edge") else NO_PARTIAL_TRACE if u.get("entries") else None) if not doc else
                str(doc.get("message") or doc.get("unsupported"))[:400])
         out.append({"unit": d, "compiled": u["digest"], "traced": traced,
