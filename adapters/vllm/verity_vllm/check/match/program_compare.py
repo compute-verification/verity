@@ -37,13 +37,9 @@ from typing import Any
 
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import split_selects
+from verity_vllm.check.match.instance_sequence import RootView
 
-# Imported from here by modules open PRs edit (tests/program/test_compact.py, tests/check/test_glm53_rank_rehearsal.py) and
-# by check/match/resolve_decomp.py, slated for deletion; they move to instance_sequence / program_loaders after those land.
-from verity_vllm.check.match.instance_sequence import (
-    RootView,
-    const_value,  # noqa: F401
-)
+# tests/program/test_compact.py and tests/check/test_glm53_rank_rehearsal.py read `LOAD_NOTES` through this module.
 from verity_vllm.check.match.program_loaders import (
     LOAD_NOTES,  # noqa: F401
     load_derived,

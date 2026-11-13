@@ -1,5 +1,6 @@
 """`program-compare`'s `main` run in process: the document it writes at `--out`, the brief it prints, and the padding audit of an
-unfolded side. The Programs are the two-rank toy's (`test_tp2_d90_fixture`): rank 0's fold and its rank Program."""
+unfolded side. The Programs are the two-rank toy's (`test_tp2_d90_fixture`): rank 0's fold and its rank Program.  Two parts of
+the module are held on values built by hand: the padding audit, and the window of a step's divergence report."""
 from __future__ import annotations
 
 import json
@@ -85,6 +86,15 @@ def test_unfolding_a_adds_its_padding_audit(tmp_path, capsys):
     assert doc["padding_audit_a"] == {"per_step": [{"step": 0, "muxes": 0}, {"step": 1, "muxes": 0}]}
 
 
+def test_the_padding_audit_is_of_the_unfolded_side(tmp_path, capsys, monkeypatch):
+    """Neither Program of the toy holds a mux, so the two sides' audits are the same rows; the view `main` hands the audit is told
+    here by its label."""
+    a, b = _dirs(tmp_path)
+    monkeypatch.setattr(PC, "audit_padding", lambda P: {"of": P.label})
+    doc, _brief, _ = _run(tmp_path, capsys, a=a, b=b, unfold_a=True, label_a="rank", label_b="fold")
+    assert doc["padding_audit_a"] == {"of": "rank"}
+
+
 def test_progressions_refuse_an_unfolded_side_before_a_directory_is_read(tmp_path):
     out = tmp_path / "match_compare.json"
     with pytest.raises(UsageError, match="compares without unfolding only"):
@@ -110,3 +120,19 @@ def test_the_padding_audit_counts_a_steps_muxes_their_live_bit_and_zero_row_and_
         {"step": 0, "muxes": 0},
         {"step": 1, "muxes": 3, "mux_kinds": {"SelectI32_v1": 1, "SelectBf16_v1{N=16}": 2}, "distinct_live_refs": 1, "distinct_zero_refs": 1,
          "guards_and_consts": {"I32Eq_v1": 1, "BitNot_v1": 1, "BitAnd_v1": 1}}]}
+
+
+
+def test_a_core_past_the_window_on_one_side_alone_is_reported_cut(monkeypatch):
+    """A step's two spec sequences differ between a common prefix and a common suffix.  The report matches at most a window of each
+    side's differing core, and says so by name when either core is longer, with both cores' lengths; its ranges stay in the whole
+    sequences' coordinates."""
+    monkeypatch.setattr(PC, "_DIVERGENCE_WINDOW", 4)
+    long, short = ["e", "a", "b", "c", "d", "f", "g", "t"], ["e", "x", "t"]
+    assert PC._divergence_report(long, short) == {
+        "ops": [("replace", 1, 5, 1, 2)],
+        "window": {"common_prefix": 1, "common_suffix": 1, "core_a": 6, "core_b": 1, "window": 4, "truncated": True}}
+    assert PC._divergence_report(short, long) == {
+        "ops": [("replace", 1, 2, 1, 5)],
+        "window": {"common_prefix": 1, "common_suffix": 1, "core_a": 1, "core_b": 6, "window": 4, "truncated": True}}
+    assert PC._divergence_report(["e", "a", "b", "c", "d", "t"], short) == {"ops": [("replace", 1, 5, 1, 2)]}   # a core of the window's length is whole
