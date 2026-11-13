@@ -4474,7 +4474,6 @@
     {"file": "verity/protocols/accounting/pouw/verifier/coins.py", "count": 2},
     {"file": "verity/protocols/accounting/pouw/verifier/core_check.py", "count": 135},
     {"file": "verity/protocols/accounting/pouw/verifier/credit.py", "count": 250},
-    {"file": "verity/protocols/accounting/pouw/verifier/dither/PROTOCOL.md", "count": 15},
     {"file": "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck.lean", "count": 1},
     {"file": "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/Check.lean", "count": 32},
     {"file": "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CommittedFiles.lean", "count": 1},
@@ -5423,6 +5422,7 @@
     {"file": "tests/import_order.toml", "count": 4},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu", "count": 5},
     {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cuh", "count": 13},
-    {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp", "count": 4}
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp", "count": 4},
+    {"file": "verity/protocols/experimental/dither/PROTOCOL.md", "count": 15}
   ]
 }
