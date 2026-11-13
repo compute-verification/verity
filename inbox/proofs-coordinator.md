@@ -118908,3 +118908,45 @@ Runs: this session launched none since 03:40Z. [run, at 03:45Z] `r20261113-03391
 To post: nothing.
 
 Not established: that anything of (b) compiles; findings 1 and 2 by a run (both are by reading); whether the small class's interior has two members; whether `stamped` and the second-stage statement check pass on an honest play once 1 and 2 are mended; the one-block, one-template accept; the `draw/0` point in 3.
+
+## TWOLEG, Fri 13 Nov 04:05Z: one session holds the pen; #9555's 38b7c6df38ba merged; a second emptiness in the form's last step, which (b) does not cure
+
+Lean-slot waits over 10 minutes: `r20261113-025634-a018` waited 02:56Z to 03:39Z (43 min) on vy-nebius-cpu-12 before its slot [run]; `r20261113-033911-de94` and `r20261113-034025-288d` waited 14 and 15 min unstarted on vy-nebius-2 and I cancelled them (their check never started) [run].
+
+One session holds the pen: this one, resumed at 03:55Z on a new machine; no timer of mine is live (the subscription list is empty) [run]. #9555 at `38b7c6df38ba` is merged into my work branch with no conflict (`cursor/proofs-twoleg-c5e5` at `d06ec7c3306d`, pushed) [run]. Since `df901c234fa4` it changes no Lean under the spot verifier, and `TRUSTED.sha256` still checks [run]. In plain words, the new finding is this. The form's last step checks the second stage's sample again, as an ordinary one-stage audit of the interior registration. That check takes its sampling law from the parameters, and its R1 forces that law to equal the interior record's law: a subset of all m inner blocks. The second stage's sample is a work law with one stratum a cell, and it proves fewer than all m inner blocks. The run of record holds the proved units to the second stage's sample, and the last step holds them to all m. No evidence satisfies both, so with the switch on the form accepts no play even once the coin evidence is cured [derived].
+
+**The finding, line by line** [read, derived]:
+- Run of record (`Run.interiorSteps`): `v := { v with law := subset m }`, then `Registration.check it.record v`, so the interior record's `law` must be `{"law":"subset","k":m}` (R1-law, `Registration.check` line 554). Its audit is over its own draw, `Select.selectSecond` under `Select.secondLaw` (`"work"`, one stratum a cell), and `checkProved` holds the evidence's `proved_units` to that draw's proved units. `secondProblem` refuses counts that prove every cell whole, so there are fewer than m.
+- The form's last step (`prepare`): `OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }`. `p.audit.base.verifier` is parsed from the same `interior.params` object as `p.interior` (`paramsOfJson`), and `OneStage.check` runs `Registration.check c₂.record v` on it, so `Draw.derive v.law` must be `subset m`. Then `Draw.checkDraw e.draw … law` refuses any draw whose `lawOf` is not `subset m` (code `law`), and `subset` needs `k = |units|` = m. `recordChecks`'s `proved` then wants all m units proved.
+- So the two hold one `proved_units` to m units and to fewer than m. The Python stream does not meet this, because `V.audit_record(ireg.record, …, second.draw, second.law, …)` takes the second stage's law as given. The form's reuse of `OneStage.checkAt`, which derives the law from the parameters, is where it parts.
+- Every theorem over the form's accept is therefore empty for a second reason, independent of the coin evidence: `Steps` (line 83), `SecondRead.checkAt_read` and what reads them.
+
+**(b)**: written, with a run launched behind it but no result yet. `inputOf` sets `key`, `main` and both families; `interiorUnshown` reads under the parameters' key and family on the interior audit's window; `Steps.interiorUnshown_roots` is restated; the form's docstring says the verifier's own copy of `main` as a parameter is the open fix. The work branch also has `sampled-two-on`, a test-only executable of `checkBlobsAtWith true` with its own `exempt` line in the lock. No party runs it, and the shipped `sampled-two` and `vstar-recursive` are untouched. #9574 (`cursor/proofs-twoleg-e0ff`) stays at `457a4837078c` (the `SampledTwoMain` `exempt` line, lean's item) until J1 and J2 compile the merge.
+**(c)**: no run, and blocked by the finding: no fixture can pass the last step as it stands. I won't spend a node cycle on generating the fixture until the last step is ruled on.
+**(d)**: no run. I'll start the order refusal and the `null` refusal now, since both only refuse more.
+**(c')**, before I build it [guess]: the 2^20 leaves cost key generation only. Checking the accept reads 20 auth-path hashes and about 530 SHA-512 chain steps per signature (W = 1), so the key's size is not what the kernel would pay. What it would pay is `membersRun`, a whole Flock session verification per inner block, by `decide` over SHA-512 and field arithmetic; I expect that out of reach. A smaller thing the kernel could decide: everything after `membersRun`, with its `Run` value from the fixture taken as the premise that Flock's own honest witness discharges. First I would measure one LMS verification at `Lms.deployed` by `decide` before promising any of it.
+
+**StageDraws** (one line): the `label = ℓ` half is mine and follows from the form once (b) sets `Run.Input.family` (the run's `coinsCode` and `drawCoins` refuse coins of another family); the `OneRoot ℓ after o.log` half is over the play's log, which the form does not read (it gives `FAMILY_ROOT` on the session the evidence's ledger opens), so it is HISTORY's, through `dev₂` and CUT's `PrintsInOrder` [derived]. To check [derived, unverified]: the driver names each stage's family `draw/0` (`a5_coins.family(rank)`), and the form does not refuse two equal labels, while `devSecond_stage` takes `ℓ₁ ≠ ℓ₂`. A refusal of equal labels would refuse more and nothing else; I can add it with (d) if you want it.
+**accepted_fits, stagesFit** (one line): neither has compiled anywhere yet. `r20261113-025634-a018` (tries at `b6d988648b2a`) is running on vy-nebius-cpu-12 and has no verdict; `r20261113-035641-a2e6` builds them at `d06ec7c3306d` and is waiting in line [run].
+
+### STOP RULE
+Before: the last step is `OneStage.checkAt p.audit.base c₂ (some ξ₂) {…}`, so the law is the interior parameters' law (subset m). After, as I propose: the same check of the interior audit's verdicts, coins (`coinsReason` at `ξ₂`) and records, with R1 at subset m as the run reads it, but the draw held to the second stage's law, the one the run of record derives (`Select.secondLaw sample ns ks`), and the bound under that law. The alternative is to drop the one-stage re-check and take the run of record's own interior audit, adding only `coinsWhy` at `ξ₂` and the bound. Either one changes the definition that every statement over the form's accept reads (mine, and what ASSEMBLY's join carries), so I make neither until you rule. The shipped check is unchanged by either while `FORM = false`.
+
+### NEEDS
+1. A ruling on the last step: the second stage's law in a check of the form's own (my proposal), or the run of record's interior audit in place of the one-stage re-check.
+2. For (c), once ruled: nothing more; the fixture is designed (two-stage small flow, one `Local` host at `lms.DEPLOYED` handed to both stages, `two_stage.py --challenger-host`, neither driver file touched).
+
+### Runs
+- `r20261113-035525-5af6`, vy-nebius-cpu-9 (`--on auto`), launched 03:55Z: builds `sampled-two` and `sampled-two-on` at `d06ec7c3306d`, runs the composition difftest, and times one `a5_coins.Local` key at W = 1, H = 20 over the node's cores [run: launched].
+- `r20261113-035641-a2e6`, vy-nebius-2 (proofs line), launched 03:56Z: `lean_changed.py --build` of the form, `SampledTwoOnMain` and the nine proof files at `d06ec7c3306d` [run: launched, waiting].
+- `r20261113-025634-a018`, vy-nebius-cpu-12: running since 03:39Z, stale head `b6d988648b2a` [run].
+- `r20261113-033911-de94` and `r20261113-034025-288d`: cancelled unstarted [run].
+- `aed4`, `3d06`, `9acd` and `c4f6` have not been reread since the machine change.
+
+### To post
+- Lean, soundness and ASSEMBLY: theorems over the form's accept are empty for a second reason, the last step's law (above), independent of #9555.
+
+### Not established
+- That J1 and J2 compile (b). The key's time at 2^20 leaves. That the proposed last step admits the honest play (that is (c)'s test). Whether `decide` can check one LMS verification at the deployed parameters.
+
+Heads: `cursor/proofs-twoleg-c5e5` at `d06ec7c3306d`, `cursor/proofs-twoleg-e0ff` (#9574) at `457a4837078c`. Nothing unpushed.
