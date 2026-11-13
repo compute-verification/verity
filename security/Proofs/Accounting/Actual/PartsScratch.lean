@@ -350,6 +350,35 @@ open Finset
 
 variable (S : Site)
 
+open Classical in
+/-- A node is its own place and its children's nodes. -/
+theorem under_eq (i : String) (hi : i ∈ S.places) :
+    S.under i = insert i ((S.places.filter (S.Child i)).biUnion S.under) := by
+  ext j
+  simp only [under, mem_filter, mem_insert, mem_biUnion]
+  constructor
+  · rintro ⟨hj, h⟩
+    rcases Relation.ReflTransGen.cases_head h with rfl | ⟨c, hc, hcj⟩
+    · exact Or.inl rfl
+    · have hcp : c ∈ S.places := by
+        obtain ⟨x, hx, hxc, -⟩ := hc
+        exact Finset.mem_insert_of_mem (List.mem_toFinset.2 (List.mem_map.2 ⟨x, hx, hxc⟩))
+      exact Or.inr ⟨c, ⟨hcp, hc⟩, hj, hcj⟩
+  · rintro (rfl | ⟨c, ⟨-, hc⟩, hj, hcj⟩)
+    · exact ⟨hi, Relation.ReflTransGen.refl⟩
+    · exact ⟨hj, Relation.ReflTransGen.head hc hcj⟩
+
+open Classical in
+/-- **A node's limit is at most its own place's and its children's, summed**: limits add over the parts of a node of
+the registered tree, at most. -/
+theorem egressLimit_le_parts (i : String) (hi : i ∈ S.places) :
+    S.egressLimit i ≤ Accounting.linkCapacity S.linkEnds S.linkβ {i} +
+      ∑ c ∈ S.places.filter (S.Child i), S.egressLimit c := by
+  unfold egressLimit
+  rw [S.under_eq i hi, Finset.insert_eq]
+  exact (Accounting.linkCapacity_union_le _ _ _ _).trans
+    (Nat.add_le_add_left (Accounting.linkCapacity_biUnion_le _ _ _ _) _)
+
 /-- **(2) at a node of the registered tree**: for node `i`, its prover places as the location and its certifiers
 (`certifiersOf`) as the certifiers, at the registered links. -/
 theorem leak_le_sum_K_registered {Ω : Type*} (i : String) (R : Ω → Accounting.Actual.Run S.Place)
