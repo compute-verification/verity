@@ -143,6 +143,20 @@ def test_proved_units_other_than_the_evidences_and_a_verdict_of_another_program_
                          f"\"{PARTITION['program']}\"")
 
 
+def test_a_statement_of_a_member_the_sample_missed_is_refused_before_any_session(tmp_path):
+    """A session proves the units of the sample that are its member's, so a statement of a member the sample holds no
+    unit of is a session that proves none: the run refuses it by the member's name before it reads a file or verifies
+    a session, the first such statement in the statements' order."""
+    w = Window(tmp_path)
+
+    def never(st):
+        raise AssertionError("a session was verified before the refusal")
+    missed = "the sample holds none of its units, and a member the sample missed has no statement"
+    assert w.run(never, evidence=w.evidence | {"proved_units": [0, 1]}) == (None, f"member {B}: {missed}")
+    assert w.run(never, evidence=w.evidence | {"proved_units": [3]}) == (None, f"member {A}: {missed}")
+    assert w.run(never, evidence=w.evidence | {"proved_units": []}) == (None, f"member {A}: {missed}")
+
+
 def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the_others_units(tmp_path):
     w = Window(tmp_path)
     run, refused = w.run(lambda st: accepting(st) if st.public.read_bytes().startswith(

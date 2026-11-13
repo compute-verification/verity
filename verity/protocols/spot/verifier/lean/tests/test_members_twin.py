@@ -3,7 +3,9 @@ form (`members.refusal`, the executable's ``refusal``) on a window of two member
 session opens one after another, each closed after its session's evidence.
 
 The files are stand-ins, so no session is accepted: an audit with nothing else wrong ends at its first session's
-verdict on both sides, and each other row changes one thing and reads Lean's reason off the twin. A case every session
+verdict on both sides, and each other row changes one thing and reads Lean's reason off the twin. Each member has a
+statement, so an audit's sample holds a unit of each (`Audit`'s `sampled`); where it misses one, both refuse that
+member's statement (`OneStageZk.sampledHeld`). A case every session
 accepts, which Lean refuses for its form alone (`members.ALL_PASSED`), is a whole audit's, which
 `benchmarks/one_stage` runs with the twin beside it.
 
@@ -62,16 +64,19 @@ class Audit:
     the order `opened`, each tree's link, its rounds and its closing round after its session's evidence (its record and
     one proof file) before the next tree's first round: the per-member parameters and evidence, and the files. Only
     the members of `closed` have their tree's closing round opened, and with `together` those rounds are opened after
-    every tree's other rounds."""
+    every tree's other rounds. The sample holds a unit of exactly the members of `sampled`: the challenger session is
+    one whose coins give such a sample."""
 
     def __init__(self, seed: str, ports: tuple[str, str] = (f"{A}/out", f"{B}/out"), opened: tuple[str, str] = (A, B),
-                 closed: tuple[str, ...] = (A, B), together: bool = False):
+                 closed: tuple[str, ...] = (A, B), together: bool = False, sampled: tuple[str, ...] = (A, B)):
         rng = random.Random(seed)
         s = self.s = Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
         self.rec = R.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
         ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
+        while {n for n in (A, B) if any(lo <= u < hi for u in DR.proved(sample) for lo, hi in UNITS[n])} != set(sampled):
+            ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
         self.files: dict[str, bytes] = {}
         sessions = {}
 
@@ -238,6 +243,19 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_sessions_trees(tmp
          evidence=a.proofs([first, {**last, "sessions": [{**s1, "record": elsewhere}]}]))
     same(a, "shared", f"two sessions' coins are one tree's: {Ch.SHARED_TREE}",
          evidence=a.proofs([first, {**last, "sessions": [{**s1, "record": s0["record"], "reps": s0["reps"]}]}]))
+
+
+def test_a_statement_of_a_member_the_sample_missed_is_refused_by_both_before_any_session(tmp_path):
+    """A window whose sample holds units of one member alone, audited with a statement of each member, each statement's
+    tree logged and closed: Lean refuses the other member's statement by its member's name (`OneStageZk.sampledHeld`),
+    after the trees, the members laid and the roots and before any member's file, and the twin answers the same,
+    whichever member the sample missed."""
+    for k, held, missed in (("second", (A,), B), ("first", (B,), A)):
+        a = Audit(f"members-twin-missed-{k}", sampled=held)
+        why, (run, refused) = a.ask(tmp_path / k)
+        assert run is None and why == M.run_reason(run, refused), (k, why, refused)
+        assert why == (f"proofs: member {missed}: the sample holds none of its units, and a member the sample missed "
+                       "has no statement")
 
 
 def test_the_one_row_run_here_where_the_twin_is_not_leans(tmp_path):
