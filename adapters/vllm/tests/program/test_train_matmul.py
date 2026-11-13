@@ -9,9 +9,9 @@ import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 from verity.circuits.boolean.trace import word_of
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import cublas_bf16 as CB
 
 from tests.program.test_train_step import CC, _bits, _data, _meta, _program
 from verity_vllm.program.frontend.derive_graph import derive_graph
@@ -139,7 +139,7 @@ def test_gpu_tf32_mm_is_cublas_tf32_gemm(monkeypatch) -> None:
     over a's rows, b row- or column-major (a rotation codec's y @ R and y @ R^T), and each word is the TF32 step's chain from +0
     (`mhc_twin.tf32_dot8`; checked at a stand-in shape, the captured ones being thousands of rows).  An operand that is not
     dense is refused with the capture it needs."""
-    from verity.definitions.numerics import mhc_twin as MT
+    from verity_vllm.definitions.numerics import mhc_twin as MT
 
     tf32 = training_rules(cc=CC, tf32=True)
     meta = [torch.empty(4096, 64, device="meta"), torch.empty(64, 64, device="meta")]

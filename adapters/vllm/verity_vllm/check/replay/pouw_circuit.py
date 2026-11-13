@@ -49,7 +49,7 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics.kernel_registry import Declined
+from verity_vllm.definitions.numerics.kernel_registry import Declined
 from verity.protocols.accounting.pouw.prover.circuit import SCHEMES
 from verity.protocols.accounting.pouw.prover.circuit import anchors as CA
 from verity.protocols.accounting.pouw.prover.circuit import plan as CPL

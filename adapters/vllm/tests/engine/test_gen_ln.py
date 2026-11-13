@@ -10,7 +10,7 @@ import re
 
 import numpy as np
 import pytest
-from verity.definitions.registry import act, b1, gelu_erf_table, layer_norm
+from verity_vllm.definitions.registry import act, b1, gelu_erf_table, layer_norm
 
 from verity_vllm.check.fold_compare import (
     _f16_words_to_bf16,

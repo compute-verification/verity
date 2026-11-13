@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
 

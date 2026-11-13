@@ -19,10 +19,10 @@ from verity.circuits.defs import bind as ir_bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array as Arr_
 from verity.circuits.types import Tuple as Tup_
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import b1, serve3
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import stop_check as SC
+from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import b1, serve3
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import stop_check as SC
 
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import examples

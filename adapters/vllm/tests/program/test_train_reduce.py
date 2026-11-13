@@ -1,6 +1,6 @@
 """The training rules' whole-tensor reductions at a compute capability (`rules.training_reduce.FullReduce`): a vector norm of
 bf16 and of f32 values and a sum of f32 values, each bit for bit against `torch_kernels.reduce_all`, the model of the GPU's
-`reduce_kernel` that `verity/definitions/tests/test_torch_training_gpu.py` holds to an sm_120 GPU's words for bf16 norms.
+`reduce_kernel` that `adapters/vllm/verity_vllm/definitions/tests/test_torch_training_gpu.py` holds to an sm_120 GPU's words for bf16 norms.
 Lengths on the kernel's scalar path, its vectorized path and across CTAs, with launches patched to many CTAs a lane; a transposed
 operand read in memory order; Muon's normalization against the GPU's arithmetic stated in torch CPU's f32 operations; and the
 refusals."""
@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
-from verity.definitions.numerics import torch_kernels as TK
-from verity.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.numerics import torch_kernels as TK
+from verity_vllm.definitions.registry import cublas_bf16 as CB
 
 from tests.program.test_train_step import (
     _bits,

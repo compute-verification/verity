@@ -123,8 +123,8 @@ def test_a_composites_lift_parses_to_the_lift_a_body_calling_it_binds(monkeypatc
     lift is the very specialization a body that calls the composite binds (`lifted.lift_def`), and checks; a lift its id doesn't
     name (`MoeFfnFixed`'s is by hand) is refused by name; without the catalog."""
     from verity.circuits.defs import REGISTRY, bind
-    from verity.definitions.registry import lifted as L
-    from verity.definitions.registry import moe, ref_prims
+    from verity_vllm.definitions.registry import lifted as L
+    from verity_vllm.definitions.registry import moe, ref_prims
 
     from circuit_check import checks as CK
 
@@ -149,8 +149,8 @@ def test_a_composites_lift_names_the_owner_of_its_pins(monkeypatch):
     composite, the lifted module's; the on-demand ``Lifted[...]_v2`` family lifts primitives only, and made from it,
     ``Lifted[ArgmaxStepF32_v1]_v2``'s pin raised ``'CompositeDefinition' object has no attribute 'params'``, which killed the
     target's check in ``--all``.  A lift its id doesn't name (`MoeFfnFixed`'s is by hand) names no owner."""
-    from verity.definitions.registry import lifted as L
-    from verity.definitions.registry import ref_prims
+    from verity_vllm.definitions.registry import lifted as L
+    from verity_vllm.definitions.registry import ref_prims
 
     from circuit_check import sidecars as SC
 

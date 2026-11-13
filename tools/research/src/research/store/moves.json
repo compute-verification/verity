@@ -2396,6 +2396,21 @@
         "verity/protocols/certifier/": "verity/protocols/accounting/certifier/",
         "verity/protocols/inference_only/": "verity/protocols/policy/inference_only/"
       }
+    },
+    {
+      "paths": {
+        "verity/definitions/registry/": "adapters/vllm/verity_vllm/definitions/registry/",
+        "verity/definitions/numerics/": "adapters/vllm/verity_vllm/definitions/numerics/",
+        "verity/definitions/tests/": "adapters/vllm/verity_vllm/definitions/tests/",
+        "verity/definitions/boolean.py": "adapters/vllm/verity_vllm/definitions/boolean.py",
+        "verity/definitions/encoding.py": "adapters/vllm/verity_vllm/definitions/encoding.py",
+        "verity/definitions/evidence.json": "adapters/vllm/verity_vllm/definitions/evidence.json",
+        "verity/definitions/evidence.py": "adapters/vllm/verity_vllm/definitions/evidence.py",
+        "verity/definitions/replay.py": "adapters/vllm/verity_vllm/definitions/replay.py",
+        "verity/definitions/README.md": "adapters/vllm/verity_vllm/definitions/README.md",
+        "verity/definitions/pyproject.toml": "adapters/vllm/verity_vllm/definitions/pyproject.toml",
+        "verity/definitions/__init__.py": "adapters/vllm/verity_vllm/definitions/__init__.py"
+      }
     }
   ]
 }

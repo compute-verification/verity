@@ -14,7 +14,7 @@ import logging
 import os
 import tempfile
 
-from verity.definitions.registry import catalog
+from verity_vllm.definitions.registry import catalog
 
 from tests.check import test_batch_decomp_e2e as e2e
 from verity_vllm.check.match import batch_decomp as bd

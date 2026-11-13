@@ -51,8 +51,8 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
-from verity.definitions.registry import b1, dense, prims
+from verity_vllm.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
+from verity_vllm.definitions.registry import b1, dense, prims
 
 from verity_vllm.acquire.sources.hidden_source import (
     KBLOCK_M,

@@ -60,8 +60,8 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
          slices: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """Member ``m``'s units (the module's order and ports), every port its elements' bytes in u16 words, the row's argument groups
     read by ``slices`` (`serving_rows._slices`); one index entry per row."""
-    from verity.definitions.numerics.derived_rows import f2fp_bf16
-    from verity.definitions.numerics.fp8_moe_rows import (
+    from verity_vllm.definitions.numerics.derived_rows import f2fp_bf16
+    from verity_vllm.definitions.numerics.fp8_moe_rows import (
         TWIN_DOT_OF,
         moe_expert_fp8_block_accs,
     )

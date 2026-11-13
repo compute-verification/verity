@@ -19,7 +19,7 @@ import json
 from typing import Any
 
 import pytest
-from verity.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 from verity_vllm.check import commit_rules as CR
 from verity_vllm.check import verdict as V

@@ -463,7 +463,7 @@ def prefix_input(model: nn.Module, C: int) -> torch.Tensor:
 def registered_policy_splits(sampling: dict) -> int:
     """The registered split count S of a stochastic policy: `sampling["splits"]`, refused unless it is an int equal to
     `topp_geometry.registered_splits` of the policy's geometry's num_SMs (`build.sampler_geometry`)."""
-    from verity.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits
     S, g = sampling.get("splits"), sampling.get("geometry")
     if not g or g.get("num_sms") is None:
         raise ValueError(f"sampling.splits {S!r}: the policy's geometry declares no num_sms, so it has no registered split count")

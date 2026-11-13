@@ -17,7 +17,7 @@ from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Value
 from verity.circuits.census import step_of
 from verity.circuits.requirement import from_census
-from verity.definitions.replay import replayer
+from verity_vllm.definitions.replay import replayer
 
 from tests.program import test_dsa_derive as DSA
 from tests.program.predict.test_predict import TINY, _phi

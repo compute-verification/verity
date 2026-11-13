@@ -7,10 +7,10 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1
-from verity.definitions.registry import cuda_rmsnorm as C
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import value_inputs as VI
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import cuda_rmsnorm as C
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import value_inputs as VI
 
 from verity_vllm.observe.events import TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major

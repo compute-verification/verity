@@ -24,9 +24,9 @@ from verity.circuits.types import Array
 from verity.commitments.windows import interface as I
 from verity.commitments.windows import wiring as WI
 from verity.circuits.ops import gemm as GE
-from verity.definitions.registry import moe
-from verity.definitions.registry import tp_allreduce as TA
-from verity.definitions.registry.prims import BF16
+from verity_vllm.definitions.registry import moe
+from verity_vllm.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry.prims import BF16
 
 from tests.program.predict.test_steps import _mixed, _registered
 from tests.program.test_tp_binding import ROWS, N, rank_body

@@ -23,7 +23,7 @@ buffers vLLM's wrapper allocates (`fused_moe/moe_align_block_size.py`), in the s
 No expert owns a pair whose id, read as vLLM's kernel reads it (its low 32 bits, signed), lies outside [0, E), and none
 owns one that `expert_map` sends to -1. vLLM's op writes the same buffers, except for the order within each expert.
 `moe_align.reference` is the definition in Python. The integration's tests (`adapters/vllm/tests/engine/test_moe_align.py`)
-hold it to the circuits' `moe_align_ranks` and `moe_align_blocks` (`verity.definitions.numerics.moe_align_rows`), with the
+hold it to the circuits' `moe_align_ranks` and `moe_align_blocks` (`verity_vllm.definitions.numerics.moe_align_rows`), with the
 pair index as the key.
 
 ## How it runs

@@ -395,7 +395,7 @@ def prims() -> dict:
         from verity.circuits.defs import PrimitiveDefinition
 
         mods = ["verity.circuits.ops.prims"]
-        import verity.definitions.registry as R
+        import verity_vllm.definitions.registry as R
         mods += [f"{R.__name__}.{m.name}" for m in pkgutil.iter_modules(R.__path__) if not m.name.startswith(("quarantine",))]
         _PRIMS = {}
         for m in mods:
@@ -413,7 +413,7 @@ def _width_prim(pid: str):
     """A primitive the registry makes per width on demand (``BitAtx{W}``, ``TopPMaskWordx{V}``), from its factory."""
     import re
 
-    from verity.definitions.registry import sampling
+    from verity_vllm.definitions.registry import sampling
 
     for pat, make in ((r"BitAtx(\d+)_v1", sampling.bit_at), (r"TopPMaskWordx(\d+)_v1", sampling.topp_mask_word)):
         m = re.fullmatch(pat, pid)
@@ -1364,7 +1364,7 @@ class _Encoded:
         self.ix: dict[str, dict] = {}
 
     def add(self, fn) -> str:
-        from verity.definitions.encoding import encode_specialization
+        from verity_vllm.definitions.encoding import encode_specialization
 
         top, defs = encode_specialization(fn)
         self.ix.update(defs)
@@ -1455,7 +1455,7 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
     """The Call's cut under the no-recompute partition: its record id (``commitment``), or per T (``commitment_by_T``) for a group
     whose T varies, at the program graph's partition points (every T up to a few hundred, else the key-block boundaries), each
     checked against the program graph's own ``q_word_v1`` summary where it has one."""
-    from verity.definitions.encoding import word_values
+    from verity_vllm.definitions.encoding import word_values
     from verity.circuits.word import specialization
 
     if g["template"].startswith(("Const32", "Const64")):

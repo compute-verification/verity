@@ -53,12 +53,12 @@ def test_premise_mutating_pattern_is_an_ordinary_pattern(toy):
 # ---------------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="HOLE-3: a Definition outside verity.definitions.registry that is not under *.quarantine.* is not a quarantine spec for G4")
+@pytest.mark.xfail(strict=True, reason="HOLE-3: a Definition outside verity_vllm.definitions.registry that is not under *.quarantine.* is not a quarantine spec for G4")
 def test_hole3_unregistered_definition_outside_quarantine_is_a_quarantine_spec(toy):
     r, _ = _mutated(toy, "M06")
     mods = {m["spec"]: spec_module(r.body.nodes[m["node"]].fn) for m in r.instances}
     baked = {s: m for s, m in mods.items() if s.startswith("AdvBakedOutput")}
-    assert baked and all(not m.startswith("verity.definitions.registry") for m in baked.values())
+    assert baked and all(not m.startswith("verity_vllm.definitions.registry") for m in baked.values())
     assert gates.quarantine_specs({"spec_modules": mods, "by_spec": {s: {} for s in mods}}) != []
 
 

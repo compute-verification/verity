@@ -60,7 +60,7 @@ from verity.circuits import codec, partition_object as PO
 from verity.commitments.identity import identity_digest, identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.definitions.registry import catalog
+from verity_vllm.definitions.registry import catalog
 
 import r2_population as R2
 

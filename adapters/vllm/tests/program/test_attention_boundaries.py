@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-PKG = "verity.definitions.registry"
+PKG = "verity_vllm.definitions.registry"
 _SPEC = importlib.util.find_spec(PKG)
 assert _SPEC is not None and _SPEC.origin is not None, PKG
 REGISTRY = Path(_SPEC.origin).parent
@@ -45,9 +45,9 @@ OTHER_FAMILIES = {
 }
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
+CATALOG = ("verity.circuits", "verity_vllm.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
 #: `evidence.json`'s ids, read with the standard library only
-EVIDENCE = "verity.definitions.evidence"
+EVIDENCE = "verity_vllm.definitions.evidence"
 
 
 def _core(name: str) -> bool:
@@ -58,7 +58,7 @@ def _core(name: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.commitments.multiproof", "verity.circuits.private_circuits", "verity.circuits.ops",
                 "verity.circuits.silicon", "verity.circuits.targets", "verity.circuits.kernels", "verity.ml.flock",
-                "verity.definitions")
+                "verity_vllm.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.claims"))))
 
@@ -138,10 +138,10 @@ def test_the_vocabulary_is_out_of_the_definition_modules():
 def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
     (tmp_path / "fa2_check_inf.py").write_text(
         "from verity.circuits.defs import composite\n"
-        "from verity.definitions.registry import prims as P, targets\n"
-        "from verity.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
+        "from verity_vllm.definitions.registry import prims as P, targets\n"
+        "from verity_vllm.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
         "from verity_vllm.config import X\n\n\n"
-        "def f():\n    from verity.definitions.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
+        "def f():\n    from verity_vllm.definitions.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
     monkeypatch.setattr(sys.modules[__name__], "REGISTRY", tmp_path)
     assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == sorted([
-        "imports verity_vllm.config", "imports verity.definitions.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"])
+        "imports verity_vllm.config", "imports verity_vllm.definitions.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"])

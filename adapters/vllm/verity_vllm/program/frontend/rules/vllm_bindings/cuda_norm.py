@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 from verity.circuits.refs import Coll
-from verity.definitions.registry import cuda_rmsnorm as C
+from verity_vllm.definitions.registry import cuda_rmsnorm as C
 
 from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo

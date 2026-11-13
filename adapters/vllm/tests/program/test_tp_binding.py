@@ -11,8 +11,8 @@ from verity.circuits.defs import Builder, bind
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array
 from verity.circuits.ops import gemm as G
-from verity.definitions.registry import b1_tp2 as TP
-from verity.definitions.registry.prims import BF16
+from verity_vllm.definitions.registry import b1_tp2 as TP
+from verity_vllm.definitions.registry.prims import BF16
 
 from tests.program.predict.test_steps import _mixed, _registered
 from verity_vllm.program import tp_binding as TB

@@ -14,8 +14,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_call
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import word as W_
-from verity.definitions.numerics import fp8_twins
-from verity.definitions.registry import fp8
+from verity_vllm.definitions.numerics import fp8_twins
+from verity_vllm.definitions.registry import fp8
 
 from tests.check.test_sampled_replay_fp8 import G, H, I, _program_fp8
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest

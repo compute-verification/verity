@@ -14,10 +14,10 @@ measured the same rcp and sqrt words.
 
 Batch kernels.  Every primitive but `MufuTanh` has a numpy kernel registered with `verity.circuits.evaluation` (domain: every encoding).
 
-Provenance.  These are the definitions the vLLM integration registered in `verity.definitions.registry.prims` (same ids,
+Provenance.  These are the definitions the vLLM integration registered in `verity_vllm.definitions.registry.prims` (same ids,
 signatures and conformance statuses), which re-exports them from here.  The bit rules are the integration's C++ models
 (`fa2_model.cpp`: `mufu_ex2_bits`, `mufu_rcp_bits`; `rms_triton_model.cpp`: `mufu_sqrt`, `mufu_rsq`, `div_full_parts`,
-`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`verity/definitions/numerics/derived_rows.py`).
+`rsqrt_nonftz`) on integers; the kernels are its numpy ports (`adapters/vllm/verity_vllm/definitions/numerics/derived_rows.py`).
 """
 from __future__ import annotations
 

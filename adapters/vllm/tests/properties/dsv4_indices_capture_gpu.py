@@ -70,9 +70,9 @@ from typing import Any, NamedTuple
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import dsv4_indices_twin as T
-from verity.definitions.registry import dsv4_indexer as I
-from verity.definitions.registry import dsv4_indices as R
+from verity_vllm.definitions.numerics import dsv4_indices_twin as T
+from verity_vllm.definitions.registry import dsv4_indexer as I
+from verity_vllm.definitions.registry import dsv4_indices as R
 
 from tests.properties import dsv4_compressor_capture_gpu as CX
 from tests.properties import dsv4_flashmla_capture_gpu as FX

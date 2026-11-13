@@ -18,8 +18,8 @@ from verity.circuits import (  # noqa: E402
 )
 from verity.circuits.defs import REGISTRY  # noqa: E402
 from verity.circuits.refs import Concat, Explicit, Strided  # noqa: E402
-from verity.definitions.registry import b1  # noqa: E402
-from verity.definitions.registry.prims import BF16  # noqa: E402
+from verity_vllm.definitions.registry import b1  # noqa: E402
+from verity_vllm.definitions.registry.prims import BF16  # noqa: E402
 
 from verity_vllm.program.frontend import (  # noqa: E402
     Arr,
@@ -203,7 +203,7 @@ def test_r1_two_bodies_in_one_program_are_rejected():
     # and the program-level check catches the same conflict on an already-built program (no first-wins on decode paths)
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.types import Array
-    from verity.definitions.registry.prims import Bf16Add, Bf16AddF2fp
+    from verity_vllm.definitions.registry.prims import Bf16Add, Bf16AddF2fp
 
     def leaf(prim):
         return CompositeDefinition("Leaf1x", 1, ("K",), lambda S: ((("x", Array(S.K, BF16)),), Array(S.K, BF16)),
@@ -220,7 +220,7 @@ def test_r1_two_bodies_in_one_program_are_rejected():
 def test_r1_registry_version_in_provenance():
     rep = export_report(ex.Gemm, static={"K": 32, "N": 4}, dead_gates="ignore")
     reg = rep.provenance["registry"]
-    assert len(reg["digest"]) == 64 and reg["primitives"] > 20 and "verity.definitions.registry.prims" in reg["sources"]
+    assert len(reg["digest"]) == 64 and reg["primitives"] > 20 and "verity_vllm.definitions.registry.prims" in reg["sources"]
     assert rep.provenance["torch"] == torch.__version__ and rep.provenance["mode"] == "authoring"
     assert rep.provenance["rules"] == []
 

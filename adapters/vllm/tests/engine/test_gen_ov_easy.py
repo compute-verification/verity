@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import GemmLaunch

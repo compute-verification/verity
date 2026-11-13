@@ -75,8 +75,8 @@ def piece_rows(logits: Any, ids: Any, c: int | None = None, *, pad: int | None =
     selects every id. ``pad``: the size class's tokens, the last row and id repeated to it first, as `Span.padded` pads
     `pieces`' cells by whole tokens."""
     import torch
-    from verity.definitions.registry.b1 import NEG_INF_BF16
-    from verity.definitions.registry.dead_free import CHUNK
+    from verity_vllm.definitions.registry.b1 import NEG_INF_BF16
+    from verity_vllm.definitions.registry.dead_free import CHUNK
     x = logits.view(torch.int16) if logits.dtype == torch.bfloat16 else logits
     n, V = x.shape
     ids = torch.as_tensor(ids, device=x.device).to(torch.int64)

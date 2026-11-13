@@ -25,7 +25,7 @@ package's docstring lists every module.
   `benchmarks/one_stage`, `benchmarks/route_capture`, `benchmarks/spot_proved`, `adapters/vllm/tools` and a test of
   `verity/circuits/requirement`; the integration's command line (`pipeline.cli`) loads `cli` and `block_counts` by
   name. No module of the Build, the Match or the Commit imports it.
-- **Loads:** `verity.circuits`, `verity.definitions`, `verity.commitments.windows` and `verity.commitments`; the
+- **Loads:** `verity.circuits`, `verity_vllm.definitions`, `verity.commitments.windows` and `verity.commitments`; the
   certifier's modules under `verity.protocols.accounting.certifier`, and SPOT's under `verity.protocols.proofs.spot.verifier`;
   and the integration's `program`, `config`, `pipeline`, `engine`, `check`, `records`, `observe`, `acquire`, `query`,
   `protocols`, `correspondence`, `target_family` and `errors`, with `commit` inside a function.

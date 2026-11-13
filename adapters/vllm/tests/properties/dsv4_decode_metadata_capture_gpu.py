@@ -83,8 +83,8 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import dsv4_decode_metadata_twin as T
-from verity.definitions.registry import dsv4_decode_metadata as R
+from verity_vllm.definitions.numerics import dsv4_decode_metadata_twin as T
+from verity_vllm.definitions.registry import dsv4_decode_metadata as R
 
 from tests.properties import dsv4_compressor_capture_gpu as CX
 from tests.properties import dsv4_flashmla_capture_gpu as FX

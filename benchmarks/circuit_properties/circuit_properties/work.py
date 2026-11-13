@@ -163,7 +163,7 @@ class Lookup:
         return re.compile(self.op)
 
 
-#: the reference registry's matrix products (`verity.definitions.registry.ref_prims`): a row times a matrix, and a dot
+#: the reference registry's matrix products (`verity_vllm.definitions.registry.ref_prims`): a row times a matrix, and a dot
 PRODUCTS = (Product(r"LinearRef_v\d+", "x", "w"), Product(r"DotRef_v\d+", "x", "w"))
 #: the registered gathers: a column of a table at a token
 LOOKUPS = (Lookup(r"Gather\w+x\d+_v\d+", "token", "column"),)
@@ -1250,7 +1250,7 @@ def boolean_gates(program) -> int:
     none, summed once per Definition and multiplied through batches and scans. `NoBooleanVersion` names every
     primitive that has none."""
     from verity.circuits.evaluation.bits import compile as compile_bits
-    from verity.definitions.boolean import NoBooleanVersion, boolean_version
+    from verity_vllm.definitions.boolean import NoBooleanVersion, boolean_version
 
     memo: dict = {}
     missing: dict = {}

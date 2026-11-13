@@ -16,10 +16,10 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.boolean import boolean_version
+from verity_vllm.definitions.boolean import boolean_version
 from verity.circuits.ops.boolean import elementwise as EW
-from verity.definitions.registry import boolean_dsa as BD
-from verity.definitions.registry import dsa as D
+from verity_vllm.definitions.registry import boolean_dsa as BD
+from verity_vllm.definitions.registry import dsa as D
 
 STATICS = ["N", "H", "D"]
 

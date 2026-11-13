@@ -21,11 +21,11 @@
     {"file": "verity_vllm/program/frontend/rules/reference.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 879},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 865},
     {"file": "verity_vllm/program/compiled_norm_literal.py", "kind": "function", "symbol": "_build", "detail": "lines", "count": 206},
-    {"file": "verity/definitions/numerics/twins.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1015},
-    {"file": "verity/definitions/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1146},
-    {"file": "verity/definitions/numerics/derived_rows.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 944},
-    {"file": "verity/definitions/registry/lifted.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2228},
-    {"file": "verity/definitions/registry/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
-    {"file": "verity/definitions/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 805}
+    {"file": "adapters/vllm/verity_vllm/definitions/numerics/twins.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1015},
+    {"file": "adapters/vllm/verity_vllm/definitions/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1146},
+    {"file": "adapters/vllm/verity_vllm/definitions/numerics/derived_rows.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 944},
+    {"file": "adapters/vllm/verity_vllm/definitions/registry/lifted.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2228},
+    {"file": "adapters/vllm/verity_vllm/definitions/registry/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
+    {"file": "adapters/vllm/verity_vllm/definitions/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 805}
   ]
 }

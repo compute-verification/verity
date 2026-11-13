@@ -13,7 +13,7 @@ The Build is the traced one (`acquire.served.build`) term for term, assembled by
     measured -- each piece kind's kernel source digests, the compile artifact (their launched configs and the autotune winners, which
     the Commit seeds), the CUDA-graph dispatch (capture sizes, max_num_seqs, and under FA2 max_model_len) and the fused-MoE configs
     vLLM launched at each row count;
-  * the device pin (`verity.definitions.registry.bf16_gemm_check.device_pin`): the cuBLAS routes, the SM count the attention scheduler reads and
+  * the device pin (`verity_vllm.definitions.registry.bf16_gemm_check.device_pin`): the cuBLAS routes, the SM count the attention scheduler reads and
     the compute capability, whose bindings the Build takes (`served_device`).
 
 A family without a layout, a config outside it (attention bias, shared experts or dense layers in an MoE, another activation or
@@ -34,7 +34,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from verity.definitions.registry.bf16_gemm_check import device_pin
+from verity_vllm.definitions.registry.bf16_gemm_check import device_pin
 
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T

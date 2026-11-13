@@ -21,7 +21,7 @@ from verity.circuits import (
 )
 from verity.circuits.codec import SCHEMA_V0, SCHEMA_V1
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, concat
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from tests.program.descriptor_equivalence import (
     Mismatch,

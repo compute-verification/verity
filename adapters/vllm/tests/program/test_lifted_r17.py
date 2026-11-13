@@ -27,12 +27,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.circuits import Program, bind
 from verity.circuits.types import Array, Value
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry import b1
-from verity.definitions.registry import lifted as L
-from verity.definitions.registry import pad_prims as PP
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.b1 import weights_type
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import pad_prims as PP
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.b1 import weights_type
 
 from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs
 from verity_vllm.program.lifting import lifted_compose, lifted_records

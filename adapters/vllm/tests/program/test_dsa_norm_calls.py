@@ -16,11 +16,11 @@ from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.program import Program
-from verity.definitions import boolean as SW
+from verity_vllm.definitions import boolean as SW
 from verity.circuits.ops.boolean import cast as BC
 from verity.circuits.ops.boolean import elementwise as EW
-from verity.definitions.registry import boolean_dsa_norm as BN
-from verity.definitions.registry import dsa_norm as DN
+from verity_vllm.definitions.registry import boolean_dsa_norm as BN
+from verity_vllm.definitions.registry import dsa_norm as DN
 from tests.program.test_boolean_fp8 import _flat, _inputs
 
 #: GLM-5.3's rms_norm_eps, and its two rows: q_c [2048] (program 2) and kv_c [512] (program 1)

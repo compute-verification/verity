@@ -18,7 +18,7 @@ import pytest
 
 import glm53 as G
 from verity.commitments.windows.interface import proof_block_k_log
-from verity.definitions.registry import boolean_stop_rule
+from verity_vllm.definitions.registry import boolean_stop_rule
 from verity.protocols.accounting.certifier.prover import response_tie
 from verity.protocols.proofs.spot.prover.optimize import Objective, certify
 

@@ -22,9 +22,9 @@ import math
 import pytest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.types import Array
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import moe as MOE
-from verity.definitions.registry.prims import BF16, F32
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import moe as MOE
+from verity_vllm.definitions.registry.prims import BF16, F32
 
 from verity_vllm.observe.events import (
     DispatchEnter,

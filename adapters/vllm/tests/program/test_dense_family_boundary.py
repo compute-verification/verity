@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-REGISTRY = "verity.definitions.registry"
+REGISTRY = "verity_vllm.definitions.registry"
 _SPEC = importlib.util.find_spec(REGISTRY)
 assert _SPEC is not None and _SPEC.origin is not None
 REGISTRY_DIR = Path(_SPEC.origin).parent
@@ -23,9 +23,9 @@ FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms"
 READS = ("prims", "b1", "sampling", "value_inputs", "tables")
 THIRD_PARTY = ("numpy",)
 #: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
+CATALOG = ("verity.circuits", "verity_vllm.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
 #: `evidence.json`'s ids, read with the standard library only
-EVIDENCE = "verity.definitions.evidence"
+EVIDENCE = "verity_vllm.definitions.evidence"
 MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
          "verity_vllm.program.frontend.gemm_targets")
 
@@ -51,7 +51,7 @@ def _core(name: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.commitments.multiproof", "verity.circuits.private_circuits", "verity.circuits.ops",
                 "verity.circuits.silicon", "verity.circuits.targets", "verity.circuits.kernels", "verity.ml.flock",
-                "verity.definitions")
+                "verity_vllm.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.claims"))))
 

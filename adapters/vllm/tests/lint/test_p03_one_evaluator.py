@@ -9,7 +9,7 @@ Checked today, against ``allowlists/p03_one_evaluator.json``:
 * ``rng``: constructing a random generator (``random.Random``, ``random.SystemRandom``, numpy's ``default_rng``,
   ``RandomState``, ``Generator``, ``torch.Generator``): challenge randomness comes from the one challenge module.
 
-The kernels (``verity/definitions/numerics/``) and the modules ``LADDER_HOMES`` names are exempt from ``if-ladder``.
+The kernels (``adapters/vllm/verity_vllm/definitions/numerics/``) and the modules ``LADDER_HOMES`` names are exempt from ``if-ladder``.
 The one challenge module, ``commit/challenge.py``, is the ``RNG_OWNERS`` entry: its legacy derivations keep
 ``random.Random`` and numpy generators until the re-baseline epoch.
 The rule's parametrized self-check (every registered (kernel, Definition) pair against the core reference on seeded
@@ -26,8 +26,8 @@ from . import _ratchet as R
 NAME = "p03_one_evaluator"
 RULE = "P3 (one evaluator interface, one challenge derivation)"
 LADDER_MIN = 4
-#: program/kernels/, and by name the modules of it that stay in the package when its Definitions move to `verity.definitions`
-LADDER_HOMES = ("verity/definitions/numerics/", "verity_vllm/program/sampling_rng.py",
+#: program/kernels/, and by name the modules of it that stay in the package when its Definitions move to `verity_vllm.definitions`
+LADDER_HOMES = ("adapters/vllm/verity_vllm/definitions/numerics/", "verity_vllm/program/sampling_rng.py",
                 "verity_vllm/program/gemm_target_correspondence.py", "verity_vllm/program/compiled_relations.py",
                 "verity_vllm/program/compiled_norm_literal.py")
 FAMILY = re.compile(r"^[A-Z][A-Za-z0-9]*(?:_v[0-9]+)?$")

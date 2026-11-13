@@ -1,4 +1,4 @@
-"""Every (Definition, kernel) pair registered through `verity.definitions.numerics.kernel_registry` — the replay row
+"""Every (Definition, kernel) pair registered through `verity_vllm.definitions.numerics.kernel_registry` — the replay row
 kernels (`rows`) and the twins — against the reference by core `verity.circuits.evaluation.self_check`, on each of the kernel's
 check specialisations: no mismatch, and not every instance declined."""
 from __future__ import annotations
@@ -9,9 +9,9 @@ import pkgutil
 import numpy as np
 import pytest
 from verity.circuits.evaluation import kernels, self_check
-from verity.definitions import registry
-from verity.definitions.numerics import kernel_registry as KR
-from verity.definitions.numerics import rows, twins
+from verity_vllm.definitions import registry
+from verity_vllm.definitions.numerics import kernel_registry as KR
+from verity_vllm.definitions.numerics import rows, twins
 
 from verity_vllm.commit import challenge as CH
 
@@ -42,8 +42,8 @@ def test_attention_kernels_on_scores_below_two_to_the_minus_63(monkeypatch):
     q = 0, whose every ex2 input is 0."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.registry import b1
 
     statics = {"T": 20, "NH": 2, "KVH": 1, "D": 16, "BN": 16}
     target = bind(b1.AttentionV3, **statics)

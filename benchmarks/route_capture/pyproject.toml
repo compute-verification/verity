@@ -21,7 +21,6 @@ inputs = [
     "verity/circuits",
     "verity/commitments",
     "verity/commitments/crypto",
-    "verity/definitions",
     "verity/circuits/kernels",
     "adapters/vllm/verity_vllm",
     "adapters/vllm/manifests/capture-maps/glm-moe-dsa-eager-hopper-tp8-v0.json",

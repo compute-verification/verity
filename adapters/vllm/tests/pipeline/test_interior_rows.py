@@ -24,8 +24,8 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array
-from verity.definitions.numerics.rows import SAMPLED_MEMBER
-from verity.definitions.registry import dead_free as DF
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.definitions.registry import dead_free as DF
 from verity.commitments.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore

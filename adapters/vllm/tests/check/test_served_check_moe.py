@@ -10,11 +10,11 @@ from typing import Any
 
 import numpy as np
 import pytest
-from verity.definitions.numerics import rows as R
-from verity.definitions.numerics.act_rows import silu_mul_expf
-from verity.definitions.numerics.rows import token_select_first_max
-from verity.definitions.registry import act, b1
-from verity.definitions.registry import moe as M
+from verity_vllm.definitions.numerics import rows as R
+from verity_vllm.definitions.numerics.act_rows import silu_mul_expf
+from verity_vllm.definitions.numerics.rows import token_select_first_max
+from verity_vllm.definitions.registry import act, b1
+from verity_vllm.definitions.registry import moe as M
 
 from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD

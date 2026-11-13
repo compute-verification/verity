@@ -7,7 +7,7 @@ Two readers of ONE flat body (`program.fn.body.nodes` of the derived request Pro
 * :func:`from_instances` -- the Build's instance sequence (`instances.json.gz`, `derive_step._instance_sequence`): the same nodes
   written one row per Call (`i`, `spec`, `form`, `name`, `args` = operand runs) -- a projection of the descriptor body plus the
   name annotation, produced by the same derivation on meta tensors (nothing executed).  The output type is not in a row: it is
-  the registered Definition's signature bound to the row's statics (`verity.definitions.registry`), read once per distinct spec.
+  the registered Definition's signature bound to the row's statics (`verity_vllm.definitions.registry`), read once per distinct spec.
 
 Both yield the same :class:`ProgramView`: Calls with ports, reads and names; prescribed inputs as Values of negative ids
 (`-(k + 1)` for parameter `k`; a record parameter has one port per field, anything else the port `out`); outputs as the reader
@@ -557,7 +557,7 @@ def definition_ports(spec: str) -> tuple[Port, ...]:
     if hit is not None:
         return hit
     # importing the registry registers the on-demand primitive families, so it stays in the functions that read it
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     reg, errors = load()
     base = spec_base(spec)
     d = reg.defs.get(base)
@@ -732,7 +732,7 @@ def from_descriptor(desc: dict[str, Any] | str, registry=None, checks: int = 0) 
         with gzip.open(desc, "rt") if desc.endswith(".gz") else open(desc) as f:
             desc = json.load(f)
     if registry is None:
-        from verity.definitions.registry.catalog import load
+        from verity_vllm.definitions.registry.catalog import load
         registry, _errors = load()
     decoded = codec.decode_program(desc, registry)
     hints = {int(k): str(v) for k, v in decoded.annotations.get("node_hints", {}).items()}

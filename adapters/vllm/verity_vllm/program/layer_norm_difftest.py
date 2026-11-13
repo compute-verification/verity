@@ -36,6 +36,6 @@ def production(statics: dict, inputs: list) -> list:
 
 def spec(statics: dict):
     from verity.circuits.defs import bind
-    from verity.definitions.registry.layer_norm import LayerNormAten
+    from verity_vllm.definitions.registry.layer_norm import LayerNormAten
 
     return bind(LayerNormAten, N=int(statics["N"]), EPS=float(statics["EPS"]))

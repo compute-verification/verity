@@ -22,7 +22,7 @@ try:
 except ModuleNotFoundError:
     pytest.skip("could not import 'torch'", allow_module_level=True)
 
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from tests.query.test_boolean_manifest import _write
 from verity_vllm.acquire.sources import narrowed_source as NS

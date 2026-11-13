@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.definitions.numerics.int8_rows import ROWS
+from verity_vllm.definitions.numerics.int8_rows import ROWS
 
 from tests.engine import int8_attention_cut as C
 from verity_vllm.observe.events import Note, Root, RunHeader, ViewDesc

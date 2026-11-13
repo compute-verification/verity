@@ -528,7 +528,7 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
     name-independent KV-ownership oracle holds on the derived program (30 layers x 47 positions)."""
     if not _DERIVE:
         pytest.skip("derive() not available")
-    from verity.definitions.registry.b1 import B0_CONFIG
+    from verity_vllm.definitions.registry.b1 import B0_CONFIG
 
     from tests.program.test_derive_negative import (
         check_cache_ownership,

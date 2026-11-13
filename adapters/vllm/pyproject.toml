@@ -319,11 +319,11 @@ paths = ["adapters/vllm/verity_vllm/check"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/test_moe_fp8_definition_imports.py"]
-paths = ["verity/definitions/registry"]
+paths = ["adapters/vllm/verity_vllm/definitions/registry"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/test_prims_serve_boundaries.py"]
-paths = ["verity/definitions"]
+paths = ["adapters/vllm/verity_vllm/definitions"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/protocols/test_pous_option.py"]

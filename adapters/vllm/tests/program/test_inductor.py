@@ -11,10 +11,10 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.numerics import inductor_rows as TW
-from verity.definitions.registry import hopper
-from verity.definitions.registry import inductor as I
-from verity.definitions.registry.fa3_check_inf import AttentionHeadV4
+from verity_vllm.definitions.numerics import inductor_rows as TW
+from verity_vllm.definitions.registry import hopper
+from verity_vllm.definitions.registry import inductor as I
+from verity_vllm.definitions.registry.fa3_check_inf import AttentionHeadV4
 
 U16 = np.uint16
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

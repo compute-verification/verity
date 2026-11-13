@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_norms`: the served RMSNorms on bits.
+"""`verity_vllm.definitions.registry.boolean_norms`: the served RMSNorms on bits.
 
 The leaf pieces are Boolean and pinned; the split output word keeps every AND, and the squares pay none for the decodes they
 return. Each piece agrees with its word primitives on special words (every bf16 word for the squares) and on random ones. Both
@@ -28,9 +28,9 @@ from verity.circuits import word as QW
 from verity.circuits.cross_call import members_check
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import mufu as MU
-from verity.definitions.registry import b1
-from verity.definitions.registry import boolean_norms as BN
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import boolean_norms as BN
+from verity_vllm.definitions.registry import prims as P
 from verity.circuits.silicon import fp
 
 FULL = os.environ.get("VERITY_VLLM_BOOLEAN_NORMS_FULL")

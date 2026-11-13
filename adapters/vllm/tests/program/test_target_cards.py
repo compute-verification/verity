@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 
-from verity.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity.hardware.cards import load
 
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS

@@ -16,7 +16,7 @@ import types
 import pytest
 import torch
 import torch.fx.traceback as fxt
-from verity.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import tp_allreduce as TA
 
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build import applicability_conditions, run
@@ -102,7 +102,7 @@ def test_step_982_a_full_graph_decode_reduces_on_flashinfer_mnnvl_at_its_padded_
     uncaptured.  No communicator of vLLM d9105ea80 reads the graph mode, so 32 rows reduce on FlashInfer's MNNVL (under its
     512 KiB), the PIECEWISE steps on symm_mem's multimem.  The FULL graph captures the attention at the padded batch, its 7
     padding rows without keys, which leave FA3's split counts the real batch's."""
-    from verity.definitions.registry.sparse_mla_split import launch_num_splits
+    from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 
     from verity_vllm.engine.profiles.engine_classes import CLASS_G_LIMITS
     from verity_vllm.program.predict.common import _Launch

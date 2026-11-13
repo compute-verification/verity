@@ -10,7 +10,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # hold to the numpy model of FlashInfer's kernel (`tp_allreduce_check`); verity_vllm's imports reach the one-stage protocol and
 # verity.ml's commitments, crypto, windows and the tc kernel; capture.py's site copies the SHA-512 header its device kernel
 # includes
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits", "verity/definitions",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
           "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness/__init__.py", "verity/commitments/windows",
           "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "verity/circuits/kernels/sha512.cuh",
           "verity/protocols/proofs/spot/verifier/profile.py",

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import period_case as PC
 from verity.circuits import codec, population
-from verity.definitions.registry import io_shell as X
+from verity_vllm.definitions.registry import io_shell as X
 
 #: the sidecar's `SlotEntry_v1` rows the pins are of, in `SLOT_ENTRY_PINS`' order; `SlotEntry_v1:4` is no pin, since at
 #: KO 4 a slot's entry is a `SelectEntry_v1` unit's

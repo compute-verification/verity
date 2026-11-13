@@ -2472,7 +2472,7 @@ def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_co
     """`served_verdicts.sh block-counts 0` on a window of two slots (two blocks) at the class runs the real
     `verity-vllm block-counts` against the policy at IO_POLICY's default: its line and its public judgment hold n and no
     count, and the exact count is in the serve dir's private/ alone (0600); with no policy it says so and judges nothing."""
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     from verity.commitments.windows import interface as IF
 
     load()

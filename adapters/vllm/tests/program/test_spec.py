@@ -15,8 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.circuits import Program, bind
 from verity.circuits.evaluation import evaluate_call
-from verity.definitions.registry import spec
-from verity.definitions.registry.b1 import Serve
+from verity_vllm.definitions.registry import spec
+from verity_vllm.definitions.registry.b1 import Serve
 
 from tests.program.crosscheck import _standalone
 
@@ -69,7 +69,7 @@ def test_advance_matches_reference(K):
 
 
 def _random_weights(C: dict, rng) -> list[int]:
-    from verity.definitions.registry.b1 import weights_type
+    from verity_vllm.definitions.registry.b1 import weights_type
     n = weights_type(C).leaves
     w = (rng.standard_normal(n) * 0.05).astype(np.float32).view(np.uint32) >> 16
     return [int(x) for x in w]

@@ -10,7 +10,7 @@ from __future__ import annotations
 import itertools
 
 import pytest
-from verity.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import lifted as L
 
 from verity_vllm.program.lifting import continuation as K
 from verity_vllm.program.lifting import lifted_records

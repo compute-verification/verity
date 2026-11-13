@@ -35,12 +35,12 @@ from verity.circuits import Program, bind
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.types import Array, RecordType, Tuple, Value
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry import b1, serve3
-from verity.definitions.registry import lifted as L
-from verity.definitions.registry import pad_prims as PP
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.b1 import weights_type
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import b1, serve3
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import pad_prims as PP
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.b1 import weights_type
 
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 
@@ -307,7 +307,7 @@ def test_every_registered_gather_family_is_specified_with_its_own_extension():
     reference gather `GatherF32x{V}_v1` (ref_prims, OOR 0x7FC00000) lifts to `LGatherRow32x{V}` with ITS extension, read from
     the original; a strict lift would let an unselected ⊥ row poison an Active read (A5).  Two originals of one `(w, N)` with
     different extensions cannot share the id: refused by name."""
-    from verity.definitions.registry import ref_prims as R
+    from verity_vllm.definitions.registry import ref_prims as R
     g32 = R.gather_f32(4)
     lg = L.lifted_prim_v1(g32)
     assert lg is L.l_gather_row(32, 4) and lg.id == "LGatherRow32x4_v1" and getattr(lg, "lift_class", None) == "specified"
@@ -989,7 +989,7 @@ def test_register_hand_lift_is_honoured_on_the_registry_and_the_decoded_path_and
     from verity.circuits.codec import decode_program, encode_program
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.refs import coll_concat
-    from verity.definitions.registry.prims import I32
+    from verity_vllm.definitions.registry.prims import I32
 
     def twin_sig(S):
         return (("x", Array(S.N, I32)),), Array(S.N, I32)

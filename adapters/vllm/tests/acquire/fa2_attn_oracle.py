@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """Verity-semantics reference for the FA2 attention chain -- the P0 tap oracle.
 
-Implements `AttentionHead_v3{T, D, BN}` -> `AttnBlock_v3{D, NVIS, FIRST, BN}` (verity/definitions/registry/b1.py:727-822) with
-the registry primitives themselves (verity/definitions/registry/prims.py), so every emitted word is *the Definition's* word:
+Implements `AttentionHead_v3{T, D, BN}` -> `AttnBlock_v3{D, NVIS, FIRST, BN}` (adapters/vllm/verity_vllm/definitions/registry/b1.py:727-822) with
+the registry primitives themselves (adapters/vllm/verity_vllm/definitions/registry/prims.py), so every emitted word is *the Definition's* word:
 FTZ f32 ops, `x > y ? x : y` max, the measured MUFU.EX2 / MUFU.RCP tables, the measured Ampere m16n8k16 model,
 RNE bf16.  Emits every online-state version the kernel holds in registers (mapping: p0-tap-spec.md).
 
@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.definitions.registry import prims as P  # PYTHONPATH=.
+from verity_vllm.definitions.registry import prims as P  # PYTHONPATH=.
 
 NEG_INF = 0xFF800000
 BF16_KEYS = {"q", "k", "v", "pb", "out"}

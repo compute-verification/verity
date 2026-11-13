@@ -14,8 +14,8 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.definitions.numerics import dsv4_compressor_twin as T
-from verity.definitions.numerics import flashmla_twin as FT
+from verity_vllm.definitions.numerics import dsv4_compressor_twin as T
+from verity_vllm.definitions.numerics import flashmla_twin as FT
 
 from tests import fake_vllm
 from tests.properties import dsv4_compressor_capture_gpu as X

@@ -20,7 +20,7 @@ import json
 from collections import defaultdict
 
 import pytest
-from verity.definitions.registry import hopper
+from verity_vllm.definitions.registry import hopper
 
 from tests.acquire.glm53_model import CMAP, ENV
 from tests.program import test_dsa_derive as T

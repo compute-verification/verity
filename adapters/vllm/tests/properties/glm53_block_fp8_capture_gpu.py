@@ -89,14 +89,14 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.kernels.tc import group_sum_total_batch
-from verity.definitions.numerics import derived_rows as D
-from verity.definitions.numerics.act_rows import silu_mul_expf_rows
-from verity.definitions.numerics.deepgemm_twins import (
+from verity_vllm.definitions.numerics import derived_rows as D
+from verity_vllm.definitions.numerics.act_rows import silu_mul_expf_rows
+from verity_vllm.definitions.numerics.deepgemm_twins import (
     ue8m0_group_quant_row,
     ue8m0_group_quant_rows,
 )
-from verity.definitions.numerics.derived_rows import fma_rn, tc_dot32_e4m3
-from verity.definitions.numerics.fp8_moe_rows import (
+from verity_vllm.definitions.numerics.derived_rows import fma_rn, tc_dot32_e4m3
+from verity_vllm.definitions.numerics.fp8_moe_rows import (
     E4M3_AS_BF16,
     E4M3_NAN,
     MMAV2_HALVES,
@@ -104,12 +104,12 @@ from verity.definitions.numerics.fp8_moe_rows import (
     moe_expert_fp8_block_row,
 )
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-from verity.definitions.registry import act as ACT
-from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import fp8_moe as MO
-from verity.definitions.registry import fp8_moe_experts as MX
-from verity.definitions.registry import moe as MOE_R
-from verity.definitions.registry.fp8_moe import sm90_dot
+from verity_vllm.definitions.registry import act as ACT
+from verity_vllm.definitions.registry import deepgemm as DG
+from verity_vllm.definitions.registry import fp8_moe as MO
+from verity_vllm.definitions.registry import fp8_moe_experts as MX
+from verity_vllm.definitions.registry import moe as MOE_R
+from verity_vllm.definitions.registry.fp8_moe import sm90_dot
 from verity.circuits.silicon.cast import e4m3_to_f32_word
 from verity.circuits.silicon.models import (
     AMPERE_BF16_M16N8K16,
@@ -590,7 +590,7 @@ def moe_launches(work: Path, phase: str, name: str, inter: int, M: int, hot: int
     returns (launch records, comparison jobs)."""
     import torch
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
-    from verity.definitions.registry.fp8_moe import check_statics
+    from verity_vllm.definitions.registry.fp8_moe import check_statics
 
     probe = phase == "mmav2"
     gen = torch.Generator(device="cuda").manual_seed(seed)
@@ -771,7 +771,7 @@ def compare_moe(job: dict[str, Any]) -> dict[str, Any]:
 def compare_sum(job: dict[str, Any]) -> dict[str, Any]:
     """Tokens [r0, r1) of one `moe_sum`: `MoeSum_v1{TOPK,H}`'s twin against the kernel's words (and every competing sum on the
     planted rows), and `MoeSumCoordinate_v1` on a sample of the columns and every planted one."""
-    from verity.definitions.numerics.rows import moe_sum
+    from verity_vllm.definitions.numerics.rows import moe_sum
 
     rec: dict[str, Any] = {**{k: 0 for k in TOTALS}, "first_mismatch": None, "refuted": {}}
     a = _load(job["paths"])

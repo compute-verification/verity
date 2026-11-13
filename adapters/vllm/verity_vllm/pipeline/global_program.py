@@ -34,7 +34,7 @@ from verity.circuits.codec import canonical_json, descriptor_size
 
 # published as `global_program.REGISTRY`: the registry with every registry module loaded (the loop below)
 from verity.circuits.defs import REGISTRY as REGISTRY
-from verity.definitions.registry.catalog import load as _load_registry
+from verity_vllm.definitions.registry.catalog import load as _load_registry
 
 from verity_vllm.check.match.batch_decomp import derived_shape
 from verity_vllm.config import (
@@ -408,13 +408,13 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered", "num_sms": nsm,
            "rule": "S = registered_splits(num_SMs) at every launch, whatever the live batch (engine.topp_pin); "
                    "every top-p TokenSelect of the fold carries it (its launch S); GM-01 fails by name otherwise",
-           "source": "verity.definitions.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
+           "source": "verity_vllm.definitions.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
            "component_splits": samp.get("splits")}
     if nsm is None:
         out["refusal"] = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): the registered split count "
                           "cannot be evaluated -- the Program does not model this row's sampler geometry")
         return out
-    from verity.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits
     out["splits"] = S = int(registered_splits(int(nsm)))
     if samp.get("splits") != S:
         out["refusal"] = (f"the components declare splits {samp.get('splits')!r}, not the registered split count {S} of num_SMs={nsm}: "

@@ -151,9 +151,9 @@ def test_every_gemma_root_resolves_to_a_quarantine_dense_compute():
     for k, cs in specs.items():
         for c in cs:
             # Bf16MulScalarTensor is in the accepted registry (b1); the rest in
-            # `verity.definitions.registry.dense` (the quarantine modules re-export the same objects: same ids, same bodies)
-            assert spec_module(c.spec) == "verity.definitions.registry.dense" or (
-                k.startswith("Bf16MulScalarTensor_v1") and spec_module(c.spec) == "verity.definitions.registry.b1"), (k, spec_module(c.spec))
+            # `verity_vllm.definitions.registry.dense` (the quarantine modules re-export the same objects: same ids, same bodies)
+            assert spec_module(c.spec) == "verity_vllm.definitions.registry.dense" or (
+                k.startswith("Bf16MulScalarTensor_v1") and spec_module(c.spec) == "verity_vllm.definitions.registry.b1"), (k, spec_module(c.spec))
             assert c.rows == (1 if k.startswith("AddScalarBf16") else M)
     # the widened operands read their bf16 sources (never the f32 copies) ...
     (sq,) = specs[f"SquareBf16_v1{{N={H}}}"]

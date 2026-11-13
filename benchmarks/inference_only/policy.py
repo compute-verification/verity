@@ -113,7 +113,7 @@ def shape(model: str) -> Shape:
     (`b1.layer_weights_type`) and the LM head's, the embedding's where the two are tied."""
     from verity_vllm.program.model import config_of
 
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
 
     C, _ = config_of(pinned(model)[1])
     weights = dict(b1.weights_type(C).fields)

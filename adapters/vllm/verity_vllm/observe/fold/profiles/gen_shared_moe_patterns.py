@@ -45,9 +45,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import act as _ACT
-from verity.definitions.registry import cublas_bf16, ll_bf16
-from verity.definitions.registry import moe as _MOE
+from verity_vllm.definitions.registry import act as _ACT
+from verity_vllm.definitions.registry import cublas_bf16, ll_bf16
+from verity_vllm.definitions.registry import moe as _MOE
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (
@@ -488,7 +488,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
 def served_gate_spec(tp, K: int, N: int, M: int, tier: str) -> tuple[Any, tuple[str, ...]] | None:
     """The Build's gate Definition (`vllm_bindings.bf16_gemm.LlBf16GemmRule` / `CublasRouterRule`) at (K, N, M) on `tier`, or None
     when vLLM dispatches another tier there, the cuBLAS shape and M have no captured route, or the target is not the H200 default."""
-    from verity.definitions.registry import bf16_gemm_check
+    from verity_vllm.definitions.registry import bf16_gemm_check
 
     if tuple(tp.compute_capability) != (9, 0) or tp.batch_invariant:
         return None

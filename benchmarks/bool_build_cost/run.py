@@ -5,7 +5,7 @@ distinct Definition), timed per Definition.
     uv run benchmarks/bool_build_cost/run.py [--workload qwen3-06b|small] [--ir word,boolean] [--part descriptor,rules]
                                              [--jobs N] [--t T,T,...] --out DIR
 
-A workload is its Calls' word specializations (`WORKLOADS`); the Boolean ones are `verity.definitions.boolean.boolean_version` of each, as the Boolean
+A workload is its Calls' word specializations (`WORKLOADS`); the Boolean ones are `verity_vllm.definitions.boolean.boolean_version` of each, as the Boolean
 Build's lift calls them.  `--t` keeps the attention specializations of those key lengths only.  Writes `DIR/<ir>.json` (descriptor
 bytes, Program digest, the largest Definitions, rule seconds and the verdict per specialization, a digest of every rule) and
 `DIR/rules-<ir>.jsonl` (one line per rule as it finishes, so a run cut short keeps what it measured).
@@ -34,7 +34,7 @@ def _attention(T: int, mf: int) -> str:
 def qwen3_06b() -> list[str]:
     """Qwen3-0.6B, B1, a 256-token prompt and 32 tokens out on FA2: prefill row r sees r + 1 keys,
     decode step s sees 256 + s; MASKED_FROM is FA2's tile rule (`attention_vocab.fa2_masked_from`, BN 64)."""
-    from verity.definitions.registry.attention_vocab import fa2_masked_from
+    from verity_vllm.definitions.registry.attention_vocab import fa2_masked_from
     att = [_attention(r + 1, fa2_masked_from(256, 256, r, 64, True)) for r in range(256)]
     att += [_attention(T, fa2_masked_from(T, 1, 0, 64, False)) for T in range(257, 288)]
     other = [f"Gemm_v2{{K={k},N={n},DOT={DOT}}}" for k, n in ((1024, 4096), (2048, 1024), (1024, 6144), (3072, 1024), (1024, 151936))]
@@ -53,7 +53,7 @@ WORKLOADS = {"qwen3-06b": qwen3_06b, "small": small}
 
 def definitions(specs: list[str], ir: str) -> list:
     from verity.circuits.defs import CompositeDefinition, bind
-    from verity.definitions import boolean as BB
+    from verity_vllm.definitions import boolean as BB
     from verity.circuits.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
     out = []

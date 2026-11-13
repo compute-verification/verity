@@ -6,11 +6,11 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import b1, dense, hopper
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import fa2_softcap as F2S
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry import b1, dense, hopper
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import fa2_softcap as F2S
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -133,8 +133,8 @@ def test_the_capture_compare_accepts_the_definitions_own_rows(tanh_table, tmp_pa
 
 @pytest.mark.parametrize("masked_from", [2, 0])
 def test_the_replay_row_kernel_is_the_definition(masked_from):
-    from verity.definitions.numerics import rows as R
-    from verity.definitions.numerics import softcap_rows as SR
+    from verity_vllm.definitions.numerics import rows as R
+    from verity_vllm.definitions.numerics import softcap_rows as SR
 
     rng = np.random.default_rng(20 + masked_from)
     T, NH, KVH, D, BN = 40, 4, 2, 16, 16

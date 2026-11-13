@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from tests.properties import fp8_read_back_capture_gpu as X
-from verity.definitions.registry import fp8_ds_mla_upconvert as U
+from verity_vllm.definitions.registry import fp8_ds_mla_upconvert as U
 
 DN, DR = U.FP8_DS_MLA_GLM53["DN"], U.FP8_DS_MLA_GLM53["DR"]
 

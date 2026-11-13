@@ -15,7 +15,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from verity.definitions.numerics.kernel_registry import Declined
+from verity_vllm.definitions.numerics.kernel_registry import Declined
 
 from verity_vllm.program.compact import expanded_file_args
 from verity_vllm.query.manifest import format as RM

@@ -426,7 +426,7 @@ def test_readiness_lists_64bit_input_and_primitive():
 
 
 def test_readiness_gumbel_const64():
-    G = pytest.importorskip("verity.definitions.registry.sampling")
+    G = pytest.importorskip("verity_vllm.definitions.registry.sampling")
     P_ = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))
     r = readiness_32bit(P_)
     assert not r.ok

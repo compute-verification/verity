@@ -1,5 +1,5 @@
 """The vectorised twins of the block-scaled FP8 families (`derived_rows.tc_dot32_e4m3`, `fp8_group_quant_row`,
-`scaled_mm_fp8_block_row`) are word-for-word the registered Definitions (`verity/definitions/registry/fp8.py`) and the saved H100 kernel
+`scaled_mm_fp8_block_row`) are word-for-word the registered Definitions (`adapters/vllm/verity_vllm/definitions/registry/fp8.py`) and the saved H100 kernel
 words (`data/fp8_block_operands.npz`: `_C.per_token_group_fp8_quant` + blockwise `_C.cutlass_scaled_mm`, on an H100).
 Python >= 3.12 (`veritor.core.silicon_total_fp8`, the scalar QGMMA step)."""
 from __future__ import annotations
@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.circuits import Program, bind
-from verity.definitions.numerics import derived_rows as D
-from verity.definitions.registry import fp8 as F
+from verity_vllm.definitions.numerics import derived_rows as D
+from verity_vllm.definitions.registry import fp8 as F
 
 from tests.program.test_fp8 import _evaluate_returns
 

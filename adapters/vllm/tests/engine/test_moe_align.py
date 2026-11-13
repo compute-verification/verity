@@ -80,7 +80,7 @@ def routing(rng: random.Random, rows: int, how: str) -> list[int]:
 def test_reference_is_the_definitions_schedule_keyed_by_pair_index(how):
     # MoeAlignRanks_v1 over key = ix = the pair index, then MoeAlignBlocks_v1: every pair at blk * BM + rank % BM
     np = pytest.importorskip("numpy")
-    from verity.definitions.numerics.moe_align_rows import (
+    from verity_vllm.definitions.numerics.moe_align_rows import (
         moe_align_blocks,
         moe_align_ranks,
     )

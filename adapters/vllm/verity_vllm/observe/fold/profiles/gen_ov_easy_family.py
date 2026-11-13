@@ -10,7 +10,7 @@ one registered family covers both (`tests/engine/test_gen_ov_easy.py`).  Dense p
 from __future__ import annotations
 
 from verity.circuits.defs import SpecializedDefinition, bind
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 
 def serve_family(C: dict, *, LP: int = 32, STEPS: int = 15, BN: int | None = None) -> SpecializedDefinition:

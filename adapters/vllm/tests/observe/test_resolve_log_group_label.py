@@ -5,7 +5,7 @@ whose scope pattern returns a Group, e.g. `MoEFusedExperts` on `vllm.moe_forward
 from __future__ import annotations
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.resolve_log import short_label

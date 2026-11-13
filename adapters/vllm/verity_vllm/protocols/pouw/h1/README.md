@@ -25,7 +25,7 @@ says what the module holds.
   and their modules' `__all__` spells them.
 - **Loaded by:** the adapter's `pipeline`, `acquire`, `program.predict` and `protocols.pouw` packages, and the
   benchmarks under `benchmarks/pouw/`, `benchmarks/one_stage/`, `benchmarks/prove_path/` and `benchmarks/hash/dither/`.
-- **Loads:** `verity.circuits`, `verity.commitments`, `verity.definitions`, `verity.protocols.accounting.pouw` and
+- **Loads:** `verity.circuits`, `verity.commitments`, `verity_vllm.definitions`, `verity.protocols.accounting.pouw` and
   `verity.protocols.proofs.spot`; the adapter's `engine`, `commit`, `program.frontend`, `errors` and `protocols.pouw`; torch,
   at import in `receipts` and inside functions elsewhere; and vLLM and `verity_flock`, inside the functions that use
   them.

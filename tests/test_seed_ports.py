@@ -59,9 +59,9 @@ KEY_COUNTS = {
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
     "verity/circuits/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
         "QkSoftmaxPvPad's key count n, both halves' one port: a head's attention padded to T = 32",
-    "verity/definitions/registry/torch_attention.py::_POSITION":
+    "adapters/vllm/verity_vllm/definitions/registry/torch_attention.py::_POSITION":
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
-    "verity/definitions/registry/torch_step.py::_POSITION":
+    "adapters/vllm/verity_vllm/definitions/registry/torch_step.py::_POSITION":
         "TrainStep_v1's key count n, the run input its attention calls read as theirs: a position with no coin",
 }
 WINDOWS = {

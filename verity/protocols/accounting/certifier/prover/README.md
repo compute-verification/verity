@@ -24,5 +24,5 @@ with the ones they build on.
 - **Documents**: none. No module writes a file or defines a schema.
 - **Loads from**: `verity.protocols.accounting.certifier.verifier` (the schedule and records the Definitions are stated over, and
   the Definitions they build on), `verity.protocols.proofs.spot.verifier`, `verity.circuits`, `verity.commitments` and, for
-  `memcheck` and `block_key`, `verity.definitions`.
+  `memcheck` and `block_key`, `verity_vllm.definitions`.
 - **Tests**: not here. They are in `verity/protocols/accounting/certifier/verifier/tests`, with the verifier's.

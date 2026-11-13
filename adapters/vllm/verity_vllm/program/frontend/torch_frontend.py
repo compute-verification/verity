@@ -427,11 +427,11 @@ class Ops:
 
     def const(self, w: int, bits: int, name: str = ""):
         """`Const<w>[0x..]`: a zero-arity gate with a fixed correct output (emitted immediately)."""
-        from verity.definitions.registry.b1 import const
+        from verity_vllm.definitions.registry.b1 import const
         return Prim(const(w, bits))(name=name)
 
     def gather_bf16(self, vocab: int) -> Prim:
-        from verity.definitions.registry.prims import gather_bf16
+        from verity_vllm.definitions.registry.prims import gather_bf16
         return Prim(gather_bf16(vocab))
 
     def __getitem__(self, fid: str) -> _Callable:

@@ -190,12 +190,12 @@ def test_the_boolean_call_candidates_drop_only_families_boolean_version_refuses(
 
 def test_a_boolean_version_whose_statics_no_word_call_binds_is_not_a_candidate(monkeypatch):
     """A Boolean Definition linked to its word by name is the Boolean version only at a binding that gives each of its statics
-    (`verity.definitions.boolean._find`), so one with a static no word Call family of its name has is not a candidate, and
+    (`verity_vllm.definitions.boolean._find`), so one with a static no word Call family of its name has is not a candidate, and
     `is_call` says it is no Call without the catalog: a new port shape (``{K,R}`` beside the word Call's ``{K}``) is not
     refused."""
     from types import SimpleNamespace
 
-    from verity.definitions import boolean as BV
+    from verity_vllm.definitions import boolean as BV
 
     TG.load_registries()
     exact, by_name, errors = BV._load()
@@ -238,7 +238,7 @@ def test_a_boolean_version_made_on_demand_is_a_call_by_its_id(monkeypatch):
 def test_the_boolean_versions_made_on_demand_are_made_in_sorted_order(monkeypatch):
     """Making a Boolean version on demand registers it, so `on_demand_boolean_families` makes them in sorted order: the
     registry's order, which a slice's shared part notes (`units.slices`' ``families``), is not a set's."""
-    from verity.definitions import boolean
+    from verity_vllm.definitions import boolean
 
     asked: list[str] = []
     monkeypatch.setattr(boolean, "made_on_demand", asked.append)
@@ -392,7 +392,7 @@ def test_a_caller_keeps_room_for_random_vectors_after_fewer_edges():
 
 def _f32_sum():
     from verity.circuits.types import Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     return _composite("CircuitCheckFloorSum", (_f32x2(), Value(32)), lambda B, S, x: B.call(P.F32Add, x[0], x[1]))
 
@@ -652,7 +652,7 @@ def _wide_experts(E: int):
     are over and 8 vectors of its other parameters fit in."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32
-    from verity.definitions.registry import fp8_moe_experts as X
+    from verity_vllm.definitions.registry import fp8_moe_experts as X
 
     return (bind(X.MoeExpertFp8Gemm, E=E, K=128, N=80, G=64, KB=32, SWAP=False, DOT=BlackwellE4m3QmmaDot32),
             dataclasses.replace(OPTS, input_budget=8192, vectors=8))
@@ -712,7 +712,7 @@ def _wide_shard():
     """`EmbeddingShard_v1` at VS=64, H=32, START=1000, with an input budget its table's 2,048 leaves are over: no edge or
     random token lies in the shard."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import b1_tp2
+    from verity_vllm.definitions.registry import b1_tp2
 
     return bind(b1_tp2.EmbeddingShard, VS=64, H=32, START=1000), dataclasses.replace(OPTS, input_budget=1024, vectors=8)
 
@@ -800,7 +800,7 @@ def _f32x2():
 
 def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
     from verity.circuits.types import Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckRedundant", (_f32x2(), Value(32)),
                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])))
@@ -815,7 +815,7 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     node by node; the whole Definition's cut compares them)."""
     from verity.circuits.refs import array_of
     from verity.circuits.types import Array, Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckRecompute", (_f32x2(), Array(2, Value(32))),
                     lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
@@ -833,7 +833,7 @@ def test_a_call_over_the_partition_budget_fails_by_its_name(monkeypatch):
     contains it, so its record says it is unchecked and nothing fails; a Call whose callees can't partition it either (one is no
     Call) fails by its name, with that callee, so its entry never reads as a pass."""
     from verity.circuits.types import Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     fn = _composite("CircuitCheckOverBudget", (_f32x2(), Value(32)),
                     lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), x[1]))
@@ -853,7 +853,7 @@ def _two_callees():
     callee that computes one value twice, each copy returned by its own proof block, and a 1-gate one."""
     from verity.circuits.refs import array_of
     from verity.circuits.types import Array, Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     twice = _composite("CircuitCheckTwice", (_f32x2(), Array(2, Value(32))),
                        lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
@@ -918,7 +918,7 @@ def test_a_call_over_the_budget_with_a_primitive_callee_over_it_too_fails_by_its
     """A primitive callee over ``partition_max_leaves`` has no callees to partition it, so nothing checks its Call's partition
     though it is a Call: `checks.callee_gap` names it, in the record, in the Call's failure and for the suite's walk."""
     from verity.circuits.types import Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     top = _composite("CircuitCheckOverPrimitive", (_f32x2(), Value(32)), lambda B, S, x: B.call(P.F32Mul, x[0], x[1]))
     monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (top, P.F32Mul)})
@@ -1044,7 +1044,7 @@ def test_the_partition_cuts_a_call_once(monkeypatch):
     cut whole once, by `partition` alone."""
     from verity.circuits.types import Value
     from verity.circuits import word as W
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     real_rule, cuts = W.unit_rule, []
 
@@ -1234,7 +1234,7 @@ def test_a_boolean_family_over_the_budget_keeps_its_boolean_binding(suite):
 
 def test_a_gate_no_output_reads_is_a_dead_gate():
     from verity.circuits.types import Value
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     def body(B, S, x):
         B.call(P.F32Mul, x[0], x[1])
@@ -1411,7 +1411,7 @@ def test_a_boolean_constant_is_checked_on_its_one_instance():
 
 def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
     from verity_flock import ir_lower as IL
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     add = IL.PIECES["F32Add_v1"]
     monkeypatch.setitem(IL.PIECES, "F32Mul_v1", lambda C, a, b: add(C, a, b))
@@ -1420,7 +1420,7 @@ def test_a_lowering_that_differs_from_the_ir_is_caught(monkeypatch):
 
 
 def test_a_lowering_count_off_its_pin_is_named():
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     pins = {"pieces": {"F32Mul_v1": {"and": 1}}, "units": {}}
     e = CK.check_definition(P.F32Mul, OPTS, pins=pins)
@@ -1492,7 +1492,7 @@ def test_a_lowering_with_its_pinned_and_count_but_another_circuit_is_refused_on_
     """The same ANDs computing the same function, but built another way (every AND's operands swapped), match the pin's AND count
     and every correspondence check: only the pin's ``type`` refuses it."""
     from verity.circuits.boolean import forms
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
     pins = {"pieces": {"F32Mul_v1": pin["counts"]}, "units": {}}
@@ -1510,7 +1510,7 @@ def test_a_pin_without_a_type_is_named_as_untyped_and_update_pins_types_it(monke
     warning, and `--update-pins` writes the lowering's ``type`` into it."""
     from circuit_check import cli
     from circuit_check import sidecars as SC
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     pin = _lowering_pin(CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {}, "units": {}}))
     e = CK.check_definition(P.F32Mul, OPTS, pins={"pieces": {"F32Mul_v1": {"and": pin["counts"]["and"]}}, "units": {}})
@@ -1549,7 +1549,7 @@ def test_any_definition_holding_a_digests_pin_is_held_to_it():
     from verity.circuits.codec import program_digest
     from verity.circuits.defs import bind
     from verity.circuits.program import Program
-    from verity.definitions.registry import tp_allreduce as TA
+    from verity_vllm.definitions.registry import tp_allreduce as TA
 
     d = bind(TA.AllReduceMultimemVector, WORLD=8, TREE=TA.GLM53_H200_TREE, FTZ=False)
     digest = program_digest(Program(d))

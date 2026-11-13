@@ -11,11 +11,11 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.liveness import dead_gates
 from verity.circuits.program import Program
-from verity.definitions.registry import dead_free as DF
-from verity.definitions.registry import sampling as SA
-from verity.definitions.registry import topp_standalone as TS
-from verity.definitions.registry import topp_standalone_words as TSW
-from verity.definitions.registry.topp_keep_builder import Engine
+from verity_vllm.definitions.registry import dead_free as DF
+from verity_vllm.definitions.registry import sampling as SA
+from verity_vllm.definitions.registry import topp_standalone as TS
+from verity_vllm.definitions.registry import topp_standalone_words as TSW
+from verity_vllm.definitions.registry.topp_keep_builder import Engine
 
 f32 = np.float32
 P = (0.95, 0.5, 0.9, 0.95, 0.8, 1.0, 0.3, 0.99)

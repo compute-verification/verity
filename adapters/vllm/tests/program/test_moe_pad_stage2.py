@@ -30,11 +30,11 @@ from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import composite
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry import b1, moe
-from verity.definitions.registry import lifted as L
-from verity.definitions.registry import moe_pad as MP
-from verity.definitions.registry.prims import BF16, F32, I32
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import b1, moe
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import moe_pad as MP
+from verity_vllm.definitions.registry.prims import BF16, F32, I32
 
 E, VPT, H, INTER = 4, 2, 16, 16
 I = INTER   # the name `test_moe_pad_route_a3.py` imports

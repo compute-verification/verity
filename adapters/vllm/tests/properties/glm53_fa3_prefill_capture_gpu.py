@@ -52,11 +52,11 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import fa3_split_twins as TW
-from verity.definitions.registry import attention_vocab, hopper
-from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import fa3_split as FS
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import fa3_split_twins as TW
+from verity_vllm.definitions.registry import attention_vocab, hopper
+from verity_vllm.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.registry import fa3_split as FS
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
@@ -102,7 +102,7 @@ def case_list(quick: bool = False) -> list[dict[str, Any]]:
 
 def plan(seqlens: list[int], num_splits: int) -> dict[str, Any]:
     """The launch's split count and each sequence's (`fa3_model.split_plan` for the served `num_splits = 0`; 1 for a pinned launch)."""
-    from verity.definitions.numerics import fa3_model as FM
+    from verity_vllm.definitions.numerics import fa3_model as FM
 
     if num_splits == 1:
         return {"static": 1, "dynamic": [1] * len(seqlens)}
@@ -285,8 +285,8 @@ def split_twin(q, k, v, rows, L: int, ns: int) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
-    from verity.definitions.numerics import fa2_relation
-    from verity.definitions.numerics import fa3_model as FM
+    from verity_vllm.definitions.numerics import fa2_relation
+    from verity_vllm.definitions.numerics import fa3_model as FM
 
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.frontend.rules import vllm_dsa_dense

@@ -20,12 +20,12 @@ sm_89 table lands, evaluating this composite raises `MufuTanhUnmeasured` on any 
 `softcap_tests.py` check the STRUCTURE (gate population = v3 + NVIS x {MufuTanh, F32MulFtz} + the two constants, the constants'
 bit patterns, static wiring); `softcap_difftest.py` is the adapter for the pod difftest vs `_vllm_fa2_C.varlen_fwd(softcap=CAP)`.
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.dense.AttentionSoftcap`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.definitions.registry.dense.AttentionSoftcap`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
 
-from verity.definitions.registry.dense import AttentionSoftcap, AttentionHeadSoftcap, AttnBlockSoftcap, softcap_mul_bits, softcap_scale_log2_bits, M_LOG2E
+from verity_vllm.definitions.registry.dense import AttentionSoftcap, AttentionHeadSoftcap, AttnBlockSoftcap, softcap_mul_bits, softcap_scale_log2_bits, M_LOG2E
 
 SEMANTIC_ID = "dense/AttentionSoftcap@v1"
 

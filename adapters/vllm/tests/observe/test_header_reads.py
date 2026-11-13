@@ -15,7 +15,7 @@ import dataclasses
 import json
 
 import pytest
-from verity.definitions.registry import tp_allreduce
+from verity_vllm.definitions.registry import tp_allreduce
 
 from tests.observe.test_patterns_synthetic import V, context, decode_step
 from verity_vllm.observe.events import Note, RunHeader

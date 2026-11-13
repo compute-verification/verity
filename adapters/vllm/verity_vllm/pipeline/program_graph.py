@@ -35,7 +35,7 @@ import numpy as np
 from verity.circuits.codec import definition_digest
 from verity.circuits.defs import bind
 from verity.circuits import word as word_query
-from verity.definitions.encoding import encode_specialization, word_values
+from verity_vllm.definitions.encoding import encode_specialization, word_values
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence

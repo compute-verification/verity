@@ -3,12 +3,12 @@
 (`alpha = 1`): one FADD per element, RN.  Both widenings are Transparent noops, so the definition reads the two bf16
 sources.
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.dense.AddWidenedBf16`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.definitions.registry.dense.AddWidenedBf16`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
 
-from verity.definitions.registry.dense import AddWidenedBf16
+from verity_vllm.definitions.registry.dense import AddWidenedBf16
 
 SEMANTIC_ID = "dense/AddWidenedBf16@v1"
 

@@ -216,7 +216,7 @@ REQUESTS_RTOL = 1e-9
 
 def heads() -> int:
     """The sparse-MLA heads a token runs: GLM-5.3's `NH`."""
-    from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+    from verity_vllm.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
     return SPARSE_MLA_GLM53["NH"]
 
 

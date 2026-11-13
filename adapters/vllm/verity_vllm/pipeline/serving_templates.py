@@ -171,10 +171,10 @@ _TOPP_STAGES = ("TopPStatsHead_v1", "TopPStatsExp_v1", "TopPProbs_v1", "TopPStep
 STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES,
           "TokenSelect_v1": ("GreedyChunk_v2", "GreedyCombine_v2")}
 STAGE_OF = {f: tuple(row for row, fs in STAGES.items() if f in fs) for fs in STAGES.values() for f in fs}
-_TOPP_PLAN = "verity.definitions.registry.topp_stages"
+_TOPP_PLAN = "verity_vllm.definitions.registry.topp_stages"
 #: the module whose ``plan`` and ``cut`` a ``STAGES`` row family's units are
 STAGE_PLANS = {"GumbelTopPTokenSelect_v1": _TOPP_PLAN, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_PLAN,
-               "TokenSelect_v1": "verity.definitions.registry.greedy_stages"}
+               "TokenSelect_v1": "verity_vllm.definitions.registry.greedy_stages"}
 #: the row Definitions cut per expert (`expert_rows`), by the row family: its block family, a pair's GEMM over n of its expert's
 #: rows (n a power of two dividing G and N, N / n blocks of the row), each block's rows and its G-block's scale row read at the
 #: pair's expert from a table registered one expert a row (`gates.embedding.EmbeddingRead_v1`, ``READ``), whose key is the slot
@@ -238,7 +238,7 @@ def template(t: str) -> Template:
     from verity.circuits.boolean.trace import word_of
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import CompositeDefinition, bind
-    from verity.definitions import boolean as BB
+    from verity_vllm.definitions import boolean as BB
     from verity.circuits.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -309,8 +309,8 @@ def cols_refused(word: str) -> str | None:
 
     if spec_base(word) != "AllReduceMultimem_v1":
         return None
-    from verity.definitions.registry import tp_allreduce as TA
-    from verity.definitions.registry import tp_allreduce_nodes as TN
+    from verity_vllm.definitions.registry import tp_allreduce as TA
+    from verity_vllm.definitions.registry import tp_allreduce_nodes as TN
 
     S = spec_statics(word)
     try:
@@ -369,7 +369,7 @@ def chain_ways(spec: str) -> list[tuple[int | None, tuple[tuple[str, int], ...]]
     key blocks first (None, the cut its module names), then each key block its scores unit and values units of G columns, at
     each G of `values_widths`, coarse to fine."""
     from verity.circuits.codec import descriptor_id
-    from verity.definitions.registry import sparse_mla, sparse_mla_split
+    from verity_vllm.definitions.registry import sparse_mla, sparse_mla_split
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     sp, chain = _bind(spec), {**sparse_mla.CUTS, **sparse_mla_split.CUTS}[spec_base(spec)]
@@ -511,7 +511,7 @@ def fused_block(spec: str, n: int) -> Any:
     from verity.circuits.codec import lookup_primitive
     from verity.circuits.defs import REGISTRY
     from verity.commitments.gates.embedding import read
-    from verity.definitions import boolean as BB
+    from verity_vllm.definitions import boolean as BB
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S = spec_statics(spec)
@@ -533,7 +533,7 @@ def _bind(spec: str, family: str | None = None, **over: Any) -> Any:
     when it does not bind.  A caller holds the bound descriptor id to ``spec``."""
     from verity.circuits.codec import lookup_primitive
     from verity.circuits.defs import REGISTRY
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     def static(v: Any) -> Any:

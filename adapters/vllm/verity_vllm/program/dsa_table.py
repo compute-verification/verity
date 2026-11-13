@@ -15,7 +15,7 @@ reads its own history at it, so the index and the reads are two Calls.  Serving 
 (request, layer) history table, `EmbeddingRead_v1{V=2^17,H}` each, read j's ``tok`` wired to index output j.
 
 These are stand-ins: the Boolean index units and table read (`commitments.gates.embedding`) are on bits only, with no word view a
-Program can call.  Once `verity.definitions.registry` holds word Definitions of these two names with their Boolean versions, the
+Program can call.  Once `verity_vllm.definitions.registry` holds word Definitions of these two names with their Boolean versions, the
 Program calls those and this module goes.
 """
 from __future__ import annotations
@@ -24,9 +24,9 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.ops.prims import const
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.definitions.registry import b1
-from verity.definitions.registry import dsa_topk_mask as M
-from verity.definitions.registry.prims import BF16, BIT, I32
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import dsa_topk_mask as M
+from verity_vllm.definitions.registry.prims import BF16, BIT, I32
 
 _INDEX_CONF = ("reference-defined: a mask's members' positions in ascending order, held to the rows network (DsaButterflyRows_v1 at "
                "DsaButterflySettings_v1) on counted masks of TOPK members (adapters/vllm/tests/program/test_dsa_table.py)")

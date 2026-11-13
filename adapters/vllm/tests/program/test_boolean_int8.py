@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_int8`: `int8_exact`'s numerics on bits.
+"""`verity_vllm.definitions.registry.boolean_int8`: `int8_exact`'s numerics on bits.
 
 Each leaf is its word primitive on uniform words and on its special ones (signed zeros, infinities, quiet and signalling NaNs,
 subnormals, rint's ties, the s8 and u32 saturation edges). Each σ composite is its word Definition on random rows and on the
@@ -16,10 +16,10 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate, evaluate_batch
 from verity.circuits.types import Array, Value
-from verity.definitions.boolean import boolean_version
+from verity_vllm.definitions.boolean import boolean_version
 from verity.circuits.ops import prims as CP
-from verity.definitions.registry import boolean_int8 as BI8
-from verity.definitions.registry import int8_exact as IE
+from verity_vllm.definitions.registry import boolean_int8 as BI8
+from verity_vllm.definitions.registry import int8_exact as IE
 
 #: 1/sqrt(128), the 8B row's attention scale
 SCALE = 128 ** -0.5

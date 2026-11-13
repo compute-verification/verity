@@ -19,7 +19,7 @@ from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import REGISTRY
 from verity.circuits.population import population_program
 from verity.commitments.windows import interface as IF
-from verity.definitions.boolean import gate_table
+from verity_vllm.definitions.boolean import gate_table
 
 from verity_vllm.program.predict import block_counts as BC
 from verity_vllm.records import block_counts as RBC

@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.registry import b1
-from verity.definitions.registry.moe import MoeExpertGemm, MoeExpertGemmW, MoeSum
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.moe import MoeExpertGemm, MoeExpertGemmW, MoeSum
 
 from verity_vllm.program import moe_difftest as MD
 from verity_vllm.properties import admission as A

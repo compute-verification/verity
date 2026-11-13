@@ -219,7 +219,7 @@ def test_a_structural_stager_lays_a_table_read_out_as_the_flat_stager_does(tmp_p
 #: combine (ex2 and rcp), the fused RMSNorm (rsq) and the multimem all-reduce (none); each has a row of at least 2,048 bits,
 #: since a statement needs a row whose SHA-512 compresses a block before its last
 def _served(name: str):
-    from verity.definitions.registry import cuda_rmsnorm, deepgemm, hopper, sparse_mla_split, tp_allreduce
+    from verity_vllm.definitions.registry import cuda_rmsnorm, deepgemm, hopper, sparse_mla_split, tp_allreduce
 
     return {"FlashInferFp8Linear": lambda: bind(deepgemm.FlashInferFp8Linear, K=128, N=1),
             "SparseMlaCombine": lambda: bind(sparse_mla_split.SparseMlaCombine, NSPLIT=2, DV=32, INV=hopper.Fa3InvSum),

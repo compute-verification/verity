@@ -126,7 +126,7 @@ def zk_refusal(tp: Any) -> str | None:
     if statement(tp).get("reads") != "slots" or not (tables := slot_tables(tp.fn)):
         return None
     from verity.circuits.codec import descriptor_id
-    from verity.definitions import boolean as BB
+    from verity_vllm.definitions import boolean as BB
 
     try:
         fix = f"name its Boolean version {descriptor_id(BB.boolean_version(tp.fn))}"

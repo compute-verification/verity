@@ -11,12 +11,12 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.registry import b1 as B1
-from verity.definitions.registry import boolean_moe as BMOE
-from verity.definitions.registry import boolean_sigma as SG
-from verity.definitions.registry import boolean_tp_allreduce as BTA
-from verity.definitions.registry import moe as M
-from verity.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import b1 as B1
+from verity_vllm.definitions.registry import boolean_moe as BMOE
+from verity_vllm.definitions.registry import boolean_sigma as SG
+from verity_vllm.definitions.registry import boolean_tp_allreduce as BTA
+from verity_vllm.definitions.registry import moe as M
+from verity_vllm.definitions.registry import tp_allreduce as TA
 
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST

@@ -49,7 +49,7 @@ def values(tok: int, start: int, vs: int) -> tuple[int, int, int]:
 def shard_fn(VS: int, H: int, START: int) -> Any:
     # inside the function: importing this module loads neither numpy nor the core `verity`
     from verity.circuits.defs import bind
-    from verity.definitions.registry import b1_tp2
+    from verity_vllm.definitions.registry import b1_tp2
 
     return bind(b1_tp2.EmbeddingShard, VS=VS, H=H, START=START)
 

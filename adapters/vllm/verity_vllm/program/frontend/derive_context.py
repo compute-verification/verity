@@ -315,7 +315,7 @@ class Ctx:
         return self._registered(node, f"value {name!r}", lambda r: r.value(name, int(width), int(bits), distinct))
 
     def table(self, name: str, node=None) -> Coll:
-        """The registered table `name` (`verity.definitions.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
+        """The registered table `name` (`verity_vllm.definitions.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
         return self._registered(node, f"table {name!r}", lambda r: r.table(name))
 
     def _registered(self, node, what: str, read) -> Coll:

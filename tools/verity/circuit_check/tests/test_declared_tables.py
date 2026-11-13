@@ -29,8 +29,8 @@ from verity.circuits.ops.prims import F32
 from verity_flock import fp as FP
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
-from verity.definitions.registry import lifted as L
-from verity.definitions import registry as R
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions import registry as R
 
 #: the fewest entries an indexable constant has to be a table
 MIN_ENTRIES = 16

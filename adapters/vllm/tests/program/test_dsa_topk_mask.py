@@ -15,10 +15,10 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.codec import lookup_primitive
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
-from verity.definitions import boolean as SW
-from verity.definitions.registry import boolean_dsa_topk_mask as BM
-from verity.definitions.registry import dsa_topk as T
-from verity.definitions.registry import dsa_topk_mask as M
+from verity_vllm.definitions import boolean as SW
+from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
+from verity_vllm.definitions.registry import dsa_topk as T
+from verity_vllm.definitions.registry import dsa_topk_mask as M
 
 POOL = [0x00000000, 0x80000000, 0x3F800000, 0xBF800000, 0x7FC00000, 0xFFC00000, 0x7F800000, 0xFF800000, 0x00000001, 0x80000001]
 

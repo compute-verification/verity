@@ -29,15 +29,15 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import fa3_model as FA3
-from verity.definitions.registry import attention_vocab
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import fa2_split as W
-from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import inductor as IR
-from verity.definitions.registry.hopper import Fa3InvSum
-from verity.definitions.registry.prims import Fa2InvSum
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import fa3_model as FA3
+from verity_vllm.definitions.registry import attention_vocab
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import fa2_split as W
+from verity_vllm.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.registry import inductor as IR
+from verity_vllm.definitions.registry.hopper import Fa3InvSum
+from verity_vllm.definitions.registry.prims import Fa2InvSum
 from verity.hardware.cards import load
 
 from verity_vllm.acquire import inductor_templates as T

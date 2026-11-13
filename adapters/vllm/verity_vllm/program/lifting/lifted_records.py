@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from verity.definitions.registry.lifted import check_lag
+from verity_vllm.definitions.registry.lifted import check_lag
 
 from verity_vllm.program.workload import eos_lag_rows_declared
 

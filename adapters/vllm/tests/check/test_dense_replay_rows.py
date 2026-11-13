@@ -9,9 +9,9 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.call_scope import specialization
-from verity.definitions.numerics import ir_rows
-from verity.definitions.numerics.rows import EVALUATORS, ROWS
-from verity.definitions.registry import dense
+from verity_vllm.definitions.numerics import ir_rows
+from verity_vllm.definitions.numerics.rows import EVALUATORS, ROWS
+from verity_vllm.definitions.registry import dense
 
 from tests.acquire.call_boundary_programs import DENSE, LP, PF, build_dir, dense_program
 from verity_vllm.check.replay import coverage as COV

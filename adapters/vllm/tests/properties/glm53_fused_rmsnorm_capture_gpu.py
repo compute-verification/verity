@@ -53,11 +53,11 @@ from typing import Any
 import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions import boolean as SW
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import dsa_norm_rows as NR
-from verity.definitions.registry import dsa_norm as DN
-from verity.definitions.registry.prims import bits_of
+from verity_vllm.definitions import boolean as SW
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import dsa_norm_rows as NR
+from verity_vllm.definitions.registry import dsa_norm as DN
+from verity_vllm.definitions.registry.prims import bits_of
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G

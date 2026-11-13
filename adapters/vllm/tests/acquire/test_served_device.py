@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from verity.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served_device as SD

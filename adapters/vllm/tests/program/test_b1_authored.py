@@ -11,7 +11,7 @@ torch = pytest.importorskip("torch")
 
 from verity.circuits import Program, bind, encode_program, program_digest  # noqa: E402
 from verity.circuits.codec import descriptor_size  # noqa: E402
-from verity.definitions.registry import b1  # noqa: E402
+from verity_vllm.definitions.registry import b1  # noqa: E402
 
 from tests.program import b1_authored as A  # noqa: E402
 from verity_vllm.program.frontend import export_report  # noqa: E402

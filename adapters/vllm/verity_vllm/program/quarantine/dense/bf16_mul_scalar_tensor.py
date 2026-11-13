@@ -4,7 +4,7 @@
 `c10::BFloat16(float)` = `cvt.rn.bf16.f32` (NaN -> 0x7FFF).  Probe `normalizer`: `aten.mul(bf16 x, bf16 0-d) ==
 bf16(f32(x) * 48)` on all 65,282 non-NaN bf16 words.
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.b1.Bf16MulScalarTensor`, bound as
+PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.definitions.registry.b1.Bf16MulScalarTensor`, bound as
 kind `scale_tensor` by the pinned `b1-eager-v3` vocabulary); this module re-exports the same object so the quarantine's
 difftest adapter and `ALL_DEFINITIONS` are unchanged.
 
@@ -13,7 +13,7 @@ it as `Shared(view)` so the Program reads the buffer honestly, and `analytic.che
 is an owner-level decision, REPORT §GEMMA2_2B)."""
 from __future__ import annotations
 
-from verity.definitions.registry.b1 import Bf16MulScalarTensor
+from verity_vllm.definitions.registry.b1 import Bf16MulScalarTensor
 
 SEMANTIC_ID = "dense/Bf16MulScalarTensor@v1"
 

@@ -115,10 +115,10 @@ from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
-from verity.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import derived_rows as DR
 from verity.circuits.ops.prims import HopperE4m3QgmmaDot32
-from verity.definitions.registry import act, b1, dsa, dsa_topk_reads, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
-from verity.definitions.registry import boolean_fp8 as BF
+from verity_vllm.definitions.registry import act, b1, dsa, dsa_topk_reads, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
+from verity_vllm.definitions.registry import boolean_fp8 as BF
 
 
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): `class_statement.stage` cuts a PARTS type's

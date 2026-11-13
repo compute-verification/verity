@@ -33,4 +33,4 @@ inputs = ["tools/config/verity_config",
           "benchmarks/torch_gpu/s8_linear/int_mm.py",
           "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
           "verity/circuits/ops", "verity/circuits/silicon",
-          "verity/definitions/__init__.py", "verity/hardware/__init__.py", "verity/protocols/accounting/poub/__init__.py"]
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/hardware/__init__.py", "verity/protocols/accounting/poub/__init__.py"]

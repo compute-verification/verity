@@ -181,7 +181,7 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     out.append(Template(f"token select (greedy) {fn.id}", fn, (own("r"),), own("r"), bind_at=lambda _req, n: fn,
                         shapes=tuple(((), n) for n in range(1, max_seqs + 1))))
     # (logits, top_p, seed, pos, temperature, S)
-    from verity.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits
     S_reg = registered_splits(tp.num_sms)
     fn = kind("token_select_stochastic_split", V=V, S=S_reg)
     out.append(Template(f"token select (top-p, registered S) {fn.id}", fn, (own("r"), SHARED, own("r"), SHARED, SHARED, SHARED),

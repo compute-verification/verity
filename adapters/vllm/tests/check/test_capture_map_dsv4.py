@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 import pytest
-from verity.definitions.registry import catalog
+from verity_vllm.definitions.registry import catalog
 
 from tests.check.capture_map_check import check, check_target, report
 from tests.check.test_capture_map_versions import violations

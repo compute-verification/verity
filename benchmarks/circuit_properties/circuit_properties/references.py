@@ -2,7 +2,7 @@
 products.
 
 * `boolean_gemm`: `Gemm_v3{K,N,DOT=AmpereBF16TcDot16_v3}` (`verity.circuits.ops.boolean.gemm`), one GEMM on bits.
-* `layer`: one transformer layer of the served b1 registry (`verity.definitions.registry.b1`) at T positions, on bits:
+* `layer`: one transformer layer of the served b1 registry (`verity_vllm.definitions.registry.b1`) at T positions, on bits:
   σ(`LayerPre_v1`), the Boolean `Attention_v3` (`Attention_v6`), σ(`LayerPost_v1`), wired as `_forward_positions_v4` wires
   one layer (not layer 0: the fused add+RMSNorm with the residual). The GEMMs are σ(b1's `Gemm_v1`), `Gemm_v4`, whose dot
   steps are `AmpereBF16TcDot16_v3`: a counted product is one lane of such a step under a `Gemm` (the activation `a`, the
@@ -61,7 +61,7 @@ def shape(model) -> dict:
 
 def configs() -> dict[str, tuple[dict, str]]:
     """name -> (b1 configuration, where its shape comes from)."""
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
     models = rho_models()
     qwen7 = b1.B1_CONFIG | shape(models["qwen25-7b"]) | {"model": "Qwen/Qwen2.5-7B"}
     llama = b1.B1_CONFIG | shape(models["llama3-405b"]) | {"model": "meta-llama/Llama-3.1-405B", "EPS": 1e-5,
@@ -78,8 +78,8 @@ def configs() -> dict[str, tuple[dict, str]]:
 def on_bits(word: CompositeDefinition, version: int, **bindings):
     """σ(``word``) at ``bindings`` (`boolean.lift_body`: each Call the Boolean version of its Definition), with the QKV bias
     add, `BiasAdd_v1`, which has no registered Boolean version, as σ(`BiasAdd_v1`) (its `Bf16Add`s on bits)."""
-    from verity.definitions import boolean as BB
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions import boolean as BB
+    from verity_vllm.definitions.registry import b1
     bias = BB.sigma_lift(b1.BiasAdd, 2, register=False)
 
     def override(fn):
@@ -94,8 +94,8 @@ def on_bits(word: CompositeDefinition, version: int, **bindings):
 
 def layer_fn(C: dict, T: int = 1):
     """One b1 layer (not layer 0) at T positions on bits, as an unregistered root Definition."""
-    from verity.definitions import boolean as BB
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions import boolean as BB
+    from verity_vllm.definitions.registry import b1
     BB.load()
     H, NH, KVH, D = C["H"], C["NH"], C["KVH"], C["D"]
     pre = on_bits(b1.LayerPre, 3, C=C, L0=False)

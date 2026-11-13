@@ -15,10 +15,10 @@ from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
 from verity.circuits.ops.prims import ZERO32
-from verity.definitions.registry import b1, hopper
-from verity.definitions.registry import fa2_check_inf as F2
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.prims import BF16, F32
+from verity_vllm.definitions.registry import b1, hopper
+from verity_vllm.definitions.registry import fa2_check_inf as F2
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.prims import BF16, F32
 
 RNG = np.random.default_rng(20261024)
 #: bf16 words at the edges: ±0, ±inf, NaNs, the largest finite, the smallest subnormal, ±1, one ulp above 1

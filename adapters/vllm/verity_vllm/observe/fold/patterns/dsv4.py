@@ -13,12 +13,12 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import re
 from dataclasses import dataclass
 
-from verity.definitions.numerics.mhc_twin import tf32_num_split
-from verity.definitions.registry import dsv4_compressor as C
-from verity.definitions.registry import dsv4_indexer as I
-from verity.definitions.registry import dsv4_qnorm_insert as Q
-from verity.definitions.registry.dsa_norm import check_block
-from verity.definitions.registry.fp8 import weight_blocks
+from verity_vllm.definitions.numerics.mhc_twin import tf32_num_split
+from verity_vllm.definitions.registry import dsv4_compressor as C
+from verity_vllm.definitions.registry import dsv4_indexer as I
+from verity_vllm.definitions.registry import dsv4_qnorm_insert as Q
+from verity_vllm.definitions.registry.dsa_norm import check_block
+from verity_vllm.definitions.registry.fp8 import weight_blocks
 
 from verity_vllm.observe.events import TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import ALL_REDUCE_OP

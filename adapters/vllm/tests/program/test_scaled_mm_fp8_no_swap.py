@@ -9,8 +9,8 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits import word as W
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
-from verity.definitions.registry import fp8
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import fp8
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile

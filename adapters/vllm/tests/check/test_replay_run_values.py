@@ -19,8 +19,8 @@ import types
 import numpy as np
 import pytest
 import torch
-from verity.definitions.numerics import rows as RK
-from verity.definitions.registry.dsa_topk import (
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.registry.dsa_topk import (
     canonical_ok,
     topk_set,
     waksman_apply,

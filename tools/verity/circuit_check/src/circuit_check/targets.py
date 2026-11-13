@@ -80,11 +80,11 @@ def load_registries() -> None:
 
     for mod in SC.discover():
         importlib.import_module(mod)
-    import verity.definitions.registry as R
+    import verity_vllm.definitions.registry as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
-    from verity.definitions.numerics import rows, twins  # noqa: F401  (their kernels register with core)
+    from verity_vllm.definitions.numerics import rows, twins  # noqa: F401  (their kernels register with core)
     CC.registries(SC.discover())
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
@@ -471,7 +471,7 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 
 def _kernel_roots() -> list[Any]:
-    from verity.definitions.numerics import kernel_registry as KR
+    from verity_vllm.definitions.numerics import kernel_registry as KR
 
     out = []
     for r in KR.registered():
@@ -481,7 +481,7 @@ def _kernel_roots() -> list[Any]:
 
 def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
     """`tanh_rn` (2^27 entries of two words) as parameter 1, probed at its ends and its regions' edges (`TANH_RN_REGIONS`)."""
-    from verity.definitions.registry import tables
+    from verity_vllm.definitions.registry import tables
 
     from .vectors import TableProbe
 
@@ -490,7 +490,7 @@ def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
 
 def _tanh_rn_word(i: int) -> int:
     """The word of `tanh_rn`'s region whose low 27 bits are entry ``i`` (past HI where no region word has them)."""
-    from verity.definitions.registry import tables
+    from verity_vllm.definitions.registry import tables
 
     return 0x38000000 | i if (0x38000000 | i) >= tables.TANH_RN_LO else 0x40000000 | i
 
@@ -625,13 +625,13 @@ def _kinds_and_templates() -> list[Any]:
 
 
 def word_call_families() -> set[str]:
-    """The word Call families of a served Program: the replay's row families (`verity.definitions.numerics.rows.ROWS`), every
+    """The word Call families of a served Program: the replay's row families (`verity_vllm.definitions.numerics.rows.ROWS`), every
     frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
     doesn't bind is refused by name: left out, its family's partition would be judged as no Call's.  So is a path no binding file
     binds a vocabulary on (``_vocabulary_roots``, in a sidecar of the frontend's package): every kind would be left out."""
     if "words" not in _SHORT:
         load_registries()
-        from verity.definitions.numerics import rows
+        from verity_vllm.definitions.numerics import rows
 
         made = _kinds_and_templates()
         if _BOUND["unbound"]:
@@ -759,7 +759,7 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
     such a family's name and whose statics a binding of that family could give (each one of the family's statics or one its word
     computes, ``word_statics``: the by-name lookup reads no other).  Each candidate it returns is one of those Definitions, bound."""
     from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
-    from verity.definitions.boolean import _load
+    from verity_vllm.definitions.boolean import _load
 
     exact, by_name, _errors = _load()
     statics: dict[str, list[set[str] | None]] = {}
@@ -775,11 +775,11 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
 
 
 def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
-    """The Boolean version's family of each word Call family made on demand, by its id (`verity.definitions.boolean.
+    """The Boolean version's family of each word Call family made on demand, by its id (`verity_vllm.definitions.boolean.
     made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`).  No module registers such a family's members ahead,
     so these come from the families' own patterns, not from the catalog.  Made in sorted order: making one registers it, and
     the registry's order is then the same in every process, whatever its hash seed or what it did before."""
-    from verity.definitions.boolean import made_on_demand
+    from verity_vllm.definitions.boolean import made_on_demand
 
     return {family(d) for f in sorted(word_calls) if (d := made_on_demand(f)) is not None}
 
@@ -807,7 +807,7 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
     Call family, so its body (most of the catalog's build) never is.  With them, `on_demand_boolean_families` (in ``only``)."""
     from verity.circuits import boolean as BL
     from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-    from verity.definitions.boolean import boolean_version
+    from verity_vllm.definitions.boolean import boolean_version
 
     linked: dict[str, list[Any]] = {}
     for fn in binding_roots():
@@ -832,7 +832,7 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
 
 
 def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = None) -> set[str]:
-    """Sigma's image of the word Call families ``word_calls``: the family of `verity.definitions.boolean.boolean_version` (the
+    """Sigma's image of the word Call families ``word_calls``: the family of `verity_vllm.definitions.boolean.boolean_version` (the
     switch's table of `word=` links) of each catalog specialization of a word Call family that has one, and of each word Call
     family made on demand (`on_demand_boolean_families`)."""
     from verity.circuits.evaluation import ScalarReference
@@ -847,8 +847,8 @@ def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = N
 
 
 def boolean_family(fn: Any) -> str | None:
-    """The family of ``fn``'s Boolean version (`verity.definitions.boolean.boolean_version`), or None when it has none."""
-    from verity.definitions.boolean import NoBooleanVersion, boolean_version
+    """The family of ``fn``'s Boolean version (`verity_vllm.definitions.boolean.boolean_version`), or None when it has none."""
+    from verity_vllm.definitions.boolean import NoBooleanVersion, boolean_version
 
     try:
         return family(boolean_version(fn))
@@ -857,10 +857,10 @@ def boolean_family(fn: Any) -> str | None:
 
 
 def boolean_links() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
-    """The Boolean table's two lookups (`verity.definitions.boolean._load`) as families: each word Definition's descriptor id
+    """The Boolean table's two lookups (`verity_vllm.definitions.boolean._load`) as families: each word Definition's descriptor id
     with the Boolean families linked to it exactly, and each name with the Boolean families whose word is a function of their
     bindings.  `boolean_family` of a Definition is among those of its descriptor id and of its name, or None."""
-    from verity.definitions.boolean import _load
+    from verity_vllm.definitions.boolean import _load
 
     exact, by_name, _errors = _load()
     return ({k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in exact.items()},

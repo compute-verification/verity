@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 from verity.circuits.defs import bind
-from verity.definitions.registry import moe as MOE
+from verity_vllm.definitions.registry import moe as MOE
 
 from tests.engine.moe_scope_cut import cut, write
 from tests.engine.test_gen_shared_moe_fp8 import _fits

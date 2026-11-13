@@ -24,8 +24,8 @@ from verity_vllm.program import workload as W
 torch = pytest.importorskip("torch")
 
 from verity.circuits.codec import descriptor_id, encode_program, program_digest  # noqa: E402
-from verity.definitions import boolean as BB  # noqa: E402
-from verity.definitions.registry import b1  # noqa: E402
+from verity_vllm.definitions import boolean as BB  # noqa: E402
+from verity_vllm.definitions.registry import b1  # noqa: E402
 
 from verity_vllm.check.match import program_compare as PC  # noqa: E402
 from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402

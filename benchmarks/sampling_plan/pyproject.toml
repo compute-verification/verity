@@ -27,8 +27,8 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "benchmarks/census/deployments.json", "benchmarks/rho/data/reference.toml",
           "benchmarks/rho/data/hardware.toml",
           # glm53.py's stop class reads its two blocks' Definitions and their pins: the stop rule's Boolean lowering
-          # (verity.definitions.registry, whose package loads the numerics and the evidence table) and the response tie
+          # (verity_vllm.definitions.registry, whose package loads the numerics and the evidence table) and the response tie
           # (verity.protocols.accounting.certifier.prover, which loads the certifier's verifier)
-          "verity/definitions/registry", "verity/definitions/numerics", "verity/definitions/evidence.py",
-          "verity/definitions/evidence.json", "verity/protocols/accounting/certifier",
-          "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py"]
+          "adapters/vllm/verity_vllm/definitions/registry", "adapters/vllm/verity_vllm/definitions/numerics", "adapters/vllm/verity_vllm/definitions/evidence.py",
+          "adapters/vllm/verity_vllm/definitions/evidence.json", "verity/protocols/accounting/certifier",
+          "adapters/vllm/verity_vllm/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py"]

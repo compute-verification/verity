@@ -5,7 +5,7 @@ For a sampled VU `V` (one Call of the Program) the check is
     F_V( tau(in(V)) ) == tau(out(V))      bit-for-bit,
 
 where `tau` reads the COMMITTED bytes of the Values the Program's dataflow names (the Call's `args`), and `F_V` is the
-registered relation of the Call's Definition evaluated by the registry's own reference (`verity.definitions.numerics.derived_rows`,
+registered relation of the Call's Definition evaluated by the registry's own reference (`verity_vllm.definitions.numerics.derived_rows`,
 the same numpy models the Match stage's fold checks use).  Nothing here reads the collector's emissions to decide WHAT is
 required or WHERE an input lives: the population is the Program (its Calls, the instances.json.gz rows), the addresses are the required-value
 manifest's Value rule -- the v2 query's population the manifest of record was built from (`required.Population.members_of`) -- and the
@@ -64,8 +64,8 @@ from typing import Any
 
 import numpy as np
 from verity.commitments.randomness import Key
-from verity.definitions.numerics import prims_twins
-from verity.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
+from verity_vllm.definitions.numerics import prims_twins
+from verity_vllm.definitions.numerics.rows import EVALUATOR_PROVENANCE, EVALUATORS
 
 from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP
@@ -193,7 +193,7 @@ _FAMILY_LIBS = {"RMSNormTriton_v1": ("rms",), "RMSNormTriton_v5": ("rms",), "RMS
 def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     """Build + dlopen every twin library the sample's families need in the PARENT before the fork:
     the children inherit the mapping and never race a first-use JIT build (a sibling used to dlopen the half-written .so -> 'file too
-    short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity.definitions.numerics._jit`); this makes the fast path
+    short' -> a stratum 'not evaluated').  The build itself is atomic + locked (`verity_vllm.definitions.numerics._jit`); this makes the fast path
     the only path.  Returns {library: path} for the record; a failure here is reported, not fatal (the children fall back to their own
     locked build)."""
     fams = {str(vu.get("spec") or "").split("{", 1)[0] for vu in picked}

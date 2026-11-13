@@ -547,8 +547,8 @@ def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs
     import dataclasses
 
     import numpy as np
-    from verity.definitions.registry import b1
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import b1
+    from verity_vllm.definitions.registry import prims as P
 
     from verity_vllm.observe.fold.resolver import Supplied
 
@@ -572,7 +572,7 @@ def test_registered_values_on_the_rtx_pro_6000_bind_fa2s_check_inf_chain_with_th
     choice there (`targets.attention_spec(..., scale_input=True)`), with the scale its last `Supplied` operand; the norms as above."""
     import dataclasses
 
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
 
     from verity_vllm.observe.fold.resolver import Supplied
 

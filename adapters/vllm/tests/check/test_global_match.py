@@ -22,8 +22,8 @@ from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, runs
-from verity.definitions.registry import b1
-from verity.definitions.registry.topp_geometry import registered_splits, splits_for
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.topp_geometry import registered_splits, splits_for
 
 from tests.check import test_batch_decomp_e2e as e2e
 from tests.check.test_batch_decomp_e2e import (

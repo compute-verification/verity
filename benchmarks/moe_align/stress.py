@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from verity.definitions.numerics.marlin_moe_rows import MOE_BLOCKS, moe_block
+from verity_vllm.definitions.numerics.marlin_moe_rows import MOE_BLOCKS, moe_block
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -3,12 +3,12 @@ computes `::tanh(float(x))` = libdevice `tanhf` in opmath float and converts onc
 The exhaustive GPU table (`tanh_bf16_table.npy`) equals `bf16(RN32(tanh(f32(x))))` on all 65,282 non-NaN words and
 0x7FFF on the 254 NaN words — the finite domain makes the `TanhF32Rn` stand-in exact here.
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.dense.Bf16Tanh`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.definitions.registry.dense.Bf16Tanh`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
 
-from verity.definitions.registry.dense import Bf16Tanh
+from verity_vllm.definitions.registry.dense import Bf16Tanh
 
 SEMANTIC_ID = "dense/Bf16Tanh@v1"
 

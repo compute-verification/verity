@@ -1,9 +1,9 @@
 """vLLM's Gumbel noise row, bit-exact and torch-free: Philox4x32-10 and `uint_to_uniform_float` from `program.sampling_rng`,
-`__nv_logf` and `__nv_log1pf` from the libdevice transcription (`verity.definitions.numerics.libdevice`)."""
+`__nv_logf` and `__nv_log1pf` from the libdevice transcription (`verity_vllm.definitions.numerics.libdevice`)."""
 from __future__ import annotations
 
 import numpy as np
-from verity.definitions.numerics.libdevice import F32, nv_log1pf, nv_logf
+from verity_vllm.definitions.numerics.libdevice import F32, nv_log1pf, nv_logf
 
 from verity_vllm.program import sampling_rng as R
 

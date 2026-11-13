@@ -11,7 +11,7 @@ docstring says what it holds.
   partials (`xrank_collectives`); and the shape a derived directory states (`derived_index`).
 - **Loaded by:** the integration's `pipeline`: its command line, the Build (`components`, `global_program`) and the
   tensor-parallel stages (`tp`). Otherwise it is run, as those commands.
-- **Loads:** `verity.circuits` and `verity.definitions`; the integration's `program`, `records`, `observe`, `query`,
+- **Loads:** `verity.circuits` and `verity_vllm.definitions`; the integration's `program`, `records`, `observe`, `query`,
   `engine`, `config`, `settings` and `log`, and `check.program_ops` and `check.replay`; numpy, and torch inside the
   sampled replay. Two commands' `main` still read `pipeline.gc_tuning.tune` inside the function; the layering list holds
   them.

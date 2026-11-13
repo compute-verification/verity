@@ -36,7 +36,7 @@ from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bin
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat, runs
 from verity.circuits.types import Array, RecordType, Value
-from verity.definitions.registry import b1, b1_tp2
+from verity_vllm.definitions.registry import b1, b1_tp2
 
 from verity_vllm.check.match import rank_match as RM
 from verity_vllm.observe.events import (

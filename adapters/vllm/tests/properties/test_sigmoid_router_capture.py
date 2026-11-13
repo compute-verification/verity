@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import moe_twins
-from verity.definitions.registry import moe
+from verity_vllm.definitions.numerics import moe_twins
+from verity_vllm.definitions.registry import moe
 
 from tests.properties import sigmoid_router_capture_gpu as S
 from verity_vllm.engine.env import SERVED_DEFAULTS, served_defaults

@@ -12,8 +12,8 @@ import os
 import numpy as np
 import pytest
 from verity.circuits.defs import bind
-from verity.definitions.registry import sampling as SM
-from verity.definitions.registry import topp_split as TS
+from verity_vllm.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import topp_split as TS
 
 from tests.program.test_topp_splits_operand import _bits, _eval, _u32, _u32s
 

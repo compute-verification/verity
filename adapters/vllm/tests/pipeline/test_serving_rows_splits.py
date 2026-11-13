@@ -41,13 +41,13 @@ from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline.serving_templates import values_widths
-from verity.definitions import boolean as BB
-from verity.definitions.numerics import sparse_mla_split_twins as TW
-from verity.definitions.registry import boolean_sparse_mla as BM
-from verity.definitions.registry import boolean_sparse_mla_split as BX
-from verity.definitions.registry import hopper
-from verity.definitions.registry import sparse_mla as M
-from verity.definitions.registry import sparse_mla_split as W
+from verity_vllm.definitions import boolean as BB
+from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
+from verity_vllm.definitions.registry import boolean_sparse_mla as BM
+from verity_vllm.definitions.registry import boolean_sparse_mla_split as BX
+from verity_vllm.definitions.registry import hopper
+from verity_vllm.definitions.registry import sparse_mla as M
+from verity_vllm.definitions.registry import sparse_mla_split as W
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 

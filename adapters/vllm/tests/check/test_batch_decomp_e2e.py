@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1
-from verity.definitions.registry import value_inputs as VI
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import value_inputs as VI
 
 from tests.observe import test_fold_synthetic as toy
 from tests.observe.test_fold_synthetic import (

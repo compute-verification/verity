@@ -1,5 +1,5 @@
 """The torch-frontend authoring of `Serve@3` (`tests/program/serve3_authored.py`)
-against the registered definitions (`verity/definitions/registry/serve3.py`) — `check_identity` at export, and
+against the registered definitions (`adapters/vllm/verity_vllm/definitions/registry/serve3.py`) — `check_identity` at export, and
 digest equality / graph-and-reference correspondence per program, exactly as `test_b1_authored.py` checks
 `Serve@1/@2`.  Needs torch; skips without it."""
 
@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 torch = pytest.importorskip("torch")
 
 from verity.circuits import Program, bind, program_digest  # noqa: E402
-from verity.definitions.registry import b1, serve3  # noqa: E402
+from verity_vllm.definitions.registry import b1, serve3  # noqa: E402
 
 from tests.program import serve3_authored as A  # noqa: E402
 from verity_vllm.program.frontend import export_report  # noqa: E402

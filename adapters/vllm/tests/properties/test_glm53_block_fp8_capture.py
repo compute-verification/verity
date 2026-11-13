@@ -13,10 +13,10 @@ import json
 import numpy as np
 import pytest
 import torch
-from verity.definitions.numerics import deepgemm_twins as DGT
-from verity.definitions.numerics import fp8_moe_rows as MR
-from verity.definitions.numerics.act_rows import silu_mul_expf_rows
-from verity.definitions.numerics.rows import moe_sum
+from verity_vllm.definitions.numerics import deepgemm_twins as DGT
+from verity_vllm.definitions.numerics import fp8_moe_rows as MR
+from verity_vllm.definitions.numerics.act_rows import silu_mul_expf_rows
+from verity_vllm.definitions.numerics.rows import moe_sum
 
 from tests import fake_vllm
 from tests.properties import glm53_block_fp8_capture_gpu as X

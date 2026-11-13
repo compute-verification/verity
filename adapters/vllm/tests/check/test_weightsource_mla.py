@@ -7,7 +7,7 @@ import struct
 import numpy as np
 import pytest
 from verity.circuits.types import Array, RecordType
-from verity.definitions.registry.prims import BF16, F32
+from verity_vllm.definitions.registry.prims import BF16, F32
 
 from verity_vllm.check.checkpoint_words import mla_field_words, mla_moe_sources
 from verity_vllm.check.fold_compare import WeightSource

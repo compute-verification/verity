@@ -23,7 +23,7 @@ that shortens the Program.  This module is the SEMANTIC core: the reference eval
 independently written three-state reference machine (SERVING / LAG / INACTIVE), the checker's recurrence over a RAW transcript
 (`recurrence`), the named invariants (`invariants`), the Match-side checks (`check_transcript`), the slot <-> engine-iteration map
 (`slot_map` -- a STATED fact, contiguity + unchunked prefill or FAIL by name), and the derived invariant.  The registered gates
-(`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `verity/definitions/registry/lifted.py` (`continuation_chain`); the
+(`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `adapters/vllm/verity_vllm/definitions/registry/lifted.py` (`continuation_chain`); the
 lag unit (`LStepLive`/`LSelect` guard chain) is proven to compute exactly `r` / `u` of this rule (`chain_bits`, tested exhaustively).
 
 Indexing: slot `t` <-> the Build's sampling EVENT / step `s = t - 1` (`out[s]`; the lifted tool's `a_r` is the first event with `r = 0`).
@@ -36,7 +36,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from verity.definitions.registry import lifted as L
+from verity_vllm.definitions.registry import lifted as L
 
 from verity_vllm.program.lifting import lifted_records
 

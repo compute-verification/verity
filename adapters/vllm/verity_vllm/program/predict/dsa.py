@@ -74,7 +74,7 @@ def run_bits(layout: dict, orders: Mapping[tuple[int, int], Sequence[int]], topk
     wrote for the row at position `pos`, in the order it wrote them (its `topk_indices_buffer` row), each index one of the row's
     own keys, the wrapper's rows pos0..pos (a request's pos0 is 0). Each field is the Waksman settings that route those keys to
     that order (`dsa_topk.waksman_settings`)."""
-    from verity.definitions.registry.dsa_topk import waksman_settings
+    from verity_vllm.definitions.registry.dsa_topk import waksman_settings
     bits: list[int] = []
     for f in layout["fields"]:
         m = _RUN_FIELD.fullmatch(f["name"])
@@ -112,8 +112,8 @@ class Net:
         from verity_vllm.program import model as analytic
         from verity_vllm.program.frontend import targets as TG
         from verity_vllm.program.frontend.rules.vllm_dsa import FA3_SPARSE_GEOMETRY
-        from verity.definitions.registry import dsa
-        from verity.definitions.registry.tp_allreduce import settings_of
+        from verity_vllm.definitions.registry import dsa
+        from verity_vllm.definitions.registry.tp_allreduce import settings_of
         hf = phi.hf_config
         self.world, self.rank = int(phi.tp["world"]), int(phi.tp.get("rank", 0))
         try:
@@ -219,9 +219,9 @@ class Net:
         """The selections of a dense-MHA prefill of M rows at pos0.. after `context` history rows (`_Model._dense_prefill`), each
         kind `k(role, **statics)`'s, or the refusal."""
         import numpy as np
-        from verity.definitions.numerics import fa3_model
-        from verity.definitions.registry import fa3_split
-        from verity.definitions.registry.merge_attn_states import NEG_INF
+        from verity_vllm.definitions.numerics import fa3_model
+        from verity_vllm.definitions.registry import fa3_split
+        from verity_vllm.definitions.registry.merge_attn_states import NEG_INF
         from verity_vllm.program.frontend import targets as TG
         C, tp = self.C, self.tp
         R, NOPE, VH, NH = (int(C[k]) for k in ("QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
@@ -379,7 +379,7 @@ class _Model:
         """One all-reduce over the rows on the route vLLM takes at the launch's tokens (`tp_allreduce.served_route`), the captured one
         -> each row's sum."""
         from verity_vllm.program.frontend.rules.vllm_bindings.collectives import _ROUTE_KINDS
-        from verity.definitions.registry import tp_allreduce as AR
+        from verity_vllm.definitions.registry import tp_allreduce as AR
         n, N = len(rows), rows[0].count
         M = self.launch.tokens(n)
         setting, route = AR.served_route(self.net.settings, M, N)
@@ -396,7 +396,7 @@ class _Model:
     def reduce_norm(self, parts: list[Refs], res: list[Refs], w: Coll) -> tuple[list[Refs], list[Refs]]:
         """The all-reduce of the rows' partials, the residual add and the RMSNorm -> (normed rows, residual rows): FlashInfer's fused
         kernel where vLLM fuses (its FlashInfer all-reduce on and M within `fused_max_tokens`), else the all-reduce then the fused norm."""
-        from verity.definitions.registry import tp_allreduce as AR
+        from verity_vllm.definitions.registry import tp_allreduce as AR
         M, N, W, s = self.launch.tokens(len(parts)), parts[0].count, self.net.world, self.net.settings
         if s["flashinfer"] and M <= AR.fused_max_tokens(N, W):
             setting, _ = AR.served_route(s, M, N)
@@ -426,7 +426,7 @@ class _Model:
         """An unbiased bf16 GEMM on cuBLAS's captured route at the launch's tokens (its sequences for the `sampled` rows): bf16 out
         (`CublasLinearRule`), or f32 (`CublasRouterRule`: the router family's route, or a direct call's where the shape has its own)."""
         from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import _f32out_phase
-        from verity.definitions.registry.bf16_gemm_check import default_cublas_route
+        from verity_vllm.definitions.registry.bf16_gemm_check import default_cublas_route
         M, (N, K) = self.launch.tokens(len(xs), sampled), _arr_shape(w.type)
         phase = _f32out_phase(K, N) if f32 else "linear"
         route = default_cublas_route(phase, M, K, N)
@@ -439,7 +439,7 @@ class _Model:
 
     def router(self, xs: list[Refs], w: Coll) -> list[Refs]:
         """`GateLinear`'s f32 logits on the tier vLLM dispatches (`LlBf16GemmRule`, `CublasRouterRule`)."""
-        from verity.definitions.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
+        from verity_vllm.definitions.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
         M, (N, K) = self.launch.tokens(len(xs)), _arr_shape(w.type)
         tier, st = dispatch_sm90(M, K, N)
         if tier == "cublas":
@@ -468,7 +468,7 @@ class _Model:
         over the rows) -> the o projection's partials."""
         from verity_vllm.program.frontend.rules.vllm_dsa import (DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, FA3_SPARSE_GEOMETRY, PAD_SCORE,
                                                                  long_row_blocks, long_row_keys, pad_words)
-        from verity.definitions.registry.sparse_mla_split import launch_num_splits
+        from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
         C, M = self.C, len(x)
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         IH, ID, TOPK = int(C["INDEX_HEADS"]), int(C["INDEX_HEAD_DIM"]), int(C["INDEX_TOPK"])
@@ -637,7 +637,7 @@ class _Model:
         and the routed w2 GEMM; each row's sum of its TOPK down rows, plus the shared expert's."""
         from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG
-        from verity.definitions.registry.moe import router_kernel
+        from verity_vllm.definitions.registry.moe import router_kernel
         C, M, H, G = self.C, len(x), self.H, self.G
         E, TOPK, I = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])
         w = lambda f: self.w[(L, f)]  # noqa: E731

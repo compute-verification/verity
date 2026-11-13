@@ -8,10 +8,10 @@
 The padded serving circuit's three new composites (`PadGuard_v1`, `PadDecodeStep_v1`, `Serve_v3`) written as
 `@function`s over tensors, exactly as `b1_authored.py` writes `Serve@1/@2`: `ops.<Prim>` for the registered
 primitives (`I32Eq`, `SelectI32`, `SelectBf16`, and the new `BitAnd`/`BitNot` of
-`verity/definitions/registry/pad_prims.py`; the live flag is a `torch.bool` scalar — `Value<1>`), the authored
+`adapters/vllm/verity_vllm/definitions/registry/pad_prims.py`; the live flag is a `torch.bool` scalar — `Value<1>`), the authored
 `b1_authored` v2 layer functions for the step bodies, `batch` for the row muxes, and torch views for the
 reference rearrangements.  Nothing here is a new definition: each function carries the registered `Name_vN`
-and statics of `verity/definitions/registry/serve3.py`, and `check_identity` (run by `export`) rejects it if its
+and statics of `adapters/vllm/verity_vllm/definitions/registry/serve3.py`, and `check_identity` (run by `export`) rejects it if its
 body differed from the registered one.  As with `Serve@1/@2`, where digests nevertheless differ it is the
 reference *encoding* of the zero-row broadcast (the registry writes repeated-ref runs, the frontend a
 zero-stride `Strided`); `verity_vllm.program.frontend.correspond` shows the reference sequences are the same leaf by
@@ -21,11 +21,11 @@ leaf (`tests/program/test_serve3_authored.py`).  Needs torch; the tests skip wit
 import torch
 from verity.circuits.types import Array
 from verity.circuits.types import Tuple as TupleT
-from verity.definitions.registry import (
+from verity_vllm.definitions.registry import (
     b1,
     pad_prims,  # noqa: F401  — registers BitAnd_v1/BitNot_v1 for `ops.<name>` resolution
 )
-from verity.definitions.registry.prims import BF16, BIT, I32
+from verity_vllm.definitions.registry.prims import BF16, BIT, I32
 
 from tests.program.b1_authored import FinalV2, _forward_positions_v2
 from verity_vllm.program.frontend.schemas import Arr, Dep, Tup

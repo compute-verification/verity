@@ -45,7 +45,7 @@ def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[tuple[str, str]]:
     """The specializations of the rows the replay evaluates, each ``(spec, bound)``: ``spec`` is the row's word Definition, of a
     family with a row kernel (`rows.ROWS`) or a protocol's delegate, and ``bound`` the Definition its Build's descriptor holds
     the row's Call under, a Boolean Build's row's ``bits`` and otherwise ``spec``."""
-    from verity.definitions.numerics.rows import ROWS
+    from verity_vllm.definitions.numerics.rows import ROWS
 
     from verity_vllm.check.replay.delegate import DELEGATES
     from verity_vllm.query.manifest.format import spec_family
@@ -79,8 +79,8 @@ def kernel_refusal(specs: Iterable[tuple[str, str]]) -> str | None:
     """Why a row kernel this tree grades ``specs`` (`evaluated_specs`) by is not its family's Definition, or None: each ``spec``'s
     family's row kernel against the reference by core `self_check` (`kernel_registry.check`; module docstring), once a family
     per process."""
-    from verity.definitions.numerics import kernel_registry as KR
-    from verity.definitions.numerics.rows import KERNEL, ROWS
+    from verity_vllm.definitions.numerics import kernel_registry as KR
+    from verity_vllm.definitions.numerics.rows import KERNEL, ROWS
 
     from verity_vllm.commit import challenge as CH
     from verity_vllm.query.manifest.format import spec_family
@@ -103,7 +103,7 @@ def refusal(program_dir: str, digest: str, specs: Iterable[tuple[str, str]]) -> 
     more than that: the replay does not hold that a Boolean Definition computes its word; each lowering's tests and
     `circuit-check` hold it."""
     from verity.circuits.codec import program_digest
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
 
     specs = list(specs)
     if not specs:

@@ -11,7 +11,7 @@ import pytest
 from verity_flock import circuit as FC
 from verity_flock import typed_statement as TS
 
-pytest.importorskip("verity.definitions.registry.prims")
+pytest.importorskip("verity_vllm.definitions.registry.prims")
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 from synthetic_sets import synthetic_set  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402

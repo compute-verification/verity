@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 import torch
 from verity.circuits.codec import canonical_json, encode_program, program_digest
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from verity_vllm.pipeline import components as C
 from verity_vllm.pipeline import global_program as G

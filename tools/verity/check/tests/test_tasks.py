@@ -51,10 +51,10 @@ def tree(tmp_path: Path) -> Path:
     (t / "lean" / "P" / "lean-audit.json").write_text("{}\n")
     (t / "lean" / "P" / "P.lean").write_text("theorem t : True := trivial\n")
     # its own `verity`, whose twins (`check.PREBUILD`) build nothing
-    (t / "verity" / "definitions" / "numerics").mkdir(parents=True)
-    for d in ("verity", "verity/definitions", "verity/definitions/numerics"):
+    (t / "adapters" / "vllm" / "verity_vllm" / "definitions" / "numerics").mkdir(parents=True)
+    for d in ("verity", "verity/definitions", "adapters/vllm/verity_vllm/definitions/numerics"):
         (t / d / "__init__.py").write_text("")
-    (t / "verity/definitions/numerics/twins.py").write_text("def preload():\n    return {}\n")
+    (t / "adapters/vllm/verity_vllm/definitions/numerics/twins.py").write_text("def preload():\n    return {}\n")
     _git(t, "init", "-q")
     _git(t, "add", "-A")
     _git(t, "commit", "-q", "-m", "tree")

@@ -90,7 +90,7 @@ from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.crypto import lms
-from verity.definitions.registry.sampling import bit_at
+from verity_vllm.definitions.registry.sampling import bit_at
 
 ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"

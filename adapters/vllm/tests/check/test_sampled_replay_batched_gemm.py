@@ -15,12 +15,12 @@ import torch
 import torch.nn as nn
 from verity.circuits.defs import bind, conformance_label
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import batched_gemm_rows, rows
-from verity.definitions.numerics.batched_gemm_rows import batched_gemm
-from verity.definitions.numerics.kernel_registry import Declined
-from verity.definitions.registry import b1, hopper
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.numerics import batched_gemm_rows, rows
+from verity_vllm.definitions.numerics.batched_gemm_rows import batched_gemm
+from verity_vllm.definitions.numerics.kernel_registry import Declined
+from verity_vllm.definitions.registry import b1, hopper
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import cublas_bf16 as CB
 
 from tests.program.test_dsa_derive import STANDIN, _bf16, served  # noqa: F401  (the H200 Build fixture)
 from verity_vllm.check.replay import evaluate as EV
@@ -40,7 +40,7 @@ def _words(rng, *shape, scale=1.0) -> np.ndarray:
 
 def test_the_family_is_registered_with_its_evaluator():
     assert "BatchedGemm_v1" in rows.EVALUATORS and "BatchedGemm_v1" in rows.ROWS
-    assert rows.EVALUATORS["BatchedGemm_v1"].startswith("verity.definitions.numerics.batched_gemm_rows.batched_gemm")
+    assert rows.EVALUATORS["BatchedGemm_v1"].startswith("verity_vllm.definitions.numerics.batched_gemm_rows.batched_gemm")
 
 
 @pytest.mark.parametrize("B,K,N", [(2, 32, 3), (3, 48, 5)])

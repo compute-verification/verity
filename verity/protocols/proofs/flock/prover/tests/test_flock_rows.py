@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("verity.definitions.registry.prims")
+pytest.importorskip("verity_vllm.definitions.registry.prims")
 from verity.circuits import library  # noqa: E402
 from verity_flock import circuit_types as CT  # noqa: E402
 from verity_flock import lowerings  # noqa: E402

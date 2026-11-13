@@ -366,7 +366,7 @@ class _Context:
         if str(r.get("form") or "call") != "call":
             raise Uncovered(f"Call {cid} ({spec}) is a {r.get('form')} row")
         if spec not in self.plan.definitions:
-            from verity.definitions.numerics import kernel_registry, rows
+            from verity_vllm.definitions.numerics import kernel_registry, rows
 
             try:
                 d, params = _definition(spec)
@@ -664,7 +664,7 @@ def of_json(doc: Mapping[str, Any]) -> Plan:
 def evaluate_template(plan: Plan, tpl: Template, R: int, operands: Sequence[np.ndarray], weight: Callable[[str], np.ndarray],
                       shared: dict | None = None) -> dict[str, np.ndarray]:
     """Target name -> its [R, f * width] words ([1, f * width] for a step-shared target): `tpl` over R rows, level by level, one
-    `evaluate_batch` per (level, Definition) over every row (a registered row kernel of `verity.definitions.numerics.rows` where one is,
+    `evaluate_batch` per (level, Definition) over every row (a registered row kernel of `verity_vllm.definitions.numerics.rows` where one is,
     the reference for the rest and for what a kernel declines; a `plan.kernel_only` Definition by its row kernel alone, a declined
     instance a ValueError).  `operands[k]` = forward argument k's [R * per_row, elems] words; `weight(name)` = a weight field's words, read
     as a broadcast view (never copied per row); `shared` = the step-shared Values by form, kept across steps by the caller (weights and
@@ -685,7 +685,7 @@ def _run(plan: Plan, levels: tuple, recipes: tuple, R: int, sv: Mapping[int, np.
          weight: Callable[[str], np.ndarray]) -> dict[int, np.ndarray]:
     """Position -> [R, leaves] of the Calls of `recipes` over R rows; `sv` the step-shared Values ("s") they read."""
     from verity.circuits.evaluation import evaluate_batch
-    from verity.definitions.numerics import rows  # noqa: F401  -- registers the row kernels evaluate_batch picks
+    from verity_vllm.definitions.numerics import rows  # noqa: F401  -- registers the row kernels evaluate_batch picks
 
     vals: dict[int, np.ndarray] = {}
 
@@ -719,8 +719,8 @@ def _kernel_rows(d: Any, spec: str, arrays: Sequence[np.ndarray]) -> np.ndarray:
     from verity.circuits.evaluation import kernels
     from verity.circuits.evaluation.batch import type_dtype, type_shape
     from verity.circuits.evaluation.reference import signature_of, statics_of
-    from verity.definitions.numerics.kernel_registry import Declined, instance
-    from verity.definitions.numerics.rows import KERNEL
+    from verity_vllm.definitions.numerics.kernel_registry import Declined, instance
+    from verity_vllm.definitions.numerics.rows import KERNEL
 
     params, ret = signature_of(d)
     statics = statics_of(d)

@@ -85,11 +85,11 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
-from verity.definitions.numerics import deepgemm_schedule as S
-from verity.definitions.numerics import deepgemm_twins as T
-from verity.definitions.numerics import derived_rows as R
-from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import fp8 as F
+from verity_vllm.definitions.numerics import deepgemm_schedule as S
+from verity_vllm.definitions.numerics import deepgemm_twins as T
+from verity_vllm.definitions.numerics import derived_rows as R
+from verity_vllm.definitions.registry import deepgemm as DG
+from verity_vllm.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
