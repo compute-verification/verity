@@ -216,7 +216,8 @@ from verity_flock.proof_server import ProofServer, ProofServerError, Session, St
 from verity.commitments import row_table as RT  # noqa: E402
 from verity.protocols.spot.device import coins as CC
 from verity.protocols.spot.verifier import service as S  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.protocols.spot.verifier.one_stage import draw as D, members as MB, partition as P, registration as R, \
+    verifier as V  # noqa: E402
 from verity.protocols.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.commitments.windows import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 from verity.commitments.windows import wiring as WI  # noqa: E402
@@ -729,6 +730,22 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
 
 
+def member_form(mine: CS.Binding, rec: dict) -> tuple[list, dict[str, dict]] | str:
+    """What the per-member form holds each member's public file to (`members.population_why`), read off the verifier's
+    window ``mine`` and the registration ``rec``: the registration's strata and each member's slice of the record
+    (`members.slices`, Lean's `OneStageZk.Member.slice`: its units, the roots the record names under its name, the
+    scheme), or Lean's reason why there is none. A member's public file names a root for each of its ports, so the
+    record does too, a wired port with no tree of its own under its reader's name at its writer's root
+    (`rows.wired_ports`). A window's row tables' root (`rows.TABLE_PORT`) is the window's and no member's: the
+    per-member form refuses such a window, and this audit, its stand-in there, holds that root by
+    `tables.check_row_tables` and reads the slices of the record's other roots."""
+    record = {**rec, "roots": [r for r in rec["roots"] if r.get("port") != CS.TABLE_PORT]} if mine.row_tables else rec
+    try:
+        return P.strata(mine.program, mine.query), MB.slices({m.key: [[m.base, m.base + m.n]] for m in mine.members}, record)
+    except (P.QueryRefused, ValueError) as e:
+        return str(e)
+
+
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
@@ -755,8 +772,6 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     of record's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
     registration's check holds the window's registered roots before the draw, and the stream's registrations for its run
     of record; None for a window with none."""
-    from verity.protocols.spot.verifier.one_stage import proofs as PF
-
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
@@ -788,6 +803,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # file and the circuit's link only for a sampled member, after the sample (`stage`)
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
+    form = member_form(mine, rec)
     members, publics, checks, composed, programs_ok, kept, read = [], {}, {}, {}, {}, {}, set()
     t_stage = time.time()
     for k, m in enumerate(mine.members):
@@ -825,23 +841,20 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
         meta = circ.meta
         header = a0.public_header(st_dir, m.n)
-        fv = header["frame_v3"]
         if (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
             programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
+        # the header against the member's slice of the registration: the per-member form's rule, in its one Python
+        why = form if isinstance(form, str) else MB.population_why([[m.base, m.base + m.n]], form[0], header, form[1][m.key])
         ok = {"pin": header.get("circuit_sha512") == made["pin"],
               "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
               "program": meta.get("program_sha512") == part["program"],
-              "indices": PF.units_exactly([[m.base, m.base + m.n]], header["units"]["indices"]),
+              "header": why is None,
               "classes": header["units"].get("classes") == [made.get("class_sha512")] * m.n,
               "template_program": programs_ok[m.template, circ.pin],
               "shared_rows": header.get("shared_rows") == ({**dict(m.tables), **{p: m.n for p, _ in m.out_rows}}
                                                            if m.tables else None)}
-        for p_name in fv["roots"]:
-            name = mine.held(m, p_name)
-            reg = roots.get(name)
-            ok[f"root:{p_name}"] = (name in want and reg is not None and reg["root"] == fv["roots"][p_name]
-                                    and reg["domain"] == fv["domain_ids"][p_name] == want[name]["domain"])
-        checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {}}
+        checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v],
+                           "detail": {} if why is None else {"header": why}}
         publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
         members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",

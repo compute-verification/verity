@@ -379,6 +379,28 @@ def _roots(ms: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, list[d
     return out
 
 
+def _slice(m: Mapping[str, Any], roots: Sequence[Mapping[str, Any]], record: Mapping[str, Any]) -> dict[str, Any]:
+    """`OneStageZk.Member.slice`: the member's count of units, its roots of the registration and its scheme."""
+    return {"population": _count(m), "roots": list(roots), "scheme": record.get("scheme")}
+
+
+def slices(members: Mapping[str, Sequence[Sequence[int]]], record: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """Each member's slice of the registration `record` (`OneStageZk.Member.slice`), for the members `members` by name,
+    each its units as ranges ``[lo, hi)``: ``{name: {population, roots, scheme}}``, the member's count of units, the
+    registration's roots that are its own, its name taken off each port (`OneStageZk.rootsOf`), and the registration's
+    scheme. `population_why` holds a member's public file to its slice. `ValueError` with Lean's reason where the
+    members are not laid over the registration's population (`OneStageZk.laidHeld`) or a root of the registration is
+    not one member's: an audit outside the per-member form's run reads a member's slice here, never by a rule of its
+    own."""
+    ms = {name: {"units": [list(r) for r in units]} for name, units in members.items()}
+    try:
+        _laid(ms, record)
+        roots = _roots(ms, record)
+    except _Refused as e:
+        raise ValueError(str(e)) from None
+    return {name: _slice(m, roots[name], record) for name, m in ms.items()}
+
+
 def _meta(circuit: Path) -> Any:
     """`Flock.HmRow.metaOf`: the circuit file's META, read off its second line alone."""
     with open(circuit, "rb") as f:
@@ -571,8 +593,7 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
                 raise _Refused(f"member {name}: {e}") from None
             files = Statement(circuit, public, descriptor, params["partition"], m["registered"], tables, path,
                               tuple((f, blobs[s["reps"][f]]) for f in sorted(s["reps"])))
-            slice_ = {"population": _count(m), "roots": roots[name], "scheme": record.get("scheme")}
-            findings.append(_session(s["name"], name, m, files, parsed, strata, slice_, verdict))
+            findings.append(_session(s["name"], name, m, files, parsed, strata, _slice(m, roots[name], record), verdict))
         proved = tuple(u for f in findings for u in f.units)
         every = all(f.accepted for f in findings)
         if every and sorted(proved) != evidence["proved_units"]:
