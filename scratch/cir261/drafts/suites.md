@@ -1,0 +1,6 @@
+- **At the head `0978f5af04`, with the sync** (`uv sync -q --all-packages --extra torch-cpu` before `suites.py`):
+  - `r20261112-221618-0259`, `repository`: passed, 352 passed, 0 failed. It waited 11 s for slot r2 on vy-nebius-cpu-7 and held it from 22:16:53Z to the run's end at 22:23:59Z.
+  - `r20261112-222441-fadb`, `verity-vllm`: VLLM_LINE
+- **`r20261112-192652-7776`, with the sync**, at `79cb0b3e28` on vy-nebius-cpu-7: circuit-check on the sidecar, then `suites.py verity/definitions circuit-check verity-vllm repository`.
+  - circuit-check: rc 0, 2 targets, 0 failures. repository: 352 passed.
+  - I cancelled it at 22:15Z, before it reported `verity/definitions`, the circuit-check suite or verity-vllm. It had waited 56 min for slot r2 and held it for 113 min. It averaged about one core, and its head was superseded.
