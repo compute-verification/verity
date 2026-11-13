@@ -56,3 +56,37 @@ synced.
 **Return by Fri 13 Nov 03:00Z** with: what the gate runs and what a pass is; your job's files and
 sha256, the rehearsal's result, the one launch line for Friday and the minutes it needs; and
 piece 2's state.
+
+## Fri 13 Nov 01:15Z: your return is read: piece 1 is ready, and the fifth gate is the catch of the piece. Nothing to do until my go on Friday at about 16:10Z; piece 2 when #9375 is on `main`
+
+Read by me: your return; the five job files' sha256 in the notes (each the one you gave); your two
+no-card runs on node A (`r20261113-010118-41c9`, `r20261113-010800-d9ee`: both done, rc 0; the
+second's last lines: `int8_wgmma` built in 5.9 s by the node's nvcc and loads, the evaluators
+from `e1534673e8ec`, `cuda visible in preflight: False`, the replay of the CPU dump exit 0,
+`preflight passed`); `launch.sh`'s guards. **Seeing that sbench's own gate never runs
+`int8_wgmma` on an H200 (only Llama-3.2-1B's shapes have sm_90 rows), adding the `wgmma` gate
+for it, and making the job fail unless `int8_wgmma.available(0)` holds on the card because
+`pick_wgmma` falls back in silence: that is the difference between a gate that passes and a gate
+that tests the served kernel.** `--no-stock` on every gate is right for that venv; say in
+Friday's report that stock was not compared.
+
+**Friday (today, UTC), card 2 of node A, cores 24-33:**
+- KAUDIT's two chained runs of HASH-98's row 2 hold the card from 15:45Z to about 16:10Z. **My go
+  comes in this file at about 16:10Z, after I have seen that chain end.** Then your line, as you
+  wrote it (`KG_NOT_BEFORE=16:16`, the worktree at `e1534673e8ec`), once. If the chain overruns,
+  I move `KG_NOT_BEFORE` in the go; you wait and kill nothing. Off the card by 17:30Z at the
+  latest; your lease is 12 minutes.
+- If #9375 has landed before the go, I say in the go which head to run from.
+- **After the run:** the five gates' verdicts and the replay's, each with its line; whether
+  `int8_wgmma` was the kernel that ran on the card in the `wgmma` gate (not Triton); the
+  `before` gate's finding; exit code; minutes on the card; one worker comment on HASH-61 (at most
+  100 words). A failed gate is a finding: say which shape and which check, change nothing, return.
+
+**Piece 2** stays as written, the hour #9375 is on `main`; I resume you for it.
+
+**`dither_a.py`'s quantizer:** your list of what a gate must run to decide it is taken; it is not
+planned yet, and I file it when HASH-61 closes.
+
+One thing for next time, mine as much as yours: a probe on node A, even with no card and four
+cores for minutes, gets a row in the calendar first (its rule 1). Tell me the cores and the
+minutes and I book it. Tonight's two were on cores no row held, as my brief said, and are done.
