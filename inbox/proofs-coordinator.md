@@ -113059,3 +113059,46 @@ To post: nothing.
 Not established: `Messages.lean`'s own axiom probe; `runShown` clean of sorry (waits on r20261113-014519-7f02); the merge of the moved base `origin/cursor/proofs-twoleg-c5e5` into my branch (next, after this try; it means one cold rebuild). Ready for soundness's reading: none yet.
 
 Branch `cursor/proofs-messages-f55d`, pushed head e684647ce5; nothing unpushed.
+
+## STAGECOINS, Fri 01:52Z: waiting over ten minutes for a Lean slot (20 min on vy-nebius-cpu-12, then moved to vy-nebius-cpu-11, which is full too); my last compile reached `FirstCoins`, where all but one lemma elaborated
+
+My files for both stages of the two-stage audit are written and merged onto TWOLEG's and CUT's fixed heads. None has finished compiling. On my second scratch try (cpu-11, local stubs for the two files that were broken then), the build reached `FirstCoins`, my first file. There, the run's path through `Spot.Run.run`, the first stage's read, the form's first-stage-bytes refusal and the coin lemmas all elaborated, with one error, in two places: I rewrote with `Json.mkObj` without seeing its body. That is fixed (`import all Lean.Data.Json.Basic`). The scratch commits are gone. I merged TWOLEG `99da2b9189` and CUT `6c782c1022` as told and sent one try from my branch. It waited 20 minutes for a slot on cpu-12 (all four slots busy) and has now waited 2 minutes on cpu-11 (four slots busy, four short of memory).
+
+**Branch** `cursor/proofs-stagecoins-71b1`, head `1c2ab294bf`, pushed. Nothing is left unpushed; the scratch worktree is removed.
+
+**Runs** (each `verity lean try …/StageCoins.lean --siblings`; one try builds every file of mine):
+* `r20261113-005151-0704`, cpu-11, at scratch `1f0f068d40`: waited 0 min, ran 1059 s, exit 1 in TWOLEG's `Steps.lean` proofs (`inputAt_ok`, `accepted_steps`) and at my scratch `open` in `Cut.lean` [run].
+* `r20261113-011010-0ae4`, cpu-11, at scratch `f423cfe09c`: waited 0 min, ran 1031 s, exit 1 [run]:
+  * `FirstCoins` 113 and 180: `rw [Json.mkObj, …]` cannot unfold `Json.mkObj`. Fixed in `9cb86a5bef`.
+  * CUT's `CutPrints` 248 (`dsimp` made no progress) and 393 (kernel: invalid projection of `firstDraws_window …`). CUT says `6c782c1022` fixes both.
+* `r20261113-012910-d187`, cpu-12, at `1c2ab294bf`: waited 20 min without a slot, so I cancelled it.
+* `r20261113-014929-1c4e`, cpu-11, at `1c2ab294bf`: waiting for a slot since 01:49Z. Verdict about 20 min after it starts.
+
+**Since 00:54Z** [derived]:
+* `accepted_steps` now carries `interiorUnshown p e = .ok ()`; `inputOn_accepts` reads it.
+* `inputOf_source` is now plain `rfl`, as the linter suggested.
+
+**Sizes.** Six files, about 1055 lines. No theorem is left to write for the two pieces, as stated with their named premises. What remains:
+1. **Compile and fix.** First compiled hour about 02:30Z to 03:30Z [guess], hanging on a slot.
+2. **Discharge `SecondAlone`** from TWOLEG's new `interiorUnshown_roots`. It needs a lemma about `readLog` for families other than its own (`fresh_readLog` covers only the read's family), plus the three matches in NEEDS 1. I estimate 150 to 250 lines.
+3. **After the key change lands on the base,** `firstDraw` reads `i.family` and `FirstDrawn` narrows.
+
+### STOP RULE
+None. Nothing I wrote turns on the accept, wires the form into `Sampled.lean` or touches a lock. Nothing rests on the switch being off.
+
+### NEEDS
+1. **TWOLEG: does `interiorUnshown` match what the cut reads?** To give my `SecondAlone`, `interiorUnshown_roots` has to talk about the same objects CUT's `logsOf` and `secondDraws` read. Three differ today [read]:
+   * **Window.** The refusal compares the boundary's window with `p.interior.verifier.windowRoot`. The cut's second draw is on `p.audit.base.verifier.windowRoot` (`oneStageZkSource p.audit`).
+   * **Family.** The refusal takes it from the interior's coin segment (`e.interior.base.coins`). The cut's second draw takes it from `p.audit.base.challenger`.
+   * **Key.** The refusal reads the first session under the evidence's key (`e.coins "key"`). The cut reads it under the parameters' key (`keyOf`).
+   Either the form checks these equal (the key change does the family and key), or I take each match as a named premise. Until one of you says, I'll take them as premises.
+2. **CUT:** if `r20261113-014929-1c4e` still fails in `Cut*` at `6c782c1022`, the errors go in my next entry.
+3. The premises I listed at 00:54Z are unchanged: `CaseIsSent`, `CutReads`, `FirstDrawn`, `SecondAlone`, `DevFirst` and `DevSecond`.
+
+### To post
+Nothing.
+
+### Not established
+* No file of mine has finished compiling. `FirstCoins` elaborated in a scratch build except for the `Json.mkObj` rewrite, now fixed but not yet rerun.
+* The first stage's family comes from the evidence's segment until the key change lands on the base.
+* An earlier period's signature passes the run's coin check. This is not worked around.
