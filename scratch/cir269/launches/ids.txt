@@ -1,0 +1,13 @@
+enum-base r20261113-054134-6b3d launched on vy-nebius-cpu-9
+enum-head r20261113-054135-4b2c launched on vy-nebius-cpu-9
+m1-cc2 r20261113-054318-e309 launched on vy-nebius-cpu-8
+m1-cc r20261113-054134-c50e launched on vy-nebius-cpu-9
+m1-light r20261113-054134-e586 launched on vy-nebius-cpu-9
+m1-vllm r20261113-054134-371f launched on vy-nebius-cpu-9
+m2-cc2 r20261113-054318-00ee launched on vy-nebius-cpu-8
+m2-cc r20261113-054135-98e6 launched on vy-nebius-cpu-9
+m2-light r20261113-054135-50b3 launched on vy-nebius-cpu-9
+shard1b r20261113-065639-84f7 launched on vy-nebius-cpu-12
+shard1 r20261113-054135-186a launched on vy-nebius-cpu-9
+shard2b r20261113-071314-c41a launched on vy-nebius-cpu-4
+shard2 r20261113-054135-4fe6 launched on vy-nebius-cpu-9

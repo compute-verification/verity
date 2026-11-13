@@ -1,0 +1,1 @@
+uv sync -q --all-packages --extra torch-cpu </dev/null || exit 9; d=$(mktemp -d); trap "rm -rf $d" EXIT; echo "E start $(nproc) cpus $(date -u +%H:%M:%SZ)"; uv run python -m circuit_check --all -q --cache "$d/cache" --bindings -j 8 --mem-gb 40 --out "$OUT/bindings.json"; rc=$?; echo "E bindings rc=$rc $(date -u +%H:%M:%SZ)"; exit $rc
