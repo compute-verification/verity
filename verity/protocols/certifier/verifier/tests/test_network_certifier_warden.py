@@ -19,7 +19,8 @@ from verity.protocols.certifier.verifier import active, io_tie as IT
 from verity.protocols.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.protocols.certifier.verifier.grid import Reason
 from verity.protocols.certifier.verifier.pacer import Report
-from verity.protocols.certifier.verifier.release import read_watermark, release_of, watermark_head, with_release
+from verity.protocols.certifier.verifier.release import (WATERMARK_END, read_watermark, release_of, watermark_chunk,
+                                                     watermark_head, with_release)
 from verity.protocols.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, PARAMETERS_TAG, REASONS,
                                                     REFUSED, WRITE_BACKLOG, Shim, Warden, WardenParams, audit, cell,
                                                     cells, read_cell, read_reason, reason_frame)
@@ -1095,6 +1096,74 @@ def test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server():
         assert warden.watermark_error == {"open": None, "refused": "ConnectionRefusedError: refused",
                                           "unopened": "unopened", "backlog": "backlog"}[name]
         assert bool(sent) == (name == "open") and server.closed == (name in ("open", "backlog")), name
+
+
+#: `PARAMS` with a bucket more of delay: a client's copy of the stream is up to three buckets of cells, and a server
+#: that gets a request whole at its `END` answers it by its first egress slot
+STREAMED = dataclasses.replace(PARAMS, delay=D + 1)
+STREAM_RUN = bytes(range(32))
+OWN_LINE, STREAM_HEAD = watermark_head(STREAM_RUN).split(b"\r\n", 1)
+#: the request lines a client sends: the stream's own, and others a server routes as it routes that one
+CLIENT_LINES = {
+    "the stream's own": OWN_LINE,
+    "a fourth word": OWN_LINE + b" x",
+    "a query string": b"POST /verity/watermark?x HTTP/1.1",
+    "another method": b"GET /verity/watermark HTTP/1.1",
+    "an escaped letter": b"POST /verity/%77atermark HTTP/1.1",
+    "a scheme and authority": b"POST http://server/verity/watermark HTTP/1.1",
+    "line breaks first": b"\r\n\r\n" + OWN_LINE,
+}
+
+
+def client_stream(line: bytes) -> bytes:
+    """A client's request that opens with `line`: the watermark stream's head after it, naming the run, then bucket
+    0's line with release 0 named lost and the stream's end."""
+    return line + b"\r\n" + STREAM_HEAD + watermark_chunk(0, 1, (0,)) + WATERMARK_END
+
+
+def streamed(arrivals: dict[int, list[bytes]], watermark: bool):
+    server = Ordered([[(0, b"r0"), (0, EOF)], [(0, b"r1"), (0, EOF)]])
+    hooks = {"watermark": server.watermark} if watermark else {}
+    certifier, clients, _ = run(server, arrivals, params=STREAMED, run_nonce=lambda n: STREAM_RUN[:n], **hooks)
+    return certifier, clients, server
+
+
+@pytest.mark.parametrize("watermark", (True, False))
+@pytest.mark.parametrize("name", sorted(CLIENT_LINES))
+def test_a_clients_request_to_the_watermarks_path_is_refused_at_its_first_cell_and_no_server_gets_it(name, watermark):
+    """Beside an honest request, a client's copy of the stream, with the watermark or without. Its connection gets
+    padding and one `FAIL`, in the bucket after its first cell's bytes are read: no cell of its request is cut, it has
+    no place in the release order, its server connection gets nothing, and the `fails` record holds malformed. The
+    server sees exactly the run without that client: the honest request, numbered 0, and the stream's lines, none
+    naming a release lost. The same bytes to another path are released whole."""
+    honest, mine = cells(http(b"{}"), B), client_stream(CLIENT_LINES[name])
+    alone = streamed({1: [honest]}, watermark)[2]
+    certifier, clients, server = streamed({1: [honest, cells(mine, B)]}, watermark)
+    log = {e["ordinal"]: e for e in certifier.log}
+    assert (log[2]["failed"], log[2]["failed_at"], log[2]["release"], log[2]["ended"]) == ("malformed", 0, None, 2)
+    assert log[2]["ingress_cells"] == 0 and server.conns[1].received == b""
+    ingress = [f for r in records(certifier)[0] for row in r.grid for f in row if f is not None]
+    assert {f[0] for f in ingress if HEADER.unpack_from(f)[1] == 2} == {PAD}
+    assert [k for _, k, _ in clients[1].cells()] == [PAD] * R + [FAIL] + [PAD] * (R - 1)
+    assert reasons(certifier) == [(2, 2, "malformed")] and clients[1].shim().outcome == "fail"
+    assert server.events == alone.events and (log[1]["release"], log[1]["failed"]) == (0, None)
+    assert certifier.requests_released == 1 and bytes(clients[0].shim().data) == b"r0"
+    if watermark:
+        admitted, _, lines, ended, early = tick_engine(server.events, STREAM_RUN)
+        assert ended and early == [] and certifier.watermark_lost == [] and certifier.watermark_error is None
+        assert [n for _, n, _ in lines] == [0, 0] + [1] * (STREAMED.window - 2) and not any(lost for *_, lost in lines)
+        assert {T: ns for T, ns in admitted.items() if ns} == {2: [0]}
+    other = client_stream(CLIENT_LINES[name].replace(b"verity", b"verify"))
+    certifier, _, server = streamed({1: [honest, cells(other, B)]}, watermark)
+    log = {e["ordinal"]: e for e in certifier.log}
+    assert log[2]["failed"] is None and certifier.requests_released == 2
+    assert server.conns[1].received == with_release(other, log[2]["release"], STREAM_RUN, log[2]["ingress_end"])
+
+
+def test_a_schedule_that_bounds_max_tokens_refuses_it_before_its_path_is_read():
+    """Under `CAPPED` the request is refused as every request whose `max_tokens` isn't where an id request has it,
+    with that refusal's own reason: none of its bytes is cut into a cell or reaches the server."""
+    refused(client_stream(OWN_LINE))
 
 
 def test_the_parameters_digest_binds_every_parameter():
