@@ -40,7 +40,7 @@ sessions.
   `fixed + marginal c` over its sizes, with the marginal's standard error, each of the session's parts (`PARTS`: witness,
   proving, the wait on the ZK server, the rest) fitted the same way, and a dot product's proof overhead: its GPU-seconds a
   proof block over the GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format
-  (`verity.hardware.cards.rate`; `--card none` on a CPU node, whose witness and proving run on its CPUs rather than a device).
+  (`verity.device.rate`; `--card none` on a CPU node, whose witness and proving run on its CPUs rather than a device).
   Per statement and arm, its sessions at every k it drew, k = c among them, fitted over k (`drawn`): the statement's
   fixed seconds and a sampled block's, the deployed sample's price; `fw` less `nofw` at the same samples is the send
   check's increment. Its `observations.json` holds each arm's `costfit.Observation`s, prove the median timed session.
@@ -701,10 +701,10 @@ PARTS = {"witness": lambda x: x.get("witness_s") or 0.0, "proving": lambda x: x[
 
 
 def overhead(a) -> int:
-    from verity.hardware import cards
+    from verity.device import load_card, rate
     out = Path(a.out)
     # --card none: a CPU node's sessions, which no GPU's peak divides
-    card = None if a.card == "none" else cards.load(a.card)
+    card = None if a.card == "none" else load_card(a.card)
     stages = [r for r in read_jsonl(out / "records" / "stage.jsonl") if r.get("unit")]
     proves = [r for r in read_jsonl(out / "records" / "prove.jsonl") if r.get("unit") and r["accepted"]]
     verifies = [r for r in read_jsonl(out / "records" / "verify.jsonl") if r.get("unit")]
@@ -719,7 +719,7 @@ def overhead(a) -> int:
     for tag in dict.fromkeys(r["tag"] for r in stages):
         st = {r["c"]: r for r in stages if r["tag"] == tag}
         s0 = st[max(st)]
-        peak = float(cards.rate(card, fmt=s0["format"])) if s0["macs"] and card else None
+        peak = float(rate(card, fmt=s0["format"])) if s0["macs"] and card else None
         t = {"unit": s0["unit"], "definition": s0["definition"], "class": s0.get("class"), "ands": s0["ands"],
              "k_log": s0["k_log"], "full": s0["full"], "sizes": sorted(st), "macs": s0["macs"], "format": s0["format"],
              "peak_mac_per_s": peak, "stage_s": {c: r["stage_s"] for c, r in st.items()}, "arms": {}, "drawn": {}}
@@ -836,7 +836,7 @@ def main() -> int:
     ap.add_argument("--units", default="", help="stage: served types (stage.py's TYPE[:S=V,...]), space-separated, instead of --ks")
     ap.add_argument("--sizes", default=None, help="stage: staged units a statement (default 1,8,64,512; with --units half,full)")
     ap.add_argument("--card", default="rtx-pro-6000-server",
-                    help="overhead: the card whose datasheet peak divides (verity.hardware.cards); none: a CPU node's sessions")
+                    help="overhead: the card whose datasheet peak divides (verity.device.load_card); none: a CPU node's sessions")
     ap.add_argument("--draws", default="1,8,64,c", help="stage: the sample sizes a statement is proved at, c meaning all its units")
     ap.add_argument("--points", default=None, help="prove: only these indices of plan.json (one GPU lease a point)")
     ap.add_argument("--arms", default="fw,nofw", help="fw: the ZK server's send check on (the design's path); nofw: off; "

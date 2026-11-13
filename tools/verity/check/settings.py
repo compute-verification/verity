@@ -77,8 +77,9 @@ SETTINGS: dict[str, Setting] = _declare(
       "--priority` sets it)", "placement: which slot a check waits for"),
     S("CHECK_PEERS", str, None, WHERE, "the ssh names of the machines a twin claims on; unset, /etc/vy/peers (slot.py, "
       "pod_setup.sh)", "placement: where a twin's claim is made"),
-    S("CHECK_RUN_MEM_GB", str, None, WHERE, "the memory a `research run --mem-gb` run asks of a slot (research's cli sets it): "
-      "slot.py raises each slot's mem= to it", "placement: which slot a run waits for"),
+    S("CHECK_RUN_MEM_GB", str, None, WHERE, "the memory a `research run --mem-gb` run asks of a slot (research's cli sets it), "
+      "or a train check's shard (`check.py --record --priority`, `shard_ask_gib`): slot.py raises each slot's mem= to it and "
+      "books the larger of it and the line's book=", "placement: which slot a run waits for and what it books"),
     S("CHECK_SCOPE_UNIT", str, None, WHERE, "the check's own systemd scope, which slot.py sets on a scope=1 slot: the spans read "
       "its memory (`spans.check_memory`)", "telemetry: the memory a check took"),
     S("CHECK_SLOT", str, None, WHERE, "the check slot this process holds (slot.py sets it for CMD)", "placement: the slot held"),
@@ -86,6 +87,9 @@ SETTINGS: dict[str, Setting] = _declare(
       "pod_setup.sh)", "placement: which slots a check may take"),
     S("CHECK_SLOT_MEM_GB", str, "", WHERE, "the GB the check slot gives the run it holds (slot.py sets it): circuit-check's "
       "budget and the suites' jobs", "it sizes how much runs at once, never what a step computes"),
+    S("CHECK_SLOT_BOOK_GB", str, "", WHERE, "the GB the check slot books for the run it holds (slot.py sets it, `booked`): "
+      "no grant of CHECK_SLOT_MEM_GB passes it (`check.slot_mem_gb`)", "it sizes how much runs at once, never what a step "
+      "computes"),
     S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: the verified queue's checks "
       "of a candidate and its records run's (`research.landing.POSTLAND_SLOT_RANK`), none for a hand `train.sh`", "placement: "
       "the order the verified queue's checks take slots in"),
