@@ -8,16 +8,19 @@ from __future__ import annotations
 import gzip
 import io
 import json
+from collections.abc import Iterable, Iterator
 from pathlib import Path
-from typing import IO, Iterable, Iterator
+from typing import IO, cast
 
 from .events import Event, RunHeader, StepEnd, StepStart, from_json, to_json
+
+__all__ = ["header_of", "read_log", "split_steps"]
 
 
 def _open(path: str | Path, mode: str) -> IO:
     p = Path(path)
     if p.suffix == ".gz":
-        return gzip.open(p, mode + "t", encoding="utf-8")
+        return cast(IO, gzip.open(p, mode + "t", encoding="utf-8"))
     return open(p, mode, encoding="utf-8")
 
 
@@ -42,7 +45,7 @@ class LogWriter:
         if not self._f.closed:
             self._f.close()
 
-    def __enter__(self) -> "LogWriter":
+    def __enter__(self) -> LogWriter:
         return self
 
     def __exit__(self, *exc) -> None:
