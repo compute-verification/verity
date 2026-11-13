@@ -255,7 +255,7 @@ def test_a_replay_whose_sample_is_null_or_empty_is_kept_with_no_seed_and_counts_
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sample: Any) -> None:
     sr, lk = evaluated()
     evaluates(monkeypatch, (sr | {"sample": sample}, lk))
-    readings(monkeypatch, None, None, None)
+    readings(monkeypatch, 4096, 2048, 1024)
     s, cache = sources(tmp_path, **CACHED), Cache()
     C2.run(s, cache)
     (kept,) = cache.values()
