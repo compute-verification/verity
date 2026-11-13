@@ -15,9 +15,9 @@ many proof blocks as the member has units. This module reads, off one session's 
 (`SessionVerdict`), what its record's sample is and which of the registration's units the session proved:
 
 * **A member of one range** (`first_one`, `count_one`, `indices_one`, `indices_at`, `sampled_one`,
-  `laidHeld_one`, `membersStructure_laid`): the form's check holds every member to one range of the registration's
-  units (`laidHeld`, which the form's structure check runs), and
-  at a member of the one range `[lo, hi)` its first unit is `lo`, its count `hi - lo`, its unit at slot `u` is
+  `laidHeld_one`, `laidHeld_sum`, `membersStructure_laid`): the form's check holds every member to one range of the
+  registration's units and the members' counts to its population (`laidHeld`, which the form's structure check
+  runs), and at a member of the one range `[lo, hi)` its first unit is `lo`, its count `hi - lo`, its unit at slot `u` is
   `lo + u`, and the sample holds one of its units exactly where it holds a unit from `lo` up to `hi`.
 * **The record's sample is a subset sample** (`sessionVerdict_subset`): a session whose verdict passes has a record
   with a sample, which decodes by the subset sampling design; `verify --zk` refuses a session without a sample, and
@@ -90,6 +90,22 @@ theorem laidHeld_one {ms : Array _root_.Spot.OneStageZk.Member} {rec : Json}
       have hone := Array.all_eq_true'.1 hc.1 vm hvm
       rw [Bool.and_eq_true, beq_iff_eq] at hone
       exact one_range hone.1
+    · cases h
+
+/-- **The form's check holds the members' counts to the registration's population** (`laidHeld`): the record names
+a population, and the members' counts sum to it. -/
+theorem laidHeld_sum {ms : Array _root_.Spot.OneStageZk.Member} {rec : Json}
+    (h : _root_.Spot.OneStageZk.laidHeld ms rec = .ok ()) :
+    ∃ n, _root_.Spot.nat? (_root_.Spot.getD rec "population") = some n ∧
+      (ms.toList.map fun vm => vm.count).sum = n := by
+  unfold _root_.Spot.OneStageZk.laidHeld at h
+  split at h
+  · cases h
+  · rename_i n hn
+    split at h
+    · rename_i hc
+      rw [Bool.and_eq_true, beq_iff_eq] at hc
+      exact ⟨n, hn, (foldl_add_eq_sum (fun vm : _root_.Spot.OneStageZk.Member => vm.count) ms).symm.trans hc.2⟩
     · cases h
 
 /-- **The per-member form's structure lays each member over one range**: where `membersStructure` passes,
