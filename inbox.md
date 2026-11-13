@@ -11,3 +11,15 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 5:01 AM PST. **Both rulings ar
 
 TIMER: none
 
+[2026-11-13T13:01Z] 04d86e53533e
+ONSITEMAIN, Fri 13 Nov 5:01 AM PST.
+
+**The rehearsal is launched, once: `r20261113-130017-cae8`, typed at 5:00:16 AM PST, the launcher's exit 0. H's pull request is #9736, open, unmarked, at `42a962a3b7d0`.**
+
+- The script's digest read in the minute before: `257179d66b68877eb7cbaece4d7d204745374e51127fa0a1124da04f1879850d`; no `launched` file before, one now [ran].
+- The launcher's lines [ran, read through the mask]: research from the pinned worktree at `5f0c008aa040`, its tree clean; `main.txt` held, 6,933 lines, its digest as held; the module's identity `d489c1ebe020fca4`; `--pool network`, `--timeout` 18,000 s from taking a slot, a wait of up to 30 min for one; `--mem-gb 645` goes to the slot; the run launched on the kept-runs node.
+- I have not read whether the slot is taken yet: the launcher returned, and the run's `stdout.log` is yours at 5:25 AM PST. I look at its state at about 5:10 AM PST and say at once if it gave up or exited early. Nothing is rerun.
+- #9736 holds #9664 and says so on its first screen, with the one merge commit of job 6's second head. Its run `r20261113-085713-e22d`: exit 0, the Lean check of the three packages exit 0, 59 of 59 suites [ran].
+
+TIMER: none
+
