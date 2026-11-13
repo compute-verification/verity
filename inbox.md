@@ -72,3 +72,15 @@ OPTIN (TIEVERIFY) to the network-accounting coordinator, Thu 12 Nov 4:45 PM PST.
 
 TIMER: when r20261113-004356-b0f9 ends.
 
+[2026-11-13T00:47Z] 46fafbc8a16b
+ENTRIESONCE to network-accounting (lead), Thu 12 Nov 4:47 PM PST. **NET-284 Part 2: pieces 1 and 2 are pushed, with your 4:23 PM condition; piece 3 is a run, launched once and waiting for a slot.** Branch `cursor/network-accounting-view-rows-675b` at `cb691107a07c` (tree `a77a1e1b9b71`), eight commits on `388d80e41fa0`.
+
+- **Piece 1, pushed** [ran, local test files]: the record's words and cells (`onsite_record.py`), the calculator (`leak_bounds.py`, `chain_record.py leak`) and the lab record (`network_sim/onsite.py`). 26,400 rests on neither tie; 1,696 is given only as conditional on both; neither is called a leak bound; the record makes no period figure from K, by ONSITEMAIN's gate and no second one.
+- **Your 4:23 PM condition, pushed** [ran]: every row of K carries five fields of its own, `reading`, `what` (the reading's words; a reading of the slot entries says "which no check holds"), `bounds` (K bounds a count expression and is no leak bound), `open` (`view-cut`, `period-checked`, `answers-verified` in the check's reading) and `conditional_on` (`state-tied`, `view-tied` in a reading of the slot entries). Each table has the same label on the line directly above it. The lab record's figure with both ties is a phase's alone, under its own heading; no table or line holds two readings and nothing is their sum. One test a writer: `test_no_row_of_K_leaves_the_calculator_without_its_readings_label` (`test_leak_bounds.py`), `test_no_row_of_leak_leaves_without_its_readings_label` (`test_chain_record.py`), `test_no_row_of_K_leaves_the_record_without_its_readings_label` (`network_sim/tests/test_onsite.py`). Seven labels removed on purpose, each caught.
+- **Piece 2, pushed** [ran]: `test_the_record_names_no_guarantee_or_discharge_the_trees_locks_dont_list` (`benchmarks/one_stage/tests/test_onsite_record.py`); three names broken on purpose, each caught with the fix in the message.
+- **Piece 3, not yet a result:** run `r20261113-004043-cdb6`, main's launcher, the tree as an input, launched 4:40 PM PST on the CPU node that holds Monday's kept output (pool `research`, not `network`). It stops and writes nothing if the recomposed circuit file is not the case's pin, and exits 8 if the writer gives anything but 26,400; I tell you at once in either case.
+- **Checks at the same head, each launched once, main's launcher, the tree as an input:** builds `r20261113-004246-f1c0`, the lock's fast path `r20261113-004319-805f`, suites `r20261113-004357-3ee3`, `r20261113-004429-11e1`, `r20261113-004443-bae1`. None is in the pool `network`; the longest ends by Fri 13 Nov 1 AM PST at the latest.
+- **One thing for you to see now** [read, in Linear, as data]: NET-284's description still ends "Monday's record is written again from its kept output, per week, month and year for a node, a datacenter and the world". The record I write holds no period figure, as your 3:28 PM brief says. I follow the brief.
+
+TIMER: none
+
