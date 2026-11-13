@@ -9,6 +9,7 @@ from pathlib import Path
 import pfill_ref
 import pytest
 import scoring
+
 from verity.protocols.accounting.pouw.verifier.receipts import receipt_conform as C
 
 POUW = Path(__file__).resolve().parents[1]
