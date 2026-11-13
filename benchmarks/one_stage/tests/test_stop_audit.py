@@ -161,7 +161,7 @@ def test_the_stop_streams_answer_carries_its_audit_records_complete(tmp_path, mo
     refused, _ = _audit(stage1, accepted=False, why="the proof does not verify")
     b = SA.answer_of(r, refused)
     assert (b["verdict"], b["public"], b["profile"], b["commitment"]) == ("reject", None, None, a["commitment"])
-    assert b["reason"] == f"checks: registered, roots; verdicts: {SA.LEAN}, {SA.READS}" and not SA.A.answer_complete(b)
+    assert b["reason"] == f"checks: roots; verdicts: {SA.LEAN}, {SA.READS}" and not SA.A.answer_complete(b)
 
 
 def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
@@ -193,7 +193,7 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     stage1 = _stage1(tmp_path, monkeypatch, "refusals")
     _, summary = _audit(stage1, accepted=False, why="the proof does not verify")
     assert summary["accepted"] is False and summary["verdicts"][SA.LEAN] is False and summary["verdicts"][SA.ORDER] is True
-    assert summary["failed"] == ["registered", "roots"]
+    assert summary["failed"] == ["roots"]
 
     refused = SMALL.unaccepted(stage1)
     got, summary = _audit(stage1, refused)
