@@ -4,9 +4,9 @@ audit's ledger as its requirement link. `PlanMatch_v1` (each pass's plan is exac
 `MemoryMapStep_v3` (the blocks a step writes carry its values, written at their step and freed at their last structural
 reader, each registered block freed at its values' last structural reader, and each re-key's old block written below
 the cap the committed pass row and the public lifetime cap give), one instance of each per step
-(`verity.definitions.circuits.requirement_units`), the layout row at two epochs a value.
+(`verity.circuits.requirement_units`), the layout row at two epochs a value.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm:<tree>/tools/verity/circuit_check/src \\
       python benchmarks/one_stage/a7.py --bin flock-circuit --lean flock-verify --out DIR [--k K] [--steps 32] [--delta 2^-20]
 
 * **Stand-in.** A decoder's requirement built directly (`requirement.Requirement`): 8 weight blocks, every step reading
@@ -49,7 +49,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   receipt of (`audit.linked_bits` on `RequirementLink`, `UnitsLink`), the session 1 − ε of their sum, ε the share of
   it the incorrect proof blocks the sample allows can carry (`uncertified`), its δ added to the ledger's error.
 * **Check 3.** The session samples ``--samples`` receipts a window, and nothing is opened: each sample goes through the
-  remote audit's opening unit (`remote_bandwidth.opening`, `verity.protocols.poub.verifier.commitments.gates.block_check`, §8's checks 1-3
+  remote audit's opening unit (`remote_bandwidth.opening`, `verity.protocols.accounting.poub.verifier.commitments.gates.block_check`, §8's checks 1-3
   and 5 as one unit): the receipt leaf on its path to the pass's receipt root and the step's plan row holding the block
   at the sampled position, the block decoding to its payload under b_j(c_a), the payload on its path to its append's root (the
   registration's payload root for a registered block) and to the canonical payload commitment at the row the memory-map
@@ -80,14 +80,14 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
-from verity.protocols.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
-from verity.protocols.poub.verifier import schedule as SC  # noqa: E402
-from verity.protocols.poub.verifier.receipts import Plan  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
-from verity.definitions.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
+from verity.protocols.accounting.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
+from verity.protocols.accounting.poub.verifier import schedule as SC  # noqa: E402
+from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.circuits import requirement as RQ, requirement_units as RU  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
-from verity.protocols.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
+from verity.protocols.accounting.poub.verifier.commitments.gates import block_check as BC  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.commitments.merkle import CommitmentDomain, MerkleTree  # noqa: E402
@@ -322,12 +322,12 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     payloads = [store.payload.get(j, 0).to_bytes(RQ.BLOCK_BITS // 8, "little") for j in range(NR)]
     ys = [Entropy(b"a7 payload salts %d" % j)(receipts.SALT_BYTES) for j in range(NR)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    rs = C3.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
+    rs = audit.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512,
                      lifetime=LIFE, schedule_cap=SCHEDULE_CAP)
     clock = Clock()
-    s = C3.Session(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
-                   not_before_ns=0, clock=clock)
+    s = audit.AuditRun(p, rs.registration, None, coins.local(rs.registration.digest, 0, p.windows, Entropy(b"a7 coins")),
+                       not_before_ns=0, clock=clock)
     prover = audit.Prover(rs, None, entropy=Entropy(b"a7 receipt salts"))
     head = MM.Header(rs.registration.digest, NR)
     replay = MM.Replay(head, rs.registration)

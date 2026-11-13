@@ -12,7 +12,6 @@ router-softmax tap acquires it (`acquire.sources.router_softmax_source`, vLLM's 
 """
 from __future__ import annotations
 
-import hashlib
 from collections import Counter
 from collections.abc import Callable, Mapping
 from functools import cache
@@ -20,6 +19,8 @@ from typing import Any
 
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.manifest.format import identity_rows
+
+from verity_vllm.query.manifest.format import query_id_digest
 
 FAMILY = "router_softmax"
 MEMBER = "router_softmax"
@@ -72,7 +73,7 @@ def slots(E: int, TOPK: int, VPT: int, renormalize: bool) -> tuple[int, ...]:
     word i of a tapped row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or whose
     committed interior values are not `layout`'s, class by class."""
     # inside the function: importing this module loads neither numpy nor the core `verity`
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     G = W.Graph(router_fn(E, TOPK, VPT, renormalize))
     R = W.units(G, 16, 32)
@@ -124,7 +125,7 @@ def header(q: dict[str, Any], stats: Mapping[str, Any] | None) -> dict[str, Any]
     if stats is None:
         return q
     text = f"{q['query_text']}; {POLICY_TEXT}"
-    out = dict(q, query_text=text, query_id_digest=hashlib.sha256(text.encode()).hexdigest(),
+    out = dict(q, query_text=text, query_id_digest=query_id_digest(text),
                required_families=[*q.get("required_families", []), FAMILY])
     out["router_softmax"] = {"family": FAMILY, "member": MEMBER, "routers": dict(ROUTERS), "layout": "max, ex[E], rcp, p[E] (+ sel[TOPK], scale)",
                              **stats}

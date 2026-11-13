@@ -24,10 +24,10 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import wiring as WI
 from verity.definitions.registry import io_shell as IO
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.pouw.verifier import audit as AU
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.accounting.pouw.verifier import audit as AU
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 from tests.check.test_weights_of_record import _bf16, write_safetensors
 from tests.program.predict import test_steps as S
@@ -149,15 +149,15 @@ def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_o
 
 def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
     """At the class of record's slots, the wires into the slots' entries begin and end at every lane's nb = 2 slots and
-    nowhere else, and no server block ends among them, so `interface.members` (which cuts a template's batch only there
-    and at the cap) makes the entry template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
+    nowhere else, so `interface.members` (which cuts a template's batch only there and at the cap) makes the entry
+    template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
     entries, slot nb·j + b at leaf b, each lane's a hiding row with its own root in the window's registration, which the
     network certifier's scan reads as lane j's Programs."""
     eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
     entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in eight.templates}[ENTRY]
     nb = SLOTS.slots // SLOTS.lanes
     ends = {x for w in eight.wires if w.reader == entry for x in (w.at, w.at + w.reader_units)}
-    assert ends == set(range(0, SLOTS.slots + 1, nb)) and not eight.server_ends().get(entry)
+    assert ends == set(range(0, SLOTS.slots + 1, nb))
 
 
 def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeypatch):

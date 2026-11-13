@@ -11,7 +11,7 @@ append-coin rule), except with probability `δ_G` the prover system read, from t
 pass's step reads, `W`'s credited bits there less an explicit share `ε` of the store. It is a layer-1 bound in decision
 111's sense (a cryptographic lower bound on the prover system, parametric in the system's resources a pass); which device
 held what (the node's boundary, HBM against host DRAM) is attribution, stated apart. It composes the stacked remote
-audit in its deployed sketch form (`StackedSessionConservationSketchDeployed`), on a layout the prover may steer after
+audit in its deployed sketch form (`StackedRunConservationSketchDeployed`), on a layout the prover may steer after
 the coins, with the carriers' cost read from the property's caps (`Gates.Property`, under
 `Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`) and the audit linked to `W`'s placed
 requirement (A1's
@@ -32,7 +32,7 @@ open scoped ENNReal
 
 /-- **A declared circuit's held and moved bits from an accepted stacked audit, at the deployed parameters.**
 
-*The audit.* `StackedSessionConservationSketchDeployed`'s session: `n ≥ 7` windows of `P` passes, sketch receipts at
+*The audit.* `StackedRunConservationSketchDeployed`'s session: `n ≥ 7` windows of `P` passes, sketch receipts at
 16 rows over tiles of 128 sectors, 512-bit tags, 2,773 openings a window (the 1 s window's count; a longer window's
 audit instantiates `G` by verifying a uniform 2,773 of its samples, and a paced session's when each group samples at least
 2,773), and a store per pass made by the append-coin rule (`RateSketch.steeredStore`: the blocks of `T` appends of `M`
@@ -47,9 +47,10 @@ the layout may follow inputs chosen after those coins: it reads `y` only through
 (`Accounting.Assumptions.SteeredLayout`). That holds of every layout at `a = |Y|`; what makes `a` small is the schedule
 check at a cap fixed before the coins. `SteeredLayout` fixes one `a` at every coin, and
 `Properties.RemoteAudit.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
-check accepts a schedule of at most `a₀` bits holding the plan the pass sent, under the named gap
-`Properties.RemoteAudit.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
-appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin
+check accepts a schedule of at most `a₀` bits holding the plan the pass sent, the model's layout of a pass being the
+verifier's own (`Properties.RemoteAudit.sessionLayout`: the positions of the session's appends and the plan the pass
+sent, where the verifier checks each opened block, `Properties.RemoteAudit.CodeLayoutTiles` and `OpensAtPosition`). So
+`a₀` is the steering cap the prover commits before the first coin
 (`audit.Params.schedule_cap`, credited as `audit.Ledger.steering`), over which the check refuses a schedule, not
 the bits of the one schedule a session published: a prover whose schedule is 200 bits on most coins and 300 where it
 steers would meet `SteeredLayout` only at 301 (which the
@@ -65,7 +66,7 @@ with `L_min` 2 when the prover defers residency and 1 otherwise; a paced session
 nominal length.
 
 *The prover system.* Its pass devices are verbatim (`rate-sketch-verbatim`), and they are told their pass's summary:
-`A` has a session for each value of the summary (`RateSketch.SketchSummarySession`), and pass `j` of window `w` runs
+`A` has a session for each value of the summary (`RateSketch.SketchSummaryRun`), and pass `j` of window `w` runs
 the devices of session `steer c y`, so a device may follow the layout the prover steered. The system's resources a
 pass, within the pass's deadline `τ`, are the class's parameters: at most `S` bits kept besides the store, at most
 `L_r·τ` bits taken from outside it, at most `q_r·τ` oracle queries over its grinding candidates at every summary
@@ -90,7 +91,7 @@ KV value's sequence, layer, plane and page parity), the step `bind x w j` each p
 strictly increasing over the passes, the memory map `σ x`, each pass's plan `plan x w j` (its blocks), and the
 store position `addr x k` of each block `k`. On device `d`'s clock pass `j` of window `w` is the `τ` ticks from the one
 at which `d` begins the pass's step (`Requirement.Placement.passTicks`), window `w` its passes' ticks
-(`Requirement.Placement.windowTicks`), and no device tick is in two windows or two passes of one
+(`Requirement.Placement.executionPhaseTicks`), and no device tick is in two windows or two passes of one
 (`Requirement.Placement.Deadlines`). At each bound step `t` the memory map holds `W`'s credited blocks
 (`Requirement.StoreMatches`: every block holding a credited value is resident, the live values are packed into blocks
 of 32,768 bits, and each credited value is in its block's payload), the pass's plan covers `W`'s reads
@@ -129,7 +130,7 @@ sectors or the stream's, among its correct digests, at `2^-96` each, so `k` tile
 steering costing about 520 bits of `γ`'s numerator a bit. The devices are told the
 summary, so a device may aim at the layout the prover steered to. Each summary fixes both the layout and the devices,
 so the union over the `2^a` summaries covers them together: an adaptive device costs nothing beyond `2^a`. At
-`a = k = 0` the bound is `StackedSessionConservationSketchDeployed`'s.
+`a = k = 0` the bound is `StackedRunConservationSketchDeployed`'s.
 
 **The reading.** The sectors counted are the distinct addresses of the store each pass read from device memory, within
 the pass's ticks on each device's clock, and the bound is on their sum, over the session and over each window's `P`
@@ -178,7 +179,7 @@ over the `2^a` summaries, each fixing the layout `slot c s` and the devices of s
 bounds that pass at `2^a·(q_r·τ/2^96)^(k+1) + δ`; and a pass's credit is at most a tile's bits for each of its tiles of
 `W`.
 
-Frozen (no-function, hash): `StackedSessionConservationSketchDeployed`'s game on a store per pass whose layout reads
+Frozen (no-function, hash): `StackedRunConservationSketchDeployed`'s game on a store per pass whose layout reads
 the codec and the append coins through an `a`-bit summary the pass's devices are told, each append's blocks read
 within `L` windows of the one it joined, with the rebuilds of appended tiles charged to carriers of a declared circuit
 passing the stacking property within its caps over `L` windows, its shortfall read pass by pass against the circuit's
@@ -194,7 +195,7 @@ def RegisteredCircuitRequirement : Prop :=
     (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Fin N ↪ Fin T × Fin M)
     (steer : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (joined : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin T → ℕ)
-    (A : RateSketch.SketchSummarySession a n P N 128 ρ 512 S (Lr * τ) q 16 G 2773)
+    (A : RateSketch.SketchSummaryRun a n P N 128 ρ 512 S (Lr * τ) q 16 G 2773)
     {V K Dv : Type} [DecidableEq V] [DecidableEq K] (W : Requirement.Wiring V)
     (p : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Placement Dv V)
     (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store.Placement V)

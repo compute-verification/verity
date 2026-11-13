@@ -25,17 +25,17 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.circuits.refs import runs
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import verifier
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import HM96, commit_rows, salt_of
-from verity.protocols.pouw.verifier.coins import Challenger
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
-from verity.protocols.spot.device.challenger import CoinError, LiveRecord
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import HM96, commit_rows, salt_of
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.device.challenger import CoinError, LiveRecord
 
 from tests.protocols import challenger_host as CH
 from verity_vllm import llm as L
@@ -393,7 +393,9 @@ def test_h1_is_admitted_beside_spot_and_executes_nowhere():
     short = PO.Context(stage="serve", enabled=(_entry(),), settings=_settings(rounds=_rounds(2)))
     assert any("2 unopened coins, fewer than the window's 3 rounds" in r for r in PO.refusals(short))
     other = PO.Context(stage="serve", enabled=("pouw:ncp-v1",), settings={"pouw": {"coins": Challenger(0, CH.entropy(0)), "runner": Runner()}})
-    assert any("'runner', 'rounds', 'admission' and 'served' are H1's" in r for r in PO.refusals(other))
+    assert any("the pouw setting 'runner' is H1's" in r for r in PO.refusals(other))
+    served = PO.Context(stage="serve", enabled=("pouw:ncp-v1",), settings={"pouw": {"coins": Challenger(0, CH.entropy(0)), "rounds": _rounds(1)}})
+    assert any("'rounds', 'admission' and 'served' are H1's" in r for r in PO.refusals(served))
     with pytest.raises(ValueError, match="'rounds' is the window's round coins"):
         pouw.Settings.of({"rounds": object()})
     with pytest.raises(ValueError, match="loaded Model Runner V2"):

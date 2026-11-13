@@ -65,7 +65,7 @@ Python (`certificate.CertifiedRecord`); `certified` copies the Lean device's int
 * the configuration's: `Ticking` (both grids have buckets), `FieldsFit` (what a record encodes fits its field), `Distinct`
   (two links), `Digested` (each grid has a `parameters_digest`: `Flock.canonUtf8` is well-founded recursion, which the
   kernel does not evaluate, so this is a fact about the configuration that only running it shows), `ValidKey` of the
-  issuer's key, `SessionFits` (its session's id is 32 bytes) and `SaltsFit` (each salt its coins give is 64 bytes);
+  issuer's key, `AttachmentFits` (its session's id is 32 bytes) and `SaltsFit` (each salt its coins give is 64 bytes);
 * the run's: `Closed` (both grids ran all their ticks), `NoFault` (every record published is complete), `SyncsDeclared`
   (one sync per window) and `SyncsAdmitted` (each in Σ_sync), and `LeavesLeft` (the signer has a leaf for every
   record). Honest timing (`HonestTiming`: each frame handed at the bucket the Program hands it) follows from `Closed`
@@ -95,7 +95,7 @@ def declaredSyncs (c : Config) (tr : List Event) : Array NetworkCertifier.ClockS
 /-- **The host's assembly**: each record, in order, certified by `Issuer.certify` under the next salt of the certifier's
 coins `salts`, at the reserved leaf, under its link's direction, grid and parameters digest; the certificates issued, in
 order. -/
-def certifyAll (c : Config) : Issuer → Nat → (Nat → ByteArray) → List Record →
+def certifyAll (c : Config) : Issuer → Nat → (Nat → ByteArray) → List BlockGrid →
     Except String (Issuer × List CertifiedRecord)
   | i, _, _, [] => pure (i, [])
   | i, next, salts, r :: rs => do
@@ -132,7 +132,7 @@ def Digested (c : Config) : Prop :=
   (∃ eg, parameters c.egress (some c.syncSet) = .ok eg) ∧ ∃ ig, parameters c.ingress none = .ok ig
 
 /-- The issuer's certifier session id is 32 bytes (`certificate_message` refuses any other). -/
-def SessionFits (i : Issuer) : Prop := i.session.size = NetworkCheck.sessionBytes
+def AttachmentFits (i : Issuer) : Prop := i.session.size = NetworkCheck.attachmentBytes
 
 /-- Each salt the certifier's coins give is 64 bytes (`Issuer.certify` refuses any other). -/
 def SaltsFit (salts : Nat → ByteArray) : Prop := ∀ n, (salts n).size = NetworkCheck.saltBytes
@@ -172,7 +172,7 @@ the device published, and the check accepts that commitment, whatever its bytes,
 holds, under the configuration's parameters, the key's public key and the issuer's session. -/
 def DeviceOutputAccepted : Prop :=
   ∀ (c : Config) (tr : List Event) (i : Issuer) (next : Nat) (salts : Nat → ByteArray),
-    Ticking c → FieldsFit c → Distinct c → Digested c → ValidKey i.key → SessionFits i → SaltsFit salts →
+    Ticking c → FieldsFit c → Distinct c → Digested c → ValidKey i.key → AttachmentFits i → SaltsFit salts →
     Closed c tr → NoFault c tr → SyncsDeclared c tr → SyncsAdmitted c tr → LeavesLeft i next c tr →
     ∃ i' crs, certifyAll c i next salts (published c tr) = .ok (i', crs) ∧
       ∀ bytes, NetworkCheck.Check.protocol.Accepts (unitParams c i.key i.session)

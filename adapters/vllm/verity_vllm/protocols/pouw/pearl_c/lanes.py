@@ -1,7 +1,7 @@
 """The Pearl-C device path's schedule (`pouw_pearl_c_device.PearlCDeviceRun`'s lanes): the lane each call step runs on, the
 per-call buffers a side lane touches, and a call's eager launches on those lanes.
 
-The schedule (`verity.protocols.pouw.verifier.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2)
+The schedule (`verity.protocols.accounting.pouw.verifier.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2)
 places each call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile
 hashing (`SIDE_IO`: the tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
 calls go on, and the rest of the call runs on a main lane of the run's own at the greatest priority, joined to the caller's
@@ -39,7 +39,7 @@ import struct
 from contextlib import nullcontext
 from typing import Any
 
-from verity.protocols.pouw.verifier.serving import (
+from verity.protocols.accounting.pouw.verifier.serving import (
     SCHEDULES,
     Schedule,
     StepIO,
@@ -51,7 +51,7 @@ from verity_vllm.protocols.pouw.pearl_c.ends import _RunState
 from verity_vllm.protocols.pouw.pearl_c.graphs import SLOT_BYTES
 from verity_vllm.protocols.pouw.pearl_c.host import _event, _stream
 
-#: each call step's group (`verity.protocols.pouw.verifier.serving.GROUPS`), which a schedule places on a lane.  The per-row
+#: each call step's group (`verity.protocols.accounting.pouw.verifier.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
 #: unit seed are ``a_tree``.  ``commit_a`` (`run.Pipeline.FUSED`), which also writes each row's seed and E_A line, is
 #: ``row_seeds``, and so is ``rows_a``, its mode 1; ``tree_seed_a`` (A's levels, seed_A and line_a) is ``a_tree``;
@@ -95,7 +95,7 @@ def splits_at(kernel: Any, m16: int, n: int, k: int) -> bool:
 
 def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: bool, whole_fork_stats: bool,
                   whole_tree_sm: bool, lag_ends: bool = False, aside_ends: bool = False,
-                  whole_prefetch_b: bool = False, whole_shape_joins: bool = False) -> None:
+                  whole_prefetch_b: bool = False, whole_shape_joins: bool = False, whole_pd_shared: bool = False) -> None:
     """Refuse a whole capture's options, and a pass end's, where `kernel` or the others can't run them.  `whole_defer_a`
     (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A tree within a whole
     capture (`pouw_pearl_c_graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A scales there beside its
@@ -103,7 +103,8 @@ def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: boo
     fewer, leaving the tree's CTA its SM; `whole_shape_joins` (with `whole_defer`) joins a call's side steps only before
     the next call of its shape; `aside_ends` (with `lag_ends`) runs a lagged end's tile tree aside;
     `whole_prefetch_b` (with `whole_defer`) prefetches each call's B̃ into L2 beside its A commitment (`run.Pipeline.prefetch_b`,
-    which writes nothing)."""
+    which writes nothing); `whole_pd_shared` launches each call's pd_commit and pd_tree in half an SM's shared memory
+    (`run.Pipeline.pd_shared`)."""
     if whole_defer_a and not (whole_defer and splits(kernel)):
         raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
                          f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
@@ -120,10 +121,13 @@ def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: boo
         raise ValueError(f"{entry}: whole_prefetch_b prefetches within a deferred whole capture (whole_defer)")
     if whole_prefetch_b and not hasattr(kernel.run.Pipeline, "prefetch_b"):
         raise ValueError(f"{entry}: whole_prefetch_b runs the kernel's B̃ prefetch (`Pipeline.prefetch_b`), which it lacks")
+    if whole_pd_shared and not hasattr(kernel.run.Pipeline, "pd_shared"):
+        raise ValueError(f"{entry}: whole_pd_shared launches pd_commit and pd_tree in half an SM's shared memory "
+                         f"(`Pipeline.pd_shared`), which the kernel's pipeline lacks")
 
 
 def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedule:
-    """`name`'s schedule (`verity.protocols.pouw.verifier.serving.SCHEDULES`), refused where the scheme's format, this path or (when
+    """`name`'s schedule (`verity.protocols.accounting.pouw.verifier.serving.SCHEDULES`), refused where the scheme's format, this path or (when
     given) `kernel` can't run it: A's tree leaves the main lane only on a kernel whose pipeline splits A's commitment."""
     s = SCHEDULES[name] if isinstance(name, str) else name
     bad = schedule_refusals(hash_format(scheme), s)

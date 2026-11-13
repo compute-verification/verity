@@ -140,7 +140,7 @@ class SamplerInputsSource:
 
 class StepInputPort:
     """The committer source that starts every step's stream with the step-input port the certifier's served-rows tie and
-    IO-TIE's ``IoTieRequest`` read (`verity.protocols.certifier.prover.served_tie`): the step's input ids, then its positions,
+    IO-TIE's ``IoTieRequest`` read (`verity.protocols.accounting.certifier.prover.served_tie`): the step's input ids, then its positions,
     each ``T`` little-endian i64s (IB = PB = 8), zero past the step's N scheduled tokens, ``T`` the engine's token budget
     (``max_num_batched_tokens``). So the ids are the stream's bytes [0, 8T) and the positions [8T, 16T), at fixed leaves of
     the step's tree when 8T is a whole number of chunks (refused otherwise). A pre-hook on the top model takes them from
@@ -218,7 +218,11 @@ def ints_of(raw: bytes, dtype: str) -> list[int]:
 
 def committed_raw(committer: Any, step: int, name: str) -> tuple[bytes, str] | None:
     """`committed_ints`' bytes of ``name`` at ``step`` and its dtype. A plan's metas (`plan_cache.PlanMetas`) are read from its
-    columns, so no `TensorMeta` is built for the read."""
+    columns, so no `TensorMeta` is built for the read. A window whose draw-gated release dropped the bytes answers from what was
+    read just before it (``read_before_release``, `serve_release.Draws.release`), which no bundle holds."""
+    before = getattr(committer, "read_before_release", None)
+    if before is not None and (step, name) in before:
+        return before[step, name]
     metas = committer._layouts.get(step, ())
     if isinstance(metas, PlanMetas):
         if name not in metas.names:

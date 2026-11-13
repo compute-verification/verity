@@ -13,7 +13,7 @@ Three objects, all pure Python (no torch; testable on any host):
   for and only when every applicability condition it was built under holds for the requester; the refusal names every differing
   field with both values.
 
-Canonical bytes = `verity.circuits.codec.canonical_json` (compact, keys sorted, ASCII); a tuple is written as a list, a set as its sorted list.
+Canonical bytes = `json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)`; tuples are serialised as lists.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ import json
 from dataclasses import asdict, dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
-from verity.circuits.codec import canonical_json
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
 from verity_vllm.program.frontend.compilations import COMPILATIONS
 from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
@@ -35,14 +34,15 @@ SCHEMA = "verity/aot-artifact/v1"
 
 
 def canonical_bytes(obj: Any) -> bytes:
-    return canonical_json(_plain(obj))
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True, default=_json_default).encode()
 
 
-def _plain(o):  # a set as its sorted list, which is how these bytes have always held one
-    if isinstance(o, dict):
-        return {k: _plain(v) for k, v in o.items()}
-    seq = sorted(o) if isinstance(o, (set, frozenset)) else o
-    return [_plain(v) for v in seq] if isinstance(o, (list, tuple, set, frozenset)) else o
+def _json_default(o):
+    if isinstance(o, (set, frozenset)):
+        return sorted(o)
+    if isinstance(o, tuple):
+        return list(o)
+    raise TypeError(f"not canonicalisable: {type(o).__name__}")
 
 
 def sha256_hex(b: bytes) -> str:

@@ -1,7 +1,7 @@
-"""FOLD-OPT on sm_120, the H200 and the B200, against every route below: does any program write a
+"""`FoldOpt` on sm_120, the H200 and the B200, against every route below: does any program write a
 device's receipt fold bit-exactly in fewer priced slots than that device's certificate charges?
 
-FOLD-OPT is the premise that carries the headline's floor (about 94% of sm_120's; the H200's
+`FoldOpt` is the premise that carries the headline's floor (about 94% of sm_120's; the H200's
 sheet has 12.6% of slack on it). On sm_80 it is false: duo's rotate-add `rotl(u, r) + y` runs as
 `IMAD(u, 2^r, y)` then `IMAD.HI.U32`, both on the FMA pipe, which sm_80's ALU certificate doesn't price. This battery
 asks the same question of the three served devices, each against its own fold and its own certificate:
@@ -40,7 +40,7 @@ import sys
 
 from exact_kit.checks import Checks
 
-from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
 M32 = 0xFFFFFFFF
 NV = 24          # random 32-bit test vectors a superoptimizer query (one mismatch refutes a candidate)

@@ -1,6 +1,6 @@
 """Where a reference record's bytes are: `artifact://r19/<row>/<rel>` -> a local file, sha256-checked against `files.toml`.
 
-`files.toml` (this directory; a registered fixture, `fixtures/artifacts.json`, that `research data fetch-fixtures` fetches) lists every
+`files.toml` (this directory; a registered fixture, `artifacts.json`, that `research data fetch-fixtures` fetches) lists every
 reference file this harness may read: `[rows.<row>.files."<rel>"]` with `sha256`, `bytes`, `role` (record | program | manifest | ...).
 `fixtures.toml` (committed) holds, per row, the places the bytes are known to live (`local.<machine>` = a row dir on that pod,
 `artifacts.records` / `artifacts.programs` = `art:` ids in the data store once put, `oracle` = the vault extraction dir), with the
@@ -25,7 +25,8 @@ $VERITY_REGRESSION_CANDIDATE/<row>/<rel>, or None: self-check mode), `row.decisi
 
 $VERITY_REGRESSION_CANDIDATE may also name Attempt ids (`r2026…`, comma-separated): the v2 candidate is then what those Attempts
 published -- `row.candidate_attempts()` are their manifests (matched to the row by `params.row`), `row.candidate_root()` the union
-of their `vllm-build/v1` / `vllm-match-record/v1` / `vllm-verdict/v1` / `execution-evidence/v1` trees laid out like a row dir.
+of their `vllm-build/v1` / `vllm-match-record/v1` / `vllm-verdict/v1` / `execution-evidence/v1` trees laid out like a row dir.  Those
+never hold a private file (`research_outputs.private`), so a check that reads one declares it not applicable (`kept_on_the_node`).
 """
 from __future__ import annotations
 
@@ -60,7 +61,7 @@ ORACLES = ("expected", "frozen")
 RECORD_ACTUAL_ENV = "VERITY_REGRESSION_RECORD_ACTUAL"   # a directory: test_reproduces writes every `actual` to <dir>/<row>/<check>.json (rebaseline.py input)
 REBUILD_ENV = "VERITY_REGRESSION_REBUILD"      # "1": run the checks that recompute from a row's Programs (`REBUILD = True`: a manifest rebuild, step_segmentation's decode; CPU minutes to half an hour a row)
 STORE_REQUIRED_ENV = "VERITY_STORE_REQUIRED"   # "1" (a recorded check, the post-train job): an input that does not resolve fails, never skips
-REGISTRY = HERE.parents[3] / "fixtures" / "artifacts.json"   # the fixtures too large for git (`research data fetch-fixtures`)
+REGISTRY = HERE.parents[3] / "artifacts.json"   # the fixtures too large for git (`research data fetch-fixtures`)
 
 
 def store_required() -> bool:
@@ -72,10 +73,10 @@ def rebuilds() -> bool:
 
 
 def registered(p: Path) -> str | None:
-    """The `art:` id `fixtures/artifacts.json` registers for `p` (a fixture git does not track), else None."""
+    """The `art:` id `artifacts.json` registers for `p` (a fixture git does not track), else None."""
     try:
         reg = json.loads(REGISTRY.read_text())
-        rel = str(p.resolve().relative_to(REGISTRY.parents[1]))
+        rel = str(p.resolve().relative_to(REGISTRY.parent))
     except (OSError, ValueError):
         return None
     return next((art for art, path in reg.items() if path == rel), None)
@@ -477,6 +478,14 @@ def not_applicable(why: str) -> dict[str, str]:
     binding by): `{"not_applicable": why}` in `actual`.  `diff` does not count it as a difference and `is_not_applicable` finds them so the
     test records what was declared inapplicable, by key and reason."""
     return {NOT_APPLICABLE: why}
+
+
+def kept_on_the_node(row: "Row", rel: str) -> dict[str, str] | None:
+    """`not_applicable` when the candidate is Attempts, which never publish the private file `rel` (`research_outputs.private`: request
+    values, placement and timing stay on the node), and lack it; None otherwise."""
+    if candidate_attempt_ids() and row.candidate(rel) is None:
+        return not_applicable(f"an Attempt never publishes {rel}, which stays on the node: give the candidate as its row dirs")
+    return None
 
 
 def is_not_applicable(x: Any) -> bool:

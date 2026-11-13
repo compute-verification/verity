@@ -560,10 +560,10 @@ def _commit(*enabled):
 
 
 def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
-    """`verity.protocols.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
+    """`verity.protocols.accounting.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
     that scheme is admitted beside sampled proofs, and every other one keeps its refusal, word for word.  Without sampled
     proofs nothing changes."""
-    from verity.protocols.pouw.prover import circuit
+    from verity.protocols.accounting.pouw.prover import circuit
     assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
@@ -582,8 +582,57 @@ def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     assert r.value.reasons == (_refused_beside_spot("ncp-v1"),)
 
 
+PEARL = "pouw:pearl-c-h100-v1-h3"
+PEARL_SETTINGS = {"device": "cuda", "kernel": "/k", "cubin": "/c"}
+
+
+def _cut_window(cut=None, **more):
+    """serve-openai's Commit window under Pearl+ (`serve_pearl.context`): Pearl-C beside sampled proofs, ``cut`` the
+    sampled-proofs setting naming the executor whose sites the window's circuit is cut at."""
+    own = {**({} if cut is None else {PO.CUT: cut}), **more}
+    return PO.Context(stage="commit", enabled=config.parse_protocols(f"{PEARL},sampled-proofs:rows-sha512"),
+                      settings={"pouw": PEARL_SETTINGS, "sampled-proofs": own})
+
+
+def test_beside_sampled_proofs_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
+    """Pearl-C has no circuit (its y is noise-dependent), so sampled proofs takes it only where the window's circuit is cut at
+    its linears and reads the tables its calls commit (`window_class.PearlTables`), which the sampled-proofs setting
+    ``cut`` names. Without it, or naming another entry, or under ncp-v2 (which has a circuit and commits no tables), the
+    composition refuses by name; a row's Commit refuses any cut, since its request Programs are never cut."""
+    from verity_vllm.protocols import pouw
+
+    assert pouw.cuts("pearl-c-h100-v1-h3") and not pouw.cuts("ncp-v2") and not pouw.cuts("ncp-v1")
+    assert PO.refusals(_cut_window(PEARL)) == ()
+    uncut = (f"{PEARL}: executes {APPLY}, and no Definition computes what it does there: SPOT takes it only in a "
+             f"window whose circuit is cut at its sites and reads the tables its calls commit (window_class.PearlTables), "
+             f"which the sampled-proofs setting 'cut' names ({{\"sampled-proofs\": {{\"cut\": \"{PEARL}\"}}}})")
+    assert PO.refusals(_cut_window()) == (uncut,)
+    other = PO.refusals(_cut_window("pouw:ncp-v2"))
+    assert other[0] == uncut and "not 'pouw:ncp-v2'" in other[1] and "an adapter's cuts" in other[2]
+    assert PO.refusals(_cut_window(PEARL, x=1)) == ("sampled-proofs:rows-sha512: the sampled-proofs settings ['x'] are none "
+                                                    "of its (cut)",)
+    ncp = PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"),
+                     settings={"sampled-proofs": {PO.CUT: "pouw:ncp-v2"}})
+    assert PO.refusals(ncp) == ("the sampled-proofs setting 'cut' names 'pouw:ncp-v2', and a window's circuit is cut only at "
+                                "the sites of an enabled executor with no circuit of its own whose calls commit the tables "
+                                "the cut reads (an adapter's cuts)",)
+    assert PO.refusals(PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"))) == ()
+    assert PO.refusals(_serve(PEARL, settings={"pouw": PEARL_SETTINGS})) == ()
+    row = f"{PEARL},sampled-proofs:rows-sha512"
+    with pytest.raises(PO.Refused) as r:
+        PO.at_row(row, {"protocols_config": {"pouw": PEARL_SETTINGS, "sampled-proofs": {PO.CUT: PEARL}}})
+    assert len(r.value.reasons) == 1 and "a row's Commit replays the row's request Programs" in r.value.reasons[0]
+    with pytest.raises(PO.Refused) as r:
+        PO.at_row(row, {"protocols_config": {"pouw": PEARL_SETTINGS}})
+    assert r.value.reasons == (uncut,)
+    with pytest.raises(PO.Refused) as r:
+        PO.commit_context(TargetProfile(protocols=config.parse_protocols(row)),
+                          settings={"pouw": PEARL_SETTINGS, "sampled-proofs": {PO.CUT: PEARL}})
+    assert "a row's Commit replays" in r.value.reasons[0]
+
+
 def test_traced_as_is_the_circuit_of_one_executed_call():
-    from verity.protocols.pouw.verifier.protocol import DomainError
+    from verity.protocols.accounting.pouw.verifier.protocol import DomainError
     t = PO.traced_as("pouw:ncp-v2", 16, 64, 16)
     assert t.scheme == "ncp-v2" and t.definition.name == "NcpLinear" and t.served == 16 * 16
     assert PO.traced_as("pouw:ncp-v1", 16, 64, 16) is None and PO.traced_as("pouw:pearl-fp8-v4", 16, 64, 16) is None
@@ -595,10 +644,10 @@ def test_traced_as_is_the_circuit_of_one_executed_call():
 def test_without_its_circuit_registry_pouw_stays_refused_beside_spot(monkeypatch):
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
-    monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity.protocols.pouw.verifier.not_a_circuit_registry")
+    monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity.protocols.accounting.pouw.verifier.not_a_circuit_registry")
     got = PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
     assert got[-1] == _refused_beside_spot("ncp-v2")
-    assert got[0].startswith("pouw: its circuit registry verity.protocols.pouw.verifier.not_a_circuit_registry is not installed")
+    assert got[0].startswith("pouw: its circuit registry verity.protocols.accounting.pouw.verifier.not_a_circuit_registry is not installed")
     with pytest.raises(PO.Refused, match="is not installed"):
         PO.traced_as("pouw:ncp-v2", 16, 64, 16)
 

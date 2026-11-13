@@ -10,7 +10,7 @@ a window circuit, and a window is m activations of it. A block class is that Def
 SHA-512 (`partition_v2.id_digest`).
 
 **Gates** are counted as `NciCheck.Count` counts a block Definition's (``boolGates``,
-`verity/protocols/inference_only/verifier/nci/lean/NciCheck/Count.lean`): once per specialized Definition, callees first, a
+`verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Count.lean`): once per specialized Definition, callees first, a
 primitive's from the gate table and a composite's the sum over its nodes of members times the callee's (`gates`). The gate
 table is the one `definitions.boolean.gate_table` gives: each primitive's two-input Boolean gates as the census counts work
 (`census`: an n-input And or Xor n - 1, a Not 1, a constant bit or an input 0) through its Boolean version
@@ -71,7 +71,7 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
     if "blocks" not in doc:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
-    blocks, _ = IF.Blocks.of(doc["blocks"], units, doc["partition"])
+    blocks = IF.Blocks.of(doc["blocks"], units, doc["partition"])
     per: Counter[str]
     m, per = blocks.slots, Counter()
     for e in blocks.inference:

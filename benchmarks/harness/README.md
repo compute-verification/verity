@@ -112,7 +112,9 @@ export their paths, say), are part of the resolved spec and so of every point's 
    and a failure there keeps the gates and drops the points:
    - `timed-tokens`: each timed rep of an arm with a control produces the control's tokens in that rep, so an arm can't
      compute something else only when timed. In `resident`, each timed rep of an arm without a control produces the
-     tokens its own gate saw from the same engine (`"against": "gate"`).
+     tokens its own gate saw from the same engine (`"against": "gate"`), unless its own gate says its tokens carry each
+     pass's coins (`per_pass_tokens`: Pearl-C's, each call's noise seeded by its index across the epoch, so no two of
+     one engine's runs agree); then, as in `blocks`, its `arm-closing` gate alone holds its timed reps.
    - `engine-identity`: in `blocks`, each timed engine reports the gated engine's KV pool, kernel digest, versions,
      GPU and overrides.
    - `arm-closing`: after an engine's warm-up and timed runs, before it closes, the runner reads the arm's own gate again
@@ -237,7 +239,7 @@ the count is fixed before the run and is part of the point; `plan` shows it (`se
 **Identity.** A point's identity is a digest of what its time depends on, and nothing else: its row's `type`, `n`,
 `pin`, `warm` and `period`, its prover count, the spec's `card`, `cores`, `sessions`, `ahead`, `driver`, `cuda_toolkit`,
 `env` and `setup`, and the SHA-256 of every source file of the prover and of the scripts that build it (their flags)
-(`verity/protocols/flock/prover`, `verity/protocols/flock/pod`; no tests, no Markdown), of the timing script and of the
+(`verity/protocols/proofs/flock/prover`, `verity/protocols/proofs/flock/prover/pod`; no tests, no Markdown), of the timing script and of the
 setup script. It names no commit, so a commit that changes none of those times no point again, and neither does an edit
 to another row, to `admission`, to `staged` or to the spec's name. The driver and the toolkit are the spec's because
 the node can't be asked before the run: the node side reads both on the node, refuses a node whose versions aren't the

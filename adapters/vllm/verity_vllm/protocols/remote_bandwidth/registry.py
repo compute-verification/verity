@@ -46,10 +46,10 @@ from typing import Any
 import numpy as np
 from verity.commitments import merkle_depth
 from verity.commitments.merkle import Opening
-from verity.definitions.circuits import requirement
-from verity.protocols.poub.verifier import receipts as rb
-from verity.protocols.poub.verifier.receipts import PER_LEAF, Plan
-from verity.protocols.poub.verifier.store import store_salt
+from verity.circuits import requirement
+from verity.protocols.accounting.poub.verifier import receipts as rb
+from verity.protocols.accounting.poub.verifier.receipts import PER_LEAF, Plan
+from verity.protocols.accounting.poub.verifier.store import store_salt
 
 from verity_vllm.protocols.remote_bandwidth import memory_map as mm
 from verity_vllm.protocols.remote_bandwidth.interface import (
@@ -58,6 +58,7 @@ from verity_vllm.protocols.remote_bandwidth.interface import (
     Append,
     Backing,
     BlockOpening,
+    ChainHead,
     Codec,
     Counters,
     Layout,
@@ -65,7 +66,6 @@ from verity_vllm.protocols.remote_bandwidth.interface import (
     PassCommitment,
     Receipt,
     RegionInfo,
-    Registration,
     Segment,
     Source,
     Stale,
@@ -365,8 +365,8 @@ class NodeMemory:
                    "filler": KV_FILLER})
         return tuple(self._by_name[n].info for n in names)
 
-    def registration(self) -> Registration:
-        return Registration(self._log_count, self._log_root)
+    def registration(self) -> ChainHead:
+        return ChainHead(self._log_count, self._log_root)
 
     def layout(self) -> Layout:
         by_tier: dict[str, int] = {}

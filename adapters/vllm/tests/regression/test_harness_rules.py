@@ -38,8 +38,8 @@ class _Fake(resolver.Row):
         return self.docs[rel]
 
 
-def _ident(op: str, member: str = "out", step: int = 0) -> dict:
-    return {"program_digest": "p", "request_id": "r0", "step": step, "invocation": 0, "op_path": op, "output_member": member,
+def _ident(op: str) -> dict:
+    return {"program_digest": "p", "request_id": "r0", "step": 0, "invocation": 0, "op_path": op, "output_member": "out",
             "element_range": [0, 4], "rank": 0, "family": "instance_outputs"}
 
 
@@ -112,7 +112,7 @@ def test_a_malformed_retirement_is_named(monkeypatch):
 def test_a_registered_fixture_is_found_by_its_path():
     reg = json.loads(resolver.REGISTRY.read_text())
     art, rel = next(iter(reg.items()))
-    assert resolver.registered(resolver.REGISTRY.parents[1] / rel) == art
+    assert resolver.registered(resolver.REGISTRY.parent / rel) == art
     assert resolver.registered(resolver.EXPECTED_DIR / "no-such-row.json") is None
     assert resolver.registered(resolver.FILES) is not None
 
@@ -150,6 +150,17 @@ def test_a_post_flip_reference_row_is_summarised_from_its_own_evidence(tmp_path,
     exp, act = CS.expected(row), CS.actual(row)
     assert act["source"] == "recomputed" and resolver.diff(exp, act) == []
     assert act["rc"] == 0 and act["pass"] is True and act["engine_settings"]["max_num_seqs"] == 8 and act["n_treatment"] == 1
+
+
+@pytest.mark.parametrize(("depth", "inner", "kept"), [(0, "0.5", 0.5), (0, "auto", "auto"), (200_000, "", None)],
+                         ids=["json", "no-json", "nested-past-what-json-reads"])
+def test_an_engine_arg_json_cannot_read_stays_the_text_of_the_command_line(tmp_path, monkeypatch, depth, inner, kept):
+    """`summarize` reads each `--engine-arg` as JSON, and keeps the text of one that `json.loads` does not read, whatever it raises."""
+    row = _post_flip_row(tmp_path, monkeypatch, rc=None)
+    value = "[" * depth + inner + "]" * depth
+    (tmp_path / "rows" / "k" / "commit.log").write_text(f"$ commit --engine-arg x={value} --max-num-seqs 8\n")
+    settings = CS.actual(row)["engine_settings"]
+    assert settings["max_num_seqs"] == 8 and settings["x"] == (value if kept is None else kept)
 
 
 def test_a_post_flip_rows_rc_is_its_verdicts(tmp_path, monkeypatch):

@@ -12,6 +12,7 @@ from verity_vllm.program.frontend.target_profile import (
     ApplicabilityError,
     ArtifactIdentity,
     TargetProfile,
+    _json_default,
     canonical_bytes,
     check_reuse,
     load_artifact,
@@ -58,6 +59,30 @@ def test_canonical_bytes_are_compact_sorted_ascii_json_with_a_set_as_its_sorted_
     for bad in (object(), {"a": object()}, [{1, "a"}], {(1, 2): 3}):
         with pytest.raises(TypeError):
             canonical_bytes(bad)
+
+
+def test_canonical_bytes_take_and_refuse_what_json_does():
+    """json's encoder walks the value, with no Python frame a level and its own watch for a value that holds itself: a
+    value nested 2,000 deep, twice the frames an interpreter allows by default, has its bytes, one that holds itself is a
+    ValueError, and one JSON cannot hold is a TypeError that names its type."""
+    deep = 2000  # a number, not the interpreter's limit now: code this process ran earlier may have raised that
+    in_lists: object = 0
+    in_dicts: object = 0
+    for _ in range(deep):
+        in_lists, in_dicts = [in_lists], {"k": in_dicts}
+    assert canonical_bytes(in_lists) == b"[" * deep + b"0" + b"]" * deep
+    assert canonical_bytes(in_dicts) == b'{"k":' * deep + b"0" + b"}" * deep
+    ring: list = []
+    ring.append(ring)
+    knot: dict = {"k": []}
+    knot["k"].append(knot)
+    for held in (ring, knot, {"a": {"b"}, "z": ring}):
+        with pytest.raises(ValueError, match="Circular reference detected"):
+            canonical_bytes(held)
+    for bad, name in ((object(), "object"), ({"a": b"x"}, "bytes"), ([1, {2}, range(3)], "range")):
+        with pytest.raises(TypeError, match=f"not canonicalisable: {name}"):
+            canonical_bytes(bad)
+    assert _json_default((1, 2)) == [1, 2]  # json writes a tuple itself and never hands one over
 
 
 def test_profile_rejects_unknown_and_invalid_fields():

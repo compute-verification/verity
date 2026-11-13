@@ -39,9 +39,9 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import bit_row
 from verity.commitments.windows import interface as WI
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
-from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
+from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import boolean_moe as BMOE
 from verity.definitions.registry import fp8_moe as FM
@@ -205,7 +205,7 @@ def _cut(layers: int, tokens: int, fused: bool = False) -> tuple[WI.Circuit, dic
                 params[param] = H * E
                 tables.append(WI.Table(param, param, 0, H, E))
                 roots.extend(WI.TableRead(tid, p, param, p, at, TOPK * T) for p in ("root", "domain"))
-                openings.append(WI.Opening(tid, param, "tok", ("row", "salt", "path"), "o1", at, TOPK * T))
+                openings.append(WI.TableOpening(tid, param, "tok", ("row", "salt", "path"), "o1", at, TOPK * T))
                 wires.extend(WI.Wire(tid, "tok", rid, f"o{TOPK + k}", at + k * T, (T,), layer * T, (1,)) for k in range(TOPK))
                 if routed:
                     wires.extend(WI.Wire(tid, "g", rid, f"o{k}", at + k * T, (T,), layer * T, (1,)) for k in range(TOPK))
