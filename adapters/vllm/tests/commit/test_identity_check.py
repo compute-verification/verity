@@ -58,6 +58,37 @@ def test_external_acquisition_without_a_source_that_declares_modules_keeps_the_h
     assert com.expected_manifest()["modules"] == [n for n, _m in com._modules]
 
 
+# --- the sampler's place in the manifest, and a committer with no module set -----------------------------------------------------------
+
+class _Runner:
+    """An engine's runner whose `sample` the committer wraps."""
+
+    def sample(self) -> None:
+        return None
+
+
+def test_a_runner_that_samples_adds_the_sampler_to_the_manifest_once() -> None:
+    com = XI._com()
+    hooked = [n for n, _m in com._modules]
+    assert hooked[-1] == "runner.sampler" and com.runner is None
+    com.runner = _Runner()
+    assert com.expected_manifest()["modules"] == hooked           # already a hooked module: listed once
+    com._modules = com._modules[:-1]
+    man = com.expected_manifest()
+    assert (man["modules"], man["sampler_ids"]) == (hooked, 1)
+    for runner in (None, object()):                               # no runner, and one that does not sample
+        com.runner = runner
+        man = com.expected_manifest()
+        assert (man["modules"], man["sampler_ids"]) == (hooked[:-1], 0)
+
+
+def test_a_committer_with_no_module_set_skips_the_check_and_counts_its_steps() -> None:
+    com = XI._com()
+    com._modules = []
+    com._layouts = {step: XI._layout(XI._good_step()) for step in range(3)}
+    assert com.identity_check() == {"ok": None, "skipped": "no install-time module set (offline core)", "steps_checked": 3}
+
+
 # --- MoE tensors no source declares --------------------------------------------------------------------------------------------------
 
 def test_moe_tensors_of_a_run_whose_manifest_lists_no_moe_layer_fail_the_step() -> None:
