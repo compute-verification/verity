@@ -34,7 +34,6 @@
     {"file": "verity_vllm/pipeline/components.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/pipeline/cpu_replay.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/replay-slim/v1"},
     {"file": "verity_vllm/pipeline/deferred_rows.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
-    {"file": "verity_vllm/pipeline/gpu_lease.py", "kind": "schema-literal", "symbol": "run", "detail": "verity-vllm/gpu-lease/v1"},
     {"file": "verity_vllm/pipeline/layout.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 10},
     {"file": "verity_vllm/pipeline/memory_map.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/kv-rows/v3"},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/release/v1"},
