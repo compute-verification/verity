@@ -130,4 +130,5 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.Refused", "Proofs.Properties.Verity.SampledTwo.Steps",
   "Proofs.Properties.Verity.SampledTwo.DevAgrees", "Proofs.Properties.Verity.SampledTwo.Accepts",
   "Proofs.Properties.Verity.SampledTwo.AcceptsProof", "Proofs.Properties.Verity.SampledTwo.Cover",
+  "Proofs.Properties.Verity.SampledTwo.MemberChecks",
   "Proofs.Properties.Verity.SampledTwo.ReadsOnly", "Proofs.Properties.Verity.SampledTwo.Reached"]
