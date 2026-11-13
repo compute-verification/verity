@@ -95,7 +95,7 @@ paths = ["tools/verity/check"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_shard_plan.py"]
-paths = ["fixtures/artifacts.json"]
+paths = ["artifacts.json"]
 
 # `check.cc_manifests`, which every step list and check run reads: whether this tree's circuit-check lists its records
 [[tool.verity.tests.reads]]
