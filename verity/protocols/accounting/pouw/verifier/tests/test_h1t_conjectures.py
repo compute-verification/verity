@@ -34,7 +34,7 @@ import numpy as np
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-LEAN = HERE.parents[3] / "security"
+LEAN = HERE.parents[4] / "security"
 SCRIPT = HERE / "lean" / "scripts" / "h1t_vectors.py"
 SEED = 2026101001
 N = 256

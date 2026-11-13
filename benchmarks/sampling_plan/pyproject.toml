@@ -31,4 +31,4 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # (verity.protocols.accounting.certifier.prover, which loads the certifier's verifier)
           "verity/definitions/registry", "verity/definitions/numerics", "verity/definitions/evidence.py",
           "verity/definitions/evidence.json", "verity/protocols/accounting/certifier",
-          "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/accounting/pouw/__init__.py"]
+          "verity/definitions/__init__.py", "verity/circuits/ops", "verity/circuits/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py"]
