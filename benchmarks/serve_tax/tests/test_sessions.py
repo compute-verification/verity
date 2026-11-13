@@ -570,9 +570,11 @@ def test_a_cost_over_lifetimes_is_the_mean_of_theirs_with_students_t_over_them()
     assert S.over_lifetimes([[(100.0, 100.0), (300.0, 200.0)]])["each"] == pytest.approx([4.5 / 4 - 1])
     # no pair, a pair with no pass, or a pass a side has no rate in: no value
     assert S.over_lifetimes([]) == S.over_lifetimes([[]]) == S.over_lifetimes([[(1.0, 0.0)]]) == {"value": None}
-    # degrees of freedom the table lacks read the entry below them, a little wide, as the table's means do
-    eight = S.over_lifetimes([[(1 + 0.001 * (k % 2), 1.0)] for k in range(8)])
-    assert eight["ci95"][1] - eight["value"] == pytest.approx(S.T95[6] * eight["between"] / math.sqrt(8)) and 7 not in S.T95
+    # eight lifetimes read their own row; degrees of freedom the table lacks read the entry below them, a little wide,
+    # as the table's means do
+    eight, ten = (S.over_lifetimes([[(1 + 0.001 * (k % 2), 1.0)] for k in range(n)]) for n in (8, 10))
+    assert S.T95[7] == 2.365 and eight["ci95"][1] - eight["value"] == pytest.approx(2.365 * eight["between"] / math.sqrt(8))
+    assert ten["ci95"][1] - ten["value"] == pytest.approx(S.T95[8] * ten["between"] / math.sqrt(10)) and 9 not in S.T95
 
 
 def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work():
