@@ -159624,3 +159624,32 @@ https://github.com/compute-verification/verity/pull/9810
 - Launched at 20:16Z on cpu-1, 300 minutes each, output written as it goes: `verity-flock` alone [run `r20261113-201609-a19c`] and the other suites not yet passed [run `r20261113-201620-0171`].
 - The import's two runs go on [`r20261113-195315-3f45` flock's prover suite; `r20261113-200310-d959` the other eight, `verity-vllm` first]. By the twin's time for it, `verity-vllm` alone is about 96 minutes; flock's prover suite was 88 minutes in and not ended when the first run was cut. So I expect the import's verdict between 22:00Z and 23:30Z [guess].
 - Nothing else is started. The split waits for the two pull requests, as ordered; the question of 19:54Z stands.
+
+## [2026-11-13T20:16Z] ACCEPTS: THE ONE-STAGE DIFFTEST PASSES ON THE PORTS' KEYS HEAD (124 passed, 2 skipped); THE RUN OF LINK 1'S PYTHON RAN NO TEST, BY MY LAUNCH LINE, AND IS RELAUNCHED THROUGH THE SUITE RUNNER (`r20261113-201204-193b`, running since 20:12Z); SIXTY-ODD OF YOUR OLD TIMERS AND EVENTS REACHED ME AFTER MY VM WAS REPLACED, AND I ACTED ON NONE
+
+STOP RULE: this entry holds the two runs my 19:40Z entry named (one verdict, one void), the relaunch, and what was misdelivered to me. I send the relaunch's verdicts when it ends. Nothing else is in hand.
+
+**1. Item 3's honest play passes [run].** `r20261113-192713-8614` on `vy-nebius-cpu-8` at `1a6d8d08757`: `verity-core-sampled-proofs` with `-k test_difftest`, 124 passed, 2 skipped in 485 s, rc 0. Which two were skipped is not known: the suite's log stayed in the node's cache. The `PORTS_ORDER` refusal fires on none of the difftest's honest cases, as derived.
+
+**2. Link 1's Python is still not run: `r20261113-192015-97d8` ran no test, and the fault is my launch line [run].** It waited 34 minutes for a slot, then both of its `uv run pytest` calls ended at once with "Failed to spawn: `pytest`" (rc 2). `benchmarks/one_stage` and `benchmarks/prove_path` are not workspace packages, so `uv run` inside them makes an empty environment. Nothing about link 1 is learned from it.
+
+**3. Relaunched through the suite runner [run]:** `r20261113-201204-193b` on `vy-nebius-cpu-2` at `d6b69f623dc`. It took a slot at once and was running at 20:15Z. Limit 90 minutes. Four parts, each by `suites.py`, each with its log kept in the run's `out/`:
+
+- (a) `benchmarks/one_stage`: `test_two_stage_driver.py`, `test_two_stage_second.py` and `test_two_stage_cost.py`, slow tests included, since those are the ones that hand a real boundary to the Lean.
+- (b) `benchmarks/prove_path`: `test_records_audit.py`.
+- (c) `verity-core-composition`, whole: the two-stage form's difftest, with `NO_HEAD`.
+- (d) `verity-core-sampled-proofs`, whole.
+
+After its verdict I run the change's suites (`suites.py --changed 20936c91d40b --quick`) at the head that passes it, unless you say not to. That run is the one that lists every test the `NO_HEAD` refusal breaks, the readers of the `sampled-two-case` fixture among them.
+
+**4. Misdelivered to me since my VM was replaced at 19:16Z, for your count on INF-783 [read]. I acted on none: no post, no mark, no resume, no launch, no word to Daniel.**
+
+- 20 one-off timers of yours, fired from Thu 21:08Z to today 14:41Z: `proofs-2108z-daniel-answers`, `two-round-2-25pm-pst`, `proofs-2250z-board`, `board-3pm-pst`, `history-launch-retry`, `launch-retry-2355z`, `gather-five-facts-0030z`, `history-try-4d04`, `board-7pm-pst-0300z`, `servedcard-gonogo-0412z`, `sweep-840pm-pst-0440z`, `runs-ended-resumes-0505z`, `servedcard-cards-free-0558z`, `answers-due-0710z`, `chain2-firstaccept-messages-0822z`, `proofs-1047Z-prf490`, `proofs-1132Z-ruleB`, `proofs-1206Z-76c3`, `proofs-1245Z-3623-e2a7`, `fixedcost-friday-launch`.
+- 32 firings of `proofs-sweep-30m-v42`, each half hour from 01:30Z to 17:00Z today, delivered in one batch at 19:45Z.
+- 39 events of the proofs Slack thread, 16:04Z to 17:30Z today.
+- 12 completion notices of workers I did not launch (FRAME, HELDOF, STAGECOINS, STOPDRIVER, FIXEDCOST, ADDRROW2, FIRSTACCEPT).
+- The risk: several order launches, resumes and marks (`history-launch-retry`, `launch-retry-2355z`, `runs-ended-resumes-0505z` with `mark2.sh` on #9555 and #9237, `sweep-840pm-pst-0440z`), and only `chain2-firstaccept-messages-0822z` says who it is for. A worker that takes one as its own would launch or mark.
+
+**5. FIRSTACCEPT's reason, as its notice reached me [read]:** `bc-e3c30a07-3b32-546e-94b8-ba30b8972732` ended in error, "blocked under Anthropic's Usage Policy". Your ledger owes INF-783 that reason. I have the notice's wording only as I noted it, not the notice itself.
+
+**6. One meeting to know of [read]:** STOPDRIVER's branch B (`cursor/proofs-stopdriver-family-ffc6` at `46811047714e`) also edits `benchmarks/one_stage/two_stage.py` and `test_two_stage_second.py`. Link 1's `declared` argument of `first` and `resume` meets it where the pull request's branch is cut.
