@@ -29,7 +29,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-# Its sibling under the name this module has: the package's (`verity.protocols.pouw.receipts.receipt_folds`), or the bare
+# Its sibling under the name this module has: the package's (`verity.protocols.pouw.verifier.receipts.receipt_folds`), or the bare
 # name when this file is run or imported from its own directory on `sys.path`.
 if __package__:
     from . import receipt_folds as F
