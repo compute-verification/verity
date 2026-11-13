@@ -26,9 +26,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.pous.verifier import streamed_wipe as sw
-from verity.protocols.pous.verifier import wipe_party as WP
-from verity.protocols.pous.verifier import wipe_period as W
+from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.verifier import wipe_party as WP
+from verity.protocols.accounting.pous.verifier import wipe_period as W
 
 WRAPPER = Path(__file__).resolve().parents[1] / "streamed_wipe" / "served_wipe.sh"
 DEMO = WRAPPER.parent / "demo.sh"
@@ -38,8 +38,7 @@ CARD = "GPU-5e7ed000-0000-0000-0000-000000000000"
 #: who decided, as the summary and the headline name it: the stand-in demo.sh's Python, on this host
 DECIDED = {"program": "python", "host": socket.gethostname()}
 #: the SHA-512 of the key the challenger's stand-in (`wipe_side.py`) signs under: the pin of a deployment of it
-PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pous" / "verifier" / "tests"
-                            / "wipe_side.py"))["key_sha512"]()
+PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "wipe_side.py"))["key_sha512"]()
 #: the SHA-512 of the public key of vy-auditor-2's wipe party: the pin of a run that sets none of its own
 AUDITOR_PIN = ("c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252")
@@ -48,7 +47,7 @@ UNTRUSTED = "the session is signed by a key that is not a trusted memory challen
 TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
 ROOT = Path(__file__).resolve().parents[3]
 #: the Lean judge's package, `wipe-protocol`'s
-JUDGE = "verity/protocols/pous/device/lean"
+JUDGE = "verity/protocols/accounting/pous/device/lean"
 LAKE = """#!/usr/bin/env bash
 echo "$PWD $*" >> "$FAKE_LAKE_LOG"
 python3 - << 'EOF' || exit 1

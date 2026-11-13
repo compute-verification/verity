@@ -22,7 +22,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "benchmarks" / "pous" / "served_piece.sh"
-CHECK, AUDIT = "verity/protocols/pous/verifier/check", "verity/protocols/poub/verifier/lean"
+CHECK, AUDIT = "verity/protocols/accounting/pous/verifier/check", "verity/protocols/accounting/poub/verifier/lean"
 RUN_EXE, BW_EXE = "pous-run-protocol", "remote-audit-p2-protocol"
 #: the tree's own lease script, which the piece takes where the node has no `gpu-lease`
 TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"

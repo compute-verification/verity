@@ -67,13 +67,13 @@ built() {  # the Lean executable $2 of the scratch copy's package $1, built ther
 }
 POUS_EXE=${POUS_EXE:-} BW_CASE_EXE=${BW_CASE_EXE:-}
 if [ -z "$POUS_EXE" ] || [ -z "$BW_CASE_EXE" ]; then
-  CHECK=verity/protocols/pous/verifier/check
+  CHECK=verity/protocols/accounting/pous/verifier/check
   tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
   export PATH="$HOME/.elan/bin:$PATH"
   command -v lake > /dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$CHECK" > "$DIR/lake-setup.log" 2>&1
   : > "$DIR/lake-build.log"
   [ -n "$POUS_EXE" ] || { built "$CHECK" pous-run-protocol; POUS_EXE=$EXE; }
-  [ -n "$BW_CASE_EXE" ] || { built verity/protocols/poub/verifier/lean remote-audit-p2-protocol; BW_CASE_EXE=$EXE; }
+  [ -n "$BW_CASE_EXE" ] || { built verity/protocols/accounting/poub/verifier/lean remote-audit-p2-protocol; BW_CASE_EXE=$EXE; }
 fi
 # shellcheck disable=SC2206
 ARGS=("$ROOT/benchmarks/pous/served_piece.py" "$SERVE_DIR" "$WINDOW" "$DIR" --hf-home "${HF_HOME:-/workspace/hf}"

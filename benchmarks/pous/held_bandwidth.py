@@ -50,9 +50,9 @@ if str(Path(__file__).resolve().parent) not in sys.path:
 
 from p2_v1 import bandwidth as B
 
-from verity.protocols.pous.verifier import period
-from verity.protocols.pous.verifier import verifier as V
-from verity.protocols.poub.verifier import coins, ledger, p2, p2_case, p2_party, receipts
+from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.verifier import verifier as V
+from verity.protocols.accounting.poub.verifier import coins, ledger, p2, p2_case, p2_party, receipts
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 

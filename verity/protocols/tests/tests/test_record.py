@@ -11,7 +11,7 @@ import json
 import pytest
 
 from verity.hardware import record
-from verity.protocols.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.commitments.identity import identity_digest_sha512
 
 I = bytes(range(16))
