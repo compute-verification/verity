@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Challenger.Session
+public import Proofs.Properties.Challenger.ChallengePhase
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
@@ -14,9 +14,9 @@ reader returned. These are the converses, the steps a proof that the reader acce
   roots, the ledger opens the window withheld, the segment is of the family and `challengerStream` reads it
   (`drawCoins_ok_of_steps`), and `coinsReason` gives no reason where the copy of main's history is the caller's and
   the bytes read are the start of that stream (`coinsReason_none_of_steps`);
-* `trustedSessionOf` returns what `sessionNamed` returns of the session `pinnedSession` returns
-  (`trustedSessionOf_ok_of_steps`), and `pinnedSession` the session `auditedOpen` returns where the pins log and the
-  copy of main's history give no reason (`pinnedSession_ok_of_steps`, `pinsReason_none_of` for a pins log of one line,
+* `trustedSessionOf` returns what `sessionNamed` returns of the session `pinnedChallengePhase` returns
+  (`trustedSessionOf_ok_of_steps`), and `pinnedChallengePhase` the session `auditedOpen` returns where the pins log and the
+  copy of main's history give no reason (`pinnedChallengePhase_ok_of_steps`, `pinsReason_none_of` for a pins log of one line,
   `firstParentReason_none_of`);
 * `auditedOpen` returns the session of the window the checked ledger opens under v2 and ends closed, in no period
   (`auditedOpen_ok_of_steps`);
@@ -146,7 +146,7 @@ theorem ledgerEntry_some_of_steps {text session tag t : String} {e : Json} {r : 
     (hpy : PyJson.canonical e = .ok text) (hes : escapesSurrogate text = false) (hc : Flock.canon e = .ok t)
     (hs : sortedKeys e = true) (hr : Core.Record.ofJson e = .ok r) (ht : ledgerTag? r.schema = some tag)
     (h4 : 4 ≤ r.sig.size) (hk : r.kind = "open" ∨ r.kind = "end") (hse : r.session = some session)
-    (hid : isSessionId session = true) (hb : isBodyOf r.kind (r.schema == LEDGER_SCHEMA) r.body = true) :
+    (hid : isChallengePhaseId session = true) (hb : isBodyOf r.kind (r.schema == LEDGER_SCHEMA) r.body = true) :
     ledgerEntry? (.str text) = some ⟨e, text, r.schema, r.seq, r.prev, r.kind, session, r.sig, r.body⟩ := by
   unfold ledgerEntry?
   rcases hk with hk | hk <;> rw [hk] at hb <;>
@@ -213,7 +213,7 @@ theorem withheldOn_two {l0 l1 : Json} {o e : LedgerEntry} {window : String} (h0 
 closed, its end naming its record's leaf, its refused hellos, its commitment and the files it sealed, where the ledger
 holds no period. -/
 theorem auditedOpen_ok_of_steps {ledger window : Json} {key : ChallengerKey} {wins : Array Win} {w : Win}
-    {e : LedgerEntry} {recordLeaf refusedHellos : Nat} (hw : isWindow window = true)
+    {e : LedgerEntry} {recordLeaf refusedHellos : Nat} (hw : isRun window = true)
     (hc : checked ledger key = .ok (wins, #[]))
     (hf : wins.find? (·.root == strOf (getD window "root")) = some w)
     (hs : w.opened.schema = LEDGER_SCHEMA) (he : w.ended = some e)
@@ -259,20 +259,20 @@ theorem firstParentReason_none_of {session pinned : String} {cs : Array Json}
   unfold firstParentReason
   simp only [hd, hp, Bool.not_true, Bool.false_eq_true, ite_false, ite_true]
 
-/-- `pinnedSession` returns the session `auditedOpen` returns where the pins log and the copy of main's history give
+/-- `pinnedChallengePhase` returns the session `auditedOpen` returns where the pins log and the copy of main's history give
 no reason. -/
-theorem pinnedSession_ok_of_steps {ledger window : Json} {key : ChallengerKey} {pins main : Json} {a : Audited}
+theorem pinnedChallengePhase_ok_of_steps {ledger window : Json} {key : ChallengerKey} {pins main : Json} {a : Audited}
     {opened : Json} (ha : auditedOpen ledger window key = .ok (a, opened))
     (hp : pinsReason a.session opened pins = none)
     (hf : firstParentReason a.session (strOf (getD opened "pinned")) main = none) :
-    pinnedSession ledger window key pins main = .ok a := by
-  unfold pinnedSession
+    pinnedChallengePhase ledger window key pins main = .ok a := by
+  unfold pinnedChallengePhase
   simp only [ha, hp, hf, bind, Except.bind]
   rfl
 
-/-- `trustedSessionOf` returns what `sessionNamed` returns of the session `pinnedSession` returns. -/
+/-- `trustedSessionOf` returns what `sessionNamed` returns of the session `pinnedChallengePhase` returns. -/
 theorem trustedSessionOf_ok_of_steps {ledger window : Json} {key : ChallengerKey} {pins main session : Json}
-    {a : Audited} {r : LiveCommitment × Roots} (hp : pinnedSession ledger window key pins main = .ok a)
+    {a : Audited} {r : LiveCommitment × Roots} (hp : pinnedChallengePhase ledger window key pins main = .ok a)
     (hs : sessionNamed a key session = .ok r) : trustedSessionOf ledger window key pins main session = .ok r := by
   unfold trustedSessionOf
   simp only [hp, hs, bind, Except.bind]

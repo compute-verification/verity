@@ -115,7 +115,7 @@ theorem record_ofJson {c : LiveCommitment} {host : String} (sig : ByteArray)
 
 /-- **A close with no end reads back from its JSON.** -/
 theorem close_ofJson {session : String} {lines : Nat} {chain : ByteArray} (sig : ByteArray) (hc : chain.size = 64)
-    (h1 : 1 ≤ lines) (h2 : lines ≤ MAX_LOG_LINES) (hs : isSessionId session = true) :
+    (h1 : 1 ≤ lines) (h2 : lines ≤ MAX_LOG_LINES) (hs : isChallengePhaseId session = true) :
     ChallengerClose.ofJson (ChallengerClose.toJson ⟨session, lines, chain, none, sig⟩) =
       .ok ⟨session, lines, chain, none, sig⟩ := by
   have hk : keys? (ChallengerClose.toJson ⟨session, lines, chain, none, sig⟩) =
@@ -132,12 +132,12 @@ theorem close_ofJson {session : String} {lines : Nat} {chain : ByteArray} (sig :
   have hl : nat? (getD (ChallengerClose.toJson ⟨session, lines, chain, none, sig⟩) "lines") = some lines :=
     nat?_nat lines
   have hok :
-      (chain.size == 64 && decide (1 ≤ lines) && decide (lines ≤ MAX_LOG_LINES) && isSessionId session) = true := by
+      (chain.size == 64 && decide (1 ≤ lines) && decide (lines ≤ MAX_LOG_LINES) && isChallengePhaseId session) = true := by
     rw [hc, hs, decide_eq_true h1, decide_eq_true h2]
     rfl
   unfold ChallengerClose.ofJson
   rw [hk, hch, hsig, hl, beq_self_eq_true]
-  show (if (chain.size == 64 && decide (1 ≤ lines) && decide (lines ≤ MAX_LOG_LINES) && isSessionId session) = true
+  show (if (chain.size == 64 && decide (1 ≤ lines) && decide (lines ≤ MAX_LOG_LINES) && isChallengePhaseId session) = true
     then _ else _) = _
   rw [hok]
   rfl

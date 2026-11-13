@@ -80,8 +80,8 @@ theorem device_named : isHost DEVICE = true := by
   rw [isHost, String.all_bool_eq]
   decide
 
-theorem session_id : isSessionId SESSION = true := by
-  rw [isSessionId, isHost, String.all_bool_eq]
+theorem session_id : isChallengePhaseId SESSION = true := by
+  rw [isChallengePhaseId, isHost, String.all_bool_eq]
   decide
 
 set_option maxRecDepth 100000 in
@@ -551,12 +551,12 @@ theorem trusted (h : p.Honest I) :
     rfl
   have hck := Steps.checked_two (key := p.key) heo hee rfl rfl hkey hv
   -- the session the ledger opens on the window
-  have hwin : isWindow (Json.mkObj [("root", Json.str (Flock.hexOf p.window))]) = true := by
+  have hwin : isRun (Json.mkObj [("root", Json.str (Flock.hexOf p.window))]) = true := by
     have hkw : keys? (Json.mkObj [("root", Json.str (Flock.hexOf p.window))]) = some #["root"] :=
       keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide)
     have hrw : getD (Json.mkObj [("root", Json.str (Flock.hexOf p.window))]) "root" = .str (Flock.hexOf p.window) :=
       rfl
-    unfold isWindow
+    unfold isRun
     rw [hkw, hrw, isDigest_hex (b := p.window) (n := 128) (by have := h.windowSize; omega), beq_self_eq_true]
     rfl
   have hcl : jsonTrue (getD (.obj nbe) "closed") = true := by
@@ -594,7 +594,7 @@ theorem trusted (h : p.Honest I) :
     (any_one _ _ (by
       rw [r3]
       exact Logs.jsonStrIs_str _))
-  have hps := Steps.pinnedSession_ok_of_steps hao hpr hfp
+  have hps := Steps.pinnedChallengePhase_ok_of_steps hao hpr hfp
   -- the session's files
   have g1 : getD p.session "record" = p.record.toJson := rfl
   have g2 : getD p.session "log" = .arr (p.lines.map Json.str).toArray := rfl

@@ -21,7 +21,7 @@ A ledger line's reader checks the body of the entry its text parses to, a value 
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open private isDigest isBodyOf isStr isV1Window from Spot.ChallengerSession
+open private isDigest isBodyOf isStr isV1Run from Spot.ChallengerSession
 
 namespace Properties.Challenger.Bodies
 
@@ -73,13 +73,13 @@ def openBody (auditor host pins : String) (keyHash pin window : ByteArray) : Jso
 theorem openBody_alike {auditor host pins : String} {keyHash pin window : ByteArray} {b : Json}
     (h : Same (openBody auditor host pins keyHash pin window) b) (hh : isHost host = true)
     (hk : keyHash.size = 64) (hp : pin.size = 20) (hw : window.size = 64) : isBodyOf "open" true b = true := by
-  have hwin : isWindow (getD b "window") = true := by
+  have hwin : isRun (getD b "window") = true := by
     have hsw := Entry.same_getD h "window"
     have hkw : keys? (getD b "window") = some #["root"] :=
       (Entry.same_keys? hsw).symm.trans (Built.keys?_mkObj (l := [("root", .str (Flock.hexOf window))])
         (by simp only [List.map_cons, List.map_nil]; decide))
     have hr : getD (getD b "window") "root" = .str (Flock.hexOf window) := read_str hsw rfl
-    unfold isWindow
+    unfold isRun
     rw [hkw, hr, Built.isDigest_hex (by omega), beq_self_eq_true]
     rfl
   have hhost : getD b "host" = .str host := read_str h rfl
@@ -87,7 +87,7 @@ theorem openBody_alike {auditor host pins : String} {keyHash pin window : ByteAr
   have hkey : getD b "key_sha512" = .str (Flock.hexOf keyHash) := read_str h rfl
   have hby : getD b "by" = .str auditor := read_str h rfl
   have hfor : field? b "for" = none := Entry.same_field?_none h rfl
-  show ((if true = true then isWindow (getD b "window") else isV1Window (getD b "window")) &&
+  show ((if true = true then isRun (getD b "window") else isV1Run (getD b "window")) &&
       (match getD b "host" with | .str h => isHost h | _ => false) && isDigest (getD b "pinned") 40 &&
       isDigest (getD b "key_sha512") &&
       (!true || isStr (getD b "by") && (match field? b "for" with | none => true | some j => isStr j))) = true

@@ -251,7 +251,7 @@ theorem ledgerEntry_of_record {r : Core.Record} {text session tag : String} {mb 
     {pb : ByteArray} (hp : PlainAt PyJson.DEPTH r.toJson) (hc : Flock.canon r.toJson = .ok text)
     (hlen : text.length ≤ MAX_LEDGER_LINE) (hb : r.body = .obj mb) (hprev : r.prev.length = 128)
     (hhex : Flock.unhex r.prev = .ok pb) (ht : ledgerTag? r.schema = some tag) (h4 : 4 ≤ r.sig.size)
-    (hk : r.kind = "open" ∨ r.kind = "end") (hse : r.session = some session) (hid : isSessionId session = true)
+    (hk : r.kind = "open" ∨ r.kind = "end") (hse : r.session = some session) (hid : isChallengePhaseId session = true)
     (hbody : ∀ b', Same r.body b' → isBodyOf r.kind (r.schema == LEDGER_SCHEMA) b' = true) :
     ∃ e nb, Same r.toJson e ∧ Same r.body (.obj nb) ∧
       ledgerEntry? (.str text) = some ⟨e, text, r.schema, r.seq, r.prev, r.kind, session, r.sig, .obj nb⟩ := by

@@ -983,7 +983,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
    ("challenger_ledger", Challenger.ledgerPiece), ("challenger_day", Challenger.dayPiece),
    ("challenger_head", Challenger.headPiece),
-   ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
+   ("challenger_session", Challenger.challengePhasePiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece), ("challenger_within", Challenger.withinPiece),
    ("challenger_seed_salt", Challenger.seedSaltPiece),
