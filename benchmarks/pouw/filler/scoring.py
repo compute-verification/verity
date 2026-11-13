@@ -59,7 +59,7 @@ __all__ = [
     "filler_entry_v5", "fold_facts", "fold_reading", "fold_words", "gates", "honesty", "isfinite", "kernel_facts",
     "margins", "mix_context", "mix_entry", "ncu_metric", "other_ms", "parse_nvdisasm", "parse_smi", "paths_gate",
     "point_stats", "points", "prefill_entry", "program_facts", "replay_gate", "score", "score_v5", "secondary",
-    "served_model", "smix", "tp_entry", "tp_gates", "tp_rows", "tp_score", "whole_of_peak",
+    "served_model", "share", "smix", "tp_entry", "tp_gates", "tp_rows", "tp_score", "whole_of_peak",
 ]
 
 V2, V3, V4, V5 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4", "filler-scorer/v5"

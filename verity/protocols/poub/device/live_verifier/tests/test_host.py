@@ -9,6 +9,7 @@ and `replay` replays it through both verifiers."""
 from __future__ import annotations
 
 import argparse
+import ast
 import fcntl
 import gzip
 import hashlib
@@ -754,3 +755,263 @@ def test_bw_party_runs_with_the_registration_the_host_names_and_no_lane_flag(svc
                                        "--listen", "0.0.0.0:47612", "--registration",
                                        "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json", "minutes=10"]
     assert "bw_party takes --pous-session SID | --fixture" in refused(party(svc, ["bw_party", "--registration", "/tmp/x"])[0])
+
+
+# --- the compose gate ---------------------------------------------------------------------------------------------------------
+
+HANDED = {"sampled-proofs-served/window/case.json": b'{"blobs": []}', "private/compose/compose.env": b"K=7\n",
+          "h1/log.jsonl": b"{}\n"}
+
+
+@pytest.fixture
+def composer(tmp_path) -> H.Host:
+    host = H.Host(root=tmp_path / "compose", config=tmp_path / "compose.json", pins=tmp_path / "compose-pins.jsonl",
+                  main=tmp_path / "compose-main.txt", compose=True)
+    H.record_pin(host.pins, PIN, T0, on="remote", seal=lambda p: None)
+    return host
+
+
+def raw_tar(members: list[tuple[tarfile.TarInfo | str, bytes]]) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as t:
+        for ti, body in members:
+            ti = tarfile.TarInfo(ti) if isinstance(ti, str) else ti
+            ti.size = len(body)
+            t.addfile(ti, io.BytesIO(body))
+    return buf.getvalue()
+
+
+def tar_of(files: dict[str, bytes], *, sums: dict[str, str] | None = None, unlisted: tuple[str, ...] = (),
+           more: str = "", extra: tuple[tuple[tarfile.TarInfo, bytes], ...] = ()) -> bytes:
+    """A hand-off: `files` and the sums file over them (``sums`` replacing a line, ``unlisted`` left out of it, ``more``
+    added), then ``extra``'s members."""
+    lines = "".join(f"{(sums or {}).get(f) or hashlib.sha256(b).hexdigest()}  {f}\n" for f, b in files.items()
+                    if f not in unlisted) + more
+    return raw_tar([*files.items(), (H.COMPOSE_SUMS, lines.encode()), *extra])
+
+
+def compose(host: H.Host, data: bytes, *, words=("compose",), key="vllm", units: Units | None = None,
+            rc: int = 0) -> tuple[tuple[int, bytes], dict]:
+    """`words` through the gate on `host` with `data` as the hand-off, its compose `compose_handoff` in-process (no
+    runuser) whose run writes a verdict line to $OUT and exits ``rc``: the gate's answer, and what the run saw."""
+    seen: dict = {}
+
+    def run(env, log):
+        d = Path(env["D"])
+        seen.update(env=env, modes={str(p.relative_to(d)): oct(p.stat().st_mode & 0o777) for p in d.rglob("*")
+                                    if p.is_file()})
+        (Path(env["OUT"]) / "record").mkdir(parents=True)
+        (Path(env["OUT"]) / "verdicts.txt").write_text('RECORD {"composed": "accept"}\n')
+        return rc
+
+    def exec_(argv, scratch):
+        seen.update(argv=argv, scratch=scratch, existed=scratch.is_dir())
+        return H.compose_handoff(host, scratch, io.BytesIO(data), pinned=argv[-2], on=argv[-1], run=run)
+
+    return call(host, list(words), units, key=key, compose=exec_), seen
+
+
+def test_the_compose_gate_composes_a_hand_off_in_a_scratch_of_its_own_and_answers_its_out(composer):
+    """`compose`: as `auditor`, the hand-off received into a scratch of its own (0600 files), composed there at the pin
+    (its tree's commit and the branch infra pinned it on, every path under the scratch, the tree built at its pin), its
+    $OUT answered, the scratch removed and the compose logged with the sums it was held to."""
+    (rc, out), seen = compose(composer, tar_of(HANDED))
+    doc = json.loads(out)
+    scratch = composer.scratch / "compose-20261021T130000Z-ab12"
+    assert rc == 0, doc
+    assert seen["argv"][:3] == ["runuser", "-u", "auditor"] and "/usr/bin/env" in seen["argv"]
+    assert seen["argv"][-6:] == ["-I", str(Path(H.__file__).resolve()), "compose", str(scratch), PIN, "remote"]
+    assert seen["existed"] and not scratch.exists() and list(composer.scratch.iterdir()) == []
+    assert set(seen["modes"].values()) == {"0o600"} and sorted(seen["modes"]) == sorted([*HANDED, H.COMPOSE_SUMS])
+    env = seen["env"]
+    assert (env["D"], env["OUT"], env["HOME"]) == (str(scratch / "serve"), str(scratch / "out"), str(composer.root))
+    assert (env["RESEARCH_SOURCE_SHA"], env["COMPOSE_TREE_ON"], env["FOLLOW_ANY_TREE"], env["COMPOSE_BUILT"]) == (
+        PIN, "remote", "1", "1")
+    sums = hashlib.sha512("".join(f"{hashlib.sha256(b).hexdigest()}  {f}\n" for f, b in HANDED.items()).encode()).hexdigest()
+    assert doc == {"by": "vllm", "pinned": PIN, "pin": {"line": 0, "utc": "2026-10-21T13:00:00Z", "on": "remote"},
+                   "utc": "2026-10-21T13:00:00Z",
+                   "compose": {"rc": 0, "pinned": PIN, "on": "remote", "received": 4, "sums_sha512": sums,
+                               "files": {"verdicts.txt": 'RECORD {"composed": "accept"}\n'}}}
+    logged = [json.loads(x) for x in (composer.root / "composes.jsonl").read_text().splitlines()]
+    assert logged == [{"by": "vllm", "utc": "2026-10-21T13:00:00Z", "pinned": PIN, "pin": doc["pin"], "rc": 0,
+                       "sums_sha512": sums, "refused": None}]
+    (rc, out), _ = compose(composer, tar_of(HANDED), rc=1)
+    assert rc == 1 and json.loads(out)["compose"]["rc"] == 1
+
+
+def test_the_compose_gate_serves_compose_alone_and_the_verifier_gate_never_does(svc, composer):
+    """The compose gate and the verifier's share no verb: each is its own tree's service (`host_of`), the compose gate
+    refuses every other verb, the verifier's refuses compose, a read-only key composes nothing and compose takes no
+    words (its hand-off is its stdin)."""
+    assert H.host_of(Path("/opt/vy-compose") / PIN) == H.COMPOSE_HOST and H.COMPOSE_HOST.compose
+    assert H.host_of(Path("/opt/vy-verifier") / PIN) == H.Host() and not H.Host().compose
+    for words in (["status"], PACED, ["fetch", RUN], ["party_key", "wipe"], ["wipe_party"]):
+        assert "the compose gate serves compose alone" in refused(compose(composer, b"", words=words)[0])
+    assert "compose runs on the compose gate" in refused(compose(svc, tar_of(HANDED))[0])
+    assert "this key reads only" in refused(compose(composer, tar_of(HANDED), key="-")[0])
+    assert "compose takes no words" in refused(compose(composer, tar_of(HANDED), words=("compose", "/tmp/x"))[0])
+    assert H.compose_handoff(H.Host(), Path("/nonexistent"), io.BytesIO(tar_of(HANDED)), pinned=PIN, on=None)[0] == 3
+    assert not (composer.root / "composes.jsonl").exists()
+
+
+def test_a_compose_waits_for_no_verifier_unit_runs_one_at_a_time_and_only_from_the_last_pin(composer, tmp_path):
+    units = Units()
+    units.live.append(f"vy-verifier@{RUN}.service")
+    assert "a compose waits for no verifier unit" in refused(compose(composer, tar_of(HANDED), units=units)[0])
+    composer.root.mkdir()
+    with open(composer.root / "compose.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        assert refused(compose(composer, tar_of(HANDED))[0]) == "another compose runs; one at a time"
+    H.record_pin(composer.pins, "d" * 40, T1, seal=lambda p: None)
+    assert "not this tree's" in refused(compose(composer, tar_of(HANDED))[0])
+    assert not (composer.root / "composes.jsonl").exists()
+
+
+def test_a_compose_that_answers_nothing_is_refused_logged_and_its_scratch_removed(composer):
+    seen = {}
+
+    def exec_(argv, scratch):
+        seen["scratch"] = scratch
+        raise H.Refused("the compose answered nothing (Traceback)")
+
+    assert refused(call(composer, ["compose"], key="vllm", compose=exec_)) == "the compose answered nothing (Traceback)"
+    assert not seen["scratch"].exists()
+    logged = [json.loads(x) for x in (composer.root / "composes.jsonl").read_text().splitlines()]
+    assert [(x["rc"], x["refused"]) for x in logged] == [(3, "the compose answered nothing (Traceback)")]
+
+
+def _member(name: str, kind: bytes = tarfile.REGTYPE, link: str = "") -> tarfile.TarInfo:
+    ti = tarfile.TarInfo(name)
+    ti.type, ti.linkname = kind, link
+    return ti
+
+
+@pytest.mark.parametrize("data, why", [
+    (tar_of(HANDED, extra=((_member("private/h1/key"), b"k"),)), "the hand-off carries the served run's witness: "
+     "private/h1/key (H1's prover state (its key))"),
+    (tar_of({**HANDED, "requests.jsonl": b"{}"}), "the hand-off carries the served run's witness: requests.jsonl"),
+    (tar_of({**HANDED, "sampled-proofs-served/window/m0/inst-0.bin": b"x"}), "witness: "
+     "sampled-proofs-served/window/m0/inst-0.bin (a prover's instance file (its rows))"),
+    (tar_of(HANDED, extra=((_member("h1/w7", tarfile.SYMTYPE, "/etc/passwd"), b""),)), "h1/w7 isn't a regular file"),
+    (tar_of(HANDED, extra=((_member("h1/w8", tarfile.LNKTYPE, "h1/log.jsonl"), b""),)), "h1/w8 isn't a regular file"),
+    (tar_of(HANDED, extra=((_member("../x"), b"x"),)), "the hand-off's member '../x' isn't a path under the serve dir"),
+    (tar_of(HANDED, extra=((_member("/etc/x"), b"x"),)), "the hand-off's member '/etc/x' isn't a path under the serve dir"),
+    (tar_of(HANDED, extra=((_member("h1/../../x"), b"x"),)), "isn't a path under the serve dir"),
+    (tar_of(HANDED, extra=((_member("h1/log.jsonl"), b"{}\n"),)), "the hand-off carries h1/log.jsonl twice"),
+    (tar_of(HANDED, unlisted=("h1/log.jsonl",)), "the hand-off carries h1/log.jsonl, which its sums don't list"),
+    (tar_of(HANDED, sums={"h1/log.jsonl": "0" * 64}), "h1/log.jsonl isn't the file the served node hashed"),
+    (tar_of(HANDED, extra=((_member(H.COMPOSE_SUMS), b"0" * 64 + b"  h1/gone.json\n"),)),
+     f"the hand-off carries {H.COMPOSE_SUMS} twice"),
+    (b"not a tar" * 100, "the hand-off isn't a tar"),
+])
+def test_a_hand_off_is_refused_before_anything_composes_it_unless_it_is_the_served_nodes_files_alone(
+        composer, data, why):
+    """`receive` refuses a witness by its name before writing its bytes, any member that isn't a regular file at a
+    relative path under the serve dir, a second copy, a file the sums don't list or whose SHA-256 isn't its sum, and
+    anything that isn't a tar; nothing composes, the scratch is removed and the refusal is logged."""
+    (rc, out), seen = compose(composer, data)
+    assert why in refused((rc, out)) and "env" not in seen
+    assert not seen["scratch"].exists()
+    assert json.loads((composer.root / "composes.jsonl").read_text())["rc"] == 3
+
+
+def test_receive_writes_no_witness_byte_and_holds_the_sums_to_every_file(tmp_path):
+    d = tmp_path / "serve"
+    with pytest.raises(H.Refused, match="witness"):
+        H.receive(io.BytesIO(tar_of(HANDED, extra=((_member("private/h1/key"), b"secret"),))), d)
+    assert not (d / "private" / "h1" / "key").exists()
+    with pytest.raises(H.Refused, match="has no private/compose/inputs.sha256"):
+        H.receive(io.BytesIO(raw_tar([("h1/log.jsonl", b"x")])), tmp_path / "nosums")
+    with pytest.raises(H.Refused, match="lacks h1/gone.json, which its sums list"):
+        H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  h1/gone.json\n")), tmp_path / "lacks")
+    with pytest.raises(H.Refused, match=r"sums list the served run's witness: private/h1/key \(H1's prover state"):
+        H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  private/h1/key\n")), tmp_path / "listed")
+    with pytest.raises(H.Refused, match="a line that isn't sha256sum's"):
+        H.receive(io.BytesIO(tar_of(HANDED, more="nonsense\n")), tmp_path / "line")
+    with pytest.raises(H.Refused, match="over 10 bytes"):
+        H.receive(io.BytesIO(tar_of(HANDED)), tmp_path / "cap", cap=10)
+    got = H.receive(io.BytesIO(tar_of(HANDED)), tmp_path / "ok")
+    assert got == {**{f: hashlib.sha256(b).hexdigest() for f, b in HANDED.items()},
+                   H.COMPOSE_SUMS: hashlib.sha256((tmp_path / "ok" / H.COMPOSE_SUMS).read_bytes()).hexdigest()}
+    assert oct((tmp_path / "ok").stat().st_mode & 0o777) == "0o700"
+
+
+def witness_rule(source: str) -> tuple[dict[str, list], str]:
+    """A module's witness tables, each in the order it is written, and its `witness` without the docstring, as syntax."""
+    body = ast.parse(source).body
+    tables = {t.id: list(ast.literal_eval(s.value).items()) for s in body if isinstance(s, ast.Assign)
+              for t in s.targets if isinstance(t, ast.Name) and t.id.startswith("WITNESS_")}
+    (rule,) = (s for s in body if isinstance(s, ast.FunctionDef) and s.name == "witness")
+    return tables, ast.dump(ast.Module(body=[rule.args, rule.returns, *rule.body[1:]], type_ignores=[]))
+
+
+def test_the_gate_calls_a_witness_what_the_sender_does():
+    """The gate's `witness` and its three tables are the sender's (`served_verdicts.py witness`, which the served node
+    holds its list to before it sends), entry for entry in the same order and statement for statement: the rule is
+    written in both files, so one edited alone fails here, and the gate takes no name the sender's rule refuses."""
+    ours = witness_rule(Path(H.__file__).read_text())
+    sender = witness_rule((ROOT / "benchmarks" / "one_stage" / "served_verdicts.py").read_text())
+    assert set(ours[0]) == {"WITNESS_DIRS", "WITNESS_TOPS", "WITNESS_NAMES"}
+    assert ours == sender, ("host.py's witness rule and benchmarks/one_stage/served_verdicts.py's differ: make the same "
+                            "edit in both, or have served_verdicts.py read host.py's and delete this test")
+    assert H.witness(["h1/log.jsonl", "", "windows", "a/values/x", "windows/7/rows", "private/h1/key", "h1/x.key"]) == [
+        ("a/values/x", "a committed value file"), ("windows/7/rows", "a sealed row dir (the window's rows)"),
+        ("private/h1/key", "H1's prover state (its key)"), ("h1/x.key", "a key")]
+
+
+def test_the_compose_runs_the_pinned_trees_build_and_answers_its_out_within_its_cap(composer, tmp_path):
+    tree = tmp_path / "tree"
+    (tree / H.SAMPLED_EXE).parent.mkdir(parents=True)
+    assert "SAMPLED_EXE" not in H.compose_env(composer, tmp_path / "s", PIN, None, tree)
+    (tree / H.SAMPLED_EXE).write_text("")
+    env = H.compose_env(composer, tmp_path / "s", PIN, None, tree)
+    assert env["SAMPLED_EXE"] == str(tree / H.SAMPLED_EXE) and "COMPOSE_TREE_ON" not in env
+    assert env["GIT_CEILING_DIRECTORIES"] == str(tmp_path) and env["PATH"] == "/usr/local/bin:/usr/bin:/bin"
+    out = tmp_path / "out"
+    (out / "record").mkdir(parents=True)
+    (out / "verdicts.txt").write_text("a" * 6)
+    (out / "record" / "verdicts.json").write_text("b" * 6)
+    assert H.answered(out, cap=8) == {"files": {"record/verdicts.json": "b" * 6}, "not_sent": {"verdicts.txt": 6}}
+    assert H.answered(tmp_path / "none") == {"files": {}}
+
+
+def test_a_pin_line_names_the_branch_its_commit_is_on_where_infra_names_it(tmp_path):
+    log = tmp_path / "pins.jsonl"
+    assert H.record_pin(log, PIN, T0, on="remote", seal=lambda p: None) == {
+        "commit": PIN, "utc": "2026-10-21T13:00:00Z", "on": "remote"}
+    with pytest.raises(H.Refused, match="a branch"):
+        H.record_pin(log, PIN, T0, on="a b", seal=lambda p: None)
+    host = H.Host(root=tmp_path, pins=log)
+    assert H.pin_of(host, PIN) == {"line": 0, "utc": "2026-10-21T13:00:00Z", "on": "remote"}
+    H.record_pin(log, PIN, T1, seal=lambda p: None)
+    assert H.pin_of(host, PIN) == {"line": 1, "utc": "2026-10-21T13:30:00Z"}
+
+
+def test_a_compose_is_killed_with_everything_it_started_when_its_minutes_run_out(tmp_path, monkeypatch):
+    """`run_compose` with a compose that never ends (a child blocked on a FIFO): its timer kills the whole process group
+    and the exit is 124; one that ends is its exit."""
+    armed: list[float] = []
+
+    class Timer:
+        """Runs out the moment it starts."""
+
+        def __init__(self, seconds, fn):
+            armed.append(seconds)
+            self.fn = fn
+
+        def start(self):
+            self.fn()
+
+        def cancel(self):
+            pass
+
+    script = tmp_path / "benchmarks" / "one_stage" / "served_verdicts.sh"
+    script.parent.mkdir(parents=True)
+    script.write_text('mkfifo "$D/f"; (read -r x < "$D/f") & wait\n')
+    env = {"PATH": "/usr/bin:/bin", "D": str(tmp_path)}
+    monkeypatch.setattr(H.threading, "Timer", Timer)
+    assert H.run_compose(env, tmp_path / "log", 3, tree=tmp_path) == 124 and armed == [180]
+    monkeypatch.undo()
+    script.write_text('echo composed; exit 7\n')
+    assert H.run_compose(env, tmp_path / "log", tree=tmp_path) == 7
+    assert (tmp_path / "log").read_text() == "composed\n"

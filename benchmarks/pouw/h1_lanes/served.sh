@@ -148,7 +148,7 @@ VLIMIT=$(declare -f vlimit)
 if [ "$FW" = 1 ]; then
   export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
   export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/lane.partition.json --program $WK/verifier/lane.program.json"
-  # the ZK server's Lean processes are the prover's children, and under an address-space cap (ulimit -v) their runtime
+  # the ZK server's Lean processes are the prover's children, and under an address-space limit (ulimit -v) their runtime
   # can't create its threads: a ZK server session is bounded by the run's cgroup (--mem-gb) alone
   vlimit() { :; }
 fi
@@ -156,7 +156,7 @@ N=1
 export RAYON_NUM_THREADS=$(( TH / PAR > 0 ? TH / PAR : 1 ))
 UNFW=" ${H1S_UNFIREWALLED:-tampered-zy other-call-a} "
 # H1L_SESSION_GB: a ZK server session starts only while that much is free, H1L_STAGGER seconds after the last, so
-# H1L_PAR is a cap and memory decides. A ZK server session at K=4096 holds the prover (137 GiB), its live verifier
+# H1L_PAR is an upper limit and memory decides. A ZK server session at K=4096 holds the prover (137 GiB), its live verifier
 # (141 GiB) and the ZK server's Lean process (~40 GB), ~350 GB together, and reaches that only after ~H1L_RAMP seconds
 # (900): each session younger than that is charged its whole H1L_SESSION_GB against what's free, and so is each Lean
 # check younger than that (H1L_LEAN_GB, 115: a lane's check starts as its session ends, just when the next session is

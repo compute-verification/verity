@@ -241,11 +241,19 @@ def _job_end(rec: dict, name: str) -> tuple[str, str, str | None] | str | None:
 
 
 def shard_machines(on: str, n: int) -> list[str]:
-    """Each of ``n`` shards' machines (train.sh's MACHINES) from ``on``'s: shard K gets every Nth from the Kth, so no machine is
-    in two shards and each keeps `on`'s order; with fewer machines than shards, shard K gets the ((K-1) mod M)th of the M,
-    shared.  train.sh twins only when no slot is free, so shards given one list all took its one free slot, one behind another."""
+    """Each of ``n`` shards' machines (train.sh's MACHINES) from ``on``'s: first its own, every Nth from the Kth for shard K, so
+    no machine is the own of two shards (with fewer machines than shards, the ((K-1) mod M)th of the M, shared); then every
+    other machine of ``on`` in its order from the Kth on, so each shard falls back on the next one's machines first.  check.py
+    places a check on the first machine of its list with a slot free for it, and twins it on every machine of the list only
+    when none has one: with slots free the shards keep to their own machines (and their warm caches), and a shard whose own
+    are busy takes a free slot anywhere rather than waiting in one machine's line."""
     ms = on.split(",")
-    return [",".join(ms[k::n]) if len(ms) >= n else ms[k % len(ms)] for k in range(n)]
+    out = []
+    for k in range(n):
+        own = ms[k::n] if len(ms) >= n else [ms[k % len(ms)]]
+        r = k % len(ms)
+        out.append(",".join([*own, *(m for m in ms[r:] + ms[:r] if m not in own)]))
+    return out
 
 
 def _hhmm(t: float) -> str:
@@ -1071,11 +1079,11 @@ class Landing:
         """The machines the runs of ``states`` ran on: none for a twin that never started or was stopped for a sibling."""
         return sorted({s[4] for s in states.values() if len(s) > 4 and s[4] and s[1] not in (NOT_STARTED, SIGTERM_RC)})
 
-    def _elsewhere(self, states: dict) -> str:
-        """`on` without the machines the runs of ``states`` ran on (`_ran_on`), for a check run again after a machine's fault;
-        all of `on` when that leaves none (`auto`, or one machine)."""
-        ran = self._ran_on(states)
-        return ",".join(m for m in self.on.split(",") if m not in ran) or self.on
+    def _elsewhere(self, states: dict, on: str = "") -> str:
+        """``on`` (else `on`) without the machines the runs of ``states`` ran on (`_ran_on`), for a check run again after a
+        machine's fault; all of it when that leaves none (`auto`, or one machine)."""
+        ran, on = self._ran_on(states), on or self.on
+        return ",".join(m for m in on.split(",") if m not in ran) or on
 
     def _open(self) -> dict[int, PR]:
         if self._prs is None:
