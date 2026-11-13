@@ -250,6 +250,23 @@ def test_of_two_producers_a_row_the_one_an_operand_names_is_looked_up_by_views_t
     assert refused(e, field, stated)
 
 
+def no_operand_view(lines: list[dict[str, Any]]) -> None:
+    """The embedding's first instance with a null in place of its operand's view, as the fold writes an operand that has no device
+    view (a constant, a parameter, a weight's field, several pieces)."""
+    embed_instances(lines)[0]["operand_views"] = [None]
+
+
+def test_a_null_in_place_of_an_operands_view_is_refused_by_no_name(tmp_path):
+    o = oracle(tmp_path / "plain", "instances", no_operand_view)
+    with pytest.raises(TypeError, match="'NoneType' object is not subscriptable"):
+        o.member_bytes(0, EMBED, "in", "r1")                           # the ids are operand view 0's bytes
+    assert o.member_bytes(0, EMBED, "out", "r1")[1:] == (None, 3) and o.member_bytes(0, EMBED, "in", "r0")[1:] == (None, 5)
+    fed_by = {"spec": "X_v1", "operand": "X_v1"}
+    whole = oracle(tmp_path / "whole", "instances", two_whole_producers_a_row()).member_bytes(0, EMBED, "out", "r1", producer=fed_by)
+    two = oracle(tmp_path / "two", "instances", lambda lines: [two_whole_producers_a_row()(lines), no_operand_view(lines)])
+    assert two.member_bytes(0, EMBED, "out", "r1", producer=fed_by) == whole and whole[0] is None     # fed by nothing, as an operand of no producer
+
+
 def read_through_the_second_view(field: str | None = None, stated: Any = None) -> Callable[[list[dict[str, Any]]], None]:
     """The embedding's instances read the norm's second output view; with `field`, the norm's first output view states `stated`
     under it."""

@@ -72,14 +72,18 @@ def _stated_number(view: Mapping[str, Any], key: str) -> int | None:
 
 
 def _number(view: Mapping[str, Any], key: str, left_out: int | None = None) -> int:
-    """The number a fold view states under `key`.  A view that leaves the key out answers `left_out` where one is given.  Any
-    other view that states no number there (null, anything that is none, or the key left out with no `left_out`) is refused by name."""
-    n = _stated_number(view, key)
-    if n is not None:
-        return n
-    if left_out is None or key in view:
-        raise _refused(view, key, "a number")
-    return left_out
+    """The number a fold view states under `key`, as `int` reads it; `left_out`, where one is given, for a view that leaves the
+    key out.  Any other view that states no number there (null, anything that is none, or the key left out with no `left_out`)
+    is refused by name.  What is no view is refused by no name: a null, which the fold writes for an operand that has no device
+    view, raises the `TypeError` of indexing it (with `left_out`, the `AttributeError` of its `get`)."""
+    try:
+        x = view[key] if left_out is None else view.get(key, left_out)
+    except KeyError as e:
+        raise _refused(view, key, "a number") from e
+    try:
+        return int(x)
+    except (TypeError, ValueError, OverflowError) as e:
+        raise _refused(view, key, "a number") from e
 
 
 def _stated_numbers(view: Mapping[str, Any], key: str) -> list[int]:
