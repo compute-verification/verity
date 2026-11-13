@@ -1232,7 +1232,9 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
     ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which the serve's
     next record names as its ``previous``. So each weight's root is in the log's first record under its value's name,
     which is what the inference-only policy's check cites a registered read by. Without the flag no such record is
-    written; a registration with a value that is no weight parameter gives none."""
+    written; a registration with a value that is no weight parameter gives none, and a name under a weight's with a
+    suffix `_param` takes no form of (``/bnk``, ``/b<b>/table``, ``/b<b>/vocab``) is such a value: the record is refused
+    whole, never written without the name."""
     import functools
 
     from verity_vllm.program.predict import window_weights as WW
@@ -1264,9 +1266,11 @@ def test_the_weights_registration_is_also_the_first_record_of_the_serves_registr
                                  "unrooted": sorted(reg["unrooted"])}
     assert rec["deployment"]["unrooted"] and not {e["value"] for e in rec["registered"]} & set(reg["unrooted"])
     assert key.read_bytes().hex() not in first.read_text()
-    odd = {**reg, "values": {**reg["values"], "x": {**next(iter(reg["values"].values())), "value": "x"}}}
-    with pytest.raises(ValueError, match="'x' is no weight parameter"):
-        WW.deployment_record(odd)
+    stem = next(iter(reg["values"])).rpartition("@")[0]
+    for name in ("x", f"{stem}@192/bnk", f"{stem}@3072/b0/table", f"{stem}@192/b0/vocab"):
+        odd = {**reg, "values": {**reg["values"], name: {**next(iter(reg["values"].values())), "value": name}}}
+        with pytest.raises(ValueError, match=re.escape(f"{name!r} is no weight parameter")):
+            WW.deployment_record(odd)
     with pytest.raises(ValueError, match="never a weights record"):
         WW.deployment_record({"schema": "other"})
 
