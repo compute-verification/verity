@@ -33,7 +33,7 @@ untraced = [
     "tests/test_store_layout.py",
 ]
 inputs = ["verity/protocols/poub/prover/remote_session/prover.py", "verity/protocols/poub/prover/remote_session/device.py",
-          "verity/protocols/poub/prover/remote_session/session.cu", "verity/__init__.py", "verity/settings.py", "verity/errors.py",
+          "verity/protocols/poub/prover/remote_session/session.cu", "verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py",
           "verity/protocols/spot/verifier/profile.py", "verity/protocols/poub/verifier",
           "verity/hardware/record.py",
           "verity/circuits", "verity/commitments/crypto", "verity/commitments", "verity/commitments/randomness",
