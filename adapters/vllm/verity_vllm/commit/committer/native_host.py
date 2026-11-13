@@ -1793,7 +1793,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                     cls, fam = "sampled_token_ids", ("TokenSelect_v1",)
                 elif compiled_kernel:
                     # P_compiled's VU boundaries: every non-weight argument of every Inductor kernel launch (the eager
-                    # module-output families do not describe this execution; the kernel relations are compiled_relations.py's)
+                    # module-output families do not describe this execution)
                     cls, fam, mc = "compiled_kernel_buffers", (), m.name.split("/", 1)[0].split(".", 1)[1].rsplit("_", 1)[0]
                 else:
                     cls, fam = "instance_outputs_native", self.FAMILY_OF_MODULE.get(mc, ())
