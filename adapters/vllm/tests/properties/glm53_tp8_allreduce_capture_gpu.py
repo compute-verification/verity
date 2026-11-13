@@ -104,10 +104,10 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.config import RowEngine
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import tp_allreduce as T
-from verity.definitions.registry import tp_allreduce_check as K
-from verity.definitions.registry import tp_allreduce_nodes as TN
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry import tp_allreduce as T
+from verity_vllm.definitions.registry import tp_allreduce_check as K
+from verity_vllm.definitions.registry import tp_allreduce_nodes as TN
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-tp8-allreduce-capture/v3"

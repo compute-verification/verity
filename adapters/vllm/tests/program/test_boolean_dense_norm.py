@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_dense_norm`: `registry.dense`'s RMSNorm chain (Gemma-2's) on bits.
+"""`verity_vllm.definitions.registry.boolean_dense_norm`: `registry.dense`'s RMSNorm chain (Gemma-2's) on bits.
 
 The chain is `boolean_dense`'s element-wise rows and this module's mean, rsqrt and narrow. The leaves are Boolean and pinned,
 and each is its word primitives on special words and random ones; `F32AddZero_v1` is both orders of `F32Add_v1` with +0, checked
@@ -25,12 +25,12 @@ from verity.circuits import codec
 from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.ops.boolean import mufu as MU
 from verity.circuits.boolean import trace as TR
-from verity.definitions.boolean import boolean_version
-from verity.definitions.registry import boolean_dense as BD
-from verity.definitions.registry import boolean_dense_norm as DN
-from verity.definitions.registry import boolean_norms as BN
-from verity.definitions.registry import dense as D
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.boolean import boolean_version
+from verity_vllm.definitions.registry import boolean_dense as BD
+from verity_vllm.definitions.registry import boolean_dense_norm as DN
+from verity_vllm.definitions.registry import boolean_norms as BN
+from verity_vllm.definitions.registry import dense as D
+from verity_vllm.definitions.registry import prims as P
 from verity.circuits import word as QW
 from verity.circuits.cross_call import members_check
 

@@ -6,7 +6,7 @@ extremes, ⊥, INV, three other `1‖nonzero` words) and a fresh RNG seed.  Each
 `xfail(strict=True)` documents an OPEN finding: it flips to a failure the moment the finding is fixed, so the marker must then
 be removed.
 
-Skips cleanly on a tree without `verity.definitions.registry.lifted`; needs the in-tree MUFU
+Skips cleanly on a tree without `verity_vllm.definitions.registry.lifted`; needs the in-tree MUFU
 tables like `test_serve3.py` for the LServe_v1 cases.
 """
 
@@ -21,12 +21,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-L = pytest.importorskip("verity.definitions.registry.lifted")
+L = pytest.importorskip("verity_vllm.definitions.registry.lifted")
 
 from verity.circuits import Program  # noqa: E402
-from verity.definitions.registry import b1, pad_prims as PP, prims as P, ref_prims as R  # noqa: E402
-from verity.definitions.numerics import serve3_reference as ref  # noqa: E402
-from verity.definitions.registry.b1 import weights_type  # noqa: E402
+from verity_vllm.definitions.registry import b1, pad_prims as PP, prims as P, ref_prims as R  # noqa: E402
+from verity_vllm.definitions.numerics import serve3_reference as ref  # noqa: E402
+from verity_vllm.definitions.registry.b1 import weights_type  # noqa: E402
 from tests.program import test_lifted_tiny as T  # noqa: E402  (`test_lifted_tiny`'s fixture harness: _lserve, EOS_FOR, Y_RAW, ...)
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs  # noqa: E402
 from verity.circuits.types import Array, Value  # noqa: E402

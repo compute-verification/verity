@@ -9,4 +9,4 @@ The query over a derived Program: which of its values a Commit must commit. The 
   runtime commits, and the check that a Commit used it (`manifest`).
 - **Loaded by:** the integration's `pipeline`, `acquire`, `check`, `commit`, `program.predict`, `correspondence`,
   `properties` and `protocols` packages, `circuit-check`, and the benchmarks that read a Program's view.
-- **Loads:** `verity.circuits` and `verity.definitions`, and the integration's `program` and `correspondence`.
+- **Loads:** `verity.circuits` and `verity_vllm.definitions`, and the integration's `program` and `correspondence`.

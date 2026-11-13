@@ -39,7 +39,7 @@ transformers = pytest.importorskip("transformers")
 
 from verity.circuits.codec import program_digest
 from verity_vllm.program.frontend.derive import DERIVE_VERSION, DeriveReport, Unsupported, derive_report
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity.circuits.types import Array, RecordType, Value
 
 # ---------------------------------------------------------------------------------------------------------

@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.definitions.registry import lifted as L
-from verity.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry import lifted as L
+from verity_vllm.definitions.numerics import serve3_reference as ref
 from tests.program.test_serve3 import D_MAX, EOS_FOR, TINY, _inputs
 from tests.program.test_lifted_request import tiny_component
 from verity.circuits.types import Value

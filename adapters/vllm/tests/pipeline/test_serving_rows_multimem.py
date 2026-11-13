@@ -16,8 +16,8 @@ from verity.circuits.evaluation import evaluate_batch
 
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
-from verity.definitions.registry import boolean_tp_allreduce as BTA
-from verity.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry import boolean_tp_allreduce as BTA
+from verity_vllm.definitions.registry import tp_allreduce as TA
 
 WORLD, SIZE = 4, 32
 OP = "model.layers.6.mlp"

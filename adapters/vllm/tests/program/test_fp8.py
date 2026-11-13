@@ -1,4 +1,4 @@
-"""CPU tests of the FP8 registry (`verity/definitions/registry/fp8.py`) on saved H100 operands.
+"""CPU tests of the FP8 registry (`adapters/vllm/verity_vllm/definitions/registry/fp8.py`) on saved H100 operands.
 
 Data (`tests/program/data/`, recorded on an H100):
 * `fp8_saved_operands.npz` — `_C.cutlass_scaled_mm` on random e4m3 operands at three B1 shapes (K=1536/N=2048 with bias,
@@ -26,9 +26,9 @@ if sys.version_info < (3, 12):  # pragma: no cover
 from verity.circuits import Program, bind
 from tests.program.capture_check import coll_range as _coll_range
 from verity.circuits.evaluation import evaluate_region
-from verity.definitions.registry import fp8 as F
-from verity.definitions.numerics import fp8_twins
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import fp8 as F
+from verity_vllm.definitions.numerics import fp8_twins
+from verity_vllm.definitions.registry import prims as P
 
 DATA = Path(__file__).parent / "data"
 

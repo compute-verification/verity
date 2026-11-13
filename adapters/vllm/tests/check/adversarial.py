@@ -15,8 +15,8 @@ from typing import Any, Callable
 
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Coll as _Coll, concat
-from verity.definitions.registry import b1
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import prims as P
 from verity.circuits.types import Array
 
 from verity_vllm.observe.events import ViewDesc

@@ -9,7 +9,7 @@ import torch
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import cublas_bf16 as CB
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.training_emit import _DT, BF16, F32, _batch, _shape, _TrainRule, aten
 from verity_vllm.program.frontend.rules.training_views import _info, _view_permute

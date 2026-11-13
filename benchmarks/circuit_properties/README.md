@@ -104,7 +104,7 @@ measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho
 
 ## What it reads, what it writes and what loads it
 
-The package reads `verity.circuits` (Programs, the canonical layout) and `verity.definitions` (the Boolean GEMM and
+The package reads `verity.circuits` (Programs, the canonical layout) and `verity_vllm.definitions` (the Boolean GEMM and
 the served b1 Definitions on bits). For a model's shapes it loads the slowdown calculator where it sits, with
 `benchmarks/rho` put on `sys.path`: `rho.instances`, and `rho.params` for the registry, which
 loads the inference-only policy's calibrations (`benchmarks/nci/calibrations.json`). The suite

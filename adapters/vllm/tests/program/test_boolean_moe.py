@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_moe`: the Boolean versions of `registry.moe`'s element-wise Definitions agree with their word
+"""`verity_vllm.definitions.registry.boolean_moe`: the Boolean versions of `registry.moe`'s element-wise Definitions agree with their word
 Definitions (`trace.word_of`): the routed sum's coordinate on every word at one slot, on every pair of special words, every word
 against 8 specials and random pairs at two, and at OLMoE's eight slots on random rows, rows of special words, rows that cancel to a
 few ulps and rows that overflow; the sum in 64-column chunks (`MoeSum_v3`, the lift's version) on random and special rows; the router's exponential on special words, random words and words across its range, its
@@ -29,11 +29,11 @@ from verity.circuits.types import Array, Tuple
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ZERO
 from verity.circuits.cut import separable
-from verity.definitions import boolean as SW
-from verity.definitions.registry import boolean_moe as BM
-from verity.definitions.registry import moe as M
-from verity.definitions.numerics import moe_twins
-from verity.definitions.registry.prims import F32, I32
+from verity_vllm.definitions import boolean as SW
+from verity_vllm.definitions.registry import boolean_moe as BM
+from verity_vllm.definitions.registry import moe as M
+from verity_vllm.definitions.numerics import moe_twins
+from verity_vllm.definitions.registry.prims import F32, I32
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

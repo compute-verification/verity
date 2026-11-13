@@ -10,7 +10,7 @@ import pytest
 from verity.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
 from verity.circuits.codec import IdentityConflict
 from verity.circuits.defs import CompositeDefinition
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from tests.program.test_running_example import Add16, Dot, Id16, Mul16, Relu16, make_program
 

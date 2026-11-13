@@ -13,8 +13,8 @@ from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
-from verity.definitions.registry.layer_norm import LayerNormAten
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry.layer_norm import LayerNormAten
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 BF = torch.bfloat16

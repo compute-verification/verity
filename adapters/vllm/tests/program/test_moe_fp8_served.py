@@ -8,7 +8,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from verity.definitions.registry import fp8_moe_experts, moe
+from verity_vllm.definitions.registry import fp8_moe_experts, moe
 from verity_vllm.engine.profiles.devices import fused_moe_config
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile

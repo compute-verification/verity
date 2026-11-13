@@ -32,7 +32,7 @@ HERE = Path(__file__).resolve().parent
 
 def registry() -> Any:
     """The registry modules whose Definitions the atoms bind (imported for their registration), and `int8_exact`."""
-    from verity.definitions.registry import act, b1, int8_exact, moe  # noqa: F401
+    from verity_vllm.definitions.registry import act, b1, int8_exact, moe  # noqa: F401
 
     return int8_exact
 

@@ -11,7 +11,7 @@ from verity_vllm.program.frontend.rules.common import (and_mul_operands, call_ar
                                                       shape)
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, aten
-from verity.definitions.registry.dsv4_moe import limit_bits
+from verity_vllm.definitions.registry.dsv4_moe import limit_bits
 
 
 # -- generic elementwise / activation bindings (dense2 vocabulary; none names a model) ----------------------------------------

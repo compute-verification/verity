@@ -9,12 +9,12 @@ Evidence that the stand-in is exact where the quarantine uses it: both uses take
 stand-in-based bodies on every non-NaN word (65,282 / 65,282 and 65,282 / 65,282; NaN inputs give the kernels' 0x7FFF).  CUDA's
 `tanhf` (<= 2 ulp) is therefore not distinguishable from RN32(tanh) through either bf16 output on the whole input domain.
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.dense.TanhF32Rn`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.definitions.registry.dense.TanhF32Rn`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
 
-from verity.definitions.registry.dense import TanhF32Rn, tanh_f32_bits
+from verity_vllm.definitions.registry.dense import TanhF32Rn, tanh_f32_bits
 
 SEMANTIC_ID = "dense/TanhF32Rn@v1"
 

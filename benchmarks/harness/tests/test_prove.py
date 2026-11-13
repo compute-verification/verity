@@ -1561,7 +1561,7 @@ HEAD_BLOCK = ('SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=4,FIRST=true,BN=64,DOT={"
 def registered(block: str) -> str:
     """The id of the Definition the tree registers as a census type's Boolean version, asked of the registry itself."""
 
-    from verity.definitions import boolean
+    from verity_vllm.definitions import boolean
     from verity.circuits.call_scope import spec_base, spec_statics, specialization
 
     return boolean.boolean_version(specialization(spec_base(block), spec_statics(block))).id
@@ -1569,7 +1569,7 @@ def registered(block: str) -> str:
 
 def test_a_definition_is_a_types_boolean_version_only_where_the_trees_registry_says_so():
     """`boolean_version` asks the tree's registry: a census type's Boolean version is the one Definition
-    `verity.definitions.boolean.boolean_version` gives for the type's own, at the statics it binds, a function-valued
+    `verity_vllm.definitions.boolean.boolean_version` gives for the type's own, at the statics it binds, a function-valued
     static's Boolean version among them. The type's own Definition, its Boolean Definition at other statics, a
     version the tree doesn't hold, and anything of a type the registry doesn't bind are none."""
 

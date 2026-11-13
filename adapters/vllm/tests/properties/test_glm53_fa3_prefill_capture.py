@@ -18,9 +18,9 @@ from tests.properties import glm53_fa3_prefill_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity_vllm.program.frontend.rules import vllm_dsa_dense
-from verity.definitions.numerics import fa2_relation, fa3_model as FM
-from verity.definitions.registry import attention_vocab, hopper
-from verity.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.numerics import fa2_relation, fa3_model as FM
+from verity_vllm.definitions.registry import attention_vocab, hopper
+from verity_vllm.definitions.registry import fa3_check_inf as F3
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 COMBINE = ("void cutlass::device_kernel<flash::enable_sm90_or_later<flash::FlashAttnFwdCombine<cute::tuple<cute::C<8>, cute::C<128> >, "

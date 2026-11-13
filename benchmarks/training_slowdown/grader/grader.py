@@ -532,7 +532,7 @@ def boolean_prices(prims: dict) -> dict[str, dict]:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.evaluation.bits import compile as compile_bits
     from verity.circuits.program import is_input
-    from verity.definitions.boolean import boolean_version
+    from verity_vllm.definitions.boolean import boolean_version
 
     out = {}
     for pid, fn in sorted(prims.items()):

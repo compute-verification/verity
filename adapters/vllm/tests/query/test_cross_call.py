@@ -12,7 +12,7 @@ from verity.circuits.cut import separable
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import prims as P
 from verity.circuits import cross_call as X
 from verity.circuits import word as W
 

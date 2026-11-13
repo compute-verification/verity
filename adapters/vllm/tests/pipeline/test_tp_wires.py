@@ -29,8 +29,8 @@ from verity.circuits.defs import Builder, bind
 from verity.circuits.ops import gemm as GE
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array
-from verity.definitions.registry import moe, tp_allreduce as TA
-from verity.definitions.registry.prims import BF16
+from verity_vllm.definitions.registry import moe, tp_allreduce as TA
+from verity_vllm.definitions.registry.prims import BF16
 from verity.commitments.windows import interface as I, wiring as WI
 
 RUN, LAW, CAP, W = "ab" * 64, {"law": "stratified", "k": 2}, 4, 2

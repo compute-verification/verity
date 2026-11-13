@@ -52,7 +52,7 @@ COLUMNS = (("SparseMlaHeadValues_v1{", "G"), ("SparseMlaHeadEnd_v1{", "DV"), ("S
 
 def glm53() -> dict:
     """GLM-5.3's sparse-MLA statics: its heads `NH`, a key block's keys `BN` and a row's output columns `DV`."""
-    from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+    from verity_vllm.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
     return SPARSE_MLA_GLM53
 
 
@@ -64,7 +64,7 @@ def requests(path: Path = PLAN) -> list[tuple[int, int, int]]:
 
 @lru_cache(maxsize=None)
 def decode_splits(T: int) -> int:
-    from verity.definitions.registry.sparse_mla_split import launch_num_splits
+    from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
     return launch_num_splits([T], SMS, TOPK)[0]
 
 
@@ -72,7 +72,7 @@ def units(T: int, NS: int, heads: int, whole: frozenset = frozenset()) -> Counte
     """The units of one row of T keys at NS splits, {(kind, parameter): count}: `first` and `later` key blocks by
     their keys, a head's `end`, a split's end in each column block (`cols`, counted once for all of them), the
     `combine` of a column block by its splits, or the `whole` row where T is in `whole` at one split."""
-    from verity.definitions.registry.sparse_mla_split import combine_cols, split_blocks
+    from verity_vllm.definitions.registry.sparse_mla_split import combine_cols, split_blocks
 
     if NS == 1 and T in whole:
         return Counter({("whole", T): 1})
@@ -93,7 +93,7 @@ def units(T: int, NS: int, heads: int, whole: frozenset = frozenset()) -> Counte
 def rows_of(p: int, o: int, h: int = 0) -> Counter:
     """One request's rows a (layer, rank), {(keys, splits): count}: its prefill, positions h + 1 to p, one launch, and
     each of its o decode steps a launch of one token."""
-    from verity.definitions.registry.sparse_mla_split import MAX_SPLIT_BATCH, launch_num_splits
+    from verity_vllm.definitions.registry.sparse_mla_split import MAX_SPLIT_BATCH, launch_num_splits
 
     out = Counter()
     if p - h > MAX_SPLIT_BATCH:

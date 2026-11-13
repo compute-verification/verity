@@ -14,20 +14,20 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
-from verity.definitions import boolean as SW
+from verity_vllm.definitions import boolean as SW
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.rules import vllm_dsa_dense
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as VOCAB
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import fa3_model
-from verity.definitions.numerics import fa3_split_twins as TW
-from verity.definitions.registry import boolean_attention as BAt
-from verity.definitions.registry import boolean_fa3_split as BF
-from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import fa3_split as F
-from verity.definitions.registry import hopper
-from verity.definitions.registry import sparse_mla_split as W
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import fa3_model
+from verity_vllm.definitions.numerics import fa3_split_twins as TW
+from verity_vllm.definitions.registry import boolean_attention as BAt
+from verity_vllm.definitions.registry import boolean_fa3_split as BF
+from verity_vllm.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.registry import fa3_split as F
+from verity_vllm.definitions.registry import hopper
+from verity_vllm.definitions.registry import sparse_mla_split as W
 from tests.program.test_boolean_attention import _inputs
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

@@ -28,12 +28,12 @@ from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.boolean import trace as TR
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32 as BW
 from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
-from verity.definitions import boolean as SW
+from verity_vllm.definitions import boolean as SW
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.numerics import fp8_moe_rows as MR
-from verity.definitions.registry import boolean_fp8_moe as BM
-from verity.definitions.registry import fp8_moe as M
-from verity.definitions.registry import fp8_moe_experts as X
+from verity_vllm.definitions.numerics import fp8_moe_rows as MR
+from verity_vllm.definitions.registry import boolean_fp8_moe as BM
+from verity_vllm.definitions.registry import fp8_moe as M
+from verity_vllm.definitions.registry import fp8_moe_experts as X
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as T
 from tests.program.test_boolean_fp8 import _flat, _inputs

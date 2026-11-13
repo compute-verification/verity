@@ -46,9 +46,9 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (_OBSE
                                                                            launch_keys_of)
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.torch_frontend import _tensor_type
-from verity.definitions.registry import dsa
-from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity.definitions.registry.sparse_mla_split import launch_num_splits
+from verity_vllm.definitions.registry import dsa
+from verity_vllm.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 
 aten = torch.ops.aten
 BF16, F32, E4M3 = torch.bfloat16, torch.float32, torch.float8_e4m3fn

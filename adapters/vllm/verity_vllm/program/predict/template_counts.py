@@ -158,8 +158,8 @@ class TemplateCounts(StepNeeds):
         return out
 
     def _pass(self, launch: _Launch, m: int, p: int, sampled: bool) -> _Pass:
-        from verity.definitions.registry import tp_allreduce as AR
-        from verity.definitions.registry.sparse_mla_split import launch_num_splits
+        from verity_vllm.definitions.registry import tp_allreduce as AR
+        from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
         from verity_vllm.program.frontend.rules.vllm_dsa import long_row_blocks
         M, TOPK, e = launch.tokens(m), self.index_topk, launch.entry(m)
         prefills = launch.prefills((e, p), self.threshold)

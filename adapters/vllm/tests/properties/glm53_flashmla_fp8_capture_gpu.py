@@ -77,9 +77,9 @@ from tests.properties import dsv4_marlin_capture_gpu as M
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity.circuits.kernels import tc as CK
-from verity.definitions.numerics import derived_rows as DRW
-from verity.definitions.numerics import flashmla_twin as T
-from verity.definitions.numerics import flashmla_dsv32_twin as V
+from verity_vllm.definitions.numerics import derived_rows as DRW
+from verity_vllm.definitions.numerics import flashmla_twin as T
+from verity_vllm.definitions.numerics import flashmla_dsv32_twin as V
 from verity_vllm.properties.record import digest_of
 
 SCHEMA = "verity-vllm/glm53-flashmla-fp8-capture/v1"
@@ -710,7 +710,7 @@ def definition_token(job: dict[str, Any]) -> dict[str, Any]:
     rec = {"case": job["case"], "token": job["token"], "words": 0, "differ": 0, "first": None}
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
-    from verity.definitions.registry import flashmla_dsv32 as R
+    from verity_vllm.definitions.registry import flashmla_dsv32 as R
 
     outdir, t = Path(job["dir"]), job["token"]
     a, cache = _case(outdir, job["case"]), np.load(outdir / "cache.npy", mmap_mode="r")

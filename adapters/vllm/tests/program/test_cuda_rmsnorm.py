@@ -8,11 +8,11 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.ops.boolean import mufu as BM
-from verity.definitions.numerics import twins as TW
+from verity_vllm.definitions.numerics import twins as TW
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.registry import boolean_norms as BN
-from verity.definitions.registry import cuda_rmsnorm as C
+from verity_vllm.definitions.registry import boolean_norms as BN
+from verity_vllm.definitions.registry import cuda_rmsnorm as C
 
 
 @pytest.mark.parametrize(

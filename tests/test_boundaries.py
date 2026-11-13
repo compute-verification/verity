@@ -176,17 +176,17 @@ BENCHMARKS_IMPORTERS = {
 CIRCUIT_CHECK = "tools/verity/circuit_check/src"
 #: The files of circuit-check that still import another distribution of the workspace, each with the packages it imports:
 #: Flock's lowerings and templates, which its lowering and template checks hold each Definition's Boolean circuit to.  An
-#: entry that is a module (``verity.definitions.registry``) covers that module and the ones under it, not its package:
+#: entry that is a module (``verity_vllm.definitions.registry``) covers that module and the ones under it, not its package:
 #: the served circuits circuit-check checks, listed ahead of their move into the vLLM adapter, which makes them another
 #: distribution's; circuits' to remove, as circuit-check is handed them.  It only shrinks.
 CIRCUIT_CHECK_IMPORTS = {
     f"{CIRCUIT_CHECK}/circuit_check/ambient.py": {"verity_flock"},
     f"{CIRCUIT_CHECK}/circuit_check/checks.py": {"verity_flock"},
-    f"{CIRCUIT_CHECK}/circuit_check/sidecars.py": {"verity_flock", "verity.definitions.registry"},
+    f"{CIRCUIT_CHECK}/circuit_check/sidecars.py": {"verity_flock", "verity_vllm.definitions.registry"},
     f"{CIRCUIT_CHECK}/circuit_check/structural.py": {"verity_flock"},
-    f"{CIRCUIT_CHECK}/circuit_check/targets.py": {"verity_flock", "verity.definitions.boolean", "verity.definitions.numerics",
-                                                  "verity.definitions.registry"},
-    f"{CIRCUIT_CHECK}/circuit_check/units.py": {"verity.definitions.boolean"},
+    f"{CIRCUIT_CHECK}/circuit_check/targets.py": {"verity_flock", "verity_vllm.definitions.boolean", "verity_vllm.definitions.numerics",
+                                                  "verity_vllm.definitions.registry"},
+    f"{CIRCUIT_CHECK}/circuit_check/units.py": {"verity_vllm.definitions.boolean"},
 }
 #: Functions past a guard, which tests alone may name, since a guard never fails open (AGENTS.md "Working principles"): each
 #: with the file that defines it and why tests need it.
@@ -1541,7 +1541,7 @@ ORDER_TREE = {
     "verity/commitments/__init__.py": "",
     "verity/commitments/crypto/__init__.py": "",
     "verity/commitments/crypto/lms.py": "",
-    "verity/definitions/__init__.py": "",
+    "adapters/vllm/verity_vllm/definitions/__init__.py": "",
     "verity/definitions/ops.py": "import verity.circuits.at_load\n",
     "verity/protocols/flock/__init__.py": "",
     "verity/protocols/flock/prover/stage.py": "import verity.protocols.pouw.verifier.check\n",

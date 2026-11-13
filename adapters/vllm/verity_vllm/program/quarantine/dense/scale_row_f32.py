@@ -2,12 +2,12 @@
 `(x.float() + residual.float()) * torch.rsqrt(variance + eps)`).  ATen's CUDA `mul_kernel` on f32 with the `[M,1]` operand
 broadcast along the row: one FMUL per element, RN; `s` is the row's `[1]` cell of the `[M,1]` operand (PerRow).
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.dense.ScaleRowF32`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.definitions.registry.dense.ScaleRowF32`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
 
-from verity.definitions.registry.dense import ScaleRowF32
+from verity_vllm.definitions.registry.dense import ScaleRowF32
 
 SEMANTIC_ID = "dense/ScaleRowF32@v1"
 

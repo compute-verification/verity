@@ -2,12 +2,12 @@
 bf16(bf16(gelu_tanh(gate[i])) * up[i])`, gate = gu[:I], up = gu[I:] (`act_and_mul_kernel<..., act_first=true>`), the same
 shape as the registered `SiluMul_v1` with the element `GeluTanhMulBf16` (see `gelu_tanh_mul_bf16.py`).
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.dense.GeluTanhMul`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.definitions.registry.dense.GeluTanhMul`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
 
-from verity.definitions.registry.dense import GeluTanhMul
+from verity_vllm.definitions.registry.dense import GeluTanhMul
 
 SEMANTIC_ID = "dense/GeluTanhMul@v1"
 

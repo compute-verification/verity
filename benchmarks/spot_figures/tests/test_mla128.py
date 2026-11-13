@@ -16,7 +16,7 @@ def test_a_row_is_counted_as_serving_cuts_it():
     """At one split a row is each head's key blocks and its end; at more, each split's blocks, its end in the column
     blocks and a combine of each column block a head; a row the card holds whole stays whole. The units are
     `sparse_mla_split.split_chain`'s, by count."""
-    from verity.definitions.registry import sparse_mla, sparse_mla_split as S
+    from verity_vllm.definitions.registry import sparse_mla, sparse_mla_split as S
 
     assert M.units(9, 1, 8, frozenset({9})) == Counter({("whole", 9): 1})
     assert M.units(9, 1, 8) == Counter({("first", 9): 8, ("end", 0): 8})

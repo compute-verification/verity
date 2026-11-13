@@ -1,6 +1,6 @@
 """Stage MoE, spec + tiny circuit on CPU — **padded baseline (experimental)**.
 
-The registered fused-MoE block (`verity/definitions/registry/moe.py`: router top-k → expert row gather with the expert index as an
+The registered fused-MoE block (`adapters/vllm/verity_vllm/definitions/registry/moe.py`: router top-k → expert row gather with the expert index as an
 I32 VALUE → expert GEMMs → routed sum) lifted by node replay (`lifted.lift_def`), on a tiny per-token MoE FFN (E=4 experts, TOPK=2,
 K=16 hidden, N=16 intermediate, silu_and_mul).  What this establishes, gate for gate:
 
@@ -30,9 +30,9 @@ from verity.circuits import Program, bind
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import composite
 from verity.circuits.refs import Coll, array_of, coll_concat, tuple_of
-from verity.definitions.registry import b1, lifted as L, moe, prims as P
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.prims import BF16, F32, I32
+from verity_vllm.definitions.registry import b1, lifted as L, moe, prims as P
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry.prims import BF16, F32, I32
 from verity.circuits.types import Array, Tuple
 
 E, TOPK, VPT, K, N = 4, 2, 2, 16, 16

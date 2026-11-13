@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 
 from verity_vllm.check.replay import index as IX, linkage as LK
-from verity.definitions.numerics import rows as RK
+from verity_vllm.definitions.numerics import rows as RK
 
 EMB = "model.embed_tokens"
 

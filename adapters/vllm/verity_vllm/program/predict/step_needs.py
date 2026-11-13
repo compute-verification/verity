@@ -111,7 +111,7 @@ class StepNeeds:
         is on, which samples a step's unseeded requests only when some request filters by top-k or top-p and none is seeded (one
         request's generator sends the whole batch to the native sampler); an unseeded request's select is refused once, as
         FlashInfer's or as unseeded."""
-        from verity.definitions.registry.sparse_mla_split import launch_num_splits
+        from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
         calls = [(int(q), int(done)) for q, done in prefills] + [(1, int(k) - 1) for k in decodes]
         keys: Counter[int] = Counter()
         long_calls = []
@@ -149,7 +149,7 @@ class StepNeeds:
         return self.kind("flashinfer_fp8_linear" if M < 32 else "deepgemm_fp8_linear", K=K, N=N)
 
     def _cublas(self, M: int, w: object, f32: bool = False) -> Need:
-        from verity.definitions.registry.bf16_gemm_check import default_cublas_route
+        from verity_vllm.definitions.registry.bf16_gemm_check import default_cublas_route
         from verity_vllm.program.frontend.rules.vllm_bindings.bf16_gemm import _f32out_phase
         N, K = self._shape[w]
         phase = _f32out_phase(K, N) if f32 else "linear"
@@ -162,7 +162,7 @@ class StepNeeds:
         return self.kind(role, K=K, N=N, DOT=self.net.dot, **route[1])
 
     def _router(self, M: int, w: tuple[int, str]) -> Need:
-        from verity.definitions.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
+        from verity_vllm.definitions.registry.bf16_gemm_check import DEFAULT_LL_BF16_FMA, dispatch_sm90
         N, K = self._shape[w]
         tier, st = dispatch_sm90(M, K, N)
         if tier == "cublas":
@@ -172,7 +172,7 @@ class StepNeeds:
         return self.kind("ll_bf16_splitk", N=N, K=K, DOT=self.net.dot, **st)
 
     def _all_reduce(self, M: int, n: int) -> Need:
-        from verity.definitions.registry import tp_allreduce as AR
+        from verity_vllm.definitions.registry import tp_allreduce as AR
         from verity_vllm.program.frontend.rules.vllm_bindings.collectives import _ROUTE_KINDS
         setting, route = AR.served_route(self.net.settings, M, self.H)
         c = AR.covered(setting, self.H, route, M) if setting else None
@@ -185,7 +185,7 @@ class StepNeeds:
         return self.kind(_ROUTE_KINDS[c.definition], **st)
 
     def _reduce_norm(self, M: int, n: int) -> list[tuple[Need, int]]:
-        from verity.definitions.registry import tp_allreduce as AR
+        from verity_vllm.definitions.registry import tp_allreduce as AR
         s = self.net.settings
         if s["flashinfer"] and M <= AR.fused_max_tokens(self.H, self.W):
             setting, _ = AR.served_route(s, M, self.H)
@@ -198,7 +198,7 @@ class StepNeeds:
         return [(self._all_reduce(M, n), 1), (self.kind("rmsnorm_fused", N=self.H, EPS=self.EPS, TARGET=self.tp, M=M), n)]
 
     def _moe(self, M: int, n: int, L: int) -> list[tuple[Need, int]]:
-        from verity.definitions.registry.moe import router_kernel
+        from verity_vllm.definitions.registry.moe import router_kernel
         from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG
         C, H, G = self.C, self.H, self.G
@@ -262,7 +262,7 @@ class StepNeeds:
             out.append((self.kind("token_select", V=V * W), sampling["greedy"]))
         seeded, unseeded = sampling.get("seeded", 0), sampling.get("random", 0)
         if seeded:
-            from verity.definitions.registry.topp_geometry import registered_splits
+            from verity_vllm.definitions.registry.topp_geometry import registered_splits
             out.append((self.kind("token_select_stochastic_split", V=V * W, S=registered_splits(int(self.tp.num_sms))), seeded))
         if unseeded:
             fi = flashinfer_sampler and not seeded and bool(sampling.get("top_k") or sampling.get("top_p"))

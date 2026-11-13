@@ -22,10 +22,10 @@ from torch.fx.experimental.proxy_tensor import make_fx
 
 from tests.program.test_train_step import _program
 from verity.circuits.ops import scalar as SC
-from verity.definitions.numerics import torch_kernels as TK
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import int8_exact as IE
+from verity_vllm.definitions.numerics import torch_kernels as TK
+from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import int8_exact as IE
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.rules import training_views as TV

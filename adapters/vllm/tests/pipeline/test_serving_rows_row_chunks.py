@@ -10,12 +10,12 @@ import pytest
 from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity.definitions.registry import b1 as B1
-from verity.definitions.registry import dead_free as DF
-from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import fa2_check_inf as FA2
-from verity.definitions.registry import fa3_check_inf as FA3
-from verity.definitions.registry import hopper as HP
+from verity_vllm.definitions.registry import b1 as B1
+from verity_vllm.definitions.registry import dead_free as DF
+from verity_vllm.definitions.registry import deepgemm as DG
+from verity_vllm.definitions.registry import fa2_check_inf as FA2
+from verity_vllm.definitions.registry import fa3_check_inf as FA3
+from verity_vllm.definitions.registry import hopper as HP
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind

@@ -15,10 +15,10 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity_vllm.pipeline import serving_templates as ST
-from verity.definitions.numerics import deepgemm_twins as T
-from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import fp8 as F8
-from verity.definitions.registry.fp8 import FP8_BLOCK
+from verity_vllm.definitions.numerics import deepgemm_twins as T
+from verity_vllm.definitions.registry import deepgemm as DG
+from verity_vllm.definitions.registry import fp8 as F8
+from verity_vllm.definitions.registry.fp8 import FP8_BLOCK
 from tests.program.test_deepgemm import _bf16_rows, _guard_rows, _weights, _words
 
 K = 256

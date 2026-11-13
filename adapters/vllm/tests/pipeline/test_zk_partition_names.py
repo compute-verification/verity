@@ -28,8 +28,8 @@ from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.circuits import evaluation as E
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import bits as BS
-from verity.definitions import boolean as BB
-from verity.definitions.numerics import deepgemm_twins as DT
+from verity_vllm.definitions import boolean as BB
+from verity_vllm.definitions.numerics import deepgemm_twins as DT
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.query.program_view import spec_statics

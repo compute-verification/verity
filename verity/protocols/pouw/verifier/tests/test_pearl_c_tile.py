@@ -1,4 +1,4 @@
-"""TileRead and the served y as registered Definitions (`verity.definitions.registry.pearl_c_tile`), word and Boolean, against
+"""TileRead and the served y as registered Definitions (`verity_vllm.definitions.registry.pearl_c_tile`), word and Boolean, against
 PoUW's pin (`schemes.pearl_c_u`) on its vectors (the H100 kernel's gate problem, ``vectors/pearl_c_u.json``) and random codes
 at both devices' atoms, against pc8's tile (`circuit.pc8`'s `Pc8Tile`), and the unscale against the kernels' epilogue order on
 the vectors' U and their rows' α."""
@@ -19,7 +19,7 @@ from verity.circuits.evaluation.bits import evaluate_words
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity.circuits.silicon import fp32
-from verity.definitions.registry import pearl_c_tile as PT
+from verity_vllm.definitions.registry import pearl_c_tile as PT
 from verity.protocols.pouw.prover.circuit import pc8
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 from verity.protocols.pouw.prover.schemes import pearl_c_u as U

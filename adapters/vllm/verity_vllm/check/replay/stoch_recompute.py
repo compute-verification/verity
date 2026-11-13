@@ -3,7 +3,7 @@ with the Program's own sampler Definition under the DECLARED inputs, and compare
 
 For every snapshotted engine step with a `_gumbel_sample_kernel` launch (row_pod's Match snapshots steps `MATCH_SNAP_STEPS`, default 0,1):
 
-    token', masked' = GumbelTopPTokenSelect_v1{V}(bf16 logits row, top_p, seed, pos, temperature, S)     # verity/definitions/registry/sampling.py
+    token', masked' = GumbelTopPTokenSelect_v1{V}(bf16 logits row, top_p, seed, pos, temperature, S)     # adapters/vllm/verity_vllm/definitions/registry/sampling.py
 
 with the bf16 logits row from the capture's snapshot of the sampler input (`SampleEnd.logits_view`), `seed` the request record's
 DECLARED seed (`RunHeader.workload.requests[*].seed`, i.e. the workload manifest -- the Program's runtime input), `pos` the row's
@@ -91,7 +91,7 @@ def _eval_job(job: tuple) -> tuple[int, "np.ndarray", float]:
     """One sampled row through the Definition of record: GumbelTopPTokenSelect_v1{V,S} on (bf16 logits row, top_p, seed, pos, T) ->
     (token, the masked fp32 row it went through, seconds).  Module-level so a worker process can run it."""
     from verity_vllm.properties.admission import evaluate_spec
-    from verity.definitions.registry import sampling_topp_difftest as D
+    from verity_vllm.definitions.registry import sampling_topp_difftest as D
     V, S, words = job
     t1 = time.time()
     out = evaluate_spec(D.spec({"V": int(V), "S": int(S)}), words)
@@ -105,7 +105,7 @@ def _eval_job_rows(job: tuple) -> tuple[int, "np.ndarray", float]:
     """The same Definition over the whole row at once: `sampling_rows.gumbel_topp_token_select_row`
     (numpy twins of the registered gates, held word-equal to `evaluate_spec` in tests/program/test_sampling_rows.py) -> the same
     (token, masked fp32 row, seconds) triple.  The words layout is `_eval_job`'s: [bf16 row, top_p, seed, pos, temp] (uint64 arrays)."""
-    from verity.definitions.registry import sampling_rows as SR
+    from verity_vllm.definitions.registry import sampling_rows as SR
     V, S, words = job
     t1 = time.time()
     bf, p_w, seed_w, pos_w, t_w = words
@@ -119,7 +119,7 @@ def _eval_job_rows(job: tuple) -> tuple[int, "np.ndarray", float]:
 
 EVALUATORS = {"lane": _eval_job, "rows": _eval_job_rows}
 EVALUATOR_DOC = {"lane": "evaluate_spec: the registry interpreter walks GumbelTopPTokenSelect_v1{V,S} gate by gate over the V lanes",
-                 "rows": "sampling_rows: numpy twins of the same registered gates over the whole row at once (verity/definitions/registry/sampling_rows.py), "
+                 "rows": "sampling_rows: numpy twins of the same registered gates over the whole row at once (adapters/vllm/verity_vllm/definitions/registry/sampling_rows.py), "
                          "held word-equal to the lane walk by tests/program/test_sampling_rows.py and by the reference rows of this run"}
 
 
@@ -412,7 +412,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
     from verity_vllm.properties.admission import evaluate_spec
     from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
     from verity_vllm.observe.log import read_log
-    from verity.definitions.registry import sampling_topp_difftest as D
+    from verity_vllm.definitions.registry import sampling_topp_difftest as D
 
     t0 = time.time()
     events = list(read_log(log_path))
@@ -674,7 +674,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
             "workload": None if workload is None else str(workload), "build": None if build_dir is None else str(build_dir),
             "declared_facts": facts, "run_header_facts": run_facts, "program_splits": program_S,
             "header_vs_manifest": header_vs_manifest, "structure_note": structure_note,
-            "variant": VARIANT, "definition": "GumbelTopPTokenSelect_v1{V,S} = TemperatureScale_v1 -> TopPMask_v1 -> GumbelSelectF32_v1 (verity/definitions/registry/sampling.py)",
+            "variant": VARIANT, "definition": "GumbelTopPTokenSelect_v1{V,S} = TemperatureScale_v1 -> TopPMask_v1 -> GumbelSelectF32_v1 (adapters/vllm/verity_vllm/definitions/registry/sampling.py)",
             # WHICH evaluator produced the value check, and the lane-walk reference beside it: both named
             "evaluator": {"name": evaluator, "what": EVALUATOR_DOC[evaluator], "eval_seconds_total": eval_seconds_total,
                           "reference": ref_check, "jobs": jobs, "cpu_quota": _cpu_quota()},
@@ -715,7 +715,7 @@ class Options:
                                "shape, compared with the mask kernel's constexpr S at every checked row; needs --workload)")
     evaluator: str = option("--evaluator", env="STOCH_EVALUATOR", default="lane", choices=sorted(EVALUATORS),
                             help="'lane' = the registry interpreter over the V lanes (the path of record; default; env STOCH_EVALUATOR); 'rows' = the "
-                            "vectorised twins of the same gates (verity/definitions/registry/sampling_rows.py), milliseconds per row")
+                            "vectorised twins of the same gates (adapters/vllm/verity_vllm/definitions/registry/sampling_rows.py), milliseconds per row")
     reference_rows: int = option("--reference-rows", type=int, env="STOCH_REFERENCE_ROWS", default=8,
                                  help="under --evaluator rows: this many value-checked rows ALSO go through the lane walk; token + masked row must agree "
                                  "word for word or the verdict is FAIL by name (default 8; env STOCH_REFERENCE_ROWS)")

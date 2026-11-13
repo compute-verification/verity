@@ -14,11 +14,11 @@ from verity_vllm.acquire import served as SV
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.check import c2_rules
 from verity_vllm.check.replay import served_check as SC
-from verity.definitions.numerics.rows import token_select_first_max
-from verity.definitions.registry import b1, cublas_bf16
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import inductor as IR
+from verity_vllm.definitions.numerics.rows import token_select_first_max
+from verity_vllm.definitions.registry import b1, cublas_bf16
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.registry import inductor as IR
 from verity_vllm.query.manifest.format import manifest_digest
 
 V, H, NH, KVH, D, I, P = 64, 64, 2, 1, 64, 32, 512

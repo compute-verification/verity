@@ -199,11 +199,11 @@ paths = ["verity/protocols/pouw/verifier/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_derive.py"]
-paths = ["verity/definitions/registry", "verity/protocols/flock/prover/python/verity_flock/templates"]
+paths = ["adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_flock_rows.py"]
-paths = ["verity/circuits/ops", "verity/definitions/registry", "verity/protocols/flock/prover/python/verity_flock"]
+paths = ["verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_keyed.py"]

@@ -37,9 +37,9 @@ from typing import Any
 
 import numpy as np
 
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry import tp_allreduce as T
-from verity.definitions.registry import tp_allreduce_check as K
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry import tp_allreduce as T
+from verity_vllm.definitions.registry import tp_allreduce_check as K
 
 SCHEMA = "verity-vllm/tp4-nccl-tree-capture/v1"
 RECORD = "tp4_nccl_tree_capture.json"
@@ -140,7 +140,7 @@ def _replay(capture: str, step: int, items: list, word: bool) -> list[dict]:
     from verity.circuits import evaluation as E
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import bits as BS
-    from verity.definitions.registry import boolean_tp_allreduce as BA
+    from verity_vllm.definitions.registry import boolean_tp_allreduce as BA
 
     dumps = [torch.load(Path(capture) / f"coll.rank{r}.step{step}.pt", map_location="cpu", mmap=True, weights_only=True)
              for r in range(WORLD)]

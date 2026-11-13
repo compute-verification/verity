@@ -26,10 +26,10 @@ import torch
 from verity.circuits.ops import scalar as SC
 from verity.circuits.refs import Coll, Strided, broadcast
 from verity.circuits.types import Array, Value
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as R
-from verity.definitions.registry import torch_words as W
-from verity.definitions.registry.dsv4_decode_indices import gather_i32
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as R
+from verity_vllm.definitions.registry import torch_words as W
+from verity_vllm.definitions.registry.dsv4_decode_indices import gather_i32
 from verity_vllm.program.frontend.rules.training_emit import (_DT, _alpha, _batch, _bits, _broadcast, _const, _converted, _ew,
                                                               _flat, _from_bits, _operand, _operand_ok, _ref, _shape,
                                                               _static_coll, _tokens, _TrainRule, _tree, _word_ew, _word_ok,

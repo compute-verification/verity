@@ -9,7 +9,7 @@ the task list's build, nor an earlier target's check):
   name and content stand for), every path it only probed (``os.stat``: whether it was a file, a directory or absent; when
   `inspect` or `linecache` probes a loaded module's source file, the module, by its name), every library built in the tree
   that it loaded (``ctypes.dlopen``: by its bytes), and the sources of every C++ model it called (`MODEL`, which each call of a
-  `verity.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
+  `verity_vllm.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
   loaded it), and of every one its process, or one it was forked from, called before it ended (`_CALLED`): a process-wide memo
   of a model's result, filled by another target's check or a binding's build, hands it the result without a call;
 - the module of every function that ran (``sys.monitoring``: the first start or resume of each code object in the recording),
@@ -174,7 +174,7 @@ _LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
 UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
 #: the audit event each call of a C++ model raises with the files its library is built from
-#: (`verity.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
+#: (`verity_vllm.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
 MODEL = "verity.numerics.model"
 #: the sources in the tree of every C++ model this process, or one it was forked from, called while tracing (`MODEL`): a
 #: process-wide memo of a model's result hands it to a later check or build without a call, so every recording holds them all
@@ -427,7 +427,7 @@ def _importing() -> bool:
 
 #: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
 #: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them
-_ENUMERATORS = frozenset({("verity.definitions.registry.catalog", "load"), ("verity.definitions.boolean", "_load")})
+_ENUMERATORS = frozenset({("verity_vllm.definitions.registry.catalog", "load"), ("verity_vllm.definitions.boolean", "_load")})
 
 
 def _enumerator(f) -> bool:

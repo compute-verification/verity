@@ -31,12 +31,12 @@ from verity.circuits.parts import Part, n_members
 from verity.circuits.program import is_input
 from verity.circuits.query_ast import GateSet, evaluate, parse
 from verity.circuits.refs import runs as ref_runs
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import moe as MOE
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as R
+from verity_vllm.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import moe as MOE
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as R
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.errors import FrontendError

@@ -3,12 +3,12 @@ of a bf16 tensor (GemmaRMSNorm without residual: `x * torch.rsqrt(variance + eps
 the `[M,1]` operand broadcast along the row: one FMUL per element, RN.  The widening is a Transparent noop, so the definition
 reads the bf16 source; `s` is the row's `[1]` cell of the `[M,1]` operand (PerRow).
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.dense.ScaleRowBf16`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.definitions.registry.dense.ScaleRowBf16`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
 
-from verity.definitions.registry.dense import ScaleRowBf16
+from verity_vllm.definitions.registry.dense import ScaleRowBf16
 
 SEMANTIC_ID = "dense/ScaleRowBf16@v1"
 

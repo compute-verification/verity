@@ -77,7 +77,7 @@ class Place(NamedTuple):
 
 @cache
 def _plan(T: int, NS: int, BN: int, DV: int) -> tuple[Place, ...]:
-    from verity.definitions.registry.sparse_mla_split import check_split_statics, combine_cols, split_blocks
+    from verity_vllm.definitions.registry.sparse_mla_split import check_split_statics, combine_cols, split_blocks
 
     check_split_statics(T, NS)
     out: list[Place] = []
@@ -101,7 +101,7 @@ def _plan(T: int, NS: int, BN: int, DV: int) -> tuple[Place, ...]:
 
 @cache
 def _places(T: int, NS: int, BN: int, DV: int) -> tuple[Place, ...]:
-    from verity.definitions.registry.sparse_mla_split import combine_cols, split_blocks
+    from verity_vllm.definitions.registry.sparse_mla_split import combine_cols, split_blocks
 
     out = list(_plan(T, NS, BN, DV))
     whole = {(p.key, p.split, p.col): j for j, p in enumerate(out)}
@@ -145,7 +145,7 @@ def _places(T: int, NS: int, BN: int, DV: int) -> tuple[Place, ...]:
 def _cols(p: Place, DV: int) -> int:
     """The columns of place ``p``'s column block in a row of DV output columns: a values unit's, an end's or a combine's G,
     a whole head's end's DV."""
-    from verity.definitions.registry.sparse_mla_split import combine_cols
+    from verity_vllm.definitions.registry.sparse_mla_split import combine_cols
 
     if p.key[0] in ("values", "split"):
         return int(p.key[-1])
@@ -184,7 +184,7 @@ def kind(tp: Template) -> str:
 def _key(tp: Template, DV: int) -> tuple:
     """The key of the places template ``tp`` holds in a row of DV output columns: an end or a combine on fewer columns than
     the row's whole key blocks end in is a chain of values units'."""
-    from verity.definitions.registry.sparse_mla_split import combine_cols
+    from verity_vllm.definitions.registry.sparse_mla_split import combine_cols
     from verity_vllm.query.program_view import spec_statics
 
     if (hit := _KEYS.get((tp.id, DV))) is None:
@@ -235,9 +235,9 @@ def cuts(tp: Template) -> dict[str, int] | None:
 def _twins(statics: dict[str, Any], what: str) -> tuple[Callable, Callable, float]:
     """A row's dot step, inverse and scale; ``statics`` as a binding holds them or as the record spells them (every value a string,
     SCALE ``{"f64":"<hex>"}``)."""
-    from verity.definitions.numerics import derived_rows as D
-    from verity.definitions.numerics.ir_rows import f64_statics
-    from verity.definitions.numerics.kernel_registry import prim_static
+    from verity_vllm.definitions.numerics import derived_rows as D
+    from verity_vllm.definitions.numerics.ir_rows import f64_statics
+    from verity_vllm.definitions.numerics.kernel_registry import prim_static
 
     dot, inv = prim_static(statics, "DOT", what), prim_static(statics, "INV", what)
     if dot not in D.TC_DOT16_BY_PRIM or inv not in D.INV_SUM_BY_PRIM:
@@ -249,7 +249,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
          slices: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """Member ``m``'s units (the module's order and ports), every port its elements' bytes in u16 words, the row's argument groups
     read by ``slices`` (`serving_rows._slices`); one index entry per row."""
-    from verity.definitions.numerics.sparse_mla_split_twins import combine_rows, head_end_rows, split_chain_rows, split_end_rows
+    from verity_vllm.definitions.numerics.sparse_mla_split_twins import combine_rows, head_end_rows, split_chain_rows, split_end_rows
 
     tp = template(m.template)
     k = kind(tp)

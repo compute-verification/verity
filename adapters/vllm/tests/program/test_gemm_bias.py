@@ -27,10 +27,10 @@ from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm_ruleset
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.numerics import rows as RK
-from verity.definitions.registry import b1, gemm_bias, hopper
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.registry import b1, gemm_bias, hopper
 from verity_vllm.program.frontend import targets as TG
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 from verity_vllm.query import required as RQ
 from verity.circuits import word as W
 

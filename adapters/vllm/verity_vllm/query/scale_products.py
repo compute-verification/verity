@@ -16,9 +16,9 @@ from collections import Counter
 from functools import lru_cache
 from typing import Any, Callable, Mapping
 
-from verity.definitions.registry import fp8
-from verity.definitions.registry import fp8_vocab
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import fp8
+from verity_vllm.definitions.registry import fp8_vocab
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.query.manifest.format import query_id_digest
 

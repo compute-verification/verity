@@ -13,8 +13,8 @@ from verity.circuits.defs import bind
 from verity.circuits.ops import scalar as SC
 from verity.circuits.refs import Coll, Strided
 from verity.circuits.types import Array
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as R
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as R
 from verity_vllm.program.frontend.rules.training_emit import (BIT, F32, _batch, _const, _ones, _operand_ok, _per_row, _rows, _shape,
                                                               _TrainRule, aten)
 from verity_vllm.program.frontend.rules.training_views import _info

@@ -16,7 +16,7 @@ from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire.inductor_templates import Unmodelled
 from verity_vllm.engine.profiles.devices import CARD, NO_CARD
 from verity_vllm.pipeline import served_match
-from verity.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
 #: a GQA model's attention (query heads, KV heads, head dim) at head dim 64 and the cc 12.0 device's SM count
 HEADS, SMS = (32, 8, 64), 188

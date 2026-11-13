@@ -15,7 +15,7 @@ import pytest
 
 from verity.protocols.spot.verifier.one_stage import proofs as PF
 from verity.circuits.codec import descriptor_id
-from verity.definitions import boolean as BB
+from verity_vllm.definitions import boolean as BB
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 

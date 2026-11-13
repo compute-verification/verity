@@ -14,7 +14,7 @@ def specialization(fam: str, statics: dict[str, Any]):
     `{"fn": id}` or as the bare id) resolve to the registered Definition they name, a specialized id (`READ`'s
     `EmbeddingRead_v1{V=256,H=3072}`) to its family bound to its own record."""
     from verity.circuits.codec import lookup_primitive
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     reg, _errors = load()
     d = reg.defs.get(fam)
     if d is None:

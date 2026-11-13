@@ -23,7 +23,7 @@ from verity_vllm.program.frontend.derive import Unsupported, derive, derive_repo
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 

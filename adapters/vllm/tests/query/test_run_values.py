@@ -110,7 +110,7 @@ def test_a_descriptors_last_returned_leaves_are_its_checks():
     from verity.circuits.program import Program
     from verity.circuits.refs import tuple_of
     from verity.circuits.types import Tuple, Value
-    from verity.definitions.registry import prims
+    from verity_vllm.definitions.registry import prims
 
     i32 = Value(32)
     checked = CompositeDefinition("QChecked", 1, (), lambda S: ((("a", i32), ("b", i32)), Tuple(i32, Value(1))),

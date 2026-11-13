@@ -11,8 +11,8 @@ import pytest
 
 from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
-from verity.definitions.registry import sampling as SM
-from verity.definitions.registry import sampling_vocab
+from verity_vllm.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import sampling_vocab
 from verity.circuits.cut import call_scope
 from verity.circuits import word as W
 

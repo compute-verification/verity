@@ -12,7 +12,7 @@ from verity_vllm.pipeline import ingress_rows as IR, serving_rows as SRW
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1 as B1
+from verity_vllm.definitions.registry import b1 as B1
 from verity.commitments.windows import interface as IF
 
 FN = bind(B1.BiasAdd, N=8)

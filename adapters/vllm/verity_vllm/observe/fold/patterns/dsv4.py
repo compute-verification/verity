@@ -32,12 +32,12 @@ from verity_vllm.program.frontend.rules.vllm_bindings.fp8 import FP8_QUANT_PINS
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import QKV_RMS_PINS
 from verity_vllm.program.frontend.rules.vllm_bindings.triton_launches import QKV_ARGS, TRITON_DIVISIBILITY, qkv_rms_launch
 from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY, post_pre_path
-from verity.definitions.numerics.mhc_twin import tf32_num_split
-from verity.definitions.registry import dsv4_compressor as C
-from verity.definitions.registry import dsv4_indexer as I
-from verity.definitions.registry import dsv4_qnorm_insert as Q
-from verity.definitions.registry.dsa_norm import check_block
-from verity.definitions.registry.fp8 import weight_blocks
+from verity_vllm.definitions.numerics.mhc_twin import tf32_num_split
+from verity_vllm.definitions.registry import dsv4_compressor as C
+from verity_vllm.definitions.registry import dsv4_indexer as I
+from verity_vllm.definitions.registry import dsv4_qnorm_insert as Q
+from verity_vllm.definitions.registry.dsa_norm import check_block
+from verity_vllm.definitions.registry.fp8 import weight_blocks
 
 LAYER = re.compile(r"model\.layers\.(\d+)")
 QNORM_INSERT_OP = "_C.fused_deepseek_v4_qnorm_rope_kv_rope_quant_insert"

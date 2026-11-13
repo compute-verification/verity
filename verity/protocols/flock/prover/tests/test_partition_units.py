@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("verity.definitions.registry")
+pytest.importorskip("verity_vllm.definitions.registry")
 from circuit_check import targets as TG  # noqa: E402
 from verity.circuits import partition_object as PO  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
@@ -17,7 +17,7 @@ from verity_flock import partition_units as PU  # noqa: E402
 @pytest.fixture(scope="module")
 def tiny():
     TG.load_registries()
-    from verity.definitions.registry import b1
+    from verity_vllm.definitions.registry import b1
 
     return Program(bind(b1.Serve, C=TG.TINY, LP=3, STEPS=2))
 

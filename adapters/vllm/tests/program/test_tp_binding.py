@@ -18,8 +18,8 @@ from verity.circuits.defs import Builder, bind
 from verity.circuits.ops import gemm as G
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array
-from verity.definitions.registry import b1_tp2 as TP
-from verity.definitions.registry.prims import BF16
+from verity_vllm.definitions.registry import b1_tp2 as TP
+from verity_vllm.definitions.registry.prims import BF16
 
 N, ROWS = 16, 2
 GEMM = bind(G.Gemm, K=N, N=N, **G.GEMM_AMPERE)

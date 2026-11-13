@@ -6,12 +6,12 @@ computed once on the host in f32 (correctly rounded: `f32(1)/f32(30)` = 0x3D0888
 true-division form and found all 65,282 non-NaN words equal), so the two readings are indistinguishable here; the body
 follows ATen's actual algorithm.
 
-PROMOTED: the Definition now lives in the accepted registry (`verity.definitions.registry.dense.Bf16DivScalar`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity_vllm.definitions.registry.dense.Bf16DivScalar`, bound by the pinned `b1-eager-v3` vocabulary) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
 
-from verity.definitions.registry.dense import Bf16DivScalar, reciprocal_bits
+from verity_vllm.definitions.registry.dense import Bf16DivScalar, reciprocal_bits
 
 SEMANTIC_ID = "dense/Bf16DivScalar@v1"
 

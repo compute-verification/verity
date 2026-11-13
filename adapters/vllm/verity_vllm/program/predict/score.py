@@ -265,7 +265,7 @@ def equivalence(pred_program, traced_desc: dict) -> dict:
     from verity.circuits.codec import decode_program
     from verity.circuits.defs import REGISTRY
     from verity_vllm.program import descriptor_equivalence as DE
-    from verity.definitions.registry.catalog import load as load_registry
+    from verity_vllm.definitions.registry.catalog import load as load_registry
     load_registry()
     t0 = time.time()
     try:

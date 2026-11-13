@@ -30,7 +30,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.predict.build import BF16, I32, build_program, decoder
 from verity_vllm.program.predict.common import _Peers
-from verity.definitions.replay import replayer
+from verity_vllm.definitions.replay import replayer
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
 

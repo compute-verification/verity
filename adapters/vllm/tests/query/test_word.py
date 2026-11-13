@@ -237,7 +237,7 @@ def test_a_dead_gate_joins_the_unit_it_reads():
 @pytest.mark.parametrize("name,E,committed", [("MoeRouterTopKOrdered", 64, 2 * 64 + 2), ("MoeRouterTopKOrderedNorm", 128, 2 * 128 + 2 + 8 + 1)])
 def test_the_ordered_router_commits_its_softmax_once_and_recomputes_nothing(name, E, committed):
     from verity.circuits.defs import bind
-    from verity.definitions.registry import moe
+    from verity_vllm.definitions.registry import moe
     f = bind(getattr(moe, name), E=E, TOPK=8, VPT=8)
     G = W.Graph(f)
     R = W.units(G, 16, 32)
@@ -275,7 +275,7 @@ def test_a_call_that_only_rearranges_bits_returns_its_inputs():
     # every gate is wiring: the returned values are the committed inputs themselves (not committed and unread)
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.types import Array
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
     f = bind(CompositeDefinition("Widen", 1, ("N",), lambda S: ((("a", Array(S.N, P.BF16)),), Array(S.N, P.F32)),
                                  lambda B, S, a: B.batch(P.Bf16ToF32, a, axes=(0,)), register=False), N=8)
     G = W.Graph(f)
@@ -353,7 +353,7 @@ def _moe(routed: bool, E: int, K: int, N: int, swap: bool):
     """GLM-5.3's MoE expert FP8 GEMM (w13; w2 `routed`) on Hopper's tiles (G = KB = 128), scaled down in E, K and N."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
-    from verity.definitions.registry import fp8_moe_experts as XM
+    from verity_vllm.definitions.registry import fp8_moe_experts as XM
     return bind(XM.MoeExpertFp8GemmW if routed else XM.MoeExpertFp8Gemm, E=E, K=K, N=N, G=128, KB=128, SWAP=swap,
                 DOT=HopperE4m3QgmmaDot32 if swap else HopperE4m3MmaV2Dot32)
 
@@ -363,7 +363,7 @@ def _twice():
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.refs import tuple_of
     from verity.circuits.types import Array, Tuple
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     def body(B, S, x):
         a = B.call(P.F32Add, x[0], x[1])
@@ -374,7 +374,7 @@ def _twice():
 
 def _sampler():
     from verity.circuits.defs import bind
-    from verity.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import sampling as SM
     return bind(SM.GumbelTopPTokenSelect, V=16)
 
 
@@ -383,7 +383,7 @@ def _dead_input():
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.refs import tuple_of
     from verity.circuits.types import Array, Tuple
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.registry import prims as P
 
     def body(B, S, x, y):
         B.call(P.Bf16ToF32, y[0])

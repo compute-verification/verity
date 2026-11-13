@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_marlin_moe`: the Boolean versions of `marlin_moe`'s Definitions agree with the numpy twin
+"""`verity_vllm.definitions.registry.boolean_marlin_moe`: the Boolean versions of `marlin_moe`'s Definitions agree with the numpy twin
 (`kernels.marlin_moe_rows`) and their word Definitions: the group on every code at every scale byte, and its quiet-NaN form; the
 divider on edge and random words; the schedule on random and edge words; the steps on random operands at every special scale byte
 and on special activations, and their halves cut at each word of x, which have exactly the step's gates; the coordinates over every cut
@@ -24,10 +24,10 @@ from verity.circuits.evaluation import bits as BS
 from verity.circuits.program import Program
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.types import Array
-from verity.definitions import boolean as SW
-from verity.definitions.numerics import marlin_moe_rows as MR
-from verity.definitions.registry import boolean_marlin_moe as BM
-from verity.definitions.registry import marlin_moe as MM
+from verity_vllm.definitions import boolean as SW
+from verity_vllm.definitions.numerics import marlin_moe_rows as MR
+from verity_vllm.definitions.registry import boolean_marlin_moe as BM
+from verity_vllm.definitions.registry import marlin_moe as MM
 
 DOT = BG.HopperBF16WgmmaDot16
 I32_EDGES = [0, 1, 2, 3, 7, 0x7FFFFFFF, 0x80000000, 0x80000001, 0xFFFFFFFF, 0xFFFFFFFE, 0xFFFFFFF9]

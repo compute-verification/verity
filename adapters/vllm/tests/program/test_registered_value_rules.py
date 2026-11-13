@@ -13,9 +13,9 @@ from verity.circuits.constants import program_data
 from verity.circuits.program import Program
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, vllm_ruleset
-from verity.definitions.registry import dense as DN
-from verity.definitions.registry import prims as P
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.registry import dense as DN
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 
 BF = torch.bfloat16
 

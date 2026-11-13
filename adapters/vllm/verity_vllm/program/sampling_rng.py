@@ -14,7 +14,7 @@ generator: for every logits row it evaluates, inside the kernel, a *pure functio
 `sample/states.py`), and `pos` is the absolute position of the sampled token.  This module recomputes the first two lines with
 numpy integers and one IEEE fp32 multiply (Triton's `python/triton/language/random.py`, v3.7.1, transcribed line by line):
 Philox, the int32 -> fp32 conversion and the `* 2**-31` scaling are exact.  The clamp, the logs and the argmax are the sampler
-Definition's (`verity/definitions/registry/sampling.py`), which the value check of a stochastic row evaluates
+Definition's (`adapters/vllm/verity_vllm/definitions/registry/sampling.py`), which the value check of a stochastic row evaluates
 (`check.replay.stoch_recompute`) with the snapshot readers at the end of this module.
 """
 

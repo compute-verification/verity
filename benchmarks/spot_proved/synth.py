@@ -19,7 +19,7 @@ TREES = None
 
 
 def blocks():
-    from verity.definitions.registry import tp_allreduce as AR
+    from verity_vllm.definitions.registry import tp_allreduce as AR
     trees = json.dumps([AR.GLM53_H200_TREE] * 8, separators=(",", ":"))
     return {
         "SparseMlaSplitPart_T64": 'SparseMlaSplitPart_v1{T=64,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'

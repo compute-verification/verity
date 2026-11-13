@@ -22,7 +22,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 import torch
 
-from verity.definitions.registry.dsa_topk import waksman_settings
+from verity_vllm.definitions.registry.dsa_topk import waksman_settings
 from verity_vllm.query.manifest.format import RUN_FAMILY
 
 

@@ -18,7 +18,7 @@ from verity_vllm.observe.fold.profiles import profile_module_for_case
 
 gemma = importlib.import_module("verity_vllm.observe.fold.profiles.derived_GEMMA2_2B")
 phi3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_PHI3_MINI")
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 PROFILES = REPO / "workloads"

@@ -19,8 +19,8 @@ import torch
 from tests.properties import dsv4_mhc_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import mhc_twin as W
-from verity.definitions.registry import mhc as R
+from verity_vllm.definitions.numerics import mhc_twin as W
+from verity_vllm.definitions.registry import mhc as R
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 SMALL = {"HC": 2, "H": 64, "TH": 2, "TH_HEAD": 2, "TN": 2, "REPEAT": 2, "EPS": 1e-6, "HC_EPS": 1e-6}

@@ -18,7 +18,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from verity_vllm.engine import hooks
-from verity.definitions.numerics import fp8_twins
+from verity_vllm.definitions.numerics import fp8_twins
 from verity_vllm.query import scale_products as SP
 
 

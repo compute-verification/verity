@@ -38,8 +38,8 @@ this window).  Nothing is claimed exact beyond the R = 2 statement above.
 from __future__ import annotations
 
 from verity.circuits.defs import bind, composite
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.prims import BF16
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.prims import BF16
 from verity.circuits.types import Array
 
 SEMANTIC_ID = "tp2/AllReduceSumBf16@v1"

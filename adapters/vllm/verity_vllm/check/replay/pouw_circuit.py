@@ -55,7 +55,7 @@ from verity.protocols.pouw.verifier.protocol import DomainError
 
 from verity.circuits.evaluation import evaluate
 from verity_vllm.check.replay.delegate import Place, delegated
-from verity.definitions.numerics.kernel_registry import Declined
+from verity_vllm.definitions.numerics.kernel_registry import Declined
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import native as PN

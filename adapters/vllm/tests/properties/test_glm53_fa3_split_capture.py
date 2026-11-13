@@ -14,10 +14,10 @@ import pytest
 
 from tests.properties import glm53_fa3_split_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import sparse_mla_split_twins as TW
-from verity.definitions.registry import sparse_mla as M
-from verity.definitions.registry import sparse_mla_split as W
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
+from verity_vllm.definitions.registry import sparse_mla as M
+from verity_vllm.definitions.registry import sparse_mla_split as W
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 U32 = np.uint32

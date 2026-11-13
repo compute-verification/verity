@@ -27,8 +27,8 @@ import pytest
 from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
 from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as DOT
-from verity.definitions.registry import dsa as D
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import dsa as D
+from verity_vllm.definitions.registry import prims as P
 from tests.program.test_fp8_moe import _ffma, _fmul, _q, _rn
 
 SIGN, INF, M32 = 1 << 31, 0x7F800000, 0xFFFFFFFF

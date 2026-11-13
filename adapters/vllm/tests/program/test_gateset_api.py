@@ -13,7 +13,7 @@ from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.layout import FunctionCall
 from verity.circuits.parts import Part, n_members
 from verity.circuits.program import Program
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 from verity.circuits import query_ast as G
 from verity.circuits.query_ast import GateSet, QueryError, evaluate
 from verity.circuits.query import parse, query

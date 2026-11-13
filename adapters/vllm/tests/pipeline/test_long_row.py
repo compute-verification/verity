@@ -35,7 +35,7 @@ from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, Tuple
 from verity.commitments import history as HT
 from verity.commitments.gates.embedding import read
-from verity.definitions.registry import dsa_topk_reads as R
+from verity_vllm.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_links as IL, interior_rows as IR
 from verity_vllm.pipeline import long_row as LR
 

@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import driver as SR, index as IX, opening as OP
-from verity.definitions.numerics import rows as RK
+from verity_vllm.definitions.numerics import rows as RK
 from tests.check.test_sampled_replay import Honest, _bf16, _program, _programs, _weights
 
 # needs the rope / attention test Program (`_program(rope=...)`); a tree without it cannot run this end to end

@@ -46,7 +46,7 @@ def test_the_digest_is_pinned():
 def test_every_core_primitive_declares_only_library_tables():
     from verity.circuits.defs import PrimitiveDefinition
     from verity.circuits.ops import mufu  # noqa: F401  (registers the MUFU primitives)
-    core = ("verity.circuits.", "verity.definitions.circuits.", "verity.circuits.ops.", "verity.circuits.silicon.")
+    core = ("verity.circuits.", "verity_vllm.definitions.circuits.", "verity.circuits.ops.", "verity.circuits.silicon.")
 
     names = {t.name for t in L.TABLES}
     declared = {d.id: d.tables for d in REGISTRY.defs.values()

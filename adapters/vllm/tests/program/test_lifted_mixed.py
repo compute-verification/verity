@@ -28,10 +28,10 @@ from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import REGISTRY, bind, composite
 from verity_vllm.program import workload as W
 from verity.circuits.refs import array_of, coll_concat, tuple_of
-from verity.definitions.registry import b1, lifted as L
+from verity_vllm.definitions.registry import b1, lifted as L
 from verity_vllm.program.lifting import lifted_compose
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.b1 import weights_type
+from verity_vllm.definitions.numerics import serve3_reference as ref
+from verity_vllm.definitions.registry.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
 from verity.circuits.types import Array, Value
 

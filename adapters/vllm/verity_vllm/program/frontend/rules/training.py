@@ -40,12 +40,12 @@ from verity.circuits.defs import bind
 from verity.circuits.ops import scalar as SC
 from verity.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.circuits.types import Array, Value
-from verity.definitions.registry import int8_exact as IE
-from verity.definitions.registry import moe as MOE
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import ref_prims as R
-from verity.definitions.registry import sampling as SM
-from verity.definitions.registry import torch_embedding_f32 as TEF
+from verity_vllm.definitions.registry import int8_exact as IE
+from verity_vllm.definitions.registry import moe as MOE
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry import ref_prims as R
+from verity_vllm.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import torch_embedding_f32 as TEF
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.training_attention import FlashSdpa
 from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _alpha, _batch, _bits, _call, _const, _ew, _flat,

@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.boolean_dense`: the Boolean versions of `registry.dense`'s element-wise rows agree with their
+"""`verity_vllm.definitions.registry.boolean_dense`: the Boolean versions of `registry.dense`'s element-wise rows agree with their
 word Definitions (`trace.word_of`): the rows whose element reads one bf16 word on every word at Gemma-2's constants, the others on
 every pair of special words, on random words and on products and sums at f32's subnormal and overflow ends. They are pinned by
 gate count and program digest, a shared scalar's gates and its element's are the ANDs of the operation they cut, and they pass
@@ -22,9 +22,9 @@ from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.boolean import trace as TR
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.silicon import fp
-from verity.definitions.registry import b1
-from verity.definitions.registry import boolean_dense as BD
-from verity.definitions.registry import dense as D
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import boolean_dense as BD
+from verity_vllm.definitions.registry import dense as D
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {

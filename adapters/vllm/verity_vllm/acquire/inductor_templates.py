@@ -37,8 +37,8 @@ from verity.circuits.defs import bind
 from verity.circuits.types import Array, Tuple, Value
 from verity_vllm.acquire.inductor_texts import (ADD2_NORM, ADD2_NORM_FINAL, ADD_NORM, ADD_NORM_COPY, EMBED_NORM, QK_NORM_ROPE, ROPE_QK,
                                                 SILU_MUL)
-from verity.definitions.registry import b1
-from verity.definitions.registry import inductor as IR
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import inductor as IR
 
 
 class Unmodelled(ValueError):

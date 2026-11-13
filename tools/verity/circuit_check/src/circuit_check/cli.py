@@ -1342,10 +1342,10 @@ def _ambient_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     return 1 if any(t["failures"] for t in rep["targets"]) else 0
 
 
-#: what `prebuild` runs in a process of its own: every C++ model of `verity.definitions.numerics` (`twins.preload`), then the
+#: what `prebuild` runs in a process of its own: every C++ model of `verity_vllm.definitions.numerics` (`twins.preload`), then the
 #: registries, which build there whatever else they build on first use
 PREBUILD = ("import json\n"
-            "from verity.definitions.numerics import twins\n"
+            "from verity_vllm.definitions.numerics import twins\n"
             "from circuit_check import targets\n"
             "built = twins.preload()\n"
             "targets.load_registries()\n"

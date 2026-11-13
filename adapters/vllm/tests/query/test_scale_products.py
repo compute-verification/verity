@@ -11,8 +11,8 @@ import pytest
 
 from tests.check.test_sampled_replay_fp8 import G, H, I, _program_fp8
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
-from verity.definitions.registry import fp8
-from verity.definitions.numerics import fp8_twins
+from verity_vllm.definitions.registry import fp8
+from verity_vllm.definitions.numerics import fp8_twins
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query.manifest import format as fmt
 

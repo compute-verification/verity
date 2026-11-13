@@ -41,8 +41,8 @@ import numpy as np
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.numerics import rows as RK
-from verity.definitions.numerics import softcap_rows as SR
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.numerics import softcap_rows as SR
 from verity_vllm.properties.fa_tap_exactness import PAGE, cases as tap_cases
 from verity_vllm.properties.record import seal as seal_record
 
@@ -118,10 +118,10 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.circuits.evaluation.reference import evaluate
     from verity.circuits.defs import bind
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity.definitions.numerics import derived_rows as DR
-    from verity.definitions.registry import b1, hopper
-    from verity.definitions.registry import fa2_softcap as F2S
-    from verity.definitions.registry import prims as P
+    from verity_vllm.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.registry import b1, hopper
+    from verity_vllm.definitions.registry import fa2_softcap as F2S
+    from verity_vllm.definitions.registry import prims as P
     from verity_vllm.program.frontend import targets as TG
 
     table = np.memmap(job["tanh_table"], dtype="<u4", mode="r")

@@ -13,8 +13,8 @@ from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program import prune as PR
 from verity_vllm.program.prune import (_read, _renumbered, batched_form, dead_free, dead_units, kept_records, narrowed, swapped,
                                        without_dead_units)
-from verity.definitions.boolean import boolean_version
-from verity.definitions.registry import b1, gemm_bias, topp_words as TW
+from verity_vllm.definitions.boolean import boolean_version
+from verity_vllm.definitions.registry import b1, gemm_bias, topp_words as TW
 
 from verity.circuits.defs import Body, BodyNode, bind
 from verity.circuits.evaluation.reference import evaluate

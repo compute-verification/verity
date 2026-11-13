@@ -1,6 +1,6 @@
 """The frontend rule for the STOCHASTIC token select: `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p,
 pos, S)` -> one `GumbelTopPTokenSelect_v2{V,S}(logits_row, top_p, seed, pos, temp, Const32[S])` per logits row
-(verity.definitions.registry.sampling).
+(verity_vllm.definitions.registry.sampling).
 
 What the op stands for (vLLM d9105ea80 `Sampler.sample` for a request whose `SamplingParams` are temperature T > 0, top_p < 1, top_k 0,
 an explicit `seed`, no penalties / logit bias / min_p / logprobs):
@@ -84,7 +84,7 @@ class GumbelTopPTokenSelectRule(OpRule):
             return f"top_p {top_p!r} is not a static number in (0, 1]"
         if isinstance(pos, bool) or not isinstance(pos, int) or pos < 0:
             return f"pos {pos!r} is not a static non-negative int"
-        from verity.definitions.registry.sampling import SPLIT_COUNTS
+        from verity_vllm.definitions.registry.sampling import SPLIT_COUNTS
         if isinstance(S, bool) or not isinstance(S, int) or S not in SPLIT_COUNTS:
             return f"S {S!r} is not a launched split count {SPLIT_COUNTS} (the registered constant)"
         return True

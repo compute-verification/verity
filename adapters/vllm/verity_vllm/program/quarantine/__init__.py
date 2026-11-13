@@ -13,7 +13,7 @@ Admission (gate G4 + `verity_vllm.properties.quarantine_lint` + `verity_vllm.pro
   4. differential: `difftest produce` (production op, GPU) + `difftest check` (Verity body) bit-exact on randomized inputs
      including the edge kinds zeros / max / subnormal / alternating -> `quarantine.json`;
   5. every specialization of the definition that appears in the target run is compared at least once by Tier A (replay);
-  6. only then may an accepted profile use the definition.  Promotion out of quarantine into `verity.definitions.registry` is an
+  6. only then may an accepted profile use the definition.  Promotion out of quarantine into `verity_vllm.definitions.registry` is an
      integrator move.
 
 Sub-packages must import only `verity.circuits.*` and the standard library's math / dataclasses / typing.

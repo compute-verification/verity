@@ -779,7 +779,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                   "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
                                                                   **({"entries": list(entries)} if entries else {}), **edge_config(edge),
                                                                   **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
-    from verity.definitions.replay import replayer
+    from verity_vllm.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",
                                register=False)

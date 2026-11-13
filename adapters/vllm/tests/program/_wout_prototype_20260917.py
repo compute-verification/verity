@@ -10,7 +10,7 @@ from verity.circuits.layout import Scope, resolve
 from verity.circuits.query_ast import oracle_gateset, oracle_out
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Strided, runs
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 
 def node_leaf_gate(sc: Scope, j: int, leaf: int) -> int:
@@ -187,7 +187,7 @@ if __name__ == "__main__":
         print("MoE skipped:", type(e).__name__, str(e)[:120])
     # 5. Gumbel: the Const64 gates
     try:
-        from verity.definitions.registry import sampling as G
+        from verity_vllm.definitions.registry import sampling as G
         P5 = Program(bind(G.GumbelArgmaxBf16, V=8, SEED=12345, POS=3))
         sc5 = P5.circuit.root_scope
         ok5, w5 = check(P5, sc5, body_parts(sc5), "GumbelArgmaxBf16_v1{V=8} nodes")

@@ -25,8 +25,8 @@ from verity.commitments.windows import rows as CS
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
-from verity.definitions import boolean as BB
-from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
+from verity_vllm.definitions import boolean as BB
+from verity_vllm.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 from verity.circuits.call_scope import specialization
 from verity_vllm.query.program_view import spec_base, spec_statics
 

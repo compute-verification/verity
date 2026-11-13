@@ -28,7 +28,7 @@ from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager_qwen15 a
 L = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B")
 Q = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN05")
 B7 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B7")
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"

@@ -41,7 +41,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.gates import embedding as E
-from verity.definitions.registry import io_shell as IO
+from verity_vllm.definitions.registry import io_shell as IO
 from verity.commitments.windows import interface as IF
 
 PROGRAM = "test/model"

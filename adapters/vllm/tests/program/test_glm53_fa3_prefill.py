@@ -15,10 +15,10 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import fa2_relation, fa3_model
-from verity.definitions.registry import attention_vocab, b1, hopper
-from verity.definitions.registry import fa3_check_inf as F3
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import fa2_relation, fa3_model
+from verity_vllm.definitions.registry import attention_vocab, b1, hopper
+from verity_vllm.definitions.registry import fa3_check_inf as F3
 
 CMAP = Path(__file__).resolve().parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json"
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}

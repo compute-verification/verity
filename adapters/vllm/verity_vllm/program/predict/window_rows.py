@@ -58,9 +58,9 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.gates import embedding as E
-from verity.definitions.numerics.rows import ROWS
-from verity.definitions.numerics.token_select_rows import token_select_chunk_bests
-from verity.definitions.registry import io_shell as IO
+from verity_vllm.definitions.numerics.rows import ROWS
+from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
+from verity_vllm.definitions.registry import io_shell as IO
 from verity.commitments.windows import interface as IF
 from verity_vllm.check.replay.checks import check_rows
 from verity_vllm.protocols.pouw.h1 import registered as H1R

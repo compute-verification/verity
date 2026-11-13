@@ -21,8 +21,8 @@ import pytest
 import torch
 
 from tests.check.test_commit_verdict_replay_seed_of_record import BASE, ROOT_FORM, RUN_ROOT, SEED_ROOT
-from verity.definitions.numerics import rows as RK
-from verity.definitions.registry.dsa_topk import canonical_ok, topk_set, waksman_apply, waksman_settings, waksman_switches
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.registry.dsa_topk import canonical_ok, topk_set, waksman_apply, waksman_settings, waksman_switches
 from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.replay import checks as CK, driver as DR, index as IX
 from verity_vllm.check.replay.coverage import QUERY_FAMILY_MECHANISM

@@ -43,7 +43,7 @@ def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[tuple[str, str]]:
     family with a row kernel (`rows.ROWS`) or a protocol's delegate, and ``bound`` the Definition its Build's descriptor holds
     the row's Call under, a Boolean Build's row's ``bits`` and otherwise ``spec``."""
     from verity_vllm.check.replay.delegate import DELEGATES
-    from verity.definitions.numerics.rows import ROWS
+    from verity_vllm.definitions.numerics.rows import ROWS
     from verity_vllm.query.manifest.format import spec_family
 
     return sorted({(str(r["spec"]), str(r.get("bits") or r["spec"])) for r in rows
@@ -76,8 +76,8 @@ def kernel_refusal(specs: Iterable[tuple[str, str]]) -> str | None:
     family's row kernel against the reference by core `self_check` (`kernel_registry.check`; module docstring), once a family
     per process."""
     from verity_vllm.commit import challenge as CH
-    from verity.definitions.numerics import kernel_registry as KR
-    from verity.definitions.numerics.rows import KERNEL, ROWS
+    from verity_vllm.definitions.numerics import kernel_registry as KR
+    from verity_vllm.definitions.numerics.rows import KERNEL, ROWS
     from verity_vllm.query.manifest.format import spec_family
 
     bad: list[str] = []
@@ -98,7 +98,7 @@ def refusal(program_dir: str, digest: str, specs: Iterable[tuple[str, str]]) -> 
     more than that: the replay does not hold that a Boolean Definition computes its word; each lowering's tests and
     `circuit-check` hold it."""
     from verity.circuits.codec import program_digest
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
 
     specs = list(specs)
     if not specs:
