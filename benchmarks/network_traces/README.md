@@ -222,12 +222,15 @@ protocol's verdict.
 
 - The filter keeps the flows with the server's address on one side and nothing else, so a shared link's other traffic
   never enters the file: one `or` clause for each further address (`ip6 host` for an IPv6 one, which `ip host` never
-  keeps), and `vlan and (…)` on a link whose frames carry a VLAN tag. A capture of every interface (`-i any`) is a
-  Linux cooked one, where `tcpdump` refuses a filter that holds `vlan`, and the filter without it keeps a frame under
-  one tag and none under two. The reader walks the one tag a cooked v1 capture holds after its header, where the
-  header's type names it (a v2 capture holds nothing of that tag); a second tag can reach either as four bytes
-  before the IP header that no type names, and the reader refuses a cooked frame whose type says IP where no IP
-  header starts by that name. The reader refuses a file that still holds a flow between two addresses it wasn't
+  keeps), and, on an interface captured by its name, `vlan and (…)` where its frames carry a VLAN tag and
+  `vlan and vlan and (…)` where they carry two, which `vlan and (…)` doesn't keep. A capture of every interface
+  (`-i any`) is a Linux cooked one, where `tcpdump` refuses a filter that holds `vlan`, and the filter without it
+  keeps a frame under one tag and none under two. The reader walks the one tag a cooked v1 capture holds after its
+  header, where the header's type names it (a v2 capture holds nothing of that tag); a second tag can reach either
+  as four bytes before the IP header that no type names, and the reader refuses a cooked frame whose type says IP
+  where no IP header starts by that name. It tells by the first byte there, so an unnamed second tag of priority 2
+  with a VLAN id of 1280 or more (under IPv4's type), or of priority 3 (under IPv6's), its drop-eligible bit clear,
+  is not refused by that name. The reader refuses a file that still holds a flow between two addresses it wasn't
   given; `--skip-foreign` counts and skips them. A flow the filter left out is refused by nothing: the record's bytes
   on it are a difference in each direction, and nothing names the cause.
 - `-s 130` keeps at most each packet's first 130 bytes: every header and, where the headers are shorter (a common
