@@ -54,7 +54,7 @@ def locate(calls: list[dict], tile: tuple[int, int], u: int) -> dict:
             "z_table": c["tables"]["z"], "a_table": c["tables"]["a"]}
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--calls", required=True)
     ap.add_argument("--session", required=True)

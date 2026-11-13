@@ -171,7 +171,10 @@ def test_the_verifier_runs_under_its_allocator_setting_unless_the_caller_sets_it
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
                          program=RUN_ONLY, partition={"program": "p"}, registered=None)
     assert why is None and [(f.accepted, f.why) for f in got] == [(False, "refused")]
-    assert children == [{**os.environ, "MIMALLOC_PURGE_DELAY": want}]
+    (env,) = children
+    wanted = {**os.environ, "MIMALLOC_PURGE_DELAY": want}
+    differ = sorted(k for k in env.keys() | wanted.keys() if env.get(k) != wanted.get(k))
+    assert differ == []
 
 
 #: `Flock/Test/RecordText.lean`'s `printed` vectors and a text it `accepts`, which is its own printing, verbatim (Lean's

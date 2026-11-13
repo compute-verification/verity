@@ -4836,23 +4836,23 @@ def _read_interior(c: dict, x: int) -> dict:
                                                                                "root": read["root"]}}}}}
 
 
-#: The root and domain of the value the interior registers under a link's name, in `_read_linked`.
+#: The root and domain of the value the interior registers under a link's name, `_read_linked`'s by default.
 LINKED_VALUE = {"root": "7f" * 64, "domain": "80" * 64}
 
 
-def _read_linked(c: dict, x: int, kept: bool = False) -> dict:
-    """`c` with its interior registering a value of its first link's name (`LINKED_VALUE`, the link's rows a block for
-    each sampled block), the boundary record then holding no port of that name unless `kept`, and each statement of the
-    linked template reading it at the linked port as round 2 places it, each slot its unit's row of its cell's sampled
-    block, as the verifier of record reports it. By `x`, that read is as placed, at the boundary port, at another root,
-    domain or leaf count, or at the boundary port's rows."""
+def _read_linked(c: dict, x: int, value: dict = LINKED_VALUE, root: str = "00" * 64, kept: bool = False) -> dict:
+    """`c` with its interior registering a value of its first link's name (`value`'s root and domain, the link's rows a
+    block for each sampled block), the boundary record then holding no port of that name unless `kept`, and each
+    statement of the linked template reading it at the linked port as round 2 places it, each slot its unit's row of its
+    cell's sampled block, as the Lean verifier reports it. By `x`, that read is as placed, at the boundary port, at
+    another root (`root`), domain or leaf count, or at the boundary port's rows."""
     links, rows, sample, ss, b = c.get("links"), c.get("rows"), c.get("sample"), c.get("statements"), c.get("boundary")
     if not (isinstance(links, list) and links and isinstance(rows, list) and isinstance(sample, list)
             and isinstance(ss, list) and isinstance(b, dict)):
         return c
     link = links[0]
     per = next(r["per"] for r in rows if r["template"] == link["template"] and r["port"] == link["port"])
-    entry = {"value": link["value"], **LINKED_VALUE, "leaves": len(sample) * per}
+    entry = {"value": link["value"], **value, "leaves": len(sample) * per}
     out = c if kept else {**c, "boundary": {**b, "roots": [r for r in b["roots"] if r["port"] != link["value"]]}}
     reported = dict(c["verdicts"]["lean"].get("registered") or {})
     for k, s in enumerate(ss):
@@ -4861,13 +4861,38 @@ def _read_linked(c: dict, x: int, kept: bool = False) -> dict:
         e = s["registered"]["ports"][link["port"]]
         placed = {**e, **entry, "reads": [None if r is None else sample.index(r // per) * per + r % per
                                           for r in e["reads"]]}
-        read = [placed, e, {**placed, "root": "00" * 64}, {**placed, "domain": "01" * 64},
+        read = [placed, e, {**placed, "root": root}, {**placed, "domain": "01" * 64},
                 {**placed, "leaves": entry["leaves"] + 1}, {**e, **entry}][x]
         out = _second_with(out, k, registered={**s["registered"], "ports": {**s["registered"]["ports"],
                                                                               link["port"]: read}})
         reported[f"{s['template']}/{link['port']}"] = {"value": read["value"], "root": read["root"]}
     return {**out, "interior": {**out["interior"], "registered": [*(out["interior"].get("registered") or []), entry]},
             "verdicts": {**out["verdicts"], "lean": {**out["verdicts"]["lean"], "registered": reported}}}
+
+
+def _supplied_linked(c: dict, schema: str) -> dict:
+    """The root and domain of a value its verifier supplies under `c`'s first link's name, committed in `schema` as
+    `registered.supplied_value` commits one: the link's rows of each sampled block, two 16-bit words each, under the
+    public salts of the interior's program (`supplied_salts`)."""
+    link, prog = c["links"][0], c["interior"]["program"]
+    n = len(c["sample"]) * next(r["per"] for r in c["rows"] if r["template"] == link["template"])
+    reg = G.Registered.commit(prog, link["value"], [[(40503 * i + j) & 0xFFFF for j in range(2)] for i in range(n)],
+                              G.supplied_salts(prog, link["value"], n), schema=schema)
+    return {"root": reg.root.hex(), "domain": reg.domain.domain_id.hex()}
+
+
+def _row_schema(c: dict, schema: str, reference: bool = True) -> dict:
+    """`c` with its first link's port a `schema` row (`row_schema`, as a reads file names a bit row's format) in each
+    statement of the linked template, and in that template's reference reads where `reference`."""
+    t, p = c["links"][0]["template"], c["links"][0]["port"]
+
+    def named(r: dict) -> dict:
+        return {**r, "ports": {**r["ports"], p: {**r["ports"][p], "row_schema": schema}}}
+    out = c
+    for k, s in enumerate(c["statements"]):
+        if s.get("template") == t:
+            out = _second_with(out, k, registered=named(s["registered"]))
+    return {**out, "ref_reads": {**out["ref_reads"], t: named(out["ref_reads"][t])}} if reference else out
 
 
 def _shadowing(c: dict, x: int) -> dict:
@@ -7098,6 +7123,29 @@ def test_round_two_reads_a_linked_port_at_the_value_the_interior_registers_for_i
         got = second_interior_reads(copy.deepcopy(case))
         assert D.replay(SECOND_INTERIOR_READS, case, pieces) == ("output", D.canonical(got)), (want, got)
         assert got == want, (want, got)
+
+
+def test_round_two_reads_a_linked_port_at_a_supplied_row_seg_value(pieces):
+    """A value the interior's verifier supplies under a link's name, committed in `row-seg/v1` as R7 holds a supplied
+    value to the row format its verifier names (`_supplied_linked`), is what round 2 reads the linked port at, Lean's the
+    Python's whole, with the port a `row-seg/v1` row in the session and in its template's reference reads (`_row_schema`).
+    The read at the value's root passes; at the root of the same rows committed in `row/v1` or `row/v2` it is refused
+    (`second-read`), and a session naming the port's rows in another format than its reference reads do is refused
+    (`second-values`). `test_lean_registered_bit_rows.py`'s supplied value opens under its `row-seg/v1` read at that
+    root alone."""
+    _, triple = SECOND_MIXED.templates
+    linked = _row_schema(_second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], links={triple}, allow=True),
+                         G.SCHEMA_SEG)
+    value = {schema: _supplied_linked(linked, schema) for schema in G.SCHEMAS}
+    assert len({v["root"] for v in value.values()}) == len(G.SCHEMAS) and len({v["domain"] for v in value.values()}) == 1
+    seg = value[G.SCHEMA_SEG]
+    cases = [(_read_linked(linked, 0, seg), []),
+             (_row_schema(_read_linked(linked, 0, seg), G.SCHEMA, reference=False), ["second-values"])]
+    cases += [(_read_linked(linked, 2, seg, value[schema]["root"]), ["second-read"]) for schema in (G.SCHEMA, G.SCHEMA_V2)]
+    for case, codes in cases:
+        got = second_statements(copy.deepcopy(case))
+        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
+        assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
 
 
 def test_round_two_refuses_an_interior_that_registers_a_name_round_one_has(pieces):

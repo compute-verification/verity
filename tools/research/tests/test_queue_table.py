@@ -558,6 +558,26 @@ def test_the_heads_the_loop_leaves_out_are_a_row_of_their_own():
     assert rows["Mark to `main`"]["day"] == "p50 95, p90 111 min (n=2)"
 
 
+def test_ready_to_built_is_split_by_the_cause_the_loops_lines_give_for_each_minute():
+    """Each landed PR's minutes from ready to its first candidate go to the cause of the loop's newest line leaving its head
+    out since its mark (`leave`, or a `conflict` or `skip` of a build), and to none logged before its first: #1 is ready at
+    its verdict 00:40, out for a full chain from 00:45, built 01:00; #2 is ready at its mark 00:50, its batch full from 00:55,
+    built 01:00.  A line from before the mark, or of the shadow, says nothing."""
+    def leave(hhmm: str, number: int, head: str, cause: str, shadow: bool = False) -> dict:
+        return {"action": "leave", "at": at(hhmm), "number": number, "heads": [head], "cause": cause, "why": cause, "shadow": shadow}
+
+    d = doc()
+    d["control"]["decisions"] = sorted(d["control"]["decisions"] + [
+        leave("00:05", 1, "h1", "no land verdict"), leave("00:45", 1, "h1", "chain full"),
+        leave("00:52", 2, "h2", "held", shadow=True), leave("00:55", 2, "h2", "batch full")], key=lambda r: r["at"])
+    row = {r["name"]: r for r in qt.table(d)}["Ready to built, by the loop's reason"]
+    assert row["hour"] == row["day"] == "30 PR-min over 2 PRs: chain full 15 (50%), none logged 10 (33%), batch full 5 (17%)"
+    assert {r["name"]: r for r in qt.table(doc())}["Ready to built, by the loop's reason"]["day"] == (
+        "30 PR-min over 2 PRs: none logged 30 (100%)")
+    script = qt.CONTROL_SCRIPT[:qt.CONTROL_SCRIPT.index("ticks = ")]
+    assert '"leave"' in script and '"cause"' in script, "the control pod's reading keeps the loop's leave lines and their cause"
+
+
 def test_a_window_that_ended_is_cut_to_what_was_known_then():
     d = qt.cut(dict(doc(), read=qt.ts(at("03:00"))), qt.ts(at("02:00")))
     assert d["now"] == d["until"] == qt.ts(at("02:00"))
