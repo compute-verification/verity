@@ -18,20 +18,29 @@ import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 
 from verity_vllm.config import option, workload_arg
 
+__all__ = ["COMMANDS", "main"]
+
 
 def kernel(out: Path) -> dict:
     import torch
+    import vllm.v1.sample.ops.topk_topp_triton as TT
+    from verity.definitions.registry.topp_geometry import (
+        SPLIT_MAX_BATCH,
+        registered_splits,
+    )
 
     from verity_vllm.engine import topp_pin
-    from verity_vllm.pipeline.topp_split_probe import NEG_INF_BITS, drain_batches, gen_ties
-    from verity.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
-
-    import vllm.v1.sample.ops.topk_topp_triton as TT
+    from verity_vllm.pipeline.topp_split_probe import (
+        NEG_INF_BITS,
+        drain_batches,
+        gen_ties,
+    )
 
     patch = topp_pin.install(TT)
     pinned, original = TT._apply_topp_split, patch.original
@@ -79,9 +88,11 @@ def served(workload: str, out: Path) -> dict:
     from verity_vllm.engine import engine_profile as prof
 
     prof.apply_env()
-    from verity_vllm.commit.committer.topp_splits import install_split_kernel_proxies
-    from verity_vllm.engine import topp_pin, vllm_adapter as va
     from verity.definitions.registry.topp_geometry import registered_splits
+
+    from verity_vllm.commit.committer.topp_splits import install_split_kernel_proxies
+    from verity_vllm.engine import topp_pin
+    from verity_vllm.engine import vllm_adapter as va
 
     wl = va.load_workload(workload)
     reqs = wl["requests"]
@@ -119,14 +130,14 @@ def served(workload: str, out: Path) -> dict:
 @dataclass(frozen=True, kw_only=True)
 class KernelOptions:
     out: str = option("--out")
-    cmd: str = field(default="kernel", init=False)
+    cmd: Literal["kernel"] = field(default="kernel", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
 class ServedOptions:
     workload: str = option("--workload", type=workload_arg)
     out: str = option("--out")
-    cmd: str = field(default="served", init=False)
+    cmd: Literal["served"] = field(default="served", init=False)
 
 
 COMMANDS = {"kernel": KernelOptions, "served": ServedOptions}
