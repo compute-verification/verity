@@ -55,6 +55,8 @@ Withdrawn: the question about tonight's runs. The serving-cost runs (5 PM and 9:
 
 **State:** 15 of 16 leads have answered; still to come: proofs. Nothing on the Goals page's top level changes before Daniel's word. Each lead's own table is on TOP-416.
 
+**Second form:** 6 leads have re-sorted their parked rows so far (benchmarks, compute-accounting, console, kernels, memory-accounting, soundness); compute-research and circuits have nothing that changes. The counts and the four tables below are the first form's.
+
 compute-research's six goals that were parked before today are one row of its table, so the parked count is five short.
 
 **Counts so far:** kept 148 (goal 1: 22, goal 2: 87, goal 3: 7, goal 4: 32), parked 55, dropped 24, new goals written for lines and rows that had none: 21.
@@ -270,70 +272,88 @@ compute-research's six goals that were parked before today are one row of its ta
 | top | **Research velocity scored and steered every six hours.** as it is; reviewed today 6 PM | none | today 6 PM |
 | top | **The Goals page's top level holds only Daniel's list.** Check: `research goals audit` finds no goal at the top only because nothing waits on it | none | today, within the hour of his word |
 
+## Goals 5 to 12: each holder's line
+
+Asked at 8:58 AM PST. A holder that has not answered shows the Goals page's own words in the table at the top.
+
+| Goal | Command | Target | Today | A day its holder can hold, structure first |
+| --- | --- | --- | --- | --- |
+| 5. Remote demo | not answered yet |  |  |  |
+| 6. Onsite demo | not answered yet |  |  |  |
+| 7. Production vLLM's serving cost | not answered yet |  |  |  |
+| 8. Network accounting on GLM-5.3 | not answered yet |  |  |  |
+| 9. Proof-system performance | `verity bench prove --system spot --workload glm53` | At most 0.0545 prover GPUs a serving GPU, as benchmarks reads proofs' share of the 10% budget. proofs confirms the number | 0.0364, modeled (run `r20261113-015519-fdb2`): under the target in the model. The Lean verifier's time and the proof's size are modeled, not timed on a served audit | Tue 17 Nov for the command. The measured form has no day: benchmarks says by Mon 16 Nov noon |
+| 10. Verified compute share | `verity bench compute --from RUN` | 97% | 95.44% on the run of record `r20261106-165116-614b`, printed again today at `main`. It is the credited share: on the H200 the credit rests on a premise red team refuted (ASK-296), so it is an upper bound there | Wed 2 Dec, if the LM head (Mon 30 Nov) and the massive-activation rows (Thu 19 Nov) are credited: the missing 1.56 points |
+| 11. Uncertified memory share | `verity bench memory PERIOD` | At most 0.14 at the data sheet's read rate, in a session the Lean verifier on the auditor's host accepts, at the bandwidth audit's error of 2^-15 a session (not 100 bits) | 0.199, run `r20261112-193236-2608`, Thu 12 Nov | Wed 18 Nov, if two changes not yet written are on `main` by Sun 15 Nov 6 PM. memory-accounting says by 6 PM today. The path is one session on Mon 16 Nov, Tue the fallback |
+| 12. Training slowdown | not answered yet |  |  |  |
+
+## Goals 5 to 12: the rows that come back under them
+
+Rows the leads parked under the first form. "Its lead" means the lead confirmed or corrected the sort on TOP-416.
+
+| Goal | Lead | Row | Day | Sorted by |
+| --- | --- | --- | --- | --- |
+| 5. Remote demo | compute-accounting | Remote demo's proof covers Pearl+ | Wed 18 Nov, conditional on TT_OUT (ASK-296) | its lead |
+| 5. Remote demo | compute-accounting | Pearl+ check runs on the auditor's machine | Fri 20 Nov | its lead |
+| 5. Remote demo | lean | Inference-only policy proved for served traffic |  | top's first sort, not yet confirmed |
+| 5. Remote demo | lean | Honest signed session's proof sized |  | top's first sort, not yet confirmed |
+| 5. Remote demo | soundness | Sampled proofs sound as deployed | Fri 20 Nov | its lead |
+| 5. Remote demo | soundness | Remote demo's soundness fully proved | Mon 30 Nov, as goal 8's "fully proved" | its lead |
+| 5. Remote demo | soundness | Deployed remote theorem's honest witness runs a session | not known; I say on Tue 17 Nov | its lead |
+| 6. Onsite demo | compute-accounting | Onsite demo's proof covers Pearl+ | Tue 24 Nov | its lead |
+| 6. Onsite demo | memory-accounting | Memory verdicts on the onsite record | vllm's day for goal 6 | its lead |
+| 7. Production vLLM's serving cost | vllm | Production vLLM reproducible under 1% serving overhead (the goal itself) |  | top's first sort, not yet confirmed |
+| 7. Production vLLM's serving cost | vllm | vLLM serving cost benchmarked |  | top's first sort, not yet confirmed |
+| 7. Production vLLM's serving cost | vllm | Serving cost measured on GLM-5.3 |  | top's first sort, not yet confirmed |
+| 7. Production vLLM's serving cost | vllm | Serving cost's tick arm measured behind certifier |  | top's first sort, not yet confirmed |
+| 8. Network accounting on GLM-5.3 | network-accounting | Network certification adds no exfiltration capacity |  | top's first sort, not yet confirmed |
+| 8. Network accounting on GLM-5.3 | network-accounting | Network check ties responses to committed outputs |  | top's first sort, not yet confirmed |
+| 8. Network accounting on GLM-5.3 | network-accounting | Certifier turns away arrivals at a run's end |  | top's first sort, not yet confirmed |
+| 8. Network accounting on GLM-5.3 | network-accounting | Run record reports the tighter exfiltration capacity |  | top's first sort, not yet confirmed |
+| 8. Network accounting on GLM-5.3 | network-accounting | Network bound counts only unchecked inputs |  | top's first sort, not yet confirmed |
+| 8. Network accounting on GLM-5.3 | network-accounting | Onsite exfiltration capacity proved in Lean |  | top's first sort, not yet confirmed |
+| 8. Network accounting on GLM-5.3 | soundness | Served weights proved to be the registered ones | Fri 20 Nov | its lead |
+| 8. Network accounting on GLM-5.3 | vllm | Long-context request served and committed |  | top's first sort, not yet confirmed |
+| 9. Proof-system performance | benchmarks | Proof system performance benchmarked (the goal itself) | Tue 17 Nov for the command printing it from labelled runs; for the verifier's time measured on a served audit, benchmarks says by Mon 16 Nov noon | its lead |
+| 9. Proof-system performance | benchmarks | Head key blocks priced as served units | Mon 16 Nov | its lead |
+| 9. Proof-system performance | kernels | Steady-state proving cost measured | today 6 PM PST: done if benchmarks' noon repricing reads 90% of proving time priced from measured rows; else I give its count and a day here | its lead |
+| 9. Proof-system performance | kernels | Deep blocks' witness built on GPU | Wed 18 Nov, as dated | its lead |
+| 9. Proof-system performance | kernels | Flock's wide leaf measured on a GPU | Tue 17 Nov, as dated | its lead |
+| 10. Verified compute share | compute-accounting | Twice the sampled tiles a window | Tue 24 Nov (it was Tue 17 Nov; its H200 hours go after structure) | its lead |
+| 10. Verified compute share | compute-accounting | Massive-activation rows credited | Thu 19 Nov | its lead |
+| 10. Verified compute share | compute-accounting | LM head credited by Pearl+ | Mon 30 Nov | its lead |
+| 10. Verified compute share | compute-accounting | Small model's verified compute share reaches 97% (the goal itself) | Wed 2 Dec | its lead |
+| 10. Verified compute share | kernels | Overhead benchmark passes its GPU check | today 6 PM PST | its lead |
+| 10. Verified compute share | kernels | PoUW overhead counts the output's commitment | Tue 17 Nov, as dated | its lead |
+| 10. Verified compute share | kernels | Row commitment takes LM-head rows | Tue 24 Nov, as dated | its lead |
+| 11. Uncertified memory share | memory-accounting | Uncertified memory share reaches its target (the goal itself) | Wed 18 Nov, as above | its lead |
+| 11. Uncertified memory share | memory-accounting | Uncertified memory share at most 0.17 | Tue 17 Nov | its lead |
+| 12. Training slowdown | soundness | Linear layers tied into inference-only check | Wed 18 Nov | its lead |
+| 12. Training slowdown | training | Library holds standard algorithms and most frontier points |  | top's first sort, not yet confirmed |
+| 12. Training slowdown | training | Every search frontier point runs from the library |  | top's first sort, not yet confirmed |
+| 12. Training slowdown | training | Training circuits match GPU kernels |  | top's first sort, not yet confirmed |
+| 12. Training slowdown | training | Training slowdown results final and proved |  | top's first sort, not yet confirmed |
+| 12. Training slowdown | training | Inference-only accounting on a small model (the goal itself) |  | top's first sort, not yet confirmed |
+| 12. Training slowdown | training | Small model's proved slowdown reaches 1,000 (the goal itself) |  | top's first sort, not yet confirmed |
+| 12. Training slowdown | training | Slowdown plotted against model size |  | top's first sort, not yet confirmed |
+
 ## Lines and rows with no goal yet
 
 L10, R11 (L = a not-yet line of the layout file, R = a row of the architecture file's code still to be written; the numbering is in the sheet on TOP-416.)
 
-## Parked under the first form: results, climbs, and work the architecture does not need now
-
-The last column is top's first sort after Daniel's word of 8:47 AM (demos and benchmark targets are tier 1 again): K5 to K12 name the goal of the second form a row would serve. Each lead confirms or corrects it on TOP-416.
+## Parked: what serves none of the twelve, or is not yet sorted under them
 
 | Lead | Goal | The state it stops in | Under the second form |
 | --- | --- | --- | --- |
-| benchmarks | Proof system performance benchmarked | Parked at: `verity bench prove --system spot` prints 0.0364 prover GPUs a serving GPU, 4.60 × 10^-4 Lean verifier seconds and 4.08 proof bytes a token, all modeled, from labelled runs on `main`, and the dashboard shows all four. | is goal 9 |
-| benchmarks | Head key blocks priced as served units | Parked at: the driver prices the head as units under `--partition head-scores-values` on `main`; values units verified, scores at 64 keys and @circuits' key-row writer not yet. | K9 |
 | ci | Platform repository lands through the queue | Stops with the infra repository's loop stopped since Tue 10 Nov; INF-639 settles on Mon whether it's a second instance or a mode. Park, unless you want the platform repository held to two hours now | stays parked |
 | comms | SPOT draft's differences on the page | Parks with the SPOT post. State: comms' part done (the $57$ placed, $36$ ready); proofs posts them when Daniel says yes. | stays parked |
-| compute-accounting | Remote demo's proof covers Pearl+ | Stops at: Pearl+'s Lean check accepts on the prover's side; TT_OUT open (ASK-296); the composite's tie is proofs' (PRF-596) | K5 |
-| compute-accounting | Onsite demo's proof covers Pearl+ | Stops at: not started for onsite | K6 |
-| compute-accounting | Twice the sampled tiles a window | Stops at: design written, not measured | K10 |
-| compute-accounting | Massive-activation rows credited | Stops at: channel swaps #9518 marked | K10 |
-| compute-accounting | Pearl+ check runs on the auditor's machine | Stops at: CMP-370's answer (which form of the case an auditor's host may hold) by Fri 20 Nov | K10 |
-| compute-accounting | LM head credited by Pearl+ | Stops at: not started | K10 |
-| compute-accounting | Small model's verified compute share reaches 97% | Stops at: 614b's figures | is goal 10 |
-| compute-accounting | Daniel's page on H200 accounting | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) | its lead says |
-| compute-accounting | Pearl-C's debit closes red team's breaks | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) | its lead says |
-| compute-accounting | 97% of H200 capacity accounted for | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) | its lead says |
+| compute-accounting | Daniel's page on H200 accounting | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) | stays parked, its lead |
+| compute-accounting | Pearl-C's debit closes red team's breaks | As they are; the debit stops at #9735 (mend 1), and its card is with Daniel (ASK-296: B default, C recommended) | stays parked, its lead |
 | compute-research | Paused work resumed or dropped | As they are, each with the state Daniel paused it in on Mon 9 Nov: `accounting/silicon-logs-all-compute`, `accounting/useful-weights-hard`, `compute-research/chain-premise-probed`, `chain-round-pinned`, `first-four-layers-numbers`, `hardness-train-at-point`. | stays parked |
-| console | Each bound shows per week, month and year | Stops with the README contract naming a bound's `period` and `over` keys; the tab has no per-period code. Bounds are results, and results are parked. | K3 |
 | infra | Infra repository merges without Daniel | Stops with: no change there has waited for Daniel since Tue, each merges on a verdict from a reader who is not its owner; the queue lands nothing there; its author fix is on `main`; the second change is ci's, which ci parks as `ci/platform-repo-queue` | stays parked |
 | infra | Checker slot starts its next task at once | Stops with: the change on since Wed; the executor runs every submission in shadow on its own machine; twelve test files end each submission with no verdict (CI-526, infra's five being mended today); how many tasks run at once on a slot not read from the machine. I keep it instead if ci puts the executor under goal 4: ci's table names no goal for it | stays parked |
-| kernels | Steady-state proving cost measured | stops with rows 1 and 2 timed again from `main` today and labelled | K9 |
-| kernels | Deep blocks' witness built on GPU | stops measured on a card twice (Thu, today); its code is on a branch, not on `main` | K9 |
-| kernels | Flock's wide leaf measured on a GPU | stops timed on a card today, not of record; #9079 open behind proofs' #9108 | K9 |
-| kernels | Overhead benchmark passes its GPU check | stops with the arm's first card run today; #9489 and #9550 open | K10 |
-| kernels | PoUW overhead counts the output's commitment | stops with no timed row of record | K10 |
-| kernels | Row commitment takes LM-head rows | stops with the wide kernel built and stored, pinned only in #9550 | K10 |
-| lean | Inference-only policy proved for served traffic | stops at: not true on `main`; its 25 parts listed with owners, lean's five dated; network-accounting holds the policy and takes the goal Mon 16 Nov | K5 |
-| lean | Honest signed session's proof sized | stops at: one worker's read, which builds nothing. I let it finish Sun 15 Nov 6 PM and send soundness the sizes Mon noon | K5 |
-| memory-accounting | Memory verdicts on the onsite record | Stops at: all three audits accepted in a rehearsal on one H200 over the `bf16` store, each decided by its Lean verifier (Thu 12 Nov); the onsite record lists no memory verdict; @vllm's setting and your word on where Lean runs are not in | K6 |
-| memory-accounting | Uncertified memory share reaches its target | Stops at: 0.199 at the data sheet's rate, Thu 12 Nov, the session accepted by Lean; the target 0.14 for Wed 18 Nov is not reached | is goal 11 |
-| memory-accounting | Uncertified memory share at most 0.17 | Stops at: 0.233 and 0.199 over the cards' memory alone; the store with the host's memory has not been run served | K11 |
-| memory-accounting | Cost of a 100-bit memory audit measured | Stops at: the 64-row session passes its check on one H200; its cost on the eight-card node is not measured. The bandwidth audit's error stays 2^-15 a session. If that is a hole under your ruling 1, the five changes that need no new version are kept under goal 2: say so | stays parked |
-| network-accounting | Network certification adds no exfiltration capacity | Stops at: the figure of record prints on `main`. A worker started on the certifier's stamps this morning and stops at its plan | K8 or K6, its lead says |
-| network-accounting | Network check ties responses to committed outputs | Stops at: a one-token change is refused on a served try; #9491 and #9541 are open; the exchange with vllm and proofs on the two classes stops at Monday's reads | K8 or K6, its lead says |
-| network-accounting | Certifier turns away arrivals at a run's end | Stops at: built, #9457 open | K8 or K6, its lead says |
-| network-accounting | Run record reports the tighter exfiltration capacity | Stops at: the check prints the ruled value on Monday's data; #9656 and #9741 are open | K8 or K6, its lead says |
-| network-accounting | Network bound counts only unchecked inputs | Stops at: the statement is on `main`; #9663 is reviewed; #9350, #9641 and #8829 are open | K8 or K6, its lead says |
+| memory-accounting | Cost of a 100-bit memory audit measured | Stops at: the 64-row session passes its check on one H200; its cost on the eight-card node is not measured. The bandwidth audit's error stays 2^-15 a session. If that is a hole under your ruling 1, the five changes that need no new version are kept under goal 2: say so | stays parked, its lead |
 | network-accounting | Scan count statements restated as soundness amended | Stops at: #9639 is reviewed | stays parked |
-| network-accounting | Onsite exfiltration capacity proved in Lean | Stops at: four statements, none proved; #8708 is open. #9664 and #9736 change the Lean check and land under `network/onsite-port-staged` | K8 or K6, its lead says |
-| soundness | Sampled proofs sound as deployed | stops at: the deployed remote theorem listed, five open premises, the sample-choice and device-key mends in flight | K5 |
-| soundness | Remote demo's soundness fully proved | stops at: the open list on PRF-579, with owners and days | K5 |
-| soundness | Served weights proved to be the registered ones | stops at: VLLM-424 (the proofs read the registered rows), the checkpoint match a completeness note | K8 |
-| soundness | Linear layers tied into inference-only check | stops at: #9669 open, `Shared` and the A-row home proved, the `theta` rewrite after #9463 | K12 |
-| soundness | Deployed remote theorem's honest witness runs a session | stops at: `cursor/soundness-remote-witness-8fb2` at `beebe2ec45`, sized at 4,500 to 7,500 lines, its worker blocked three times | K5 |
-| training | Library holds standard algorithms and most frontier points | parked at: all 83 points have an entry on `main` held to its run; the command prints a slowdown for 39 of 62 entries; the rule for the other 23 is decided, not built | K12 or parked, its lead says |
-| training | Every search frontier point runs from the library | parked at: 99 of 139 points on `main`; the open drafts (#9531, #9711, #9731, #9733) land or close as they are; no new route starts | K12 or parked, its lead says |
-| training | Training circuits match GPU kernels | parked at: forward attention's circuit matches the card on every captured word, on `main`; the backward kernel is captured, its circuit drafted and not matched | K12 or parked, its lead says |
-| training | Training slowdown results final and proved | parked at: three plots on the bound of record; of three corrections one is published, two are not; each raises the plotted figures | K12 or parked, its lead says |
-| training | Inference-only accounting on a small model | parked at: 1 as served | folds into goal 12 |
-| training | Small model's proved slowdown reaches 1,000 | parked at: 1 of 1,000 | is goal 12 |
-| training | Slowdown plotted against model size | 17 of 22 configs on `main`, none run on a GPU | K12 or parked, its lead says |
-| vllm | Production vLLM reproducible under 1% serving overhead | stops in: the run of record reproduced 5,700 of 5,700 tokens and read +2.31% [+0.68%, +3.94%], under 1% not shown; the command is marked to merge; which change loses the drafts not known | is goal 7 |
-| vllm | vLLM serving cost benchmarked | stops in: the command on `main`, the calibration, one value on the dashboard | K7 |
-| vllm | Serving cost measured on GLM-5.3 | stops in the same state | K7 |
-| vllm | Serving cost's tick arm measured behind certifier | stops in: not run; booked tonight 5 to 8 PM PST | K7 |
-| vllm | Long-context request served and committed | stops in: one request of 131,072 tokens served with one layer's table committed, no draw on it; the code that carries its keys between windows on an old branch | K8 |
 | top | Paused work resumed or dropped | **Results resume after the architecture.** It holds every parked goal with the state it stopped in | stays parked |
 
 ## Dropped: done, duplicates, steps that are not a state of main
@@ -364,6 +384,8 @@ The last column is top's first sort after Daniel's word of 8:47 AM (demos and be
 | network-accounting | Onsite network audits timed at the demo's scale | Done: timed in this morning's rehearsal (NET-331). The change it rests on, #9319, lands under `network/onsite-port-staged` |
 | vllm | Root README describes the approved architecture | `ARCHITECTURE.md` at the root of `main` is what this goal was for. If you want a one-page `README.md` beside it that points there, say so and I write it the same day |
 | top | Hotspots ranked nightly, top rows closing | a nightly routine, not a state of `main`; the bar goals carry its rows |
+| compute-accounting | 97% of H200 capacity accounted for | Under the second form: D: goal 10 is the target, on the small model |
+| compute-accounting | 97% of the small model's work verified | Under the second form: D (as before): a duplicate of goal 10 |
 
 # The numbering used above
 
