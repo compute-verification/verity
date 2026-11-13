@@ -10,6 +10,7 @@ public import Proofs.Properties.Verity.SampledTwo.RecordNames
 public import Proofs.Flock.SpotFlock.RunsAs.Steps
 public import Proofs.Flock.SpotFlock.HeldOfRun
 public import Proofs.Flock.SpotFlock.Cap
+public import Proofs.Properties.Verity.Sampled.Record.Reg
 public import Proofs.Flock.SpotFlock.RunsAs.PopulationOf
 public import Proofs.Properties.Verity.SampledTwo.AtStmt
 public import Proofs.Flock.Claims.Complete.Encode
@@ -46,7 +47,10 @@ so not asked:
 at the play's replay sample. A held copy `heldOf` builds has the other eight by construction (`heldAt_of_parts`,
 `HeldOf.heldMatches_of`). `PartsHeldAt` reads the play's bytes only through the replay sample's size, and where the
 first stage samples a uniform `K`-subset of the replay blocks (`SpotFlock.firstK`) that size is `K` at every play, so
-`PartsSizedAt` at `K`, which reads the play's parameters alone, gives it (`partsHeldAt_of_sized`). Asked at every
+`PartsSizedAt` at `K`, which reads the play's parameters alone, gives it (`partsHeldAt_of_sized`). Every accepted
+play's first stage is of a count `K` (`firstK_of_formAccepts`): the form's parser takes a two-stage rule only with a
+rate law (`Select.Rule.ofJson`), which `Select.resolve` makes `subset:K` at `1 ≤ K ≤ n`, so `PartsSizedAt` at each
+such `K` gives `PartsHeldAt` with nothing else asked (`partsHeldAt_of_accepts`). Asked at every
 size it would hold of no held copy (`HeldOf.not_partsAre`: no stratum makes a part of a sample of no block).
 
 `playAccepts_form` is `PlayAccepts` from what is left. Nothing here turns the form on, and none of the premises says
@@ -193,6 +197,124 @@ theorem partsHeldAt_of_sized {A : Live₂} {C : CaseOf} {K : ℕ} (hK : SpotFloc
   intro o i it hA hi hit draw rest read strata hsel hst
   rw [SpotFlock.select_subset_size hK hsel]
   exact hs o i it strata hA hi hit hst
+
+/-- **A two-stage rule `Select.Rule.ofJson` reads has a rate law** for its first stage (`Select.replayLaw?`). -/
+theorem ofJson_replay {j g : Lean.Json} {t : String} {k : Spot.Select.Counts}
+    (h : Spot.Select.Rule.ofJson j = .ok (.twoStage g t k)) : (Spot.Select.parseRate t).isSome = true := by
+  unfold Spot.Select.Rule.ofJson at h
+  repeat'
+    first
+    | (cases h; done)
+    | split at h
+    | dsimp only at h
+  all_goals first
+    | (cases h; done)
+    | (cases h; simp_all [Spot.Select.replayLaw?, Option.isSome_iff_ne_none])
+
+/-- **The form's parameters' rule is one `Select.Rule.ofJson` read.** -/
+theorem paramsOfJson_ruleOf {j : Lean.Json} {p : VStar.Recursive.SampledTwo.Params}
+    (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) : ∃ j', Spot.Select.Rule.ofJson j' = .ok p.rule := by
+  unfold VStar.Recursive.SampledTwo.paramsOfJson at h
+  repeat'
+    first
+    | (cases h; done)
+    | (obtain ⟨_, _, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h)
+    | (simp only [pure, Except.pure, Except.ok.injEq] at h
+       subst h
+       exact ⟨_, by assumption⟩)
+    | split at h
+    | dsimp only at h
+
+/-- **A rate law over `n` units is `subset:K` at `1 ≤ K ≤ n`** (`Select.textOver`). -/
+theorem textOver_rate {t : String} {a b c n : ℕ} {sizes : List ℕ} {s : String}
+    (hpr : Spot.Select.parseRate t = some (a, b, c)) (h : Spot.Select.textOver t n sizes = some s) :
+    ∃ K, 1 ≤ K ∧ K ≤ n ∧ s = s!"subset:{K}" := by
+  unfold Spot.Select.textOver at h
+  rw [hpr] at h
+  repeat' first | (cases h; done) | split at h | dsimp only at h
+  all_goals first
+    | (cases h; done)
+    | (cases h; exact ⟨_, by simp_all, by simp_all, rfl⟩)
+    | (exfalso; simp_all)
+
+theorem subset_text (K : ℕ) : s!"subset:{K}" = "subset" ++ ":" ++ Nat.repr K := by
+  simp only [String.append_assoc]
+  rfl
+
+/-- **An accepted play's run has a two-stage rule with a rate law**: the run of record's rule is the parameters'
+(`inputOf_first`), which the form's parser reads with `Select.Rule.ofJson`. -/
+theorem rule_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} (hA : FormAccepts C o)
+    (hi : inputOn C o = some i) :
+    ∃ g t k, i.rule = .twoStage g t k ∧ (Spot.Select.parseRate t).isSome = true := by
+  obtain ⟨k, hk, p, cm, e, pub, prof, ⟨h1, h2, h3⟩, hacc⟩ := hA
+  obtain ⟨-, c₂, ξ₂, r, i', run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hacc
+  obtain ⟨-, -, -, -, vs, rc, j₁, j₂, -, hieq, -, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  have hik : inputOfCase k = some i' := by
+    unfold inputOfCase
+    rw [h1, h2, h3]
+    simp only [bind, Except.bind, hin]
+    rfl
+  have hi' : inputOn C o = some i' := by
+    unfold inputOn
+    rw [hk]
+    exact hik
+  have hii : i = i' := Option.some.inj (hi.symm.trans hi')
+  have hrp : i.rule = p.rule := by
+    rw [hii, hieq]
+    exact (VStar.Recursive.SampledTwo.inputOf_first _ _ _ _ _ _ _).1
+  obtain ⟨j, -, hj⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h1
+  obtain ⟨g, t, kk, hr⟩ := SpotFlock.RunsAs.paramsOfJson_twoStage hj
+  obtain ⟨j', hj'⟩ := paramsOfJson_ruleOf hj
+  rw [hr] at hj'
+  exact ⟨g, t, kk, hrp.trans hr, ofJson_replay hj'⟩
+
+/-- **Each accepted play's held first stage is of a count `K`** (`SpotFlock.firstK`): the held copies are the ones
+`heldOf` builds (`HeldOfAt`), whose first-stage registration has the run's closure map, none at an accepted play
+(`closure_of_formAccepts`), and the rule `Select.resolve` makes of the run's, a rate law (`rule_of_formAccepts`)
+resolved to `subset:K` at `1 ≤ K ≤ n` (`textOver_rate`), which Flock reads as a uniform `K`-subset. -/
+theorem firstK_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+    {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
+    (hit : i.interior = some it) : ∃ K, SpotFlock.firstK A.h.reg.first = some K := by
+  obtain ⟨u, hu⟩ := hof o i it hA hi hit
+  obtain ⟨first, ns, ks, l, hz, hf, -, -, hh, -⟩ := SpotFlock.HeldOf.heldOf_spec hu
+  have hfirst : A.h.reg.first = first := by
+    rw [hh]
+    rfl
+  rw [hfirst]
+  have hcl := closure_of_formAccepts hA hi
+  obtain ⟨g₀, t, kk, hrt, hrate⟩ := rule_of_formAccepts hA hi
+  obtain ⟨⟨a, b, c⟩, hpr⟩ := Option.isSome_iff_exists.1 hrate
+  unfold SpotFlock.HeldOf.firstOf at hf
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
+  obtain ⟨n, -, rule, -, law, -, workTable, -, resolved, hres, rfl⟩ := hf
+  have hres' := SpotFlock.HeldOf.ok_of_toOption hres
+  unfold Spot.Select.resolve at hres'
+  obtain ⟨n', hn', hr⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 hres'
+  split at hr
+  · rename_i r hov
+    cases hr
+    rw [hrt] at hov
+    simp only [Spot.Select.Rule.over] at hov
+    obtain ⟨s, htx, hov⟩ := Option.map_eq_some_iff.1 hov
+    subst hov
+    obtain ⟨K, hK1, hKn, hs⟩ := textOver_rate hpr htx
+    have hpd : Spot.Select.parseDesign s =
+        .ok (Lean.Json.mkObj [("law", Lean.Json.str "subset"), ("k", Lean.toJson K)]) := by
+      rw [hs, subset_text K]
+      exact Verity.Sampled.Record.parseDesign_count "subset" (Or.inl rfl) K hK1
+    refine ⟨K, ?_⟩
+    unfold SpotFlock.firstK SpotFlock.firstKOf
+    simp only [hcl, hn', Spot.Select.Rule.lawOver, hpd, Verity.Sampled.Record.flockLaw_subset_text K n' hK1 hKn]
+  · cases hr
+
+/-- **`PartsHeldAt` from the parts at each count the first stage samples**: at each accepted play the held first
+stage is of a count `K` (`firstK_of_formAccepts`), and `PartsSizedAt` at that `K` gives the parts at the play's
+replay sample (`partsHeldAt_of_sized`). -/
+theorem partsHeldAt_of_accepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C)
+    (hs : ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K) : PartsHeldAt A C := by
+  intro o i it hA hi hit
+  obtain ⟨K, hK⟩ := firstK_of_formAccepts hof hA hi hit
+  exact partsHeldAt_of_sized hK (hs K hK) o i it hA hi hit
 
 /-- **Held copies `heldOf` builds agree with what each accepted play's run reads** (`HeldAt`), given their parts
 (`HeldOf.heldMatches_of`). -/
