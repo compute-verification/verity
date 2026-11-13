@@ -118316,3 +118316,69 @@ Branch `cursor/proofs-accepts-7d08` at `5e016c10de`, pushed. Nothing is unpushed
 2. The 03:00Z NEEDS 1 (the form hands the run each record as the proved verifier's parser reads it, for `RecordsRead`) stands.
 
 **To post.** Nothing.
+
+## ASSEMBLY, Fri 03:46Z: the join's branch is pushed, `cursor/proofs-join-42b8` at `79d111689f`: the six merges in your order, SESSIONCOINS's two reverts undone, MAJORITY's two files. Nothing of the join has compiled and no try is out on the branch; my one try (r20261113-032633-3e3a, vy-nebius-cpu-12) has waited 18 minutes for a Lean slot
+
+In plain words: the branch exists and holds every piece at the heads you named. The form and `Steps.lean` on it are word for word TWOLEG's. I have not written a line of the join yet. One fact has to ride in `Good`, and it changes one statement of STAGECOINS's, so I name it here before adding it, as you asked.
+
+**The branch** [run]. `cursor/proofs-join-42b8`, cut from my head `1a80621ef6`. That is one commit past the `8af933566b` you named: it adds `cutBound_and` to my own file, which the join needs. First-parent history, oldest first:
+
+| Commit | What |
+|---|---|
+| `9fb9dfd42b` | merge STAGECOINS at `b216567a0c` |
+| `bb01d1b017` | merge MESSAGES at `5b8e6bec5d` |
+| `a5c994201a` | merge HISTORY at `1d288564a1` |
+| `a93ec4f34a` | merge COINMAP at `a36ddec487` (the head it names as compiled) |
+| `9eda67b3c6` | merge ACCEPTS at `d169ce4c52` |
+| `d49ec1e78b` | merge SESSIONCOINS at `b417401849` |
+| `333d53cb77` | revert of `016c9128dc`: the form's `stagesFit` is back |
+| `8e8b5ef4f5` | revert of `2b92d76759`: `accepted_fits` is back |
+| `79d111689f` | MAJORITY's two files at `65810fa781` and their two roots, as a plain commit, not a merge |
+
+- No merge stopped. [run]
+- After the two reverts, `git diff b774e651d2 HEAD` is empty on the form (`VStarRecursive/SampledTwo.lean`) and on `Steps.lean`, and on every other file of TWOLEG's under `SampledTwo/` and `verity/protocols/recursion`. `accepted_fits` and `stagesFit` are there. [run]
+- MAJORITY's files came by `git checkout`, so a later merge of MAJORITY's branch still brings its `Recursive/Target.lean` whole. `Recursive/` on the join is as at TWOLEG's `b774e651d2`. [run]
+- **MAJORITY's change to `Recursive/Target.lean`, in one line:** it moves the recursive leg's averaging lemmas for the plurality out of that file into the new shared `Verity/Majority.lean` and has the recursive target read them from there (88 lines added, 270 removed), and reaches the shared extract by rewriting. [read: `git diff`, commits `127731294a`, `e00ab95ce5`]
+- TWOLEG's branch moved to `4d19a7ad4f` at 03:38Z (the run of record reads both stages' coins under the parameters' key and families). It is in neither of my branches. It changes the form, `Steps.lean`, `Challenger/Coins.lean`, `Challenger/Drawn.lean` and `Sampled/RecordDraw.lean`, which `ProjectionOf.lean` imports. I take it when TWOLEG names it compiled, by your 03:13Z rule to the others. Say if you want it sooner.
+
+**What the join can and cannot import today** [read; your 03:43Z item 1]. At `a36ddec487`, `CoinMapAgree.lean` is the file COINMAP reports 20 errors in, and `CoinStages.lean` imports it. So `coinMapHolds`, `stageLocate`, `elems_first`, `elems_second`, `freshWide_play`, `devFirst_stage` and `devSecond_stage` are unproved and cannot be imported into a file that must compile. `SessionDev.lean` imports only `CoinMap.lean`, so `runLocate` can be.
+
+**The join's three files** [guess: a plan, nothing written]:
+1. `JoinElems.lean`: `FirstElems` and `SecondElems` from the coin map's agreement at any locator, where each stage's bytes are at most 16 bytes per element that fits. Imports TWOLEG's `DevAgrees.lean` and COINMAP's `CoinMap.lean` only, both compiled.
+2. `Joined.lean`: the projection's bound over any `Acc` and any `Good`, at the coin map's frame with MESSAGES's prover. Each piece that is stated at the form's accept comes in as a hypothesis in the piece's own words. Imports compiled files only.
+3. `JoinedForm.lean`: the last theorem, the one place the form comes in. `Acc := FormAccepts C`, the locator `runLocate A (stageLocate ℓ₁ ℓ₂) tab`, and each hypothesis of file 2 discharged by its piece's theorem. It compiles only when every piece does.
+
+**A fact that must ride in `Good`: named before I add it.** `FreshWide o.log`: every fresh coin in the log carries its 512 bits. It is true on every play of the game (COINMAP's `freshWide_play`, unproved), but the pieces quantify over every exchange, not only plays. Who needs it of an exchange:
+- `FirstElems` and `SecondElems`, through COINMAP's `size_le_fit_first` and `stageWidth_le_fit_second`.
+- STAGECOINS's `DevSecond`: COINMAP's `devSecond_stage` proves it only on logs with `FreshWide o.log`, and `DevSecond` as STAGECOINS states it asks it of every exchange the form accepts, with no `Good` [read: `SecondCoins.lean:56-60`, `CoinStages.lean:644-656`]. COINMAP raised this to STAGECOINS as its NEED 1; it is open.
+
+So the join's `Good` is `ReadIsDevice o ∧ FreshWide o.log`. What that changes for the two you named:
+- **CUT: nothing.** `cutBound_and` with `freshWide_play` carries `cutBound_read` to the larger `Good` at the same `terms`.
+- **STAGECOINS: one statement.** `DevSecond` has to read `Good o` beside `FormAccepts C o` (and `coinsAgree_second_of` pass it through), or the join cannot use `coinsAgree_second_log`. Its other theorems are untouched: the `mono` lemmas carry them from `LogIsDevice` to the join's `Good`. Until STAGECOINS changes it, file 3 takes `CoinsAgree … .second` at the join's `Good` as a named premise.
+Files 1 and 2 keep `Good` abstract, so I write them now and add the clause only in file 3. Stop me if you want `FreshWide` carried another way.
+
+**Your 03:43Z items 2 and 3:** read. When `main` comes a second time through ACCEPTS's line I take FRAME's side in the four files. `PrintsInOrder` is a premise of file 3 only, listed under Not established, until HISTORY proves it at `dev₂`.
+
+**Misdelivered to my conversation, acted on by me in no way** [run: my own subscriptions list holds only my timer]: at 03:38Z five Slack events from #agent-coordination dated 02:05Z to 02:09Z (infra's agent watch, PRF-611, NET-390, VLLM-339, TOP-402), and at 03:39Z a timer named `proofs-1552Z-prf589-opened`, fired Thu 15:52Z, about FIXEDCOST's run `r20261112-110333-4c33`. They read as yours. If your timers and Slack events are landing with workers, you are not getting them.
+
+### STOP RULE
+Nothing. No lock edits. On the join's branch I changed no file of another worker's by hand: the merges, two `git revert`s and one `git checkout` of MAJORITY's two files [run].
+
+### NEEDS
+1. STAGECOINS: `DevSecond` with `Good o` (above). COINMAP already asked.
+2. COINMAP: say when `CoinMapAgree.lean` and `CoinStages.lean` compile, and at which head; I merge that head.
+3. TWOLEG: say when `4d19a7ad4f` or later has compiled.
+
+### To post
+Nothing.
+
+### Not established
+- Nothing on the join's branch has compiled as a whole. Whether `accepted_fits` and `stagesFit` compile there is decided by my first try on it, which will include `Steps.lean`.
+- Everything from `CoinMapAgree.lean` and `CoinStages.lean` is unproved (list above).
+- `StageDraws` and `PrintsInOrder` are premises until TWOLEG and HISTORY answer.
+- `63d233290e` (the messages' change) and `1a80621ef6` (`cutBound_and`) have not compiled; `r20261113-032633-3e3a` decides the first.
+- The earlier-period signature hole in `CutBound` stays open.
+- The PoUS pin of `security/Proofs/lakefile.toml` (`TRUSTED.sha256`) is stale on the join's branch, since the merges add roots. I do not regenerate it on a branch that is not landing.
+- The form with its switch on accepts no play today, so file 3 will be empty of content until it does.
+
+Branches, both pushed, nothing unpushed [run]: `cursor/proofs-join-42b8` at `79d111689f`; `cursor/proofs-assembly-992e` at `1a80621ef6`.
