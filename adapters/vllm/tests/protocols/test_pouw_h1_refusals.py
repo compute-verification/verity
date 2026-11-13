@@ -1,16 +1,20 @@
 """H1's checks refuse, by name, the forms its other tests never hand them: a request's first slot and a step's slots
 under tables a prover committed consistently (`pouw_h1_requests.request_reason`, `slot_reason`), a round's row and coin
 (`round_reason`, `rounds_reason`), a record's calls (`tables_reason`), a window's coins and its sample
-(`pouw_h1_challenger.trusted_rounds_reason` and its sample session's checks), and what H1's settings, its input ids, a static
-declaration and the gate's ``model-key`` answer are parsed from."""
+(`pouw_h1_challenger.trusted_rounds_reason` and its sample session's checks), what H1's settings, its input ids, a static
+declaration and the gate's ``model-key`` answer are parsed from, and a hand-off's socket path
+(`pouw_h1_handoff.Holder`, `send_stream`)."""
 from __future__ import annotations
 
 import dataclasses
 import hashlib
 import json
+import os
 import random
+import socket
 from fractions import Fraction
-from typing import TYPE_CHECKING
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
@@ -33,6 +37,7 @@ import verity_vllm.protocols.pouw.h1.commit as CT
 import verity_vllm.protocols.pouw.h1.draw as PHD
 import verity_vllm.protocols.pouw.h1.drawn as DN
 import verity_vllm.protocols.pouw.h1.drawn_rows as DR
+import verity_vllm.protocols.pouw.h1.handoff as HO
 import verity_vllm.protocols.pouw.h1.hooks as PHK
 import verity_vllm.protocols.pouw.h1.live as LV
 import verity_vllm.protocols.pouw.h1.model_key as MK
@@ -663,3 +668,35 @@ def test_a_statement_names_only_sessions_that_hold_a_session_file(tmp_path):
     with pytest.raises(ValueError) as refused:
         PHC.statement(3, "c.vyc", "public.json", [full, bare])
     assert str(refused.value) == f"call 3's session {bare} has no session.json"
+
+
+@pytest.mark.parametrize("path", ["/" + "s" * HO.PATH_BYTES, "/" + "é" * (HO.PATH_BYTES // 2 + 1)],
+                         ids=["a-byte-over", "two-byte-letters"])
+def test_a_hand_offs_socket_path_longer_than_an_address_holds_is_refused_with_its_length(path):
+    """`Holder` and `send_stream` refuse a path of more bytes than a Unix socket's address holds, in words that give its
+    length in bytes, the limit and the path, where the socket's own refusal names none of them. The second path is
+    within the limit counted in letters and over it in bytes."""
+    nobody: Any = None
+    said = (f"the hand-off's socket path is {len(os.fsencode(path))} bytes and a Unix socket's address holds "
+            f"{HO.PATH_BYTES}: {path}")
+    for refuse in (lambda: HO.Holder(path), lambda: HO.send_stream(nobody, path)):
+        with pytest.raises(OSError) as refused:
+            refuse()
+        assert str(refused.value) == said
+
+
+def test_a_hand_offs_socket_path_of_as_many_bytes_as_an_address_holds_carries_the_stream(tmp_path, monkeypatch):
+    """The limit is the socket's own: a path of exactly ``PATH_BYTES`` binds, and the stream handed to it is taken, where
+    a socket refuses one byte more. The paths are relative, so the test's directory, however long, is no part of them."""
+    monkeypatch.chdir(tmp_path)
+    with socket.socket(socket.AF_UNIX) as bare, pytest.raises(OSError, match="AF_UNIX path too long"):
+        bare.bind("s" * (HO.PATH_BYTES + 1))
+    holder = HO.Holder("s" * HO.PATH_BYTES)
+    try:
+        with socket.socket() as stream:
+            client: Any = SimpleNamespace(_wire=SimpleNamespace(sock=stream))
+            HO.send_stream(client, holder.path)
+    finally:
+        fd = holder.take()
+    assert fd is not None and holder.error is None and holder.path.is_socket()
+    os.close(fd)
