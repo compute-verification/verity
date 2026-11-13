@@ -1089,8 +1089,8 @@ def _past_its_outputs() -> tuple[WA.Advice, dict]:
      "step 0 runs 3 sequences, over the registered max_num_seqs 2"),
     (_session([(300, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 300)]]), {},
      "request 0: step 0 runs 300 of its rows, over the registered long_prefill_token_threshold 256"),
-    (_past_its_outputs(), CACHE_ON, "request 1: its cache hit reads request 0's KV, which has no Program in the window (its rows here "
-                                    "are past its last kept output)"),
+    (_past_its_outputs(), CACHE_ON, ("request 1: its cache hit reads request 0's KV, which has no Program in the window (its rows here "
+                                     "are past its last kept output)")),
 ])
 def test_class_g_refuses_a_request_whose_program_misses_a_launch_it_ran_in(session, engine, fact, tmp_path):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
@@ -1161,10 +1161,10 @@ def _two_producers(split: bool) -> tuple[I1.Advice, dict]:
 
 
 @pytest.mark.parametrize("session,fact", [
-    (_two_producers(False), "request 2: its hit's positions 16 … 31 are request 1's rows from position 0 at step 0, a row that starts "
-                            "before them"),
-    (_two_producers(True), "request 2: its hit's positions 16 … 31 are request 1's rows at step 1, computed over a history of other "
-                           "rows than the hit holds"),
+    (_two_producers(False), ("request 2: its hit's positions 16 … 31 are request 1's rows from position 0 at step 0, a row that starts "
+                             "before them")),
+    (_two_producers(True), ("request 2: its hit's positions 16 … 31 are request 1's rows at step 1, computed over a history of other "
+                            "rows than the hit holds")),
     (_past_its_outputs(), "request 0's KV at positions below 16 has no row of the window that computed it (the window carries it in)"),
 ])
 def test_class_g_refuses_a_hit_no_one_chain_of_its_rows_recomputes(session, fact, tmp_path):

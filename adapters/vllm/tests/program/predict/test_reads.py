@@ -74,15 +74,15 @@ def test_every_field_the_compiler_reads_is_an_output_certified_or_advice():
     (R.Field("advice", "release", "served"), "advice.release: account 'served', none of output, certified, advice"),
     (R.Field("request", "stop", "advice"), "request.stop: not a field of the advice's request record"),
     (R.Field("request", "output_len", "output"), "request.output_len: a field of the advice, not a circuit output"),
-    (R.Field("request", "prompt_len", "certified", ahead=("T",)), "request.prompt_len: read ahead of the step that outputs it "
-                                                                   "(it shapes T), so it must be committed advice"),
+    (R.Field("request", "prompt_len", "certified", ahead=("T",)), ("request.prompt_len: read ahead of the step that outputs it "
+                                                                    "(it shapes T), so it must be committed advice")),
     (R.Field("body", "temperature", "advice", role="policy"), "body.temperature: a certified body's field, account 'advice'"),
     (R.Field("body", "min_p", "certified", role="policy", inert=(0,)), "body.min_p: role 'policy' with inert values (0,)"),
-    (R.Field("body", "seed", "advice", role="policy"), "body.seed: a stochastic request's seed is certified, its body's seed or "
-                                                       "derived from its id and the window's seed salt"),
+    (R.Field("body", "seed", "advice", role="policy"), ("body.seed: a stochastic request's seed is certified, its body's seed or "
+                                                        "derived from its id and the window's seed salt")),
     (R.Field("served", "seed", "output"), "served.seed: a stochastic request's seed is certified"),
-    (R.Field("row", "cache_hit", "advice"), "row.cache_hit: a prefix-cache hit is a row's advice, charged at its width, under "
-                                            "enable_prefix_caching: never derived by verifier-side Python"),
+    (R.Field("row", "cache_hit", "advice"), ("row.cache_hit: a prefix-cache hit is a row's advice, charged at its width, under "
+                                             "enable_prefix_caching: never derived by verifier-side Python")),
     (R.Field("row", "sources", "certified", switch=R.PREFIX_CACHE), "row.sources: a prefix-cache hit is a row's advice"),
     (R.Field("served", "cache_hit", "output"), "served.cache_hit: a prefix-cache hit is a row's advice"),
     (R.Field("body", "stream", "certified", role="transport", switch=R.PREFIX_CACHE),
