@@ -319,6 +319,25 @@ def test_at_refuses_a_fixed_path_outside_var_tmp_a_start_outside_the_tree_and_a_
     assert not (real / "pkg" / "src" / "no").exists() and not Path("/var/tmp/lean-artifacts-that-need-not-exist").exists()
 
 
+@needs_unshare
+@needs_var_tmp
+def test_an_ro_dir_under_an_rw_dir_is_read_only_at_its_own_path_and_through_the_fixed_path(tmp_path):
+    """A build's fetched dependencies lie in its `.lake`, which it writes: handed as an RO_DIR, the script binds them
+    read-only before it binds the tree at FIXED, whose copy keeps them so, since the command can mount nothing itself. An
+    RO_DIR under an RW_DIR that doesn't exist is left alone."""
+    real, _ = linked_tree(tmp_path)
+    (deps := real / "pkg" / ".lake" / "packages" / "dep").mkdir(parents=True)
+    (deps / "D.olean").write_text("kept")
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--ro", str(deps.parent), "--ro", str(real / "pkg" / ".lake" / "gone"),
+                        "--at", FIXED, str(real), str(real / "pkg" / ".lake"), "--", sys.executable, "-c", APPEND,
+                        f"{FIXED}/pkg/.lake/packages/dep/D.olean", str(deps / "D.olean"), f"{FIXED}/pkg/.lake/out"],
+                       cwd=real / "pkg", capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout.splitlines() == ["EROFS", "EROFS", "written"]
+    assert (deps / "D.olean").read_text() == "kept" and (real / "pkg" / ".lake" / "out").read_text() == "x"
+    assert not (real / "pkg" / ".lake" / "gone").exists()
+
+
 #: each mount a command in the sandbox may ask for, as (its name, the shell that asks): `$AT` is FIXED, `$TREE` the tree
 #: at its own path, `$OWN` the mount that holds the tree there, and `$AT/pkg/.lake/x` a directory of the RW_DIR
 ASKS = {
