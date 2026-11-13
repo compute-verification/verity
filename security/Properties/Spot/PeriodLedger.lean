@@ -134,8 +134,8 @@ For every challenger device that numbers and chains its ledger's lines under the
 `Chained`), and every ledger the ledger's half of the period's check reads under that key (`Spot.Period.read`): the
 presented lines but the last are the first lines of the device's own ledger, each whole, in order; or the finder at
 the lines' whole texts outputs a break (`LineBreak`). So the LMS leaf the reader reads from each of those lines'
-signatures (`leafOf`) is the leaf the device signed its own line at. The last presented line is not held: no line
-after it names its digest, so its signature, and the leaf read from it, stay free. -/
+signatures (`leafOf`) is the one the device's own line carries. The last presented line is not held: no line after
+it names its digest, so its signature, and the leaf read from it, stay free. -/
 def LedgerOfDeviceSigned : Prop :=
   ∀ (dev : History) (p : _root_.Spot.Period.Params) (ledger : Json) (r : _root_.Spot.Period.Read),
     _root_.Spot.Period.read p ledger = .ok r →
