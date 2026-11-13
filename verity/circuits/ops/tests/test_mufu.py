@@ -19,7 +19,7 @@ import pytest
 from verity.circuits.codec import definition_digest, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
-from verity.definitions.circuits import library as L
+from verity.circuits import library as L
 from verity.circuits.ops import mufu as M
 
 PINNED = {  # id: (definition digest, one-call program digest, outputs fingerprint)

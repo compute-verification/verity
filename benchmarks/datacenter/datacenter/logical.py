@@ -18,7 +18,7 @@ the same rows.
 
 A Program holds only gates. Its root body is its step structure: an input node for each parameter, bound per run or at
 registration (`program.bindings`), then its Calls. The accounting layer reads it at that grain, the census's
-(`verity.definitions.circuits.census`):
+(`verity.circuits.census`):
 
 - a *node* is a root node, named by its parameter or by the `name` its Call was given (`names`);
 - a *value* (`Value`) is a census value: a run of one node's output leaves that the same Calls read, which is what moves
@@ -49,7 +49,7 @@ import numpy as np
 from verity.hardware import registration
 from verity.circuits import boolean as BL
 from verity.circuits import types as T
-from verity.definitions.circuits.census import PRECISION, PRODUCTS, census, family
+from verity.circuits.census import PRECISION, PRODUCTS, census, family
 from verity.circuits.codec import program_digest
 from verity.circuits.cut import WIRING
 from verity.circuits.defs import PrimitiveDefinition
