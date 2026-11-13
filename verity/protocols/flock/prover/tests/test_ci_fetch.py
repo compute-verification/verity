@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-VERIFIER = Path(__file__).resolve().parents[2] / "agreement"
+VERIFIER = Path(__file__).resolve().parents[1] / "agreement"
 
 
 @pytest.fixture

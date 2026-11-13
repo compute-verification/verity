@@ -168,7 +168,7 @@ def test_the_setup_is_part_of_every_points_identity(tmp_path):
 
 # ---- the setup under the launcher ------------------------------------------------------------------------------------------
 
-#: a stand-in for verity/protocols/flock/pod/cuda-13.3.sh, in its shape: it names a toolkit it finds, else unpacks one,
+#: a stand-in for verity/protocols/flock/prover/pod/cuda-13.3.sh, in its shape: it names a toolkit it finds, else unpacks one,
 #: which resets the sourcing shell's arguments, and exits where it can't
 TOOLKIT = """for c in "$FLOCK_WORK/cuda-root"; do
   [ -z "${CUDA_TK:-}" ] && [ -x "$c/bin/nvcc" ] && export CUDA_TK=$c
@@ -218,7 +218,7 @@ class Launcher:
         tmp_path = tmp_path.resolve()
         self.root, self.work, self.run_dir, home = (tmp_path / name for name in ("tree", "work", "run", "home"))
         texts = {LAUNCHER: (ROOT / LAUNCHER).read_text(), SETUP: (ROOT / SETUP).read_text(),
-                 "verity/protocols/flock/pod/cuda-13.3.sh": TOOLKIT, "verity/protocols/flock/pod/70-class-sweep.sh": BUILD,
+                 "verity/protocols/flock/prover/pod/cuda-13.3.sh": TOOLKIT, "verity/protocols/flock/prover/pod/70-class-sweep.sh": BUILD,
                  "home/.local/bin/uv": UV}
         for path, text in texts.items():
             path = tmp_path / path if path.startswith("home/") else self.root / path

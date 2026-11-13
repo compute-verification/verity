@@ -62,7 +62,7 @@ part = "lean"
 group = 3
 needs = ["lean-build"]
 # parts named apart from their directory: a move that sends one elsewhere keeps it under the gate
-merge_requires = ["verity/protocols/flock/prover/", "verity/protocols/flock/pod/", "verity/protocols/flock/agreement/", "verity/protocols/flock/tool.py",
+merge_requires = ["verity/protocols/flock/prover/", "verity/protocols/flock/prover/pod/", "verity/protocols/flock/prover/agreement/", "verity/protocols/flock/prover/tool.py",
                   "verity/protocols/flock/verifier/", "verity/circuits/base/", "verity/circuits/lean/",
                   "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"]
 
