@@ -70,8 +70,8 @@ from dataclasses import asdict, dataclass
 from itertools import accumulate
 from typing import Any, NamedTuple
 
-from verity.protocols.certifier.prover.window_charge import Advice as Window
-from verity.protocols.certifier.verifier.arith_encode import CW
+from verity.protocols.accounting.certifier.prover.window_charge import Advice as Window
+from verity.protocols.accounting.certifier.verifier.arith_encode import CW
 from verity_vllm.pipeline.advice_code import arith as C
 
 __all__ = ["Book", "capped", "Caps", "code_executionPhase", "CoderState", "context_key", "decode", "decode_tailed", "decode_windows",

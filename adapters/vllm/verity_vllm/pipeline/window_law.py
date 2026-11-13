@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.protocols.spot.verifier.one_stage import draw as DR
+from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
 
 
 def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:

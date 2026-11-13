@@ -26,8 +26,8 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from verity.protocols.spot.verifier import second_stage as SS
-from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
