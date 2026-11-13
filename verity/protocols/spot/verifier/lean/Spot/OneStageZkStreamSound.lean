@@ -318,6 +318,53 @@ theorem stepKept_eq {S : State} {full : Core.Blobs} {files : List (String × Ste
   simp only [SessionKept.of, Except.toOption, Option.map_some, StepKept.step_of, ok_bind]
   simp
 
+/-- A fold over a list's entries with their places is the fold over its entries, where the step at each place is
+the other step at its entry. -/
+theorem foldlM_zipIdx {α β : Type} {f : β → α × Nat → V β} {g : β → α → V β} :
+    ∀ (l : List α) (n : Nat) (r : β), (∀ (k : Nat) (x : α) (r : β), l[k]? = some x → f r (x, n + k) = g r x) →
+      (l.zipIdx n).foldlM f r = l.foldlM g r
+  | [], _, _, _ => rfl
+  | x :: l, n, r, h => by
+    have h0 := h 0 x r rfl
+    rw [Nat.add_zero] at h0
+    rw [List.zipIdx_cons, List.foldlM_cons, List.foldlM_cons, h0]
+    congr 1
+    funext r'
+    exact foldlM_zipIdx l (n + 1) r' fun k y r'' hk => by
+      rw [show n + 1 + k = n + (k + 1) by omega]
+      exact h (k + 1) y r'' hk
+
+/-- **Where every member's files read, the statement the files' pass read for a member is that member's**, the
+first under its name, as `heldStep` finds a statement's member. -/
+theorem statementAt_of {slice : Member → Json} {bs : Core.Blobs} :
+    ∀ {ms : List Member} {files : List (String × StepAt)} {m : Member}, membersFiles slice bs ms = .ok files →
+      ms.find? (·.name == m.name) = some m → ∃ a, m.files (slice m) bs = .ok a ∧ statementAt files m = .ok a
+  | [], _, _, _, hf => by cases hf
+  | m' :: ms, files, m, h, hf => by
+    unfold membersFiles at h
+    cases ha : m'.files (slice m') bs with
+    | error e => rw [ha] at h; cases h
+    | ok a =>
+      rw [ha] at h
+      cases hr : membersFiles slice bs ms with
+      | error e => simp only [ok_bind, hr] at h; cases h
+      | ok as =>
+        simp only [ok_bind, hr] at h
+        cases h
+        rw [List.find?_cons] at hf
+        by_cases hn : (m'.name == m.name) = true
+        · rw [if_pos hn] at hf
+          cases hf
+          exact ⟨a, ha, by simp [statementAt, List.lookup]⟩
+        · rw [if_neg hn] at hf
+          obtain ⟨b, hb, hs⟩ := statementAt_of hr hf
+          refine ⟨b, hb, ?_⟩
+          unfold statementAt at hs ⊢
+          have hn' : (m.name == m'.name) = false := by
+            simpa [eq_comm] using hn
+          simp only [List.lookup, hn'] at hs ⊢
+          exact hs
+
 /-- **The fold's half of `StreamSound`, stated and not proved**: on a feed in the per-member stream's order, its
 state after every step keeps every member's files and every statement's session as they read on all the blobs fed. -/
 def StepsKept : Prop :=
