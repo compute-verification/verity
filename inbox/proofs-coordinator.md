@@ -156680,3 +156680,367 @@ Your 18:06Z order is followed. The branch is `cursor/proofs-messages-word-745c`,
 - Whether TOP-415 names a live goal (see the top).
 
 To post: nothing. Runs going on: the two suites runs. `gatesRefine_check` starts now that this is open. Next entry by 19:58Z, sooner when the suites end.
+
+## ADDRROW2, Fri 13 Nov 19:02Z: THE TRIAL HOLDS: all five places compile on a node with the same statements and the same bounds; the second pull request is 37 files and 52 records, and one premise's text (`RegisteredFiles`) has to change for it, so I bring the two texts; pull request 1 is pushed with its two tries passing, and opens when its records run and suites are back; the list of the 50 is pushed
+
+**In plain words.** The restatement makes every proof of "a disagreement gives a collision" into a function that
+returns the two colliding strings, and makes the finders output that function's value. I wrote the five places you
+named as copies beside the real files and compiled each on a node. All five went. No statement's text, no bound and no
+premise list had to change in them. Three things are not in the trial and I say them plainly in section A. The second
+pull request has grown by your rulings: section C lists what it changes, file by file. One part of it cannot keep a
+text: with the registered files held as data, the premise `RegisteredFiles` as written can be met only by a file taken
+by choice, so it has to speak of the parameters the deployment runs a session at. That is a premise's text, so I stop
+there and bring both texts (section D). Your 17:33Z message and the 17:50Z mail are read whole; the mailbox holds
+nothing newer [run: read at 19:02Z].
+
+One correction first: my lookup entry is headed 17:43Z and was pushed at 17:41Z by the clock. I had not read the clock
+before stamping. This entry's stamp is read from `date -u`.
+
+The trial is on `cursor/proofs-addrrow2-pairtrial-681e` at `4c0cb39c06d9`, cut from `origin/main` `2359dfc54cd6`. It
+is a scratch and is never to merge. The Lean of the trial is at `1fb9a70591af` (the commit above it only adds the
+list of section E). Paths are under `security/`. Every try is `lean_changed.py --try FILE --siblings` on
+vy-nebius-cpu-3.
+
+### A. The five places [run]
+
+Each line is the try's own last lines. "The standard three" is `propext`, `Classical.choice`, `Quot.sound`.
+
+| # | place | file of the trial | run | the try's line |
+|---|---|---|---|---|
+| 1 | `walkPair` with `walkPair_spec` (and `openPair`, `openPairL` with theirs) | `Definitions/Flock/MerklePair.lean`, `Proofs/Flock/Soundness/MerklePair.lean` | `r20261113-180725-87ee` | "lean exit 0 in 25 s"; "none of its 3 theorems uses an axiom beyond" the standard three |
+| 2 | `collOf_isColl` with the four lemmas every bound passes through, and `TreeRewind` | `Proofs/Flock/Soundness/PairTrial/Pick.lean` | `r20261113-180310-406c` | "lean exit 0 in 23 s"; "none of its 8 theorems" |
+| 3 | one session finder end to end: `advRSFinderZ` with `advRSZ_le_strict` | `…/PairTrial/Session.lean` | `r20261113-180725-20ce` | "lean exit 0 in 28 s"; "none of its 5 theorems" |
+| 4 | `Leaf.hm96` with its pair | `…/PairTrial/Leaf.lean` | `r20261113-180310-4348` | "lean exit 0 in 22 s"; "none of its 6 theorems"; `hm96Pair_spec` uses `propext` and `Quot.sound` only |
+| 5 | `collOf_congr` with its two users | `…/PairTrial/Congr.lean` | `r20261113-180310-84e5` | "lean exit 0 in 24 s"; "none of its 3 theorems" |
+
+Two tries failed or warned before these and were mended [run]:
+- Place 3's first try (`r20261113-180310-d292`, exit 1): one helper lemma of mine (`firstL_some`) lacked
+  `open Classical in`. The finder and the bound had compiled. Mended, and the table's run is the second try.
+- Place 1's first try (`r20261113-180310-317e`, exit 0) warned that `if_pos` and `if_neg` are deprecated. I renamed
+  them; the table's run is the second try.
+No try failed on a file I did not change, so the friction note's case did not come up.
+
+**What each place shows** [text for the shapes; run for "compiles"].
+1. `walkPair H E sibs sibs' idx a a'` walks both paths up together and returns the two strings hashed at the first
+   step whose parents agree. It compares two digests by their bytes (`E.dig`, injective), so it needs no decidable
+   equality on the digest type and no choice: it is a plain computable function. `walkPair_spec` concludes
+   `Hash.Collision H (walkPair …).1 (walkPair …).2` from the hypotheses `walk_binding` has. `openPairL` takes the
+   leaf function and the leaf's pair function as arguments, so it compiles against today's `Leaf`.
+2. `collOfP (p : W → Prop) (pr : W → pair) := if h : ∃ w, p w then some (pr h.choose) else none`. The four lemmas keep
+   their left sides and their bounds; each takes the pair function `pr` and the fact `hpr` that it is a collision in
+   place of the proof `hcol : … → Merkle.Collision H`. `tree_le_strictP`'s conclusion is `tree_le_strict`'s, word for
+   word. `TreeRewindP` has the fields `pair` and `binds` in place of `binds : … → Merkle.Collision H`.
+3. `advRSFinderZP` is `advRSFinderZ` with `conflictPickP` at the pair of the two runs' first verifying openings at the
+   position (`opRZPair`, through `opOfLPair` and `openPairL`). `advRSZ_le_strictP` has `advRSZ_le_strict`'s statement
+   at that finder: the same left side, `≤ q ^ 2 / 2 ^ 513`, the same premise `(finder).CR Hs.H q`. Its proof is the
+   original's three steps.
+4. `LeafP` is `Leaf` with `pair` and `pair_spec` in place of `bind`. `hm96Pair` returns the two outer inputs when
+   they differ, else the two salt-digest inputs when the salts differ, else the two columns' encodings.
+   `LeafP.plain_toLeaf` and `LeafP.hm96_toLeaf` are `rfl`: forgetting the pair gives today's `Leaf.plain` and
+   `Leaf.hm96`. The three base lemmas follow as corollaries (`walk_bindingP`, `opening_bindingP`,
+   `opening_bindingLP`), each one line.
+5. `collOfP_congr` (two propositions that agree at every witness give one pair) and both users
+   (`clashPickCLP_lastFree`, `clashPickHLP_lastFree`) compile, each proof one line as today.
+
+**What the trial did not compile. Three things, plainly.**
+- **It is on copies, not in place.** Every restated declaration has the suffix `P` and sits in a new file that imports
+  the built modules. The 21 files of my 16:42Z entry are not edited, so no listed guarantee has been compiled against
+  the restated definitions. What the trial shows is that the shape holds at the five places you named; the 52
+  declarations that name only a finder are untested where a proof unfolds a finder's body.
+- **Place 3 takes the leaf's pair as a parameter** (`pairLf`, with `hpair`), standing for the fields `Hs.Lf.pair` and
+  `Hs.Lf.pair_spec` that `Leaf` gets. Place 4 compiles that structure and `hm96`'s instance, so the two fit by
+  construction, but they were not compiled joined.
+- **Place 5 takes the pair of two clashing outcomes as a parameter** (`pairC`, `pairH`). The pair function of
+  `ClashCL` and of `ClashRunHL` themselves (through `SelfClashL`, `op₀L`, `opRL`) is not built. It is a composition of
+  `opOfLPair` over the cases of the clash, of the kind place 3 compiles, but it is not compiled.
+
+**Where choice is still used, so that soundness reads it and not me** [run: `r20261113-180725-360f`, a file of
+`#print axioms` over the trial's definitions, "lean exit 0 in 33 s"; read for where it comes in]. `walkPair`,
+`openPair` and `openPairL` use `propext` alone; `hm96Pair` and `LeafP.hm96` use `propext` and `Quot.sound`;
+`LeafP.plain` uses no axiom. The definitions that use `Classical.choice` are `collOfP`, `onePickP`, `conflictPickP`,
+`firstL`, `opOfLPair`, `opRZPair`, `advRSFinderZP`, `clashPickCLP` and `clashPickHLP`, as today's `advRSFinderZ`
+does. By reading, it comes in at three places:
+- `collOfP` picks the witness `w` by `h.choose` (your ruling 4: go on as derived). For the finders of place 3 the
+  witness is the position `p` at which the two runs conflict, so it could be `Finset.univ.toList.find?` over the
+  positions under soundness's ruling B, with no `choose`. I did not build that; it changes `collOfP`'s shape only.
+- `firstL` (the run's first verifying opening at a position) decides "this opening verifies" by classical
+  decidability, as `opOfL` does today (`Exec/CompiledL.lean:136`). It picks nothing: the element is the first of the
+  run's own list. If soundness's walk refuses `Classical.propDecidable`, the test becomes a comparison of bytes
+  (`E.dig`), as in `walkPair`.
+- **`plurSZ`** (`Discharge/ZkLink/SessionZ.lean:112`, three `Classical.choose`) is the chooser of `advRSFinderZ`
+  (`StrictZ.lean:51`) and so of `advRSFinderZP`. The trial meets it there and goes on, as you ordered. It did not meet
+  `candZC` or `candL` (they are in `ZkLink/{CompiledLink,RowsSound}.lean`, `Exec/FlockLinkL.lean`,
+  `Recursive/{Transfer,ZkReg/RegLink}.lean`, none of the five places) [run: grep].
+
+**STOP RULE for the trial: not touched.** No place needed a statement's text, a bound or a premise list to change.
+
+### B. The two lemmas of your rulings 2 and 3, sized [read for today's text; derived for the restated one; nothing compiled]
+
+**`RegClash.collision`** (`Proofs/Flock/Recursive/HoloExec.lean:310`).
+- Today `HoloReg.Opens` (`:134`) is a proposition: `∀ pos < 2 ^ lv.logLen, ∃ salt sibs, VerifiesL … pos (x.column …) salt sibs`.
+  `RegClash.collision` takes the salt and the path out of that `∃`, so its pair rests on an opening only said to exist.
+- Restated, the openings are data: a structure with `salt : ℕ → Sl`, `sibs : ℕ → List D` and the proof that each
+  position below `2 ^ lv.logLen` verifies with them. The pair of a `RegClash` is `openPairL` of the run's first
+  opening off the word (found as `firstL` finds it) and the registrant's opening of that position.
+- What it touches: `HoloExec.lean:134-137, 304-332` (`HoloReg.Opens`, `RegClash.collision`, `ClashHL.collision`) and
+  `C3/Fork/Sound.lean:57-103, 208-218` (`holoInnerCLO`, whose statement type `{x // x.Opens …}` becomes a pair of the
+  registration and its openings; `clashPickHLO`; `holo_inner_sound_compiled`; `holoForkSound_holoAt`). About 60 to 90
+  lines in those two files [guess].
+- **The reader has no reader** [run: grep over `security/`, and the reads of the pinned facts]. `clashPickHLO` and
+  `holoInnerCLO` are named only in `C3/Fork/Sound.lean`; `holo_inner_sound_compiled` and `holoForkSound_holoAt` are
+  named by no other Lean (one docstring in `Proofs/Flock/C3.lean:130`); no listed guarantee reads any of them, or
+  `HoloReg.Opens`, `RegClash` or `ClashHL`. Soundness's rule was "delete unless a reader is found". The reader found is
+  itself read by nothing. So the other choice is to delete the chain (`RegClash.collision`, `ClashHL.collision`,
+  `holoInnerCLO`, `clashPickHLO` and the two theorems, about 70 lines), keeping `RegClash` and `ClashHL`, which
+  `C3/Fork/{Runs,Extract,Coupling,CouplingBad,CouplingProb}.lean` and `Recursive/RegExtract.lean` read. I take the
+  restatement as ruled unless you say delete.
+
+**`topRoot_collision`** (`Proofs/Flock/Recursive/TopRoot.lean:300`).
+- Today it argues by contradiction over `S := topStrings dom bcs ++ topStrings dom bcs'`, a list of byte arrays.
+- Restated: `topPair dom bcs bcs'` searches the pairs of `S` for the first two different members with one SHA-512
+  (`List.findSome?` over the list with itself; byte arrays have decidable equality, so no choice and no `toList` is
+  needed), and the theorem concludes that this pair is a collision, from the same three hypotheses. The proof is
+  today's, turned around: `¬ CF S` gives a member pair, so the search succeeds.
+- Its reader `TopColl.collision` (`TopFinder.lean:205`) takes the held top `bcs` and the domain `dom` out of `∃`s. The
+  pair function has to compute them from the history: `innerCommitsAt (wr t).1 (wr t).2 st reg`, its stream
+  `"stacked/rep0"`, `tops[0]?`, and the domain `topEntryFields_ok` reads (`TopFinder.lean:139`). `topFinder` (`:239`)
+  then outputs it.
+- What it touches: `TopRoot.lean:296-317`, `TopFinder.lean:139-248`. About 60 to 90 lines [guess]. The three bounds
+  below `topFinder` name it only. No listed guarantee reads `topFinder` [run].
+
+### C. What the second pull request changes
+
+The Flock part is my 16:42Z entry's sections F and G, unchanged by the trial. The rest is new.
+
+| part | what changes | files and lines at `origin/main` `fa3e619ee146` | size |
+|---|---|---|---|
+| 1. `Leaf` | `bind` becomes `pair` with `pair_spec`; `Leaf.plain`, `Leaf.hm96` with `hm96Pair`; the three base lemmas become corollaries of pull request 1's specs | `Definitions/Flock/Merkle.lean:62-64, 67, 117-119`; `Proofs/Flock/Soundness/Merkle.lean` (82 lines) | [guess] about 100 lines; the trial's file is 104 |
+| 2. the three pickers | `collOf`, `onePick`, `conflictPick` take a pair function; `collOf_isColl`, `ind_le_onePick`, the four lemmas, `TreeRewind` | `Proofs/Flock/Soundness/StrictCR.lean:53-77, 124-204, 206-262` | [guess] about 150 lines; the trial's file is 166 |
+| 3. the finders and their lemmas | 25 finders hand a function where they handed a proof; 33 lemmas give their pair; `collOf_congr` and its users | the 17 files of entry 2's section G; the listed finders are at `ZkLink/StrictZ.lean:50,59,68,77,84`, `Exec/StrictCRL.lean`, `Recursive/Compile.lean:89`, `Recursive/Registrants.lean` | [guess] 450 to 600 lines |
+| 4. call sites | 32 declarations in 14 modules pass a lemma whose parameters change | 4 more files (`C3/Fork/Extract`, `Exec/Headline`, `Refine/Paths`, `ZK/CoinBinding`) | [guess] 60 to 100 lines |
+| 5. `RegClash.collision` | section B | `Recursive/HoloExec.lean`, `C3/Fork/Sound.lean` (both among the 17) | [guess] 60 to 90 lines |
+| 6. `topRoot_collision` | section B | `Recursive/TopRoot.lean`, `Recursive/TopFinder.lean` (both among the 17) | [guess] 60 to 90 lines |
+| 7. `fileWith`, `registeredOf` | section D | `Proofs/Properties/Verity/Sampled/Instance.lean:125-142, 529-547, 570-590, 744-814`; `Sampled/OpensAt.lean:270-292` | [guess] 40 to 70 lines |
+| 8. `pinnedFile` | section D | `Proofs/Properties/Verity/Sampled.lean:719-755, 795-826`; `Sampled/Binding.lean:677-712, 922-981`; `Sampled/Instance.lean:163-198`; `Sampled/Accepts.lean:303-363`; and 11 files that only pass the new argument | [guess] 150 to 250 lines |
+| 9. documents | 7 lines of `Proofs/Flock/Soundness/{ASSUMPTIONS,DESIGN,README}.md`; the docstrings of `Finder.CR` and `SHA512CRStrict`; the docstrings of the sampled instance | | [guess] 30 lines |
+
+**In all** [guess, but for the file counts, which are run]: 21 files under `Proofs/Flock` and `Definitions/Flock`, 16
+under `Proofs/Properties/Verity/Sampled*` (`Sampled.lean` and `Sampled/{Accepts, Assembled, Binding, CountsLayout,
+Coupling, CouplingAt, Device, Instance, Messages, MovesLayout, MovesReach, MovesReachAt, OpensAt, SessionAt,
+Target}.lean`), 37 in all; about 1,000 to 1,300 lines rewritten or added. No file is in both halves.
+
+**The records that move** [run for the readers, at the pin's facts; derived for "moves"].
+- **50 of `security/lean-audit.json`, two of them deployed** (`Flock.SecurityProofs.SampledKSLiveV3`,
+  `Flock.SecurityProofs.SampledKSLiveV5`): their `reads` only, as in entry 2's section F. No statement's text, no
+  bound, no premise list. Parts 5 and 6 add no record: no listed guarantee reads them.
+- **2 more of the same lock, neither deployed**: `Verity.Sampled.remote_soundness_deployedReady` and
+  `Verity.Sampled.remote_soundness_deployedReady_honest`. They are the only listed guarantees that read `Instance`,
+  `readOf`, `pinnedFile`, `pinnedTables`, `Instance.RegisteredFiles`; the first alone reads `tableCollision`,
+  `readFinder` and `finderOf`; the second alone reads `fileWith`, `registeredOf` and the honest instance. Their
+  `reads` move. Neither statement's text moves if the honest instance keeps its two arguments. **One premise's text
+  moves**: `Instance.RegisteredFiles`, an open premise of the first in the lock (section D).
+- No guarantee of `security/Properties/lean-audit.json` reads any of it [run].
+- So 52 records in one lock. The two halves share no file and no record, so they can be two pull requests that land
+  together, if soundness would rather read them apart. I build them as one unless you say two.
+
+**The day.** Ready for your read on **Mon 16 Nov**, ahead of the 20:00Z line you set, so that the line is the gate
+and not the work [guess]. What it rests on, since none of it is measured:
+- your word on the premise's text (section D) and soundness's on `pr h.choose` by Sat 14 Nov. A no on either changes
+  `collOfP`'s shape or part 7, not the rest;
+- the whole build. `Definitions/Flock/Merkle.lean` changes, and 2,478 modules import it, so each whole round rebuilds
+  half of `security/Proofs` on a node. I have not timed one. I work file by file with tries (a leaf try is about a
+  minute once its imports are built) and keep whole builds to two or three;
+- the 52 declarations that name only a finder. If many of their proofs unfold a finder's body, part 4 grows;
+- the other worker's sizing of `plurSZ`, `candZC` and `candL`. If that work edits `ZkLink/StrictZ.lean` or
+  `StrictCR.lean` before Monday, the two changes meet in those files.
+If Monday slips I say so in an entry on Sun 15 Nov, with what is left.
+
+### D. The files taken by choice: the design, and the one text that has to change [read; derived; nothing compiled]
+
+**`pinnedFile`** (`Proofs/Properties/Verity/Sampled.lean:719`). Today `pinnedFile sha` is some byte array with the
+digest `sha`, by choice. It is read in two ways, and the second is wider than the finder:
+- `Binding.tableCollision` (`Sampled/Binding.lean:677`) pairs the play's blob with it, and `Binding.readFinder`
+  (`:691`) outputs that pair. This is the fault soundness named.
+- `pinnedTables` (`Sampled.lean:733`) is the lookup tables of `readOf θ F` (`:795`), which is the reading every
+  instance must have (`Instance.read`, `Sampled/Instance.lean:167`). So **the circuit the sampled guarantee speaks of
+  is built from table bytes taken by choice**, not only the finder's second string.
+
+The mend, as soundness worded it:
+- New data: `structure Pinned` with `file : String → Option ByteArray` (a table's registered bytes, by its pinned
+  digest's hex) and `hash : ∀ sha b, file sha = some b → Flock.hexOf (Flock.Sha512.hash b) = sha`. The field `hash`
+  is the proof that the bytes' digests are `Flock.MUFU_TABLES`'s: it is what `pinnedFile_hash` proves today from
+  `choose_spec`, and the one fact the proofs use (`Binding.lean:981`).
+- `Instance` gets the field `pinned : Pinned`, and its field `read` says `base.read θ F = readOf pinned θ F`.
+- `pinnedFile` is deleted. `pinnedTables`, `TablesSent`, `DigestsAt` (its field `tables`), `readOf`,
+  `tableCollision` and `readFinder` each take the `Pinned`. `tableCollision P s` sets the play's first blob with a
+  pinned digest against `P.file` of that digest; `readFinder V P dev` outputs it; `Instance.finderOf` passes
+  `I.pinned`. The proofs change only by the one argument.
+- A second way, which I name and do not take: read the tables out of `base.registered θ` (the first registered file
+  with the digest, as `namedFinder` reads the circuit file). It needs no new field and no proof, but it ties the
+  tables to the same array as part 7, and soundness asked for a field.
+
+**`fileWith` and `registeredOf`** (`Sampled/Instance.lean:125, 140`). They are the honest instance's registered files
+(`Instance.Honest.base`, `:760`). The mend deletes both, with `fileWith_mem`, `registeredFiles_of` (`:534`) and
+`Honest.registeredFiles` (`:813`); the honest instance's `registered` is no file (`fun _ => #[]`) and its `pinned` no
+table. Then the honest lemma's second fact, `RegisteredFiles` at that instance, is no longer provable as written, and
+no data can make it so. That is the stop:
+
+**The premise `Instance.RegisteredFiles` (`Sampled/Instance.lean:529`), the two texts.**
+
+Today:
+```lean
+def RegisteredFiles : Prop :=
+  ∀ θ F, (∃ p, ParamsAt θ p) → I.base.Registered θ F → I.base.Registered θ (I.base.registered θ)
+```
+Proposed:
+```lean
+def RegisteredFiles : Prop :=
+  ∀ θ F A, I.session θ = some A → (∃ p, ParamsAt θ p) → I.base.Registered θ F →
+    I.base.Registered θ (I.base.registered θ)
+```
+- **Why today's text cannot stand with data** [derived]. It asks, at every parameters `θ` whose two digests some
+  files have, that the instance's registered files hold a file with each. `θ` ranges over all byte strings, not the
+  parameters the deployment registered. An instance whose registered files are data holds files for the parameters
+  it registered, and none for the rest, so the text is false of it wherever any other `θ` has files with its
+  digests. Only a file taken from existence meets it at every `θ`, which is how `registeredFiles_of` proves it today.
+- **Why the proposed text is enough** [read: the proof, `Instance.lean:570-590`]. The one use of the premise is in
+  `Instance.covers`, at `:586`, inside the case `hA : I.session θ = some A`. Where the deployment runs no session the
+  proof never reads it. So the theorem's proof takes the proposed text with one more argument, `hA`.
+- **What it does to the claim.** The premise gets weaker, so `remote_soundness_deployedReady` gets stronger. Its
+  premise list keeps its names. The honest instance runs no session, so it meets the proposed text as it meets the
+  other four premises, "each deployment premise speaks of the sessions the deployment runs", in the honest lemma's
+  own words (`OpensAt.lean:282`). Today `RegisteredFiles` is the one premise of the six that does not.
+- **The other ways, which I do not propose.** Keep the text and give the honest lemma the fact as a hypothesis: it
+  then witnesses nothing for that premise. Keep the text and define the honest files by a search for the first file
+  with the digest: it is not a `choose`, but it is no more the registered file than the chosen one is.
+I make no edit to this premise before your word.
+
+### E. The list of the 50, one by one [run]
+
+`scratch/bare-collisions/guarantees.md` on `cursor/proofs-addrrow2-pairtrial-681e` at `4c0cb39c06d9` (and
+`guarantees.tsv` beside it, the same rows). One row per guarantee: its name, whether it is deployed, the module that
+proves it, which of the changed definitions its statement reads (`Leaf`, `Leaf.hm96`, the two bare definitions, the
+three pickers, the five session finders, the three `…SFinderL`, `clashPickCL`, `regFinder`), and its named
+assumptions and open premises from the lock. Below the 50, apart, the two guarantees of section C that read a file
+taken by choice. Everything in it is from the facts of `security/lean-audit.json` at the pin `053b8e50fe8a`; the
+files it speaks of are the same at `origin/main` `fa3e619ee146` [run: `git diff --stat`], but I did not regenerate
+the facts there.
+
+### F. Pull request 1
+
+**Not opened yet. Its branch is pushed, its checks on this machine pass and its two tries pass on a node; its
+records run and its changed suites at the final head are waiting on memory.** I send the line "ready to mark #N at
+SHA" when they are back and the pull request is open.
+
+- **The branch** [run]: `cursor/proofs-addrrow2-pairs-681e` at `071cba3fba4b`, cut from `origin/main`
+  `fa3e619ee146`. Three commits, five files, 147 lines added and 2 removed:
+  - `security/Definitions/Flock/MerklePair.lean` (new, 54 lines): `walkPair`, `openPair`, `openPairL`, in the
+    definitions tree beside `Leaf`, as you ruled.
+  - `security/Proofs/Flock/Soundness/MerklePair.lean` (new, 85 lines): `walkPair_spec`, `openPair_spec`,
+    `openPairL_spec`.
+  - their roots: one import line in `security/Definitions/Flock.lean` and one in
+    `security/Proofs/Flock/Soundness.lean`. Those two files are the areas' import lists. Nothing else imports the new
+    files, and `Definitions/Flock/Merkle.lean` and `Proofs/Flock/Soundness/Merkle.lean` are not edited.
+  - `tools/verity/lean/unread-caps.json`: the next point but one.
+- **They are the trial's two files of place 1 but for one word** [run: the diff of the two]. The glossary retires the
+  word "cap" (it was Pearl's name for its bound), and the ratchet gate refused the change for 10 new sites of it. So
+  the binder `cap` of the two specs is `top`, and the prose says "tree top". A binder's name changes no statement.
+  Because the text moved, the tries run again at this head and I do not count place 1's run for them.
+- **One edit you did not order, which the rule asks** [read: `tools/verity/lean/unread.py` and the last change that
+  did the same]. No guarantee reads the two new modules until the second pull request, and an area's count of wholly
+  unread modules must not pass its entry in `unread-caps.json`. So the change gives `Definitions/Flock`, which had no
+  entry, 1 module and 3 declarations, and raises `Proofs/Flock` from 273 to 274 modules and from 2309 to 2312
+  declarations: main's entry plus this change's additions [derived: no audit counted the areas at this head]. The
+  body lists each unread module, the guarantees that will read it (all listed today) and that the change that makes
+  them read is not marked before Mon 16 Nov. Two things to weigh: another pull request that raises `Proofs/Flock`'s
+  entry conflicts with this one in that file; and if you would rather not carry two unread modules until the second
+  pull request, this one can wait and land with it.
+- **Checks on this machine** [run, at `071cba3fba4b`]. The ratchet gate
+  (`adapters/vllm/tools/ratchet_gate.py origin/main HEAD`): "passed: no lane-text site is new in the 4 file(s) it
+  changes; no retired-term site is new in the 4 file(s) it changes". `tests/lint/test_repo_retired_terms.py`,
+  `tests/lint/test_lean_bar.py` and `tests/lint/test_repo_lane_text.py`: 29 passed.
+  `tests/test_lean_packages.py`, `tests/test_lean_vocabulary.py`, `tools/verity/lean/tests/test_unread.py` and
+  `tools/verity/lean/tests/test_unread_gate.py`: 68 passed; their warnings name no file of this change.
+- **The tries, at the final head** [run: `r20261113-185118-fedd`, done, exit 0, vy-nebius-cpu-12].
+  `Definitions/Flock/MerklePair.lean`: "lean exit 0 in 12 s". `Proofs/Flock/Soundness/MerklePair.lean`: "lean exit 0
+  in 29 s"; "axiom probe: none of its 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+  The try's check of name clashes with sibling modules is partial, here and in the trial's tries: it reads only the
+  modules that node's cache holds built (577 of the definitions package with 151 unchecked; 832 of the proofs package
+  with 3,217 unchecked) and found no clash among them. A grep of the tree for the six names finds no other
+  declaration of them in the namespace `FlockSoundness.Merkle` [run].
+- **What the grep did find: the walk's pair has a twin in the proofs tree, which I had not named** [read].
+  `FlockSoundness.ZK.GK.walkPairs` with `walkPairs_coll` (`Proofs/Flock/Soundness/ZK/GK/Extract.lean:76, 91`) lists
+  the inputs of two walks' steps side by side and proves that one pair of the list collides; `findColl` (`:49`)
+  returns the list's first colliding pair, under decidable equality of digests. It was written for the simulator's
+  finder over the coin tree, on the same `up`, `walk` and `Enc`. `walkPair` returns the pair at the first step whose
+  parents agree, which is the pair `findColl` meets first when the two start nodes differ [derived; not proved], and
+  it needs no decidable equality because it compares bytes. So after this change the tree says the walk's pair
+  twice, as after the second pull request it says the leaf's pair twice (`Binding.ExplicitLeaf`, entry 2). Pull request 1 cannot make them one: the
+  twin is in `Proofs/`, under the zero-knowledge files, and you ordered new files only. I name it in the body, and
+  put making them one (`walkPairs_coll` from `walkPair_spec`, or `walkPair` read out of `walkPairs`) with the same
+  later step as `ExplicitLeaf`. The executable side has its own (`climbPair` in `Proofs/Flock/Verifier/Merkle.lean:74`;
+  `climbPair` and `openPair` in `Proofs/Flock/Verifier/Registered.lean:224, 284`), over byte arrays, which are other
+  trees' walks and stay.
+- **The other node runs.** At the head before the rename (`64571987475c`) the changed suites passed:
+  `r20261113-182609-2389`, done, exit 0, all six the change touches (`repository` 358 passed, `verity-check` 1003,
+  `verity-graph` 220, `verity-lean-audit` 750, `verity/circuits/ops` 949,
+  `verity/protocols/accounting/pouw/verifier` 2013). At the final head, waiting on memory as I write: the records run
+  (`r20261113-185209-f829`, `lean_changed.py --records security`, which must show no record moved) and the changed
+  suites (`r20261113-185337-0238`).
+- **The issue.** `research queue open` asks for one. I know no issue of ours for the restatement, so I open against
+  PRF-490, where the finding is. Name another and I move it with `research queue edit`.
+
+### Not established
+
+- Nothing of the second pull request is compiled in place: sections B, C and D are read and derived, and every line
+  count marked [guess] is a guess.
+- The pair functions of `ClashCL`, `ClashRunHL` and `RegClash`, and `topPair`, are not written.
+- That the 52 declarations naming only a finder still compile.
+- How long a whole build of `security/Proofs` takes after `Definitions/Flock/Merkle.lean` changes.
+- Whether soundness's walk admits `Classical.propDecidable` in `firstL`, and `h.choose` in `collOfP`.
+- The readers of section C are from the pin's facts, not from facts at `origin/main`.
+- Pull request 1 at its final head `071cba3fba4b`: the records run and the changed suites are not back. No audit
+  has counted the unread modules at that head, so the two entries of `unread-caps.json` are derived.
+- That `walkPair` returns the pair `findColl` returns from `walkPairs`: derived by reading, not proved.
+- Every try's check of sibling name clashes is partial (it reads the built modules of the node's cache only).
+
+### Pushed
+
+- `cursor/proofs-addrrow2-pairtrial-681e` at `4c0cb39c06d9` (the trial and the list; scratch, never to merge).
+- `cursor/proofs-addrrow2-pairs-681e` at `071cba3fba4b` (pull request 1).
+- This entry, on `cursor/verity-proofs-84b5`.
+
+### Runs
+
+The trial, at `1fb9a70591af` unless said, each `lean_changed.py --try FILE --siblings`:
+- `r20261113-180725-87ee` done, exit 0: place 1.
+- `r20261113-180310-317e` done, exit 0: place 1's first version, at `a3c941f77c82` (deprecation warnings).
+- `r20261113-180310-406c` done, exit 0: place 2.
+- `r20261113-180725-20ce` done, exit 0: place 3.
+- `r20261113-180310-d292` failed, exit 1: place 3's first try (my helper lemma `firstL_some`).
+- `r20261113-180310-4348` done, exit 0: place 4.
+- `r20261113-180310-84e5` done, exit 0: place 5.
+- `r20261113-180725-360f` done, exit 0: the probe of axioms.
+
+Pull request 1:
+- `r20261113-182609-2389` done, exit 0: the changed suites at `64571987475c`, the head before the rename.
+- `r20261113-185118-fedd` done, exit 0: the two tries at `071cba3fba4b`.
+- `r20261113-185209-f829` waiting: the records run at `071cba3fba4b`.
+- `r20261113-185337-0238` waiting: the changed suites at `071cba3fba4b`.
+- `r20261113-183944-e44f` cancelled by me before it started (tries and records at `64571987475c`; the head moved).
+- `r20261113-182609-f26a`, `r20261113-182609-6333`, `r20261113-182609-cc6e` cancelled by me before any Lean ran:
+  three runs of one commit in the shared source tree wait on one another's Lean lock. The runs above have a tree of
+  their own (`--cwd clone`).
+
+A timer of 25 minutes is set while these are out.
+
+### To post
+
+- To soundness, on the thread where the finding is: sections C and D in short. The second pull request is 37 files
+  and 52 records of `security/lean-audit.json` (the 50, two deployed, and the two of remote soundness at the one-stage
+  instance); the day is Mon 16 Nov [guess]; one premise's text changes, `Instance.RegisteredFiles`, with both texts
+  above; and one finding beyond the finder: `readOf` builds the circuit's lookup tables from `pinnedFile`, so the
+  circuit the sampled guarantee speaks of rests on bytes taken by choice until the instance holds them as data.
+- To soundness, two questions: whether the walk admits classical decidability of "this opening verifies" where the
+  element taken is the first of the run's own list (`firstL`); and delete or restate for the `RegClash.collision`
+  chain, whose one reader is read by nothing.
