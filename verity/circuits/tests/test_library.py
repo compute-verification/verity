@@ -1,4 +1,4 @@
-"""The library list (`verity.definitions.circuits.library`): the measured MUFU tables and core's tensor-core steps and casts are `library`,
+"""The library list (`verity.circuits.library`): the measured MUFU tables and core's tensor-core steps and casts are `library`,
 everything else `program`; the list's digest is pinned, so an edit without a version bump fails here."""
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import re
 import pytest
 
 from verity.circuits.defs import REGISTRY
-from verity.definitions.circuits import library as L
+from verity.circuits import library as L
 from verity.circuits.ops import prims  # noqa: F401  (registers the listed Definitions)
 
 #: `digest()` of VERSION 2. A change to the list needs a new VERSION, then this pin.
