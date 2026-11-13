@@ -74,7 +74,7 @@ REPLACED = {
                  "    if m.name not in ('quarantine', 'catalog'):\n"
                  "        importlib.import_module(package.__name__ + '.' + m.name)\n"),
     ("ops", "registry"): ("import importlib, pkgutil\n"
-                          "for name in ('verity.definitions.ops', 'verity.definitions.registry'):\n"
+                          "for name in ('verity.circuits.ops', 'verity.definitions.registry'):\n"
                           "    package = importlib.import_module(name)\n"
                           "    for m in pkgutil.walk_packages(package.__path__, name + '.'):\n"
                           "        importlib.import_module(m.name)\n"),
@@ -103,15 +103,15 @@ def test_each_scope_registers_what_the_walk_it_replaced_did_in_its_order():
 
 
 def test_the_ops_scope_imports_every_module_of_ops():
-    """`load(("ops", "registry"))` imports every module of `verity.definitions.ops` and of its subpackages besides the registry's,
+    """`load(("ops", "registry"))` imports every module of `verity.circuits.ops` and of its subpackages besides the registry's,
     and registers Definitions the registry alone does not: in a process of its own, so the list above stays the registry's."""
     code = ("import pkgutil, sys\n"
-            "from verity.definitions import ops\n"
+            "from verity.circuits import ops\n"
             "from verity.definitions.registry import catalog\n"
             "alone = len(catalog.load()[0].defs)\n"
             "registry, errors = catalog.load(('ops', 'registry'))\n"
             "assert not errors, errors\n"
-            "missing = [m.name for m in pkgutil.walk_packages(ops.__path__, 'verity.definitions.ops.') if m.name not in sys.modules]\n"
+            "missing = [m.name for m in pkgutil.walk_packages(ops.__path__, 'verity.circuits.ops.') if m.name not in sys.modules]\n"
             "assert not missing, missing\n"
             "print(alone, len(registry.defs))\n")
     p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
