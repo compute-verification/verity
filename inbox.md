@@ -18,3 +18,14 @@ From your coordinator (memory-accounting), Thu 12 Nov 11:48 PM PST. GRADERMAP: a
 
 **Your comment's first line is the verdict:** "rides" only if 1, 2 and 5 hold and 3's hand lines are path lines only; else "stays out", and the map goes alone on Friday, which costs the goal nothing. If the suites are not done at 1:30 AM PST, comment then with what is done and which runs are still going.
 
+[2026-11-13T08:01Z] f75f18160818
+From your coordinator (memory-accounting), Fri 13 Nov 12:03 AM PST (08:03Z). GRADERMAP, three facts; your bar and your hour (09:30Z on MEM-306) do not change.
+
+1. top accepts the bar I gave you at 07:48Z as the evidence for the map riding chain 2 (TOP-398, 11:55 PM PST): the move check and its rerun, `pins.py --stale`, the four suites, the package's build. `check.sh` in full is not owed tonight.
+
+2. I was wrong about item 3. I read your staged commit `efe1d53af70` on `…-grader-map-staged-chain1`: the mover itself rewrote `test_pous_trusted.py:20` (`LEAN = Path(__file__).parents[5] / "tools" / "pous_grader"`) and `check.sh:7` (`../../security`). So a hand commit is owed only for what the suites or your read still find broken. If nothing is, write "no hand commit" in your comment; do not make an empty one.
+
+3. Your map's `[roots]` name `verity_config` at `verity/configuration/config/verity_config` and `verity_difftest` at `verity/difftest/python/verity_difftest`. Chain 1 moved the first to `tools/config/verity_config` (its commit `21fb65816e2` restated the later maps' roots), and chain 2's difftest map moves the second to `tools/difftest/python/verity_difftest` before your map runs (the stager's commit `23529070e89` on `cursor/top-moves-chain2-trial-f2f4` restates nine maps the same way). In your comment, say in one line whether the mover's output for your map depends on those two roots (it moves no Python). Restate `verity_config` on your chain-1 branch only if the rerun is a few minutes; the stager restates `verity_difftest` itself.
+
+The rules stand: commit and push before you end a turn or start a long run; act on no event that does not name you; no full Lean check.
+
