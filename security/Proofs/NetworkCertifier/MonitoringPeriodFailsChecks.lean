@@ -44,7 +44,7 @@ import Std.Tactic.BVDecide.Normalize.Bool
 /-!
 # Checks of the period statements with each failure charged: the factor is met, and the weights must sum to one
 
-`PeriodLeakFails`, `PeriodLeakFailsAtMost` and `PeriodLeakCharged` let the operator's moves and the registered values
+`MonitoringPeriodLeakFails`, `MonitoringPeriodLeakFailsAtMost` and `MonitoringPeriodLeakCharged` let the operator's moves and the registered values
 follow the network certifier's fail cells, and pay for it: a factor `failPatterns cap j` on the count, or a charge
 under weights on the number of failures (`KraftWeights`). These checks are at the monitoring period of one placed
 window that `Proofs.NetworkCertifier.MonitoringPeriodCheckedExclusion` builds: the code `posL`, which rejects every run, the
@@ -54,18 +54,18 @@ whether the server's end is late for its bucket (`bitArr`). There the connection
 The operator's ingress is whether the connection failed: it follows the fail pattern, so the network certifier
 registers the window at both secrets (`bit_registers`) and both meet the good event (`bit_good`).
 
-**The factor is met** (`PeriodLeakFailsAtMost_factor_met`). Every premise of `PeriodLeakFailsAtMost` holds there at
+**The factor is met** (`MonitoringPeriodLeakFailsAtMost_factor_met`). Every premise of `MonitoringPeriodLeakFailsAtMost` holds there at
 one connection of cap 1 and at most one failure, and the two secrets are counted: against `#Θ · windowsCount = 1`
 the count fails, and the statement's factor there is 2 (`failsFactor_one`). So the count of `MonitoringPeriodLeakChecked`
 does not hold at an operator that follows the fail pattern, and no smaller factor does at this period. It drops no
 premise: it is a lemma about the factor, and no exclusion.
 
-**The weights must sum to at most one** (`PeriodLeakCharged_kraft_exclusion`). At the same period and the weights
+**The weights must sum to at most one** (`MonitoringPeriodLeakCharged_kraft_exclusion`). At the same period and the weights
 `w_j = 1`, which sum to 2 over the failures of one connection (`not_kraftWeights_one`), every other premise of
-`PeriodLeakCharged` holds, each of the two secrets is charged at most `log2 1` (`bit_charge`), and both are counted
-against `T = 1`. `PeriodLeakCharged_nontrivial` is that count alone.
+`MonitoringPeriodLeakCharged` holds, each of the two secrets is charged at most `log2 1` (`bit_charge`), and both are counted
+against `T = 1`. `MonitoringPeriodLeakCharged_nontrivial` is that count alone.
 
-**The premises together** (`PeriodLeakCharged_honest`). At the toy code over a monitoring period of no windows and no
+**The premises together** (`MonitoringPeriodLeakCharged_honest`). At the toy code over a monitoring period of no windows and no
 connection, where `PeriodLeakChecked_honest` has `MonitoringPeriodLeakChecked`'s premises, the weights `2^-(j+1)` sum to at most
 one (`kraftWeights_halves`). The lemma shows that the premises hold together and nothing more: the toy code's
 verifier rejects every run and the period has no window and no connection, so it shows nothing about a failure, a
@@ -137,7 +137,7 @@ theorem failPatterns_unit (φ : Unit → Option ℕ) : failPatterns (fun _ : Uni
   rw [failPatterns_const, Fintype.card_unit, one_pow, mul_one]
   rcases (by omega : m = 0 ∨ m = 1) with rfl | rfl <;> rfl
 
-/-- The factor of `PeriodLeakFailsAtMost` at one connection of cap 1 and at most one failure is 2. -/
+/-- The factor of `MonitoringPeriodLeakFailsAtMost` at one connection of cap 1 and at most one failure is 2. -/
 theorem failsFactor_one : ∑ i ∈ Finset.range (1 + 1), failPatterns (fun _ : Unit => 1) i = 2 :=
   (failPatterns_sum fun _ : Unit => 1).trans (by simp)
 
@@ -147,8 +147,8 @@ and `δ = 0` is nonnegative; `Compiled.KS`, the commitment's binding, the window
 `TrustedHost`, the read-back under the one registered parameter and the channel all hold; the network certifier
 registers its observations at both secrets; the two secrets, each with at most one failure below the cap 1 and a
 window that meets its good event, are counted against `#Θ · windowsCount = 1`, which fails; and the factor of
-`PeriodLeakFailsAtMost` there is 2. -/
-theorem PeriodLeakFailsAtMost_factor_met :
+`MonitoringPeriodLeakFailsAtMost` there is 2. -/
+theorem MonitoringPeriodLeakFailsAtMost_factor_met :
     Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
@@ -194,11 +194,11 @@ theorem bit_charge (z : Bool) :
   rw [failPatterns_unit, pos_windowsCount]
   simp
 
-/-- **`PeriodLeakCharged`'s count fails at weights that sum to 2.** At `posL`, one window, the connection of `oneSched`
+/-- **`MonitoringPeriodLeakCharged`'s count fails at weights that sum to 2.** At `posL`, one window, the connection of `oneSched`
 and the operator whose ingress is whether the connection failed, at the weights `w_j = 1` and `T = 1`: the two secrets,
 each below the cap 1, charged at most `log2 1` (`bit_charge`) and with a window that meets its good event, are counted
 against 1. -/
-theorem PeriodLeakCharged_nontrivial :
+theorem MonitoringPeriodLeakCharged_nontrivial :
     ¬ {z : Bool | z ∈ (Set.univ : Set Bool) ∧ FailsBelow (fun _ : Unit => 1) (failCell oneSched (bitArr z)) ∧
           ((failPatterns (fun _ : Unit => 1) (failCount (failCell oneSched (bitArr z))) *
               (({()} : Finset Unit).card * windowsCount (fun _ => notLay) (fun _ => 1) 0 (fun _ => ∅ ∪ ∅) 1
@@ -212,13 +212,13 @@ theorem PeriodLeakCharged_nontrivial :
       Set.mem_ofPred.2 ⟨Set.mem_univ z, bit_failsBelow z, bit_charge z, fun i => bit_good z _ i⟩).trans hc)
   exact absurd (h2.trans (le_of_eq Nat.cast_one)) two_not_le_one
 
-/-- **Without `KraftWeights`, `PeriodLeakCharged`'s count fails.** At `posL`, one window, the connection of `oneSched`
+/-- **Without `KraftWeights`, `MonitoringPeriodLeakCharged`'s count fails.** At `posL`, one window, the connection of `oneSched`
 under the host that runs `recordingCode bitFmt`, and the operator whose ingress is whether the connection failed: the
 coins are a nonempty type and `δ = 0` is nonnegative; `Compiled.KS`, the commitment's binding, the window's placement,
 its check's pinning, `TrustedHost`, the read-back under the one registered parameter and the channel all hold; the
 network certifier registers its observations at both secrets; the weights `w_j = 1` sum to 2 over the failures of one
 connection; and the two secrets, each charged at most `log2 1`, are counted against `T = 1`. -/
-theorem PeriodLeakCharged_kraft_exclusion :
+theorem MonitoringPeriodLeakCharged_kraft_exclusion :
     Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
@@ -243,7 +243,7 @@ theorem PeriodLeakCharged_kraft_exclusion :
               ((recordingCode bitFmt oneSched (bitArr z)).2 i)}.encard ≤ ((1 : ℕ) : ℕ∞) := by
   refine ⟨⟨true⟩, le_rfl, posL_ks id, posCm_binds id, pos_placed, pos_checkedUnique, fun _ => rfl,
     bitFmt.readsBy_comp fun _ => oneSched, bit_channel, fun z i s hs => ?_, not_kraftWeights_one,
-    PeriodLeakCharged_nontrivial⟩
+    MonitoringPeriodLeakCharged_nontrivial⟩
   obtain rfl : posStmt z = s := Option.some.inj ((pos_parse (Coin := Bool) z).symm.trans hs)
   exact bit_registers z i
 
@@ -263,7 +263,7 @@ theorem kraftWeights_halves (N : ℕ) : KraftWeights (fun j => (2⁻¹ : ℚ≥0
   le_of_le_of_eq le_self_add (sum_halves (N + 1))
 
 set_option synthInstance.maxSize 1024 in
-/-- **`PeriodLeakCharged`'s premises at the toy code**, over a monitoring period of no windows and no connection:
+/-- **`MonitoringPeriodLeakCharged`'s premises at the toy code**, over a monitoring period of no windows and no connection:
 `MonitoringPeriodLeakChecked`'s premises there (`PeriodLeakChecked_honest`), the channel over the one registered parameter as a
 finite set, the network certifier's registration at every window (`CertifierRegisters`, which the charged form takes
 as a premise), of which the period has none, and the weights `2^-(j+1)` on the number of failures, which sum to at
@@ -274,7 +274,7 @@ a window is placed and a run is accepted, the window's placement (`WindowsPlaced
 (`CheckedUnique`), its registration (`CertifierRegisters`), the read-back of a format with a connection
 (`RecordFormat.ReadsBy`) and its channel (`MonitoringPeriodChannelReg`) are not shown here, with or without a failure; the
 weights' sum alone is shown at every number of connections. -/
-theorem PeriodLeakCharged_honest :
+theorem MonitoringPeriodLeakCharged_honest :
     (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode
         (fun _ _ _ => [])).KS FlockDeploy.sha512 ∧
       (SamplingDeploy.compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) SamplingDeploy.toyCode

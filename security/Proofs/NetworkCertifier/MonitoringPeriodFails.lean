@@ -38,8 +38,8 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The period's leak with each failure charged as it happens
 
-`periodLeakFails`, `periodLeakFailsAtMost` and `periodLeakCharged` are `Guarantees.PeriodLeakFails`,
-`Guarantees.PeriodLeakFailsAtMost` and `Guarantees.PeriodLeakCharged`. Each is `periodLeakChecked` applied once a fail
+`monitoringPeriodLeakFails`, `monitoringPeriodLeakFailsAtMost` and `monitoringPeriodLeakCharged` are `Guarantees.MonitoringPeriodLeakFails`,
+`Guarantees.MonitoringPeriodLeakFailsAtMost` and `Guarantees.MonitoringPeriodLeakCharged`. Each is `periodLeakChecked` applied once a fail
 pattern and summed over the patterns, so each rests on what `Guarantees.MonitoringPeriodLeakChecked` rests on and, for the
 charged form, on the weights' sum.
 
@@ -50,10 +50,10 @@ reads them as its own operator and registered values. It gives the held clause a
 
 **Over the patterns.** The fail patterns of exactly `j` connections, each below its cap, are among
 `failPatterns cap j` patterns (`exists_failPatterns`), so a count that holds at each pattern holds, times that
-number, over them (`encard_failsExactly_le`, by `encard_biUnion_le`): `periodLeakFails`. Summed over `0 … j` it is
-`periodLeakFailsAtMost`, whose held clause is `checked_at_pattern`'s at each run's own pattern. Under weights that sum
+number, over them (`encard_failsExactly_le`, by `encard_biUnion_le`): `monitoringPeriodLeakFails`. Summed over `0 … j` it is
+`monitoringPeriodLeakFailsAtMost`, whose held clause is `checked_at_pattern`'s at each run's own pattern. Under weights that sum
 to at most one, sets of at most `c j` secrets with `c j ≤ w j · T` wherever one is inhabited hold at most `T` secrets
-together (`encard_weighted_le`): `periodLeakCharged`.
+together (`encard_weighted_le`): `monitoringPeriodLeakCharged`.
 
 **The factor.** `failPatterns cap 0 = 1` (`failPatterns_zero`), at one cap `c` it is `C(N, j) · c^j`
 (`failPatterns_const`), and over every number of failures it sums to `∏ (cap + 1)` (`failPatterns_sum`). A fail cell
@@ -229,9 +229,9 @@ theorem checked_at_pattern
   rintro z ⟨hp, hz, hg⟩
   exact ⟨⟨hz, hp⟩, hg⟩
 
-/-- **`Guarantees.PeriodLeakFails`**: `periodLeakChecked` at each fail pattern (`checked_at_pattern`), summed over
+/-- **`Guarantees.MonitoringPeriodLeakFails`**: `periodLeakChecked` at each fail pattern (`checked_at_pattern`), summed over
 the patterns of exactly `j` failures (`encard_failsExactly_le`). Its first clause is `periodLeakChecked`'s. -/
-theorem periodLeakFails : Guarantees.PeriodLeakFails := by
+theorem monitoringPeriodLeakFails : Guarantees.MonitoringPeriodLeakFails := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk Conn _ ρ op
     Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb cap j
   refine ⟨(periodLeakChecked H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
@@ -247,12 +247,12 @@ theorem periodLeakFails : Guarantees.PeriodLeakFails := by
   rintro z ⟨hz, hj, hb', hg⟩
   exact ⟨hj, hb', hz, hg⟩
 
-/-- **`Guarantees.PeriodLeakFailsAtMost`**: held at each run's own pattern (`checked_at_pattern`), and
-`periodLeakFails` summed over `0 … j`. -/
-theorem periodLeakFailsAtMost : Guarantees.PeriodLeakFailsAtMost := by
+/-- **`Guarantees.MonitoringPeriodLeakFailsAtMost`**: held at each run's own pattern (`checked_at_pattern`), and
+`monitoringPeriodLeakFails` summed over `0 … j`. -/
+theorem monitoringPeriodLeakFailsAtMost : Guarantees.MonitoringPeriodLeakFailsAtMost := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk Conn _ ρ op
     Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb cap j
-  have hi := fun i => periodLeakFails
+  have hi := fun i => monitoringPeriodLeakFails
     H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
     ρ op arr f tap run htrust rd allows hread Θ Zs
     schedOf srvOf dec hch x wit tops hb cap i
@@ -273,9 +273,9 @@ theorem periodLeakFailsAtMost : Guarantees.PeriodLeakFailsAtMost := by
     rw [Nat.cast_sum, Finset.sum_mul]
     exact Finset.sum_le_sum fun i _ => (hi i).2 htap
 
-/-- **`Guarantees.PeriodLeakCharged`**: `periodLeakFails` at each number of failures, under the weights
+/-- **`Guarantees.MonitoringPeriodLeakCharged`**: `monitoringPeriodLeakFails` at each number of failures, under the weights
 (`encard_weighted_le`). -/
-theorem periodLeakCharged : Guarantees.PeriodLeakCharged := by
+theorem monitoringPeriodLeakCharged : Guarantees.MonitoringPeriodLeakCharged := by
   intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj n sw Pw β hplaced hchk Conn _ ρ op
     Cell Srv Dev Z Par arr f tap run htrust rd allows hread Θ Zs schedOf srvOf dec hch x wit tops hb cap w hw T htap
   refine (Set.encard_le_encard ?_).trans
@@ -291,7 +291,7 @@ theorem periodLeakCharged : Guarantees.PeriodLeakCharged := by
   · rintro z ⟨hz, hb', hle, hg⟩
     exact Set.mem_iUnion₂.2 ⟨failCount (failCell (schedOf z) (arr (srvOf z))),
       Finset.mem_range.2 (Nat.lt_succ_of_le (Finset.card_le_univ _)), hz, rfl, hb', hle, hg⟩
-  · refine (Set.encard_le_encard ?_).trans (((periodLeakFails
+  · refine (Set.encard_le_encard ?_).trans (((monitoringPeriodLeakFails
       H D hks L K S lay k δ hδ reg chk valid₁ valid₂ ε₁ ε₂ Dj sw Pw β hplaced hchk
       ρ op arr f tap run htrust rd allows hread (Θ : Set Par) Zs
       schedOf srvOf dec hch x wit tops hb cap j).2 htap).trans (le_of_eq ?_))

@@ -83,7 +83,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     (certifierRun) and the leak relation there (RLeakCertifierChecked)
 ../../Definitions/NetworkCertifier/Guarantees/MonitoringPeriodChecked.lean  trusted: ExecutionPhaseGoodChecked and MonitoringPeriodLeakChecked
 ../../Definitions/NetworkCertifier/Guarantees/MonitoringPeriodFails.lean  trusted: the period's leak with each failure charged
-    (failPatterns, KraftWeights; PeriodLeakFails, PeriodLeakFailsAtMost, PeriodLeakCharged)
+    (failPatterns, KraftWeights; MonitoringPeriodLeakFails, MonitoringPeriodLeakFailsAtMost, MonitoringPeriodLeakCharged)
 ../../Definitions/NetworkCertifier/Witness.lean  trusted: the instances the honest and nontrivial lemmas are
     stated at, each built by hand (trivLay, notLay, certOps; the honest certifier at a
     Program, the reference schedule, the verifier and the sender that accept and leak
@@ -125,8 +125,8 @@ PeriodChecked.lean  the period's leak with the checked inputs left out (periodLe
     bound at the network certifier's rows with a valid run
     (periodChecked_first), and the records counted by Carried's count at the
     empty pool (encard_periodChecked_le, periodChecked_second)
-PeriodFails.lean  the period's leak with each failure charged (periodLeakFails, periodLeakFailsAtMost,
-    periodLeakCharged): periodLeakChecked at each fail pattern
+PeriodFails.lean  the period's leak with each failure charged (monitoringPeriodLeakFails, monitoringPeriodLeakFailsAtMost,
+    monitoringPeriodLeakCharged): periodLeakChecked at each fail pattern
     (checked_at_pattern), summed over the patterns (exists_failPatterns,
     encard_failsExactly_le, encard_weighted_le)
 PeriodLengths.lean  a lengths format reads back under the link's parameters (LengthsRows.readsBy): a lane is
@@ -175,13 +175,13 @@ PoolRoots.lean  the opened rows' roots, a lemma: a run's check that holds its op
 PeriodCheckedChecks.lean  MonitoringPeriodLeakChecked held to the trace's run is false (freeL_traceRun_insufficient,
     monitoringPeriodLeakChecked_traceRun_fails, freeL_certifierRun_miss); its nontrivial lemma, and
     its honest lemma at the toy code over a period of no windows
-PeriodCheckedExclusion.lean  a placed window: no count without ReadsBy (PeriodLeakChecked_readsBy_exclusion);
-    premises hold together (PeriodLeakChecked_placed)
+PeriodCheckedExclusion.lean  a placed window: no count without ReadsBy (MonitoringPeriodLeakChecked_readsBy_exclusion);
+    premises hold together (MonitoringPeriodLeakChecked_placed)
 PeriodFailsChecks.lean  at a placed window whose operator follows the fail pattern: the count without the
-    failures' factor fails and the factor is 2 (PeriodLeakFailsAtMost_factor_met); the charged
-    count fails at weights that sum to 2 (PeriodLeakCharged_nontrivial,
-    PeriodLeakCharged_kraft_exclusion); the charged form's premises at the toy code, a period of
-    no windows and no connection (PeriodLeakCharged_honest)
+    failures' factor fails and the factor is 2 (MonitoringPeriodLeakFailsAtMost_factor_met); the charged
+    count fails at weights that sum to 2 (MonitoringPeriodLeakCharged_nontrivial,
+    MonitoringPeriodLeakCharged_kraft_exclusion); the charged form's premises at the toy code, a period of
+    no windows and no connection (MonitoringPeriodLeakCharged_honest)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
     draft's toy
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
@@ -436,9 +436,9 @@ The other 26 are the rest of the Capacity table's bounds and the schedule's caus
 - **The period's bound with each failure charged as it happens** (`PeriodFails.lean`): where the operator's moves
   and the registered values may follow the network certifier's fail cells, the secrets whose run fails exactly `j`
   connections, each below its cap, number at most `failPatterns cap j` times `MonitoringPeriodLeakChecked`'s count
-  (`PeriodLeakFails`); at most `j`, the factor summed over `0 … j`, with the lengths held at each run's own pattern
-  (`PeriodLeakFailsAtMost`); and under weights on the number of failures that sum to at most one (`KraftWeights`),
-  the secrets charged at most `log2 T` number at most `T` (`PeriodLeakCharged`). Each is `MonitoringPeriodLeakChecked` applied
+  (`MonitoringPeriodLeakFails`); at most `j`, the factor summed over `0 … j`, with the lengths held at each run's own pattern
+  (`MonitoringPeriodLeakFailsAtMost`); and under weights on the number of failures that sum to at most one (`KraftWeights`),
+  the secrets charged at most `log2 T` number at most `T` (`MonitoringPeriodLeakCharged`). Each is `MonitoringPeriodLeakChecked` applied
   once a fail pattern, and takes its premises and no other but the weights' sum.
 
 **The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions

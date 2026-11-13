@@ -11,7 +11,7 @@ import Mathlib.Data.Nat.Choose.Basic
 # The period check's `K` at the terms of the failure forms
 
 `NetworkCheck.Period`'s terms charge every connection's cells (`capsTerm`), in `cells` and, in the rows form, again in
-`schedules`. `PeriodLeakFailsAtMost`'s count has neither factor: it has the registered parameters' count and the fail
+`schedules`. `MonitoringPeriodLeakFailsAtMost`'s count has neither factor: it has the registered parameters' count and the fail
 patterns of the period's failed connections. These lemmas say what the check's `K` bounds at the terms that count:
 
 * `clockKBoundsHeld`: the clock form's `terms` at no caps bounds the count with no cells factor;
@@ -161,7 +161,7 @@ theorem failsAtMostCovers {m : ℕ} (caps : Fin m → ℕ) (fails : ℕ) :
             omega
           rw [Nat.choose_eq_zero_of_lt hlt, zero_mul]
 
-/-- **The rows form's `K` at `fails` failures bounds `PeriodLeakFailsAtMost`'s factors at the check's numbers**: the
+/-- **The rows form's `K` at `fails` failures bounds `MonitoringPeriodLeakFailsAtMost`'s factors at the check's numbers**: the
 fail patterns of at most `fails` connections below their caps (`Σ_{i ≤ fails} failPatterns caps i`), times `thetas`
 registered parameters, times each window's factors, is at most `2 ^ K`. -/
 theorem rowsKBoundsFailPatterns (facts : Array Facts) (scan : Scan) (jitter windows thetas fails : ℕ) {m n : ℕ}

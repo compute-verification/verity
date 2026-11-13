@@ -43,8 +43,8 @@ patterns:
 
 * `failCount`, `FailsBelow`, `failPatterns`: the failed connections of a pattern, a cap on each fail cell, and the
   number of patterns of exactly `j` failures below their caps;
-* `PeriodLeakFails`: exactly `j` failures; `PeriodLeakFailsAtMost`: at most `j`, with the held conclusion on every run;
-  `PeriodLeakCharged`: a charge that adds over periods, under weights on the number of failures (`KraftWeights`).
+* `MonitoringPeriodLeakFails`: exactly `j` failures; `MonitoringPeriodLeakFailsAtMost`: at most `j`, with the held conclusion on every run;
+  `MonitoringPeriodLeakCharged`: a charge that adds over periods, under weights on the number of failures (`KraftWeights`).
 
 **The pattern covers the operator and nothing else.** `op` and `ρ` are bound before the secrets and read the fail
 pattern alone, so a window's operator and registered values are fixed for each pattern before the run. A failure is
@@ -98,7 +98,7 @@ fails exactly `j` connections, each below its cap, and whose every window meets 
 `op` and `ρ` are bound before the secrets and read the fail pattern alone: a window's operator and registered values
 are fixed for each pattern before the run, so they carry nothing of the secret beyond the pattern, which the factor
 counts. Nothing else of the statement reads the pattern. -/
-def PeriodLeakFails : Prop :=
+def MonitoringPeriodLeakFails : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
     (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S)
@@ -160,7 +160,7 @@ window's operator and registered values may follow the network certifier's fail 
 
 `Conn` is every connection slot of the period, over all its links, and `j` the period's failures: one factor for the
 period, under one logarithm. -/
-def PeriodLeakFailsAtMost : Prop :=
+def MonitoringPeriodLeakFailsAtMost : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
     (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S)
@@ -220,7 +220,7 @@ connections that sum to at most one (`KraftWeights`) and finitely many registere
 connections is charged `log2 (failPatterns cap j · #Θ · windowsCount / w j)` bits. For every `T`, the secrets whose
 every window meets `ExecutionPhaseGoodChecked` and whose run is charged at most `log2 T` bits number at most `T`: the number of
 failures is the sender's choice, and the weight charges for it, so the charges of two periods add. -/
-def PeriodLeakCharged : Prop :=
+def MonitoringPeriodLeakCharged : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
     (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S)

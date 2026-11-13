@@ -46,7 +46,7 @@ import Proofs.Flock.Claims.Prob
 `MonitoringPeriodLeakChecked` counts the secrets by the registered parameters' number times the windows' count, and takes the
 read-back of the record under a registered parameter (`RecordFormat.ReadsBy`). This file builds a monitoring period of
 one placed window at which every other premise holds, no reader reads the record back, and two secrets are counted
-against a count of 1 (`PeriodLeakChecked_readsBy_exclusion`).
+against a count of 1 (`MonitoringPeriodLeakChecked_readsBy_exclusion`).
 
 **The code** (`Proofs.Flock.Claims.Witnesses.SamplingGenericPlaced`). `posL` is a compiled verifier that rejects every
 run, so `Compiled.KS` holds at it, over the statement whose program negates its input (`notProg`), under a commitment
@@ -69,7 +69,7 @@ schedules (`adm_not_readsBy`), and both secrets are counted against `#Θ · wind
 **The premises together.** At the same window, under the one schedule `oneSched` and a server that is not late, the
 record reads back under the registered parameter (`RecordFormat.readsBy_comp`), the network certifier registers its
 observations at the operator whose move is the unset bit, the window meets `ExecutionPhaseGoodChecked`, and
-`MonitoringPeriodLeakChecked`'s premises hold together (`PeriodLeakChecked_placed`). It is at one secret: the toy circuit
+`MonitoringPeriodLeakChecked`'s premises hold together (`MonitoringPeriodLeakChecked_placed`). It is at one secret: the toy circuit
 has no free input, so its count is 1, and an operator fixed before the secrets registers one ingress. `posL` rejects
 every run, so the lemma shows that the premises and the good event are consistent at a placed window. It is no honest
 lemma of the statement: no honest run is accepted there. The toy has no checked input, so neither lemma shows
@@ -379,7 +379,7 @@ host that runs the network certifier's code, and the channel all hold; the netwo
 observations at both secrets, at an operator that reads nothing; no reader reads the record back under the one
 registered parameter; and the two secrets, each of whose windows meets its good event, are counted against
 `#Θ · windowsCount = 1`. -/
-theorem PeriodLeakChecked_readsBy_exclusion :
+theorem MonitoringPeriodLeakChecked_readsBy_exclusion :
     Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
@@ -423,7 +423,7 @@ input (`CheckedUnique`), `TrustedHost` at a host that runs the network certifier
 registered parameter (`RecordFormat.ReadsBy`) and the channel of the secret (`MonitoringPeriodChannelReg`); the network certifier
 registers the window's observations at the operator whose move is the unset bit (`CertifierRegisters`); and the window
 meets its good event (`ExecutionPhaseGoodChecked`), at the check every run passes. -/
-theorem PeriodLeakChecked_placed :
+theorem MonitoringPeriodLeakChecked_placed :
     (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       WindowsPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
