@@ -350,18 +350,19 @@ theorem Laid.prCoin_parts (h : w.Laid) (E : Finset (Fin w.nJ) → Prop) :
 
 variable (w)
 
-/-- **The design member `k`'s session is played alone at is the window's marginal too**: the earlier sessions' coins it
-samples with the window's don't move its sample. -/
+/-- **The design member `k`'s session is played alone at is the window's marginal where the sample ended**: the earlier
+sessions' coins it samples with the window's don't move its sample, so the ended share of an event's probability at it
+is at most the probability the window's one sample gives the event at member `k`'s part. -/
 theorem prCoin_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) (E : Finset (Fin (w.ms.get k).n) → Prop) :
-    prCoin (fun x : (w.memberLaw τ k).Ω => E ((w.memberLaw τ k).draw x)) =
+    w.endShare * prCoin (fun x : (w.memberLaw τ k).Ω => E ((w.memberLaw τ k).draw x)) ≤
       prCoin (fun ω : w.L.Ω => E ((w.ms.get k).part (w.L.draw ω))) :=
-  w.avg_memberLaw τ k fun S => if E S then 1 else 0
+  w.endShare_mul_avg_le τ k fun S => if E S then 1 else 0
 
-/-- Member `k`'s design played alone misses a set of its proof blocks exactly when the window's sample misses their
-places in the population. -/
+/-- The ended share of the probability that member `k`'s design played alone misses a set of its proof blocks is at most
+the probability that the window's sample misses their places in the population. -/
 theorem memberLaw_escape (τ : Strategy w.game) (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
-    (w.memberLaw τ k).escape B = w.L.escape (B.image (w.ms.get k).emb) :=
-  (w.prCoin_memberLaw τ k fun S => Disjoint S B).trans (w.design_escape k B)
+    w.endShare * (w.memberLaw τ k).escape B ≤ w.L.escape (B.image (w.ms.get k).emb) :=
+  (w.prCoin_memberLaw τ k fun S => Disjoint S B).trans_eq (w.design_escape k B)
 
 /-- **Member `k`'s design misses a set of its proof blocks** with probability at most the window's sampling design's
 own miss `P_a` of their places in the population, under A3. -/

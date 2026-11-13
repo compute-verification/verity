@@ -11,8 +11,8 @@ The proofs of `JointSampledV5`, `JointShareV5` and `JointHorizonV5` (`Joint/V5/S
 
 * `JointAuditV5.accepted_drawnWrong_le`: the window's audit accepts with a sampled proof block incorrect with
   probability at most `Σ_m (ε_ks,m + ε_bind,m)`: an incorrect sampled proof block is member `m`'s, in its part of the
-  sample, and an accepted run accepted the session of member `m`, which has that proof block in its part
-  (`forall₂_getElem?`), so a union over the members (`ZkSession.prob_exists_le`) of
+  sample, and an accepted run's sample ended and it accepted the session of member `m`, which has that proof block in
+  its part (`forall₂_getElem?`), so a union over the members (`ZkSession.prob_exists_le`) of
   `JointAuditV5.member_accepted_drawnWrong_le` bounds it;
 * `JointAuditV5.drawMiss_le`: the sample misses a set `B` with probability at most the sampling design's own miss `P_a(B)`, under
   A3 (`Bridge.execSel_escape_le`);
@@ -59,17 +59,17 @@ theorem accepted_drawnWrong_le (τ : Strategy w.game)
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
       (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') :
     prob (fun o => w.Accepts o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ ≤ w.eps := by
-  refine (prob_mono (q := fun o : w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript =>
+  refine (prob_mono (q := fun o : (w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript =>
       ∃ k ∈ Finset.univ, (o.2.2[k.1]?).elim False (fun t => AcceptsZKP (w.ms.get k).I (w.ms.get k).own t ∧
-        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberWrong τ k)) (fun o ho => ?_) _ _).trans
+        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberWrong τ k) ∧ o.1.2 = true) (fun o ho => ?_) _ _).trans
     ((FlockSoundness.Discharge.ZkSession.prob_exists_le _ _ _ _).trans
       (Finset.sum_le_sum fun k _ => w.member_accepted_drawnWrong_le τ k (hCR k) (hA2 k)))
-  obtain ⟨hacc, u, hu, hw⟩ := ho
+  obtain ⟨⟨hend, hacc⟩, u, hu, hw⟩ := ho
   obtain ⟨k, -, hk⟩ := Finset.mem_biUnion.1 hw
   obtain ⟨v, hv, rfl⟩ := Finset.mem_image.1 hk
   obtain ⟨t, ht, hacc'⟩ := forall₂_getElem? hacc k
   have hv' : v ∈ (w.ms.get k).part o.2.1 := Finset.mem_filter.2 ⟨Finset.mem_univ _, hu⟩
-  refine ⟨k, Finset.mem_univ _, ?_⟩
+  refine ⟨k, Finset.mem_univ _, ?_, hend⟩
   rw [ht]
   exact And.intro (hacc' ⟨v, hv'⟩) ⟨v, hv', hv⟩
 
@@ -84,7 +84,8 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
 /-- **The window's sample misses a set `B`** with the acceptance probability of its live sampling design. -/
 theorem prob_drawMiss (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.escape B := by
-  show avg (fun ω => prob _ ((w.sessions (w.L.draw ω) τ.1).map fun ts => (τ.1, w.L.draw ω, ts)) (τ.2 ω)) =
+  show avg (fun ω => prob _
+      ((w.sessions (w.L.draw ω) τ.1).map fun ts => ((τ.1, w.ended ω), w.L.draw ω, ts)) (τ.2 ω)) =
     prCoin fun ω => Disjoint (w.L.draw ω) B
   unfold prCoin
   refine congrArg avg (funext fun ω => ?_)
