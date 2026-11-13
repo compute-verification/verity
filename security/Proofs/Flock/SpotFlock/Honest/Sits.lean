@@ -2,16 +2,17 @@ module
 
 public import Proofs.Flock.SpotFlock.Honest.Runs
 public import Proofs.Flock.SpotFlock.Honest.Written
-public import Proofs.Flock.SpotFlock.AddressFacts.RowOf
+public import Proofs.Flock.SpotFlock.AddressFacts.RowLeaves
 
 /-!
 # The row at the instance
 
-`rowFact_of_runs` proves the row at the address map from the wiring facts of each accepted run and three premises.
-Two of them speak of a written bit at a port no link names (`AddressRow.OwnLeaves`, `AddressRow.PublishedRows`). At the
-instance every port of `R` is linked, and where the design evaluates every row the member's units write is one of
-`R`'s ports (`written_of_two`), so no written bit is at such a port (`linked_of_two`) and both hold with nothing to
-check (`ownLeaves_held`, `publishedRows_held`).
+`rowFact_of_wires` proves the row at the address map from the wiring facts of each accepted run, one condition
+decided on the registered wires (`AddressRow.wiresChecked`) and two premises. The instance has no wire, so the
+condition holds (`wiresChecked_held`). One premise speaks of a written bit at a port no link names
+(`AddressRow.PublishedRows`). At the instance every port of `R` is linked, and where the design evaluates every row
+the member's units write is one of `R`'s ports (`written_of_two`), so no written bit is at such a port
+(`linked_of_two`) and it holds with nothing to check (`publishedRows_held`).
 
 So the row at the instance's address map takes `R`'s reference reads being well formed and where the second stage
 puts a checked proof block (`AddressRow.Sits`): `rowFact_of_sits`. The address premise, the design premises and
@@ -39,13 +40,9 @@ theorem linked_of_two {s : AuditStatement} {d : Design.Two} (h2 : two (held R B 
   rw [e] at hs
   simp at hs
 
-/-- **No registered read is at a written port no link names**, so the leaf count asked of one is asked of none. -/
-theorem ownLeaves_held : AddressRow.OwnLeaves (held R B desc q c₀) := by
-  intro r hr own reg _ _ hw hl
-  obtain ⟨y, rp, hy, hrow⟩ := hw
-  obtain ⟨d, h2⟩ := CheckedRun.design_of_ok hr
-  rw [← hrow] at hl
-  exact absurd hl (linked_of_two R B desc q c₀ h2 hy)
+/-- **Each wire is one the second stage's check reads**: there is no wire. -/
+theorem wiresChecked_held : AddressRow.wiresChecked (held R B desc q c₀) = true := by
+  simp [AddressRow.wiresChecked, held, held₀]
 
 /-- **No written port is without a link**, so the published rows asked at one are asked at none. -/
 theorem publishedRows_held : AddressRow.PublishedRows (held R B desc q c₀) := by
@@ -58,8 +55,8 @@ stage puts a checked proof block. -/
 theorem rowFact_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (held R B desc q c₀)) :
     RowFact (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀))
       (addressOf (held R B desc q c₀)) :=
-  rowFact_of_runs (fun _ hr => wiring_of_refReads (refReadsWf_held R B desc q c₀ hWf) hr) hS
-    (ownLeaves_held R B desc q c₀) (publishedRows_held R B desc q c₀)
+  rowFact_of_wires (fun _ hr => wiring_of_refReads (refReadsWf_held R B desc q c₀ hWf) hr) hS
+    (wiresChecked_held R B desc q c₀) (publishedRows_held R B desc q c₀)
 
 /-- **The address premise at the instance**, from the same two. -/
 theorem addressesConnected_of_sits (hWf : Claims.Json.Wf R.reads) (hS : AddressRow.Sits (held R B desc q c₀)) :
