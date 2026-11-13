@@ -22,6 +22,7 @@ src/research/
 ├── cores.py        --cpus (--queue): a queued run's whole cores, claimed on the machine
 ├── mem.py          --mem-gb admission: cgroup limit - in use - live /workspace/ramlock reservations; MemoryNotAvailable
 ├── auto.py         --on auto: a CPU node's research pool or node 2's queue, and when the run should start there
+├── asker.py        --on auto: the launch's asker, which moves a pool run that waits on memory to a pool that would start it now
 ├── jobuser.py      --job-user: the workload as an unprivileged user in a sandboxed system unit; it makes no namespace but those
 │                   --job-namespaces lists (of user, mnt, net), where the workload holds capabilities
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map

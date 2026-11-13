@@ -36,7 +36,9 @@ read comes last there, never first. The placement's reason names the Lean pool t
 A GPU job, a run naming its own node, or one asking more CPUs than a pool slot has stays on node 2's queue. A machine that can't
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
 run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
-the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long.
+the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long. While it waits there on
+memory, the launch's asker asks again where it would start now (`elsewhere`) and moves it there as its late twin, as long as
+the launching VM is up (research.asker).
 
 The launch is told when the job should start where `choose` sent it (`expect`, from the documents `read` already has): now, in
 about so many minutes behind the line it joins, or that nothing read gives an estimate. A job expected to wait past
