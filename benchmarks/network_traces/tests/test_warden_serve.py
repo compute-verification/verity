@@ -990,6 +990,28 @@ def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_
     assert result["summary"]["certified_windows"] == 6
 
 
+def test_one_connection_failed_closed_refuses_a_sessions_whole_run_whichever_client_it_was(tmp_path):
+    """The check's verdict is the whole session's. Of four connections, three end and one's answer is out of the id
+    form, which the relay fails closed: every execution phase is still certified, the audit refuses the one the
+    failure is in and accepts the other, and the check refuses the run, whoever's the three that ended were."""
+    args, p, load = _session(tmp_path, 2)
+    requests, responses = load(4)
+    out = tmp_path / "run"
+    out.mkdir()
+    relay = _run(out, tmp_path / "key", requests, responses[:3] + [_response([" a"])], windows=args.windows,
+                 params=p, id_payload=p.payload, arrive=dict(enumerate([0, 0, 1, 2])))
+    (out / "client.json").unlink()
+    records = ws.read_records(out, p)
+    audit_ = ws.audit(p, records[ws.INGRESS], records[ws.EGRESS], records[ws.FAILS])
+    result = ws.check(out)
+    assert sorted(e["failed"] or "" for e in relay.log) == ["", "", "", "format"]
+    assert [(c["failed"], c["ended"] is not None) for c in audit_["connections"]] == \
+        [(None, True)] * 3 + [("format", True)]
+    assert sorted(w["accepted"] for w in audit_["windows"]) == [False, True]
+    assert not result["accepted"] and all(w["certified"] for w in result["windows"])
+    assert result["problems"] == ["audit: connection 4 failed closed (format) at egress cell 0"]
+
+
 def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):
     """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the network certifier's process
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
