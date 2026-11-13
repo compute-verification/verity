@@ -117977,3 +117977,45 @@ Nothing.
 - The axioms of `lawAt` and `coinMapHolds` [run: not yet probed]. `CoinMapAgree.lean` and `CoinStages.lean` have not compiled.
 
 Branch `cursor/proofs-coinmap-8b0c` at `21830e1f9e`, pushed; nothing unpushed.
+
+## MEMBERS, Fri 13 Nov 03:37Z: #9441 is pushed at `51a2e803cb83e7d539c067dd50d119758e6a3e27` with the twin following; NOT ready yet, four runs out
+
+**Head.** [run] `cursor/proofs-members-files-61d4` = `51a2e803cb83e7d539c067dd50d119758e6a3e27`, nothing unpushed. It holds `main` at `4a7291116e11` (so #9375), merged once at 03:07Z. `main` has since moved to `8ef93f01963c` (nine landings, none of ours); [run] a trial merge of the head with that `main` has no conflict. I do not merge again: one merge, as told.
+
+**WINDOWAT: this is the head to merge after.** The twin follows #9441 in it. What your merge meets, [run] by a trial merge with `af8682dc824e`:
+- one conflict, in `test_members_twin.py`, the module docstring's second paragraph (lines 5 to 8): we both reword its first sentences. Mine now says the stand-in files end the audit at the first member's circuit, before any session; yours adds the sentence about `sampled`. Keep both.
+- `members.py` and `test_members_run.py` merge by themselves. [read] In the merged `members.py` your `_sampled(...)` call lands before my files pass, which is Lean's order as you state it (after the roots, before any member's file).
+- [run] My new difftest row builds `Audit("members-twin-no-statement", opened=(B,))`; I built that fixture on my VM without Lean and its sample is units 0 and 4, one of each member, so your `sampledHeld` lets its one statement (B's) stand.
+
+**What changed since `1bb432a596a8`** (two commits, Python and tests only; [run] `git diff --stat` names three `.py` files and no Lean):
+- `98652b2570`: `members_run` holds every member's files before any session, in the members' order, a member with no statement as one with a session. It makes the reads Lean's `Member.statement` makes, then `files_why`, which answers Lean's `StepAt.filesHeld` in Lean's order: a circuit that does not parse or a public file that does not load, the template's two refusals, the rest of the form the sampled audit's knowledge soundness covers, then the member's population check. The form is the Flock verifier's own: its executable's `ks-form` on the member's files (`flock_form`), [read] which is `KsScope.checkOf` without a sample and so `KsScope.filesOf` at the one table of a member's session.
+- `51a2e803cb`: the difftest fixture's docstring, kept clear of the lines WINDOWAT's branch changes.
+
+**What the twin does not answer, said in its docstring.** [read] `StepAt.filesHeld` also runs the scope's rules on a circuit that parses (`ProvedScope.circuitRules`) and the ports' roots (`PortRoots.checkOf`). The Flock executable runs neither without a session, so the twin passes them: a member Lean refuses for one of those alone is left to its session's verdict, and is not answered at all for a member with no statement. Neither side accepts such a case, because the per-member form is refused whatever its sessions say. An exact answer needs a files-only command in the Lean executable; I have not started one.
+
+**One test changed meaning, as I said at 03:20Z.** A public file that is not its member's slice of the registration was a rejected session in the twin. It is now a refusal before any session, as in Lean, with or without a statement of that member.
+
+**Established.**
+- [run] On my VM, the one Python-only file `test_members_run.py`: 17 passed in 0.4 s; ruff clean on the three files. This file runs no Lean and no executable.
+- [run] Trial merges of the head: #9584 `ae80f367e6a2` clean (its head is untouched and stays as marked); WINDOWAT's Lean branch `5d5c7183ca94` clean; FIRSTACCEPT `9049e2c572ec` conflicts in `benchmarks/one_stage/composite.py` and `tests/test_composite.py`, which are its conflicts with `main`, not with this change.
+
+**Not established.**
+- [derived, not run] That Lean's refusal on the stand-in files is word for word the twin's (`proofs: member <A>: refused: a circuit that does not parse (...)`). The difftest's rows run only where the Lean executables are built: run `d582` below.
+- [not run] `flock_form` itself has run nowhere yet: it calls the built `flock-verify`. `d582` runs it in the difftest and on the real two-member audit in `benchmarks/one_stage`.
+- The records at the merged tree: runs `2b7f` and `ea8d`, still running.
+
+**Runs out** (all `--as proofs`):
+| run | node | head | what | state at 03:37Z |
+|---|---|---|---|---|
+| `r20261113-031715-2b7f` | vy-nebius-cpu-5 | `1bb432a596a8` | records from Flock's verifier, `--update` | running |
+| `r20261113-031717-ea8d` | vy-nebius-cpu-5 | `1bb432a596a8` | records from the spot verifier's package, `--update` | running |
+| `r20261113-033502-d582` | vy-nebius-cpu-1 | `51a2e803cb83` | four suites: the spot verifier's Lean difftest, the spot verifier, `benchmarks/one_stage`, `tests` | waiting for a slot |
+| `r20261113-033544-7bf5` | vy-nebius-cpu-11 | `51a2e803cb83` | the root suite (`repository`) | waiting for a slot |
+
+The two records runs ran at `1bb432a596a8`; the two commits after it change no Lean, so their records are this head's. [guess] Records by about 05:15Z; the suites about 30 minutes after each takes a slot, and the line was an hour long at 19:30Z.
+
+I cancelled two runs of my own by run id, `r20261113-033147-b87b` and `r20261113-033223-2eb0`: the same suites launched at `98652b2570`, three minutes into waiting for a slot, when the head moved by the docstring commit.
+
+**STOP RULE.** Nothing to report yet. If a records run regenerates a guarantee's own record I stop and write the before and after.
+
+**Next.** I end this turn now, since everything left waits on these four runs. On resume: read them, commit regenerated lock files if any, rerun the root suite if the locks moved, then the ready line. The one-parse change is not started.
