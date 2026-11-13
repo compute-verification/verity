@@ -26,7 +26,8 @@ one session, and this module proves the parts of them that are about which recor
 
 **Not established here**: `SessionCoins.VerdictsAt`, that the masked verdict accepts each template's session's record
 with its proof files at the setup of the session's statement, a setup of one table under SHA-512 digests with the
-template's rounds, and that the session has messages. `StmtsCount` and `StmtsRead` are taken as hypotheses.
+template's rounds, and that the session has messages; `FormSetup.lean` proves it from the join's fields and three
+named hypotheses (`SessionCoins.verdictsAt_of`). `StmtsCount` and `StmtsRead` are taken as hypotheses.
 -/
 
 @[expose] public section

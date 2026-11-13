@@ -26,7 +26,8 @@ verified that session at that member: the first part of `SessionCoins.VerdictsAt
 
 **Not established here**: that the session the form set up is the one the statement sets up
 (`FlockDeploy.setupOf`), which needs the statement's printed files read back (`MemberChecks.ReadsBack`); that the
-session has messages; and the template's count of rounds. `SessionCoins.VerdictsAt` stays a hypothesis.
+session has messages; and the template's count of rounds. `FormSetup.lean` takes these up and proves
+`SessionCoins.VerdictsAt` from them (`SessionCoins.verdictsAt_of`).
 -/
 
 @[expose] public section
@@ -69,10 +70,7 @@ theorem heldStep_paired {ms held h' : Array Spot.OneStageZk.Member} {st : Spot.O
         · split at h
           · exact absurd h (throw_ne _ _)
           next hsz =>
-            refine ⟨m, ⟨name, hn, hm, ?_⟩, (Except.ok.inj h).symm⟩
-            first
-              | exact bne_eq_false_iff_eq.1 hsz
-              | simpa using hsz
+            exact ⟨m, ⟨name, hn, hm, bne_eq_false_iff_eq.1 hsz⟩, (Except.ok.inj h).symm⟩
 
 theorem foldlM_paired {ms : Array Spot.OneStageZk.Member} :
     ∀ (l : List Spot.OneStageZk.StatementFiles) (acc out : Array Spot.OneStageZk.Member),
@@ -241,10 +239,10 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
         (Spot.OneStageZk.filesOf k.blobs fs (.ok (spec, #[], Json.null, Json.null))).toOption = some proofs ∧
         Flock.Zk.verify spec tabs record proofs = .ok () := by
   obtain ⟨k', hk', pp, c, e', pub, prof, hdec, hck⟩ := hacc
-  obtain rfl : k' = k := Option.some.inj (hk'.symm.trans hk)
+  obtain rfl : k = k' := Option.some.inj (hk.symm.trans hk')
   have hpe : (pp, e') = (p, e) := Option.some.inj ((SessionMsgs.formOf_of_decoded hdec).symm.trans hf)
-  obtain rfl : pp = p := congrArg Prod.fst hpe
-  obtain rfl : e' = e := congrArg Prod.snd hpe
+  obtain rfl : p = pp := (congrArg Prod.fst hpe).symm
+  obtain rfl : e = e' := (congrArg Prod.snd hpe).symm
   obtain ⟨-, c₂, ξ₂, r, i, run, hin, -⟩ := VStar.Recursive.SampledTwo.accepted_steps hck
   obtain ⟨-, -, hrun, hall, -⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
   obtain ⟨held, ts, L, roots, hheld, -, -, -, -, hrm⟩ := membersRun_ran hrun
