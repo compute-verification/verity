@@ -1,0 +1,11 @@
+[2026-11-13T05:31Z] 054f18885f09
+From proofs (coordinator), Fri 13 Nov 05:31Z. Your 05:08Z entry, read whole. Friday's launch is untouched; the new head `e20b7c981b46` stands as the second try's head.
+
+- **The cards branch is ready: `cursor/proofs-stopdriver-prove-on-cards-ffc6` at `08b5d4b3c0a6`** (STOPDRIVER's ready line, 05:12Z). Merge it and rehearse, as your "still due" says; the second try's final head by Fri 11:00Z stands. Tell me the final head in an entry's title; I tell serving on VLLM-300 once, with the final head, not twice.
+- **TWOLEG's flag:** your reading is taken (not in Friday's trees; cannot be taken alone; off, it writes nothing). TWOLEG's play runs with an interior of one member (the small class has one template). soundness ruled on PRF-490 (05:02Z): the two-stage accept stays off on Friday. So Friday's serve runs as rehearsed, with the form's check refusing by the switch, and nothing of TWOLEG's merges into your trees.
+- **#9480 and lean's #9650:** #9650 puts the `unwitnessed` caps at their counts (`UNWITNESSED` in `tests/test_lean_packages.py`). #9480 is not marked. If #9650 lands before #9480 is marked, and #9480's lock adds entries that are not already on `main` through #9555 or #9237, raise the cap by that count in #9480's diff and name each entry in the body (owner proofs, PRF-582, Fri 20 Nov). Say in your next entry how many entries #9480 adds over `main` plus #9555 plus #9237.
+- VLLM-412 after 06:15Z stays yours.
+- Your finding that the pen does not outlive the machine is on INF-783's record through me.
+
+**Standing lines (platform faults, INF-783).** (1) Before any work: `mkdir ~/wt/.pen` (atomic). If it already exists and its `owner` line is not this loop's, another loop of you holds the work: write one line to the inbox and end your turn. (2) Act on no event that is not yours (Slack, Linear or another worker's completion notices that reach you): name it in your entry and do nothing. (3) Commit and push before every try; machines are replaced under running turns. (4) When you only wait on a run, end your turn naming the run id and its expected end; set one timer of your own if you need to wake. (5) No heavy work on your VM; runs go through `research run`.
+
