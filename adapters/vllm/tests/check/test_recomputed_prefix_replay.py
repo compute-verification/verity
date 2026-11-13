@@ -4,7 +4,8 @@ the sampled replay's CPU-served world (`tests.check.test_sampled_replay`): r1 se
 rows leave its population, every sampled VU replays bit for bit, a read below C is its replay's and never a committed word
 (with attention, a later position's and every decode's key and value reads of position 0), and without the recompute the
 same record doesn't pass. A hit its Program takes (a prefix layout beside the Program) is recomputed by nothing: the
-population binds the request to its producers."""
+population binds the request to its producers. A plane a row's output is committed under a second time is a position's
+too, the replay's to read, and a second address of its row in the population."""
 from __future__ import annotations
 
 import copy
@@ -16,8 +17,10 @@ import pytest
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay import recomputed_prefix as RP
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.check.replay.request_replay import Replay
 
 C = 1
 #: the weights field only the world with attention registers
@@ -157,3 +160,38 @@ def test_a_hit_its_program_takes_is_bound_to_its_producers_and_recomputed_by_not
     assert indices(0, ["r0"])["r1"].cached_prefix == {}                           # served no cached row: no hit to bind
     with pytest.raises(ValueError, match="^r1 is served 5 cached prompt rows but its Program of record takes a cached prefix of 4$"):
         indices(5, ["r0"])
+
+
+class _Described(IX.ProgramIndex):
+    """An index over rows described here, the first of which reads a prompt id."""
+
+    def __init__(self, described: list[dict]) -> None:
+        self.rows = [{"i": i, "spec": "X_v1{}", "name": f"x{i}", "args": [[["p", 0, i, i + 1]]] if i == 0 else []} for i in range(len(described))]
+        self.by_i, self._described = {r["i"]: r for r in self.rows}, described
+        self.pnames, self.kv_prefix, self.segs = ["prompt"], None, [None]
+        self.supplied: set[int] = set()
+
+    def describe(self, r: dict) -> dict | None:
+        return self._described[int(r["i"])]
+
+
+def test_a_plane_a_row_s_output_is_committed_under_a_second_time_is_a_position_s_the_replay_s_to_read_and_an_address_of_the_row():
+    """Two positions of a first step: at each, an embedding row and a row whose four words are also a plane's."""
+    def described(row: int) -> list[dict]:
+        plane = {"op_path": "moe/L0", "member": "sum", "width": 4, "dtype": "f32", "row": row}
+        return [{"step": 0, "row": row, "op_path": "embed", "members": [("out", 8, "bf16")]},
+                {"step": 0, "row": row, "op_path": "moe", "members": [("out", 4, "bf16")], "copies": [plane]}]
+
+    pi = _Described(described(0) + described(1))
+    assert RP.positions(pi) == {("embed", "out"): 8, ("moe", "out"): 4, ("moe/L0", "sum"): 4, ("embed", IX.IDS_MEMBER): 1}
+    replay = Replay(pi, "r0", [1, 2], None)
+    assert replay.words("r0", 0, "moe/L0", "sum", 8, 12) == (None, "no row 2 of (moe/L0/sum) at request r0's step 0")
+    assert replay.words("r0", 0, "moe/L1", "sum", 0, 4) == (None, "no row of request r0 commits (moe/L1/sum) at its step 0, and nothing gives it")
+    addresses: dict[tuple, dict] = {}
+    POP.population(pi, "r0", addresses=addresses)                                 # each row at both its addresses, the plane's under the plane's family
+    assert {k: (a["manifest_family"], a["rows"]) for k, a in addresses.items()} == {
+        ("r0", 0, "embed", "out"): ("instance_outputs", 2), ("r0", 0, "moe", "out"): ("instance_outputs", 2),
+        ("r0", 0, "moe/L0", "sum"): ("moe_block_stream", 2)}
+    twice = _Described(described(0) + described(0)[1:])
+    with pytest.raises(ValueError, match=r"rows 1 and 2 both commit \(moe/out\) row 0 at step 0"):
+        Replay(twice, "r0", [1], None)
