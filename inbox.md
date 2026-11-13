@@ -324,3 +324,53 @@ The public JSON in the rows form is `K`, `audits`, `cells`, `eps`, `schedules`, 
 
 **Not in this line:** `tunnel.log`'s ruling (my 10:27 PM PST), and the three runs, all still running at 10:31 PM PST.
 
+[2026-11-13T06:33Z] ed0626fdf241
+**NET-410, from LAYOUTREAD, Thu 12 Nov 10:33 PM PST: `main` moved under the map, and #9589 changed for it. Its head is `5e891bd421c8` now, not `7e7a8b2977ce`. The map still certifies; one line is new in it; both hand patches are rebuilt. Two things are yours: a word to training, and whether you want the commit undone.**
+
+I found this while merging `main` into #9667, and did not wait for your word: you mark by 9 AM PST and the patches as they stood would have failed top's builder.
+
+**1. The map leaves `tests/tree.toml` out of its rewrite: one commit, `5e891bd421c`** [ran]
+
+- `tests/tree.toml` is new on `main`. Two of its not-yet lines are ours: `verity/protocols/inference_only/nci/` and `rho/`, owner network-accounting, day Sat 14 Nov noon PST.
+- The map as it stood rewrote both lines. Each then named `benchmarks/nci/` as the path still to move to `benchmarks/nci/`, and no test would have warned.
+- The tree file's header says "A move needn't edit this file" and that a landed line warns and is top's to delete. The data sheets' map on `main` (`tools/move/hardware_map.toml`) leaves the file out for that reason. Ours does the same now, with a line in its header.
+- With it, on the moved tree the tree test warns that the two lines' move landed, as the file intends. The hand commits do not touch the file.
+- `main` (`b843a10af48a`) is merged into the branch, `27e5022e3a3`, so the trial ran on today's `main`.
+
+**2. The trial stage on that head passed** [ran]
+
+- Run `r20261113-062205-a400`, pool `research`, exit 0: "certified 5e891bd421c8…..b1988aa2262a… is a pure move (42 renames, 86 path-only edits)", and "run again on it, it changes nothing". 77 files move, 87 are rewritten.
+- The one more file than Thursday's 86 is `AGENTS.md`: it writes the two paths whole now.
+- Lean and lock, unchanged in kind: `security/Definitions/Nci/Guarantees/Remote.lean` in two paths (lines 11 and 12, as the body said it would be once #9375 was on `main`) and the three `test` paths of `security/lean-audit.json`. No other Lean file, no other lock line. No `--update` run.
+- The include line still rewrites nothing on `main`.
+
+**3. Both hand patches no longer applied; both are rebuilt and pushed** [ran]
+
+- They are on `scratch/na-nci-rho-hand-8d6e` at `f163776c9d37`, under the same two names. `git am` of each on the certified move gives `scratch/na-nci-rho-trial3-8d6e` at `b51e12f0910`.
+- **`nci_rho_hand.patch`.** Training's TRN-133 landed (`b4af0fac3aa`) and changed `test_one_calculator.py`: the package's name now comes from `calculator.CALCULATOR`. It still finds a reach by the path part `inference_only`, so it still fails after the move without a hunk. I rebuilt the hunk on training's file. The rule is the one training said yes to, word for word. What differs: `DIRECTORY` is `PACKAGE`, and the toy sources take the path and the name from `CALCULATOR`, as training's now do.
+  - On the moved tree the file's 11 tests pass. I broke the rule the same seven ways: each fails a case, the same cases as before.
+- **`nci_rho_stale.patch`.** After the move's rewrite `AGENTS.md` lists `benchmarks/nci/` and `benchmarks/rho/` as code the move brought from `benchmarks/`. The patch takes them out of that sentence. The `SEPARATE` hunk is unchanged.
+  - #9667 edits the line two above in `AGENTS.md`. The patch carries one line of context and applies in either order: tried on the move alone and on the move merged with #9667's head.
+
+**Running:** run `r20261113-063039-3706`, pool `research`, on `b51e12f0910`: the root suite whole, the six suites you listed and the six the move also rewrites, on the final tree, then the same on the move alone.
+
+**Yours**
+
+- **Training.** Their yes was to the hunk on the old file. A draft comment for NET-410 is below; post it or say what to change.
+- **The commit.** If you want the tree file handled another way, say so and I change it before your mark.
+- **#9589's body** still describes the old head. I rewrite it when the suites end, by Fri 1:30 AM PST, and send you a line.
+
+**Draft for NET-410, to training**
+
+> @training network-accounting, on `test_one_calculator.py` and Friday's move. **Your TRN-133 landed after you said yes to our hunk, so the hunk is rebuilt on your file. The rule is the one you agreed to; nothing is asked unless you object by Fri 13 Nov noon PST.**
+>
+> - After the move your file still looks for the path part `inference_only`, which `benchmarks/rho` lacks: `test_a_reach_is_found` and `test_only_the_one_module_reaches_the_calculator` fail on the moved tree without a hunk. [ran]
+> - The hunk now: `DIRECTORY = PACKAGE`; `reaches` as in the hunk you read (a part of a path written whole, or the name alone as an operand of `/`); the toy sources take the path and the name from `calculator.CALCULATOR`, as yours do, with the dictionary's-key and subscript cases added.
+> - On the moved tree all 11 tests of the file pass, and the rule broken seven ways fails a case each time. [ran]
+> - It is `nci_rho_hand.patch` on `scratch/na-nci-rho-hand-8d6e` (`f163776c9d37`). The calls you asked for (`Path`, `PurePath`, `join`, `joinpath`) are still not in it; they are yours after the cut, as agreed.
+
+**What I owe, with its hour**
+
+- #9589's body: Fri 1:30 AM PST. #9667's body with its suites: Fri 1:00 AM PST, if its run gets a slot; it has waited since 10:08 PM PST.
+- The one commit on the include line by Fri 9:00 AM PST on your word; the rehearsal's result by Fri 3:30 PM PST; on call from Fri 7:00 PM PST.
+
