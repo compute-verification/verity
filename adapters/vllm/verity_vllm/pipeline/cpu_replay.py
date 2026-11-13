@@ -4,7 +4,7 @@
 
 The replay is the prover's pre-flight check: it reads committed values, the requests and the weights in the clear on the
 prover's node, so neither it nor its keep is verifier-facing.  A verifier checks the sampled proof blocks' proofs
-(`sampled_proofs.one_stage`).
+(`verity.protocols.spot.verifier.one_stage`).
 
 The bundle is opened against its manifest and against the Commit's record beside it: the manifest sha256 the Commit's verdict names,
 the run root of the instrumented run's row (`runs.jsonl`), the dumped store's step roots folding to it, the binding map, the
@@ -70,6 +70,7 @@ from verity_vllm.log import init_logger
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.program.compiled_relations import warm_vml
+from verity_vllm.records.schema_ids import REPLAY_SLIM_SCHEMA
 
 # The checks this command reads (the weights of record and their rewrites, the route pin, the verdict, the driver's refusal), the
 # partition, the admission's calibration and the timeline are imported inside the functions that read them: the route pin's and the
@@ -86,7 +87,7 @@ ATTESTS = ("every weight field the replay consumed, composed from the checkpoint
 #: registered dtype -> (the Program's value bits, the words the replay reads): the widths the live provider serves
 WORDS = {"bfloat16": (16, np.uint16), "float32": (32, np.uint32), "float8_e4m3fn": (8, np.uint8), "float8_e4m3fnuz": (8, np.uint8),
          "uint8": (8, np.uint8), "int8": (8, np.uint8), "int32": (32, np.uint32)}
-SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
+SLIM_SCHEMA = REPLAY_SLIM_SCHEMA
 SLIM_DOC = "slim.json"
 PICKS_KEY = "[request, request-relative step, Program row, op_path] of each pick, in draw order"
 
@@ -616,10 +617,6 @@ def kept_sample(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     seen = (f"reads what the keep does not hold ({why})" if why else
             f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} drawn)")
     raise Refused(f"this code's draw from the keep {seen}" + (f"; the record draws by {draw!r}" if draw else ""))
-
-
-#: `kept_sample` under its older name, for the callers that still say it
-kept_draw = kept_sample
 
 
 def replay(o: Options) -> bool | None:
