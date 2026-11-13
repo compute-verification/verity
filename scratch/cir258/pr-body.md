@@ -45,18 +45,27 @@ Each run is one `research run --on auto` in a research-pool check slot, one at a
 - `r20261112-152804-9697`, with the base's three files (vy-nebius-cpu-2, slot r5, 15 cores; waited 86 s, held 15:29:55Z–18:11:15Z): `circuit-check --all`, as described below.
 - `r20261112-183018-3636`, at `c00bf07b2258` (vy-nebius-cpu-14, slot r12, 16 cores; waited 19 min 37 s, held 18:50:20Z–21:51:23Z): `circuit-check --all`, as described below.
 - `r20261112-215945-375d`, with the base's three files (vy-nebius-cpu-5, slot r8, 30 cores; waited 97 s, held 22:01:47Z–23:16:53Z): the `tools/verity/circuit_check` suite whole and fresh, then the two walk tests. All passed.
-- @@SUITESRUN@@
+- `r20261112-232130-c3ca`, at `c00bf07b2258` (vy-nebius-cpu-1, slot r4, 12 cores; waited 50 min 7 s, held 00:12:02Z–01:53:07Z): it ran two steps, and all passed.
+  - `suites.py --changed 1885cf1fe08c --quick` (`out/suites.json`) ran 57 suites: 57 passed, 0 failed, in 3,854 s, with a peak of 25.2 GiB.
+  - `repository` and `tools/verity/circuit_check`, whole and fresh (`out/suites-whole.json`), with a peak of 48.5 GiB. `repository` had 349 passed in 507 s. `tools/verity/circuit_check` had 428 passed and 5 skipped, in 2,203 s on 6 workers.
+- `r20261113-015932-d77d` (vy-nebius-cpu-4, slot r0, 46 cores; waited 30 min 50 s, held 02:30:45Z–03:42:16Z): the `tools/verity/circuit_check` suite whole and fresh three times in one slot. It took 1,833 s at the head, 400 s at the base, and 2,056 s at the head again; all passed.
+- `r20261113-034352-d28a` (vy-nebius-cpu-6, slot r2, 22 cores; waited 46 min 31 s, held 04:30:28Z–05:45:42Z): the same suite at the base, which took 1,753 s. Then at the base plus one comment line in `targets.py`, which took 1,784 s. Both passed. Its last step, the head with records it had stored, failed as described below.
+- `r20261113-055542-22f5` (vy-nebius-cpu-4, slot r1; waited 2 s, held 05:56:06Z–06:11:20Z): `circuit-check --all --records-only` for the head built and stored 826 binding records in 890 s. The suite, with those records handed in through `CIRCUIT_CHECK_RECORDS`, refused them before any test ran: `verity.definitions.kernels.tc.circuit-check#_core_roots's record doesn't count (a read changed, or it lists other roots than its binding makes now)`.
 
 ## What the change adds to `check`
 
-Nothing measurable in time or memory. The only change in what `check` checks is that the two coordinate targets already in the catalog are now checked as Calls.
+In the circuit-check step and the walk tests, nothing measurable. The only change in what they check is that the two coordinate targets already in the catalog are now checked as Calls. The `tools/verity/circuit_check` suite, run on its own, takes about 24 minutes longer. That cost comes from editing `targets.py`, not from what this change checks: the suite rebuilds circuit-check's catalog when no stored record counts. Details are below and on CIR-258.
 
 - **circuit-check step** (`python -m circuit_check --all -q --jobs 16 --mem-gb 96`, no cache, as `check` runs it; `check` passes no `--ranges`, so the new spots don't enter it):
   - At the base, with the three changed files put back as at `1885cf1fe08c` (run `r20261112-152804-9697`, vy-nebius-cpu-2): 9,678 s, 17,189 targets, 0 failures. The highest target peak was 63.9 GB, and the run's memory-cgroup peak was 101.8 GiB.
   - At the head `c00bf07b2258` (run `r20261112-183018-3636`, vy-nebius-cpu-14): 10,862 s, the same 17,189 targets, 0 failures. The highest target peak was 63.94 GB, and the cgroup peak was 92.3 GiB.
   - The two runs check the same target set. Exactly two targets' results differ: `ScaledMmFp8BlockCoordinateGivenScale_v2{K=128,G=128}` (5.35 s at the base, 4.93 s at the head) and `{K=64,G=32}` (4.48 s, 5.26 s). Each goes from `partition.applies: false` to `true`; their gates, units and redundant gates are unchanged. The K=256 coordinate's new pin is not reached by `--all`.
   - The 1,184 s wall difference is the machines, not the change. The head's catalog prologue was 4,411 s against 3,834 s, and the summed target seconds were 40,760 against 35,992. That is 13 % slower spread across all 17,189 targets, while the targets the change touches differ by under 3 s each (computed from the two reports).
-- **`tools/verity/circuit_check` suite**, whole and fresh, without the opt-in tests: 397 s at the base (run `r20261112-215945-375d`, peak 22.4 GiB) and @@SUITEHEAD@@ at the head (run `r20261112-232130-c3ca`).
+- **`tools/verity/circuit_check` suite**, whole and fresh, without the opt-in tests:
+  - On one machine, in one slot (run `r20261113-015932-d77d`): 1,833 s at the head, 400 s at the base, and 2,056 s at the head again. Earlier runs gave 397 s at the base (run `r20261112-215945-375d`, peak 22.4 GiB) and 2,203 s at the head beside `repository` (run `r20261112-232130-c3ca`, peak 48.5 GiB for both suites).
+  - The summed per-test time grows by only about 330 s, in tests unrelated to FP8; the first test in each worker that reads the catalog is charged for building it. The suite takes its catalog from the bindings' records in the host's `~/.cache/verity-check/circuit-check` (`tests/conftest.py`, `_from_records`). A record counts only while every input it read is unchanged, and `targets.py` is read by every binding. With no record counting, the session builds the catalog itself.
+  - On a host whose records don't match the base either, the unchanged base took 1,753 s, and the base with one comment line added to `targets.py` took 1,784 s (run `r20261113-034352-d28a`). So this cost belongs to any change to `targets.py` or a sidecar, until records for the new tree exist.
+  - I could not show the head's time with records of its own: handed records from `--records-only` were refused (run `r20261113-055542-22f5`, quoted above). Whether `check`'s own suite finds records that count for the tree it checks is for the cache's owners.
 - **The two opt-in walk tests**, which run only in a cold check: 4,104 s at the base (run `r20261112-215945-375d`, peak 73.8 GiB) and 4,075 s at the head (run `r20261112-130257-171f`, peak 71.0 GiB).
 
 ## Not run
