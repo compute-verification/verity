@@ -106,6 +106,17 @@ def test_chain_units(window):
         assert {_writer(circuit, up, "x", u0 + h * 256 + n) for n in (0, 255)} == {(end, "o0", e0 + h)}
 
 
+def test_chain_place_ranges():
+    """In a prefill of 150 ids the first layer's tokens past 128 keys have chains of three key blocks, unsplit (a launch of
+    150 tokens splits none): each one's two later blocks are places of one template,
+    `SparseMlaHeadBlock_v1{NVIS=64,FIRST=false}`, the second's lanes reading the first's. Each place is a range of its own in
+    the window's order (`interface.ordered`), else that range would wait on itself."""
+    circuit, w = NW.node_window(glm_request(150, 2).program.fn, families=FAMILIES)
+    block = _tid(circuit, r"SparseMlaHeadBlock_v1\{DR=64,DV=512,NVIS=64,FIRST=false,.*\}")
+    ranges = [n for t, _at, n in circuit.order if t == block]
+    assert ranges == [HEADS] * (circuit.units[block] // HEADS) and len(ranges) > 64
+
+
 def test_census(window):
     """The three families are lowered, the families they read and wrote are gone from the free list, and every template
     is a proof block Flock's composer proves."""
