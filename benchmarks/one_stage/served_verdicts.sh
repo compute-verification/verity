@@ -39,7 +39,10 @@
 #     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
 #     private/verdicts.txt, and once the run is done, however it ends, `served_verdicts.py publish` holds in full in the
 #     serve dir's private/out each file of $OUT that names or counts a window or holds a load's tokens or span (the
-#     aggregate's, which `served_overhead.py table` reads there), its public form in its place. The advice registration's published copies
+#     aggregate's, which `served_overhead.py table` reads there) or Pearl+'s exclusion tiles' count or its replayed tiles'
+#     ids (its verdict's profile and replay by tile, the reference's and the Lean's), its exact credit where the work is
+#     in the grid form, or its prover's give-up before the coin (the piece's give-up document and the counts in its
+#     log's volunteer and retain lines), its public form in its place. The advice registration's published copies
 #     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
@@ -317,7 +320,9 @@
 # digest no auditor holds), so the log before R is that record and W, and runs `served_verdicts.sh pearl-tie`
 # (PEARLPLUS_TIE_CMD) before its coin: the window's
 # advice and `prove_path.py window-commit --window-registration W --pearl-passes DIR --law V3C_LAW`, the circuit cut at
-# Pearl+'s linears and R chained right after W, in the serve dir's pearlplus/w<k>/; then `verify --tie W`. V3c then runs
+# Pearl+'s linears and R chained right after W, in the serve dir's pearlplus/w<k>/; then `verify --tie W --class
+# V3C_CLASS` (PEARLPLUS_CLASS), which refuses passes that aren't the class's fixed load and publishes the work in its
+# grid form (the class's structural credit less the give-up on H1's window grid, the exact credit held). V3c then runs
 # after step 4 and before the record (on a node short of its audit's memory, deferred as under H1_TIE): it audits that
 # commit, held to W (WINDOW-COMMIT), with records_audit's --tie W (V3C-TIE), and the record reads R and that audit's
 # summary from pearlplus/w<k>/tie (`record --window-tie`), where `pearlplus_of_record` holds them to W.
@@ -406,8 +411,9 @@ if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B
   # the class's fixed load, at whose rows the circuit cut at Pearl+'s linears reads its tables
   IFS=, read -r slots prompt _ <<< "${V3C_CLASS-4,32,4}"
   SLOTS=${SLOTS:-$slots} PROMPTS=${PROMPTS:-$prompt:$prompt}
-  # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE)
-  export PEARLPLUS_TIE PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
+  # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE); PEARLPLUS_CLASS is the class
+  # Pearl+'s verdict holds the window's passes to (served_pearlplus.sh's `verify --class`)
+  export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
   # the BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of which step 3 proves (work:K)
   PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_tg_l0_step1.json} PP_SETS=${PP_SETS:-rope-head/d64/bf16}
   # the row's Build of record, PROGRAM_DIGEST:MANIFEST_DIGEST, which the served compare holds PRED to (BUILD)

@@ -3,6 +3,9 @@ module
 public import PouwPearlPlus.Tile
 public import PouwPearlPlus.Load
 public import Flock.WindowRecord
+meta import PouwPearlPlus.Tile
+meta import PouwPearlPlus.Load
+meta import Flock.WindowRecord
 
 /-!
 # The window record's tie (`verify_run.tie`, `verify_run.tie_entries`)
@@ -29,6 +32,14 @@ one that registers a ``pearl-b/`` value is refused (`V1_WEIGHTS`), and a W stati
 An entry that names no ``word_bits`` is at `registered.WORD_BITS` (16). The answer is `{record: digest(W), tables}`, with
 `weights` for a version-1 W; the first mismatch is Python's `ValueError`, in its words. Every JSON comparison is by a
 match (`Want.holds`).
+
+`tieAt load w passes rounds dropped` is the verdict's tie step (`verify_passes`' ``window`` and ``window_class``): `tieOf`, and
+then, given the window's class, the passes must be that class's fixed load (`heldToLoad`, `verify_run.held_to_load`):
+the retained and the dropped rounds are each of the class's `outputs` rounds once, and every call of a retained round
+has that round's rows, `slots × prompt` at round 0 and `slots` after, committed in rows padded to `ROW_ALIGN`
+(`window_class.PearlTables`). Passes of another load are refused in the class's own words (`offLoad`), which name no
+round, call or count of the passes'; W's header names no class, so the verdict takes it as an input. Only at a held load
+are the passes', the calls' and W's tables' counts the class's and the model's, and so protocol structure.
 -/
 
 @[expose] public section
@@ -173,5 +184,46 @@ def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
     if !bad.isEmpty then throw s!"W's {v}: its {", ".intercalate bad} not the {tieOwner v}'s"
   pure { record := ← Flock.WindowRecord.digestHex w, tables := want.length,
          weights := if tied then none else some WEIGHTS_UNTIED }
+
+/-- `pearl_c.ROW_ALIGN`: a call's A rows are committed in rows padded to a multiple of it. -/
+def ROW_ALIGN : Nat := 16
+
+/-- `verify_run.off_load`: why passes that aren't the class's fixed load are refused, in the class's words alone. -/
+def offLoad (c : LoadClass) : String :=
+  s!"the passes are not the fixed load of the window's class ({c.slots} slots, {c.prompt} prompt ids, {c.outputs} " ++
+    s!"outputs): a pass a round of its {c.outputs}, each retained or dropped, every call of round 0 of " ++
+    s!"{c.slots * c.prompt} rows and of a later round of {c.slots}, committed in rows padded to a multiple of {ROW_ALIGN}"
+
+/-- `verify_run.load_rows`: a round-`s` call's (rows, committed A rows) under the class's fixed load
+(`window_class.PearlTables`' `rows` and `a_rows`). -/
+def loadRows (c : LoadClass) (s : Nat) : Nat × Nat :=
+  let rows := if s == 0 then c.slots * c.prompt else c.slots
+  (rows, (rows + ROW_ALIGN - 1) / ROW_ALIGN * ROW_ALIGN)
+
+/-- `verify_run.held_to_load`: whether the retained passes, pass i as round `rounds[i]` (default i), are the class's
+fixed load: the retained and the dropped rounds are each of the class's `outputs` rounds once, and every call of a
+retained round has that round's `loadRows`. -/
+def heldToLoad (c : LoadClass) (passes : List Pass) (rounds : Option (List Nat)) (dropped : List Nat) : Bool :=
+  let ss := rounds.getD (List.range passes.length)
+  ss.length == passes.length &&
+    ((ss ++ dropped).toArray.qsort (· < ·)).toList == List.range c.outputs &&
+    (ss.zip passes).all fun (s, p) => p.records.all fun r => (r.realRows, r.matmul.m) == loadRows c s
+
+/-- `verify_passes`' tie step: `tieOf`, then, given the window's class `load`, the passes are its fixed load
+(`heldToLoad`) and the tie names it, or the refusal is `offLoad`'s. -/
+def tieAt (load : Option LoadClass) (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
+    (dropped : List Nat) : Except String Tied := do
+  let t ← tieOf w passes rounds dropped
+  match load with
+  | none => pure t
+  | some c =>
+    if heldToLoad c (passes.map (·.2)) rounds dropped then pure { t with load := some c } else throw (offLoad c)
+
+#guard loadRows ⟨4, 32, 4⟩ 0 == (128, 128) && loadRows ⟨4, 32, 4⟩ 1 == (4, 16) && loadRows ⟨2, 8, 2⟩ 0 == (16, 16)
+#guard loadRows ⟨3, 7, 2⟩ 0 == (21, 32) && loadRows ⟨3, 7, 2⟩ 5 == (3, 16)
+#guard offLoad ⟨2, 8, 2⟩ ==
+  "the passes are not the fixed load of the window's class (2 slots, 8 prompt ids, 2 outputs): a pass a round of " ++
+    "its 2, each retained or dropped, every call of round 0 of 16 rows and of a later round of 2, committed in rows " ++
+    "padded to a multiple of 16"
 
 end PouwCheck.PearlPlus
