@@ -293,14 +293,19 @@ active network certifier's records, both ends at the network certifier's grid an
 
 Stated in Lean: `NetworkCheck.Period` (`verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
-and the bound `K` it publishes. Its parameters list the LMS public keys of the network certifiers trusted for the
-link (`"keys"`, hex strings: at least one, no two with one identifier, a key's first 16 bytes; parameters that name
-one `"key"` are refused, naming `"keys"`) and each one's designated session for the period (`"sessions"`, hex strings
-of 32 bytes, one for each key and in the keys' order, session i being key i's; lists of unequal length are refused by
-name, and parameters that name one `"session"` are refused, naming `"sessions"`). Each certificate and rows
-registration is checked under the listed key whose identifier it names, in that key's session, a signer that is not
-listed refused by name. The period check is not in the public tree, because it reads the inference-only policy's
-layout check, which is withheld.
+and the bound `K` it publishes. Its parameters list the keys of the link's network certifier (`"keys"`), an entry
+for each certifier session: `{"key": hex, "session": hex, "start": a}`, its LMS public key, its session of 32 bytes,
+and the start of its stretch of link-windows, in the numbers the period's `first` is in. An entry's stretch runs from
+its start up to the next entry's, and the last entry's from its start on. Link-window W of the period picks the one
+entry whose stretch holds it, and each certificate and rows registration for W is held to that entry: its key, its
+session, and that session's own number for the link-window, W − a, since a session numbers its link-windows from 0.
+The developer's record, a clock-form registration's served window, is in the period's numbers. Refused by name: no
+entry; entries out of order; two entries with one start, whose stretches would overlap; one key identifier (a key's
+first 16 bytes) and one session twice; two entries with one key identifier; a period that starts before the first
+entry's stretch; parameters that still name `"key"`, `"session"` or `"sessions"`; and, at a link-window, a signer
+that is a listed key outside its stretch or is not listed. `certifierEntries` and `certifierLink` read the entries
+and the link off the parameters through the period's own decoder, for a composition that pins them. The period check
+is not in the public tree, because it reads the inference-only policy's layout check, which is withheld.
 
 ## A served link (`served`)
 

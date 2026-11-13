@@ -82,8 +82,8 @@ Open premises (`open`):
   (`../device/program/lean/lean-audit.json`).
 - **Documents others read**: the answer of `network-period check`, `verity/certifier/v0`. `benchmarks/network_traces`
   runs the check and writes it as the certifier's piece, which `benchmarks/one_stage` reads. It also writes the
-  check's parameters, whose `"keys"` list the trusted network certifiers' LMS public keys and whose `"sessions"`
-  list each key's session (`scan_period.py`: the deployment's one key and one session).
+  check's parameters, whose `"keys"` list the link's network certifier's entries, each a key, its session and the
+  start of its stretch of link-windows (`scan_period.py`: the deployment's one key and session, from link-window 0).
 - **Files others load by path**: `tests/scan_traffic.py` (`benchmarks/network_traces`, `benchmarks/prove_path`, the
   tests of `adapters/vllm`); `tests/egress_traffic.py` (`benchmarks/network_traces`); in `tests/fixtures`,
   `compile_slice_smallkv.json` (`benchmarks/network_traces`, `benchmarks/prove_path`) and the vectors
