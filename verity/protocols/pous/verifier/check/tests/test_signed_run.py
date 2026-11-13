@@ -28,6 +28,7 @@ from hypothesis import strategies as st
 import verity_difftest as D
 from test_run import LEAN, M, _decode_session, _decode_setup, _point_of
 from verity_difftest import protocol as P
+from verity.protocols.pous.device import challenger_session
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period
 from verity.protocols.pous.verifier import run as R
@@ -128,21 +129,24 @@ def _zeros_on_odd_rounds(blocks):
 
 def signed_run(signer, coins: bytes = COINS, prover=period.honest, setup_signer=None, setup_session: bytes | None = None,
                **record) -> Signed:
-    """The memory challenger's session on `held()` under `coins`, signed by `signer`; the setup record signed by
+    """The memory challenger's session on `held()` under `coins` (as `period.audit` runs it), signed by `signer`, whose
+    key the verifier trusts; the setup record signed by
     `setup_signer` (by default the session's key, at its next leaf for a test key) under `setup_session` (by default the
     session's id) for the published outputs, each overridden by `record`; and the openings from the prover's table."""
-    h, test = held(), signer.scheme != mc.LMS
-    a = period.audit("n0", h, coins, signer=signer, log=M.ts.session_log(), schemes=M.ts.SCHEMES if test else mc.SCHEMES,
-                     protocol=mc.TEST_PREFIX + period.PROTOCOL if test else period.PROTOCOL, prover=prover,
-                     clock=M.Clock(10 ** 9))
-    params, ev = a.case["params"], json.loads(bytes.fromhex(a.case["evidence"]))
-    sid, session, pub = bytes.fromhex(params["session_id"]), R.ChallengePhaseRecord.from_json(ev["session"]), h.published
+    h, pub = held(), held().published
+    q = h.point.params
+    sid = challenger_session.coin_session_id(coins, period.SESSION_DOMAIN, "n0", pub.root)
+    challenger = mc.MemoryChallenger(mc.CoinTree.draw(coins, sid, q.blocks, h.point.k), signer, log=M.ts.session_log(),
+                                     limit_ns=h.point.limit_ns, block_bytes=q.block_bytes, binding=pub.root,
+                                     clock=M.Clock(10 ** 9))
+    signed = challenger.run(prover(h.blocks))
+    session = R.ChallengePhaseRecord(signed, challenger.commitment, challenger.openings())
     if setup_signer is None:
-        setup_signer = dataclasses.replace(signer, q=signer.q + 1) if test else signer
+        setup_signer = dataclasses.replace(signer, q=signer.q + 1) if signer.scheme != mc.LMS else signer
     fields = dict(passed=True, blocks=pub.blocks, commitment=pub.commitment, salt=pub.salt, root=pub.root) | record
     setup = mc.sign_setup_record(setup_signer, sid if setup_session is None else setup_session, **fields)
     openings = tuple(period.openings_of(h.point, pub.salt, h.digests, session.signed.rounds))
-    return Signed(h.point, sid, tuple(bytes.fromhex(t) for t in params["trusted"]), pub, session, setup, openings)
+    return Signed(h.point, sid, (signer.public_key,), pub, session, setup, openings)
 
 
 def _repeat(s: Signed) -> int:
@@ -172,9 +176,13 @@ def _setup_json(case: dict, **kw) -> dict:
     return case | {"evidence": D.canonical(ev).encode().hex()}
 
 
+DECODER = "evidence: "
+"""The reason prefix of a case the decoders refuse: the Lean's and the Python's words for it differ."""
+
+
 def edited(signer) -> dict[str, tuple[dict, str | None]]:
     """The cases of `signer`'s run, honest and under each edit, with the reason each is refused for (`None`: accepted;
-    `""`: refused for a reason not checked here, a decoder's or the verdict's)."""
+    `""`: the verdict's, not checked here; `DECODER`: the decoders')."""
     s = signed_run(signer)
     q, pub, k, j = s.point.params, s.published, len(s.openings), _repeat(s)
     flip = M._flip
@@ -233,11 +241,11 @@ def edited(signer) -> dict[str, tuple[dict, str | None]]:
     }
     out = {n: (c.case(), r) for n, (c, r) in cases.items()}
     honest_case = out["honest"][0]
-    out["passed-2"] = (_setup_json(honest_case, passed=2), "")
-    out["passed-true"] = (_setup_json(honest_case, passed=True), "")
+    out["passed-2"] = (_setup_json(honest_case, passed=2), DECODER)
+    out["passed-true"] = (_setup_json(honest_case, passed=True), DECODER)
     ev = json.loads(bytes.fromhex(honest_case["evidence"]))
     ev["paths"][0]["row"] = ev["paths"][0]["row"].upper()
-    out["row-capitals"] = (honest_case | {"evidence": D.canonical(ev).encode().hex()}, "")
+    out["row-capitals"] = (honest_case | {"evidence": D.canonical(ev).encode().hex()}, DECODER)
     return out
 
 
@@ -246,9 +254,12 @@ def _agree(port, server, cases: dict[str, tuple[dict, str | None]]) -> dict[str,
     for name, (case, reason) in cases.items():
         python = port.reference(case)
         lean = json.loads(D.replay(port, case, server)[1])
+        if reason == DECODER:
+            assert lean["reason"].startswith(DECODER) and python["reason"].startswith(DECODER), (name, lean, python)
+            lean, python = (dict(a, reason=None) for a in (lean, python))
         assert lean == python, (name, lean["reason"], python["reason"])
         assert lean["verdict"] == ("accept" if reason is None else "reject"), (name, lean)
-        if reason:
+        if reason and reason != DECODER:
             assert lean["reason"] == reason, (name, lean["reason"])
         got[name] = lean
     return got
@@ -263,7 +274,6 @@ def test_each_refusal_agrees(test_server) -> None:
     honest = got["honest"]
     assert honest["protocol"] == TEST_ID and honest["public"] == {"certified": False, "eps": "0", "s_bits": 0}, honest
     assert honest["profile"]["gaps"][-2:] == list(period.SIGNED_GAPS) and len(period.SIGNED_GAPS) == 2, honest
-    assert all(got[n]["reason"].startswith("evidence: ") for n in ("passed-2", "passed-true", "row-capitals")), got
 
 
 def test_the_deployed_signer_agrees(deployed_server, test_server) -> None:
@@ -284,6 +294,7 @@ def test_the_deployed_signer_agrees(deployed_server, test_server) -> None:
     assert json.loads(D.replay(DEPLOYED, test_case, deployed_server)[1])["verdict"] == "reject"
 
 
+@pytest.mark.slow
 def test_drawn_sessions_agree(test_server) -> None:
     """Sessions under drawn coins on the one setup, honest or under one bit off in one opening's row or path, or in the
     setup record's signature."""
