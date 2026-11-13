@@ -444,16 +444,18 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
 #: A served window's own fields, never published: the windows (closed, sealed or joined), its users, its engine steps and
 #: whether its requests filled the slots, its unpadded population, its advice's length and its windows' advice by number.
 OWN = frozenset({"windows", "users", "engine_steps", "every_slot", "population", "advice_bits", "bits_by_window"})
-#: Fields that name a window or count its own where their value holds a number: the window's number, its steps, its
-#: requests' count, the windows refused. A window named ``all``, the bench Build's requests by name and a refusal's reason
-#: stay.
-NUMBERED = frozenset({"window", "steps", "requests", "refused"})
+#: Fields that name a window or count its own where their value holds a number: the window's number, its steps (as
+#: ``window_steps`` too, a tied Pearl+ piece's ``load``), its requests' count, the windows refused. A window named
+#: ``all``, the bench Build's requests by name and a refusal's reason stay.
+NUMBERED = frozenset({"window", "steps", "window_steps", "requests", "refused"})
 #: A load's own fields, held by path as (parent, key), the parent the nearest key above the field through lists: the
 #: tokens of each load of `served_overhead.py metrics`' aggregate, which over a block's outputs are the exact block
 #: count, and its span. Held by path, not as bare keys, so the inference-only policy's ``n_inputs.span_s`` stays as
 #: written, and with it the policy digest its verdict cites.
 OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s")})
-#: A window's number, step range or count in text, each with what the published text says in its place
+#: A window's number, step range or count in text, each with what the published text says in its place; and its
+#: population where a stream's rule states it, the denominator of a rate written from the window's own N
+#: (`records_audit.rule_of`), which is no sampling rate and says only the design, K of each N
 WINDOW_TEXT = (
     (re.compile(r'\\?"(?:%s)\\?": ?(?:-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^{}]*\}|true|false)(?:, ?)?'
                 % "|".join(sorted(OWN | NUMBERED))), ""),
@@ -463,6 +465,7 @@ WINDOW_TEXT = (
     (re.compile(r"\b\d+ (sealed|closed)\b"), r"\1"),
     (re.compile(r"(?i)\b(steps?) \[\d+, ?\d+[\])]"), r"\1"),
     (re.compile(r"\b\d+/\d+ ok\b"), "ok"),
+    (re.compile(r"\b((?:stratified-|work-)?rate:\d+)/\d+"), r"\1/N"),
 )
 #: A window's number in a file's path under the published dir: the file is held whole
 NAMED = re.compile(r"(?<![A-Za-z0-9])w\d+(?![A-Za-z0-9])")
