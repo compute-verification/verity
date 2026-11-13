@@ -149676,3 +149676,65 @@ If you take the cure, add: "A line you did not name is carried later the same wa
 - A second carry across a later move for a line carried late: read from the code, not run.
 - Which of the 48 are live: the owners'. `cursor/proofs-heldof-joinswitch-f684` (`1002467c84a9`, 205 commits of its own) and `cursor/proofs-addrrow2-unlinked-scratch-681e` are not in your names and were committed to today.
 - Branches of other lanes that share a commit with what the pass lands.
+
+## SESSIONOF2, Fri 13 Nov 15:48Z: the second reader, sized: two tokens of code and about 1,000 lines of Lean close it on the side soundness reads; no proof reads through it today; and `main`'s moves now touch five of the switch's eleven files
+
+After the switch there are still two readers of canonical JSON: `Core.canonicalJson`, now on the total parser, and the reader that reads large texts in place (`Core.Canonical`), which PoUS's evidence, the composition's evidence and every served case go through. The second one is held to the first only by a test on 81 texts, and it still calls Lean core's parser in two places. This entry says what it would take to hold it by a theorem, in steps, and what each step costs. I have written none of it: it is a sizing, by reading. It also says what the switch's branch needs to be carried across the moves that are now on `main`.
+
+**1. What the second reader is, and who reads it** `[read: main at 4ae17f7eafd, the join at d557b8cf4282]`
+
+- `verity/protocols/interface/CoreProtocol/Protocol/Canonical.lean`, 389 lines, no proof. Five entry points: `parseUpTo`, `parse` and `read` stand in for `canonicalJson`; `unhex` for `Flock.unhex`; `writes` for `Flock.canon j == s`. It is there for size: `canonicalJson` and `Flock.unhex` go through `String.toList`, about 30 bytes a character, and the compiled `String.toList` counts characters in 32 bits.
+- Callers: `Cli.lean` (`caseInputs`, `Protocol.case`, `serveLoop`: every `serve` case line), `Blobs.lean` (`BlobProtocol.case`: a served case's blobs), PoUS's `RunProtocol.lean` (`hexAt`, `decodeEvidence`: `read`, `unhex`, `writes`), the composition's `Product.lean` (`decodeEvidence`: `read`, `unhex`).
+- Guarantees' statements read it. Both `security/lean-audit.json` and `security/Properties/lean-audit.json` list `CoreProtocol.Protocol.Canonical` under `reads` with 33 definitions, among them `read`, `value`, `strValue`, `refusal`, `unhex`, `writes`. They enter through the two `decodeEvidence`s (the game's `Composition.decodeEvidence s.evidence = .ok ev`, `Properties/Verity/Game.lean:221`). `parse`, `parseUpTo` and the `serve` path are read by no statement (`CoreProtocol.Cli` is not under `reads`).
+- No proof reads through it. No Lean file under `security/` names `Core.Canonical`, on `main` or on the join: every proof takes "`decodeEvidence` returned `ev`" as given. So no premise of today would be discharged by a theorem about it, and none is blocked for lack of one.
+
+**2. What holds it to `canonicalJson` today** `[read]` `[run]`
+
+- Two `#guard`s in `Cli.lean` compare `parse` and `parseUpTo` with `canonicalJson` on 81 texts, the tree up to its print and the refusal's words exactly; six in the file hold `read`, `unhex`, `canonError` and `writes` on 2, 13, 5 and 19 values.
+- They pass with the switch `[run]`: `e2a7`'s `build-total.log` has "Built CoreProtocol.Cli", built with the one token switched on a tree whose `Cli.lean`, `Canonical.lean` code and `Base/JsonParse.lean` are the switch's (same blobs `[read]`).
+- After the switch it still calls Lean core's `Json.parse` twice: `strValue` (line 103: the value of every string that holds an escape, on the accepting path) and `refusal` (line 214: the reason only). These are the two `PENDING` lines I put in `tests/test_flock_json.py`.
+
+**3. The steps, cheapest first.** Sizes are `[guess]`, set against proofs of the same kind that exist: `parse_wf` is `Json/Parse.lean`, 181 lines; `parse_canon` is `Json/RoundTrip.lean`, 1,199 lines and 60 theorems `[read]`.
+
+| Step | What it gives | Code change | Lean, new files under `security/Proofs/Core/` |
+| --- | --- | --- | --- |
+| 0 | Lean core's parser is called nowhere in the interface's readers | 2 tokens in `Canonical.lean` (`Json.parse` to `Flock.JsonParse.parse` in `strValue` and `refusal`), one import line twice | none |
+| 1 | `read b = .ok (j, s) → Good j`, and the same for `parse`, `parseUpTo`: what it returns is well formed, with whole numbers | none | about 150 lines; `FlockComplete.JsonRT.ins_wf` is reused |
+| 2 | `read b = .ok (j, s) → s.toUTF8 = b ∧ Flock.canon j = .ok s`, hence by `canonicalJson_of_canon`: `∃ j', Core.canonicalJson b = .ok j' ∧ Same j j'`. It accepts nothing `canonicalJson` refuses, and its tree is alike | needs step 0 | about 700 to 1,000 lines: strings against `canonStr`'s escapes (about 250), integers (120), objects' order and the map built by rising inserts (200), arrays and literals (80), a text's bytes against its characters for ASCII (150) |
+| 3 | The same for the other two: `writes j s = .ok true → Flock.canon j = .ok s`; `unhex s = .ok b → Flock.unhex s = .ok b` | none | about 400 to 500, and 100 to 150; the string lemmas of step 2 are shared |
+| 4 | One reader: `canonicalJson` and the in-place reader equal as functions, by `@[csimp]` or by making the in-place one the definition | the definition or an attribute | steps 1 to 3, their converses, equal refusal words and equal trees (not only alike): about 2,500 to 3,500 lines in all |
+
+- Steps 0 to 2 are what answers soundness's "two readers of one format": after them the second reader is proved to accept only what the first accepts. About 1,000 lines and two tokens.
+- The converse (every text `canonicalJson` accepts, the in-place reader accepts, with the same reason on refusal) is completeness: honest texts pass. By the design rule it may stay a test. Today that is the 81 texts; a difftest in REDRAW's pattern would widen it, one file.
+- Step 4 is the same theorem as the cheaper total parser that the pull request's body lists under what is not done (`parseFast` with `@[csimp]`): proved once, it takes the switch's added 34.6 s and 3 GiB away again and leaves one reader. So the two follow-ups are one piece of work, and the largest.
+- The risk in steps 2 to 4 is the bridge from a text's bytes (`String.Internal.getUTF8Byte`, `String.Pos.Raw.extract`) to its characters (`String.toList`). No file under `security/` names `getUTF8Byte`; one, `Proofs/Flock/VBridge/Family/Names.lean`, has a lemma that `extract` between two character boundaries is the characters between them, which the strings' part can reuse `[read: main and the join]`. For ASCII the bytes' side is short in principle; I have not tried it.
+
+**4. Step 0, before and after, and why I did not do it** `[derived]`
+
+- Before: `strValue` reads a string holding an escape with `Json.parse` (opaque to the kernel). After: with `Flock.JsonParse.parse`. `refusal` likewise.
+- It changes two definitions that listed guarantees read (`Core.Canonical.strValue`, `Core.Canonical.refusal`, and the module's digest under `reads` in both locks), so it is a change of what those guarantees say, and it could change which texts the reader accepts if the two parsers read some canonical string literal differently. The guards say they agree on the 81 texts; the lemma that they agree on every literal `strEnd` accepts is part of step 2. So it stays unwritten until you rule, like the switch's own token did.
+
+**5. What the switch's carry needs** `[read: main at 4ae17f7eafd, 162 commits past the switch's base 053b8e50fe8a; I merge nothing]`
+
+The moves on `main` touch five of the switch's eleven files:
+
+- `verity/difftest/README.md`, `verity/difftest/pyproject.toml`, `verity/difftest/tests/test_canonical_json_port.py`: the directory is now `tools/difftest/`. My three changes go there, and the new test's line 31 becomes `INTERFACE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "interface"`, as `test_protocol_port.py` has it on `main`.
+- `tests/test_flock_json.py`: `main` rewrote its paths (`verity/protocols/proofs/flock/…`, `verity/protocols/proofs/spot/…`, `verity/protocols/proofs/recursion/…`). My change is re-applied on `main`'s text: `"verity/protocols/interface/"` joins `TREES` and leaves `NOT_READ`, the difftest's module joins `ALLOWED`, and the four `PENDING` lines.
+- `verity/protocols/interface/README.md` and `lakefile.toml`: `main` changed other lines of each (the profile's module path; the difftest package's path, now `../../circuits/difftest`). Mine add lines beside them.
+- Untouched by the moves: `CoreProtocol/Protocol.lean`, `Protocol/Canonical.lean`, the two difftest modules, `security/Proofs/Core/CanonicalJson.lean`. The other owners' lines keep their paths: `security/Proofs/Properties/Pous/Component.lean`, `verity/protocols/interface/lean-audit.json`.
+- Say the word and I carry it: a new branch off `main`, the eleven files re-applied, the difftest and the theorem's file tried again on a node. Not before.
+
+**STOP RULE**: nothing done. Step 0 would change definitions that listed guarantees read; its before and after are in section 4, unwritten.
+
+**NEEDS**: your ruling on which of steps 0 to 3 I write, if any, and when the carry starts. The NEEDS of my 15:36Z entry stand (one root line and one `compile_time` listing for the join's owner).
+
+**To post** (PRF-490, if you pass the sizing on): "The second reader (`Core.Canonical`) after the switch: it still calls Lean core's parser in two places (the value of an escaped string; a refusal's words). Two tokens remove that. A theorem that it accepts only what `canonicalJson` accepts, with an alike tree, is about 1,000 lines by SESSIONOF2's estimate, unwritten. That honest texts pass both stays a test (81 texts today). Making the two one reader is the same work as the cheaper total parser, about 3,000 lines. No proof on `main` reads through the second reader today; 33 of its definitions are read by guarantees' statements, through PoUS's and the composition's evidence decoders."
+
+**Not established**
+
+- Every size: none of the steps has a line written or compiled.
+- That the two parsers read every canonical string literal alike: tested on the guards' texts only.
+- How many guarantees' recorded hashes step 0 moves: the locks name the module's 33 definitions, not which guarantee reads which.
+- That the carry is only the five files: read from `main`'s diff, not merged and not built.
+
+**Pushed heads**: unchanged since 15:36Z. `cursor/proofs-sessionof2-params-4e98` `9c5b95260b60`; `cursor/proofs-sessionof2-parser-defe` `fe28c96c4322`; `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`; `cursor/proofs-sessionof-5c1e` `521933e1430b`. No run is out.
