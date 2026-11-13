@@ -133236,3 +133236,47 @@ Mailbox read to 09:27Z (`82ea7f0938ab`). Branch `cursor/proofs-members-switch-34
 - The switch's proofs' side as above; then the Python twin, tests and docs.
 
 **Next**: the binding in both forms, then the one statement's chain up to `remote_soundness_deployedReady`, one try at a time through `verity lean try --on auto`.
+
+## ADDRROW2, Fri 13 Nov 09:42Z: the place half of `Sits` COMPILES: `7b4574d02e` on `cursor/proofs-addrrow2-5e1b` (`r20261113-093259-3922`, rc 0, 18 theorems, probe clean): `sits_of_slots` proves all of `Sits h` from "no inner block always checked" and the named premise `SampleSlots h`, and `rowFact_of_slots` gives the row fact from them, `wiresChecked` and `PublishedRows`
+
+**In plain words.** The placement premise of the row fact is now a theorem with two hypotheses about the registration, and no hypothesis about a run. It says: at an accepted run, the checked inner block is one of its session's instances, and the unit the session drew for that instance is exactly "the inner block's own outer block, at its place in the first stage's record, and the inner block's position in that outer block's cell". The two hypotheses are that no inner block is checked whatever the stages draw, and that every outer block the first stage can sample is a slot of the layout that names itself. The second is the one fact no check of the design decides; it is a named premise, not proved. The row fact itself still takes one more unproved premise, about published rows at written ports.
+
+Clock: `date -u` read 09:42Z. Branch `cursor/proofs-addrrow2-5e1b` at `7b4574d02e74fe2d733c9d6b374573935f3bbe24`, pushed; nothing unpushed. Mailbox read at 09:40Z: the coordinator's 09:23Z note is read (go on; `--siblings` on each new file; `SampleSlots` stays inside `AddressFacts/`).
+
+**1. What compiled** [run: `r20261113-093259-3922`, `--on auto`, placed on vy-nebius-cpu-14, 09:33Z to 09:39Z, `done rc=0`; lines quoted from its `stdout.log`], at `7b4574d02e`:
+- `security/Proofs/Flock/SpotFlock/AddressFacts/RowPlace.lean` (new, 382 lines): "lean exit 0 in 278 s"; "axiom probe: none of its 18 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- With `--siblings`: "no built module of its package that doesn't import Proofs.Flock.SpotFlock.AddressFacts.RowPlace declares a name it does (1972 imported in 10 s, peak 4988 MB); 2227 unchecked, with no build of their source as it is or importing a module with none". So the name check covers the 1972 modules that slot tree had built and not the other 2227.
+- Two warnings name the file: `if_pos` and `if_neg` are deprecated names (lines 160 and 171). Other compiled files on this line carry the same warning; I left them.
+- The file adds one root line to `security/Proofs/lakefile.toml` (on a line of its own) and one `roots` line to `security/Proofs/lean-audit.json`. No record, statement or assumption of the lock changed.
+
+**2. STATEMENTS (HONEST2, ASSEMBLY)** [run: compiled in `3922`], namespace `SpotFlock`:
+- `def AddressRow.SampleSlots (h : Held) : Prop := ∀ l, Spot.Slots.layout h.reg.first.program h.reg.first.query = .ok l → ∀ c : ByteArray, ∀ ρ ∈ h.reg.sample c, ∃ b, l.blocks[ρ]? = some b ∧ b.unit = some ρ`. This differs from my 09:16Z text in one place: the layout is `= .ok l`, not `.toOption = some l`. It is the form `two_eq` and HELDOF's `block_of_popOk` use.
+- `theorem AddressRow.sits_of_slots {h : Held} (hna : ∀ v, h.reg.always v = false) (hSS : AddressRow.SampleSlots h) : AddressRow.Sits h`.
+- `theorem rowFact_of_slots {h : Held} (hW : ∀ r : CheckedRun h.stage, r.Ok h → Wiring h) (hna : ∀ v, h.reg.always v = false) (hSS : AddressRow.SampleSlots h) (hwc : AddressRow.wiresChecked h = true) (hPub : AddressRow.PublishedRows h) : RowFact h (wireMap h) (returned h) (addressOf h)`.
+- Lemmas others may want: `AddressRow.proved_in_cell` (every unit an accepted `selectSecond` proves is `cellOff q ns t + i · n_t + p` with `t < ns.size`, `i < q`, `p < n_t`; no `Held` in it); `AddressRow.blockAt_slot` (under `two h s = some d` and `SampleSlots h`, the registration maps that cell's unit to `unitBase h.ms t + (sample[i] · n_t + p)`, a unit member `t` has); `CheckedRun.n_eq_findIdx` (the instance of an accepted run's checked inner block is the first drawn unit the registration maps to it).
+
+**3. How it goes** [read: each name is a declaration at `7b4574d02e`].
+- The first of ADDRROW's two unfound facts, "the second draw's units are in the cells", is `proved_in_cell`. It comes from the second stage's weighted count `sum_proved_selectSecond_le` at the weight that is 0 on the cells and 1 off them: the count is then 0, so no proved unit is off the cells.
+- The second, "each sampled outer block is a slot whose unit is itself", is `SampleSlots`, taken as a premise. The reason is as in my 09:16Z entry: `filesOk_sound` gives `blockOf ρ t p` only at such slots, and `two h` does not ask that the first stage sample only them.
+- The checked inner block is `unitBase t + (r.ρ · n_t + p)` by `member_of_replayOf`, and a drawn cell's unit by `proved_of_checked` and `blockAt_slot`. A member's unit has one template, outer block and position (`unit_inj`), so the drawn cell is the inner block's own. The sample lists each outer block once (`selectSecond_sample`), which gives the place in the first stage's record (`blocks_of_ok`, `placeOf_irootsOf`).
+
+**4. What is left of the row fact, and what I do next.**
+- `SampleSlots h`: unproved. Next, I write the short step from the run's population check: `Slots.popOk p q n = true` and "every outer block the first stage samples is below `n`" give `SampleSlots` (through HELDOF's `block_of_popOk`). Then I look for "below `n`" in what `Spot.Select.select` checks of its own draw (`Draw.checkDraw`). [guess] That second step is 100 to 200 lines if no lemma has it. If HELDOF's answer says it is proved, I use that and stop.
+- `PublishedRows h`: unproved, not started. I read it after the step above and say in my next entry what it takes.
+- "No inner block always checked" stays a hypothesis: `Sits` is false without it.
+
+**STOP RULE.** Nothing touched: no listed guarantee's statement or record, no named assumption, no verifier, no file of FRAME's. `SampleSlots` is a premise of theorems inside `AddressFacts/` only.
+
+**NEEDS.**
+- **HONEST2:** your instance needs `∀ v, h.reg.always v = false` and `AddressRow.SampleSlots h` at `held R B desc q c₀` to use `sits_of_slots`. Say if either is false there.
+- **ASSEMBLY:** the row fact's premises are now `Wiring` at each accepted run, no inner block always checked, `SampleSlots h`, `wiresChecked h = true` and `PublishedRows h`. Merge `7b4574d02e` in place of `d2cae2a309`; it holds it.
+- **HELDOF (through the coordinator):** the same question as at 09:16Z, now exact: is `∀ c, ∀ ρ ∈ h.reg.sample c, ρ < n` proved anywhere, where `n` is the population `Slots.popOk` holds the layout to?
+
+**To post.** Nothing.
+
+**Not established.**
+- `SampleSlots h` and `PublishedRows h` at any registration.
+- A whole build of `security/Proofs`, or its records audit, at `7b4574d02e`. The sibling check left 2227 modules unchecked.
+- Whether any instance in use has an inner block always checked.
+
+Runs: `r20261113-082753-b31c`, `r20261113-090552-1d81`, `r20261113-093259-3922`: all done, rc 0. None out.
