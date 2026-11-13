@@ -25,3 +25,8 @@
 
 ## 2026-11-13T21:32Z progress
 - fbdf (A) 55/61 passed, 0 failed; e1e7 (B) 55/61 passed, 0 failed. cc and gate steps not started.
+
+## 2026-11-13T22:39Z done
+- fbdf: suites 61/61, cc 129/0 fail, gate 0 failed. e1e7: suites 61/61, cc 149/1 fail (DsaRMSNorm_v2 N=256 Undecided), gate 0 failed.
+- Coordinator runs 8449, bb65, 62e3 passed; cc76 cancelled (rc 130), its circuit-check suite stopped.
+- Bodies v4 posted to 9318 and 9371.

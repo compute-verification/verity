@@ -1,0 +1,2 @@
+ratchet gate af9b13440693..2b1b6db00950: 1 change(s), 0 failed
+  af9b13440693..2b1b6db00950 (2b1b6db00950): passed: 9814 -> 9805 ratchet exceptions; ruff finds nothing new in the 1 Python file(s) it changes; no direct environment read is new in the 7 Python file(s) it changes; no silent except handler is new in the 7 Python file(s) it changes; no lane-text site is new in the 15 file(s) it changes; no retired-term site is new in the 15 file(s) it changes

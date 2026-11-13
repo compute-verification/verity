@@ -1,0 +1,2 @@
+ratchet gate af9b13440693..8d39f1d85794: 1 change(s), 0 failed
+  af9b13440693..8d39f1d85794 (8d39f1d85794): passed: 9814 -> 9808 ratchet exceptions; no direct environment read is new in the 5 Python file(s) it changes; no silent except handler is new in the 5 Python file(s) it changes; no lane-text site is new in the 8 file(s) it changes; no retired-term site is new in the 8 file(s) it changes
