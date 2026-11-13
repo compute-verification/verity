@@ -11,14 +11,16 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.boolean import gemm as BG
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat, runs
 from verity.circuits.types import Array
+from verity.definitions.ops import gemm as G
+from verity.definitions.ops.boolean import gemm as BG
 from verity.protocols.pouw.prover.circuit import compile as C
 from verity.protocols.pouw.prover.circuit import h1tile as H
 from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.spot.device import challenger as Ch
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment) are not on this tree")
 COIN_RULES = C._ports is not None and hasattr(C._ports, "_coin_role") and "position" not in C._ports.KINDS
@@ -203,9 +205,6 @@ def test_the_receipt_is_the_lanes_partials_xored(r, c):
 def test_live_salt_is_the_round_key_stream():
     """A live execution phase's unit salt is round r's `window.round_key` stream's first 64 bytes, from the round's 64-byte coin and
     root; another round, root or coin gives another salt, and the unit's receipt follows it."""
-    from verity.protocols.pouw.verifier import window as Wd
-    from verity.protocols.spot.device import challenger as Ch
-
     count = iter(range(1 << 20))
     ch = Wd.live_challenger(7, 2, entropy=lambda n: hashlib.shake_256(next(count).to_bytes(8, "big")).digest(n))
     rec = Ch.LiveRecord(ch, Wd.ROUND, clock=lambda: 0.0)

@@ -55,17 +55,18 @@ import json
 import sys
 import time
 from collections import Counter, deque
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from math import lcm
 from numbers import Rational
 from pathlib import Path
-from typing import Any, Callable, Hashable, Iterable, Mapping, Sequence
+from typing import Any
 
 #: |c|: the bits of one encoded word
 WORD_BITS = 1024
 #: E, the nonlinear units one encode of a 1024-bit word costs under SquaringFloor and ChainSum at p1024, k = 3, at ε = 2^-40
-#: and at the carrier threshold 2^-20: `share.E_WORD`'s conjectured rows. No E is proved: counting caps a squaring's bound
+#: and at the carrier threshold 2^-20: `share.E_WORD`'s conjectured rows. No E is proved: counting holds a squaring's bound
 #: near its output bits (`FoolingCap`).
 E_WORD = {"2^-40": 1_145_562, "2^-20": 1_151_688}
 #: `products_pass.py`'s directory: data products on property/v1's pass
@@ -136,17 +137,17 @@ def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int,
     """The max flow from `s` to `t` over `edges` (u, v, capacity, an int >= 0) on nodes 0..n-1 (Dinic's), and which nodes the
     residual graph reaches from `s`: the min cut's source side. ``progress(phase, flow)`` is called after each phase."""
     to: list[int] = []
-    cap: list[int] = []
+    residual: list[int] = []
     adj: list[list[int]] = [[] for _ in range(n)]
     for u, v, c in edges:
         if c < 0:
             raise ValueError(f"a capacity is an int >= 0, not {c!r}")
         adj[u].append(len(to))
         to.append(v)
-        cap.append(c)
+        residual.append(c)
         adj[v].append(len(to))
         to.append(u)
-        cap.append(0)
+        residual.append(0)
     flow = phase = 0
     while True:
         if progress is not None and phase:
@@ -158,7 +159,7 @@ def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int,
         while q:
             u = q.popleft()
             for e in adj[u]:
-                if cap[e] > 0 and level[to[e]] < 0:
+                if residual[e] > 0 and level[to[e]] < 0:
                     level[to[e]] = level[u] + 1
                     q.append(to[e])
         if level[t] < 0:
@@ -168,19 +169,19 @@ def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int,
         u = s
         while True:
             if u == t:
-                f = min(cap[e] for e in path)
+                f = min(residual[e] for e in path)
                 for e in path:
-                    cap[e] -= f
-                    cap[e ^ 1] += f
+                    residual[e] -= f
+                    residual[e ^ 1] += f
                 flow += f
-                cut = next(i for i, e in enumerate(path) if cap[e] == 0)
+                cut = next(i for i, e in enumerate(path) if residual[e] == 0)
                 u = to[path[cut] ^ 1]
                 del path[cut:]
                 continue
             lst = adj[u]
             while it[u] < len(lst):
                 e = lst[it[u]]
-                if cap[e] > 0 and level[to[e]] == level[u] + 1:
+                if residual[e] > 0 and level[to[e]] == level[u] + 1:
                     break
                 it[u] += 1
             if it[u] < len(lst):
@@ -200,7 +201,7 @@ def max_flow(n: int, edges: Sequence[tuple[int, int, int]], s: int, t: int,
     while q:
         u = q.popleft()
         for e in adj[u]:
-            if cap[e] > 0 and not seen[to[e]]:
+            if residual[e] > 0 and not seen[to[e]]:
                 seen[to[e]] = True
                 q.append(to[e])
     return flow, seen
@@ -260,11 +261,11 @@ def bound(g: Graph, *, E: Any = E_WORD["2^-40"], c: int = WORD_BITS, R_in: Any =
     n = len(g.work)
     held = set(g.fixed) | (set(g.inputs) if inputs == "window" else set())
     S, T = n, n + 1
-    work_cap: dict[int, Fraction] = {}
+    work_capacity: dict[int, Fraction] = {}
     for v, w in enumerate(g.work):
         if v not in held and w is not None and w:
-            work_cap[v] = c * Fraction(w) / Eq
-    den = lcm(1, *(f.denominator for f in work_cap.values()))
+            work_capacity[v] = c * Fraction(w) / Eq
+    den = lcm(1, *(f.denominator for f in work_capacity.values()))
     edges: list[tuple[int, int, int]] = []
     infinite: list[int] = []
     nxt = n + 2
@@ -291,7 +292,7 @@ def bound(g: Graph, *, E: Any = E_WORD["2^-40"], c: int = WORD_BITS, R_in: Any =
                 infinite.append(len(edges))
                 edges.append((nxt, r, 0))
             nxt += 1
-    for v, f in work_cap.items():
+    for v, f in work_capacity.items():
         edges.append((S, v, int(f * den)))
     for v in sorted(held) + [v for v, w in enumerate(g.work) if w is None and v not in held]:
         infinite.append(len(edges))
@@ -359,9 +360,9 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
     (default: a value a Call of the window makes that a later step reads). ``registered``: root inputs the Build binds as
     run inputs that are fixed before the coins all the same (the census's 8B Build binds its weights so): their values
     carry no bits and no product reads them as data, so a weight's MACs stay linear maps."""
+    from verity.circuits.program import RUN, input_id, is_input
     from verity.definitions.circuits import stacking as P
     from verity.definitions.circuits.census import census, step_of
-    from verity.circuits.program import RUN, input_id, is_input
 
     if str(REDTEAM) not in sys.path:
         sys.path.insert(0, str(REDTEAM))
@@ -371,10 +372,11 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
         P.Step.acc = True
     nodes = program.root.body.nodes
     doc = census(program, list(ends) if ends is not None else None) if doc is None else doc
-    I = doc["inputs"]
+    n_inputs = doc["inputs"]
     fixed = frozenset(registered)
-    if not fixed <= set(range(I)):
-        raise ValueError(f"registered names root inputs, nodes 0..{I - 1}, not {sorted(fixed - set(range(I)))[:5]}")
+    if not fixed <= set(range(n_inputs)):
+        raise ValueError(f"registered names root inputs, nodes 0..{n_inputs - 1}, "
+                         f"not {sorted(fixed - set(range(n_inputs)))[:5]}")
     step = step_of(doc)
     S = len(doc["steps"]["ends"])
     win = range(S) if window is None else window
@@ -397,8 +399,8 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
         unproven.update(t.unproven)
     wide = {g: b for g, (cls, b) in sorted(p.shapes.items())
             if cls in P.BUDGETED and b > P.OPERAND_BITS and not P._column(g)}
-    before = frozenset(k for k in range(I, len(nodes)) if step(k) < win.start)
-    after = {k for k in range(I, len(nodes)) if step(k) >= win.stop}
+    before = frozenset(k for k in range(n_inputs, len(nodes)) if step(k) < win.start)
+    after = {k for k in range(n_inputs, len(nodes)) if step(k) >= win.stop}
     for k in after | before:
         work[k] = 0
         products[k] = 0
@@ -413,27 +415,27 @@ def from_program(program: Any, ends: Sequence[int] | None = None, *, doc: Mappin
             continue
         rs = sorted((set(reads) | cand.get(v, set())) - after)
         allr = sorted(set(reads) | cand.get(v, set()))
-        inp = j < I
+        inp = j < n_inputs
         w = (writes(v, j, allr) if writes is not None else any(step(r) > step(j) for r in allr)) and not inp and j not in before
         values.append(Value(j, bits, tuple(rs), dyns[j], w, inp))
-    names = [f"{k}:{nd.fn.id}" + (f"@{step(k)}" if k >= I else "") for k, nd in enumerate(nodes)]
-    inputs = frozenset(k for k in range(I) if input_id(nodes[k].fn.id)[0] == RUN and k not in fixed)  # type: ignore[index]
+    names = [f"{k}:{nd.fn.id}" + (f"@{step(k)}" if k >= n_inputs else "") for k, nd in enumerate(nodes)]
+    inputs = frozenset(k for k in range(n_inputs) if input_id(nodes[k].fn.id)[0] == RUN and k not in fixed)  # type: ignore[index]
     by_callee: Counter = Counter()
     for k, n in enumerate(products):
         if n:
             by_callee[nodes[k].fn.id] += n
     input_bits: Counter = Counter()
     for x in values:
-        if x.producer < I:
+        if x.producer < n_inputs:
             input_bits[x.producer] += x.bits
     total = sum(w for w in work if w is not None)
-    info = {"nodes": len(nodes), "inputs": I, "steps": S, "window": [win.start, win.stop], "values": len(values),
+    info = {"nodes": len(nodes), "inputs": n_inputs, "steps": S, "window": [win.start, win.stop], "values": len(values),
             "writes": sum(x.write for x in values), "work_units": total, "budgeted_units": total - sum(products),
             "products": sum(products), "products_by_callee": dict(by_callee.most_common(12)),
             "run_inputs": {names[k]: input_bits[k] for k in sorted(inputs)},
             "registered_inputs": len(fixed), "unknown_work_nodes": sum(w is None for w in work), "refused": dict(refused),
             "operand_bits": {"B": P.OPERAND_BITS, "past_B": wide}, "s8_unproven": dict(unproven)}
-    assert all(is_input(nodes[k].fn) for k in range(I))
+    assert all(is_input(nodes[k].fn) for k in range(n_inputs))
     return Graph(work, values, names, inputs, before), info
 
 
@@ -647,8 +649,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         m_node_bytes = m_node_bytes or spec.get("m_dyn_node_bytes")
         source = {"decoder": str(a.decoder), "spec": spec}
     else:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from units import load  # noqa: E402
+        from units import load
 
         from verity.definitions.circuits.census import census, step_ends
 
