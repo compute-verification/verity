@@ -1,0 +1,91 @@
+"""`tp-commit` (`verity_vllm.pipeline.tp.commit`) into the out dir of an earlier deferred Commit (`--replay-deferred`), and what
+`tp-commit-replay` (`verity_vllm.pipeline.tp.commit_replay`) then decides there.  From where a Commit writes its `versions.json`
+the out dir holds no verdict of an earlier one: not its `summary.json`, not its `replay_deferred.json`, not a rank's replay
+result.  So the replay of a second deferred Commit waits for that Commit's own ranks, and after a Commit refused past that point
+there is no deferred Commit to decide.
+CPU-only, in the frames of `tests.pipeline.test_tp_commit_pair_replay` (a deferred pair over two stand-in ranks, whose sealed
+bundles hold no store) and `tests.pipeline.test_tp_replay_deferred` (a rank's replay record): a rank's replay on CPU is its
+result file, written as `tp-commit-replay` names it, and `tp-commit-replay --fold-only` decides the record."""
+from __future__ import annotations
+
+import json
+import logging
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+pytest.importorskip("torch")
+
+from tests.pipeline import test_tp_commit_options as TO
+from tests.pipeline import test_tp_commit_pair as TP
+from tests.pipeline import test_tp_commit_pair_replay as PR
+from tests.pipeline import test_tp_replay_deferred as RD
+from verity_vllm.pipeline.tp import c2 as C2
+from verity_vllm.pipeline.tp import commit_replay as TPR
+
+driver, pair = TO.driver, TP.pair
+
+NO_RANKS = "^fail-closed: committer constructed on 1/2 ranks$"
+
+
+def _deferred_commit(pair: TP._Pair, root: Path) -> tuple[str, ...]:
+    """A deferred Commit over the pair, both ranks pending; its flags, for a second Commit into the same out dir."""
+    for r in (0, 1):
+        pair.alter("tp2_commit_finalize", r, PR._deferred(pair, r))
+    flags = (*PR._of_record(root), "--replay-deferred")
+    assert pair.run(*flags) == 0
+    return flags
+
+
+def _replayed(pair: TP._Pair, record: dict[str, Any]) -> list[Path]:
+    """Each rank's replay of ``record``'s bundles, as a replay that passed writes its result; the result files."""
+    files = []
+    for b in record["bundles"]:
+        doc = {"schema": TPR.RESULT_SCHEMA, "pair": b["pair"], "rank": b["rank"], "bundle": b["path"], "manifest_sha256": b["manifest_sha256"],
+               "where": "cpu", "host": "h", "sampled_replay": dict(RD._sr(rank=b["rank"]), unreplayable=[]),
+               "boundary_linkage": RD._lk(True, b["rank"]), "wall_s": 2.5, "peak_rss_bytes": 1 << 30, "utc": "u"}
+        files.append(TPR.result_path(pair.out, b["pair"], b["rank"]))
+        files[-1].write_text(json.dumps(doc))
+    return files
+
+
+def _fold(pair: TP._Pair, caplog) -> tuple[int, str]:
+    """`tp-commit-replay --fold-only` on the out dir: its exit code and what it logs of the record (nothing where its fold decides)."""
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger=TPR.__name__):
+        code = TPR.main(TPR.Options(commit_out=str(pair.out), checkpoint_dir="/ck", fold_only=True))
+    return code, "\n".join(r.getMessage() for r in caplog.records if r.name == TPR.__name__)
+
+
+def test_the_replay_of_a_second_deferred_commit_waits_for_its_own_ranks(pair, tmp_path, caplog):
+    flags = _deferred_commit(pair, tmp_path)
+    first = pair.read(C2.DEFERRED)
+    earlier = _replayed(pair, first)
+    assert _fold(pair, caplog) == (0, "") and pair.read("summary.json")["pass"] is True
+    assert pair.run(*flags) == 0
+    second = pair.read(C2.DEFERRED)
+    assert "decided" not in second and second["pending_pairs"] == [0] and pair.read("summary.json")["pass"] is None
+    assert not {b["manifest_sha256"] for b in second["bundles"]} & {b["manifest_sha256"] for b in first["bundles"]}
+    assert not any(p.exists() for p in earlier)
+    assert _fold(pair, caplog) == (4, "[tp-replay] PENDING: (pair, rank) [(0, 0), (0, 1)] have no replay on the record yet")
+    _replayed(pair, second)
+    assert _fold(pair, caplog) == (0, "") and pair.read(C2.DEFERRED)["decided"]["pass"] is True
+
+
+@pytest.mark.parametrize("decided", [True, False], ids=["the earlier one decided", "the earlier one pending"])
+def test_a_commit_refused_at_its_ranks_make_leaves_no_verdict_of_an_earlier_deferred_one(pair, tmp_path, caplog, decided):
+    flags = _deferred_commit(pair, tmp_path)
+    earlier = pair.read(C2.DEFERRED)
+    if decided:
+        _replayed(pair, earlier)
+        assert _fold(pair, caplog) == (0, "") and pair.read("summary.json")["pass"] is True
+    pair.lose("tp2_commit_make", 1)
+    with pytest.raises(SystemExit, match=NO_RANKS):
+        pair.run(*flags)
+    left = sorted(p.name for p in pair.out.iterdir() if p.is_file())
+    assert not {"summary.json", C2.DEFERRED, "runs.jsonl"} & set(left) and not [name for name in left if name.startswith("sampled_replay_p")]
+    files = _replayed(pair, earlier)                    # the earlier Commit's ranks replay late, from its bundles, which are still sealed
+    none = f"[tp-replay] REFUSED: {pair.out / C2.DEFERRED}: not a deferred TP Commit (tp-commit --replay-deferred) or decided in the Commit"
+    assert _fold(pair, caplog) == (2, none)
+    assert not (pair.out / "summary.json").exists() and all(p.exists() for p in files)
