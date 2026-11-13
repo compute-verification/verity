@@ -11,7 +11,7 @@
 #      default; several, comma-separated, are proved one after another)  CS_POINTS (its --points, 1 by default, none
 #      under CS_PLAIN)  CS_KINDS (its --kinds, every kind by default)  CS_G (its --g, the steps a served row holds, P by
 #      default)  CS_CACHE (the build cache, kept across runs where writable; default pouw-hidden-zk's)  CS_PLAIN=1 (its
-#      --plain: Flock's plain path, no ZK server, so no firewall frame is built)  CS_DRY=1 (the slice and its
+#      --plain: Flock's plain path, no ZK server, so no ZK server frame is built)  CS_DRY=1 (the slice and its
 #      references only)
 # Kept in $OUT/cszk/<slice> (cszk-plain/<slice> under CS_PLAIN): the driver's records and logs, the public files and
 # everything the verifier received; never a prover's file (inst-*) nor a circuit (its pin is kept), nor a session's

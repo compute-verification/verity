@@ -9,21 +9,21 @@ import all Lean.Data.Json.Basic
 import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 
 /-!
-# The session's numbers at a draw file
+# The session's numbers at a sample file
 
-The session's statement at a draw file `d` (`sessStmt A o d`) has the statement's numbers (`numsOk`) wherever it sets up
+The session's statement at a sample file `d` (`sessStmt A o d`) has the statement's numbers (`numsOk`) wherever it sets up
 one table of `A.kd` units (`RefOk`, `numsOk_of_refOk`):
 
 * **one table, hidden** (`shape_sess`): the statement is `verity/flock-circuit`, whose outputs are hidden, at one table,
   so its setup is `Stmt.setupHidden`'s one table, whose circuit, regions and `m` read the circuit file, the tables and
   the unit count `n` alone (`Verity.Recursive.Numbers.setupHidden_shape`);
 * **the numbers read the table** (`nums_one`): the rounds and `N₀` of a one-table session are its table's, and they
-  read its statement's version too (`Stmt.wideLeaf`), which is the session's tags'. So two draw files whose tables
-  have one `n` give one set of numbers (`nums_congr`), the reference draw file's (`d₀`) among them.
+  read its statement's version too (`Stmt.wideLeaf`), which is the session's tags'. So two sample files whose tables
+  have one `n` give one set of numbers (`nums_congr`), the reference sample file's (`d₀`) among them.
 
-And what `RefOk`'s unit count reads at a draw v2 accepts: a draw file's units are its `units` field's
-(`unitsAt_size`), a draw by a law `LawOn` holds draws `A.kd` units (`drawn_length`), and a session's draw that
-`ProvedScope.drawLaw` keeps proves its drawn units alone (`proved_of_drawLaw`).
+And what `RefOk`'s unit count reads at a sample v2 accepts: a sample file's units are its `units` field's
+(`unitsAt_size`), a sample by a sampling design `LawOn` holds samples `A.kd` units (`drawn_length`), and a session's sample that
+`ProvedScope.drawLaw` keeps proves its sampled proof blocks alone (`proved_of_drawLaw`).
 -/
 
 @[expose] public section
@@ -110,8 +110,8 @@ theorem getD_of_arr {j : Json} {k ctx : String} {a : Array Json} (h : Flock.J.ar
   rw [← hva]
   simp only [_root_.Spot.getD, _root_.Spot.field?, hg, Except.toOption, Option.getD_some]
 
-/-- **A draw file's units, as v2 credits them, are as many as its draw's**: `unitsAt` reads one unit per entry of the
-draw's `units` field, which `UnitDraw.ofJson` reads as its units. -/
+/-- **A sample file's units, as v2 credits them, are as many as its sample's**: `unitsAt` reads one unit per entry of the
+sample's `units` field, which `UnitDraw.ofJson` reads as its units. -/
 theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
     (hu : _root_.Properties.Spot.Units.unitsAt h j = some xs) (hD : Flock.Draw.UnitDraw.ofJson j = .ok D) :
     xs.size = D.units.size := by
@@ -126,15 +126,15 @@ theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
   cases hX
   rw [Verity.QSort.size_qsort, size_mapM_option hus, size_mapM_except hm]
 
-/-- **The coins draw `A.kd` units** where the draw ends: `A`'s law is on its strata and draws `A.kd` (`Live.hlaw`). -/
+/-- **The coins sample `A.kd` units** where the sample ends: `A`'s law is on its strata and samples `A.kd` (`Live.hlaw`). -/
 theorem drawn_length (A : Live) {src : ByteArray} {u : Array ℕ} {rd : ℕ}
     (h : _root_.Spot.Draw.drawUnits A.design A.n src = .ok (u, rd)) : (drawn A src).length = A.kd := by
   unfold drawn
   simp only [h, Array.length_toList]
   exact _root_.Properties.Spot.SecurityProofs.drawUnits_size A.hlaw h
 
-/-- **A draw `ProvedScope.drawLaw` keeps proves its drawn units alone**: it is by a subset or stratified law, whose
-draws carry no closure. -/
+/-- **A sample `ProvedScope.drawLaw` keeps proves its sampled proof blocks alone**: it is by a subset or stratified sampling design, whose
+samples carry no closure. -/
 theorem proved_of_drawLaw {T : Flock.Tags} {J : Json} {D : Flock.Draw.UnitDraw}
     (hD : Flock.Draw.UnitDraw.ofJson (Flock.norm J) = .ok D)
     (h : Flock.ProvedScope.drawLaw true T false (some (Flock.norm J)) = .ok ()) : D.proved = D.units := by
@@ -182,8 +182,8 @@ theorem hidden_sess {d : Msg} {s : Ins}
     exact hI'
   · exact hI'
 
-/-- **The session's statement at any draw file sets up one hidden table**: its circuit, regions and `m` read the
-session's tags, circuit file and tables and its unit count `n`, which is its public file's, the draw's, and its tags
+/-- **The session's statement at any sample file sets up one hidden table**: its circuit, regions and `m` read the
+session's tags, circuit file and tables and its unit count `n`, which is its public file's, the sample's, and its tags
 are the session's. -/
 theorem shape_sess {d : Msg} {s : Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hins : ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok s)
@@ -221,7 +221,7 @@ theorem nums_one {x : Msg} {s : Ins} {t : Flock.Stmt} (h : FlockDeploy.setupOf t
   rw [hk, ht, Verity.Recursive.Numbers.rounds_one]
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
 
-/-- **The session's numbers read only its table's unit count**: at two draw files whose sessions set up one table each,
+/-- **The session's numbers read only its table's unit count**: at two sample files whose sessions set up one table each,
 of one unit count, the numbers agree. The two tables are of one version, the session's tags'. -/
 theorem nums_congr {d d' : Msg} {s s' : Ins} {t t' : Flock.Stmt}
     (hins : ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok s)
@@ -257,7 +257,7 @@ theorem nums_congr {d d' : Msg} {s s' : Ins} {t t' : Flock.Stmt}
   have ew : t.wideLeaf = t'.wideLeaf := congrArg Flock.Tags.wideLeaf (htg.trans (eT.trans htg'.symm))
   simp only [FlockDeploy.repRounds, FlockDeploy.tableLen, Flock.Stmt.spec, em, ek, er, ew]
 
-/-- **A draw file whose session sets up one table of `A.kd` units has the statement's numbers**: the reference draw
+/-- **A sample file whose session sets up one table of `A.kd` units has the statement's numbers**: the reference sample
 file's session does too (`d₀`), and the numbers read only the unit count (`nums_congr`). -/
 theorem numsOk_of_refOk {d : Msg} (h : RefOk A o d) : numsOk A o d := by
   have h0 : RefOk A o (d₀ A o) := Classical.epsilon_spec ⟨d, h⟩

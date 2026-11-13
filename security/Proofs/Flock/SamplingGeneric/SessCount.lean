@@ -14,7 +14,7 @@ A run's extractions at gate `g` run each session some block of which needs `g`, 
 disjoint slots. A weight `e_s ≤ e_max` on each session, summed over a set of gates and, at each gate, over the sessions
 some block of which needs it, is then at most `e_max` times the sample's blocks' needs, summed:
 `Σ_g Σ_{s ∋ g} e_s = Σ_s e_s·|needs(s)| ≤ e_max·Σ_{u sampled} |needs u|`. At `e = 1` over the first slots among the
-proof units and every gate, the sessions' needs summed are at most the blocks' (`sum_first_sessNeeds_le`), and so are
+proof blocks and every gate, the sessions' needs summed are at most the blocks' (`sum_first_sessNeeds_le`), and so are
 the gates the sample needs (`card_filter_needs_le`); the sessions are at most the sample's slots
 (`card_firstSlots_le`).
 -/
@@ -100,7 +100,7 @@ theorem sum_sessions_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (needs : 
     _ = emax * (l.map fun u => (needs u).card).sum := by
         rw [sum_range_getD_map l (fun u => (needs u).card), Nat.mul_comm]
 
-/-- **The sessions' needs, counted by block**: over the sessions' first slots among the `n` proof units, the gates
+/-- **The sessions' needs, counted by block**: over the sessions' first slots among the `n` proof blocks, the gates
 below `N` some block of each session needs, summed, are at most the sample's blocks' needs, summed. -/
 theorem sum_first_sessNeeds_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (needs : ℕ → Finset ℕ) (n N : ℕ) :
     ∑ i ∈ Finset.univ.filter (fun i : Fin n => (L.sessSlots x l i.val).head? = some i.val),
@@ -117,7 +117,7 @@ theorem sum_first_sessNeeds_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (n
   refine Finset.sum_congr rfl fun g _ => ?_
   by_cases hg : ∃ u ∈ L.sessBlocks x l i.val, g.val ∈ needs u <;> simp [hg]
 
-/-- **The sessions, counted by slot**: the sessions' first slots among the `n` proof units are at most the sample's
+/-- **The sessions, counted by slot**: the sessions' first slots among the `n` proof blocks are at most the sample's
 slots. -/
 theorem card_firstSlots_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) (n : ℕ) :
     (Finset.univ.filter fun i : Fin n => (L.sessSlots x l i.val).head? = some i.val).card ≤ l.length := by

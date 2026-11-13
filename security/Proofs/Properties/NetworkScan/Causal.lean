@@ -336,7 +336,7 @@ theorem gate_input {q x p : ℕ} {ops : Array ℕ} {sc : Scope} (hq : q < (P.def
     simp only [hs, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     rw [← h.2.1, hops]
 
-/-- **`InS` holds what each of its gates reads**, in a flattening of a Program C-Flock decodes, topological and laid
+/-- **`InS` holds what each of its gates reads**, in a flattening of a Program Flock decodes, topological and laid
 out, at a root node `ke` batching a composite whose every argument is one input node's leaves. -/
 theorem closure {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.orderViolation = none)
     (hbl : NciCheck.Desc.bodiesLaidOut P = true) (C : Claims.Sampling.Prog) (hF : Flattens P C)
