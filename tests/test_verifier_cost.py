@@ -32,7 +32,7 @@ import re
 from test_repository import ROOT, _tracked
 
 ALLOWED: dict[str, str] = {
-    "verity/definitions/evaluate/Evaluate/Walk.lean":
+    "verity/circuits/evaluate/Evaluate/Walk.lean":
         "Evaluate.walk, the evaluator: a Program's values gate by gate, every member of every node, by definition; no "
         "verifier imports it",
     "verity/protocols/inference_only/verifier/nci/lean/NciCheck/Desc.lean":
