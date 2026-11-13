@@ -40,7 +40,7 @@ def test_xin13_matches_fill_sec_r5s_drop_in_values():
 
 def test_p2ff_r9s_twin_meets_the_vectors():
     path = HERE / "fixtures" / "receipt_folds_r9.py"
-    assert hashlib.sha256(path.read_bytes()).hexdigest() == P2FF_SHA256, f"{path} is not P2-FF r9's: restore it from art:91c156a1…"
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == P2FF_SHA256, f"{path} is not P2-FF r9's twin (P2FF_SHA256): restore it with git"
     spec = importlib.util.spec_from_file_location("receipt_folds_r9", path)
     rf = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(rf)

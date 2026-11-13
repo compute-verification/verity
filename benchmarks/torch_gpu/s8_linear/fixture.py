@@ -87,7 +87,7 @@ def linears(d: int) -> dict[str, tuple[int, int]]:
     return {name: (n, k) for name, n, k, _ in model(f"d{d}").linears}
 
 
-#: what a layer commits a token row (commit.py): the served commit's quantizer tables, the fused cuts, every op
+#: what a layer commits a token row: the served commit's quantizer tables, the fused cuts, every op
 TABLE_SETS = ("quantize", "fused", "every")
 
 

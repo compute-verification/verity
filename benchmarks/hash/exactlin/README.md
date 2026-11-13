@@ -60,24 +60,18 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
     copies to stream from DRAM. `--arms` also takes single kernels.
   - `ksweep.py`: the fused GEMM's configs swept at the decode shapes, each gated before it is timed, and the
     quantizer's warps.
-  - `zybench.py`: the cost of `int8_fused.scaled_mm_zy`'s z/y record epilogue over `scaled_mm`, after the vLLM
-    integration's tests of it.
 - Served:
   - `served.sh`: `benchmarks/hash/dither/sbench.py`'s stock and exact arms (`stock`, `stock-percall`, `exact`,
     `exact-fused`, and `stock-cutlass` on sm_90) on the leased GPU's NUMA node. With `exact-fused` it runs `kgate.py` in the same lease first.
     `DITHER_NSYS=1` captures the decode step's kernels for `steps.py`.
   - `percall.py`: sbench's `stock-percall` arm, stock's `triton_scaled_mm` behind a custom op
     (`exactlin_stock::scaled_mm`), so its tile heuristic runs on each call's M.
-  - `percall_diag.py`: why `stock-percall` can serve other tokens than `stock`. It logs each engine's Inductor autotune
-    picks and pins them first, last or deterministic.
 - Analysis:
   - `steps.py`: a served decode step's kernels by category, from an sbench `prof` capture's nsys SQLite export.
     `--compare` puts arms side by side.
   - `share.py` and `share.sh`: the share of a served step that PoUW doesn't credit. Each arm runs under nsys through
     decode and prefill scenarios, and `--analyse` splits a forward's GPU time into the credited int8 GEMMs, the
     quantizer, lm_head, attention, norms and elementwise, sampling and the gaps.
-- `probe.sh`: what stock vLLM int8 runs on an RTX PRO 6000 host, without a GPU lease. It records the stack's versions
-  and vLLM's int8 linear sources, and the SASS of `_C`'s per-token quantizer.
 
 Outside this directory, `benchmarks/hash/dither/sbench.py` serves `exact-fused` and the `-xl` arms from `install`, and
 `benchmarks/torch_gpu/s8_linear` times `int8_fused` with `kbench.py`'s helpers (`timed`, `copies_for`, `nvml`).

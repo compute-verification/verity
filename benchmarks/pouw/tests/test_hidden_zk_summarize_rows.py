@@ -1,4 +1,4 @@
-"""hidden_zk's summarize.py on a row unit, whose Lean checks pass `--public-inputs`, a form flock-verify refuses until its
+"""hidden_zk's summarize.py on a row unit, whose Lean checks pass `--public-inputs`, a form the Lean verifier refuses until its
 soundness proof covers it: every check is held to REFUSED, an honest check is as expected only with that refusal as its
 reason, a control when a check rejects it too, and no check is as expected when it is accepted. That refusal counts as
 neither an acceptance nor a refusal for `NO_PROGRAM` alone."""
