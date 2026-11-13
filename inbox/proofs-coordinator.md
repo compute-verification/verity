@@ -158137,3 +158137,34 @@ No run of mine is out. Ready lines written by me today: #9681 (17:36Z) and #9441
 **Not established.**
 - That the carried word line compiles: no build ran on it.
 - That the pin file regenerates to one value after the carried join and the mended join are merged: nobody has made that merge.
+
+## MEMBERS, Fri 13 Nov 19:34Z: checkpoint: the cost row runs and its suites are green; the import's and the twin's suites still run, and the import's may be cut by its 180 minutes at 20:06Z; your 18:42Z is read, with one thing the split must carry
+
+### 1. The cost row [branch `cursor/proofs-members-parserow-34fd`, head `b000aeebb94`]
+
+- It compiles and runs as written; both guards held at every count.
+- On `main` [run `r20261113-183430-b13e`, cpu-14]: 1,000 members 33 ms; 5,000: 1,001 ms; 10,000: 3,949 ms; 20,000: 17,128 ms. Twice the members is about four times the time.
+- With the twin (the twin's branch with the row's files copied in) [run `r20261113-183455-f469`, cpu-11]: 1,000: 2 ms; 25,000: 49 ms; 100,000: 207 ms; 1,000,000: 2,257 ms. Ten times the members is about eleven times the time.
+- Its suites: 3 of 3 passed, none cached (`benchmarks/verifier_cost` 10 passed, `repository` 362, `verity-graph` 246), exit 0 [run `r20261113-184725-02a3`, cpu-14]. Its pull request's body is written; it opens after the twin's, as ordered.
+- These are times of one parse of made-up members; nothing is scaled to a period or a datacenter.
+
+### 2. The two small pull requests wait on suites that are slow
+
+- The import's [run `r20261113-170545-ec7a`, cpu-9, in its slot since 17:06Z] and the twin's [run `r20261113-174635-438e`, cpu-1, since 17:51Z] still run: the builds ended long ago and the suites' processes are alive and using CPU [read: the runs' process samples]. A change to `Spot/OneStageZk.lean` reaches far more suites than the row's three.
+- Each run ends at 180 minutes from its slot whether done or not: the import's at 20:06Z, the twin's at 20:51Z. My job prints the suites' verdict only at their end, so a run that is cut prints nothing. That is my job's fault, and the next one writes its output as it goes (`$OUT/suites.log` and `--json`).
+- The same suites at the import-only head `7ed31bd0e46e` [run `r20261113-164751-d3cc`, cpu-9] are cut at 19:48Z if not done; that tells me twenty minutes ahead what the import's will do.
+- A read-only job is queued on cpu-9 that lists which suites have a pass kept for those two heads and each running suite's last log line [run `r20261113-192557-03a9`, waiting for a slot]. It writes nothing.
+- **If the import's run is cut without a verdict**, I relaunch at once on a node I name (not cpu-6), with the output written as it goes, and I write you which suites had passed by the list above. Say if you would rather I open the pull request unmarked with that list and "the rest relaunched" in its body; without your word I wait for a green end, as ordered.
+
+### 3. Your 18:42Z (the split): read, by the hook and in the mailbox
+
+- The cut at line 1604, `Spot/OneStageZkStatement.lean`, no `import all`: the `#guard`'s helper spells the value. `NO_FILE` is read below the cut in that one place only (one line, twice on it) [read: the carried file]. No other private name crosses: my first list had `digest`, which was `digest?`, read only above.
+- `import all Init.Util` goes with `withPtrEq` to the new module and leaves `Spot/OneStageZk.lean`: every use is above the cut. It is the toolchain's module, which the rule you name lets alone [read: `tests/test_lean_packages.py` at the carried head].
+- **One thing the split must carry, for ASSEMBLY.** `popHeld` (with its call of `Slots.popOk`) and `membersOf` are both above the cut, so they go to the new module. The import's pull request puts `public import Spot.PopOrder` in `Spot/OneStageZk.lean`, and the twin's puts its three declarations after `membersOf` there. Where those meet the split, the import line and the twin must be in `Spot/OneStageZkStatement.lean`, or the compiler runs the old code again. The scan the import's pull request adds to `tests/test_verifier_cost.py` fails that tree and names the fix, so it cannot pass unseen. I put the import line in the new module on my branch only once it is on `main` or you say so: the carried head does not have `Spot.PopOrder`'s line today.
+- Nothing of the split is written; it starts when the two small pull requests are open.
+
+### Not established
+
+- The suites' verdict for the import's branch and the twin's.
+- Why those suites take more than two and a half hours on these nodes: I have not seen which suite is the slow one.
+- That the cut builds.
