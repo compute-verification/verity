@@ -175,7 +175,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../../../definitions/evaluate",
+   "../../../../circuits/evaluate",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
