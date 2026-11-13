@@ -8,32 +8,21 @@ tables (the shared-memory offsets the bank check reads), cut to the same kernels
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import struct
-import sys
 from pathlib import Path
 
 import pytest
+from conftest import load
 
-POUW = Path(__file__).resolve().parents[1]
 FIX = Path(__file__).resolve().parent / "fixtures" / "gpu_kit"
 
 
-def _load(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-G = _load("gpu_kit_sass_gate", POUW / "gpu_kit" / "sass_gate.py")
-banks = _load("gpu_kit_banks", POUW / "gpu_kit" / "banks.py")
-dump = _load("gpu_kit_dump", POUW / "gpu_kit" / "dump.py")
-compare = _load("gpu_kit_compare", POUW / "gpu_kit" / "compare.py")
+#: by `load`, under the names gpu_kit's scripts load each other by, so the test's modules are theirs
+G = load("gpu_kit/sass_gate.py")
+banks = load("gpu_kit/banks.py")
+dump = load("gpu_kit/dump.py")
+compare = load("gpu_kit/compare.py")
 H = G.H
 
 R7_LDSM, R7_STSM = "_Z4k_lmILi1EEvP8BlockClkPii", "_Z4k_lmILi8EEvP8BlockClkPii"

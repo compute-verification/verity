@@ -20,7 +20,7 @@
     verity graph run ID --work DIR  run one task of it here and print its result (`verity-result/v1`)
     verity graph check --local [--family F]
                                     run the graph serially here, uncached: the reference executor
-    verity demo NAME [ARGS]         examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
+    verity demo NAME [ARGS]         demos/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
                                     workload on its placement
     verity demo --status            every demo's protocol, workload, run and proof, and each one's next missing evidence
     verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that

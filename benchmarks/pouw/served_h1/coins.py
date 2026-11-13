@@ -22,7 +22,7 @@
   Each coin opens there, after the root the serving loop sends, and the challenger logs both before the coin leaves its
   host. `RoundPipe` sends a window's round roots without waiting on each coin (a ring of steps whose units wait on their
   round's coin), every coin still opened after its own root and checked as it comes back. The window's sampling coin is
-  not that session's: once the prover's sample root is in, `gate_draw` reserves a withheld sample session
+  not that session's: once the prover's sample root is in, `gate_sample` reserves a withheld sample session
   (`window.DRAW_FAMILIES`, ``reserve --withhold``: the gate's ledger marks its reserve and open ``withheld: true`` and
   serves it with `remote.open_session(..., withhold=True)`) and opens it on that root. The gate's open answers no root
   for it (``commitment`` null until the session's end), its challenger answers the hello with the layout alone and the
@@ -246,7 +246,7 @@ def stand_in_root(sid: str) -> bytes:
     return hashlib.sha512(STAND_IN_TAG + hashlib.sha512(sid.encode()).digest()).digest()
 
 
-def gate_draw(gate: str, peer: str, epoch: int, ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run
+def gate_sample(gate: str, peer: str, epoch: int, ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run
               ) -> Callable[[bytes], Endpoint]:
     """The opener of a window's sample session at infra's gate `gate`: given the sample root, it reserves a withheld sample
     session (`layout` of `epoch` and None, ``--withhold``) listening on `peer`'s 127.0.0.1 and opens it on that root."""
@@ -257,10 +257,10 @@ def gate_draw(gate: str, peer: str, epoch: int, ssh: Sequence[str] = SSH, run: C
 
 
 def env_draw(epoch: int) -> Callable[[bytes], Endpoint] | None:
-    """`gate_draw` at ``$POUW_CHALLENGER_GATE`` for ``$POUW_CHALLENGER_PEER`` (with ``$POUW_CHALLENGER_SSH_KEY``), or
+    """`gate_sample` at ``$POUW_CHALLENGER_GATE`` for ``$POUW_CHALLENGER_PEER`` (with ``$POUW_CHALLENGER_SSH_KEY``), or
     None while either is unset."""
     gate, peer = settings.get(GATE_ENV), settings.get(PEER_ENV)
-    return gate_draw(gate, peer, epoch, ssh_args(settings.get(SSH_KEY_ENV))) if gate and peer else None
+    return gate_sample(gate, peer, epoch, ssh_args(settings.get(SSH_KEY_ENV))) if gate and peer else None
 
 
 def layout_reason(commitment: Ch.LiveCommitment, epoch: int, rounds: int | None) -> str | None:
@@ -277,7 +277,7 @@ class Coins:
     """A window's live coins from `challenger` (`LiveChallenger`'s commitment and open: a `RemoteChallenger`, or the
     in-process `LiveChallenger`), `source` "off-node" or "in-process": its salt coin and its rounds through `LiveRecord`
     (`rounds`), and its sampling coin from a sample session of its own (`draw`): in process `window.draw_challenger` over
-    `entropy`, off the node the session `open_draw` opens withheld on the sample root (`gate_draw`)."""
+    `entropy`, off the node the session `open_draw` opens withheld on the sample root (`gate_sample`)."""
 
     def __init__(self, challenger: Any, source: str, session: Endpoint | None = None, epoch: int = 0,
                  entropy: Callable[[int], bytes] | None = None,
@@ -733,6 +733,11 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(got, indent=1))
     return 0 if got["ok"] else 1
 
+
+__all__ = ["CHALLENGER_ENV", "COMMITMENT_ENV", "Ch", "Coins", "Endpoint", "GATE_ENV", "HEX_WITHHELD", "IN_PROCESS",
+           "PEER_ENV", "R", "RoundPipe", "SECRET_ENV", "SESSION_ENV", "SSH", "STAND_IN", "STAND_IN_TAG", "Wd", "check",
+           "gate_call", "gate_sample", "key_record", "layout", "layout_reason", "main", "open_coins", "open_window",
+           "published", "read_secret", "reserve", "session", "ssh_args", "stand_in_root", "write_secret"]
 
 if __name__ == "__main__":
     sys.exit(main())

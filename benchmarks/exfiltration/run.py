@@ -1,5 +1,5 @@
 """`verity bench exfiltration [ARGS]`: GLM-5.3's exfiltration capacity in GB over a monitoring period at 10% of total
-compute, the compute audit's part beside the network certifier's, every input labelled measured, modeled or assumed
+compute, the compute audit's part beside the network certifier's, every input labelled with its mark
 (the README beside this file). Its code is `verity_bench.exfiltration`.
 
     verity bench exfiltration                 the figure, the inputs, each part, and the two side by side a period

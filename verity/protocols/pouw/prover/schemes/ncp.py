@@ -169,8 +169,8 @@ def assemble(a: list[list[int]], b: list[list[int]], e1: list[list[int]], f1: li
     y = []
     for bj, f in zip(b, f1):
         f2 = [0] * k
-        for l in range(k):
-            f2[pi[l]] = -sigma[l] * f[l]
+        for t in range(k):
+            f2[pi[t]] = -sigma[t] * f[t]
         y.append([p + q for p, q in zip(bj, f)] + [p + q for p, q in zip(bj, f2)] + [p + q + r for p, q, r in zip(bj, f, f2)])
     return Ops(x, y)
 
@@ -225,7 +225,7 @@ class NCP:
     and n in [1600, 2^16] (Ω* = 1 + 8/1600 over the credited 3·m·k·n, so the gap is <= 1%).  Smaller bounds make a test
     instance, whose certificate has no gap."""
 
-    def __init__(self, perm: str = "word", k_min: int = 1088, n_min: int = 1600, tile: tuple[int, int] = (16, 16)):
+    def __init__(self, perm: str = "word", k_min: int = 1088, n_min: int = 1600, tile: tuple[int, int] = (16, 16)) -> None:
         if perm not in ("word", "shift24"):
             raise ValueError("perm is 'word' or 'shift24'")
         self.perm, self.k_min, self.n_min, self.tile = perm, k_min, n_min, tile
@@ -286,7 +286,7 @@ class NCP:
     def noise(self, ctx: Context) -> tuple[tuple[int, ...], tuple[int, ...]]:
         return self._perm(self.perm, ctx.matmul.shape.k)
 
-    def encode(self, ctx: Context, noise, a_rows: Sequence[bytes], b_rows: Sequence[bytes], tile: Tile) -> Ops | None:
+    def encode(self, ctx: Context, noise: tuple[tuple[int, ...], tuple[int, ...]], a_rows: Sequence[bytes], b_rows: Sequence[bytes], tile: Tile) -> Ops | None:
         k = ctx.matmul.shape.k
         a, b = int7_rows(a_rows, k), int7_rows(b_rows, k)
         return None if a is None or b is None else stack(ctx, *noise, a, b, tile)
@@ -298,11 +298,15 @@ class NCP:
         """``checked[i][j][t]``: entry (i, j)'s route-U accumulator after step t, mod 2^32 (`checked_route_u`)."""
         return checked_route_u(ops, self.beta)
 
-    def digest(self, ctx: Context, noise, checked: list[list[list[int]]]) -> bytes:
+    def digest(self, ctx: Context, noise: tuple[tuple[int, ...], tuple[int, ...]], checked: list[list[list[int]]]) -> bytes:
         steps = len(checked[0][0]) if checked and checked[0] else 0
         words = b"".join(checked[i][j][t].to_bytes(4, "little")
                          for t in range(steps) for i in range(len(checked)) for j in range(len(checked[i])))
         return hashlib.shake_256(domains.POUW_NCP_TILE.encode() + b"\0" + words).digest(32)
 
-    def useful(self, ctx: Context, noise, ops: Ops, checked) -> list[list[int]]:
+    def useful(self, ctx: Context, noise: tuple[tuple[int, ...], tuple[int, ...]], ops: Ops, checked: list[list[list[int]]]) -> list[list[int]]:
         return [[s[-1] - (1 << 32) if s[-1] >> 31 else s[-1] for s in row] for row in checked]
+
+
+__all__ = ["BETA", "D", "FORM_UNITS", "NCP", "Ops", "admissible_perm", "assemble", "checked_route_u", "checked_unbiased",
+           "int7_bytes", "int7_rows", "perm_digest", "route_u_shift", "shift_perm", "word_perm", "xof"]

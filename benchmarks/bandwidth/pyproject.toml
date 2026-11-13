@@ -1,0 +1,10 @@
+# PoUB's device ceilings. Not a package: the probes (`chip.cu`, `write.cu`, `write_host.c`) run on a GPU node or a host,
+# each by its own script. The runner that hands a name to its script, `run.sh`, and `chip_ur.py`'s rewrite of a cubin
+# are tested here as a suite (`uv run tools/verity/check/suites.py benchmarks/bandwidth`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_run.py"]

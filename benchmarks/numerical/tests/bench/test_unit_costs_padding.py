@@ -19,8 +19,8 @@ def test_hyper_is_the_exact_pmf():
 
 
 @pytest.mark.parametrize("N, n, K", [(30, 7, 12), (2_929_277_932, 2_000_000_000, 27_713), (656_132, 4_150, 27_713)])
-def test_upper_q_is_draw_counts(N, n, K):
-    assert P.upper_q(N, n, K) == U.draw_count(N, n, K)[1]
+def test_upper_q_is_sample_count(N, n, K):
+    assert P.upper_q(N, n, K) == U.sample_count(N, n, K)[1]
 
 
 def test_menu_dp():

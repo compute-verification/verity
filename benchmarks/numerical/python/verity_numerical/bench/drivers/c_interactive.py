@@ -23,7 +23,12 @@ import sys
 import tarfile
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from verity_flock.subcircuit_templates import Subcircuit
+
+    from ..cell import Cell
 
 __all__ = ["BACKEND", "FAMILY", "INTERACTIVE", "RESULT", "jobs", "register", "unmet"]
 
@@ -42,14 +47,14 @@ RELATIONS = (CIRCUIT_PREFIX,)
 CIRCUIT_SCHEME = "frame-v3-sha512/hm96-sha512"
 
 
-def supports_relation(relation: str, sub, scheme: str):
+def supports_relation(relation: str, sub: Subcircuit, scheme: str) -> str | None | Literal[False]:
     """The circuit statement binds its rows under :data:`CIRCUIT_SCHEME` only; other relations are the template module's."""
     if relation.startswith(CIRCUIT_PREFIX):
         return None if scheme == CIRCUIT_SCHEME else f"verity/flock-circuit binds rows under {CIRCUIT_SCHEME}, not {scheme}"
     return False
 
 
-def set_tarball(cell) -> str:
+def set_tarball(cell: Cell) -> str:
     """The cell's input set as one tarball both pods receive (``research run --send``), under ``$TMPDIR/verity-cell-sets``."""
     src = Path(cell.input_set["path"])
     out = Path(tempfile.gettempdir()) / "verity-cell-sets" / f"{cell.input_set['content_digest']}.tar"
@@ -60,7 +65,7 @@ def set_tarball(cell) -> str:
     return str(out)
 
 
-def ir_jobs(cell, script: str = IR_SCRIPT) -> list[dict]:
+def ir_jobs(cell: Cell, script: str = IR_SCRIPT) -> list[dict]:
     if cell.input_set.get("kind") != "set":
         raise ValueError("an IR template cell runs on an input set (directory or art: id), not a census frozen set")
     tar = set_tarball(cell)
@@ -76,7 +81,7 @@ def ir_jobs(cell, script: str = IR_SCRIPT) -> list[dict]:
     ]
 
 
-def unmet(cell) -> str | None:
+def unmet(cell: Cell) -> str | None:
     if not cell.lane:
         return "C-interactive registers its result under the producing lane (verity_flock.register --lane): plan the cell with --lane"
     if not cell.rtt_target:
@@ -84,7 +89,7 @@ def unmet(cell) -> str | None:
     return None
 
 
-def jobs(cell) -> list[dict]:
+def jobs(cell: Cell) -> list[dict]:
     if cell.relation.startswith(CIRCUIT_PREFIX):
         return ir_jobs(cell, CIRCUIT_SCRIPT)
     if cell.relation.startswith(IR_PREFIX):
@@ -102,7 +107,7 @@ def jobs(cell) -> list[dict]:
     ]
 
 
-def register(cell, prover_run: Path, verifier_run: Path | None, out: Path) -> list[list[str]]:
+def register(cell: Cell, prover_run: Path, verifier_run: Path | None, out: Path) -> list[list[str]]:
     if verifier_run is None:
         raise ValueError("C-interactive registers from both runs: --verifier-run")
     if not cell.lane:
@@ -132,6 +137,6 @@ def ir_binary(prover_run: Path) -> str:
 
 
 def takes_lane() -> bool:
-    """Whether the installed ``verity_flock.register`` takes ``--lane`` (required from flock-backend a9d13f68; unknown before)."""
+    """Whether the installed ``verity_flock.register`` takes ``--lane``: a register that knows the flag requires it, and an earlier one rejects it."""
     r = subprocess.run([sys.executable, "-m", "verity_flock.register", "--help"], capture_output=True, text=True)
     return "--lane" in r.stdout

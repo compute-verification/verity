@@ -23,7 +23,7 @@ from outside the store while the stretch's reads are served:
 - the snapshot: at most (W + R)/P + S are absent at a pass, on average over the passes.
 
 W is the pooled bound of the session's record (`pooled.bound`, the Lean's `RemoteAudit.Pooled`: its windows' receipts
-and draws at δ), so the line reads it from the record's windows, never from a float another module computed.  The
+and samples at δ), so the line reads it from the record's windows, never from a float another module computed.  The
 line of record reads its groups' passes, its windows and its registered chunks off the Lean verifier's record of the
 session (`line_of_record`, the Lean's `lineOfRecordAt` at the record's `groups_per_coin` g, `lineOfRecord` at g = 1),
 and each group's times and reads beside it (`Seen`), refused unless the record is of the registration given with it
@@ -35,7 +35,7 @@ tie, and its shares are of the node's bytes.  Both forms need every pass to read
 chunk a pass leaves out can be absent across it with neither a wrong read nor a rebuild.
 
 The JSON form (`inputs_json`, `run_json`; `record_inputs_json`, `record_run_json` for the record's) is the Lean's:
-integers, each rational a string `n` or `n/d`, and the windows a list of [receipts, draws].  A float given here is
+integers, each rational a string `n` or `n/d`, and the windows a list of [receipts, samples].  A float given here is
 the rational its shortest decimal writes, which is what its JSON text says (`number`), except δ, which is the float's
 exact value (`pooled.number`): the value the session sampled at."""
 from __future__ import annotations
@@ -317,7 +317,7 @@ def _stretches(groups: Sequence[Group], per: int, N: int, b: int, chip_bytes: in
         held = tuple(Fraction(sum(k(x) for x in groups[lo:hi]), P)
                      for k in (lambda x: x.weights, lambda x: x.hbm, lambda x: x.host))
 
-        def reading(lost: Fraction) -> Reading:
+        def reading(lost: Fraction, held: tuple[Fraction, ...] = held) -> Reading:
             w, h, host = held
             return Reading(lost, max(Fraction(0), w - lost) * b, max(Fraction(0), h - lost) * b,
                            max(Fraction(0), h - w + host - lost) * b)
@@ -382,7 +382,7 @@ def line(groups: Sequence[Group], *, per: int, blocks: int, block_bytes: int, ch
          windows: Sequence[tuple[int, int]], delta: object, rates: Rates) -> Line:
     """The session's line in both forms on a node of `rates`, `node_bytes` of memory and `chip_bytes` of on-chip
     storage, with at most W of its receipts wrong: the pooled bound of its record's `windows` (each window's receipts
-    and draws) at `delta` (`pooled.bound`, a float δ its exact value); refused (`Refused`) as the Lean refuses."""
+    and samples) at `delta` (`pooled.bound`, a float δ its exact value); refused (`Refused`) as the Lean refuses."""
     try:
         W = pooled.bound(windows, delta).wrong
     except pooled.Refused as e:
@@ -481,12 +481,12 @@ def receipts(window: Mapping) -> int:
 
 SHARED = ("a record drawn more than one window a coin (groups_per_coin) at one window in flight has no line: no "
           "property of the code covers its draws there")
-"""Why a record drawn more than one window a coin (`audit.Params.groups_per_coin`) at one window in flight
+"""Why a record sampled more than one window a coin (`audit.Params.groups_per_coin`) at one window in flight
 (`audit.Pace.in_flight` 1) has no line: no property of the code covers its samples there (`LiveIsRun` is at two)."""
 
 
 def draws_of(g: int, ws: Sequence[Mapping]) -> list[tuple[int, int]]:
-    """The samples of a record sampled `g` windows a coin, as the pooled bound reads them (`audit.pooled_windows`): draw c is
+    """The samples of a record sampled `g` windows a coin, as the pooled bound reads them (`audit.pooled_windows`): sample c is
     windows cg … min((c + 1)g, W) − 1, its receipts U and its samples theirs summed."""
     return [(sum(receipts(w) for w in ws[a:a + g]), sum(w["drawn"] for w in ws[a:a + g])) for a in range(0, len(ws), g)]
 
@@ -495,7 +495,7 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
                g: int = 1) -> tuple[list[Group], list[tuple[int, int]]]:
     """The groups and windows the line reads of an accepted session's record (the Lean verifier's, as its `outcome`
     request writes it) and what the auditor saw of each of its windows: group t is window t, its passes the record's
-    and its times and reads `seen[t]`'s, and window t's receipts and draws are the record's (Σ lengths_t, drawn_t).
+    and its times and reads `seen[t]`'s, and window t's receipts and samples are the record's (Σ lengths_t, drawn_t).
     Refused unless the auditor saw each of the record's windows and each window drew min(s, U_t) of its receipts at
     the session's `samples` s, as the verifier's sample does. Sampled `g` > 1 windows a coin (`groups_per_coin`), the
     windows are the record's samples (`draws_of`), each refused unless it sampled min(s, U) of its U receipts and has fewer
@@ -712,3 +712,7 @@ def record_run_json(j: Mapping) -> dict:
         return line_of_record(**args).to_json()
     except Refused as e:
         return {"refused": str(e)}
+
+
+__all__ = ["FORMS", "GROUP", "LINK_CHARGED", "Refused", "SEEN", "TIME_HELD", "line", "number", "of_json",
+           "record_run_json", "run_json", "text"]

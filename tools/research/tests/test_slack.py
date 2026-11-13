@@ -317,6 +317,18 @@ def test_a_remit_longer_than_a_user_group_description_is_refused(registry):
         slack.load_registry(registry)
 
 
+def test_a_handles_staffs_are_name_patterns_that_match_no_handle():
+    """`staffs` names the agents a handle's holder alone registers (ci's readers, `review-*`); a pattern that matched a handle
+    would hand that lane's own name to it."""
+    reg = json.loads(REAL_REGISTRY.read_text())
+    ci = next(h for h in reg["handles"] if h["handle"] == "ci")
+    for ok in (["review-*"], ["review-3?", "seat-gemm"]):
+        slack.check_registry({**reg, "handles": [{**h, "staffs": ok} if h is ci else h for h in reg["handles"]]}, "r")
+    for bad in (["*"], ["c*"], ["infra"], ["Review-*"], "review-*", [7]):
+        with pytest.raises(slack.SlackError, match="staffs: the names of the agents its holder alone may register"):
+            slack.check_registry({**reg, "handles": [{**h, "staffs": bad} if h is ci else h for h in reg["handles"]]}, "r")
+
+
 def test_handles_and_subscriptions(registry, routes_dirs, capsys):
     add_route(routes_dirs[0], "infra", "1.0", holder="bc-5a69647d-04f7-5d94-9ff1-56593e2e1037", branch_suffixes=["558b", "9e59"])
     add_route(routes_dirs[1], "proofs", "2.0", holder="bc-8f4b652b-17bc-5055-a120-b56940b7c7a9", posters=["bc-8ece7cde"])

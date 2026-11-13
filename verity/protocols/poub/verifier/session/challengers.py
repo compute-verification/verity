@@ -43,8 +43,8 @@ import socket
 import subprocess
 import tarfile
 import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Callable, Sequence
 
 from verity.protocols.poub.verifier import audit, coins
 from verity.protocols.spot.device import challenger as Ch
@@ -287,3 +287,6 @@ def of(kind: str, out: Path, key: Path | None, params: str | None, *, verify: Ch
         return ChallengerGate(out, ssh_gate(shlex.split(ssh)), peer, pin, period, first_parent, verify,
                               minutes=minutes)
     raise ValueError(f"--challenger is one of {KINDS}")
+
+
+__all__ = ["ChallengerGate", "GATE_PORTS", "Local", "Serve", "of"]

@@ -177,5 +177,7 @@ def main() -> int:
     return 0
 
 
+__all__ = ["quant_a", "quant_vllm", "quant_w", "tokens_of"]
+
 if __name__ == "__main__":
     raise SystemExit(main())

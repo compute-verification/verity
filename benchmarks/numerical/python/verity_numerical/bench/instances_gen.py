@@ -28,6 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
+from typing import TypeVar
 
 from verity.definitions.silicon import models as S, term as T
 from verity.definitions.silicon.cast import f32_to_bf16_word
@@ -94,6 +95,8 @@ F32_INF = 0x7F800000
 
 # --- deterministic randomness -----------------------------------------------------------------------------------------------
 
+_Item = TypeVar("_Item")
+
 
 class Rng:
     """A SHA-256 counter stream keyed by labels: ``key = sha256("bench-instances/v1|" + "|".join(labels))``, block ``n`` is
@@ -141,7 +144,7 @@ class Rng:
 
         return lo + self.below(hi - lo)
 
-    def choice(self, seq: Sequence):
+    def choice(self, seq: Sequence[_Item]) -> _Item:
         return seq[self.below(len(seq))]
 
     def sample(self, n: int, k: int, exclude: frozenset[int] | set[int] = frozenset()) -> list[int]:

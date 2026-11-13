@@ -6,13 +6,13 @@ public import Proofs.Properties.Nci.ResolveRows
 /-!
 # A unit of a primitive
 
-A unit is a member of a root node that is no input node, and its Definition may be a primitive: then the node is a
-batch of that primitive (`prim_unit`), the unit is one gate, and its Definition has the body the decoder leaves a
-primitive, `default`. Resolution reads that body as it reads any other. A reference of a default body names its
-node 0, which is no node: the default node, whose form is a primitive's, at offset 0. So resolution ends at once,
-at the activation's own gate (`resolve_default`), and every leaf such a unit returns is that gate (`ret_default`,
-`returnsOwn_prim`). The gate is located at the root, at the unit's node, and its operands are the node's member's
-(`gate_member_prim`, `prim_unit_gate`).
+A unit is a member of a root node that is no input node (`unit_place`, `unit_member`), and its Definition may be a
+primitive: then the node is a batch of that primitive (`prim_unit`), the unit is one gate, and its Definition has the
+body the decoder leaves a primitive, `default`. Resolution reads that body as it reads any other. A reference of a
+default body names its node 0, which is no node: the default node, whose form is a primitive's, at offset 0. So
+resolution ends at once, at the activation's own gate (`resolve_default`), and every leaf such a unit returns is that
+gate (`ret_default`, `returnsOwn_prim`). The gate is located at the root, at the unit's node, and its operands are
+the node's member's (`gate_member_prim`, `prim_unit_gate`).
 
 `run_one` and `run_two_ok` give a walk its result from its first step, or its first two, at any fuel that covers
 them: where `run_two` reads a result off a walk that ended, these say that the walk ends.
@@ -96,58 +96,6 @@ section
 variable (P : Prog) (hL : ∀ d < P.defs.size, Walk.LaidOut P d)
 include hL
 
-/-- **The step of `Prog.gate`'s walk at a member of a primitive's node**: for the gate of member `m` of node `k` of
-an activation, the node calling a primitive, the step from the activation ends there, with the member's operands. -/
-theorem gateStep_at_prim (sc : Scope) (hd : sc.d < P.defs.size) (hp : (P.defs[sc.d]!).prim = false) {k m g : ℕ}
-    (hk : k < (P.defs[sc.d]!).body.nodes.size) (hm : m < ((P.defs[sc.d]!).body.nodes[k]!).members)
-    (hc : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = true)
-    (hlo : sc.off + (P.defs[sc.d]!).body.offsets[k]! +
-      m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤ g)
-    (hhi : g < sc.off + (P.defs[sc.d]!).body.offsets[k]! +
-      m * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates +
-      (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates) {x : (ℕ × Array ℕ × Scope) ⊕ Scope}
-    (h : gateStep P g sc = .ok x) :
-    ∃ ops, x = .inl (((P.defs[sc.d]!).body.nodes[k]!).fn, ops, sc) ∧
-      operands P sc ((P.defs[sc.d]!).body.nodes[k]!) m = .ok ops := by
-  have hmono := offsets_mono P sc.d (hL sc.d hd) hp
-  obtain ⟨-, -, hnodes⟩ := hL sc.d hd hp
-  have hstep := hnodes k hk
-  have hle : (m + 1) * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates ≤
-      ((P.defs[sc.d]!).body.nodes[k]!).members * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates :=
-    Nat.mul_le_mul_right _ hm
-  rw [Nat.add_mul, Nat.one_mul] at hle
-  unfold gateStep at h
-  simp only [bind, Except.bind] at h
-  split at h
-  · rename_i k' hk'
-    obtain ⟨hkK, hpk⟩ := DescAgree.find?_range_some hk'
-    simp only [Bool.and_eq_true, decide_eq_true_eq] at hpk
-    have hkk : k' = k := by
-      rcases Nat.lt_trichotomy k' k with hlt | heq | hgt
-      · have := hmono (k' + 1) k (by omega) (by omega)
-        omega
-      · exact heq
-      · have := hmono (k + 1) k' (by omega) (by omega)
-        omega
-    rw [hkk] at h
-    simp only [hc, ite_true] at h
-    split at h
-    · cases h
-    · rename_i ops hops
-      simp only [pure, Except.pure, Except.ok.injEq] at h
-      subst h
-      have hx : g - sc.off - (P.defs[sc.d]!).body.offsets[k]! <
-          ((P.defs[sc.d]!).body.nodes[k]!).members * (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates := by
-        omega
-      obtain ⟨-, hm2, hm3⟩ := Walk.member_of ((P.defs[sc.d]!).body.nodes[k]!) _ _ hx
-      have e1 : (g - sc.off - (P.defs[sc.d]!).body.offsets[k]!) /
-          (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).gates = m :=
-        Nat.div_eq_of_lt_le (by omega) (by rw [Nat.add_mul, Nat.one_mul]; omega)
-      have hM := (Nat.div_eq_of_lt_le hm2 (by rw [Nat.add_mul, Nat.one_mul]; omega)).symm.trans e1
-      exact ⟨ops, rfl,
-        (congrArg (fun M => operands P sc ((P.defs[sc.d]!).body.nodes[k]!) M = Except.ok ops) hM).mp hops⟩
-  · simp [throw, throwThe, MonadExceptOf.throw] at h
-
 variable (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false)
 include hroot
 
@@ -195,27 +143,7 @@ theorem unit_leaf_ok {k : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     ∃ g, resolveStep P (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get
         (argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t)) = .ok (.inl g) ∧
       resolve P (.child P.rootScope d off k m) ⟨true, i, t⟩ = .ok g := by
-  obtain ⟨-, hc, hno⟩ := decoded_root bytes P hdec k hk
-  have hx : argIdx ((P.defs[P.root]!).body.nodes[k]!) i m t <
-      ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq).count := by
-    rcases hf with hf | hf
-    · rw [argIdx_call hf]
-      have hcp : (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false := hno.2.2.2.1 (Or.inl hf)
-      have hbp := (hc.2 hcp).1
-      have hup := BodiesOk.up_ok _ _ hc hno i (by rw [hbp, ← hno.1]; exact hi) t (by rw [hbp]; exact ht) m hm
-      rw [hf] at hup
-      exact hup
-    · rw [argIdx_batch hf]
-      have hd : (((P.defs[P.root]!).body.nodes[k]!).args[i]!).dims.isSome = true := by
-        refine batch_dims hown (n := (P.defs[P.root]!).body.nodes[k]!) ?_ hf ?_
-        · refine List.mem_filter.2 ⟨?_, by simp [hu]⟩
-          rw [getElem!_pos _ k hk]
-          exact Array.mem_toList_iff.2 (Array.getElem_mem hk)
-        · rw [getElem!_pos _ i hi]
-          exact Array.getElem_mem hi
-      have hop := BodiesOk.op_ok _ _ hno i hi m hm t (by rw [hf, hd]; exact ht)
-      rw [hf] at hop
-      exact hop
+  have hx := argIdx_lt bytes P hdec hown hk hu hf hm hi ht
   obtain ⟨n, j, -, -, -, -, hstep⟩ := arg_leaf bytes P hdec hov hlay hown hk hu hi hx
   obtain ⟨fuel, hfuel⟩ : ∃ fuel, Flock.Steps.FUEL = fuel + 2 :=
     ⟨Flock.Steps.FUEL - 2, by unfold Flock.Steps.FUEL; omega⟩
@@ -303,6 +231,53 @@ theorem read_walk {P : Prog} (hP : ReadProg P) : P.orderViolation = none ∧ Des
   simp only [Bool.and_eq_true] at hwk
   exact ⟨hov, hwk.1.2⟩
 
+/-- **Where a unit is**: member `m` of the root node of a range `j`, a call or a batch that is no input node, with
+as many arguments as the unit's Definition has parameters. -/
+theorem unit_place {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
+    {sc : Scope} (hu : UnitAt P rs tid u sc) :
+    ∃ j m, j < rs.size ∧ rs[j]!.template = tid ∧
+      u = ((rs.extract 0 j).filter fun r => r.template == tid).foldl (fun a r => a + r.count) 0 + m ∧
+      sc = P.child P.rootScope rs[j]!.node m ∧ rs[j]!.node < (P.defs[P.root]!).body.nodes.size ∧
+      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[rs[j]!.node]!) = false ∧
+      (((P.defs[P.root]!).body.nodes[rs[j]!.node]!).form = .call ∨
+        ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).form = .batch) ∧
+      m < ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).members ∧
+      ((P.defs[P.root]!).body.nodes[rs[j]!.node]!).args.size =
+        (P.defs[((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn]!).params.size := by
+  obtain ⟨hr, -, -, -⟩ := read_bodies hP
+  have hir := readProg_inputs hP
+  obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
+  obtain ⟨hnodes, hall⟩ := ranges_spec hr hfirst hir hrs
+  obtain ⟨j, m, hj, htj, hm, huj, hsc⟩ := hu
+  have hmem : rs[j]! ∈ rs.toList := by
+    rw [getElem!_pos rs j hj]
+    simp
+  obtain ⟨hlt, -, hform, hcount⟩ := hall _ hmem
+  have hno : rs[j]!.node ∈ rs.toList.map (·.node) := List.mem_map.2 ⟨_, hmem, rfl⟩
+  rw [hnodes, List.mem_filter] at hno
+  have hkey : Flock.Program.isInputId (P.defs[((P.defs[P.root]!).body.nodes[rs[j]!.node]!).fn]!).key = false := by
+    simpa using hno.2
+  obtain ⟨-, -, hnode⟩ := Resolve.decoded_root bytes P hdec _ hlt
+  refine ⟨j, m, hj, htj, huj, hsc, hlt, ?_, hform, ?_, hnode.1⟩
+  · simp [Desc.isInputNode, hkey]
+  · rw [← hcount]
+    exact hm
+
+/-- **A unit is a member of a root node that is a call or a batch and no input node**, with an argument for each
+of the unit's Definition's parameters. -/
+theorem unit_member {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
+    (hrs : Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P) ts = .ok rs) {tid : String} {u : ℕ}
+    {sc : Scope} (hu : UnitAt P rs tid u sc) :
+    ∃ k m, k < (P.defs[P.root]!).body.nodes.size ∧
+      Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false ∧
+      (((P.defs[P.root]!).body.nodes[k]!).form = .call ∨ ((P.defs[P.root]!).body.nodes[k]!).form = .batch) ∧
+      m < ((P.defs[P.root]!).body.nodes[k]!).members ∧
+      (∀ i, i < (P.defs[sc.d]!).params.size → i < ((P.defs[P.root]!).body.nodes[k]!).args.size) ∧
+      sc = P.child P.rootScope k m := by
+  obtain ⟨j, m, -, -, -, rfl, hk, hnode, hform, hm, hargs⟩ := unit_place hP hrs hu
+  exact ⟨rs[j]!.node, m, hk, hnode, hform, hm, fun i hi => Nat.lt_of_lt_of_eq hi hargs.symm, rfl⟩
+
 /-- **A leaf of a unit's parameter resolves**, whatever the unit's Definition, where every unit's rows are its own
 (`Record.ownRows`). -/
 theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : ReadProg P)
@@ -311,29 +286,10 @@ theorem unit_param_ok {P : Prog} {ts : Array String} {rs : Array TRange} (hP : R
     {sc : Scope} (hu : UnitAt P rs tid u sc) {i t : ℕ} (hi : i < (P.defs[sc.d]!).params.size)
     (ht : t < ((P.defs[sc.d]!).params[i]!).2.leaves) :
     ∃ g, Flock.Program.resolve P sc (⟨true, i, t⟩ : Ref) = .ok g := by
-  obtain ⟨hr, -, -, -⟩ := read_bodies hP
   obtain ⟨hov, hlay⟩ := read_walk hP
-  have hir := readProg_inputs hP
-  obtain ⟨⟨bytes, hdec⟩, -, -, -, -, -, hfirst⟩ := hP
-  obtain ⟨-, hall⟩ := ranges_spec hr hfirst hir hrs
-  obtain ⟨k, m, hk, hkey, -, hm, rfl⟩ := unit_node hr hfirst hir hrs hu
-  obtain ⟨-, -, hno⟩ := Resolve.decoded_root bytes P hdec k hk
-  have hnode : Desc.isInputNode P ((P.defs[P.root]!).body.nodes[k]!) = false := by
-    simp [Desc.isInputNode, hkey]
-  have hform : ((P.defs[P.root]!).body.nodes[k]!).form = .call ∨
-      ((P.defs[P.root]!).body.nodes[k]!).form = .batch := by
-    obtain ⟨j, m', hj, -, -, -, hsc⟩ := hu
-    have hmem : rs[j]! ∈ rs.toList := by
-      rw [getElem!_pos rs j hj]
-      simp
-    obtain ⟨-, -, hfm, -⟩ := hall _ hmem
-    have hkj : k = rs[j]!.node := by
-      simp only [Prog.child, Scope.child.injEq] at hsc
-      exact hsc.2.2.2.1
-    rw [hkj]
-    exact hfm
-  have hi' : i < ((P.defs[P.root]!).body.nodes[k]!).args.size := Nat.lt_of_lt_of_eq hi hno.1.symm
-  obtain ⟨g, -, hg⟩ := Resolve.unit_leaf_ok bytes P hdec hov hlay hO hk hnode hform hm hi' ht
+  obtain ⟨k, m, hk, hnode, hform, hm, hargs, rfl⟩ := unit_member hP hrs hu
+  obtain ⟨⟨bytes, hdec⟩, -⟩ := hP
+  obtain ⟨g, -, hg⟩ := Resolve.unit_leaf_ok bytes P hdec hov hlay hO hk hnode hform hm (hargs i hi) ht
     ((P.defs[P.root]!).body.nodes[k]!).fn (P.child P.rootScope k m).off
   exact ⟨g, hg⟩
 

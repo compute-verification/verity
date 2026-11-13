@@ -23,6 +23,9 @@ import os
 import sys
 from pathlib import Path
 
+#: what the scripts of `theory/` and `edited_gemm/` and the tests read
+__all__ = ["Checks", "SCHEMA", "dumps"]
+
 SCHEMA = "exact-kit/verdict/v1"
 
 

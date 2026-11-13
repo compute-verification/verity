@@ -702,7 +702,7 @@ def _interface(made: dict):
     except malformed:
         return "inputs", None
     try:
-        blocks, _ = IF.Blocks.of(doc["blocks"], units, "")
+        blocks = IF.Blocks.of(doc["blocks"], units, "")
     except malformed:
         return "blocks", None
     return None, (lays, units, blocks, doc)

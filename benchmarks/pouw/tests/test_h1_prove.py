@@ -1,4 +1,4 @@
-"""h1_prove's window and the verifier's view of it (`h1_prove/window.py`, `run.py`, `h1unit.py`, `stage.py`), without the
+"""h1_prove's window and the verifier's view of it (`h1_prove/window.py`, `recorded.py`, `h1unit.py`, `stage.py`), without the
 unit's circuit: the window's public Program and template-instance partition derive exactly the tiles it commits and the
 rows each reads, its registered values (each call's A table and z table, its tiles' z/y records, `scaled_mm_zy`'s, and
 the weights' b/<K>) are read where the window's own reads say, every per-window value's domain binds the window's open
@@ -12,39 +12,30 @@ opened ``b || c`` and paths is Flock's own over the rows."""
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import h1unit as U
+import layer as L
 import numpy as np
 import pytest
+import recorded as RN
+import window as W
+from conftest import load
 
+from verity.protocols.pouw.prover.circuit import h1zy as Z
+from verity.protocols.pouw.prover.circuit import seeds as SD
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.spot.verifier.one_stage import partition as P
 from verity.protocols.spot.verifier.one_stage import registered as G
 
 H1 = Path(__file__).resolve().parents[1] / "h1_prove"
-sys.path.insert(0, str(H1))
-import h1unit as U  # noqa: E402
-
-from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
-from verity.protocols.pouw.prover.circuit import h1zy as Z  # noqa: E402
-from verity.protocols.pouw.prover.circuit import seeds as SD  # noqa: E402
-
-
-def _module(name: str, file: str):
-    spec = importlib.util.spec_from_file_location(name, H1 / file)
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    return m
-
-
-RN = _module("h1_prove_run", "run.py")
-W = _module("h1_prove_window", "window.py")
-ST = _module("h1_prove_stage", "stage.py")
+#: by `load`: hidden_zk holds a ``stage.py`` too
+ST = load("h1_prove/stage.py")
 
 K = 64
 R, C = U.TILE
@@ -112,7 +103,7 @@ def reference(z: dict, i: int) -> tuple[list[int], int]:
 
 @pytest.fixture(scope="module")
 def win():
-    """`run.program_of` the tests' window shape (`SHAPE`), which every commitment registers under: the tile's Program
+    """`recorded.program_of` the tests' window shape (`SHAPE`), which every commitment registers under: the tile's Program
     traces its seed and noise circuits, about 35 s at any K, and its partition about 14 s more."""
     return RN.program_of(K, *SHAPE)
 
@@ -371,7 +362,7 @@ def test_sampled_proof_blocks_open_to_their_window_and_no_other(tmp_path, win):
 
 @pytest.mark.slow
 def test_each_in_proof_negatives_window_changes_its_value_and_ok_drops_where_its_record_moved(tmp_path, win):
-    """Each in-proof negative's tampered window (`window.py tamper`, `run.IN_PROOF`) opens to its own registration and
+    """Each in-proof negative's tampered window (`window.py tamper`, `recorded.IN_PROOF`) opens to its own registration and
     not the honest one, and changes exactly the value it names: the receipt word 0 plus one, a record's y of cell 0 plus
     one, its z of cell 0 plus one with y that z's dequant, two units' records exchanged, the record of the same tile in the
     other call, a record of z alone, a D_1 word one too large, a changed record re-registering its call's z table alone.
@@ -448,10 +439,10 @@ def test_the_h1_statement_is_flat_unless_h1_tmpl_says_structural(monkeypatch):
 
 
 @pytest.mark.slow
-def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
+def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch):
     """`h1unit.stager`: with a layout, the templated statement of the unit's own structural template; with none, the flat
     statement, which evaluates the unit alike; and where struct_lower refuses the Definition (its NotImplementedError, as
-    for an assertion), the flat statement, said on stderr."""
+    for an assertion), the flat statement, said in a warning."""
     from verity.circuits.boolean import BIT
     from verity.circuits.boolean.forms import add
     from verity.circuits.boolean.trace import definition
@@ -473,10 +464,9 @@ def test_a_unit_struct_lower_refuses_is_staged_flat(monkeypatch, capsys):
         raise NotImplementedError(f"{definition.id}: an assertion is not laid out: its row reads its own column")
 
     monkeypatch.setattr(SL, "lower", refuse)
-    capsys.readouterr()
-    fell = U.stager(d, "unit/toy", rows, outs, U.LAYOUT)
+    with pytest.warns(UserWarning, match="the flat statement: struct_lower refuses H1StagerToy"):
+        fell = U.stager(d, "unit/toy", rows, outs, U.LAYOUT)
     assert not hasattr(fell.low, "template") and fell.pin == flat.pin
-    assert "the flat statement: struct_lower refuses H1StagerToy" in capsys.readouterr().err
 
 
 def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
@@ -529,7 +519,7 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
     """Three units of a window, units 0 and 2 reading the same A rows and units 0 and 1 the same B rows, each its own
     record: the prover's shared-row statement (`h1unit.statement_tables` through Flock's `circuit.write`, as `stage.py`
     stages it) and the verifier's own file (`h1unit.verifier_pub`, from the units' ``b || c``, positions and paths alone)
-    are one file byte for byte, every A, B, record and ok table row opening its registered root (`run.registered_opens`,
+    are one file byte for byte, every A, B, record and ok table row opening its registered root (`recorded.registered_opens`,
     the Lean verifier's check under --registered; ok's the verifier's own, `h1unit.register_ok`). An ok row of 0 opens none, ok rows
     committed afresh state no ok registration, a prover's A row the registration does not hold opens none, two rows at one
     position are refused, and a forged statement (`h1unit.forge_statement`) is the verifier's file of a window with the
@@ -666,7 +656,6 @@ def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no
 
 def test_vllm_quant_puts_each_rows_absmax_at_127_rounding_to_nearest():
     """vLLM's quantizer (and H1's) give each row's codes and its f32 scale, the one the window commits beside them."""
-    L = _module("h1_prove_layer", "layer.py")
     x = np.array([[0.5, -2.0, 1.1, 0.26, 9.0], [-4.0, 1.0, 0.016, -0.015, 3.0]], np.float32)
     q, s = L.quant_vllm(x)
     assert q.tolist() == [[7, -28, 16, 4, 127], [-127, 32, 1, 0, 95]]
@@ -688,7 +677,6 @@ def test_a_layers_tokens_come_from_the_seed_or_the_models_tokenizer_and_a_tokeni
     """`layer.tokens_of` gives the seed's ids where a seed is given and a fresh seed's where the model has no tokenizer;
     where it has one, the prompt's ids are the tokenizer's, and a tokenizer that doesn't load raises instead of
     falling back to a fresh seed."""
-    L = _module("h1_prove_layer", "layer.py")
     seeded = L.tokens_of(tmp_path, 6, b"\x01" * 16)
     assert seeded == L._seeded(6, b"\x01" * 16) != L._seeded(6, b"\x02" * 16) and seeded[0] == 128000
     fresh = L.tokens_of(tmp_path, 6, None)

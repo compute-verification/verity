@@ -2830,23 +2830,28 @@ def _n1_lease(monkeypatch, tmp_path, holders=(), **env):
     return m, calls, state
 
 
-def _table_fences(monkeypatch, m) -> dict[int, int]:
-    """The controller's fences kept in a table, {gpu: pid}, in place of `flock` processes: `fence` and `unfence` write it, and
-    `lock_holders` and `cmdline` answer from it alone.  For a test of what the controller decides, not of the locks: the real
-    `lock_holders` lists every flock on the machine by inode number, whatever its filesystem, so a lock another process holds
-    on a file with a GPU lock's inode number reads as a lease on that GPU, which the controller then leaves unfenced; and a
-    real fence is a process the machine may fail to start."""
+def _table_locks(monkeypatch, m) -> dict[int, int]:
+    """The GPU locks kept in a table, {gpu: the pid that holds its lock}, in place of `flock` processes and the machine's lock
+    list: `fence` and `unfence` write the controller's fences into it, a test writes a lease into it under the lease's pid
+    (`locks[0] = os.getpid()`), and `lock_holders` and `cmdline` answer from it alone.  For a test of what the controller
+    decides, not of the locks.  The real `lock_holders` is a read of every flock on the machine, which no test holds: the
+    kernel hands /proc/locks out a page per read, so a lock another process releases between two reads leaves a lock held
+    throughout unlisted; it matches by inode number, whatever the filesystem, so a lock another process holds on a file with
+    a GPU lock's inode number reads as a lease on that GPU, which the controller then leaves unfenced; and a real fence is a
+    process the machine may fail to start."""
     held: dict[int, int] = {}
-    pids = iter(range(5_000_000, 6_000_000))               # above the kernel's largest pid: no process of the machine's
+    fence_pids = range(5_000_000, 6_000_000)               # above the kernel's largest pid: no process of the machine's
+    unused = iter(fence_pids)
 
     def unfence(gone: list[int]) -> None:
         for i in [i for i, pid in held.items() if pid in gone]:
             del held[i]
 
-    monkeypatch.setattr(m, "fence", lambda i, t: None if i in held else held.setdefault(i, next(pids)))
+    monkeypatch.setattr(m, "fence", lambda i, t: None if i in held else held.setdefault(i, next(unused)))
     monkeypatch.setattr(m, "unfence", unfence)
     monkeypatch.setattr(m, "lock_holders", lambda: {m.lock_path(i).stat().st_ino: [pid] for i, pid in held.items()})
-    monkeypatch.setattr(m, "cmdline", lambda pid: next((["flock", str(m.lock_path(i)), m.FENCE_CMD] for i, p in held.items() if p == pid), []))
+    monkeypatch.setattr(m, "cmdline", lambda pid: next((["flock", str(m.lock_path(i)), m.FENCE_CMD]
+                                                        for i, p in held.items() if p == pid and pid in fence_pids), []))
     return held
 
 
@@ -2883,6 +2888,9 @@ def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_ho
     m, calls, _ = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-c")])
     (tmp_path / "gl" / "2.foreign").write_text(f"pid={os.getpid()} mem=94000MiB user=research seen=2026-10-19T01:20:00Z cmd=vllm worker\n"
                                                "pid=5000000 mem=2048MiB user=research seen=2026-10-19T01:20:00Z cmd=gone\n")
+    # the lease dir is new and its lock files not yet made: nobody holds them, whatever lock the machine's list has under the
+    # inode numbers they then get (a file just released and deleted leaves its number to the next one made)
+    monkeypatch.setattr(m, "lock_holders", dict)
     s = m.Controller().tick(1_800_000_000.0)
     assert s["pool"] == 1 and [bool(g["fence_pids"]) for g in s["gpus"]] == [True, True, False, True]
     assert [g.get("foreign") for g in s["gpus"]] == [None, None, [{"pid": str(os.getpid()), "mem": "94000MiB", "user": "research",
@@ -2897,11 +2905,11 @@ def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_ho
 
 
 def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkeypatch, tmp_path):
-    """What the controller decides, tick by tick, over fences it only records (`_table_fences`): that a real fence keeps
+    """What the controller decides, tick by tick, over fences it only records (`_table_locks`): that a real fence keeps
     gpu-lease off its GPU is `test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_holders_gpu`'s."""
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_IDLE_S=120)
-    fences = _table_fences(monkeypatch, m)
+    fences = _table_locks(monkeypatch, m)
     c = m.Controller()
     w = tmp_path / "gl" / "wait.1.4242"
     w.write_text("pid=4242 n=1 run=r-x who=backend-sweep-2 since=2026-09-30T22:00:00Z\n")
@@ -2928,11 +2936,11 @@ def test_n1_lease_grows_the_pool_for_a_waiter_and_shrinks_a_gpu_left_idle(monkey
     assert s["gpus"][1]["fence_pids"] == [fences[1]] and s["gpus"][1]["holder"] is None
 
 
-@needs_flock
-def test_n1_lease_named_pool_labels_its_own_holders_and_a_blocked_pool_grants_nothing_new(monkeypatch, tmp_path, reap):
+def test_n1_lease_named_pool_labels_its_own_holders_and_a_blocked_pool_grants_nothing_new(monkeypatch, tmp_path):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-circuits-1", "gpu-pool-circuits-1-x", "GPU-b")],
                                 VY_POOL_NAME="circuits", VY_POOL_QUEUE="deployments-gpu")
+    _table_locks(monkeypatch, m)
     c = m.Controller()
     t = 1_800_000_000.0
     s = c.tick(t)
@@ -3117,16 +3125,17 @@ def test_gpu_stray_judges_only_a_process_listed_before_and_after_the_leases_are_
     assert "pid 21 (default/nd-x) ran on GPU 1 without a lease" in (pool / "blocked").read_text()
 
 
-@needs_flock
-def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path, reap):
-    import fcntl
+def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(monkeypatch, tmp_path):
+    """What the controller decides about a lease it reads, over locks the test records (`_table_locks`): a read of the
+    machine's lock list can leave a lease held throughout unlisted, which the controller then sees a tick later."""
     m, calls, state = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-a")])
+    locks = _table_locks(monkeypatch, m)
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: "uid-job-pod")
     t = 1_800_000_000.0
     c = m.Controller()
     c.tick(t)
-    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
-    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    assert sorted(locks) == [1, 2, 3]                      # GPU 0 is the pool's: no fence holds its lock
+    locks[0] = os.getpid()
     (tmp_path / "gl" / "0.owner").write_text(f"pid={os.getpid()} run=r-x who=backend-sweep-2 uuid=GPU-a "
                                              f"since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=bash -c x\n")
     state["pods"].append(("job-x", "job-pod", "-"))
@@ -3141,13 +3150,12 @@ def test_n1_lease_expires_a_lease_past_its_until_and_stops_one_outside_the_pool(
     assert not [a for a, _ in calls if a[0] == "delete"]
     s = c.tick(t + 3)
     assert [e["ev"] for e in s["events"]] == ["lease-outside-pool"] and ("delete", "pod", "job-pod", "--wait=false") in [a for a, _ in calls]
-    os.close(lock)
 
 
-@needs_flock
-def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_host_process_lease(monkeypatch, tmp_path, reap):
+def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_host_process_lease(monkeypatch, tmp_path):
     import fcntl
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3)
+    locks = _table_locks(monkeypatch, m)
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
     w = tmp_path / "gl" / "wait.1.4242"
     w.write_text("pid=4242 n=3 run=r-x who=adhoc:me since=2026-09-30T22:00:00Z\n")
@@ -3173,23 +3181,22 @@ def test_n1_lease_grows_only_within_the_queues_unborrowed_quota_and_sigterms_a_h
     c3 = m.Controller()
     c3.tick(t)
     proc = subprocess.Popen(["cat"], stdin=subprocess.PIPE)          # blocks until signalled
-    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
-    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    assert 0 not in locks                                            # its holder runs: GPU 0's fence is gone
+    locks[0] = proc.pid
     (tmp_path / "gl" / "0.owner").write_text(f"pid={proc.pid} run=r-x who=adhoc:me since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=x\n")
     s = c3.tick(t + 1)
     assert [e["ev"] for e in s["events"]] == ["expired"] and not [a for a, _ in calls if a[:2] == ("delete", "pod")]
     assert proc.wait() == -15
-    os.close(lock)
 
 
-@needs_flock
 def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_sigkills_a_lease_that_outlives_sigterm(
-        monkeypatch, tmp_path, reap):
+        monkeypatch, tmp_path):
     import fcntl
     t = 1_800_000_000.0
     m, calls, state = _n1_lease(monkeypatch, tmp_path, VY_POOL_MAX=3, VY_POOL_BORROW=1,
                                 VY_POOL_BORROW_UNTIL=datetime.datetime.fromtimestamp(t + 60, datetime.timezone.utc)
                                 .strftime("%Y-%m-%dT%H:%M:%SZ"))
+    locks = _table_locks(monkeypatch, m)
     monkeypatch.setattr(m, "pod_uid_of", lambda pid: None)
     bench = {"metadata": {"ownerReferences": [{"name": "nd-m0-bench"}]},
              "status": {"admission": {"clusterQueue": "provers"}, "conditions": [{"type": "QuotaReserved", "status": "True"}]},
@@ -3213,13 +3220,12 @@ def test_n1_lease_borrows_only_for_preemptible_waiters_before_its_deadline_and_s
     c.tick(t)
     proc = subprocess.Popen(["sh", "-c", "trap '' TERM; echo ready; exec cat"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     assert proc.stdout.readline() == b"ready\n"   # the trap is set before the lease is signalled
-    lock = os.open(tmp_path / "gl" / "0.lock", os.O_WRONLY)
-    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    assert 0 not in locks                         # its holder runs: GPU 0's fence is gone
+    locks[0] = proc.pid
     (tmp_path / "gl" / "0.owner").write_text(f"pid={proc.pid} run=r-x who=adhoc:me since={m.iso(t - 3600)} until={m.iso(t - 200)} cmd=x\n")
     assert [e.get("signal") for e in c.tick(t + 1)["events"]] == ["SIGTERM"]
     assert [e.get("signal") for e in c.tick(t + 1 + m.KILL_AFTER_S)["events"]] == ["SIGKILL"]
     assert proc.wait() == -9
-    os.close(lock)
 
 
 def _policy_lease(monkeypatch, tmp_path, max_: int, policy: str | None = None):
@@ -3301,6 +3307,49 @@ def test_n1_lease_sees_a_waiter_that_a_read_of_proc_locks_misses(monkeypatch, tm
     os.close(fd)
     assert len([a for a, _ in calls if a[0] == "create"]) == 3
     assert not m.waiters()
+
+
+def test_n1_lease_lock_holders_lists_each_held_flocks_pid_under_its_inode_number(monkeypatch, tmp_path):
+    """`lock_holders` over a text in /proc/locks' form: the pid of each flock held, in the text's order, under the inode
+    number its `MAJ:MIN:INODE` ends in.  A POSIX or OFD lock, a request waiting behind a lock (`->`) and a line cut short
+    are nobody's flock.  With no path it reads the kernel's list."""
+    m, _, _ = _n1_lease(monkeypatch, tmp_path)
+    text = tmp_path / "locks"
+    text.write_text("1: FLOCK  ADVISORY  WRITE 4242 fe:20:604607 0 EOF\n"
+                    "2: POSIX  ADVISORY  WRITE 4243 fe:20:604607 0 EOF\n"
+                    "3: FLOCK  ADVISORY  READ  4244 00:2e:77 0 EOF\n"
+                    "4: OFDLCK ADVISORY  WRITE -1 fe:20:78 0 EOF\n"
+                    "5: FLOCK  ADVISORY  READ  4245 00:2e:77 0 EOF\n"
+                    "6: FLOCK  ADVISORY  WRITE 4246 103:05:9 0 EOF\n"
+                    "6: -> FLOCK  ADVISORY  WRITE 4247 103:05:9 0 EOF\n"
+                    "7: FLOCK  ADVISORY  WRITE 4248\n"
+                    "\n")
+    assert m.lock_holders(text) == {604607: [4242], 77: [4244, 4245], 9: [4246]}
+    assert m.lock_holders.__defaults__ == (Path("/proc/locks"),)
+
+
+@needs_flock
+def test_n1_lease_tells_its_fence_from_a_lease_by_the_command_line_of_the_locks_pid(monkeypatch, tmp_path, reap):
+    """A lock's pid is the controller's fence when its command line is a fence's on that GPU's lock, and a lease's otherwise:
+    a `flock` helper holding the lock that isn't a fence, a process that names no lock, a pid no process has (gpu-lease's
+    helper, long gone), another GPU's fence.  The fence and the helper are real; which pid holds which lock is given as
+    `lock_holders` returns it, not read from the machine's list."""
+    m, _, _ = _n1_lease(monkeypatch, tmp_path)
+    t = 1_800_000_000.0
+    fence = m.fence(0, t)
+    assert fence
+    lease = subprocess.Popen(["flock", "-n", "-x", str(m.lock_path(1)), "sh", "-c", "echo locked; exec cat"],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, start_new_session=True)
+    assert lease.stdout.readline().strip() == b"locked"
+    ino = [m.lock_path(i).stat().st_ino for i in range(4)]
+    gone = 5_000_000                                       # above the kernel's largest pid: no process of the machine's
+    monkeypatch.setattr(m, "lock_holders", lambda: {ino[0]: [fence], ino[1]: [lease.pid], ino[2]: [os.getpid(), gone],
+                                                    ino[3]: [fence]})
+    s = m.Controller().tick(t)
+    m.unfence([fence])
+    lease.communicate()                                    # its stdin closes: `cat` ends, and the helper with it
+    assert [g["fence_pids"] for g in s["gpus"]] == [[fence], [], [], []]
+    assert ["lease" in g for g in s["gpus"]] == [False, True, True, True]
 
 
 @needs_flock

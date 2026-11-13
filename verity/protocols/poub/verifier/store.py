@@ -165,7 +165,7 @@ def pin_of(data: bytes, path: str, role: str | None = None) -> dict:
         checkpoints = {_pinned(x.get("checkpoint")) for x in mine}
         if len(checkpoints) != 1:
             raise Refused(f"the registry {path} has {len(mine)} lines of {role}, pinning {len(checkpoints)} "
-                          "checkpoints: one is the pin")
+                          "checkpoints: one is the pin") from None
         doc = mine[-1]
     if isinstance(doc, dict) and doc and all(isinstance(v, dict) for v in doc.values()):
         if role not in doc:
@@ -522,3 +522,7 @@ class Binding:
         return {"name": self.role, "checkpoint_sha512": self.pin["checkpoint_sha512"], "pin": str(self.pin_path),
                 "checkpoint": str(self.directory), "files": len(self.pin["checkpoint"]), "workers": self.workers,
                 "salt": SALT_VERSION, **self.state}
+
+
+__all__ = ["Arena", "BLOCK", "Binding", "KEY_BYTES", "PAYLOAD_LABEL", "Refused", "SALT_DOMAIN", "Store", "arena",
+           "arena_of", "checkpoint_sha512", "expected_root", "file_sha512", "pool", "read_pin", "store_salt"]

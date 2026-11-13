@@ -245,14 +245,14 @@ def cases():
 
 
 def run_case(name, reqs, proxy, fresh, schedule=SCHEDULE, rand=None, challenger=None, coin_salt=None):
-    s = FT.Session(schedule, rand or _rand(name.encode()), fresh or _salts(name.encode()), proxy=proxy,
+    s = FT.InnerRun(schedule, rand or _rand(name.encode()), fresh or _salts(name.encode()), proxy=proxy,
                    coin_salt=coin_salt or _salts(b"challenger:" + name.encode()), **(challenger or {}))
     for r in reqs:
         s.handle(r)
     return s
 
 
-def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | None]:
+def replay(d: Path, schedule: dict | None = None) -> tuple[FT.InnerRun, str | None]:
     """A recorded inner session through the current firewall again, with its own coins and salts and its requests in the prover's
     order; and why the replay differs from the record, if it does."""
     rec = json.loads((d / "session" / "session.json").read_text())
@@ -295,7 +295,7 @@ def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | Non
         op = rec_coins["openings"]
         ys = iter([op[RL.LINK_COINS][0]] + [op[r["stream"]][r["k"]] for r in schedule["rounds"]])
         coin_salt = lambda: bytes.fromhex(next(ys))
-    s = FT.Session(schedule, rand, lambda: next(it), coin_salt=coin_salt, commit=rec_coins is not None)
+    s = FT.InnerRun(schedule, rand, lambda: next(it), coin_salt=coin_salt, commit=rec_coins is not None)
     for r in reqs:
         s.handle(r)
     got = s.coins.record()
@@ -328,8 +328,8 @@ def decide(lean: str, out: Path, named: list[tuple[str, dict, dict]]) -> list[di
     return [got[str(out / f"{name}.json")] for name, _, _ in named]
 
 
-def verdicts(lean: str, out: Path, sessions: list[tuple[str, FT.Session]]) -> list[dict]:
-    """Each session's transcript decided under its public input (`FT.Session.public`: the schedule the session was run
+def verdicts(lean: str, out: Path, sessions: list[tuple[str, FT.InnerRun]]) -> list[dict]:
+    """Each session's transcript decided under its public input (`FT.InnerRun.public`: the schedule the session was run
     with, never the transcript's), as `decide` does."""
     return decide(lean, out, [(name, s.transcript(), s.public()) for name, s in sessions])
 
@@ -470,7 +470,7 @@ def main(argv=None) -> int:
     ap.add_argument("--schedule", type=Path, help="the schedule every --sessions session is held to (default: its schedule.json)")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
-    todo: list[tuple[str, FT.Session, dict, str | None]] = []
+    todo: list[tuple[str, FT.InnerRun, dict, str | None]] = []
     if a.cases:
         for name, reqs, proxy, fresh, expect, challenger in cases():
             todo.append((name, run_case(name, reqs, proxy, fresh, challenger=challenger), expect, None))

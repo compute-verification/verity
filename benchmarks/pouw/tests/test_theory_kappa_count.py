@@ -1,17 +1,11 @@
-"""kappa_count.py on the censuses in the tree: every kind each device's current epoch holds has a destination width, and
-the creation bounds κ = 65·d that `ClassPSlots` charges come out as the ISA's widths give them."""
+"""theory/kappa_count.py on the censuses in the tree: every kind each device's current epoch holds has a destination
+width, and the creation bounds κ = 65·d that `ClassPSlots` charges come out as the ISA's widths give them."""
 from __future__ import annotations
 
-import importlib.util
 from fractions import Fraction
-from pathlib import Path
 
+import kappa_count as kc
 import pytest
-
-SCRIPT = Path(__file__).resolve().parents[1] / "theory" / "kappa_count.py"
-spec = importlib.util.spec_from_file_location("kappa_count", SCRIPT)
-kc = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(kc)
 
 
 def test_every_device_classified(tmp_path):

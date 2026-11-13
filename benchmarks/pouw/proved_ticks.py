@@ -67,6 +67,12 @@ from verity_machine_model import headline
 from verity_machine_model.eps import PRODUCTS, design, honest, table
 from verity_machine_model.model import device
 
+#: what the tests read
+__all__ = [
+    "EB", "SCHEME", "SCHEME_V3", "SHEET_EPS", "Tile", "device", "placed", "proved_block_ticks", "sheet", "tiles",
+    "unit_cycles", "units",
+]
+
 SMSPS = 4                          # SMSPs an SM
 #: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the hardware's 2,430 MHz on sm_120 (Lean's
 #: `Accounting.TS.Headline.Sm120.ds120.fmax`)

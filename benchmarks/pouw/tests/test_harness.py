@@ -12,13 +12,6 @@ import sys
 import types
 from pathlib import Path
 
-import numpy as np
-import pytest
-
-from verity.protocols.pouw.verifier import serving
-
-sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
-
 import arm as A
 import baselines as B
 import bench as H
@@ -26,10 +19,14 @@ import chain as CH
 import derive as DV
 import fill as F
 import identity as I
+import numpy as np
+import pytest
 import report as R
 import schedule as S
 import shapes as SH
 import torch_baselines as TB
+
+from verity.protocols.pouw.verifier import serving
 
 UUID5 = "GPU-0a1b2c3d-0000-1111-2222-333344445555"
 
@@ -1038,7 +1035,7 @@ class FakeLtLib:
         return b""
 
 
-def test_a_named_configuration_past_the_enumerations_cap_stops_the_run(tmp_path, monkeypatch):
+def test_a_named_configuration_past_the_enumerations_limit_stops_the_run(tmp_path, monkeypatch):
     import native as N
 
     monkeypatch.setattr(B, "cutlass_candidates", lambda *a, **k: ([], []))

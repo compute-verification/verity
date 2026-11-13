@@ -4,7 +4,7 @@
 `answer` turns what the audit wrote into sampled proofs' core answer (``verity/sampled-proofs/one-stage/v1``): the
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the profile is
 `audit.profile` as `Core.Integrity` (δ an exact ratio) and the public outputs are the four `Spot.OneStage.check` makes
-public (``drawn`` and ``proved``, the sampled and proved units; ``bound``, the bound on incorrect proof blocks at δ;
+public (the sampled proof blocks and ``proved``, the proved ones; ``bound``, the bound on incorrect ones at δ;
 ``per_template``, each template's under a stratified or work sampling design) and two the Lean's answer doesn't have,
 ``coins`` and ``case_v2``. A refusal before the
 sample (the records, a check on the registration, the sample) rejects with its codes; an audit record that doesn't accept,
@@ -25,7 +25,7 @@ values are to come from once an audit writes one. Until then a case that does na
 compiled check's, `Spot.OneStageZk`'s, which nothing here runs. The field says whether the audit wrote the case that
 check reads, as the audit record says it (``case_v2``, `a5.case_written`, set by the audit when it wrote its cases and
 not read from a case): ``{"written": true}``, or ``{"written": false, "why"}`` with the audit's own reason (sessions
-that aren't `--zk`, a sample of several members), where no verifier of record can be run on the window at all.
+that aren't `--zk`, a sample of several members), where the compiled check can't be run on the window at all.
 ``written`` true says a case file is there, not that the compiled check accepts it: `a5.write_case` writes its
 parameters without a challenger, and `Spot.OneStageZk` refuses parameters that name none. A record or a statement
 about the compiled check's accepts counts no answer here as one.

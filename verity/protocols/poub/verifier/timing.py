@@ -115,7 +115,7 @@ fill buffers; and the memory controllers', UPI's and PCIe's queues."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
 """S_chip, the node's: every GPU's on-chip storage and the host's caches."""
 LINK_WINDOW_BYTES = 6_291_456
-"""One link window, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
+"""One link burst, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
 receive buffer at most, `net.ipv4.tcp_rmem`'s max on the measured node (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
 holds less)."""
 GPU_SQUARINGS_PER_S = {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}
@@ -527,8 +527,8 @@ def _grid() -> None:
     print()
     _sizing(gap)
     print()
-    print(f"# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
-          f"deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
+    print("# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
+          "deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
     print("| pass ms | RTT ms | floor | U ms | Δ = pass | Δ* ms | at Δ* | chained |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for p in (20, 50):
@@ -587,6 +587,10 @@ def _grid() -> None:
         print(f"| {name} | {math.log2(c):.2f} | 2^{log2(sketch_failure(c, p, outside=1)):.2f} | "
               f"2^{log2(sketch_failure(c, p)):.2f} | 2^{log2(sketch_failure(c, p, rows=64)):.2f} |")
 
+
+__all__ = ["CHIP_BYTES", "GPUS", "GPU_CHIP_BYTES", "GPU_READ_BYTES_PER_S", "GPU_SHA512_PER_S", "GPU_SPEC_BYTES_PER_S",
+           "GPU_SQUARINGS_PER_S", "GPU_WRITE_BYTES_PER_S", "HOST_CHIP_BYTES", "HOST_READ_BYTES_PER_S",
+           "HOST_SPEC_BYTES_PER_S", "HOST_WRITE_BYTES_PER_S", "READ_BYTES_PER_S", "SPEC_BYTES_PER_S", "log2"]
 
 if __name__ == "__main__":
     _grid()

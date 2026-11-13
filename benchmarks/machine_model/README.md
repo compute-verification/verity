@@ -35,8 +35,19 @@ own and changes with it.
   `holds(m, since, until, epoch)`, `attacks(m, epoch, data)`, `all_attacks(data)` and `u_of`.
 - **`verity_machine_model.eps`**, a design's ε: `design(name, data)` and `designs(data)`, `honest(name, data)`,
   `forms(data)`, `machine(name, data)`, `table(data)`, `setup(d, pi, data)` and `eps(d, pi, q, data)`, with `Design`,
-  `Honest`, `Form`, `PRODUCTS`, `LANES`, `UNI` and `MMA`. `commands.eps` is the same computation as the command
-  prints it.
+  `Honest`, `Form`, `PRODUCTS`, `LANES`, `UNI` and `MMA`.
+- **`verity_machine_model.commands.eps`**, the same computation as the command prints it:
+  `record(d, pi, q, data, operands, credit)`, what `eps --json` prints for one design.
+- **`verity_machine_model.skip`**, ε_skip as made: `design_skip(d, rates, data, vector)`, the number a design's
+  `[skip]` records and the Lean headline exporters read, with what it is made of: `summary`, `parts`, `products`,
+  `floor_skip`, `floor_eps`, `prices`, `pv_ts`, the models' shapes (`MODELS`, `Shape`) and the rates (`RATES`).
+- **`verity_machine_model.lean_headline`**, sm_120's headline instances as exact data, which `lean-headline` writes as
+  Lean: `instance()` and `measured()`, with `stars`, `load`, `mload`, `price`, `coef`, `branches` and the constants
+  its `__all__` lists. `benchmarks/pouw/lean_headline.py` gives the same names to the files that load that path.
+- **`verity_machine_model.dc_reading`**, the H200's and B200's headline instances as exact data:
+  `reading(family, vector, full, q)` with `FAMILIES` and `SM90`, and the constants its `__all__` lists; and
+  **`verity_machine_model.lean_headline_dc`**, which `lean-headline` writes them as Lean with: `render_measured`,
+  `write` and `main`. `benchmarks/pouw/lean_headline_dc.py` gives both modules' names to the files that load that path.
 - **`verity_machine_model.headline`**, what the Lean headline files are exported from: `spec(data)` and
   `row(family, reading, data)`, with `READINGS`, `OPERANDS` and `CREDIT`.
 - **`verity_machine_model.capacity`**, certified capacity: `Work`, `Cell` and `cell(pi, groups)`, `tensor_filler`,
@@ -44,7 +55,9 @@ own and changes with it.
 - **`verity_machine_model.sheet`**, a device's data sheet: `Sheet`, `sheet(data)`, `row(name)`, `omega(s)` and
   `lines(s, peaks)`.
 - **`data/` by path**, for a probe or a calculator that reads one file without the package: `census/`, `rows.csv`,
-  `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout").
+  `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout"). One test
+  outside this directory, `benchmarks/pouw/tests/test_census_cover.py`, also reads every table of class counts the
+  data holds: `honest/`, `designs/` and `headline.toml` by path, and `attacks/` through `all_attacks`.
 
 What it uses: scipy (pinned: a vector's margin is read at the vertex its LP solver returns) and numpy; a device's card
 file through `verity.hardware.cards`, imported only where a ceiling is read (`model.card`, the card table, the opcode
@@ -71,6 +84,7 @@ uv run machine-model eps --table          # every design, one line each
 uv run machine-model eps --table --credit floor --operands floor --lookups
 uv run machine-model eps --device sm_89 --table --credit floor --operands floor
 uv run machine-model headline             # each family's design of record at the data-sheet and measured readings
+uv run machine-model lean-headline [--check]   # write every family's headline instances as Lean, or check them
 uv run machine-model redteam [DESIGN]     # the binding and near-binding rows, and how far each can move
 uv run machine-model margin [DESIGN]      # the worst core with every near measured row moved 2% at once
 uv run machine-model --device sm_90 sheet [--eps]   # the data sheet's lines against the census
@@ -85,8 +99,11 @@ uv run machine-model cover [--holes|--check]   # the opcode table
 the vector fails its check or doesn't reproduce a published number.
 
 Every command prints to standard output and writes no file, `sheet --lean` included (it prints the Lean module), with
-one exception: `adopt` rewrites, in the data directory it is given, the census files of the epochs it touches and
-`rows.csv` ("Adopt a probe's census").
+two exceptions: `adopt` rewrites, in the data directory it is given, the census files of the epochs it touches and
+`rows.csv` ("Adopt a probe's census"), and `lean-headline` with neither `--check` nor `--numbers` writes the Lean
+files of the families' headline instances, `security/Definitions/Accounting/Headline/Sm120.lean` and
+`Sm120Measured.lean` and the five `Sm*.lean` of `security/Definitions/Accounting/HeadlineDc/`; `--json F` writes the
+data-centre families' readings to `F`.
 
 ## Layout
 
@@ -150,7 +167,17 @@ one exception: `adopt` rewrites, in the data directory it is given, the census f
   program could still add beside the pooled verified load n̄: `parse(spec) -> Work`, `hidden`, `pool`.
 - `counts`: n(H)(m, n, k), an honest kernel's instruction counts from its closed form, the model bound it certifies at
   any shape, its fit and its check: `load(name) -> Counts`, `fit`, `names()`.
+- `skip`: ε_skip as made, a design's skippable share of honest work as served: `design_skip(design) -> Summary`, the
+  most over the models, contexts and phases of `floor_eps` (Corollary D3's, `floor_skip` over ♭'s bound at `prices`),
+  and `summary`, `parts` and `products`, the share by int8 products and by honest seconds with γ.
 - `headline`: the per-family headline: `row(family, reading)`, `rows(reading)`, `record()`, `text()`.
+- `lean_headline`: sm_120's headline instances, exact, and their Lean files: `instance() -> Instance` (the data sheet's)
+  and `measured() -> Measured`, each checked against the model's own numbers, `render` and `render_measured`, and
+  `write(check)`.
+- `dc_reading`: the H200's and B200's headline instances, exact: `reading(family, vector, full, q) -> Reading` on a
+  family's data sheet and on its measured vector, whose certificate an LP over the Lean menu finds (`certificate`).
+- `lean_headline_dc`: those readings' Lean files: `render_sheet`, `render_measured` and `render_twin`, and
+  `write(check, numbers, json_to)`.
 - `redteam`: from a device's census alone, how much room an adversary has to beat a row: `audit`, `margin_audit`,
   `least_filler`, `uniform_gap`.
 - `theta`: the card table: `theta(data) -> Theta`, `check`, and what it derives on the data sheet and measured
@@ -300,12 +327,12 @@ Beside its names, a design file has these keys:
 - `[table]`: `bits` on the operand a table route indexes, by default the coins' width and never below it.
 - `ppl`: a spec in `benchmarks/ppl/specs/`, or `""` while the design's arm isn't on main.
 - The ε terms' accounting: `[skip.served]` and `[mand.PART]`, each with its `eps` and `source`, and `[clock]`, `[luck]`,
-  `[baseline]` and `[routes]`. `[skip.served]` is the number `../pouw/eps_budget.py` gives the design's `[noise]` and `sums`
-  (`design_skip`: the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served output free),
+  `[baseline]` and `[routes]`. `[skip.served]` is the number `skip.design_skip` gives the design's `[noise]` and `sums`
+  (the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served output free),
   and the pouw suite's `test_eps_budget` fails, printing the number to write, when they differ.
 
 A new design is a file with its own name, title and summary, and a `base` if it varies one. The tests refuse an alias
-that names two designs, a noise leaf or a proof block that isn't defined, a `[skip]` that isn't `eps_budget.py`'s number
+that names two designs, a noise leaf or a proof block that isn't defined, a `[skip]` that isn't `design_skip`'s number
 for the design's noise, an arm that isn't a spec, and a filler off lanes.
 
 ## ε in the tensor–scalar model
