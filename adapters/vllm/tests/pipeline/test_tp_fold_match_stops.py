@@ -85,9 +85,14 @@ def test_a_compare_a_decomposition_or_a_global_match_that_is_not_a_mapping_fails
 
 
 @pytest.mark.parametrize("text", NOT_MAPPINGS)
-def test_under_reuse_legs_a_document_that_is_not_a_mapping_is_not_kept_and_its_stage_runs_again(tmp_path, monkeypatch, text):
+def test_a_kept_document_that_is_not_a_mapping_is_not_reused_and_its_stage_runs_again(tmp_path, monkeypatch, text):
     ran: list[list[str]] = []
-    monkeypatch.setattr(FM, "_run", lambda cmd, log, timeout=None: ran.append(cmd) or 5)
+
+    def run(cmd: list[str], log: Path, timeout: int | None = None) -> int:
+        ran.append(cmd)
+        return 5
+
+    monkeypatch.setattr(FM, "_run", run)
     document = tmp_path / "match_compare.json"
     document.write_text(text)
     assert FM._run_unless(True, document, ["py", "-m", "stage"], tmp_path / "match_compare.log", None) == 5 and ran == [["py", "-m", "stage"]]

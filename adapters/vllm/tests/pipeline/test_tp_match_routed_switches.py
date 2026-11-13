@@ -28,25 +28,25 @@ DIFFERENT = "the ranks' captures ran under different all-reduce switches: "
 NO_FILE, NO_SWITCHES = "no log", "a header with no switches"
 
 
-def _log(cap: Path, rank: int, disabled: Any) -> None:
+def _log(capture: Path, rank: int, disabled: Any) -> None:
     """Rank ``rank``'s capture log, its header recording `disable_custom_all_reduce` = ``disabled``; NO_SWITCHES: a header that
     records none; NO_FILE: no log."""
     if disabled == NO_FILE:
         return
     notes = {} if disabled == NO_SWITCHES else {"tp2": {"facts": {"parallel_config": {"disable_custom_all_reduce": disabled}}}}
-    with LogWriter(cap / f"log.rank{rank}.jsonl.gz") as lw:
+    with LogWriter(capture / f"log.rank{rank}.jsonl.gz") as lw:
         lw.write(RunHeader(schema="test", created_utc="", profile_id="", profile={"engine_flags": {}}, model={}, workload={}, notes=notes))
 
 
 def _settings(tmp_path: Path, world: int = WORLD, **odd: Any) -> tuple[dict | None, dict]:
     """`_routed_settings` over a capture whose ranks ran with the custom all-reduce on, but each ``rank<r>`` of ``odd``: (the
     switches, what the check's provenance record was given)."""
-    cap = tmp_path / "capture"
-    cap.mkdir()
+    capture = tmp_path / "capture"
+    capture.mkdir()
     for r in range(world):
-        _log(cap, r, odd.get(f"rank{r}", False))
+        _log(capture, r, odd.get(f"rank{r}", False))
     prov: dict[str, Any] = {"all_reduce_definitions": {"left": 1}}
-    return M._routed_settings(cap, list(range(world)), world, prov), prov
+    return M._routed_settings(capture, list(range(world)), world, prov), prov
 
 
 # ------------------------------------------------------------------------------------------------ the switches of a Match

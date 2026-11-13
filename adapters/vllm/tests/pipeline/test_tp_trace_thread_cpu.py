@@ -3,6 +3,7 @@ files: summed by the thread's Python name, a thread Python did not start under i
 the listing and the read left out.  No thread is started and no process file is read."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from types import SimpleNamespace
 
 import pytest
@@ -18,7 +19,7 @@ def _stat(tid: int, comm: str, user: int, system: int) -> str:
     return f"{tid} ({comm}) S 1 1 1 0 -1 4194304 10 0 0 0 {user} {system} 0 0 20 0 9 0 12345 1000 100\n"
 
 
-def _thread_cpu(monkeypatch, stats: dict[int, str | BaseException], python: dict[int, str], rank: object = 3) -> dict:
+def _thread_cpu(monkeypatch, stats: Mapping[int, str | BaseException], python: dict[int, str], rank: object = 3) -> dict:
     """`thread_cpu` on a rank whose process lists the threads of ``stats`` (a thread's stat text, or what reading it raises) and
     whose Python threads are ``python`` (native id: name)."""
     def read(path: str) -> str:
@@ -28,8 +29,16 @@ def _thread_cpu(monkeypatch, stats: dict[int, str | BaseException], python: dict
         return got
 
     asked: list[str] = []
-    monkeypatch.setattr(TRACE, "os", SimpleNamespace(listdir=lambda d: asked.append(d) or [str(t) for t in stats],
-                                                     sysconf=lambda name: asked.append(name) or TICK))
+
+    def listdir(directory: str) -> list[str]:
+        asked.append(directory)
+        return [str(t) for t in stats]
+
+    def sysconf(name: str) -> int:
+        asked.append(name)
+        return TICK
+
+    monkeypatch.setattr(TRACE, "os", SimpleNamespace(listdir=listdir, sysconf=sysconf))
     monkeypatch.setattr(TRACE, "Path", lambda p: SimpleNamespace(read_text=lambda: read(p)))
     monkeypatch.setattr(TRACE, "threading", SimpleNamespace(enumerate=lambda: [SimpleNamespace(native_id=t, name=n) for t, n in python.items()]))
     out = TRACE.thread_cpu(SimpleNamespace(_tp2_commit={"rank": rank}))
