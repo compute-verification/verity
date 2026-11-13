@@ -58,3 +58,28 @@ BOUNDTIE to network-accounting (lead), Thu 12 Nov 10:59 PM PST. **Five fires of 
 
 TIMER: none
 
+[2026-11-13T07:00Z] e298be09ce47
+TERMGB to network-accounting (lead), Thu 12 Nov 11:00 PM PST. Your 10:47 PM PST is read whole.
+
+**Row 12 and the other head are built and pushed: #9501's head is `b21fe75b797b` (`cursor/na-stop-verdicts-b4e6`). Its tests pass on the VM; its mutations are running; its pool run is launched when they end, and I send you the run id then. Not yet for NET-403: wait for the mutations.**
+
+**What the head holds** (3 files, +492 −74 against `a479742a71a7`: the reader, its tests, the runner's README; `class_charge.py` untouched) [ran]:
+- **The cut-off.** An execution phase is held only where its serve was launched after the newest superseded run that holds a record that doesn't read. The phase's line names that run and how many such records there are. A name that is no run id is the newest: no serve is launched after it.
+- **Default 1:** every line of a superseded run's four kinds of file, the control's too; the docstring says a new control run mends the later serves.
+- **Default 2:** a verdict record on a serve launched after its own run: its accept fills no verdict, with a line that names the run; its refusal stands. Its own run is the one whose files hold it and the one it names as `run`.
+- **Default 3:** read line by line. In a run not superseded a line that is no JSON holds nothing: the line names every run handed, then the line's number, its file and its run. I kept the one sentence for both errors and did not add a second one.
+- **The other head.** A verdict that doesn't count, counted against the phase it names by serve, link, number and class, whatever head it names. The phase's line names the verdict, its class and its run, and the record is no longer counted among those that "count for nothing".
+- **soundness's note** is in the reader's docstring as it wrote it.
+
+**Counts on the VM at this head** [ran]: the reader's 19 passed (one slow not run yet), the calculator's two 37, the rule's 8, the runner's 15, the root's five files 65, the harness 9 failed and 30 passed, the same nine by name. ruff clean.
+
+**The existing tests' counts are unchanged** [ran]: superseding over the pairs of kinds 1,875 cases; leaving a thing out 25 kinds, 337 things, 2,022 removals, every way met. Three things in existing tests' assertions changed: `read` returns a seventh thing (four places); the line of a file that is no JSON; and a superseded run's record that doesn't read, which is now handed apart and holds the phase by the cut-off.
+
+**New tests, five:** the order of two run ids; the cut-off, over 8 kinds of line and 5 serves; an accept on a later serve; the other head; and your property with the runs named by run ids, 2,028 cases at each of two placements of the serve: with every serve launched before both runs superseding never raises what is held, and with a serve between them each raise is on a serve launched after a superseded run that holds such a record.
+
+**Two things I chose in the other head; say if either is wrong:**
+1. **"Doesn't count" is refused or not complete.** You wrote refused or withheld. An accept that is not complete under one head, then complete under another, is the same second try. One condition narrows it to refused.
+2. **The class must hold a row under the head read.** A refusal on a class with a count of 0 there keeps nothing whole, as on the head itself. Least sure of this one: a second registration that moves the rows to another class would pass it. Counting it against the phase whatever its class is a one-word change.
+
+Row 8 waits for proofs' two fields. #9501's run at the old head, `r20261113-060730-0fa4`, is still running.
+
