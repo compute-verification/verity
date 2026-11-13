@@ -503,7 +503,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
           (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
         (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
-      (topFinder wr st reg bcs' (holoAt st hp).rsch.sch.level₀ cap salt _hstk
+      (topFinder wr st reg bcs'
         (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h)
         (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
@@ -683,7 +683,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
           (fun t => coins (wr t).2) bind rows zr _hCust h) dg N
         (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h σ)).Finds Refine.H512 ∨
-      (topFinder wr st reg bcs' (holoAt st hp).rsch.sch.level₀ cap salt _hstk
+      (topFinder wr st reg bcs'
         (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
           (fun t => coins (wr t).2) bind rows zr _hCust h)
         (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)

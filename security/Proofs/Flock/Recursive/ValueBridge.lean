@@ -77,7 +77,7 @@ theorem zk_sessions_recursive_fork_onV
     (hcmt : VCommits zs Sk cmt) (hdec : VDecodesR wmsg same Sk msg) (hfull : VFullR I.r Sk)
     {εin : ℝ≥0∞} (hin : ∀ ref, InnerAtLeavesVZ zs dg N k Rw σ x wmsg (rd ref) εin) :
     (valueFinder zs vsrc dg N σ).Finds H512 ∨ (leafFinder zs dg N σ).Finds H512 ∨
-      (saltFinder lv cap salt zs σ).Finds H512 ∨ (topFinder wr st reg bcs' lv cap salt hstk zs σ).Finds H512 ∨
+      (saltFinder lv cap salt zs σ).Finds H512 ∨ (topFinder wr st reg bcs' zs σ).Finds H512 ∨
       (regFinder zs dg N σ).Finds H512 ∨
       RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
@@ -95,7 +95,7 @@ theorem zk_sessions_recursive_fork_onV
   by_cases hsa : (saltFinder lv cap salt zs σ).Finds H512
   · exact Or.inl hsa
   refine Or.inr ?_
-  by_cases hto : (topFinder wr st reg bcs' lv cap salt hstk zs σ).Finds H512
+  by_cases hto : (topFinder wr st reg bcs' zs σ).Finds H512
   · exact Or.inl hto
   refine Or.inr ?_
   by_cases h0 : (regFinder zs dg N σ).Finds H512
@@ -171,7 +171,7 @@ theorem zk_sessions_recursive_fork_innerLV
       ∀ ref, InnerAtLeavesL σ (fun R ω t o => AcceptsV (zs R ω t) o) x (W := ((j : Fin S) → (Vs j).Bits) × I.Stmt)
         (fun R ω t _ o => (layers (zs R ω t o.1) dg N k Rw o.2, x R ω)) (fun w => wmsg w.1) ref εin) :
     (valueFinder zs vsrc dg N σ).Finds H512 ∨ (leafFinder zs dg N σ).Finds H512 ∨
-      (saltFinder lv cap salt zs σ).Finds H512 ∨ (topFinder wr st reg bcs' lv cap salt hstk zs σ).Finds H512 ∨
+      (saltFinder lv cap salt zs σ).Finds H512 ∨ (topFinder wr st reg bcs' zs σ).Finds H512 ∨
       (regFinder zs dg N σ).Finds H512 ∨
       RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨ InnerForkRec zs dg N k Rw σ x wmsg H pick ∨
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))

@@ -165,7 +165,7 @@ it registered. The registered `stacked` entry is the one computed from `bcs` (th
 salts, behind the ZK server. That is reasonable because an honest registrant registers the entry of the rows it
 committed and holds them. A prover that registers strings it can't open is outside the guarantee. The first two
 conjuncts are the verifier's checks only at a transcript's own top.
-At the held `bcs` they are part of the premise: `TopColl.collision` reads them to turn a held top other than `bcs` into
+At the held `bcs` they are part of the premise: `TopColl.cand` reads them to turn a held top other than `bcs` into
 a SHA-512 collision, so the premise doesn't narrow to `TopOf`. No hash premise. -/
 def StackedTopAt (lv : Level) (st : Flock.Stmt) (reg : Lean.Json) (cap : Cap Refine.Dig) (salt : ℕ → ByteArray)
     (bcs : Array ByteArray) : Prop :=

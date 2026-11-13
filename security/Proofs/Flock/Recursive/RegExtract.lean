@@ -140,7 +140,7 @@ theorem zk_sessions_recursive_fork_regV {nT r : ℕ} (T : Fin nT → Type) (CT :
       (Flock.Guarantees.regStmt T CT st hp zs dg N k Rw wmsg σ cap) wmsg Sk cmt msg) :
     (valueFinder zs vsrc dg N σ).Finds Refine.H512 ∨ (leafFinder zs dg N σ).Finds Refine.H512 ∨
       (saltFinder (holoAt st hp).rsch.sch.level₀ cap salt zs σ).Finds Refine.H512 ∨
-      (topFinder wr st reg bcs' (holoAt st hp).rsch.sch.level₀ cap salt hstk zs σ).Finds Refine.H512 ∨
+      (topFinder wr st reg bcs' zs σ).Finds Refine.H512 ∨
       (regFinder zs dg N σ).Finds Refine.H512 ∨
       RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       InnerForkRec zs dg N k Rw σ (Flock.Guarantees.regStmt T CT st hp zs dg N k Rw wmsg σ cap) wmsg Refine.H512
@@ -184,7 +184,7 @@ theorem zk_sessions_recursive_fork_regVτ {nT r : ℕ} (T : Fin nT → Type) (CT
       (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap) wmsg Sk cmt msg) :
     (valueFinder zs vsrc dg N σ).Finds Refine.H512 ∨ (leafFinder zs dg N σ).Finds Refine.H512 ∨
       (saltFinder lv cap salt zs σ).Finds Refine.H512 ∨
-      (topFinder wr st reg bcs' lv cap salt hstk zs σ).Finds Refine.H512 ∨
+      (topFinder wr st reg bcs' zs σ).Finds Refine.H512 ∨
       (regFinder zs dg N σ).Finds Refine.H512 ∨
       RoundFork zs dg N k Rw σ cmt ∨ SessionFork zs dg N k Rw M σ ∨
       InnerForkRec zs dg N k Rw σ (Flock.Guarantees.regStmtτ T CT st hp τv zs dg N k Rw wmsg σ cap) wmsg Refine.H512
