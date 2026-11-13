@@ -332,7 +332,7 @@ theorem messageInput_ok {k s : ByteArray} {l : String} {d : Direction} {w : Int}
   · simp [throw, throwThe, MonadExceptOf.throw] at h
   rename_i hk
   simp only [Except.ok.injEq] at h
-  exact ⟨by simpa [digestBytes] using hg, by simpa [sessionBytes] using hs, by simpa using hk, wb, hwb, h.symm⟩
+  exact ⟨by simpa [digestBytes] using hg, by simpa [attachmentBytes] using hs, by simpa using hk, wb, hwb, h.symm⟩
 
 theorem value_inj {d d' : Direction} (h : d.value.toUTF8 = d'.value.toUTF8) : d = d' := by
   cases d <;> cases d' <;> first | rfl | (exfalso; revert h; decide)

@@ -119,7 +119,7 @@ on the period's incorrect proof blocks, with the claim at `K`. Every field is a 
   cells each gives a connection): they come with that tie.
 
 The two inputs that `PooledLeakAccepted` takes at each execution phase are not fields: the miss probability given the
-earlier phases' coins (`NetTiming.PeriodEscapes` at `acc` and `W`) and the leak relation at the witness's incorrect
+earlier phases' coins (`NetTiming.MonitoringPeriodEscapes` at `acc` and `W`) and the leak relation at the witness's incorrect
 set (`PhaseLeaks` at `op`, `acc`, `W` and `record`), each at every value of the other audits' coins, are the premises of
 `Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted` (`hesc`, `hleak`). -/
 structure RealizesCommOfPooledLeakAccepted {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}

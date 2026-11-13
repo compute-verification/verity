@@ -355,7 +355,7 @@ theorem ingress_noVerdict {p : Params} {c : Commitment} {ig : ByteArray} {l : St
 
 /-! ## The verdicts -/
 
-theorem verdicts_all {p : Params} {c : Commitment} {e : Evidence} {eg ig : ByteArray} (P : LinkWindow → Prop) :
+theorem verdicts_all {p : Params} {c : Commitment} {e : Evidence} {eg ig : ByteArray} (P : TransferBlocks → Prop) :
     (∀ v ∈ (verdicts p c e eg ig).toList, P v) ↔
       (∀ l link, (l, link) ∈ p.egress.toList.zip e.links.toList → ∀ w < p.windows,
         P ⟨.egress, l, w, egressVerdict p c e eg l link w⟩) ∧
@@ -369,7 +369,7 @@ theorem verdicts_all {p : Params} {c : Commitment} {e : Evidence} {eg ig : ByteA
     · exact he l link hm w hw
     · exact hi l hl w hw
 
-theorem verdicts_exists {p : Params} {c : Commitment} {e : Evidence} {eg ig : ByteArray} (P : LinkWindow → Prop) :
+theorem verdicts_exists {p : Params} {c : Commitment} {e : Evidence} {eg ig : ByteArray} (P : TransferBlocks → Prop) :
     (∃ v ∈ (verdicts p c e eg ig).toList, P v) ↔
       (∃ l link, (l, link) ∈ p.egress.toList.zip e.links.toList ∧ ∃ w < p.windows,
         P ⟨.egress, l, w, egressVerdict p c e eg l link w⟩) ∨
