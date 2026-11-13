@@ -4668,7 +4668,7 @@
     {"file": "verity/protocols/poub/verifier/tests/test_ledger.py", "count": 16},
     {"file": "verity/protocols/poub/verifier/tests/test_line.py", "count": 2},
     {"file": "verity/protocols/poub/verifier/tests/test_monitoring.py", "count": 10},
-    {"file": "verity/protocols/poub/verifier/tests/test_opening.py", "count": 18},
+    {"file": "verity/protocols/poub/verifier/tests/test_opening.py", "count": 7},
     {"file": "verity/protocols/poub/verifier/tests/test_p2.py", "count": 3},
     {"file": "verity/protocols/poub/verifier/tests/test_p2_party.py", "count": 2},
     {"file": "verity/protocols/poub/verifier/tests/test_pooled.py", "count": 5},
