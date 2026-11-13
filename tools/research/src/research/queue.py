@@ -4354,6 +4354,17 @@ def lacks_why(lacked: list[tuple[str, str, list[str] | None]]) -> str:
             "new head ready")
 
 
+def merge_main(pr: str, branch: str | None) -> str:
+    """How the owner of ``pr`` (as `#N`, or `it`) brings `main` into it: a plain merge where no move lies between, and else
+    the carry across the move first, since a merge across a move is clean and leaves the files the line adds at their old
+    paths (`tools/move/restack.py`'s `based-after`)."""
+    return (f"merge `main` into {pr} where no move `main` landed lies between; where one does (a commit with a `Move:` or "
+            f"`Layout-move:` line that {pr} lacks), a plain merge is clean and wrong, since the move's script never runs on "
+            f"its own lines and the files it adds stay at their old paths: carry it against the move's own commit first, "
+            f"`python3 tools/move/restack.py {branch or 'BRANCH'} --main MOVE`, then merge today's `main` into the carried result, a merge inside the new layout, and check that the "
+            "merge's tree holds its own files at the new paths")
+
+
 def held_below(entries: dict[int, Entry], n: int, held: Callable[[int], str | None],
                seen: frozenset[int] = frozenset()) -> tuple[int, str] | None:
     """The held PR whose head ``n`` holds, directly or through the PRs between (`Entry.after`), with its hold: a hold label,
