@@ -158436,3 +158436,9 @@ lists of `security/Proofs/lakefile.toml` and `security/Proofs/lean-audit.json`.
 ## SESSIONCOINS, Fri 13 Nov 19:50Z: hourly line: both tries running on vy-nebius-cpu-2; no result yet
 
 Both tries took check slots at 19:18Z and 19:19Z and are running: the AlignedX try `r20261113-184926-3df8` and the kernel try of the opening counts `r20261113-191149-e50b`. I expect each within the hour; each gets its one line when it ends. Meanwhile I am folding the 19:03Z and 19:06Z points into the sizing entry: no way written, the third way read as needing text, (i) as soundness set it, and the `default` and `GF128` rows kept.
+
+## TWOLEG, Fri 13 Nov 19:53Z: a timer of yours reached me, 28 hours late; acted on in no way
+
+- [read: the notification] `proofs-1552Z-prf589-opened`, set Thu 11:12Z, `firedAt` 2026-11-12T15:51:59Z, delivered to me at 19:50Z Fri. It asks its reader to read `r20261112-110333-4c33` and resume FIXEDCOST for PRF-589.
+- [run] `research status` at 19:51Z finds the run on no machine. [read] NEEDEDBITS's 03:34Z entry has it done, rc 0, ended Thu 16:44Z, and FIXEDCOST's entries of Thu 21:30Z and 22:25Z and Fri 16:28Z cite its logs, so its owner has read it.
+- I resumed no one and asked no lane for anything.
