@@ -4,13 +4,13 @@ public import Proofs.Flock.SpotFlock.RunsAs.Steps
 public import Proofs.Properties.Challenger.Drawn
 
 /-!
-# An accepted two-stage run's coins are the device's, or a break
+# An accepted two-stage run's challenges are the device's, or a break
 
 Each stage of an accepted two-stage run got no code from `Run.coinsCode` on the bytes it read (`accepted_steps`); where
-it read any, the verifier holds a key, a window and a family, the record has a digest and the coin check finds no
-reason under them (`coinsCode_read`). The check reads the challenger's draw under that key, window and family
-(`Properties.Challenger.Coins.coinsReason_draw`), and the draw's coins are the device's or the model's finder outputs a
-break (`Properties.Challenger.Drawn.drawnByDevice`), so the stage's bytes are (`fromDevice_of_reason`,
+it read any, the verifier holds a key, a window and a family, the record has a digest and the challenger's check finds
+no reason under them (`coinsCode_read`). The check reads the challenger's draw under that key, window and family
+(`Properties.Challenger.Coins.coinsReason_draw`), and the draw's challenges are the device's or the model's finder
+outputs a break (`Properties.Challenger.Drawn.drawnByDevice`), so the stage's bytes are (`fromDevice_of_reason`,
 `runCoinsFromDevice`). No premise names the key: it is the run's own (`Input.key`).
 -/
 
@@ -20,8 +20,9 @@ namespace SpotFlock.RunsAs
 
 open Lean (Json)
 
-/-- **A coin check with no code on bytes read**: where `coinsCode` gives no code on a non-empty read, the verifier holds
-a key, a window and a family, the record has a digest, and the coin check finds no reason under them after it. -/
+/-- **A check of challenges with no code on bytes read**: where `coinsCode` gives no code on a non-empty read, the
+verifier holds a key, a window and a family, the record has a digest, and the challenger's check finds no reason
+under them after it. -/
 theorem coinsCode_read {key : Option Spot.Challenger.ChallengerKey} {main coins record : Json}
     {window family : Option String} {read : ByteArray}
     (h : Spot.Run.coinsCode key main coins record window family read = none) (hr : 0 < read.size) :
@@ -47,7 +48,7 @@ theorem coinsCode_read {key : Option Spot.Challenger.ChallengerKey} {main coins 
         | none => simp at h
         | some label => exact ⟨k, w, label, after, rfl, rfl, rfl, rfl, by simpa [hd] using h⟩
 
-/-- **A coin check with no code on no byte** carries no evidence. -/
+/-- **A check of challenges with no code on no byte** carries no evidence. -/
 theorem coinsCode_empty {key : Option Spot.Challenger.ChallengerKey} {main coins record : Json}
     {window family : Option String} {read : ByteArray}
     (h : Spot.Run.coinsCode key main coins record window family read = none) (hr : read.size = 0) :
@@ -60,7 +61,7 @@ theorem coinsCode_empty {key : Option Spot.Challenger.ChallengerKey} {main coins
   rw [he] at h
   cases coins <;> first | rfl | simp at h
 
-/-- **Bytes the coin check passes are the device's, or a break**: of the family and on the window the check is handed,
+/-- **Bytes the challenger's check passes are the device's, or a break**: of the family and on the window it is handed,
 under its key. -/
 theorem fromDevice_of_reason (dev : Properties.Challenger.History) {key : Spot.Challenger.ChallengerKey}
     {main coins : Json} {w label : String} {after read : ByteArray}

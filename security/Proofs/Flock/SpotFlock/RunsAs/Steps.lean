@@ -17,9 +17,9 @@ answer names `accept` only where the boundary audit and round 2's attached recor
 reads accepted only where its check has no code (`codes_of_attach`), and that check at the form's switch has no code
 only where the check with the form allowed has none (`check_true_of_codes`).
 
-Each stage's coin check gave no code on the bytes the stage read (`Run.coinsCode … = none`, in `accepted_steps`), and
-each stage's registration passed the registration check with no code (`accepted_registered`). The walks are public:
-`run_path` over `Run.run` at either switch, `interiorSteps_ok` over the interior's steps.
+Each stage's check of its challenges gave no code on the bytes it read (`Run.coinsCode … = none`, in
+`accepted_steps`), and each stage's registration passed the registration check with no code (`accepted_registered`).
+The walks are public: `run_path` over `Run.run` at either switch, `interiorSteps_ok` over the interior's steps.
 -/
 
 @[expose] public section
@@ -97,7 +97,7 @@ private theorem none_of_forall {α : Type} {o : Option α} (h : ∀ c, o = some 
 set_option maxHeartbeats 8000000 in
 /-- **A run's answer**, at either switch: refused at a step, or past every step: the boundary registration passed the
 registration check under the law the rule gives its population and the work table the rule expands, the first stage
-ran with no closure map on the challenger's bytes and its coin check gave no code on the bytes it read, the second
+ran with no closure map on the challenger's bytes and the check of them gave no code on the bytes it read, the second
 stage ran over the first stage's proved units, then the second stage's audit, and the answer names `accept` where
 both audits read accepted. -/
 theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
@@ -160,8 +160,8 @@ theorem secondStage_two {i : Spot.Run.Input} {sample : Array ℕ} {grain : Json}
 set_option maxHeartbeats 4000000 in
 /-- **The interior's steps, accepted**: the interior is the run's, its cells and counts are the replay block's and the
 rule's, its record states the population the replay sample gives those cells and passed the registration check under
-the subset law at that population, its second stage is `selectSecond` on its bytes over the replay sample, and its
-coin check gave no code on the bytes it read. -/
+the subset law at that population, its second stage is `selectSecond` on its bytes over the replay sample, and the
+check of its challenges gave no code on the bytes it read. -/
 theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot.Select.Counts}
     {sample : Array ℕ} {x : Spot.Run.Interior × Json × Json × Json × ℕ}
     (h : Spot.Run.interiorSteps i it k sample = .ok (.ok x)) :
@@ -228,10 +228,10 @@ private theorem audit_wf {i : Spot.Run.Input} {record receipt draw law : Json} {
   exact record_wf h
 
 /-- **Part 5: the steps of an accepted two-stage run.** Its first stage ran with no closure map on the challenger's
-bytes under `Select.resolve`'s rule and the work table `Rule.tableOver` expands, and the run's coin check gave no code
-on the bytes it read (`Run.coinsCode`, under the run's key, its copy of main's history and its family); its second
+bytes under `Select.resolve`'s rule and the work table `Rule.tableOver` expands, and the run's check of them gave no
+code on the bytes it read (`Run.coinsCode`, under the run's key, its copy of main's history and its family); its second
 stage ran on the interior's bytes over the units the first stage proves, at the replay block's cells and the rule's
-counts, and the coin check gave no code on the bytes it read, under the same key and the interior's family; and
+counts, and the same check gave no code on the bytes it read, under the same key and the interior's family; and
 round 2's statement check with the form allowed reports no code at the `Own` the run builds (`runOwn`). -/
 theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
     i.closure = none ∧
@@ -243,8 +243,8 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
         .ok (draw, rest, read) ∧
       Spot.Run.coinsCode i.key i.main i.coins i.record i.params.verifier.windowRoot i.family
         (i.source.extract 0 read) = none ∧
-      ∃ (grain : Json) (replay : String) (k : Spot.Select.Counts) (ns : Array ℕ) (ids : Array String) (ks : Array ℕ) (draw₂ : Json) (read₂ : ℕ)
-        (strata : Array (String × Array (ℕ × ℕ))),
+      ∃ (grain : Json) (replay : String) (k : Spot.Select.Counts) (ns : Array ℕ) (ids : Array String) (ks : Array ℕ)
+        (draw₂ : Json) (read₂ : ℕ) (strata : Array (String × Array (ℕ × ℕ))),
         i.rule = .twoStage grain replay k ∧
         Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
         Spot.Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧

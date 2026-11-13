@@ -140,7 +140,7 @@ def PlayCoins (h : Held) (i : Spot.Run.Input) (it : Spot.Run.Interior) (c₀ : F
 /-- **`b` is the start of `ξ`.** -/
 def Starts (b ξ : ByteArray) : Prop := b.size ≤ ξ.size ∧ ξ.extract 0 b.size = b
 
-/-- **A stage's bytes are the device's coins, or a break**: `read` starts the coins of the stage's family `label` that
+/-- **A stage's bytes are the device's challenges, or a break**: `read` starts the challenges of the family `label` that
 a run of the device `dev` under the verifier's key `key`, one its own ledger opens on the window `w`, released after
 `after`; or the model's finder outputs a break from the evidence `coins` (`Properties.Challenger.Break`: a forgery
 under the key, or a SHA-512 collision among what the reader and the device hash). -/
@@ -150,13 +150,13 @@ def FromDevice (dev : Properties.Challenger.History) (key : Spot.Challenger.Chal
       Starts read (s.released label after)) ∨
     Properties.Challenger.Break dev key label coins
 
-/-- **The run's coins come from the device, in the order the two-stage guarantee assumes**: at an accepted two-stage
-run, the bytes the first stage read are the device's coins of the run's family (`Input.family`) released after the
-boundary record's digest, and those the second stage read the device's coins of the interior's family
+/-- **The run's challenges come from the device, in the order the two-stage guarantee assumes**: at an accepted
+two-stage run, the bytes the first stage read are the device's challenges of the run's family (`Input.family`) released
+after the boundary record's digest, and those the second stage read the device's challenges of the interior's family
 (`Interior.family`) released after the interior record's digest, each on the window its verifier holds and under the
-run's one key (`Input.key`); or a break. The key, the window and the family are the verifier's own: the run's coin
-check (`Run.coinsCode`) refuses a stage that read a byte where it holds none of them, and no evidence names them. A
-stage that read no byte carries no evidence. The sessions' coins are not read by `Run.run`. -/
+run's one key (`Input.key`); or a break. The key, the window and the family are the verifier's own: the run's check
+of its challenges (`Run.coinsCode`) refuses a stage that read a byte where it holds none of them, and no evidence names
+them. A stage that read no byte carries no evidence. The sessions' challenges are not read by `Run.run`. -/
 def RunCoinsFromDevice : Prop :=
   ∀ (i : Spot.Run.Input) (it : Spot.Run.Interior) (j : Json) (dev : Properties.Challenger.History),
     AcceptedTwo i it j →
