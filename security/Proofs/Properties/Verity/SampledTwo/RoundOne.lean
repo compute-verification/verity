@@ -202,6 +202,7 @@ def taggedMsg (j : Json) : Option Msg :=
 
 /-- Either format's tag is 22 bytes. -/
 theorem tag_size (j : Json) : (Flock.WindowRecord.tagOf j).toUTF8.size = 22 := by
+  rw [String.toUTF8_eq_toByteArray, String.size_toByteArray]
   unfold Flock.WindowRecord.tagOf
   split
   · decide
@@ -217,7 +218,8 @@ theorem recordMsg_tagged (j : Json) : recordMsg j = (taggedMsg j).map fun t => t
       some (((Flock.WindowRecord.tagOf j).toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8).data.toList.drop 23)
     have h1 : ((Flock.WindowRecord.tagOf j).toUTF8 ++ ByteArray.mk #[0]).data.toList.length = 23 := by
       have e : ((Flock.WindowRecord.tagOf j).toUTF8 ++ ByteArray.mk #[0]).size = 23 := by
-        rw [ByteArray.size_append, tag_size] <;> rfl
+        rw [ByteArray.size_append, tag_size]
+        rfl
       rw [Array.length_toList]
       exact e
     have h2 : ((Flock.WindowRecord.tagOf j).toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8).data.toList =
@@ -244,9 +246,8 @@ theorem inputOf_interior_record (p : VStar.Recursive.SampledTwo.Params) (c : Spo
     {it : Spot.Run.Interior} (h : (VStar.Recursive.SampledTwo.inputOf p c ξ ξ₂ e received₂ vs).interior = some it) :
     it.record = e.record := by
   unfold VStar.Recursive.SampledTwo.inputOf at h
-  first
-    | (cases h; rfl)
-    | (split at h; cases h; rfl)
+  cases h
+  rfl
 
 /-- **An accepted case's interior registration, as the log names it**: the run of record's input holds an interior on
 at least 64 bytes, its record has a tagged text, and that text's SHA-512 is the digest the second stage's coins are
@@ -273,14 +274,13 @@ theorem interior_tagged {k : Case} (h : AcceptsOn k) :
     rfl
   · rw [hrec]
     unfold taggedMsg
-    rw [hs₂] <;> rfl
+    rw [hs₂]
+    rfl
   · intro label after hsd
     obtain ⟨key, c₂', -, hint, rfl⟩ := secondDraw_parts (c := cm) ⟨h1, h2, h3⟩ hsd
     obtain rfl : c₂ = c₂' := Except.ok.inj ((interiorOf_of hs hc₂).symm.trans hint)
     rw [← hdo]
-    first
-      | rfl
-      | exact (Verity.Sampled.sha512Msg_bytes _).symm
+    rfl
 
 /-- **The interior registration's tagged text on a play**: the tagged text of the record the run of record's interior
 holds; none where the play has no such input. -/
@@ -489,11 +489,7 @@ theorem showsAt_form_one (A : Live₂) (C : CaseOf) (S : SessionReading)
   rw [hk, Option.bind_some] at hsd
   have hafter := hdig ℓ₂ after hsd
   have htag : interiorTagged C o = some t := by
-    first
-      | simp only [interiorTagged, inputOn, hk, Option.bind_some, hi, hit, ht]
-      | (unfold interiorTagged inputOn
-         rw [hk, Option.bind_some, hi, Option.bind_some, hit, Option.bind_some]
-         exact ht)
+    simp only [interiorTagged, inputOn, hk, Option.bind_some, hi, hit, ht]
   refine ⟨⟨t.drop 23,
     (form_msg_one_tagged A C S dev o).trans (congrArg (Option.map fun t : Msg => t.drop 23) htag)⟩,
     [after.data.toList], [t], ?_, ?_, ?_⟩
