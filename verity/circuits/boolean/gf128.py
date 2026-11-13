@@ -7,7 +7,7 @@ reference. `mul_forms` is Karatsuba down to single bits (`karatsuba`): ``kara(a,
 n = 0, else, split at h = 2^(n-1) into (lo, hi), p0 = kara(lo_a, lo_b), then p2 = kara(hi_a, hi_b), then p1 = kara(lo_a +
 hi_a, lo_b + hi_b), and the product p0 + X^h (p1 + p0 + p2) + X^2h p2; then the reduction (`reduce_forms`): from
 coefficient 254 down to 128, coefficient i is added into i - 128, i - 127, i - 126 and i - 121 and dropped. XORs only, so
-3^7 = 2,187 ANDs, one per base product, in that order. `verity.definitions.ops.boolean.gf2k` registers it as
+3^7 = 2,187 ANDs, one per base product, in that order. `verity.circuits.ops.boolean.gf2k` registers it as
 ``Gf128Mul_v1``.
 """
 from __future__ import annotations
