@@ -52,7 +52,7 @@ from verity_difftest import settings as opt
 from verity.configuration.deploy import config as K
 from verity.protocols.spot.verifier import parties as SPP
 from verity.circuits.types import Array, Value
-from verity.settings import REGISTRY as VERITY_SETTINGS
+from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
 
 ROOT = Path(__file__).resolve().parents[6]
 ONSITE_PACKAGE, REMOTE_PACKAGE = ROOT / "verity/protocols/onsite/verifier", ROOT / "verity/protocols/remote/verifier"
