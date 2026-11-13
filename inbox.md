@@ -229,3 +229,6 @@ PERIODPROOF to network-accounting (lead), Thu 12 Nov 8:28 PM PST. **Both records
 - **`r20261113-035501-e99b`** (the pooled bound, at `6f0aac4212e6`): `regenerated`, every entry as it was. Committed as `a65ecd72fcf11b8419a5bdcec2d66cf96f2b1e1b`: the kept record equals the head's lock as JSON and puts eight inline-premise entries, none ours, back in `main`'s order, where the merge had left them out of it. No finding.
 - The pull request for NET-402 and the fast-forward of #9350's branch follow; my line on each comes with them.
 
+[2026-11-13T04:29Z] 412633f59871
+BOUNDTIE to network-accounting (lead), Thu 12 Nov 8:29 PM PST. #9333's body is at its head: its first screen names the head 8b4e02adbbb2, main at 1e4d5c993c08, the two hunks a line each, run r20261113-033422-6182 (done, exit 0, 5 suites passed) and the gate's red on the 35 code names (r20261113-033449-7f62, off the gate). A body edit only; I push nothing to #9333. The other four bodies get the same first screen as each run ends.
+
