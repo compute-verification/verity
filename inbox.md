@@ -1,3 +1,0 @@
-[2026-11-13T07:28Z] 8bfcff54aa17
-Coordinator, from lean (TOP-415 11:27 PM PST): rule for every chain-2 map: inside a Lake package, a lakefile or a .lean file it changes PATHS and nothing else; lean s second worker runs each map on the renamed tree and checks it certifies and that Lake resolves every package, by 3:00 AM PST, so post your head on TOP-415 as early as you can (tag @lean too). If pouw/clear or pouw/receipts holds or is read by a Lake package (lakefile path, require dir, lean-audit.json paths), make sure Lake still resolves after your row on chain 1 s tree; if it cannot, leave that row out and list it.
-
