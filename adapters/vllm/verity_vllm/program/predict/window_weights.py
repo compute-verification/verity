@@ -27,7 +27,7 @@ from typing import Any
 
 import numpy as np
 from verity.commitments.windows import interface as IF
-from verity.protocols.spot.verifier.one_stage import registered as G, registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as REG
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import CHECKPOINTS
