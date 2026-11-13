@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
-import sys
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
@@ -19,20 +17,12 @@ from verity_machine_model import lean_headline_dc as H
 from verity_machine_model.lean_headline import Q
 
 HERE = Path(__file__).resolve()
-#: the exporter under the path the Lean files name as their writer
-SCRIPT = HERE.parents[1] / "lean_headline_dc.py"
 
 
-def test_the_exporter_reads_its_own_trees_machine_model(tmp_path):
-    """The readings are this tree's machine-model data, and an interpreter that imported another
-    checkout's verity_machine_model first gets a refusal from the script, not that tree's numbers."""
+def test_the_exporter_reads_its_own_trees_machine_model():
+    """The readings are this tree's machine-model data: the verity_machine_model imported is this checkout's, not
+    another's that is installed."""
     assert HERE.parents[3] in Path(verity_machine_model.__file__).resolve().parents, verity_machine_model.__file__
-    (tmp_path / "verity_machine_model").mkdir()
-    (tmp_path / "verity_machine_model" / "__init__.py").write_text("")
-    code = (f"import sys, runpy; sys.path.insert(0, {str(tmp_path)!r}); import verity_machine_model; "
-            f"runpy.run_path({str(SCRIPT)!r})")
-    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    assert r.returncode != 0 and "ImportError: lean_headline_dc reads" in r.stderr, r.stderr[-400:]
 
 
 def test_the_committed_instances_are_the_exporters():

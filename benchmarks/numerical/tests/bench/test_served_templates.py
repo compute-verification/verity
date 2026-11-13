@@ -10,6 +10,7 @@ import json
 import numpy as np
 import pytest
 
+from verity.circuits.evaluation import evaluate_batch
 from verity_numerical.bench import census
 from verity_numerical.bench import generate as G
 from verity_flock import synthetic as SY
@@ -43,8 +44,6 @@ def test_every_bound_subcircuit_id_is_the_spines():
 
 
 def test_fa3_head_equals_its_definition():
-    from verity.circuits.evaluation import evaluate_batch
-
     sub = TM.subcircuit("attention-head", D=16, BN=16, T="17:40", semantics="sm90.fa3.bf16")
     assert sub.relation["definition"] == "Attention_v2" and sub.set_name == "attention-head-hopper-bf16-wgmma-fa3invsum_v1-d16-bn16"
     for d in _instances(sub, 4):
@@ -56,8 +55,6 @@ def test_fa3_head_equals_its_definition():
 @pytest.mark.parametrize("weighted", [False, True])
 def test_expert_coordinate_equals_its_definition(weighted):
     """The slab path (MoeExpertGemm(W)_v1{N=1}) equals MoeExpertCoordinate(W)_v1's gate reference on the same slab."""
-    from verity.circuits.evaluation import evaluate_batch
-
     sub = TM.subcircuit("moe-expert-coordinate-weighted" if weighted else "moe-expert-coordinate", E=3, K=32)
     instances = _instances(sub, 6)
     got = _eval(sub, instances)["y"]
@@ -73,8 +70,6 @@ def test_expert_coordinate_equals_its_definition(weighted):
 
 
 def test_embedding_equals_its_definition():
-    from verity.circuits.evaluation import evaluate_batch
-
     sub = TM.subcircuit("embedding-row", V=40, H=6)
     instances = _instances(sub, 8)
     out = _eval(sub, instances)["out"]
@@ -88,8 +83,6 @@ def test_embedding_equals_its_definition():
 
 def test_silu_mul_v2_equals_its_definition():
     """The served SiLU·mul's evaluation path (`SiluMul_v2`'s registered row kernel) equals the Definition's gate reference."""
-    from verity.circuits.evaluation import evaluate_batch
-
     sub = TM.subcircuit("silu-mul-v2", I=32)
     assert sub.relation["definition"] == "SiluMul_v2" and sub.set_name == "silumul-v2-i32"
     instances = _instances(sub, 8)
@@ -103,8 +96,6 @@ def test_silu_mul_v2_equals_its_definition():
 def test_vec8_rmsnorm_equals_its_definition(template, family):
     """The served RMSNorms' evaluation paths (vLLM's width-8 CUDA kernels) equal the Definitions' gate reference, at a launch
     whose threads hold two vectors each; BLOCK is in the subcircuit id."""
-    from verity.circuits.evaluation import evaluate_batch
-
     sub = TM.subcircuit(template, N=64, EPS=1e-5, BLOCK=4)
     assert sub.relation["definition"] == family and sub.id == f"{template}/n64-b4-eps1e-05/bf16"
     instances = _instances(sub, 8)
@@ -117,8 +108,6 @@ def test_vec8_rmsnorm_equals_its_definition(template, family):
 
 def test_rmsnorm_triton_v5_equals_its_definition():
     """The dead-free RMSNormTriton_v5's evaluation path (its registered row kernel) equals its Definition's gate reference."""
-    from verity.circuits.evaluation import evaluate_batch
-
     sub = TM.subcircuit("rmsnorm-triton-v5", N=128, EPS=1e-6)
     assert sub.relation["definition"] == "RMSNormTriton_v5" and sub.id == "rmsnorm-triton-v5/n128-eps1e-06/bf16"
     assert sub.set_name.startswith("rmsnormtriton-v5-n128-")
@@ -131,8 +120,6 @@ def test_rmsnorm_triton_v5_equals_its_definition():
 def test_v18_head_equals_its_definition_at_the_decode_launch():
     """AttentionHead_v18's evaluation path (Attention_v18{NH=1, KVH=1}'s row kernel) equals the head's gate reference, at the
     MASKED_FROM FA2's decode-only launch guards (its last block of keys, 0-based: ceil(T/BN) - 1)."""
-    from verity.circuits.evaluation import evaluate_batch
-
     sub = TM.subcircuit("attention-head-v18", D=16, BN=16, T="17:40")
     assert sub.relation["definition"] == "Attention_v18" and sub.set_name == "attention-head-v18-decode-d16-bn16"
     for d in _instances(sub, 4):
