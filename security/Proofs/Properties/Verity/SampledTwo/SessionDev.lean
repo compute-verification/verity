@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.SessionAgrees
+public import Proofs.Properties.Verity.SampledTwo.SessionHeld
 public import Proofs.Properties.Verity.SampledTwo.CoinStages
 
 /-!
@@ -18,7 +18,10 @@ stage's last round. At it:
   (`usedOf_located`, `devBits_located`);
 * `devElems_of`: the coin map's agreement (`CoinMap.ElemAgrees`) gives the sessions' (`DevElems`), where the releases
   on each session's round fit in one coin (`SessionsFit`): below 65536 elements the coin map's count of the releases
-  that fit (`CoinMap.fitOf`) is the count of all of them (`fitOf_eq_usedOf`).
+  that fit (`CoinMap.fitOf`) is the count of all of them (`fitOf_eq_usedOf`);
+* `sessionsFit_of`: on a play the form accepts, the session-round locator puts at most one release on each round
+  (`located_one_accepted`), so `SessionsFit` holds where every opening the device releases is of at most one coin's
+  elements (`OpensFit`).
 
 At the stages' rounds the run's locator puts what the stages' locator puts, so `CoinMap.devFirst_stage` and
 `CoinMap.devSecond_stage` read the same release there (`dev_congr`).
@@ -189,5 +192,59 @@ theorem devElems_of (A : Live₂) (x : Claims.Msg) (tab : ℕ → String) (L : C
   refine hAg i (hreads _ hr) c hc e ?_
   rw [fitOf_eq_usedOf L i.val [] o.log (by rw [hu, show CoinMap.usedOf L i.val [] [] = 0 from rfl, Nat.zero_add]; exact hfit o hA hG i.val hg), hu]
   exact he
+
+theorem frame_mem {l l' : List Release} (h : List.Forall₂ (fun r r' => r.frame = r'.frame) l l') :
+    ∀ r ∈ l, ∃ r' ∈ l', r.frame = r'.frame := by
+  induction h with
+  | nil => intro r hr; exact absurd hr List.not_mem_nil
+  | cons hab _ ih =>
+    intro r hr
+    rcases List.mem_cons.1 hr with rfl | hr
+    · exact ⟨_, by simp, hab⟩
+    · obtain ⟨r', hr', e⟩ := ih r hr
+      exact ⟨r', List.mem_cons_of_mem _ hr', e⟩
+
+/-- **Every opening the device releases is of at most one coin's elements**: on a play whose log is the device's, an
+opening of `n` coins has `n ≤ 65536`. -/
+def OpensFit (Good : Exchange → Prop) : Prop :=
+  ∀ o, Good o → ∀ r ∈ o.log, ∀ i s n, r.frame = .opening i s n → n ≤ 65536
+
+/-- **`SessionsFit` at the form's acceptance**: the session-round locator puts at most one release of the log the
+check read on each round, the play's log puts releases of the same frames there, and each is an opening of at most one
+coin's elements. -/
+theorem sessionsFit_of (A : Live₂) (C : CaseOf) (tab : ℕ → String) (Good : Exchange → Prop) (hsz : HeldSize)
+    (hlog : InteriorLogged C Good) (hfit : OpensFit Good) : SessionsFit A tab (FormAccepts C) Good := by
+  intro o hA hG n hg
+  obtain ⟨l, hl⟩ := interiorReads C hsz o hA
+  obtain ⟨q, l', hlog', hq, hR⟩ := hlog o hA hG l hl
+  have hF : List.Forall₂ (fun r r' => r.frame = r'.frame) l l' :=
+    (List.forall₂_map_left_iff.1 hR).imp fun _ _ h => (of_ofV2 h).1
+  have hS : Same [] q := by simpa using same_append (pre := []) hq
+  have e : ((located (locOf A tab) n [] o.log).map fun y => widthOf y.1).sum =
+      ((located (locOf A tab) n [] l).map fun y => widthOf y.1).sum := by
+    unfold locOf
+    rw [hlog', located_append, located_none q (fun y hy => (hq y hy).1) []]
+    simp only [List.nil_append]
+    exact located_widths hF hS
+  rw [e]
+  have h1 := located_one_accepted A C tab hsz o hA l hl n
+  cases hx : located (locOf A tab) n [] l with
+  | nil => simp
+  | cons x t =>
+    cases t with
+    | cons y t =>
+      rw [hx] at h1
+      simp at h1
+    | nil =>
+      obtain ⟨a, r, b, he, hloc, rfl⟩ := mem_located (show x ∈ located (locOf A tab) n [] l by rw [hx]; simp)
+      obtain ⟨r', hr', hrr'⟩ := frame_mem hF r (by rw [he]; simp)
+      have hr'o : r' ∈ o.log := by rw [hlog']; exact List.mem_append_right _ hr'
+      simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+      cases hfr : r.frame with
+      | opening i s c =>
+        rw [hfr] at hrr'
+        exact hfit o hG r' hr'o i s c hrr'.symm
+      | fresh _ => rw [hfr] at hloc; simp [locOf, sessLoc] at hloc
+      | hello _ => rw [hfr] at hloc; simp [locOf, sessLoc] at hloc
 
 end Verity.SampledTwo.SessionCoins
