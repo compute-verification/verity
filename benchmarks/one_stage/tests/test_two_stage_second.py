@@ -148,8 +148,8 @@ def test_an_interior_registered_with_no_leaf_layer_is_held_to_its_roots_alone(ru
                        [again.record], registered=tie["registered"], schemas=tie["schemas"])
 
     assert check(r.record, r.tie, None).ok
-    assert check(r.record, r.tie, "00" * 64).codes == ["R4"]
-    assert check(run["r"].record, run["r"].tie, None).codes == ["R4"]
+    assert list(check(r.record, r.tie, "00" * 64).codes) == ["R4-leaf-layer"]
+    assert list(check(run["r"].record, run["r"].tie, None).codes) == ["R4-leaf-layer"]
 
 
 def test_the_replay_side_refuses_a_capture_that_is_not_the_sampled_spans_or_a_return_round_1_did_not_commit(run):
