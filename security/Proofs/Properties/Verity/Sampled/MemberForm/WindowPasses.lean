@@ -16,7 +16,7 @@ The window's theorem takes three facts of the deployment's windows at accepted p
   (`readsFiles_of_sent`), so every member's files pass (`WindowOn.passes`); and the form's structure holds every
   member to one range (`laidHeld_one`), the parameters' members share no unit (`FormApart`), so the window is laid
   out in order (`WindowOn.laid`).
-* **`WindowAt`** (`windowAt_form`): so the verifier sets the deployment's window up at every accepted play, where
+* **`WindowAt`** (`executionPhaseAt_form`): so the verifier sets the deployment's window up at every accepted play, where
   the window is the parameters' members on the registered files (`WindowInstance.WindowRegistered`).
 * **`WindowReads`** (`windowReads_members`): the read at a play (`windowRead_members`) at each play of the period's
   game, whose parameters are the game's.
@@ -54,11 +54,11 @@ theorem windowPasses_members (I : WindowInstance d α) (k : Verity.Registration.
 /-- **The verifier sets the deployment's window up at every accepted play of the per-member form**
 (`WindowInstance.WindowAt`): the window is the parameters' members on the registered files
 (`WindowInstance.WindowRegistered`), laid out with each member's files passing at each accepted play
-(`windowPasses_members`, `WindowInstance.windowAt_members`). The check's accepts hold `FormAccepts` and `FormApart`
+(`windowPasses_members`, `WindowInstance.executionPhaseAt_members`). The check's accepts hold `FormAccepts` and `FormApart`
 (`formAccepts`, `formApart`). -/
-theorem windowAt_form (I : WindowInstance d α) (k : Verity.Registration.Composite) (hW : I.WindowRegistered)
+theorem executionPhaseAt_form (I : WindowInstance d α) (k : Verity.Registration.Composite) (hW : I.WindowRegistered)
     (hF : FormAccepts) (hA : FormApart) (hR : RegisteredHolds I.base) : I.WindowAt k :=
-  I.windowAt_members k hW (windowPasses_members I k hF hA hR)
+  I.executionPhaseAt_members k hW (windowPasses_members I k hF hA hR)
 
 /-- **What the verifier's acceptance gives of each play of the per-member form, at the deployment's windows**
 (`WindowInstance.WindowReads`), at the evidence sent for each session and the proof files decoded from it at the
