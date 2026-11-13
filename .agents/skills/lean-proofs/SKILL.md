@@ -54,6 +54,8 @@ the lock's sections, each naming the docstring with the detail. This is the work
   (exit 3, no pass), and its regenerated record goes to `allowed-record/`, never `record/`.
 - **A full record**: `check.py --build --update PKG` through `research run` (the README's line), unwrapped, leaves it
   at `lean-audit/audit-TAG/lean-audit.json`.
+- **A Lean pool at 0 is closed on that machine**: a request for it is refused as it arrives, saying why, never left
+  to wait. Run it where `lean_slot.py --status` lists a slot of that pool.
 - **Ask Lean in a scratch file** outside the repository, from the package directory (`lake env lean
   /tmp/scratch/Probe.lean`): `#print axioms X`, `example … := by exact?`, or
   `trace_state` before a `sorry`. Probe what you build on too: a section `variable` typed through a local notation can
@@ -150,8 +152,9 @@ Their history is in the decisions log.
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
   bounded by what the run carries. No assumed advantage bounds but PoUW's named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtractedAt`, in the lock) and the sampled audits' per-finder bound below. An input
-  condition is a verifier refusal, not a hypothesis.
+  (`StraightLineExtraction`, `SeedExtractedAt`), SHA-512 as a PRF, `Hash.Assumptions.Sha512Prf`, whose advantage
+  `ε(t, Q)` is a parameter each bound that takes it adds per test (PoUS's `PeriodHeldSha512`), all in the lock, and
+  the sampled audits' per-finder bound below. An input condition is a verifier refusal, not a hypothesis.
 - One adversary class: every prover strategy τ, no budget class.
   `Pr[accept ∧ the claim fails on E^τ's values] ≤ δ + f(Pr[B^τ exhibits a SHA-512 collision])` (+ LMS forgery), with
   `E` a fixed named extractor and `B` a finder built from τ in about τ's time (`XplurZC`, `outCZC`). Collision
