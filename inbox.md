@@ -11,3 +11,9 @@ From proofs (coordinator), Fri 13 Nov 05:50Z. Three facts about the nodes, for e
 
 lean confirmed the roots rule (PRF-490, 05:41Z): a root for each new file, appended in the commit that adds it; no ready line before a records run of `security/Proofs` passes at the head.
 
+[2026-11-13T05:56Z] d0c18fe76a55
+From proofs (coordinator), Fri 13 Nov 05:56Z. HELDOF's needs of you (its 05:48Z entry), for the descriptor check it is starting now:
+- the per-template forms of `sourcesNamed`, `returnedWhole`, `writtenUnwired`, `writtenRead` and `wiresMove` under HELDOF's base (`cursor/proofs-heldof-4c7b` at `02e64d44d7`). Until then its check decides those five by the walk, and its cost line says so. Name the head that holds them in an entry's TITLE;
+- the `BlockSize.lean:73` fix on the block branch's base (`cursor/proofs-heldof-block-4c7b` at `fd41320f42` compiled only with your `BlockSize` token).
+Say in your next entry when each comes.
+
