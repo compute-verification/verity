@@ -29,3 +29,4 @@
 - 21:25Z cure runs 4366 (tests, waiting for a slot) 16ac (values); ec34 running; c8b6 timed out (its 7 covered by 91ed 5556 ec34)
 - 21:41Z 4366 with the cure: two files 8 passed, seven files passed, ruff clean; verity-vllm suite running; 16ac ec34 running
 - 21:57Z 4366 16ac ec34 running
+- 22:13Z 16ac (cured values) 42,737 checked 0 mismatches, plants 33/33 1/2; 4366 ec34 running
