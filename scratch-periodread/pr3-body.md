@@ -4,7 +4,7 @@ Goal proofs/sampled-audits-sound
 
 Issue: PRF-600. The third of its pull requests: what an accept of SPOT's period check means and whose ledger it reads, as eight statements, with the check's executable. It is on the audits' half's head (#9595), which is on #9537's; both land first.
 
-**Nothing here is proved, and no statement gets a guarantee entry.** The proofs are the next pull request. Each statement is held in the lock as a draft (`unstated`), the way the three drafts of `Properties.Challenger` are.
+**Nothing here is proved, and no statement gets a guarantee entry.** The proofs are the next pull request (#9625). Each statement is held in the lock as a draft (`unstated`), the way the three drafts of `Properties.Challenger` are.
 
 ## The statements
 
