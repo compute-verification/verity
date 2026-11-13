@@ -71,18 +71,80 @@ def test_the_shell_hook_judges_a_pretooluse_shell_event_like_a_beforeshellexecut
     assert ask("env | cut -d= -f1") == "deny" and ask("ls") == "allow"
 
 
-def test_each_hook_run_records_its_events_key_names_and_never_a_value(event_log):
-    W = "bc-44444444-4444-4444-8444-444444444444"
-    subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution", "conversation_id": W,
-                                                             "command": "echo not-to-be-copied", "cwd": "/"}),
-                   capture_output=True, text=True, check=True)
-    subprocess.run([sys.executable, HOOK], input="not json", capture_output=True, text=True, check=True)
+def test_each_hook_records_its_events_key_names_and_of_its_values_only_the_model_and_the_turns_id(tmp_path, event_log):
+    """Cursor's payload names a model and a turn (`generation_id`) beside the command, the account and paths. Each hook's
+    line keeps those two where the payload has them as strings, cut at 64 characters, and no other value, so which model a
+    turn's events name is read on the agent's own VM (`inbox.py turns`)."""
+    W, turn = "bc-44444444-4444-4444-8444-444444444444", "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f"
+    registry = tmp_path / "registry.json"
+    registry.write_text(json.dumps({"handles": []}))
+    env = {**os.environ, "AGENT_INBOX": str(tmp_path / "inbox"), "AGENT_GUARD_REGISTRY": str(registry),
+           "AGENT_GUARD_TASK_LOG": str(tmp_path / "task.jsonl")}
+    sent = {"conversation_id": W, "generation_id": turn, "model": "a-model-name", "cursor_version": "0.0-not-to-be-copied",
+            "sandbox": False, "session_id": "session-not-to-be-copied", "tool_use_id": "tool-not-to-be-copied",
+            "transcript_path": "/not-to-be-copied/transcript.jsonl", "user_email": "an-address-not-to-be-copied",
+            "workspace_roots": ["/not-to-be-copied"]}
+    shell = {**sent, "hook_event_name": "beforeShellExecution", "command": "echo not-to-be-copied", "cwd": "/"}
+    task = {**sent, "hook_event_name": "preToolUse", "tool_name": "Task",
+            "tool_input": {"subagent_type": "explore", "prompt": "not-to-be-copied", "model": "not-to-be-copied"}}
+    stop = {**sent, "hook_event_name": "stop", "status": "completed", "loop_count": 0}
+
+    def run(name, event):
+        subprocess.run([sys.executable, HOOK.parent / name], input=event if isinstance(event, str) else json.dumps(event),
+                       capture_output=True, text=True, check=True, env=env)
+
+    for name, event in (("shell_hook.py", shell), ("task_hook.py", task), ("stop_hook.py", stop)):
+        run(name, event)
+    run("shell_hook.py", {**shell, "model": "m" * 500, "generation_id": "g" * 500})
+    run("shell_hook.py", {**shell, "model": {"name": "not-to-be-copied"}, "generation_id": 7})
+    run("shell_hook.py", {k: v for k, v in shell.items() if k not in ("model", "generation_id")})
+    run("shell_hook.py", "not json")
     text = event_log.read_text()
-    first, second = (json.loads(ln) for ln in text.splitlines())
+    lines = [json.loads(ln) for ln in text.splitlines()]
     assert "not-to-be-copied" not in text
-    assert (first["hook"], first["event"], first["conversation_id"]) == ("shell_hook.py", "beforeShellExecution", W)
-    assert first["keys"] == ["command", "conversation_id", "cwd", "hook_event_name"]
-    assert second["keys"] == "str" and second["conversation_id"] is None
+    assert [(e["hook"], e["event"], e["conversation_id"], e["generation_id"], e["model"]) for e in lines[:3]] == [
+        ("shell_hook.py", "beforeShellExecution", W, turn, "a-model-name"),
+        ("task_hook.py", "preToolUse", W, turn, "a-model-name"), ("stop_hook.py", "stop", W, turn, "a-model-name")]
+    assert [e["keys"] for e in lines[:3]] == [sorted(shell), sorted(task), sorted(stop)]
+    assert lines[1]["tool_input_keys"] == ["model", "prompt", "subagent_type"]
+    assert sorted(lines[0]) == ["conversation_id", "event", "generation_id", "hook", "keys", "model", "t", "tool_input_keys",
+                                "tool_name"], "the two values, and nothing else new"
+    cut, typed, without, unread = lines[3:]
+    assert (cut["model"], cut["generation_id"]) == ("m" * 64, "g" * 64)
+    assert not {"model", "generation_id"} & (set(typed) | set(without) | set(unread)), "kept only where the payload has a string"
+    assert typed["keys"] == sorted(shell) and unread["keys"] == "str" and unread["conversation_id"] is None
+    listed = subprocess.run([sys.executable, INBOX_TOOL, "turns", W], capture_output=True, text=True, check=True, env=env).stdout
+    assert re.search(rf"^{turn}  \S+  \S+ +3  a-model-name$", listed, re.M), listed
+
+
+@pytest.fixture(scope="module")
+def before_any_test():
+    """What a module's fixture has before any per-test fixture has run: a hook it started, and a copy of the environment."""
+    event = {"hook_event_name": "a module's fixture", "command": "true", "cwd": "/"}
+    subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True)
+    return dict(os.environ)
+
+
+def test_no_hook_a_test_starts_records_in_the_machines_log_whatever_environment_it_is_handed(before_any_test, scratch_event_log,
+                                                                                            event_log):
+    """A module's fixture runs before conftest's per-test log is named in the environment, and a test that builds a hook's
+    environment from nothing, or takes every `AGENT_GUARD_*` variable out of it, drops the name. One fixture (conftest's
+    `scratch_event_log`) gives each such hook a log under the test session's own directory: in the machine's log, a run's
+    hundreds of events would push real agents' events out as it rotates."""
+    def run(name, env):
+        event = {"hook_event_name": name, "command": "true", "cwd": "/"}
+        subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True, env=env)
+
+    def events(log):
+        return [json.loads(ln)["event"] for ln in log.read_text().splitlines()]
+
+    run("the test's own", None)
+    run("a module's copy", before_any_test)
+    run("from nothing", {"PATH": os.defpath})
+    run("stripped", {k: v for k, v in os.environ.items() if not k.startswith("AGENT_GUARD_")})
+    assert events(event_log) == ["the test's own"]
+    elsewhere = ["a module's fixture", "a module's copy", "from nothing", "stripped"]
+    assert [e for e in events(scratch_event_log) if e in elsewhere] == elsewhere
 
 
 def test_a_checkout_without_the_guard_runs_the_cached_copy_so_a_branch_switch_cant_lock_the_agent_out(tmp_path):
@@ -699,6 +761,46 @@ def test_the_inbox_list_says_since_when_a_message_is_pending(tmp_path):
     assert any(x.startswith("delivered bc-33333333-3333-4333-8333-333333333333 ") and "since" not in x for x in listed)
 
 
+def test_turns_prints_the_model_each_turn_of_an_agent_names_from_both_files_of_the_event_log(event_log):
+    """`turns` reads this VM's event log, the file it rotated to first: a line per generation id of the agent, oldest first,
+    with when its first and last event were recorded, how many it has and the model they name, so a rule about models can
+    be checked by turn. `-` stands for what an event doesn't name, a generation id whose events name two models is a line
+    for each, and only printable characters of the log are printed."""
+    A, other = "bc-12121212-1212-4212-8212-121212121212", "bc-34343434-3434-4434-8434-343434343434"
+    one, two, three = (f"{n * 8}-0000-4000-8000-000000000000" for n in "123")
+
+    def line(t, agent=A, hook="shell_hook.py", **kept):
+        return json.dumps({"t": t, "hook": hook, "event": "beforeShellExecution", "conversation_id": agent, **kept}) + "\n"
+
+    def turns(*args, **env):
+        return subprocess.run([sys.executable, INBOX_TOOL, "turns", *args], capture_output=True, text=True,
+                              env={**os.environ, **env})
+
+    Path(f"{event_log}.1").write_text(
+        line(1_000_000_000) + line(1_000_000_060, generation_id=one, model="model-a")
+        + line(1_000_000_090, other, generation_id=three, model="model-c"))
+    event_log.write_text(
+        line(1_000_000_120, hook="task_hook.py", generation_id=one, model="model-a") + "not json\n"
+        + line(1_000_003_600, generation_id=two, model="model-b")
+        + line(1_000_003_660, hook="stop_hook.py", generation_id=two, model="model-b")
+        + line(1_000_003_720, generation_id=two, model="model-c\x1b[2J") + line(1_000_007_200, generation_id=three))
+    listed = turns(A)
+    assert listed.returncode == 0 and listed.stdout.splitlines() == [
+        "generation_id                         first_event           last_event            events  model",
+        "-                                     2001-09-09T01:46:40Z  2001-09-09T01:46:40Z       1  -",
+        f"{one}  2001-09-09T01:47:40Z  2001-09-09T01:48:40Z       2  model-a",
+        f"{two}  2001-09-09T02:46:40Z  2001-09-09T02:47:40Z       2  model-b",
+        f"{two}  2001-09-09T02:48:40Z  2001-09-09T02:48:40Z       1  model-c?[2J",
+        f"{three}  2001-09-09T03:46:40Z  2001-09-09T03:46:40Z       1  -"], listed.stdout
+    assert listed.stderr.startswith("inbox: `-` stands for what a turn's events don't name")
+    mine = turns(CURSOR_CONVERSATION_ID=other)
+    assert (mine.returncode, mine.stdout.splitlines()[1:], mine.stderr) == (
+        0, [f"{three}  2001-09-09T01:48:10Z  2001-09-09T01:48:10Z       1  model-c"], ""), "this shell's agent by default"
+    nobody = turns("bc-nobody")
+    assert nobody.returncode == 1 and nobody.stdout == (
+        f"inbox: {event_log} holds no event of bc-nobody: no hook has run for it on this VM, or its events have rotated out\n")
+
+
 def test_send_refuses_an_id_the_hook_would_never_deliver_to(tmp_path):
     """The hook reads the whole conversation id, so a message queued under an id prefix was never delivered."""
     inbox, repo = tmp_path / "inbox", tmp_path / "not-a-checkout"
@@ -822,7 +924,6 @@ def clones(tmp_path):
                      ["-C", d, "branch", "lane/mine"], ["-C", d, "branch", "theirs"], ["-C", d, "remote", "add", "origin", url]):
             subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
     env = {k: v for k, v in os.environ.items() if not k.startswith(("AGENT_GUARD_", "GIT_CONFIG"))}
-    env["AGENT_GUARD_EVENT_LOG"] = str(tmp_path / "events.jsonl")     # the hook's record of this test's runs, not the machine's
 
     def ask(form: str, clone: str) -> dict:
         command = form

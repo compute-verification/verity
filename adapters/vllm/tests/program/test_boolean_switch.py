@@ -14,20 +14,29 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate, evaluate_words
 from verity.circuits import boolean as BL
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.evaluation import evaluate, evaluate_words
 from verity.circuits.program import Program
-from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, coll_concat
-from verity.circuits.types import Array, RecordType, Tuple as TupleT, Value
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    Explicit,
+    PartLog,
+    Strided,
+    coll_concat,
+)
+from verity.circuits.types import Array, RecordType, Value
+from verity.circuits.types import Tuple as TupleT
+from verity.definitions import boolean as BB
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops import gemm as G
 from verity.definitions.ops import prims as MP
-from verity.definitions import boolean as BB
-from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 from verity.definitions.replay import replayer
+
+from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 F32, BF16 = Value(32), Value(16)
 PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", RecordType(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
@@ -74,7 +83,8 @@ def _inputs(n: int, seed: int = 7):
 
 
 def test_the_table_reads_the_boolean_definitions_word_links():
-    from verity.definitions.ops.boolean import attention as BA, gemm as BG
+    from verity.definitions.ops.boolean import attention as BA
+    from verity.definitions.ops.boolean import gemm as BG
     assert BB.boolean_version(W.F32AddFtz) is bind(BA.F32AddFtz)
     assert BB.boolean_version(MP.F2fpBf16) is bind(BG.F2fpBf16)
     word = bind(G.DotBf16, K=64, DOT=MP.HopperBF16WgmmaDot16)
@@ -114,7 +124,8 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
 @pytest.mark.slow
 def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
     from verity.definitions.ops.boolean import mufu as BM
-    from verity.definitions.registry import b1, boolean_norms as BN
+    from verity.definitions.registry import b1
+    from verity.definitions.registry import boolean_norms as BN
     cuda = BB.boolean_version(bind(b1.RMSNormFusedCuda, N=16, EPS=1e-5))
     triton = BB.boolean_version(bind(b1.RMSNormTriton, N=16, EPS=1e-5))
     assert descriptor_id(cuda) == descriptor_id(bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)))
@@ -153,7 +164,6 @@ def test_the_lifted_program_is_bits_throughout_and_the_word_program_is_not():
 
 
 def test_a_word_derivation_report_becomes_its_program_on_bits():
-    from verity.circuits.codec import encode_program, program_digest
     from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import DeriveReport
 
@@ -184,8 +194,8 @@ def test_sigma_check_reads_the_boolean_function_against_sigma_of_the_word_functi
     word = _derived()
     assert BB.sigma_check(word, BB.lift(word)) == {"nodes": 6, "definitions": 5, "mismatches": [], "mismatch_n": 0, "ok": True}
     callee = BB.sigma_check(word, BB.lift(_derived({"mul": W.F32AddFtz})))
-    assert not callee["ok"] and callee["mismatches"] == [f"node 1: Calls {descriptor_id(BB.boolean_version(W.F32AddFtz))}, "
-                                                         f"σ(F32MulFtz_v1) = {descriptor_id(BB.boolean_version(W.F32MulFtz))}"]
+    assert not callee["ok"] and callee["mismatches"] == [(f"node 1: Calls {descriptor_id(BB.boolean_version(W.F32AddFtz))}, "
+                                                         f"σ(F32MulFtz_v1) = {descriptor_id(BB.boolean_version(W.F32MulFtz))}")]
     assert BB.sigma_check(one_add(1), BB.lift(one_add(1)))["ok"]
     assert BB.sigma_check(one_add(1), BB.lift(one_add(0)))["mismatches"] == ["node 0 operand 1: not the word operand's bits"]
 
@@ -202,7 +212,9 @@ def test_a_definition_with_no_boolean_version_is_refused_by_name():
 
 
 def test_derive_refuses_a_call_with_no_boolean_version_by_name():
-    torch = pytest.importorskip("torch")
+    pytest.importorskip("torch")
+    import torch
+
     from verity_vllm.program.frontend.boolean import derived
     from verity_vllm.program.frontend.derive import derive_report
 

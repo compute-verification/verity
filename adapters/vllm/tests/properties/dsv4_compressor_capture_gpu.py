@@ -68,14 +68,17 @@ from types import SimpleNamespace
 from typing import Any, NamedTuple
 
 import numpy as np
-
-from tests.properties import dsv4_flashmla_capture_gpu as FX
-from tests.properties import fa2_target_capture_gpu as C
-from tests.properties import fa_tap_exactness_gpu as G
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_compressor_twin as T
 from verity.definitions.numerics import flashmla_twin as FT
 from verity.definitions.registry import dsv4_compressor as R
 from verity.definitions.registry import dsv4_indexer as I
+from verity.definitions.registry import flashmla as F
+
+from tests.properties import dsv4_flashmla_capture_gpu as FX
+from tests.properties import fa2_target_capture_gpu as C
+from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-compressor-capture/v1"
@@ -204,7 +207,7 @@ def layout(layer: str, seed: int) -> dict[str, np.ndarray]:
     pos = np.concatenate([np.arange(s0, s0 + n0), np.arange(s1, s1 + n1), [p for p, _, _ in extra]]).astype(np.int64)
     req = np.concatenate([np.zeros(n0), np.ones(n1), np.full(len(extra), 2)]).astype(np.int32)
     top = max(p for p, _, _ in extra) + 1
-    sbt = np.zeros((3, (s1 + n1) // L.block + 1), dtype=np.int32)
+    sbt: np.ndarray = np.zeros((3, (s1 + n1) // L.block + 1), dtype=np.int32)
     perm, k = rng.permutation(NBS[layer]).astype(np.int32), 0
     for r, (a, b) in enumerate(((s0, s0 + n0), (s1 - pre, s1 + n1), (0, top))):
         lo, hi = a // L.block, -(-b // L.block)
@@ -212,7 +215,7 @@ def layout(layer: str, seed: int) -> dict[str, np.ndarray]:
         k += hi - lo
     sslot = sbt[req, pos // L.block].astype(np.int64) * L.block + pos % L.block
     e = pos // L.ratio
-    kbt = np.zeros((3, (s1 + n1) // L.ratio // L.pbs + 1), dtype=np.int32)
+    kbt: np.ndarray = np.zeros((3, (s1 + n1) // L.ratio // L.pbs + 1), dtype=np.int32)
     kperm, k = rng.permutation(NBK[layer]).astype(np.int32), 0
     for r, (a, b) in enumerate(((s0, s0 + n0), (s1, s1 + n1), (0, top))):
         lo, hi = a // L.ratio // L.pbs, -(-(b // L.ratio + 1) // L.pbs)
@@ -284,7 +287,7 @@ def operands(layer: str, seed: int) -> dict[str, Any]:
     w = FX._bf16(1 + 0.1 * rng.standard_normal(D))
     for i, v in W_SPECIAL.items():
         w[i] = v
-    state = np.full((NBS[layer], STATE_PAGE), SENTINEL_STATE, dtype=np.uint32)
+    state: np.ndarray = np.full((NBS[layer], STATE_PAGE), SENTINEL_STATE, dtype=np.uint32)
     k = lay["prefilled"].shape[0]
     rows = np.concatenate([scaled(k), (4 * rng.standard_normal((k, L.width))).astype(np.float32)], axis=1).view(np.uint32)
     state_rows_of(state, layer)[lay["prefilled"][:, 0], lay["prefilled"][:, 1]] = rows
@@ -331,7 +334,7 @@ def slot_words(cache: np.ndarray, slots, pbs: int) -> np.ndarray:
 def written_bytes(n_pages: int, pbs: int, slots) -> np.ndarray:
     """The bytes of a (n_pages, page_bytes(pbs)) cache that writing rows at ``slots`` touches: 576 value bytes and 8 scale bytes."""
     page = page_bytes(pbs)
-    m = np.zeros(n_pages * page, dtype=bool)
+    m: np.ndarray = np.zeros(n_pages * page, dtype=bool)
     for slot in slots:
         blk, off = divmod(int(slot), pbs)
         m[blk * page + off * DATA_BYTES: blk * page + (off + 1) * DATA_BYTES] = True
@@ -355,8 +358,6 @@ def entries_twin(layer: str, kv: np.ndarray, score: np.ndarray, nrows: np.ndarra
 
 
 def entry_fn(layer: str, rows: int):
-    from verity.circuits.defs import bind
-
     if layer == "c4":
         return bind(R.Dsv4MlaCompressC4, ROWS=rows, D=D, QB=QB, EPS=EPS)
     return bind(R.Dsv4MlaCompressC128, W=W128, R=R128, D=D, QB=QB, EPS=EPS)
@@ -439,7 +440,9 @@ def launches(layer: str, o: dict[str, Any]) -> tuple[list[dict[str, np.ndarray]]
     ("saved") and after the compress ("after") and the cache bytes ("k"); on ratio 128 the split call on the first run's saved
     state, its f32 `compressed_kv` words ("cols"), state ("state") and cache ("k"), else None."""
     import torch
-    from vllm.models.deepseek_v4.common.ops.save_partial_states import save_partial_states
+    from vllm.models.deepseek_v4.common.ops.save_partial_states import (
+        save_partial_states,
+    )
     from vllm.models.deepseek_v4.nvidia.ops import sparse_attn_compress_cutedsl as K
 
     L = LAYERS[layer]
@@ -498,7 +501,7 @@ def observe(work: Path, layer: str, o: dict[str, Any], runs: list[dict[str, np.n
     p, r_, ss, ks = o["pos"], o["req"], o["sslot"], o["kslot"]
     flat = lambda s: state_rows_of(s, layer).reshape(nbs * L.block, 2 * L.width)  # noqa: E731
     written = np.flatnonzero(ss >= 0)
-    touched = np.zeros(nbs * L.block, dtype=bool)
+    touched: np.ndarray = np.zeros(nbs * L.block, dtype=bool)
     touched[ss[written]] = True
     pad = slice(L.block * 2 * L.width, None)
     jobs: list[dict[str, Any]] = []
@@ -516,6 +519,7 @@ def observe(work: Path, layer: str, o: dict[str, Any], runs: list[dict[str, np.n
     act = compressed(o, layer)
     (_, n0), (_, n1, _) = REQUESTS[layer]
     want = {0: n0 // L.ratio, 1: (REQUESTS[layer][1][0] + n1) // L.ratio - REQUESTS[layer][1][0] // L.ratio}
+    rec_comp: dict[str, Any]
     rec_comp = {"phase": "compress", "case": layer, "entries": int((act & (r_ == 0)).sum()),
                 "checks": {"deterministic": bool(np.array_equal(k, runs[1]["k"])),
                            "state_unchanged": all(np.array_equal(r["saved"], r["after"]) for r in runs),
@@ -575,9 +579,6 @@ def _flat_out(y) -> list[int]:
 def compare_score(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """State rows [lo, hi): their score words against `fadd(score, ape)`, the reference `Dsv4CompressorScore_v1{W}` on every
     ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     want = FT.fadd(a["score"][lo:hi], a["ape"][lo:hi])
@@ -592,8 +593,6 @@ def compare_score(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_entries(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Cache rows [lo, hi): every word against the twin, the reference `Dsv4MlaCompressC4_v1{ROWS,...}` or
     `Dsv4MlaCompressC128_v1{8,16,...}` on every ref_every-th."""
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     layer = job["layer"]
@@ -611,9 +610,6 @@ def compare_entries(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_columns(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Ratio-128 columns of tokens [lo, hi): every word against `c128_columns`, the reference `Dsv4MlaC128Column_v1{8,16}` on every
     column of every ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     kv, sc = (np.swapaxes(np.asarray(a[x][lo:hi]), -1, -2) for x in ("kv", "score"))
@@ -697,9 +693,6 @@ def ptx(outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics, and the decode's row reader at the row they write."""
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import flashmla as F
-
     row = {"D": D, "QB": QB, "EPS": EPS}
     targets = {
         "Dsv4CompressorScore_v1{W=1024}": lambda: bind(I.Dsv4CompressorScore, W=LAYERS["c4"].width),
@@ -714,7 +707,7 @@ def bind_check() -> dict[str, Any]:
         "Dsv4MlaCompressC128_v1{W=8,R=16,...}": lambda: entry_fn("c128", LAYERS["c128"].window),
         "FlashMlaKvRow_v1{DN=448,DR=64,QT=64}": lambda: bind(F.FlashMlaKvRow, DN=NOPE, DR=ROPE, QT=QB),
     }
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in targets.items():
         try:
             out[name] = bool(make().signature())

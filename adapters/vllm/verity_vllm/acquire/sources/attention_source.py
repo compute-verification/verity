@@ -43,15 +43,16 @@ from __future__ import annotations
 import inspect
 import re
 import sys
-from typing import Any, Mapping, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import torch
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit.committer.run_values import RunValues
-from verity_vllm.query.manifest.bind import Port
 from verity_vllm.engine.hooks import Hooks
+from verity_vllm.query.manifest.bind import Port
 
 BINDER = "attention"
 ATTEND, MQA, MHA, NORM_ROPE = "_sparse_indexer_and_attn", "forward_mqa", "forward_mha", "fused_norm_rope"
@@ -74,8 +75,14 @@ TAP_PORTS = {**{t: Port(fams, "out", call_boundary=True) for t, fams in CALL_TAP
 _CALL_SITE = re.compile(r"(?:^|\.)layers\.(\d+)\.self_attn/[^/]+$")
 
 
+def _commits(tap: Mapping[str, Any]) -> bool:
+    """Whether this source commits `tap`: its `commit` block names `BINDER` (a tap with no block, or an empty one, is committed nowhere)."""
+    block = tap.get("commit")
+    return bool(block and block.get("binder") == BINDER)
+
+
 def binds(cmap: Mapping[str, Any]) -> bool:
-    return any((t.get("commit") or {}).get("binder") == BINDER for t in cmap["taps"])
+    return any(_commits(t) for t in cmap["taps"])
 
 
 def call_tap(r: Mapping[str, Any]) -> tuple[str, int] | None:
@@ -145,15 +152,21 @@ class AttentionSource:
         self.c, self.cmap, self.env, self.on_target = com, routes.cmap, routes.env, routes.on_target
         self.layers: dict[int, Any] = dict(routes.layers)
         free = self.cmap.get("free_symbols", {})
-        self.taps = {t["id"]: t for t in self.cmap["taps"] if (t.get("commit") or {}).get("binder") == BINDER}
+        self.taps = {t["id"]: t for t in self.cmap["taps"] if _commits(t)}
         unknown = sorted(set(self.taps) - TAPS)
         if unknown:
             raise ValueError(f"capture map {self.cmap.get('id')}: the attention source binds no tap {unknown}")
         #: tap id -> layer -> the committed name, for the taps bound here (the target_only ones on the target only)
-        self.names = {tid: {i: CM.at_layer(t["commit"]["name"], i) for i in CM.tap_layers(self.cmap, t, self.env)}
+        self.names = {tid: {i: CM.at_layer(t["commit"]["name"], i) for i in self._layers_of(t)}
                       for tid, t in self.taps.items() if self.on_target or not t.get("target_only")}
-        self.width = {tid: CM.dim(t["shape"][-1], self.env, free) for tid, t in self.taps.items()}
-        self.homes = []
+        widths = {tid: CM.dim(t["shape"][-1], self.env, free) for tid, t in self.taps.items()}
+        per_step = sorted(tid for tid in (MLA_ROWS, INDEX_ROWS, TOPK) if isinstance(widths.get(tid), str))
+        if per_step:
+            raise ValueError(f"capture map {self.cmap.get('id')}: the row width of {per_step} reads a per-step size; the source cuts "
+                             f"their rows by a number")
+        #: tap id -> its last dimension, where the map fixes it: the width the cache taps' and the top-k's rows are cut by
+        self.width: dict[str, int] = {tid: w for tid, w in widths.items() if isinstance(w, int)}
+        self.homes: list[Any] = []
         for i, m in sorted(self.layers.items()):
             impl = getattr(m, "impl", None)
             if not callable(getattr(m, ATTEND, None)) or not all(callable(getattr(impl, f, None)) for f in (MQA, MHA)):
@@ -181,6 +194,14 @@ class AttentionSource:
         self._mqa_rows = 0
         self.stats: dict[str, Any] = {}
         self.begin_run()
+
+    def _layers_of(self, tap: dict[str, Any]) -> list[int]:
+        """The layers one of this source's taps is captured at: each is bound at an attention layer's call."""
+        layers = CM.tap_layers(self.cmap, tap, self.env)
+        if layers is None:
+            raise ValueError(f"capture map {self.cmap.get('id')}: the attention source binds per-layer taps (`layers`); {tap['id']} is a "
+                             f"model-level one (`layer`)")
+        return layers
 
     # -- install / steps ------------------------------------------------------------------------------------------------------
     def install(self) -> None:
@@ -370,4 +391,5 @@ class AttentionSource:
         return fused_norm_rope
 
 
-__all__ = ["AttentionSource", "BINDER", "ARGUMENTS", "TAPS", "CALL_TAPS", "TAP_PORTS", "binds", "call_tap", "mla_rows", "indexer_rows"]
+__all__ = ["AttentionSource", "BINDER", "ARGUMENTS", "TAPS", "CALL_TAPS", "TAP_PORTS", "MLA_ROWS", "INDEX_ROWS", "INDEX_SCALE", "binds",
+           "call_tap", "mla_rows", "indexer_rows"]

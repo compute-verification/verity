@@ -12,8 +12,10 @@ steps, in the worker's order.
 from __future__ import annotations
 
 import copy
+import queue
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -68,6 +70,20 @@ class WindowViews:
 
     #: what a view shares with the committer once either has made it: one of each for the process
     SHARED_LAZY = ("_side",)
+    #: what the committer this is mixed into holds: its pinned pool, how it stages, the worker's queue, the steps begun, what its
+    #: sources expected and committed, the collector's pauses and the sources
+    pool: Any
+    staging: str
+    inline_d2h: bool
+    _q: queue.Queue
+    _step_index: int
+    x03_expected: int
+    x03_committed: int
+    gc_pauses: Any
+    sources: list[Any]
+    #: and its step end (serving thread) and its commit of one step (worker)
+    _end_step: Callable[[], None]
+    _absorb_step: Callable[[Any], None]
 
     def _init_views(self) -> None:
         # the open window's view, whether the last window was detached, the windows detached (serving thread) and ended by the worker
