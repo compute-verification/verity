@@ -1,4 +1,4 @@
-"""Every build gate on ptxas's report and cuobjdump's SASS (`verity/protocols/pouw/prover/sass_gate.py`'s `mma_gate`,
+"""Every build gate on ptxas's report and cuobjdump's SASS (`verity/protocols/accounting/pouw/prover/sass_gate.py`'s `mma_gate`,
 through each kernel's own `sass_gate.py`): its CLI's exit code, OUT_JSON and printed lines on each case are pinned in
 `fixtures/mma_gate/verdicts.json` (sha256s of the bytes), so a refactor of the shared gate can't move a verdict.
 

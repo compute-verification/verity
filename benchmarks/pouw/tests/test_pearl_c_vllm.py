@@ -24,19 +24,19 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.prover.schemes import pearl_c_u as PCU
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 from verity_vllm.protocols.pouw.pearl_c import host as PH
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
-from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import core_check as CC
 
 torch = pytest.importorskip("torch")
 
 from verity.commitments import MerkleTree
 from verity.commitments.merkle import tree_levels
-from verity.protocols.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.verifier.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -55,20 +55,20 @@ from verity.protocols.pouw.verifier.audit import (
     weight_binding,
     weights_root,
 )
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment
-from verity.protocols.pouw.verifier.credit import passes_distinct
-from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.pouw.verifier.serving import SchemeId
-from verity.protocols.spot.device import challenger as Ch
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.coins import Challenger, CoinCommitment
+from verity.protocols.accounting.pouw.verifier.credit import passes_distinct
+from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.verifier.serving import SchemeId
+from verity.protocols.proofs.spot.device import challenger as Ch
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
-# the work sampling design and the clear audit are a reference tool's (verity/protocols/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
 import clear_work as CW  # noqa: E402
 from clear_audit import Prover, Verifier  # noqa: E402
 
@@ -1197,7 +1197,7 @@ def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     rc = SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1", "--draws", "3", "--test-instance", *more])
     answer = json.loads((out.parent / "answer.json").read_text())
-    from verity.protocols.pouw.verifier import core_check as CC
+    from verity.protocols.accounting.pouw.verifier import core_check as CC
     CC.answer_of(answer)
     return rc, json.loads(out.read_text()), answer
 
@@ -3938,9 +3938,9 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
 # ---- the hashing format, from the one table --------------------------------------------------------------------------
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
-    """Every tree's hash is the scheme's format's (`verity.protocols.pouw.verifier.serving.HASH_FORMATS`), not a
+    """Every tree's hash is the scheme's format's (`verity.protocols.accounting.pouw.verifier.serving.HASH_FORMATS`), not a
     literal: -h3's hm96-sha512, keyed by the prover's salt key; and the path runs only its own schemes."""
-    from verity.protocols.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
+    from verity.protocols.accounting.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
 
     make, *_ = device_run
     run = make()
@@ -4006,7 +4006,7 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves the
     tile hashing, which reads C~ and U, and A's tree where the kernel's pipeline splits A's commitment (sm_90a's and
     sm_120's), each with the buffers it touches rotated.  The screen stays on the caller."""
-    from verity.protocols.pouw.verifier.serving import Schedule
+    from verity.protocols.accounting.pouw.verifier.serving import Schedule
     make, kernel, *_ = device_run
     s = PPD.scheme_of(SCHEME)
     assert PPD.schedule_of("deferred-a", s).name == "deferred-a" and PPD.splits(kernel)
