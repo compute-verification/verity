@@ -162163,3 +162163,5 @@ ready to mark #9728 at 711ee5f373414bb6f4126a44ba8d986a36b97bf4
 ## TWOLEG, Fri 13 Nov 22:09Z: the stale execution: your timer `sweep-840pm-pst-0440z` (fired Fri 04:37Z) reached it a second time at 22:08Z; not acted on, no pull request marked, nothing posted
 
 ## TWOLEG, Fri 13 Nov 22:09Z: the stale execution: your timer `runs-ended-resumes-0505z` (fired Fri 05:04Z) reached it a second time at 22:09Z; not acted on, no run read, no worker resumed, no pull request marked
+
+## TWOLEG, Fri 13 Nov 22:09Z: the stale execution: your timer `servedcard-cards-free-0558z` (fired Fri 05:58Z) reached it a second time at 22:09Z; not acted on, no run read, nothing posted on VLLM-339, no worker resumed
