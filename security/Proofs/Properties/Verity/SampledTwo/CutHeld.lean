@@ -107,6 +107,8 @@ theorem members_trees {p : Spot.OneStageZk.Params} {ms : Array Spot.OneStageZk.M
     ∃ held ts L, Spot.OneStageZk.membersHeld ms sts = .ok held ∧ Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
       Spot.OneStageZk.membersTreesHeld ts L (sts.zip held) bs = .ok () := by
   unfold Spot.OneStageZk.membersRun at h
+  obtain ⟨_, h, -⟩ := Verity.Sampled.Trees.bind_ok h
+  unfold Spot.OneStageZk.membersStructure at h
   dsimp only at h
   obtain ⟨held, hheld, h⟩ := Verity.Sampled.Trees.bind_ok h
   have hrest : ∃ ts L, Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧

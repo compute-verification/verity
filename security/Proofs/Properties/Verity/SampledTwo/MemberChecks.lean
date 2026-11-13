@@ -95,6 +95,113 @@ theorem statement_ok {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : Co
   obtain ⟨rd, hrd, h⟩ := bind_ok h
   exact ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, (Except.ok.inj h).symm⟩
 
+/-! ## The statement the run reads for a member -/
+
+/-- A member's statement with its files held is its statement. -/
+theorem files_statement {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : Core.Blobs}
+    {a : _root_.Spot.OneStageZk.StepAt} (h : m.files slice bs = .ok a) : m.statement slice bs = .ok a := by
+  unfold _root_.Spot.OneStageZk.Member.files at h
+  obtain ⟨a', hs, h⟩ := bind_ok (mapError_ok h)
+  obtain ⟨⟨⟩, -, h⟩ := bind_ok h
+  obtain rfl : a' = a := Except.ok.inj h
+  exact hs
+
+/-- **The statement `membersFiles` read under a member's name is that member's**, where the member is the first of
+its name (`find?`). -/
+theorem files_lookup {slice : _root_.Spot.OneStageZk.Member → Json} {bs : Core.Blobs} :
+    ∀ {l : List _root_.Spot.OneStageZk.Member} {files : List (String × _root_.Spot.OneStageZk.StepAt)}
+      {m : _root_.Spot.OneStageZk.Member} {a : _root_.Spot.OneStageZk.StepAt},
+      _root_.Spot.OneStageZk.membersFiles slice bs l = .ok files → l.find? (·.name == m.name) = some m →
+        files.lookup m.name = some a → m.files (slice m) bs = .ok a
+  | [], _, _, _, _, hf, _ => by cases hf
+  | m0 :: l, files, m, a, h, hf, hl => by
+    rw [_root_.Spot.OneStageZk.membersFiles] at h
+    obtain ⟨a0, ha0, h⟩ := bind_ok h
+    obtain ⟨as, has, h⟩ := bind_ok h
+    obtain rfl : (m0.name, a0) :: as = files := Except.ok.inj h
+    cases e : (m0.name == m.name) with
+    | true =>
+      have hf' : some m0 = some m := by simpa only [List.find?_cons, e] using hf
+      obtain rfl : m0 = m := Option.some.inj hf'
+      have hl' : some a0 = some a := by simpa only [List.lookup_cons_self] using hl
+      obtain rfl : a0 = a := Option.some.inj hl'
+      exact ha0
+    | false =>
+      have hf' : l.find? (·.name == m.name) = some m := by simpa only [List.find?_cons, e] using hf
+      have e' : (m.name == m0.name) = false := by
+        rw [beq_eq_false_iff_ne] at e ⊢
+        exact fun h => e h.symm
+      have hl' : as.lookup m.name = some a := by simpa only [List.lookup_cons, e'] using hl
+      exact files_lookup has hf' hl'
+
+/-- **The statement the per-member run reads for a member the statements name is the member's own**:
+`statementAt` on what `membersFiles` read, at a member that is the first of its name. -/
+theorem statementAt_statement {slice : _root_.Spot.OneStageZk.Member → Json} {bs : Core.Blobs}
+    {ms : Array _root_.Spot.OneStageZk.Member} {files : List (String × _root_.Spot.OneStageZk.StepAt)}
+    {m : _root_.Spot.OneStageZk.Member} {a : _root_.Spot.OneStageZk.StepAt}
+    (hf : _root_.Spot.OneStageZk.membersFiles slice bs ms.toList = .ok files)
+    (hm : ms.find? (·.name == m.name) = some m)
+    (h : _root_.Spot.OneStageZk.statementAt files m = .ok a) : m.statement (slice m) bs = .ok a := by
+  unfold _root_.Spot.OneStageZk.statementAt at h
+  cases hl : files.lookup m.name with
+  | none =>
+    rw [hl] at h
+    exact absurd h (throw_ne _ _)
+  | some a' =>
+    rw [hl] at h
+    obtain rfl : a' = a := Except.ok.inj h
+    exact files_statement (files_lookup hf (by rw [Array.find?_toList]; exact hm) hl)
+
+/-- `heldStep` adds one member, the first of its name among the parameters'. -/
+theorem heldStep_find {ms held h' : Array _root_.Spot.OneStageZk.Member} {st : _root_.Spot.OneStageZk.StatementFiles}
+    (h : _root_.Spot.OneStageZk.heldStep ms held st = .ok h') :
+    ∃ m, ms.find? (·.name == m.name) = some m ∧ h' = held.push m := by
+  unfold _root_.Spot.OneStageZk.heldStep at h
+  split at h
+  · exact absurd h (throw_ne _ _)
+  next name _ =>
+    split at h
+    · exact absurd h (throw_ne _ _)
+    next m hm =>
+      have hn : (m.name == name) = true := by
+        have h' := Array.find?_some hm
+        exact h'
+      obtain rfl : m.name = name := beq_iff_eq.1 hn
+      repeat' split at h
+      all_goals first
+        | exact absurd h (throw_ne _ _)
+        | exact ⟨m, hm, (Except.ok.inj h).symm⟩
+
+private theorem foldlM_held_find {ms : Array _root_.Spot.OneStageZk.Member} :
+    ∀ (l : List _root_.Spot.OneStageZk.StatementFiles) (acc out : Array _root_.Spot.OneStageZk.Member),
+      l.foldlM (_root_.Spot.OneStageZk.heldStep ms) acc = .ok out →
+        ∀ m ∈ out, m ∈ acc ∨ ms.find? (·.name == m.name) = some m
+  | [], acc, out, h => by
+    rw [List.foldlM_nil] at h
+    obtain rfl : acc = out := Except.ok.inj h
+    exact fun _ hm => .inl hm
+  | st :: l, acc, out, h => by
+    rw [List.foldlM_cons] at h
+    obtain ⟨a, ha, h⟩ := bind_ok h
+    obtain ⟨m₁, hm₁, rfl⟩ := heldStep_find ha
+    intro m hm
+    rcases foldlM_held_find l _ out h m hm with hm' | hm'
+    · rcases Array.mem_push.1 hm' with hm' | rfl
+      · exact .inl hm'
+      · exact .inr hm₁
+    · exact .inr hm'
+
+/-- **Each statement's member is the first of its name among the parameters'** (`heldStep`'s `find?`). -/
+theorem membersHeld_find {ms held : Array _root_.Spot.OneStageZk.Member}
+    {sts : Array _root_.Spot.OneStageZk.StatementFiles} (h : _root_.Spot.OneStageZk.membersHeld ms sts = .ok held) :
+    ∀ m ∈ held, ms.find? (·.name == m.name) = some m := by
+  unfold _root_.Spot.OneStageZk.membersHeld at h
+  rw [← Array.foldlM_toList] at h
+  intro m hm
+  rcases foldlM_held_find sts.toList #[] held h m hm with hm' | hm'
+  · simp at hm'
+  · exact hm'
+
 /-! ## The accepted sessions -/
 
 /-- **One session's step, where the run still accepts every session after it**: the run accepted every session before
@@ -170,12 +277,14 @@ theorem foldl_all {a : _root_.Spot.OneStageZk.StepAt} {bs : Core.Blobs} :
     · exact hl s' hs'
 
 /-- **The per-member form's check of one member, accepting every session**: where `stepMember` on the member `m`'s
-statement files `sf` returns a run that accepts every session, the member's statement passed at its files and
-registered reads, and each of `sf`'s sessions was accepted there (`SessionAccepted`). -/
-theorem stepMember_sessions {slice : _root_.Spot.OneStageZk.Member → Json} {bs : Core.Blobs}
+statement files `sf`, at a statement `st` that returns the member's own statement at its slice (`hst`), returns a run
+that accepts every session, the member's statement passed at its files and registered reads, and each of `sf`'s
+sessions was accepted there (`SessionAccepted`). -/
+theorem stepMember_sessions {slice : _root_.Spot.OneStageZk.Member → Json}
+    {st : _root_.Spot.OneStageZk.Member → V _root_.Spot.OneStageZk.StepAt} {bs : Core.Blobs}
     {r r' : _root_.Spot.OneStageZk.Run} {sf : _root_.Spot.OneStageZk.StatementFiles}
-    {m : _root_.Spot.OneStageZk.Member}
-    (h : _root_.Spot.OneStageZk.stepMember slice bs r (sf, m) = .ok r') (ha : r'.all = true) :
+    {m : _root_.Spot.OneStageZk.Member} (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a)
+    (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r') (ha : r'.all = true) :
     ∃ circuitB pubB rd, Flock.Tags.circuit.plainLeaves = false ∧
       bs.get m.own.circuit "circuit" = .ok circuitB ∧ bs.get m.own.pub "public file" = .ok pubB ∧
       _root_.Spot.OneStageZk.readsOf m.own.registered = .ok rd ∧
@@ -185,8 +294,8 @@ theorem stepMember_sessions {slice : _root_.Spot.OneStageZk.Member → Json} {bs
   unfold _root_.Spot.OneStageZk.stepMember at h
   have h := mapError_ok h
   unfold _root_.Spot.OneStageZk.runFrom at h
-  obtain ⟨a, hst, h⟩ := bind_ok h
-  obtain ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, rfl⟩ := statement_ok hst
+  obtain ⟨a, ha', h⟩ := bind_ok h
+  obtain ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, rfl⟩ := statement_ok (hst a ha')
   rw [← Array.foldlM_toList] at h
   exact ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, (foldl_all _ r r' h ha).2⟩
 
@@ -303,8 +412,9 @@ theorem ins_of_fields {w : FlockDeploy.Raw} {m : _root_.Spot.OneStageZk.Member} 
 
 /-! ## The checks -/
 
-variable {slice : _root_.Spot.OneStageZk.Member → Json} {bs : Core.Blobs} {r r' : _root_.Spot.OneStageZk.Run}
-  {sf : _root_.Spot.OneStageZk.StatementFiles} {m : _root_.Spot.OneStageZk.Member}
+variable {slice : _root_.Spot.OneStageZk.Member → Json}
+  {st : _root_.Spot.OneStageZk.Member → V _root_.Spot.OneStageZk.StepAt} {bs : Core.Blobs}
+  {r r' : _root_.Spot.OneStageZk.Run} {sf : _root_.Spot.OneStageZk.StatementFiles} {m : _root_.Spot.OneStageZk.Member}
 
 /-- **A member's session statement, accepted by the per-member form, is in Flock's masked scope**: where `stepMember`
 on the member `m`'s statement files `sf` returns a run that accepts every session, at a session `s` of `sf` whose record
@@ -312,8 +422,8 @@ on the blobs is `record`, a statement `w` whose fields are the member's (at the 
 for it), whose JSON files read back (`ReadsBack`) and whose bytes decode as `w` sets up in Flock's masked scope
 (`SpotFlock.zkOk`), passes the deployed `--zk` scope check (`FlockDeploy.scopeCheck true`) and has hidden outputs
 (`SpotFlock.hiddenOf`). -/
-theorem memberSession_checks (h : _root_.Spot.OneStageZk.stepMember slice bs r (sf, m) = .ok r')
-    (ha : r'.all = true) {s : _root_.Spot.OneStageZk.RunFiles} (hs : s ∈ sf.sessions.toList)
+theorem memberSession_checks (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a)
+    (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r') (ha : r'.all = true) {s : _root_.Spot.OneStageZk.RunFiles} (hs : s ∈ sf.sessions.toList)
     {circuitB pubB b : ByteArray} {record : String}
     (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
     (hb : bs.get s.record s!"session {s.name}'s record" = .ok b) (hu : String.fromUTF8? b = some record)
@@ -321,7 +431,7 @@ theorem memberSession_checks (h : _root_.Spot.OneStageZk.stepMember slice bs r (
     (hdec : FlockDeploy.decode w.encode = some w) :
     _root_.SpotFlock.zkOk w.encode = true ∧ FlockDeploy.scopeCheck true w.encode = true ∧
       _root_.SpotFlock.hiddenOf w.encode = true := by
-  obtain ⟨circuitB', pubB', rd, hpl, hc', hp', hrd, hall⟩ := stepMember_sessions h ha
+  obtain ⟨circuitB', pubB', rd, hpl, hc', hp', hrd, hall⟩ := stepMember_sessions hst h ha
   obtain rfl : circuitB' = circuitB := Except.ok.inj (hc'.symm.trans hc)
   obtain rfl : pubB' = pubB := Except.ok.inj (hp'.symm.trans hp)
   obtain ⟨coinKeys, b', record', hb', hu', hv⟩ := hall s hs
@@ -402,7 +512,8 @@ theorem memberSession_checks (h : _root_.Spot.OneStageZk.stepMember slice bs r (
 /-- **A member's session statement, accepted by the per-member form, is in the scope the two-stage proof reads**
 (`SpotFlock.sessionOk` at template `t`), where it has template `t`'s reference statement's shape (`hshape`). -/
 theorem memberSession_ok (H : _root_.SpotFlock.Held) (t : ℕ)
-    (h : _root_.Spot.OneStageZk.stepMember slice bs r (sf, m) = .ok r')
+    (hst : ∀ a, st m = .ok a → m.statement (slice m) bs = .ok a)
+    (h : _root_.Spot.OneStageZk.stepMember st bs r (sf, m) = .ok r')
     (ha : r'.all = true) {s : _root_.Spot.OneStageZk.RunFiles} (hs : s ∈ sf.sessions.toList)
     {circuitB pubB b : ByteArray} {record : String}
     (hc : bs.get m.own.circuit "circuit" = .ok circuitB) (hp : bs.get m.own.pub "public file" = .ok pubB)
@@ -411,7 +522,7 @@ theorem memberSession_ok (H : _root_.SpotFlock.Held) (t : ℕ)
     (hdec : FlockDeploy.decode w.encode = some w)
     (hshape : _root_.SpotFlock.shapeOf w.encode = _root_.SpotFlock.shapeOf (H.xS₀ t)) :
     _root_.SpotFlock.sessionOk H t w.encode = true := by
-  obtain ⟨h1, h2, h3⟩ := memberSession_checks h ha hs hc hp hb hu hf hr hdec
+  obtain ⟨h1, h2, h3⟩ := memberSession_checks hst h ha hs hc hp hb hu hf hr hdec
   unfold _root_.SpotFlock.sessionOk
   simp [h1, h2, h3, hshape]
 

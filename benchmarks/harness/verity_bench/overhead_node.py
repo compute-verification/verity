@@ -152,7 +152,7 @@ def points(a: argparse.Namespace, run: Runner = _run) -> int:
         except ValueError as ex:
             why = str(ex)
     if why is None:
-        doc |= {"c": p.c, "l": p.l, "best_flop_per_ms": p.best_flop_per_ms,
+        doc |= {"c": p.c, "l": p.lat, "best_flop_per_ms": p.best_flop_per_ms,
                 "times_ms": {str(m): t for m, t in sorted(times.items())},
                 "tflops": {str(m): O.layer_flop(a.model, m) / t / 1e9 for m, t in sorted(times.items())},
                 "linears": {str(m): v for m, v in sorted(chosen.items())}}
@@ -223,7 +223,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
         return 1
     model = pts["model"]
     at = {p: pts[p.lower()] for p in (O.POINTS if a.point == "all" else (a.point,))}
-    arm_args = ["--arm", sch.arm, "--arm-path", sch.arm_path] if sch.arm else []
+    arm_args = ["--arm", sch.arm, "--arm-path", sch.arm_path] if sch.arm and sch.arm_path else []
     prof = scratch / "prof"
     bench_json = out / "bench.json"
     rc = run([*(["env", f"{CUBIN_ENV}={cubin}"] if cubin else []), a.nsys, *NSYS_PROFILE, "-o", str(prof),
@@ -295,7 +295,7 @@ def run_scheme(a: argparse.Namespace, run: Runner = _run) -> int:
             p["epsilon"] = epsilon_at(sch, card, m, model)
             p["perplexity"] = {"value": None, "why": "a kernel point runs no model: perplexity is a served point's"}
             g = (p.get("gamma") or {}).get("gamma")
-            p["gate"] = None if g is None else {"cap": O.GAMMA_CAP, "passes": g <= O.GAMMA_CAP}
+            p["gate"] = None if g is None else {"cap": O.GAMMA_MAX, "passes": g <= O.GAMMA_MAX}
             p["whys"] = O.point_whys(p)
             doc["points"][name] = p
     _write(out / "overhead.json", doc)

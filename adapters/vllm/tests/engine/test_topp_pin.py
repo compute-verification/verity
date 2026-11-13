@@ -2,13 +2,18 @@
 the module's own global, armed before the module is imported or installed on it."""
 from __future__ import annotations
 
+import importlib.util
 import sys
 import types
 
 import pytest
+from verity.definitions.registry.topp_geometry import (
+    SPLIT_MAX_BATCH,
+    registered_splits,
+    splits_for,
+)
 
 from verity_vllm.engine import topp_pin
-from verity.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits, splits_for
 
 #: the RTX PRO 6000, the L40S, the H100, and two SM counts below 32
 SM_COUNTS = (188, 142, 132, 16, 6)
@@ -28,11 +33,15 @@ class _Logits:
         self.shape = (rows, 4096)
 
 
-def _vllm_module(name: str = "fake_topk_topp_triton") -> types.ModuleType:
+@pytest.fixture
+def vllm_module(tmp_path) -> types.ModuleType:
     """vLLM d9105ea80's `_apply_topp_split` as far as S goes: its doubling loop, recording the split count it launches with."""
-    m = types.ModuleType(name)
-    m.LAUNCHES = []
-    exec(_SPLIT_LOOP, m.__dict__)
+    path = tmp_path / "fake_topk_topp_triton.py"
+    path.write_text("LAUNCHES = []\n" + _SPLIT_LOOP)
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    assert spec is not None and spec.loader is not None
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
     return m
 
 
@@ -43,16 +52,16 @@ def clean():
     topp_pin.uninstall()
 
 
-def test_unpinned_vllm_picks_s_from_the_batch(clean) -> None:
-    m = _vllm_module()
+def test_unpinned_vllm_picks_s_from_the_batch(clean, vllm_module) -> None:
+    m = vllm_module
     for B in (1, 5, 6, 12, 24, 48, 64):
         m._apply_topp_split(_Logits(B), None, None, float("-inf"), 188)
     assert m.LAUNCHES == [splits_for(B, 188) for B in (1, 5, 6, 12, 24, 48, 64)] == [32, 32, 16, 8, 4, 2, 2]
 
 
 @pytest.mark.parametrize("num_sm", SM_COUNTS)
-def test_the_pin_launches_the_registered_s_at_every_batch(clean, num_sm) -> None:
-    m = _vllm_module()
+def test_the_pin_launches_the_registered_s_at_every_batch(clean, vllm_module, num_sm) -> None:
+    m = vllm_module
     p = topp_pin.install(m)
     for B in range(1, SPLIT_MAX_BATCH + 1):
         m._apply_topp_split(_Logits(B), None, None, float("-inf"), num_sm)
@@ -60,8 +69,8 @@ def test_the_pin_launches_the_registered_s_at_every_batch(clean, num_sm) -> None
     assert topp_pin.pinned() and topp_pin.install(m) is p
 
 
-def test_uninstall_restores_vllms_split_count(clean) -> None:
-    m = _vllm_module()
+def test_uninstall_restores_vllms_split_count(clean, vllm_module) -> None:
+    m = vllm_module
     original = m._apply_topp_split
     topp_pin.install(m)
     topp_pin.uninstall()

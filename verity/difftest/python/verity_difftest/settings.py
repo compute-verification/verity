@@ -9,7 +9,8 @@ import os
 
 SETTINGS = {
     "VERITY_EVALUATE_FULL_LOGF": "1: run NvLogf_v1 and _v2 on all 2^32 words (about 85 core-hours)",
-    "VERITY_SAMPLED_TWO_CASE": "a directory: an honest two-stage play's case, which the two-stage form's accept test checks",
+    "VERITY_SAMPLED_TWO_CASE": "a directory: an honest two-stage play's case, which the two-stage form's accept test checks "
+                               "in its kept case's place",
     "VERITY_SKIP_STORE": "1: skip the tests that fetch from the evidence store (check.py refuses it in a recorded run)",
     "VERITY_SLOW": "1: run the difftests that take over five minutes each, which skip otherwise and so stay out of `check`",
     "VERITY_VSTAR_STAGE": "inner sessions' shapes, `M,K_LOG,CLAIMS` separated by `;`, whose whole stage V*'s difftest compares",

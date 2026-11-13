@@ -78,14 +78,15 @@ accepted play on two windows shows its sessions' order (`firstReads`, `orderShow
   holds of. That on two windows the first session samples no challenge tree is a theorem of the form's accept
   (`SessionCoins.firstTreeless_of_check`, from the form's refusal of a tree's line in the first session's log and
   `caseIsSent`), no longer a field; it gives the interior's log on the play's (`SessionCoins.interiorLogged_read`).
-* **The run of record's accept** (`playAccepts_form`'s premises): `partsSizedAt` (ACCEPTS: at each number of replay
-  blocks the held first stage samples, the held copies' parts are the interior program's strata's, which with
-  `heldOfAt` gives the parts at each play's replay sample, `partsHeldAt_of_accepts`); `heldOfAt` (HELDOF);
-  `portsDistinctAt`; `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions'
-  workers); and `sessionMsgs`. That an accepted play's records name their registrations' names and read back as the
-  records the run held, that the held copies' design evaluates, and that each accepted play's held first stage samples
-  one fixed number of replay blocks, are theorems (ACCEPTS's `recordsHeldAt_of`, `recordsRead`, `twoHolds_at`,
-  `firstK_of_formAccepts`), no longer fields.
+* **The run of record's accept** (`playAccepts_form`'s premises): `heldOfAt` (HELDOF); `portsDistinctAt`;
+  `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`, `sessionsRun` (MESSAGES and the sessions' workers); and
+  `sessionMsgs`. That an accepted play's records name their registrations' names and read back as the records the run
+  held, that the held copies' design evaluates, that each accepted play's held first stage samples one fixed number
+  of replay blocks, and that at each such number the held copies' parts are the interior program's strata's, are
+  theorems (ACCEPTS's `recordsHeldAt_of`, `recordsRead`, `twoHolds_at`, `firstK_of_formAccepts`,
+  `partsSizedAt_of_formAccepts`), no longer fields. The last is the run's refusal of an interior whose strata are not
+  the parts its replay block's cells give (`interior-parts`), read at `heldOfAt`'s copies; with `heldOfAt` it gives the
+  parts at each play's replay sample (`partsHeldAt_of_accepts`).
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
@@ -257,11 +258,6 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   digestBefore : ∀ i < A.L.V.k x, Messages.DigestBefore
     (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
     (joinReading A C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂)) (FormAccepts C) JoinGood Dg i
-  /-- At each number of replay blocks the held copies' first stage samples (`SpotFlock.firstK`), the held copies'
-  parts are the interior program's strata's (ACCEPTS's `PartsSizedAt`): it reads each accepted play's parameters and
-  none of its bytes. Each accepted play's held first stage samples such a number (`firstK_of_formAccepts`), so with
-  `heldOfAt` it gives the parts at each accepted play's replay sample (`partsHeldAt_of_accepts`). -/
-  partsSizedAt : ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K
   /-- Each accepted play's held copies are the ones `heldOf` builds from its input and interior. -/
   heldOfAt : HeldOfAt A C
   /-- Each accepted play's registrations list each port once. -/
@@ -378,7 +374,7 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
       (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) :=
     cutBound_and (fun o hr => CoinMap.freshWide_play V θ F c σ hr)
       (Sessions.cutOrder_dev₂ V k P fs₁ fs₂ cut θ F c σ hw (firstReads θ) (orderShown θ) h.ledgerInOrder h.signer)
-  have hParts : PartsHeldAt A C := partsHeldAt_of_accepts h.heldOfAt h.partsSizedAt
+  have hParts : PartsHeldAt A C := partsHeldAt_of_accepts h.heldOfAt (partsSizedAt_of_formAccepts h.heldOfAt)
   exact joined V k A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q (FormAccepts C)
     JoinGood (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ) h.wiring
     (hHolds V A x θ F c σ _ _ (readsAt A.h))
