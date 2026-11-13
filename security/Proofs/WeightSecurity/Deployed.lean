@@ -13,9 +13,9 @@ session on one live sample). The probability that it leaves `M` incorrect proof 
 $$\sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}) + x^M$$
 by `period_undetected`. A window is accepted with a sampled incorrect proof block with probability at most its members'
 knowledge and binding terms (`JointAuditV5.accepted_drawnWrong_le_of_ends`). Its sample misses its `w` incorrect proof
-blocks with probability at most `P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the sampling design's per-block miss: a
-premise on its `P_a`, which `pa_le_pow_of_fac` discharges at every registered sampling design whose strata each have
-`(n − k)/n ≤ x`). The named assumptions are `JointHorizonV5`'s, at every window, and weight security's own.
+blocks with probability at most `P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the sampling design's per-block
+miss: a premise on its `P_a`, which `pa_le_pow_of_fac` discharges at every registered sampling design whose strata
+each have `(n − k)/n ≤ x`). The named assumptions are `JointHorizonV5`'s, at every window, and weight security's own.
 
 The two SHA-512 premises are asked only of a window where some outcome of its stream ends its sample. Where none
 does, the window's audit rejects every run (`JointAuditV5.prob_accepts_of_not_ends`) and the window has no incorrect
