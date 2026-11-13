@@ -138002,3 +138002,33 @@ I now write the draft branch for findings 2 and 3 off `9eec48aab933`, each its o
 - Whether any draft account on another lane's branch has a form that names its steps on the verified side and relies on an answer with no span counting; I searched `main` only.
 - How a consumer outside the tree reads a row's `status`; inside the tree nothing does.
 - That network's Tuesday change moves this module's digest in a lock is their sizing and my reading of a record's shape, not a run.
+
+## REDRAW, Fri 13 Nov 11:33Z: `87d9` ended exit 0: `AUDIT …/security/Properties: PASS … 543 guarantees`, `OUTCOME {"outcome": "regenerated"`; the lock takes `drawWithheld_honest`'s form. The one-call records run `682b` is on vy-nebius-2 since 11:27Z
+
+Mailbox read to line 505, nothing after your 10:54Z [read]. The pen is mine [run].
+
+**`r20261113-102457-87d9`** (vy-nebius-2, 64 GB asked, no wait, 10:26:22Z to 11:21:49Z, 55 minutes), the credit branch at `26152de11ce3`, the no-call lemma [run]:
+
+- `AUDIT …/security/Proofs: PASS  205053 declarations in 4063 modules; axioms propext, Classical.choice, Quot.sound; 0 guarantees`.
+- `AUDIT …/security/Properties: PASS  3485 declarations in 107 modules; axioms propext, Classical.choice, Quot.sound; 543 guarantees`.
+- `security`: first `FAIL` on record differences alone, then `check.py --update` and `AUDIT …/security: PASS  27776 declarations in 730 modules; … 1137 guarantees`.
+- `lean-records: OUTCOME {"outcome": "regenerated", "package": "security/Properties", …`.
+- In its regenerated record of `security/Properties`: `unwitnessed` has 181 entries and `drawWithheld` is not among them; `drawWithheld_honest` is recorded under `@proofs` with no premise [read, the run's `lean-audit/record/security/Properties/lean-audit.json`].
+
+**I did not copy its records** [derived]: the lemma under that name is now the one-call statement (`ae6df4b23cfc`), and a record's hash is its statement's. What `87d9` shows is that the witness rule takes the form `∃ seed k …, keygen … ∧ credited … = .ok got` for `drawWithheld` and that the list falls to 181.
+
+**The one-call records run:** `r20261113-112700-682b` (vy-nebius-2, pool proofs, 64 GB asked, started 11:27:30Z with no wait), the credit branch at `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`; about 12:20Z [guess, from `87d9`'s 55 minutes]. One try on the machine. Not run before: `check.py` on a witness that ends `= .ok [0]`. I read its rule (`witness_failures`, `vacuous_meets`): a conjunct must be headed by a constant, not be a reflexivity or one of its own hypotheses, and apply a definition; `credited … = .ok [0]` has the shape of `drawCoins … = .ok ξ`, which `f241` took [read; a guess that it passes].
+
+**Session pull request #9728:** `r20261113-105619-032e` (vy-nebius-cpu-1, 32 GB, started 10:56:44Z) is still running at 11:32Z. At the head the change from `8130cf7e15e2` touches 62 suites, not nine: the pin's line is an input of the others [run, the log's first line; the reason is a guess]. 55 of the 62 have passed and none has failed, `repository` (389 passed) and `verity/protocols/pous/verifier` (549 passed) among them [run]. Still to report: `verity-vllm`, `verity-numerical`, `research`, `verity/circuits`, `verity/commitments/windows`, `verity-core-evaluate`, `verity/definitions/ops` [run]. The ready line comes in a short entry when it ends.
+
+**Events not mine, none acted on, no file touched** [read]:
+
+- 26 late firings of your own timers under 18 names reached me from 11:00Z to 11:03Z: `proofs-1552Z-prf589-opened`, `proofs-1650Z-prf589-read`, `proofs-1905z-marks`, `proofs-1955z-runs`, `proofs-2015z-posts`, `proofs-2108z-daniel-answers`, `two-round-2-25pm-pst`, `proofs-2250z-board`, `board-3pm-pst`, `history-launch-retry`, `launch-retry-2355z`, `gather-five-facts-0030z`, `proofs-sweep-30m-v42` (nine firings, 01:30Z to 05:30Z), `history-try-4d04`, `board-7pm-pst-0300z`, `servedcard-gonogo-0412z`, `sweep-840pm-pst-0440z`, `runs-ended-resumes-0505z`.
+- They look like the timers of a loop of yours that ended, delivered to this agent [guess]. If one of them still matters to you, it did not run here.
+- My own timer `redraw-records-f241` (set 10:04Z) also arrived late, at 11:03Z, its job done at 10:27Z [run].
+
+**Open with you:** the six Lean names with "escape" in the JSON sense on the session branch (my 10:59Z entry); and "keep" if you want the no-call lemma back beside the one-call one (my 10:54Z entry).
+
+**Heads, all pushed, nothing unpushed** [run]: `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d` (#9717); `cursor/proofs-honest-session-7c1e` `36d6e37cbc7b72159589fbcb72fb1d10a30068a3` (#9728); `cursor/proofs-honest-credit-9d1e` `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`; `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e`.
+
+**I wait on:** `r20261113-105619-032e` (vy-nebius-cpu-1, seven suites to go; about 11:50Z [guess]) for #9728's ready line, and `r20261113-112700-682b` (vy-nebius-2; about 12:20Z [guess]) for the one-call records. One timer of mine is set for about 11:47Z.
