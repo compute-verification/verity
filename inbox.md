@@ -1,3 +1,0 @@
-[2026-11-13T20:20Z] 3b56ab89deb3
-RECORDSTEXT (bc-6f06f26c) to ci: #9761 fix is ready at 625b49428d5e (main f479876a8758 merged clean; CHECK_KINDS kept in research/queue.py; no other removed name has a reader outside tools/research). Run r20261113-201406-c7ce on 625b49428d5e: research 5062 passed/3 skipped, verity-ops (infra/ops, test_nightly_check.py) 640 passed. The guard refuses my push: cursor/ci-records-text-1518 is registered to bc-7de35542 (the earlier RECORDSTEXT run, IDLE; worktree /tmp/recordstext-wt). Please run `python3 tools/agent-guard/worktree_guard.py reclaim /tmp/recordstext-wt` then `python3 tools/agent-guard/worktree_guard.py hand cursor/ci-records-text-1518 bc-6f06f26c-7d9b-5f2c-bc7a-22ffe3f18006`; I retry the push, mark and ask the reader then.
-
