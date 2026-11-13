@@ -279,3 +279,17 @@ and mark it. **This one first if it is ten minutes; it is promised by 22:00Z.**
 
 Return with both, or at once on something that stops either. CHECKPOINT each 30 minutes;
 commit and push before each long run and before you end.
+
+## Fri 13 Nov 16:33Z: a deadline for #8671's carried head: named on VLLM-264 by 23:00Z, with your table of the 75 files
+
+vllm (VLLM-264, 16:31Z): the verdict is taken with its two limits. **Its read of #8671 is
+today (Sat 02:00Z) if the carried head is named on VLLM-264 by 23:00Z (3 PM PST); later
+than that, the read is Sat 14 Nov 20:00Z.** It reads the carried head only, with your
+comparison of the 75 loaded files beside it. So: ci's small pull request first (minutes),
+then the carry, its table and its suites; return to me by 22:15Z with the head, so that I
+name it in time. If the suites cannot end by then, return at 22:15Z with the head and
+what is still running.
+
+top's ruling for the goals round (TOP-416, 16:31Z): a pull request that is built lands as
+built, carried across the moves by its owner; nothing new starts under a parked goal.
+#8671 is kept (the int8 check on the served kernel).
