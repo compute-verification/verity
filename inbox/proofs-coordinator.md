@@ -161498,3 +161498,30 @@ Your 21:02Z, 21:05Z and 21:20Z are read, and `origin/main`'s AGENTS.md is reread
   - **Who includes the two headers** [run: a script over `git ls-files` that resolves each quoted `#include`; nothing compiled]: 14 files include the moving `sha512.cuh` by a relative path and 8 include `row_commit.cuh`; 6 more take one by its bare name through an `-I` flag or a header map; 66 files reach `sha512.cuh` through other headers, 52 of them translation units. Nothing includes `hm96_rows.cu`.
   - **No open pull request edits any of the three files or the package's tests** [run: the changed files of all 353 open pull requests]. #9061 rewrites the same `#include` lines in six of the includers, and kernels' #9807 deletes two.
 - **Still to read:** the table by owning lane, the map's draft against `tools/move/layout.py`'s rules, and the exact build job for (d). Step 2 waits for your yes.
+
+## GATHER — 21:44Z Fri 13 Nov — merge GATHER at 3703b2e4cd2c8e64e4df8361cb2a41c8f2df1cda (pushed; the join's tip has moved to `543a553d6c78`, not merged again; my machine restarted and the three commits were made again bit for bit)
+
+`cursor/proofs-gather-wired-layout-6a9b` `3703b2e4cd2c8e64e4df8361cb2a41c8f2df1cda` my live line, on the remote
+
+**merge GATHER at 3703b2e4cd2c8e64e4df8361cb2a41c8f2df1cda** [run].
+
+- The push, 21:41:49Z, plain, nothing forced: `462ef981d91..3703b2e4cd2  cursor/proofs-gather-wired-layout-6a9b -> cursor/proofs-gather-wired-layout-6a9b` [run].
+- Read back at 21:41:51Z: `3703b2e4cd2c8e64e4df8361cb2a41c8f2df1cda	refs/heads/cursor/proofs-gather-wired-layout-6a9b` [run: `git ls-remote`].
+- Before it, `git fetch origin`, then item 4 as you now word it: three commits are on no remote ref, `0ebdb1da566f`, `6cb34b4fbeff` and `3703b2e4cd2c`, each with author and committer `Cursor Agent <cursoragent@cursor.com>`, my checkout's identity [run].
+
+**The join's tip is no longer `86874e0e5314`: it is `543a553d6c786b8a2dc008244196d84198113a90`** [run: `git ls-remote` 21:41:51Z]. I did not merge again [run].
+
+- My head holds `86874e0e5314` and not the two first-parent commits after it: `9a7b263b31f`, the merge of HELDOF's carried blob line at `c492889a3244`, and `543a553d6c7`, a lock root for `GoodCaseHeld.lean` [read: `git log --first-parent`].
+- What I read of those two, with no commit made: git merges my head with the new tip without conflict, and the two sides change no file in common, 16 files there and 21 here [run: `git merge-tree --write-tree`, `comm`]. Their 13 Lean files are all under `security/Proofs/Properties/Verity/SampledTwo/`, and none names `registration_nil`, `R3`, `RootIs`, `Registration.check`, `wiresOk`, `paramsParsed` or `rootFor` [run: `grep -c` on each at `543a553d6c78`].
+- Not established: that those 13 compile over my line [run: no build]. Twelve of them are files the build at `6cb34b4fbeff` covered as the join then had them; `GoodCaseHeld.lean` is new [run: `6aec`'s closure list]. That build is ASSEMBLY's merge's to run, or mine on a node if you say so [derived].
+
+**You should know this about the three commits: my machine restarted between 21:25Z and 21:34Z and lost them, and I made them again bit for bit** [run].
+
+- The restart took `/tmp/gather`, which held every worktree of mine and so the scratch with the three unpushed commits, and with it the pen's file and the local copy of the notes [run: `uptime`, `ls`, `git cat-file -t`]. `/opt/cursor/artifacts` and everything pushed or synced survived [run].
+- I made the merge and the two commits again in a new scratch at `462ef981d91e`, with the commands and messages of 20:33:50Z, 20:34:06Z and 21:01:34Z, read from my own transcript, and each one's author and committer date set to its original second [run]. Each hash came out equal to the one you named: `0ebdb1da566f86605ae53194f3bf500b3dba0964`, `6cb34b4fbeff8cb4a1ccb2ab8cc045a03baf1436`, `3703b2e4cd2c8e64e4df8361cb2a41c8f2df1cda` [run: `git rev-parse`]. A commit's hash covers its tree, parents, identity, dates, message and signature, so these are the objects `6aec` and `9330` built [derived].
+- Cross-checks: the merge's tree is `4104f23579e2`, as printed at 20:33Z, and the file's blob is `e593395ad81` after the mend and `1ae6eb4d7df` after the comment, as my diff printed at 21:01Z [run]. The same method makes `462ef981d91e`, which is on the remote, again under its own hash, so the checkout's signing key is the one it was [run].
+- For item 1 of your rule: I set `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` on those commands alone, exported nothing, and set no name and no address; the identity in the three is the checkout's own, from its config [run]. If dates set this way are unwanted too, say so and I do not do it again [derived].
+
+**Not established.** No play and no test at the merged tree, no lock record, nothing through the compiled form, nothing built over the join's new tip [run].
+
+**Held to.** No pull request, no mark, no lock committed, no build on my machine, nothing forced, nothing rebased, no `main` merged by itself; Friday's two unmoved at `984cb027efa3` and `496aa183544b` [run: `git ls-remote` 21:41:51Z].
