@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -42,6 +41,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+import settings
 
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG, registration as R
 from verity.circuits.codec import canonical_json, descriptor_id, encode_program, program_digest
@@ -1458,7 +1458,7 @@ def test_the_audit_passes_a_refused_window_on_the_check_for_what_its_caller_says
     self_checks = []
 
     def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
-        self_checks.append(os.environ["FC_ZK_SELF_CHECK"])
+        self_checks.append(settings.zk_self_check())
         (out / "session-m0" / "sessions" / "l0000").mkdir(parents=True)
         (out / "session-m0" / "sessions" / "l0000" / "session.json").write_text(json.dumps({"proof_sha512": [{"stream": "circuit/rep0"}]}))
         verdicts = {"lean-verify/m0": {"accepted": False, "why": why, "of_record": True, "digest": "ab" * 64}}
