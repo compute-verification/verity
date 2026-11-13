@@ -113,3 +113,34 @@ ENTRIESONCE to network-accounting (lead), Thu 12 Nov 5:22 PM PST. **As you asked
 
 TIMER: none
 
+[2026-11-13T01:24Z] b1d4717f78ff
+From SCANCOUNT, Thu 12 Nov 5:24 PM PST. To network-accounting (lead).
+
+**Run 2 ended: failed, on `trees` alone. The `domain` entry is taken. Way 1 is pushed; its try waits for a slot. A's date holds.**
+
+## Run 2: `r20261113-004114-5195`, tree `ad3ee3cd503a` [ran; its audit lines and its review file read whole]
+- `security/Properties`: FAIL, with one failing line, `trees` (`scan_honest` reads `sksL` and `toyA`). No `open` line, no `domain` line, no `honest` line.
+- The review says of `scanScopeAcc`: "takes Claims.SamplingGeneric.Compiled.Scope as a domain hypothesis (new) ...; no longer takes Properties.NetworkScan.ScopeMatches (was open)". So the entry is read as you ruled it.
+- No new `open` entry.
+- Records that moved, mine, each expected:
+  - `scanScopeAcc`: its premises, as quoted above.
+  - `scanScopeAcc_nontrivial` and `scan_honest`: their statements.
+  - The definition `ScanScopeAcc`: changed.
+  - Three definitions no guarantee of the package reads any more: `Properties.NetworkScan.ScopeMatches`, and through it `Claims.ScopeMatches` and `Claims.SamplingGeneric.Compiled.scopeCheck`.
+- Records that moved, not mine: `Properties.NetworkPeriod.rowsCapPublished_nontrivial` (its terms gained `entries := 0`), eight definitions of `NetworkCheck.Period`, `cappedPeriod`, `Verity.Idle.vocab` and `Verity.Vocab`'s fields. None is declared in a file step A touches [ran: `git diff --stat` of the base against my head names four files, the three of step A and the lock].
+- `security`: its first audit failed on six `guarantees:` lines, each a record difference, and the run regenerated it (PASS). I committed nothing from the run.
+
+## Way 1, on step A's branch [ran: pushed]
+- `a955eafdb30f`: `scan_honest`'s third conjunct is `∃ A D x, D.Scope x` over `Claims.SamplingGeneric.Arg Bool`, `Compiled Bool A` and `Claims.Msg`, proved at `twoL Bool` by `twoL_scope []`.
+- `53f340ef3e`: docs only. Two docstrings of the proofs file said no descriptor's acceptance can be exhibited because `Flock.Program.decode` reads `Lean.Json.parse`, a `partial def`. `decode` reads the total `JsonParse.parse` (`verity/circuits/lean/Circuits/Program.lean:956-958`) [read]. They now say only that no descriptor is evaluated there. `main`'s copy has the same stale sentence.
+- The try, `r20261113-010713-45a5` (`--siblings`, tree `a955eafdb30f`), was launched 5:07 PM PST and still waits for a slot. One line when it ends. Nothing of way 1 is [ran] in Lean until then.
+
+## The records run at the new head, and the replay
+- **I hold the records run for A's head once it is on `main` with #9375** (your point 3), so that one run is the pull request's. Say if you want one sooner at `53f340ef3e`.
+- Why I think it can wait [read, not ran]: the statement now names only `Arg`, `Compiled`, `Compiled.Scope` and `Msg`, all of `Definitions/Claims/SamplingGeneric.lean`, so `trees` has nothing of the proofs tree to find; and the honest rule reads a conjunct's head past its `∃` binders (`tools/verity/lean/Facts.lean:977-979`), which is still `Compiled.Scope`.
+- **The replay can run at that same head, in the same launch** [read: `tools/verity/lean/README.md:53-58`]. The full check (`check.py --build --update security/Properties` through `research run`, 180 minutes allowed) writes the records and replays through the kernel; the fast path writes the records only. So I propose one run, the full check, in place of a fast-path run and then a replay. Say if you want the fast path first.
+- Not checked: whether the pool's replay cache holds the unchanged modules of `security/Proofs` at that head. If it does not, the replay covers far more than step A's three files and may not fit in 180 minutes.
+
+## Still owed, Fri 13 Nov 2:00 PM PST
+C's two reads, job 2's two reads, and your NET-404 read. All but the counterexample try are read and in my note; the try is in hand.
+
