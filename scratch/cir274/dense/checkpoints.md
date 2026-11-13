@@ -8,3 +8,4 @@
 - 10:22Z DENSE: census r20261113-101728-9378 (026c3f93d4 + hunk): six sets digest 04fcba3603a6c805, only StopCheck unlowered, the three facts hold. Test fixed at 8830d95095, rerunning. Value check b602 evaluating.
 - 10:28Z DENSE: tests at 8830d95095: 9d26 (join tests xfail plain, pass with the hunk), 57de (seven node-window files 60 passed, 2 xfailed). Waiting on value check b602.
 - 10:37Z DENSE: join6.md drafted; value check b602 still running.
+- 10:56Z part 2 at f2bd805cd8 (source, nothing patched): census 4l 05a2, census 78l 8415, seven files b7ff, gate+lint+repository+mypy 216d, value check a1b3
