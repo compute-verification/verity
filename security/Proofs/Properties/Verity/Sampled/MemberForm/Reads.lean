@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.MemberForm.Sent
-public import Proofs.Properties.Verity.Sampled.MemberForm.WindowPasses
+public import Proofs.Properties.Verity.Sampled.MemberForm.Registered
 public import Proofs.Properties.Verity.Sampled.MemberForm.Units
 public import Proofs.Properties.Verity.Sampled.MemberForm.Links
 public import Proofs.Properties.Verity.Sampled.MemberForm.Files
@@ -12,26 +12,20 @@ public import Proofs.Properties.Verity.Sampled.Held
 /-!
 # What the verifier's acceptance gives of a play of the per-member form, at the window
 
-`WindowInstance.WindowReads` is what the window's theorem takes of each accepted play: every release of the sample's
-family precedes every opening, and the play has the sessions of the window's sample (`WindowRead`,
-`WindowSessions`). This file proves it of an accept of the per-member form, at the evidence the verifier reads for
-each session on the blobs sent (`sentEvidenceAt`) and the proof files decoded from it at the statement's table
+`WindowRead` is what the window's theorem takes of an accepted play: every release of the sample's family precedes
+every opening, and the play has the sessions of the window's sample (`WindowSessions`). This file proves it of an
+accept of the per-member form (`windowRead_members`), at the evidence the verifier reads for each session on the
+blobs sent (`sentEvidenceAt`) and the proof files decoded from it at the statement's table
 (`statementFiles statementTable`).
 
-* **The window's population is the registration's** (`WindowOn.population`): the form's structure holds the
-  members' counts to the registration's population (`laidHeld_sum`), and the window's members' proof blocks, as many
-  as their counts, sum to the window's population (`WindowOn.total`).
-* **The read at a play** (`windowRead_members`): the sample's family's releases precede every opening
-  (`accept_read`'s `SampleLinkFirst`); and at coins whose bytes are the window's, the window's sample is the units
-  v1's check proved (`joint_draw_of_drew`, `checkAt_proved`), so each member with a proof block in it has a
-  statement with one session (`member_session`), which the check names at its place (`named_at`), whose record and
-  evidence are the ones sent for that place (`sentRecordAt_session`, `sentEvidenceAt_session`), which the
-  verifier's read holds the device's log to (`sessionRead_logged`), and whose proof files are the evidence's
-  (`statementFiles_evidence`); the log opens as many trees as statements (`members_place_logged`), each tree's
-  streams named once and each opening of a tree opened before the last tree's (`Accepted.specs`,
-  `Accepted.opensLast`).
-* **`WindowReads`** (`windowReads_members`): the read at each play of the period's game, whose parameters are the
-  game's.
+The sample's family's releases precede every opening (`accept_read`'s `SampleLinkFirst`). At coins whose bytes are
+the window's, the window's sample is the units v1's check proved (`joint_draw_of_drew`, `checkAt_proved`, at the
+registration's population, `WindowOn.population`), so each member with a proof block in it has a statement with one
+session (`member_session`), which the check names at its place (`named_at`), whose record and evidence are the ones
+sent for that place (`sentRecordAt_session`, `sentEvidenceAt_session`), which the verifier's read holds the device's
+log to (`sessionRead_logged`), and whose proof files are the evidence's (`statementFiles_evidence`). The log opens
+as many trees as statements (`members_place_logged`), each tree's streams named once and each opening of a tree
+opened before the last tree's (`Accepted.specs`, `Accepted.opensLast`).
 
 It takes two statements besides the play: `FormAccepts`, which holds of the check as it is and which a check that
 accepts the form proves of its own accepts, and `RegisteredHolds`, the registration's.
@@ -46,26 +40,6 @@ open Lean (Json)
 open Properties.Challenger (bitsOf Draws)
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
-
-/-- **The window's population is the registration's**: at the window the parameters' members are on, whose members'
-files pass, where the form's structure holds the members to the registration `rec` (`Spot.OneStageZk.laidHeld`),
-the window's population is the population `rec` names. -/
-theorem WindowOn.population {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
-    (h : WindowOn V θ F W) (hp : ∀ m ∈ W.ms, FilesPass m) {p : _root_.Spot.OneStageZk.Params}
-    {ms : Array _root_.Spot.OneStageZk.Member} (hpa : ParamsAt θ p) (hms : p.members = some ms) {rec : Json}
-    (hl : _root_.Spot.OneStageZk.laidHeld ms rec = .ok ()) {n : ℕ}
-    (hn : _root_.Spot.nat? (_root_.Spot.getD rec "population") = some n) : W.nJ = n := by
-  obtain ⟨p', ms', vms, hp', hms', hperm, -, hall, -⟩ := h.members
-  obtain rfl : p = p' := hpa.unique hp'
-  obtain rfl : ms = ms' := Option.some.inj (hms.symm.trans hms')
-  obtain ⟨n', hn', hsum⟩ := laidHeld_sum hl
-  obtain rfl : n = n' := Option.some.inj (hn.symm.trans hn')
-  have h1 : vms.map (fun vm : _root_.Spot.OneStageZk.Member => vm.count) =
-      W.ms.map (fun m : Member W.nJ => m.n) :=
-    forall₂_map_eq hall fun vm m hon => hon.units.symm
-  have h2 := sum_perm (fun vm : _root_.Spot.OneStageZk.Member => vm.count) hperm
-  have h3 : (W.ms.map fun m : Member W.nJ => m.n).sum = W.nJ := h.total hp
-  exact h3.symm.trans ((congrArg List.sum h1).symm.trans (h2.trans hsum))
 
 /-- **What the verifier's acceptance gives of a play of the per-member form, at the window the verifier sets up at
 its parameters** (`WindowRead`): where the form's accepts hold `MembersAccept` and the registered files hold each
@@ -186,20 +160,5 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
     sentRecordAt_session hcs hevs hB hBu, hdec, hread, hτ, sentEvidenceAt_session hcs hevs hevd, ?_⟩
   rw [hstt]
   exact statementFiles_evidence hsv.files hevd htb
-
-/-- **What the verifier's acceptance gives of each play of the per-member form, at the deployment's windows**
-(`WindowInstance.WindowReads`), at the evidence sent for each session and the proof files decoded from it at the
-statement's table: `windowRead_members` at each play of the period's game, where the form's accepts hold
-`MembersAccept` and the registered files hold each member's file. -/
-theorem windowReads_members (I : WindowInstance d α) (k : Verity.Registration.Composite) (hF : FormAccepts)
-    (hR : RegisteredHolds I.base) : I.WindowReads k sentEvidenceAt (statementFiles statementTable) := by
-  intro θ F W hW c σ z hv hl ht hfs hsd
-  have hθ := (play_ends I.base θ F c σ z).1
-  have hset : MembersSetUp I.base (CoinTape.run (I.base.game θ F c) σ z).params F W := by
-    rw [hθ]
-    exact (I.windows_some hW).2
-  have h := windowRead_members hF hR hset hv hl ht hfs hsd
-  rw [hθ] at h
-  exact h
 
 end Verity.Sampled.MemberForm

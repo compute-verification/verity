@@ -19,6 +19,11 @@ many proof blocks as the member has units. This module reads, off one session's 
   registration's units and the members' counts to its population (`laidHeld`, which the form's structure check
   runs), and at a member of the one range `[lo, hi)` its first unit is `lo`, its count `hi - lo`, its unit at slot
   `u` is `lo + u`, and the sample holds one of its units exactly where it holds a unit from `lo` up to `hi`.
+* **The window's population** (`WindowOn.total`, `WindowOn.population`): at the window the parameters' members are
+  on, where every member's files pass, the members' counts sum to the window's population (the committed files'
+  units are the population and the members' reads' units summed, `Verity.FileRead.unitsWith_eq_sum`, and a member
+  whose files pass has as many units in its read as proof blocks, `Flock.Guarantees.MemberV5.fileRead_units`), which
+  is the population the registration names where the form's structure holds the members to it (`laidHeld_sum`).
 * **The record's sample is a subset sample** (`sessionVerdict_subset`): a session whose verdict passes has a record
   with a sample, which decodes by the subset sampling design; `verify --zk` refuses a session without a sample, and
   a session set up without a stratified input refuses a stratified one.
@@ -128,6 +133,46 @@ theorem membersStructure_laid {p : _root_.Spot.OneStageZk.Params} {ms : Array _r
   obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
   obtain ⟨⟨⟩, hlaid, -⟩ := ebind_ok h
   exact hlaid
+
+/-! ## The window's population -/
+
+/-- **The members' counts sum to the window's population**, where every member's files pass: the committed files'
+units are the population and the members' reads' units summed, and a member whose files pass has as many units in
+its read as proof blocks. -/
+theorem WindowOn.total {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : WindowOn V θ F W)
+    (hp : ∀ m ∈ W.ms, FilesPass m) : (W.ms.map fun m => m.n).sum = W.nJ := by
+  obtain ⟨m₀, rest, hW, hread⟩ := h.read
+  have hu : V.units θ F = ((W.ms.map fileRead).map Verity.FileRead.units).sum := by
+    rw [hW, List.map_cons]
+    show (V.read θ F).units = _
+    rw [hread]
+    exact Verity.FileRead.unitsWith_eq_sum (fileRead m₀) (rest.map fileRead)
+  refine Eq.trans ?_ h.units
+  rw [hu, List.map_map]
+  refine congrArg List.sum (List.map_congr_left fun m hm => ?_)
+  exact ((m.toV5 0).fileRead_units ((hp m hm).checked_all 0)).symm
+
+/-- **The window's population is the registration's**: at the window the parameters' members are on, whose members'
+files pass, where the form's structure holds the members to the registration `rec` (`Spot.OneStageZk.laidHeld`),
+the window's population is the population `rec` names. -/
+theorem WindowOn.population {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : WindowOn V θ F W)
+    (hp : ∀ m ∈ W.ms, FilesPass m) {p : _root_.Spot.OneStageZk.Params}
+    {ms : Array _root_.Spot.OneStageZk.Member} (hpa : ParamsAt θ p) (hms : p.members = some ms) {rec : Json}
+    (hl : _root_.Spot.OneStageZk.laidHeld ms rec = .ok ()) {n : ℕ}
+    (hn : _root_.Spot.nat? (_root_.Spot.getD rec "population") = some n) : W.nJ = n := by
+  obtain ⟨p', ms', vms, hp', hms', hperm, -, hall, -⟩ := h.members
+  obtain rfl : p = p' := hpa.unique hp'
+  obtain rfl : ms = ms' := Option.some.inj (hms.symm.trans hms')
+  obtain ⟨n', hn', hsum⟩ := laidHeld_sum hl
+  obtain rfl : n = n' := Option.some.inj (hn.symm.trans hn')
+  have h1 : vms.map (fun vm : _root_.Spot.OneStageZk.Member => vm.count) =
+      W.ms.map (fun m : Member W.nJ => m.n) :=
+    forall₂_map_eq hall fun vm m hon => hon.units.symm
+  have h2 := sum_perm (fun vm : _root_.Spot.OneStageZk.Member => vm.count) hperm
+  have h3 : (W.ms.map fun m : Member W.nJ => m.n).sum = W.nJ := h.total hp
+  exact h3.symm.trans ((congrArg List.sum h1).symm.trans (h2.trans hsum))
 
 /-! ## The record's sample is a subset sample -/
 

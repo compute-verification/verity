@@ -75,7 +75,7 @@ the lock) give of the bytes and the release log they accept, each stated at the 
   place of a member a filter keeps (`filter_at`).
 * `MemberForm.Sample`: the sample a session's record holds at its member's statement, and the units it proved
   (`session_sample`): the subset print of slots ascending below the member's count, the units the member's first
-  unit plus each slot.
+  unit plus each slot. The window's population is the one the registration names (`WindowOn.population`).
 * `MemberForm.Units`: the units the form's sessions proved, member by member (`run_over`), and the session of a
   member the sample holds (`member_session`): its statement's place among the statements, its verdict at the
   member's own statement, and its record's sample the sample file of the member's part of the window's sample.
@@ -86,16 +86,16 @@ the lock) give of the bytes and the release log they accept, each stated at the 
   `membersParamsOfJson_apart`), and what the proofs read of that at an accept (`FormApart`, of the check as it is
   by `formApart_refused`).
 * `MemberForm.Laid`: the window the parameters' members are on is laid out (`WindowOn.laid`): its members' units'
-  counts sum to its units (`WindowOn.total`, from the files' units), and each member's units lie one after another
-  from where the members before it end.
-* `MemberForm.WindowPasses`: at each play the form accepts, the window the verifier sets up is laid out and each
-  member's files pass (`windowPasses_members`), which is what a window's instance takes of the form's acceptance;
-  so the verifier sets the deployment's window up at every accepted play (`windowAt_form`).
+  counts sum to its units (`WindowOn.total`), and each member's units lie one after another from where the members
+  before it end.
 * `MemberForm.Sent`: each session of the form in what the prover sent: the evidence sent for the `u`-th session
   (`sentEvidenceAt`), the `j`-th statement's one session as the evidence's `j`-th, named at place `j` (`named_at`),
   its record and evidence among what was sent (`sentRecordAt_session`, `sentEvidenceAt_session`), its one table and
   that table's coin tree (`rootBTables_one`, `Member.spec_coinTree`).
-* `MemberForm.Reads`: at each play the form accepts, every release of the sample's family precedes every opening
-  and the play has the sessions of the window's sample (`windowRead_members`, `windowReads_members`), which is the
-  read a window's instance takes of the form's acceptance.
+* `MemberForm.Reads`: at a play the form accepts, every release of the sample's family precedes every opening and
+  the play has the sessions of the window's sample (`windowRead_members`).
+* `MemberForm.WindowPasses`: what a window's instance takes of the form's acceptance. At each play the form
+  accepts, the window the verifier sets up is laid out and each member's files pass (`windowPasses_members`), so
+  the verifier sets the deployment's window up at every accepted play (`windowAt_form`), and each play has the
+  window's read (`windowReads_members`).
 -/

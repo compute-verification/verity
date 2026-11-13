@@ -17,6 +17,8 @@ hold of the compiled check the day the form accepts:
 * **The form's accepts hold it** (`FormAccepts`): of everything v2 accepts at the coins it read (`V2Accepts`) on
   parameters that name members. It holds of the check as it is, which accepts no such parameters
   (`formAccepts_refused`); a check that accepts the form must prove it of its own accepts.
+* **An accepted play at parameters that name members is an accept of the form** (`accept_members`): v2's case in
+  it accepted at the coins it read, on those parameters, and the form's accepts hold `MembersAccept`.
 * **A statement of the form as the sessions' verdicts read it** (`stepAt`): what `Spot.OneStageZk.StepAt` holds
   besides the form of its circuit file is the statement `SessionVerdict` and `Verdicts` are stated at, with the same
   `step` (`stepAt_step`).
@@ -60,6 +62,23 @@ theorem formAccepts_refused : FormAccepts := by
   intro bs a b e p c ev ξ dr ms h hm
   obtain ⟨-, -, -, -, -, pub, prof, hacc⟩ := h
   cases hm.symm.trans (_root_.Spot.OneStageZk.checkBlobsAt_accept hacc).2.1
+
+/-- **An accepted play at parameters that name members is an accept of the form**: v2's case in the play accepted
+at the coins it read, on the play's parameters, and the form's accepts hold `MembersAccept`. -/
+theorem accept_members {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+    {k : Verity.Registration.Composite} {o : Verity.Exchange} (hF : FormAccepts)
+    {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member}
+    (hp : ParamsAt o.params p) (hms : p.members = some ms) (hv : V.Verdict k .sampled o) :
+    ∃ (a b e : ByteArray) (c : _root_.Spot.OneStage.Commitment) (ev : _root_.Spot.OneStageZk.Evidence)
+      (ξ : ByteArray) (dr : Draws) (sts : Array _root_.Spot.OneStageZk.StatementFiles)
+      (r : _root_.Spot.OneStageZk.Run),
+      V2Case k o.sent a b e ∧ V2Accepts (_root_.Core.Blobs.ofArray o.sent.blobs) a b e p c ev ξ dr ∧
+        MembersAccept p c ξ ev (_root_.Core.Blobs.ofArray o.sent.blobs) ms sts r := by
+  obtain ⟨a, b, e, p', c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp (verdict_case hv)
+  have hpp : p = p' := paramsAt_case hv.2.1 hcase hacc hp
+  subst hpp
+  obtain ⟨sts, r, hM⟩ := hF _ _ _ _ _ _ _ _ _ _ hacc hms
+  exact ⟨a, b, e, c, ev, ξ, dr, sts, r, hcase, hacc, hM⟩
 
 /-- **A statement of the form as the sessions' verdicts read it**: its inputs, the verifier's registered reads, the
 scope, files and population checks and its program's digest against the partition object's; without the form of its

@@ -12,12 +12,9 @@ blocks sit after the earlier members'. This file proves it of the window the par
 (`WindowOn`), where every member's files pass (`FilesPass`), each member is one range of units and no unit is in two
 members' ranges (`Apart`).
 
-* **The counts sum to the population** (`WindowOn.total`): the committed files' units are the window's population
-  (`WindowOn.units`) and are the members' reads' units summed (`unitsWith_sum`), and a member whose files pass has as
-  many units in its read as proof blocks (`Flock.Guarantees.MemberV5.fileRead_units`).
 * **Each member sits after the earlier ones** (`WindowOn.laid`): the members are in the order of their first units,
   each at the range from its first unit, the ranges share no unit and lie inside the population, and their counts sum
-  to it, so each starts where the ones before it end (`emb_of_tiles`).
+  to it (`WindowOn.total`), so each starts where the ones before it end (`emb_of_tiles`).
 * **From the counts and the places to `Window.Laid`** (`Window.laid_of`).
 -/
 
@@ -44,30 +41,6 @@ theorem Window.laid_of {W : Window} (ht : (W.ms.map fun m => m.n).sum = W.nJ)
 namespace MemberForm
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
-
-/-- The units of a member's files and each later member's, summed, are the sum of each one's. -/
-theorem unitsWith_sum : ∀ (r : Verity.FileRead) (rs : List Verity.FileRead),
-    Verity.FileRead.unitsWith r rs = ((r :: rs).map Verity.FileRead.units).sum
-  | r, [] => by
-    rw [Verity.FileRead.unitsWith, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
-  | r, s :: rs => by
-    rw [Verity.FileRead.unitsWith, unitsWith_sum s rs, List.map_cons, List.sum_cons]
-
-/-- **The members' counts sum to the window's population**, where every member's files pass: the committed files'
-units are the population and the members' reads' units summed, and a member whose files pass has as many units in
-its read as proof blocks. -/
-theorem WindowOn.total {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
-    (h : WindowOn V θ F W) (hp : ∀ m ∈ W.ms, FilesPass m) : (W.ms.map fun m => m.n).sum = W.nJ := by
-  obtain ⟨m₀, rest, hW, hread⟩ := h.read
-  have hu : V.units θ F = ((W.ms.map fileRead).map Verity.FileRead.units).sum := by
-    rw [hW, List.map_cons]
-    show (V.read θ F).units = _
-    rw [hread]
-    exact unitsWith_sum (fileRead m₀) (rest.map fileRead)
-  refine Eq.trans ?_ h.units
-  rw [hu, List.map_map]
-  refine congrArg List.sum (List.map_congr_left fun m hm => ?_)
-  exact ((m.toV5 0).fileRead_units ((hp m hm).checked_all 0)).symm
 
 /-- **A window whose members' files pass is laid out in order**, where each of the parameters' members is one range
 of units and no unit is in two members' ranges: the members are in the order of their first units, each at the range
