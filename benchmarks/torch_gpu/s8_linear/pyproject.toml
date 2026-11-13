@@ -15,7 +15,7 @@ untraced = ["tests/test_ship_nvcc.py", "tests/test_ship_place.py"]
 # tests/ evaluate the Definition (verity.circuits, which imports no other unit) and the twin's bf16 cast (verity.definitions.kernels.tc);
 # wgmma.py reads its variables through settings.py, on verity_config.settings; the SASS gate is the harness's build gate.
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/circuits",
-          "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "verity/configuration/config/verity_config",
+          "verity/definitions/kernels/__init__.py", "verity/definitions/kernels/tc.py", "tools/config/verity_config",
           "benchmarks/pouw/harness/sass_gate.py", "benchmarks/torch_gpu/ship_nvcc.sh",
           "benchmarks/torch_gpu/ship_probe.sh", "benchmarks/torch_gpu/job_nvcc.sh", "benchmarks/torch_gpu/ship.sh",
           "benchmarks/torch_gpu/ship_clock.c",
