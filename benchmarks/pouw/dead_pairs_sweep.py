@@ -5,12 +5,14 @@
 over depths and seeds on whole 64 x 64 audit tiles (`--cases` for dead pairs, `--raised` for the raised adder), and
 checks each mechanism on the scheme's own code (`--scheme`, `--raised-scheme`): `pearl_c.PearlC` at forming v1 with -h3's
 SHA-512 lines forms a small tile, admits it, and computes its ticket words; the program's words are computed with the
-device record's own atom and compared.
+device record's own atom and compared. `--raised-pearlc` does that on a whole 64 x 64 tile and adds the scheme's tile rule
+(`clear_work.check_opened`: the per-row rules and the inert-work bound) on the served verifier's batch forms.
 
     python benchmarks/pouw/dead_pairs_sweep.py --cases 8192:8192:1,16384:8192:2 --runs 1,2,3 --out "$OUT/cases.json"
     python benchmarks/pouw/dead_pairs_sweep.py --scheme 8192:1 --salts 3 --tile 4x4 --out "$OUT/scheme.json"
     python benchmarks/pouw/dead_pairs_sweep.py --raised 8192:8192:20:zero,8192:8192:20:gauss --units 1 --out "$OUT/raised.json"
     python benchmarks/pouw/dead_pairs_sweep.py --raised-scheme 8192:20:zero --salts 3 --tile 4x4 --out "$OUT/scheme.json"
+    python benchmarks/pouw/dead_pairs_sweep.py --raised-pearlc 65536:8192+65536:170:gauss --salts 3 --units 1 --out "$OUT/pearlc.json"
 """
 from __future__ import annotations
 
@@ -20,6 +22,7 @@ import importlib.util
 import json
 import sys
 import time
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -130,6 +133,105 @@ def raised_scheme_check(k: int, groups: int, fill: str, salt: bytes, rows: int, 
             "reference_atoms": k // 32}
 
 
+def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: bytes, rows: int = 64, cols: int = 64,
+                       units: int = 1, cross: int = 64) -> list[dict]:
+    """The raised adder on a whole audit tile that the scheme's own code forms, admits, checks and holds to its tile rule:
+    `PearlC.encode` at forming v1 with -h3's SHA-512 row seeds and lines, `admissible`, `checked`'s ticket words, and
+    `clear_work.check_opened`, the per-row rules and the inert-work bound on the tile and on each credited row, all on
+    `fast_tile`'s batch forms (the served verifier's `--fast`). The two programs' words are computed on the scheme's
+    codes and compared with `checked`'s on every word, and `cross` of `checked`'s words are recomputed with the scalar
+    chain. One row of the result per n of `ns`: the forming does not read n, the bound, the credit and the price do."""
+    sys.path.insert(0, str(HERE / "pearl_c_vllm"))
+    sys.path.insert(0, str(HERE.parents[1] / "verity" / "protocols" / "pouw" / "clear"))
+    import clear_work as CW
+    import fast_tile as FT
+    from verity.protocols.pouw.prover.schemes import pearl_c_debit as D
+    from verity.protocols.pouw.prover.schemes.pearl_c_work import UnitRecord
+
+    C.set_atom("hopper")
+    sch = PC.PearlC(forming="v1", device=H100)
+    scalar_chain = PC.chain
+    undo = FT.install(sch)
+    try:
+        clock = {"start": time.perf_counter()}
+
+        def lap(name: str) -> None:
+            now = time.perf_counter()
+            clock[name] = round(now - clock["start"], 1)
+            clock["start"] = now
+
+        tile = Tile(tuple(range(rows)), tuple(range(cols)))
+        u = Matmul(0, Shape(8192, k, ns[0]), 0)
+        ctx = Context(salt, u, hashlib.sha512(b"root-a" + salt).digest(), hashlib.sha512(b"root-b").digest())
+        XA = T._raised_rows("A", rows, k, groups, C._rng("scheme", "raised", k, "A", salt.hex()), fill)
+        XB = T._raised_rows("B", cols, k, groups, C._rng("scheme", "raised", k, "B"), fill)
+        a_rows = [bytes(r) for r in XA.astype("<f4").view("u1").reshape(rows, 4 * k)]
+        b_rows = [bytes(r) for r in XB.astype("<f4").view("u1").reshape(cols, 4 * k)]
+        ops = sch.encode(ctx, sch.noise(ctx), a_rows, b_rows, tile)
+        assert ops is not None
+        lap("encode")
+        admitted = bool(sch.admissible(ctx, ops))
+        checked = sch.checked(ctx, ops)
+        lap("checked")
+        a, b = np.array(ops.a.codes, dtype=np.uint8), np.array(ops.b.codes, dtype=np.uint8)
+        value = np.array([np.nan if c & 0x7F == 0x7F else PC.P.fp8_to_f32(c) for c in range(256)])
+        planted_ok, largest = True, 0.0
+        later = np.array([128 * g + l for g in range(groups) for l in range(32, 128) if l % 32 != 1])
+        for side, codes, plant in (("A", a, T.PLANT_A), ("B", b, T.PLANT_B)):
+            vals = value[codes]
+            for g in range(groups):
+                top = -448.0 if side == "B" and g % 2 else 448.0
+                planted_ok &= bool((vals[:, 128 * g + 1:128 * g + 4] == top).all())
+                planted_ok &= all(bool((vals[:, 128 * g + 32 * t + 1] == v).all()) for t, v in zip((1, 2, 3), plant[g % 2]))
+            largest = max(largest, float(np.abs(vals[:, later]).max()))
+        want = np.array(checked.c, dtype=np.uint32).reshape(-1)
+        sample = [(i * rows // cross, (5 * i) % cols) for i in range(min(cross, rows * cols))]
+        scalar_equal = sum(scalar_chain(ops.a.codes[i], ops.b.codes[j], H100) == int(want[i * cols + j]) for i, j in sample)
+        lap("codes")
+        ii, jj = np.meshgrid(np.arange(rows), np.arange(cols), indexing="ij")
+        A, B = a[ii.ravel()], b[jj.ravel()]
+        programs = {}
+        for name, fn in (("one-atom", T._raised_program), ("skip", T._raised_skip_program)):
+            words, atoms = fn(A, B, groups)
+            bits = words.astype(np.float32).view(np.uint32).copy()
+            bits[bits == 0x80000000] = 0
+            programs[name] = (int((bits == want).sum()), atoms)
+        del A, B
+        lap("programs")
+        flags, _ = FT._flags(FT._rows(ops.a.codes), FT._rows(ops.b.codes), H100)
+        in_planted = int(flags[:, :T.G * groups].sum())
+        atoms_f, zeros, elements = D.tile_debit(ops.a.codes, ops.b.codes,
+                                                [(ops.a.alpha[p], ops.a.x[p], ops.a.beta[p]) for p in range(rows)], H100)
+        assert atoms_f == int(flags.sum())
+        lap("debit")
+        out = []
+        for n in ns:
+            s = Shape(8192, k, n)
+            sch.check(Matmul(0, s, 0))
+            record = UnitRecord(Matmul(0, s, 0), real_rows=s.m, k_kept=k)
+            rule = CW.check_opened(sch, record, tile, a_rows, b_rows, ops)
+            lap(f"rule n={n}")
+            debit = D.debit_units(atoms_f, Fraction(cols * elements, n), sch.prices, H100, zeros=zeros)
+            cap = sch.cap * CW.cell_credit(sch, record) * rows * cols
+            per_word = Fraction(sch.credit_of(s), s.m * s.n)
+            for name, (equal, atoms) in programs.items():
+                cost, credit = T._raised_cost(s, atoms, units), units * Fraction(sch.credit_of(s))
+                out.append({"class": "raised-adder", "forming": "PearlC v1, -h3 SHA-512 lines", "program": name, "fill": fill,
+                            "shape": (s.m, k, n), "groups": groups, "units": units, "salt": salt.hex()[:16],
+                            "admitted": admitted, "tile_rule": rule, "planted_codes_as_designed": planted_ok,
+                            "largest_other_code_in_later_atoms": largest, "words": rows * cols, "equal": equal,
+                            "scalar_chain_agrees": f"{scalar_equal}/{len(sample)}", "atoms": atoms,
+                            "reference_atoms": k // 32, "flagged": atoms_f, "flagged_in_planted_groups": in_planted,
+                            "later_zero": int(zeros), "elements": int(elements), "debit": float(debit), "cap": float(cap),
+                            "cost": float(cost / (units * s.m * s.n)), "credit": float(per_word),
+                            "bound": float((1 - T.G0) * (1 - T.RHO) * per_word), "fires": T._fires(credit, cost)})
+        for o in out:
+            o["seconds"] = {key: v for key, v in clock.items() if key != "start"}
+        return out
+    finally:
+        undo()
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--cases", default="", help="k:n:groups, comma separated")
@@ -138,6 +240,8 @@ def main() -> None:
     ap.add_argument("--scheme", default="", help="k:groups, comma separated")
     ap.add_argument("--raised", default="", help="k:n:groups:fill[:program] (fill: zero or gauss; program: one-atom or skip), comma separated")
     ap.add_argument("--raised-scheme", default="", help="k:groups:fill, comma separated")
+    ap.add_argument("--salt-from", type=int, default=0, help="the first salt's index, for --raised-pearlc")
+    ap.add_argument("--raised-pearlc", default="", help="k:n[+n...]:groups:fill, comma separated: whole tiles on the scheme's code")
     ap.add_argument("--salts", type=int, default=1)
     ap.add_argument("--tile", default="4x4")
     ap.add_argument("--out", required=True)
@@ -160,6 +264,13 @@ def main() -> None:
             case["seconds"] = round(time.perf_counter() - t0, 1)
             out["cases"].append(case)
             print(json.dumps(case), flush=True)
+    for spec_ in filter(None, args.raised_pearlc.split(",")):
+        k, ns, groups, fill = spec_.split(":")
+        for i in range(args.salt_from, args.salt_from + args.salts):
+            for r in raised_pearlc_tile(int(k), [int(n) for n in ns.split("+")], int(groups), fill,
+                                        hashlib.sha512(b"raised/salt/%d" % i).digest()[:32], units=args.units):
+                out["scheme"].append(r)
+                print(json.dumps(r), flush=True)
     rows, cols = map(int, args.tile.split("x"))
     for spec_ in filter(None, args.raised_scheme.split(",")):
         k, groups, fill = spec_.split(":")
