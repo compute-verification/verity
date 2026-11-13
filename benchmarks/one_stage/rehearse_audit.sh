@@ -34,6 +34,8 @@
 #                         main's line). Once the build has made the tree's environment, the tree's own on_main is held
 #                         to TREE_PIN too, before the warm and the audit (exit 66). The clone is removed with the job's
 #                         directory. Unset: the tree is the directory the job starts in
+# The job drops the PYTHONPATH it was started with: the build, the warm, the audit, the public copy and the reader all run
+# in the tree's own environment (`uv sync`'s), on the tree's own packages, whatever commit the run's source is.
 # Once the audit has sampled, one line says the sampled member's circuit file's bytes and the seconds a table gives the
 # audit from there to its end: the kept run's stages' seconds, those that follow the member scaled to its circuit file.
 # The table is an estimate, no measurement, and nothing in the job acts on it.
@@ -128,6 +130,10 @@ if [ -n "${TREE_INPUT:-}" ]; then  # the tree audited is a sent input: cloned, h
   cd "$TREE" || exit 64
 fi
 PY=$TREE/.venv/bin/python
+# Every interpreter the job starts is the tree's environment's and reads the tree's own packages there. The runner's
+# PYTHONPATH names the packages of the run's source, which under TREE_INPUT is another commit, and an entry of it comes
+# before the environment's install of the tree: with it, `import verity` in a script of the tree is the source's.
+unset PYTHONPATH
 for f in "$VW/window/registration.json" "$VW/window/circuit.json" "$KEPT/windows.jsonl" "$WREG"; do
   [ -s "$f" ] || { step "PREFLIGHT: the kept serve dir has no ${f#"$KEPT"/}"; exit 64; }
 done
