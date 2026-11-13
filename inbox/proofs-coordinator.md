@@ -120538,3 +120538,62 @@ Nothing.
 Machine note [run]: this session's machine was a fresh clone at 04:27Z. Nothing was lost: every head of mine was on the remote, and I re-made the worktrees from it.
 
 Not established: that `OwnReads.lean`, `HeldOfReads.lean` or `ReadsCheck.lean` compile at `ba8cc8ab0c` (`0733` in flight); `ReadsWf` at any real parameters; `OpensOwn` at any device; that any play is accepted, so that `binds_of_own` or anything composed over the form's accept is more than true and empty. The package's Lean check with its lock has run on none of my heads.
+
+## TWOLEG, Fri 13 Nov 04:34Z: finding 2 holds; the last step is written as ruled (not compiled); the three step lemmas are written; J5 in line
+
+STOP RULE: none reached. Every change here refuses more or restates a proof over the new step; nothing accepts a form refused today. One move to name: SAME_FAMILY sits at the end of `paramsOfJson`, on the parsed labels the check reads (`bp.challenger`, `audit.base.challenger`), past the twin's mirror, not beside ONE_KEY on the JSON. Why: so ASSEMBLY's lemma is about the families `inputOf` hands the run, with no lemma over `OneStage.paramsParsed`. The twin and the difftest keep no case of it; the base case's labels are now `draw/first` and `draw/second`, and three `#guard`s pin `familiesApart`.
+
+**Finding 2 holds [read].** These lines decide it:
+- `two_stage.py:812` sets `a.coins = None` before `a5.audit(…, drawn=second)`.
+- Under `drawn`, `trees = False` (`a5.py:896-898`).
+- `write_case` in the `not streamed(a)` branch passes no coins, key, family or window root (`a5.py:1104-1108`).
+
+So the kept case names no challenger.
+
+**The flagged fix is pushed (not run).** `two_stage.py second --interior-trees`, off by default:
+- The second stage's session is started with the stage tag `a5_coins.SECOND`, so its family is `draw/second/0` against the first stage's `draw/0`.
+- It is held (`draws.hold(0)`) before the sample, not skipped after it, and handed to a5 as `a.stage`.
+- `a5.drawn_trees` puts the sessions' trees on it under FLOCK_CHALLENGER=1 with two members or more, else releases it at once.
+- `write_case` gets coins, key, family, window root and `member_trees` (`a5.stage_case`).
+- The size: a5.py +30, two_stage.py +13, a5_coins.py +18 (the tag has to reach the `Draws` process), and one new test in `test_a5_reserve.py`.
+
+**The last step, as ruled (not compiled), in `SampledTwo.lean`:**
+- `prepare` now ends `let law ← secondLawOf p run; pure (secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ {e.interior.base with verdicts := r.out}, run)`.
+- `secondLawOf` is `Select.secondLaw ((Draw.proved (getD run "draw")).map Int.toNat) ns ks`, with `ns ← Select.replayCells p.replay q`, `ks ← k.over (← Select.templateIds q) ns`, `q = p.interior.verifier.query` and `k` the rule's counts. It is computed and never read from the evidence. The sample is the run of record's own `draw` value; the lemma that it is the run's first sample is over `Run.run`'s steps and is not written.
+- `secondCheck`, in order:
+  1. population `m`;
+  2. `OneStage.coinsReason {v with law := subsetLaw m} law rec draw ξ₂`, so the draw is `flockLaw law`'s, as the run's `selectSecond`;
+  3. `Registration.check` at the subset law (R1 as the run reads it);
+  4. `Draw.checkDraw e.draw population law`;
+  5. `OneStage.recordChecks`, then `OneStage.verdictOf`;
+  6. the bound `Bound.boundOf m (profileDraw law) delta`, with per-stratum bounds.
+- `OneStage.lean` is untouched. The module docstring has the paragraph **The last step**.
+- `Steps.accepted_steps`'s last conjunct is now `∃ law, secondLawOf p run = .ok law ∧ secondCheck … = .accept pub prof`.
+- `SecondRead.second_read` is restated over it through `secondCheck_read`, with the draw `drawnFrom {v with law := subsetLaw n} law n ξ₂`.
+
+**The step lemmas, in `Shown.lean` (not compiled):**
+- CUT: `evidenceOf_coins : evidenceOf b = .ok e → e.coins ≠ Json.null`. The check takes the parsed evidence, so that is the shape that gives `FirstShown`.
+- CUT, the order: `accepted_order : checkBlobsAtWith form p c ξ e bs = .accept pub prof → (two windows, key k) → ∃ first second, … en.seq < r.seq`, which is `stagesOrdered_order (accepted_ordered h)`.
+- ASSEMBLY: `paramsOfJson_families : paramsOfJson j = .ok p → ∃ l, p.boundary.challenger.map (·.2) = some l ∧ p.audit.base.challenger.map (·.2) ≠ some l`.
+
+`SecondRead`, `ClaimInner`, `Ordered`, `Deployed` and `Shown` are now roots of `security/Proofs` (TRUSTED.sha256 regenerated). Their absence is what failed a018 and c4e4.
+
+NEEDS: none.
+
+Runs:
+- `r20261113-035525-5af6` (J1, at `d06ec7c3306d`): `BUILD rc=0` (sampled-two, sampled-two-on), `DIFFTEST rc=0` (65 passed), and `KEYTIME {"W": 1, "H": 20, "workers": 22, "seconds": 97.8, "public_bytes": 80}` [run].
+- `r20261113-025634-a018` (at `b6d9`): `Steps`' seven theorems depend on `[propext, Classical.choice, Quot.sound]`. It then failed: "unknown module `…SampledTwo.SecondRead`" [run].
+- `r20261113-040646-c4e4` (cpu-8, at `9b300c2d3ea2`): the form and `SampledTwoOnMain` built (`Built VStarRecursive.SampledTwo`). Then "error: unknown module `Proofs.Properties.Verity.SampledTwo.Ordered`", rc 1 [run].
+- `r20261113-042218-5639`: never ran (my slot wrapper named a slot list cpu-9 lacks). `r20261113-042304-7176` and `r20261113-042846-909f`: cancelled unstarted, on stale heads.
+- `r20261113-042950-253b` (J5, cpu-4, at `1f211470c7`): `--try` of all twelve SampledTwo proof files, then the build of `sampled-two`/`sampled-two-on`, then the difftest. In line.
+
+To post: nothing.
+
+Not established:
+- Nothing of this entry's Lean has compiled.
+- The driver flag has not run.
+- (c) has no run behind it.
+- The equality of `getD run "draw"`'s proved units with the run's first-stage sample.
+- (c'): coordinator item 4 noted; a small-height fixture is the `_honest` witness I aim at.
+
+Head `7832486258` (cursor/proofs-twoleg-c5e5).
