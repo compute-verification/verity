@@ -25,7 +25,7 @@ import itertools
 import json
 from dataclasses import dataclass
 
-from verity.definitions.circuits import library
+from verity.circuits import library
 
 from . import circuit as C
 from . import circuit_types as CT
