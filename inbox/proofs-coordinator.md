@@ -118726,3 +118726,106 @@ So my word on A23's day, due Fri 12:00Z, is early: **the run you asked for by Fr
 **Next, in order:** `2101`; #9595's body, quick tier and ready line; #9581's body; open PR 4; the R8 sentence (the merged tree has no `RowsTiedSampled`: it accepts a tied audit at any sample and charges one sampled in part, `RowsTiedCharged`, with `RowsStateTied` beside `RowsProgWired`); (l)'s sizing.
 
 **Heads pushed:** as in point 4; scratch `208e5bbe93`. Unpushed: nothing. I can pause at any time. Mailbox read at `4adc7e8915` (03:36:03Z).
+
+
+## COUNT, Fri 13 Nov 03:58Z: the served run's section is open as #9621 on benchmarks' hook and reads only names `main` has; #9479 is merged with `main` and waits on #9476 and #9454; on network's table we agree with all 13 rows, three with a condition, and nothing is built
+
+**In plain words, for Daniel.** Three things. First, the part of the exfiltration command that prints what Friday's audit showed, and what still stands between it and fully proved, now has a pull request of its own and no longer waits on any other change of ours. It sits on the benchmarks team's pull request that calls it and reads only what the command already has. On the rehearsal's files it prints what it printed before: every sampled proof accepted, the final accept withheld, not proved, with the list of what is open. One line is left out for now, the security level at the run's own sizes, until the pull request that defines that level lands; it comes back in a small follow-up. Second, the security level's pull request is merged with the main branch again and waits for two other teams' pull requests to land, since all three change the same pinned print; the second merge is one line, already computed. Third, on the network team's comparison of the two readers of the stop class's verdicts: they are right on every point, and the consequence should be said plainly. Once their reader is the only one, the network certifier's part under the design is charged its whole schedules until there are verdicts that name a signed head, and no verifier writes such a verdict today. Friday's run cannot lower that number, with either reader. Nothing here was measured on a served engine.
+
+### Job 1: #9479 (the security level), merged with `main`, not ready
+
+- Head `72b1a8a4a2b491258d24789ec21e5612cd9c518b` on `cursor/proofs-count-70d5`: one merge commit of `main` at `1e4d5c993c08` [run]. One conflict, the comment over the suite's inputs in `benchmarks/spot_figures/pyproject.toml`, both sentences kept; the inputs are both sides', 81, none twice [run].
+- Tests at that head, on my VM, one file a command [run]: `benchmarks/harness/tests/test_exfiltration.py` 36 passed; `benchmarks/spot_figures/tests/test_binding.py` 63 passed; `benchmarks/spot_figures/tests/test_headline.py` 25 passed.
+- Suites: `r20261113-033239-bbbf` on vy-nebius-cpu-10, launched 03:32Z, running at 03:56Z [run]; expected end by about 04:15Z [guess].
+- At 03:47Z [run: `gh pr view`]: #9521 MERGED; #9476 OPEN, its head moved to `c86c30b8f708`; #9454 OPEN at `de9bd72fdddd`. So no ready line.
+- The second merge, computed now [run: `git merge-tree`, and a scratch merge of the three heads]:
+  - #9476 at `c86c30b8f708`: no conflict, and it does not move the pinned print.
+  - #9454 at `de9bd72fdddd`: one conflict, the pin `NO_VERDICTS` in `benchmarks/harness/tests/test_exfiltration.py`. With all three merged the pin is text `d3827f13c6936a3a5f218211d4e8110abb74c4075f154a1606f99e7ea329fafa`, json `627912cb87733f1cd4036f35d27de37aad9707700b5a686d2a678b5a8e5abbf0`, the same at #9476's earlier head and at its new one [run]. It holds only while both heads stay where they are.
+- I wait on #9476 and #9454 on `main`.
+
+### Job 2: the served run's section: #9621, ours, built on #9551
+
+- Where it was [read]: `verity_bench/served_row.py` and its reader `verity_bench/served_record.py` were only on `cursor/proofs-count-9fb0` at `9a85151d9b81`, with no pull request.
+- The names it read that `main` lacks [read]: `E.SECURITY`, `E.LEAN_BOUND`, `E._lean` and `headline.binding_bound`. `main` never had them: they are #9479's, and `9fb0` held #9479's old head by merge.
+- Why a new branch and not a merge of `main` into `9fb0` [derived]: a pull request from `9fb0` would show #9479's lines and could not land before it. A branch from `main` with #9551 merged in at its head carries the reader and the section without the one block that read #9479's names, so Friday's module waits on #9551 alone.
+- Branch `cursor/proofs-count-b7e2`, head `e33cbdcda543a5d0501363a5f85a4268b5dceedb`, pull request #9621, unmarked, its body beginning `Lane proofs` [run: `research queue open`]. Over #9551's head it is 6 files, 1,391 lines, all new; `exfiltration.py` is untouched [run: `git diff --stat`].
+- Three changes against `9fb0` [run]:
+  1. The security level at the run's own sizes is out (`security`, `_security_said`, its test). It stays on `9fb0` for the follow-up.
+  2. The mark's resampling holes are read through `spot_status.served`, the reading #9551's next block prints for the same record. A hole that block prints as "closed at the runs read", one of the four runs not given, is not closed for the mark. One assertion each way.
+  3. The reader names the field `prove_seconds_source` by the command's own constant, and its test holds the two lists of sources to each other. On `main` the command now names that field among what a record lacks, and the test expected the earlier list.
+- Tests at `e33cbdcda543`, on my VM, one file a command [run]: `tests/test_served_row.py` 16 passed; `tests/test_served_record.py` 9 passed; `tests/test_exfiltration.py` 37 passed. `tests/test_spot_status.py` 28 passed at `9b1c5753c6a5`, one merge earlier; that merge changed three lines of `tests/test_prove.py` and nothing else. `ruff check` on the four new Python files: clean.
+- The whole command on the rehearsal's fetched files, at `9b1c5753c6a5` [run, on my VM; 4 min 40 s, nearly all of it the pull of the store's labels]: exit 0, 213 lines, the section between the figure and the block on the holes. The reader's record is byte for byte the one `9fb0`'s reader wrote [run: `cmp`]. The section's words are those of the 21:43Z entry less the security level's line: "verdict: run, not proved. Every sampled proof accepted by the Lean verifier (20 of 20 sessions); the final accept withheld, reason `two-stage-form`". A rehearsal proved on CPUs with a stand-in replay block; no served engine.
+- Suites: `r20261113-034848-bc7f` on vy-nebius-cpu-3, launched 03:48Z, waiting for a check slot at 03:54Z [run]; expected end by about 04:40Z [guess]. `r20261113-034553-e7cf`, launched three minutes earlier at the head before the merge, I cancelled [run]: #9551's new commit mends the inputs guard that the 21:41Z suites run failed on.
+- **For benchmarks, one thing their block prints on that record** [run]: the hole `redrawn sample` reads "not known", with "The fix's commit 9d4aec0111fb is a merge … declare the commit whose first parent is the base its change landed on". That is `spot_holes.json` at #9551's head `fd8b8b4562cd`. #9476's head `c86c30b8f708` holds a later commit, "a fix may be a range A..B", which #9551 does not hold yet [read: `git log`]. Printed from #9551 as it stands, Friday's row shows that hole as not known, and the label stays `SPOT`. Theirs to mend; I did not touch it.
+- I wait on: #9551 on `main`, then one merge of `main` and the ready line; and benchmarks' read, since it is their command.
+- The follow-up, the security level at the run's sizes: about 40 lines of `served_row.py`, one test and one suite input, on top of #9479. Not started.
+
+### Job 3: the two readers of the stop class's verdicts, read; nothing built
+
+Read [read]: every comment on the issue through 03:41Z. Two came after your 03:28Z message: network's lead at 03:40Z rules row 12 and asks soundness row 6, and soundness's lead answers at 03:41Z (that comment's own text says 04:50Z, an hour ahead of the clock that stamped it). The calculator's reader and rule at #9501's head: `benchmarks/network_traces/stop_verdicts.py`, `verity/protocols/certifier/verifier/class_charge.py`, `leak_bounds.Stop`. The harness's `verdict`, `stop_verdicts` and `stop_class` on `main`.
+
+#9501's head moved to `4c7dbfdb8a78` and now holds #9533's head and `main` itself [run: `git merge-base`], so their scratch merge is no longer needed to see the nine.
+
+Run [run, on my VM]: `tests/test_exfiltration.py` at their scratch merge `1a007bda7169`: nine red, the nine they name; at #9501's head `4c7dbfdb8a78`: the same nine. With no verdict of record, on the tests' fixtures, the network certifier's part over the world's year as the calculator models it at an assumed class of at most 1,024 ids a response, no served engine:
+
+| row | on `main` | at #9501's head |
+|---|---|---|
+| `design` | 1,847,615 GB | 26,392,406 GB, the figure of `design, no stop block` |
+| `all three`, under the set-time card's label | 0 GB | 24,453,012 GB, the figure network gives |
+
+That move is #9501's, not the join's: the join makes the harness's words agree with it.
+
+**(a) Each row of network's table.**
+
+| # | what | agree | in one line |
+|---|---|---|---|
+| 1 | the files of a run | yes | Nothing writes `out/verdicts.jsonl`: the section of #9621 prints one such line and writes no file [read]. A file for each verifier with the registration beside it is what a verifier can write, and the reader pools registrations and records over the runs it is handed, so a verdict in one run can name a head registered in another [read: `read`]. |
+| 2 | a record | yes, on a condition | A flat word names no head. But a digest in the compute audit's verdict is also only a word unless its verifier checked something against that head. Today the second stage's verifier is handed no head, and nothing holds its committed ids to a class's rows of one [read: the summary's fields]. The form is right; that verdict cannot be written honestly until that check exists. |
+| 3 | what a verdict is of | yes | One class of one execution phase on one signed head. The same condition as row 2 for the compute audit's. |
+| 4 | what a complete answer moves | yes | Six records of one run re-marking a 0 over a year of the world's requests is a figure scaled from one run that does not say so. The number moves, by the share of execution phases held. Its cost is the table above. |
+| 5 | `proved_by` | yes | Any string moves the harness's mark to `measured` [read: `stop_class`]. The section of #9621 already reads such a name against the lock, listed and with no open premise, and prints `proved` only then; the join can use that check, and the mark stays `run, not proved` until a reader also holds the statement to that verifier at that commit. |
+| 6 | negative controls | yes, as soundness ruled at 03:41Z | One control for each verifier, at its commit. Open on our side: the compute audit's is "a committed output changed". Each two-stage run already holds 18 negative controls, all refused in the rehearsal, each decided in Python by the driver, and none is named as a changed committed output [read: the rehearsal's `summary.json`]. Whether one of them is that control, and whether the driver's refusal counts as the refusal of the verifier that gives the final accept, is soundness's to say. |
+| 7 | who produced a verdict | yes | Mended at #9501. Nothing of ours. |
+| 8 | an accept the verifier held back | yes for the charge, on a condition for the word | `accepted` false charges the whole schedule, as it should. But the rule's line then reads "the compute audit is refused" [read: `class_charge.REFUSED`], and the reader hands on six fields of a verdict, not its codes [read: `_handed`]. A withheld accept is neither an accept nor a refusal, and Friday's verdict is one. The line should say `withheld` with its reason: one more value beside `refused`, and the codes handed on. |
+| 9 | the four | yes | One list, the rule's. "Request tie" and "certified read" are one verdict: in the harness's tests a complete class has a changed `max_tokens` refused on the request tie, and `max_tokens` is the first of the three words the rule's certified read names [read: both texts]. "Second stage" is the rule's "compute audit". |
+| 10 | a record that doesn't read | yes | Whole schedules with the line can only raise the figure, and the reason prints. One case under row 12. |
+| 11 | one verdict held twice | yes | Every record on the head must accept [read: `charge`]. That is stricter than a choice between records, and nothing resamples. |
+| 12 | a superseded run | yes, as ruled at 03:40Z, with one case unsaid | It adds no accept and takes away no refusal. The case the ruling does not name: a superseded run whose record doesn't read. By row 10 that puts every execution phase of every run at its whole schedule [read: `_whole`], and by row 12 no label takes it away, so one bad file under the label could never be mended. A record that doesn't read is on no head: in a superseded run it should charge nothing and be named in a line. |
+| 13 | today | yes | Nothing writes the other three verdicts in a form that names a head, so nothing is held, with either reader. |
+
+Not every row is theirs alone to decide. Rows 2, 3 and 8 are about the compute audit's verdict, which is ours, and row 6's fourth control is ours to run. So I build nothing before your word.
+
+**(b) The size of the join** [derived: from the line ranges read on `main` and at #9501's head; a count, not a build].
+
+- `benchmarks/harness/verity_bench/exfiltration.py`, 1,445 lines. Out, about 150: the flat reader (`verdict`, `stop_verdicts`, `stop_class`, three helpers, six constants). In, about 100: the labelled runs with which of them are superseded, handed to the calculator's reader; its answer passed to `lb.document(..., stop=...)` at three calls; the print's words at the six sites of `at_zero_in` and the two branches of the output count's input, for no row at 0 and for some execution phases held.
+- `benchmarks/harness/tests/test_exfiltration.py`. The nine red tests re-pinned. The eight tests of the flat reader, about 230 lines with their fixtures, rewritten on records that name a signed head; that needs a head and a registration built in the test, since the calculator's own helpers are in another suite. About 200 lines in.
+- `benchmarks/exfiltration/README.md`: the section on the stop class's verdicts, 34 lines, rewritten.
+- `benchmarks/harness/pyproject.toml`: the suite's inputs gain the calculator's reader and the rule's module.
+- `verity_bench/served_row.py` and its test, in #9621: the section prints the audit's verdict as a flat record held to the harness's `verdict`. With that reader gone the block changes or goes: about 30 lines and one test.
+- Whether the test of boundaries must list the harness's load of a second file of the calculator's directory: not looked at [guess: one line].
+- In all: five or six files, about 400 lines out and 350 in, one pull request built on #9501's head as #9621 is built on #9551's.
+
+**(c) Whether Mon 16 Nov 9 AM PST holds.** It holds on two conditions, neither of them mine to meet [derived].
+
+- The calculator's reader stops moving. By network's own account its interface changes twice more: for row 12, every labelled run with which are superseded ("in #9501 before its mark"), and for row 6, a control of record for each verifier at its commit, which no code reads or writes today and whose record has no form yet. The join calls that interface. If the controls go into #9501, the date is network's; if they come in a later pull request, the join can be built on #9501 without them.
+- Your word to build, and the head of #9501 to build on, by Sat 14 Nov noon PST, the time you gave network.
+
+With both, Monday 9 AM PST holds for the join without the controls. It does not hold for a join that also reads controls. And the join makes no verdict count: that waits on a verifier that names a head (rows 2 and 13).
+
+### To post (the issue of the two readers, from proofs, worded to send)
+
+    @network-accounting @soundness proofs (lead). **Your table, row by row from our side: we agree with all 13. Three carry a condition, and row 12's ruling leaves one case unsaid.**
+
+    - **Rows 1, 4, 5, 7, 9, 10, 11 and 13:** agreed as you argue them. On row 9 we checked the two texts: our "request tie" is your "certified read", and our "second stage" is your "compute audit". On row 5, our section for a served run already reads a `proved_by` name against the lock (listed, no open premise). The join can use that check, and the mark stays `run, not proved` until a reader also holds the statement to that verifier at that commit.
+    - **Rows 2 and 3, the form: agreed. One condition, ours to meet.** A digest in the compute audit's verdict is only a word unless the verifier checked something against that head. Today the second stage's verifier is handed no head, and nothing holds its committed ids to a class's rows. So that verdict cannot be written in your form yet, and we will not write one that names a digest nothing checked.
+    - **Row 8, the charge: agreed. One ask.** `accepted` false charges the whole schedule, as it should. But the rule's line then reads "the compute audit is refused", and the reader hands on six fields of a verdict, not its codes. A withheld accept is neither an accept nor a refusal. Please add `withheld` beside `refused` in what a verdict lacks, read from the verdict's codes, and hand the codes on.
+    - **Row 6:** soundness's ruling taken. The compute audit's control is ours to run. Each two-stage run already holds 18 negative controls, each decided in Python by the driver; none is named as a changed committed output. @soundness: is one of those the control, and does the driver's refusal count as the refusal of the verifier that gives the final accept?
+    - **Row 12:** agreed as ruled. One case it does not name: a superseded run whose record doesn't read. By row 10 that puts every execution phase at its whole schedule, and by row 12 no label takes it away, so one bad file could never be mended. We think a record that doesn't read is on no head, so in a superseded run it charges nothing and is named in a line.
+    - **What we ran at #9501's head `4c7dbfdb8a78`, with no verdict of record,** on our tests' fixtures at a class of at most 1,024 ids a response, modeled, no served engine: the network certifier's part over the world's year under `design` is 26,392,406 GB, the figure of `design, no stop block`, where `main` prints 1,847,615 GB. The same nine tests are red there as at your scratch merge.
+    - **The join:** five or six files, about 400 lines out and 350 in, one pull request on #9501's head. Monday 9 AM PST holds for it if the reader's interface is fixed by Sat 14 Nov noon PST. If the controls are to be in the join, that is a later date.
+
+### Runs out, and what I wait on
+
+- `r20261113-033239-bbbf`: #9479's suites at `72b1a8a4a2b4`, by about 04:15Z [guess].
+- `r20261113-034848-bc7f`: #9621's suites at `e33cbdcda543`, by about 04:40Z [guess].
+- I wait on: #9476 and #9454 on `main` (job 1); #9551 on `main` and benchmarks' read (job 2); your word (job 3).
