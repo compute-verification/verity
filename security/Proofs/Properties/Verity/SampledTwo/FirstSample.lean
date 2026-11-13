@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Verity.SampledTwo.Steps
+public import Proofs.Properties.Verity.SampledTwo.InputMap
 public import Proofs.Flock.Claims.Sampling.Select.Code
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Proofs.Flock.SpotFlock.Jeq
@@ -18,8 +18,6 @@ the run of record returned. That `draw` is the first stage's sample of record:
   `Select.resolve`'s rule and the work table the rule expands) on the bytes it was handed, held that sample to the
   registration (`Draw.checkDraw`, under the sampling design the rule gives the population), and its `draw` is that
   sample. A refused run names no symbol, and the entry a second stage adds to the answer is named `interior`.
-* `secondLawOf_ok`: `secondLawOf` returns `Select.secondLaw` of the proved units of the run's `draw`, over the cells
-  the replay block's program has under the interior's query, at the rule's counts.
 * `accepted_secondLaw`: where the two-stage check accepts, the law its last step holds the interior audit's draw to is
   `Select.secondLaw` of the proved units of the first stage's sample, the one `Select.select` drew on the first
   stage's bytes `ξ` under the boundary's parameters and the run of record held to the boundary registration.
@@ -33,12 +31,6 @@ namespace VStar.Recursive.SampledTwo
 
 open Lean (Json)
 open Spot
-
-private theorem bind_ok' {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : x >>= f = .ok b) :
-    ∃ a, x = .ok a ∧ f a = .ok b := by
-  cases x with
-  | error => cases h
-  | ok a => exact ⟨a, rfl, h⟩
 
 /-- `getD` of `Json.mkObj l` at a key of `l`'s, its keys distinct, is its value. -/
 private theorem getD_mkObj {l : List (String × Json)} (hd : FlockComplete.JsonRT.Distinct l) {k : String} {v : Json}
@@ -156,39 +148,6 @@ theorem run_draw {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.r
           (by simp)
       · exact getD_mkObj (by simp [FlockComplete.JsonRT.Distinct, List.pairwise_cons, Std.compare_eq_iff_eq])
           (by simp)
-
-/-- **What `secondLawOf` computed** where it returned: under a two-stage rule, `Select.secondLaw` of the proved units
-of the run's `draw`, over the replay block's cells under the interior's query at the rule's counts. -/
-theorem secondLawOf_ok {p : Params} {run law : Json} (h : secondLawOf p run = .ok law) :
-    ∃ grain replay k ns ids ks, p.rule = .twoStage grain replay k ∧
-      Select.replayCells p.replay p.interior.verifier.query = .ok ns ∧
-      Select.templateIds p.interior.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
-      law = Select.secondLaw ((Draw.proved (getD run "draw")).map Int.toNat) ns ks := by
-  unfold secondLawOf at h
-  split at h
-  · try dsimp only at h
-    obtain ⟨ns, hns, h⟩ := bind_ok' h
-    obtain ⟨ids, hids, h⟩ := bind_ok' h
-    obtain ⟨ks, hks, h⟩ := bind_ok' h
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    exact ⟨_, _, _, ns, ids, ks, by assumption, hns, hids, hks, h.symm⟩
-  · cases h
-
-/-- What the run of record's input (`inputOf`) hands `Spot.Run.run` of the first stage: the parameters' rule, the
-boundary's parameters, the boundary registration's record, no closure and the first stage's bytes. -/
-private theorem inputOf_first (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : Evidence)
-    (received₂ : String) (vs : Array (String × Json)) :
-    (inputOf p c ξ ξ₂ e received₂ vs).rule = p.rule ∧ (inputOf p c ξ ξ₂ e received₂ vs).params = p.boundary ∧
-      (inputOf p c ξ ξ₂ e received₂ vs).record = c.record ∧ (inputOf p c ξ ξ₂ e received₂ vs).closure = none ∧
-      (inputOf p c ξ ξ₂ e received₂ vs).source = ξ := by
-  first
-    | exact ⟨rfl, rfl, rfl, rfl, rfl⟩
-    | (unfold inputOf
-       split
-       exact ⟨rfl, rfl, rfl, rfl, rfl⟩)
-    | (unfold inputOf
-       cases rootsSplit c.record e.interior.base.sessionRoots
-       exact ⟨rfl, rfl, rfl, rfl, rfl⟩)
 
 /-- **The second stage's law is computed from the first stage's accepted sample.** Where the two-stage check accepts,
 the run of record's first stage drew `draw` on the first stage's bytes `ξ` (`Select.select`, under the rule
