@@ -11,8 +11,8 @@ import pytest
 
 from test_census import programs, request
 from verity.circuits import boundary
-from verity.definitions.circuits import requirement as R
-from verity.definitions.circuits.census import census, step_ends
+from verity.circuits import requirement as R
+from verity.circuits.census import census, step_ends
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition
 from verity.circuits.ops import fp32
 from verity.circuits.parts import Part, n_members

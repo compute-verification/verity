@@ -26,7 +26,7 @@ worker_gb = 10
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_boundaries.py", "tests/test_census_products.py"]
-paths = ["verity/circuits", "verity/definitions/circuits", "verity/circuits/ops", "verity/circuits/silicon"]
+paths = ["verity/circuits", "verity/circuits/ops", "verity/circuits/silicon"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_trace_cache.py"]
