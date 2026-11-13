@@ -67,7 +67,7 @@ def test_the_plans_are_the_documented_ones():
         4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
             ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST)),
-        5: ((*NAMED, *BESIDE_AUDIT), ("lean-audit:*",), (*build, *BESIDE_BUILD, "lean-agreement"),
+        5: ((*NAMED, *BESIDE_AUDIT), ("lean-audit:*", "lean-suites:verity-lean-audit"), (*build, *BESIDE_BUILD, "lean-agreement"),
             ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST))}
 
 
