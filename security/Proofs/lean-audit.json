@@ -47,6 +47,7 @@
   "Proofs.Properties.NetworkCertifier.Records",
   "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkPeriod",
+  "Proofs.Properties.NetworkPeriod.Fails",
   "Proofs.Properties.NetworkScan",
   "Proofs.Properties.Spot",
   "Proofs.Properties.Spot.Halt",

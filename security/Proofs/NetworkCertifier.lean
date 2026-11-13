@@ -7,6 +7,7 @@ public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.NetworkCertifier.Guarantees.Checked
 public import Definitions.NetworkCertifier.Guarantees.Carried
 public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked
+public import Definitions.NetworkCertifier.Guarantees.MonitoringPeriodFails
 public import Proofs.NetworkCertifier.Lemmas
 public import Proofs.NetworkCertifier.Occupancy
 public import Proofs.NetworkCertifier.Counting
@@ -22,6 +23,7 @@ public import Proofs.NetworkCertifier.MonitoringPeriodSum
 public import Proofs.NetworkCertifier.Pooled
 public import Proofs.NetworkCertifier.TapRows
 public import Proofs.NetworkCertifier.MonitoringPeriod
+public import Proofs.NetworkCertifier.MonitoringPeriodChecked
 public import Proofs.NetworkCertifier.PooledLeak
 public import Proofs.NetworkCertifier.Schedule
 public import Proofs.NetworkCertifier.PerWindow
@@ -42,6 +44,10 @@ public import Proofs.NetworkCertifier.Carried
 public import Proofs.NetworkCertifier.WitnessesCarried
 public import Proofs.NetworkCertifier.PoolRoots
 public import Proofs.NetworkCertifier.MonitoringPeriodCheckedChecks
+public import Proofs.NetworkCertifier.MonitoringPeriodCheckedExclusion
+public import Proofs.NetworkCertifier.MonitoringPeriodFails
+public import Proofs.NetworkCertifier.MonitoringPeriodFailsChecks
+public import Proofs.NetworkCertifier.MonitoringPeriodLengths
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -98,12 +104,22 @@ from it, `EncardProgramRunsLeWindows`: the program's runs over their first `m` w
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
 any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
 `Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.
-`TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_certifier`): an accepted audit's extracted
-trace carries the network certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the
-network certifier's; `Period` counts with it. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`):
-inputs a check pins cost no advice bits, and `WitnessesChecked` gives its nontrivial lemma.
-`PeriodCheckedChecks` checks the period statement with checked inputs (`Guarantees.MonitoringPeriodLeakChecked`, stated and not
-yet proved): which run its check is held to, and its nontrivial lemma.
+`TapRows` fills an extracted trace in with the network certifier's values and reduces a disagreement between the two
+to a collision (`TapProof.certifierColl_of_disagree`): an accepted audit's extracted trace carries the network
+certifier's registered rows outside the incorrect proof blocks, unless its openings collide with the network
+certifier's. `Checked` proves the leak bound with checked inputs (`SampledLeakChecked`): inputs a check pins cost no
+advice bits, and `WitnessesChecked` gives its nontrivial lemma.
+`PeriodChecked` proves the period's bound with the checked inputs left out (`MonitoringPeriodLeakChecked`): each window's bound
+at the network certifier's rows with a valid run, and the count of the period's records through `Carried`'s at the
+empty pool. `Period` proves `MonitoringPeriodLeakAccepted` as its instance at no checked input. `PeriodCheckedChecks` checks the
+checked statement: which run its check is held to, and its nontrivial and honest lemmas. `PeriodCheckedExclusion` shows
+the read-back is needed: at a placed window the count fails without `RecordFormat.ReadsBy`.
+`PeriodFails` proves the period's bounds with each failure charged as it happens (`MonitoringPeriodLeakFails`,
+`MonitoringPeriodLeakFailsAtMost`, `MonitoringPeriodLeakCharged`): `MonitoringPeriodLeakChecked` at each fail pattern, at the pattern's operator and
+registered values, summed over the patterns. `PeriodFailsChecks` checks them at a placed window whose operator follows
+the fail pattern: the failures' factor is met, and the charged count fails at weights that sum past one.
+`PeriodLengths` shows a record format of each lane's length, released data and fail cell reads back under the link's
+registered parameters (`LengthsRows.readsBy`).
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
@@ -179,6 +195,10 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
     fun x hx s P hs hP op =>
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
+theorem MonitoringPeriodLeakChecked : NetTiming.Guarantees.MonitoringPeriodLeakChecked := NetTiming.periodLeakChecked
+theorem MonitoringPeriodLeakFails : NetTiming.Guarantees.MonitoringPeriodLeakFails := NetTiming.monitoringPeriodLeakFails
+theorem MonitoringPeriodLeakFailsAtMost : NetTiming.Guarantees.MonitoringPeriodLeakFailsAtMost := NetTiming.monitoringPeriodLeakFailsAtMost
+theorem MonitoringPeriodLeakCharged : NetTiming.Guarantees.MonitoringPeriodLeakCharged := NetTiming.monitoringPeriodLeakCharged
 theorem MonitoringPeriodLeakAccepted : NetTiming.Guarantees.MonitoringPeriodLeakAccepted := NetTiming.monitoringPeriodLeak
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.pooledIncorrectBlocks
 theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.pooledLeak
