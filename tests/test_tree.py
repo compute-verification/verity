@@ -1,7 +1,10 @@
-"""The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at four
-levels: the root, `verity/`, `verity/protocols/` and each protocol's directory. Every tracked entry at those levels is in
-the tree or on the not-yet list; every not-yet line names a path the tree still holds, with where it goes, its owner and
-its day; and an entry the tree has that main doesn't hold yet names its owner and day until it lands. A stray entry
+"""The tracked tree holds to its layout of record, `tests/tree.toml` (its header says what each part holds), at five
+levels: the root, `verity/`, `verity/protocols/`, each group of protocols in it (`proofs/`, `accounting/`,
+`policy/`) and each protocol's directory, read where main holds it: at its place in the tree, or, before its move
+lands, at the path of the not-yet line whose `to` is that place (`places`), so a stray inside either fails. Every
+tracked entry at those levels is in the tree or on the not-yet list; every not-yet line names a path the tree still
+holds, with where it goes, its owner and its day; and an entry the tree has that main doesn't hold yet names its owner
+and day until it lands. A stray entry
 fails; a line or an entry whose move landed only warns (`BOOKKEEPING` in `tests/conftest.py`), so a move is never
 reverted for a line of this file: top deletes landed lines, and the metric counts them until then. The not-yet list
 only shrinks: it holds at most `NOT_YET_MAX` lines, at most `UNOWNED_MAX` of them unowned and `ARRIVING_MAX` arriving.
@@ -23,7 +26,7 @@ from test_repository import ROOT, _tracked
 LAYOUT = "tests/tree.toml"
 HANDLES = ".agents/skills/using-slack/registry.json"
 #: the not-yet list's length, its unowned lines and its arriving lines: each only shrinks, so lower it with the list
-NOT_YET_MAX = 36
+NOT_YET_MAX = 44
 UNOWNED_MAX = 0
 ARRIVING_MAX = 1
 UNOWNED = "unowned"
@@ -48,25 +51,34 @@ def _protocols(doc: dict) -> set[str]:
     return {_p(t["path"]) for t in doc["tree"] if t.get("protocol")}
 
 
+def places(doc: dict) -> set[str]:
+    """Where a protocol's directory may be: its place in the tree, and the path of a not-yet line whose `to` is that
+    place (where main holds it until the move lands)."""
+    protocols = _protocols(doc)
+    return protocols | {_p(n["path"]) for n in doc["not_yet"] if _p(n["to"]) in protocols}
+
+
+def _groups(doc: dict) -> set[str]:
+    return {p.rsplit("/", 1)[0] for p in _protocols(doc)} - {"verity/protocols"}
+
+
 def tree(doc: dict) -> set[str]:
-    """The tree's paths, each protocol's directory's entries written out for each protocol."""
+    """The tree's paths, each protocol's directory's entries written out for each of its places."""
     out = set()
     for t in doc["tree"]:
         path = _p(t["path"])
-        out |= {f"{p}/{path[len(NAME):]}" for p in _protocols(doc)} if path.startswith(NAME) else {path}
+        out |= {f"{p}/{path[len(NAME):]}" for p in places(doc)} if path.startswith(NAME) else {path}
     return out
 
 
 def entries(doc: dict, tracked: list[str]) -> set[str]:
-    """The tracked entries at the four levels: each file's first component, its second under `verity/`, its third under
-    `verity/protocols/` and its fourth under a protocol's directory."""
-    protocols, out = _protocols(doc), set()
+    """The tracked entries at the five levels: each file's first component, and its next one under `verity/`,
+    `verity/protocols/`, a group of protocols and a protocol's directory at each of its places."""
+    levels, out = {"verity", "verity/protocols"} | _groups(doc) | places(doc), set()
     for f in tracked:
         parts = f.split("/")
         out.add(parts[0])
-        for k, under in ((2, lambda q: q == "verity"), (3, lambda q: q == "verity/protocols"), (4, protocols.__contains__)):
-            if len(parts) >= k and under("/".join(parts[:k - 1])):
-                out.add("/".join(parts[:k]))
+        out |= {"/".join(parts[:k]) for k in range(2, len(parts) + 1) if "/".join(parts[:k - 1]) in levels}
     return out
 
 
@@ -205,6 +217,27 @@ def test_each_check_names_its_fix() -> None:
         f"[[not_yet]] b/: its owner 'nobody' is no handle in {HANDLES}: name one, or unowned"]
     assert longer({"not_yet": [{"owner": UNOWNED, "arriving": True}] * (NOT_YET_MAX + 1)})[0].startswith(
         f"{LAYOUT}'s not-yet list has {NOT_YET_MAX + 1} lines, above tests/test_tree.py's NOT_YET_MAX = {NOT_YET_MAX}")
+
+
+def test_a_protocol_is_read_where_main_holds_it() -> None:
+    """A protocol in a group is read at its grouped place and, while a not-yet line moves it there, at its flat one: a
+    stray inside either place, or inside the group, fails. Its paths are made up, as above."""
+    doc = {"tree": [{"path": "verity/", "means": "m"}, {"path": "verity/protocols/", "means": "m"},
+                    {"path": "verity/protocols/made-up-group/", "means": "m", "owner": "top", "day": "2026-11-19"},
+                    {"path": "verity/protocols/made-up-group/made-up-protocol/", "means": "m", "protocol": True},
+                    {"path": "verity/protocols/NAME/made-up-part/", "means": "m"}],
+           "not_yet": [{"path": "verity/protocols/made-up-protocol/",
+                        "to": "verity/protocols/made-up-group/made-up-protocol/", "owner": "top", "day": "2026-11-19"}]}
+    assert places(doc) == {"verity/protocols/made-up-group/made-up-protocol", "verity/protocols/made-up-protocol"}
+    tracked = ["verity/protocols/made-up-protocol/made-up-part/a.py",
+               "verity/protocols/made-up-protocol/made-up-stray/b.py",
+               "verity/protocols/made-up-group/made-up-protocol/made-up-part/c.py",
+               "verity/protocols/made-up-group/made-up-protocol/made-up-stray/d.py",
+               "verity/protocols/made-up-group/made-up-stray/e.py"]
+    assert strays(doc, tracked) == [f"{e}: move it to its place in {LAYOUT}'s [[tree]], {ASK}"
+                                    for e in ("verity/protocols/made-up-group/made-up-protocol/made-up-stray",
+                                              "verity/protocols/made-up-group/made-up-stray",
+                                              "verity/protocols/made-up-protocol/made-up-stray")]
 
 
 def main(ref: str) -> int:
