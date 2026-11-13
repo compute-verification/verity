@@ -36,7 +36,8 @@ in one order, with no verifier and no window in it: arrays and lists of natural 
 * **Ranges that lie one after another** (`sum_le_of_apart`, `start_of_tiles`, `start_at`): ranges that share no
   unit, in the order of their starts, the nonempty ones inside `[0, n)`, with lengths summing to `n`, lie one after
   another from `0`: a nonempty one starts at the sum of the lengths before it. With them, what the sums read
-  (`foldl_add_eq_sum`, `forall₂_map_eq`, `sum_perm`).
+  (`foldl_add_eq_sum`, `forall₂_map_eq`, `sum_perm`), and members at such ranges sit at their bases
+  (`emb_of_tiles`).
 -/
 
 @[expose] public section
@@ -486,5 +487,32 @@ theorem forall₂_map_eq {α β γ : Type} {R : α → β → Prop} {f : α → 
 /-- Lists with the same members, in any order, have one sum of counts. -/
 theorem sum_perm {α : Type} (f : α → ℕ) {l l' : List α} (h : l.Perm l') : (l.map f).sum = (l'.map f).sum :=
   (h.map f).sum_eq
+
+/-- **Members at ranges that share no unit, in the order of their starts, with counts summing to the population,
+sit one after another**: where each member `m` of `ms` has as many proof blocks as its range `[first, first + count)`
+holds units and its proof block `u` at the population's place `first + u`, that place is `base + u`, the base the
+sum of the counts of the members before it. -/
+theorem emb_of_tiles {α β : Type} (first count : α → ℕ) {nJ : ℕ} (n : β → ℕ) (emb : (b : β) → Fin (n b) → Fin nJ)
+    {vms : List α} {ms : List β}
+    (hall : List.Forall₂ (fun vm m => n m = count vm ∧ ∀ u : Fin (n m), (emb m u).val = first vm + u.val) vms ms)
+    (hsorted : vms.Pairwise fun a b => first a < first b)
+    (hapart : vms.Pairwise fun a b =>
+      ∀ x, first a ≤ x → x < first a + count a → first b ≤ x → x < first b + count b → False)
+    (htotal : (ms.map n).sum = nJ) (j : Fin ms.length) (u : Fin (n (ms.get j))) :
+    (emb (ms.get j) u).val = ((ms.map n).take j.1).sum + u.val := by
+  have hcnt : vms.map count = ms.map n := forall₂_map_eq hall fun a b h => h.1.symm
+  obtain ⟨vm, hvm, hR⟩ := forall₂_at hall j.1 (ms.get j) (List.getElem?_eq_getElem j.2)
+  have hpos : 0 < count vm := by
+    rw [← hR.1]
+    exact Nat.lt_of_le_of_lt (Nat.zero_le _) u.2
+  have hin : ∀ a ∈ vms, 0 < count a → first a + count a ≤ nJ := by
+    intro a ha hpa
+    obtain ⟨m, -, hRa⟩ := forall₂_left hall a ha
+    have hv : (emb m ⟨count a - 1, by rw [hRa.1]; omega⟩).val = first a + (count a - 1) := hRa.2 _
+    have hlt := (emb m ⟨count a - 1, by rw [hRa.1]; omega⟩).2
+    omega
+  have hstart := start_at first count (hsorted.imp fun h => Nat.le_of_lt h) hapart hin
+    (by rw [hcnt]; exact htotal) hvm hpos
+  rw [hR.2 u, hstart, hcnt]
 
 end Verity.Sampled.MemberForm

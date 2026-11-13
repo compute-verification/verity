@@ -15,7 +15,8 @@ many proof blocks as the member has units. This module reads, off one session's 
 (`SessionVerdict`), what its record's sample is and which of the registration's units the session proved:
 
 * **A member of one range** (`first_one`, `count_one`, `indices_one`, `indices_at`, `sampled_one`,
-  `laidHeld_one`): the form's check holds every member to one range of the registration's units (`laidHeld`), and
+  `laidHeld_one`, `membersStructure_laid`): the form's check holds every member to one range of the registration's
+  units (`laidHeld`, which the form's structure check runs), and
   at a member of the one range `[lo, hi)` its first unit is `lo`, its count `hi - lo`, its unit at slot `u` is
   `lo + u`, and the sample holds one of its units exactly where it holds a unit from `lo` up to `hi`.
 * **The record's sample is a subset sample** (`sessionVerdict_subset`): a session whose verdict passes has a record
@@ -90,6 +91,27 @@ theorem laidHeld_one {ms : Array _root_.Spot.OneStageZk.Member} {rec : Json}
       rw [Bool.and_eq_true, beq_iff_eq] at hone
       exact one_range hone.1
     · cases h
+
+/-- **The per-member form's structure lays each member over one range**: where `membersStructure` passes,
+`laidHeld` did. -/
+theorem membersStructure_laid {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member}
+    {c : _root_.Spot.OneStage.Commitment} {e : _root_.Spot.OneStageZk.Evidence}
+    {sts : Array _root_.Spot.OneStageZk.StatementFiles} {bs : _root_.Core.Blobs}
+    (h : _root_.Spot.OneStageZk.membersStructure p ms c e sts bs = .ok ()) :
+    _root_.Spot.OneStageZk.laidHeld ms c.record = .ok () := by
+  unfold _root_.Spot.OneStageZk.membersStructure at h
+  obtain ⟨held, -, h⟩ := ebind_ok h
+  dsimp only at h
+  split at h
+  · obtain ⟨_, ht, -⟩ := ebind_ok h
+    cases ht
+  obtain ⟨ts, -, h⟩ := ebind_ok h
+  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
+  obtain ⟨lines, -, h⟩ := ebind_ok h
+  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
+  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
+  obtain ⟨⟨⟩, hlaid, -⟩ := ebind_ok h
+  exact hlaid
 
 /-! ## The record's sample is a subset sample -/
 

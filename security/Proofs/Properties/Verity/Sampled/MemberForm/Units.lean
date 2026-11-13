@@ -14,7 +14,7 @@ the units: the units its sessions proved, appended and sorted, are the evidence'
 (`Spot.OneStageZk.provedHeld`), which v1's window check holds to the window's sample. This module reads, off a run
 that accepted every session, which session is which member's and what its record's sample is:
 
-* **The run's sessions, a statement each** (`membersStructure_laid`, `files_statement`, `verdicts_units`,
+* **The run's sessions, a statement each** (`files_statement`, `verdicts_units`,
   `run_units`): each statement's one session has its verdict at its member's own statement (`ProvedAt`), and a unit
   is one of the evidence's exactly when one of those sessions proved it.
 * **The sessions' units over the members** (`run_over`): the window's members are the parameters', a range each,
@@ -38,27 +38,6 @@ open Lean (Json)
 open FlockSoundness.Refine (ebind_ok)
 
 /-! ## The run's sessions, a statement each -/
-
-/-- **The per-member form's structure lays each member over one range**: where `membersStructure` passes,
-`laidHeld` did. -/
-theorem membersStructure_laid {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member}
-    {c : _root_.Spot.OneStage.Commitment} {e : _root_.Spot.OneStageZk.Evidence}
-    {sts : Array _root_.Spot.OneStageZk.StatementFiles} {bs : _root_.Core.Blobs}
-    (h : _root_.Spot.OneStageZk.membersStructure p ms c e sts bs = .ok ()) :
-    _root_.Spot.OneStageZk.laidHeld ms c.record = .ok () := by
-  unfold _root_.Spot.OneStageZk.membersStructure at h
-  obtain ⟨held, -, h⟩ := ebind_ok h
-  dsimp only at h
-  split at h
-  · obtain ⟨_, ht, -⟩ := ebind_ok h
-    cases ht
-  obtain ⟨ts, -, h⟩ := ebind_ok h
-  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
-  obtain ⟨lines, -, h⟩ := ebind_ok h
-  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
-  obtain ⟨⟨⟩, -, h⟩ := ebind_ok h
-  obtain ⟨⟨⟩, hlaid, -⟩ := ebind_ok h
-  exact hlaid
 
 /-- **A member's statement with its files held is the member's statement.** -/
 theorem files_statement {m : _root_.Spot.OneStageZk.Member} {slice : Json} {bs : _root_.Core.Blobs}
