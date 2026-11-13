@@ -1,39 +1,78 @@
-From b51e12f091000a62ae78e451062f249443c2f583 Mon Sep 17 00:00:00 2001
+From 5ce6135f903f38c863d03f3f49fe46188039c968 Mon Sep 17 00:00:00 2001
 From: Cursor Agent <cursoragent@cursor.com>
-Date: Fri, 13 Nov 2026 06:28:25 +0000
-Subject: [PATCH] AGENTS.md, tests/test_boundaries.py: nci/ and rho/ are no
- longer under verity/protocols/inference_only/
+Date: Fri, 13 Nov 2026 07:15:08 +0000
+Subject: [PATCH] AGENTS.md, tests/import_order.toml, tests/test_boundaries.py:
+ nci/ and rho/ are no longer under verity/protocols/inference_only/
 
-The move took the two calculators to benchmarks/. AGENTS.md's map of verity/protocols/ listed them as code a move
-brought from benchmarks/, which the move's rewrite left there under their new paths, and SEPARATE still named their
-old directories. No test names either line.
+After the move the two are benchmarks, not distributions of their own under verity/:
+
+- AGENTS.md's list of the code a move brought from benchmarks/ no longer names them.
+- tests/import_order.toml loses their two [[distribution]] entries, and its generated tables are what
+  tools/verity/check/import_order.py writes on the moved tree: seven loaded_by lines of rho's files go, since a file
+  under benchmarks/ is no loader the listing names.
+- tests/test_boundaries.py's NO_DATE_OR_REASON loses nci's entry.
 
 Co-authored-by: danielreuter <danielreuter@users.noreply.github.com>
 ---
- AGENTS.md                | 3 +--
- tests/test_boundaries.py | 3 +--
- 2 files changed, 2 insertions(+), 4 deletions(-)
+ AGENTS.md                |  3 +--
+ tests/import_order.toml  | 18 ------------------
+ tests/test_boundaries.py |  6 +++---
+ 3 files changed, 4 insertions(+), 23 deletions(-)
 
 diff --git a/AGENTS.md b/AGENTS.md
-index 3d4a2f19cb5..8d30d8694cf 100644
+index badafeeddd8..c87c7d8f04f 100644
 --- a/AGENTS.md
 +++ b/AGENTS.md
-@@ -27,4 +27,3 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
-     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
--    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
+@@ -28,4 +28,3 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
+     keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
+-    own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
 -    `benchmarks/nci/` and `benchmarks/rho/`.
-+    `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
++    own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
    - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
+diff --git a/tests/import_order.toml b/tests/import_order.toml
+index 7769ae3e388..d67504ddfda 100644
+--- a/tests/import_order.toml
++++ b/tests/import_order.toml
+@@ -69,11 +69,2 @@ owner = "ci"
+ 
+-[[distribution]]
+-directory = "benchmarks/rho"
+-owner = "training"
+-date = "2026-11-16"
+-
+-[[distribution]]
+-directory = "benchmarks/nci"
+-owner = "compute-accounting"
+-
+ [[distribution]]
+@@ -665,7 +656,2 @@ paths = [
+ trusted = true
+-loaded_by = [
+-    "benchmarks/rho/rho/params.py",
+-    "benchmarks/rho/tests/test_operating.py",
+-    "benchmarks/rho/tests/test_params.py",
+-]
+ 
+@@ -768,6 +754,2 @@ loaded_by = [
+     "verity/protocols/flock/prover/tests/test_audit_profile.py",
+-    "benchmarks/rho/rho/params.py",
+-    "benchmarks/rho/tests/test_envelopes.py",
+-    "benchmarks/rho/tests/test_held_to_core.py",
+-    "benchmarks/rho/tests/test_params.py",
+     "verity/protocols/pouw/prover/circuit/plan.py",
 diff --git a/tests/test_boundaries.py b/tests/test_boundaries.py
-index 9638fe72c0e..72cab8fc519 100644
+index 5e20a10ec58..fd1319e186e 100644
 --- a/tests/test_boundaries.py
 +++ b/tests/test_boundaries.py
-@@ -214,4 +214,3 @@ DEPENDENCIES = {"numpy"}
- SEPARATE = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
--            "difftest", "protocols/pous/verifier/check", "configuration/config", "protocols/inference_only/rho",
--            "protocols/inference_only/nci")
-+            "difftest", "protocols/pous/verifier/check", "configuration/config")
- #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
+@@ -83,5 +83,5 @@ NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
+ #: own: each owner owes one of the two.  It only shrinks.
+-NO_DATE_OR_REASON = ("verity/configuration/config", "benchmarks/nci",
+-                     "verity/composite/device/live_challenger", "verity/protocols/poub/device/live_verifier",
+-                     "verity/protocols/pouw/clear", "verity/protocols/pouw/receipts")
++NO_DATE_OR_REASON = ("verity/configuration/config", "verity/composite/device/live_challenger",
++                     "verity/protocols/poub/device/live_verifier", "verity/protocols/pouw/clear",
++                     "verity/protocols/pouw/receipts")
+ #: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
 -- 
 2.43.0
 
