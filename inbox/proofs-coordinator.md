@@ -136340,3 +136340,196 @@ branch `08b5d4b3c0a6`, #9458 `049c5875989c`. No run is out and no timer is set.
 - A wired play of more than one member is not an accepted play today (TWOLEG's line of the 10:26Z entry, unchanged).
 
 **Runs out:** `r20261113-103758-9715` (records, vy-nebius-cpu-9, at `4a4d22b644`), expected end 11:15Z to 11:40Z; `r20261113-095636-adf2` (records, vy-nebius-cpu-1, at `0df461b1b2`), on its third package. **Timer:** one, for `9715`. **Next entry:** 11:30Z, with `9715`'s verdict.
+
+## TWOLEG, Fri 13 Nov 10:49Z: B: the statements, before and after. The 14:00Z line needs four words added: "with its switch on" (the form ships with its switch off and refuses every play, the play of one member too); the rest of it holds
+
+**The 14:00Z line.** "on Friday's twenty wired files the two-stage form's compiled check refuses today, at two rules; a
+play of one member is accepted" holds as written only for the check with its switch on (`sampled-two-on`, `form` true).
+As shipped (`Spot.SecondStage.FORM` off) it refuses both: the play of an interior of one member gave `FORM_ON rc=0`
+and `FORM_OFF rc=1` at `654e34d42b` (`r20261113-090307-9fa6` on vy-nebius-cpu-1), and the same under the draft
+(`r20261113-100828-2396`). "At two rules" is exact: the compiled check names the first only, the
+second shows with the first set aside in a scratch executable, and with both set aside the same check accepts the kept
+case of an interior of twenty members (`r20261113-094725-9096`). "Twenty wired files": twenty members, one of them (the
+combine) the reader of nineteen wires, the other nineteen its writers.
+
+**The draft.** `cursor/proofs-scratch-twoleg-ownreads-ad71`, off `654e34d42b`: `80ced2eac7d` (B, one file) and
+`326deb5ebcf` (the join's own mend `07319646f70` of two stale patterns, cherry-picked; item 4). Not merged into the
+join, no pull request, no lock.
+
+### 1. B: the statements, before and after
+
+**No statement's text moves.** `UnitsProved` (`security/Properties/Spot.lean` 385 to 393) is the one-stage check's: it
+is read by `AcceptMeans` (line 433, about `OneStage.check`), by `recordChecks_nil`, `acceptMeans_iff` and
+`acceptMeans_complete` (`security/Proofs/Properties/Spot.lean` 173, 1263, 1338) and by a docstring in
+`Verity/Sampled/Held.lean`. B leaves
+`OneStage.recordChecks` and `OneStage.check` untouched, so its last clause reads before and after
+
+~~~lean
+((field? c.record "registered").isSome ∨ (openedRoots c.record e.verdicts).isSome →
+  SameRoots ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record))
+~~~
+
+and no proof of the two-stage form names it. No file under `security/Properties` or `security/Definitions` names the
+form, and no guarantee's record in `security/lean-audit.json` or `security/Properties/lean-audit.json` reads its module.
+
+**One definition of the compiled check moves, one line** (`VStarRecursive/SampledTwo.lean`, `secondChecked`):
+
+~~~lean
+-- before
+let failed := OneStage.recordChecks rec_ (Flock.hexOf c.digest) e
+-- after
+let failed := interiorChecks rec_ (Flock.hexOf c.digest) e
+~~~
+
+`interiorChecks` is `OneStage.recordChecks`'s body with one argument changed, the reads the `registered` check compares:
+
+~~~lean
+-- before (inside OneStage.recordChecks)
+(Record.ownRegistered rec (Record.sessionRegistered e.verdicts))
+-- after (inside interiorChecks)
+(Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered e.verdicts)))
+~~~
+
+**What that says.** Write `opened` for the `{value: root}` the accepted verdicts of record report reading, kept to the
+values that are a port or a registered value of the interior record.
+
+- Before: the last step passes `registered` only where `opened` is exactly the record's `registered` `{value: root}`.
+- After: the same, with `opened` less each `(v, r)` where `v` is a port of the interior record and `r` that port's root
+  in the record.
+
+**In accepted cases.**
+
+- A case in which no session reads a port of the interior record at that port's root: unchanged, the filter takes
+  nothing out.
+- A case with such a read. Before: refused always. Where the record lists the read under `registered`, step 4 refuses
+  (its audit record reads `own_reads` under a two-stage rule and finds a registered value not opened); where it does
+  not, step 5 refused (opened and not registered). After: accepted where the record does not list it and all else
+  passes; still refused where the record lists it, and where a port is read at a root other than its own (that read
+  stays in `opened`).
+- So B adds accepted cases and, as I read it, removes none: after B the last step's `registered` check is step 4's,
+  taken again on the same record and the same verdict fields (`inputAt` hands the run the interior record read back
+  from its canonical text and the verdicts `stamped`, which sets up to five other fields and leaves `of_record`,
+  `accepted` and `registered`). No theorem states that the two are one check.
+
+**What reads the moved definition.** Seven theorems name `secondCheck` in their statements; their text is unchanged and
+they read the changed definition through `secondChecked`: `accepted_law_run` (`InputMap`), `prepare_of_steps`,
+`accepts_of_steps`, `accepts_iff_steps` (`AcceptsOfSteps`), `accepted_steps` (`Steps`), `secondCheck_read`
+(`SecondRead`), `accepted_secondLaw` (`FirstSample`). So does every theorem with `FormAccepts` as a premise (30 files
+name it; `Reading.lean` 79). None of them unfolds `secondChecked`: no proof names it, and none names `recordChecks` for
+the form. So no proved statement used what the old line refused, and each now holds for the wider set of accepted
+cases, if it compiles (item 4).
+
+### 2. The fact the yes rests on: stated, proved, and about these reads. No STOP RULE
+
+**Yes: a read of the registration's own port at its own root is held by the second stage's statement check, and a
+lemma says so for a wire's reader.**
+
+- `Spot.SecondStage.readOk_wired` (`verity/protocols/spot/verifier/lean/Spot/SecondStage.lean` 1674, the compiled
+  check's own package): at a port a wire names and no link names, a read `readOk` passes has the wire's writer's output
+  port of the interior record as its value (`getD e "value" = .str (portOf named w.writer w.wport)`), that port is one
+  of the record's (`∈ Record.byPort own.interior`), the read is at that entry's root, domain and leaves (`sameAt e x`),
+  the writer's count is the rows' `per`, and each slot reads only its unit's writer unit's row in its cell's outer
+  block (`placedOk … (wiredRow p r)`). These are THESE reads: the combine's `r0` to `r18`, each naming the producing
+  port `GreedyChunk_v2{N=128,OFF=…}/o0`. Its value and root are exactly what `Record.lessOwnReads` tests.
+- That every such read goes through `readOk`: `Spot.SecondStage.stmtCodes_nil` (1585; a statement with no code has
+  every entry of its registered reads passing `readOk`, and an entry at each wire's port that names its template as
+  reader, `wiredRead`); `Spot.SecondStage.check_ok` (1499; a check with no code has every statement's codes empty and
+  the reads the verdicts of record report equal to the statements', `Record.sameDict (own.reported.getD #[])
+  (statementReads ss.toList)`); `SpotFlock.RunsAs.codes_of_attach` (`RunsAs/Outcome.lean` 102; an attached record
+  reads accepted only where its check reports no code).
+- In the analysis, the same reads: `SpotFlock.AddressRow.readOk_wired_find` (`AddressFacts/RowLeaves.lean` 89),
+  `SpotFlock.AddressRow.wired_entry_of_stmtOk` (165: the session of a wire's reader reads the wire's port registered
+  and the second stage checks that read) and `SpotFlock.CheckedRun.wired_reg` (`AddressFacts/RowOf.lean` 485: the
+  read has the sample's size times the writer's count of leaves, and the header's position for the checked inner
+  block's instance is the writer's inner block's place in its cell).
+- **The lemmas you named are about the other reads.** `OwnReads` (`WiringOk.lean` 198), `ownReads_of`
+  (`OwnReads.lean` 527) and `ownReads_form` (`HeldOfReads.lean` 89) are stated for a registered read "at a port no link
+  or wire names" (`heldLink … = none`, `heldWire … = none`): a template's read of its own port, `readOk`'s last arm
+  (`readOk_own_find`). They say nothing of a wire's reader. `lessOwnReads` takes out both kinds (it tests only the
+  value's name and root), and each kind has its arm of `readOk` and its lemma.
+
+**What nothing proved states:** the one lemma that joins these to B's line, "each `(value, root)` that
+`Record.lessOwnReads` takes out of the verdicts' reads is the value and root of an entry `readOk` passed". It follows
+from `check_ok`'s `sameDict` and the arms' lemmas and is not written, because no theorem today reads the last step's
+record checks. If soundness wants B to rest on a stated lemma, that is the one to write, in `Spot/SecondStage.lean`
+beside `readOk_wired`.
+
+**One case to name.** A read at a port a link names, of the link's value where the interior record registers none, is
+held to the BOUNDARY record's port of that name (`readOk`'s first arm: `sameAt e b`, rows by `linkedRow`). If the
+interior record also had a port of that name at the same root, `lessOwnReads` would take that read out too. It is
+still a read `readOk` passed at that root with its rows placed, so nothing unheld is dropped; it is held as the
+boundary's port. On the plays I have, no value is named so (the interior's ports are `<member>/<port>`, the links'
+values `logits` and `o0`).
+
+### 3. A: your two asks
+
+**A1, by run: yes, R1 to R8 take a record that names one tree at two ports where the parameters' `ports` name both, and
+only at the writer's leaves and domain.** `r20261113-103542-af74` on vy-nebius-cpu-11, rc 0, at `654e34d42b`: a scratch
+executable that parses the form's parameters as the form does (`paramsOfJson`) and prints `Registration.check`'s codes
+for the interior audit's verifier, its law the subset law of the record's population, as the last step calls it.
+
+- The made record: the kept case's interior record (an interior of twenty members, 40 roots) plus 19 roots
+  `GreedyCombine_v2{V=2560,N=128}/r<i>`, each at the root, leaves (8) and domain of the port whose tree holds it
+  (`GreedyChunk_v2{N=128,OFF=…}/o0`): 59 roots, 40 trees. The made parameters: the interior's `ports` plus the same 19
+  at the same leaves and domain.
+
+| parameters | record | codes |
+| --- | --- | --- |
+| kept (40 ports) | kept (40 roots) | `[]` |
+| made (59) | made (59) | `[]` |
+| kept (40) | made (59) | `[R3-ports]` |
+| made (59) | kept (40) | `[R3-ports]` |
+| made (59) | made, the 19 at a domain of the reader's own | `[R3-domain]` |
+
+- This is the record GATHER's trial `70ca0eda5df` writes (`rows.expected_ports`, `rows.registration`: "one tree at
+  two ports").
+- Not covered by the probe: the rest of the form on such a record (its digest changes, so the kept case's receipts and
+  sessions do not go with it). One part I can speak to: handed the slice such a record names for the combine (its own
+  2 roots and the 19, each at its writer's root, leaves and domain), `headerHeld` passes and 20 of 20 sessions accept;
+  the scratch executable of `8148` and `9096` hands it that slice, on the kept record. Not run on a record of 59
+  roots: `membersRun`'s own checks of the record (`laidHeld`, `rootsOf`), the second-stage statement check's
+  `second-roots`, and the rule's 59 values. Those need a play at GATHER's head.
+- **B stays needed under that layout.** The combine's session still reports reads of `GreedyChunk…/o0` at their roots,
+  which are ports of the record, and the record lists no `registered`.
+
+**A2, by reading, with one run on the same line: yes.** `552354cbe19` changes `benchmarks/one_stage/a5.py` only:
+`bound_reads` hands `REG.bind_ports` a root only for a header port the registration holds under the port's own name. It
+is HELDOF's line (`508b06a084`) as a function. With it `a5.audit` takes the combine's public file, whose header names 21
+roots, and `headerHeld` refuses that file ("public file: not the registration's: roots": the member's slice has 2).
+
+- The difference is not in `552354cbe19`'s lines. It is in a check main has today: `a5.audit`'s header check before the
+  sample (`root:<port>`, `a5.py` 855 to 858) holds a header's root at a wired port to the registration's root of the
+  port whose tree holds it (`mine.held(m, p)`, `rows.Binding.held`: the writer's), where `headerHeld` holds a member's
+  header to the roots the record names `<member>/<port>` and nothing else. Today the KeyError at `roots[m.port(p)]`
+  stops the audit before any session, so the difference never shows; `552354cbe19` takes the KeyError away.
+- By run, on HELDOF's line applied in the clone (the same filter): my play of an interior of twenty members,
+  `r20261113-092534-04b4`: `STAND_IN rc=0`, `second rc=0`, `ROUND_TWO {"codes": [], "detail": {}, "ok": true}`, and the
+  form `FORM_ON rc=1` on the same case.
+- To be exact about "mirror": `a5.audit` is the play's audit under `benchmarks/`. The difftested twin of `headerHeld`
+  is `verity/protocols/spot/verifier/one_stage/members.py` (425 to 446, the slice at 574), which `552354cbe19` does not
+  touch and which refuses as the Lean does. So no difftested twin disagrees with its Lean. What `552354cbe19` does is
+  let main's play of a wired class run through its second stage and write a case main's form refuses.
+- Under GATHER's layout trial the two would agree (the record then names the reader's port at the writer's root). Not
+  run.
+
+### 4. The compile and the kept case under B (your 12:30Z item, early)
+
+- **The check and the kept case.** `r20261113-100828-2396` on vy-nebius-cpu-9, rc 0, at `80ced2eac7d`: the form and its
+  executables build; the play of an interior of one member is accepted with the switch on (`K1_FORM_ON rc=0`) and
+  refused with it off (`K1_FORM_OFF rc=1`); the kept case of an interior of twenty members is refused at rule A still
+  (`K20_FORM_ON rc=1`, "two-stage: proofs: a session's verifier did not accept") and, with A set aside in the scratch
+  executable as in `9096` and the last step the tree's own, accepted (`K20_WHATIF_ROOTS rc=0`: 40 drawn, 40 proved,
+  bound 2); the form's difftest on the one-member case: 66 passed.
+- **The proofs.** 82 proof modules import the form's module. `r20261113-104145-ebe3` on vy-nebius-cpu-7, rc 0, at
+  `326deb5ebcf`: `lean_changed.py --build` of the form's module and the 17 of the 82 that no other of them imports:
+  all 82 compiled, none failed (`lean-build: {"built": {"security/Proofs": 0, …/recursive": 0}, "failed": {},
+  "skipped": {}}`). A compile only: no axiom probe, no replay, no records.
+- **One failure on the way, the base's and not B's.** At `80ced2eac7d` (`r20261113-103244-ef92` on vy-nebius-cpu-7,
+  rc 1) 71 of the 82 compiled and `FirstCoins.lean:262` failed, with 10 modules behind it not built. The file is the
+  same blob at `654e34d42b`: its `obtain` pattern on `inputAt_ok` predates the read-back records and the digest
+  conjunct. The join mended it in `07319646f70` (with `StageCut.lean:209`); I cherry-picked that commit onto the
+  scratch branch, which is `326deb5ebcf`. So `654e34d42b` itself does not compile `FirstCoins`; the join's tip has the
+  mend.
+- **No proof needed mending for B.** The seven theorems that name `secondCheck` compile unchanged.
+
+**Standing.** #9574 at `b7949765a0`; nothing moved at the public boundary; no job cancelled; no lock touched.
