@@ -30,7 +30,7 @@ from typing import Any
 import numpy as np
 
 from verity.circuits.defs import bind
-from verity.circuits.evaluation.batch import evaluate_batch, type_dtype
+from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.refs import runs
 from verity.commitments.windows import interface as IF
 
@@ -133,7 +133,7 @@ def _embedding_shard_small() -> tuple[Any, list[np.ndarray], np.ndarray]:
 
     fn = bind(B1T.EmbeddingShard, VS=4, H=3, START=2)
     table = np.arange(1, 13, dtype=np.uint16) * 0x0101
-    return fn, [np.array([t], np.uint32) for t in range(-1, 8)], table
+    return fn, [np.array([t & 0xFFFFFFFF], np.uint32) for t in range(-1, 8)], table
 
 
 #: an unlowered family's NumPy transcription, a member at a time, for one whose reference evaluator can't take its operands
@@ -220,6 +220,8 @@ class Values:
             return np.concatenate([NATIVE[fam](self, node, t) for t in range(n)])
         if node.form != "batch":
             return np.asarray(evaluate_batch(node.fn, *(self.leaves(a.refs)[None] for a in node.args))).reshape(-1)
+        if any(x not in (0, None) for x in node.axes):
+            raise ValueError(f"{node.fn.id}: a batch on axes {node.axes}, not 0 or none")
         shared = sum(len(a.refs) for a, x in zip(node.args, node.axes) if x is None)
         if shared * n <= 1 << 22:
             args = [self.leaves(a.refs).reshape(n, -1) if x == 0 else np.broadcast_to(self.leaves(a.refs), (n, len(a.refs)))
@@ -308,8 +310,7 @@ FREE: dict[tuple[str, str], Callable[["Check", Any, int, int, int], np.ndarray]]
 
 def _batched_gemm_w(ck: "Check", node: Any, a: int, u: int, words: int) -> np.ndarray:
     """`BatchedGemm` (`node_window_sparse`): unit (b, n) of member t, at a + (b N + n) M + t, reads w[b, n, :] of K words."""
-    S = node.fn.bindings
-    N, K = int(S["N"]), int(S["K"])
+    K = int(node.fn.bindings["K"])
     M = node.n if node.form == "batch" else 1
     i = u - a
     t, bn = i % M, i // M
@@ -351,6 +352,8 @@ class Check:
         for f in w.free:
             self.free.setdefault((f.tid, f.port), []).append(f)
         self.params = self._params()
+        #: rows two pieces hold, ``(tid, out, unit, node, the first holder's node)``; the first holder's words are expected
+        self.conflicts: list[tuple[str, str, int, int, int]] = []
         self.anchor = self._anchors()
         self.gathered: dict[tuple[str, int, str], tuple[Any, ...]] = {}
         for rows, r in w.wholes.items():
@@ -396,9 +399,11 @@ class Check:
                 k = (p.hi - p.lo) // r.words
                 for m in range(o.members):
                     us = r.unit + m * p.member + np.arange(k) * p.step
-                    if (a[us, 0] >= 0).any():
-                        raise ValueError(f"{r.tid} {r.out}: a row two pieces hold")
-                    a[us, 0], a[us, 1], a[us, 2] = j, m, p.lo + np.arange(k) * r.words
+                    held = a[us, 0] >= 0
+                    if held.any():
+                        self.conflicts.append((r.tid, r.out, int(us[held][0]), j, int(a[us[held][0], 0])))
+                    us, lo = us[~held], (p.lo + np.arange(k) * r.words)[~held]
+                    a[us, 0], a[us, 1], a[us, 2] = j, m, lo
         return out
 
     # -- expected words
@@ -471,8 +476,12 @@ class Check:
                 if not sel.any():
                     continue
                 for r in range(C):
-                    srcs = x.source((units[sel] - x.at) * C + r)
-                    vals = np.stack([self.row(x.writer, x.out, int(s)) for s in srcs])
+                    srcs = [int(s) for s in x.source((units[sel] - x.at) * C + r)]
+                    need = sorted({s for s in srcs if (x.writer, s) not in self.memo
+                                   and self.want(x.writer, x.out, s) is None})
+                    if need:
+                        self.outputs(x.writer, need)
+                    vals = np.stack([self.row(x.writer, x.out, s) for s in srcs])
                     put(sel, c0 + r, vals, "wire")
             for x in self.reads.get((tid, port), ()):
                 C, c0 = x.cut[1], x.cut[0]
@@ -495,8 +504,9 @@ class Check:
                 if not sel.any():
                     continue
                 tb = self.tables(o.table)
-                keys = done[o.key][sel]
-                key = np.ascontiguousarray(keys[:, :2]).view("<u4")[:, 0].astype(np.int64)
+                keys = done[o.key][sel].astype(np.int64)
+                key = keys[:, 0] if keys.shape[1] == 1 else keys[:, 0] | (keys[:, 1] << 16)
+                key = np.where(key >= 1 << 31, key - (1 << 32), key) if keys.shape[1] == 2 else key
                 which = o.ports.index(port)
                 vals = []
                 for t in key:
