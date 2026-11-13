@@ -25,8 +25,8 @@ from __future__ import annotations
 from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.gemm import DotBf16 as DotBf16V2
-from verity.definitions.ops.prims import ZERO32, const
+from verity.circuits.ops.gemm import DotBf16 as DotBf16V2
+from verity.circuits.ops.prims import ZERO32, const
 from verity.definitions.registry import fa2_check_inf as F2, prims as P
 from verity.definitions.registry.b1 import ZERO16, _lane, scale_log2_bits
 from verity.definitions.registry.dead_free import AttnBlockFirstV1, AttnHeadEndV1
