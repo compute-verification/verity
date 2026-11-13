@@ -66,25 +66,41 @@ theorem valid_items_nodup {D : Verity.Registration.Digests} {A : Verity.Registra
     have ho : e.ItemsOnce l := (Verity.Registration.valid_append_singleton.mp h).2.2.1
     simpa [Verity.Registration.Entry.ItemsOnce, Verity.Registration.items, List.flatMap_append] using ho
 
-/-- What the check's State after the prefix `p` holds of it: the spec's Site, items, declarations and head. -/
+/-- What the check's State after the prefix `p` holds of it: the spec's Site, items, declarations, head, length and
+prefix heads. -/
 def Inv (c : Core.Site.Registration.Composite) (p : Core.Registration.Log) (s : Core.Registration.State) : Prop :=
   Properties.Site.site s.site = Verity.Site.ofLog (log B p) ∧
     Verity.Registration.items (log B p) = s.items.map (item B) ∧
     (log B p).filterMap Verity.Registration.Entry.declared? = s.declared.map declared ∧
-    Verity.Registration.head (digests E) (composite c) (log B p) = s.head
+    Verity.Registration.head (digests E) (composite c) (log B p) = s.head ∧
+    s.entries = p.length ∧ Verity.Registration.heads (digests E) (composite c) (log B p) = s.heads
 
 theorem log_append (p q : Core.Registration.Log) : log B (p ++ q) = log B p ++ log B q := List.map_append
 
+/-- The heads of a log with one more entry: the log's, then the entry's digest at the longer length. -/
+theorem heads_concat (D : Verity.Registration.Digests) (c : Verity.Registration.Composite) (L : Verity.Registration)
+    (x : Verity.Registration.Entry) :
+    Verity.Registration.heads D c (L ++ [x]) = Verity.Registration.heads D c L ++ [(L.length + 1, D.entry x)] := by
+  unfold Verity.Registration.heads
+  rw [List.length_append, List.length_singleton, List.range_succ, List.map_append]
+  congr 1
+  · apply List.map_congr_left
+    intro n hn
+    rw [List.take_append_of_le_length (by simpa [List.mem_range, Nat.lt_succ_iff] using hn)]
+  · simp [List.take_of_length_le]
+
 theorem inv_empty (c : Core.Site.Registration.Composite) : Inv B E c [] (Core.Registration.State.empty c) := by
-  refine ⟨rfl, rfl, rfl, ?_⟩
-  simp [log, digests, Core.Registration.State.empty, Properties.Site.ofComposite_composite]
+  refine ⟨rfl, rfl, rfl, ?_, rfl, ?_⟩
+  · simp [log, digests, Core.Registration.State.empty, Properties.Site.ofComposite_composite]
+  · simp [Verity.Registration.heads, log, digests, Core.Registration.State.empty,
+      Properties.Site.ofComposite_composite]
 
 theorem inv_add (c : Core.Site.Registration.Composite) {p : Core.Registration.Log} {s : Core.Registration.State}
     (e : Core.Registration.Entry) (hN : E (entry B e) = e.digest) (hi : Inv B E c p s) :
     Inv B E c (p ++ [e]) (s.add e) := by
-  obtain ⟨hS, hI, hD, hH⟩ := hi
+  obtain ⟨hS, hI, hD, hH, hL, hHs⟩ := hi
   rw [Inv, log_append]
-  refine ⟨?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [show log B [e] = [entry B e] from rfl, Verity.Site.ofLog_concat, ← hS]
     cases e with
     | site x =>
@@ -109,6 +125,11 @@ theorem inv_add (c : Core.Site.Registration.Composite) {p : Core.Registration.Lo
     | declaration p d => simp [Core.Registration.State.add, entry, Verity.Registration.Entry.declared?]
   · rw [show log B [e] = [entry B e] from rfl, Verity.Registration.head_concat]
     cases e <;> exact hN
+  · cases e <;> simp [Core.Registration.State.add, hL]
+  · rw [show log B [e] = [entry B e] from rfl, heads_concat, hHs]
+    have hlen : (log B p).length = s.entries := by simp [log, hL]
+    rw [hlen, show (digests E).entry (entry B e) = e.digest from hN]
+    cases e <;> rfl
 
 /-- **An entry's refusal in code is the spec's** against the prefix the State holds, when that prefix is valid. -/
 theorem refusal_eq (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration.Composite)
@@ -116,7 +137,7 @@ theorem refusal_eq (A : Core.Site.Registration.Auditor) (c : Core.Site.Registrat
     (hv : Verity.Registration.Valid (digests E) (auditor A) (composite c) (log B p)) (e : Core.Registration.Entry) :
     (e.refusal A c s).map refusal =
       Verity.Registration.refusal (digests E) (auditor A) (composite c) (log B p) (entry B e) := by
-  obtain ⟨hS, hI, hD, hH⟩ := hi
+  obtain ⟨hS, hI, hD, hH, -, -⟩ := hi
   have hn := valid_items_nodup hv
   rw [hI] at hn
   have hdays : Verity.Registration.days (log B p) = s.declared.map (·.day) := by
@@ -213,10 +234,10 @@ theorem go_says (A : Core.Site.Registration.Auditor) (c : Core.Site.Registration
 
 theorem view_eq (c : Core.Site.Registration.Composite) {l : Core.Registration.Log} {s : Core.Registration.State}
     (hi : Inv B E c l s) : view B s.view = Verity.Registration.view (digests E) (composite c) (log B l) := by
-  obtain ⟨hS, hI, hD, hH⟩ := hi
+  obtain ⟨hS, hI, hD, hH, -, hHs⟩ := hi
   unfold view Verity.Registration.view Core.Registration.State.view Verity.Registration.theta
     Verity.Registration.builder?
-  rw [hI, hS, hD, hH]
+  rw [hI, hS, hD, hH, hHs]
   congr 1
   · generalize s.items = is
     induction is with

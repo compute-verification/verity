@@ -61,9 +61,11 @@ def entry (B : Core.Registration.Builder → Verity.Compiler) : Core.Registratio
 def log (B : Core.Registration.Builder → Verity.Compiler) (l : Core.Registration.Log) : Verity.Registration :=
   l.map (entry B)
 
-/-- **The view a code view denotes**: the spec's Site, θ, builder and declarations of the code's, and the same head. -/
+/-- **The view a code view denotes**: the spec's Site, θ, builder and declarations of the code's, and the same head and
+prefix heads. -/
 def view (B : Core.Registration.Builder → Verity.Compiler) (v : Core.Registration.View) : Verity.Registration.View :=
-  ⟨Properties.Site.site v.site, v.theta.map theta, v.builder.map (builder B), v.declarations.map declared, v.head⟩
+  ⟨Properties.Site.site v.site, v.theta.map theta, v.builder.map (builder B), v.declarations.map declared, v.head,
+    v.heads⟩
 
 /-- **The spec's digests for the code's check**: a sheet and a composite's genesis by the code's own digests, and an
 entry by `E`. -/

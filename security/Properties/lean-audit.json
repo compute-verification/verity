@@ -86,7 +86,7 @@
   "Properties.Verity.Sha512",
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
-  "Properties.Verity.Ties",
+  "Properties.Ties",
   "Properties.Flock.Nets",
   "Properties.Flock.ReadNet",
   "Properties.Assumptions",
@@ -2349,13 +2349,15 @@
     "Properties.Verity.Coupling",
     "Definitions.Accounting.JointPeriod",
     "Properties.Pouw.PearlPlus",
-    "Properties.Pouw.PearlPlusDraw",
-    "Definitions.Core.Registration",
-    "Flock.ProvedScope",
-    "NetworkCheck.Check"
+    "Properties.Pouw.PearlPlusDraw"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), and the ties between the registration and another protocol's parameters (`Properties.Verity.Ties`) over the registration's view, the program Flock's verifier binds a circuit file to (`Flock.ProvedScope`) and the network certifier's parameters (`NetworkCheck.Check`), never over a proof"
+   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
+  },
+  "Properties.Ties": {
+   "imports": ["Properties.Verity.Game", "Definitions.Core.Registration", "Flock.ProvedScope", "NetworkCheck.Check"],
+   "except": [],
+   "why": "the ties between the registration and the protocols that name what it registers join two protocols, so they are the composition's, under a prefix of their own because they read a protocol's code: the game's reading of the committed files (`Properties.Verity.Game`), the registration's view and prefix heads (`Definitions.Core.Registration`), the Program Flock's verifier binds a circuit file to (`Flock.ProvedScope`) and the network certifier's parameters (`NetworkCheck.Check`); never a proof"
   },
   "Properties.Core": {
    "imports": ["Definitions.Core", "CoreProtocol.Site", "CoreProtocol.Registration", "Properties.Core.Site"],

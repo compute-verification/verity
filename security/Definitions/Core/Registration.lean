@@ -12,9 +12,12 @@ hardware is accounted for by some protocol of the composite. It defines no secon
 is the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
 
 * **The view** (`Registration.View`, `Registration.view`): what the theorems read of a log at its head, the Site, θ's
-  values by their committed roots, the registered compiler `B` by its builder, and each day's circuit by its program's
-  digest. It is the spec's copy of the code's view (`Core.Registration.View`), which a protocol reads of an accepted
-  log.
+  values by their committed roots, the registered compiler `B` by its builder, each day's circuit by its program's
+  digest, and the heads of the log's chain (`Registration.heads`). It is the spec's copy of the code's view
+  (`Core.Registration.View`), which a protocol reads of an accepted log.
+* **Prefix heads** (`Registration.heads`, `Registration.AtHead`): an answer names a head of the accepted log's chain, the
+  head of one of its prefixes, and is read against what that prefix registers. No entry retires what an earlier one
+  registers, so what a prefix registers a longer prefix registers too.
 * **The readings** (`Registration.Reading`, `View.figures`): a registered device's figures as its sheet states them, or
   as the bound reads them, figure by figure the larger of those and the auditor's estimate (`DeviceFigures.bounding`),
   the reading `Site.device` builds the device model from.
@@ -36,7 +39,7 @@ is the one `Definitions.Core.Site` and `Definitions.Core.Compiler` define.
 a property of the code (`Properties.Registration.Checks`). Nothing here ties a builder's digest to the compiler it
 holds: the spec's builder holds its compiler (`Registration.Builder.B`), while the code's holds a digest and a cap.
 What another protocol names of the registration (the circuit its parameters name, a network certifier's links and key)
-joins two protocols, so it is stated in the composition's area (`Properties.Verity.Ties`), and nothing proves it.
+joins two protocols, so it is stated in the composition's area (`Properties.Ties`), and nothing proves it.
 `Registration.Valid` doesn't check `AccountedFor`, so no guarantee here concludes it. Hardware outside the Site
 (unregistered hardware) and a host's own compute, which the Site registers no rate for, are parts of no Site.
 -/
@@ -71,24 +74,37 @@ namespace Registration
 
 open Site (Sheet Loc)
 
+/-- **The heads of the log's chain**: the head (`head`) of each prefix of the log with the prefix's length, shortest
+first: the empty prefix's, the composite's genesis, then one for each entry. -/
+def heads (D : Digests) (c : Composite) (log : Registration) : List (ℕ × String) :=
+  (List.range (log.length + 1)).map fun n => (n, head D c (log.take n))
+
 /-- **What the theorems read of a registration log**, at its head: the Site, θ's registered values in order, the
-registered compiler's builder, and the days' declared circuits in order. The code's `Core.Registration.View` is its
-copy. -/
+registered compiler's builder, the days' declared circuits in order, its head, and the heads of its chain. The code's
+`Core.Registration.View` is its copy. -/
 structure View where
   site : Site
   theta : List Theta
   builder : Option Builder
   declarations : List Declared
   head : String
+  heads : List (ℕ × String)
 
 /-- **A log's view**: its Site (`Site.ofLog`), its θ (`Registration.theta`), its builder (`Registration.builder?`), its
-declarations in the log's order, and its head (`Registration.head`). -/
+declarations in the log's order, its head (`Registration.head`) and the heads of its chain (`Registration.heads`). -/
 def view (D : Digests) (c : Composite) (log : Registration) : View where
   site := Site.ofLog log
   theta := log.theta
   builder := log.builder?
   declarations := log.filterMap Entry.declared?
   head := head D c log
+  heads := heads D c log
+
+/-- **At a head of the log's chain**: `h` is the head of a prefix of the log (`View.heads`), and `P` holds of that
+prefix's view, so what `P` reads as registered is what the prefix registers. An answer that names the head `h` is read
+so. -/
+def AtHead (D : Digests) (c : Composite) (log : Registration) (h : String) (P : View → Prop) : Prop :=
+  ∃ n, (n, h) ∈ (view D c log).heads ∧ P (view D c (log.take n))
 
 /-- **A reading of a registered device's figures**: as its registered sheet states them, or as the bound reads them,
 figure by figure the larger of those and the auditor's estimate (`DeviceFigures.bounding`). -/
