@@ -5,9 +5,10 @@ pairs: any order the kernel's atomics can hand out passes, and a rank that is no
 from __future__ import annotations
 
 import numpy as np
-
-from verity_vllm.check.replay import evaluate as EV, opening as OP
 from verity.definitions.numerics.moe_align_rows import moe_align_ranks
+
+from verity_vllm.check.replay import evaluate as EV
+from verity_vllm.check.replay import opening as OP
 
 E, P, BM, ROW = 3, 8, 2, 1
 EXPERTS = "model.layers.0.ffn.experts"
@@ -45,7 +46,7 @@ def _store(rank: np.ndarray, start: np.ndarray) -> OP.CommittedStore:
     planes = {(ROUTER, "out"): IDS, (ALIGN, "rank.0"): rank, (ALIGN, "rank.1"): start}
     entries, blobs = [], {}
     for (op, member), row in planes.items():
-        words = np.zeros((3, P), dtype=np.uint32)
+        words: np.ndarray = np.zeros((3, P), dtype=np.uint32)
         words[ROW] = np.asarray(row).astype(np.int64) & 0xFFFFFFFF
         blobs[f"{op}/{member}"] = words.tobytes()
         entries.append({"name": f"{op}/{member}", "element_offset": 0, "encoding": {"dtype": "int32"},

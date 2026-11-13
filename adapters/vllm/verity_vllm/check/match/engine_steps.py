@@ -17,7 +17,7 @@ def vu_population(run: MatchRun, att: Attribution, reqs: RequestFacts) -> dict[i
     res, B, fast = run.res, run.fold, run.fast
     per_req, meta_of = att.per_req, att.meta_of
     glob2loc, engine_step_of, comps, exec_pop, unexercised = reqs.glob2loc, reqs.engine_step_of, reqs.comps, reqs.exec_pop, reqs.unexercised
-    c = NamedCheck(res, "G7", "vu_population: global query population (components over executed steps) == attributed fold; boundary probes resolve")
+    c = NamedCheck(res, "vu_population", "global query population (components over executed steps) == attributed fold; boundary probes resolve")
     attributed = sum(len(v) for v in per_req.values())
     if exec_pop != attributed:
         c.fail(f"global query exposes {exec_pop} VUs over the executed steps but the fold holds {attributed} attributed instances")
@@ -28,7 +28,7 @@ def vu_population(run: MatchRun, att: Attribution, reqs: RequestFacts) -> dict[i
         by_step[s].append(gi)
     for s in sorted(by_step):
         gis = sorted(by_step[s])
-        owners = []
+        owners: list[tuple[str, int]] = []
         block_last: list[int] = []
         if fast:   # same blocks; the last attributed instance of each block kept while building them (O(1) per boundary below)
             owners, block_last = GMF.g7_owner_blocks(gis, glob2loc)
@@ -51,8 +51,9 @@ def vu_population(run: MatchRun, att: Attribution, reqs: RequestFacts) -> dict[i
                 rid, ls, lj = loc
                 back = loc2glob.get(loc)
                 A = comps.get(rid)
+                meta = meta_of.get(B.inst[gi]["k"])   # the fold's own row of the instance; an instance it wrote none for has none
                 ok = back == gi and rid in per_req and A is not None and ls < len(A.steps) and lj < len(A.steps[ls]) \
-                    and A.inst[A.steps[ls][lj]]["spec"] == B.inst[gi]["spec"] and (meta_of.get(B.inst[gi]["k"]) or {}).get("request") in (None, rid)
+                    and A.inst[A.steps[ls][lj]]["spec"] == B.inst[gi]["spec"] and (meta.get("request") if meta else None) in (None, rid)
                 if not ok:
                     failures += 1
                     if failures <= 10:
@@ -70,9 +71,9 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
     per_req = att.per_req
     glob2loc, shared_loc, proj, comps = reqs.glob2loc, reqs.shared_loc, reqs.proj, reqs.comps
     engine_step_of, dep_viol, perm_facts = reqs.engine_step_of, reqs.dep_viol, reqs.perm_facts
-    c = NamedCheck(res, "G8", "within_step_order: each request's own instances in its component order inside every engine step; cross-request interleaving = recorded runtime batch layout"
+    c = NamedCheck(res, "within_step_order", "each request's own instances in its component order inside every engine step; cross-request interleaving = recorded runtime batch layout"
                   if within_step == "sequence" else
-                  "within_step_order: emission order inside an engine step recorded as batch layout (canonical addresses are structural); "
+                  "emission order inside an engine step recorded as batch layout (canonical addresses are structural); "
                   "dependency order is G3's (a consumer before its producer is DAG-unequal)")
     layout = []
     nonmono_steps = {}
@@ -120,32 +121,33 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
             continue
         if within_step == "sequence":
             if ent.get("executed_steps_equal") is False:
-                perm_targets.append((ent, rid, (ent.get("first_divergence") or {}).get("step")))
+                first = ent.get("first_divergence")   # stated with every sequence that is not equal
+                perm_targets.append((ent, rid, first.get("step") if first else None))
         else:
             A_, P_ = comps[rid], proj[rid]
             for s_ in range(min(len(P_.steps), len(A_.steps))):
                 if any((glob2loc.get(per_req[rid][il]) or shared_loc.get(per_req[rid][il], {}).get(rid) or (None, None, None))[2] != pos
                        for pos, il in enumerate(P_.steps[s_])):
                     perm_targets.append((ent, rid, s_))
-    for ent, rid, s in perm_targets[:32]:
+    for ent, rid, step in perm_targets[:32]:
         A, P = comps[rid], proj[rid]
-        if not perm_eligible(A, P, s):
+        if step is None or not perm_eligible(A, P, step):
             continue
         # Merkle (order-insensitive) matching of the step's instances: B instance -> A index with the same DAG hash -- the leg's
         # matching when it ran (computed where the hashes were), else this process's hashes on both sides
-        pi = (perm_facts.get(rid) or {}).get(s)
+        pi = perm_facts[rid].get(step) if perm_facts.get(rid) else None
         if pi is None:
-            pi = perm_match(A, P, s, ops.dag_hashes(A), ops.dag_hashes(P))
+            pi = perm_match(A, P, step, ops.dag_hashes(A), ops.dag_hashes(P))
         same_dag = all(x is not None for x in pi)
         moved = [(j, x) for j, x in enumerate(pi) if x != j]
-        es = engine_step_of.get(per_req[rid][P.steps[s][0]])
+        es = engine_step_of.get(per_req[rid][P.steps[step][0]])
         # which computations were displaced: the specs of the A instances that moved by more than the induced shift, with their
         # Attention T (= query position + 1) against the positions of the OTHER requests' rows in the same engine step
         offs = collections.Counter(x - j for j, x in moved if x is not None)
         big = [(j, x) for j, x in moved if x is not None and abs(x - j) > 2]
-        displaced = collections.Counter(A.inst[A.steps[s][x]]["spec"] for _, x in big)
+        displaced = collections.Counter(A.inst[A.steps[step][x]]["spec"] for _, x in big)
         t_re = re.compile(r"\{T=(\d+)")
-        disp_pos = sorted({int(m.group(1)) - 1 for _, x in big for m in [t_re.search(A.inst[A.steps[s][x]]["spec"])] if m})
+        disp_pos = sorted({int(m.group(1)) - 1 for _, x in big for m in [t_re.search(A.inst[A.steps[step][x]]["spec"])] if m})
         others = sorted({p for r_, p in steps.get(es, {}).get("rows", []) if r_ != rid}) if es is not None else []
         if within_step == "sequence":
             statement = ("the request's own instances of this step are exactly its component's computations (Merkle-identical DAG multiset) "
@@ -160,14 +162,14 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
                          "wiring and dependency order are the component's (Merkle-identical), each is addressed by its canonical component index; "
                          "recorded as batch layout, not re-sorted" if same_dag else
                          "NOT a permutation of the component's step (different DAG): reported by G3")
-        perms.append({"request_id": rid, "local_step": s, "engine_step": es, "n": len(pi), "moved": len(moved), "same_dag_multiset": same_dag,
+        perms.append({"request_id": rid, "local_step": step, "engine_step": es, "n": len(pi), "moved": len(moved), "same_dag_multiset": same_dag,
                       "unmatched": sum(1 for x in pi if x is None), "offset_histogram": dict(offs.most_common(6)),
                       "displaced_specs": dict(displaced.most_common(6)), "displaced_query_positions": disp_pos[:16],
                       "coscheduled_other_positions": others[:16], "permutation_head": pi[:8], "statement": statement})
         if within_step == "sequence":
-            c.fail(f"{rid}: local step {s} (engine step {es}) is a permutation of its component's step ({len(moved)}/{len(pi)} moved; displaced query "
+            c.fail(f"{rid}: local step {step} (engine step {es}) is a permutation of its component's step ({len(moved)}/{len(pi)} moved; displaced query "
                    f"positions {disp_pos[:6]} vs co-scheduled others' positions {others[:6]})" if same_dag
-                   else f"{rid}: local step {s} differs structurally from its component ({sum(1 for x in pi if x is None)} unmatched)")
+                   else f"{rid}: local step {step} differs structurally from its component ({sum(1 for x in pi if x is None)} unmatched)")
     c.info.update({"shared_steps": len(layout), "batch_layout": layout[:6] + ([{"...": len(layout) - 6}] if len(layout) > 6 else []),
                    "steps_with_emission_out_of_canonical_order": len(nonmono_steps),
                    "order_source": "request-local canonical order: the component Program; cross-request row interleaving and (under dag) the "

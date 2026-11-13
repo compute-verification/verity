@@ -19,20 +19,19 @@ import zlib
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
-from verity.circuits.cut import separable
-from verity.circuits.defs import REGISTRY, bind
+from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
+from verity.circuits.cut import separable
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.definitions import word as W
 from verity.definitions.registry import gumbel_boolean as GB
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import sampling_boolean as SB
-from verity.definitions import word as W
 
 F32 = GB.F32
 
@@ -292,7 +291,7 @@ def test_setup_is_the_lane_values(N) -> None:
     """`GumbelSetup_v1{N}` on random keys and the edges, at temperatures 1, +0, -0, a subnormal and a NaN (noisy iff not
     zero)."""
     key = np.concatenate([KEY_EDGES, _rng("setup").integers(0, 1 << 32, 2000, dtype=np.uint64)])
-    temp = np.resize(TEMPS, len(key))
+    temp: np.ndarray = np.resize(TEMPS, len(key))
     got = BS.evaluate_words(bind(GB.GumbelSetup, N=N), key.astype(np.uint32), temp.astype(np.uint32)).astype(np.uint64)
     for i, k in enumerate(key.tolist()):
         ks, ka, lows = lane_values(k, N)
@@ -337,7 +336,7 @@ def select_rows(V: int, n: int, rng) -> tuple[np.ndarray, ...]:
     apart, and subnormals among signed zeros (flushed when noisy, kept at temp 0); temperatures in turn 1, +0, -0, a subnormal
     and a NaN (noisy: a NaN is not zero)."""
     x = rng.integers(0, 1 << 32, (n, V), dtype=np.uint64)
-    kind = np.arange(n) % 9
+    kind: np.ndarray = np.arange(n) % 9
     few = np.array([0x3F800000, 0x40000000, 0x40400000, 0xC0000000, 0, 0x80000000], np.uint64)
     x[kind == 1] = rng.choice(few, (int((kind == 1).sum()), V))
     x[kind == 2] = rng.choice(F32_SPECIALS, (int((kind == 2).sum()), V))
