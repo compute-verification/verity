@@ -1,4 +1,4 @@
-"""One IMAD writes 4 single-entry fields and one IMAD.WIDE 6, above qstar's "IMAD ≤ 3" and the ISA cap's 32/7."""
+"""One IMAD writes 4 single-entry fields and one IMAD.WIDE 6, above qstar's "IMAD ≤ 3" and ISA-CAP's 32/7."""
 from __future__ import annotations
 
 import sys
@@ -24,7 +24,7 @@ def test_idp2a_packs_five():
     assert not ic.idp2a_packing(m2=128, m3=128 * 257)
 
 
-def test_load_bound_against_the_cap():
+def test_load_bound_against_kappa():
     """QSTAR's 6.0 / 3.5 B at κ = 32/7, and 5.3 / 3.0 B at the 8 one IMAD.WIDE reaches."""
     assert round(ic.load_bound(32 / 7, 128), 2) == 6.04 and round(ic.load_bound(32 / 7, 216), 2) == 3.53
     assert round(ic.load_bound(8, 128), 2) == 5.27 and round(ic.load_bound(8, 216), 2) == 3.04

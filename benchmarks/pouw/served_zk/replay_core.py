@@ -58,7 +58,7 @@ from verity.protocols.pouw.verifier import verifier as PV
 from verity.protocols.pouw.verifier import window as Wd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import of_record as OR  # noqa: E402
+import of_record as OR
 
 REPO = Path(__file__).resolve().parents[3]
 LEAN = REPO / "verity/protocols/pouw/verifier/lean/check"
@@ -173,15 +173,15 @@ def core_cases(out: Path, checks: dict) -> list[tuple[str, dict, str, Any]]:
 def opening_inputs(out: Path, checks: dict, summary: dict) -> list[tuple[str, dict]]:
     """The openings `job.sh`'s ``opencheck`` judged, as `pouw-check-difftest`'s ``opening`` inputs."""
     regs = {s: load(out / s / "registration.json") for s in ("request", "other")}
-    drawn = summary.get("units") or []
-    u0 = drawn[0] if drawn else None
+    sampled = summary.get("units") or []
+    u0 = sampled[0] if sampled else None
     ou = u0 if u0 is not None and u0 < regs["other"]["population"] else 0
-    plan = {f"open-u{t}": ("request", t, f"u{t}", f"u{t}", True) for t in drawn}
+    plan = {f"open-u{t}": ("request", t, f"u{t}", f"u{t}", True) for t in sampled}
     plan["open-filler"] = ("request", summary.get("filler_unit"), "filler", "filler", False)
     plan["open-foreign-proof"] = ("request", u0, "other-tile", f"u{u0}", True)
     plan["open-foreign-commit"] = ("other", ou, f"u{u0}", "other-tile", False)
     got = []
-    for name, (side, unit, pub, op, is_drawn) in plan.items():
+    for name, (side, unit, pub, op, is_sampled) in plan.items():
         if name not in checks or unit is None or not (out / pub / "pub.bin").is_file():
             continue
         p = load(out / side / "params.json")
@@ -190,7 +190,7 @@ def opening_inputs(out: Path, checks: dict, summary: dict) -> list[tuple[str, di
                                       "context": p["context"], "delta": p["delta"], "eps": p["eps"],
                                       "grid_bits": p["grid_bits"], "length": p.get("length", LENGTH), "query": reg["query"],
                                       "range": p["range"]},
-                           "commitment": hexed(reg), "units": drawn if is_drawn else None, "unit": unit,
+                           "commitment": hexed(reg), "units": sampled if is_sampled else None, "unit": unit,
                            "pub": (out / pub / "pub.bin").read_bytes().hex(), "opening": load(out / op / "opening.json")}))
     return got
 
@@ -233,19 +233,19 @@ def coin_inputs(out: Path, checks: dict, summary: dict, passes: dict[str, Path])
     recorded = True
     reg, receipt, d = load(out / "request/registration.json"), load(out / "receipt.json"), load(out / "draw.json")
     openings = [json.loads(x) for x in (ch / "openings.jsonl").read_text().splitlines() if x]
-    drawn = next((o for o in openings if o["label"] == "draw"), None)
+    opened = next((o for o in openings if o["label"] == "draw"), None)
     audit = out / "outcome-honest/audit.json"
     stream = load(audit)["stream"] if audit.is_file() else selected_stream(ch)
     got: list[tuple[str, str, dict, str]] = []
-    if drawn is not None and stream is not None and "select" in checks:
-        x = {"coins": coins, "recorded": recorded, "opening": drawn, "stream": stream,
+    if opened is not None and stream is not None and "select" in checks:
+        x = {"coins": coins, "recorded": recorded, "opening": opened, "stream": stream,
              "registration": receipt["registration"], "receipt": receipt, "k": reg["law"]["k"],
              "population": reg["population"], "units": d["units"]}
         got.append(("select", "draw", x, checks["select"]["verdict"]))
         other = load(out / "other/registration.json") if (out / "other/registration.json").is_file() else {"x": 1}
         for name, edit in (("draw-unit", {"units": sorted({*x["units"][1:], next(u for u in range(x["population"])
                                                                                     if u not in x["units"])})}),
-                           ("draw-coin", {"opening": {**drawn, "coin": f"{int(drawn['coin'][:2], 16) ^ 1:02x}" + drawn["coin"][2:]}}),
+                           ("draw-coin", {"opening": {**opened, "coin": f"{int(opened['coin'][:2], 16) ^ 1:02x}" + opened["coin"][2:]}}),
                            ("draw-after", {"registration": hashlib.sha512(D.canonical(other).encode()).hexdigest()}),
                            ("draw-stream", {"stream": "00" * 64}),
                            ("draw-receipt", {"receipt": {**receipt, "received": "1"}}),

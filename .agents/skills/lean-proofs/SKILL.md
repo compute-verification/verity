@@ -43,8 +43,9 @@ the lock's sections, each naming the docstring with the detail. This is the work
   Mathlib, ArkLib, `lean-toolchain`) in a feature PR; a `path` require between in-repo packages that AGENTS.md "Lean"
   allows may go in one, in its own commit with the regenerated `lake-manifest.json`, the requires acyclic. The full
   check, `check.py PKG`, runs in the merge queue's check; run it by hand only on a machine of your own.
-- **The fast path is for the lock and the mark**, once `verity lean try` passes: `lean_changed.py --records PKG
-  --update` through `research run` (the README's commands have the line) regenerates PKG's records and its requirers',
+- **The fast path is not owed before a mark**; once `verity lean try` passes, run it for what the candidate's records run
+  can't write (below) or to see a changed record early: `lean_changed.py --records PKG --update` through `research run`
+  (the README's commands have the line) regenerates PKG's records and its requirers',
   with the `--update` printout the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
   `--on auto` places it: never name a node, and never launch one run on two nodes to race them (cancel a duplicate).
   Don't wrap it in `slot.py`: where it lands, the runner takes the slot. Commit each record it kept under
@@ -129,10 +130,10 @@ fixes. Two they don't hold: Mathlib's names, and no binder `X` or `Y` where ArkL
   `lean-audit.json` merges without a rebuild; each `merge.py:` warning names an entry it took from one side, so read
   them. It conflicts only where it can't vouch for the merge (AGENTS.md "Lean", the lock), and says why: do what it
   says.
-- Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
-  commit of exactly the records a passing run kept needs no new run. Your PR's candidate's records run regenerates
-  records another PR moved; re-record only what it can't (a hand-written entry a merge warning says took theirs, `shape`, a
-  move's map).
+- Mark with no records run of your own: the candidate's records run commits every stale record. Record first, by the
+  fast path, only what it can't write: a hand-written entry a merge warning says took theirs; `shape`; a hand edit to
+  the lock (an `exempt` entry deleted while its module is not in `roots` fails the run, and the PR leaves its batch);
+  a guarantee that only moved (`--update --moved MOVES.json`, which the run lacks).
 
 ## Standing rulings
 

@@ -4,6 +4,7 @@ side's versioned points and source check on a real store with a directory remote
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import math
@@ -11,6 +12,7 @@ import re
 import runpy
 import sqlite3
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -497,7 +499,8 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
         assert fast["cpu_sm_s"] == pytest.approx(HOST * fast["sm_s"], rel=1e-3)
     sent, sha = str(run_dir / "inputs" / "arm.cubin"), hashlib.sha256(CUBIN).hexdigest()
     assert doc["arm"] == {"name": ARM, "cubin_art": CUBIN_ART, "cubin_sha256": sha, "binaries": [sent],
-                          "verifier": "verify.py", "gated": [{"path": sent, "sha256": sha, "ok": True}]}
+                          "verifier": "verify.py", "gated": [{"path": sent, "sha256": sha, "ok": True}],
+                          "commits_y": False}
     prof, *exports, verify = node.calls
     assert prof[:2] == ["env", f"{overhead_node.CUBIN_ENV}={sent}"]
     prof = prof[2:]
@@ -634,12 +637,19 @@ def stored_points(tmp: Path, s: Store, run: str) -> str:
 
 
 def timed(tmp: Path, s: Store, art: str, scheme: str, run: str, node: Node | None = None, cubin: bytes = CUBIN,
-          cubin_art: str | None = None) -> str:
+          cubin_art: str | None = None, edit: Callable[[dict], None] | None = None) -> str:
+    """A timed run of the door in the store; `edit` changes its `overhead.json` first, for a made-up record."""
+
     points = tmp / f"{run}-points.json"
     points.write_bytes(Path(s.store.fetch(art)).read_bytes())
     rc, run_dir = node_run(tmp, node or Node(tmp), points, scheme, art, run=run, cubin=cubin,
                            cubin_art=cubin_art or s.cubin)
     assert rc == 0
+    if edit is not None:
+        record = run_dir / "out" / "overhead.json"
+        doc = json.loads(record.read_text())
+        edit(doc)
+        record.write_text(json.dumps(doc))
     s.ran(run, run_dir)
     return run
 
@@ -774,6 +784,70 @@ def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_
     assert all("superseded" in r["why"] for r in later["rows"])
     with pytest.raises(ValueError, match="superseded"):
         R.gamma_of_record(third, "stock", "h200", "L")
+
+
+def test_a_row_carries_the_note_of_its_own_run_and_the_same_numbers_with_it_or_without(tmp_path, scheme, monkeypatch, capsys):
+    """Made-up records of one stand-in arm under three entries. pearl-plus's entry commits no y, so its C and L rows carry
+    `WITHOUT_Y` in both rendered tables and the JSON. A made-up scheme whose entry commits y carries no note, and every
+    number of its rows is pearl-plus's. A run recorded before the field (its `arm` record without `commits_y`) carries the
+    note whatever today's entry says: the note is the run's, not the entry's. stock, with no arm, carries none. The
+    table's coverage line names the layer's linears and what the model's entry leaves out."""
+
+    with_y = dataclasses.replace(scheme, id="pearl-plus-y", commits_y=True)
+    before = dataclasses.replace(with_y, id="pearl-plus-before")
+    for sch in (with_y, before):
+        monkeypatch.setitem(O.SCHEMES, sch.id, sch)
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    runs = {"pearl-plus": timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0002"),
+            with_y.id: timed(tmp_path, s, art, with_y.id, "r20261104-030000-0003"),
+            before.id: timed(tmp_path, s, art, before.id, "r20261104-030000-0004",
+                             edit=lambda doc: doc["arm"].pop("commits_y")),
+            "stock": timed(tmp_path, s, art, "stock", "r20261104-030000-0005")}
+    assert all(R.record_run(s.store, run) == [] for run in runs.values())
+
+    table = R.build(s.fresh(), root=REPO)
+    by = {(r["scheme"], r["point"]): r for r in table["rows"]}
+    assert set(by) == {(name, point) for name in runs for point in O.POINTS} and all(r["of_record"] for r in by.values())
+    ours = {"scheme", "run", "commits_y", "note"}
+    for point in O.POINTS:
+        without, committed, old, stock = (by[name, point] for name in runs)
+        assert (without["commits_y"], without["note"]) == (False, O.WITHOUT_Y) == (old["commits_y"], old["note"])
+        assert (committed["commits_y"], committed["note"]) == (True, None)
+        assert (stock["commits_y"], stock["note"]) == (None, None)
+        numbers = {k: v for k, v in without.items() if k not in ours}
+        assert numbers["gamma"]["gamma"] == pytest.approx(0.55, rel=1e-4) and numbers["periods"]["share"] > 0
+        assert all({k: v for k, v in r.items() if k not in ours} == numbers for r in (committed, old))
+    assert R.gamma_of_record(s.store, "pearl-plus", "h200", "C")["note"] == O.WITHOUT_Y
+
+    lines = R.render(table).splitlines()
+    rows = {name: [ln for ln in lines if ln.startswith(f"| {name} | ")] for name in runs}
+    # a row of the γ table at each point and, for a scheme with an arm, a row a period (and the window) at each point
+    assert [len(rows[name]) for name in runs] == [2 * (2 + len(O.PERIODS_H))] * 3 + [2]
+    for name in ("pearl-plus", before.id):
+        assert all(ln.endswith(f" | {O.WITHOUT_Y} |") for ln in rows[name])
+    for name in (with_y.id, "stock"):
+        assert all(ln.endswith(" |  |") and O.WITHOUT_Y not in ln for ln in rows[name])
+
+    def bare(name: str, note: str) -> list[str]:
+        """A scheme's rows without their note, under pearl-plus's name and no run id."""
+
+        return [ln.removesuffix(f" {note} |").replace(f"| {name} |", "| pearl-plus |").replace(runs[name], "RUN")
+                for ln in rows[name]]
+
+    assert bare("pearl-plus", O.WITHOUT_Y) == bare(with_y.id, "") == bare(before.id, O.WITHOUT_Y)
+
+    assert O.WITHOUT_Y == "without y's commitment (y tree not timed)"
+    assert table["covers"] == O.covers() == ("Each γ is over the 4 linears of one llama3.1-70b layer (qkv, o, gate_up, "
+                                             "down) and leaves the LM head out.")
+    assert lines.count(table["covers"]) == 1
+    monkeypatch.setenv("COLUMNS", "400")
+    with pytest.raises(SystemExit):
+        main(["overhead", "table", "--help"])
+    said = capsys.readouterr().out
+    assert table["covers"] in said and O.WITHOUT_Y in said
+    monkeypatch.setitem(O.LEFT_OUT, O.KERNEL_MODEL, ())
+    assert O.covers() == "Each γ is over the 4 linears of one llama3.1-70b layer (qkv, o, gate_up, down)."
 
 
 # ---- the command ------------------------------------------------------------------------------------------------------------------

@@ -24,8 +24,8 @@ def test_the_record_the_registration_and_the_site_import_no_cards() -> None:
     the loader is not among the modules, so none of them, nor the package file, imports it."""
     done = subprocess.run(
         [sys.executable, "-c",
-         "import sys, verity.hardware.record, verity.hardware.registration, verity.hardware.site; "
-         "sys.exit('verity.hardware.cards' in sys.modules)"],
+         ("import sys, verity.hardware.record, verity.hardware.registration, verity.hardware.site; "
+          "sys.exit('verity.hardware.cards' in sys.modules)")],
         capture_output=True, text=True)
     assert done.returncode == 0, (
         "importing verity.hardware.record, .registration and .site imported verity.hardware.cards (or failed): "

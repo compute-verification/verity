@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 import torch
 
-from verity.protocols.spot.verifier.one_stage import registration as R, verifier as V
+from verity.protocols.spot.verifier.one_stage import partition as P, registration as R, verifier as V
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
 from verity.commitments import history as HT
@@ -294,9 +294,14 @@ XOR8 = PrimitiveDefinition("BoundaryTablesTestXor8", 1, (("a", Bits(8)), ("b", B
                            register=False)
 PAIR = bind(CompositeDefinition("BoundaryTablesTestPair", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
                                 lambda B, S_, x: B.call(XOR8, x[0], x[1]), register=False))
+SAME8 = PrimitiveDefinition("BoundaryTablesTestSame8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(1), lambda a, b: int(a == b),
+                            register=False)
+#: a check template that returns a verdict, one bit
+SAME = bind(CompositeDefinition("BoundaryTablesTestSame", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(1)),
+                                lambda B, S_, x: B.call(SAME8, x[0], x[1]), register=False))
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
-LAW = {"law": "subset", "k": 1}
+DESIGN = {"law": "subset", "k": 1}
 
 
 class Scheduler:
@@ -319,10 +324,11 @@ class Scheduler:
         return []
 
 
-def windows(out, latents: BT.Latents, make, lines: list, keep: BT.Kept | None = None):
+def windows(out, latents: BT.Latents, make, lines: list, keep: BT.Kept | None = None, check=PAIR, verdicts: bool = False):
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-tables")
-    bw = BW.BoundaryWindows(out, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
-                            tables=BT.LocalChannel(BT.Builder(latents, make, keep=keep)), layers=(0, 3), capacity=CAP)
+    bw = BW.BoundaryWindows(out, check, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
+                            tables=BT.LocalChannel(BT.Builder(latents, make, keep=keep)), layers=(0, 3), capacity=CAP,
+                            verdicts=verdicts)
     return bw.install(sched, hooks), sched, hooks
 
 
@@ -363,15 +369,42 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
         mine = BR.layout_of(pub, PAIR)
         assert mine.tables == tuple(names) and mine.ports()[names[1]] == {k: made[names[1]].entry()[k] for k in
                                                                            ("leaves", "domain")}
-        rec = BR.record(pub, PAIR, LAW)
+        rec = BR.record(pub, PAIR, DESIGN)
         assert [r["port"] for r in rec["roots"]] == [*BR.PORTS, *names]
-        assert R.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
-        assert V.check(rec, mine.program, mine.grain, LAW, CS.SCHEME, mine.ports()).codes == ()
+        assert R.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+        assert V.check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
         bare = BR.Layout(PAIR, 0, 1, p, o, 1, run)
-        assert R.check(rec, bare.program, bare.grain, LAW, CS.SCHEME, bare.ports()).codes != ()
+        assert R.check(rec, bare.program, bare.grain, DESIGN, CS.SCHEME, bare.ports()).codes != ()
         assert BR.reopen(tmp_path / "w0" / f"p{p}-o{o}", PAIR).roots == {k: bytes.fromhex(v["root"])
                                                                           for k, v in pub["values"].items()}
     assert [len(made[BT.name(BR.run_root("s", 0), *k, 0, 3)].rows) for k in ((8, 4), (4, 4))] == [12, 8]
+
+
+def test_a_serve_of_verdicts_commits_its_blocks_return_beside_its_tables(tmp_path):
+    """A serve with history tables whose check returns verdicts: each class lists ``b.ingress``, ``b.egress``, its replay
+    block's return under the block's id, a verdict an output, then its tables; both verifiers accept the registration
+    against the challenger's copy of the layout, and the class's files reopen to the same roots."""
+    _runner, hook, _hooks = serve()
+    make, _tables, lines = *built(), []
+    bw, sched, hooks = windows(tmp_path, hook.latents, make, lines, check=SAME, verdicts=True)
+    try:
+        finish(sched)
+        bw.stop()
+    finally:
+        hooks.uninstall()
+    assert all("error" not in x for x in lines) and sorted((x["prompt"], x["outputs"]) for x in lines) == [(4, 4), (8, 4)]
+    for line in lines:
+        p, o = line["prompt"], line["outputs"]
+        d, run = tmp_path / "w0" / f"p{p}-o{o}", BR.run_root("s", 0)
+        pub = json.loads((d / BR.COMMIT).read_text())
+        mine = BR.layout_of(pub, SAME)
+        name, names = f"{P.template_id(mine.replay)}/{BR.RETURN}", [BT.name(run, p, o, 0, x) for x in (0, 3)]
+        assert pub["verdicts"] is True and list(pub["values"]) == [*BR.PORTS, name, *names] == list(mine.ports())
+        assert pub["values"][name]["leaves"] == o
+        rec = BR.record(pub, SAME, DESIGN)
+        for check in (R.check, V.check):
+            assert check(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+        assert BR.reopen(d, SAME).roots == {k: bytes.fromhex(v["root"]) for k, v in pub["values"].items()}
 
 
 def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other_ones(tmp_path):
