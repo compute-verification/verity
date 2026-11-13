@@ -140127,3 +140127,36 @@ noncomputable abbrev L (A : Live₂) :=
 - The probe is at `6247d2ddfc`, not at the tip `e9346a9e70`. The two differ in a file move and a docstring.
 - Way 2's falsity is read, not compiled: no Lean instance has an accepted run at a held code with an interior port.
 - That the lemma of way 2 holds at HONEST2's shape: a guess from `wired_id_keep`, `cut_id` and `wireMap_held`.
+## ONSITE, Fri 13 Nov 12:14Z: CHAIN 2: on the stager's tip `316032179818` nothing I ran is red but the one test lean named: our four moves certify, the listing is what its generator writes, the four root test files pass 69 of 69; the Lean fast path passed for the composition's package and is still out on `security`; lean's records run on that tip has not ended
+
+**What I ran on.** `cursor/top-moves-chain2-42e2` at `316032179818dbbeee0835885d574d4b1c14bf0a` [read 12:04Z]. It is five commits above the after-maps tree `a282b4223b0d` you named, and importcarry's listing commit `1e02add7658` is one of the five, so the tests of the listing can only be read there. lean's records run is on the same tip [relayed: lean, TOP-398, 12:04Z]. Not established: that this tip is the head top posts.
+
+**The checks job, `r20261113-120530-e134`** [run: cpu-1 through `--on auto`, 12:05Z to 12:11:34Z, rc 1 by one test alone]:
+
+| Step | Verdict |
+|---|---|
+| compose, configurations, world, loose paths | each certified a pure move with 0 `resolve_check.py` issues; the same four commits and counts as in `b914` |
+| `tests/test_tree.py HEAD` | rc 0 |
+| what Python imports | the new module names, from the run's clone |
+| `import_order.py --check` | "the same" |
+| the four root test files | 69 passed, 0 failed |
+| `verity-cli`, quick | 132 passed, 1 failed: the test lean named, no other |
+| `demos/lifecycle`, quick | 66 passed |
+
+**A red test that is neither lean's two nor one of the listing's edits: none in what I ran.**
+
+- The four tests of the listing that were red at 11:21Z pass with importcarry's commit. The order holds its three rows for compose, and the place is `verity/protocols/compose/verifier` [read].
+- `demos/lifecycle` passes, its read guard too. The served Definitions' map, which had it refused in the first trial, is not among the pass's 17 maps [read: the first-parent log].
+- **Not run by me:** `tests/test_pins.py`, PoUS's suite (so `test_trusted_hashes_are_current`), and every suite beyond the two. Those are ci's recorded run's.
+
+**The Lean fast path, `r20261113-111607-5428`** [run: cpu-14, one place, on the tip before the group map, `ffdc9480c03d`]:
+
+- **Ended:** the composition's package, `verity/protocols/compose/verifier/lean`: pass, 167 declarations in 8 modules, at 11:17Z.
+- **That verdict holds for the stager's tip** [derived from a read of both trees]: between the two tips no `.lean` file, lakefile, manifest or lock of the package changes, and nothing under the two packages it requires but one README.
+- **Still out at 12:13Z:** `security` with `security/Proofs`, 55 minutes in; then `security/Properties`, then the world's package. Expected end by 12:50Z [guess]; its time limit ends it at 13:17Z.
+- **The world's package** has not run yet. No file of it differs between the two tips, and its lakefile requires no other package [read].
+- **A caution on my own run** [read: `research status`]: its session's memory peaked at 113 GiB against the 32 GB I reserved. A next fast path that takes in `security` asks for more.
+
+**lean's records run has not ended.** It was ordered at 12:05Z on this tip, and lean expects its two commits at 12:55Z to 13:05Z [relayed]. It serves for our two packages if it covers them at their new paths; I have not read that it does, and I check its report when it ends. Mine is an earlier reading of the tree before the group map. If `security` is refused in mine, I say whether the refusal is the renamed record or something else.
+
+**Next.** One line when `5428` ends. No head of mine moved; nothing of ours is asked of the stager.
