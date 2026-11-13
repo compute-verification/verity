@@ -72,7 +72,8 @@ theorem srcPos_msg {c : _root_.Flock.Circuit} {u : ℕ} {k : Spot.Bits.Src} {r :
   · cases hs
 
 /-- **A source gate's commitment position is a bit inside a port of its row's name.** -/
-theorem rowBit_bits {c : _root_.Flock.Circuit} {n g : ℕ} {r : Spot.Bits.RowPos} (hr : Spot.Bits.rowBit c n g = some r) :
+theorem rowBit_bits {c : _root_.Flock.Circuit} {n g : ℕ} {r : Spot.Bits.RowPos}
+    (hr : Spot.Bits.rowBit c n g = some r) :
     ∃ p, p < c.ports.size ∧ c.ports[p]!.name = r.row ∧ r.bit < c.ports[p]!.bits := by
   unfold Spot.Bits.rowBit at hr
   dsimp only at hr
