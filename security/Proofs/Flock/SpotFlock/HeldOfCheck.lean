@@ -71,9 +71,9 @@ def decidedAt (it : Spot.Run.Interior) (xs : List Msg) (first : Reg) (c : Array 
     decide ((List.range (msOf xs (unitsOf (requests l) c.1 it.circuits.size)).length).map fun t =>
       (it.circuits.map (·.1)).toList.getD t "").Nodup &&
     (namesOf it.params.verifier).values.isEmpty &&
-    descCoreAt { first, ns := c.1, ks := c.2,
+    descCoreAt ({ first, ns := c.1, ks := c.2,
              blockOf := filesBlockOf (msOf xs (unitsOf (requests l) c.1 it.circuits.size)) c.1,
-             always := fun _ => false }
+             always := fun _ => false } : RegTwo)
       (msOf xs (unitsOf (requests l) c.1 it.circuits.size)) c.2.toList (refStmt xs)
 
 /-- **Whether `heldOf` builds a held copy**, decided: the boundary registration, the cells and the layout read, the
