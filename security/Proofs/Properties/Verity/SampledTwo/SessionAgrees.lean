@@ -24,13 +24,13 @@ namespace Verity.SampledTwo.SessionCoins
 
 /-- **The device's release at a session's round shares the run's coin's elements its releases carry** (the coin map's
 agreement, at the session-round locator): on an accepted play whose log is the device's, at coins the coin map's
-agreement `Ag` holds of, the release for a session's round and the run's coin there have the same elements below the
-count the releases the locator puts on the round carry, in the play's log. -/
+agreement `Ag` holds of, the release for a session's round the run's verifier reads and the run's coin there have the
+same elements below the count the releases the locator puts on the round carry, in the play's log. -/
 def DevElems (A : Live₂) (x : Claims.Msg) (loc : List Release → Verity.Frame → Option ℕ)
     (dev : List Release → ℕ → Option FlockDeploy.Coin) (Acc Good : Exchange → Prop)
     (Ag : Exchange → Coins A x → Prop) : Prop :=
-  ∀ o, Acc o → Good o → ∀ r : Coins A x, Ag o r → ∀ i : Fin (A.L.V.k x), groupOf A i.val = .sessions →
-    ∀ c, dev o.log i.val = some c →
+  ∀ o, Acc o → Good o → ∀ r : Coins A x, Ag o r → ∀ i : Fin (A.L.V.k x), readsAt A.h i.val →
+    groupOf A i.val = .sessions → ∀ c, dev o.log i.val = some c →
       ∀ e : Fin 65536, e.val < ((located loc i.val [] o.log).map fun y => widthOf y.1).sum → c e = r i e
 
 /-- **The elements a round's releases carry are the same in two logs of the same frames.** -/
@@ -92,7 +92,7 @@ theorem sessionsAgree (A : Live₂) (x : Claims.Msg) (C : CaseOf) (Ms : SessionR
     e.val < ((located (locOf A tab) (SpotFlock.off A.h t + (i.val - SpotFlock.off A.h t)) [] l).map
       fun y => widthOf y.1).sum → c e = r i e
   rw [hn]
-  refine ⟨l, hl, fun e he => hE o hA hG r hAg i hg c hc e ?_⟩
+  refine ⟨l, hl, fun e he => hE o hA hG r hAg i hr hg c hc e ?_⟩
   unfold locOf at he ⊢
   rw [hlog', located_append, located_none q (fun y hy => (hq y hy).1) []]
   simp only [List.nil_append]
