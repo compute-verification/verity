@@ -1,0 +1,121 @@
+{
+ "file": "description_43_3.json",
+ "slots": 1,
+ "steps": 3,
+ "entries": 142,
+ "templates": 106,
+ "wires": 19414,
+ "all_wires": {
+  "inside": 19411,
+  "between": 3
+ },
+ "wires_between_blocks": [
+  {
+   "reader": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=44,FIRST=true,BN=64,DOT=\u2026}",
+   "port": "kv",
+   "writer": "DsaLatentRow_v1{KVL=512,R=64,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+   "out": "o0",
+   "at": 0,
+   "radix": [
+    4,
+    8,
+    43
+   ],
+   "base": 0,
+   "step": [
+    43,
+    0,
+    1
+   ],
+   "writer step -> reader step": [
+    "0->1"
+   ]
+  },
+  {
+   "reader": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=45,FIRST=true,BN=64,DOT=\u2026}",
+   "port": "kv",
+   "writer": "DsaLatentRow_v1{KVL=512,R=64,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+   "out": "o0",
+   "at": 0,
+   "radix": [
+    4,
+    8,
+    43
+   ],
+   "base": 0,
+   "step": [
+    43,
+    0,
+    1
+   ],
+   "writer step -> reader step": [
+    "0->2"
+   ]
+  },
+  {
+   "reader": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=45,FIRST=true,BN=64,DOT=\u2026}",
+   "port": "kv",
+   "writer": "DsaLatentRow_v1{KVL=512,R=64,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"}}",
+   "out": "o0",
+   "at": 0,
+   "radix": [
+    4,
+    8,
+    2
+   ],
+   "base": 172,
+   "step": [
+    1,
+    0,
+    4
+   ],
+   "writer step -> reader step": [
+    "1->2",
+    "2->2"
+   ]
+  }
+ ],
+ "key_wires": {
+  "count": 18144,
+  "writers": {
+   "MoeRouterSigmoidBiasSlots_v1{E=256,TOPK=8,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}": 18144
+  },
+  "inside": 18144,
+  "between": 0,
+  "index_pairs_by_steps": {
+   "writer step 0 -> reader step 0": 260064,
+   "writer step 1 -> reader step 1": 6048,
+   "writer step 2 -> reader step 2": 6048
+  },
+  "by_reader": {
+   "EmbeddingRead_v1{V=256,H=3072}": {
+    "wires": 12288,
+    "inside": 12288,
+    "reader step [0]": 4096,
+    "reader step [1]": 4096,
+    "reader step [2]": 4096
+   },
+   "EmbeddingRead_v1{V=256,H=4096}": {
+    "wires": 4608,
+    "inside": 4608,
+    "reader step [0]": 1536,
+    "reader step [1]": 1536,
+    "reader step [2]": 1536
+   },
+   "EmbeddingRead_v1{V=256,H=4}": {
+    "wires": 1152,
+    "inside": 1152,
+    "reader step [0]": 384,
+    "reader step [1]": 384,
+    "reader step [2]": 384
+   },
+   "EmbeddingRead_v1{V=256,H=96}": {
+    "wires": 96,
+    "inside": 96,
+    "reader step [0]": 32,
+    "reader step [1]": 32,
+    "reader step [2]": 32
+   }
+  }
+ }
+}
