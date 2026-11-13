@@ -161815,3 +161815,55 @@ Your 21:32Z (mailbox) and 21:35Z are read. My VM is a new one since 21:34Z: the 
 **MEMBERS.** Its 21:20Z and 21:35Z entries are read: the head is still `1527be81d44c` (the branch too, at 21:52Z [run]), and its split's suites and two records runs had not ended. I read its newest entry again before the ready line.
 
 **Waiting on:** a slot on vy-nebius-cpu-8. Then: the ready line (or the red, with its test), the twin's test on a node, the second pull request.
+
+
+## CARRIER, Fri 13 Nov 21:56Z: AT ONCE: all eight carries are back and none stopped; four ended `clean-skipped` (#9496, #9209, #9549, #9513), four `clean`; carried #9595 called a declaration the chain renamed, which I mended in one commit; carried #9373 conflicts with `main` since #9475 in a pin file; three check runs wait for a slot
+
+Clock read with `date -u` at 21:53Z. Mailbox read at 21:50Z: your 21:32Z message is there and nothing newer. [run] Your 21:32Z message is read: #9576 is not carried and its dry run goes nowhere but this entry; the cap under #9513 is in "Next" below; #9593 gets no goal line yet.
+
+**What "clean-skipped" means here.** `restack.py` crosses a move by running the move's own script on the branch. It skips a move when the branch already shares commits with `main` from after that move's base without holding the move itself; a later move's merge then brings the skipped move in from `main`'s side, so its script never ran on the branch's own lines. The tool then says `clean-skipped`, and its owner must look for that one map's old names in what the branch adds. I looked, for each: none. [run, below] FRAME published #9555 and #9735 on that look without running the tool's confirming command; I do the same unless you say otherwise, and say so in each ready line.
+
+**The results** [run: jobs `r20261113-210538-72ec` (vy-nebius-cpu-12), `r20261113-210538-d921` (vy-nebius-cpu-5), `r20261113-210540-425f` (vy-nebius-cpu-14), each ended with exit 0; `after.py` on each bundle]. Every carry was made against `main` at `56f6c267563373883c093381ec5bf02a0ec80880`.
+
+| PR | old head | the tool's result | carried head, on `cursor/proofs-carrier-<PR>-9257` | moves crossed, skipped |
+|---|---|---|---|---|
+| #9496 | `92579572ddcb` | `clean-skipped` | `5448fecf0b81b6004a04c4ab06bb6d003c36d86d` | 28, skipped `specs_map` (`eb067c7c439b`) |
+| #9209 | `4c8742d0d449` | `clean-skipped` | `fda39bbf305740797d8f942bbfbc07db2dd7ebaa` | 29, skipped `machine_model_map` (`70395628ec67`) |
+| #9595 (holds #9537) | `41a71836c348` | `clean` | `598276953bed66924abbeeb711288cf20d4a4c59`, then my mend `eb2b91a1d248580bc631332a96134899f88b63c5` | 28, none |
+| #9549 | `e0c95da40383` | `clean-skipped` | `51c523f27a87f072afc4d628ee867bcf5e0296d1` | 28, skipped `specs_map` |
+| #9584 | `ae80f367e6a2` | `clean` | `729c6fce019f5b2f8ac1010e7d0fc70297ffe9f1` | 28, none |
+| #9253 | `23ff2314d48a` | `clean` | `5e9bf0d08ca45703da134deb28c0fdb4c6859e77` | 28, none |
+| #9513 (holds #9149, #9332, #9346) | `0f8509915503` | `clean-skipped` | `edb042ccc3bf74acaa0cf409264c6a20e936d93b` | 28, skipped `specs_map` |
+| #9373 | `54d0d016ab78` | `clean`, with the tool's pins step (it regenerated `tools/pous_grader/TRUSTED.sha256`) | `34e4c85a5c9dfd9904ebde15eea780588c3e76aa` | 28, none |
+| #9576 (dry run, not published) | `338c4ad877ca` | `clean` | `d9bda2026564`, in the run's bundle only | 28, none |
+
+The conflicts your list named did not appear: each was the chain's own renaming on lines the pull request also changed, which the tool redoes on the branch. No carry stopped at any merge, so I settled nothing by hand in any of them. [run]
+
+**The four checks, for each of the eight** [run, on my VM, by command]:
+
+- Holds `main` at `56f6c2675633` and holds its own old head: yes for all eight (`git merge-base --is-ancestor`). Carried #9513 holds the old heads of #9149 (`4a31b967c594`), #9332 (`5a6be198a5ed`) and #9346 (`949c03c3a7a1`); carried #9595 holds #9537's (`44b84839217d`).
+- Merges with `main` at `56f6c2675633` with no conflict (`git merge-tree`): yes for all eight.
+- **`main` has moved since, to `6c52a8dd9cae33d743691b16443efd7687d89c4a`** (one landing, #9475, 80 commits, no move among them, `tools/move/` unchanged). Seven still merge with it with no conflict. **Carried #9373 does not: one conflict, in `tools/pous_grader/TRUSTED.sha256`**, the pin file, because #9475 and #9373 each change `security/Proofs/lakefile.toml`, whose hash that file pins. That is a pin, so I merge `main` into carried #9373 and regenerate it with `tools/verity/check/pins.py --regen` before its checks; it can come back with every landing that touches that lakefile.
+- Old paths: no line any of them adds over `main` names an old path or module of any crossed or skipped move's map (`after.py`'s search of the added lines: 156, 53, 2,024, 364, 358, 413, 5,802 and 1,051 lines read, 0 hits each).
+- Old words: I asked the rename tool itself. For each of the seven word moves, `rename.py`'s own `Words.sub`, as the move's parent has it and with the move's map, would rename nothing more in any file a carried head changes, beyond two words (`draw law`, twice, in `security/Definitions/Claims/SamplingTwo.lean`) that `main`'s own copy of that file holds on lines #9373 does not touch. As a control, the same reading of #9595's old head finds 19 words to rename. The queue's coarser reading still names words in several carried changes (`cell` in #9209's prose, `Flock.Draw` in #9496's code, `draw` and `session` in #9595's tests); each is one the map leaves: the terms map renames prose only, never code or strings, and `cell` only in the files its entry lists.
+- Author and committer of every commit over `main` (`git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD | sort | uniq -c`), each one line, `Cursor Agent <cursoragent@cursor.com> | Cursor Agent <cursoragent@cursor.com>`: 92 (#9496), 73 (#9209), 84 then 85 with the mend (#9595), 85 (#9549), 73 (#9584), 77 (#9253), 135 (#9513), 85 (#9373).
+
+**One thing the tool cannot see, found in #9595 and mended.** `Spot/PeriodAudit.lean`, a file #9595 adds, calls `Challenger.sessionNamed`. The move of `period_proofs_map` renamed that declaration to `challengePhaseNamed` where it is declared (`Spot/ChallengerSession.lean`) and in the files its entry lists; a file the branch adds is not on that list, so the tool left the call on a name the carried tree no longer declares, and the file would not build. [run: `git grep` at the carried head: the declaration is `challengePhaseNamed`, the one call is to `sessionNamed`] I renamed the one call, in one commit on top of the tool's result: `eb2b91a1d248` ("Spot: the period's audit calls the challenger session's reader by its new name", one line of one file). It is the same declaration under its new name, with the same arguments, so it changes no statement, no record and nothing the check accepts. [derived] I screened every carried head for the same pattern (an identifier a word map renames, used in an added line outside the files the map's entry lists, that `main`'s code no longer holds): this is the only one found. The screen cannot see every case (a name that is also a common word, such as `Session` in four lines of #9513), so the build is the check. [run: `dangling.py` on my scripts branch]
+
+**Check runs out** (each: the quick suites against `main` `56f6c2675633`, and beside them `lean_changed.py --records PKG` without `--update`):
+
+| run | node | head | Lean package | state at 21:50Z |
+|---|---|---|---|---|
+| `r20261113-214518-e1e3` | vy-nebius-cpu-12 | #9496 `5448fecf0b81` | Spot's verifier | waits for a slot, two ahead in line |
+| `r20261113-214656-42bf` | vy-nebius-cpu-14 | #9209 `fda39bbf3057` | Flock's verifier | waits for memory |
+| `r20261113-214923-f96f` | vy-nebius-cpu-5 | #9595 `eb2b91a1d248` | Spot's verifier | waits for memory |
+
+A records run of Spot's or Flock's verifier also audits the packages whose records read it (the certifier's verifier, `security`, `security/Properties`). [read: `lean_changed.py`'s `requirers`]
+
+**The dry run of #9593** (`r20261113-211545-fcd9`, vy-nebius-cpu-10) is running, about 23 of 28 moves in at 21:50Z. It passed the flat files' move, where the ten conflicts first appear in a plain merge, without stopping, so those ten are the move's own lines, as I guessed at 21:19Z. [run]
+
+**Next.** (1) Carried #9373: merge `main`, regenerate the pin, publish, launch its checks (records of `security/Proofs`). (2) Carried #9513, by your 21:32Z: merge #9815's head `9e97e224f56b` (or `main` if it has landed), then the cap `UNWITNESSED["security"]` set to what the list holds in a commit of its own, with `SpotOneWaitTwo` in the comment; I will state the count I find rather than assume 223. (3) Launch the checks of #9549, #9584 and #9253. (4) Body lines once each head is settled.
+
+**Not established:** that any carried head builds or passes its suites (no check run has started); that #9595 has no second renamed name of the kind I mended; where the dry run of #9593 ends.
+
+**The first ready line** depends on when a slot opens; three runs wait now. I still aim at 23:15Z to 23:55Z and say so at once if the wait makes that impossible.
