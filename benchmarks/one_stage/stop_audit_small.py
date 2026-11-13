@@ -2,9 +2,9 @@
 `stop_audit.py`'s rehearsal (``stop_audit_small.sh``) and tests: no engine runs.
 
     python stop_audit_small.py serve --out DIR [--outputs 32] [--spans 6] [--serve NONCE]
-    python stop_audit_small.py unlogged STAGE1.json      # case 2's hand-off, to stdout
-    python stop_audit_small.py unaccepted STAGE1.json    # case 3's boundary outcome, to stdout
-    python stop_audit_small.py incomplete STAGE1.json    # case 4's boundary outcome, to stdout
+    python stop_audit_small.py unlogged HANDOFF.json     # case 2's hand-off, to stdout
+    python stop_audit_small.py unaccepted HANDOFF.json   # case 3's boundary outcome, to stdout
+    python stop_audit_small.py incomplete HANDOFF.json   # case 4's boundary outcome, to stdout
     python stop_audit_small.py expect DIR                # the five runs' summaries under DIR
 
 ``serve`` writes two classes of ``spans`` requests under the stop rule `stop_rule`, each request ended at the stop id
@@ -97,31 +97,31 @@ def serve(out: Path, v: int = 128, outputs: int = 32, spans: int = 6, nonce: str
             "wrong": registered, "wrong_files": out / "wrong" / "w0" / name}
 
 
-def unlogged(stage1: Mapping[str, Any], check: Any = None) -> dict[str, Any]:
-    """``stage1`` with its stop record built on a boundary record the class's boundary stream never logged: the
+def unlogged(handoff: Mapping[str, Any], check: Any = None) -> dict[str, Any]:
+    """``handoff`` with its stop record built on a boundary record the class's boundary stream never logged: the
     class's own record chained after one that is not there, its values and roots unchanged."""
-    pub, s = stage1["commit"], stage1["stop"]
+    pub, s = handoff["commit"], handoff["stop"]
     check = TS.template_fn(pub["check"]) if check is None else check
-    other = {**stage1["record"], "previous": "5a" * 64}
+    other = {**handoff["record"], "previous": "5a" * 64}
     record = BS.stop_record(pub, check, BS.Stop.of(pub["stop"]), s["record"]["law"], other)
-    assert record["previous"] == R.digest(other) != stage1["registration"]
-    return {**stage1, "stop": {**s, "record": record}}
+    assert record["previous"] == R.digest(other) != handoff["registration"]
+    return {**handoff, "stop": {**s, "record": record}}
 
 
-def unaccepted(stage1: Mapping[str, Any]) -> dict[str, Any]:
+def unaccepted(handoff: Mapping[str, Any]) -> dict[str, Any]:
     """An outcome record on the class's boundary registration that did not accept (module docstring): its audit
     record names that registration and holds no verdict."""
-    audit = {"format": A.FORMAT, "registration_digest": stage1["registration"], "accepted": False, "complete": True,
+    audit = {"format": A.FORMAT, "registration_digest": handoff["registration"], "accepted": False, "complete": True,
              "checks": {}, "verdicts": {}}
-    return {"format": S.OUTCOME, "stream": stage1["spec"], "order": 0, "registration": stage1["registration"],
-            "receipt": SA.sha512(dict(stage1["receipt"])), "draw": SA.sha512(dict(stage1["draw"])), "sessions": [],
+    return {"format": S.OUTCOME, "stream": handoff["spec"], "order": 0, "registration": handoff["registration"],
+            "receipt": SA.sha512(dict(handoff["receipt"])), "draw": SA.sha512(dict(handoff["draw"])), "sessions": [],
             "symbol": S.REJECT, "public": {}, "audit": audit}
 
 
-def incomplete(stage1: Mapping[str, Any]) -> dict[str, Any]:
+def incomplete(handoff: Mapping[str, Any]) -> dict[str, Any]:
     """An outcome record on the class's boundary registration that accepted with an entry that did not run (module
     docstring): its audit record names that registration, accepted on its verdict of record, and is not complete."""
-    got = unaccepted(stage1)
+    got = unaccepted(handoff)
     verdicts = {"lean-verify/boundary": {"accepted": True, "of_record": True}, "not-run": {"accepted": None, "of_record": False}}
     return {**got, "symbol": S.ACCEPT, "audit": {**got["audit"], "accepted": True, "complete": False, "verdicts": verdicts}}
 
@@ -161,7 +161,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--spans", type=int, default=6)
     s.add_argument("--serve", default=SERVE, help="the serve's nonce, which the window's run is of")
     for name in ("unlogged", "unaccepted", "incomplete"):
-        sub.add_parser(name).add_argument("stage1", type=Path)
+        sub.add_parser(name).add_argument("handoff", type=Path)
     sub.add_parser("expect").add_argument("dir", type=Path)
     a = ap.parse_args(argv)
     if a.cmd == "serve":
@@ -169,7 +169,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd in ("unlogged", "unaccepted", "incomplete"):
         made = {"unlogged": unlogged, "unaccepted": unaccepted, "incomplete": incomplete}[a.cmd]
-        print(json.dumps(made(json.loads(a.stage1.read_text())), indent=1))
+        print(json.dumps(made(json.loads(a.handoff.read_text())), indent=1))
         return 0
     summaries = {k: json.loads(f.read_text()) for k in RUNS if (f := a.dir / k / "summary.json").exists()}
     checks = expect(summaries)

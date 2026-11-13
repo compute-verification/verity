@@ -24,12 +24,14 @@ unrecorded fact by name too; and the replay evaluates those families (`kernels.c
 No engine, no torch: the route is a table, the arithmetic numpy models, the gates pure functions of the record."""
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
+from verity.definitions.registry import bf16_gemm_check as BC
 
 from verity_vllm.check.cublas_route_pin import route_pin_gate
 from verity_vllm.pipeline.tp.c2 import c2_and_pin_gates, replay_gates
-from verity.definitions.registry import bf16_gemm_check as BC
 
 #: vLLM's batch-invariant cuBLAS configuration on cc 9.0 (determinism/batch_invariant.py), the capture's `split_k_off` variant
 SWITCH_ENV = {"CUBLAS_WORKSPACE_CONFIG": ":16:8", "CUBLASLT_WORKSPACE_SIZE": "1"}
@@ -86,7 +88,7 @@ def test_the_split_k_off_route_departs_from_the_bound_definition():
 #: the facts that Commit's ranks recorded: the workspace variables, no cuBLAS facts
 FACTS_OF_RECORD = {"VLLM_BATCH_INVARIANT": "0", "CUBLAS_WORKSPACE_CONFIG": None, "CUBLASLT_WORKSPACE_SIZE": None}
 #: an honest rank's: the pin's scan's conditions, as `engine_facts_of_record` measures them
-HONEST = {**FACTS_OF_RECORD, "cublas": {**BC.ROUTE_CONDITIONS, "cublaslt_version": 120901, "cublas_library": "/venv/nvidia/cublas/lib/libcublas.so.12"}}
+HONEST: dict[str, Any] = {**FACTS_OF_RECORD, "cublas": {**BC.ROUTE_CONDITIONS, "cublaslt_version": 120901, "cublas_library": "/venv/nvidia/cublas/lib/libcublas.so.12"}}
 #: the switched process's, measured the same way (the capture's `switch`, read back)
 SWITCHED = {**HONEST, **SWITCH_ENV, "cublas": {**HONEST["cublas"], "env": dict(SWITCH_ENV), "preferred_blas_library": "_BlasBackend.Cublaslt",
                                                "allow_fp16_reduced_precision_reduction": "(False, False)",
@@ -105,7 +107,7 @@ def test_the_tp_verdict_fails_a_rank_served_off_the_route_pin():
 
 def test_the_switched_rank_is_refused_naming_every_departure():
     ok, why = _gates(SWITCHED)
-    assert ok is False
+    assert ok is False and why is not None
     assert why.startswith("cuBLAS route pin (rank 0): CublasSplitKGemmF32Out_v1 x153600, CublasSplitKGemm_v1 x48216 bound at the routes of "
                           f"{BC.CUBLAS_ROUTES['run_record']}, served otherwise: ")
     assert why.split("served otherwise: ")[1].split("; ") == [
@@ -119,20 +121,20 @@ def test_the_switched_rank_is_refused_naming_every_departure():
                                          ("torch", "2.12.0+cu128"), ("compute_capability", [10, 0])])
 def test_another_library_device_or_torch_is_a_departure(fact, served):
     ok, why = _gates({**HONEST, "cublas": {**HONEST["cublas"], fact: served}})
-    assert ok is False and why.endswith(f"served otherwise: {fact} {served!r} (pin: {BC.ROUTE_CONDITIONS[fact]!r})")
+    assert ok is False and why is not None and why.endswith(f"served otherwise: {fact} {served!r} (pin: {BC.ROUTE_CONDITIONS[fact]!r})")
 
 
 def test_a_fact_the_rank_could_not_read_or_did_not_record_is_refused_by_name():
     unread = {**HONEST, "cublas": {**HONEST["cublas"], "cublas_version": "unavailable: LookupError: 0 libcublas.so* mapped []"}}
-    assert _gates(unread)[1].endswith("served otherwise: cublas_version 'unavailable: LookupError: 0 libcublas.so* mapped []' (pin: 120901)")
+    assert (_gates(unread)[1] or "").endswith("served otherwise: cublas_version 'unavailable: LookupError: 0 libcublas.so* mapped []' (pin: 120901)")
     no_env = {**HONEST, "cublas": {k: v for k, v in HONEST["cublas"].items() if k != "env"}}
-    assert _gates(no_env)[1].endswith("CUBLAS_WORKSPACE_CONFIG not recorded (pin: None); CUBLASLT_WORKSPACE_SIZE not recorded (pin: None)")
+    assert (_gates(no_env)[1] or "").endswith("CUBLAS_WORKSPACE_CONFIG not recorded (pin: None); CUBLASLT_WORKSPACE_SIZE not recorded (pin: None)")
 
 
 def test_the_commit_of_record_is_now_refused_for_its_unrecorded_cublas_facts():
     """GLM-5.3 B1 TP8's Commit of record recorded the workspace variables alone: under the gate it no longer passes."""
     ok, why = _gates(FACTS_OF_RECORD)
-    assert ok is False and "no cuBLAS facts recorded (engine_of_record.cublas" in why
+    assert ok is False and why is not None and "no cuBLAS facts recorded (engine_of_record.cublas" in why
 
 
 def test_a_rank_that_binds_no_pinned_route_family_is_not_gated():

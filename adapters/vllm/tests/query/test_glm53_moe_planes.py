@@ -5,6 +5,8 @@ replay index addresses each row at its plane, and the MoE source binds the same 
 that reads another pair's quant is named, never read."""
 from __future__ import annotations
 
+from verity_vllm.program.compact import expanded_file_args
+
 __models__ = ("zai-org/GLM-5.3",)
 
 import copy
@@ -22,7 +24,7 @@ from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import request_manifest
 
-E, M, TOPK, H, I, G, NV = S.E, S.M, S.TOPK, S.H, S.I, S.G, S.NV
+E, M, TOPK, H, INTER, G, NV = S.E, S.M, S.TOPK, S.H, S.INTER, S.G, S.NV
 X = "model.model.layers.3.mlp.experts"
 EPS = '{"f64":"0x1.0c6f7a0b5ed8dp-20"}'
 RESULT = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}}}
@@ -36,9 +38,9 @@ class _Served(nn.Module):
         super().__init__()
         rng = np.random.default_rng(5)
         self.bias = nn.Parameter(torch.from_numpy(rng.normal(0.0, 0.05, E).astype(np.float32)), requires_grad=False)
-        self.w13, self.w13_s = S._expert_stack(rng, 2 * I, H)
-        self.w2, self.w2_s = S._expert_stack(rng, H, I)
-        self.up, self.down = S._meta(False, H, 2 * I, S.TUNED), S._meta(True, I, H, S.TUNED)
+        self.w13, self.w13_s = S._expert_stack(rng, 2 * INTER, H)
+        self.w2, self.w2_s = S._expert_stack(rng, H, INTER)
+        self.up, self.down = S._meta(False, H, 2 * INTER, S.TUNED), S._meta(True, INTER, H, S.TUNED)
 
     @staticmethod
     def _quant(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -49,10 +51,10 @@ class _Served(nn.Module):
     def forward(self, logits, x):
         xq, sx = self._quant(x)
         g, ids = torch.ops.vllm_iface.grouped_topk(logits, 1, 1, TOPK, True, S.RSF, self.bias, 1)
-        c1 = torch.empty(M, TOPK, 2 * I, dtype=torch.bfloat16)
+        c1 = torch.empty(M, TOPK, 2 * INTER, dtype=torch.bfloat16)
         torch.ops.verity_cba.triton_launch(S.MOE_GEMM_PINS["kernel"], [xq, self.w13, c1, sx, self.w13_s, ids], self.up)
-        c2 = torch.empty(NV, I, dtype=torch.bfloat16)
-        torch.ops.vllm_iface.silu_and_mul(c2, c1.view(-1, 2 * I))
+        c2 = torch.empty(NV, INTER, dtype=torch.bfloat16)
+        torch.ops.vllm_iface.silu_and_mul(c2, c1.view(-1, 2 * INTER))
         q, s = self._quant(c2)
         c3 = torch.empty(M, TOPK, H, dtype=torch.bfloat16)
         torch.ops.verity_cba.triton_launch(S.MOE_GEMM_PINS["kernel"], [q, self.w2, c3, s, self.w2_s, ids, g], self.down)
@@ -64,7 +66,6 @@ def instances() -> dict:
     """The derived chain's instance rows under `model.model.layers.3.mlp.experts`, with the rows the CPU derive cannot emit appended:
     `MoeSum_v1` per token (`_moe_C.moe_sum` needs vLLM), the next layer's fused norm reading it, the logits and the token select."""
     from verity_vllm.pipeline.build import _instance_sequence
-    from verity_vllm.program.compact import expanded_file_args
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
 
     class Root(nn.Module):
@@ -117,10 +118,10 @@ def test_the_derived_chain_is_the_served_paths_rows(instances):
 
 def test_the_manifest_requires_the_ten_planes_the_source_binds_at_their_sizes(instances):
     g = fmt.moe_geometry(instances["rows"])[X]
-    assert (g["M"], g["TOPK"], g["H"], g["I"], g["N_up"], g["G"], g["fp8"]) == (M, TOPK, H, I, 2 * I, G, True)
+    assert (g["M"], g["TOPK"], g["H"], g["I"], g["N_up"], g["G"], g["fp8"]) == (M, TOPK, H, INTER, 2 * INTER, G, True)
     assert (g["in_quant_rows"], g["act_quant_rows"], g["act_rows"]) == (M, NV, NV)     # H == I here: the input's quant is the first M
-    want = {"router_w": M * TOPK, "router_ids": M * TOPK, "in_q": M * H, "in_scale": M * H // G, "up": NV * 2 * I, "act": NV * I,
-            "act_q": NV * I, "act_scale": NV * I // G, "down": NV * H, "sum": M * H}
+    want = {"router_w": M * TOPK, "router_ids": M * TOPK, "in_q": M * H, "in_scale": M * H // G, "up": NV * 2 * INTER, "act": NV * INTER,
+            "act_q": NV * INTER, "act_scale": NV * INTER // G, "down": NV * H, "sum": M * H}
     assert [p for p, _n, _d in fmt.moe_identities(g)] == list(fmt.MOE_FP8_PLANES) == list(want)
     P = from_instances(instances)
     m = request_manifest(P, Correspondence(P), RESULT, request_id="r0", rank=0, ranks=1).manifest
@@ -153,7 +154,7 @@ def test_the_replay_index_addresses_every_row_at_the_plane_the_manifest_sizes(in
     seen["sum"] = sum(c["width"] for d in sm for c in d["copies"])
     assert seen == sizes and all(d["members"] == [("out", H, "bf16")] for d in sm)
     act_q = next(r for r in instances["rows"] if pi.describe(r).get("plane_kind") == "act_quant")
-    assert pi.describe(act_q)["members"] == [("act_q", I, "w8"), ("act_scale", I // G, "f32")]
+    assert pi.describe(act_q)["members"] == [("act_q", INTER, "w8"), ("act_scale", INTER // G, "f32")]
 
 
 def test_a_block_whose_router_no_plane_names_is_calls_like_the_rest(instances):

@@ -17,14 +17,15 @@ from __future__ import annotations
 
 import bisect
 import re
-from typing import Any
+from collections.abc import Callable
+from typing import Any, Literal
 
 import torch
-
 from verity.circuits.refs import Affine, Coll, Concat, Strided, prefix_runs
 from verity.circuits.types import RecordType
-from verity_vllm.program.frontend.value_types import flat_types
+
 from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, correspondence_digest
+from verity_vllm.program.frontend.value_types import flat_types
 from verity_vllm.program.prune import kept_records
 
 _ROW_RE = re.compile(r"\[(\d+)\]")
@@ -66,18 +67,12 @@ def _runs(refs, max_runs: int = MAX_RUNS) -> list[tuple[str, int, int, int]] | N
                 return True
             if r.count > max_runs:                      # one run per leaf
                 return False
-            for space, idx, leaf in r:
-                if not push(space, idx, leaf, leaf + 1):
-                    return False
-            return True
+            return all(push(space, idx, leaf, leaf + 1) for space, idx, leaf in r)
         if isinstance(r, Concat):
             return all(walk(p) for p in r.parts)
         if len(r) > max_runs:
             return False
-        for space, idx, leaf in r:
-            if not push(space, idx, leaf, leaf + 1):
-                return False
-        return True
+        return all(push(space, idx, leaf, leaf + 1) for space, idx, leaf in r)
 
     return out if walk(refs) else None
 
@@ -154,7 +149,7 @@ def _arg_runs(refs) -> tuple[list[tuple[str, int, int, int]] | None, Any, int]:
     return _runs(refs), None, 0
 
 
-def _locate_shared(index: dict, rs: list[tuple[str, int, int, int]], log, s: int, memo: dict) -> tuple[int, int] | None | bool:
+def _locate_shared(index: dict, rs: list[tuple[str, int, int, int]], log, s: int, memo: dict) -> tuple[int, int] | None | Literal[False]:
     """`_locate_runs(index, rs)` when the first `s` runs of `rs` are `log`'s shared runs: their spans are located once per
     (index, log) and kept in `memo`, so a longer cut of the same log locates only its own runs."""
     st = memo.get((id(index), id(log)))
@@ -212,7 +207,7 @@ def _all_located(inputs: list, rs: list[tuple[str, int, int, int]], log, s: int,
     return (st[3] is None or st[3] >= s) and all(held(*r) for r in rs[s:])
 
 
-def _locate_runs(index: dict, rs: list[tuple[str, int, int, int]]) -> tuple[int, int] | None | bool:
+def _locate_runs(index: dict, rs: list[tuple[str, int, int, int]]) -> tuple[int, int] | None | Literal[False]:
     """Every run of `rs` inside one collection: its contiguous flat range, `None` if covered but not contiguous, False if not covered."""
     spans: list[tuple[int, int]] = []
     for space, i, lo, hi in rs:
@@ -288,50 +283,15 @@ def _collective_record(ctx, node, kind: str, occurrence: int) -> dict:
                   "peer_inputs": [ctx.is_input_storage(operands[i]) for i in peers]}
 
 
-def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> dict:
-    """The `runtime-correspondence/v1` document of the finished flat `body` derived under `ctx` (see module docstring)."""
-    params = list(body.params)
-    n_user = len(ctx.user_inputs)
-    input_names = [n for n, _ in params[:n_user]]
-    weights_index = len(params) - 1 if ctx.weights_coll is not None else None
-    field_names: list[str] = []
-    field_starts: list[int] = []
-    if weights_index is not None and isinstance(params[weights_index][1], RecordType):
-        off = 0
-        for fname, ft in params[weights_index][1].fields:
-            field_names.append(fname)
-            field_starts.append(off)
-            off += ft.leaves
-    from verity_vllm.program.frontend.derive import _mutates, fx_arg_nodes  # local: derive imports this module
-
-    def field_of(leaf: int) -> str | None:
-        j = bisect.bisect_right(field_starts, leaf) - 1
-        return field_names[j] if 0 <= j < len(field_names) else None
-
-    # (which Calls / inputs / weight fields an argument's leaves come from is the Program's own data -- the body's reference sequences --
-    #  and is NOT repeated here: the record only locates the argument inside the occurrence's input tensors)
-
-    def source_of(fx_arg, v) -> tuple[str, str | None]:
-        """Source class of an fx input from its binding: read off the FIRST and LAST reference only (O(1); a cache-sized tensor is
-        never walked here) -- `call` (another lowering's output), `input`, `weight` (+ the field), `constant`, `other` (mixed)."""
-        if isinstance(v, Coll):
-            n = len(v.refs)
-            if n == 0:
-                return "other", None
-            (s0, i0, l0), (s1, i1, _l1) = v.refs[0], v.refs[n - 1]
-            if s0 == "n" and s1 == "n":
-                return "call", None
-            if s0 == "p" and s1 == "p" and i0 == i1 and i0 < n_user:
-                return "input", input_names[i0]
-            if s0 == "p" and s1 == "p" and i0 == i1 and i0 == weights_index:
-                return "weight", field_of(l0)
-            return "other", None
-        if type(v).__name__ in ("_LiftedConstant", "StaticIndex"):
-            return "constant", getattr(v, "name", None)
-        return "other", None
-
-    # -- occurrences: one per fx node that some Call was lowered from, in graph order ------------------------------------------
-    node_fx: dict[int, Any] = dict(getattr(ctx, "node_fx", {}))
+def _occurrences(
+    ctx, body, node_fx: dict[int, Any], source_of: Callable[[Any, Any], tuple[str, str | None]], rank: tuple[int, int] | None
+) -> tuple[list[dict], dict[Any, int], list[list[tuple[Any, Any, dict | None]]], list[dict]]:
+    """`(occurrences, occ_index, occ_inputs, occ_outputs)`: one occurrence per fx node that some Call was lowered from, in graph
+    order (`node_fx`: Call index -> its fx node), each node's index among them, and what `_calls` locates each Call in."""
+    from verity_vllm.program.frontend.derive import (  # local: derive imports this module
+        _mutates,
+        fx_arg_nodes,
+    )
     by_node: dict[Any, list[int]] = {}
     for k in range(len(body.nodes)):
         fx = node_fx.get(k)
@@ -343,7 +303,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
     collectives = 0
     occurrences: list[dict] = []
     occ_index: dict[Any, int] = {}
-    occ_inputs: list[list[tuple[Any, dict]]] = []      # per occurrence: (fx arg node, interval index of its value AS READ)
+    occ_inputs: list[list[tuple[Any, Any, dict | None]]] = []   # per occurrence: (fx arg node, its value, interval index of its value AS READ)
     occ_outputs: list[dict] = []                        # per occurrence: interval index over its produced / written collections, tagged by port
     bindings: dict[Any, dict] = getattr(ctx, "occurrence_bindings", {})
     index_memo: dict[int, tuple[Any, dict | None]] = {}   # id(refs) -> (refs kept alive, its interval index): a cache read by many
@@ -356,7 +316,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
         return hit[1]
 
     for node in fx_nodes:
-        stack = node.meta.get("nn_module_stack") or {}
+        stack = node.meta.get("nn_module_stack")
         module = ctx.stack_path(node) if stack else ""
         mcls = ctx.module_class(node) if stack else None
         t = node.target
@@ -430,9 +390,16 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
         occurrences.append(occ)
         occ_inputs.append(idxs)
         occ_outputs.append(out_index)
+    return occurrences, occ_index, occ_inputs, occ_outputs
 
-    # -- calls: Call k -> occurrence + return slots + argument slots --------------------------------------------------------------
-    calls, located = [], {}   # located: (id(index), id(PartLog)) -> the log's shared runs located in that index (`_locate_shared`)
+
+def _calls(
+    ctx, body, node_fx: dict[int, Any], occ_index: dict[Any, int], occ_inputs: list[list[tuple[Any, Any, dict | None]]], occ_outputs: list[dict]
+) -> list[dict]:
+    """One record per Call k of `body`: its occurrence, its return slots and its argument slots, located in that occurrence's
+    outputs and inputs (`_occurrences`)."""
+    calls: list[dict] = []
+    located: dict = {}        # (id(index), id(PartLog)) -> the log's shared runs located in that index (`_locate_shared`)
     held: dict = {}           # (id(inputs), id(PartLog)) -> how far the log's shared runs lie in the occurrence's inputs (`_all_located`)
     for k, nd in enumerate(body.nodes):
         fx = node_fx.get(k)
@@ -486,7 +453,7 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
                 # the Call's argument spans SEVERAL fx inputs (a collective's operand is `own ++ peer`): resolve run by run
                 spans: list[dict] = []
                 for space, i, lo, hi in rs:
-                    hit = None
+                    hit: dict[str, Any] | None = None
                     for j, (_fx_arg, _v, index) in enumerate(occ_inputs[o]):
                         r = _locate(index, space, i, lo, hi) if index else None
                         if r is not None:
@@ -503,7 +470,53 @@ def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> di
                     found["spans"] = spans
             args.append(found)
         calls.append({"occ": o, "member": member, "row": row, "hint": hint, "returns": rets, "args": args})
+    return calls
 
+
+def emit_correspondence(ctx, body, *, rank: tuple[int, int] | None = None) -> dict:
+    """The `runtime-correspondence/v1` document of the finished flat `body` derived under `ctx` (see module docstring)."""
+    params = list(body.params)
+    n_user = len(ctx.user_inputs)
+    input_names = [n for n, _ in params[:n_user]]
+    weights_index = len(params) - 1 if ctx.weights_coll is not None else None
+    field_names: list[str] = []
+    field_starts: list[int] = []
+    if weights_index is not None and isinstance(params[weights_index][1], RecordType):
+        off = 0
+        for fname, ft in params[weights_index][1].fields:
+            field_names.append(fname)
+            field_starts.append(off)
+            off += ft.leaves
+
+    def field_of(leaf: int) -> str | None:
+        j = bisect.bisect_right(field_starts, leaf) - 1
+        return field_names[j] if 0 <= j < len(field_names) else None
+
+    # (which Calls / inputs / weight fields an argument's leaves come from is the Program's own data -- the body's reference sequences --
+    #  and is NOT repeated here: the record only locates the argument inside the occurrence's input tensors)
+
+    def source_of(fx_arg, v) -> tuple[str, str | None]:
+        """Source class of an fx input from its binding: read off the FIRST and LAST reference only (O(1); a cache-sized tensor is
+        never walked here) -- `call` (another lowering's output), `input`, `weight` (+ the field), `constant`, `other` (mixed)."""
+        if isinstance(v, Coll):
+            n = len(v.refs)
+            if n == 0:
+                return "other", None
+            (s0, i0, l0), (s1, i1, _l1) = v.refs[0], v.refs[n - 1]
+            if s0 == "n" and s1 == "n":
+                return "call", None
+            if s0 == "p" and s1 == "p" and i0 == i1 and i0 < n_user:
+                return "input", input_names[i0]
+            if s0 == "p" and s1 == "p" and i0 == i1 and i0 == weights_index:
+                return "weight", field_of(l0)
+            return "other", None
+        if type(v).__name__ in ("_LiftedConstant", "StaticIndex"):
+            return "constant", getattr(v, "name", None)
+        return "other", None
+
+    node_fx: dict[int, Any] = dict(getattr(ctx, "node_fx", {}))
+    occurrences, occ_index, occ_inputs, occ_outputs = _occurrences(ctx, body, node_fx, source_of, rank)
+    calls = _calls(ctx, body, node_fx, occ_index, occ_inputs, occ_outputs)
     return {"schema": SCHEMA, "body": "program_fn", "inputs": input_names, "weights": field_names or None,
             "rank": _rank_coordinate(rank),
             "occurrences": occurrences, "calls": calls}
