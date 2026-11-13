@@ -79,6 +79,7 @@ public import Proofs.Pouw.Period
 public import Proofs.Pouw.Period.Accept
 public import Proofs.Pouw.Period.Honest
 public import Proofs.Pouw.Period.Sort
+public import Proofs.Pouw.Period.Witnesses
 public import Proofs.Pouw.PeriodJ10RStrata
 public import Proofs.Pouw.PeriodJ10RStrata.Honest
 public import Proofs.Pouw.PeriodJ10R
