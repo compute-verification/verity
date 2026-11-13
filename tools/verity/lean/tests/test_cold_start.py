@@ -57,9 +57,9 @@ def _shipped(tmp_path: Path) -> Path:
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_lean_check_builds_and_audits_a_package_in_a_fresh_tree(tmp_path, monkeypatch):
     """`--build` of the control package from a fresh shipped tree, to its `AUDIT` line. It can take over a minute (a whole
-    tree's checkout and the package's first Lake build, and outside `check` a wait for a node's Lean audit slot); what it catches
-    that the fixture-copy tests here can't is a Lean check that works from this checkout and not from a tree a run ships:
-    a path it resolves through the tree, `lean_slot.py` loaded from it, the runner's PYTHONPATH."""
+    tree's checkout and the package's first Lake build); what it catches that the fixture-copy tests here can't is a Lean
+    check that works from this checkout and not from a tree a run ships: a path it resolves through the tree, `lean_slot.py`
+    loaded from it, the runner's PYTHONPATH."""
     tree = _shipped(tmp_path)
     data, digest = remote.tool_tarball(tree / "tools" / "research" / "src" / "research")
     tool = tmp_path / "root" / "tool" / digest
@@ -72,7 +72,8 @@ def test_the_lean_check_builds_and_audits_a_package_in_a_fresh_tree(tmp_path, mo
         if k.startswith(("AWS_", "R2_", "RESEARCH_", "VERITY_", "PYTEST_")) or k in ("VIRTUAL_ENV", "PYTHONPATH"):
             monkeypatch.delenv(k)
     env = Names(remote._runner_env({"tool": str(tool)}, tmp_path / "root" / "runs", str(tree), {"source_sha": tree.name}))
-    env.update(XDG_CACHE_HOME=str(tmp_path / "cache"))
+    # no node's slot policy (whether its slots list an audit pool, how long they're held) decides a one-package build here
+    env.update(XDG_CACHE_HOME=str(tmp_path / "cache"), LEAN_SLOTS=str(tmp_path / "no-lean-slots"))
     p = subprocess.run(["python3", "tools/verity/lean/check.py", "--build", "--out", str(tmp_path / "out"), PKG], cwd=tree, env=env,
                        capture_output=True, text=True)
     shown = "\n".join((p.stdout + p.stderr).splitlines()[-30:])
