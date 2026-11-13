@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import select
 import subprocess
 import sys
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from waits import FakeClock, Gate
 
 from research import notes
 from research import notes_sync as NS
@@ -135,6 +138,113 @@ def test_a_detached_head_commits_nothing(machines):
     assert _git(a, "rev-parse", "HEAD") == before and "a while detached" in (a / DOC).read_text()
 
 
+def _start(clone: Path, *argv: str, **env: str) -> subprocess.Popen:
+    """`research notes ARGV` on the scratch ``clone``, started and not waited for (`_research` says in what environment)."""
+    shell = {k: v for k, v in os.environ.items() if k not in NS.IDENTITY_ENV}
+    return subprocess.Popen([sys.executable, "-m", "research", "notes", *argv, "--root", str(clone)], stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True,
+                            env={**shell, "RESEARCH_NOTES": str(clone), NS.SYNC_ENV: "1", NS.CITE_ENV: "0", **env})
+
+
+def _hook(clone: Path, body: str) -> Path:
+    """Install ``body`` as the clone's post-checkout hook, which git runs when a rebase has checked out the commit it rebases
+    onto: HEAD is detached there, and nothing is picked yet."""
+    hook = clone / ".git" / "hooks" / "post-checkout"
+    hook.parent.mkdir(exist_ok=True)
+    hook.write_text(f"#!/bin/sh\n{body}\n")
+    hook.chmod(0o755)
+    return hook
+
+
+@pytest.fixture
+def held(tmp_path):
+    """``hold(clone)``: the clone's next rebase stops once it has detached HEAD, until ``go.release()``; ``reached(proc)``
+    returns once the rebase ``proc`` runs is stopped there."""
+    at, go = Gate(tmp_path / "at"), Gate(tmp_path / "go")
+    started: list[subprocess.Popen] = []
+
+    def hold(clone: Path) -> None:
+        once = tmp_path / "held-once"
+        _hook(clone, f"[ -e '{once}' ] && exit 0\n: > '{once}'\necho held > '{at.path}'\nhead -c 1 '{go.path}' > /dev/null")
+
+    def reached(proc: subprocess.Popen) -> None:
+        started.append(proc)
+        ready, _, _ = select.select([at, proc.stdout], [], [])
+        assert at in ready, f"the sync ended before its rebase began: {proc.communicate()}"
+        at.readline()
+
+    try:
+        yield SimpleNamespace(hold=hold, reached=reached, go=go, started=started)
+    finally:
+        go.release()
+        for proc in started:
+            proc.kill()
+            proc.communicate()
+        at.close()
+        go.close()
+
+
+def _state(clone: Path) -> tuple[str, bool, list[str]]:
+    """The branch HEAD is on ('' when detached), whether a rebase or merge is in progress, and the clone's rescue branches."""
+    head = subprocess.run(["git", "-C", str(clone), "symbolic-ref", "-q", "--short", "HEAD"], capture_output=True, text=True)
+    busy = any((clone / ".git" / x).exists() for x in ("rebase-merge", "rebase-apply", "MERGE_HEAD"))
+    return head.stdout.strip(), busy, _git(clone, "for-each-ref", "--format=%(refname:short)", "refs/heads/rescue-*").split()
+
+
+def _report(clone: Path, lane: str, text: str) -> str:
+    rel = f"lanes/{lane}/report.md"
+    (clone / rel).parent.mkdir(parents=True, exist_ok=True)
+    (clone / rel).write_text(text)
+    return rel
+
+
+def test_two_syncs_of_one_clone_at_the_same_moment_both_publish_and_leave_it_on_its_branch(machines, held):
+    """Two agents share one clone and sync at once.  The second starts while the first is inside its rebase, HEAD detached: it
+    waits for the first, saying whom it waits for, and then both have published and the clone is on its branch."""
+    origin, shared, other = machines
+    _insert_after(other / DOC, "<!-- b -->", "the other machine's line")
+    assert NS.sync(other, secrets=[])["pushed"]
+    one, two = _report(shared, "one", "one's report\n"), _report(shared, "two", "two's report\n")
+    held.hold(shared)
+    first = _start(shared, "sync", "--path", "lanes/one")
+    held.reached(first)
+    assert _state(shared)[:2] == ("", True), "the first sync is inside its rebase"
+    second = _start(shared, "sync", "--path", "lanes/two")
+    held.started.append(second)
+    waiting = second.stderr.readline()
+    held.go.release()
+    out1, out2 = first.communicate(), second.communicate()
+    assert (first.returncode, second.returncode) == (0, 0), (out1, waiting, out2)
+    assert f"waiting up to {NS.LOCK_WAIT_S:g} s for another sync of this clone to end" in waiting and f"pid {first.pid} on " in waiting
+    assert _state(shared) == ("main", False, []) and _git(shared, "status", "--porcelain") == ""
+    assert _git(origin, "show", f"main:{one}") == "one's report\n" and _git(origin, "show", f"main:{two}") == "two's report\n"
+    assert "the other machine's line" in _git(origin, "show", f"main:{DOC}")
+
+
+def test_a_sync_waits_a_bounded_time_for_another_sync_of_its_clone_and_then_commits_nothing(machines, monkeypatch, capsys):
+    """One sync of a clone at a time: a sync that finds another at work waits for it, saying once whom it waits for, and
+    after LOCK_WAIT_S gives up with nothing committed."""
+    origin, a, _ = machines
+    clock = FakeClock()
+    monkeypatch.setattr(NS, "time", clock.module)
+    holder = NS._lock(a / ".git", 0)
+    _insert_after(a / DOC, "<!-- a -->", "a waited")
+    clock.at(60, lambda: os.close(holder))
+    rep = NS.sync(a, secrets=[])
+    err = capsys.readouterr().err
+    assert (rep["rc"], rep["pushed"]) == (0, True) and 60 <= clock.now < 61 and "a waited" in _git(origin, "show", f"main:{DOC}")
+    assert err.count("\n") == 1 and f"waiting up to {NS.LOCK_WAIT_S:g} s for another sync of this clone" in err and f"pid {os.getpid()} on " in err
+    holder = NS._lock(a / ".git", 0)
+    _insert_after(a / DOC, "<!-- a -->", "a gave up")
+    start = clock.now
+    rep = NS.sync(a, secrets=[])
+    os.close(holder)
+    assert (rep["rc"], rep["commit"], rep["pushed"]) == (1, None, False) and NS.LOCK_WAIT_S <= clock.now - start < NS.LOCK_WAIT_S + 1
+    assert f"still running after {NS.LOCK_WAIT_S:g} s" in rep["error"] and f"pid {os.getpid()} on " in rep["error"]
+    assert _git(a, "status", "--porcelain").strip() == f"M {DOC}", "the line waits, uncommitted, for the next sync"
+    assert NS.sync(a, secrets=[])["pushed"] and "a gave up" in _git(origin, "show", f"main:{DOC}")
+
+
 def test_a_rebase_whose_abort_lost_its_state_goes_back_to_the_branch(machines, monkeypatch):
     """On NFS a rebase can lose `.git/rebase-merge` ("could not lock .../git-rebase-todo"), so its abort does nothing and
     HEAD stays detached at origin/main; the sync puts the branch back, with the local commit on it."""
@@ -255,9 +365,9 @@ def _research(clone: Path, *argv: str, **env: str) -> subprocess.CompletedProces
     """`research notes ARGV` on the scratch ``clone``, one process: its environment is this one's less the four identity
     variables (a check's tests run with them set) plus ``env``, as a shell that exported ``env`` starts it.  The notes it
     knows are ``clone``, whose remote is the test's."""
-    shell = {k: v for k, v in os.environ.items() if k not in NS.IDENTITY_ENV}
-    return subprocess.run([sys.executable, "-m", "research", "notes", *argv, "--root", str(clone)], capture_output=True, text=True,
-                          env={**shell, "RESEARCH_NOTES": str(clone), NS.SYNC_ENV: "1", NS.CITE_ENV: "0", **env})
+    proc = _start(clone, *argv, **env)
+    out, err = proc.communicate()
+    return subprocess.CompletedProcess(proc.args, proc.returncode, out, err)
 
 
 def _who(repo: Path, rev: str = "HEAD") -> list[str]:

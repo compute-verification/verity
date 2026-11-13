@@ -10,6 +10,11 @@ exit is 3 and the conflicted files are named.  Before anything is pushed, the ou
 material (`KEY_PATTERNS`, and the value of any secret-named environment variable); a hit refuses the push (exit 4), naming the
 file.  With no remote configured the commit is local and the report says so.
 
+One sync of a clone runs at a time, so several agents can share a clone: a sync holds the clone's lock (`_lock`, a flock on
+`<git dir>/notes-sync.lock`) from before its commit to after its push, and another sync of the clone waits for it, at most
+LOCK_WAIT_S, saying on stderr whom it waits for (the holder's pid, machine and agent); past that it commits nothing and exits
+1.  Other git commands in a clone (the watcher's `snapshot`, the standby's `pull`, the archive) do not take the lock.
+
 A commit made here is the clone's own (`identity_env`: `sync`'s and its rebase's, the archive's, `snapshot`'s): where the
 configuration git reads in the clone names an author and a committer, git is not handed the calling shell's GIT_AUTHOR_NAME,
 GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL, so a name a script exported never reaches the notes.  A clone
@@ -59,11 +64,13 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import json
 import math
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -103,6 +110,8 @@ NEVER_COMMIT = ("steward-state.json", ".steward-state.json.tmp")
 EVIDENCE_PATH = re.compile(r"^(?:renders/|campaigns/[^/]+/assets/|lanes/[^/]+/evidence/)")
 #: an index.lock this old, with no git process in the repository, was left by a git that died mid-write
 STALE_LOCK_S = 600
+#: the clone's sync lock, in its git directory; how long a sync waits for another sync of the clone, and how often it looks again
+LOCK_FILE, LOCK_WAIT_S, LOCK_POLL_S = "notes-sync.lock", 120.0, 0.25
 
 
 def is_evidence(path: str) -> bool:
@@ -645,16 +654,75 @@ def clear_stale_lock(root: Path, now: float | None = None, procs: Path = Path("/
     return True
 
 
+def _gitdir(root: Path) -> Path | None:
+    out = (_out(root, "rev-parse", "--absolute-git-dir") or "").strip()
+    return Path(out) if out else None
+
+
+class Busy(Exception):
+    """Another sync held the clone's lock for the whole wait; the text names it."""
+
+
+def _who() -> str:
+    """This sync, as one that waits for it names it: its pid and machine, the agent that runs it (`remote.sender`), else the
+    lane or the user, and when it took the lock."""
+    from .remote import sender
+
+    who = sender() or os.environ.get("RESEARCH_LANE") or os.environ.get("USER") or "an unnamed caller"
+    return f"pid {os.getpid()} on {socket.gethostname()}, {who}, since {_utcnow():%H:%M:%SZ}"
+
+
+def _lock(gitdir: Path, wait_s: float) -> int:
+    """A descriptor holding the clone's sync lock, an exclusive flock on `<git dir>/notes-sync.lock`, after waiting at most
+    `wait_s` for another sync of the clone to let it go; `Busy` after that.  The kernel drops the lock when its holder exits,
+    however it exits, so a killed sync leaves nothing to clear, and git never inherits it.  The holder writes who it is into the
+    file (`_who`), and a sync that waits says once, on stderr, whom it waits for."""
+    fd = os.open(gitdir / LOCK_FILE, os.O_RDWR | os.O_CREAT, 0o666)
+    start, said = time.monotonic(), False
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            holder = os.pread(fd, 400, 0).decode(errors="replace").strip()      # empty for the instant before it writes it
+            if time.monotonic() - start >= wait_s:
+                os.close(fd)
+                raise Busy(holder or "which did not say who it is") from None
+            if holder and not said:
+                print(f"notes sync: waiting up to {wait_s:g} s for another sync of this clone to end: {holder}", file=sys.stderr, flush=True)
+                said = True
+            time.sleep(LOCK_POLL_S)
+    os.ftruncate(fd, 0)
+    os.pwrite(fd, _who().encode(), 0)
+    return fd
+
+
 def sync(root: Path, paths: list[str] | None = None, message: str | None = None, retries: int = 5, remote: str = "origin",
          max_bytes: int = MAX_BYTES, secrets: list[str] | None = None, now: dt.datetime | None = None) -> dict:
-    """Commit, then fetch / rebase / push with bounded retries (module docstring).  The report: `commit`, `paths`, `skipped`,
+    """Commit, then fetch / rebase / push with bounded retries (module docstring), one sync of a clone at a time (`_lock`).
+    The report: `commit`, `paths`, `skipped`,
     `evidence` (evidence and renders left out), `future` (notes left out, stamped ahead of `now`), `header` (notes left out, broken
-    front matter), `warn` (SYNC-WARN lines: front matter, and once pushed, citations the store lacks), `pushed` (bool), `attempts`,
-    and on failure `error` plus `conflict` (files)
+    front matter), `warn` (SYNC-WARN lines: front matter, and once pushed, citations the store lacks),
+    `pushed` (bool), `attempts`, and on failure `error` plus `conflict` (files)
     or `keys` (hits); `rc` is the exit code."""
     root = Path(root)
-    if _out(root, "rev-parse", "--git-dir") is None:
+    gitdir = _gitdir(root)
+    if gitdir is None:
         return {"rc": 2, "error": f"{root} is not a git repository"}
+    try:
+        lock = _lock(gitdir, LOCK_WAIT_S)
+    except Busy as e:
+        return {"rc": 1, "pushed": False, "attempts": 0, "commit": None,
+                "error": f"another sync of this clone was still running after {LOCK_WAIT_S:g} s ({e}); nothing committed: sync again"}
+    try:
+        return _sync(root, gitdir, paths, message, retries, remote, max_bytes, secrets, now)
+    finally:
+        os.close(lock)
+
+
+def _sync(root: Path, gitdir: Path, paths: list[str] | None, message: str | None, retries: int, remote: str, max_bytes: int,
+          secrets: list[str] | None, now: dt.datetime | None) -> dict:
+    """`sync`, holding the clone's lock."""
     branch = (_out(root, "symbolic-ref", "--short", "HEAD") or "").strip()
     if not branch:
         return {"rc": 2, "pushed": False, "attempts": 0, "commit": None,
@@ -794,7 +862,8 @@ def auto_sync(root: Path, lanes: list[str]) -> tuple[str | None, int]:
 def main(argv: list[str], default_root: Path) -> int:
     ap = argparse.ArgumentParser(prog="research notes", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sy = sub.add_parser("sync", help="commit your changes, rebase onto the remote, push (bounded retries; a conflict drops nothing; "
+    sy = sub.add_parser("sync", help="commit your changes, rebase onto the remote, push (one sync of a clone at a time; bounded retries; a "
+                                     "conflict drops nothing; "
                                      "exit 5: lane notes stamped over 5 min ahead of the clock, or with broken front matter, were left out)")
     sy.add_argument("--path", action="append", default=[], metavar="P", help="only changes under P (repeatable; default every change)")
     sy.add_argument("-m", "--message", default=None)
