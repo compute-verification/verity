@@ -421,7 +421,9 @@ def test_a_release_is_filed_in_the_first_class_that_holds_it_and_the_tables_lay_
     assert {name: swapped[name] for name in ruled} == CT.tables(CON, first, [3, 3, 3, 3]) != ruled
     monkeypatch.undo()
     # a class with a row for one release holds the execution phase's first that fits; a class too small holds none
-    one, small = (dataclasses.replace(LEN, content=c) for c in (((128, 8, 1),), ((2, 2, 1), (4, 2, 1))))
+    # of another schedule's releases, the only ones no class of its own holds (its responses are held to 2 ids)
+    one = dataclasses.replace(LEN, content=((128, 8, 1),))
+    small = dataclasses.replace(LEN, content=((2, 2, 1), (4, 2, 1)), max_tokens_cap=2)
     assert [CT.file(one, r) for r in first] == [0, 0, 0, 0]
     made = CR.tables(one, handed[0])
     assert CT.request_of(made["request.0"][0], B, 128) == first[0].request and len(made["request.0"]) == 1
@@ -502,6 +504,36 @@ def test_an_execution_phase_a_longer_request_reached_releases_only_what_its_clas
     assert phases() == [(1, [0, 0, 1, 0], 0)]
     monkeypatch.setattr(type(HELD), "request_bound", property(lambda self: self.ingress_cells * self.payload))
     assert phases() == [(2, [0, 0, 1, 0], 0)]
+
+
+def test_a_schedule_is_refused_unless_a_class_of_its_largest_p_holds_the_most_ids_a_response_releases():
+    """A release is filed in the first class that holds its request and its ids, and the longest request ingress
+    admits is one that only a class of the largest P holds. So a schedule is refused unless such a class holds the
+    most ids a response of it releases (`content_rows.most_released`): one `DATA` cell fewer than `egress_cells`,
+    or what the schedule holds a request's `max_tokens` to. The same classes are a schedule's once a response is
+    held to what they hold, by either parameter. Then no release is unfiled for its ids: the longest request
+    answered with the most ids is released and filed, in that class. Under either form of the lengths rows."""
+    assert (CT.most_released(LEN), CT.most_released(dataclasses.replace(LEN, max_tokens_cap=5))) == (8, 5)
+    for form, numbers in ((1, 3), (2, 2)):
+        base = dataclasses.replace(LEN, lengths=form)
+        for short in (((128, 4, 2),), ((4, 8, 2), (128, 4, 2)), ((128, 2, 2), (128, 4, 2)),
+                      ((16, 8, 2), (128, 4, 2), (4, 8, 2))):
+            content = tuple(c[:numbers] for c in short)
+            with pytest.raises(ValueError, match="P=128 prompt ids, the schedule's largest, hold at most O=4 ids, "
+                                                 "and a response of the schedule releases up to 8: .* Give a class "
+                                                 "of P=128 an O of at least 8, or hold a response to 4 ids"):
+                dataclasses.replace(base, content=content)
+            assert dataclasses.replace(base, content=content, max_tokens_cap=4).content == content
+            assert dataclasses.replace(base, content=content, egress_cells=5).content == content
+        # an O past the most ids is no fault, and a second class of the largest P may hold fewer
+        for holds in (((128, 8, 2),), ((128, 16, 2),), ((128, 4, 2), (128, 8, 2))):
+            dataclasses.replace(base, content=tuple(c[:numbers] for c in holds))
+    most = tuple(range(1, CT.most_released(HELD) + 1))
+    for params in (CON, HELD):
+        device, _, _ = run([answer(most)], {0: [cells(id_req(1, 128), B)]}, params=params, windows=3)
+        handed = [r for _, strides in device.lengths for stride in strides or () for r in stride]
+        assert [(len(r.request), len(r.ids) // 4, r.failed, CT.file(params, r)) for r in handed] == [
+            (CT.request_room(B, 128), len(most), False, 2)]
 
 
 def test_a_row_of_zero_bytes_reads_as_each_tables_decoder_says(ran):
