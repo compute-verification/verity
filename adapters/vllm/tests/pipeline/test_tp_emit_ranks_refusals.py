@@ -94,15 +94,23 @@ def test_a_report_the_lowering_refuses_is_not_written_and_one_it_passes_is_writt
 
     def post(rep):
         lowered.append(rep)
-        return _refusal(rep.rank, "no Boolean lowering of aten::roll") if rep.rank == 0 else _report(rep.rank, lowered=True)
+        return _refusal(rep.rank, "no Boolean lowering of aten::roll") if rep.rank == 2 else _report(rep.rank, lowered=True)
 
     reports = {0: _report(0), 2: _report(2)}
     e, out, _, written = _emit(tmp_path, monkeypatch, reports=reports, post=post)
     assert lowered == [reports[0], reports[2]], "the lowering is given the relabel's report of each rank"
     assert [(rec["rank"], rec["ok"], rec["error"]) for rec in e.report] == [
-        (0, False, "RelabelRefused: rank 0's report is a refusal: ['no Boolean lowering of aten::roll']"), (2, True, None)]
-    assert [w["rank"] for w in written] == [2] and written[0]["report"].lowered is True
-    assert not os.path.exists(_dirs(e, out, 0)[1])
+        (0, True, None), (2, False, "RelabelRefused: rank 2's report is a refusal: ['no Boolean lowering of aten::roll']")]
+    assert [w["rank"] for w in written] == [0] and written[0]["report"].lowered is True
+    assert not os.path.exists(_dirs(e, out, 2)[1])
+
+
+def test_a_hidden_directory_an_earlier_run_left_is_made_anew_before_the_rank_is_written(tmp_path, monkeypatch):
+    left = tmp_path / "staged" / "rank2" / ".build_step.relabel-tmp"
+    left.mkdir(parents=True)
+    (left / "half_written.bin").write_text("an earlier run's")
+    e, out, _, _ = _emit(tmp_path, monkeypatch, ranks=(2,))
+    assert _dirs(e, out, 2)[1] == str(left) and os.listdir(left) == ["program.json"]
 
 
 def test_a_relabel_that_raises_a_long_message_keeps_its_first_four_thousand_characters(tmp_path, monkeypatch):
@@ -116,14 +124,15 @@ def test_a_relabel_that_raises_a_long_message_keeps_its_first_four_thousand_char
 
 # finish
 
-def _finish(tmp_path: Path, monkeypatch, *, inputs: bool = True, manifest: Any = None) -> tuple[ER.Emit, str, dict]:
+def _finish(tmp_path: Path, monkeypatch, *, inputs: bool = True, manifest: Any = None, **template: Any) -> tuple[ER.Emit, str, dict]:
     """`finish` after an `emit` that wrote ranks 0 and 2: (the ranks' record, the template's directory, `<out>.relabel.json`).
-    `manifest(dir, res)` is the manifest's writer (default: one that writes the rank's number)."""
+    `manifest(dir, res)` is the manifest's writer (default: one that writes the rank's number); `template` are fields of the
+    template's finished record over the ones it had before its writer ran."""
     e, out, _, _ = _emit(tmp_path, monkeypatch)
     os.makedirs(out)
     if inputs:
         Path(out, "inputs.json").write_text('{"n_open_events": 1}')
-    res = dict(copy.deepcopy(PRE), wall_secs_total=12.5, max_rss_mb=640.0)
+    res = dict(copy.deepcopy(PRE), wall_secs_total=12.5, max_rss_mb=640.0) | template
     ER.finish(e, out, res, manifest or (lambda d, res_r: Path(d, "construction_manifest.json").write_text(str(res_r["tp"]["rank"]))))
     return e, out, json.loads(Path(f"{out}.relabel.json").read_text())
 
@@ -139,6 +148,11 @@ def test_a_finished_rank_is_renamed_into_place_with_the_templates_trace_and_tele
         assert result["relabeled_from"] == {"rank": TEMPLATE, "dir": out} and (result["wall_secs_total"], result["max_rss_mb"]) == (12.5, 640.0)
         assert result["tp"]["rank"] == r and Path(dst, "inputs.json").read_text() == '{"n_open_events": 1}'
         assert Path(dst, "construction_manifest.json").read_text() == str(r)
+
+
+@pytest.mark.parametrize("ok", [False, None, 1, "true"], ids=["false", "null", "one", "the text true"])
+def test_the_report_says_the_template_is_ok_only_when_its_record_says_true(tmp_path, monkeypatch, ok):
+    assert _finish(tmp_path, monkeypatch, ok=ok)[2]["template"]["ok"] is False
 
 
 def test_a_rank_whose_manifest_cannot_be_written_has_no_directory_and_its_error_in_the_report(tmp_path, monkeypatch):
