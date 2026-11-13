@@ -159653,3 +159653,31 @@ After its verdict I run the change's suites (`suites.py --changed 20936c91d40b -
 **5. FIRSTACCEPT's reason, as its notice reached me [read]:** `bc-e3c30a07-3b32-546e-94b8-ba30b8972732` ended in error, "blocked under Anthropic's Usage Policy". Your ledger owes INF-783 that reason. I have the notice's wording only as I noted it, not the notice itself.
 
 **6. One meeting to know of [read]:** STOPDRIVER's branch B (`cursor/proofs-stopdriver-family-ffc6` at `46811047714e`) also edits `benchmarks/one_stage/two_stage.py` and `test_two_stage_second.py`. Link 1's `declared` argument of `first` and `resume` meets it where the pull request's branch is cut.
+
+## ADDRWC, Fri 13 Nov 20:18Z: the gates suites run is green; L1's two suites runs still going, none red, both waiting on the Flock prover's suite
+
+**Nothing for you to do yet.** #9792 is not ready for your mark: its two suites runs have not ended.
+
+### `gatesRefine_check`, #9803 (head `da88e9dd2ccf`, unchanged)
+
+- [run] `suites.py --changed ff95b899ecf8` at the head, `r20261113-193050-3c00` on vy-nebius-2: exit 0, **4 suites, 4 passed, 0 failed** (`repository` 362, `verity-graph` 246, `verity/circuits/ops` 985, `verity/protocols/accounting/pouw/verifier` 2114).
+- The body's Checked table has that row and the three Lean-invariant test files on the VM (58 passed); its "Not run" line now reads: the full `check.py`, a records run, `circuit-check`.
+- Nothing more is running for it. It is as ordered (the theorem compiled; its record: none, an unlisted theorem has none) and waits on your word on a listed form.
+
+### L1, #9792 (head `7daf00f8e7d2`, unchanged)
+
+- [run] `r20261113-185310-3a57`, at the head, base `ff95b899ecf8`: **68 of 78 passed, none failed.** Passed among them, the suites nearest the change: `verity-pouw-check-difftest` (56; `test_pouw_check` walks every row of `pouw_check_cases.py`, so the Lean and the Python agreed on `answer-level-work`), `verity/protocols/accounting/pouw/verifier` (2114), `verity/protocols/accounting/certifier/verifier` (1440) and its `network` (104), `verity/protocols/proofs/spot/verifier` (936), `verity-core-sampled-proofs` (324), `benchmarks/one_stage` (1088), `verity-difftest` (153).
+- [run] `r20261113-171916-e22e`, the tree before the difftest row, the records and the last merge: **67 of 76 passed, none failed**; no line since 19:19Z.
+- [read] Why the first is silent: its stall dump of 19:34Z shows one process inside `test_flock_rows_is_the_layout` (`verity/protocols/proofs/flock/prover/tests/test_flock_rows.py`, waiting on the `flock-rows` binary) and eight suites waiting their turn behind it (`Slots.take`: the thirteen parallel suites go one at a time, in planned order). So the nine left are the Flock prover's suite and what queues behind it: `verity-flock`, `verity-numerical`, `research`, `circuit-check`, `verity-core-evaluate`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity/definitions`. The second run has the same nine left and `verity-vllm` (which took 4649 s in the first).
+- [derived] None of those ten reads a file this change edits by name that I know of; they run because the node kept no pass at these inputs. I have not checked each one's declared inputs.
+
+### State
+
+- [script] `git ls-remote` at 20:17Z: `main` `f479876a8758` (unmoved since 19:31Z); #9713's head `8637beb2fe6a` (unmoved). Neither of my branches needs a merge.
+- Both pull requests open, unmarked, no review, no comment. My mailbox is empty.
+
+### Not established
+
+- How long `verity-flock` takes on this node, and so when either L1 run ends. If the first is still inside the same test at my next entry I say so and ask whether the second run alone (the head's) is enough for your mark.
+
+**To post:** nothing. **Runs going on:** `r20261113-171916-e22e`, `r20261113-185310-3a57` (vy-nebius-2, slots p0 and p1). **Next entry by 21:18Z**, sooner when a suites run ends.
