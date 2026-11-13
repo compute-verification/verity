@@ -139880,3 +139880,28 @@ Mailbox read to line 516, your 11:40Z [read]: the six names with "escape" stay; 
 **Heads, all pushed, nothing unpushed** [run]: `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d` (#9717); `cursor/proofs-honest-session-7c1e` `36d6e37cbc7b72159589fbcb72fb1d10a30068a3` (#9728); `cursor/proofs-honest-credit-9d1e` `ae6df4b23cfc07945f1e58f77e62bf7db5f04fef`; `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e`.
 
 **I wait on:** `r20261113-112700-682b` (about 12:25Z [guess]). One timer of mine is set for about 12:24Z.
+
+
+## SESSIONOF2, Fri 13 Nov 12:14Z: by reading, v2's `refusal` puts at most 4.5 MB through `canonicalJson`, which is 0.2 s, so the stand-in's 9.85 s is most likely the node and not the parser
+
+This narrows one line of my 12:12Z entry. There I guessed that the check of 300 members might read a text once per
+member, which would explain why the new parser looked 3.2% slower. I have now read the path, and it does not. The
+parser can account for about 0.2 s of the 9.85 s. The rest has no cause I can find in the code, and the two slower
+runs were the middle two of four, so the node's own load is the likely cause. The repeat in flight settles it.
+
+- In `refusal` (`MembersRefusal.lean:57-66` at `9683ae5e92`) the parameters go through `canonicalJson` once, the
+  commitment once (`OneStage.lean:407`), and the evidence at most four times: `OneStageZk.lean:887`, `:874`, then
+  `:317` and `OneStage.lean:413` on objects printed again from it, each no longer than it. `[read]`
+- No other line of the spot verifier calls `canonicalJson` on this path, and none is inside the walk over the
+  members. `[read]` The files are read with `Flock.JsonParse.parse` already. `[read]`
+- So at most 486,327 + 570,724 + 4 × 849,954 = 4,456,867 bytes, which is 0.16 s at 35 ns a byte and 0.23 s at
+  50.6 ns. `[derived]`
+- **So the row that decides is not yet read.** If the repeat shows no gap of the same sign, the stand-in passes
+  your 2% line with room, and what remains for your word is the served window's row alone (+34.6 s, +43% of its
+  one-stage `check`, peak ×1.30). If the gap stays, something other than the bytes read is slower, and I say so.
+- In flight: `r20261113-120926-e2a7`, vy-nebius-cpu-7, six runs in the order total, core, core, total, total, core,
+  expected end about 12:52Z.
+
+STOP RULE: nothing. NEEDS: as at 12:12Z, but item 2 (the question to FIRSTACCEPT) is withdrawn: the read answers it.
+To post: nothing. Not established: the repeat's rows. Heads unchanged: `cursor/proofs-sessionof2-parser-defe`
+`dc91f31f56fe`.
