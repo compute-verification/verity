@@ -2,18 +2,24 @@
 that is not the manifest's.  CPU only; the store dump itself is `tests/commit/test_store_dump.py`."""
 from __future__ import annotations
 
+import hashlib
 import json
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
+from tests.check.opened import commit_steps
 from tests.check.test_commit_verdict_hopper_no_evaluator_gap import (
     BASE,
     SR_HOPPER,
     _bnd,
 )
 from verity_vllm.check.commit_pass import commit_verdict
+from verity_vllm.check.replay import driver
+from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB
+from verity_vllm.pipeline.timeline import Timeline
 
 DEFERRED, _ = RB.deferred_records(RB.path("/o", 1))
 
@@ -42,7 +48,9 @@ def test_the_commit_pass_is_none_only_while_every_failure_is_absent():
     _pass_of = RB.pass_of
     ok, pend = {"commit": {"commit_pass": True}}, {"commit": {"commit_pass": None, "sampled_replay": DEFERRED}}
     bad = {"commit": {"commit_pass": False}}
-    rows = lambda *cs: [{"arm": "instrumented", **c} for c in cs] + [{"arm": "control", "commit": {}}]
+
+    def rows(*cs):
+        return [{"arm": "instrumented", **c} for c in cs] + [{"arm": "control", "commit": {}}]
     assert _pass_of(rows(ok, ok)) is True and _pass_of(rows(ok, pend)) is None
     assert _pass_of(rows(pend, bad)) is False and _pass_of(rows(bad)) is False
     assert _pass_of(rows({"commit": {"commit_pass": None}})) is False, "a pass that is None without a deferred replay is no pass"
@@ -66,7 +74,6 @@ def test_a_sealed_bundle_opens_and_its_partial_is_gone(tmp_path):
 
 
 def test_a_digest_taken_as_the_file_was_written_is_the_manifest_s_and_is_checked_on_opening(tmp_path):
-    import hashlib
     p = RB.partial(tmp_path, 1)
     (p / "store" / "raw").mkdir(parents=True)
     (p / "store" / "raw" / "s0.bin").write_bytes(bytes(range(256)))
@@ -98,14 +105,14 @@ def _deferred(out, keys=None, **kw):
     """`defer` of a small committed store (under `keys`, another commit's step keys, when given), its write started beside the checks
     (`start`) unless `replay_bundle_overlap=0`; with the committer's step keys."""
     torch = pytest.importorskip("torch")
-    from tests.check.opened import commit_steps
     from tests.commit.test_store_dump import STEPS
-    from verity_vllm.pipeline.timeline import Timeline
 
     com, rc = commit_steps(STEPS, row_keys=keys)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     args = SimpleNamespace(**{"replay_deferred": "full", "replay_bundle_overlap": 1, "retain": "host", "required_manifest": None, "openings": 64, **kw})
-    started, row, deferred = RB.start(out, 1, com, rc, args, None), {"commit": {}}, {}
+    row: dict[str, Any] = {"commit": {}}
+    deferred: dict[int, Any] = {}
+    started = RB.start(out, 1, com, rc, args, None)
     assert RB.defer(out, 1, com, rc, args, tl=Timeline(None), arm="instrumented", versions={}, reqs=[], sampling={}, tokens={}, stop_of_record=None,
                     ids_full=None, declaration=None, required_classes=[], row=row, deferred=deferred, started=started)
     files = {p.relative_to(RB.partial(out, 1)).as_posix(): p.read_bytes() for p in RB.partial(out, 1).rglob("*") if p.is_file()}
@@ -124,17 +131,16 @@ def test_the_bundle_reads_the_models_tensors_and_the_engines_facts_before_start_
     """A leased Commit gives its GPU back right after `start` (`gpu_lease.release`): nothing the bundle carries is read from the
     model or the engine after it returns."""
     torch = pytest.importorskip("torch")
-    from tests.check.opened import commit_steps
     from tests.commit.test_store_dump import STEPS
-    from verity_vllm.check.replay import driver
-    from verity_vllm.pipeline.timeline import Timeline
 
     com, rc = commit_steps(STEPS)
     com.model = torch.nn.Module()
     com.model.register_buffer("cos", torch.arange(4, dtype=torch.int32))
     com.weights_tree = {"root": (rc.weight_registration or {}).get("root"), "names": [["w", "bfloat16", [2], 4], ["cos", "int32", [4], 16]]}
     args = SimpleNamespace(replay_deferred="full", replay_bundle_overlap=1, retain="host", required_manifest=None, openings=64)
-    started, row, deferred = RB.start(tmp_path, 1, com, rc, args, None), {"commit": {}}, {}
+    row: dict[str, Any] = {"commit": {}}
+    deferred: dict[int, Any] = {}
+    started = RB.start(tmp_path, 1, com, rc, args, None)
     com.model = None
     monkeypatch.setattr(driver, "engine_facts_of_record", lambda: pytest.fail("the engine's facts were read after start"))
     assert RB.defer(tmp_path, 1, com, rc, args, tl=Timeline(None), arm="instrumented", versions={}, reqs=[], sampling={}, tokens={},
@@ -149,7 +155,6 @@ def test_the_bundle_reads_the_models_tensors_and_the_engines_facts_before_start_
                                 {"replay_bundle_cap_gb": 0}])
 def test_the_store_is_written_beside_the_checks_only_where_defer_writes_it_in_full(kw):
     pytest.importorskip("torch")
-    from tests.check.opened import commit_steps
     from tests.commit.test_store_dump import STEPS
 
     com, rc = commit_steps(STEPS)
@@ -160,8 +165,6 @@ def test_the_store_is_written_beside_the_checks_only_where_defer_writes_it_in_fu
 def test_serving_rows_defer_in_full_and_a_slim_bundle_with_them_is_refused_by_name():
     """A full deferral takes ``--serving-rows`` (its C2 site commits the window, `c2_replay.serving_rows`), and the bundle's CPU
     replay commits none over it; a slim one, whose plan would commit the window and seal every unit it reads, is refused."""
-    from verity_vllm.pipeline import cpu_replay as CPU
-
     def args(**kw):
         return SimpleNamespace(**{"replay_deferred": "full", "program_dir": "/p", "programs_root": None, "arms": None, "only_arm": None,
                                   "compiled_taps": "off", "vu_export_dir": None,

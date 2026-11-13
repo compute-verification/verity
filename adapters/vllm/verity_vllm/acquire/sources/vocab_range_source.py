@@ -13,10 +13,14 @@ range is not the manifest's, or on a padded or added-vocabulary shard (which `Em
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.engine import hooks
+from verity_vllm.log import init_logger
 from verity_vllm.query import vocab_range as VR
+
+logger = init_logger(__name__)
 
 
 def range_values(torch: Any, ids: Any, start: int, vs: int) -> Any:
@@ -147,12 +151,11 @@ def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required
         return required_classes, None
     sites = VR.manifest_sites(manifest)
     if not sites:
-        print("[delta] REFUSE: --vocab-range but the required-value manifest names no vocab_range identity (manifest build --vocab-range)",
-              flush=True)
+        logger.error("[delta] REFUSE: --vocab-range but the required-value manifest names no vocab_range identity (manifest build --vocab-range)")
         raise SystemExit(3)
     src = VocabRangeSource(com, model if model is not None else getattr(com, "model", None), sites)
     com.attach_source(src)
-    print(f"[delta] vocabulary-range source attached: {len(sites)} sites -> committer {com.name}", flush=True)
+    logger.info("[delta] vocabulary-range source attached: %d sites -> committer %s", len(sites), com.name)
     if not explicit_classes and VR.FAMILY not in required_classes:
         return (*required_classes, VR.FAMILY), src
     return required_classes, src
