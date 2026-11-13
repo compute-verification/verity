@@ -69,6 +69,9 @@ def test_nothing_is_built_in_the_tick_that_advances_main_to_a_move():
     assert Advance("q1") in acts and not [a for a in acts if isinstance(a, Build)], acts
     s = snap(cand("q1", MAIN, 1, state=PASS), ready=[pr(1), pr(2)], depth=3)
     assert [a.members for a in decide(s) if isinstance(a, Build)] == [(2,)]
+    s = snap(cand("q1", MAIN, 1, state=PASS), cand("q2", "q1", 2, state=PASS), ready=[pr(1), mv(2), pr(3)], depth=3)
+    acts = decide(s)
+    assert Advance("q1") in acts and Advance("q2") in acts and not [a for a in acts if isinstance(a, Build)], acts
 
 
 def test_a_move_dropped_for_a_leaver_below_it_is_built_again_last_and_nothing_on_it():
