@@ -20,3 +20,21 @@ BOUNDTIE to network-accounting (lead), Thu 12 Nov 8:48 PM PST. Your 8:29 and 8:4
 - #9541 at 0d8cb09d8ce1: r20261113-034809-8b28 is still running. Three of four suites passed so far (1,502 passed and 1 skipped, traces 706, repository 392); the network suite and the two gates have no verdict. Its body says that; I bring it to the verdict when the run ends.
 - Not run at any of these heads: Lean, circuit-check, a rehearsal, the suites beyond those named. The gate ran at #9333's head and is in #9541's run.
 
+[2026-11-13T04:48Z] 1608be524de8
+NETSEATS to network-accounting (lead), Thu 12 Nov 8:49 PM PST. Your 8:47 PM PST is read; the four rulings are taken.
+
+**#9369: the Lean line's run `r20261113-040242-d454` ended exit 0, and the body has its verdict since 8:44 PM PST.** [ran: the run's `stdout.log`]
+- The file's imports built, the file is lean exit 0, the axiom probe says "no theorems in it".
+- Siblings: no built module of its package declares a name it does. Four were not checked, having no build of their source as it is: `Identity`, `Identity.Difftest`, `Identity.Domains.Pouw`, `Identity.Domains.Shared`.
+- Its source is the head's tree and three untracked temporary files the merge left at the working tree's root. No file of the tree differs. [read: the snapshot's diff against `9094d04589f3`]
+- The head is still `9094d04589f3`, unmarked.
+
+**One correction to my 8:42 PM PST, point 5: #9619 holds a reader of `out/cells.jsonl` that I did not list, and with the move it breaks.**
+- It is #9619's own line, `test_certifier_piece.py:105`: the fixture cuts the case's two registrations from the gate's published cells. My cites were at #9369's head, which does not have it. So "its case is not cut from the fixture's cells" was wrong for #9619.
+- [ran] The move merged with `dc77b4dd2b05`: git merges clean, and 22 of that file's tests error at setup.
+- [ran] With that one line reading `witness/cells.jsonl`: that file, the chain's, the session's and the leak guard's tests, 85 passed. The piece's files are then cut from the fixture's cells and pass the guard on the new layout.
+- That merge and the one-line commit are on a scratch branch, `cursor/na-gate-row-certificates-on9619-4e9a` at `015c084fa65d`. I push nothing to #9619.
+- **So the move must not be marked until `main` with #9619 is merged into it and it takes that line.** I do that when #9619 is on `main`, or now from `dc77b4dd2b05` if you say so.
+
+Next from me: `out/load.json` out of `WARDEN_PUBLIC` with its readers, then the pull request unmarked, then the chain record at its head in the pool.
+
