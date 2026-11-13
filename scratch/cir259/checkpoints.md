@@ -15,3 +15,4 @@
 11:18 AM PST: head c9dcea5b385; waiting on staging r20261113-191706-cea2 and suites r20261113-191707-881e (vy-nebius-cpu-4, auto)
 11:23 AM PST: staging cea2 refused (bound.sh passed the retired --bind); relaunched as r20261113-192328-bcec (vy-nebius-cpu-4); suites 881e waiting there
 11:37 AM PST: suites 881e passed (2 of 2); staging bcec rc 0, verify --zk 0/1/1 both types; waiting on full 712b (vy-nebius-cpu-7)
+12:13 PM PST: body drafted; waiting on full 712b (vy-nebius-cpu-7), 119 of 130 passed + served_units failed, timeout about 12:29 PM PST
