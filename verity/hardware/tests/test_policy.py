@@ -14,7 +14,7 @@ from pathlib import Path
 from verity.hardware.cards import load, number
 
 ROOT = Path(__file__).resolve().parents[3]
-POLICY = "verity/protocols/inference_only/rho/data/hardware.toml"
+POLICY = "benchmarks/rho/data/hardware.toml"
 
 
 def test_the_policys_links_are_the_cards_connectx_ports() -> None:
