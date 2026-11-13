@@ -23,8 +23,9 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
@@ -34,13 +35,16 @@ import numpy as np
 import pytest
 import torch
 from torch import nn
+from verity.circuits.types import Array, RecordType, Value
+from verity.definitions.numerics.serve3_reference import materialize
+
+from verity_vllm.program.frontend.derive import (
+    DERIVE_VERSION,
+    DeriveReport,
+    derive_report,
+)
 
 transformers = pytest.importorskip("transformers")
-
-from verity.circuits.codec import program_digest
-from verity_vllm.program.frontend.derive import DERIVE_VERSION, DeriveReport, Unsupported, derive_report
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.circuits.types import Array, RecordType, Value
 
 # ---------------------------------------------------------------------------------------------------------
 # dims, environment, output
@@ -616,7 +620,7 @@ def test_realhf_summary_written():
     """Prints the compressed outcome table from the JSONL rows of this run (for the report)."""
     if not os.path.exists(OUT_PATH):
         pytest.skip("no rows")
-    rows = [json.loads(l) for l in open(OUT_PATH)]
+    rows = [json.loads(line) for line in open(OUT_PATH)]
     rows = [r for r in rows if r.get("importer_head") == GIT_HEAD and r.get("probe", 0) == PROBE]
     print(f"\n{len(rows)} rows @ {GIT_HEAD} probe={PROBE} {PROBE_APPLIED}")
     for r in rows:

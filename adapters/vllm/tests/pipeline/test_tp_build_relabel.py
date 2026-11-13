@@ -12,6 +12,7 @@ import functools
 import gzip
 import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -19,7 +20,8 @@ from tests.pipeline import tp_toy as T
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.pipeline.row_tp import TpRow
-from verity_vllm.pipeline.tp import emit_ranks, relabel_build as RB
+from verity_vllm.pipeline.tp import emit_ranks
+from verity_vllm.pipeline.tp import relabel_build as RB
 from verity_vllm.program.frontend import relabel
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
@@ -52,6 +54,7 @@ def _fake_build(W: int, r: int, out: str, args: tuple, hook=None) -> None:
     pre = copy.deepcopy(res) if emit else None
     write(out, res, rep, rank=r)
     if emit:
+        assert session is not None
         emit_ranks.emit(emit, out, pre, session[0], shards=lambda q: T.embedding_shards(W, q), context=contextlib.nullcontext, post=None,
                         write=hook(out, write) if hook else write)
     res = B._finish(out, res, 0.0)
@@ -103,9 +106,9 @@ def test_every_relabeled_rank_writes_the_bytes_its_full_derive_writes(W, tmp_pat
     for r in others:
         rel = f"{tmp_path}/rel/rank{r}/build_step"
         assert_same_files(f"{tmp_path}/real/rank{r}/build_step", rel)
-        res = json.load(open(f"{rel}/result.json"))
+        res = json.loads(Path(f"{rel}/result.json").read_text())
         assert res["relabeled_from"] == {"rank": t, "dir": tmpl} and res["tp"]["rank"] == r
-        assert json.load(open(f"{rel}/construction_manifest.json"))["relabeled_from"] == res["relabeled_from"]
+        assert json.loads(Path(f"{rel}/construction_manifest.json").read_text())["relabeled_from"] == res["relabeled_from"]
         assert RB.compare_dirs(f"{tmp_path}/real/rank{r}/build_step", rel) is None
     doc = emit_ranks.read_report(tmpl)
     assert doc["template"] == {"dir": tmpl, "world": W, "rank": t, "ok": True}
@@ -130,8 +133,8 @@ def test_a_relabel_leaves_the_template_derivation_as_it_was(tmp_path):
     for r in (0, 2, 3, 1):
         rep = relabel.rank_report(sess[0], r, shards=relabel.shard_map(T.embedding_shards(W, t), T.embedding_shards(W, r)))
         assert (json.dumps(rep.to_json(), default=str), json.dumps(rep.descriptor, sort_keys=True)) == \
-               ((blob if r == t else (json.dumps(T.derive_rank(W, r)[0].to_json(), default=str),
-                                      json.dumps(T.derive_rank(W, r)[0].descriptor, sort_keys=True))))
+               (blob if r == t else (json.dumps(T.derive_rank(W, r)[0].to_json(), default=str),
+                                     json.dumps(T.derive_rank(W, r)[0].descriptor, sort_keys=True)))
     plain = T.derive_rank(W, t)[0]
     assert (json.dumps(plain.to_json(), default=str), json.dumps(plain.descriptor, sort_keys=True)) == blob, "a session changes no byte"
 
@@ -173,7 +176,8 @@ class _Row:
     step, request, launch_of, launch_args = TpRow.step, TpRow.request, TpRow.launch_of, TpRow.launch_args
 
     def __init__(self, tmp, W: int, hook=None) -> None:
-        self.W, self.B, self.bdir, self.hook, self.lctx, self.aot = W, 1, f"{tmp}/build", hook, {}, None
+        self.W, self.B, self.bdir, self.hook, self.aot = W, 1, f"{tmp}/build", hook, None
+        self.lctx: dict = {}
         self.marks: list = []
         self.logs: list[str] = []
         self.verdicts: list = []
@@ -210,7 +214,7 @@ REQ = "build_request_LP4_T2"
 
 def _relabeled(row: _Row) -> list[int]:
     return [r for r in range(row.W) if os.path.isfile(f"{row.rank(r)}/{REQ}/result.json")
-            and "relabeled_from" in json.load(open(f"{row.rank(r)}/{REQ}/result.json"))]
+            and "relabeled_from" in json.loads(Path(f"{row.rank(r)}/{REQ}/result.json").read_text())]
 
 
 @pytest.mark.parametrize("W", [2, 4])
@@ -218,13 +222,13 @@ def test_a_relabeled_build_places_every_request_after_the_step_guard_and_the_can
     row, t = _Row(tmp_path, W), RB.template_rank(W)
     RB.derive(row, row.todo(), 4)
     canary = W - 1
-    assert row.rounds[0] == [(r, f"rank{r}/build_step", False) for r in range(W)] + [(t, "relabel_check/rank%d/build_step" % t, True)]
+    assert row.rounds[0] == [(r, f"rank{r}/build_step", False) for r in range(W)] + [(t, f"relabel_check/rank{t}/build_step", True)]
     assert row.rounds[1:] == [[(t, f"rank{t}/{REQ}", True), (canary, f"rank{canary}/{REQ}", False)]]
     assert _relabeled(row) == [r for r in range(W) if r not in (t, canary)]
     for r in range(W):                       # every rank's request: what its full derive writes
         _fake_build(W, r, f"{tmp_path}/real/rank{r}", ("--wrapper", "request", "--LP", "4", "--T", "2"))
         assert_same_files(f"{tmp_path}/real/rank{r}", f"{row.rank(r)}/{REQ}")
-    g = json.load(open(f"{row.bdir}/relabel_check/guard.json"))
+    g = json.loads(Path(f"{row.bdir}/relabel_check/guard.json").read_text())
     assert all(s["ok"] for s in g["steps"].values()) and sorted(g["steps"]) == [str(r) for r in range(W)]
     assert g["canary"] == {"rank": canary, "request": REQ, "ok": True, "difference": None}
     assert [m for s, m in row.marks if s == "build.relabel_guard"] == [{"rank": r, "ok": "true", "file": "null", "path": "null"} for r in range(W)]
@@ -274,7 +278,7 @@ def test_the_step_guard_fails_closed_by_name_and_every_request_is_derived(name, 
     W = 4
     row, t = _Row(tmp_path, W, hook=hook), RB.template_rank(W)
     RB.derive(row, row.todo(), 4)
-    g = json.load(open(f"{row.bdir}/relabel_check/guard.json"))
+    g = json.loads(Path(f"{row.bdir}/relabel_check/guard.json").read_text())
     bad = {int(r): s for r, s in g["steps"].items() if not s["ok"]}
     assert sorted(bad) == [r for r in range(W) if r != t] and g["steps"][str(t)] == {"ok": True}
     for s in bad.values():
@@ -297,7 +301,7 @@ def test_a_request_only_dependence_fails_the_build_at_the_canary_and_places_noth
     assert e.value.rc == 10
     [(stage, status, detail)] = row.verdicts
     assert (stage, status) == ("build", "FAIL") and "relabel canary: rank 3" in detail and "tp_links.json /rank" in detail
-    g = json.load(open(f"{row.bdir}/relabel_check/guard.json"))
+    g = json.loads(Path(f"{row.bdir}/relabel_check/guard.json").read_text())
     assert all(s["ok"] for s in g["steps"].values())
     assert g["canary"]["ok"] is False and g["canary"]["difference"]["file"] == "tp_links.json"
     assert [r for r in range(W) if os.path.isdir(f"{row.rank(r)}/{REQ}")] == [t, 3], "only the template's and the canary's derives"
@@ -312,13 +316,39 @@ def test_a_relabel_that_raises_leaves_its_rank_to_a_full_derive(tmp_path):
             raise RuntimeError(f"emit of rank {rank} failed")
         return broken if REQ in out else write
 
-    row, t = _Row(tmp_path, W, hook=hook), RB.template_rank(W)
+    row = _Row(tmp_path, W, hook=hook)
     RB.derive(row, row.todo(), 4)
-    g = json.load(open(f"{row.bdir}/relabel_check/guard.json"))
+    g = json.loads(Path(f"{row.bdir}/relabel_check/guard.json").read_text())
     assert g["requests"][REQ]["emit_failed"] == {str(r): f"RuntimeError: emit of rank {r} failed" for r in (0, 2, 3)}
     assert g["canary"]["ok"] is None and g["canary"]["why"] == "not compared: its relabel failed"
     assert row.rounds[2] == [(0, f"rank0/{REQ}", False), (2, f"rank2/{REQ}", False)]
     assert _relabeled(row) == [] and all(os.path.isfile(f"{row.rank(r)}/{REQ}/result.json") for r in range(W))
+
+
+def test_the_step_guard_says_why_a_rank_was_not_compared(tmp_path):
+    """A rank is compared only when its own step and the template's relabel of it were both derived; otherwise the guard names
+    whichever failed, and for a relabel the reason the template's report gives (none: "no emit report")."""
+    bdir, chk, t = str(tmp_path), str(tmp_path / "relabel_check"), 1
+
+    def derived(d: str, ok: bool = True) -> None:
+        os.makedirs(d)
+        Path(d, "result.json").write_text(json.dumps({"ok": ok}))
+
+    for r in range(6):
+        derived(f"{bdir}/rank{r}/build_step", ok=r != 3)
+    derived(f"{chk}/rank0/build_step")
+    os.makedirs(f"{chk}/rank{t}")
+    report = [{"rank": 0, "ok": True}, {"rank": 2, "ok": False, "error": "RuntimeError: emit of rank 2 failed"}, {"rank": 5, "ok": False}]
+    Path(f"{chk}/rank{t}/build_step.relabel.json").write_text(json.dumps({"schema": emit_ranks.SCHEMA, "ranks": report}))
+    assert RB.step_guard(bdir, chk, 6, t) == {
+        0: {"ok": True},
+        1: {"ok": False, "why": "the template's step derive failed"},
+        2: {"ok": False, "why": "its relabel failed: RuntimeError: emit of rank 2 failed"},
+        3: {"ok": False, "why": "its step derive failed"},
+        4: {"ok": False, "why": "its relabel failed: no emit report"},
+        5: {"ok": False, "why": "its relabel failed: no emit report"}}
+    os.remove(f"{chk}/rank{t}/build_step.relabel.json")      # the template's process died before it wrote its report
+    assert RB.step_guard(bdir, chk, 6, t)[2] == {"ok": False, "why": "its relabel failed: no emit report"}
 
 
 def test_compare_dirs_names_the_first_difference(tmp_path, monkeypatch):
@@ -364,3 +394,25 @@ def test_compare_dirs_names_a_file_it_cannot_read_as_a_difference(tmp_path):
     (a / "result.json").write_text("{}")
     assert RB.compare_dirs(str(a), str(b))["files"] == ["descriptor.json.gz", "result.json"], "a summary that is not JSON too"
     assert RB._where({"file": "x", "only_in": "real"}) == "only in the real directory"
+
+
+def test_compare_dirs_reads_the_real_side_of_a_telemetry_file_before_it_opens_the_other(tmp_path, monkeypatch):
+    """A telemetry file is read one side after the other: the real directory's is opened and parsed before the relabel's is opened.  So
+    where neither side can be read, the difference says why the real side could not, and the relabel's file is not opened."""
+    a, b = tmp_path / "a", tmp_path / "b"
+    for d in (a, b):
+        d.mkdir()
+    (a / "result.json").write_text("{")
+    (b / "result.json").write_text("{}")
+    opened: list[str] = []
+
+    def opens(path, *args, **kw):
+        opened.append(Path(path).parent.name)
+        if Path(path).parent.name == "b":
+            raise PermissionError(13, "Permission denied", str(path))
+        return open(path, *args, **kw)
+
+    monkeypatch.setattr(RB, "open", opens, raising=False)
+    diff = RB.compare_dirs(str(a), str(b))
+    assert diff is not None and diff["file"] == "result.json" and diff["unreadable"].startswith("JSONDecodeError"), diff
+    assert opened == ["a"]

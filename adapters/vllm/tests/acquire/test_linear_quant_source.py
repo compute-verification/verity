@@ -6,13 +6,17 @@ from __future__ import annotations
 
 import json
 import types
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.acquire.sources import linear_quant_source as LQ  # noqa: E402
-from verity_vllm.acquire.sources import taps as TAPS  # noqa: E402
+from verity_vllm.acquire.sources import linear_quant_source as LQ
+from verity_vllm.acquire.sources import taps as TAPS
 
 K, GROUP = 256, 128
 OPS = types.SimpleNamespace()
@@ -54,7 +58,10 @@ class Committer:
     gather = True
 
     def __init__(self) -> None:
-        self.log, self.acquired, self.errors, self._cur = [], {}, [], None
+        self.log: list[tuple] = []
+        self.acquired: dict[str, torch.Tensor] = {}
+        self.errors: list[str] = []
+        self._cur: types.SimpleNamespace | None = None
         self._nc = types.SimpleNamespace(flush=lambda: self.log.append(("flush",)))
 
     def _acquire(self, name, t, job):

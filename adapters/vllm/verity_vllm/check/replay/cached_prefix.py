@@ -12,11 +12,15 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Mapping
 from typing import Any
 
-from verity_vllm.program.compact import expanded_file_args
 from verity.definitions.numerics.kernel_registry import Declined
+
+from verity_vllm.program.compact import expanded_file_args
 from verity_vllm.query.manifest import format as RM
+
+__all__ = ["layout_of"]
 
 PREFIX_FILE = "prefix_cache.json"
 _LAYER = re.compile(r"layers\.(\d+)")
@@ -28,7 +32,8 @@ def layout_of(program_dir: str | None) -> dict[str, Any] | None:
     p = os.path.join(program_dir, PREFIX_FILE) if program_dir else None
     if not p or not os.path.exists(p):
         return None
-    lay = json.load(open(p))
+    with open(p) as f:
+        lay = json.load(f)
     return {"input": int(lay["input"]), "C": int(lay["C"]), "row_leaves": int(lay["row_leaves"]), "layers": [str(x) for x in lay["layers"]]}
 
 
@@ -41,7 +46,7 @@ class CachedPrefix:
     """One warm request's `prefix` input as its producers' committed identities.  `producers`: the request label of each cached block,
     `indices` / `arrivals`: every request's ProgramIndex and arrival step, the producers' among them."""
 
-    def __init__(self, layout: dict[str, Any], producers: list[str], indices: dict[str, Any], arrivals: dict[str, int]) -> None:
+    def __init__(self, layout: dict[str, Any], producers: list[str], indices: Mapping[int | str, Any], arrivals: dict[str, int]) -> None:
         self.C, self.rl, self.layers = int(layout["C"]), int(layout["row_leaves"]), [layer_number(n) for n in layout["layers"]]
         if not producers or self.C % len(producers):
             raise ValueError(f"{len(producers)} producing requests for {self.C} cached rows: one per whole block")
