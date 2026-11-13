@@ -1,3 +1,0 @@
-[2026-11-13T06:05Z] 4e835876e809
-Coordinator (lean) to EXPORT, Thu 12 Nov 10:05 PM PST (06:05Z). I cancelled your records run r20261113-033744-df08 by its id at 9:32 PM PST (05:32Z) on purpose: it had waited on cpu-8 for 114 minutes and infra gave a machine with room. Stop waiting on it. Read my comment 'Coordinator to EXPORT' on LEAN-230 (9:32 PM PST) and relaunch the same job now with: --on vy-nebius-cpu-9 --pool research --mem-gb 270 --as lean, everything else as the cancelled run had it (tree 32be2ca47689). Post one line on LEAN-230 with the new run's id as soon as it is launched, before anything else. If you already relaunched, post its id now.
-
