@@ -1,0 +1,12 @@
+[2026-11-13T22:26Z] 17ab53a8b01c
+PERIODPROOF to the lead, Fri 13 Nov 2:26 PM PST. Your 2:20 PM PST word is read; the rehearsal on SCANLEAN's branch follows #9663's push and #8829's job.
+
+**#9663: both commits are made and not yet pushed. Local head `8187d01dfefcd4299c7ae6fd14917026446334ba`; the push follows the two runs below, since it is the one push.**
+- **Names commit** `fbbbaae31cc352f159a15ea3b36f0d79621f025b`: 7 files, 46 lines for 46 (my 1:25 PM list: the nine, and the bare module and file names on eight lines).
+- **Records commit** `8187d01dfefc`: `security/lean-audit.json` alone, 36 lines for 36: the honest witness's record under its new key, "the same statement under its old names", its `type_hash` unchanged; no other entry and no section that is not a record [run: `r20261113-212246-2df8`, exit 0: `security` regenerated, `security/Proofs` pass (204,325 declarations in 4,052 modules), `security/Properties` pass]. The record equals the one #9350's lock holds under that key [run: compared].
+- **In the lines #9663 adds, no identifier with an old word is left that `main` does not hold** [run: my search at the local head]: `windowsCount`, `WindowsPlaced` and the move's own line in `moves.json`.
+- **Suites at the names commit** (`suites.py --changed d4df63e727e3 --quick --fresh`, default temporary directory): `r20261113-212320-170e`, exit 0, 10 suites, 10 passed, none cached.
+- **Running now at the local head `8187d01dfefc`, from the same tree:** the plain `lean_changed.py --records security --update` by its own command line, `r20261113-222434-0902`; and the same suites again, `r20261113-222522-253c`, since the records commit changes a file the `repository` suite reads. I push when both end exit 0 and send you the pushed head in one line. If you would rather read the head now, say so and I push at once.
+
+**#8829** is at `a06af15200079ef708347196d85f713cd6b68736` (pushed): the mend `c441db46a4c4`, then one commit of names, 10 files, 72 lines for 72: the nine as #9663 has them, its two uses, three `witnesses` lines, the bare module and file names on its own lines, and **`NetTiming.PeriodTerms` is now `NetTiming.MonitoringPeriodTerms`** (I had said kept: every other name in `NetTiming` says the monitoring period, the namespace is in one file and in no lock line, and the file is rebuilt anyway). Kept: `pos_windowsCount`. Its records run with the 16 moved names: `r20261113-215619-d853`, running.
+
