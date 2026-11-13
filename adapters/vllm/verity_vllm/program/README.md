@@ -12,4 +12,4 @@ a registered Definition. The package's docstring and each module's say what it h
   `protocols` packages and its tools, `circuit-check`, and the benchmarks that build or read a Program.
 - **Loads:** `verity.circuits` and `verity.definitions`; torch, and vLLM inside functions; the integration's
   `engine`, `config` and `correspondence`; and, inside functions, its `check`, `observe` and `settings` and
-  `verity.protocols.pouw.prover`.
+  `verity.protocols.accounting.pouw.prover`.

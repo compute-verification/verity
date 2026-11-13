@@ -25,7 +25,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
-from verity.protocols.spot.verifier.one_stage import registered as G1
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G1
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate

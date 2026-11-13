@@ -25,11 +25,11 @@ from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import weights as Wt
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
 from verity.commitments.crypto import lms
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 

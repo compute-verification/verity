@@ -19,11 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.verifier import warden_rows as WR
-from verity.protocols.certifier.verifier.active import DATA, VirtualClock
-from verity.protocols.certifier.verifier.grid import Reason
-from verity.protocols.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-from verity.protocols.certifier.verifier.warden import (END, REFUSED, Shim, Warden, WardenParams, cells, read_cell,
+from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.active import DATA, VirtualClock
+from verity.protocols.accounting.certifier.verifier.grid import Reason
+from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
+from verity.protocols.accounting.certifier.verifier.warden import (END, REFUSED, Shim, Warden, WardenParams, cells, read_cell,
                                                     reason_frame)
 
 HERE = Path(__file__).resolve().parents[1]
@@ -393,7 +393,7 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
     import auditor as A
     import demo_stub as D
     import scan_zk as sz
-    from verity.protocols.certifier.verifier.release import release_of
+    from verity.protocols.accounting.certifier.verifier.release import release_of
     prompts = D.prompts(4)
     req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
            "prompts": True, "temperature": 0.0, "top_p": 1.0}

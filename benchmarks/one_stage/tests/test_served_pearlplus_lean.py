@@ -32,7 +32,7 @@ pytest.importorskip("torch")
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-PACKAGE = ROOT / "verity" / "protocols" / "pouw" / "verifier" / "lean" / "pearlplus"
+PACKAGE = ROOT / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "lean" / "pearlplus"
 H100 = "pearl-c-h100-v1-h3"
 SOURCE = b"verifier" * 4
 pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"),
@@ -56,8 +56,8 @@ SP = T.load("pearl_c_vllm_served_passes", T.KERNEL.parent / "pearl_c_vllm" / "se
 
 def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_compose_reads_it(tmp_path, monkeypatch):
     import verity_difftest as D
-    from verity.protocols.pouw.verifier import verifier as PV
-    from verity.protocols.spot.verifier.one_stage import registration as REG
+    from verity.protocols.accounting.pouw.verifier import verifier as PV
+    from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
     monkeypatch.setattr(PV, "coins", lambda n: SOURCE[:n])
     for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):

@@ -8,10 +8,10 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.device import remote
+from verity.protocols.proofs.spot.device.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
                                                              live_reason)
 
 from verity_vllm.protocols.pouw.h1 import requests as RQ

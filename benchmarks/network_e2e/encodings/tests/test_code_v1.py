@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.prover.window_charge import Advice as W
+from verity.protocols.accounting.certifier.prover.window_charge import Advice as W
 
 HERE = Path(__file__).resolve().parent
 

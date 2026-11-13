@@ -19,16 +19,16 @@ from pathlib import Path
 
 import reference as R
 from verity_difftest import protocol as P
-from verity.protocols.pous.device import memory_challenger as mc
-from verity.protocols.pous.verifier import period as pous
-from verity.protocols.pous.verifier import run as RUN
-from verity.protocols.pous.verifier import setup
-from verity.protocols.pous.verifier.schemes import p2 as P2
-from verity.protocols.poub.verifier import p2, p2_case, p2_lean, p2_party
+from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.verifier import period as pous
+from verity.protocols.accounting.pous.verifier import run as RUN
+from verity.protocols.accounting.pous.verifier import setup
+from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
+from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_lean, p2_party
 from verity.commitments.identity import canonical_json_bytes
 
 ROOT = Path(__file__).resolve().parents[6]
-BANDWIDTH = ROOT / "verity/protocols/poub/verifier"
+BANDWIDTH = ROOT / "verity/protocols/accounting/poub/verifier"
 POUS_K = 8
 """Rounds of PoUS's audit: the composition reads only the component's answer, so its case is kept small (the hook's
 own point is `pous_check`'s difftest's)."""
@@ -101,7 +101,7 @@ def _served(case: dict) -> dict:
 def build(tmp: Path) -> None:
     """Fill `reference.POUS` and `reference.BANDWIDTH` with their cases, the memory challenger's session logs in
     `tmp`."""
-    M = R.module("mc_cases", ROOT / "verity/protocols/pous/device/lean/tests/mc_cases.py")
+    M = R.module("mc_cases", ROOT / "verity/protocols/accounting/pous/device/lean/tests/mc_cases.py")
     T = R.module("p2_party_sessions", BANDWIDTH / "lean/tests/test_p2_party.py")
     signer = M.deployed_signer()
     store = _committed(T)

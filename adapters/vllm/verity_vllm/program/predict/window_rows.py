@@ -52,8 +52,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.refs import runs

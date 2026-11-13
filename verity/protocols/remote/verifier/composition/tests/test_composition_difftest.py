@@ -50,7 +50,7 @@ from verity_difftest import canonical
 from verity_difftest import settings as opt
 
 from verity.configuration.deploy import config as K
-from verity.protocols.spot.verifier import parties as SPP
+from verity.protocols.proofs.spot.verifier import parties as SPP
 from verity.circuits.types import Array, Value
 from verity.settings import REGISTRY as VERITY_SETTINGS
 

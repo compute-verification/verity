@@ -31,12 +31,12 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.naming import write_build
 from verity_vllm.program.predict.steps import compile_steps
 
-from verity.protocols.certifier.prover import ingress_scan as IS
-from verity.protocols.certifier.verifier import warden as W
-from verity.protocols.certifier.verifier.active import id_request
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.spot.verifier.one_stage import registered as CR
-from verity.protocols.spot.verifier.one_stage import registration as REG
+from verity.protocols.accounting.certifier.prover import ingress_scan as IS
+from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
+from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch

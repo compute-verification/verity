@@ -20,8 +20,8 @@ torch = pytest.importorskip("torch")
 # ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
 from torch import nn
 
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier.coins import Challenger
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity_vllm.acquire import h1_commit as HC
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.protocols import pouw

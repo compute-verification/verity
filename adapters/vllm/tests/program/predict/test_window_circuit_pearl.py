@@ -30,9 +30,9 @@ from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
-from verity.protocols.pouw.verifier.audit import hm96_salt
-from verity.protocols.pouw.prover.schemes import SCHEMES
-from verity.protocols.spot.verifier.one_stage import registered as CR
+from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
+from verity.protocols.accounting.pouw.prover.schemes import SCHEMES
+from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array, Value

@@ -26,7 +26,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-import verity.protocols.pouw.prover.circuit.words  # noqa: F401  (PouwNoiseByte)
+import verity.protocols.accounting.pouw.prover.circuit.words  # noqa: F401  (PouwNoiseByte)
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat, tuple_of

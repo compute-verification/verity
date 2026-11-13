@@ -41,7 +41,7 @@ from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, C
 from verity_vllm.protocols.remote_bandwidth.registry import KindReceipt, NodeMemory, RemoteBandwidthReceipt
 
 if TYPE_CHECKING:
-    from verity.protocols.poub.verifier.audit import Tiles
+    from verity.protocols.accounting.poub.verifier.audit import Tiles
 
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 #: What a `RUNNERS` runner calls its kernel block sizes, one per KV cache group, set in `initialize_kv_cache`: Model Runner

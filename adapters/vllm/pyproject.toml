@@ -121,12 +121,12 @@ untraced = [
 inputs_only = true
 inputs = ["verity", "verity/README.md", "verity/configuration/config/verity_config", "fixtures/artifacts.json",
           "demos/vllm/workloads/SHA256SUMS", ".gitignore",
-          "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/protocols/pouw/verifier/lean/check/lakefile.toml",
-          "verity/protocols/poub/verifier/lean/lakefile.toml",
+          "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/accounting/pouw/verifier/lean/check/lakefile.toml",
+          "verity/protocols/accounting/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
-          "benchmarks/remote_session/prover.py", "verity/protocols/poub/verifier/session/verifier.py", "verity/protocols/poub/verifier/session/wire.py",
-          "verity/protocols/poub/verifier/session/checks.py", "verity/protocols/poub/verifier/session/lean_verifier.py", "verity/protocols/poub/verifier/session/challengers.py",
+          "benchmarks/remote_session/prover.py", "verity/protocols/accounting/poub/verifier/session/verifier.py", "verity/protocols/accounting/poub/verifier/session/wire.py",
+          "verity/protocols/accounting/poub/verifier/session/checks.py", "verity/protocols/accounting/poub/verifier/session/lean_verifier.py", "verity/protocols/accounting/poub/verifier/session/challengers.py",
           "benchmarks/remote_session/store_layout.py", "verity/composite/device/live_challenger/auditor.py", "verity/composite/device/live_challenger/host.json",
           "verity/composite/device/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
@@ -223,7 +223,7 @@ paths = ["adapters/vllm/verity_vllm/commit/committer/hidden_gpu_src"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/commit/test_pinned_pool_exact.py", "tests/observe/test_pouw_fold.py"]
-paths = ["adapters/vllm/verity_vllm", "verity/protocols/poub/verifier", "verity/circuits"]
+paths = ["adapters/vllm/verity_vllm", "verity/protocols/accounting/poub/verifier", "verity/circuits"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/engine/collectives/test_tp_collective.py", "tests/properties/test_quarantine_lint.py"]
@@ -290,14 +290,14 @@ tests = [
     "tests/pipeline/test_serve_remote.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
 ]
-paths = ["benchmarks/remote_session", "verity/protocols/poub/verifier"]
+paths = ["benchmarks/remote_session", "verity/protocols/accounting/poub/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_serve_row.py"]
 paths = [
     "adapters/vllm/verity_vllm/engine",
     "adapters/vllm/verity_vllm/pipeline",
-    "verity/protocols/certifier",
+    "verity/protocols/accounting/certifier",
     "verity/commitments/crypto",
 ]
 
@@ -311,7 +311,7 @@ paths = ["verity/definitions/ops"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/predict/test_window_rows.py"]
-paths = ["verity/protocols/certifier"]
+paths = ["verity/protocols/accounting/certifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/program/test_compiled_relations_warm_vml.py"]

@@ -18,7 +18,7 @@ from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.steps import Registered, compile_steps, plan_steps
 
 from tests.program.predict.test_steps import GREEDY, _prompt, _registered
-from verity.protocols.certifier.verifier import advice as I1
+from verity.protocols.accounting.certifier.verifier import advice as I1
 
 EOS = 2
 #: two sequences and an 8-token budget: the second request's prefill is chunked beside the first's, the third waits for a slot

@@ -27,7 +27,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
     keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
     own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
-    `verity/protocols/inference_only/nci/` and `verity/protocols/inference_only/rho/`.
+    `verity/protocols/policy/inference_only/nci/` and `verity/protocols/policy/inference_only/rho/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -277,8 +277,8 @@ Landing.
   area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
-  executable verifier and the ZK server (`verity/protocols/flock/verifier/`, with the release side in
-  `verity/protocols/recursion/verifier/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  executable verifier and the ZK server (`verity/protocols/proofs/flock/verifier/`, with the release side in
+  `verity/protocols/proofs/recursion/verifier/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions

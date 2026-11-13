@@ -1,4 +1,4 @@
-"""H1's coins from the proof system's challenger on its auditor host (`verity.protocols.spot.device.remote`), and the
+"""H1's coins from the proof system's challenger on its auditor host (`verity.protocols.proofs.spot.device.remote`), and the
 verifier's check that a served window's coins are that challenger's.
 
 * **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor host's
@@ -58,7 +58,7 @@ verifier's check that a served window's coins are that challenger's.
   close, one whose close isn't complete (an empty one, or a window never opened, never ended, unclosed or short of its
   coins), an accepted window that isn't one of its windows, and a window of it that has no accepted window (abandoned
   after its coins).
-* **Credit** is core's rules of record (`verity.protocols.pouw.verifier.credit`), called through its one composed
+* **Credit** is core's rules of record (`verity.protocols.accounting.pouw.verifier.credit`), called through its one composed
   entry, never copied or run step by step. A period's open commits its circuit, the SHA-512 of the declared window
   Program's descriptor (`pouw_h1_served.descriptor`), its sample size K (``draw_k``, `draw_k`: the proof system's selection
   at `DRAW_EPS` for the credited share `EXPECTED_CREDIT`), each K's circuit file (``circuit_files``) and its
@@ -84,15 +84,15 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import salt_of
-from verity.protocols.pouw.verifier.protocol import DomainError
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import salt_of
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.device import remote
+from verity.protocols.proofs.spot.device.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
                                                              extends, ledger_head, live_reason, pinned_session,
                                                              session_named)
 
@@ -581,7 +581,7 @@ def manifest_reason(record: Mapping[str, Any]) -> str | None:
 
 def program_salt_of(c: Mapping[str, Any]) -> bytes:
     """The window's Program salt, from its H1 commitment `c`'s salt coin over its weights' root."""
-    from verity.protocols.pouw.verifier.audit import salt_of
+    from verity.protocols.accounting.pouw.verifier.audit import salt_of
 
     from verity_vllm.protocols.pouw import h1 as PH
     return PH.program_salt(salt_of(LiveCommitment.from_json(c.get("coins")), LiveOpening.from_json(c.get("salt_opening")).coin,
