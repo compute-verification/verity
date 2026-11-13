@@ -110790,3 +110790,84 @@ Mailbox read by git at `23c3e423be` (00:30Z; last heading "Fri 13 Nov 00:23Z: wh
 
 - I wrote "at `7d…`": that was not a head. I read the docstring at PR 3's head before my commit, `2df52fa474` [read: `git log` of `cursor/proofs-prf600-period-statements-e2a7`], where `Numbered`'s docstring had no sentence about the device's definition.
 - Under "Not established" I wrote that PR 3's statements elaborated "only in part". The fact: all five statements built at `d3825441e7cf` with the three axioms only [run `r20261112-222731-6f65`, my 22:43Z entry]. Nothing of PR 3 has been elaborated at any later head (`6eed072912`'s `unsignedText`, `2df52fa474`'s `shared_rows` conjunct of `AuditedAt` and the history that may hold earlier audits, `f2889fd3ce`'s docstring). Run `1ca7` builds both files at `f2889fd3ce` merged into PR 4.
+
+## GATHER, Fri 13 Nov 00:45Z: `second` takes the gate exactly as `first` does, but no two-stage run has gone through it; the two commands would then share the host's standing key and ledger, not ones made for the run; serving's catch is right on both points; the first try at Friday's shape ended exit 0 in 51 minutes at 58 GiB
+
+**The second try's branch: `cursor/proofs-gather-second-try-5a28`, head `957d763fb52498aa1e2f1b4410b50ad32f0b80a7`, now rehearsed at that head** with a prover and the Lean verifier at V = 2,560: history tables beside the committed logits (`3ba5`, exit 0, 22 tests passed) and a stop rule with every span in the replay sample, so the request that stopped early went through the second stage (`b032`, first part, exit 0). Its part at V = 154,880 is running (`b032`, ETA 00:55Z). **The first try's tree `496aa183544b` is rehearsed at its head too** (`ab11`, exit 0: plain, with tables, under a stop rule with every span sampled, and 59 tests). **At Friday's shape** (V = 154,880, 8 requests, stop rule, 64 tokens, 2 of 8 spans, 1 unit a cell) the first try's driver ended exit 0 at `bdf9fd1086` (`b876`): `first` 4 minutes, `second` 51 minutes, peak 57.9 GiB, 20 of 20 sessions accepted by Lean. **On the challenger:** `second` takes `--challenger gate:USER@HOST` with the same three options as `first`; I find no run of `two_stage.py` through the gate, by me or in any entry; through it both commands sign under the host's one standing key into its one ledger, so neither is made for the run. The table of rate and k comes by 02:30Z.
+
+### 1. The challenger for Friday
+
+[read: the first try's tree at `496aa183544b`; the same code on the second try's, lines given where they differ]
+
+**Does `second` take the gate as `first` does? Yes.**
+
+- Both parsers have `--challenger`, `--peer`, `--challenger-key`, `--ssh-key` (`two_stage.py:1109–1113` for `first`, `:1136–1140` for `second`; on the second try's tree `:1193–1197` and `:1222–1226`), and both hand them to `a5_coins.start` the same way (`:911–913` and `:1042–1043`; `:994–996` and `:1125–1126`).
+- `start` makes a gate client for `gate:USER@HOST` when `--peer` and `--challenger-key` are given (`a5_coins.py:767–768`), and exits naming the three forms otherwise.
+- The rehearsal script takes the gate too: its header (`two_stage_small.sh:21–23`) says to pass the four options as both `SMALL_FIRST` and `SMALL_SECOND`, with a serve nonce no run has used.
+
+**Has any rehearsal of `two_stage.py` run through the gate? None that I can find.**
+
+- [run] Every rehearsal of mine ran `--challenger local`.
+- [run: a search of your inbox file for `two_stage.py` beside `gate:`] No entry reports one. The path that entries name as run through the gate is `a5.py --challenger gate:`, the one-stage audit.
+- Not read: whether serving's Wednesday run went through it. Their `first` line carries `--peer`, `--challenger-key` and `--ssh-key`, which `local` ignores, so their runner was written with the gate in mind.
+
+**Do the two commands then share one key and one ledger on the host? Yes, the host's standing ones.**
+
+- Each command opens one session of its own: `first` on the window's run root, with every rank of the window on it (each class's replay sample and each stop class's stop sample, a coin family each); `second` on the interior's run root (`two_stage.py:909–913`, `:1041–1043`).
+- The gate client reads the key from the deployment's key record, not from the session (`a5_coins.py:646–649`), and at the end fetches the session's directory, the host's whole ledger and its pins log (`:688–703`).
+- [read: the fields of `benchmarks/pouw/tests/fixtures/challenger-key.json`, the record serving's `first` line names] That record is `vy-challenger-1`'s, at W = 1, H = 20, which are the deployed LMS parameters (`lms.py:112`), valid from 20 Oct 2026, with one earlier key retired. Whether the host signs under that key today is infra's to say (INF-769).
+- So through the gate: one key at the deployed parameters and one ledger for both sessions, on the auditor's host. But the key is a month old and the ledger holds every lane's sessions since: **not made for the run**.
+
+**What a key and ledger made for the run, at the deployed parameters, would take.**
+
+| Way | What changes | What it gives | What it does not |
+|---|---|---|---|
+| **On the auditor's host**: infra starts the challenger service on a fresh root before the run | Nothing in the tree, as far as I read. The service makes a key when its key directory has none, at the deployed parameters by default (`serve.py:79–105`, `auditor.py:854–859`), about 16 core-minutes (`lms.py:39–40`). Infra publishes that key's record | One key and one ledger, made for the audit, shared by both sessions, on a host the prover does not control | Not rehearsed. A root is opened once, ever (`a5_coins.py:661–663`), so there is no dry run on Friday's own serve |
+| **On the proving machine**: `--challenger local` with a key at the deployed parameters | Four lines on the second try's branch: `a5_coins.start` already takes `deployed` (`:763`), as `records_audit.py --deployed-key` passes it (`records_audit.py:870`, `:993`); `two_stage.py` has no such option | Deployed parameters, key and ledger made for each command | Still a thread of the driver's own process, so not an auditor's device; and two keys and two ledgers an audit, one a command |
+
+**What I need, to rehearse the first way before Friday 20:00Z.**
+
+- **From infra (INF-769):**
+  1. Whether `vy-challenger-1` signs today under the key of the tree's record.
+  2. Which commit the host is pinned to. The gate client refuses unless the pins log's last line is on `main`'s first-parent line in the run's `--main` file (`a5_coins.py:664–670`). [run: `git diff --stat` of the host's code between `main` at `5f0c008aa040` and each tree] Neither tree changes the host's code, so a host pinned on `main` serves what our client asks.
+  3. Whether a fresh key and ledger can be made for the second try, and its key record by when.
+  4. The machine that runs the two commands listed in the host's peers with a coin-port range, and the lane's gate key on it. The session's challenger listens on that peer's loopback.
+  5. That a session may last 240 minutes: the client reserves that (`a5_coins.py:85`), and `second` must end inside it.
+- **From serving:** that their runner passes `--peer`, `--challenger-key` and `--ssh-key` to `second` too (their `second` line has none of the three), and runs both commands on the peer machine.
+- **Mine, once infra gives the gate's address, the peer's name and the key's path:** one rehearsal of the stand-in serve at V = 2,560 through the gate, both commands. About 15 minutes on a CPU node that is a peer. I launch it only on your word.
+
+### 2. Serving's catch on `second`'s line: right on both points
+
+[read: `496aa183544b`; the lines they cite are the same there]
+
+- **`--stop` is needed.** `second` reopens the class under the rule it is handed (`two_stage.py:1030–1031`), and `reopen` refuses a commitment under a rule when handed none (`boundary_rows.py:604–607`). The command then ends exit 1 with that refusal in its summary (`:1033–1034`). [run] All five of my rehearsals under a rule pass the rule to both commands (`two_stage_small.sh:62`, `:65`, `:71`) and ended exit 0: `5326`, `b876`, `ab11`, `92eb`, `b032`.
+- **`--unlinked` is wrong for the 20 units.** `design` reads the flag only when the replay block gives no wires (`two_stage.py:527–529`); the 20-unit select gives 19, so nothing computed changes. But the summary then says `"unlinked": true` (`:1015`), and my `expect --unlinked` would hold the run to the code `second-wires` (`two_stage_small.py:177`), which a run that holds does not give. My rehearsals of the 20 units never pass it (`two_stage_small.sh:56` sets it only under `SMALL_INLINE=1`).
+- **One thing to add for serving:** their first-try tree `1536ba03d3` is an ancestor of mine. [run: `git diff --stat 1536ba03d3 496aa183544b`] Mine adds 5 files' changes, of which one is in the audit's path: `two_stage.py`, 9 lines, the summary's `record.own_reads` field. So a run at `1536ba03d3` computes the same and writes a summary without that field. Their rule has three ids; my stand-in's has one.
+
+### 3. Runs that ended
+
+[run: `research fetch` of each, 00:17Z to 00:38Z; summaries read]
+
+| Run | Tree | What | Result |
+|---|---|---|---|
+| `b876` | first try, `bdf9fd1086` | **Friday's shape**: V = 154,880, 8 spans, stop rule, 64 tokens, `rate:2/8`, 1 unit a cell; cpu-12 | exit 0. Replay sample 2 of 8, stop sample 2 of 8, order held. 40 units of 2,560 proved in 20 sessions; Lean accepted 20 of 20; 18 of 18 negatives refused; the second stage's check clean; outcome refused by `two-stage-form` alone. `first` 4.2 min, `second` 50.9 min, peak 57.9 GiB |
+| `8cac` | first try, `bdf9fd1086` | V = 154,880, 6 spans of 4 tokens, 3 units a cell | exit 0. 120 units in 20 sessions, 20 of 20; `second` 35.1 min, peak 57.8 GiB |
+| `ab11` | first try, `496aa183544b` | V = 2,560: plain; with tables; stop rule with every span sampled; 3 test files | exit 0 on all four. 59 tests passed. Peak 20.6 GiB |
+| `3ba5` | second try, `957d763fb524` | V = 2,560: tables beside committed logits; 2 test files | exit 0. The second stage's check clean, the interior registers nothing. 22 tests passed. Peak 15.1 GiB |
+| `b032`, part 1 | second try, `957d763fb524` | V = 2,560: committed logits, stop rule, every span sampled | exit 0. 480 units in the interior, 20 of 20, the second stage's check clean |
+
+- **Where `b876`'s 51 minutes went** [run: its summary's times; derived from its memory samples: which parts ran one process at a time]: the provers' own time was 27 seconds summed over the 20 sessions (1.2 to 2.6 s each). Lean's verification of the 20 sessions took 10.4 minutes summed, one after another. Composing the 20 circuits took 5.7 minutes summed. The summary times nothing else: the other 31 minutes or so are the driver's own work, one process at a time. So cards would shorten almost nothing at this sample: the time is not in proving.
+- **Memory** [run: process sizes at the peak]: the 58 GiB is about 26 processes at once for three minutes, some 21 of 1.9 GiB and four or five of 3.5 to 3.9 GiB. The peak was 57.4, 57.8 and 57.9 GiB in three runs at 2, 6 and 2 units a session and 4, 8 and 128 units a template in the interior, so at these sizes it does not grow with the sample.
+- **A session's size** [read: `a7.py:97`, `:550`]: m is the circuit's log plus the log of the template's population in the interior, not of the units proved. `b876` ran at m = 31 and 32. The prover's shape allows up to 35, which is 2,048 units a template for a chunk and 1,024 for the combine; every span of Friday sampled is 512.
+
+### 4. Machines
+
+- [run] `9585` (vy-nebius-2) waited 51 minutes and never started; cancelled at 00:17Z when its twin `b032` started on cpu-8.
+- [run] One new run, for the table: three larger samples at V = 154,880 on the first try's tree (30 units a session; Friday's shape with every span sampled and 4 units a cell; 90 units a session). Sent to vy-nebius-2 at 00:25Z as `c90f`: 29 ahead, 15 ahead after 15 minutes, cancelled at 00:40Z and sent to cpu-11 as `f58a`, as your 00:23Z message says; 1 ahead at 00:41Z. It asks 128 GB, more than any run of mine has peaked at, because the provers' memory at 30 and 90 units a session is not known. I read its first part's peak before its third part starts and cancel if it climbs.
+
+### 5. Not established
+
+- `two_stage.py` through the gate: no run.
+- The second try at V = 154,880: running (`b032`).
+- Proving on cards at V = 154,880: no run of mine; `b876` says the prover's share is under a minute of 51.
+- What an early-stopped span commits in the real serve: my stand-in gives every span its full 64 cells' units.
