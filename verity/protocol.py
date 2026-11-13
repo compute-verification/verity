@@ -47,11 +47,12 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from verity.channel import NAME, MessageTypes, Refused, Schema
 
-from .party import Party
+if TYPE_CHECKING:
+    from .party import Party
 
 PRINCIPALS = ("developer", "auditor", "anyone")
 OWNERS = ("developer", "auditor")
