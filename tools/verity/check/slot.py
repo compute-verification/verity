@@ -1167,12 +1167,12 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
               f"with a train slot (only=trains, mem={min_mem} or more: `check.py --slots` lists them); exit {NOT_STARTED}",
               file=sys.stderr, flush=True)
         return NOT_STARTED
-    me = asker(by, pair)
-    run_dir = research_run_dir()
-    if after and (rc := hold_off(pair, after, me, run_dir, now, sleep)) is not None:
+    if after and (rc := hold_off(pair, after, asker(by, pair), research_run_dir(), now, sleep)) is not None:
         return rc
+    me = asker(by, pair)
     ticket, tfd = join(SLOTS.parent, priority=priority, who=me, rank=rank)
     told, joined, peeked = None, now(), None
+    run_dir = research_run_dir()
     since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {}),
              **({"rank": rank} if rank is not None else {})}
     record_slot(run_dir, {"state": "waiting", **since})
