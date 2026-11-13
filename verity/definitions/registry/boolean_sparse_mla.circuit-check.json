@@ -30,8 +30,14 @@
   "SparseMlaHeadBlock_v3{DR=64,DV=512,NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
    "sha512": "0bf69ff4363950f7ccb8b04562a667948570b08c4e145cdcf573eb46332eda3f9b17cf1340140fca358230be6d1fc61cc6b19b0439446dcf66cd21c23ae5b6cb"
   },
+  "SparseMlaHeadEnd_v2{DV=64,INV=Fa3InvSum_v2}": {
+   "sha512": "c05cafe97cca6ae42e1dc9aa8a329d505c70dc934423a3c2c8ab9dda00f64c6cf6acb9f428eb47caca0a9552e2b3cd4b2bfedeaf80bb1c85f6370c8101ff8ab0"
+  },
   "SparseMlaHeadScores_v2{DR=16,DV=16,NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
    "sha512": "b839bcb2cc6ca38d01eb07c0ca6d6ee210fc3ee02a6f1cce577a0e687d7c74f76a94cd13d37f944113ffa5f0732e23504b55d584caf49056130cb14a1bbd8cda"
+  },
+  "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=16,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
+   "sha512": "fdd2515e33abbc025e29ba8301fa1e894c24195b73f90ec4cef0ced3a01d191d0bf7a46a436c498cbc95e784551dc96450575fdffabf80a1ecd07fdc7ed859d5"
   },
   "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}": {
    "sha512": "21b25aa462177714aea96751a1165692c9b98cdd1d2b87f3c91534025db87310e405517874b459ca020d5c9a18e59f59c6f92604ec977a6fb01a7cde0d65d0e2"
@@ -41,6 +47,9 @@
   },
   "SparseMlaHeadValues_v2{NVIS=16,FIRST=False,BN=16,DOT=HopperBF16WgmmaDot16_v2,G=8}": {
    "sha512": "12cb05bbfdb4b47d3ca5d9fd5e5172576468dd0f3fd1ec61ff8aff9db716a96dc257798d9ec873017cc35573289cb4dbd334218afe8af9a143151d2e4d697950"
+  },
+  "SparseMlaHeadValues_v2{NVIS=16,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=64}": {
+   "sha512": "778f85f19b4bc15e9f1bc2fbb2c3118c19520fadbe2867787fadbd1bb198840d1155880f76aacad3d050bab3e37fa4a8c740621499057d34417ae2343688c21b"
   },
   "SparseMlaHeadValues_v2{NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=128}": {
    "sha512": "b75130057de26e6f265a96a5cdc8407266f7d73fb99ce34c644f66571664d039f969bf66840c1a3deaf26130d6dfb737ca9254fb37c31562ec9bbc0714e5914c"
@@ -53,6 +62,9 @@
   },
   "SparseMlaHeadValues_v2{NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=128}": {
    "sha512": "56d988130a6a6e11e2434943e822208d5980d675438471d87aa04a7497b173a3e11fcac6d26cd0287cd597a105d343868827d8d43ffa4ed711aaabf2e4f438ce"
+  },
+  "SparseMlaHeadValues_v2{NVIS=64,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,G=64}": {
+   "sha512": "89b338a490d93b55d2cecb0c8e68ddd55b160bf2fa4d4bce065b145d73c41dab578e0b86efcd890ba447440dc16c294cf5d1d022403c0d12ef2749cae6d96c40"
   }
  }
 }
