@@ -1,1 +1,1 @@
-2026-11-13T06:30Z GEMMCALL: PR #9683 open, unmarked, head c00bf07b22584705513ad11879f5b3d0a014ab95; CIR-258 comments posted; done
+2026-11-13T17:16Z GEMMCALL: carried head d015be086ecc (e4aada53 + merge of origin/main c68135b49d63); r20261113-165939-b78b: pins clean, circuit-check 10/0/7; suites running
