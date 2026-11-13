@@ -19,7 +19,9 @@ git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothin
 In a checkout of those repositories a commit carries the machine's configured identity, so for every agent it refuses there a
 git command that names an author or committer of its own (`identity_reason`): `-c user.name=...` and the like, `commit
 --author`, `GIT_AUTHOR_NAME=... git` and the like, and a `git config` that writes the checkout's own `user.name` or
-`user.email`. A scratch repository takes any identity, and a command the guard can't place passes.
+`user.email`; and, wherever it is typed, a `git config --global` that writes the machine's. A scratch repository takes any
+identity. This rule alone follows a plain `cd`, so `cd CHECKOUT && git ...` is judged in CHECKOUT and `cd SCRATCH && git ...`
+in SCRATCH (`after_cd`); a command it still can't place passes.
 It refuses, too, a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only
 after the hook has read it. A push the agent doesn't type (a script's, a tool's) meets the same push rule, `PROTECTED_REASON`
 and `owner_reason`, in git's pre-push hook (pre_push.py), branch by branch.
@@ -30,8 +32,8 @@ expression, names others in their place): another repository's `main` is its own
 reads them (`read_push`: options anywhere, by any prefix, with their values), and one whose repository the guard can't tell
 is judged as one to them (`judged`): run outside a repository, a first word that is neither a remote, a URL nor a path, an
 option git doesn't know, or git configuration another command in the line may set.
-A git command runs, for every rule, in the event's cwd (else the workspace root) joined with its own `git -C DIR`, and
-nowhere else (`indexed_invocations`). A `cd`, `pushd` or `popd` anywhere in the command, run or not, makes its directory
+A git command runs, for every rule but that one, in the event's cwd (else the workspace root) joined with its own `git -C DIR`,
+and nowhere else (`indexed_invocations`). A `cd`, `pushd` or `popd` anywhere in the command, run or not, makes its directory
 unknown (`moves`) unless its own `-C` is absolute, the directory git runs in wherever the shell is; a `source` or `.`, which
 can change what git reads too, or a repository named by `GIT_DIR`, `GIT_WORK_TREE` or `--git-dir`, makes it unknown whatever
 its `-C`. A push is then judged as one to the queue's repositories with every branch its current one, refused for what the
@@ -421,8 +423,20 @@ def main_or_config_reason(invocations_: list[Git], pushes: dict[int, Push], next
 #: the configuration keys and the variables that name a commit's author or committer in place of the machine's configured one
 IDENTITY_KEYS = {f"{who}.{what}" for who in ("user", "author", "committer") for what in ("name", "email")}
 IDENTITY_VARIABLES = {f"GIT_{who}_{what}" for who in ("AUTHOR", "COMMITTER") for what in ("NAME", "EMAIL")}
-#: the words of a `git config` beside which `KEY VALUE` writes the checkout's own configuration
-CONFIG_OWN = {"set", "--local", "--worktree"}
+#: the words of a `git config` beside which `KEY VALUE` writes the checkout's own configuration, or the machine's
+CONFIG_SCOPE = {"set", "--local", "--worktree", "--global"}
+#: the variables that name another file as the global configuration a `git config --global` writes
+GLOBAL_FILE = {"HOME", "XDG_CONFIG_HOME", "GIT_CONFIG_GLOBAL"}
+
+
+def after_cd(commands: list[list[str]], indexed: list[Git], envs: list[dict[str, str]], dirs: list[str]) -> list[Git]:
+    """`indexed` as the identity rule reads it, and no other rule: each git in the directory the command's plain `cd`s leave
+    it in (`dirs[i]`, shell_hook.cd_dirs; "" where they leave that in doubt) joined with its own `-C`, so `cd CHECKOUT && git
+    ...` is judged in CHECKOUT and `cd SCRATCH && git ...` in SCRATCH. One that anything but a `cd` leaves unplaced stays so
+    (`Git.unknown`): another move anywhere in the command (`moves`), `--git-dir`, `GIT_DIR`."""
+    if len(dirs) != len(commands) or moves([words for words in commands if words[:1] != ["cd"]]):
+        return indexed
+    return [indexed_invocations([commands[g.i]], dirs[g.i], envs[g.i:g.i + 1])[0]._replace(i=g.i) if dirs[g.i] else g for g in indexed]
 
 
 def identity_reason(indexed: list[Git], envs: list[dict[str, str]]) -> str | None:
@@ -430,23 +444,34 @@ def identity_reason(indexed: list[Git], envs: list[dict[str, str]]) -> str | Non
     whose `origin` is theirs (`queue_remote`), as a worktree's is. A commit there carries the machine's configured identity,
     so refused are git's own `-c` or `--config-env` of one of IDENTITY_KEYS, one of IDENTITY_VARIABLES assigned ahead of the
     command (`envs`, shell_hook.git_env), `commit --author`, and a `git config KEY VALUE` that writes one of IDENTITY_KEYS to
-    the checkout's own configuration. A read passes (`log --author`, `config KEY`, `config --get KEY`), as does a `git config`
-    with any other option (`--global`, `--file`, `--unset`), a command in any other repository (a scratch one takes any
-    identity) and one the guard can't place (`Git.unknown`)."""
+    the checkout's own configuration. `indexed` places each command (`after_cd`). A read passes (`log --author`, `config KEY`,
+    `config --get KEY`), as does a `git config` with any other option (`--file`, `--unset`), a command in any other
+    repository (a scratch one takes any identity) and one the guard can't place (`Git.unknown`).
+    The machine's identity sits in its global configuration, which every checkout on it commits with, so a `git config
+    --global KEY VALUE` of one of IDENTITY_KEYS is refused wherever it runs, unless the command names another file as the
+    global configuration (GLOBAL_FILE)."""
     for g in indexed:
         sub, rest, env = g.args[0], g.args[1:], envs[g.i] if g.i < len(envs) else {}
         keys = [w.removeprefix("--config-env=").partition("=")[0] for w in g.options]
-        written = [a for a in rest if a not in CONFIG_OWN]
+        written = [a for a in rest if a not in CONFIG_SCOPE]
+        wrote = written[:1] if sub == "config" and len(written) == 2 and written[0].lower() in IDENTITY_KEYS else []
+        if wrote and "--global" in rest and not GLOBAL_FILE & set(env):
+            return (f"this `git config --global` writes `{wrote[0]}` to the machine's global configuration, the identity every "
+                    f"checkout on this machine commits with, verity's and infra's among them: the machine's identity is already "
+                    f"configured, so leave it as it is (`git config --global {wrote[0]}` reads it). A scratch repository that "
+                    f"needs a name takes it in its own configuration, `git -C <scratch> config user.name NAME`, or on the "
+                    f"command, `git -C <scratch> -c user.name=NAME -c user.email=ADDRESS commit ...`.")
         given = [*(k for k in keys if k.lower() in IDENTITY_KEYS),
                  *(n for n in sorted(IDENTITY_VARIABLES) if env.get(n, "$") != "$"),
                  *(a.partition("=")[0] for a in rest if sub == "commit" and a.partition("=")[0] == "--author"),
-                 *(written[:1] if sub == "config" and len(written) == 2 and written[0].lower() in IDENTITY_KEYS else [])]
+                 *(wrote if "--global" not in rest else [])]
         if given and not g.unknown and queue_remote(git(g.d, "remote", "get-url", "origin") or "", PUSH_REMOTES):
             return (f"this `git` names an author or committer of its own (`{given[0]}`) in a checkout of verity or infra, where a "
                     f"commit carries the machine's configured identity, so that the history shows who wrote what: commit with the "
                     f"machine's configured identity; pass no name or address (no `-c user.*`, `--author`, `GIT_AUTHOR_*` or "
                     f"`GIT_COMMITTER_*`, and no `git config user.name|user.email VALUE`; `git config user.email` reads the one "
-                    f"it has). A scratch repository takes any identity: name it on git itself, `git -C <scratch> ...`.")
+                    f"it has). A scratch repository takes any identity: run it there, `cd <scratch> && git ...` or `git -C "
+                    f"<scratch> ...`.")
     return None
 
 
@@ -471,14 +496,15 @@ def unexpanded_reason(commands: list[list[str]], indexed: list[Git], pushes: dic
 
 
 def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] | None = None,
-           envs: list[dict[str, str]] | None = None) -> str | None:
+           envs: list[dict[str, str]] | None = None, dirs: list[str] | None = None) -> str | None:
     """Why the agent may not run these git commands here, or None. Registers the branches an allowed command creates.
     `next_ok[i]` is the AGENT_GUARD_PUSH_NEXT_OK reason `commands[i]` was given, if any; `envs[i]` the git variables it runs
-    under (shell_hook.git_env)."""
+    under (shell_hook.git_env); `dirs[i]` the directory its plain `cd`s leave it in (shell_hook.cd_dirs), which the identity
+    rule alone reads."""
     indexed = indexed_invocations(commands, cwd, envs)
     pushes = {g.i: read_push(g, envs[g.i] if envs is not None and g.i < len(envs) else {}) for g in indexed if g.args[0] == "push"}
     if why := (unexpanded_reason(commands, indexed, pushes) or main_or_config_reason(indexed, pushes, next_ok or [], agent)
-               or identity_reason(indexed, envs or [])):
+               or identity_reason(after_cd(commands, indexed, envs or [], dirs or []), envs or [])):
         return why
     if not agent:
         return None

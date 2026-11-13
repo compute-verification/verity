@@ -82,8 +82,10 @@ carriers run too) leaves it unplaced unless its `-C` is absolute, a `source` or 
 whatever its `-C`, and an unplaced push is judged as theirs.
 In a checkout of those repositories a commit carries the machine's configured identity, so it refuses there a git command
 that names an author or committer of its own (`worktree_guard.identity_reason`): `-c user.name=...`, `commit --author`,
-`GIT_AUTHOR_NAME=... git`, a `git config` that writes `user.name` or `user.email`. A scratch repository takes any identity,
-and such a command it can't place passes.
+`GIT_AUTHOR_NAME=... git`, a `git config` that writes `user.name` or `user.email`; and, wherever it is typed, a `git config
+--global` that writes the machine's. A scratch repository takes any identity. For this rule alone a git after a plain `cd
+DIR` is placed in DIR (`cd_dirs`), so `cd CHECKOUT && git ...` is refused and `cd SCRATCH && git ...` passes; such a command
+it still can't place passes.
 
 The VM's tmux server stays (kept_session.py): its environment holds the secrets it started with, which a shell that lost
 them takes back from it. So it refuses `tmux kill-server`, and a `tmux kill-session` that would end the session the VM
@@ -1173,6 +1175,38 @@ def git_env(raw: list[list[str]]) -> list[dict[str, str]]:
     return [{**dict.fromkeys(elsewhere, "$"), **mine} for mine in ahead]
 
 
+#: the operators beside which a `cd` moves the shell that runs what follows it ("" ends the text), and with them the ones
+#: after which the next command runs in the shell and directory of the one before
+IN_TURN = {"&&", ";", ""}
+SAME_SHELL = IN_TURN | {"||", "|", "|&"}
+
+
+def cd_dirs(text: str, cwd: str) -> tuple[list[str], str]:
+    """The directory each of `flattened(text)`'s commands runs in as far as the plain `cd`s before it say, "" where they
+    leave it in doubt, and the directory `text` ends in. A plain `cd` is a simple command `cd DIR` and no more, between
+    `&&`, `;` or a line's end, with DIR written out (no `~`, nothing the shell has yet to expand) and a directory, taken from
+    where the `cd` before it left the shell; what a carrier runs starts where the carrier does. Everything after any of
+    these is in doubt: another form of `cd`; a keyword (`if`, `then`, `do`, `{`), whose body may not run; an operator that
+    starts or ends a shell of its own (`(`, `)`, `&`) or a `case`; a carrier whose text moves. An unquoted backquote puts
+    the whole text in doubt: `words_of` gives the commands inside it as the text's own."""
+    out, d, before = [], cwd, ";"
+    if any("\0" in words for words, _ in words_of(text.replace("`", " \0 "))):
+        d = ""
+    for words, after in words_of(text):
+        words = strip_redirections(words)
+        run = unwrap(words)
+        d = "" if words[:1] and words[0] in KEYWORDS else d
+        out.append(d)
+        for carried_text in carried(run):
+            inner, end = cd_dirs(carried_text, d)
+            out, d = out + inner, d if end == d else ""
+        if run[:1] == ["cd"]:
+            to = os.path.join(d, words[-1])
+            d = os.path.normpath(to) if d and words == ["cd", words[-1]] and {before, after} <= IN_TURN and os.path.isdir(to) else ""
+        d, before = d if after in SAME_SHELL else "", after
+    return out, d
+
+
 def guard(name: str = "worktree_guard"):
     """The module `name` beside this hook (worktree_guard, kept_session), imported when a rule first needs it."""
     sys.dont_write_bytecode = True                      # no __pycache__ beside the hook: boot.sh copies its directory file by file
@@ -1185,11 +1219,11 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     """One agent per checkout (worktree_guard.py): why this command's git may not run here, or None."""
     worktree_guard = guard()
     try:
-        raw = flattened(command)
+        raw, (dirs, _) = flattened(command), cd_dirs(command, cwd)
     except ValueError:
         return None
     next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
-    return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok, git_env(raw))
+    return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok, git_env(raw), dirs)
 
 
 def own_tmux(given: dict[str, str]) -> bool:
