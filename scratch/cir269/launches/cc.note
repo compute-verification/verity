@@ -1,0 +1,1 @@
+n1-cc, n2-cc: as n2-light.cmd with the circuit-check suite (verity- plus circuit-check) in place of its two suites; kept out of the tree because the suite name trips the secret scan

@@ -1,0 +1,56 @@
+== 8854b8249777: 48 lines {'doc': 9, 'string': 3, 'data': 23, 'import': 13}
+  doc    cache.py:12  `verity.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
+  doc    cache.py:177  #: (`verity.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
+  string cache.py:430  _ENUMERATORS = frozenset({("verity.definitions.registry.catalog", "load"), ("verity.definitions.boolean", "_load")})
+  doc    cli.py:1345  #: what `prebuild` runs in a process of its own: every C++ model of `verity.definitions.numerics` (`twins.preload`), then the
+  string cli.py:1348  "from verity.definitions.numerics import twins\n"
+  doc    sidecars.py:3  fp8.py                    a Definition module (`verity.definitions.registry.fp8`)
+  import sidecars.py:259  from verity.definitions.registry import lifted as L
+  import targets.py:83  import verity.definitions.registry as R
+  import targets.py:87  from verity.definitions.numerics import rows, twins  # noqa: F401  (their kernels register with core)
+  import targets.py:474  from verity.definitions.numerics import kernel_registry as KR
+  import targets.py:484  from verity.definitions.registry import tables
+  import targets.py:493  from verity.definitions.registry import tables
+  doc    targets.py:628  """The word Call families of a served Program: the replay's row families (`verity.definitions.numerics.rows.ROWS`), every
+  import targets.py:634  from verity.definitions.numerics import rows
+  import targets.py:762  from verity.definitions.boolean import _load
+  doc    targets.py:778  """The Boolean version's family of each word Call family made on demand, by its id (`verity.definitions.boolean.
+  import targets.py:782  from verity.definitions.boolean import made_on_demand
+  import targets.py:810  from verity.definitions.boolean import boolean_version
+  doc    targets.py:835  """Sigma's image of the word Call families ``word_calls``: the family of `verity.definitions.boolean.boolean_version` (the
+  doc    targets.py:850  """The family of ``fn``'s Boolean version (`verity.definitions.boolean.boolean_version`), or None when it has none."""
+  import targets.py:851  from verity.definitions.boolean import NoBooleanVersion, boolean_version
+  doc    targets.py:860  """The Boolean table's two lookups (`verity.definitions.boolean._load`) as families: each word Definition's descriptor id
+  import targets.py:863  from verity.definitions.boolean import _load
+  string units.py:514  (`verity.definitions.boolean.made_on_demand`).  False where a module doesn't import, the next Definition is made by
+  import units.py:535  from verity.definitions.boolean import made_on_demand
+== 3d484ece0953: 48 lines {'doc': 9, 'string': 3, 'data': 23, 'import': 13}
+  doc    cache.py:12  `verity.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
+  doc    cache.py:177  #: (`verity.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
+  string cache.py:430  _ENUMERATORS = frozenset({("verity.definitions.registry.catalog", "load"), ("verity.definitions.boolean", "_load")})
+  doc    cli.py:1345  #: what `prebuild` runs in a process of its own: every C++ model of `verity.definitions.numerics` (`twins.preload`), then the
+  string cli.py:1348  "from verity.definitions.numerics import twins\n"
+  doc    sidecars.py:3  fp8.py                    a Definition module (`verity.definitions.registry.fp8`)
+  import sidecars.py:259  from verity.definitions.registry import lifted as L
+  import targets.py:83  import verity.definitions.registry as R
+  import targets.py:87  from verity.definitions.numerics import rows, twins  # noqa: F401  (their kernels register with core)
+  import targets.py:474  from verity.definitions.numerics import kernel_registry as KR
+  import targets.py:484  from verity.definitions.registry import tables
+  import targets.py:493  from verity.definitions.registry import tables
+  doc    targets.py:628  """The word Call families of a served Program: the replay's row families (`verity.definitions.numerics.rows.ROWS`), every
+  import targets.py:634  from verity.definitions.numerics import rows
+  import targets.py:762  from verity.definitions.boolean import _load
+  doc    targets.py:778  """The Boolean version's family of each word Call family made on demand, by its id (`verity.definitions.boolean.
+  import targets.py:782  from verity.definitions.boolean import made_on_demand
+  import targets.py:810  from verity.definitions.boolean import boolean_version
+  doc    targets.py:835  """Sigma's image of the word Call families ``word_calls``: the family of `verity.definitions.boolean.boolean_version` (the
+  doc    targets.py:850  """The family of ``fn``'s Boolean version (`verity.definitions.boolean.boolean_version`), or None when it has none."""
+  import targets.py:851  from verity.definitions.boolean import NoBooleanVersion, boolean_version
+  doc    targets.py:860  """The Boolean table's two lookups (`verity.definitions.boolean._load`) as families: each word Definition's descriptor id
+  import targets.py:863  from verity.definitions.boolean import _load
+  string units.py:514  (`verity.definitions.boolean.made_on_demand`).  False where a module doesn't import, the next Definition is made by
+  import units.py:535  from verity.definitions.boolean import made_on_demand
+== 1333bd53f693: 26 lines {'doc': 3, 'data': 23}
+  doc    cache.py:12  `verity.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
+  doc    cache.py:177  #: (`verity.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
+  doc    sidecars.py:3  fp8.py                    a Definition module (`verity.definitions.registry.fp8`)
