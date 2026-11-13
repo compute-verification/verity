@@ -41,8 +41,10 @@ capacity, the certified amount with its error, and the other, which follows.
   over answers of one series whose spans are pairwise disjoint, or the largest single amount of an answer that names
   none, whichever is more. A free amount is its answers' summed plus the capacity of the ticks no certified answer's
   span covers, each tick's cover counted once: one series' named spans' steps, or the longest span that names none.
+  It is not held to the capacity: a sum above it is printed as it is, with nothing verified.
 * An amount at a moment (memory) has one row for each accepted answer, a session, and one for the period, which states
-  the least verified (or the most free) of its sessions and counts them (`Row.sessions`).
+  the least verified (or the most free) of its sessions and counts them (`Row.sessions`). Its free amount is at most
+  the capacity.
 * A period's error, of a flow and of a moment alike, is its answers' errors as the amount's `Pool` says: summed, or
   the one answer's that states it once for the period.
 * A row whose error is 1 or more is `Status.noBound`: it prints "no bound at this period" in place of a number.
@@ -556,12 +558,9 @@ private def together (each : List (Nat × List (Nat × Nat))) : Nat :=
   max ((each.map fun e => e.1).foldl max 0) ((each.map fun e => e.1).sum - common)
 
 /-- The row of amount `m` certified as `n` at `error`, against capacity `total`: the other amount follows, and neither
-is printed at an error of 1 or more. A free amount is at most the capacity. -/
+is printed at an error of 1 or more. An amount above the capacity is printed as it is, and the other is 0. -/
 private def certifiedRow (m : Amount) (place reading : String) (total : Option Nat) (n : Nat) (error : Ratio)
     (sessions : Nat) (session : Option Nat) : Row :=
-  let n : Nat := match m.side, total with
-    | .free, some c => min n c
-    | _, _ => n
   let other : Option Nat := total.map fun c => c - n
   let bounded : Bool := !whole.le error
   { metric := m.metric, part := m.part, place, reading, session, sessions, side := some m.side, error,
@@ -590,10 +589,13 @@ period, summed, plus the capacity of the period's ticks they do not surely cover
 in the period, joined and counted once, their length less its clock's drift, rounded down once a series. Two series'
 covers add less the ticks their spans can share, each span taken at the widest its clock's drift allows (`together`).
 The longest span that names no steps counts instead where it is more. Where the registration holds no capacity for the
-ticks not covered it prints no amount.
+ticks not covered it prints no amount. A flow's free amount is not held to the capacity: an answer's amount may count
+more than what its link sends (when it sends, and how much), so where the sum passes the capacity the row prints the
+sum, above the capacity, and verifies nothing.
 
 An amount at a moment has a row for each session and one for the period: the least verified, or the most free, of its
-sessions. The period's error is its answers' as the amount's `pool` says, for a flow and for a moment alike. -/
+sessions. A moment's free amount is at most the capacity: no more is free than is there. The period's error is its
+answers' as the amount's `pool` says, for a flow and for a moment alike. -/
 def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
     (ticks : Nat) (origin : String → Option Origin) (clock : String → Option Figure) (place : Option String)
     (rs : List Reading) : List Row :=
@@ -650,7 +652,7 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
         match m.side, fits with
         | .verified, true => (r.amount, r.error)
         | .verified, false => (0, r.error)
-        | .free, true => (r.amount + rest, r.error)
+        | .free, true => (min (r.amount + rest) (total.getD (r.amount + rest)), r.error)
         | .free, false => (total.getD r.amount, r.error)
       let worst : Nat := match m.side with
         | .verified => each.foldl (fun n x => min n x.1) ((each.head?.map fun x => x.1).getD 0)
@@ -1002,6 +1004,10 @@ private def cached : Site :=
   [("after a wipe", "", "registered", some 8589934592, some 7999999000, some 589935592, "1/1000")]
 #guard cells ((table [wiped] [wipe 1000 9000000000]).take 1) ==
   [("after a wipe", "", "registered", some 8589934592, some 0, some 8589934592, "1/1000")]
+-- a moment's free amount is at most the capacity: a wipe that states more foreign bits than its memory holds leaves
+-- the whole of the registered memory free, and no more
+#guard cells ((table [wiped] [wipe 9000000000 8000000000]).take 1) ==
+  [("after a wipe", "", "registered", some 8589934592, some 0, some 8589934592, "1/1000")]
 #guard ((table [wiped] [wipe 1000 8000000000]).take 1).map (fun r => r.unpriced) ==
   [["the keyed stream's PRF advantage"]]
 -- a link: its checks' bits and errors summed, and the ticks no check covers charged at the link's capacity
@@ -1015,6 +1021,10 @@ private def cached : Site :=
   [("sent", "up0", "registered", some 100000, some 45000, some 55000, "1/500")]
 #guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" none]).take 1) ==
   [("sent", "up0", "registered", some 100000, some 35000, some 65000, "1/500")]
+-- a flow's free amount is not held to the capacity: a check whose bits pass it prints them with the ticks it does not
+-- cover charged, above the capacity, and verifies nothing
+#guard cells ((table [sent] [check 200000 400 "1/1000"]).take 1) ==
+  [("sent", "up0", "registered", some 100000, some 0, some 260000, "1/1000")]
 -- verified amounts add only over spans shown disjoint: two audits of one span, or of overlapping spans, count the
 -- larger once; two of disjoint spans add; of three in a chain, the two ends add where they outweigh the middle
 #guard firstVerified (audited [audit 700 (some (0, 9)), audit 500 (some (0, 9))]) == [(some 700, "1/500")]
