@@ -13,7 +13,7 @@ Issue: PRF-600. The fourth of its pull requests: the proofs of the eight stateme
 - **`ledgerMeans`**: what the ledger's half returns. Every root the lane committed in the monitoring period is returned once, a window when its session can be sampled and another session when it cannot.
 - **`acceptMeans`**: what the check accepts. Each window has exactly one audit, the check's own at that window.
 - **`committedOnce`: every root committed under this registration is one published window, with one audit entry.** Every root the lane committed is on a session that a period committing a circuit lists; under this registration's circuit it is a window, and its place is its root's alone.
-- **`othersElsewhere`**: the published others are exactly the roots the lane committed under another circuit, each once.
+- **`othersElsewhere`**: the published others are exactly the roots the lane committed under another circuit, each once. It proves soundness's own sentence of the refusal: "others" must be exactly "other registrations", and that is checked.
 - **`decodedMeans`**: the key each audit is handed reads as the key the ledger is checked under, and `audit` names none of the keys a window sets or leaves unset.
 - **`auditedSession`**: the session audited at a window is the window's own.
 
@@ -32,7 +32,7 @@ Issue: PRF-600. The fourth of its pull requests: the proofs of the eight stateme
 ## The lock
 
 - **`security/Proofs/lean-audit.json`** and the lakefile's roots gain the three modules.
-- **`security/Properties/lean-audit.json`**: each of the eight `unstated` lines now names the theorem that proves it. `LedgerOfDevice`'s says it is proved from `Numbered`.
+- **`security/Properties/lean-audit.json`**: each of the period's eight `unstated` lines, the count unchanged, now names the theorem that proves it. `LedgerOfDevice`'s says it is proved from `Numbered`.
 - **No guarantee entry**, as in the statements' pull request: an entry needs an honest witness, a ledger whose LMS signatures the kernel verifies and which the check accepts, and none exists yet.
 
 ## What it does not do

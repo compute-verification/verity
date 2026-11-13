@@ -8,12 +8,13 @@ One sentence of `Properties.Spot.R8`'s docstring, and nothing else. It named `Pr
 
 - **What it is read from**: `RowsTiedCharged` and `RowsTiedChargedAt` in `security/Properties/NetworkPeriod.lean`.
 - **The sentence after it is as it was**: that the rows under that root are the outputs of the proof blocks that computed them is not composed with those into a theorem, unproved.
-- **No code, no statement and no lock record changes.** `R8`'s term is untouched. The lock records a definition it reads by the hash of its type and value terms, not its docstring, and holds no line numbers. That is read from the lock's code, not shown by a records run.
+- **No code and no statement changes.** `R8`'s term is untouched.
+- **No lock record moves, by reading**: the lock hashes a read definition's type and value, not its docstring, and holds no line numbers. No records run was made for it; the train's records check is the run.
 
 ## Checks
 
+- **The file elaborates**: `r20261113-042733-cae0` on vy-nebius-cpu-11, `security/Properties/Spot.lean`: `lean exit 0`; it holds no theorem, so there is no axiom probe.
 - **On the author's machine**: `tests/lint/test_lean_bar.py`, 8 passed; `tests/lint/test_repo_retired_terms.py`, 14 passed, and the file is not among its warnings.
-- **A try of the file is in line** (`r20261113-041132-775d`). No ready line until it is in.
-- **No records run.**
+- **No records run**, as above.
 
 Asked for on LEAN-249.

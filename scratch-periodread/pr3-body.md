@@ -60,6 +60,7 @@ The statements read the check that holds the refusal (#9595). The ledger ties a 
 - **`layers`**: `Properties.Spot.PeriodLedger` gets its own layer, since it reads `Properties.Challenger` beside `Spot` and the period's statements. It imports nothing of Mathlib or `security`, and no proof.
 - **`shape.frozen`**: one `unstated:` line for each of the eight. The lock's rule fails a `Prop` in the statements tree that is neither a listed guarantee's statement nor held there with its reason.
 - **No guarantee entry, and why.** A guarantee entry here is keyed by the theorem that proves it, and a property of an acceptance needs an honest witness: a ledger whose LMS signatures the kernel verifies, which the check accepts. Neither exists in this pull request. `LedgerOfDevice`'s line says it gets no entry while it takes `Numbered`. `DecodedMeans`, `AuditedSession` and `OthersElsewhere` are lemmas a reader takes beside the others, no guarantee's statement.
+- **`OthersElsewhere` stays, and the count is eight `unstated` lines.** It states soundness's own sentence of the refusal: "others" must be exactly "other registrations", and that is checked.
 
 ## The executable
 
@@ -75,7 +76,7 @@ The statements read the check that holds the refusal (#9595). The ledger ties a 
 - **The statements build** as they stand here: `r20261113-035417-2795` on vy-nebius-cpu-11 built `Properties.Spot.Period` and `Properties.Spot.PeriodLedger`, on the proofs' branch, whose statement files and verifier are this head's.
 - **The proofs elaborate against them** (#9625): `r20261113-035213-962c` and `2795`, on `propext`, `Classical.choice` and `Quot.sound` alone.
 - **The check itself at #9595's head**: `r20261113-034210-2101`, both period difftests, 28 passed.
-- **The executable's build and the difftests at this head are in line** (`r20261113-040702-87ae`). No ready line until they are in, and none before #9595's.
+- **The executable builds and the difftests pass at this head**: `r20261113-040702-87ae` on vy-nebius-2. `lake build Spot sampled-proofs-period sampled-proofs-difftest`, 504 jobs; the executable answers `id` with `verity/sampled-proofs/period/v1`; both period difftests, 28 passed in 153 s. No ready line before #9595's.
 - **No quick tier and no Lean check on this head.** The lock's eight lines are by hand; `tests/test_lean_packages.py` passes on the proofs' branch, which holds them.
 
 Refs PRF-600
