@@ -93,7 +93,7 @@ What it adds to your tasks:
 
 The hour does not move: PR open, unmarked, by Fri 13 Nov 3:00 AM PST.
 
-## Fri 13 Nov 12:25 AM PST: place 10, registration is an accounting protocol (the export is replaced a fourth time)
+## Fri 13 Nov 12:05 AM PST: place 10, registration is an accounting protocol (the export is replaced a fourth time)
 
 Daniel, Thu 12 Nov 11:58 PM PST: "I'm pretty sure registration should just live inside of accounting." Its place is
 `verity/protocols/accounting/registration/`, not `verity/registration/`, and SPOT reads no registration.
