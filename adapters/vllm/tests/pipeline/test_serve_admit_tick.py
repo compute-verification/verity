@@ -23,7 +23,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from verity.protocols.certifier.verifier import release as REL
+from verity.protocols.accounting.certifier.verifier import release as REL
 
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Tokenizer
 from verity_vllm.engine import hooks
