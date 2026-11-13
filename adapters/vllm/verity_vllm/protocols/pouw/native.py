@@ -23,17 +23,17 @@ from __future__ import annotations
 
 import hashlib
 import os
+from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from functools import cache, cached_property
-from typing import Callable, Mapping
 
 import numpy as np
+from verity.definitions.kernels.tc import f32_to_bf16_rn_batch
+from verity.definitions.ops.scalar import F32_NAN_PTX
 from verity.protocols.pouw.prover.circuit import ncp2
 from verity.protocols.pouw.prover.circuit import reference as R
 from verity.protocols.pouw.prover.circuit.ncp2 import D, Shape
 
-from verity.definitions.kernels.tc import f32_to_bf16_rn_batch
-from verity.definitions.ops.scalar import F32_NAN_PTX
 from verity_vllm.protocols.pouw import circuit as PC
 
 M32 = 0xFFFFFFFF
@@ -151,7 +151,7 @@ class NativeWeight:
         self._strips: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
 
     @classmethod
-    def of(cls, side: PC.WeightRecord) -> "NativeWeight":
+    def of(cls, side: PC.WeightRecord) -> NativeWeight:
         """The side a record commits, regenerated from its inputs."""
         return cls(side.rows, side.scheme, side.salt, side.weight, side.colids)
 
