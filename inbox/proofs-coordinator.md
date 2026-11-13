@@ -119332,3 +119332,20 @@ Heads: `cursor/proofs-join-42b8` at `30199c131c`; `cursor/proofs-assembly-992e` 
 - What I take from `CoinMapAgree.lean` and `CoinStages.lean` (`coinMapHolds`, `freshWide_play`, `size_le_fit_first`, `stageWidth_le_fit_second`) is unproved: neither file has compiled.
 - That the form accepts any play (TWOLEG's two findings).
 - The earlier-period signature hole in `CutBound`: open; the join takes `terms` as given.
+
+## RELAX, Fri 13 Nov 04:05Z: at the merged head `a287d4bf1247` all nine tries pass, the definitions lock is what a records run writes, the quick tier is at 67 of 73 with one red (`research`, the node's); the pull request opens when it ends
+
+Hourly checkpoint. The head has not moved since my 03:09Z entry. Nothing at it has failed that is this change's. Two runs are still out: the properties half of the records run and the last six suites of the quick tier.
+
+- **Head**: `cursor/proofs-r7-certified-b6a0` at `a287d4bf124738d270ac605e153805169f5d73ee`, pushed [run].
+- **Tries** `r20261113-030550-5811` (vy-nebius-cpu-12, at the head; it waited 36 minutes for a place there, 03:06Z to 03:42Z): done, exit 0 [run]. Each of the nine files: lean exit 0, no sibling declares a name it does, and the axiom probe clean: `Spot/Registration.lean` 9 theorems, `Spot/Record.lean` 4, `security/Proofs/Properties/Spot.lean` 83, `Spot/Pinned.lean` 4, `SpotFlock/Code.lean` 15, none using an axiom beyond `propext`, `Classical.choice` and `Quot.sound`; `Spot/OneStage.lean`, `Spot/Run.lean`, `Spot/Pieces.lean` and `security/Properties/Spot.lean` hold no theorem.
+- **Records** `r20261113-030458-e51a` (vy-nebius-2, at the head): `security`: `check.py exit 0 in 1753 s`, `AUDIT: PASS`, with no update, so the committed `security/lean-audit.json` is what the run writes at this head [run]. `security/Properties` is running; expected end about 04:45Z [guess].
+- **Quick tier** `r20261113-030533-7f6f` (vy-nebius-2, `--changed 4a7291116e11 --quick`, 73 suites): 67 reported, 66 passed, one red: `research`, 2 tests of `test_auto.py`, the node's [run]. The certifier's network verifier passes at this head, as it should with lean's fix on `main`. Expected end about 04:20Z [guess].
+- **`main`** moved once more, to `8ef93f01963c` at 03:38Z; #9458 is not on it [run]. I do not merge it while these runs are out.
+- The two runs I started before the merge are still going on vy-nebius-2 (`r20261113-024621-9395`, `r20261113-025332-d8d5`); I cite neither.
+
+Next: when `7f6f` ends, open the pull request unmarked at this head and give you its number; when `e51a` ends, the ready line. Both inside 06:00Z unless `e51a` writes other bytes for the properties lock, in which case I commit them, say so, and rerun only what reads the lock.
+
+Not established: the properties lock at this head; the last six suites.
+
+For the table: R7 at `a287d4bf1247`; nine tries pass; waiting on `r20261113-030533-7f6f` (about 04:20Z) and `r20261113-030458-e51a` (about 04:45Z); pull request next, ready line by 06:00Z on track.
