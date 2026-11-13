@@ -607,6 +607,33 @@ def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_l
     assert not run.exists()
 
 
+def test_a_run_s_slot_record_says_what_its_slot_reserves_for_it_and_the_scope_its_check_runs_in(tmp_path, monkeypatch):
+    """A run's record says what the run asked and what it held (research.memmark). For a run in a check slot the ask is what
+    the slot reserved for it, the larger of the slot's mem= and the run's own ask, and a `scope=1` check leaves the cgroup
+    the run's samples are of: the run's slot.json says both."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (tmp_path / "slots").write_text("a 0 mem=500 scope=1\nb 1 mem=64\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 1000)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261023-000000-abcd")
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(env["CHECK_SLOT"])))
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda: None)
+    monkeypatch.setattr(SLOT, "SESSION_DROPINS", tmp_path / "no-dropins")
+    with pytest.raises(Exec, match="a"):
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot a is free"))
+    doc = json.loads((run / SLOT.RUN_SLOT).read_text())
+    assert doc == {"state": "held", "since": "2026-10-01T09:00:00Z", "slot": "a", "cores": "0", "took": "2026-10-01T09:00:00Z",
+                   "reserves_gib": 500, "scope": "check-a-r20261023-000000-abcd.scope"}
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "100")                            # 93.2 GiB: more than b's mem=
+    with pytest.raises(Exec, match="b"):                                   # a's lock is still held: the faked exec kept it
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot b is free"))
+    doc = json.loads((run / SLOT.RUN_SLOT).read_text())
+    assert (doc["slot"], doc["reserves_gib"]) == ("b", 94) and "scope" not in doc, "what the run asks, in whole GiB, and no scope of its own"
+
+
 def test_the_command_holds_the_slots_lock_on_the_slots_cores(tmp_path):
     """The real exec: the child runs pinned, and the slot's lock is held for as long as it runs."""
     cpu = min(os.sched_getaffinity(0))
