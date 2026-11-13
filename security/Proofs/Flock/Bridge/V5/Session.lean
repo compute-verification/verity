@@ -9,7 +9,7 @@ public import Proofs.Flock.Bridge.FaultyRightC
 # A session's satisfying message opens its proof block correct at public inputs
 
 What `SessionOpens` asks of one Flock session, at V5's objects (`keyProgP`, `rsZHJP`, `constsOfP` and the public file's
-leaf map): a message that satisfies drawn proof block `u`'s table reveals openings, each of which opens under the
+leaf map): a message that satisfies sampled proof block `u`'s table reveals openings, each of which opens under the
 deployed commitment, such that any committed values carrying those that open make `u`'s proof block correct, whatever
 its interior values.
 
@@ -23,7 +23,7 @@ its interior values.
   (`openingsCanonV5`, `transports_shapedP_at`).
 * `packOf`, `packZ`: the message packing a witness of a `--zk` table's statement, which gives it back
   (`witnessOf_packOf`, `wit_packZ`).
-* `tabOfZHJP_one`: at one table and a constant draw, a drawn proof block's table is any set-up table's at that draw
+* `tabOfZHJP_one`: at one table and a constant sample, a sampled proof block's table is any set-up table's at that sample
   (`DrawSetupZHJP.table_congr`).
 -/
 
@@ -166,7 +166,7 @@ theorem wit_packZ {mPts : ℕ} (T : TabZK FlockLevel3.GF128 mPts) (z : Witness T
 
 end Messages
 
-/-! ## One table at a constant draw -/
+/-! ## One table at a constant sample -/
 
 section OneTable
 
@@ -174,7 +174,7 @@ open FlockSoundness FlockSoundness.Model FlockSoundness.Discharge FlockSoundness
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkSession FlockSoundness.Discharge.ZkHidden
   FlockSoundness.Discharge.ZkBind
 
-/-- **A table set up at one draw is one table**, along equal inputs, drawn units and draws (`DrawSetupZHJP.table_eq`). -/
+/-- **A table set up at one sample is one table**, along equal inputs, sampled proof blocks and samples (`DrawSetupZHJP.table_eq`). -/
 theorem _root_.FlockSoundness.Discharge.ZkHidden.DrawSetupZHJP.table_congr {n mPts : ℕ} {I₁ I₂ : Inputs}
     {own : Option ByteArray} {S₁ S₂ : Finset (Fin n)} {d₁ d₂ : Lean.Json} (y₁ : DrawSetupZHJP I₁ own mPts S₁ d₁)
     (y₂ : DrawSetupZHJP I₂ own mPts S₂ d₂) (hI : I₁ = I₂) (hS : S₁ = S₂) (hd : d₁ = d₂) : y₁.table = y₂.table := by
@@ -188,8 +188,8 @@ theorem partOf_one (h1 : I.count ≤ 1) (d : Lean.Json) (v : ℕ) : (Composed.pa
   have h3 : nTab I = 1 := by simp [nTab, h1]
   omega
 
-/-- **At one table and a constant draw, a drawn proof block's table is the table set up at that draw** (`tableZHJP`'s
-first branch at table `0`, which proves every drawn unit: `partS` is `S`). -/
+/-- **At one table and a constant sample, a sampled proof block's table is the table set up at that sample** (`tableZHJP`'s
+first branch at table `0`, which proves every sampled proof block: `partS` is `S`). -/
 theorem tabOfZHJP_one (h1 : I.count ≤ 1) {d : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
     {S : Finset (Fin n)} (y : DrawSetupZHJP (inputsJ I 0) own mPts S d) (R : Reg) (u : Fin n) :
     tabOfZ (planZHJP (fun _ => d) y₀) (tabZHJP (fun _ => d) y₀) S R u = y.table := by
@@ -221,7 +221,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge.Exec FlockSound
   FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkSession
 
-/-- **The openings a message of drawn proof block `u`'s table reveals**, at public inputs: `revealOf` under the roots of
+/-- **The openings a message of sampled proof block `u`'s table reveals**, at public inputs: `revealOf` under the roots of
 the public file's leaf map, at each wire's bit in the opening the message gives of its commit string (`vbP`'s
 `opening`), with the datum of the wire's registered row at that opening's row bits and salt. -/
 noncomputable def revealV5 {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray}
@@ -254,7 +254,7 @@ theorem revealV5_length_le {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Optio
       (((keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)).io u).card :=
   revealOf_length_le _ _ _ _ _ _
 
-/-- **A drawn proof block's satisfying message reveals openings that make it correct**, at public inputs: on its table's
+/-- **A sampled proof block's satisfying message reveals openings that make it correct**, at public inputs: on its table's
 satisfying message `M`, committed values that carry each opening of `revealV5` that opens under the deployed commitment
 at the public file's leaf map make proof block `u` correct, whatever its interior values. Its values are the openings'
 bits, the decoder's on `u`'s committed wires (`opening_spec`), on which `u` is correct (`loweringSoundZK_of_place`) and

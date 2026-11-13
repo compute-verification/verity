@@ -727,7 +727,7 @@ loop admits, and a `register` event without a key is checked under `k`, which no
 registration is numbered, appended and admitted as any other.
 
 **Who reads an interior session's key.** `ks` and its tag are witness, never public. The tag is a MAC under `k`:
-released, it would put bytes that depend on `k` in the auditor's view, which drawing `ks` from the OS keeps out of it.
+released, it would put bytes that depend on `k` in the auditor's view, which sampling `ks` from the OS keeps out of it.
 `ks` is the key of the session's tags: whoever holds it can forge table refs the service takes as that session's. So
 both live only on the ZK server's record, `record.jsonl` in its state directory. Only the ZK server's own OS user reads
 that record: the value service and the session loop, and the tools the ZK server runs as that user

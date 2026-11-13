@@ -7,7 +7,7 @@ the measured overhead as a vertical line, the references as grey horizontal ones
 each panel's caption from the JSON.  The main figure plots the series and references the JSON marks `main`; the
 appendix figure (`appendix_stem`) is the exfiltration panel with every design and the references the main figure
 leaves out.  A panel's y-axis spans its headline curves and the references up to `OFF_SCALE` above them, so a
-comparison curve may leave it at the top; a reference further up is named at the axis's top, and one at 0 is drawn along
+comparison curve may leave it at the top; a reference further up is named at the axis's top, and one at 0 is sampled along
 the axis's floor, labelled as at 0.
 
     uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json [--scope "world year"] [--out DIR]
@@ -51,7 +51,7 @@ VERTICAL = "#E69F00"
 OFF_SCALE = 1e3
 #: reference lines within this relative distance coincide on the plot
 COINCIDENT = 0.02
-#: how far up its axis, in the axis's height, a reference line at 0 is drawn
+#: how far up its axis, in the axis's height, a reference line at 0 is sampled
 FLOOR = 0.012
 #: where a reference line's label may go, the axis's side it is aligned to and above or below its line; it takes the
 #: first that leaves the axis least, then overlaps the fewest labels already placed, then crosses the fewest other lines
@@ -135,7 +135,7 @@ def _fit(t) -> None:
 
 
 def _floor(ax, zeros: list[tuple[str, str]], styles: dict, fontsize: int) -> list:
-    """Draw each line at 0, which a log axis has no place for, along the axis's floor, its label saying it is at 0; the
+    """Sample each line at 0, which a log axis has no place for, along the axis's floor, its label saying it is at 0; the
     panel leaves the decade above the floor clear of its curves for them.  Returns the labels."""
     labels = []
     for i, (label, style) in enumerate(zeros):
