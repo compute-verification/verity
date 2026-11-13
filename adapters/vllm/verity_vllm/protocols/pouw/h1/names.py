@@ -1,11 +1,15 @@
 """How H1's served window names and salts its registered tables (`pouw_h1_served`'s, which re-exports these): the window
 Program's parameter prefix (`PREFIX`) and each table's nonce in the hm96 salt stream of the
-period's key (`nonce`, `B_NONCE`, `IDS_NONCE`, `RECEIPT_NONCE`, `LIVE_NONCE`). It imports nothing that imports `pouw_h1`, so
-the Commit's tie (`pouw_h1_commit.reuse`), which `pouw_h1` imports, reads them."""
+period's key (`nonce`, `B_NONCE`, `IDS_NONCE`, `RECEIPT_NONCE`, `LIVE_NONCE`), and the salt of the install's Programs
+(`program_salt`, an epoch's under `SALT_TAG`). It imports nothing that imports `pouw_h1`, so the Commit's tie
+(`pouw_h1_commit.reuse`), which `pouw_h1` imports, reads them."""
 from __future__ import annotations
 
-from verity.protocols.pouw.verifier import weights as Wt
+import hashlib
+
 from verity.protocols.pouw.prover.circuit import h1window as HW
+from verity.protocols.pouw.verifier import weights as Wt
+
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 #: the window Program's parameter prefix, the same for every window of a period
@@ -18,6 +22,8 @@ B_NONCE = Wt.B_NONCE
 IDS_NONCE = B_NONCE + (1 << 39)
 #: call c's receipt table's nonce is RECEIPT_NONCE + c, past every round's input-ids table's
 RECEIPT_NONCE = IDS_NONCE + (1 << 38)
+#: the tag the install's Programs' salt is derived under (`program_salt`)
+SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
 #: the live tables' nonces (`pouw_h1_live.nonce`): requests@0's LIVE_NONCE, round s's slots@<s>'s LIVE_NONCE + 1 + s
 LIVE_NONCE = RECEIPT_NONCE + (1 << 37)
 
@@ -28,4 +34,9 @@ def nonce(call: int, table: str) -> int:
     return NONCE + 2 * int(call) + HW.TABLES.index(table)
 
 
-__all__ = ["B_NONCE", "IDS_NONCE", "LIVE_NONCE", "NONCE", "PREFIX", "RECEIPT_NONCE", "nonce"]
+def program_salt(epoch_salt: bytes) -> bytes:
+    """`pouw.salt` of the install's Programs: the epoch's 32-byte salt under `SALT_TAG`, a SHA-512 digest."""
+    return hashlib.sha512(SALT_TAG + epoch_salt).digest()
+
+
+__all__ = ["B_NONCE", "IDS_NONCE", "LIVE_NONCE", "NONCE", "PREFIX", "RECEIPT_NONCE", "SALT_TAG", "nonce", "program_salt"]

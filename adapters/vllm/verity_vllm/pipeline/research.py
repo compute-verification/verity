@@ -35,11 +35,14 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from verity_vllm.config import ROOT, UsageError
 from verity_vllm.pipeline import config_record as CR
+from verity_vllm.pipeline import source_identity
 from verity_vllm.pipeline.row_driver import CLI, utc
+from verity_vllm.records.schema_ids import ROW_ATTEMPTS_SCHEMA
 
 REPO_ROOT = os.path.realpath(os.path.join(ROOT, "../.."))
 STORE_VARS = ("RESEARCH_STORE_CONFIG", "RESEARCH_STORE", "RESEARCH_RUNS")
@@ -78,7 +81,8 @@ def job_input(run_dir: str | None, name: str) -> str:
     if not run_dir:
         return ""
     try:
-        d = json.load(open(os.path.join(run_dir, "job.json")))
+        with open(os.path.join(run_dir, "job.json")) as f:
+            d = json.load(f)
         return ((d.get("store") or {}).get("inputs") or {}).get(name) or ""
     except (OSError, ValueError, AttributeError):
         return ""
@@ -167,7 +171,10 @@ def preserve(path: str, run_id: str) -> None:
     """Register ``run_id`` on the pod guard's durability list (once)."""
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        have = open(path).read().split("\n") if os.path.exists(path) else []
+        have: list[str] = []
+        if os.path.exists(path):
+            with open(path) as f:
+                have = f.read().split("\n")
         if run_id not in have:
             with open(path, "a") as f:
                 f.write(run_id + "\n")
@@ -179,12 +186,16 @@ def _row_json(d: str, path: tuple[str, ...], value: Any) -> None:
     """``value`` at ``path`` in ``row.json`` beside the row: a stage's Attempt under ``stages``, the record's at ``record``."""
     p = f"{d}/row.json"
     try:
-        doc = json.load(open(p)) if os.path.exists(p) else {"schema": "verity-sweep/row-v2/v1", "stages": {}}
+        doc: Any = {"schema": ROW_ATTEMPTS_SCHEMA, "stages": {}}
+        if os.path.exists(p):
+            with open(p) as f:
+                doc = json.load(f)
         node = doc
         for k in path[:-1]:
             node = node.setdefault(k, {})
         node[path[-1]] = value
-        json.dump(doc, open(p, "w"), indent=1)
+        with open(p, "w") as f:
+            json.dump(doc, f, indent=1)
     except (OSError, ValueError, KeyError, TypeError) as e:
         print(f"row.json not updated: {e}", file=sys.stderr)
 
@@ -199,7 +210,6 @@ def publishing(o: Any) -> dict[str, str | None] | None:
         raise UsageError(f"{why}; the chain would publish it as one (or --no-publish)")
     ref = o.ref
     if not ref:
-        from verity_vllm.pipeline import source_identity
         ref = source_identity.tree_identity(REPO_ROOT).get("branch")
     if not ref or ref == "HEAD":
         raise UsageError(f"{o.row}: the chain publishes its record with the tree REF@SHA, and {REPO_ROOT} names no branch: --ref REF "

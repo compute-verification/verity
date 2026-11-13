@@ -8,8 +8,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import numpy as np
-
-from verity.circuits.types import Type
+from verity.circuits.types import Array, RecordType, Type
 
 
 def load_safetensors_words(paths: Iterable[Path]) -> tuple[dict[str, np.ndarray], dict[str, str]]:
@@ -58,15 +57,24 @@ MLA_LAYER_FIELD = re.compile(r"(dense_layers|layers)\[(\d+)\]\.(\w+)$")
 MlaSources = tuple[int, dict[str, list[str]], dict[str, list[str]]]
 
 
-def mla_moe_sources(weights_type: Type) -> MlaSources | None:
-    """`(FIRST_DENSE, dense layer sources, MoE layer sources)` of an mla-moe weights Record (one with `dense_layers`), each source
-    a list of `model.layers.{L}.`-relative checkpoint names concatenated along dim 0; None for every other Record."""
-    try:
-        dense = weights_type.fields[weights_type.index("dense_layers")][1]
-        moe = weights_type.fields[weights_type.index("layers")][1].elem
-    except (AttributeError, KeyError, ValueError, IndexError):
+def _record_field(t: Type, name: str) -> Type | None:
+    """Record `t`'s field `name`; None where `t` is no Record or has no such field."""
+    if not isinstance(t, RecordType):
         return None
-    E = moe.fields[moe.index("w13")][1].n
+    return next((ft for k, ft in t.fields if k == name), None)
+
+
+def mla_moe_sources(weights_type: Type) -> MlaSources | None:
+    """`(FIRST_DENSE, dense layer sources, MoE layer sources)` of an mla-moe weights Record (one with `dense_layers` and an array
+    of `layers`), each source a list of `model.layers.{L}.`-relative checkpoint names concatenated along dim 0; None for every
+    other Record."""
+    dense, layers = _record_field(weights_type, "dense_layers"), _record_field(weights_type, "layers")
+    if dense is None or not isinstance(layers, Array):
+        return None
+    w13 = _record_field(layers.elem, "w13")
+    if not isinstance(dense, Array) or not isinstance(w13, Array):
+        raise ValueError(f"an mla-moe weights Record has an array of dense_layers and an array w13 in each of its layers, not {dense!r} and {w13!r}")
+    E = w13.n
     experts = {"w13": [f"mlp.experts.{e}.{p}_proj.weight" for e in range(E) for p in ("gate", "up")],
                "w2": [f"mlp.experts.{e}.down_proj.weight" for e in range(E)]}
     return dense.n, {**_MLA_ATTN_SOURCES, **_MLA_DENSE_SOURCES}, {**_MLA_ATTN_SOURCES, **_MLA_MOE_SOURCES, **experts}
@@ -76,6 +84,8 @@ def mla_field_words(sources: MlaSources, name: str, tensor_words: Callable[[str,
     """The words of layer field `name` (`dense_layers[d].f` / `layers[i].f`, matching `MLA_LAYER_FIELD`): its source tensors'
     words (`tensor_words(checkpoint name, field)`) concatenated, the f32 router gate widened from bf16."""
     m = MLA_LAYER_FIELD.match(name)
+    if m is None:
+        raise ValueError(f"{name}: not a layer field of an MLA Program")
     fd, dense, moe = sources
     L = int(m[2]) + (0 if m[1] == "dense_layers" else fd)
     srcs = (dense if m[1] == "dense_layers" else moe)[m[3]]

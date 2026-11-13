@@ -22,11 +22,11 @@ import shutil
 
 import numpy as np
 import pytest
-
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier.audit import HM96, hm96_salt, rows_domain
 from verity.protocols.pouw.verifier.protocol import tagged
 from verity.protocols.spot.verifier.one_stage import registered as G
+
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import registered_device as D
 from verity_vllm.protocols.pouw.h1 import requests as RQ

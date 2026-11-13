@@ -29,7 +29,7 @@ def _spec(**over):
 
 def test_spec_is_pre_execution_and_concrete():
     s = _spec()
-    assert s["known_before_execution"] is True
+    assert s["schema"] == "verity-gen/spec/v1" and s["known_before_execution"] is True
     w = s["workload"]
     assert w["serving_profile"] == "B8-mixed" and w["context_class"] == "C256" and w["n_requests"] == 8
     r = w["requests"][0]
@@ -95,7 +95,7 @@ def test_experiment_index_separates_records(tmp_path: Path):
     (run / "stages.json").write_text(json.dumps([{"stage": "fold", "status": "ok", "seconds": 1.5}, {"stage": "gates", "status": "ok", "seconds": 0.5}]))
     (run / "program.json").write_text("{}")
     doc = EXP.write_experiment(run)
-    assert set(doc) >= {"specification", "execution", "representation", "checks"}
+    assert doc["schema"] == "verity-gen/experiment/v1" and set(doc) >= {"specification", "execution", "representation", "checks"}
     assert doc["specification"]["spec"]["present"] and doc["specification"]["spec_digest"]
     assert doc["execution"]["realized"] == {"prompt_lens": [1], "n_generated": [2]}
     assert doc["execution"]["observation_log"]["present"] is False                 # referenced, absent, not invented
@@ -110,10 +110,11 @@ def test_experiment_index_separates_records(tmp_path: Path):
 def test_realized_consistency_names_the_phase_that_ignored_the_arrivals(tmp_path):
     """Spec §5 of the campaign runner: the same spec digest does not prove every phase honoured the arrivals; the check compares each
     phase's own realized record with the capture's and names the phase + request that differ."""
-    import json
-    from verity_vllm.pipeline import experiment as EXP
     run = tmp_path / "run"
-    (run / "capture").mkdir(parents=True); (run / "control").mkdir(); (run / "census").mkdir(); (run / "nonint" / "c_bare").mkdir(parents=True)
+    (run / "capture").mkdir(parents=True)
+    (run / "control").mkdir()
+    (run / "census").mkdir()
+    (run / "nonint" / "c_bare").mkdir(parents=True)
     reqs = {"r0": {"first_step": 0, "finish_step": 12, "n_generated": 13, "arrive_step_realized": 0},
             "r1": {"first_step": 3, "finish_step": 21, "n_generated": 19, "arrive_step_realized": 3}}
     cap = {"timing": {"engine_steps": 38, "requests": reqs}}
@@ -155,8 +156,8 @@ def test_code_version_is_unknown_when_git_cannot_run(tmp_path: Path, monkeypatch
     monkeypatch.setattr(EXP.subprocess, "run", no_tree)
     assert EXP.code_version(tmp_path / "no-such-tree") == {"source": "unknown"}
 
-    def timeout(cmd, **kw):
-        raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+    def timeout(cmd, timeout=None, **kw):
+        raise subprocess.TimeoutExpired(cmd, timeout)
 
     monkeypatch.setattr(EXP.subprocess, "run", timeout)
     assert EXP.code_version(tmp_path) == {"source": "unknown"}
@@ -167,8 +168,6 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
     EXPORT.json with the shipped commit): the first pod records carried code null.  Now: EXPORT.json's commit first
     (code_source 'EXPORT.json', the dirty-patch digest named when present), git HEAD in a git tree, null only when neither exists.
     The git tree's git is a stand-in (`experiment.code_version`'s own git is the tests above)."""
-    import subprocess
-    import verity_vllm.pipeline.experiment as EX
     root = os.path.abspath(os.path.join(os.path.dirname(WR.__file__), "..", ".."))
     exp = os.path.join(root, "EXPORT.json")
     if os.path.exists(exp):
@@ -177,7 +176,7 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
     def git(cmd, **kw):
         assert cmd[0] == "git", cmd
         return subprocess.CompletedProcess(cmd, 0, stdout="d" * 40 + "\n" if cmd[1] == "rev-parse" else "", stderr="")
-    monkeypatch.setattr(EX.subprocess, "run", git)
+    monkeypatch.setattr(EXP.subprocess, "run", git)
     dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
     assert dv["code"] == "d" * 40 and dv["code_source"] == "git"
     try:

@@ -22,9 +22,10 @@ from typing import Any
 import numpy as np
 
 from verity_vllm import config as C
+from verity_vllm.records.schema_ids import INT8_K_SCALES_SCHEMA
 
 RECIPE = "verity-int8-kscale-amax/v0"
-SCHEMA = "verity-vllm/int8-k-scales/v1"
+SCHEMA = INT8_K_SCALES_SCHEMA
 MANIFEST = C.MANIFESTS / "int8-k-scales.json"
 TOP = 127
 SCALE_FLOOR = 1e-30
@@ -63,7 +64,9 @@ def rank_table(s: np.ndarray, kv_heads: int, rank: int = 0, world: int = 1) -> n
 
 def entry(revision: str, repo: str, amax: np.ndarray, calibration: dict[str, Any]) -> dict[str, Any]:
     """The table entry of a calibration: its recipe, what it read, amax and s_k as float.hex of float32."""
-    hexes = lambda t: [[float(x).hex() for x in row] for row in np.asarray(t, dtype=np.float32)]
+    def hexes(t: np.ndarray) -> list[list[str]]:
+        return [[float(x).hex() for x in row] for row in np.asarray(t, dtype=np.float32)]
+
     return {"revision": revision, "repo": repo, "recipe": RECIPE, "calibration": calibration, "amax": hexes(amax),
             "scales": hexes(scales(amax))}
 
