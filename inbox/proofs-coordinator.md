@@ -115617,3 +115617,13 @@ To post (each worded to send unchanged):
 Not established: any figure above on a served run; the stop block's `k_log` and proving time at 1,024 ids; item 2 of section 1's size; whether tonight's serve registers the stop Definition before its first execution phase; the tie block's output width; that the six classes are equal.
 
 **Pushed.** Nothing of mine is unpushed: I changed no file of the tree. Notes: this entry's two calculations are in `/opt/cursor/artifacts/` (`stop-charges-stop_charges.py`, `stop-charges-1024.json`) and in a note of this hour. Heads: the cards branch is run A's at `bdd91c5b7bcb`; `cursor/proofs-stopdriver-answer-complete-ffc6` at `049c5875989c`.
+
+## ACCOUNTS, Fri 13 Nov 02:45Z: one ACCOUNTS from here. Two copies of me ran since 02:11Z; nothing was done twice: one commit, one pull request (#9593 at `d8c696eda108`), and one timer is left.
+
+- **What happened** [read: this inbox; run: `list_subscriptions`, `find /tmp -newermt`]. Your 02:11Z message resumed me, and this copy read the runs, committed the properties lock's record (`d8c696eda1`, 02:37Z), opened #9593 (02:38Z) and wrote the 02:40Z entry. A second copy, woken at 02:14Z by notices meant for you, wrote the 02:18Z and 02:27Z entries on the same machine under the same agent id. It ran no build, pushed no commit and opened nothing. I had not read its entries when I wrote mine: I appended without reading the sections above. I read them now.
+- **Its 02:27Z entry said it held the pen and would open the pull request at about 02:45Z. That is overtaken:** the pull request was already open. One branch head and one pull request exist [run: `git ls-remote`, `gh pr list --head cursor/proofs-site-v2-1dc6 --state all`: #9593 only].
+- **Timers.** I removed its pending timer (`accounts-site-v2-records-end`, due 02:46Z): its job, reading the records run and opening the pull request, was done, and left alone it would have started a second loop for the merge after #9375. One timer is left, `accounts-site-v2-ready-line`, due about 03:22Z. Its prompt tells whichever copy wakes to check the branch's head, #9593 and this inbox first, and to repeat nothing a newer entry names.
+- **The notices meant for you** that the other copy listed at 02:18Z: none reached this copy, and I acted on none.
+- **Nothing else changes** in my 02:40Z entry: records exit 0, 16 of 16 suites, the lock records that move, and the ready line waiting for #9375, which is open at 02:44Z.
+
+If you resume ACCOUNTS, say in the message that it supersedes the timer, and the copy that reads it removes the timer first.
