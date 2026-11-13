@@ -5,7 +5,9 @@ the prefix cache states each request's cached rows and the requests that made th
 target's (1 under async scheduling, which is the pinned resolver's value when the target says nothing; 0 synchronous), each
 component is held to it and to the pinned vLLM, and the first that disagrees is named.  The engine is the components' agreed
 block under the conditions the Program models: eager for an eager label, the agreed compilation facts for a compiled one, and a
-refusal by name where the components disagree, cache prefixes or state the other execution."""
+refusal by name where the components disagree, cache prefixes or state the other execution.  The stop rule is the set of the
+ids given, the checkpoint's and the manifest's, each under its source; a manifest that switches EOS off or a row with no id says
+so, and a manifest's set that is not the checkpoint's is refused."""
 from __future__ import annotations
 
 import copy
@@ -19,9 +21,12 @@ from verity_vllm.config import VLLM
 from verity_vllm.pipeline import coverage_workloads as gw
 from verity_vllm.pipeline import global_program as GP
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.records.workload import Workload
+from verity_vllm.records.workload import Workload, WorkloadSampling
 
 LAG_SCHEMA = "verity/workload-program/v1/lag"
+STOP_SCHEMA = "verity/workload-program/v1/stop-rule"
+STOPS_AT_EOS = ("a request may stop before max_tokens only when its last served token is one of eos_token_ids (finish_reason stop/None); "
+                "stop strings, aborts and drops are not modelled and FAIL G6")
 GPU = {"compute_capability": [8, 9], "num_sms": 142}
 
 
@@ -120,6 +125,7 @@ def test_each_component_is_held_to_the_workload_s_lag_and_one_with_no_declared_t
     assert list(out["components"]) == [PP.shape_key(s) for s in ((8, 1), (64, 7), (128, 15, 32), (256, 31))]      # in the shapes' order
     assert GP.component_declared_target(bare) is None and GP.component_spec_histogram(bare) is None
     assert GP.component_declared_target(same) == GPU and GP.component_spec_histogram(_component(tmp_path, "h", spec_histogram={"Gemm": 2})) == {"Gemm": 2}
+    assert GP.component_spec_histogram(_component(tmp_path, "list", spec_histogram=["Gemm"])) is None           # a histogram that is no table
 
 
 TWO_SCHEDULERS = ("component (LP=64, T=7) BAD was derived under a target resolving async_scheduling={a} (LAG {la}) but the workload's declared "
@@ -206,3 +212,58 @@ def test_a_compiled_label_models_the_agreed_facts_under_one_spelling_from_either
         engine, refusal = GP.modelled_engine(COMPILED, comps)
         declared = FACTS if block == "engine" else {}
         assert refusal is None and engine == {**declared, **MODELLED_ENGINE, "enforce_eager": False, "compilation": NORMAL}
+
+
+def _sampling(**stated):
+    return WorkloadSampling.of({"variant": "greedy", **stated}, "w.json")
+
+
+def test_the_stop_rule_is_the_set_of_the_ids_given_the_checkpoint_s_and_the_manifest_s_each_under_its_source(tmp_path):
+    def rule(ids, source, directory):
+        return {"schema": STOP_SCHEMA, "eos_token_ids": ids, "source": source, "checkpoint_dir": directory, "rule": STOPS_AT_EOS}
+
+    ck = str(tmp_path)
+    (tmp_path / "generation_config.json").write_text(json.dumps({"eos_token_id": [9, 2]}))
+    (tmp_path / "config.json").write_text(json.dumps({"eos_token_id": 2}))
+    files = {"generation_config.json": [2, 9], "config.json": [2]}
+    assert GP.stop_rule(ck, None) == rule([2, 9], files, ck) and GP.stop_rule(None, [4], None) == rule([4], {"--eos-token-ids": [4]}, None)
+    both = GP.stop_rule(ck, [7, 7, 3], _sampling(stop_token_ids=[42, 5]))
+    assert both == rule([2, 3, 5, 7, 9, 42], {"--eos-token-ids": [3, 7], **files, "manifest.sampling.stop_token_ids": [5, 42]}, ck)
+    assert list(both["source"]) == ["--eos-token-ids", "generation_config.json", "config.json", "manifest.sampling.stop_token_ids"]
+    # the manifest's own set is the declaration of record: with no checkpoint, and beside one that agrees
+    assert GP.stop_rule(None, None, _sampling(eos_token_ids=[2, 9, 2])) == rule([2, 9], {"manifest.sampling.eos_token_ids": [2, 9]}, None)
+    assert GP.stop_rule(ck, [7], _sampling(eos_token_ids=[9, 2])) == rule([2, 7, 9], {"--eos-token-ids": [7], **files,
+                                                                                      "manifest.sampling.eos_token_ids": [2, 9]}, ck)
+
+
+def test_a_manifest_that_switches_eos_off_and_a_row_with_no_id_say_so_and_a_set_that_is_not_the_checkpoint_s_is_refused(tmp_path):
+    for name, text in (("generation_config.json", json.dumps({"eos_token_id": [9, 2]})), ("config.json", "{")):
+        (tmp_path / name).write_text(text)
+    read = GP.stop_rule(str(tmp_path), None)["source"]
+    assert read == {"generation_config.json": [2, 9], "config.json": f"unreadable: {_decode_error('{')!r}"}       # the file that is no JSON
+    off = {"schema": STOP_SCHEMA, "eos_token_ids": [], "ignore_eos": True, "source": None, "checkpoint_dir": None,
+           "rule": "manifest sampling.ignore_eos: every request must reach max_tokens; any early stop FAILS G6"}
+    assert GP.stop_rule(None, None, _sampling(ignore_eos=True)) == off
+    assert GP.stop_rule(str(tmp_path), [7], _sampling(ignore_eos=True, stop_token_ids=[5])) == {
+        **off, "source": {"--eos-token-ids": [7], **read, "manifest.sampling.stop_token_ids": [5]}, "checkpoint_dir": str(tmp_path)}
+    none = {"schema": STOP_SCHEMA, "eos_token_ids": None, "source": None, "checkpoint_dir": None,
+            "note": "no EOS set declared: GM-01 fails closed on any request that stops before its max_tokens"}
+    assert GP.stop_rule(None, None) == GP.stop_rule(None, [], _sampling(ignore_eos=False, stop_token_ids=[])) == none
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    (bare / "generation_config.json").write_text(json.dumps({"bos_token_id": 1}))        # a file that states none is passed over
+    (bare / "config.json").write_text("{")
+    assert GP.stop_rule(str(bare), None) == {**none, "source": {"config.json": read["config.json"]}, "checkpoint_dir": str(bare)}
+    (bare / "config.json").write_text(json.dumps({"eos_token_id": 2}))                    # the checkpoint's set is both files'
+    assert GP.stop_rule(str(bare), None, _sampling(eos_token_ids=[2, 9])) == {
+        "schema": STOP_SCHEMA, "eos_token_ids": None, "source": {"config.json": [2], "manifest.sampling.eos_token_ids": [2, 9]},
+        "checkpoint_dir": str(bare), "refusal": "manifest sampling.eos_token_ids [2, 9] != the pinned checkpoint's eos_token_id set [2]: the "
+                                                "manifest was pinned from another tokenizer/generation config"}
+
+
+def _decode_error(text):
+    try:
+        json.loads(text)
+    except json.JSONDecodeError as e:
+        return e
+    raise AssertionError(f"{text!r} is JSON")
