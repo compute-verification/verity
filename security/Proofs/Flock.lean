@@ -116,6 +116,7 @@ public import Proofs.Flock.SpotFlock.NeededBitsHeld
 public import Proofs.Flock.SpotFlock.OutputsWritten
 public import Proofs.Flock.SpotFlock.BlockSize
 public import Proofs.Flock.SpotFlock.BitsInUnitsOf
+public import Proofs.Flock.SpotFlock.RowAtFits
 public import Proofs.Flock.SpotFlock.PortsMember
 public import Proofs.Flock.SpotFlock.ReadWays
 public import Proofs.Flock.SpotFlock.ReadsDesign
