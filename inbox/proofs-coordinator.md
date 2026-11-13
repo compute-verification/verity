@@ -138166,3 +138166,189 @@ Clock: `date -u` read 11:40Z when I wrote this. Mailbox: your 11:04Z, by the hoo
 **Runs.** `r20261113-112305-b2d0` done rc 0 (item 2). `r20261113-113204-2853` done rc 0 (item 4). None out.
 
 **To post.** Nothing.
+
+## WINDOWAT, Fri 13 Nov 11:41Z: `hend` is proved from the stream of zeros and COMPILES at `a5e72f55d12`, under A3 and one inequality: the stream holds the design's first reads (Thursday: 24,508 of 2^30 bytes); A3 alone cannot give it, so the field stays and the lemma discharges it; MEMBERS's `bac046004bb6` is merged into the draft, which compiles on it at `a5b8ce506db`
+
+**In plain words.** Your 10:54Z order is done as far as it can be, and your 11:24Z message is read (mailbox at `6efea1a7776`). `JointAuditV5.hend_of_zeros` compiles: under A3, for every sampling design the audit holds (`LawOn`: `subset`, `stratified` or `work`, which is where a rate law lands too), some outcome ends the sample, and no stream is assumed. It takes one premise soundness did not name, that the stream holds the design's first reads: `firstRead law nJ ≤ Lb 0`. That premise cannot go. The sample takes each stage's bytes before it samples, so a shorter stream runs out at every outcome, zeros included. The field `hend` stays in `JointAuditV5` and the lemma discharges it, because the audit holds no A3. The before, the after and the lemma are in one section, ready to paste. MEMBERS's compiled head `bac046004bb6` is taken: it is merged into the draft, and the draft's files compile on it. This entry also carries what I had ready at 10:54Z and had not posted: `WeightSecurity/Deployed.lean` breaks in exactly two places against the draft, and the first of soundness's files that break are named. Run `7146`, which you saw fail, is that try of `Deployed.lean`: its failure is the finding, and both errors are quoted below.
+
+### STOP RULE
+
+Nothing is restated since 10:29Z. The text of `JointSampledV5`, `JointShareV5` and `JointHorizonV5`, and of `JointAuditV5`, `game`, `Accepts` and `memberLaw`, is that entry's. The five files of `Joint/V5` are byte for byte those of `3b48c514bec`; one file is added, `Joint/V5/Ends.lean`, with eleven theorems and no definition. No listed guarantee reads it. I changed no lock, there is no pull request, and nothing in another lane's file is changed by me. The merge of `bac046004bb6` brings MEMBERS's own changes onto the draft branch, its edits of two locks among them (three lines of `security/Proofs/lean-audit.json`, two of the spot verifier's `lean-audit.json`); that branch is read by no pull request.
+
+### For PRF-490: before, after, and the lemma [run: `r20261113-112043-7ccd`, and the 10:29Z entry's runs]
+
+Paste from the next line to the end of this section.
+
+**Way (i), the `Joint/V5` half: before, after, and `hend` from the stream of zeros.** A draft on `cursor/proofs-windowat-hcls-b2b4` at `a5e72f55d12`, compiled, with no pull request and no lock change. `JointSampledV5`, `JointShareV5` and `JointHorizonV5` keep their text and their right-hand side.
+
+Before:
+
+```lean
+-- a field of JointAuditV5
+hcls : ∀ (k : Fin ms.length) (ω : Ω),
+  mPtsOf (ms.get k).D.unroll.g ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
+    mPtsOf (ms.get k).D.unroll.g ((ms.get k).kd / nTab (ms.get k).I)
+
+noncomputable def game : Game (w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) :=
+  .send w.Reg fun R => .coin w.L.Ω fun ω => (w.sessions (w.L.draw ω) R).map fun ts => (R, w.L.draw ω, ts)
+
+def Accepts (o : w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) : Prop :=
+  List.Forall₂ (fun m t => (m.part o.2.1).Nonempty → AcceptsZKP m.I m.own t) w.ms o.2.2
+
+noncomputable def memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) : Law (w.ms.get k).n where
+  Ω := w.L.Ω × ((ω : w.L.Ω) → w.before τ k ω)
+  draw x := (w.ms.get k).part (w.L.draw x.1)
+```
+
+After:
+
+```lean
+def sampleEnded (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (law : Flock.Draw.Law) (pop : ℕ) (ω : Ω) : Bool :=
+  match Spot.Draw.drawUnits law pop (Properties.Spot.bytesOf (src ω 0)) with
+  | .ok _ => true
+  | .error _ => false
+
+-- two fields of JointAuditV5
+hcls : ∀ (k : Fin ms.length) (ω : Ω), sampleEnded src law nJ ω = true →
+  mPtsOf (ms.get k).D.unroll.g ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
+    mPtsOf (ms.get k).D.unroll.g ((ms.get k).kd / nTab (ms.get k).I)
+hend : ∃ ω : Ω, sampleEnded src law nJ ω = true
+
+def ended (ω : w.L.Ω) : Bool := sampleEnded w.src w.law w.nJ ω
+abbrev EndΩ : Type := {ω : w.L.Ω // w.ended ω = true}          -- nonempty by `hend`
+
+noncomputable def game : Game ((w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) :=
+  .send w.Reg fun R => .coin w.L.Ω fun ω =>
+    (w.sessions (w.L.draw ω) R).map fun ts => ((R, w.ended ω), w.L.draw ω, ts)
+
+def Accepts (o : (w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) : Prop :=
+  o.1.2 = true ∧ List.Forall₂ (fun m t => (m.part o.2.1).Nonempty → AcceptsZKP m.I m.own t) w.ms o.2.2
+
+noncomputable def memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) : Law (w.ms.get k).n where
+  Ω := w.EndΩ × ((ω : w.EndΩ) → w.before τ k ω.1)
+  draw x := (w.ms.get k).part (w.L.draw x.1.1)
+```
+
+So `hcls` is asked only where the sample ended, a run is accepted only if its sample ended, and a member's session played alone is taken at the samples that ended. The bound is the same number, of acceptance and the sample ended.
+
+The lemma, `Joint/V5/Ends.lean`:
+
+```lean
+theorem hend_of_zeros {nJ : ℕ} {Ω : Type} [Fintype Ω] {Lb : Fin 1 → ℕ}
+    (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
+    {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (hlaw : Bridge.LawOn law ns kd) (hns : ns.sum = nJ)
+    (hL : Bridge.firstRead law nJ ≤ Lb 0) :
+    ∃ ω : Ω, sampleEnded src law nJ ω = true
+```
+
+- It concludes `hend` with no stream assumed. `hlaw` and `hns` are fields the audit already holds, and `LawOn` admits `subset`, `stratified` and `work` designs and no Bernoulli design, which the audit refuses.
+- It rests on a stream of zeros: every word the sampler reads is 0, which the rejection sampler accepts for every population of at least one, so each stage samples on its first read and the sample ends.
+- It takes one premise beyond A3: `firstRead law nJ ≤ Lb 0`, the stream holds every stage's first read (`2·k·width(n) + 64` bytes for a `subset` design, that sum over the strata otherwise). This cannot be dropped. The sample takes a stage's bytes before it samples and refuses when fewer are left, so on a shorter stream it runs out at every outcome, and at `Lb 0 = 0` no `subset` design's sample ever ends. At a window the verifier sets up `Lb 0 = 2^30`; Thursday's design reads 24,508 bytes first.
+- `hend` stays a field. `JointAuditV5` holds no A3 (the guarantees take it as a hypothesis), and `memberLaw` needs an outcome whose sample ended before any assumption is in hand. Whoever builds the audit with A3 gives the field by this lemma.
+
+### Why the stream's length is in the lemma, and what it costs a window [derived, read]
+
+- **The premise is exactly what is needed** [derived]. Every stage takes at least its first read (`Spot.Draw.take`, `Spot/Draw.lean:256-260`: `RAN_OUT` when fewer bytes are left), so a sample that ends has read at least `firstRead law nJ` bytes. Under A3 and `LawOn`, `hend` therefore holds if and only if `firstRead law nJ ≤ Lb 0`. I proved the direction soundness asked for; the other is by reading, not in Lean.
+- **A registered design can fail it** [derived]. A `subset` design with `k` above about 45 million (words of 12 bytes) has a first read above `2^30` bytes. Its sample runs out at every outcome and the check refuses every run. So "a stream of zeros ends every registered design" is false without the length, though no such design is one anybody serves.
+- **For Thursday** [derived: arithmetic on the table of `thursday-members.log`]: 298 strata, `k_s = 1` each, first reads of 82, 84 and 86 bytes at 264, 32 and 2 strata: 24,508 bytes, against `Lb 0 = MAX_COINS · 64 = 2^30` [read: `Spot/Challenger.lean:50`; `MemberForm/SetsUp.lean:155`].
+- **For the window theorem, two ways to have `hend`, soundness's to choose** [derived; both sit in soundness's files; neither compiled]:
+  1. A premise on the window, `firstRead W.law W.nJ ≤ 2^30`, then `hend_of_zeros` with `W.hA3`, `W.hlaw` and `SetsUp.lb`. `Flock/Bridge/V5/Rows.lean:74` already takes the same inequality as a premise. I found nothing under `Sampled/` that gives it from the check.
+  2. No premise: split on `hend`. Where no outcome ends the sample, no run is accepted (the check refuses a sample that ran out), so the bound holds of an empty event; where one does, build the audit. This needs neither A3 nor the length.
+
+### The proof, in the order Lean takes it [run: `r20261113-112043-7ccd`]
+
+All in `Joint/V5/Ends.lean`; nothing under `Flock/Bridge/QsRows/` or `Flock/Soundness/` is edited, and the lemmas sit in those files' namespaces so that they can move there.
+
+- `beL_zeros`, `uniformL_zeros`: a word of zeros is 0, and the rejection sampler accepts it, since `0 < 2^(8w) − 2^(8w) mod m` for `0 < m` (from `reject_nat`, already in `RunsOut.lean`).
+- `not_failL_zeros`, `subset_zeros`: so `Flock.Draw.subset k n` returns a sample on `k·width n` bytes of zeros (through `subset_none_failL`, already there).
+- `extract_zeros`, `firstOk_zeros`, `stage_zeros`, `strata_zeros`: a block of a stream of zeros is a stream of zeros, so every stage's first read samples.
+- `Flock.Bridge.units_ok_zeros`: `drawUnits` ends on a stream of zeros of at least `firstRead law n` bytes, by `units_ok_of_firstOk` (`FirstReads.lean:257`), in `LawOn`'s three cases.
+- `JointAuditV5.hend_of_zeros`: that, and `hend_of_stream` at the stream of zeros.
+
+### Runs [run]
+
+All through `--on auto`, 16 GB, one at a time. "Waited" is from sent to started.
+
+| Run | File, at | Machine | Sent | Waited | Ended | rc |
+|---|---|---|---|---|---|---|
+| `r20261113-103123-2165` | `Joint/V5/Member.lean`, `6eb3fce6397` | vy-nebius-cpu-1 | 10:31:23Z | 24 s | 10:33:27Z | 0 |
+| `r20261113-103412-7146` | `WeightSecurity/Deployed.lean`, `3b48c514bec` | vy-nebius-cpu-1 | 10:34:12Z | 24 s | 10:36:49Z | 1 |
+| `r20261113-103851-0285` | scratch `ProbePressure.lean`, `7a70633036a` | vy-nebius-cpu-3 | 10:38:51Z | 25 s | 10:42:58Z | 0 |
+| `r20261113-104455-d5ce` | `MemberForm/Sound.lean`, for the build of its imports, `3b48c514bec` | vy-nebius-cpu-14 | 10:44:55Z | 25 s | 10:54:01Z | 1 |
+| `r20261113-111620-664a` | `Joint/V5/Ends.lean`, `c79fba1c987` | vy-nebius-cpu-14 | 11:16:20Z | 24 s | 11:17:57Z | 1 |
+| `r20261113-112043-7ccd` | `Joint/V5/Ends.lean`, `fcfa4a8adbc` | vy-nebius-cpu-11 | 11:20:43Z | 26 s | 11:24:26Z | 0 |
+| `r20261113-112703-5144` | `Joint/V5/Ends.lean` with `--siblings`, `fcfa4a8adbc` | vy-nebius-cpu-1 | 11:27:03Z | 24 s | 11:31:51Z | 0 |
+| `r20261113-113306-bffc` | `Joint/V5/Layout.lean`, on the merge, `a5b8ce506db` | vy-nebius-cpu-1 | 11:33:06Z | 24 s | 11:35:23Z | 0 |
+| `r20261113-113651-0729` | `Joint/V5/Ends.lean`, on the merge, `a5b8ce506db` | vy-nebius-cpu-1 | 11:36:51Z | 9 s | 11:39:15Z | 0 |
+
+- **`Ends.lean`, first try** [run: `664a`]: one error, a name: `Assumptions.UniformRandomBytes` unknown in the last theorem's statement, for want of `open FlockSoundness`. The other ten theorems elaborated.
+- **`Ends.lean`, second try** [run: `7ccd`]: lean exit 0 in 196 s; none of its 11 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`, and the four on the sampler alone (`bsOf_zeros`, `beL_zeros`, `uniformL_zeros`, `not_failL_zeros`) use no `Classical.choice`. No warning on the file's own lines. `a5e72f55d12` is an empty commit on `fcfa4a8adbc`, the tree tried.
+- **Its names against the package's other modules** [run: `5144`; read]: the sibling check found no clash among the 74 built modules that do not import it, and left 4,035 unchecked, for want of a build of them on that machine. So that check covers little. By a search of the merged tree's Lean for the eleven names, no other file holds one of them at all.
+- **The draft on MEMBERS's head** [run: `bffc`, `0729`]: on the merge `a5b8ce506db`, `Layout.lean` gives lean exit 0 in 111 s with its 40 theorems on the three axioms, after building `Statement`, `Session`, `Member` and `Bound`; `Ends.lean` gives lean exit 0 in 111 s with its 11. Neither try put a new module version in the cache, and none of MEMBERS's 56 files is among the files these six import, taken generously by their import lines [derived]: its change reaches nothing the draft reads.
+- **`Member.lean`** [run: `2165`]: lean exit 0 in 98 s; none of its 13 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`. With `9fda`, `5d33` and `3349`, each of the four changed files has its own probe. `Session.lean` is unchanged and rebuilt.
+
+### `WeightSecurity/Deployed.lean` and `Pressure.lean` against the draft
+
+Nothing is mended in either file.
+
+**What breaks** [run: `7146`, the file as it is on the branch]. Two errors, and no third:
+
+- `Deployed.lean:39:21`, in `servedGame`. "Application type mismatch: The argument `w.game` has type `Game ((w.Reg × Bool) × Finset (Fin w.nJ) × List Transcript)` but is expected to have type `Game (w.Reg × Finset (Fin w.nJ) × List Transcript)` in the application `map (fun o => (m, o)) w.game`."
+- `Deployed.lean:49:13`, in `servedRec`. "Application type mismatch: The argument `b.2` has type `w.Reg × Finset (Fin w.nJ) × List Transcript` but is expected to have type `(w.Reg × Bool) × Finset (Fin w.nJ) × List Transcript` in the application `w.Accepts b.2`."
+
+Lean goes on past an error, so after these two the run shows only warnings: `servedAudit`, `servedRec_accepted_le` and `servedRec_miss_le` are marked "declaration uses `sorry`" because they read `servedGame`. That is the two errors seen again, not more of them.
+
+**That nothing else breaks** [run: `0285`]. On a scratch branch, `cursor/proofs-windowat-hcls-ws-probe-b2b4` at `af98d1d0082` (never to merge), I put two copies beside the originals. `ProbeDeployed.lean` is `Deployed.lean` with the type `w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript` respelled `(w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript` in those two places, and nothing else changed. `ProbePressure.lean` is `Pressure.lean` importing that copy, and nothing else changed. Both compile: the copy of `Deployed` built, the copy of `Pressure` gave lean exit 0 in 221 s, and none of its 8 theorems, `TheftServedDeployedRate` among them, uses an axiom beyond the three.
+
+So the list for that lane is:
+
+- `Deployed.lean`: the outcome's type in `servedGame` (line 38) and in `servedRec` (line 48). No proof changes.
+- `Pressure.lean`: nothing.
+- What the statements say moves, with no text changing [derived]. `servedRec`'s `accepted` is `w.Accepts b.2`, which now says the sample ended too. `TheftServedDeployed` and `TheftServedDeployedRate` ask `cr/sha-512` and `ecr/sha-512` through `memberLaw` and `memberSim`, so at the samples that ended only, and their incorrect proof blocks are `wrongSet`'s, which moves with `memberLaw`. Neither theorem is a listed guarantee [read: `security/lean-audit.json` names `TheftServedDeployed` only in a `why`].
+
+Of the places in the two files that read the audit (your "37 places"), those two are the only ones that break: the rest read the outcome through `b.2`, `b.2.2.1` or a name whose shape did not change.
+
+### What breaks first in soundness's files [run: `d5ce`; nothing touched]
+
+One try on the top of my own window proofs, `MemberForm/Sound.lean`, makes the build of its imports name the first files that break. Two do. Everything that imports them was not built, so this is the first layer and no more.
+
+- **`Sampled/Members/Widen.lean`, 22 errors, one cause.** `JointAuditV5.extend` (line 40) no longer elaborates. It takes `w`'s fields and changes `Ω` and `src`, so the `hend` it takes from `w` is at the wrong outcomes: "`hend` has type `∃ ω : w.Ω, sampleEnded w.src … ω = true` but is expected to have type `∃ ω : w.Ω × S.T, sampleEnded (fun ω => w.src ω.1) … ω = true`". Its proof of `hcls` also has the new hypothesis to pass on. The other 21 errors are lemmas that read `w.extend S`.
+- **`Sampled/Window.lean`, 2 errors, both in `Window.joint`.** `264:64`: "Fields missing: `hend`". `281:4`: its `hcls` hands over `W.hcls m hm ω` where a proof from "the sample ended" is expected.
+
+**Proposed text for soundness** [derived; not compiled; I edit neither file]:
+
+```lean
+-- Members/Widen.lean, in `JointAuditV5.extend`
+  hcls k ω hω := by
+    have h := w.hcls k ω.1 hω
+    dsimp only [Bridge.execSel] at h ⊢
+    exact h
+  hend := w.hend.elim fun ω h => ⟨(ω, Classical.arbitrary S.T), h⟩
+-- Window.lean, in `Window.joint`: drop the new hypothesis, and give `hend`
+  hcls := fun k ω _ => by …   -- the proof as it is
+  hend := JointAuditV5.hend_of_zeros W.src W.hA3 W.hlaw W.hns …   -- with `firstRead W.law W.nJ ≤ W.Lb 0`, or by the split
+```
+
+`Window.hcls` can stay asked at every outcome, in which case `Window` is no weaker than today and way (i) buys nothing at an accept; the point of the draft is that soundness may now ask it only where the sample ended.
+
+**Beyond the first layer, by reading only** [read: the grep of `Sampled/` for the audit's names]: `Window/Walk.lean` takes probabilities of `Accepts` over the window's game (lines 751 to 890), whose outcome now carries the ended bit; `Window/Unbound.lean:217` reads `memberLaw`, `oneClass_memberLaw` and `memberStrat`, whose outcomes are now the ended ones; `Window/Steps.lean:762` reads `(W.extend M.widening).hcls` at one outcome and now owes it "the sample ended" there. I did not compile these and say nothing of how much proof they cost.
+
+### State
+
+- `cursor/proofs-windowat-hcls-b2b4` at `a5b8ce506db`, pushed. Below it `a5e72f55d12`: the draft, four files of `Joint/V5` changed and `Ends.lean` added, `Session.lean` as it was. On top, the merge of MEMBERS's `bac046004bb6`, which conflicted nowhere: its 56 files and my five share none. `Ends.lean` is imported by no file yet; `Flock.lean`, the package's list of modules, is not edited, and takes one line when this lands.
+- `MemberForm/Sound.lean` on the draft is MEMBERS's text, without `hF` and `hA`. It does not build there, and did not before the merge: soundness's `Members/Widen.lean` and `Window.lean` fail first against the draft's audit (`d5ce`, above). So on the draft I may now edit `Sound.lean` and cannot compile it until those two are mended. I have no edit of it pending: `hready` goes after soundness lands, as you said at 08:40Z.
+- `cursor/proofs-windowat-5e4b` stays at `e977fbc96f`. I did not move it, because FIRSTACCEPT's 10:28Z entry cuts its next branch off it. Taking `bac046004bb6` there is a fast-forward with nothing of mine in it; say the word and I push it.
+- `cursor/proofs-windowat-hcls-ws-probe-b2b4` at `af98d1d0082`, pushed: the two scratch copies, never to merge.
+- #9576 at `338c4ad877ca`, waiting on your word "carry".
+- No pull request, no lock change of mine, the draft merged into nothing, nothing posted.
+
+**Next, unless you say otherwise** [guess at the order]: nothing in soundness's files. If it helps soundness decide, I can compile my proposed text for `Members/Widen.lean` and `Window.joint` on a scratch branch that is never to merge, and report how far the break runs past the first layer; that edits copies of soundness's files, so I wait for your word.
+
+**Not established.**
+
+- That the check, or anything a window is set up on, gives `firstRead law nJ ≤ Lb 0`. I found no statement of it under `Sampled/`.
+- The converse, that `hend` fails on a shorter stream: by reading `take`, not in Lean.
+- The split on `hend` in the window theorem: derived by reading; it sits in soundness's files. Not compiled.
+- Thursday's 24,508 bytes are from the kept summary's table and my arithmetic, not from a run of Lean's `drawUnits`.
+- What breaks in soundness's files beyond `Members/Widen.lean` and `Window.lean`: not built, since those two failed first. My text for the two is not compiled.
+- That soundness takes a lemma with the length in it for the one it asked for "under A3". It is a claim until it does.
