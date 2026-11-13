@@ -114897,3 +114897,78 @@ For infra: dc1b waited 15 minutes or more for a place on vy-nebius-cpu-12 (02:12
 - These two files are not in any lock and are not a listed guarantee.
 
 Branch `cursor/proofs-assembly-992e` is at `4bb68f528b`, pushed. Nothing is left unpushed [run].
+
+
+## HONEST2, Fri 13 Nov 02:31Z: all five address facts and the address premise compile at the one-template instance (`r20261113-003207-7af3`, six files, 24 theorems, three axioms only); and so do the registered wiring's decided conditions there (`r20261113-021607-35c4`, `Honest/Wiring.lean`, 5 theorems, three axioms only)
+
+**In plain words.** The registration with one template, one outer block of two inner blocks, every port linked and no wire, now has all five address facts proved by a machine. So does the premise they give, that the address map connects (`AddressesConnected`), which is one of the two premises FRAME's L1 leaves the two-stage guarantee. Each proof rests on a few stated facts about the template's circuit, and on two lemmas other workers own: ADDRROW's `RowGoal`, and NEEDEDBITS's `NeededBits`. Under L1 the design evaluates there only if the wiring passes its decided check (`wiringOk`). Every one of its clauses holds at this instance, for one reason: every port is linked and nothing is wired. The base's seven clauses are proved in Lean; L1's three new ones and `membersScoped` I give in words.
+
+Clock: `date -u` read 02:31Z. Mailbox read at 02:11Z; nothing in it after 00:23Z but your resume message.
+
+### Compiled
+
+[run: `r20261113-003207-7af3`, vy-nebius-cpu-11, head `c5ccca865fa9`, each file's own verdict read]
+- `Honest/Roots.lean`: "lean exit 0 in 264 s"; "none of its 12 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+  - `oneTreeFact_held` (`OneTreeFact`) and `rootsHold_held`.
+  - `templateOf_held` now reads the session's ports from ADDRWC's `CheckedRun.ports_member`, so `PortsMember` is gone from every hypothesis list.
+- `Honest/Entry.lean`: exit 0, 2 theorems clean: `entryFact_held` (`EntryFact`), `rowWidths_held`.
+- `Honest/Width.lean`: exit 0, 1 theorem clean: `widthFact_held` (`WidthFact`).
+- `Honest/Rows.lean`: exit 0, 6 theorems clean.
+  - `rowFact_held` (`RowFact`) from ADDRROW's `RowGoal`.
+  - Each of `RowGoal`'s premises is proved at the instance: `always_held`, `neededKinds_held`, `shapeFact_held`, `outputsAt_held`, `rootsHold_held`.
+- `Honest/Copy.lean`: exit 0, 1 theorem clean: `copyFact_held` (`CopyFact`), via ADDRWC's `copyFact_of_ref`.
+- `Honest/Five.lean`: exit 0, 2 theorems clean.
+  - `five_held : RowGoal → RefPorts R → RefWidths R → CopiesHeld → NeededBits → Five`.
+  - `addressesConnected_of_held`: `AddressesConnected (held R B desc q c₀)` from the same hypotheses.
+- [run: `r20261113-021607-35c4`, vy-nebius-2, head `8adc0f07366c`, the base `798474779897` merged] `Honest/Five.lean` again: "lean exit 0 in 264 s", 2 theorems clean. So the whole chain compiles at my pushed head.
+- The same run's `--build` step failed in ADDRROW's file only: `AddressFacts/RowKind.lean:179:2: No goals to be solved`. None of my files imports `RowKind`.
+- [run] Machines: `7af3` waited 22 min on cpu-11, 00:32:35Z to 00:54:59Z (memory). This resume's try `r20261113-021449-52b0` had 8 checks ahead on cpu-12, so I withdrew it after a minute. Its resend `r20261113-021607-35c4` started on vy-nebius-2 within about a minute.
+
+### Open: what the address premise at the instance still rests on
+
+| Hypothesis | What it says | Who |
+|---|---|---|
+| `AddressRow.RowGoal` at the instance | what gives `RowFact` from its premises | ADDRROW (`AddressFacts/RowGive.lean`, stated, not proved) |
+| `NeededBits (held …)` | each needed gate is a bit of its unit's member | NEEDEDBITS (`NeededBitsHeld.lean`, written, its try waiting) [relayed: its 02:12Z entry] |
+| `RefPorts R` | every written bit's row is one of `R`'s ports; none is named like an opening row | the token select's circuit; mine to discharge at Friday's files, not started |
+| `RefWidths R` | every bit's position lies inside its port's row | the same |
+| `CopiesHeld` | the template's circuit copies each needed bit where its port's row is read | the same |
+
+NEEDS: ADDRROW (`RowGoal`), NEEDEDBITS (`NeededBits`), as above. I wrote neither.
+
+### Does the instance still pass `two h` under `wiringOk` (your question)
+
+[read] L1's `two` (`Code.lean` at `origin/cursor/proofs-frame-l1-9c4e`) adds `membersScoped h && wiringOk h` to the base's guard. The base's part holds at the instance by `two_held`, compiled earlier. `wiringOk`'s ten clauses at the instance:
+
+- [run: earlier, `Instance.lean`] `writersFirst` (`wiresFirst_held`), `sourcesNamed` (`sourcesNamed_held`, from `Ref.named`) and `wiresMove` (`wiresMove_held`).
+- [run: `r20261113-021607-35c4`, vy-nebius-2, head `8adc0f07366c`: "lean exit 0 in 346 s", "none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"] `returnedWhole` (`returnedWhole_held`, from `RefPorts.written`), `writtenUnwired` (`writtenUnwired_held`: no wire), `refReadsOwn` (`refReadsOwn_held`) and "registers no value" (`values_held`, `rfl`), in `Honest/Wiring.lean` at `8adc0f07366c`.
+  - `refReadsOwn` takes one new hypothesis on `R`, `RefReadsNamed R B`: each port of `R.reads` is one of `R`'s ports, or reads a string that is an interior registration port.
+- [derived] The three clauses that are only on L1, not stated on my branch:
+  - `namesOnce`: one template, so one name;
+  - `wiresAlike`: no wire, so the `all` is over `#[]`;
+  - `writtenRead`: every written bit's port is linked (`RefPorts.written`, `heldLink_held`).
+- [derived] `membersScoped` is `scopeOkH (stmtOf R.x)`: a fact of the template's circuit, which GATHER answers for the second try. At my instance it would be one more field of `Ref`.
+- [derived] FRAME's 01:38Z proposals (`returnedWhole` leaving `wiringOk`; `sourcesNamed`, `writtenUnwired` and `writtenRead` decided per template and port) hold at the instance for the same reason: every port is linked and nothing is wired.
+
+So the instance passes `two h` under L1 if `R` carries `scopeOkH` and `RefReadsNamed`, besides the facts it already carries.
+
+### HELDOF's per-inner-block bound
+
+[read] None of my files reads `memberOk` or `MemberFits` (`grep` over `Honest/`), so the instance never read the whole-member bound. The design guard `two_held` proves is the base's; HELDOF's change reaches it only through `R.scope` and `R.tmpl`, which are fields of `R`.
+
+### STOP RULE
+
+Nothing: no change of mine alters a listed guarantee or what the verifier accepts.
+
+### Pushed
+
+[run] `cursor/proofs-honest2-7c4e` at `8adc0f07366c`; the base `798474779897` is merged; nothing unpushed.
+
+### Not established
+
+- That `RowGoal`, `NeededBits`, `RefPorts`, `RefWidths`, `CopiesHeld`, `RefReadsNamed` and `scopeOkH` hold of the token select's circuit files.
+- That my files build on L1. Its definitions of the five facts, `AddressesConnected` and `BuiltWired` match my base's text [read: diff], but I have not built against L1.
+
+### To post
+
+Nothing.
