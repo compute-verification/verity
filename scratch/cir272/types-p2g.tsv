@@ -1,0 +1,5 @@
+t172	census:SparseMlaSplit_v1{T=2,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	3160
+t174	census:SparseMlaSplit_v1{T=4,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	3160
+t176	census:SparseMlaSplit_v1{T=6,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	3160
+t178	census:SparseMlaSplit_v1{T=8,NS=1,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session	3160
+t202	census:DsaMqaLogits_v3{N=29,H=32,D=128}	1	session	3184
