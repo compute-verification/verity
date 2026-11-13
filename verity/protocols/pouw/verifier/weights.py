@@ -38,13 +38,13 @@ import re
 from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
-from verity.protocols.pouw.verifier.protocol import fold_roots
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.commitments import domains, hm96
+from verity.commitments.crypto import chacha20
 from verity.commitments.hm96 import batch as hm96_batch
 from verity.commitments.merkle import merkle_depth
 from verity.commitments.rowleaf import sha512_row_v2_prefix
-from verity.commitments.crypto import chacha20
+from verity.protocols.pouw.verifier.protocol import fold_roots
+from verity.protocols.spot.verifier.one_stage import registered as G
 
 #: an H1 execution phase's weights' root: each K's registered ``…/b/<K>`` root
 WEIGHTS_TAG = domains.POUW_H1_WEIGHTS
