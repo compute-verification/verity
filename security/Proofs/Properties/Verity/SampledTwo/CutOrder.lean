@@ -19,8 +19,8 @@ This module takes the order from the ledger the check read, in three steps.
 
 * **What the check shows** (`OrderShown`): at an accepted play on two windows, the ledger the second stage's coin
   evidence carries holds an open of the first window for a session `a`, an `end` of `a`, an open of the second window
-  for a session `b` and a `reserve` of `b`, the end's `seq` below the reserve's. No lemma here derives it from the
-  form's acceptance: it is a hypothesis of `order_binds` and `cutBound_order`.
+  for a session `b` and a `reserve` of `b`, the end's `seq` below the reserve's. It is a hypothesis of `order_binds`
+  and `cutBound_order`, and `CutAccept.orderShown` derives it from the form's acceptance.
 * **Each of those lines is the device's** (`line_device`, `entry_device`): a line of a ledger `drawCoins` accepted is
   signed under the key (`Window.verifyLedger_sig`), so the device's own ledger holds a line with the same text apart
   from its signature, or the finder outputs a break from that session's record. `Window.window_opens` is this for the
@@ -311,10 +311,10 @@ def PrintsInOrder (dev : History) (w₁ w₂ : String) (log : List Release) : Pr
   else ∀ pk a b, LedgerOpens (dev.ledger pk) w₁ a → LedgerOpens (dev.ledger pk) w₂ b → EndsBefore (dev.ledger pk) a b →
     ∃ log₁ log₂, log = log₁ ++ log₂ ∧ PrintsOn dev w₁ log₁ ∧ PrintsOn dev w₂ log₂
 
-/-- **What an accepted play on two windows shows of its two sessions' order** (a hypothesis where it is used: no lemma
-here derives it from the form's acceptance): the ledger the second stage's coin evidence carries holds an open of the
-first window, an `end` of that open's session, an open of the second window and a `reserve` of that open's session,
-the end's `seq` below the reserve's. -/
+/-- **What an accepted play on two windows shows of its two sessions' order** (a hypothesis where it is used here;
+`CutAccept.orderShown` derives it from the form's acceptance): the ledger the second stage's coin evidence carries
+holds an open of the first window, an `end` of that open's session, an open of the second window and a `reserve` of
+that open's session, the end's `seq` below the reserve's. -/
 def OrderShown (θ : ByteArray) : Prop :=
   ∀ s : Verity.Sent, s.params = θ → Accepts s → ∀ p c e, caseOf s = .ok (p, c, e) →
     ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
