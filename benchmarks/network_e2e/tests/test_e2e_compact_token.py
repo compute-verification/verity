@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.protocols.certifier.verifier import active
+from verity.protocols.accounting.certifier.verifier import active
 
 HERE = Path(__file__).resolve().parents[1]
 

@@ -23,8 +23,8 @@ import pytest
 from conftest import load
 from verity_config.settings import of
 
-from verity.protocols.pouw.verifier.audit import weights_root
-from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.accounting.pouw.verifier.audit import weights_root
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SM120_DIR = HERE.parent / "pearl_c_sm120"
@@ -169,9 +169,9 @@ def test_descriptors_are_the_layouts_staged():
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.protocols.pouw.prover.schemes import pearl_c as C
-    from verity.protocols.pouw.prover.schemes import pearl_kw as P
-    from verity.protocols.pouw.prover.schemes.pearl_c_device import H100
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+    from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import H100
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)

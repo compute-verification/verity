@@ -41,7 +41,7 @@ from collections.abc import Sequence
 
 from exact_kit.checks import Checks
 
-from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
 __all__ = ["keyed_round", "main", "u32"]
 

@@ -53,14 +53,14 @@ from pathlib import Path
 from verity_config.settings import of
 
 from verity.commitments import Commitment, MerkleTree, Opening
-from verity.protocols.pouw.prover.schemes import get
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.pouw.prover.schemes import pearl_c_work as W
-from verity.protocols.pouw.verifier import audit as au
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, tagged
+from verity.protocols.accounting.pouw.prover.schemes import get
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.accounting.pouw.verifier import audit as au
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, tagged
 
-# the work sampling design and the clear audit are a reference tool's (verity/protocols/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
 import clear_audit as CA
 import clear_work as CW
 

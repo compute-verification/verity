@@ -47,7 +47,7 @@ from fractions import Fraction
 
 from verity_machine_model import lean_headline
 
-from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
 UNITS_A_SET = 8
 LANES = 32

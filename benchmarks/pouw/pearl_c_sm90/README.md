@@ -1,7 +1,7 @@
 # pearl_c_sm90: Pearl-C's kernels on the H100 and H200, and GLM-5.3 on them
 
 Pearl-C's device kernels for sm_90a (`pearl_c_sm90.cu`: `pearl-c-h100-v1-h3`, G = 4, hashing format -h3), checked bit
-for bit against the CPU reference (`verity.protocols.pouw.prover.schemes.pearl_c`), and what they cost at the linears
+for bit against the CPU reference (`verity.protocols.accounting.pouw.prover.schemes.pearl_c`), and what they cost at the linears
 of GLM-5.3 as one tensor-parallel rank serves them: the served call against the card's stock FP8 GEMMs, the passes it
 retains and their reference replay, and the fused-MoE grouped call against the same rows called one unit at a time.
 
