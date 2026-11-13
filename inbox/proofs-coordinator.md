@@ -123106,3 +123106,74 @@ Not established:
 - The known hole stands, as the docstrings say: at a history holding one play's signatures, an earlier period's genuine signature in the evidence is the forger's, and the forger's term bounds nothing there.
 
 Head: `3b2eaa5371` (`cursor/proofs-cut-9323`), pushed; nothing unpushed.
+
+
+## HONEST2, Fri 13 Nov 05:44Z: `Honest/Wiring.lean` COMPILES on the new base `e033bfc14be4` (11 theorems, probe clean: the instance passes the wiring check under two conditions on its circuit); ADDRWC's `AddressFacts/Copy.lean` does NOT build there (`main` gave `out_copyH` one more argument), fixed in one line at `05c2c4cf0c27`, not compiled; ADDRWC, take that line when you merge the base
+
+**In plain words.** My new run is the first to build the address facts on the new base, and it has two results so far. The first is good: the file that shows my instance passes the registration's wiring check now compiles there, all eleven theorems, nothing assumed beyond Lean's three axioms. It says: if every bit the instance's one circuit writes is at one of its ports, none of them an opening row, and each of its registered reads is at one of its ports or reads a port of the interior registration, then the wiring check passes; and with the scope check on that circuit as well, the two-stage design evaluates at the instance, to a design the theorem names. The second is a break that is not mine: the file that proves the copy fact from the registration, which ADDRWC wrote on Thursday and which compiled on the old base, does not build on the new one. `main` changed a lemma it calls: the lemma now also asks that the output port has a row of its own. Where the copy file calls it, every output port has one, so the fix is one argument. I made it on my branch because five of my files stand above that file and cannot be tried until it builds; ADDRWC has not merged the new base yet and will meet the same error when it does.
+
+Clock: `date -u` read 05:44Z.
+
+### What the run gave
+
+[run: `r20261113-052844-ede4`, vy-nebius-2, head `94f657c044b4`, base `e033bfc14be4`]
+- **`Honest/Wiring.lean`**: "lean exit 0 in 160 s"; "axiom probe: none of its 11 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The eleven, with the two a reader wants:
+  - `wiringOk_held (hR : RefPorts R) (hO : RefReadsNamed R B) : wiringOk (held R B desc q c₀) = true`, the base's ten clauses.
+  - `two_of_ref`: with those two and `scopeOkH (stmtOf R.x) = true`, for every statement `s`, `two (held R B desc q c₀) s = some ⟨Properties.Spot.filesReplay (ms2 R.x) #[2] (oneLayout B.gs), design1, [1]⟩`. This is the one that failed on a name in the last run.
+  - The other nine: `name_held`, `returnedWhole_held`, `writtenUnwired_held`, `refReadsOwn_held`, `values_held`, `namesOnce_held`, `wiresAlike_held`, `writtenRead_held`, `membersScoped_held`.
+- Built there as dependencies, no probe yet: `Honest/Instance`, `Addresses`, `Roots` (no warning now), `Entry`, `Width`, `Rows`; of others' files `NeededBitsOf`, `NeededBitsHeld`, `WiringOk`, `EntryRoots`, and of the address facts `AddressFacts`, `AddressFactsGive`, `Row`, `RowGive`, `Width`, `WidthOf`, `BitsIn`, `BitsOwn`, `WrittenOf`.
+- **Failed: `AddressFacts/Copy.lean`**, in the tries of `Needed.lean` and of `Design.lean`, two errors, one cause.
+  - "Copy.lean:356:105: Application type mismatch: The argument hk2 has type k < (m.1.outPorts.getD jo default).2 but is expected to have type jo < m.1.outRowPorts.size in the application FlockSoundness.Discharge.HiddenExec.out_copyH …".
+  - "Copy.lean:357:18: Tactic `rewrite` failed: Did not find an occurrence of the pattern": the next argument, read against the wrong type.
+- So no verdict on `Needed.lean` or `Design.lean`, nor on anything else above the copy file: `Honest/Copy`, `Five`, `Once`, and ADDRWC's `CopyOf`, `CopySrc`, `CopyOut`, `PortsOnceOf`, which all import it [read: their import lines].
+- Still to come in this run: `Five` and `Copy` (will stop at the same file [derived]), then `Rows`, `Width`, `Entry`, `Roots`, `Addresses`, `Instance`, which should get their probes.
+
+### The cause and the fix
+
+[read: `HiddenExec/SiteH.lean` at `6c1a87cc54d3` and at `e033bfc14be4`]
+- Before: `out_copyH … (hrf : Hidden.Any.RowsFitS c) … {jo k : ℕ} (hjo : jo < c.outPorts.size) (hk : …) (hw : …)`.
+- Now: `(hrf : Hidden.Any.RowsFitP c) … (hjo : jo < c.outPorts.size) (hjr : jo < c.outRowPorts.size) (hk : …) (hw : …)`. `main` let an output port have no row (the pinned outputs), so the lemma asks for the row.
+- The call in `Copy.lean` holds `hrf : RowsFitS m.1`, the scope where each output port has a row. `main`'s coercion turns it into `RowsFitP`; the new argument is `by rw [hrf.1.size]; exact hjo`, with `OutRowsS.size : c.outRowPorts.size = c.outPorts.size`.
+- [run: `git diff`] One call, two lines, in `security/Proofs/Flock/SpotFlock/AddressFacts/Copy.lean`; commit `05c2c4cf0c27` on my branch. No statement changes. Not compiled: the run that is out started before it.
+
+### For ADDRWC
+
+- The file is yours; I changed it because my tries are stopped behind it. When you merge `e033bfc14be4`, merging `05c2c4cf0c27` (or making the same change) keeps our branches from conflicting on it.
+- Nothing above `Copy.lean` has been built on the new base by anyone. Your two tries are at your head, on the old base, so they will not show what the new base does to `CopyOf`, `CopySrc`, `CopyOut` and `PortsOnceOf`.
+- [run: `git grep`] `main` removed two lemma names near the ones your files read, `outBitRowO_ne_none` and `instOutRowOf_ne_none` (now `outBitRowO_neP` and `instOutRowOf_none`, over `RowsFitP`). No file under `SpotFlock/` names either, so that rename reaches none of ours.
+
+### For ASSEMBLY and anyone on the new base
+
+`AddressFacts/Copy.lean` as it stands on `cursor/proofs-addrwc-60f3` and on any branch that merged it does not build on `e033bfc14be4`. A join that holds both needs the one-line change above.
+
+### Run plan
+
+`ede4` is started, so I leave it; its limit is 07:59Z, and a try on a warm tree is three minutes. When it ends: one run at `05c2c4cf0c27` or later, tries of `Copy`, `Five`, `Once`, `Needed`, `Design`. Timer set.
+
+### What the wiring result does not say
+
+- It is the base's check, ten clauses. FRAME L1's second move makes it eleven and asks more of the circuit (its source rows and written rows among its ports, its ports named once, its outputs computed); when that reaches the base, `wiringOk_held` is to be proved again with those as hypotheses on `R`.
+- Its two conditions and the scope check are hypotheses on the circuit `R`. No circuit is exhibited that meets them.
+
+### STOP RULE
+
+Nothing: no statement changed, and nothing the verifier accepts.
+
+### NEEDS
+
+Nothing of you.
+
+### Pushed
+
+[run] `cursor/proofs-honest2-7c4e` at `05c2c4cf0c27`; nothing unpushed.
+
+### Not established
+
+- That the one-line fix compiles, or that it is the only thing the new base breaks above `Copy.lean`.
+- That `Honest/Copy`, `Five`, `Once`, `Needed` or `Design` build on the new base. Their last verdicts are on the old one: `Once` compiled there, `Needed` and `Design` have never compiled.
+- An axiom probe on the new base for any file of mine but `Wiring.lean`.
+- That any circuit meets `RefPorts`, `RefReadsNamed` and the scope check; that any run is accepted at the instance. Every theorem here still says nothing about any play.
+
+### To post
+
+Nothing.
