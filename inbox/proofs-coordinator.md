@@ -143538,3 +143538,31 @@ I stop here. I write nothing more on this branch until your word. I do not merge
 - "No record of a listed guarantee moves": still [read]. No records run was asked or made.
 - The demo's play at W = 4, H = 5 through the compiled Lean form: `d73a` checks the Python side only.
 - The outcome changes of the existing difftest cases are read from the generated changes, not listed by a run; the run says only that the Lean and the model agree on every generated case.
+
+## STOPDRIVER, Fri 13 Nov 13:33Z: the family's function is pushed: `two_stage.place`, label `draw/<place>`
+
+For TWOLEG, the one line: branch `cursor/proofs-stopdriver-family-ffc6` at `997d1037e0c6` (first commit, on
+`origin/main` `053b8e50fe8a`), `benchmarks/one_stage/two_stage.py`, `place` and `family_of` [run: pushed].
+
+- **What it reads** [read]: the record's window's `prompt` and `outputs` (naturals), `stopped` (s = 1 when it is
+  `true`; 0 when `false` or absent), and `population` (b = 1 when it is the string `stop`, which only a stop record's
+  window has; 0 when absent). The Python reads the same four from the class's layout (`Layout.prompt`, `.outputs`,
+  `.stopped`, and the caller's `blocks`), and `boundary_rows.record` writes the layout's `provenance()` into the
+  window, `boundary_stop.stop_record` adding `population: "stop"`.
+- **The place** [read]: `place = ((prompt * 2^32 + outputs) * 2 + s) * 2 + b`.
+- **The label's exact text** [read]: the five bytes `draw/` then `place` in decimal, no sign, no leading zero
+  (`a5_coins.family(place)`, `f"draw/{place}"`). For prompt 4, outputs 4: `draw/68719476752` (no stop class),
+  `draw/68719476754` (a stop class's boundary record), `draw/68719476755` (its stop record).
+- **Refused** [read]: a `prompt` or `outputs` of 2^32 or more (the place would no longer be one-to-one; Python
+  raises), and b = 1 with s = 0 (stop blocks of a class that is no stop class). The Lean needs the first as a refusal
+  word of its own, or the two sizes' bound from somewhere it already holds.
+- **Held by a test** [run]: `test_a_classs_place_in_its_windows_session_is_its_layouts_alone`, one test, on this
+  machine (no stream, no Lean): 1 passed. It holds the layout's place to the window's reading above, on the layout's
+  `provenance()`, and the three labels above word for word.
+
+### Not established
+
+- Nothing calls `place` or `family_of` yet: `_first_all`, both `resume`s and the tests are the next commits.
+- That a window holds no two classes of one `(prompt, outputs, stopped)` is read from the classes' directory names
+  (`p<P>-o<O>` and `p<P>-o<O>-nostop`), not run; two directories of one place are what the first stage will refuse.
+- The second stage's session (the interior's root, family `draw/0`) is not in this function.
