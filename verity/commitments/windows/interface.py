@@ -1032,8 +1032,8 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
             raise ValueError(f"table read {r.doc()}: a declared table's root or domain id, a 64-byte port")
         rects.append((r.reader, r.port, r.at, r.at + r.units, 0, k, r.doc()))
     for o in reg.openings:
-        units(o.reader, o.at, o.units, o.doc())
         port(o.reader, o.key, o.doc())
+        units(o.reader, o.at, o.units, o.doc())
         if o.table not in tables or o.verdict not in dict(templates[o.reader][0].outs) or not o.ports:
             raise ValueError(f"opening {o.doc()}: a declared table's row at its key, with a verdict output")
         for p in o.ports:
