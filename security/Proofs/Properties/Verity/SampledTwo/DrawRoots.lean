@@ -77,6 +77,7 @@ theorem stageDraws_first {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : St
   have hℓ := hfam o ho label after hd
   obtain ⟨⟨k, hk, p, c, e, -, -, hdec, -⟩, hg, hx⟩ := hA o ho
   have hd' : firstDraw k = some (label, after) := by
+    beta_reduce at hd
     rw [hk] at hd
     exact hd
   obtain ⟨hl, rfl⟩ := firstDraw_label hdec hd'
@@ -93,6 +94,7 @@ theorem stageDraws_second {C : CaseOf} {Acc : Verity.Exchange → Prop} {ℓ : S
   have hℓ := hfam o ho label after hd
   obtain ⟨⟨k, hk, p, c, e, -, -, hdec, -⟩, hg, hx⟩ := hA o ho
   have hd' : secondDraw k = some (label, after) := by
+    beta_reduce at hd
     rw [hk] at hd
     exact hd
   obtain ⟨key, c₂, hch, h5, rfl⟩ := secondDraw_parts hdec hd'
