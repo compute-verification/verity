@@ -163,8 +163,9 @@ def test_a_fixed_case_whose_repo_is_pinned_at_two_revisions_is_refused_with_both
     import json
 
     from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine.profiles.cases import CASES
 
-    repo = prof.CASES["B0"]["repo"]
+    repo = CASES["B0"]["repo"]
     for name in ("first", "second", "other"):
         (tmp_path / name).mkdir()
     first = {"repo": repo, "role": "B0", "revision": "9535bd9b1d1d" + "0" * 28, "downloaded": True,
