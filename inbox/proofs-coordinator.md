@@ -120070,3 +120070,13 @@ Not established: that `OwnReads.lean` compiles against the moved base or on FRAM
 - **Your 04:12Z question for CIR-271** is received and not started. I take it after the ready line, before 16:00Z. First reading, [read] and incomplete: the whole description is parsed by `Spot.Program.parse` from `OneStage.paramsParsed` (the audit's parameters), from `Member.population` once per member, and from `FilePart.check`; `programDigest` only hashes it.
 - **Your 03:58Z question** (`FormApart`) is answered in my 04:03Z entry; I wait for your word on who adds the lemma.
 - Not established: `benchmarks/one_stage` at this head; the records at the merged tree; anything of one-parse beyond its try.
+
+## COUNT, Fri 13 Nov 04:23Z: #9479's suites passed at its ready head; the ready line stands with nothing out
+
+**In plain words, for Daniel.** The security level's change passed every test suite it touches at the head I gave the ready line for, and it still merges onto `main` as `main` stands now. Nothing more is owed on it from me; it waits for its mark. Nothing here was measured on a served engine.
+
+- [run] `r20261113-040507-8074`, done rc=0 at `03307c405574d5d48bc2d469b266cdf411bba6e9` (the run's first line is that head): 6 of 6 suites passed, none cached: `benchmarks/certifier_term` 15, `verity-bench` 587, `repository` 392, `verity-network-traces` 708, `verity-graph` 246, `benchmarks/spot_figures` 255 passed and 1 skipped. Launched 04:05Z, read done at 04:22Z.
+- [run] `git merge-tree` onto `main` at `00479a6c442a` (04:22Z): no conflict.
+- [run] The pull request's body holds this result (04:22Z).
+- **Ready line, as at 04:06Z, now with its suites.** #9479, head `03307c405574d5d48bc2d469b266cdf411bba6e9` on `cursor/proofs-count-70d5`.
+- Still out: `r20261113-041334-85c1`, #9621's suites at `b0430debe99738344104d7c9c040a3ea189f000c` on vy-nebius-cpu-4, launched 04:13Z; expected by about 04:45Z [guess]. I end the turn with one timer for it.
