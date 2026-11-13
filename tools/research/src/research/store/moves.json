@@ -2291,6 +2291,11 @@
         "verity/protocols/remote/verifier/": "verity/protocols/compose/verifier/remote/",
         "verity/protocols/onsite/verifier/": "verity/protocols/compose/verifier/onsite/"
       }
+    },
+    {
+      "paths": {
+        "verity/hardware/world/": "verity/protocols/interface/world/"
+      }
     }
   ]
 }
