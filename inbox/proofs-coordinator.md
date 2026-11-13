@@ -122013,3 +122013,91 @@ In plain words. The two tries that died on vy-nebius-cpu-9 are sent again on vy-
 Not established: whether either file compiles; whether the cap was the cause; `ReadsBack` and the reference's shape stay hypotheses of `memberSession_ok`, which is empty until the form accepts a play. No lock entry is added (your 05:16Z item 3).
 
 **STOP RULE.** Nothing done. **NEEDS.** None new. **To post.** For INF-786, if you like: "the cpu-9 thread failures of 8403 and b01d were most likely the job's own `ulimit -Sv`; resent without it."
+
+
+## WINDOWAT, Fri 13 Nov 05:17Z: A28 compiles whole with three axioms only (`windowRead_members`, `windowReads_members`, `windowAt_form`, `windowPasses_members`) once `vocab_finder_le` in soundness's `Window/Instance.lean` is three lemmas; at `b870875f9e` that file does not build, and 8 times the heartbeats do not cure it
+
+No statement of mine changed. `windowReads_members` is now in `MemberForm/WindowPasses.lean` (it was in `MemberForm/Reads.lean`); the aggregator `MemberForm` still imports everything. Every theorem below is stated at an accept of the per-member form, which accepts no play today: each is true and empty until it does, and the docstrings of `windowAt_form` and `windowReads_members` say so (`9bb5f219b3`, the 04:50Z message).
+
+Mailbox read at `6902675daf` (05:12Z): the 04:50Z and 05:07Z messages. No `~/wt/.pen`. Branch `cursor/proofs-windowat-5e4b` at `b423826c1a`, pushed.
+
+**Compiled, each with only `propext`, `Classical.choice`, `Quot.sound`** [run]
+
+- `MemberForm/Reads.lean`, `windowRead_members`: `r20261113-044857-9818`, at `53f10cc8f2`, lean exit 0 in 498 s.
+- `MemberForm/WindowPasses.lean` (3 theorems: `windowPasses_members`, `windowAt_form`, `windowReads_members`) and `MemberForm/Laid.lean` (2): `r20261113-045701-a2d1`, at `53f10cc8f2` with the patch below on soundness's file. At my head alone they cannot build, because that file does not.
+- `MemberForm/Sent.lean` (9): `r20261113-042006-7408`. `MemberForm/Sample.lean` (16, with `WindowOn.total` and `WindowOn.population`) and `MemberForm/Accept.lean` (3, with `accept_members`): `r20261113-043720-c129`, at `33348d5b4e`. `Units` (7), `Passes` (14), `States` (4): `r20261113-035758-fc62`.
+- Not yet at their present text: `MemberForm/Apart.lean` (with the 05:07Z lemma) and the axiom probe of `MemberForm/Registered.lean` (it built as a dependency of `Reads` in `9818`). Both are in `r20261113-051531-ca27`.
+
+**Finding I: `Window/Instance.lean` on #9520's branch does not build** [run]
+
+- At `b870875f9e`: `Window/Instance.lean:554:0: (deterministic) timeout at whnf, maximum number of heartbeats (200000) has been reached`, which is `vocab_finder_le`, then `573:8: unknown constant vocab_finder_le` in `covers` (`r20261113-042006-7408`).
+- At the head before it, `covers` itself timed out the same way at `546:0` (`r20261113-034225-11e6`). So nothing that imports the file builds: soundness's `spotSound` and `remote_soundness_window`, my `Laid` and `WindowPasses`.
+- It is not merely slow: the same term under `set_option maxHeartbeats 1600000` times out too (`r20261113-044248-10ba`, a probe theorem of mine).
+- What builds: the three lemmas below. With them the whole file compiles, lean exit 0 in 29 s, 32 theorems, three axioms only (`r20261113-045701-a2d1`). It replaces `vocab_finder_le` as it stood at `b870875f9e`; I pushed it nowhere.
+
+```lean
+/-- The deployed vocabulary's sampled collision bound is `sampledBound`, at every number of calls. -/
+theorem vocab_crBound (θ : ByteArray) (t : ℕ) : (I.vocab K).crBound θ .sampled t = I.sampledBound θ t :=
+  rfl
+
+/-- The deployed vocabulary's sampled finder is the window's read finder. -/
+theorem vocab_finder {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    (σ : Verity.Game.Strategy ((I.vocab K).game θ F c)) :
+    (I.vocab K).finder .sampled θ F c σ = windowReadFinder I.base I.dev θ F c σ :=
+  rfl
+
+/-- The deployed vocabulary's sampled finder is the window's read finder, and its bound `sampledBound`. -/
+theorem vocab_finder_le {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (h : (I.vocab K).FinderCR .sampled θ F c σ) :
+    (windowReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg ≤
+      I.sampledBound θ ((I.vocab K).cost θ F c σ) := by
+  rw [← I.vocab_crBound K θ, ← I.vocab_finder K σ]
+  exact (I.vocab K).finderPr_le_crBound h
+```
+
+- Soundness's head moved to `50b624bb89` at 04:36Z, with `have h' := (I.vocab K).finderPr_le_crBound h; exact h'` in that lemma. I have not seen it build. [guess] The `exact` meets the same comparison as the term did. It is merged into my branch and in `r20261113-051531-ca27` (`Window/Instance` is its second file), so its verdict comes about 05:35Z. If it fails, the lemmas above are the tested replacement.
+- [guess] Why the three lemmas work: each `rfl` compares one field of the vocabulary at a free variable, and after the two rewrites `exact` is a syntactic match.
+- A smaller proposal, not needed today: `get_map_of`, `get_of_map`, `Member.map_n_toV5`, `Window.counts_joint`, `Window.Laid.joint` and `Window.Laid.extend` (`Window/Instance.lean:81-129` [read]) read nothing of the instance. In `Window/UnboundLaid.lean` they would let `MemberForm/Laid.lean` build without it.
+
+**What I changed** (all pushed)
+
+- `33348d5b4e`: `windowRead_members` no longer imports the instance. `accept_members` moved beside `FormAccepts` (`Accept.lean`); `WindowOn.total` and `WindowOn.population` beside the form's structure (`Sample.lean`); my `unitsWith_sum` is deleted for the existing `Verity.FileRead.unitsWith_eq_sum`; the three facts the instance takes are together in `WindowPasses.lean`.
+- `53f10cc8f2`: the one error Lean found in `Reads.lean` (`checkAt_proved` named at the evidence v1's check read).
+- `4cdd4f8706`: the 05:07Z lemma, `paramsEitherOfJson_apart : paramsEitherOfJson j = .ok p → p.members = some ms → Apart ms.toList`, in `MemberForm/Apart.lean`. The statement is true as worded [derived, from reading `Spot/OneStageZk.lean:845-846` and `:1585`]; not compiled yet (`ca27`). One fact beside it [read]: today the parse an accept carries is `VStar.Recursive.Sampled.paramsOfJson` (`VStarRecursive/Sampled.lean:57-61`), which reads `OneStageZk.paramsOfJson`, not `paramsEitherOfJson`. So the lemma discharges `FormApart` on the day that parse reads either form; until then `formApart_refused` does.
+- `b423826c1a`: merge of soundness's `50b624bb89`. Not merged yet: MEMBERS' `cursor/proofs-members-subset-391b` at `ae80f367e6`, next after `ca27` reports.
+
+**#9576** (the refusal of an unsampled member's statement), head `338c4ad877`, unmarked
+
+- It now holds #9441's head `51a2e803cb` and the Python of the refusal (`af8682dc82`); one docstring conflict in `test_members_twin.py`, resolved keeping both sides. The verifier's module docstring states the one direction `membersRun_sampled` proves.
+- `r20261113-042849-610e`, rc 0 [run]: `Spot/OneStageZk.lean` (18 theorems), `MembersParse.lean`, `MembersRefusal.lean` with three axioms only; `verity-core-sampled-proofs` and `verity/protocols/spot/verifier --quick`: 2 suites passed, 0 failed.
+- It merges with `main` at `00479a6c44` without conflict [run: `git merge-tree`].
+- Its diff against `main` holds #9441's, which is unmarked too. The ratchet gate against `origin/main` fails on 9 retired-term sites, all in #9441's commits and none in mine [run, locally]: `Flock/KsScope.lean` 47 to 55, and "sampled unit" at `Spot/OneStageZk.lean:1428` (`0429a81f98`).
+- I have not marked it. I would mark it once #9441 is marked or on `main`; say if you want it sooner.
+
+**Machines and waits** [run]
+
+- `7408` (`--on auto`, vy-nebius-cpu-3) and `c129` (auto, cpu-8) took a place within seconds. `9818` (auto, cpu-9) waited about 5 minutes for a check slot.
+- `r20261113-045441-6264` was a second copy of the `Reads` try, sent to cpu-8 while `9818` stood in line; it stood behind a 77-minute wait there, `9818` took its place first, and I cancelled `6264` after one minute in line (its check never started).
+- `--on auto` put two of my tries on one machine twice for a few minutes (cpu-12: `fc62` and `10ba`; cpu-9: `610e` and `9818`).
+
+**In flight**
+
+- `r20261113-051531-ca27` (cpu-12, `--pool proofs`, at `b423826c1a`): `MemberForm/Apart`, `Window/Instance`, `MemberForm/WindowPasses`, `MemberForm/Registered`, then the aggregator `MemberForm`. First verdict about 05:25Z, whole about 05:50Z.
+- `r20261113-034225-11e6` (vy-nebius-2, at the older `407876aa6f`): `Apart` and `Registered` left, each building its tree; about 05:45Z.
+
+**Size and day** (for 18:00Z), at `b423826c1a`
+
+- Mine: 23 files (22 under `MemberForm/` and `Core/QSortPerm.lean`), 5127 lines, 203 theorems [run: counted]. My earlier "24 files" counted one too many.
+- A28 is written whole and each file of it has compiled. It is compiled at one head of my branch as soon as `Window/Instance.lean` builds at soundness's head: today, if `50b624bb89` builds or the three lemmas go in.
+- It rests on four hypotheses that are not the play's: `FormAccepts` and `FormApart` (the day the composite's parse and check read the per-member form), `RegisteredHolds` (soundness's guarded field) and `WindowRegistered` (soundness's instance).
+
+**Not established**
+
+- Whether `Window/Instance.lean` builds at `50b624bb89`.
+- `Apart.lean` with the new lemma; `Registered.lean`'s axiom probe; the aggregator at one head.
+- Anything at MEMBERS' subset branch, which changes `Spot/OneStageZk.lean`.
+- `Reads.lean` takes 498 s to elaborate; I have not looked for the slow step.
+- A33's `opensOwn_of_checked`; the twin's row for the link-first refusal.
+- That any of these theorems says something of a play: the form accepts none today.
+
+**To post** (to soundness, PRF-490): `Window/Instance.lean` at `b870875f9e` does not build: `vocab_finder_le` times out at `whnf`, at 200000 heartbeats and at 1600000 (`r20261113-042006-7408`, `r20261113-044248-10ba`). Three lemmas in its place build the whole file in 29 s (`r20261113-045701-a2d1`); their text is in WINDOWAT's 05:17Z entry. Whether `50b624bb89` builds is in `r20261113-051531-ca27`.
