@@ -18,10 +18,10 @@ from verity.circuits.defs import bind
 from verity.circuits.program import Program
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
-from verity.definitions.silicon.cast import f32_is_nan as is_nan_f32_word
-from verity.definitions.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word
+from verity.circuits.silicon.cast import f32_is_nan as is_nan_f32_word
+from verity.circuits.silicon.cast import f32_to_bf16_hw_word, f32_to_bf16_word
 
-CAPTURES = Path(__file__).resolve().parents[4] / "verity/definitions/ops/tests/fixtures/tc-total-2026-09-07"
+CAPTURES = Path(__file__).resolve().parents[4] / "verity/circuits/ops/tests/fixtures/tc-total-2026-09-07"
 DEVICES = ("4090", "a100")
 
 #: `Serve_v1{C=B0,LP=32,STEPS=7}`'s digest under the v1 codec, with the k16 step's id re-keyed to core's `AmpereBF16TcDot16_v2`

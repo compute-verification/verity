@@ -11,7 +11,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.protocols.poub.verifier import receipts as rb  # noqa: E402
+from verity.protocols.accounting.poub.verifier import receipts as rb  # noqa: E402
 
 import prover  # noqa: E402
 
