@@ -146895,3 +146895,37 @@ Clock: `date -u` read 14:43Z when I wrote this. Mailbox: your 14:07Z (`4911c4266
 **Runs.** `r20261113-142845-1c3c` (vy-nebius-cpu-14): done, rc 0. Earlier: `r20261113-133857-2491` and `r20261113-134107-b389`, rc 0.
 
 **To post.** Nothing from me.
+
+## SESSIONOF2, Fri 13 Nov 14:49Z: `ParamsWf.lean` compiles on a node, its 22 theorems on the three standard axioms only; `PortsOfParams.lean` has moved beside it and its first try is running
+
+The three lemmas of order F are now checked where it counts: on a node, in the join's tree, Lean accepts the file and the axiom probe finds nothing beyond the three standard axioms in any of its 22 theorems. The fourth lemma, which turns the ports' one into the named premise `PortsDistinctAt`, is in a second file that has not compiled yet; its try is running.
+
+**The verdict** `[run]`
+
+- `r20261113-143202-0854` on vy-nebius-cpu-7, `lean_changed.py --try security/Proofs/Flock/SpotFlock/ParamsWf.lean --siblings`, `--mem-gb 24`, on commit `e0eb889df17a`: done, rc 0. "lean exit 0 in 299 s". "axiom probe: none of its 22 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". "siblings: no built module of its package that doesn't import Proofs.Flock.SpotFlock.ParamsWf declares a name it does (94 imported in 9 s, peak 4581 MB); 4134 unchecked".
+- So the walk of the real `paramsParsed` passes in the tree, which the first try had not reached, and with it `paramsParsed_reads`, `ports_nodup`, `partition_wf` and the three at the form.
+- Its only warnings on the file: one alternative of a `repeat'` that the tree never runs (`dsimp only at hb`). Commit `b6f6845cee44` deletes that line and nothing else. That commit has not compiled on its own; the try below builds it as a dependency, and the copy on my VM passes on it (22 theorems, no `sorryAx`).
+
+**The second file** `[run]` `[read]`
+
+- It is now `security/Proofs/Flock/SpotFlock/PortsOfParams.lean`, module `Proofs.Flock.SpotFlock.PortsOfParams`, not under `Properties/Verity/SampledTwo/` as my 14:32Z entry says. Its text is unchanged and its theorems stay in `namespace Verity.SampledTwo`.
+- Why: a try at the old place (`r20261113-144300-c9d0`, vy-nebius-cpu-1) failed in 14 s with "error: unknown module `Proofs.Properties.Verity.SampledTwo.PortsOfParams`". Lake knows a module of the `Proofs` library only under one of its roots. `Proofs.Flock` is a root, so anything under `Proofs/Flock/` is known; under `Proofs/Properties/Verity/SampledTwo/` each module has its own root line in `security/Proofs/lakefile.toml`, a file that is not mine. A module under `SpotFlock/` importing one of `Properties/Verity/SampledTwo/` has a precedent on the join (`RunsAs/OfCheck.lean` imports `SampledTwo.Steps`).
+- Its try: `r20261113-144840-d257` on vy-nebius-cpu-3, same form and `--mem-gb 24`, launched 14:48:40Z on commit `b7abdd8e8478`. At 14:49:26Z it is running, at module 10,503 of 11,442 under the file. I expect it to end by about 15:10Z; its limit is 15:33Z. It is my only run: the three before it had ended.
+
+**STOP RULE**: nothing. No listed guarantee's statement or premise changes; no verifier code is touched.
+
+**NEEDS**
+
+- This replaces the root line of my 14:32Z entry. The join's owner: `"Proofs.Flock.SpotFlock.PortsOfParams"` in `roots` of `security/Proofs/lean-audit.json`, and in `roots` of lib `Proofs` in `security/Proofs/lakefile.toml`, or an import of it from a module the roots reach. It imports `Proofs.Flock.SpotFlock.ParamsWf`, so the one line reaches both. Without it the Lean check fails `orphan.file` on both files (`tools/verity/lean/check.py`, "is not imported by the roots"). Not before `PortsOfParams.lean` passes.
+- The rest of the 14:32Z entry's NEEDS stand.
+
+**To post** (for the coordinator, to the holders of the three premises): "`ReadsWf p.circuits`, `PortsDistinctAt C` and `Claims.Json.Wf` of the partition object each follow from one hypothesis, `∀ b j, Core.canonicalJson b = .ok j → Claims.Json.Wf j`, which the parser switch proves (`canonicalJson_ok` with `parse_wf`). The lemmas are `readsWf_of_bytes`, `partition_wf`, `partition_wf_form`, `ports_nodup_form` in `Proofs.Flock.SpotFlock.ParamsWf`, compiled with a clean axiom probe on `cursor/proofs-sessionof2-params-4e98`. Nothing to change on your side until the switch and the join are on one branch."
+
+**Not established**
+
+- That `PortsOfParams.lean` compiles (`ports_of_inputOfCase`, `portsDistinctAt_of`).
+- `hcj` on the join: it holds only after the switch.
+- That any consumer's premise is dropped: I changed no file that takes one.
+- The whole Lean check on the branch: only the one file's try ran, and the orphan rule would fail until the root line is in.
+
+**Pushed heads**: `cursor/proofs-sessionof2-params-4e98` `b7abdd8e8478` (off the join at `4e986e339ad2`); `cursor/proofs-sessionof2-parser-defe` `fe28c96c4322` (unchanged); `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`; `cursor/proofs-sessionof-5c1e` `521933e1430b`.
