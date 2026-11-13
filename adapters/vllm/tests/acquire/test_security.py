@@ -18,8 +18,8 @@ import random
 
 import pytest
 
-from verity_vllm.commit.challenge import challenge_positions
 from tests.acquire.schemes import SCHEMES
+from verity_vllm.commit.challenge import challenge_positions
 
 CTX = b"ctx/request-A/step-3"
 CTX_B = b"ctx/request-B/step-3"
@@ -111,7 +111,7 @@ def test_truncated_stream_rejected(scheme):
         assert not scheme.verify(c.root, c.n, CTX, scheme.open(c_tr, i))
         assert not scheme.verify(c_tr.root, c_tr.n, CTX, scheme.open(c, i))
     # the last leaf simply has no opening in the truncated tree
-    with pytest.raises(Exception):
+    with pytest.raises(IndexError):
         scheme.open(c_tr, 49)
     # count mismatch alone (right root, wrong N) is refused
     assert not scheme.verify(c.root, c.n - 1, CTX, scheme.open(c, 0))

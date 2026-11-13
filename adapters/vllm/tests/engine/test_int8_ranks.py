@@ -18,7 +18,7 @@ def registered(monkeypatch):
     seen: list[str] = []
     for part, mod in (("linears", "int8_vllm"), ("attention", "int8_attention_vllm")):
         stand_in = ModuleType(f"verity_vllm.engine.{mod}")
-        stand_in.register = lambda part=part: seen.append(part)
+        stand_in.__dict__.update(register=lambda part=part: seen.append(part))
         monkeypatch.setitem(sys.modules, stand_in.__name__, stand_in)
         monkeypatch.setattr(pkg, mod, stand_in, raising=False)
     monkeypatch.delenv(IR.ENV, raising=False)

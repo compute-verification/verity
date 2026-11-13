@@ -19,16 +19,15 @@ import os
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits import codec
-from verity.definitions.circuits import operations as O
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits.program import Program
+from verity.definitions.circuits import operations as O
 from verity.definitions.registry import boolean_tanh as BT
 from verity.definitions.registry import dense as D
 from verity.definitions.registry import prims as P
@@ -111,7 +110,7 @@ def _tanh_words(rng) -> np.ndarray:
 def _tanh_ref(words: np.ndarray) -> np.ndarray:
     """`TanhF32Rn_v1` (`dense.tanh_f32_bits`) on f32 words, vectorized: NaN -> 0x7FC00000, |x| >= 10 (inf included) -> ±1,
     ±0 -> ±0, else RN32 of float64 `math.tanh`."""
-    w = words.astype(np.uint32)
+    w: np.ndarray = words.astype(np.uint32)
     a = w & 0x7FFFFFFF
     out = np.where(w >> 31, np.uint32(0xBF800000), np.uint32(0x3F800000))
     mid = (a != 0) & (a < 0x41200000)
@@ -155,6 +154,8 @@ def _edge_products(rng, n: int, act) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _pairs(rng) -> tuple[np.ndarray, np.ndarray]:
+    sg: np.ndarray
+    su: np.ndarray
     sg, su = np.meshgrid(SPECIALS, SPECIALS, indexing="ij")
     eg, eu = _edge_products(rng, 4096, D.gelu_tanh_bf16_bits)
     g = np.concatenate([sg.reshape(-1), eg, rng.integers(0, 1 << 16, 8192, dtype=np.uint16)])
@@ -178,7 +179,7 @@ def test_the_activation_is_the_table_on_every_word() -> None:
 def test_every_gate_word(u: int) -> None:
     """All 65,536 gate words at an up word: at 1.0 the activation alone, then signs, zeros (-0 becomes +0), subnormals, the
     finite maximum, an infinity, a NaN and scales that move the product's exponent."""
-    g = np.arange(1 << 16, dtype=np.uint64)
+    g: np.ndarray = np.arange(1 << 16, dtype=np.uint64)
     _agree(bind(BT.GeluTanhMulBf16), g, np.full(g.shape, u, np.uint64))
 
 
@@ -204,7 +205,7 @@ def _procs() -> int:
 
 
 def _tanh_chunk(c0: int):
-    words = np.arange(c0, c0 + CHUNK, dtype=np.uint64)
+    words: np.ndarray = np.arange(c0, c0 + CHUNK, dtype=np.uint64)
     got, want = _bits(bind(BT.TanhF32Rn), words), _tanh_ref(words)
     bad = np.flatnonzero(got != want)
     region = (words >= T.TANH_RN_LO) & (words < T.TANH_RN_HI)
@@ -218,6 +219,8 @@ def test_tanh_on_every_f32_word() -> None:
     """`TanhF32Rn_v3` is `TanhF32Rn_v1` on all 2^32 words, and its results at the region's 123,179,281 positive words, by their
     low 27 bits, are the pinned `tanh_rn`."""
     BS.compile(bind(BT.TanhF32Rn))
+    table: np.ndarray
+    first: list[tuple[int, int, int]]
     table, bad, first = np.zeros(1 << 27, np.uint32), 0, []
     with mp.get_context("fork").Pool(_procs()) as pool:
         for n, few, idx, vals in pool.imap_unordered(_tanh_chunk, range(0, 1 << 32, CHUNK)):
