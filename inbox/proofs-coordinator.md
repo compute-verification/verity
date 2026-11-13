@@ -113614,3 +113614,40 @@ Clock: `date -u` read 02:05Z. Branch `cursor/proofs-addrrow-d318` at `c6a040e60c
 **To post.** Nothing.
 
 **Not established.** Anything beyond `Row.lean` compiling. `SubsetParses` itself. `Good` of a session statement's draw. `NeededKinds` from condition (a). The hour stays Fri 12:00Z [guess]. It moves later if cpu-12's line is as long as vy-nebius-2's was.
+
+## HELDOF, Fri 02:06Z: Friday's inner blocks commit at most 131,120 (chunk) and 131,104 (combine) bits, under 262,144, read from the V = 154,880 circuit files, so two h is not none on size; the per-block bound is written on my branch, try running
+
+Compiled since 01:48Z: `HeldOfRun.lean` (`filesOk` and `fillOk` at the copies, from the run's population check), run `r20261113-011911-4032`, exit 0, 9 theorems, axioms only `propext`, `Classical.choice`, `Quot.sound` [run]. Not yet compiled: the per-block bound (try `r20261113-020313-913d`, running).
+
+In plain words: what an inner block of Friday's run commits is its inputs and its returned output bits, and both circuit files put that near 131,000 bits, half the cap. So the proved verifier's scope check passes on size at Friday's shape. The old member bound was off by a factor of about 5,800 because it counted every gate of every inner block. My new bound counts only what one inner block commits. It doesn't grow with the number of inner blocks or with their rows, and Friday's templates meet it.
+
+The numbers, read from the circuit files at `vy-nebius-2:/workspace/tmp/proofs-stopdriver-statements/v154880/{chunk,combine}/circuit.txt` (STOPDRIVER's run `r20261112-234712-4ed2`) [run: header `META` and `flock-ir-unit/v2` lines read over ssh; read: `Net.ofRows` for the header's fields, `WORD = 128`]:
+
+| template | input group | `B = upv·min(inWords·128, constPos)` | `R = upv·(constPos − min + 1)` | returned leaves | `outBits = 16·leaves` | per-block bound `B + outBits` | old `2 + n·B + 3·n·R` at n = 512 |
+|---|---|---|---|---|---|---|---|
+| `GreedyChunk_v2{N=7744,OFF=0}` | 1,024 words, 7,744 ports of 16 bits | 131,072 | 952,193 | 3 | 48 | 131,120 | 1,529,677,314 |
+| `GreedyCombine_v2{V=154880,N=7744}` | 1,024 words, 7,801 ports of 16 bits | 131,072 | 954,881 | 2 | 32 | 131,104 | 1,533,806,082 |
+
+- `upv` (`units_per_vu`) is 1 in both, `constPos` is 1,083,264 and 1,085,952, and `R` agrees with the AND counts STOPDRIVER logged (951,941 and 954,687) within the input and constant rows [run].
+- At n = 1 the old bound is already 2,987,653 and 2,995,717 [derived].
+- The per-block bound counts every input column of the group (131,072). The ports use 123,904 and 124,816 bits of it, so the committed count is at most 123,952 and 124,848, size class 2^17 [derived: only keyed input columns are inputs a unit owns; guess that no padding column is keyed].
+
+Is `two h` `none` at Friday's run? No, not on size [derived]. `partitionsOk` asks each inner block's committed count to fit 262,144, and each commits at most its inputs and its returned bits (the lemma below, once compiled). The other conjuncts of `two` (`topoOk`, Nodup, `replayOf`, `filesOk`, `templateOk`) don't read sizes [read].
+
+The per-block bound, on my branch `cursor/proofs-heldof-block-4c7b` cut from FRAME's L1 head `d702f45e9e` (commit `dcdbe25bbc`) [read: written, not compiled]:
+- `BlockCommits.lean` (new, beside FRAME's `BlockSize.lean`):
+  - `committed_le_ends`: a block that reads only its own gates and constants, among disjoint blocks covering every gate but constants and inputs, commits only its returned gates and its inputs (no outside gate reads it);
+  - `length_ends_le`: a member's unit's block has at most `(bitsRows c).nIn + outBits c` of those, whatever `n` and the rows (from `member_closed`, `outGate_some`, `eq_of_off` and FRAME's `length_insOf_le`).
+- `ScopeOf.lean`:
+  - `partitions_keyProg` takes `nIn + outBits ≤ unitClassMax` in place of the member's gate count;
+  - `MemberFits`' fourth conjunct is that bound.
+- `ScopeDesc.lean`: `memberOk`'s third clause is `unitIns c + outBits c ≤ unitClassMax`.
+- FRAME's `length_blockOf_le` (`nIn + 3·nComp`) is not enough on its own: at Friday's shape `3·nComp` is about 2.86M [derived]. The bound has to be on what the block commits, which is what `BlockCommits` proves.
+
+STOP RULE: none. `MemberFits`, `memberOk` and `partitions_keyProg` are read by no verifier and by neither `SpotKSTwo`'s nor `SpotExfilTwo`'s statement [read: `two`'s body; no `lean-audit.json` names any of them]. `two` and what the model's verifier accepts are unchanged.
+
+NEEDS: none new.
+
+To post: nothing.
+
+Not established: that the per-block bound compiles (try running); whether any padding column of the input group is keyed (it changes the committed count by at most 7,168 bits, not the verdict); `Built` from the parse; (c).
