@@ -20,8 +20,10 @@ messages `SpotFlock.V h` reads: SpotFlock's tagged Flock messages, not the recor
   member's circuit and public file, the blobs' lookup tables, the record's sample (`drawBytes`), the member's partition
   object and program and its registered reads, each JSON value as `Flock.RecordText.printT` prints it. Its fields are
   `SpotFlock.HeldOf.memberRaw`'s, so `pinOk` compares it with template `t`'s reference statement like with like.
-* **The statements' message** (`stmtsMsg`): one statement a template, in template order, in the encoding
-  `SpotFlock.stmtsOf` reads back (`stmtsOf_stmtsMsg`, `stmtAt_stmtsMsg`).
+* **The statements' message** (`stmtsMsg`): one statement an entry of the evidence's `stmts`, which the run's
+  second-stage statement check reads by position, the `t`-th template `t`'s session statement, in the encoding
+  `SpotFlock.stmtsOf` reads back (`stmtsOf_encStmts`, `stmtAt_stmtsMsg`). A statement whose fields fit their length
+  words decodes back to its fields (`stmtAtCase_some`, then `FlockDeploy.decode_encode_of_fits`).
 * **A session's messages** (`sessionMsgs`, `msgAtCase`): as `FlockDeploy.act` reads them, the link message (tag `0`, the
   record's `root_B` and public words, `linkBody`), each recorded round's retained bytes after tag `0`, in
   `spec.repStreams` order, and the last message (tag `1`: the statement, the record's text and the proof files the
@@ -79,9 +81,9 @@ def stmtRaw (m : Spot.OneStageZk.Member) (circuit pub : ByteArray) (tables : Lis
 /-- **Template `t`'s session statement on the case**: its member's statement at its session's record's sample, with
 the member's own circuit, public file and registered reads and the blobs' lookup tables. -/
 def stmtAtCase (k : Case) (t : ℕ) : Option Msg := do
-  let (p, e) ← formOf k
-  let m ← memberAt p t
-  let s ← filesAt p e t
+  let pe ← formOf k
+  let m ← memberAt pe.1 t
+  let s ← filesAt pe.1 pe.2 t
   let record ← recordAt k.blobs s
   let circuit ← (k.blobs.get m.own.circuit "circuit").toOption
   let pub ← (k.blobs.get m.own.pub "public file").toOption
@@ -91,10 +93,11 @@ def stmtAtCase (k : Case) (t : ℕ) : Option Msg := do
 /-- **The session statements' encoding**: the list of statements as `SpotFlock.stmtsOf` reads one back. -/
 def encStmts (xs : List Msg) : Msg := FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩) xs
 
-/-- **The session statements' message on the case**: each template's session statement, in template order. -/
+/-- **The session statements' message on the case**: one statement an entry of the evidence's `stmts` (the statements
+the run's second-stage statement check reads, by position), the `t`-th template `t`'s session statement. -/
 def stmtsMsg (k : Case) : Option Msg := do
-  let (p, _) ← formOf k
-  let xs ← (List.range p.circuits.size).mapM (stmtAtCase k)
+  let pe ← formOf k
+  let xs ← (List.range pe.2.stmts.size).mapM (stmtAtCase k)
   pure (encStmts xs)
 
 /-- **A session's messages**, as `FlockDeploy.act` reads them at the session `spec` its statement `x` sets up: the link
@@ -110,13 +113,13 @@ def sessionMsgs (spec : _root_.Flock.SessionSpec) (x : Msg) (record : String) (p
 /-- **Template `t`'s session's messages on the case**: at its session statement's setup, its record and the proof
 files its reps name (`Spot.OneStageZk.filesOf`). -/
 def msgsAtCase (k : Case) (t : ℕ) : Option (List Msg) := do
-  let (p, e) ← formOf k
-  let s ← filesAt p e t
+  let pe ← formOf k
+  let s ← filesAt pe.1 pe.2 t
   let record ← recordAt k.blobs s
   let x ← stmtAtCase k t
-  let (_, spec, _) ← FlockDeploy.setupOf true x
-  let proofs ← (Spot.OneStageZk.filesOf k.blobs s (.ok (spec, #[], Json.null, Json.null))).toOption
-  sessionMsgs spec x record proofs
+  let su ← FlockDeploy.setupOf true x
+  let proofs ← (Spot.OneStageZk.filesOf k.blobs s (.ok (su.2.1, #[], Json.null, Json.null))).toOption
+  sessionMsgs su.2.1 x record proofs
 
 /-- **Template `t`'s session's `i`-th message on the case.** -/
 def msgAtCase (k : Case) (t i : ℕ) : Option Msg := (msgsAtCase k t).bind fun ms => ms[i]?
@@ -176,7 +179,7 @@ theorem stmtsOf_encStmts {xs : List Msg} (hl : xs.length < 2 ^ 64) (hb : ∀ x �
 
 /-- **The statements' message states each template's session statement**, where they fit their length words. -/
 theorem stmtsOf_stmtsMsg {k : Case} {m : Msg} (h : stmtsMsg k = some m) :
-    ∃ p e xs, formOf k = some (p, e) ∧ (List.range p.circuits.size).mapM (stmtAtCase k) = some xs ∧
+    ∃ p e xs, formOf k = some (p, e) ∧ (List.range e.stmts.size).mapM (stmtAtCase k) = some xs ∧
       m = encStmts xs := by
   unfold stmtsMsg at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h
@@ -186,8 +189,8 @@ theorem stmtsOf_stmtsMsg {k : Case} {m : Msg} (h : stmtsMsg k = some m) :
 /-- **Template `t`'s statement in the statements' message** is its session statement on the case, where the
 statements fit their length words. -/
 theorem stmtAt_stmtsMsg (h : SpotFlock.Held) {k : Case} {m : Msg} (hm : stmtsMsg k = some m) {p e xs}
-    (hf : formOf k = some (p, e)) (hxs : (List.range p.circuits.size).mapM (stmtAtCase k) = some xs)
-    (hl : xs.length < 2 ^ 64) (hb : ∀ x ∈ xs, x.length < 2 ^ 64) {t : ℕ} (ht : t < p.circuits.size) :
+    (hf : formOf k = some (p, e)) (hxs : (List.range e.stmts.size).mapM (stmtAtCase k) = some xs)
+    (hl : xs.length < 2 ^ 64) (hb : ∀ x ∈ xs, x.length < 2 ^ 64) {t : ℕ} (ht : t < e.stmts.size) :
     stmtAtCase k t = some (SpotFlock.stmtAt h m t) := by
   obtain ⟨p', e', xs', hf', hxs', rfl⟩ := stmtsOf_stmtsMsg hm
   rw [hf] at hf'
@@ -202,6 +205,18 @@ theorem stmtAt_stmtsMsg (h : SpotFlock.Held) {k : Case} {m : Msg} (hm : stmtsMsg
   rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by omega : t < xs.length), Option.getD_some]
   have h2 := hget t (by rw [List.length_range]; exact ht) (by omega)
   simpa using h2
+
+/-- **Template `t`'s session statement is its member's statement** at its session's record's sample. -/
+theorem stmtAtCase_some {k : Case} {t : ℕ} {x : Msg} (h : stmtAtCase k t = some x) :
+    ∃ p e m s record circuit pub, formOf k = some (p, e) ∧ memberAt p t = some m ∧ filesAt p e t = some s ∧
+      recordAt k.blobs s = some record ∧ (k.blobs.get m.own.circuit "circuit").toOption = some circuit ∧
+      (k.blobs.get m.own.pub "public file").toOption = some pub ∧
+      x = (stmtRaw m circuit pub (Spot.OneStageZk.tablesOf k.blobs) (drawBytes record)
+        (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode := by
+  unfold stmtAtCase at h
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h
+  obtain ⟨⟨p, e⟩, hf, m, hm, s, hs, record, hr, circuit, hc, pub, hp, rfl⟩ := h
+  exact ⟨p, e, m, s, record, circuit, pub, hf, hm, hs, hr, hc, hp, rfl⟩
 
 /-- **A session's messages are its link message, its rounds' and its last message.** -/
 theorem sessionMsgs_some {spec : _root_.Flock.SessionSpec} {x : Msg} {record : String} {proofs : Array ByteArray}
