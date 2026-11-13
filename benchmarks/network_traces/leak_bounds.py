@@ -496,6 +496,10 @@ OF_RECORD = 2
 SET_TIME = "with a simulated set-time card"
 #: the mark of the set-time card and of the figure printed under its label, one of `MARKS`
 SIMULATED = "simulated"
+#: the mark of a row whose accept a run gives and no proof covers. It is a row's mark and no input's, so not one of
+#: `MARKS`: it is the harness's mark of that name (`verity_bench.exfiltration`'s `MARKS`), whose tests hold this string
+#: to it
+RUN_NOT_PROVED = "run, not proved"
 #: what a figure under `SET_TIME` rests on, the source of the card's input and of that figure
 SET_TIME_CLAUSE = ("`trusted-host`, set-time card clause: the network certifier's card releases each bucket at the "
                    "tick its record names, whatever the host and the server send it. It holds only of a calibrated "
@@ -542,9 +546,6 @@ class Kind(NamedTuple):
 #: why a row that holds the lengths by a stop block, and is not the design's, is charged no count
 NO_COUNT = ("it is charged no count: its tables are of the lengths rows' form 1, the schedule's rows whatever the "
             "load, so the head states none")
-#: the mark of a row whose accept a run gives and no proof covers: the harness's mark of that name
-#: (`verity_bench.exfiltration`'s `MARKS`), whose tests hold this string to it
-RUN_NOT_PROVED = "run, not proved"
 #: where the scan's accept stands, said in the `scan` row's own line beside its mark, whatever the row's bound and its
 #: scans' δ
 SCAN_ACCEPT = ("its accept is run, not proved: it rests on verdicts the scan's driver hands the compiled record check, "
