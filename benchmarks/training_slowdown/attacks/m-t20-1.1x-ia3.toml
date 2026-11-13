@@ -1,0 +1,17 @@
+# IA3: a scale trained on each output channel of every block's key, value and MLP up projection, under fused AdamW at a
+# rate of 3e-3, each step two forwards of 32 rows, the rate warmed over 50 steps and decayed linearly from the first;
+# E is the scales.
+start = "m-t20"
+route = "ia3"
+target = { gain = 1.1 }
+budget = { steps = 3216, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+targets = "blocks.*.wk.weight,blocks.*.wv.weight,blocks.*.w_up.weight"
+lr = 3e-3
+warmup = 50.0
+clip = 1.0
+micro_batches = 2
+fused = true

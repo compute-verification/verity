@@ -77,8 +77,9 @@ HELD = Path(__file__).with_name("of_record.toml")
 SCHEMA = "of-record/v1"
 #: a record's E `format` beside the codec kinds (`codecs.Codec.kind`) that are the same kind of encoding: the trained
 #: tensors whole, and their deltas in codes with a scale a group, the codes a rounding of the trained delta
-#: (`scaledquant`) or the ternary ones the run trained (`sparseternary`). A format may have several kinds
-E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary"), "lora2": ("lowrank",)}
+#: (`scaledquant`) or the ternary ones the run trained (`sparseternary`), and the parts an adapter trained beside the
+#: frozen start, low-rank factors (`lowrank`) or a scale a row (`rowscale`). A format may have several kinds
+E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary"), "lora2": ("lowrank", "rowscale")}
 #: the codecs a plan may hold beside at least one of its record's format's own kind: a tensor the record's program
 #: carried whole beside its coded ones
 E_BESIDE = {"quant": ("identity",)}
@@ -246,7 +247,10 @@ def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     stream by a scalar a token), which must be one for each gain's multiply, and the backward's multiplies and
     quotients over those three shapes alone. A step that trains no gain has neither of the first two, a record with
     nothing of the kernel beside a config with no updated gain's multiply: the rule then fires on the config's
-    multiplies by θ's gains, and covers the same products."""
+    multiplies by θ's gains, and covers the same products. A backward product of those the record has too, from a
+    computation of its own over the same shapes, leaves the norm the config's excess: the rule takes that where the
+    config has more of it at the same MACs a product, and does not fire where the record has as many or more, or
+    where a product's MACs differ."""
     x, s, g = [1, shape["ctx"], shape["d_model"]], [1, shape["ctx"], 1], [shape["d_model"]]
     gain = json.dumps([x, g])
     fused, mul = ("fwd", "updated", "_fused_rms_norm", gain), ("fwd", "updated", "mul", gain)
@@ -257,19 +261,25 @@ def norm(cfg: dict, rec: dict, shape: dict, args: list) -> dict | None:
     updated = rec[fused] if trained else [0, 0]
     inside = [k for k in cfg if k in (frozen, scale) or k[:2] == ("bwd", "grad") and k[2] in ("mul", "div")
               and k[3] != "[]" and all(o in (x, s, g) for o in json.loads(k[3]))]
-    if cfg.get(scale, [0])[0] != updated[0] + cfg.get(frozen, [0])[0] or any(k in rec for k in inside):
+    both = [k for k in inside if k in rec]
+    if cfg.get(scale, [0])[0] != updated[0] + cfg.get(frozen, [0])[0] or any(
+            k[0] != "bwd" or rec[k][0] >= cfg[k][0] or rec[k][1] * cfg[k][0] != cfg[k][1] * rec[k][0] for k in both):
         return None
     gains = (f"{updated[0]} multiplies by an updated gain, the same on both sides" if trained else
              "no gain is updated, so the record has nothing of the kernel")
-    found = {"rule": "norm", "record_macs": updated[1], "config_macs": updated[1] + sum(cfg[k][1] for k in inside),
+    theirs = sum(rec[k][0] for k in both)
+    found = {"rule": "norm", "record_macs": updated[1] + sum(rec[k][1] for k in both),
+             "config_macs": updated[1] + sum(cfg[k][1] for k in inside),
              "what": f"the norm as the CPU's elementwise ops for CUDA's fused kernel: {gains}, and on the config's "
                      f"alone {cfg.get(frozen, [0])[0]} by θ's gains, {cfg[scale][0]} normalisations and "
-                     f"{sum(cfg[k][0] for k in inside if k[0] == 'bwd')} products of the backward's, none of which "
-                     "CUDA's kernel shows the counter"}
+                     f"{sum(cfg[k][0] for k in inside if k[0] == 'bwd') - theirs} products of the backward's, none of "
+                     "which CUDA's kernel shows the counter"
+                     + (f"; {theirs} products of the backward's over the same shapes, op and MACs are on both sides, "
+                        "the record's own, beside which the config's excess is the norm's" if both else "")}
     for k in (*((mul,) if trained else ()), *inside):
         del cfg[k]
-    if trained:
-        del rec[fused]
+    for k in (*((fused,) if trained else ()), *both):
+        del rec[k]
     return found
 
 

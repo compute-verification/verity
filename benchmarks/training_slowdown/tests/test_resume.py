@@ -198,6 +198,7 @@ def test_a_kept_state_with_other_buffers_than_the_route_built_is_refused(tiny, s
 OUTPUTS = {"dgrad": {"targets": "blocks.0.w_*.weight", "rank": 1, "grow": "0.1:blocks.0.w_*.weight:2", "group": 16,
                      "msg_bits": 4, "rotate": True, "micro_batches": 2, "lr": 1e-2},
            "ema": {"trainable": "blocks.0.w_*", "lr": 1e-2, "ema_decay": 0.9},
+           "ia3": {"targets": "blocks.0.w_*.weight", "lr": 1e-2},
            "lora": {"targets": "blocks.0.w_*.weight", "rank": 2, "lr": 1e-2},
            "qat": {"targets": "blocks.0.w*.weight", "keep": 0.5, "lr": 1e-2}}
 
@@ -205,12 +206,13 @@ OUTPUTS = {"dgrad": {"targets": "blocks.0.w_*.weight", "rank": 1, "grow": "0.1:b
 def bare(state: dict) -> dict:
     """A kept state without what a route with an `output` carries beside the weights θ holds: `dgrad`'s store (its
     codes and scales), `ema`'s averages, `lora`'s B, and `qat`'s latents and its codes (`scales`, `plus`, `minus`),
-    each zeros, as `build` leaves it."""
+    each zeros, and `ia3`'s scales, ones, as `build` leaves them."""
     def zeros(tensors: dict, named) -> dict:
         return {k: torch.zeros_like(v) if named(k) else v for k, v in tensors.items()}
+    model = zeros(state["model"], lambda k: k.endswith((".b", ".v")))
     return state | {"buffers": zeros(state["buffers"], lambda k: k.startswith("average_")
                                      or k.endswith((".scales", ".plus", ".minus", "_codes", "_scales"))),
-                    "model": zeros(state["model"], lambda k: k.endswith((".b", ".v")))}
+                    "model": {k: torch.ones_like(v) if k.endswith(".l") else v for k, v in model.items()}}
 
 
 @pytest.mark.parametrize("route", sorted(OUTPUTS))

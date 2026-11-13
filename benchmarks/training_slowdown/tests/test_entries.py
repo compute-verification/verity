@@ -207,6 +207,30 @@ def qat(dials: dict) -> dict:
     return theta | built()
 
 
+def ia3(dials: dict) -> dict:
+    """IA³ written the other way round: each scaled matrix is built whole, diag(l)·W, before one forward of the
+    start's own model on it, where the route scales the matrix's output. The scales start at one under torch's AdamW;
+    the output is the matrices as built."""
+    torch.manual_seed(0)
+    model = LM.of(SHAPE)
+    theta = {k: v.detach().clone() for k, v in model.state_dict().items()}
+    scales = {k: torch.ones(len(v), requires_grad=True) for k, v in theta.items() if v.ndim == 2 and any(
+        fnmatch.fnmatchcase(k, p.strip()) for p in dials["targets"].split(","))}
+    opt = torch.optim.AdamW([scales[k] for k in sorted(scales)], lr=dials["lr"], betas=(0.9, 0.95), weight_decay=0.0)
+
+    def built() -> dict:
+        return theta | {k: theta[k] * scales[k][:, None] for k in scales}
+
+    for t, rows in enumerate(batches()):
+        logits = torch.func.functional_call(model, built(), (rows[:, :-1],))
+        F.cross_entropy(logits.flatten(0, 1), rows[:, 1:].flatten()).backward()
+        torch.nn.utils.clip_grad_norm_(list(scales.values()), dials["clip"])
+        opt.param_groups[0]["lr"] = dials["lr"] * subset.schedule(dials, t, STEPS)
+        opt.step()
+        opt.zero_grad()
+    return {k: v.detach() for k, v in built().items()}
+
+
 def dgrad(dials: dict) -> dict:
     """The coded reduction written out, a block of rows at a time. Each block of rows takes one forward of the start's
     own model on the matrices as the store gives them (θ + its codes' values for a matrix trained whole; for an
@@ -456,6 +480,7 @@ REFERENCES = {
     "m-t20-1.1x-fullmuon-wsd-4611": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611-ema": (averaged, CLOSE),
     "m-t20-1.1x-fullmuon-wsd-ema": (averaged, CLOSE),
+    "m-t20-1.1x-ia3": (ia3, CLOSE),
     "m-t20-1.1x-ref-optim-1372": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-ref-optim-fullmuon": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-shallow-depthshare-4": (under(muon), CLOSE_BF16),
