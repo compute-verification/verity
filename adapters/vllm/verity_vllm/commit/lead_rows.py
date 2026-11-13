@@ -201,14 +201,14 @@ class WindowKeying:
         return self._key_leaf
 
     def register(self, weights_root: bytes) -> tuple[bytes, bytes, int]:
-        """The window's registration, recorded with the challenger before it draws salt_w."""
+        """The window's registration, recorded with the challenger before it samples salt_w."""
         if self._weights is not None:
             raise Refused("a window is registered once")
         self._weights = bytes(weights_root)
         return self._weights, self._key_leaf, self._calls
 
     def open(self, salt_w: bytes) -> None:
-        """Take the window's live salt, drawn after its registration was recorded."""
+        """Take the window's live salt, sampled after its registration was recorded."""
         if self._weights is None:
             raise Refused("salt_w before keyLeaf, the weights' root and the call count are recorded")
         if self._salt_w is not None:

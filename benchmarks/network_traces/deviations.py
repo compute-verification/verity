@@ -247,7 +247,7 @@ class Deviation:
 
 
 def bits_of(seed: int | None = None) -> Callable[[], int]:
-    """The planted string, a bit a call: `seed`'s (None: drawn from the system's randomness)."""
+    """The planted string, a bit a call: `seed`'s (None: sampled from the system's randomness)."""
     rng = random.Random(secrets.randbits(64) if seed is None else seed)
     return lambda: rng.getrandbits(1)
 
