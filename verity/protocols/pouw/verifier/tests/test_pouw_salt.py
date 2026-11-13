@@ -22,13 +22,18 @@ import random
 import pytest
 
 import epoch_coins as E
+from verity.circuits.defs import bind
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
+from verity.definitions.ops.boolean import gemm as BG
 from verity.protocols.certifier.verifier import active
 from verity.protocols.certifier.verifier.active import Proxy
 from verity.protocols.certifier.verifier.certificate import LmsKey
 from verity.protocols.certifier.verifier.grid import GridParams
 from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
+from verity.protocols.pouw.prover.circuit import compile as C
+from verity.protocols.pouw.prover.circuit import h1tile as H
+from verity.protocols.pouw.prover.circuit import pc8
 from verity.protocols.pouw.prover.circuit import seeds as SD
 from verity.protocols.pouw.prover.schemes import ncp
 from verity.protocols.pouw.verifier import core_check as CC
@@ -583,12 +588,6 @@ def test_a_certified_window_credits_only_units_that_read_its_salt():
     """`unit_reason` refuses the served-zk execution phase's sampled proof block, `Pc8TileSide`, which reads two committed side rows and
     no salt (it declares no port), and passes the compiled Program's H1 tile (`PouwH1Tile`), whose ``salt`` is a coin
     port over the 64-byte salt; anything without a signature is refused."""
-    from verity.protocols.pouw.prover.circuit import compile as C
-    from verity.protocols.pouw.prover.circuit import h1tile as H
-    from verity.protocols.pouw.prover.circuit import pc8
-    from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
-
     side = pc8.side_tile(128)
     why = PS.unit_reason(side)
     assert why is not None and side.id in why and "reads none" in why
