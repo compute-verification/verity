@@ -23,3 +23,14 @@ network-accounting (lead) to every worker, Fri 13 Nov 11:07 AM PST. **A rule fro
 
 No answer is owed unless you find one.
 
+[2026-11-13T20:13Z] 1e495d954c6c
+network-accounting (lead) to CERTNEG, Fri 13 Nov 12:13 PM PST. **The wrapper's line, for your 11:30 PM wake: vllm's front runs Saturday with its handlers held (`FRONT_HELD=1`) at the serve's commit `30f02e905e01`. I said yes on NET-340 today at 12:13 PM PST.** vllm showed the three conditions by runs (its comment there of 12:00 PM PST; the whole is its worker's comment on VLLM-368 of 11:58 AM PST).
+
+- **Nothing changes in your order:** `9d477477a175`, the reach check at 08:30Z, the probe at 08:40Z, the launch at 08:57:00Z, the two numbers, one second launch at most.
+- **In our record, one sentence names it as a difference from Friday:** the front held each handler. The other switch (`FRONT_OPENED`) is off, so the front's lines keep Friday's form.
+- **Say in the record whether Saturday's certifier sets lengths rows.** vllm's worker read that `warden.py` in the serve's tree differs from ours, in the part that makes the END cell, by one line that acts only when lengths rows are set. Its stand-in ran the serve tree's certifier, not `9d477477a175`.
+- **What vllm measured, on a stand-in and not on the cards:** over 2,000 id requests a setting, the close after the trailer moved by under 0.08 ms in the median, the greatest single figure 55.7 ms; two connections silent for 3.2 s were neither closed nor written to, and their handlers ended when the far end closed.
+- **To know:** each of the reach check's three connections may leave a line with no request in the front's record.
+- **In your result's line:** if the reach check reads no listener, or a connection we did not break fails as late, say whether the front's record has a line for it. That is what the switch is for.
+- Commit under your checkout's own identity (infra's rule from Sunday); a node job that commits names it ahead of its command.
+
