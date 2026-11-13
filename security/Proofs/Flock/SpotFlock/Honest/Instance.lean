@@ -13,14 +13,15 @@ boundary registration `B` (`Bnd`) of one request sampled `subset:1`, at the desc
 `q`, with SPOT's own frame at the wired program (`frameAt` at the wired address map, `revealCodeWired`, from the code
 `c₀`). Every port of the template's statement is linked to the boundary port of its own name (`Ref.links`), each of
 the request's two units reading its own row of the port (`Ref.rows`), there are no wires (`some #[]`) and the second
-stage reads the coins of round 1 only (`more := 0`). This is the token select's shape: one template over every port,
-its input and output each at the boundary record.
+stage reads the first stage's coins only (`more := 0`). This is the token select's shape: one template over every
+port, its input and output each at the boundary record.
 
 What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what an accepted run of it is, are stated here as
 `Premises`, `InScope` and `Accepts`; `HonestExists` says one registration has all three. At the instance:
 * `builtWired_held`: the frame is SPOT's own at the wired program;
-* `wiresFirst_held`, `wiresMove_held`: there are no wires;
-* `sourcesNamed_held`: every source bit's port is one of `R`'s ports (`Ref.named`), each of which a link names;
+* `wiresFirst_held`, `heldWire_held`: there are no wires;
+* `heldLink_held`: each of `R`'s ports has a link, and every row its units read source bits at is one of them
+  (`Ref.named`);
 * `two_held`, `scope_held`: where every member's circuit is in the scope Flock's hidden-output proof covers and the
   registered wiring passes its check (`membersScoped`, `wiringOk`), the design evaluates, and every statement that
   decodes is in the two-stage scope at the compiled code;
@@ -28,8 +29,8 @@ What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what an accepted
 
 ## What this does not show
 
-* `AddressesConnected` at the instance: it holds only where round 1's record carries each linked port and the interior
-  registers none (`not_addresses_of_input`, `not_addresses_of_readsInterior`);
+* `AddressesConnected` at the instance: it holds only where the first stage's record carries each linked port and the
+  interior registers none (`CheckedRun.not_addresses_of_input`, `CheckedRun.not_addresses_of_readsInterior`);
 * an accepted run (`Accepts`): it needs a concrete `Ref`, a reference statement with hidden outputs and
   `sha512/row/v2` ports in the two-stage scope at two units a request, and an honest session of it. No such statement is
   defined in Lean yet.
@@ -100,8 +101,8 @@ structure Bnd where
 /-- **A template's reference statement**, named `name`, with its ports (`ports`), each linked to the boundary port of
 its own name, its reference registered reads (`reads`, `.null` for none), its reference header (`headers`), and the
 facts the registration reads of it:
-it sets up in Flock's masked scope, reads as a member, with its two units is in the two-stage scope, and each of its
-source bits is at one of its ports. -/
+it sets up in Flock's masked scope, reads as a member, with its two units is in the two-stage scope, and each row
+its units read source bits at (`sourceRows`) is one of its ports. -/
 structure Ref where
   x : Msg
   name : String
@@ -111,9 +112,9 @@ structure Ref where
   zk : zkOk x = true
   tmpl : ∀ h : Held, h.xS₀ 0 = x → templateOk h 0 = true
   scope : scopeOk (bitsProgs (ms2 x)) (membersPart (ms2 x)) ⟨part2 x, design1, [1]⟩ = true
-  named : (sourceBits (ms2 x)).all (fun s => ports.contains s.2.2.row) = true
+  named : (sourceRows (stmtOf x)).all (fun row => ports.contains row) = true
 
-/-- **Round 2's links**: each port of the template's statement reads the boundary port of its own name. -/
+/-- **The second stage's links**: each port of the template's statement reads the boundary port of its own name. -/
 def Ref.links (R : Ref) : Array Spot.SecondStage.Link := R.ports.map fun p => ⟨R.name, p, p⟩
 
 /-- **The rows each port's units read**: two a request, unit `p` its row `p`. -/
@@ -125,7 +126,7 @@ def reg (B : Bnd) : RegTwo :=
   { first := B.g, ns := #[2], ks := #[1], blockOf := fun ρ _ p => ρ * 2 + p, always := fun _ => false }
 
 /-- **The auditor's copies at the frame `c₀`**: one template, `R`'s, with two VUs, the second stage's count `1`, `R`'s
-links and rows, its reference registered reads and header, no wires, and the coins of round 1 only. -/
+links and rows, its reference registered reads and header, no wires, and the first stage's coins only. -/
 def held₀ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held where
   desc := desc
   vus := [#[0, 1]]
@@ -156,6 +157,9 @@ variable (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code)
 
 theorem ms_held : (held R B desc q c₀).ms = ms2 R.x := rfl
 
+/-- **The one template's circuit is `R`'s statement's.** -/
+theorem memberCircuit_held (t : ℕ) : memberCircuit (held R B desc q c₀) t = stmtOf R.x := rfl
+
 /-! ## The design's premises -/
 
 /-- **Each wire's writer is first**: there are no wires. -/
@@ -165,11 +169,6 @@ theorem wiresFirst_held : WiresFirst (held R B desc q c₀) := by
 theorem heldWire_held (t port : String) : heldWire (held R B desc q c₀) t port = none := by
   simp [heldWire, held, held₀]
 
-/-- **Every wired source bit moves**: there are no wires. -/
-theorem wiresMove_held : WiresMove (held R B desc q c₀) := by
-  unfold WiresMove wiresMove
-  simp [heldWire_held]
-
 theorem heldLink_held (p : String) (hp : R.ports.contains p = true) :
     (heldLink (held R B desc q c₀) R.name p).isSome = true := by
   have hmem : p ∈ R.ports := by simpa using hp
@@ -177,28 +176,6 @@ theorem heldLink_held (p : String) (hp : R.ports.contains p = true) :
     fun l => l.template == R.name && l.port == p).isSome = true
   rw [Array.find?_isSome]
   exact ⟨⟨R.name, p, p⟩, Array.mem_map.2 ⟨p, hmem, rfl⟩, by simp⟩
-
-/-- **Every source bit is at a port a link names**: each is at one of `R`'s ports (`Ref.named`). -/
-theorem sourcesNamed_held : SourcesNamed (held R B desc q c₀) := by
-  unfold SourcesNamed sourcesNamed
-  rw [List.all_eq_true]
-  intro s hs
-  rw [ms_held] at hs
-  have hn : R.ports.contains s.2.2.row = true := List.all_eq_true.1 R.named s hs
-  have ht : s.2.1 = 0 := by
-    unfold sourceBits at hs
-    simp only [List.mem_flatMap, List.mem_filterMap, List.mem_range] at hs
-    obtain ⟨m, hm, g, -, hg⟩ := hs
-    have hm0 : m = 0 := by simpa [ms2] using hm
-    subst hm0
-    split at hg
-    · simp at hg
-    · obtain ⟨r, -, rfl⟩ := Option.map_eq_some_iff.1 hg
-      rfl
-  have e : [R.name].getD s.2.1 "" = R.name := by rw [ht]; rfl
-  show ((heldLink (held R B desc q c₀) ([R.name].getD s.2.1 "") s.2.2.row).isSome ||
-    (heldWire (held R B desc q c₀) ([R.name].getD s.2.1 "") s.2.2.row).isSome) = true
-  rw [e, heldLink_held R B desc q c₀ _ hn, Bool.true_or]
 
 /-- The wiring map doesn't read the frame. -/
 theorem wireMap_frame (h : Held) (f : Code) : wireMap { h with frame := f } = wireMap h := rfl
@@ -378,15 +355,6 @@ theorem inScope_of_accepts (hA : Accepts (held R B desc q c₀)) : InScope (held
   | some st => exact ⟨r.x, scope_held R B desc q c₀ hS hW r.x st hx⟩
 
 /-! ## The statements the instance owes -/
-
-/-- **What holds of the instance's wiring and frame with no hypothesis**: `wiresFirst_held`, `wiresMove_held` and
-`sourcesNamed_held`, three clauses of the registered wiring's check, and `builtWired_held`, the first of the two
-premises. -/
-theorem design_held :
-    WiresFirst (held R B desc q c₀) ∧ WiresMove (held R B desc q c₀) ∧ SourcesNamed (held R B desc q c₀) ∧
-      BuiltWired (held R B desc q c₀) (wireMap (held R B desc q c₀)) (returned (held R B desc q c₀)) :=
-  ⟨wiresFirst_held R B desc q c₀, wiresMove_held R B desc q c₀, sourcesNamed_held R B desc q c₀,
-    builtWired_held R B desc q c₀⟩
 
 /-- **What the instance owes for `HonestExists`**: its address premise and an accepted run, at some reference statement
 and boundary registration. -/
