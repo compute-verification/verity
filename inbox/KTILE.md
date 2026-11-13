@@ -567,3 +567,42 @@ from `benchmarks/`, which the page forbids. I promised on it **a plan with days 
    compute-accounting on Friday; your plan is what I bring.
 
 Return by Fri 13 Nov 14:00Z. If the table is done earlier, return then.
+
+## Fri 13 Nov 07:15Z: THE PLAN'S ROW 4 IS TONIGHT. PoUW's served GPU directories move into its package in top's chain 2, by a map compute-accounting's worker writes by 09:30Z. Your table is what checks it. Two passes: a scratch run now, then the real branch
+
+**What happened since your table.** Daniel agreed the architecture page and asked for the
+repository in its structure when he wakes (TOP-415, 07:05Z): every path-only move is on
+`main` by Fri 15:00Z, in two chains marked by 13:00Z. Daniel also regrouped the protocols:
+`verity/protocols/pouw` becomes `verity/protocols/accounting/pouw` (the proofs under
+`protocols/proofs/`, the policy under `protocols/policy/`). compute-accounting (07:20Z): **its
+path-only moves join chain 2 tonight: `pearl_c`, `pearl_c_sm90`, `pearl_c_sm120`,
+`served_zk`'s `hm96_rows.cu` and `filler` into the package's `prover/kernels/`; `pouw_cuda`
+out of the adapter with vllm's yes; `pearl_c4`, dither's `h1u.cu` and `h1sha.cuh` and
+`served_h1` into `verity/protocols/experimental/`.** Its worker pushes a branch with those
+rows by 09:30Z and rings me with the head; a row that needs a code edit is left out and
+listed. I said yes for kernels on TOP-415 (07:2xZ) and promised two lists.
+
+**Pass 1, now (the list is owed by 09:30Z; return with it as soon as it is done):**
+1. In a scratch copy of `origin/main` (say which commit), a map of your own with those rows
+   (copy the format of `tools/move/sass_gate_map.toml`; destinations under
+   `verity/protocols/pouw/prover/kernels/`, since the group move is another map's). Nothing
+   of it is committed anywhere.
+2. Run the mover for real on that copy and list **every reader it leaves behind**: a path
+   built in a form it does not follow (as `ksweep.py:51` and `job.sh:94` were), a setting's
+   default, a spec's `kernel =`, a `contents/kernels/*.toml` field, an include across
+   directories, a build script that names a sibling, a suite's declared inputs, a row of
+   `tests/test_boundaries.py` or of the public export, a pin. File, line, what it reads
+   after the move, whose it is. Your table's `path_sensitive` and `followers` columns say
+   where to look; this pass says what the tool in fact does.
+3. `python3 tools/verity/check/move_check.py` on the scratch range, if it runs there: does it
+   certify, and what does it refuse.
+4. What you would tell compute-accounting's worker in ten lines: the rows that are safe as
+   pure moves, the rows that need a hand edit, and the order.
+
+**Pass 2, when I resume you with the branch's head (about 09:30Z; the list is owed by
+11:00Z):** the same on the real branch, and its rows against your table: anything of the
+table's that the map misses, anything the map takes that the table has staying.
+
+**Not yours tonight:** building anything (another worker builds the H200 kernel before and
+after and compares bytes), a PR, a file in the tree. From now, in prose: "challenges" not
+"coins", "accounting protocol", "the auditor's devices" and never "host".
