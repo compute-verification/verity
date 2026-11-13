@@ -110,10 +110,11 @@ theorem accepted_law_run {form : Bool} {p : Params} {c : OneStage.Commitment} {�
       Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
       law = Select.secondLaw ((Draw.proved (Spot.getD run "draw")).map Int.toNat) ns ks := by
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, hr, -, -, hj, law, hl, htwo⟩ := accepted_steps h
-  obtain ⟨-, -, -, -, vs, received₂, -, hio⟩ := inputAt_ok hi
+  obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, hio, -, -⟩ := inputAt_ok hi
   obtain ⟨grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw⟩ := secondLawOf_ok hl
-  obtain ⟨it, hit, hp, hrep, hsrc⟩ := inputOf_interior p c ξ ξ₂ e received₂ vs
-  obtain ⟨h1, -, -, h4, h5⟩ := inputOf_first p c ξ ξ₂ e received₂ vs
+  obtain ⟨it, hit, hp, hrep, hsrc⟩ :=
+    inputOf_interior p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs
+  obtain ⟨h1, -, -, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂ { e with record := j₂ } received₂ vs
   refine ⟨c₂, ξ₂, r, i, run, law, it, grain, replay, k, ns, ids, ks, hi, hr, hj, htwo, ?_, hsrc, ?_, ?_, ?_, ?_, ?_,
     hks, hlaw⟩
   · rw [hio]

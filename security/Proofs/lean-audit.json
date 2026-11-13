@@ -285,6 +285,10 @@
   "Proofs.Flock.SpotFlock.HeldOfReads",
   "Proofs.Flock.SpotFlock.ReadsCheck",
   "Proofs.Properties.Verity.SampledTwo.AcceptsOfSteps",
+  "Proofs.Properties.Verity.SampledTwo.MemberChecks",
+  "Proofs.Properties.Verity.SampledTwo.RecordNames",
+  "Proofs.Properties.Verity.SampledTwo.JpWalk",
+  "Proofs.Properties.Verity.SampledTwo.AtStmt",
   "Proofs.Properties.Verity.SampledTwo.DrawRoots"
  ],
  "exempt": {
@@ -368,6 +372,10 @@
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "68161b2e468dd0509c8ee6c345e27b5930837246b884fc4999cb26da93f04881"
+  },
+  "Proofs.Properties.Verity.SampledTwo.JpWalk": {
+   "why": "name_lets, jp_mono, jp_body, jp_close, jp_core, jp_disch, jp_ext and jp_walk, the tactics that walk a registration check's do block by its join points (SampledTwo/RecordNames.lean's proofs that a check with no code names its registration's names): elaborators and macros that rename the context's lets and expand to simp only, dsimp only, split, apply, exact, intro, obtain, extract_lets and assumption over the module's code-list lemmas. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
+   "digest": "50acb057ec22daf497d407fd5de6647630daacc8a17dd6af7cf342b210665ce5"
   }
  },
  "layers": {
