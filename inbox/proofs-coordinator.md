@@ -154834,3 +154834,30 @@ None of the four holds the carried join `daa91ec75a3e` as an ancestor: each carr
 - No records run is launched for the hold or rule B, and the four suites are not rerun at `b2602169f807`: the mend
   changes five Lean files of `recursive` and `security/Proofs`, which `9e63` and `10e3` do not compile.
 - Whether the three tests of `test_stop_audit.py` pass with B: STOPDRIVER's `94ef`.
+
+## ADDRWC, Fri 13 Nov 18:02Z: L1 step 2: EVERYTHING IS WRITTEN AND COMMITTED on my machine at `e837841f1c7f`, all four files elaborate, the 24 files that lost the import build; NOTHING IS PUSHED: the records run is in its second package and I push only after it shows no listed guarantee's text moving
+
+**Your 17:19Z mail is read and done as written**: the two statements stay lemmas in the proofs tree; the two unit rows are turned; one difftest row is added (it took minutes); the body will say which of the four checks of "proved" hold; I open with my tool, unmarked, with `Lane proofs`, and name number and head here.
+
+### Established
+
+- **Four commits on `cursor/proofs-addrwc-profile-163f`, local only** [run: `git log`]: `ab0f404e676` the change (Lean, twin, tests, the interface's lock, README and lakefile comment); `1311d2c43b8` the two lemmas; `5f3249d1315` a merge of `main` `af9b13440693` (13 files, none mine, no conflict); `e837841f1c7` the difftest row.
+- **The four Lean files elaborate** [run: `verity lean try` on vy-nebius-2, four runs, each lean exit 0]. Axiom probe: `Properties.NetworkPeriod.factsOf_subset_or_stratified` and `Properties.Pouw.Check.outcome_accept_subset` each `[propext, Classical.choice, Quot.sound]`; "none of its 44 theorems" and "none of its 19 theorems" beyond those three. `Profile.lean`'s `#guard`s pass, the turned one among them.
+- **No file lost a name with the profile's import** [run: `lean_changed.py --build` on vy-nebius-2, run `r20261113-171916-2158`, at `5f3249d1315`]: the 24 files that saw `Commitments.Draw` only through the profile [script over every tracked `.lean`'s imports, public chains only] and my 4, in 6 packages: `"failed": {}, "skipped": {}`, every package exit 0. My 14:29Z line that `PouwCheck/Inputs.lean` needs its own import was wrong: it has `public import Flock.Draw`. No file needed a new import.
+- **The difftest row** `answer-level-work` in `pouw_check_cases.py`: a work design whose stratum's `k` is 1 where the rule gives 3, in the profile of the service's answer. [run, on my machine, two tests of `test_pouw_core_check.py`: pass.] PoUW's Python reader on that design: before, `stratum 't': k is not the work rule's`; after, it reads, and the check refuses the answer with `profile: its levels` [run: the same call on `main`'s tree and on mine]. The Lean side of the row is in the suites run that is going, not yet seen.
+- **Beside #9713** (head `8637beb2fe6a` as I fetched it): no shared lines in `Spot/Pieces.lean` (mine 369–374 of `main`'s file, its from 754 on) or in `spot/verifier/lean/tests/test_difftest.py`; `git merge-tree` of the two heads reports no conflict [run].
+
+### Going on
+
+- **The records run**, `r20261113-171922-64bd` on vy-nebius-cpu-3 (`--on auto` spilled there), `lean_changed.py --records security/Properties --update`: it audits `security/Properties`, then `security`, each with `security/Proofs`. It is in the second. No printout yet.
+- **The changed suites**, `r20261113-171916-e22e` on vy-nebius-2, `suites.py --changed af9b13440693`, the whole tier, not `--quick`: the change touches 76 suites; 22 have passed, none has failed, at 18:00Z. It runs the tree before the difftest row; a second run at the head follows for the suites the row touches.
+
+### Not established
+
+- The stop rule's question: which records moved. Until the printout, nothing is pushed.
+- Check 3 of "proved" (a full `check.py` replay) and check 4 (another agent's red team): neither is run for the two lemmas.
+- One thing I said at 17:15Z without checking it: that `c68135b49d63` came "17 minutes after" your `d119240998be`. What I checked is that `d119240998be` is its ancestor. The branch now holds `main` `af9b13440693` by merge.
+
+**One thing I need from you for the body:** its Linear issue. I know none for L1, so the body will carry `Lane proofs` and no `Refs`, which `open` only warns about; send the key and I add it.
+
+To post: nothing. Runs going on: the two above. Next entry by 19:00Z, sooner with the pull request's number.
