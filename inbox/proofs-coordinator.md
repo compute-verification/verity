@@ -135812,3 +135812,52 @@ behind for Friday; its Friday-size rehearsal `r20261113-053940-1822` ended exit 
 **Not established**
 - Anything about question 2 beyond the lines above.
 - That `members.py` refuses the play as Lean does: read, not run.
+
+## REDRAW, Fri 13 Nov 10:34Z: the one-call witness, sized: about 220 lines in the file that exists, eleven lemmas, two to four builds, no kept run; compiled Fri 13 Nov before the carry, Sat 14 Nov at the latest. It will show the step `credited` returns call 0, not that `window` credits it
+
+### The one-call witness, sized
+
+**What it will say.** [derived] There are a seed, a key `k` with `Lms.keygen Lms.deployed seed = .ok k`, and a window with `PouwCheck.Credit.Internal.credited (ChallengerKey.toJson ⟨Lms.deployed, k.publicKey⟩) ledger pins main salt calls served commit rounds draw = .ok [0]`: `calls` holds one manifest row whose credit bit is true, `rounds` holds one round.
+
+**What it will not say, and compute-accounting should read this line first.** [read: `Credit.lean` lines 30 to 36, 70 to 78, 2064 to 2083] `Internal.credited` is one step of `window`: it "returns the credit bits whatever the proofs' outcome", and `window` credits a call only when its other steps accept too (`roundsCheck`, `layoutOf`, `Internal.aLink`, `periodWeights`, `Internal.arow`, `Internal.servedRows`, `Internal.length`, `Internal.outcome`, `Internal.registration`, `Internal.live`). `DrawWithheld` is stated over `Internal.credited`, so this witness is that guarantee's honest half whole: the step accepts and returns call 0. It is not a witness that `window` returns a credited call. That one needs a layout, a registration, the sampled blocks' proof outcomes and a live Program on variables; I have not sized it, and [guess] it is ten times this one or more.
+
+**What it is made of.**
+- One manifest row: a built object of the fourteen fields the difftest's case writer gives a row "as the serving process writes it" (`pouw_credit_cases._row`, lines 157 to 165: `base`, `bound`, `credit`, `index`, `k`, `layer`, `leaves`, `module`, `n`, `rows`, `served`, `step`, `tables`, `units`), its numbers, its module's name and its table roots variables, `index` 0, `credit` true, `tables.z` the hex of a 64-byte digest.
+- One round of the round log: its root, the hex of a digest, and its challenge's opening with no path.
+- The Commit record of the no-call witness (it registers no value). `credited` reads only its digest. A record with registered values is one more lemma (the parsed values are objects); say if it is wanted.
+- The sample root over the manifest (`callsRoot`), the receipts' root and the round's root and challenge. SHA-512 stays opaque.
+- The honest session withheld of the family `pouw/draw`, opened on that root: the no-call witness's, unchanged.
+
+**What exists already, compiled** [run: `r20261113-094818-45b8`, `r20261113-102248-c35f`, and the bridge's builds]:
+- everything from the sample root on: `draw_ok`, `drawSession_honest`, the play with its family's name a variable and `exists_honest`, `key_read`, `pub_size`;
+- the leaves' readers: `digest_hex`, `get_getD`, `commit_read`, `Files.opening_ofJson` (the round's opening reads back), `Built.toList_mkObj` and `Built.getD_mkObj` (a built object's pairs and reads).
+
+**What is new:** eleven lemmas and two definitions.
+1. `plain_mkObj`: PoUW's `plain` holds of a built object when it holds of its values. 1 lemma.
+2. The row: its definition, its keys in order, that it is plain, its three reads (`index`, `credit`, `tables.z`). 1 definition, 5 lemmas.
+3. The round: its definition and its two reads. 1 definition, 2 lemmas.
+4. `root_one`: `creditedRoot` at one row and one round returns `[0]` and the sample root. 1 lemma, stated for any row with the five facts the step reads (an object, plain, index 0, credit true, a z root) and any round with its three.
+5. `credited_play` at the one-call window, `= .ok [0]`: the no-call proof with 4 in place of `root_ok`. 1 lemma. The sample root's definition and its size take the row and the round (two edits).
+6. The theorem. 1.
+
+**Size.** One file, the one that exists: `security/Proofs/Pouw/Credit/Withheld.lean` grows from 366 lines to about 590, so no new root and no lakefile change. Two to four builds of about 5 minutes each on vy-nebius-cpu-11 (16 GB) [guess: the no-call witness took three]. Then one records run, about 42 minutes on vy-nebius-2 at 64 GB (`f241` took 2,513 s).
+
+**What could make it fail.** [run, on core Lean 4.34 on this machine, each passed at its first try]
+- A model of `creditedRoot` with its outside functions as variables: the script for one row and one round (`List.zipIdx_cons`, `List.forIn_cons` and the eight facts) closes the goal.
+- `decide` puts the row's fourteen keys in order.
+- `plain` on a built object, on core's own `Json`, with `Built.toList_mkObj` taken as a hypothesis.
+- **The one step I trust least** is not in the proof: how `check.py` reads the statement. The no-call lemma ends `= .ok got` with `got` bound by the ∃; this one ends `= .ok [0]`. [read] The witness rule asks for the accepting function applied and an accept; [guess] a literal list is taken as one. If it is not, the lemma states `∃ got, … = .ok got ∧ got = [0]`: one more build and one more records run.
+- Second: the row's three reads go through a tree map of fourteen keys in the kernel; the bridge's largest object so far has seven. If the kernel is slow there, the reads go by `Built.getD_mkObj` and a list lookup instead.
+
+**A kept run with one call: not needed.** [derived] The witness is on variables and evaluates nothing, as soundness ruled; a kept run's window would be an evaluated witness. The row's numbers and roots are variables and `root_one` reads five facts of the row, so any served row with a true bit and a z root is an instance of it. [read] What holds the compiled check to real one-call windows by execution is the difftest's `test_credit`, whose writer builds honest windows of one to five rows with real LMS signatures (`honest_credit`, line 441); it passed in `r20261113-090547-4fae`. I did not check that one of its windows has exactly one row. Not known: whether the adapter's writer gives a row exactly the case writer's fourteen fields; I read the case writer only. I can read the adapter's writer by 12:00Z if compute-accounting wants the witness's row to be theirs field for field.
+
+**The day.** Fri 13 Nov. [guess] I write it on the credit branch in the waits of the session pull request, with its builds on vy-nebius-cpu-11, which the carry does not use: built by about 13:00Z. If it is not built when you say "carry", the carry goes first and it is compiled Sat 14 Nov. Its records run follows `87d9` on vy-nebius-2. It then replaces `drawWithheld_honest` in `witnesses`; the cap stays 181. It lands with the credit branch, after `commitOf?`, after both chains: that day is yours to name. Say no if I should not start before the carry.
+
+### State
+
+- [run] Until it lands, `drawWithheld_honest`'s docstring opens: "**`DrawWithheld`'s honest lemma, on a window of no call, crediting nothing** (accepts, credits nothing shown)". Built: `r20261113-102248-c35f`, exit 0.
+- [run] **One red of mine in the session branch's suites, mended.** `r20261113-102627-2b97` (vy-nebius-cpu-7, still running): `verity/protocols/pous/verifier` 548 passed, 1 failed: `tests/test_pous_trusted.py::test_trusted_hashes_are_current`, "`../../../../security/Proofs/lakefile.toml` does not match its hash in TRUSTED.sha256". The lakefile gained the new proof files' roots. I regenerated `verity/protocols/pous/lean/TRUSTED.sha256` with the README's command (one line changes), the test file passes locally (9 passed), and the suite runs again at the new head as `r20261113-103238-da9d` (`--on auto` chose vy-nebius-cpu-3, 16 GB asked). [read] The test's message also says to run PoUS's audit (`bash check.sh`, a fresh Lean check of that package and `security`); I have not. Say if you want a records run of `verity/protocols/pous/lean` before the ready line.
+- [run] Heads on the remote: `cursor/proofs-honest-session-7c1e` `36d6e37cbc7b72159589fbcb72fb1d10a30068a3`; `cursor/proofs-honest-credit-9d1e` `8c6c784fe1b21c56019d900369b2f00e6478ffe2` (the session head merged in, its own trusted hashes regenerated); `cursor/proofs-honest-draw-5b2f` `8130cf7e15e20949b2da80c079aec4b3cedd031d` (#9717); `cursor/proofs-redraw-commitof-4e9d` `5f0c24229844f63483a6931a30f386e8aaebc04e`. Nothing unpushed.
+- [run] Runs out: `r20261113-102457-87d9` (the credit branch's records at `26152de11ce3`, vy-nebius-2, 64 GB asked, about 11:10Z [guess]; the two commits after it change no Lean), `r20261113-102627-2b97` and `r20261113-103238-da9d`.
+- [read] A correction to my 10:27Z entry: the events not mine at 10:19Z were eighteen (seventeen Slack, one Linear), not twenty.
+- Mailbox read to your 10:19Z message (486 lines).
