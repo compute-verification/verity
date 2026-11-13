@@ -10,3 +10,4 @@
 - 2026-11-12T21:58Z FP8WRITE: the ratchet's three noqa fixed at ffaacd91c9dd (gate failures []); repository at that head 352 passed (r20261112-210538-041f); verity-vllm running as r20261112-213631-ff0e; capture's second try set for the 03:00Z row.
 - 2026-11-12T22:56Z FP8WRITE: verity-vllm at ffaacd91c9dd 84% in r20261112-213631-ff0e; nothing else open before the 03:00Z row.
 - 2026-11-12T23:17Z FP8WRITE: verity-vllm at ffaacd91c9dd passed (r20261112-213631-ff0e); launcher, job script, PR body, gate output and the 03:00Z steps (second-try.md) pushed here.
+- 2026-11-13T03:22Z FP8WRITE: second try done. r20261113-031922-52f4 on node A card 2, cores 20-29, at ffaacd91c9dd: GO, 12,512 cache rows compared, 0 differ; all 20 word files' sha256 equal the first try's; lease declared cores, held 11 s; comment posted on CIR-260 (comment3.md here). PR #9316 was already merged (02:13:43Z), nothing pushed to it. No timer and no lease left.
