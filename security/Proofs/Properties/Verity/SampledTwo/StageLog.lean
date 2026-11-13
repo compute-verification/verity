@@ -9,8 +9,9 @@ public import Proofs.Properties.Verity.Sampled.Assembled
 Where `drawCoins` reads coins `ξ` from a stage's coin evidence, in family `label` after `after`, and the read of its
 session's log lines places them (`readLog`, as the cut's `readsLogs` reads each session), every log that read matches
 release by release (`Binding.Read.Of`, as the cut's `LogIsDevice` asks of the play's log) has exactly `ξ`'s bits as its
-coins of that family after `after` (`drawn_shown`); and a log whose read is followed by other releases has them first
-(`drawn_shown_append`). With the bytes a stage read a prefix of `ξ` (`bitsOf_extract_prefix`), these give the stages'
+coins of that family after `after` (`drawn_shown`, from the read's own coins, `drawn_fresh`); a log whose read is
+followed by other releases has them first (`drawn_shown_append`); and one whose read follows releases holding none of
+that family's coins after `after` has exactly them (`drawn_shown_after`). With the bytes a stage read a prefix of `ξ` (`bitsOf_extract_prefix`), these give the stages'
 premises `FirstShown` and `SecondShown` from the cut's `LogIsDevice`.
 -/
 
@@ -33,16 +34,15 @@ theorem bitsOf_extract_prefix (b : ByteArray) (n : ℕ) :
   · rw [extract_of_size_le (by omega)]
     exact List.prefix_refl _
 
-/-- **A draw's read shows its coins**: where `drawCoins` reads coins `ξ` from coin evidence `coins` under a key, a
-window, family `label` after `after`, and the read of its session's log lines places them (`readLog`), every log that
-read matches release by release has `ξ`'s bits as its coins of the family released after `after`. -/
-theorem drawn_shown {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray} {coins : Json}
-    {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String} {l olog : List Verity.Release}
+/-- **A draw's read holds its coins**: where `drawCoins` reads coins `ξ` from coin evidence `coins` under a key, a
+window, family `label` after `after`, and the read of its session's log lines places them (`readLog`), the read's
+coins of the family released after `after` are `ξ`'s bits, none of them empty. -/
+theorem drawn_fresh {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray} {coins : Json}
+    {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String} {l : List Verity.Release}
     (hd : Spot.Challenger.drawCoins key w label after coins = .ok ξ)
     (hlog : Spot.getD (Spot.getD coins "session") "log" = .arr ls) (hls : ls.toList = lines.map .str)
-    (hr : readLog label after records ξ lines = some l)
-    (hO : List.Forall₂ Verity.Sampled.Binding.Read.Of (l.map Verity.Sampled.Binding.Read.ofV2) olog) :
-    (freshCoins label after olog).flatten = Properties.Challenger.bitsOf ξ := by
+    (hr : readLog label after records ξ lines = some l) :
+    (freshCoins label after l).flatten = Properties.Challenger.bitsOf ξ ∧ ∀ cs ∈ freshCoins label after l, cs ≠ [] := by
   obtain ⟨cm, roots, hts, hstream⟩ := Verity.Sampled.drawCoins_ok hd
   obtain ⟨_, hsn⟩ := Verity.Sampled.trustedSessionOf_ok hts
   obtain ⟨_, hso⟩ := Verity.Sampled.sessionNamed_ok hsn
@@ -56,9 +56,44 @@ theorem drawn_shown {key : Spot.Challenger.ChallengerKey} {w label : String} {af
   have hsize := Verity.Sampled.challengerStream_ok hstream
   have hfresh := Verity.Sampled.fresh_readLog _ _ _ _ hr
   rw [Verity.Sampled.countFresh_eq, ← Verity.Sampled.releasedRootsOf_ok hrr] at hfresh
-  rw [Verity.Sampled.freshCoins_ofV2 label after hO, hfresh, Verity.Sampled.chunks_flatten _ _ hsize]
   rw [hfresh]
-  exact Verity.Sampled.chunks_ne_nil_of_size _ _ hsize
+  exact ⟨Verity.Sampled.chunks_flatten _ _ hsize, Verity.Sampled.chunks_ne_nil_of_size _ _ hsize⟩
+
+/-- A log's coins of a family are its parts' in order. -/
+theorem freshCoins_append (label : String) (after : ByteArray) (a b : List Verity.Release) :
+    freshCoins label after (a ++ b) = freshCoins label after a ++ freshCoins label after b := by
+  unfold freshCoins
+  rw [List.filterMap_append]
+
+/-- **A draw's read shows its coins**: every log the read of `drawn_fresh` matches release by release has `ξ`'s bits as
+its coins of the family released after `after`. -/
+theorem drawn_shown {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray} {coins : Json}
+    {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String} {l olog : List Verity.Release}
+    (hd : Spot.Challenger.drawCoins key w label after coins = .ok ξ)
+    (hlog : Spot.getD (Spot.getD coins "session") "log" = .arr ls) (hls : ls.toList = lines.map .str)
+    (hr : readLog label after records ξ lines = some l)
+    (hO : List.Forall₂ Verity.Sampled.Binding.Read.Of (l.map Verity.Sampled.Binding.Read.ofV2) olog) :
+    (freshCoins label after olog).flatten = Properties.Challenger.bitsOf ξ := by
+  obtain ⟨hf, hne⟩ := drawn_fresh hd hlog hls hr
+  rw [Verity.Sampled.freshCoins_ofV2 label after hO hne, hf]
+
+/-- **A draw's read shows its coins after releases of other families**: where releases `l₀` that hold no coins of the
+family after `after` come before the read, a log the two match release by release has `ξ`'s bits as those coins. -/
+theorem drawn_shown_after {key : Spot.Challenger.ChallengerKey} {w label : String} {after : ByteArray}
+    {coins : Json} {ξ : ByteArray} {records : List Json} {ls : Array Json} {lines : List String}
+    {l₀ l olog : List Verity.Release}
+    (hd : Spot.Challenger.drawCoins key w label after coins = .ok ξ)
+    (hlog : Spot.getD (Spot.getD coins "session") "log" = .arr ls) (hls : ls.toList = lines.map .str)
+    (hr : readLog label after records ξ lines = some l) (h₀ : freshCoins label after l₀ = [])
+    (hO : List.Forall₂ Verity.Sampled.Binding.Read.Of ((l₀ ++ l).map Verity.Sampled.Binding.Read.ofV2) olog) :
+    (freshCoins label after olog).flatten = Properties.Challenger.bitsOf ξ := by
+  obtain ⟨hf, hne⟩ := drawn_fresh hd hlog hls hr
+  have happ : freshCoins label after (l₀ ++ l) = freshCoins label after l := by
+    rw [freshCoins_append, h₀, List.nil_append]
+  have hne' : ∀ cs ∈ freshCoins label after (l₀ ++ l), cs ≠ [] := by
+    rw [happ]
+    exact hne
+  rw [Verity.Sampled.freshCoins_ofV2 label after hO hne', happ, hf]
 
 /-- **A draw's read shows its coins first** in a log it matches the start of: there, `ξ`'s bits start the log's coins of
 the family released after `after`. -/
@@ -73,11 +108,8 @@ theorem drawn_shown_append {key : Spot.Challenger.ChallengerKey} {w label : Stri
   rw [List.map_append] at hO
   have h₁ := List.forall₂_take (l.map Verity.Sampled.Binding.Read.ofV2).length hO
   rw [List.take_left] at h₁
-  have hf : ∀ a b : List Verity.Release,
-      freshCoins label after (a ++ b) = freshCoins label after a ++ freshCoins label after b := fun a b => by
-    unfold freshCoins
-    rw [List.filterMap_append]
-  rw [← List.take_append_drop (l.map Verity.Sampled.Binding.Read.ofV2).length olog, hf, List.flatten_append,
+  rw [← List.take_append_drop (l.map Verity.Sampled.Binding.Read.ofV2).length olog, freshCoins_append,
+    List.flatten_append,
     drawn_shown hd hlog hls hr h₁]
   exact List.prefix_append _ _
 

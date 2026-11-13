@@ -133,6 +133,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Verity.SampledTwo.SecondCoins",
   "Proofs.Properties.Verity.SampledTwo.CoinBytes",
   "Proofs.Properties.Verity.SampledTwo.StageLog",
+  "Proofs.Properties.Verity.SampledTwo.StageCut",
   "Proofs.Properties.Verity.Subprotocols", "Proofs.Properties.Verity.Coupling", "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine", "Proofs.Properties.Challenger.Drawn",
   "Proofs.Properties.Firewall", "Proofs.Properties.Flock.Nets"]
