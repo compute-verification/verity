@@ -113,7 +113,7 @@ def jsonOf (what : String) (b : ByteArray) : Except String Json :=
   | some t => (Flock.JsonParse.parse t).mapError fun e => s!"{what}: not JSON: {e}"
 
 /-- `verifyCmd`'s refusal of a public header that names an identifier where it holds none of its own. -/
-def noIdentifier (st : Stmt) : V Unit :=
+def noIdentifier (st : Flock.Stmt) : V Unit :=
   match st.pub.header.getObjVal? "identifier" with
   | .error _ => pure ()
   | .ok _ => throw "identifier: the public header names an identifier; pass the verifier's own (--identifier F)"
@@ -123,11 +123,11 @@ words: `--zk`'s tags `tz` and coins, the statement's tags `tags`, the files and 
 program and registered reads. -/
 def setupAt (tz tags : Tags) (circuit pub : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
     (partition : Option Json) (program : Option ByteArray) (registered : Option (Array Registered.Port)) :
-    V (SessionSpec × Array Stmt) := do
+    V (SessionSpec × Array Flock.Stmt) := do
   if !tz.hm96Rows then
     throw s!"{tz.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
   RecSetup.checkInner none none (pure (none, none))
-  let (spec, sts) ← Stmt.setupTables tz circuit pub coins 1 tables none partition program none none none none
+  let (spec, sts) ← Flock.Stmt.setupTables tz circuit pub coins 1 tables none partition program none none none none
   for st in sts do
     checkRegistered st registered
     noIdentifier st
@@ -153,7 +153,7 @@ structure Ref where
   registeredB : Option ByteArray
   registered : Option (Array Registered.Port)
   spec : SessionSpec
-  sts : Array Stmt
+  sts : Array Flock.Stmt
 
 /-- **Template `t`'s reference statement**: its member's statement under `--zk` on the blobs, at no sample, with its
 member's public file and registered reads, read and set up as `flock-verify verify --zk` reads and sets it up. -/
@@ -184,7 +184,7 @@ def fits (r : Ref) : Bool :=
 
 /-- **A session's statement is in Flock's masked scope**: it sets up with `1` to `200` tables at at most two link
 points, each at an `m` from `25` to `35` and of a shape in `Stmt.InRange`. -/
-def zkOk (spec : SessionSpec) (sts : Array Stmt) : Bool :=
+def zkOk (spec : SessionSpec) (sts : Array Flock.Stmt) : Bool :=
   0 < sts.size && sts.size ≤ 200 && spec.points ≤ 2 &&
     sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
 
