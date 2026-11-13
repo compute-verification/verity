@@ -52,12 +52,12 @@ UNITS = {
     "verity/circuits/tests/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
 }
 KEY_COUNTS = {
-    "verity/definitions/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
+    "verity/circuits/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
     "verity/circuits/tests/test_population_ports.py::Counted":
         "the population tests' stand-in key count: a position alone, whose population keeps it",
-    "verity/definitions/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
+    "verity/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
-    "verity/definitions/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
+    "verity/circuits/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
         "QkSoftmaxPvPad's key count n, both halves' one port: a head's attention padded to T = 32",
     "verity/definitions/registry/torch_attention.py::_POSITION":
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
@@ -65,7 +65,7 @@ KEY_COUNTS = {
         "TrainStep_v1's key count n, the run input its attention calls read as theirs: a position with no coin",
 }
 WINDOWS = {
-    "verity/definitions/ops/boolean/shared_row.py::WINDOW":
+    "verity/circuits/ops/boolean/shared_row.py::WINDOW":
         "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (the shared-row commit's form (B))",
 }
 TESTS = {
