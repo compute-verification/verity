@@ -71,8 +71,9 @@ from __future__ import annotations
 import importlib
 import re
 import string
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 #: what the harness's modules, `pearl_c_sm90/overhead_arm.py` and the tests read
 __all__ = [

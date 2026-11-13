@@ -70,7 +70,7 @@ class Config:
         return self.heads // self.kv_heads
 
     @staticmethod
-    def read(snapshot: Path) -> "Config":
+    def read(snapshot: Path) -> Config:
         c = json.loads((Path(snapshot) / "config.json").read_text())
         arch = ARCHS.get((c.get("architectures") or [""])[0])
         if arch is None:

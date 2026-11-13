@@ -472,9 +472,9 @@ def sensitivity() -> dict:
 
 
 def table(rows: list[dict]) -> str:
-    lines = ["| configuration | windows | first credit | all-skip pays | draws | lanes | statements a window "
-             "| prove + Lean s a window | prove + Lean process-days | node-days | serving d | certifying d "
-             "| days to period | nodes to keep pace |",
+    lines = [("| configuration | windows | first credit | all-skip pays | draws | lanes | statements a window "
+              "| prove + Lean s a window | prove + Lean process-days | node-days | serving d | certifying d "
+              "| days to period | nodes to keep pace |"),
              "|---" * 14 + "|"]
     for p in rows:
         lines.append(
@@ -511,8 +511,8 @@ def report() -> dict:
 
 
 def markdown(rep: dict) -> str:
-    out = [f"A sampled served unit is {rep['lanes_per_unit']:.1f} lanes of the measured tile; a statement holds at most "
-           f"{rep['statement_lanes'][TODAY.rates]} lanes at `{TODAY.rates}`'s rates; a node has {NODE_GB} GB.", ""]
+    out = [(f"A sampled served unit is {rep['lanes_per_unit']:.1f} lanes of the measured tile; a statement holds at most "
+            f"{rep['statement_lanes'][TODAY.rates]} lanes at `{TODAY.rates}`'s rates; a node has {NODE_GB} GB."), ""]
     out += [f"- rates `{k}`: {rt['source']}" for k, rt in rep["rates"].items()]
     out += ["", table(rep["configurations"]), "",
             "Near term (no new receipt kernel, served unit or proof form), each on the last, then on eight nodes:", "",
