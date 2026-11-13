@@ -7,6 +7,8 @@ public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Properties.Challenger.Limits
 public import Proofs.Properties.Challenger.Coins
 public import Proofs.Properties.Spot
+public import Proofs.Properties.Pouw.LiveSalt.Ledger
+public import Batteries.Tactic.OpenPrivate
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
@@ -58,12 +60,58 @@ do (`Limits.paramsOfJson_deployed`). -/
 theorem members_deployed {j : Json} {a : Spot.OneStageZk.Params}
     (h : Spot.OneStageZk.membersParamsOfJson j = .ok a) :
     ∃ key label, a.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
-  unfold Spot.OneStageZk.membersParamsOfJson at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals first
-    | (cases h; done)
-    | (cases h; exact Limits.paramsOfJson_deployed (by assumption))
+  first
+    | (unfold Spot.OneStageZk.membersParamsOfJson at h
+       simp only [bind, Except.bind, pure, Except.pure] at h
+       repeat' split at h
+       all_goals first
+         | (cases h; done)
+         | (cases h; exact Limits.paramsOfJson_deployed (by assumption)))
+    | (unfold Spot.OneStageZk.membersParamsOfJson at h
+       split at h
+       · cases h
+       · obtain ⟨_, -, h⟩ := bind_ok h
+         obtain ⟨q, hq, h⟩ := bind_ok h
+         try dsimp only at h
+         obtain ⟨_, -, h⟩ := bind_ok h
+         simp only [pure, Except.pure, Except.ok.injEq] at h
+         subst h
+         exact Limits.paramsOfJson_deployed hq)
+
+section FormAudit
+
+open Std.Do
+open Properties.Pouw.LiveSalt.Ledger (except_spec ok_spec throw_spec of_triple)
+open private keysAre from VStarRecursive.SampledTwo
+
+private theorem form_split_spec (j : Json) (w : String) :
+    ⦃⌜True⌝⦄ VStar.Recursive.SampledTwo.split j w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+private theorem form_keys_spec (j : Json) (ks : Array String) (w : String) :
+    ⦃⌜True⌝⦄ keysAre j ks w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+private theorem form_rule_spec (j : Json) : ⦃⌜True⌝⦄ Spot.Select.Rule.ofJson j ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+private theorem form_mapM_spec (f : Json → Flock.V String) (xs : Array Json) :
+    ⦃⌜True⌝⦄ xs.mapM f ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+private theorem form_paramsAt_spec (j : Json) :
+    ⦃⌜True⌝⦄ VStar.Recursive.SampledTwo.paramsAt j ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+private theorem form_templates_spec (a b : Json) :
+    ⦃⌜True⌝⦄ Spot.Run.templateCircuits a b ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+private theorem form_canon_spec (j : Json) : ⦃⌜True⌝⦄ Flock.canon j ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
+
+private theorem form_program_spec (b : ByteArray) : ⦃⌜True⌝⦄ Spot.Program.parse b ⦃⇓? _ => ⌜True⌝⦄ :=
+  except_spec _
+
+private theorem form_members_spec (j : Json) :
+    ⦃⌜True⌝⦄ Spot.OneStageZk.membersParamsOfJson j ⦃⇓? a => ⌜Spot.OneStageZk.membersParamsOfJson j = .ok a⌝⦄ :=
+  ok_spec _
+
+private theorem form_values_spec (j : Json) (w : String) :
+    ⦃⌜True⌝⦄ VStar.Recursive.SampledTwo.valuesOf j w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
 -- `paramsOfJson` unfolds to one `match` or `if` per decoded field, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
@@ -71,12 +119,24 @@ set_option maxHeartbeats 4000000 in
 theorem form_audit {j : Json} {p : VStar.Recursive.SampledTwo.Params}
     (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) :
     ∃ j', Spot.OneStageZk.membersParamsOfJson j' = .ok p.audit := by
-  unfold VStar.Recursive.SampledTwo.paramsOfJson at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals first
-    | (cases h; done)
-    | (cases h; exact ⟨_, by assumption⟩)
+  first
+    | (unfold VStar.Recursive.SampledTwo.paramsOfJson at h
+       simp only [bind, Except.bind, pure, Except.pure] at h
+       repeat' split at h
+       all_goals first
+         | (cases h; done)
+         | (cases h; exact ⟨_, by assumption⟩))
+    | (refine of_triple (Q := fun p => ∃ j', Spot.OneStageZk.membersParamsOfJson j' = .ok p.audit) ?_ h
+       clear h
+       mvcgen -trivial [VStar.Recursive.SampledTwo.paramsOfJson, -Spec.throw_Except, throw_spec, form_split_spec,
+         form_keys_spec, form_rule_spec, form_mapM_spec, form_paramsAt_spec, form_templates_spec, form_canon_spec,
+         form_program_spec, form_members_spec, form_values_spec] invariants
+       · ⇓? _ => ⌜True⌝
+       all_goals first
+         | exact True.intro
+         | exact ⟨_, by assumption⟩)
+
+end FormAudit
 
 /-- The sampled component's parameters are the two-stage form's `paramsOfJson`'s. -/
 theorem paramsAt_form {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (h : paramsAt θ = .ok p) :
