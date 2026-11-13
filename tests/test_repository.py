@@ -64,7 +64,7 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: manifest (append-only; most of its readers don't read the sibling manifests yet), the retired-terms lint's per-file list
 #: (shrink-only: a rename of a retired term prunes it). Each is capped at its size rounded up
 #: to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
-#: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
     "adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
@@ -84,7 +84,7 @@ AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB:
 #: the E2E demo's fixtures took the tree to 40.1 MiB; register the next large one rather than raising it again.
 DATA_BUDGET = 48 * 1024 * 1024
-REGISTRY = "fixtures/artifacts.json"
+REGISTRY = "artifacts.json"
 
 
 def _tracked() -> list[str]:
