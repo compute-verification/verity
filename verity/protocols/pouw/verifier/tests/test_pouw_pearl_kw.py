@@ -6,8 +6,6 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
-import sys
-from pathlib import Path
 
 import pytest
 
@@ -16,9 +14,6 @@ from verity.commitments.crypto.blake3 import blake3
 from verity.protocols.pouw.prover.schemes import get
 from verity.protocols.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, PoUWScheme, Shape
-
-# the clear audit is a reference tool (verity/protocols/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
 
 PINNED = json.loads(PV.PINNED.read_text())
 OUT = PINNED["outputs"]
@@ -135,7 +130,7 @@ def test_interface_and_domain():
 def test_ada_tile_through_the_protocol():
     """One honest 16 x 16 tile on the 4090's device: admissible, digest reproducible, useful output near A·Bᵀ."""
     from verity.protocols.pouw.verifier.audit import Epoch, Workload
-    from clear_audit import Prover, Sampled, Verifier
+    from verity.protocols.pouw.clear.clear_audit import Prover, Sampled, Verifier
 
     s, k = get("pearl-fp8-v4"), 1024
     c = IN["tiles"][0]
