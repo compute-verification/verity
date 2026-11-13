@@ -26,17 +26,23 @@ the two pieces about it, `CallsLe` and `MessagesFixed`.
   the messages to agree at every round below `k`, but a run that refuses early has no message past its last round, so
   it also asks that the run does not stop early, which is the accept piece's fact. `MessagesReached` asks agreement at
   the rounds the run reaches; with `RunsThrough` it gives `MessagesFixed`.
-* **The first difference** (`runHist`, `MissAt`): on a play where the messages differ at a reached round, they differ
-  first at some round `i`, where the run's history is the play's (`playHist`).
-* **The miss at one round** (`MsgOpens`, `DigestBefore`, `RunShown`, `merge`, `msgFinder`, `MissBound`): where the
+* **The first difference** (`runHist`, `MissAt`, `reachedOfRounds`): on a play where the messages differ at a reached
+  round, they differ first at some round `i`, where the run's history is the play's (`playHist_eq`).
+* **Forking** (`miss_le_sqrt`): on a finite space split into classes, with a uniform redraw within a class, a member
+  whose message is not its class's most likely one is at most as likely as the square root of a member and its redraw
+  having two different messages.
+* **The miss at one round** (`MsgOpens`, `DigestBefore`, `RunShown`, `merge`, `msgFinder`, `missBound`): where the
   message the check reads opens the digest the play records (`MsgOpens`, the form's parse's), that digest is fixed by
-  the coins the history shows (`DigestBefore`, the coin map's and the cut's), and the verifier's answers depend on the
-  coins only through the coins they show (`RunShown`, a fact about `SpotFlock.V`), the round's miss is at most the
-  square root of a two-continuation finder's success: it resamples the coins the history does not show (`merge`) and
-  outputs the two messages the two plays read when they differ, a SHA-512 collision since both open one digest.
-* **The messages' bound** (`MessagesBound`): `MessagesReached` at the sum over the rounds of those square roots.
+  the coins the history shows (`DigestBefore`, the coin map's and the cut's), and the verifier's answers show the
+  run's coins and depend on them only through what they show (`RunShown`, a fact about `SpotFlock.V`), the round's
+  miss is at most the square root of a two-continuation finder's success. The classes are the frame's run's histories
+  before round `i`; the finder redraws the coins the history does not show (`merge`) and outputs the two messages the
+  two plays read when they differ, a SHA-512 collision since both open one digest. The finder's cost is declared, as
+  in the one-stage leg's.
+* **The messages' bound** (`MessagesBound`, `messagesBound`): `MessagesFixed` at the sum over the rounds of those
+  square roots.
 
-Statements and their bookkeeping; `MissBound` and `MessagesBound` are to be proved. Nothing imports this module.
+Nothing imports this module.
 -/
 
 @[expose] public section
@@ -856,5 +862,10 @@ theorem messagesBound_of (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArra
   intro place Rd Acc Good Dg q hO hB hS hT
   exact messagesFixed_of_reached V A x θ F c σ _ Rd Acc Good _ hT
     (reachedOfRounds V A x θ F c σ _ Rd Acc Good _ fun i hi => hM place Rd Acc Good Dg i q hO (hB i hi) hS)
+
+/-- **The messages' bound at the frame's prover.** -/
+theorem messagesBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Verity.Game.Strategy (V.game θ F c)) : MessagesBound V A x θ F c σ :=
+  messagesBound_of V A x θ F c σ (missBound V A x θ F c σ)
 
 end Verity.SampledTwo.Messages
