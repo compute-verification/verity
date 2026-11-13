@@ -45,7 +45,7 @@ def skip_at(d: Design, vector: str, data: Path) -> float:
     current = model(data).current
     missing = [k for k, p in d.skip.items() if vector != current and vector not in p.at]
     if missing:
-        raise SystemExit(f"{d.name}: no ε_skip at {vector} (current {current}): record eps_budget's `design_skip(d, "
+        raise SystemExit(f"{d.name}: no ε_skip at {vector} (current {current}): record `skip.design_skip(d, "
                          f"data=..., vector={vector!r})` as [skip.{missing[0]}] at = {{ \"{vector}\" = … }}")
     return sum(p.eps if vector == current else p.at[vector] for p in d.skip.values())
 
