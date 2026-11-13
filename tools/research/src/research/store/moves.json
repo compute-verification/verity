@@ -2396,6 +2396,12 @@
         "verity/protocols/certifier/": "verity/protocols/accounting/certifier/",
         "verity/protocols/inference_only/": "verity/protocols/policy/inference_only/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/nci/slowdown.py": "benchmarks/nci/bracket.py",
+        "benchmarks/nci/tests/test_slowdown.py": "benchmarks/nci/tests/test_bracket.py"
+      }
     }
   ]
 }

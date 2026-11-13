@@ -1,4 +1,4 @@
-"""The constructions: the shard port against `benchmarks/nci/slowdown.py`'s `search`, the tile against a brute-force
+"""The constructions: the shard port against `benchmarks/nci/bracket.py`'s `search`, the tile against a brute-force
 search, and measured executions extended monotonically. Every allowance must be achieved, never an estimate."""
 
 import importlib.util
@@ -22,7 +22,7 @@ DECLARED = FlopBudget(6.4e16, 2e7)
 
 
 def _nci_search():
-    path = Path(__file__).resolve().parents[2] / "nci" / "slowdown.py"
+    path = Path(__file__).resolve().parents[2] / "nci" / "bracket.py"
     spec = importlib.util.spec_from_file_location("nci_slowdown", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
