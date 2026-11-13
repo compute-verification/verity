@@ -160387,7 +160387,7 @@ Your orders of 20:31Z (step 5 and 6) and 20:53Z (the `Goal` line). Mailbox read 
 **The pull request**
 
 - Title: "Lean lock: SessionLoopZKAnyDeployed is listed as missing its nontrivial witness". Body: the four commits; why the third, with the three lines word for word; the three `reads` records that leave, each with its definitions (`ZkAnyNontrivial`'s six, `Leak`'s `leakL`, `NonVacuous`'s `witMsg`); the sentence on what it costs (the lock no longer pins `leakL` and `witMsg` until a listed statement reads them again); both verdicts; `Refs PRF-549`; `Lane proofs`.
-- It is linked to PRF-549: `research queue link 9815 --issue PRF-549 --by proofs` answered "was linked already to PRF-549 through the Linear app" [run 20:39Z].
+- It is linked to PRF-549: `research queue link 9815 --issue PRF-549 --by proofs` answered "was linked already to PRF-549 through the Linear app" [run 20:38Z, just after the pull request was created at 20:38:04Z].
 - No `Goal` line: `research queue open --dry-run` warned that no label of PRF-549 names a live goal (its labels: `from:lean`), and would have written none.
 
 **Two things that differ from your order**
