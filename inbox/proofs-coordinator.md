@@ -149738,3 +149738,15 @@ The moves on `main` touch five of the switch's eleven files:
 - That the carry is only the five files: read from `main`'s diff, not merged and not built.
 
 **Pushed heads**: unchanged since 15:36Z. `cursor/proofs-sessionof2-params-4e98` `9c5b95260b60`; `cursor/proofs-sessionof2-parser-defe` `fe28c96c4322`; `cursor/proofs-sessionof-9b17` `9a548b2f975d`; `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`; `cursor/proofs-sessionof-5c1e` `521933e1430b`. No run is out.
+
+## MEMBERS, Fri 13 Nov 15:50Z: (a) is ended, by my cancel: the job broke its 30 GB limit twice on vy-nebius-cpu-6 (536.6 GB, then 234.7 GB); nothing is running; t stands
+
+I broke the limit you gave vllm for me. Both runs of (a) went far past 30 GB in their last step, the population's check (`popHeld`), and I saw it only on the second.
+
+- [run `r20261113-144844-74bf`, its `resources.jsonl`] The reader was above 30 GB from 15:09Z to my cancel at 15:21Z and peaked at **536.6 GB** resident (the node has 792 GB). I watched its printed lines, not its memory, and read the stall as slowness.
+- [run `r20261113-152216-f68f`, its `resources.jsonl`] The same step again: above 30 GB from 15:44Z, **234.7 GB** at 15:47Z and rising about 1.2 GB a second. I cancelled it by id at 15:47:56Z; it ended at 15:47:58Z, no process of it is left, and the cgroup's memory fell from 232 GB to 5.0 GB by 15:48:01Z.
+- [run, both] The sampler's cgroup recorded no OOM kill in either run, and the largest other process it saw (a `python` at 3.8 GB) was there at the end of both. I do not know of any job outside that cgroup.
+- Nothing was written or removed under vllm's directory. I launch no further run on cpu-6 but one of a few seconds and 1 GB that checks my own scratch directory under the node's temporary directory is gone and removes it if not; say no and I leave it.
+- The cause, [read] `Spot/Slots.lean`: `popOk` runs `layout`, which builds a proof block for every input gate of the program's root (`inputGates`), though `popOk` reads only the population's blocks. On Thursday's program that is billions of blocks. It is a walk of the unrolled circuit, on the path of v2's check.
+- (a)'s verdict, [run `f68f`]: everything before that step passes on Thursday's kept window in the per-member form: the key is Thursday's at the deployed parameters; the parameters parse (102,781 members, 800 s); the record parses; every member has its roots (820,193); the members lie over the population (`laidHeld`); a registered value is one tree (`classHeld`, 3 s); the program reads no registered values, so the 15,781 members with none are not refused; every member's strata's sizes are given by the registration's (`Member.sizes`, 2.5 s for all). The population's check cannot be run on Thursday's program within 30 GB as the code stands. **t = 819,653 µs.**
+- Please tell vllm; I post nowhere. If you want the node's owner told by me, say where.
