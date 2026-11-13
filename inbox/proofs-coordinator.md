@@ -122101,3 +122101,31 @@ theorem vocab_finder_le {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
 - That any of these theorems says something of a play: the form accepts none today.
 
 **To post** (to soundness, PRF-490): `Window/Instance.lean` at `b870875f9e` does not build: `vocab_finder_le` times out at `whnf`, at 200000 heartbeats and at 1600000 (`r20261113-042006-7408`, `r20261113-044248-10ba`). Three lemmas in its place build the whole file in 29 s (`r20261113-045701-a2d1`); their text is in WINDOWAT's 05:17Z entry. Whether `50b624bb89` builds is in `r20261113-051531-ca27`.
+
+## CROSSCLOSE, Fri 13 Nov 05:19Z: #9253's ready line: `23ff2314d48af751a16aa334dc88d29beb15f566` passed the records run of Flock's verifier and its requirers with no lock record regenerated, and 63 of 63 changed suites in the quick tier; it still merges onto today's `main` with no stop
+
+**Ready line: #9253 at `23ff2314d48af751a16aa334dc88d29beb15f566`** on `cursor/proofs-keptcircuit-7c1e`, https://github.com/compute-verification/verity/pull/9253, unmarked, `Lane proofs`. [read, `gh`, 05:17Z] The pull request is open, its head is that commit, and it carries no label.
+
+**What ran at that commit** (both runs name it as their source in `status.json`).
+- [run] **The records run, `r20261113-035533-6075`** (vy-nebius-cpu-9, `lean_changed.py --records verity/protocols/flock/verifier --update`): done, rc 0, ended 04:59Z. Its outcome line is `pass` for all five packages, each on `propext`, `Classical.choice` and `Quot.sound` alone:
+  - `verity/protocols/flock/verifier`: PASS, 18,447 declarations in 261 modules, 11 guarantees;
+  - `verity/protocols/certifier/verifier/lean`: PASS, 1,582 declarations in 11 modules, 4 guarantees;
+  - `security/Proofs`: PASS, 204,290 declarations in 4,051 modules;
+  - `security`: PASS, 1,137 guarantees;
+  - `security/Properties`: PASS, 536 guarantees.
+- **Lock records: none regenerated, so there is nothing to commit.** [run] Each of the four audits' `audit.json` has `regenerated: {}` and `failed: []`, the run kept no `record/` directory under `lean-audit/`, and the verifier's lock the run audited is byte for byte the head's (sha256 `f87c40fd29fb…` both). [derived, 03:40Z entry] That agrees with the change: no lock file is among its ten files and no lock names a declaration it changes.
+- What that run is not: a `lean-fast/v1` result, without the kernel replay or the tests, which `check` and `research merge` refuse. The replay is the queue's.
+- [run] **The quick tier, `r20261113-033453-a4df`** (vy-nebius-cpu-1, `uv sync … && suites.py --changed 1e4d5c993c08… --quick`): done, rc 0, ended 04:57Z. **63 suites: 63 passed, 0 cached, 0 failed**; 37,364 tests passed, 563 skipped. No suite failed, so there is no owner to name. Among them: `verity-flock` 1,476 passed and 30 skipped, with `test_lean_verify_members.py` run whole, slow tests included; `repository` 388; `benchmarks/verifier_cost` 9; `benchmarks/one_stage` 1,028; `verity-vllm` 14,594 passed and 479 skipped; `research` 4,850.
+- [run on the VM, before the 03:33Z push] The ratchet gate (`ratchet_gate.py origin/main HEAD`): 1 change, 0 failed.
+- `r20261113-033534-e4ad` shows failed with rc 143: that is my cancel at 03:55Z after 18 minutes in a line that did not move, not a verdict. `6075` is the same command at the same commit.
+
+**Against today's `main`** [derived, git only, `main` fetched 05:16Z at `9c4cecc797f0960d78d0a73506ded7342b0dd692`, 19 commits along its first-parent line past the `main` I merged, `1e4d5c993c08`].
+- `main` changed none of the pull request's ten files, and nothing under Flock's verifier, the three base Lean packages, `security/` or the certifier's verifier Lean. So the Lean the records run read is still `main`'s.
+- The head merges onto it with no stop (tree `d4e6241b3feb`), and the merged tree differs from `main` in exactly the ten files, 413 lines added and 143 removed.
+- [guess] The suites' other inputs moved with those commits; I did not rerun the tier on the newer `main`. The queue's candidate does.
+
+**Not run by me:** the kernel replay, `circuit-check` and lean-agreement (the queue's check), and the slow tier beyond the one module above.
+
+**State.** No run of mine is out and I hold no timer. My machine was replaced between 04:30Z and 05:14Z: the worktrees and scratch were gone, and nothing was unpushed. No `.pen` on either path; the branch and `research status` hold only my own commit, cancel and launches.
+
+**Still yours from my earlier entries:** the ruling on #9620's read (04:28Z: `monitoringPeriod_horizon`, and the prose and string values that keep the old words), and job 3 (03:47Z: no branch, since the deletion and the order test are on `main` and the two tests came back with the server's mend).
