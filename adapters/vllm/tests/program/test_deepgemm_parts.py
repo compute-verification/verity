@@ -11,15 +11,15 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity_vllm.pipeline import serving_templates as ST
 from verity.definitions.numerics import deepgemm_twins as T
 from verity.definitions.registry import deepgemm as DG
 from verity.definitions.registry import fp8 as F8
 from verity.definitions.registry.fp8 import FP8_BLOCK
+
 from tests.program.test_deepgemm import _bf16_rows, _guard_rows, _weights, _words
+from verity_vllm.pipeline import serving_templates as ST
 
 K = 256
 LINEARS = {"DeepGemmFp8Linear_v1": (DG.DeepGemmFp8Linear, bind(DG.Fp8GroupQuantUe8m0, K=K, G=FP8_BLOCK), True),

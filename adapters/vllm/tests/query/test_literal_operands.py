@@ -16,12 +16,16 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.query.units import ValueRef, boundary
-from verity_vllm.query import program_view as pv
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.module_body import Q_module_body_v1, literal_calls, module_body_boundary
+from verity_vllm.query import program_view as pv
+from verity_vllm.query.module_body import (
+    literal_calls,
+    module_body_boundary,
+    module_body_partition,
+)
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import request_manifest
+from verity_vllm.query.units import ValueRef, boundary
 
 R = ValueRef
 W = "model.model"
@@ -99,7 +103,7 @@ def test_literals_cross_a_body_boundary_but_are_not_boundary_values():
     P = sampler_program()
     corr = Correspondence(P)
     assert corr.source == "v1_annotations" and corr.module_of(2) == "gumbel_topp_token_select" and corr.module_of(6) == ""
-    raw = boundary(P, Q_module_body_v1(P, corr))
+    raw = boundary(P, module_body_partition(P, corr))
     lit = {R(k, "out") for k in LITERALS}
     assert lit <= raw.values, "the mechanism: the literals' body is not the select's, so the plain boundary carries them"
     B = module_body_boundary(P, corr)
@@ -112,15 +116,18 @@ def test_literals_cross_a_body_boundary_but_are_not_boundary_values():
 
 def test_request_manifest_requires_no_literal():
     P = sampler_program()
+
+    def per_step(s: int) -> list[tuple]:
+        return [("input_token_ids", s, f"{W}.embed", "in", (0, 1)), ("instance_outputs", s, f"{W}.embed", "out", (0, 4)),
+                ("instance_outputs", s, f"{W}.lm_head", "out", (0, 4)), ("sampled_token_ids", s, "runner.sampler", "sampled_token_ids", (0, 1)),
+                ("sampler_seed", s, "runner.sampler", "seed", (0, 1))]
+
     for return_slots in (True, False):
         r = request_manifest(P, Correspondence(P), RES, request_id="r0", return_slots=return_slots)
         man = r.manifest
         assert not any(v.call in LITERALS for v in r.required.values)
         assert man["complete"] and man["unmodelled"] == {}
         rows = sorted((x["family"], x["step"], x["op_path"], x["output_member"], tuple(x["element_range"])) for x in man["identities"])
-        per_step = lambda s: [("input_token_ids", s, f"{W}.embed", "in", (0, 1)), ("instance_outputs", s, f"{W}.embed", "out", (0, 4)),  # noqa: E731
-                              ("instance_outputs", s, f"{W}.lm_head", "out", (0, 4)), ("sampled_token_ids", s, "runner.sampler", "sampled_token_ids", (0, 1)),
-                              ("sampler_seed", s, "runner.sampler", "seed", (0, 1))]
         assert rows == sorted([("weights", "*", EMBED_W, "weight", (0, None)), ("weights", "*", HEAD_W, "weight", (0, None))] + per_step(0) + per_step(1))
         assert man["populations"]["literal_calls"] == 8 and man["populations"]["steps"] == 2
         assert "minus the Program's literals" in man["query"]["query_text"]

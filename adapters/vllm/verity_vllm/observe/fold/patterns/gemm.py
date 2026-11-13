@@ -9,12 +9,41 @@ from verity.circuits.defs import bind
 from verity.definitions.registry import b1
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_weight_view, is_row_major
-from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, first, triton_name
-from verity_vllm.observe.fold.patterns.resolutions import _check_pins, _fmt, _group_compute, attribution_for, hint_of, unsupported
-from verity_vllm.observe.fold.patterns.target import _targets, gemm_target_of, pinned_num_sms, target_of
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_weight_view,
+    is_row_major,
+)
+from verity_vllm.observe.fold.patterns.ops import (
+    base_op,
+    bound_args,
+    first,
+    triton_name,
+)
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _check_pins,
+    _fmt,
+    _group_compute,
+    attribution_for,
+    hint_of,
+    unsupported,
+)
+from verity_vllm.observe.fold.patterns.target import (
+    _targets,
+    gemm_target_of,
+    pinned_num_sms,
+    target_of,
+)
 from verity_vllm.observe.fold.patterns.transparent import scope_transparents
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Resolution, Shared, StepContext, Transparent
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+    Transparent,
+    whole_view,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 
@@ -56,7 +85,7 @@ class GemmLaunch:
             launches = [n for n in node.walk() if n.is_triton and triton_name(n) == self.kernel]
             if len(launches) != 1:
                 return unsupported(node, f"{base_op(node.op)} without exactly one batch-invariant {self.kernel} launch",
-                                   launches=[n.enter.fn for n in launches])
+                                   launches=[n.triton.fn for n in launches])
             launch = launches[0]
             before, bad = scope_transparents(node, ctx, {launch.id}, self.name)
             if bad is not None:
@@ -64,7 +93,7 @@ class GemmLaunch:
         else:
             return None
         a = bound_args(launch)
-        consts = dict(launch.enter.constexprs)
+        consts = dict(launch.triton.constexprs)
         # the tiling (BLOCK_SIZE_*, num_warps, num_stages) a launch must show is the record TARGET's launch geometry for
         # (M, N, K) — the registered GEMM specialization's `launch_config` (verity_vllm.program.frontend.gemm_targets: vLLM's tuned-table row for the
         # target's arch family, else the default), the same source Bet A pins.  An unregistered target is refused whatever the launch shows.
@@ -74,7 +103,7 @@ class GemmLaunch:
         expected = dict(self.constexprs)
         exp_warps, exp_stages = self.num_warps, self.num_stages
         Mi, Ni, Ki = a.get("M"), a.get("N"), a.get("K")
-        if all(isinstance(v, int) for v in (Mi, Ni, Ki)):
+        if (isinstance(Mi, int) and isinstance(Ni, int) and isinstance(Ki, int)):
             tconsts, twarps, tstages, _src = gt.launch_config(Mi, Ni, Ki)
             expected.update({k: v for k, v in tconsts.items() if k in expected or k.startswith("BLOCK_SIZE_")})
             if exp_warps is not None:
@@ -88,9 +117,9 @@ class GemmLaunch:
         geom = {}
         pins = {}
         if exp_warps is not None:
-            geom["num_warps"], pins["num_warps"] = launch.enter.num_warps, exp_warps
+            geom["num_warps"], pins["num_warps"] = launch.triton.num_warps, exp_warps
         if exp_stages is not None:
-            geom["num_stages"], pins["num_stages"] = launch.enter.num_stages, exp_stages
+            geom["num_stages"], pins["num_stages"] = launch.triton.num_stages, exp_stages
         if self.num_sms is not None:   # [X-01] the pin is the record target's SM count (one TargetProfile fact), else the profile's
             geom["NUM_SMS"], pins["NUM_SMS"] = first(consts.get("NUM_SMS"), a.get("NUM_SMS")), pinned_num_sms(ctx, self.num_sms)
         bad = _check_pins(launch, geom, pins)
@@ -98,7 +127,7 @@ class GemmLaunch:
             return bad
         a_ptr, b_ptr, c_ptr, bias = a.get("a_ptr"), a.get("b_ptr"), a.get("c_ptr"), a.get("bias_ptr")
         M, N, K = a.get("M"), a.get("N"), a.get("K")
-        if not all(isinstance(v, ViewDesc) for v in (a_ptr, b_ptr, c_ptr)) or not all(isinstance(v, int) for v in (M, N, K)):
+        if not (isinstance(a_ptr, ViewDesc) and isinstance(b_ptr, ViewDesc) and isinstance(c_ptr, ViewDesc)) or not (isinstance(M, int) and isinstance(N, int) and isinstance(K, int)):
             return unsupported(launch, "matmul launch arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         if bias is not None or first(consts.get("HAS_BIAS"), a.get("HAS_BIAS")):
             return unsupported(launch, "bias path (HAS_BIAS / bias_ptr bound): Gemm then BiasAdd from one launch is not one Compute",
@@ -193,7 +222,7 @@ def fuse_bias_adds(resolutions: list, ctx: StepContext, roots: list[TreeNode]) -
                 or not isinstance(a.operands[1], Shared)
                 or any(_names(r, c.alloc) for k, r in enumerate(roots) if k not in (i, j) and not _allocates(out[k]))):
             continue
-        w, b = g.operands[1].view, a.operands[1].view
+        w, b = whole_view(g.operands[1]), whole_view(a.operands[1])
         names = tuple(rs[0].name if rs else None for rs in (ctx.roots_of(w), ctx.roots_of(b)))
         out[i] = Transparent("noop", g.consumed, rows=g.rows, hint=g.hint, pattern="gemm_bias.launch")
         out[j] = Compute(spec, a.rows, (g.operands[0], g.operands[1], a.operands[1]), a.outputs, a.consumed,
