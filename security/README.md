@@ -519,9 +519,9 @@ with each changed definition's source; nothing waits on it, and a guarantee that
 ## The guarantees to read first
 
 **Protocol soundness** is one theorem (Start here, item 4), the union bound over a composite's subprotocols at its
-compiled verifier, for any list of them: `Verity.soundness_of_subprotocols` at onsite's seven and
-`Verity.remote_soundness_of_subprotocols` at remote's three. Start at `Properties/Verity/README.md`: the statement, the
-subprotocols each composes, how to read it and what it rests on.
+compiled verifier: `Verity.soundness_of_subprotocols` at onsite's seven and `Verity.remote_soundness_of_subprotocols` at
+remote's three. Start at `Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it
+and what it rests on.
 
 The table lists the subprotocols' own guarantees, each in its own form; each is proved under `Proofs/`. A status names
 the statement's named assumptions, not the conditions on its inputs and setup (the lock lists them).
