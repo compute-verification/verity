@@ -22,18 +22,19 @@ What it does NOT establish: anything about a real B2 record (the `mixedstop` wor
 from __future__ import annotations
 
 import pytest
-
 from verity.circuits import Program
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import REGISTRY, bind, composite
-from verity_vllm.program import workload as W
 from verity.circuits.refs import array_of, coll_concat, tuple_of
-from verity.definitions.registry import b1, lifted as L
-from verity_vllm.program.lifting import lifted_compose
-from verity.definitions.numerics import serve3_reference as ref
-from verity.definitions.registry.b1 import weights_type
-from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
 from verity.circuits.types import Array, Value
+from verity.definitions.numerics import serve3_reference as ref
+from verity.definitions.registry import b1
+from verity.definitions.registry import lifted as L
+from verity.definitions.registry.b1 import weights_type
+
+from tests.program.test_serve3 import D_MAX, LP, TINY, Y_RAW, _inputs
+from verity_vllm.program import workload as W
+from verity_vllm.program.lifting import lifted_compose
 
 I32 = Value(32)
 CAP = D_MAX + 1
@@ -72,8 +73,7 @@ def _prompt_b():
 
 def _inputs_for(fn_u, prompts: dict[str, list[int]], lifted_words: bool, poison: dict | None = None):
     """One flat word list per root parameter of the (un)lifted workload, from the fixture weights and per-request prompts."""
-    _, w = _inputs()
-    w = list(w)
+    w = list(_inputs()[1])
     out, pos = [], 0
     for name, t in fn_u.signature()[0]:
         if name.startswith("shared."):
@@ -112,10 +112,6 @@ def _request_outs(wl, outs):
         pos += n
     assert pos == len(outs)
     return res
-
-
-def _bots(words):
-    return sum(1 for x in words if L.is_bot(32, x) or (x >> 16) == 1 and (x & 0xFFFF) == 0)
 
 
 # ---------------------------------------------------------------------------------------------------------

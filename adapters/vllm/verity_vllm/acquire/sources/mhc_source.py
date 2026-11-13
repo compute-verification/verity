@@ -30,7 +30,8 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import inspect
 import sys
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import torch
 
@@ -47,8 +48,19 @@ DECISION = "hc"
 POST_PRE_PORTS = tuple(Port(frozenset({"MhcFusedPostPre_v1", "MhcPostPreTf32_v1"}), p, call_boundary=True) for p in "0231")
 
 
+def _commits(tap: Mapping[str, Any]) -> bool:
+    """Whether this source commits `tap`: its `commit` block names `BINDER` (a tap with no block, or an empty one, is committed nowhere)."""
+    block = tap.get("commit")
+    return bool(block and block.get("binder") == BINDER)
+
+
+def _taps(cmap: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The map's taps this source commits."""
+    return [t for t in cmap["taps"] if _commits(t)]
+
+
 def binds(cmap: Mapping[str, Any]) -> bool:
-    return any((t.get("commit") or {}).get("binder") == BINDER for t in cmap["taps"])
+    return any(_commits(t) for t in cmap["taps"])
 
 
 def function_of(tap: Mapping[str, Any]) -> str:
@@ -59,7 +71,7 @@ def function_of(tap: Mapping[str, Any]) -> str:
 def ports_of(cmap: Mapping[str, Any]) -> dict[str, Port]:
     """`bind.Binder`'s declared labels: each post_pre tap's, its return's port of the fused post_pre (`POST_PRE_PORTS`)."""
     return {t["commit"]["name"].rsplit("/", 1)[1]: POST_PRE_PORTS[int(t["site"]["output"])]
-            for t in cmap["taps"] if (t.get("commit") or {}).get("binder") == BINDER and function_of(t) == POST_PRE}
+            for t in cmap["taps"] if _commits(t) and function_of(t) == POST_PRE}
 
 
 class MhcSource:
@@ -67,7 +79,7 @@ class MhcSource:
 
     def __init__(self, com: Any, routes: Any, model: Any) -> None:
         self.c, self.cmap, self.env, self.on_target = com, routes.cmap, routes.env, routes.on_target
-        taps = [t for t in self.cmap["taps"] if (t.get("commit") or {}).get("binder") == BINDER]
+        taps = _taps(self.cmap)
         unknown = sorted({function_of(t) for t in taps} - set(FUNCTIONS))
         if unknown:
             raise ValueError(f"capture map {self.cmap.get('id')}: the mhc source wraps no {unknown}")
@@ -81,7 +93,7 @@ class MhcSource:
         self.owners: dict[int, tuple[str, int | None]] = {}
         self.unowned: dict[str, tuple[str, int | None]] = {}
         self.homes: list[Any] = []
-        self.per_route: dict[str | None, list[Mapping[str, Any]]] = {}
+        self.per_route: dict[str | None, list[dict[str, Any]]] = {}
         for t in taps:
             f, side = function_of(t), t["op"].rsplit(".", 1)[-1]
             layers = CM.tap_layers(self.cmap, t, self.env)
@@ -136,7 +148,7 @@ class MhcSource:
         """The taps this source binds, as bytes per token: those on no route, and the larger of the hc routes' (a step takes one)."""
         free = self.cmap.get("free_symbols", {})
 
-        def size(taps: list[Mapping[str, Any]]) -> tuple[int, int]:
+        def size(taps: list[dict[str, Any]]) -> tuple[int, int]:
             per_token = n = 0
             for t in taps:
                 words = 1
@@ -152,12 +164,12 @@ class MhcSource:
         return {"per_token_bytes": base[0] + routed[0], "per_seq_bytes": 0, "tensors_per_step": base[1] + routed[1]}
 
     # -- binding ----------------------------------------------------------------------------------------------------------------
-    def route(self, residual: torch.Tensor) -> tuple[str, ...]:
+    def route(self, hc: Mapping[str, Any], residual: torch.Tensor) -> tuple[str, ...]:
         """The hc routes of a `mhc_fused_post_pre_tilelang` call on `residual`: its token count as the function reads it
-        (`residual.view(-1, hc_mult, hidden_size).shape[0]`) through the map's decision."""
+        (`residual.view(-1, hc_mult, hidden_size).shape[0]`) through the map's decision `hc`."""
         m = int(residual.numel()) // (int(residual.shape[-2]) * int(residual.shape[-1]))
-        yes = bool(CM.evaluate(self.hc["answer"], {**self.env, "M": m}))
-        return tuple(self.hc["true"] if yes else self.hc.get("false", ()))
+        yes = bool(CM.evaluate(hc["answer"], {**self.env, "M": m}))
+        return tuple(hc["true"] if yes else hc.get("false", ()))
 
     def bind(self, f: str, a: Mapping[str, Any], out: Any, job: Any) -> None:
         """One call of `f` with bound arguments `a` and return `out` at the committer's step `job`."""
@@ -170,7 +182,7 @@ class MhcSource:
             self.c.x03_expected = getattr(self.c, "x03_expected", 0) + 1
             return
         outs = out if isinstance(out, tuple) else (out,)
-        routes = self.route(a["residual"]) if f == POST_PRE and self.hc is not None else ()
+        routes = self.route(self.hc, a["residual"]) if f == POST_PRE and self.hc is not None else ()
         for port, r, name in self.names.get((f, *owner), ()):
             if r is None or r in routes:
                 self.c._acquire(name, outs[port], job)

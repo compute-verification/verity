@@ -11,13 +11,13 @@ import json
 import random
 
 import pytest
-
-from tests.program.predict.test_predict import FIX, _phi
+from verity.circuits.program import Program
 from verity.definitions.circuits import stacking as P
 from verity.definitions.circuits.census import census, step_ends
-from verity.circuits.program import Program
-from verity_vllm.program.predict.build import build_program
 from verity.definitions.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
+
+from tests.program.predict.test_predict import FIX, _phi
+from verity_vllm.program.predict.build import build_program
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 WGMMA = "HopperBF16WgmmaDot16_v1"
