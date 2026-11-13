@@ -21,12 +21,16 @@ that part is put on a round below `i` or on none, by its definition, so no order
 * `Messages.before_shown`: so do the plays at the run's coins and at any coins that agree with what the play's history
   before round `i` shows, on a play accepted whose log the check read is the device's, where each round a release is
   put on answers with its coin (`Messages.ShowsPlaced`).
-* `Messages.fixed_of_before`: so whatever a play fixes for round `i` that reads only its log before round `i` is fixed
-  by the coins the history before round `i` shows.
+* `Messages.fixed_of_before`: so whatever a play fixes for round `i` that reads, on the frame's plays, only its log
+  before round `i` is fixed by the coins the history before round `i` shows.
 
-What this does not prove: that the log before round `i` holds what round `i`'s message is fixed by. At a round a
-release is put on, that the release is the first put on a round at least `i` is the rounds rising along the log
-(`SessionCoins.LogRising`).
+* `SessionCoins.before_session`: where the rounds rise along the log (`SessionCoins.LogRising`), the log before a
+  session's round a release is put on is the releases before that release, with its frame and bytes.
+
+What this does not prove: that the log before round `i` holds what round `i`'s message is fixed by. At a session's
+round a release is put on, the bytes are the ones the release answers; that they are a digest of the round's message
+is the form's. At the statements' round and at the round a session is decided on, which no release is put on, where
+the releases the message is fixed by lie in the log before the round is not shown here.
 -/
 
 @[expose] public section
@@ -181,22 +185,57 @@ theorem before_shown (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (
     (hs j _ (shownAt_playHist A x r _ j hji (hShow _ hacc hgood a rl b hlog j.val hj r j.isLt))).symm
 
 /-- **What a play fixes for round `i` is fixed by the coins the history before it shows, where it reads only the log
-before round `i`**: at a frame whose coin map is the locator `L`'s, a value `Fx` reads off the play's log before
-round `i` (`CoinMap.before`) is the same at the run's coins and at any coins that agree with every coin the play's
-history before round `i` shows. -/
+before round `i`**: at a frame whose coin map is the locator `L`'s, a value `Fx` reads, on the frame's plays, off the
+play's log before round `i` (`CoinMap.before`) is the same at the run's coins and at any coins that agree with every
+coin the play's history before round `i` shows. `Fx` may read the game's parameters, files and commitment too: they
+are the same on every play of the frame. -/
 theorem fixed_of_before (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (L : CoinMap.Locate) (Fr : Frame V A x θ F c σ)
     (hFr : ∀ ω r, Fr.place ω r = CoinMap.place V θ F c σ L r ω) (Rd : Reading A)
     (Acc Good : Verity.Exchange → Prop) (hShow : ShowsPlaced A x Rd Acc Good L) {Φ : Type}
     (Fx : Verity.Exchange → ℕ → Option Φ) (i : ℕ)
-    (g : List Verity.Release × Option (Verity.Frame × ByteArray) → Option Φ)
-    (hFx : ∀ o, Fx o i = g (CoinMap.before L i [] o.log)) (ω : TapeOf V θ F c σ) (r r' : Coins A x)
+    (g : List Verity.Release × Option (Verity.Frame × ByteArray) → Option Φ) (ω : TapeOf V θ F c σ)
+    (hFx : ∀ r₀, Fx (Fr.out ω r₀) i = g (CoinMap.before L i [] (Fr.out ω r₀).log)) (r r' : Coins A x)
     (hacc : Acc (Fr.out ω r)) (hgood : Good (Fr.out ω r))
     (hs : Shows (playHist A x r (playMsgs Rd (Fr.out ω r)) i) r') :
     Fx (Fr.out ω r') i = Fx (Fr.out ω r) i := by
   have e : ∀ r₀, Fr.out ω r₀ = Verity.Game.Tape.out _ σ (CoinMap.place V θ F c σ L r₀ ω) := fun r₀ =>
     congrArg (Verity.Game.Tape.out (V.game θ F c) σ) (hFr ω r₀)
+  rw [hFx r', hFx r]
   rw [e r] at hacc hgood hs
-  rw [hFx, hFx, e r', e r, before_shown V A x θ F c σ L Rd Acc Good hShow ω r r' hacc hgood i hs]
+  rw [e r', e r, before_shown V A x θ F c σ L Rd Acc Good hShow ω r r' hacc hgood i hs]
 
 end Verity.SampledTwo.Messages
+
+namespace Verity.SampledTwo.SessionCoins
+
+/-- **The log before a session's round ends at the release put on it**: on a play the form accepts whose log the check
+read is the device's, where the locator `L` agrees with the session-round locator at the sessions' rounds and puts the
+release `rl` on the session's round `i`, the play's log before round `i` is the releases before `rl`, with `rl`'s
+frame and bytes. A release before `rl` is put on no round at least `i`: a session's round it is put on is below `i`
+by `LogRising`, and any other round is at most the statements'. -/
+theorem before_session {A : Live₂} {C : CaseOf} {Good : Exchange → Prop} {tab : ℕ → String} {L : CoinMap.Locate}
+    (hL : LocatesSessions A tab (CoinMap.locAt L)) (hRise : LogRising A C Good tab) {o : Exchange}
+    (hacc : FormAccepts C o) (hgood : Good o) {q rest : List Release} {rl : Release} {i : ℕ}
+    (hlog : o.log = q ++ rl :: rest) (hi : CoinMap.locAt L q rl.frame rl.answers = some i)
+    (hg : groupOf A i = .sessions) :
+    CoinMap.before L i [] o.log = (q, some (rl.frame, rl.answers)) := by
+  have hsi := stage_lt_of_sessions hg
+  have h2 := (hL q rl.frame rl.answers i hg).1 hi
+  have hq : ∀ a r b, q = a ++ r :: b → ¬ ∃ j, CoinMap.locAt L a r.frame r.answers = some j ∧ i ≤ j := by
+    intro a r b hqe hex
+    obtain ⟨j, hj, hij⟩ := hex
+    have hgj : groupOf A j = .sessions := sessions_of_lt (by omega)
+    have h1 := (hL a r.frame r.answers j hgj).1 hj
+    have hsplit : o.log = a ++ r :: (b ++ rl :: rest) := by
+      rw [hlog, hqe]
+      simp
+    have h2' : locOf A tab (a ++ r :: b) rl.frame = some i := by
+      rw [← hqe]
+      exact h2
+    have hlt : j < i := hRise o hacc hgood a r b rl rest hsplit j i h1 h2'
+    omega
+  rw [hlog]
+  exact CoinMap.before_first L hq hi (Nat.le_refl i)
+
+end Verity.SampledTwo.SessionCoins
