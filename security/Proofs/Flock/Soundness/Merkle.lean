@@ -43,7 +43,7 @@ theorem walk_binding : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
       simp only [walk] at heq
       by_cases hup : up H E idx a s = up H E idx a' s'
       · -- the step itself collides: different inputs (the accumulators differ), equal hashes
-        unfold up at hup
+        unfold up upIn at hup
         split_ifs at hup with he
         · refine ⟨_, _, fun h => hne (append_inj E h).1, hup⟩
         · refine ⟨_, _, fun h => hne (append_inj E h).2, hup⟩

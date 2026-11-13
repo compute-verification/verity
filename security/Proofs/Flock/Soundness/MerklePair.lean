@@ -39,13 +39,12 @@ theorem walkPair_spec : ∀ (sibs sibs' : List D) (idx : ℕ) (a a' : D),
   | s :: rest, s' :: rest', idx, a, a', hlen, hne, heq => by
       simp only [walk] at heq
       by_cases hup : E.dig (up H E idx a s) = E.dig (up H E idx a' s')
-      · have hup' := E.dig_inj hup
-        unfold up at hup'
-        split_ifs at hup' with he
-        · simp only [walkPair, ite_eq_left hup, ite_eq_left he]
-          exact ⟨fun h => hne (append_inj E h).1, hup'⟩
-        · simp only [walkPair, ite_eq_left hup, ite_eq_right he]
-          exact ⟨fun h => hne (append_inj E h).2, hup'⟩
+      · simp only [walkPair, ite_eq_left hup]
+        refine ⟨fun hin => ?_, E.dig_inj hup⟩
+        unfold upIn at hin
+        split_ifs at hin
+        · exact hne (append_inj E hin).1
+        · exact hne (append_inj E hin).2
       · simp only [walkPair, ite_eq_right hup]
         exact walkPair_spec rest rest' (idx / 2) _ _ (by simpa using hlen) (fun h => hup (congrArg E.dig h)) heq
 
