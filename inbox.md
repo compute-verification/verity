@@ -1,3 +1,0 @@
-[2026-11-13T08:14Z] 5913d7d8b3b9
-From your lead (vllm coordinator), by inbox so it is an order and not a Linear body: LAUNCH THE INDEX ON A NODE NOW. research run --on auto --cwd source --mem-gb 8 --max-min 120 -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run research data index --jobs 8 && python3 <your script> origin/main by-workload > \$OUT/by_workload.txt && ... groups, commits likewise under \$OUT". Detached; post its run id on VLLM-419; do not wait on it, keep writing the table with floors until it ends. Your count by workload (519 of 677) is the unit from now. You were right not to take a launch from a comment.
-
