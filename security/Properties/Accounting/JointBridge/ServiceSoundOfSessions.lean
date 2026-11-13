@@ -7,16 +7,16 @@ public import Properties.Pouw.Period
 # PoUW's proof system soundness from its proof layer
 
 `Properties.Pouw.Period.ServiceSound` bounds, in each window, the event that PoUW's deployed check
-(`PouwCheck.protocol.check`) accepts the window and some unit it publishes as drawn (`Public.drawn`) has an opening that
+(`PouwCheck.protocol.check`) accepts the window and some unit it publishes as sampled (`Public.drawn`) has an opening that
 fails its relation. `Accounting.TS.ProofLayer.SoundAt` bounds each proof of a window's proof layer the same way, and
-`Accounting.Guarantees.TS.SessionSoundAt` concludes it of a layer whose proofs are C-Flock sessions. This module states
+`Accounting.Guarantees.TS.SessionSoundAt` concludes it of a layer whose proofs are Flock sessions. This module states
 the step between the two:
 
-* `Sessions.layer`: a window verdict `acc` with its drawn units (`drawn`), each unit `u` read at its key `key u` of the
+* `Sessions.layer`: a window verdict `acc` with its sampled proof blocks (`drawn`), each unit `u` read at its key `key u` of the
   window's openings, as a proof layer of `n_π` proofs a window. Proof `i` is one session: `sessOf x w u` is the session
-  that proves drawn unit `u`, and the session's statement is its drawn units' relations. Every proof of a window is
+  that proves sampled proof block `u`, and the session's statement is its sampled proof blocks' relations. Every proof of a window is
   accepted where the verdict accepts the window;
-* `Sessions.checkLayer`: that layer at PoUW's check, its verdict the check's acceptance and its drawn units the check's
+* `Sessions.checkLayer`: that layer at PoUW's check, its verdict the check's acceptance and its sampled proof blocks the check's
   `Public.drawn`;
 * `CheckProofSystemSound`: the check layer's soundness at `δ` (the named premise
   `Accounting.Assumptions.TS.ProofSoundAt`) gives `ServiceSound` at `n_π · δ`, a union bound over the window's
@@ -33,9 +33,9 @@ open Pouw.RelativeSecurity (Paths)
 
 namespace Sessions
 
-/-- **A window verdict with its drawn units, as a proof layer of `n_π` sessions a window.** On path `x`, every proof of
+/-- **A window verdict with its sampled proof blocks, as a proof layer of `n_π` sessions a window.** On path `x`, every proof of
 window `w` is accepted where the verdict accepts the window (`acc x w`), and opens the window's openings
-(`opened x w`, unit by key); proof `i`'s relation is that every drawn unit `u` of the window (`drawn x w u`) whose
+(`opened x w`, unit by key); proof `i`'s relation is that every sampled proof block `u` of the window (`drawn x w u`) whose
 session is `i` (`sessOf x w u = i`) meets its relation at its key's opening. -/
 def layer {Ω U V : Type} {n nπ : ℕ} (acc : Paths Ω n → Fin n → Prop)
     (drawn : Paths Ω n → Fin n → U → Prop) (key : U → ℕ) (opened : Paths Ω n → Fin n → ℕ → ℕ → V)
@@ -47,8 +47,8 @@ def layer {Ω U V : Type} {n nπ : ℕ} (acc : Paths Ω n → Fin n → Prop)
   right _ _ := True
 
 open PouwCheck Properties.Pouw.Period in
-/-- **PoUW's check as a drawn layer**: window `w` is accepted where PoUW's deployed check accepts it, and its drawn
-units are the units the check publishes as drawn (`Public.drawn`), each read at its index. -/
+/-- **PoUW's check as a sampled layer**: window `w` is accepted where PoUW's deployed check accepts it, and its sampled
+proof blocks are the units the check publishes as sampled (`Public.drawn`), each read at its index. -/
 def checkLayer {C Ξ V : Type} {m Np n nπ : ℕ} (p : Params)
     (ws : Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
@@ -64,11 +64,11 @@ end Sessions
 
 /-- **PoUW's proof system is sound against its check, from its sessions' soundness.** For every period of `n` windows
 of PoUW's deployed check (`PouwCheck.protocol.check` at parameters `p`, each window's registration and answer any
-function of the period's coins, `ws`), openings `opened` and relations `rel` of the drawn units, and every assignment
-`sessOf` of each window's drawn units to `n_π` sessions: if each session of the check's layer is accepted with a
+function of the period's coins, `ws`), openings `opened` and relations `rel` of the sampled proof blocks, and every assignment
+`sessOf` of each window's sampled proof blocks to `n_π` sessions: if each session of the check's layer is accepted with a
 statement that fails at its openings with probability at most `δ` (`Accounting.Assumptions.TS.ProofSoundAt`, which
-`Accounting.Guarantees.TS.SessionSoundAt` concludes of C-Flock sessions), then in every window the check accepts and
-some unit it publishes as drawn fails its relation with probability at most `n_π · δ` (`ServiceSound`). -/
+`Accounting.Guarantees.TS.SessionSoundAt` concludes of Flock sessions), then in every window the check accepts and
+some unit it publishes as sampled fails its relation with probability at most `n_π · δ` (`ServiceSound`). -/
 def CheckProofSystemSound : Prop :=
   ∀ {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n nπ : ℕ} (p : PouwCheck.Params)
     (ws : Properties.Pouw.Period.Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
@@ -89,7 +89,7 @@ def CheckProofSystemSoundHonest : Prop :=
         (Sessions.checkLayer p ws (fun _ _ _ _ => ()) (fun _ _ _ _ => True) (fun _ _ _ => (0 : Fin 1))) 0
 
 /-- **`CheckProofSystemSound`'s conclusion can fail at `0`**: some period of one window, at a population of 144 units,
-has PoUW's deployed check accepting and publishing a drawn unit on every path, so with relations every opening fails
+has PoUW's deployed check accepting and publishing a sampled proof block on every path, so with relations every opening fails
 `ServiceSound` fails there at `0`. -/
 def CheckProofSystemSoundNontrivial : Prop :=
   ∃ (m : ℕ) (p : PouwCheck.Params)

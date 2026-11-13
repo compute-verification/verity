@@ -166,7 +166,7 @@ def test_a_chained_window_hits_the_carried_pool(synth):
     root, its hits find the four blocks the first cached (5 hit blocks where the first had 3), its served rows differ,
     and both units accept both windows. Its sources keep two blocks keyed from the carried pool (keyed, not fresh: their
     pages are the first window's) beside the two it wrote. The row carries the keys, not their prints, so each window
-    draws its own coins: under other coins the left row is the same, and the witness made under the first coins is
+    flips its own coins: under other coins the left row is the same, and the witness made under the first coins is
     refused."""
     x = synth
     assert x.a2["pin"] == x.a1["pout"] != x.a1["pin"]
