@@ -504,6 +504,64 @@ theorem ledger_closes (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : 
   · simp only [cond_true, List.mem_append] at hx ⊢
     exact .inr hx
 
+theorem runsAt_length (S : RunSetup) (log : List Release) (pk : ByteArray) : (runsAt S log pk).length ≤ 1 := by
+  unfold runsAt
+  refine (List.length_filter_le _ _).trans ?_
+  simp only [Verity.Sampled.Device.dev]
+  split
+  · split <;> simp
+  · simp
+
+theorem runsOf_length (S₁ S₂ : RunSetup) (one : Bool) (log₁ log₂ : List Release) (pk : ByteArray) :
+    (runsOf S₁ S₂ one log₁ log₂ pk).length ≤ 2 := by
+  have h1 := runsAt_length S₁ log₁ pk
+  have h2 := runsAt_length S₂ log₂ pk
+  unfold runsOf
+  cases one
+  · simp only [cond_false, List.length_append]
+    omega
+  · simp only [cond_true]
+    omega
+
+theorem ledger_length (cut : List Release → ℕ) (θ a : ByteArray) (log : List Release) (b : ByteArray)
+    (ρ : List Bool) :
+    (P.opensAt θ a).length + (P.closesAt cut θ a log b ρ).length ≤ P.one.ledgerLines θ + P.two.ledgerLines θ := by
+  unfold opensAt closesAt
+  have h1 := P.one.ledger_le θ a (logs cut θ log).1 b ρ
+  have h2 := P.two.ledger_le θ a (logs cut θ log).2 b ρ
+  generalize oneWindow θ = w
+  cases w
+  · simp only [cond_false, List.length_append]
+    omega
+  · simp only [cond_true]
+    omega
+
+/-- **`Q` at the deployment**: one message per ledger line either session signs, and each run's record and close. -/
+def signatures (θ : ByteArray) : ℕ := P.one.ledgerLines θ + P.two.ledgerLines θ + 4
+
+/-- **The deployed device signs at most `Q` messages in a play** (`Vocab.signs_le`): before any coin at most one per
+line the request fixes, and at the close at most the two runs' records and closes and one per line at the close
+(`Sampled.Device.signedBy_length`). -/
+theorem signs_le (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (θ a : ByteArray)
+    (log : List Release) (b : ByteArray) (ρ : List Bool) :
+    ((P.signer fs₁ fs₂ cut θ).signs a log b ρ).length ≤ P.signatures θ := by
+  have h1 : (signedBy ⟨fun _ => [], fun _ => P.opensAt θ a⟩ (pubOf θ)).length ≤ (P.opensAt θ a).length := by
+    have := Verity.Sampled.Device.signedBy_length ⟨fun _ => [], fun _ => P.opensAt θ a⟩ (pubOf θ)
+    simpa using this
+  have h2 : (signedBy (P.closing fs₁ fs₂ cut θ a log b ρ) (pubOf θ)).length ≤
+      2 * 2 + (P.closesAt cut θ a log b ρ).length := by
+    have := Verity.Sampled.Device.signedBy_length (P.closing fs₁ fs₂ cut θ a log b ρ) (pubOf θ)
+    have h3 : ((P.closing fs₁ fs₂ cut θ a log b ρ).runs (pubOf θ)).length ≤ 2 := runsOf_length _ _ _ _ _ _
+    have h4 : (P.closing fs₁ fs₂ cut θ a log b ρ).ledger (pubOf θ) = P.closesAt cut θ a log b ρ := rfl
+    rw [h4] at this
+    omega
+  have h5 := P.ledger_length cut θ a log b ρ
+  show ((signedBy ⟨fun _ => [], fun _ => P.opensAt θ a⟩ (pubOf θ)).map (·.data.toList) ++
+      (signedBy (P.closing fs₁ fs₂ cut θ a log b ρ) (pubOf θ)).map (·.data.toList)).length ≤ P.signatures θ
+  rw [List.length_append, List.length_map, List.length_map]
+  unfold signatures
+  omega
+
 end Deployment
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
