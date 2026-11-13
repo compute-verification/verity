@@ -98,9 +98,9 @@ uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [-
   per decode token and per request, and the gaps. With `--stop T` the requests are a stop class's, of at most T ids a
   response, and it adds the class's two populations, one proof block a response each: the stop blocks (the stop rule's
   Boolean Definition taken as a block of its own) and the response ties, each a candidate whose ANDs, rows and output
-  bits are its Definition's. Both are registered at `rate:1/1`, and it prints what that draw leaves at `--delta`: the
-  most blocks an accepted sample leaves incorrect, that count over the population, and those blocks' output bits, each
-  0 where every block is proved (`charged`, which gives a smaller draw its count bound's). These rows read no verdict.
+  bits are its Definition's. Both are registered at `rate:1/1`, and it prints what that leaves at `--delta`: the most
+  blocks an accepted sample leaves incorrect, that count over the population, and those blocks' output bits, each 0
+  where every block is proved (`charged`, which gives a smaller sample its count bound's). These rows read no verdict.
 
 ```text
 uv run python benchmarks/sampling_plan/glm53.py [--requests N] [--stop T [--delta D]]

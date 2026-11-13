@@ -3,9 +3,9 @@ proof-block Definition is a planner candidate whose outputs fit a size class, it
 requests, its work its own ANDs and a statement at most `cap` of it; no served row is a gap; the totals per token and per
 request are the Definitions' sums; the planner certifies a sample over the card's candidates; and `main` prints the totals and
 each gap's rows, ANDs and why. A stop class adds one stop block and one response tie a response, each a candidate whose
-ANDs, rows and output bits are its Definition's; every block of a population drawn leaves no block incorrect, no ε and
-no bit charged at any δ, a smaller draw is charged its count bound's blocks' output bits, and the planner's certificate
-over the two populations agrees; and `main --stop` prints both populations with what proving every block leaves."""
+ANDs, rows and output bits are its Definition's; every block of a population sampled leaves no block incorrect, no ε
+and no bit charged at any δ, a smaller sample is charged its count bound's blocks' output bits, and the planner's
+certificate over the two populations agrees; and `main --stop` prints both populations with what proving every block leaves."""
 
 from __future__ import annotations
 
@@ -85,7 +85,8 @@ def test_a_stop_class_adds_one_stop_block_and_one_response_tie_a_response():
     for c, inputs in ((stop, 5), (tie, 3)):
         assert (c.op, c.units, c.n_rho, c.grain) == (c.template, 5, 1, "request")
         assert c.work == c.ands > 0 and c.out_bits == c.commit_bits and c.out_gates == c.out_bits // 16
-        assert c.cap == G.cap(proof_block_k_log(c.rows[:inputs], c.rows[inputs:], c.ands, packed=False)) > 1
+        k_log = proof_block_k_log(c.rows[:inputs], c.rows[inputs:], c.ands, packed=False)
+        assert c == G._candidate(c.template, 5, 1, c.ands, c.out_bits, c.rows, k_log), "a statement holds its block's count"
     assert (stop.out_bits, stop.rows) == (16, (4 * 16, 4, 4 * 3, 4, 4, 2))
     assert (tie.out_bits, tie.rows) == (16 + 32 * 17, (4 * 16, 2, 4, 2, 4 * 17))
     assert tie.ands == _pins(response_tie)[tie.template]["and"] == response_tie.Shape(16, True).ands
@@ -95,13 +96,13 @@ def test_a_stop_class_adds_one_stop_block_and_one_response_tie_a_response():
 
 
 @pytest.mark.parametrize("delta", [1e-6, 2.0 ** -64])
-def test_every_block_drawn_leaves_nothing_charged_and_a_smaller_draw_is_charged(delta):
+def test_every_block_sampled_leaves_nothing_charged_and_a_smaller_sample_is_charged(delta):
     cs = G.response_blocks(16, 1540)
     for c in cs:
-        assert G.charged(c, delta) == {"population": 1540, "draw": 1540, "rate": "1/1", "incorrect": 0, "eps": 0.0,
+        assert G.charged(c, delta) == {"population": 1540, "sampled": 1540, "rate": "1/1", "incorrect": 0, "eps": 0.0,
                                        "bits": 0}
         x = G.charged(c, delta, 154)
-        assert (x["population"], x["draw"], x["rate"]) == (1540, 154, "1/10") and 0 < x["incorrect"] <= 1540 - 154
+        assert (x["population"], x["sampled"], x["rate"]) == (1540, 154, "1/10") and 0 < x["incorrect"] <= 1540 - 154
         assert x["eps"] == x["incorrect"] / 1540 and x["bits"] == x["incorrect"] * c.out_bits
         assert G.charged(c, delta, 1539)["incorrect"] == 1
     with pytest.raises(ValueError):

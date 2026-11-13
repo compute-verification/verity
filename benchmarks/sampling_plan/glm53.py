@@ -20,13 +20,13 @@ model's stop ids, taken as a block of its own. That is the leaf holding every ga
 three: its ids, one request row for two of the parameters, and its word, the stop ids and the model's length being its
 statics. Its response tie (`ResponseTieStop_v1{O}`, O = T) holds the response row the network certifier released to
 those ids and that stop word. Each is a candidate as the card's are, with its ANDs, its rows and its output bits read
-from its Definition and a statement's `cap` of it from its block as Flock's composer sizes it.
+from its Definition, and a statement holding as many of it as its block allows, as Flock's composer sizes that block.
 
-Both populations are registered at ``rate:1/1``, every block proved. `charged` says what a draw of a population leaves:
-the most of its blocks an accepted sample leaves incorrect at δ (the integrity profile's count bound, in exact
+Both populations are registered at ``rate:1/1``, every block proved. `charged` says what a sample of a population
+leaves: the most of its blocks an accepted sample leaves incorrect at δ (the integrity profile's count bound, in exact
 arithmetic), that count over the population (ε), and those blocks' output bits, 16 a stop word. Where every block is
-drawn no incorrect block escapes, so all three are 0 at every δ; a smaller draw is charged what its bound gives. These
-rows are the plan's: they read no verdict, and say what a sampling design charges, nothing of a served class.
+sampled no incorrect block escapes, so all three are 0 at every δ; a smaller sample is charged what its bound gives.
+These rows are the plan's: they read no verdict, and say what a sampling design charges, nothing of a served class.
 
     uv run python benchmarks/sampling_plan/glm53.py [--card PATH] [--requests N] [--stop T [--delta D]]
 """
@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Sequence
 from fractions import Fraction
 from pathlib import Path
 
@@ -60,14 +61,18 @@ def cap(k_log: int) -> int:
     return min(1 << (35 - k_log), 1 << 20)
 
 
+def _candidate(t: str, units: int, per: int, ands: int, out_bits: int, rows: Sequence[int], k_log: int) -> Candidate:
+    """The proof-block Definition ``t`` as a candidate (the module docstring): ``units`` of it, ``per`` to a request."""
+    return Candidate(t, t, units, ands, out_bits, out_gates=-(-out_bits // 16), ands=ands, rows=tuple(rows),
+                     commit_bits=out_bits, cap=cap(k_log), grain="request", n_rho=per)
+
+
 def candidates(card: dict, requests: int = 1) -> list[Candidate]:
     """One candidate per proof-block Definition over ``requests`` requests of the card's shape."""
     out = []
     for t, d in card["definitions"].items():
         per = d["prefill"] + d["decode"]
-        out.append(Candidate(t, t, per * requests, d["ands"], d["out_bits"], out_gates=-(-d["out_bits"] // 16),
-                             ands=d["ands"], rows=tuple(d["rows"]), commit_bits=d["out_bits"], cap=cap(d["k_log"]),
-                             grain="request", n_rho=per))
+        out.append(_candidate(t, per * requests, per, d["ands"], d["out_bits"], d["rows"], d["k_log"]))
     return out
 
 
@@ -82,19 +87,18 @@ def response_blocks(outputs: int, responses: int = 1, stop_ids: int = STOP_IDS) 
         outs = [sum(t.leaf_widths()) for t in getattr(ret, "fields", (ret,))]
         rows, ands = (*ins, *(2 * -(-b // 16) for b in outs)), bits.compile(d).counts["and"]
         k_log = proof_block_k_log(ins, rows[len(ins):], ands, packed=False)
-        out.append(Candidate(d.id, d.id, responses, ands, sum(outs), out_gates=-(-sum(outs) // 16), ands=ands, rows=rows,
-                             commit_bits=sum(outs), cap=cap(k_log), grain="request", n_rho=1))
+        out.append(_candidate(d.id, responses, 1, ands, sum(outs), rows, k_log))
     return out
 
 
-def charged(c: Candidate, delta: float, draw: int | None = None) -> dict:
-    """What a draw of ``draw`` of a population's proof blocks, uniform without replacement, leaves at ``delta``; every
-    block by default, ``rate:1/1``. ``incorrect``: the most of its blocks an accepted sample leaves incorrect except with
-    probability delta (`Stratified.count_bound`); ``eps``: that count over the population; ``bits``: those blocks'
-    output bits."""
-    k = c.units if draw is None else draw
+def charged(c: Candidate, delta: float, sampled: int | None = None) -> dict:
+    """What a sample of ``sampled`` of a population's proof blocks, uniform without replacement, leaves at ``delta``;
+    every block by default, ``rate:1/1``. ``incorrect``: the most of its blocks an accepted sample leaves incorrect
+    except with probability delta (`Stratified.count_bound`); ``eps``: that count over the population; ``bits``: those
+    blocks' output bits."""
+    k = c.units if sampled is None else sampled
     w = Stratified((Stratum(c.template, c.units, k),)).count_bound(delta)
-    return {"population": c.units, "draw": k, "rate": "{}/{}".format(*Fraction(k, c.units).as_integer_ratio()),
+    return {"population": c.units, "sampled": k, "rate": "{}/{}".format(*Fraction(k, c.units).as_integer_ratio()),
             "incorrect": w, "eps": w / c.units, "bits": w * c.out_bits}
 
 
@@ -131,8 +135,8 @@ def main() -> int:
     for c in response_blocks(a.stop, a.requests) if a.stop else ():
         x = charged(c, a.delta)
         print(f"  stop class {c.template}: {c.units:,} proof block(s), one a response, {c.ands:,} ANDs and {c.out_bits:,} "
-              f"output bits each, {sum(c.rows):,} row bytes opened, at most {c.cap:,} a statement; rate:{x['rate']} leaves at "
-              f"most {x['incorrect']:,} incorrect at delta {a.delta:.3g} (eps {x['eps']:.3g}), {x['bits']:,} bits charged")
+              f"output bits each, {sum(c.rows):,} row bytes opened; rate:{x['rate']} leaves at most {x['incorrect']:,} "
+              f"incorrect at delta {a.delta:.3g} (eps {x['eps']:.3g}), {x['bits']:,} bits charged")
     return 0
 
 
