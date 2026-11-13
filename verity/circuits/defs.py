@@ -61,7 +61,7 @@ class FunctionDefinition:
         return f"{self.name}_v{self.version}"
 
 
-#: what a table a primitive reads by index is: a ``library`` object (an operation's own definition, `verity.definitions.circuits.library`) or a
+#: what a table a primitive reads by index is: a ``library`` object (an operation's own definition, `verity.circuits.library`) or a
 #: ``registered`` input of the program, which the primitive still holds while it declares it
 TABLE_KINDS = ("library", "registered")
 

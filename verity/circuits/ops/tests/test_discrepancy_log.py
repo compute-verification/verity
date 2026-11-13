@@ -12,7 +12,7 @@ import tomllib
 from pathlib import Path
 
 from verity.circuits.silicon.instructions import INSTRUCTIONS
-from verity.definitions.circuits.targets.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN, TARGETS
+from verity.circuits.targets.target import DISCREPANCY_LOG, FIRST, HAWKEYE_PIN, TARGETS
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "uv.lock").exists())
 REQUIRED = ("id", "profile", "class", "issue", "hawkeye_paper", "hawkeye_simulator", "verity_reference",
