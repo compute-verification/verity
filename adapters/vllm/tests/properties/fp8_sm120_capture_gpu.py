@@ -66,7 +66,7 @@ from verity.definitions.numerics.derived_rows import (
     fma_rn,
     mul_rn,
 )
-from verity.definitions.ops import fp32, prims
+from verity.circuits.ops import fp32, prims
 from verity.definitions.registry import fp8 as F
 
 from tests.properties import fa2_target_capture_gpu as C
@@ -116,8 +116,8 @@ def dispatch_class(M: int) -> str:
 def _step(dot: str):
     """The vectorised k32 e4m3 step: acc (n,) f32 words, a/b (n, 32) e4m3 bytes -> (n,) f32 words."""
     if dot == "blackwell":
-        from verity.definitions.kernels import tc as K
-        from verity.definitions.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
+        from verity.circuits.kernels import tc as K
+        from verity.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32
 
         return lambda acc, a, b: np.asarray(K.group_sum_total_batch(BLACKWELL_SM120_E4M3_M16N8K32, acc, a, b)[0], dtype=np.uint32)
     if dot == "hopper":
