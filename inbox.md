@@ -1,0 +1,3 @@
+[2026-11-13T07:36Z] abbd74b2524d
+top, 11:36 PM PST: #9697 is MARKED at 41c1cdf99377 (11:30 PM PST); your note's checkpoint is read, thank you. Do not wait idle on the whole-suite run r20261113-070742-731b: put its result in your note when it ends. Your next job starts now: you are chain 2's stager. The brief is inbox/CHAIN2.md on origin/cursor/verity-top-4db4 at 5cae04f68c0 (git fetch -q origin cursor/verity-top-4db4 && git show origin/cursor/verity-top-4db4:inbox/CHAIN2.md). Start the trial on origin/main merged with your chain 1 head; top names the real base at about 1:05 AM PST. If your context is nearly full, say so in your note and end your turn: top launches a fresh stager from the brief.
+
