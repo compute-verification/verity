@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from verity_vllm.config import workload_file
 from verity_vllm.pipeline import admission_bound as ADM
 
 REPO = Path(__file__).resolve().parents[2]
@@ -18,7 +19,7 @@ CAP_CP_BIG = 376_999_997_440          # a node's /sys/fs/cgroup/memory.max (= 35
 
 def _fixture(name: str):
     d = json.loads((FIX / f"{name}.json").read_text())
-    wl = json.loads((REPO / "workloads" / f"{d['row_id']}.json").read_text())
+    wl = json.loads(workload_file(REPO / "workloads" / f"{d['row_id']}.json").read_text())
     obs = {int(k): int(v) for k, v in d["observed_n_bytes_pair0_instrumented"].items()}
     return d["sizing"], wl, obs
 
@@ -72,7 +73,7 @@ def test_envelope_bound_was_the_loose_one_and_the_scheduled_bound_admits_the_cp_
     assert "envelope bound 559384 MiB was over it" in rec["why"]
     # phi3 B8 1024/128 from the phi3 widths (its envelope bound, 582,111 MiB, is over the cap)
     sizing3, _wl3, _ = _fixture("phi3b1")
-    wl8 = json.loads((REPO / "workloads" / "phi3-mini__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json").read_text())
+    wl8 = json.loads(workload_file(REPO / "workloads" / "phi3-mini__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json").read_text())
     rec8 = ADM.admission(sizing3, wl8["requests"], CAP_CP_BIG, retain="host", max_num_batched_tokens=3638, lag=1)
     assert rec8["admitted"] is True and (100 << 30) < rec8["predicted_host_bytes"] < (120 << 30), rec8["predicted_host_bytes"]
     assert rec8["scheduled"]["peak_step"] == 0 and rec8["scheduled"]["steps"] == 129        # 8 concurrent prefills; caps + 1 lag row
@@ -223,7 +224,7 @@ def test_the_commit_admission_covers_the_recorded_peaks(row):
     #23 and admits #67 within 25 % of its peak; the pool alone is under both."""
     peaks = json.loads((FIX / "commit_peaks.json").read_text())
     r, limit = peaks["rows"][row], peaks["limit_bytes"]
-    wl = json.loads((REPO / "workloads" / f"{r['row_id']}.json").read_text())
+    wl = json.loads(workload_file(REPO / "workloads" / f"{r['row_id']}.json").read_text())
     res = ADM.committer_resident(wl, limit, pairs=r["pairs"], replay_workers=r["replay_workers"])
     pool, peak = r["pool_mib"] << 20, r["peak_anon_shmem_mib"] << 20
     predicted = pool + res["bytes"]
@@ -245,7 +246,7 @@ def test_row74_both_staging_modes():
     levels over every leaf (the warm-up primed 59,246 MiB pinned; kept raw x 1.25 alone was 16,058 MiB)."""
     peaks = json.loads((FIX / "commit_peaks.json").read_text())
     r, limit, M = peaks["rows"]["74"], peaks["limit_bytes"], 1 << 20
-    wl = json.loads((REPO / "workloads" / f"{r['row_id']}.json").read_text())
+    wl = json.loads(workload_file(REPO / "workloads" / f"{r['row_id']}.json").read_text())
     res = ADM.committer_resident(wl, limit, pairs=r["pairs"], replay_workers=r["replay_workers"])["bytes"]
     raw, hid = r["scheduled_raw_mib"] * M, r["scheduled_hidden_mib"] * M
     unb, _ = ADM.predicted_pool_bytes(raw, hid, retain="host", levels_factor=ADM.LEVELS_FACTOR, windowed=True, bounded=False, retain_exclude=None)
