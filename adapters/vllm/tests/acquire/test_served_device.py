@@ -89,7 +89,7 @@ def test_a_device_with_its_cards_compute_capability_and_sm_count_binds() -> None
 def test_a_device_that_is_not_its_card_is_refused_naming_each_field(cc: tuple[int, int], sms: int, card: str, off: str) -> None:
     with pytest.raises(Unmodelled) as e:
         SD.device_of(cc, sms, card=card, max_model_len=4096)
-    assert str(e.value) == f"the device is not its registered card verity/hardware/cards/{card}.toml: {off}"
+    assert str(e.value) == f"the device is not its registered card hardware/cards/{card}.toml: {off}"
 
 
 def test_acquisition_holds_the_engines_device_to_the_card_its_name_registers() -> None:
@@ -112,7 +112,7 @@ def test_a_device_registered_on_no_card_and_not_excepted_is_refused(name: str) -
     with pytest.raises(Unmodelled) as e:
         served_match.device_of(facts)
     assert str(e.value) == (f"device {name!r} is in neither engine.profiles.devices.CARD ({sorted(CARD)}) nor NO_CARD "
-                            f"({sorted(NO_CARD)}): add its card under verity/hardware/cards/ and map it in CARD")
+                            f"({sorted(NO_CARD)}): add its card under hardware/cards/ and map it in CARD")
 
 
 def test_fa2_full_decode_splits_at_the_capture_batch_and_max_model_len() -> None:
