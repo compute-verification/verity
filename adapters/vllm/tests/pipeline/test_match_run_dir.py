@@ -37,6 +37,36 @@ def test_a_run_dir_rerun_replays_the_tier_b_steps_its_run_json_records(tmp_path,
     assert RC.Plan(a).tier_b_steps == []
 
 
+def _rerun_plan(tmp_path, recorded, full_replay):
+    run = _run_dir(tmp_path, snapshot_steps=[0, 1, 2, 3], tier_b_steps=recorded)
+    a = cli.parse("match", ["--run-dir", str(run), "--phase", "cpu", *(["--full-replay"] if full_replay else [])], {})
+    RC._defaults_from_run_dir(a)
+    return RC.Plan(a)
+
+
+@pytest.mark.parametrize("recorded, steps", [
+    ([""], [0, 1, 2, 3]),       # joins to nothing: every snapshot step
+    (" ", [0]),                 # names no step: step 0 alone
+    ("0,1", [0, 1]),            # a string's characters, joined and split again
+    (["1,2"], [0, 1, 2]),
+    (["3", 1], [0, 1, 3]),
+])
+def test_a_run_json_s_tier_b_steps_are_the_comma_list_they_join_to(tmp_path, recorded, steps):
+    assert _rerun_plan(tmp_path, recorded, True).tier_b_steps == steps
+
+
+@pytest.mark.parametrize("recorded", [[""], " ", "0,1", ["1,2"], [0, 2]])
+def test_a_rerun_without_the_full_replay_has_no_tier_b_steps(tmp_path, recorded):
+    assert _rerun_plan(tmp_path, recorded, False).tier_b_steps == []
+
+
+@pytest.mark.parametrize("full_replay", [True, False])
+@pytest.mark.parametrize("recorded", [[1.0], [1.5], [True], [None], [[1]], [{"x": 1}], ["x"]])
+def test_a_run_json_s_tier_b_step_that_is_no_integer_s_text_is_refused_with_or_without_the_replay(tmp_path, recorded, full_replay):
+    with pytest.raises(ValueError, match="invalid literal for int"):
+        _rerun_plan(tmp_path, recorded, full_replay)
+
+
 def test_no_flag_sets_the_tier_b_steps():
     with pytest.raises(SystemExit):
         cli.parse("match", ["--tier-b-steps", "0,1"], {})
