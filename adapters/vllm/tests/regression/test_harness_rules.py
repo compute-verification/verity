@@ -7,7 +7,8 @@ manifest's rows beyond v1 are its "promoted" facts whatever the engine is called
 row (no `commit_summary.json`) is summarised from its own evidence.  A row's `manifest_flags` replaces POLICIES_OFF.  A merged
 Programs view outlives the trees it was assembled from, and a row's tree evicted under the suite is fetched again.  Each process
 rebuilds in a scratch of its own.  A row's pins are files.toml's, and without it nothing resolves unpinned.  A check module loads
-neither numpy, torch nor the core `verity` as it is imported.
+neither numpy, torch nor the core `verity` as it is imported.  A row's batch is its workload's, whether or not the workload was
+fetched before.
 """
 from __future__ import annotations
 
@@ -25,6 +26,8 @@ from tests.regression import decisions as D
 from tests.regression import test_regression as TR
 from tests.regression.checks import commit_summary as CS
 from tests.regression.checks import manifest_digest as MD
+from tests.regression.checks import program_digest as PD
+from verity_vllm import config
 
 
 class _Fake(resolver.Row):
@@ -224,6 +227,44 @@ def test_two_processes_rebuilding_one_row_share_no_scratch(tmp_path, monkeypatch
     other = resolver.scratch(row)
     assert one != other and one.is_dir() and other.is_dir()
     assert one.parent == other.parent == tmp_path / "r19-regress" / "k"
+
+
+def test_a_rows_batch_is_its_workloads_whether_or_not_the_workload_was_fetched_before(tmp_path, monkeypatch):
+    """The digest of record is the workload's from two requests up, so the lift counts the row's requests.  It reads the workload
+    as every other check does (`row.workload()`, which fetches one the store keeps), so it lifts the same in a tree nothing has
+    fetched into.  Only a row whose workload the tree does not hold has no batch: a stored one that cannot be fetched is the
+    fetch's refusal."""
+    root = tmp_path / "vllm"
+    (root / "workloads").mkdir(parents=True)
+    doc = json.dumps({"requests": [{"request_id": "r0"}, {"request_id": "r1"}]})
+    (root / "workloads" / config.DIGESTS).write_text(f"{hashlib.sha256(doc.encode()).hexdigest()}  k.json\n")
+    monkeypatch.setattr(resolver, "VLLM_ROOT", root)
+    fetched: list[str] = []
+
+    def fetch(paths):
+        for p in paths:
+            p.write_text(doc)
+            fetched.append(p.name)
+    monkeypatch.setattr(config, "_fetch", fetch)
+    for key in ("k", "unheld"):
+        (tmp_path / "rows" / key).mkdir(parents=True)
+        (tmp_path / "rows" / key / "build_summary.json").write_text(json.dumps(
+            {"request": {"program_digest": "request-d"}, "workload": {"workload_digest": "workload-d"}}))
+    monkeypatch.setenv(resolver.ROWS_ROOT_ENV, str(tmp_path / "rows"))
+    monkeypatch.delenv(resolver.CANDIDATE_ENV, raising=False)
+    row = resolver.Row("k", {"row": 9}, fixtures={})
+    exp = PD.expected(row)
+    assert (exp["batch"], exp["program_digest_of_record"], fetched) == (2, "workload-d", ["k.json"])
+    assert PD.expected(row) == exp and fetched == ["k.json"], "on disk now: the same lift, and nothing fetched again"
+    unheld = PD.expected(resolver.Row("unheld", {"row": 10}, fixtures={}))
+    assert (unheld["batch"], unheld["program_digest_of_record"], fetched) == (None, "request-d", ["k.json"])
+
+    def refuse(paths):
+        raise RuntimeError(f"{[p.name for p in paths]}: stored workloads, not here, and not fetched")
+    monkeypatch.setattr(config, "_fetch", refuse)
+    (root / "workloads" / "k.json").unlink()
+    with pytest.raises(RuntimeError, match=r"\['k.json'\]: stored workloads, not here"):
+        PD.expected(row)
 
 
 def test_a_rows_manifest_flags_replace_the_policies_off():
