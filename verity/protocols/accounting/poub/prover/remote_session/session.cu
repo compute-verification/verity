@@ -1727,7 +1727,7 @@ int rs_mapped_pass(const uint64_t *addrs, const uint64_t *js, uint64_t n, const 
   const size_t shared = tree_shared > CONSUMER_STAGING ? tree_shared : CONSUMER_STAGING;
   uint64_t side, tail;
   int rc;
-  if ((rc = pass_consumers((const void *)mapped16_pass_kernel, (const void *)mapped_consumer_kernel, ctas, shared,
+  if ((rc = pass_consumers((const void *)mapped16_pass_kernel, 0, (const void *)mapped_consumer_kernel, ctas, shared,
                            subtrees, &side, &tail)))
     return rc;
   unsigned *started = ctr + 2 + groups;
