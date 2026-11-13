@@ -146,9 +146,9 @@ def shell_files() -> list[str]:
     return sorted(p.relative_to(ROOT).as_posix() for p in ROOT.rglob("*.sh") if "__pycache__" not in p.parts)
 
 
-def load_keep(path: Path = KEEP_FILE) -> dict[str, str]:
+def load_keep() -> dict[str, str]:
     """module -> why it is kept although no root reaches it."""
-    with open(path) as f:
+    with open(KEEP_FILE) as f:
         return dict(json.load(f)["modules"])
 
 
@@ -283,9 +283,9 @@ class Graph:
 
 
 # ---------------------------------------------------------------------------------------------------------------------------- roots
-def read_roots_file(path: Path = ROOTS_FILE) -> list[str]:
+def read_roots_file() -> list[str]:
     out = []
-    for line in path.read_text().splitlines():
+    for line in ROOTS_FILE.read_text().splitlines():
         entry = line.split("#", 1)[0].strip()
         if entry:
             out.append(entry)
@@ -335,9 +335,9 @@ def shell_modules(g: Graph, text: str) -> set[str]:
     return mods
 
 
-def resolve_roots(g: Graph, entries: list[str] | None = None) -> tuple[dict[str, set[str]], dict[str, set[str]], list[str]]:
+def resolve_roots(g: Graph) -> tuple[dict[str, set[str]], dict[str, set[str]], list[str]]:
     """(root module -> where it is declared, root shell -> modules it runs, entries that match nothing)."""
-    entries = read_roots_file() if entries is None else entries
+    entries = read_roots_file()
     shells = shell_files()
     by_mod: dict[str, set[str]] = defaultdict(set)
     root_shells: dict[str, str] = {}                   # shell -> the entry (or shell) that makes it a root
