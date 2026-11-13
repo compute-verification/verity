@@ -50,6 +50,9 @@
 # time, `date -d` syntax) no round starts after it, so the run stays inside its booked hours. The REPS rounds are numbered
 # from FIRST_REP (1), so a second run into the same OUT adds its rounds to the first's table: two trees' runs interleaved,
 # each tree into an OUT of its own, give each tree's table over all its rounds.
+# Inside booked hours on a card others hold before and after, served_ab_row.sh runs this script: it holds for the card,
+# starts only once `served_ab.sh imports` (where a lifetime's interpreter imports verity and the endpoint from) names
+# this tree, and has the run off the card by a deadline.
 #   research run --on vy-spot-glm53 --project verity --source TREE --cwd clone --timeout 240m -- \
 #     env CARD=1 CORES=0-11 NOT_AFTER=2026-11-11T07:05Z bash benchmarks/one_stage/served_ab.sh
 set -uo pipefail
@@ -236,6 +239,11 @@ prep() {  # on CORES, no card held: the Build of record, the taps, the cubin, th
 }
 
 if [ "${1:-}" = round ]; then round "$2" "$3"; exit $?; fi
+if [ "${1:-}" = imports ]; then   # where a lifetime's interpreter imports verity and the endpoint from, a path a line
+  cd "$TREE/integrations/vllm" && CUDA_VISIBLE_DEVICES='' "$PY" -c \
+    'import verity, verity_vllm.pipeline.serve_pearl as m; print(verity.__file__, m.__file__, sep="\n")'
+  exit $?
+fi
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "cores $CORES ($(nproc)) card $CARD"; nvidia-smi -L
   cat /sys/fs/cgroup/cpu.max 2>/dev/null; echo "stage $STAGE serve dirs $SERVE_ROOT arms $ARMS reps $REPS loads $LOADS warm $WARM"; } > "$OUT/machine.txt"
 for f in "$PY" "$TAP_CUDA/bin/nvcc" "$HF_HOME"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
