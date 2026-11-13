@@ -126742,3 +126742,41 @@ Branch `cursor/proofs-sessioncoins-e4a0` at `49dbe8d36f5450cb24e0f6cb0bd323d9565
 **To post.** Nothing.
 
 **Not established.** Any file of mine on the join's tree. That `Steps.lean` fails on the join for `coinsHold` (derived, not run). Whether RUNSAS's `Round2`, `RoundTwoOf` and `Statements` compile on the join (the build stopped before or beside them; I did not check).
+
+## HISTORY, Fri 13 Nov 07:11Z: `c350` rc 0. ASSEMBLY, MERGE `d77791cc13`: over `219bc2bd1f`, which the join holds, it changes `DeviceOrder.lean` alone (nine dead proof lines less, no statement changed). CUT's compiled `680b549018` is NOT merged: it holds the base, which you told me not to merge. Nothing of mine is running
+
+**In plain words.** The small cleanup passed its compile run, so my branch's tip is compiled and is the head to take. My piece is whole: the device's record of a two-stage audit, the two facts CUT's bound takes of it, and CUT's bound stated at it in its three forms. Two conditions on the device's ledger are still assumed, as soundness ruled. I am waiting on nothing of my own.
+
+Clock: `date -u` read 07:10Z. Mailbox read at 07:07Z, whole (your 06:58Z). Pen: `~/wt/.pen` is this loop's (made 06:28:57Z). Events not mine since 06:48Z: none.
+
+**Your 06:58Z.** No base merge: none made. `ulimit -Sv`: none of my tries' commands ever had it [run: the `execution.command` of `c350`, `7f9b`, `455a` in each `job.json`]; nothing of mine waits or runs, so nothing to cancel.
+
+**1. `r20261113-064717-c350`** (vy-nebius-2) at `d77791cc13`: **done, rc 0** [run]. "tries: DeviceOrder rc=0 DeviceAccept rc=0".
+- "`DeviceOrder.lean`: lean exit 0 in 409 s"; "axiom probe: none of its 5 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- "`DeviceAccept.lean`: lean exit 0 in 389 s"; "axiom probe: none of its 1 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- The linter now reports no never-run tactic in `DeviceOrder.lean`; what is left there is four deprecation lines (`if_pos`, `if_neg`).
+
+**2. The head** [run: `git rev-parse` of each file at the join's `28d27c389e`, at `219bc2bd1f` and at my tip]. The join's copies of `Device.lean`, `DeviceRead.lean` and `DeviceAccept.lean` are byte for byte my tip's. `DeviceOrder.lean` is the one file that differs: `ledgerOpens_of_opensOn`'s proof without two fallback alternatives, a `<;>` and the `open private strOf` line. `JoinsAt.lean` imports `DeviceOrder` and reads `Sessions.LedgerInOrder`, `Sessions.cutOrder_dev₂` and `Sessions.devOf`: none of the three changed.
+
+**3. CUT's 07:03Z heads and my branch** [read: CUT's entry; `rg` over my files].
+- CUT's compiled `680b549018` and its rename at `4d24802945` both hold the base `3b05c3a3b1`, so merging either merges the base. By your 06:58Z I merged neither. My branch stays on CUT's `8cf4d46672`.
+- [derived] The join does not need it from me: my four files name none of `FirstShown`, `FirstCoinsShown`, `firstReads`, `orderShown`, and CUT says no statement changed in the cleanup or the rename. So my text is the same over either of CUT's heads; only the join's build compiles the two together.
+- CUT's entry says "`PrintsInOrder` is proved of no device". For the table: it is proved at the two-session history `dev₂` from `LedgerInOrder` (`printsInOrder_dev₂`, compiled in `c350`), and `LedgerInOrder` is taken, not proved. So of the three premises `cutBound_accept` names, two are met at `dev₂` (`PrintsInOrder` under `LedgerInOrder`; `SignsPlay` under the vocabulary's signer being the deployment's, `signsPlay_dev₂`), and `Wired` is the instance's.
+- TWOLEG's next head: no title names one yet. CUT's section 4 agrees with my 06:48Z reading: `CutFirst.lean` breaks at `inputAt_ok`'s last conjunct, the rest of the cut stands, and no text of mine reads it.
+
+**4. Pushed** [run]. `cursor/proofs-history-d2e7` at `d77791cc13`. Nothing unpushed. No run of mine is waiting or running.
+
+**5. What the piece holds now**, all compiled, three axioms or fewer [run: `455a`, `7f9b`, `c350`].
+- `Device.lean` (35 theorems): the two-session history `dev₂`, with `printsTwo_dev₂`, `binds_dev₂`, `holdsTwo_dev₂`, `signsPlay_dev₂`, `cut_dev₂`. `Apart` is taken.
+- `DeviceRead.lean` (1): `cutRead_dev₂`. `Apart` is taken.
+- `DeviceOrder.lean` (5): `LedgerInOrder`, `printsInOrder_dev₂`, `cutOrder_dev₂`. `LedgerInOrder` is taken.
+- `DeviceAccept.lean` (1): `cutAccept_dev₂`. `LedgerInOrder` is taken.
+The brief's four owed items are met: `dev₂` and both statements; `PrintsTwo` at the history, in a run; `SignsPlay`, proved.
+
+STOP RULE: not reached. Lock edits: none since `35388bbd54`. No listed guarantee, named assumption, accept switch, `RunSetup` or `History` changed; no device lines built.
+
+NEEDS: none. Resume me when CUT names a head over TWOLEG's next one, if you want one try of my four files over it on my own branch; that try needs the base on my branch, so it needs your word on the base too.
+
+To post: nothing.
+
+Not established: that all four compile in one run at one head (the join's build is that run; three of my runs and the import check give it at `219bc2bd1f`, and `c350` gives the two files that changed or import the change at `d77791cc13`). My files over the base `3b05c3a3b1` or over CUT's `680b549018`, outside the join. `LedgerInOrder` and `Apart` at any deployment (taken as hypotheses). My files over TWOLEG's next head. The known hole, which I do not close: on the play's own two windows the history holds exactly this play's runs.
