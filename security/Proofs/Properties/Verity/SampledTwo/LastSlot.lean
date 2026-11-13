@@ -12,32 +12,37 @@ public import Flock.With.Deployed
 public import Flock.With.ZkEq
 
 /-!
-# No release is put on a session's last slot, from the session's record
+# No release is put on a session's last slot
 
 `Messages.sessionMsgsAsk_form` (`SessionAsk.lean`) rests on `Messages.LastSlotFree`: the locator puts no release of an
-accepted play's log on the last slot of a template's session, the slot the session is decided on. This module takes it
-from what the session's record gives its rep streams, but for one named hypothesis.
+accepted play's log on the last slot of a template's session, the slot the session is decided on. This module proves
+it at the run's locator from four of the join's premises, and names none of its own.
 
-* **The last slot's stream and round** (`slotStream_rep1`): at a slot past the first rep's, the sessions' layout
-  (`SessionCoins.slotStream`) gives the table's rep 1 stream, at the slot less one and less a rep's rounds. So at a
-  session of at least two rounds the last slot is a round of the rep 1 stream that is at least a rep's rounds.
-* **A release on a slot is of a round the record gives** (`SessionCoins.LogRecorded`, `SessionRecordRounds.lean`).
-* **The verdict's count** (`verify_reps`): a record Flock's masked verdict accepts at a session of one table gives
-  each of that table's two rep streams as many rounds as the setup's rep has (`FlockDeploy.repRounds`): the verdict
-  read each rep's stream to its end (`FlockDeploy.zkVerifyRepWith_rounds`).
-* **At the form** (`accepted_reps`): a session the per-member form accepted (`MemberChecks.SessionAccepted`) is one
-  the masked verdict accepted at the form's own setup of it, of one table, each of its statements under a scheme of
-  the registry; so its record on the blobs gives that table's rep streams the setup's rep's rounds.
-* **The named hypothesis** (`SetupsOfTemplates`): on an accepted play, a template's session has at least two rounds,
-  and its record is one the masked verdict accepts at a setup of one table, of the template's table name, whose rep
+* **The sessions' rounds** (`two_le_rounds`): at an accepted play a template's session has at least two rounds. The
+  play's run of record has an interior, the reading states its session statements (`StmtsRead`), each has its
+  template's count of rounds and is in scope (`RoundsHeldAt`, `ScopeHeldAt`), and the held copies' two-stage design
+  evaluates (`twoHolds_at`, from `HeldOfAt`); so the session sets up one table, and its rounds are the link's, the
+  last message's and the table's two reps' (`reps_of_scope`).
+* **`LastSlotFree`** (`lastSlotFree_run_of_scope`): at a session of at least two rounds the sessions' layout puts no
+  stream's round on the last slot (`SessionCoins.locOf_ne_last`): the rep 1 stream's rounds end one slot before it.
+  `sessionMsgsAsk_run` is `Messages.sessionMsgsAsk_form` at the run's locator with it.
+
+**The verdict's count of a session's rep rounds** is not read by `LastSlotFree`. It is the road to the tie of a
+member's session statement to its template's:
+
+* `verify_reps`: a record Flock's masked verdict accepts at a session of one table gives each of that table's two
+  rep streams as many rounds as the setup's rep has (`FlockDeploy.repRounds`): the verdict read each rep's stream to
+  its end (`FlockDeploy.zkVerifyRepWith_rounds`).
+* `accepted_reps`: a session the per-member form accepted (`MemberChecks.SessionAccepted`) is one the masked verdict
+  accepted at the form's own setup of it, of one table, each of its statements under a scheme of the registry; so its
+  record on the blobs gives that table's rep streams the setup's rep's rounds.
+* `SetupsOfTemplates`: what the tie would give, stated and not proved here. On an accepted play, a template's
+  session's record is one the masked verdict accepts at a setup of one table, of the template's table name, whose rep
   has `SessionCoins.repsOf` of the template's round count.
-* **`LastSlotFree`** (`recordReps_of_setups`, `lastSlotFree_of_recorded`, `lastSlotFree_of_setups`): a release on the
-  last slot would be of a round the record gives, at least a rep's rounds, of a stream the record gives exactly a
-  rep's rounds. `sessionMsgsAsk_run` is `Messages.sessionMsgsAsk_form` at the run's locator with it.
 
 What this does not prove: `SetupsOfTemplates`. The form's check verified each session's record at its own setup of the
 session (`accepted_reps`). That this setup has the template's table name and its count of rep rounds is the tie of a
-member's session statement to its template's statement, which no premise here states.
+member's session statement to its template's statement, which no premise here states. Nothing here reads it.
 -/
 
 @[expose] public section
@@ -47,45 +52,7 @@ namespace Verity.SampledTwo.Messages
 open Claims
 open Lean (Json)
 open Verity.Sampled (repStreamName)
-open SessionCoins (slotStream repsOf)
-
-/-! ## The last slot -/
-
-/-- **A slot past the first rep's is a round of the rep 1 stream**: the slot less one, less a rep's rounds. -/
-theorem slotStream_rep1 (tab : String) {R j : ℕ} (hj : ¬ j = 0) (hR : ¬ j - 1 < R) :
-    slotStream tab R j = (repStreamName tab 1, j - 1 - R) := by
-  unfold SessionCoins.slotStream
-  rw [ite_eq_right hj, ite_eq_right hR]
-
-/-- **A session's record gives its rep 1 stream no more rounds than a rep has**: on a play accepted (`FormAccepts`)
-whose log the check read is the device's (`Good`), a template's session has at least two rounds, and the `t`-th of
-the sessions' records the check read (`SessionCoins.sessionRecords`) gives the rep 1 stream of the table `tab t` at
-most `SessionCoins.repsOf` of the template's round count. -/
-def RecordReps (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (tab : ℕ → String) : Prop :=
-  ∀ o, FormAccepts C o → Good o → ∀ recs rec t, t < A.h.ms.length →
-    SessionCoins.sessionRecords C o = some recs → recs[t]? = some rec →
-      2 ≤ SpotFlock.k₀ A.h t ∧
-        Spot.Challenger.recordRounds rec (repStreamName (tab t) 1) ≤ repsOf (SpotFlock.k₀ A.h t)
-
-/-- **`LastSlotFree`, from the session's record**: a release the locator puts on a session's last slot is of a round
-the session's record gives (`SessionCoins.LogRecorded`), which at the last slot is a round of the rep 1 stream at
-least a rep's rounds (`slotStream_rep1`); the record gives that stream no more (`RecordReps`). -/
-theorem lastSlotFree_of_recorded {A : Live₂} {C : CaseOf} {Good : Verity.Exchange → Prop} {L : CoinMap.Locate}
-    {tab : ℕ → String} (hrec : SessionCoins.LogRecorded A C Good L tab) (hreps : RecordReps A C Good tab) :
-    LastSlotFree A (FormAccepts C) Good L := by
-  intro o hacc hgood a rl b hlog t ht hloc
-  have hpos := SpotFlock.k₀_pos A.h t
-  obtain ⟨recs, rec, hrecs, hrt, hlt⟩ :=
-    hrec o hacc hgood a rl b hlog t (SpotFlock.k₀ A.h t - 1) (by omega) hloc
-  obtain ⟨h2, hle⟩ := hreps o hacc hgood recs rec t ht hrecs hrt
-  have hR : ¬ SpotFlock.k₀ A.h t - 1 - 1 < repsOf (SpotFlock.k₀ A.h t) := by
-    unfold SessionCoins.repsOf
-    omega
-  rw [slotStream_rep1 (tab t) (show ¬ SpotFlock.k₀ A.h t - 1 = 0 by omega) hR] at hlt
-  have hlt' : SpotFlock.k₀ A.h t - 1 - 1 - repsOf (SpotFlock.k₀ A.h t) <
-      Spot.Challenger.recordRounds rec (repStreamName (tab t) 1) := hlt
-  unfold SessionCoins.repsOf at hlt' hle
-  omega
+open SessionCoins (repsOf)
 
 /-! ## The verdict's count -/
 
@@ -175,7 +142,7 @@ theorem accepted_reps {own : Spot.OneStageZk.Own} {circuitB pubB : ByteArray} {b
   subst htabs'
   exact ⟨text, _, proofs, spec, sts, rest, _, hst, hzk, hN, hp, htab, fun r hr => verify_reps hzk hN hp htab hr⟩
 
-/-! ## The named hypothesis, and the last slot from it -/
+/-! ## What the tie would give -/
 
 /-- **A template's session is set up as its template**: on a play accepted (`FormAccepts`) whose log the check read
 is the device's (`Good`), a template's session has at least two rounds, and the `t`-th of the sessions' records the
@@ -191,40 +158,6 @@ def SetupsOfTemplates (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Pro
           Flock.Zk.verify spec (FlockDeploy.tabsOf sts) text proofs = .ok () ∧ (∀ st ∈ sts, st.merkle.Named) ∧
             Flock.JsonParse.parse text = .ok rec ∧ spec.tables = #[tab t] ∧
             FlockDeploy.repRounds true spec sts[0]! = repsOf (SpotFlock.k₀ A.h t)
-
-/-- **`RecordReps`, from `SetupsOfTemplates`**: the record gives the rep 1 stream of the template's table the setup's
-rep's rounds (`verify_reps`), which are `SessionCoins.repsOf` of the template's round count. -/
-theorem recordReps_of_setups {A : Live₂} {C : CaseOf} {Good : Verity.Exchange → Prop} {tab : ℕ → String}
-    (hset : SetupsOfTemplates A C Good tab) : RecordReps A C Good tab := by
-  intro o hacc hgood recs rec t ht hrecs hrt
-  obtain ⟨h2, spec, sts, text, proofs, hv, hN, hp, hT, hR⟩ := hset o hacc hgood recs rec t ht hrecs hrt
-  exact ⟨h2, le_of_eq ((verify_reps hv hN hp hT (show 1 < 2 by omega)).trans hR)⟩
-
-/-- **`LastSlotFree`, from `SessionCoins.LogRecorded` and `SetupsOfTemplates`.** -/
-theorem lastSlotFree_of_setups {A : Live₂} {C : CaseOf} {Good : Verity.Exchange → Prop} {L : CoinMap.Locate}
-    {tab : ℕ → String} (hrec : SessionCoins.LogRecorded A C Good L tab) (hset : SetupsOfTemplates A C Good tab) :
-    LastSlotFree A (FormAccepts C) Good L :=
-  lastSlotFree_of_recorded hrec (recordReps_of_setups hset)
-
-/-- **`LastSlotFree` at the run's locator, from `SetupsOfTemplates`**: `SessionCoins.logRecorded_run` is the
-release's half. -/
-theorem lastSlotFree_run_of_setups (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (Ls : CoinMap.Locate)
-    (tab : ℕ → String) (hsz : SessionCoins.HeldSize) (hI : SessionCoins.InteriorLogged C Good)
-    (hset : SetupsOfTemplates A C Good tab) :
-    LastSlotFree A (FormAccepts C) Good (SessionCoins.runLocate A Ls tab) :=
-  lastSlotFree_of_setups (SessionCoins.logRecorded_run A C Good Ls tab hsz hI) hset
-
-/-- **`SessionMsgsAsk` at the form and the run's locator** (`sessionMsgsAsk_form`), with `LastSlotFree` from
-`SetupsOfTemplates`. -/
-theorem sessionMsgsAsk_run (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
-    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
-    (Good : Verity.Exchange → Prop) (Ls : CoinMap.Locate) (tab : ℕ → String) (hplay : PlayAccepts A C S P')
-    (hsess : SessionMsgs A C S P') (hrounds : RoundsHeldAt A C S) (hsz : SessionCoins.HeldSize)
-    (hI : SessionCoins.InteriorLogged C Good) (hset : SetupsOfTemplates A C Good tab) :
-    SessionMsgsAsk A S (FormAccepts C) (fun o => Good o ∧ ReadAt A x (formReading A C S dev) o)
-      (SessionCoins.runLocate A Ls tab) :=
-  sessionMsgsAsk_form A x C S dev P' Good _ hplay hsess hrounds
-    (lastSlotFree_run_of_setups A C Good Ls tab hsz hI hset)
 
 /-! ## The sessions' rounds -/
 
@@ -247,5 +180,26 @@ theorem two_le_rounds {A : Live₂} {C : CaseOf} {S : SessionReading} (hof : Hel
   obtain ⟨_, _, _, -, hk₀, -⟩ :=
     reps_of_scope (twoHolds_at hof hA hi hit) (hrounds o m₂ hA hm₂) (hscope o m₂ hA hm₂) ht
   omega
+
+/-- **`LastSlotFree` at the run's locator, from the sessions' rounds**: at a session of at least two rounds
+(`two_le_rounds`) the sessions' layout puts no stream's round on the last slot (`SessionCoins.locOf_ne_last`). -/
+theorem lastSlotFree_run_of_scope (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity.Exchange → Prop)
+    (Ls : CoinMap.Locate) (tab : ℕ → String) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
+    (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) :
+    LastSlotFree A (FormAccepts C) Good (SessionCoins.runLocate A Ls tab) :=
+  lastSlotFree_run A C Good Ls tab fun _ hA _ a rl _ _ _ ht =>
+    SessionCoins.locOf_ne_last A tab a rl.frame (two_le_rounds hof hst hrounds hscope hA ht)
+
+/-- **`SessionMsgsAsk` at the form and the run's locator** (`sessionMsgsAsk_form`), with `LastSlotFree` from the
+sessions' rounds: every hypothesis is one the join already holds. -/
+theorem sessionMsgsAsk_run (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
+    (Good : Verity.Exchange → Prop) (Ls : CoinMap.Locate) (tab : ℕ → String) (hplay : PlayAccepts A C S P')
+    (hsess : SessionMsgs A C S P') (hof : HeldOfAt A C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)
+    (hscope : ScopeHeldAt A C S) :
+    SessionMsgsAsk A S (FormAccepts C) (fun o => Good o ∧ ReadAt A x (formReading A C S dev) o)
+      (SessionCoins.runLocate A Ls tab) :=
+  sessionMsgsAsk_form A x C S dev P' Good _ hplay hsess hrounds
+    (lastSlotFree_run_of_scope A C S Good Ls tab hof hst hrounds hscope)
 
 end Verity.SampledTwo.Messages

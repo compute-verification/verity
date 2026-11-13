@@ -2,9 +2,11 @@
 a received output that is not the definition over the committed partials fails BY NAME; a missing member is a named FAIL, never a pass."""
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
-torch = pytest.importorskip("torch")
+torch: Any = pytest.importorskip("torch")
 
 from verity_vllm.check.match import xrank_collectives as XC  # noqa: E402
 
@@ -197,7 +199,7 @@ def test_flip_site_alters_the_collective_input_but_not_the_committed_partial():
     w(x)
     assert src.flipped == 1
     assert torch.equal(src.c.bound[0][1], torch.ones(2, 4, dtype=torch.bfloat16, device=dev))      # committed = genuine
-    exp0 = float((torch.ones((), dtype=torch.bfloat16, device=dev) * 2 + 1024.0))                   # bf16(1*2+1024) = 1024.0 (spacing 8 at 2^10)
+    exp0 = float(torch.ones((), dtype=torch.bfloat16, device=dev) * 2 + 1024.0)                   # bf16(1*2+1024) = 1024.0 (spacing 8 at 2^10)
     assert float(seen["x"].view(-1)[0]) == exp0 != 1.0 and float(seen["x"].view(-1)[1]) == 1.0      # the collective saw a different tensor
     # `:ulp` mode: element 0 moves by exactly one bf16 ulp (1.0 -> 1.0078125), nothing else; the committed partial stays genuine
     src.flip_mode, src.c.bound = "ulp", []
