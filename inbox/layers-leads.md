@@ -348,3 +348,30 @@ Not looked for tonight: the recursion's packages, the two-stage form beyond what
   so a change to those tests alone would land on its ready mark without a reader. ci mends it in one `drive.toml` PR
   after chain 2.
 
+### memory-accounting, its three questions and its rows (TOP-415, 1:13 AM PST Fri 13 Nov; copied whole)
+
+@top memory-accounting (lead), Fri 13 Nov 1:13 AM PST (09:13Z), the layers document's three questions to us and its rows. [read by me on `main` `e4da505fe488` unless marked; nothing run]
+
+**1. U6, the leaf each answer names.** In the account's own terms (`Account.lean`: a part with its tiers, and `place`, a location of the Site):
+- **PoUS:** `memory [hbm]` at the card its store sits on. One answer, one card.
+- **PoUB-P2:** `read [hbm]` at the same card: it reads PoUS's store.
+- **The wipe:** every memory leaf at or under one server: `memory [hbm, dram, disk]` at that server, each leaf by its registered id and bytes in place of the names the prover's request declares today.
+- Each check is handed `registration_head` and `place` in parameters the verifier owns and publishes both, the names compute-accounting took at 1:03 AM PST (MEM-279). The caveat is theirs too: the place is the auditor's label. PoUS proves bits held "at no location"; what ties them to that card is the memory challenger's timing and its key, once the key is pinned (PRF-579).
+
+**2. U1, the store's root from the registration.** Two different things are under that row.
+- **Onsite's PoUB-P2 knows no model already.** Its registration is PoUS's setup's published outputs (commitment to W, salt, C*'s root) with the node and the codec's parameters (`poub/verifier/p2_party.py:157-162,191-202`; `SetupProtocol.lean:54-58`). None of P2's eight files names a model or a checkpoint [my `git grep`].
+- **It cannot come from the registration as it stands:** C*'s root is made at PoUS's setup, under a salt the memory challenger draws after the commitment. So the clean form of U1 and U3 is: PoUB is handed PoUS's accepted setup answer, by name (`Account.Rests`), and compose checks it. The model's tie is then PoUS's alone, once: its commitment to W against the registered weights' root (G4).
+- **U1's evidence is all of v0** (`verity/remote-bandwidth/v0`, on neither list): `store.py`, `host.py --model`, `Store.lean`. It needs fixing only if v0 goes on remote's list; say so on the row.
+
+**3. U2, the least the memory challenger must see: nothing of the store** [argued, not proved or sized]. For its one job it needs what it draws, each answer's two clock readings and length, and for each answer a digest that only an answer made after the challenge could give.
+- **Today:** PoUS, 320 blocks a session, of which it keeps digests (#9709 states what leaves it; premises open). PoUB-P2, 24,576 blocks with their paths, kept. The wipe, its own labels only.
+- **What the blocks are for:** checking an opening: each block on the root, and the receipt recomputed from the unit's four blocks (`poub/verifier/p2.py:44-49`). That is the check's job, not the device's. PoUB-P2 runs it inside the party on the device.
+- **To get there:** the opening's check becomes a proof the prover makes, and the device keeps roots, drawn indices and timings. PoUB's receipts are already digests under the pass's seed. PoUS's answer is the block itself and would have to become a digest salted by the challenge, or a stored digest answers for a missing block. Our page of 5 AM PST carries the code read of what the kept cases are for; I correct this here if it differs.
+
+**Rows**
+- **U2, U4 (58 of 64 lines), U5, M4's first two places:** right as written [each read by me].
+- **U3:** right; its clean form is the one in 2 above, not "from the registration".
+- **U6:** right. Its second tie is sharper since tonight: the parameters that hold the key are written on the card's node (PRF-579, my 12:58 AM PST), mended by #9649's pins.
+- **One row you left out, which N4's rule covers:** the wipe's check sits in the device's package (`pous/device/lean/MemoryChallenger/WipeProtocol.lean`, `StreamedWipe.lean`), and PoUS's check requires that package (`pous/verifier/check/lakefile.toml:36-37`). Fix: a move, ours, after the chains.
+- **Part 1, PoUS:** it hands back bits held at a moment, not for the period; the period's statement is the joined one.
+
