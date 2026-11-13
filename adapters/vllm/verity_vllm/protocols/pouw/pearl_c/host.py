@@ -18,6 +18,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, ClassVar
 
+import numpy as np
 from verity.commitments import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
 from verity.protocols.pouw.verifier import salt as PS
@@ -87,8 +88,8 @@ def _constant_keys(t: Any) -> dict[str, int]:
 
 
 #: the salt coin's commitment and opening a device run takes: the challenger's held in this process, or a live session's
-SaltCoins = CoinCommitment | LiveCommitment
-SaltOpening = CoinOpening | LiveOpening
+type SaltCoins = CoinCommitment | LiveCommitment
+type SaltOpening = CoinOpening | LiveOpening
 
 
 def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, opening: SaltOpening,
@@ -188,12 +189,11 @@ class _Driver:
         "cuMemcpyHtoDAsync_v2": ("u64", "vp", "sz", "vp")}
 
     def __init__(self, cu: Any):
-        import ctypes as C
-        types = {"vp": C.c_void_p, "u": C.c_uint, "u64": C.c_uint64, "sz": C.c_size_t}
+        types = {"vp": ctypes.c_void_p, "u": ctypes.c_uint, "u64": ctypes.c_uint64, "sz": ctypes.c_size_t}
         self.f = {}
         for name, args in self.SIGS.items():
             f = getattr(cu, name)
-            f.argtypes, f.restype = [types[a] for a in args], C.c_int
+            f.argtypes, f.restype = [types[a] for a in args], ctypes.c_int
             self.f[name] = f
 
     def _ck(self, name: str, *args: Any) -> None:
@@ -219,6 +219,7 @@ class _Lane:
     recording device's log.  ``priority`` is the one the device gave it.  Its events hand work over to it: from the lane
     before it (``event``; for A's tree, the main lane's per-row keying) and, on a side lane, from the other side lane
     where that ran the call's A tree, at its end (``tree_event``)."""
+    stream: Any                 # torch's stream on the GPU; None off it
 
     def __init__(self, device: Any, priority: str, standin: int):
         import torch
@@ -244,7 +245,6 @@ class _Uploads:
 
     def _slot(self, data: bytes) -> int:
         """The next slot, once its last copy is done, holding `data`."""
-        import numpy as np
         i = self.i
         self.i = (i + 1) % self.slots
         if self.events[i] is not None:

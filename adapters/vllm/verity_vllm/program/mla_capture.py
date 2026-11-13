@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,8 +33,6 @@ DL, DR = 512, 64
 D = DL + DR
 H = 20
 SCALE = 0.0625  # GLM-4.7-Flash: (qk_nope 192 + qk_rope 64) ** -0.5, no yarn
-
-_M = np.uint64(0xFFFFFFFFFFFFFFFF)
 
 
 def _splitmix(x: np.ndarray) -> np.ndarray:
@@ -216,7 +215,6 @@ def mufu_probe(out: Path, device: str) -> dict:
     """MUFU.EX2 and MUFU.RCP on this GPU against core's sm_89 tables (`verity.definitions.ops.mufu`): ex2 on [0, 1) at every 2^-23 step and
     rcp on every mantissa of [1, 2), plus ex2 / lg2 (ftz and not) on a sweep of 2^20 words; the words are stored."""
     import torch
-
     from verity.definitions.ops import mufu as MU
 
     rep = {}
@@ -257,7 +255,8 @@ def _run_case(case: dict, device: str):
     nxt = 0
     for b, T in enumerate(case["seqlens"]):
         for j in range(need[b]):
-            p = int(order[nxt]); nxt += 1
+            p = int(order[nxt])
+            nxt += 1
             table[b, j] = p
             rows = kv_w[b][j * page:(j + 1) * page]
             cache[p, :rows.shape[0]] = rows
@@ -327,8 +326,8 @@ def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict
     instance one token); a combine key one case (a row and an instance are one token)."""
     from collections import defaultdict
 
-    from verity.circuits.evaluation import bits as BS
     from verity.circuits.defs import bind
+    from verity.circuits.evaluation import bits as BS
     from verity.definitions.registry import mla as M
 
     G = M.GLM47_FLASH
@@ -399,7 +398,7 @@ def _check_key(d: Path, key: str, tmin: int | None, tmax: int | None) -> tuple[i
 
 
 def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int = 1, out: Path | None = None,
-               tmin: int | None = None, skip: set[str] = frozenset(), fresh: bool = False) -> dict:
+               tmin: int | None = None, skip: Collection[str] = frozenset(), fresh: bool = False) -> dict:
     """The Boolean Definitions on bits (`verity.circuits.evaluation.bits`) at GLM-4.7-Flash's statics against the captured words:
     `mla.TritonMlaDecodeHead` against `o` of every one-split decode row with tmin <= T <= tmax (one evaluation per distinct
     T), `mla.MlaBmm` against `c` and `mla.MoeSharedCombine` against `out` (one evaluation per case). The keys not in `skip`
