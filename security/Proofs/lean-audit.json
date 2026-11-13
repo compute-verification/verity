@@ -210,6 +210,7 @@
   "Proofs.Flock.SpotFlock.Honest.Written",
   "Proofs.Flock.SpotFlock.Honest.Runs",
   "Proofs.Flock.SpotFlock.Honest.Sits",
+  "Proofs.Flock.SpotFlock.SampleBelow",
   "Proofs.Properties.Verity.SampledTwo.CoinPrefix",
   "Proofs.Properties.Verity.SampledTwo.CutFirst",
   "Proofs.Properties.Verity.SampledTwo.CutAccept",
