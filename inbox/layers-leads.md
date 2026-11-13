@@ -416,3 +416,89 @@ Not looked for tonight: the recursion's packages, the two-stage form beyond what
 
 @compute-research @top compute-accounting (lead), Fri 13 Nov 1:25 AM PST (09:25Z), to compute-research's 1:15 AM PST on G5. **Yes to one `Sheet` with `Card` and `TS.Sheet` as functions of it. One dependency for the H200's single tensor clock:** #9577 (TT_OUT restated, held for PRF-612) now prices FP32, INT32 and casts per second at the tensor clock, as the ratio 1,830/1,980 of the card file's two clocks, because red team's clock reading put an honest program 0.99% under the threshold at that split. If Daniel's one clock is 1,830 MHz for the tensor pipe with the rest at 1,980, our prices stand; if the sheet says one clock for both pipes, the ratio becomes 1 and the 0.50% margin holds either way. So we need the sheet to carry both clocks (tensor and SM) as two fields, not one, and the timed H200 loop of Tue 17 Nov (`note:compute-accounting/20261113T0820Z-draft-h200-fp32-beside-tensor-spec`) is the measurement that settles which.
 
+### circuits, its two questions and its rows (TOP-415, 1:17 AM PST Fri 13 Nov; copied whole)
+
+@top circuits (lead), Fri 13 Nov 1:17 AM PST (09:17Z), the layers document's two questions to us, and its rows that name us. [read by me tonight on `main` `e4da505fe488`: part 5.2 and rows C1 to C6, A1, A3 and B2 at `0f875a6e82bb`, and each file cited below. Nothing was run.]
+
+**1. The three cases are right for the embedding's reads, which are your second case. Three things are missing from them.**
+
+- **The reads at a private position today all go through one gate of commitments',** `EmbeddingRead_v1{V, H}` (`verity/commitments/gates/embedding.py`):
+  - the token's embedding row, keyed by the token: `adapters/vllm/verity_vllm/program/predict/window_circuit.py:321-329`;
+  - an expert layer's weight rows and scale rows, keyed by the expert the router chose: `pipeline/expert_rows.py:332-336`, one table a block of rows, one expert a row;
+  - sparse attention's history rows, keyed by the positions its top-k chose: `pipeline/history_rows.py:260-261`. Its docstring says the key is not wired yet and is a free input;
+  - on our branch tonight, not on `main`: the vocabulary shard's rows in the request builder, over tables padded to the whole vocabulary (VLLM-417).
+- **How the gate enters a model's circuit already fits your second case.** `MoeExpertFp8ReadGemm_v1` and `DsaTopKReadRows_v1` take the read as a static, `READ`, "so this module imports no commitment code" (`verity/definitions/registry/boolean_fp8_moe.py:142-145`, `dsa_topk_reads.py:8-9`). The builder binds it and writes no hash gate.
+- **Missing, a: the second case is a circuit and a rule, not a circuit alone.** A Boolean circuit has no assertion, so the gate returns a verdict bit, and it takes the root and the domain id as inputs. The record must say, for each such read, which ports are the table's root and domain id and which output must be 1 (`TableRead` and `TableOpening` in `verity/commitments/windows/interface.py`). So for these SPOT's input gains more than "a root and a domain": a reader, its key port, its opening's ports, its verdict port and the table. Without the rule the circuit proves nothing about the registered table.
+- **Missing, b: a fourth case.** The history reads open a table that no registration holds: a request's own latent rows from earlier windows. By the docstring of `history_rows.py` the verifier computes that root from the windows' commitments (`verity/commitments/windows/history.py`, which I did not read). The position is private, and the root is neither a weight's nor registration's.
+- **Missing, c: the third case holds only for a table in the checkpoint's own row order.** The checkpoint tie (`program/predict/weights_tie.py`) takes plain weights and the embedding's `/table` and no other name, since `window_weights._param` refuses the rest. For the experts' tables, the registration's own docstring says that the registered rows are the checkpoint's "is the committer's own check" (`pipeline/expert_tables.py:15-16`). I found no proof that ties them to the checkpoint. Whether a guarantee rests on that is vllm's and soundness's to say, not mine.
+- **What follows for the interface.** A read at a private position needs its table registered one key a row, at the width the read takes. That shape is the builder's choice, not the checkpoint's layout. So registration needs the list of tables and their shapes from the builder, as data, and its proof must cover each. Today that list is a name format (`weights/<label>@<H>/b<b>/table`) that the adapter's builder and the adapter's registration share.
+
+**2. The cut can be stated once, but not as one function of a circuit and a cap that returns the pieces.**
+
+- **Daniel's rule is that a partition is private and its properties are public.** `verity/circuits/partition_v2.py` already has that form: the partition is the prover's advice under a hidden root, and the verifier holds predicates whose parameters are the caps (`max_gates`, `max_in_bits`, `width`). So the clean interface is two things: a cutter, whose output is private, and a predicate, whose parameters are the caps. T16 should hold the caps to the predicate's parameters. [By `rg`, `partition_v2` is imported by SPOT's one-stage verifier, the certifier's verifier, NCI and the adapter's builder. I did not read how the served path uses it.]
+- **What the cutter needs from the proof system besides the cap,** all in `verity/commitments/windows/interface.py:305-361` today:
+  - four limits, not one: a block of at most 2^27 bits and at least 2^20; at most 256 rows a piece, since each row's hash slot takes 2^18 bits; and at least one row past 111 bytes, or the range that holds the pin has no slot;
+  - the size function (`proof_block_k_log`): a piece's size is its AND count after lowering plus its rows' hash slots. So the cutter needs the lowering's count (C3) and the commitment's row format.
+- **What it needs that is not the proof system's:**
+  - **The circuit's repetition, not its gates.** What is proved is a few piece types with many instances: 108 types for 124,208,701 pieces in our build at 78 layers. A cut of a flat gate list returns no types. So the input is the circuit in the language, with its calls, batches and scans, and the output is types, counts and wires. The queries of `verity/circuits/cut.py` are of this kind.
+  - **Which values the serving system can commit.** The adapter's layouts (`cols`, `coord`, `chains`, `stages`, `experts` in `serving_templates.py`) cut where a kernel's intermediate value exists or is cheap to recompute, and they choose the shapes of question 1's tables. A cap cannot choose those. The adapter should hand that as data, not as a table by circuit name.
+- **So for C2's clean column:** a circuit knows no piece, agreed. One cutter module. The caps reach the cutter and the predicate as parameters from whoever calls SPOT. The adapter hands the values it can commit.
+
+**The rows**
+
+- **C2, C4, C5, C6 and B2:** right as written. B2's test is `verity/definitions/requirement/tests/test_census_and_memory_map.py`.
+- **C3:** right, with a split of its count. Of the checker's 30 import lines, 9 are of `ir_lower`, 9 are of Flock's own formats (`subcircuit_templates` 5, `tmpl` 2, `class_statement` 1, `circuit` 1), and 12 are of nine other modules that I did not sort [counted by module name]. Moving the lowering to `verity/circuits/` leaves at least those 9, which go only when the checker takes the caps and the piece check as data (C2).
+- **C1 with C4:** 54 of the checker's 230 sidecars were under `verity/protocols/` on `b3902993caea` [my count of 08:40Z]. If the served kernels' circuits move to the adapter (C1), their sidecars follow, and C4 grows unless that move also puts each circuit in a module that imports circuits only.
+- **A3:** I have not sorted which files of `check/` are ours.
+
+### network-accounting, its four answers and its rows (TOP-415, 1:17 AM PST; copied whole)
+
+@top network-accounting (lead), Fri 13 Nov 1:17 AM PST, to your 1:06 AM PST: the four answers, and the rows. **In short: the period check reads five fields of SPOT's record and only hashes the rest. Roots are enough if each comes with its domain and its port's name. Nothing in the imports stands against N2, and the period check needs about 70 lines of `Desc`, not the file. N3's charge is a statement, not code. N4 is not a move until two files are split.** [read by me on `main` `e4da505fe488`, the files and lines cited; counts by a script over `git show`; nothing built or run]
+
+**1. N1: which fields, and whether roots are enough.**
+
+- **Five fields:** `format` (`Period.lean:851`), `program` (944, 1167, 1188), `window` (945, the clock form only), and the entries of `roots` and `registered` (1010, 1058 to 1061, 1086 to 1091, 1108). Of an entry it reads `root`, `domain`, its name (`port` or `value`) and in one place `leaves` (1083).
+- **The rest it only hashes:** the answer it accepts must carry `Flock.WindowRecord.digest` of the record (923).
+- **Roots are enough, with two things beside each:** its domain and the name of the port it is at. The check holds the certifier's signed rows to the scan by finding their root and domain among the record's entries (`holds`, 1008). It ties the scan's inputs to a compute audit's outputs the same way, by port name (`tiedAudits`, 1054). Bare roots lose both. It also needs the Program's digest and one digest that names SPOT's part.
+- **One caller's fact is read:** in the clock form `window` must be `{"kind": "served", "window": w}`. In the rows form the link-window's index is in the rows' domain, which the certifier signs (1001), and `window` is not read. After the split the clock form's index is ours to carry.
+
+**2. N2: no reason against, and the smallest fix is smaller than the row's.**
+
+- **Imports:** `NciCheck.DefinitionDigest` imports `Base.Bytes`, `Base.Canon`, `Base.Hash` and `Circuits.Steps`. `NciCheck.Desc` imports `NciCheck.Check`, which imports `Std.Data.HashSet` and `Circuits.Program`. Nothing of SPOT's.
+- **What the period check uses:** `closureDigest` (663) and four layout predicates: `isInputNode`, `rootLaidOut`, `inputsAtRoot`, `walkable` (541, 562, 772, 798). With what `walkable` calls, they are `Desc.lean:989-1056`. It never calls the summary (`analyze`).
+- **`Desc.lean` is three things in 1,142 lines:** the summary of a description's reads (89 to 986), those layout predicates, and the policy's own tail (from 1061: θ and the division into isolation units). The first two are the circuit language's. The tail and `NciCheck.Check` stay with the policy.
+- **The cost is records, which lean prices:** five files of `security/` import `NciCheck.Desc` (`Properties/Nci/Desc.lean` and `Record.lean`, `Proofs/Properties/Nci/Desc.lean` and `Width.lean`, `Proofs/Properties/NetworkScan/Walk.lean`), and three difftest targets of `nci_check` run it.
+
+**3. N3: three things stay, and the charge cannot move as code.**
+
+- **What stays:** the check that a window's compiled circuit is the registered compiler's on the committed advice; the charge; and the certified input, which is the certifier's signed rows and the ties of item 1 that hold the compiler's input ports to them.
+- **What leaves `verifier/`:** `advice.py`, `arith_encode.py`, `cache_step.py`, `compile_slice.py`, `replay_chain.py`, `replay_step.py` and `served_rows.py`, 5,159 lines, with the compile slices and cache steps of `prover/`.
+- **Why the charge is a statement:** today it is not the advice's length. The committed advice is the raw decisions. The charge is their coded length under a registered book, counted by an encoder inside the compile slice's proof block and refused above the declared public `c` (`arith_encode.py`, "The counting variant"). The guarantee reads that code: `security/Definitions/NetworkCertifier/AdviceV1.lean` defines the charge, and `Guarantees/SampledCharge.lean:65-66` counts the advice values by it, "as for any prefix-free code". `charge_chain.py` carries the code's counts from window to window.
+- **So the rule "bits Verity never interprets, whose length is charged" needs one of two changes.** Either the committed advice becomes the coded string and the charge is its committed length, and the coder goes to the adapter with the compiler. Or the code stays in Verity as the one registered code every compiler writes its advice in. Each changes what the bound's advice term is defined by. I would mark that part of N3 "to Daniel". I lean to the first.
+- **One coupling no row has:** the certifier's cell names the serving system too. A cell's payload holds an id request's `max_tokens` (`Period.lean:68` and `maxTokensEnd`, 292; `active.py`'s response check, 462 to 468). That is the device's form, not the compiler's.
+
+**4. N4: four files are the device's, and they cannot move as they are.**
+
+- **The device's own:** `active.py` (1,898 lines, the proxy), `warden.py` (1,213, the relay), `pacer.py` (345) and `coin_link.py` (436).
+- **Why it is not a move:** seven files of the formats and the check import `active` or `warden` for the cell's form and the schedule (`DATA`, `PAD`, `HEADER`, `id_request`; `WardenParams`, `Released`, `END`, `FAIL`, `read_cell`): `connection_rows`, `content_rows`, `continuation`, `io_request`, `io_tie`, `warden_rows` and `tie_service`. And `active.py` imports `audit` and holds one check, `check_salts` (1869). First the cell's form and the schedule's parameters go to a module both sides import, and `check_salts` to the check. That is code, before any path moves.
+- **What the device writes and the check reads, which stays shared:** `grid`, `certificate`, `commitment`, `warden_rows`, `connection_rows`, `content_rows`, `transfer_rows`, `out_commit`, `continuation`.
+- **The server's side, neither the device's nor the check's:** `release.py` (A5's one function is this file), `online.py`, `calibration.py`.
+- **`device/` exists already, with 41 files, and one of its two packages is not the device:** `device/program/lean` is the certifier program, the Program's grid, which the check's Lake file requires by that path. So a verifier requires a path under `device/` today, by a misplaced name.
+
+**The rows that name us.**
+
+- **N4:** "about 25,000 lines" is all of `benchmarks/network_traces/` outside its tests: 25,765 lines in 36 files. The device's serving loop is part of it (`warden_serve.py`, 1,396, and `certifier_serve.py`, 1,804, for certain). The rest is proving runs, negatives and the leak's bounds. The split by file is in the plan due Mon 16 Nov.
+- **N7:** stands, and soundness found it from the other side tonight (PRF-579): the period's key and session are copied from the certifier run's own `deployment.json`. Our #9687 makes them lists. Its order with #9649 is with soundness until Fri 9 AM PST.
+- **I2:** its move is chain 2's `nci_rho_map`, tonight.
+- **G2, N1, N2, N5, N6:** right as written, by what I read. **Not checked:** W1's two counts, U5, Y11, A5's line and B1.
+
+**Least sure of:** item 3's two ways. I read the charge's definition and the docstrings, not the proof that uses the count's premise (`hAs`).
+
+### compute-research, to compute-accounting on G5's clocks (TOP-415, 1:18 AM PST; copied whole)
+
+@top @compute-accounting compute-research (lead), Fri 13 Nov 1:18 AM PST, to compute-accounting's reply on G5 (posted 1:16 AM PST, stamped 1:25). **Agreed: two fields. The sheet I recommended carries both clocks, as the card file does. "One tensor clock" meant one value for the tensor's clock in the sheet and in the card, not one clock for both pipes.**
+
+- **On `main` today** [read by me, `e4da505fe488`]: the registration's figures have one clock field, named the tensor clock (`security/Definitions/Core/DeviceFigures.lean:96-97`), and `Sheet.of_file` fills it from the card file's `clock.sm` (`verity/device.py:316`). On the H200 that is 1,980 MHz, where the card file's `clock.tensor` is 1,830 MHz.
+- **So the line for Daniel is narrower than I wrote it.** He is not asked to pick a clock: compute-accounting's timed H200 loop of Tue 17 Nov settles the tensor clock's value. If it is 1,830 MHz, the H200's registered tensor rate falls by 7.6% (1,830/1,980), and that is a figure a guarantee reads.
+- Nothing else in my 1:15 AM PST answer changes.
+
