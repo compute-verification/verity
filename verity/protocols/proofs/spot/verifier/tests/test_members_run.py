@@ -2,10 +2,11 @@
 held and sessions the verifier accepts. A window of two members on a challenger's own release log, each session closed
 after its evidence; the verifier's verdict and its check of a member's files' form are handed in (`verdict`, `form`),
 and the read of the auditor's ledger (`challenger.trusted_session_of`, which its own tests hold) is taken as passed.
-The run holds every member's files before any session, a member with no statement as one with a session, and refuses a
-member whose public file is not its slice of the registration; it credits each accepted session its member's units,
-refuses proved units other than the evidence's and a verdict naming another program, and is no verdict: a run of
-sessions that all accepted is what v1's check at the coins then reads."""
+The run refuses a statement of a member the sample holds no unit of, then holds every member's files before any
+session, a member with no statement as one with a session, and refuses a member whose public file is not its slice of
+the registration; it credits each accepted session its member's units, refuses proved units other than the evidence's
+and a verdict naming another program, and is no verdict: a run of sessions that all accepted is what v1's check at the
+coins then reads."""
 
 from __future__ import annotations
 
@@ -155,6 +156,17 @@ def test_proved_units_other_than_the_evidences_and_a_verdict_of_another_program_
     got = w.run(lambda st: {"accepted": True, "why": ""})
     assert got == (None, f"member {A}: session s0's verdict names program none, not the partition object's "
                          f"\"{PARTITION['program']}\"")
+
+
+def test_a_statement_of_a_member_the_sample_missed_is_refused_before_any_session(tmp_path):
+    """A session proves the units of the sample that are its member's, so a statement of a member the sample holds no
+    unit of is a session that proves none: the run refuses it by the member's name before it reads a member's file or
+    verifies a session, the first such statement in the statements' order."""
+    w = Window(tmp_path)
+    missed = "the sample holds none of its units, and a member the sample missed has no statement"
+    assert w.run(never, evidence=w.evidence | {"proved_units": [0, 1]}) == (None, f"member {B}: {missed}")
+    assert w.run(never, evidence=w.evidence | {"proved_units": [3]}) == (None, f"member {A}: {missed}")
+    assert w.run(never, evidence=w.evidence | {"proved_units": []}) == (None, f"member {A}: {missed}")
 
 
 def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the_others_units(tmp_path):
