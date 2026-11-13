@@ -42,7 +42,7 @@ A period `T` is a finite set of windows over one coin space `Ω` (the audit's sa
 has its own leak bound: except with probability `ε w`, an accepted audit of `w` leaves the sender at most `b w` bits
 through the network certifiers in `w` (`Pr[acc w ∧ b w < moved w] ≤ ε w`). This is the per-window guarantee's
 conclusion, whose error is `δ + ε_ks + ε_bind`, taken here as a hypothesis family, so the sum doesn't depend on the
-per-window statement's form. `periodLeak_le_sum` sums these bounds by a union bound (`Pr_exists_mem_le_sum`): except
+per-window statement's form. `monitoringPeriodLeak_le_sum` sums these bounds by a union bound (`Pr_exists_mem_le_sum`): except
 with probability `Σ_w ε w`, when every window's audit is accepted, the period's total is at most `a + Σ_w b w`. The total
 is bounded by the period-level terms `a` (`log2 #Ss + Σ_c log2 (cap_c + 1)` and whatever else the period charges once)
 plus each window's own bits (`htotal`).
@@ -75,7 +75,7 @@ theorem Pr_exists_mem_le_sum {Ω ι : Type} [Fintype Ω] (T : Finset ι) (p : ι
 than `b w` bits moved in it with probability at most `ε w`, and when every window's audit is accepted the period's
 total is at most the period-level terms `a` plus the windows' own bits, then every window's audit is accepted and the
 period's total exceeds `a + Σ_w b w` with probability at most `Σ_w ε w`. -/
-theorem periodLeak_le_sum {Ω ι : Type} [Fintype Ω] (T : Finset ι) (acc : ι → Ω → Prop) (moved : ι → Ω → ℝ)
+theorem monitoringPeriodLeak_le_sum {Ω ι : Type} [Fintype Ω] (T : Finset ι) (acc : ι → Ω → Prop) (moved : ι → Ω → ℝ)
     (b ε : ι → ℝ) (total : Ω → ℝ) (a : ℝ)
     (htotal : ∀ ω, (∀ w ∈ T, acc w ω) → total ω ≤ a + ∑ w ∈ T, moved w ω)
     (hwin : ∀ w ∈ T, Pr (fun ω => acc w ω ∧ b w < moved w ω) ≤ ε w) :

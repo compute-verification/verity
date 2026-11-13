@@ -329,7 +329,7 @@ theorem EnqRel.trans {c c' c'' : Certifier} (h : EnqRel c c') (h' : EnqRel c' c'
     fun l p hs => h'.2.2.2.2 l p (h.2.2.2.2 l p hs)⟩
 
 theorem EnqRel.enqueue (c : Certifier) (f : ByteArray) : EnqRel c (c.enqueue f) :=
-  ⟨enqueue_link c f, enqueue_params c f, enqueue_rows c f, enqueue_window c f, fun _ _ h => h.enqueue f⟩
+  ⟨enqueue_link c f, enqueue_params c f, enqueue_rows c f, enqueue_executionPhase c f, fun _ _ h => h.enqueue f⟩
 
 theorem EnqRel.foldl (c : Certifier) (l : Array (Int × ByteArray)) :
     EnqRel c (l.foldl (fun c x => match x with | (_, f) => c.enqueue f) c) :=
@@ -366,7 +366,7 @@ theorem Shape.enqueueFirst {c : Certifier} {link : String} {p : Params} (h : Sha
 theorem EnqRel.enqueueFirst (c : Certifier) (f : ByteArray) : EnqRel c (c.enqueue f true) := by
   refine ⟨?_, ?_, ?_, ?_, fun _ _ h => h.enqueueFirst f⟩ <;>
     rcases enqueue_first_eq c f with he | ⟨r, he⟩ | ⟨-, -, he⟩ <;> rw [he] <;>
-    simp [doFault_link, doFault_params, doFault_rows, doFault_window]
+    simp [doFault_link, doFault_params, doFault_rows, doFault_executionPhase]
 
 theorem takeOwn_rel (b : Bucketer) : b.takeOwn.t = b.t ∧ EnqRel b.certifier b.takeOwn.certifier := by
   unfold Bucketer.takeOwn

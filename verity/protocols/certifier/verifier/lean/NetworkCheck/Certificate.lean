@@ -272,7 +272,7 @@ from the ids of the checks that read it (`verity/network-certificate/v4`, `verit
 def messageTag : String := "verity/network-certificate-message/v2"
 
 /-- The length of a certifier session id (`lms.SESSION_BYTES`). -/
-def sessionBytes : Nat := 32
+def attachmentBytes : Nat := 32
 
 /-- What `certificate_message` hashes:
 `[tag] ‖ I ‖ [[session] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [signed digest]`, the tag `messageTag`
@@ -283,7 +283,7 @@ def messageInput (keyId session : ByteArray) (link : String) (direction : Direct
     (digest : ByteArray) : E ByteArray := do
   if digest.size ≠ digestBytes then throw "a signed digest is 64 bytes"
   let w ← uBE 8 window "window"
-  if session.size ≠ sessionBytes then throw s!"a certifier session id is 32 bytes, not {session.size}"
+  if session.size ≠ attachmentBytes then throw s!"a certifier session id is 32 bytes, not {session.size}"
   if keyId.size ≠ 16 then throw s!"an LMS identifier is 16 bytes, not {keyId.size}"
   let context := field session ++ field link.toUTF8 ++ field direction.value.toUTF8 ++ w
   pure (field messageTag.toUTF8 ++ keyId ++ field context ++ field digest)
