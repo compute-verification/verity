@@ -321,7 +321,7 @@ via = ["package"]
 
 [[needed]]
 why = "the errors and settings every unit of `verity` shares"
-paths = ["verity/errors.py", "verity/settings.py"]
+paths = ["verity/errors.py", "tools/config/verity_config/verity_settings.py"]
 from = "*"
 
 [[needed]]
