@@ -56,9 +56,10 @@ import json
 from typing import Collection, NamedTuple, Sequence
 
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import DATA, PAD, id_request
+from verity.protocols.accounting.certifier.verifier.active import id_request
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid, row_count
 from verity.protocols.accounting.certifier.verifier.io_tie import parse_cell
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
 
 #: why the rule refuses: what `check` names in a record's stamps, then what the records themselves show
 REFUSALS = ("extra", "missing", "duplicate", "release", "count", "order", "over", "records")

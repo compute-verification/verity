@@ -59,7 +59,7 @@ class ThreadPublisher:
     """The thread publisher: `Publisher.keep` on one worker thread of the relay's process, its results at `close`."""
 
     def __init__(self, out: Path, key: Path, commit) -> None:
-        self.signer = ws.cs.signer(key)
+        self.signer = ws.ck.signer(key)
         self.inline = ws.Publisher(out, ws.Issuer(self.signer, SESSION), PARAMS, commit)
         self.executor, self.futures = ThreadPoolExecutor(1), []
         self.key = self.signer.public_key()
@@ -77,7 +77,7 @@ class ThreadPublisher:
 def _key(tmp_path: Path, *names: str) -> list[Path]:
     """One LMS key, copied to `names` before any signature, so each publisher starts at the same leaf."""
     first = tmp_path / "key"
-    ws.cs.load_key(first, 4)
+    ws.ck.load_key(first, 4)
     out = []
     for name in names:
         shutil.copytree(first, tmp_path / name)

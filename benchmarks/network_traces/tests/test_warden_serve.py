@@ -450,7 +450,7 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
         server = await asyncio.start_server(lambda r, w: ws.fake_endpoint(r, w, sleep=_no_sleep), "127.0.0.1", 0)
         port = server.sockets[0].getsockname()[1]
         try:
-            return await asyncio.to_thread(ws.cs.served_model, f"http://127.0.0.1:{port}")
+            return await asyncio.to_thread(ws.served_model, f"http://127.0.0.1:{port}")
         finally:
             server.close()
 
@@ -616,13 +616,13 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
 
-        ws.cs.load_key(key, height)
+        ws.ck.load_key(key, height)
         publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)
         hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release,
                  "lengths": publisher.lengths}
         public = publisher.key
     else:
-        signer = ws.cs.signer(key, height)
+        signer = ws.ck.signer(key, height)
         issuer = ws.Issuer(signer, SESSION)
         publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
         hooks, public = {"publish": publisher, "withhold": publisher.withhold,
@@ -739,19 +739,19 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         frames[k] = frames[k][:-1] + bytes([frames[k][-1] ^ 1])
         grid = record.grid[:row] + (tuple(frames),) + record.grid[row + 1:]
         (out / "responses.records").unlink()
-        ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
+        ws.bf.write_blobs(out / "responses.records", ws.pack_record(ws.replace(record, grid=grid)))
 
     problems = refused(flip_record)
     assert "responses window 0 isn't certified" in problems and "responses window 0's cells aren't registered" in problems
 
     def edit_cells(change) -> None:
         lines = [json.loads(x) for x in (out / "cells.jsonl").read_text().splitlines()]
-        salts = ws.ar.read_blobs(out / "cells.salts")
+        salts = ws.bf.read_blobs(out / "cells.salts")
         change(lines, salts)
         (out / "cells.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
         (out / "cells.salts").unlink()
         for blob in salts:
-            ws.ar.write_blobs(out / "cells.salts", blob)
+            ws.bf.write_blobs(out / "cells.salts", blob)
 
     def other_root(lines, salts) -> None:
         lines[1]["registration"]["root"] = "00" * 64
@@ -769,7 +769,7 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         (record,) = ws.read_records(out, PARAMS)["fails"]
         grid = ((reason_frame(0, "late", PARAMS.cell_bytes),) + record.grid[0][1:],) + record.grid[1:]
         (out / "fails.records").unlink()
-        ws.ar.write_blobs(out / "fails.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
+        ws.bf.write_blobs(out / "fails.records", ws.pack_record(ws.replace(record, grid=grid)))
 
     assert "fails window 0 isn't certified" in refused(forge_reason)
 
@@ -803,7 +803,7 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
     certified = [json.loads(x) for x in (out / "certified.jsonl").read_text().splitlines()]
     cells_ = [json.loads(x) for x in (out / "cells.jsonl").read_text().splitlines()]
     assert [(x["refused"][2], x["withheld"]) for x in certified if "refused" in x] == [(0, True)] * 3
-    assert [ws.cs.certified_from_json(x).window for x in certified if "refused" not in x] == [1] * 3
+    assert [ws.certified_from_json(x).window for x in certified if "refused" not in x] == [1] * 3
     assert [("refused" in x, x.get("withheld")) for x in cells_] == [(True, True)] * 2 + [(False, None)] * 2
     result = ws.check(out)
     s = result["summary"]

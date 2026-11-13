@@ -141,11 +141,11 @@ from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.commitments.rowleaf import row_leaf
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
-from verity.protocols.accounting.certifier.verifier.active import DATA, PAD
 from verity.protocols.accounting.certifier.verifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
                                                          _u)
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid, row_count
 from verity.protocols.accounting.certifier.verifier.io_tie import parse_cell
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
 from verity.protocols.accounting.certifier.verifier.warden import END, FAIL, Released, WardenParams, read_cell
 from verity.protocols.accounting.certifier.verifier.warden_rows import OWNER, SALT_BYTES, WORD_BITS, bc
 from verity.protocols.proofs.spot.verifier.one_stage import produced

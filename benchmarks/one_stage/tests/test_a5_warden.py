@@ -198,8 +198,9 @@ def test_the_audits_case_is_written_where_replay_names_the_network_certifiers_mo
     imports it), a module with none of what a5 writes an audit's case with. a5 reads the `replay.py` beside it by its
     path, so the case is written and no error stands in its place."""
     import a5
+    import active_replay
 
-    theirs = AW.ws.ar.replay
+    theirs = active_replay.replay
     monkeypatch.setitem(sys.modules, "replay", theirs)
     assert Path(theirs.__file__).parent.name == "network_traces" and not hasattr(theirs, "params")
     RP = a5.own_replay()

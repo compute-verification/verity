@@ -33,6 +33,8 @@ import re
 from typing import Sequence
 
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = b"x-verity-release", b"x-verity-release-run", b"x-verity-release-bucket"
+#: the bytes of a certifier's run id, which it samples at its construction
+RUN_ID_BYTES = 32
 WATERMARK_PATH = b"/verity/watermark"
 WATERMARK_END = b"0\r\n\r\n"
 _REQUEST_LINE = re.compile(rb"[!#$%&'*+.^_`|~0-9A-Za-z-]+ [^\s]+ HTTP/1\.[01]")

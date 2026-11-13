@@ -189,11 +189,11 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
     params = W.WardenParams(**dep["params"])
     if params.digest.hex() != dep["digest"]:
         raise SystemExit(f"--warden-run {run}: deployment.json's digest isn't its parameters'")
-    key, session = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    records = {r.window: r for r in (WS.ar.unpack_record(b, params.cell_bytes)
-                                     for b in WS.ar.read_blobs(_found(run, f"{WS.INGRESS}.records")))}
+    key, session = WS.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    records = {r.window: r for r in (WS.unpack_record(b, params.cell_bytes)
+                                     for b in WS.bf.read_blobs(_found(run, f"{WS.INGRESS}.records")))}
     lines = [json.loads(x) for x in _found(run, "cells.jsonl").read_text().splitlines()]
-    salts = WS.ar.read_blobs(_found(run, "cells.salts"))
+    salts = WS.bf.read_blobs(_found(run, "cells.salts"))
     if len(salts) != len(lines):
         raise SystemExit(f"--warden-run {run}: cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
     regs = {doc["registration"]["window"]: (doc["registration"], blob) for doc, blob in zip(lines, salts)

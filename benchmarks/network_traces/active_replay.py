@@ -107,6 +107,7 @@ from pathlib import Path
 
 import covert
 import replay
+from blob_files import read_blobs, write_blobs
 from verity.protocols.accounting.certifier.verifier import online
 from verity.protocols.accounting.certifier.verifier.active import (
     CANONICAL_STREAM,
@@ -297,20 +298,6 @@ def unpack_record(blob: bytes, frame_bytes: int, intern: dict[bytes, bytes] | No
         grid.append(tuple(slots) + (None,) * (head["allocation"] - n))
     status = Status(Reason(head["reason"])) if head["reason"] else COMPLETE
     return BlockGrid(head["link"], head["window"], tuple(grid), status)
-
-
-def write_blobs(path: Path, blob: bytes) -> None:
-    with open(path, "ab") as fh:
-        fh.write(struct.pack(">I", len(blob)) + blob)
-
-
-def read_blobs(path: Path) -> list[bytes]:
-    data, out, i = path.read_bytes() if path.exists() else b"", [], 0
-    while i < len(data):
-        (n,) = struct.unpack_from(">I", data, i)
-        out.append(data[i + 4 : i + 4 + n])
-        i += 4 + n
-    return out
 
 
 def committed_line(record: CommittedRecord) -> str:

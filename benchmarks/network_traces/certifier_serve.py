@@ -225,7 +225,8 @@ from fractions import Fraction
 from pathlib import Path
 
 import active_replay as ar
-from verity.commitments.crypto import lms
+from certifier_key import HEIGHT, KEYGEN_WORKERS, load_key, public_json, read_public, signer  # noqa: F401 - re-exported
+from runner_cli import PACED_MS, _address, _announce
 from verity.protocols.accounting.certifier.verifier import calibration, out_commit
 from verity.protocols.accounting.certifier.verifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
     Events, Proxy, CertifierClient, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
@@ -246,16 +247,9 @@ BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
 EGRESS, INGRESS, N2_LINK = "responses", "requests", "served"
 #: the rehearsal's client writes here in its run, as on a host of its own (`check` reads its `peer.json` there)
 CLIENT = "client"
-HEIGHT = 10
-#: the processes `load_key` makes a key above `HEIGHT` in (at H = 20, about two minutes on eight cores); at or below
-#: it a key takes about a second in one, and a caller on a thread forks nothing
-KEYGEN_WORKERS = 8
 PROMPT = "Count from one to one hundred in words, separated by commas:"
 FILLER = " one, two, three, four, five, six, seven, eight, nine, ten,"
 REVEAL_MARGIN_S = 300.0
-#: when the proxy's pacer writes each egress bucket, in ms after its boundary: twice the proxy's slack, so that a tick
-#: in time has handed it before
-PACED_MS = 50.0
 PROOF_DEADLINE_S = 600.0
 DELTA = 2.0 ** -40
 STRATEGIES = ("honest", "late", "extra")
@@ -290,60 +284,6 @@ CHALLENGER = "certifier-serve-check"
 OUT_RECORDS, OUT_WITNESS = "out-records.jsonl", "out-witness.jsonl"
 NO_N2 = ("no verdict on the advice profile: the egress counts derive from the ingress head and the advice, which no "
          "N2 unit holds")
-
-
-# Keys.
-
-def load_key(directory: Path, height: int = HEIGHT) -> lms.PrivateKey:
-    """The LMS key (N = 64, W = 1) in `directory`, made there first at `height` when absent (above `HEIGHT` in
-    `KEYGEN_WORKERS` processes), in the challengers' layout
-    (`verity/protocols/compose/device/live_challenger/serve.py`'s `load_key`): `seed` (secret, 0600), `public` (`I ‖ T[1]`), `tree.bin`
-    (its tree, checked against `public` and `tree.sha512`), its leaf state `state.json`, and `public.json`, the public
-    key as a deployment record carries it."""
-    import hashlib
-
-    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
-    seed_p, public_p, tree_p, check_p, state_p = (directory / n for n in ("seed", "public", "tree.bin", "tree.sha512",
-                                                                          "state.json"))
-    if (directory / "public.json").exists():
-        height = json.loads((directory / "public.json").read_text())["params"][2]
-    params = lms.Params(64, 1, height)
-    if not seed_p.exists():
-        fd = os.open(seed_p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        try:
-            os.write(fd, secrets.token_bytes(params.N))
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-    seed = seed_p.read_bytes()
-    if tree_p.exists() and public_p.exists() and check_p.exists():
-        public, raw = public_p.read_bytes(), tree_p.read_bytes()
-        tree = (b"",) + tuple(raw[params.N * r:params.N * (r + 1)] for r in range(len(raw) // params.N))
-        key = lms.PrivateKey(params, public[:16], seed, tree)
-        if (len(tree) != 2 ** (params.H + 1) or lms.public_key(key) != public
-                or hashlib.sha512(public + raw).digest() != check_p.read_bytes()):
-            raise SystemExit(f"{tree_p} is not the tree of {public_p} at {params}")
-    else:
-        key = lms.keygen(params, seed, workers=KEYGEN_WORKERS if params.H > HEIGHT else 1)
-        raw, public = b"".join(key.tree[1:]), lms.public_key(key)
-        for path, data in ((tree_p, raw), (public_p, public), (check_p, hashlib.sha512(public + raw).digest())):
-            path.write_bytes(data)
-    if not state_p.exists():
-        lms.LeafState.create(state_p, public, params.H)
-    (directory / "public.json").write_text(json.dumps(public_json(LmsKey(params, public))))
-    return key
-
-
-def signer(directory: Path, height: int = HEIGHT) -> LmsSigner:
-    return LmsSigner(load_key(directory, height), directory / "state.json")
-
-
-def public_json(key: LmsKey) -> dict:
-    return {"params": [key.params.N, key.params.W, key.params.H], "public": key.public.hex(), "key_id": key.key_id.hex()}
-
-
-def read_public(doc: dict) -> LmsKey:
-    return LmsKey(lms.Params(*doc["params"]), bytes.fromhex(doc["public"]))
 
 
 # Certified records on disk: one JSON line each, the head's and the certificate's fields and the certifier's salt for
@@ -1034,15 +974,6 @@ def deployment(proxy: Proxy, setup: ar.Setup, windows: int, *, session: bytes, n
             "link": list(link), "reveal": list(reveal), "origin_unix": origin_unix, "windows": windows,
             "window_s": e.buckets * e.bucket_ms / 1000, "reveal_deadline_s": proxy.reveal_deadline,
             "challenger_key_id": proxy.challenger_key.key_id.hex(), "upstream": url}
-
-
-def _announce(line: dict) -> None:
-    print(json.dumps(line), flush=True)
-
-
-def _address(text: str) -> tuple[str, int]:
-    host, _, port = text.rpartition(":")
-    return host, int(port)
 
 
 def _out_shape(path: str) -> dict:

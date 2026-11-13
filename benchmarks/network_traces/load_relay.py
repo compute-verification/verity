@@ -1311,9 +1311,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--format p2 needs the store's --salt, and takes the whole load")
     if a.bytes:
         values = first_values(values, a.bytes)
-    import certifier_serve as CS
+    import certifier_key as CK
     key_dir = Path(a.key) if a.key else out / "certifier"
-    signer = CS.signer(key_dir, a.height)
+    signer = CK.signer(key_dir, a.height)
     session = bytes.fromhex(a.session) if a.session else os.urandom(32)
     dom = verifier_domain(a.program)
     witness = a.witness or str(out / "load-witness.bin")
@@ -1330,7 +1330,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             snk.flush()
     regs = sign(Issuer(signer, session), a.link, a.program, values, got.roots, dom)
     doc = {"format": FORMAT, "link": a.link, "window": WINDOW, "program": a.program, "link_format": a.format,
-           "key": CS.public_json(signer.public_key()), "session": session.hex(), "values": regs}
+           "key": CK.public_json(signer.public_key()), "session": session.hex(), "values": regs}
     (out / "load.json").write_text(json.dumps(doc, indent=1))
     rep = {"host": host, "link_bytes": got.link_bytes, "seconds": got.seconds, "jobs": got.jobs, "workers": a.workers,
            "values": len(values), "rows": sum(v.leaves for v in values), "witness": witness}

@@ -114,7 +114,7 @@ def attestation(run: Path, n: int) -> SimpleNamespace:
     how many of them hold the server's bytes (`data_rows`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
-    key, session = ws.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    key, session = ws.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
     link, direction = ws.CERTIFIED[ws.EGRESS]
     records = {r.window: r for r in ws.read_records(run, params)[ws.EGRESS]}
     cells = {(d["registration"]["window"]): (d, salts, wiring_salt) for d, salts, wiring_salt in ws.read_cells(run)

@@ -127,12 +127,12 @@ def refused(out, edit) -> list[str]:
 def edit_rows(out, change) -> None:
     """`rows.jsonl`'s lines and `rows.salts`' blobs as `change(lines, salts)` leaves them."""
     lines = [json.loads(x) for x in (out / crr.ROWS).read_text().splitlines()]
-    salts = ws.ar.read_blobs(out / crr.SALTS)
+    salts = ws.bf.read_blobs(out / crr.SALTS)
     change(lines, salts)
     (out / crr.ROWS).write_text("".join(json.dumps(x) + "\n" for x in lines))
     (out / crr.SALTS).unlink()
     for blob in salts:
-        ws.ar.write_blobs(out / crr.SALTS, blob)
+        ws.bf.write_blobs(out / crr.SALTS, blob)
 
 
 @pytest.mark.parametrize("process", [False, True])
@@ -214,7 +214,7 @@ def test_the_check_refuses_rows_that_arent_the_runs(tmp_path):
         grid = record.grid[:row] + (tuple(frames),) + record.grid[row + 1:]
         (out / "responses.records").unlink()
         for r in (ws.replace(record, grid=grid), *records[1:]):
-            ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(r))
+            ws.bf.write_blobs(out / "responses.records", ws.pack_record(r))
 
     assert "execution phase 0's connection rows aren't its records' releases" in refused(out, other_id)
 
@@ -244,7 +244,7 @@ def phases_of(out, params) -> list[tuple[int, str]]:
 def device_key(out):
     """The key and the session of the run's deployment record."""
     dep = json.loads((out / "deployment.json").read_text())
-    return ws.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    return ws.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
 
 
 @pytest.mark.parametrize("process", [False, True])
@@ -305,7 +305,7 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
         CR.check_no_head(doc[crr.NO_HEAD], key, session, params, ws.LINK, w)
         with pytest.raises(ValueError, match="the word's window"):
             CR.check_no_head(doc[crr.NO_HEAD], key, session, params, ws.LINK, 1 - w)
-    assert ws.ar.read_blobs(out / crr.SALTS)[:2] == [b"", b""]
+    assert ws.bf.read_blobs(out / crr.SALTS)[:2] == [b"", b""]
     records = ws.read_records(out, params)
     held = CR.of_records(params, records["requests"], records["responses"])
     assert [sum(map(len, held[w])) for w in range(4)] == [5, 1, 1, 0]

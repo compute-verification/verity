@@ -82,14 +82,14 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
                                                          "certificates"
     run = gate_run(tmp_path / "cell")
     path = run / "witness" / "responses.records"
-    blobs = WC.WS.ar.read_blobs(path)
-    rec = WC.WS.ar.unpack_record(blobs[0], sz.PARAMS.cell_bytes)
+    blobs = WC.WS.bf.read_blobs(path)
+    rec = WC.WS.unpack_record(blobs[0], sz.PARAMS.cell_bytes)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
     grid = [list(row) for row in rec.grid]
     grid[t][j] = bytes([grid[t][j][0]]) + bytes(len(grid[t][j]) - 1)
     path.unlink()
-    for b in [WC.WS.ar.pack_record(type(rec)(rec.link, rec.window, tuple(map(tuple, grid)), rec.status)), *blobs[1:]]:
-        WC.WS.ar.write_blobs(path, b)
+    for b in [WC.WS.pack_record(type(rec)(rec.link, rec.window, tuple(map(tuple, grid)), rec.status)), *blobs[1:]]:
+        WC.WS.bf.write_blobs(path, b)
     got = WC.certificates(run)
     assert got["verdict"] == "refused" and "responses window 0 isn't certified" in got["why"]
 

@@ -694,7 +694,7 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
     tau = params.bucket_ms / 1000
     starts = arrive or (0,) * len(requests)
     assert len(starts) == len(requests) and list(starts) == sorted(starts)
-    signer = ws.cs.signer(key, 4)
+    signer = ws.ck.signer(key, 4)
     publisher = (ws.Publisher if order is None else _Uncommitted)(out, ws.Issuer(signer, SESSION), params, WR.Cells.of)
     servers: list[_Writer] = []
     mark = _Writer()

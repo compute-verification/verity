@@ -147,8 +147,8 @@ def endpoint(args) -> int:
     async def run() -> None:
         server = await asyncio.start_server(
             lambda rd, wr: replay_endpoint(rd, wr, held=held, model=model, token_s=args.token_ms / 1000), *args.listen)
-        ws.cs._announce({"listening": [args.listen[0], server.sockets[0].getsockname()[1]], "model": model,
-                         "requests": sum(map(len, held.values()))})
+        ws.cli._announce({"listening": [args.listen[0], server.sockets[0].getsockname()[1]], "model": model,
+                          "requests": sum(map(len, held.values()))})
         await server.serve_forever()
 
     asyncio.run(run())
@@ -165,7 +165,7 @@ def rehearse(args) -> int:
     scratch = Path(tempfile.mkdtemp(prefix="warden-replay-"))
     procs: list[subprocess.Popen] = []
     try:
-        ws.cs.load_key(scratch / "warden", args.height)
+        ws.ck.load_key(scratch / "warden", args.height)
         up = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "endpoint", "--serve-run", str(args.serve_run),
                                "--serve-window", str(args.serve_window), "--listen", "127.0.0.1:0", "--token-ms", str(args.token_ms)],
                               stdout=subprocess.PIPE, text=True)
@@ -207,12 +207,12 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--serve-run", required=True, type=Path, help="a serve-openai run dir (serve.json, requests.jsonl)")
         q.add_argument("--serve-window", required=True, type=int, help="the served run's closed Commit window K")
         q.add_argument("--token-ms", type=float, default=20.0, help="milliseconds between a response's events")
-    e.add_argument("--listen", required=True, type=ws.cs._address, help="HOST:PORT (port 0: any)")
+    e.add_argument("--listen", required=True, type=ws.cli._address, help="HOST:PORT (port 0: any)")
     r.add_argument("--out", required=True, type=Path)
     r.add_argument("--start", type=float, default=1.0, help="the first request's time after the origin, in seconds")
     r.add_argument("--gap", type=float, help="seconds between requests (default: the times the run recorded, `arrivals`)")
     r.add_argument("--tail", type=float, default=10.0, help="seconds the run lasts past the last request's time")
-    r.add_argument("--height", type=int, default=ws.cs.HEIGHT, help="the LMS key's tree height")
+    r.add_argument("--height", type=int, default=ws.ck.HEIGHT, help="the LMS key's tree height")
     r.add_argument("--start-in", type=float, default=2.0, help="the origin, seconds after the warden is up")
     r.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
     ws.schedule_flags(r, "bytes")

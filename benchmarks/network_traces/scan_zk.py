@@ -620,11 +620,11 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     except ValueError as e:
         raise SystemExit(f"--warden-run {run}: {e} (warden_serve.py rehearse at scan_zk's schedule, PARAMS, or the "
                          "gate's warden-rehearse --scan)")
-    key, session = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    records = {name: [WS.ar.unpack_record(b, params.cell_bytes) for b in WS.ar.read_blobs(_found(run, f"{name}.records"))]
+    key, session = WS.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    records = {name: [WS.unpack_record(b, params.cell_bytes) for b in WS.bf.read_blobs(_found(run, f"{name}.records"))]
                for name in WS.CERTIFIED}
     lines = [json.loads(x) for x in _found(run, "cells.jsonl").read_text().splitlines()]
-    salts = WS.ar.read_blobs(_found(run, "cells.salts"))
+    salts = WS.bf.read_blobs(_found(run, "cells.salts"))
     if len(salts) != len(lines):
         raise SystemExit(f"--warden-run {run}: cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
     sides = {}
