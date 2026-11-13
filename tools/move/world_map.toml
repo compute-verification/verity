@@ -2,11 +2,16 @@
 #
 # `verity/hardware/world/`, the Lake package `core_world` (`Core.World`), is the outside world as a device reaches it:
 # the verifier's coins, a clock, a timer, byte streams and a signer's leaf state. It is no part of the registered
-# hardware. One package requires it, the network certifier's device (`verity/protocols/certifier/device/lean/`), whose
-# driver runs the device over a `World`, so it becomes that device's: `verity/protocols/certifier/device/world/`.
+# hardware, and no part of one protocol: a device's driver runs the device over a `World`, whichever protocol the device
+# is of. The network certifier's device (`verity/protocols/certifier/device/lean/`) requires it, and `World.lean` is
+# written for a challenger's too. So it goes outside every protocol's directory, beside the interface a protocol's check
+# is written against: `verity/protocols/interface/world/`.
 #
 # - The directory moves whole and laid out as it was: `World.lean`, the lakefile, manifest, lock and toolchain. It
 #   holds no Python and no suite.
+# - It stays a Lake package of its own, with no dependencies, nested in the interface's directory and no part of
+#   `core_protocol`: a device that requires it builds nothing else with it, and the Lean check takes no file under a
+#   nested directory that holds a lakefile as `core_protocol`'s own.
 # - A Lean module is named from its package's root (`World`), so no Lean module, declaration or lock record changes;
 #   what changes in a lakefile or a manifest is a path to this package.
 # - No directory is split, so the map has no [split] table and reads the same on any base.
@@ -18,7 +23,7 @@ old = { verity = "verity", verity_difftest = "verity/difftest/python/verity_diff
 new = { verity = "verity", verity_difftest = "verity/difftest/python/verity_difftest", verity_flock = "verity/protocols/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "verity/configuration/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
 
 [paths]
-"verity/hardware/world/" = "verity/protocols/certifier/device/world/"
+"verity/hardware/world/" = "verity/protocols/interface/world/"
 
 [retired]
 # the directory this map empties: `layout.py` refuses a tracked file under one that has no row, and its row is a
@@ -50,4 +55,4 @@ include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/R
 [modules]
 # the rename [paths] implies (`layout.py --modules`): the directory as a dotted path. No module lives in it: the package
 # is Lean.
-"verity.hardware.world" = "verity.protocols.certifier.device.world"
+"verity.hardware.world" = "verity.protocols.interface.world"
