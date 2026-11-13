@@ -139905,3 +139905,137 @@ runs were the middle two of four, so the node's own load is the likely cause. Th
 STOP RULE: nothing. NEEDS: as at 12:12Z, but item 2 (the question to FIRSTACCEPT) is withdrawn: the read answers it.
 To post: nothing. Not established: the repeat's rows. Heads unchanged: `cursor/proofs-sessionof2-parser-defe`
 `dc91f31f56fe`.
+
+## HONEST2, Fri 13 Nov 12:13Z: THE STATEMENTS, before any build. (1) The toy's own registration cannot be `held R B …`, and it need not be: the premises and the scope hold at ANY auditor's copies from five decided facts and one accepted run, by lemmas already on the join (`honest_of_run`, stated here, not compiled). (2) The `Bnd` as written fits no registration with an input; the toy's boundary has 2,048 input slots. (3) No `Bnd` fact is `decide`-able in the kernel; all three are computed facts and hold at the toy's boundary at one outer block (`13f3`)
+
+**In plain words.** You asked for the boundary registration and the reference statement as Lean text, and whether the instance can be the toy's own, so that a run in the tree makes it. Three findings. First, the instance I built (one template, one outer block of two inner blocks, no wires) is not the toy's, and no choice of `R` and `B` makes it so: the toy has five templates, four wires and a link to a boundary value of another name. But that shape was never needed. Each lemma the instance's proof reads that is not "there is no wire" has a general twin on the join, so the same conclusion holds at any registration: the design premises from five facts decided on the auditor's copies, and the scope from the accepted run itself. So the named instance can be the toy's own registration as it is played, with no `Bnd` or `Ref` built by hand; the one thing a run does not give is that the reference reads are well formed. Second, the `Bnd` as I wrote it has an empty input class, and the toy's boundary program has 2,048 input slots, so today's `Bnd` fits no boundary registration that has an input; the mend is small and is written below. Third, I asked the kernel to decide the `Bnd` facts and it cannot: it stops inside the verifier's own text handling even at a 1.3 KB descriptor. Compiled evaluation says all three hold at the toy's boundary at one outer block. So they are computed facts, not `decide`.
+
+Clock: `date -u` read 12:12Z when I began writing. Mailbox: read 12:07Z, nothing since your 11:40Z.
+
+**1. The statement I would write first, at any auditor's copies** [derived from the definitions and lemmas named, each read today at `191488fbab`; NOT compiled].
+
+```lean
+/-- An accepted run's statement is in the two-stage scope at the compiled code, at any auditor's copies. -/
+theorem inScope_of_run {h : Held} (hA : Accepts h) : InScope h
+
+/-- The premises `SpotKSTwo` takes, from what is decided on the auditor's copies. -/
+theorem premises_of_checks {h : Held} (hB : BuiltWired h (wireMap h) (returned h)) (hWf : RefReadsWf h)
+    (hna : ∀ v, h.reg.always v = false) {n K : ℕ}
+    (hp : Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true)
+    (hK : firstK h.reg.first = some K) (hwc : AddressRow.wiresChecked h = true) : Premises h
+
+/-- `HonestExists`, from those and one accepted run. -/
+theorem honest_of_run {h : Held} (hB …) (hWf …) (hna …) {n K : ℕ} (hp …) (hK …) (hwc …)
+    (hA : Accepts h) : HonestExists
+```
+
+Why each should go through:
+- `premises_of_checks` is `⟨hB, addressesConnected_of_firstK hWf hna hp hK hwc⟩`. ADDRROW2's `addressesConnected_of_firstK` (`AddressFacts/RowFirst.lean`) is already stated for any `h`, `n`, `K` [read]; `Honest/Sits.lean` only applies it at `held`.
+- `inScope_of_run`: `CheckedRun.Ok h r` carries `parse h r.x = some r.s`, `partition h r.s = some Pt`, `two h r.s = some d` and `InScopeTwo Pt d r.s` [read: `RevealAt.lean`, `Ok`]. From `two`: each wire's writer is first (`wiresFirst_of_two`), so the code's wiring map rewires the members' programs (`rewires_of_two`, `WiredCode.lean`), and a rewiring keeps the two-stage scope at the wired program with the partition and the design cut (`scope_rewired`, `WiredAt.lean`). That is `(compiled h).Scope r.x`. My `scope_held` did the same by hand for the map that moves nothing.
+- `BuiltWired` holds of any copies given SPOT's own frame (`builtWired_spot`, for any `h`), as `builtWired_held` uses it.
+
+What it asks at the toy's own registration, with `h` the auditor's copies the play runs at:
+
+| hypothesis | how it is had |
+|---|---|
+| `BuiltWired` | by construction: the frame is SPOT's own at the wired program [read] |
+| `RefReadsWf h` | the parser switch (SESSIONOF2); kept as the one hypothesis, now one `Claims.Json.Wf` a template |
+| `always v = false` | data of the registration [guess: the toy's rule names no inner block checked whatever is sampled; I have not read where the copies' `always` comes from] |
+| `popOk … n` | computed fact; the run's own population check. True at the toy's boundary at `n = 1` [run: `13f3`] |
+| `firstK … = some K` | computed fact. `some 1` at the toy's boundary at `(N, Q) = (1, 1)` [run: `13f3`, through the definition's own steps; see 3] |
+| `wiresChecked h` | computed fact on the copies' wires: no link names a wire's reader port, and the first wire at the port names its writer [read: `RowLeaves.lean`; not evaluated at the toy's four wires] |
+| `Accepts h` | the accepted play, if the compiled form's acceptance is `CheckedRun.Ok` at these copies [guess: that tie is TWOLEG's and the form's, not mine] |
+
+The decided facts of the design (`scopeOk`, `filesOk`, `templateOk`, `membersScoped`, `wiringOk`) are not asked: `two h r.s = some d` inside the accepted run is their evaluation.
+
+**2. The `Bnd`, as Lean text** [derived; NOT compiled].
+
+Today's `oneLayout gs` is `⟨#[#[#[⟨some 0, gs⟩]], #[]]⟩`: no stratum in the input class. `Spot.Slots.layout` gives that only for a program whose root has no input [read: `Slots.lean`]. The toy's boundary program at one outer block gives a population of one inner block at the gates `(2048, 12288)` and an input class of one stratum of 2,048 slots, the first `(0, 1)`, the last `(2047, 2048)` [run: `13f3`, `E.log`: `sizes=#[#[1], #[2048]] pop=[{ unit := some 0, gates := (2048, 12288) }]`]. So the `Bnd` I would write carries the input class:
+
+```lean
+def oneLayout (gs : ℕ × ℕ) (ins : ℕ) : Spot.Slots.SlotOrder :=
+  ⟨#[#[#[⟨some 0, gs⟩]],
+     if ins = 0 then #[] else #[(Array.range ins).map fun g => ⟨none, (g, g + 1)⟩]]⟩
+
+structure Bnd where
+  g : Reg
+  gs : ℕ × ℕ
+  ins : ℕ
+  boundaryNames : Names
+  interiorPorts : List String
+  layout : Spot.Slots.layout g.program g.query = .ok (oneLayout gs ins)
+  design : slotDesign g.rule g.program g.query g.table = .ok design1
+  firstK : firstK g = some 1
+
+/-- The toy's boundary registration at one outer block (`toy.py`, `boundary_window(1, 1)`): its descriptor's
+3,959 canonical bytes, its query, and the rule `Select.resolve` gives from the registered `rate:1/1`. -/
+def toyProgram : Spot.Program := (Spot.Program.parse toyDesc.toUTF8).toOption.getD default
+def toyQuery : Json := Json.mkObj [("name", "Q_template_instance"), ("version", (0 : ℕ)),
+  ("params", Json.mkObj [("template", "TwoStageToyReplay_v1{H=1024}")])]
+def toyReg : Reg :=
+  { verifier := { program := toyProgram, query := toyQuery, law := Json.mkObj [("law", "subset"), ("k", (1 : ℕ))],
+                  workTable := none, … },
+    rule := .twoStage toyQuery "subset:1" (.each 1), closure := none }
+
+/-- The toy's boundary facts: closed equations of the verifier's code, which compiled evaluation decides. -/
+structure ToyFacts : Prop where
+  layout : Spot.Slots.layout toyProgram toyQuery = .ok (oneLayout (2048, 12288) 2048)
+  design : slotDesign toyReg.rule toyProgram toyQuery none = .ok design1
+  firstK : firstK toyReg = some 1
+
+def toyBnd (hF : ToyFacts) : Bnd :=
+  { g := toyReg, gs := (2048, 12288), ins := 2048, boundaryNames := …, interiorPorts := …,
+    layout := hF.layout, design := hF.design, firstK := hF.firstK }
+```
+
+What the input class costs downstream [read]: `filesReplay` sends an input slot to the empty block, `filesOk` passes it, and `scopeOk` reads the replay partition only through its gates, the first replay block holding each inner block (`replayOf`), and `.all` over the input class. So one lemma (`scopeOk` is the same with and without an input class of empty blocks after the population) keeps `Ref.scope` as it is; `filesOk_held` stops being `rfl`.
+
+What `toyBnd` discharges: `Bnd.layout` gives `popOk_held` and `layout_held`, `Bnd.firstK` gives `addressesConnected_held`, `Bnd.design` gives `replayDesign_held`; so of `premises_held` it leaves `Ref` and `Claims.Json.Wf R.reads`. Of `two_of_ref`'s five it touches one, `RefReadsNamed R B`, through `interiorPorts`; the other four are of `R`'s circuit alone.
+
+Can it be the toy's own registration:
+- The boundary half: yes, at `(N, Q) = (1, 1)`, with the input class. The toy's tests and plays run at more than one outer block (`test_toy.py`: `N, Q = 6, 3`; `audit.py`'s default `--n 4 --q 2`) [read], where the layout has `N` population blocks and the first stage is `subset:Q`; `oneLayout` and `firstK = some 1` are for one block.
+- The interior half: no. `held` has one template, `ns = #[2]`, no wire, and links each port to the boundary value of its own name. The toy has five templates with `(1, 1, 1, 2, 1)` inner blocks an outer block, four wires, and the links `row → …/ingress` and `o0 → …/o0` [read: `toy.py`, `N_T`, `WRITERS`, `LINKS`]. No toy template can be `R`: the one with two inner blocks (`FLIP_B`) reads a wire and has no link.
+- So for the instance to be one a run in the tree makes, either item 1 (the toy as it is, no `Bnd`), or a second toy of the instance's shape, which no run in the tree makes today. I recommend item 1.
+
+**3. `decide` or computed fact** [run: `r20261113-115850-13f3`, `--on auto`, vy-nebius-cpu-9, launched 11:58:50Z, `--cwd clone`; `Spot.Slots` built there in 41 s; still running its toy-size probes].
+
+Compiled evaluation (`#eval`), at the toy's boundary descriptor at `(1, 1)` (3,959 bytes) and at a small one (one `TwoStageToyFlip_v1{H=2}`, 1,272 bytes):
+- both parse; `Partition.units` is `1`; `popOk … 1 = true` at both;
+- `Select.resolve` turns the toy's `rate:1/1` into `twoStage subset:1`; the rule's law over one unit is `{"k":1,"law":"subset"}`;
+- the steps `slotDesign` and `firstKOf` take (`units`, `lawOver`, `deriveLaw`, `flockLaw`) give `n=1 derived=none law=subset 1` at both. So `slotDesign = .ok design1` and `firstK = some 1` [derived: the two definitions are in `security/`, which the probe did not build; it ran their bodies' steps in the same order].
+
+The kernel (`by decide +kernel`, each probe one file):
+
+| probe | what | verdict |
+|---|---|---|
+| K01 | `JsonParse.parse` of a short text | passes, 1 s |
+| K04 | `JsonParse.parse` of the 1,272-byte descriptor | passes, 115 s |
+| K02 | `Select.parseDesign "subset:1"` is ok | FAILS: reduction stuck |
+| K03 | `Draw.flockLaw` of the `subset` law object | FAILS: stuck |
+| K05 | `Program.parse` of the 1,272-byte descriptor | FAILS after 248 s: stuck |
+| K06, K07, K08 | `Partition.units`, `popOk`, the first stage's law, at the small descriptor | FAIL: stuck |
+
+So none of `Bnd.layout`, `Bnd.design`, `Bnd.firstK` is `decide`-able as the verifier's code stands, at any descriptor: the law's own text (`subset:1`) already stops the kernel. Why [guess]: the code's `String` functions (`split1`, `toNat!`) are not ones the kernel unfolds; `JsonParse.parse` was written so that it does. Not pinned to a function. `native_decide` is not allowed. So `ToyFacts` is three computed facts: closed equations a compiled test evaluates (the lock's `runs`), which no proof reads.
+
+**4. The `Ref`** [read; nothing built].
+
+Nine facts read `R`'s statement: its four fields (`zk`, `tmpl`, `scope`, `named`) and `two_of_ref`'s five (`scopeOkH (stmtOf R.x)`, `RefWritten R`, `RefReadsNamed R B`, the ports named once, `outsComputed (stmtOf R.x)`). Each is a closed Boolean equation once `x`, `ports`, `reads` and `B.interiorPorts` are literals.
+- At the toy's reference statement: not possible for `held`, by item 2's interior half.
+- The smallest circuit that has them: a statement with hidden outputs, untyped tags and `sha512/row/v2` ports, over two units, each port linked. The toy's `TwoStageToyFlip` at a small `H` with its `x` and `o0` both linked is the candidate. `concreteStmt` (`SessionLoop/Concrete`) is not: public outputs and a `sha512/row/v1` row, so `templateOk` refuses it.
+- By `decide`: no. `stmtOf x` parses the whole circuit file with the two fixed nets (503,051 lines at `copy16`), and K05 shows the kernel stuck on a 1.3 KB parse. As a walk: the scale of `SessionLoop/Concrete` (15 files, 6,158 lines, at the open guarantee `FixedNetsBuild`), redone for a hidden-output `v2` file.
+- As computed facts: yes in principle; it needs the statement's bytes from a play of that small toy and one compiled evaluation of the nine. Under item 1 none of this is asked: the accepted run's `two h r.s = some d` is the evaluation of `scopeOk`, `filesOk`, `templateOk`, `membersScoped` and `wiringOk` at the toy's five reference statements.
+
+**5. `Claims.Json.Wf R.reads`**: kept as the one hypothesis, not proved by hand. Under item 1 it is `RefReadsWf h`, the same of each template's reads.
+
+**STOP RULE.** No file of the branch changed since `191488fbab`. One run out (`13f3`, the probe; it ends by 12:59Z on its own timeout). No records run.
+
+**NEEDS.** Your pick, or I go on as said:
+- I write `Honest/Any.lean` with the three statements of item 1 and try it, one file, one try, once `13f3` ends. Starting on the text now; say so if you want the `Bnd` mend instead.
+- If item 1 stands: who states the toy's auditor's copies `h` as the compiled form runs them (TWOLEG or the form's owner), so that `Accepts h` is about that `h`. And whether the copies' `always` is `false` there.
+- The `Bnd` mend (the input class) is worth making only if the one-template instance is kept beside item 1. I would keep `two_of_ref` (the design evaluates with no run) and not build `toyBnd`.
+
+**Not established.** Item 1's three theorems compiled. `wiresChecked` and `always` at the toy. That the compiled form's acceptance is `CheckedRun.Ok`. Which function stops the kernel. The toy-size kernel probes (K09 to K12, K14: still running). `slotDesign` and `firstK` themselves evaluated (their steps were). A concrete `Ref`. An accepted run of any `held R B`. A whole build or a records run at my head.
+
+**Pushed.** `cursor/proofs-honest2-7c4e` at `191488fbab70a42df4baad9db9387acb1de06c9c`, compiled (`f386`; `d6c5` on the join). Nothing unpushed.
+
+**To post.** Nothing.
