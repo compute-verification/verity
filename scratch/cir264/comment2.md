@@ -1,4 +1,4 @@
-**The sampled accept's kernels ran on a card and store the Definition's reference word for word on every request inside its domain: 409 requests of 1 + 5 rows, 80,226 words compared, 0 differ (run `r20261113-034537-8871`). Off the card, the registered `SampledAccept_v1{K=5,V=154880,TILE=8192}` evaluated on the first REPLAY_CASES of them gives the card's verdicts, count and tokens: REPLAY_WORDS words compared, REPLAY_DIFFER differ (run `REPLAY_RUN`).**
+**The sampled accept's kernels ran on a card and store the Definition's reference word for word on every request inside its domain: 409 requests of 1 + 5 rows, 80,226 words compared, 0 differ (run `r20261113-034537-8871`). Off the card, the registered `SampledAccept_v1{K=5,V=154880,TILE=8192}` evaluated on 11 of them gives the card's count and tokens: 264 words compared, 0 differ (run `r20261113-034958-1553`). PR_SENTENCE**
 
 circuits' worker ACCEPT, STAMP.
 
@@ -14,7 +14,7 @@ circuits' worker ACCEPT, STAMP.
 
 **The one request outside the domain, `halves-split`.** It is the hand vector where lane 0 of the rejection kernel's warp accepts the first draft token and lanes 16 to 31 refuse it, which the kernel leaves undefined. On the card its count is 6 and its six tokens are lane 0's, as the reference has them; 1 of its 200 words differs: the kept log-sum-exp of the last position tested is `0xc1af360a`, where lane 0's arithmetic gives `0x40e00000`. The PTX interpreter I used off the card had given a count of 2 for it. So after a split the card's sums are neither lane 0's arithmetic nor my interpreter's. The tokens agree here because rows 1 to 4 of this vector put all the mass on the draft token [inferred from the vector; I tested no other split]. The Definition's domain stays as stated: a request whose halves split is outside it.
 
-**The replay off the card.** REPLAY_TEXT
+**The replay off the card.** The capture keeps every request's operands and stored words, so the comparison runs again without a card as the Definition changes. Run `r20261113-034958-1553` replayed the kept 410 requests at the same tree: the same counts against the reference (409 inside the domain, 80,226 words, 0 differ), and the registered Definition evaluated on the first 12 kept requests that are inside the domain, which is 11 (nine hand vectors and two random requests; the tenth hand vector is `halves-split`). For each, the Definition's 12 output words (five verdicts, the count, six tokens) are compared with the card's, where a verdict is read off the stored count, and with the reference's: 264 words compared, 0 differ. One evaluation of the Definition at this size takes over a minute [computed from the run's 16.5 minutes], which is why it is 11 requests and not 409.
 
 **What this does not show.**
 
@@ -22,4 +22,4 @@ circuits' worker ACCEPT, STAMP.
 - Anything about a split other than the one hand vector.
 - The masked row the `logits` port reads: its writer is CIR-273.
 
-**Runs.** The capture `r20261113-034537-8871` on node A: launched 03:45:37Z, started 03:46:05Z, 90 s. The replay `REPLAY_RUN`: REPLAY_SLOT.
+**Runs.** The capture `r20261113-034537-8871` on node A: launched 03:45:37Z, started 03:46:05Z, 90 s. The replay `r20261113-034958-1553`: waited 10.5 minutes for a check slot (03:50:44Z to 04:01:15Z), held it 16.5 minutes (to 04:17:46Z). CC_SENTENCE
