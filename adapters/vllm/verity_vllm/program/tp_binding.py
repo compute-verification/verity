@@ -13,8 +13,8 @@ one slice of the Input its rank sends, a collective that isn't a call, a combine
 Each site also records, per rank, who reads its combine's output (``Site.readers``): every call or batch reading leaves of
 it, which the window wires from the combine units that compute those leaves: at a collective site too, every value a unit
 reads is the output of the unit that computed it, never a free witness. A batch is one reader, its run of the argument it
-reads stated as a call's is; its count and each argument's axis are the rank Program's (``RankSites.batches``), which
-``ranks`` binds. A combine's output read inside a scan, by a batch that produces a collective's partial, or through an
+reads stated as a call's is; its count and each argument's axis, as a batch producer's, are the rank Program's
+(``RankSites.batches``), which ``ranks`` binds. A combine's output read inside a scan, by a batch that produces a collective's partial, or through an
 argument batched on an axis other than 0 is refused by name.
 
 The prover and the verifier derive the binding from the rank Programs of record alone, so it is part of the registered circuit
@@ -40,7 +40,7 @@ Key = tuple[int, int, int]
 #: a read of a combine's output: the reading call or batch node, its argument, the leaf of that argument the read fills from,
 #: and the leaves ``[lo, hi)`` of the combine's output it reads
 Reader = tuple[int, int, int, int, int]
-#: a batch reader's members and each argument's axis (None: shared)
+#: a batch producer's or reader's members and each argument's axis (None: shared)
 Batch = tuple[int, tuple[int | None, ...]]
 
 
@@ -48,7 +48,7 @@ Batch = tuple[int, tuple[int | None, ...]]
 class RankSites:
     """One rank's collectives in one request Program (`rank_sites`): by site, its combine node, the parameter its parts are,
     and its own partial's runs, and the reads of its combine's output (``readers``); ``fns`` the combine, producer and reader
-    nodes' Definitions, by node; ``batches`` each batch reader's members and axes, by node."""
+    nodes' Definitions, by node; ``batches`` each batch producer's and reader's members and axes, by node."""
     world: int
     rank: int
     digest: str
@@ -75,7 +75,7 @@ class Site:
 @dataclass(frozen=True)
 class RequestBinding:
     """A request's binding: ``world`` ranks, each one's request Program digest (``ranks``), its sites by key; ``fns`` each rank's
-    combine and producer Definitions, by node (`RankSites.fns`), and ``batches`` its batch readers (`RankSites.batches`)."""
+    combine and producer Definitions, by node (`RankSites.fns`), and ``batches`` its batch nodes (`RankSites.batches`)."""
     world: int
     ranks: tuple[str, ...]
     sites: tuple[Site, ...]
@@ -123,6 +123,7 @@ def rank_sites(body: Any, world: int, rank: int, digest: str = "") -> RankSites:
     peer = {i: int(name[len(PEERS):]) for i, (name, _) in enumerate(body.params) if name.startswith(PEERS)}
     sites: dict[Key, tuple[int, str, tuple[Run, ...]]] = {}
     fns: dict[int, Any] = {}
+    batches: dict[int, Batch] = {}
     for at, node in enumerate(body.nodes):
         read = [a for a, arg in enumerate(node.args) if any(s == "p" and i in peer for s, i, _, _ in runs(arg.refs))]
         if not read:
@@ -152,10 +153,11 @@ def rank_sites(body: Any, world: int, rank: int, digest: str = "") -> RankSites:
         sites[key] = (at, node.fn.signature()[0][read[0]][0], tuple((i, lo, hi) for _, i, lo, hi in segs[rank]))
         fns[at] = node.fn
         fns.update((i, body.nodes[i].fn) for _, i, _, _ in segs[rank])
+        batches.update((i, (body.nodes[i].n, tuple(body.nodes[i].axes))) for _, i, _, _ in segs[rank]
+                       if body.nodes[i].form == "batch")
     combines = {node: key for key, (node, _, _) in sites.items()}
     producing = {i for _, _, own in sites.values() for i, _, _ in own}
     readers: dict[Key, list[Reader]] = {}
-    batches: dict[int, Batch] = {}
     for at, node in enumerate(body.nodes):
         for a, arg in enumerate(node.args):
             off = 0

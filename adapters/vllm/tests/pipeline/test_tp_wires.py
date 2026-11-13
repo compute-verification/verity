@@ -21,7 +21,7 @@ import pytest
 from tests.program.predict.test_steps import _mixed, _registered
 from tests.program.test_tp_binding import N, ROWS, batch_body, rank_body
 from verity_vllm.pipeline.tp import grain as TG, wires as TW
-from verity_vllm.program import tp_binding as TB
+from verity_vllm.program import prune as P, tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.tp_steps import compile_tp
 
@@ -342,6 +342,25 @@ def test_a_combine_of_no_grain_is_refused_by_name():
         TW.sites_circuit([b], "w3")
 
 
+def _as_calls(sites: TW.Sites, calls: TW.Sites) -> bool:
+    """Whether ``sites`` is the window ``calls`` of the same Programs' calls is, but for its unit ranges: the same templates,
+    units, cuts and input bits, and each wire's rows the same (reader, port, reader unit, its row, writer, output, writer
+    unit)."""
+    def rows(s: TW.Sites) -> set[tuple]:
+        out = set()
+        for w in s.circuit.wires:
+            for k in range(int(np.prod(w.radix))):
+                u, q = w.base, k
+                for r, st in zip(w.radix, w.step):
+                    u, q = u + q % r * st, q // r
+                out.add((w.reader, w.port, w.at + k // w.cut[1], w.cut[0] + k % w.cut[1], w.writer, w.out, u))
+        return out
+
+    same = all(getattr(sites.circuit, f.name) == getattr(calls.circuit, f.name) for f in fields(sites.circuit)
+               if f.name not in ("wires", "order"))
+    return same and sites.unwired == calls.unwired and rows(sites) == rows(calls) and _count(sites) == _count(calls)
+
+
 def halves_body(world: int, rank: int):
     """Rank ``rank``'s body of a ``world``-rank request: one row's Gemm partial fused with the row as residual, its normed
     row read by a batch of two Gemms of half the row each, by one w."""
@@ -378,24 +397,25 @@ def test_a_batch_reading_a_combines_output_is_a_unit_a_member_wired_as_its_calls
     """A batch of the calls reading an all-reduce over both rows (three ranks) is one range of a unit a member, at the site
     where the calls would each be one unit: each member reads its row, or both rows alike, from the combine units that
     compute them, cut at the members, so the token row is a member's and the window is the calls' circuit."""
-    def rows(sites: TW.Sites) -> set[tuple]:
-        """Each wire's rows: (reader, port, reader unit, its row, writer, output, writer unit)."""
-        out = set()
-        for w in sites.circuit.wires:
-            for k in range(int(np.prod(w.radix))):
-                u, q = w.base, k
-                for r, s in zip(w.radix, w.step):
-                    u, q = u + q % r * s, q // r
-                out.add((w.reader, w.port, w.at + k // w.cut[1], w.cut[0] + k % w.cut[1], w.writer, w.out, u))
-        return out
-
     calls = TW.sites_circuit([TB.derive([batch_body(3, r, read, batched=False) for r in range(3)])], "b3")
     b = TW.sites_circuit([TB.derive([batch_body(3, r, read) for r in range(3)])], "b3")
-    assert b.unwired == calls.unwired == () and rows(b) == rows(calls) and _count(b) == _count(calls)
-    assert all(getattr(b.circuit, f.name) == getattr(calls.circuit, f.name) for f in fields(b.circuit) if f.name not in ("wires", "order"))
+    assert b.unwired == () and _as_calls(b, calls)
     assert {k: [n for _t, _a, n in v] for k, v in b.consumers.items()} == {(0, r, 2): [ROWS] for r in range(3)}
     assert {k: [n for _t, _a, n in v] for k, v in calls.consumers.items()} == {(0, r, x): [1] for r in range(3) for x in (2, 3)}
     in_order(b)
+
+
+def test_a_batch_producing_a_partial_is_its_members_units_as_its_calls_are():
+    """The per-row Gemm partials of the three-rank route all-reduce's body, batched, are each member's coordinate units at
+    the site whose partial reads it, its row's at a per-row site and both at the route all-reduce: the calls' window."""
+    bodies = [P.batched_form(rank_body(3, r, whole=True))[0] for r in range(3)]
+    b = TB.derive(bodies)
+    assert [n.form for n in bodies[0].nodes] == ["batch", "call", "call", "batch", "call"]
+    assert b.batches == {r: {0: (ROWS, (0, None)), 3: (ROWS, (0, None))} for r in range(3)}
+    assert [s.own[0] for s in b.sites] == [((0, 0, N),), ((0, N, 2 * N),), ((3, 0, 2 * N),)]
+    sites = TW.sites_circuit([b], "w3")
+    assert sites.unwired == () and _as_calls(sites, TW.sites_circuit([TB.derive([rank_body(3, r, whole=True) for r in range(3)])], "w3"))
+    in_order(sites)
 
 
 def test_a_batch_of_token_selects_is_refused_and_a_batch_read_the_grains_dont_fit_is_listed_unwired():
