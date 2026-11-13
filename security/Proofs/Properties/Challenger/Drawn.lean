@@ -7,10 +7,10 @@ public import Proofs.Properties.Challenger.Window
 /-!
 # The coins a sample reads are the ones its challenger drew
 
-`drawCoins` reads its coins under the session the ledger opens on the window (`Session.drawCoins_ok`), and they are the
+`drawCoins` reads its coins under the session the ledger opens on the window (`ChallengePhase.drawCoins_ok`), and they are the
 coins any run of the device released whose commitment and roots are that session's (`Coins.drawn_released`), or a break.
 The session is one a run of the device under the key closed with that commitment and those roots, its log that run's
-lines (`Session.sessionOf_run`), and the device's own ledger opens it withheld on the window (`Window.window_opens`), or a
+lines (`ChallengePhase.sessionOf_run`), and the device's own ledger opens it withheld on the window (`Window.run_opens`), or a
 break; so that run released the coins, its log the session's, and the stream `challengerStream` accepted is read under
 that run's commitment and its family's roots (`session_run`, with `drawn_log` from it), and `DrawnByDevice` holds
 (`drawn`, `drawnByDevice`), with `CoinsFromLog` from it (`coinsFromLog_holds`). `challengerStream` accepts those roots
@@ -46,11 +46,11 @@ theorem session_run {w : String} {after ξ : ByteArray} {c : LiveCommitment} {ro
       s.commitment = some c ∧ releasedRootsOf c s.log = .ok roots ∧
       ∃ ls : Array Json, getD (getD coins "session") "log" = .arr ls ∧ ls.toList = s.log.map Json.str) ∨
       Break dev key label coins := by
-  obtain ⟨r, hrj, hrc⟩ := Coins.trustedSession_record ht
-  obtain ⟨a, hp, hn⟩ := Session.trustedSessionOf_ok ht
-  obtain ⟨⟨c', roots', sid⟩, ho, rfl, rfl, rfl⟩ := Window.sessionNamed_sid hn
-  rcases Window.window_opens (dev := dev) (label := label) hp hw with hopen | b
-  · rcases Session.sessionOf_run (dev := dev) (label := label) ho with ⟨s, hs, hc, hid, -, hr, hlog⟩ | b
+  obtain ⟨r, hrj, hrc⟩ := Coins.trustedChallengePhase_record ht
+  obtain ⟨a, hp, hn⟩ := ChallengePhase.trustedSessionOf_ok ht
+  obtain ⟨⟨c', roots', sid⟩, ho, rfl, rfl, rfl⟩ := Window.challengePhaseNamed_sid hn
+  rcases Window.run_opens (dev := dev) (label := label) hp hw with hopen | b
+  · rcases ChallengePhase.sessionOf_run (dev := dev) (label := label) ho with ⟨s, hs, hc, hid, -, hr, hlog⟩ | b
     · rcases Coins.stream_released hs hc hr hrj hrc hl hst with e | b
       · exact .inl ⟨s, hs, hid ▸ hopen, e, hc, hr, hlog⟩
       · exact .inr b
