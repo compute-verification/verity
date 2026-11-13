@@ -18,7 +18,7 @@ each part is keyed on: a suite's `inputs_of`, its runner and the lock; a Lean pa
 requires; and the whole tree for a `lean-suites` part, which graph/v2 keys on it but its Markdown.
 
 `run` replays the trace in every combination of batch size, depth and node count, with breaking PRs, infra errors and false
-fails drawn at the rates given, `--seeds` times each, and prints one row per combination beside the old path's.  The queue
+fails sampled at the rates given, `--seeds` times each, and prints one row per combination beside the old path's.  The queue
 is `research.vqueue` from a checkout (`--queue vqueue:SRC`, SRC its `tools/research/src`), driven by `snapshots.Driver`,
 whose snapshot fields `--set KEY=VALUE` sets (`--set lean=3`), and which starts the tasks `--defer TASK` names as the loop
 starts the run beside a check (`--defer slim`).
