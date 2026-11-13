@@ -159504,3 +159504,18 @@ So three module records of `reads` move, not one:
 - No suite has run on the regenerated lock.
 - [read] I have not asked lean whether it takes two more `reads` records leaving. PRF-549 holds its yes to the cap
   only, as far as your 18:37Z word says.
+
+## HELDOF, Fri 13 Nov 20:10Z: checkpoint: no carried head for the blob line yet; item 5 is written as text against the parser line `3a7fe4d0b1af`; nothing committed
+
+- [read] No table of FRAME's after my 19:37Z line names the blob line, and my mailbox has nothing after 18:31Z. `cursor/proofs-heldof-blob-f083` is untouched at `794613a89ee41033eff792d9c883216061292a6a`.
+- [run] Where the switch is: `security/Proofs/Core/CanonicalJson.lean` is on `cursor/proofs-sessionof2-parser-carried-e464` (`3a7fe4d0b1affb4fbc9f6c96bc19b8ce883c557e`), and not on the join's candidate `ce20e42ba47a` or on `cursor/proofs-carried-sessionof2-4ae1` (`6b274de57993`).
+- Item 5 as text, not compiled [read: `CanonicalJson.lean` and `Spot/OneStage.lean` at `3a7fe4d0b1af`, `WiredParse.lean` and `CouplesWired.lean` at my head]:
+  - `WiredParse.lean` imports `Proofs.Core.CanonicalJson` and gains
+    ~~~lean
+    theorem recordGood {c : ByteArray} {cm : Spot.OneStage.Commitment} (h : Spot.OneStage.commitmentOf c = .ok cm) :
+        Claims.Json.Good cm.record
+    theorem decode_of_stmtOf {c : ByteArray} {x : Msg} (hx : stmtOf c = some x) : ∃ st, SpotFlock.decode x = some st
+    ~~~
+    `recordGood`: `commitmentOf` returns `{ record := j, … }` for the `j` of `Core.canonicalJson c = .ok j`, and `Verity.CanonicalJson.canonicalJson_good` gives `Good j`. `decode_of_stmtOf`: today's proof with `recordGood hcm` where it has `Flock.PartCong.good_of_canon cm.record (hw cm hcm) s hc`.
+  - `CouplesWired.lean`: `RecordWf` goes and `couplesAt_wired` loses `hW`; nothing else names either [run: `git grep`]. A hypothesis fewer, none gained.
+- STOP RULE: not hit. NEEDS (standing, from 19:41Z): the carried head's name, and which head brings the switch under my line.
