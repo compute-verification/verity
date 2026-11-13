@@ -19,13 +19,7 @@ from pous_fakes import Clock
 
 from verity.claims import get as core_claim
 from verity.commitments.randomness import frame
-from verity.protocols.accounting.pous.verifier import (
-    band,
-    dense,
-    primitives,
-    protocol,
-    schemes,
-)
+from verity.protocols.accounting.pous.verifier import band, dense, primitives, protocol, schemes
 from verity.protocols.accounting.pous.verifier.codec import Geometry
 from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
 from verity.protocols.accounting.pous.verifier.layout import TensorLayout
