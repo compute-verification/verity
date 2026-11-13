@@ -105,6 +105,13 @@ prover starts on the weights its sink wrote, and runs `serve --load-heads`: the 
 the run's session before its first window (`sign_load`), so one LMS key and one session carry the load and the windows,
 and writes `load.json`, the client's kept registrations of the load. `check` reads it under the deployment's key and
 session (`check_load`) at the relay's roots.
+
+**The connection rows** (`connection_rows_run`). `serve` and `rehearse` take `--lengths 1 [--content P,O,ROWS ...]`,
+the schedule's lengths rows and its content rows' classes, which `rehearse` passes to its `serve`; without them a
+run is what it was. With them the network certifier hands each execution phase's releases once the next one's records
+are published, and the publisher process lays that execution phase's tables, commits them and signs their one head:
+`rows.jsonl` (the registration and the cost) and `rows.salts` (witness). `check` holds every execution phase that has
+connection rows to a registration that verifies and whose head is the tables laid from the records.
 """
 
 from __future__ import annotations
@@ -136,12 +143,13 @@ from pathlib import Path
 
 import active_replay as ar
 import certifier_serve as cs
+import connection_rows_run as crr
 import load_relay as lr
 import stall_probe
 from verity.protocols.certifier.verifier import io_tie as IT, warden_rows as WR
 from verity.protocols.certifier.verifier.active import DATA, PAD, id_request
 from verity.protocols.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
-from verity.protocols.certifier.verifier.grid import GridParams, Record, Status, row_count
+from verity.protocols.certifier.verifier.grid import GridParams, BlockGrid, Status, row_count
 from verity.protocols.certifier.verifier.release import WATERMARK_PATH
 from verity.protocols.certifier.verifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
                                                     WardenParams, audit, cells)
@@ -478,15 +486,15 @@ class Publisher:
     def __init__(self, out: Path, issuer: Issuer, params: WardenParams, commit=WR.Cells.of) -> None:
         self.out, self.issuer, self.params, self.commit = out, issuer, params, commit
 
-    def __call__(self, record: Record, grid: GridParams) -> None:
+    def __call__(self, record: BlockGrid, grid: GridParams) -> None:
         self.keep(record, grid)
 
-    def withhold(self, record: Record, grid: GridParams) -> None:
+    def withhold(self, record: BlockGrid, grid: GridParams) -> None:
         """The warden's `withhold`: a record of a window in which it refused a connection, kept and committed as
         `keep` does but neither certified nor signed, its execution phase under `refused` with ``"withheld": true``."""
         self.keep(record, grid, withheld=True)
 
-    def keep(self, record: Record, grid: GridParams, withheld: bool = False) -> None:
+    def keep(self, record: BlockGrid, grid: GridParams, withheld: bool = False) -> None:
         ar.write_blobs(self.out / f"{record.link}.records", ar.pack_record(record))
         link, direction = CERTIFIED[record.link]
         certified = None if withheld else \
@@ -498,7 +506,7 @@ class Publisher:
         if record.link != FAILS:
             self.attest(record, link, direction, withheld)
 
-    def attest(self, record: Record, link: str, direction: Direction, withheld: bool = False) -> None:
+    def attest(self, record: BlockGrid, link: str, direction: Direction, withheld: bool = False) -> None:
         """The link-window's cells as rows and its wiring (`warden_rows`), their head signed (never `withheld`'s): one
         line of `cells.jsonl` (the registration, or the execution phase under `refused`, and the cost), the salts to
         `cells.salts` (witness)."""
@@ -563,12 +571,16 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
             sign_load(issuer, own.public_key(), load_heads, out)
         results.send(("key", own.public_key()))
         publisher = Publisher(out, issuer, params, commit or WR.Cells.of)
+        keeper = crr.Keeper(out, issuer, params, LINK)
         grids = {INGRESS: params.grid, EGRESS: params.grid, FAILS: params.fails_grid}
         filling: dict[str, list] = {link: [] for link in grids}
         B = params.cell_bytes
         while (item := rows.get()) is not None:
             link, n, data = item
             if link is None:
+                continue
+            if link == crr.HAND:
+                keeper(n, data)
                 continue
             grid = grids[link]
             if n is not None:
@@ -579,7 +591,7 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
                 raise ValueError(f"{link} window {window} closed after {len(got)} rows, not {grid.buckets}")
             if grid_digest(got) != digest:
                 raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the warden closed")
-            publisher.keep(Record(link, window, got, Status(reason)), grid, withheld=withheld)
+            publisher.keep(BlockGrid(link, window, got, Status(reason)), grid, withheld=withheld)
             filling[link] = []
         results.send(("done", {"refused": publisher.close(), "usage": ar._usage()}))
         own.close()
@@ -649,7 +661,7 @@ class PublisherProcess:
         _hash_row(self._digests.setdefault(link, hashlib.sha512()), row)
         self.rows.put((link, n, b"".join(row[:n])))
 
-    def __call__(self, record: Record, grid: GridParams, withheld: bool = False) -> None:
+    def __call__(self, record: BlockGrid, grid: GridParams, withheld: bool = False) -> None:
         if not self.process.is_alive():
             self._end()
         released, digest = self._released.pop(record.link, []), self._digests.pop(record.link, hashlib.sha512())
@@ -657,7 +669,7 @@ class PublisherProcess:
             raise RuntimeError(f"{record.link} window {record.window}: the record's grid isn't the rows released")
         self.rows.put((record.link, None, (record.window, record.status.reason, digest.digest(), withheld)))
 
-    def withhold(self, record: Record, grid: GridParams) -> None:
+    def withhold(self, record: BlockGrid, grid: GridParams) -> None:
         """The warden's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
         self(record, grid, withheld=True)
 
@@ -669,6 +681,13 @@ class PublisherProcess:
         self.process.join()
         self.usage = done["usage"]
         return done["refused"]
+
+    def lengths(self, window: int, strides) -> None:
+        """The network certifier's `lengths`: an execution phase's hand, queued a slot stride an item
+        (`connection_rows_run.hand`); the process lays its tables, commits them and signs their head
+        (`connection_rows_run.Keeper`)."""
+        for item in crr.hand(window, strides):
+            self.rows.put(item)
 
 
 def _quantiles(xs: list[float]) -> dict:
@@ -765,9 +784,9 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     """One run of the network certifier on the host's clock (the module docstring's `serve`), its records published by a
     `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when given, its
     threads sampled by `stall_probe` when `probe`, each bucket released by its pacer `paced_ms` after its boundary
-    (`Warden(paced=…)`; 0: written on its loop), and the watermark stream sent to `upstream` when `watermark`
-    (`Warden(watermark=…)`). Returns what `warden.json` holds, with `process`, what `prepare_process` did. The loop's
-    errors are kept, not logged: the ticker writes no file."""
+    (`Warden(paced=…)`, which a warden on the host's clock must have), and the watermark stream sent to `upstream` when
+    `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds, with `process`, what `prepare_process` did.
+    The loop's errors are kept, not logged: the ticker writes no file."""
     out.mkdir(parents=True, exist_ok=True)
     loop = asyncio.get_running_loop()
     errors: list[str] = []
@@ -777,7 +796,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     origin = time.monotonic() + start_in
     warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
                     publish=publish, withhold=publish.withhold, release=publish.release, slack=slack,
-                    paced=paced_ms / 1000 if paced_ms else None,
+                    paced=paced_ms / 1000,
                     watermark=(lambda: asyncio.open_connection(*upstream)) if watermark else None)
     server = await asyncio.start_server(warden.handle, *listen)
     sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
@@ -786,6 +805,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
                                    windows=windows, listen=(listen[0], server.sockets[0].getsockname()[1]),
                                    upstream=upstream, slack=slack, run_id=warden.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
+    warden.hand_lengths = publish.lengths
     announce({"listening": deployment["listen"], "deployment": str(out / "deployment.json")})
     try:
         await warden.run()
@@ -799,14 +819,13 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
-           "ticks_ms": [round(x, 3) for x in lateness]}
+           "ticks_ms": [round(x, 3) for x in lateness],
+           "paced": {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
+                     "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3),
+                                   round(r.end * 1000, 3), r.written] for r in warden.releases]}}
     if watermark:
         log["watermark"] = {"last": warden.watermarked and list(warden.watermarked), "lost": warden.watermark_lost,
                             "error": warden.watermark_error}
-    if warden.paced is not None:
-        log["paced"] = {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
-                        "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3),
-                                      round(r.end * 1000, 3), r.written] for r in warden.releases]}
     (out / "warden.json").write_text(json.dumps(log, indent=1))
     announce({"served": True, "out": str(out)})
     return log
@@ -862,7 +881,7 @@ async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.ti
 
 # The offline check.
 
-def read_records(run: Path, params: WardenParams) -> dict[str, list[Record]]:
+def read_records(run: Path, params: WardenParams) -> dict[str, list[BlockGrid]]:
     return {name: [ar.unpack_record(b, params.cell_bytes) for b in ar.read_blobs(run / f"{name}.records")]
             for name in CERTIFIED}
 
@@ -893,7 +912,7 @@ def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
     return [(doc, *WR.read_witness(s)) for doc, s in zip(lines, salts)]
 
 
-def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[Record]]) -> tuple[dict, list]:
+def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[BlockGrid]]) -> tuple[dict, list]:
     """Every link-window of the wire's two records has a registration that `warden_rows.check_registration` accepts
     under the network certifier's key and session, whose head is the record's rows and wiring under their salts; the
     per-window cost."""
@@ -927,7 +946,7 @@ def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, l
     return summary, problems
 
 
-def egress_cells(records: list[Record], params: WardenParams) -> dict[int, list[tuple[int, int]]]:
+def egress_cells(records: list[BlockGrid], params: WardenParams) -> dict[int, list[tuple[int, int]]]:
     """Each connection's egress cells as (bucket, kind), in the records' order."""
     out: dict[int, list[tuple[int, int]]] = {}
     for record in sorted(records, key=lambda r: r.window):
@@ -990,6 +1009,8 @@ def check(run: Path) -> dict:
                 problems.append(f"{name} window {w}: {r.status.reason.value}")
     cells_summary, cells_problems = check_cells(run, dep, params, records)
     problems += cells_problems
+    rows_summary, rows_problems = crr.check(run, dep, params, records[INGRESS], records[EGRESS], records[FAILS], LINK)
+    problems += rows_problems
     verdict = audit(params, records[INGRESS], records[EGRESS], records[FAILS])
     if not verdict["accepted"]:
         problems += [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
@@ -1042,6 +1063,7 @@ def check(run: Path) -> dict:
         "finish_reasons": {f: sum(r.get("finish_reason") == f for r in served)
                            for f in sorted({str(r.get("finish_reason")) for r in served})},
         **({} if load is None else {"load": load}),
+        **({} if rows_summary is None else {"connection_rows": rows_summary}),
     }
     return {"accepted": not problems, "problems": problems[:50], "summary": summary, "windows": windows,
             "connections": rows}
@@ -1100,6 +1122,12 @@ def _params(args) -> WardenParams:
                         max_tokens_cap=getattr(args, "max_tokens_cap", None))
 
 
+def _check_paced(args) -> None:
+    if not args.slack < args.paced_ms / 1000 < args.bucket_ms / 1000:
+        raise SystemExit(f"--paced-ms {args.paced_ms:g}: the warden always paces, each bucket released past the slack "
+                         f"({args.slack * 1000:g} ms) and before the next boundary ({args.bucket_ms} ms)")
+
+
 def _flags(args) -> list[str]:
     return [x for k, v in asdict(_params(args)).items() if v is not None for x in (f"--{k.replace('_', '-')}", str(v))]
 
@@ -1122,6 +1150,7 @@ def _addresses(text: str) -> list[tuple[str, int]]:
 
 
 def rehearse(args) -> int:
+    _check_paced(args)
     if args.prompts is not None and not args.ids:
         raise SystemExit("--prompts: id requests' prompts, with --ids")
     if args.window_per_group and args.prompts is None:
@@ -1131,7 +1160,7 @@ def rehearse(args) -> int:
         raise SystemExit("--load-store: with --load-sinks and --load-program, the reading program's digest in hex")
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    params = _params(args)
+    params = crr.schedule(_params(args), args)
     me = [sys.executable, str(HERE / "warden_serve.py")]
     scratch = Path(tempfile.mkdtemp(prefix="warden-serve-"))
     procs: list[subprocess.Popen] = []
@@ -1170,7 +1199,7 @@ def rehearse(args) -> int:
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
                                              str(args.start_in), "--slack", str(args.slack), "--paced-ms",
-                                             str(args.paced_ms), *_flags(args),
+                                             str(args.paced_ms), *_flags(args), *crr.flags_of(params),
                                              *(["--watermark"] if args.watermark else []),
                                              *(["--load-heads", str(out / "load-heads.json")] if load else [])],
                                        stdout=subprocess.PIPE, stderr=log, text=True)
@@ -1234,13 +1263,15 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
         q.add_argument("--paced-ms", type=float, default=cs.PACED_MS,
                        help="when the warden's pacer releases each bucket, ms after its boundary (past the slack, "
-                            "before the next boundary); 0: the warden writes each bucket on its loop")
+                            "before the next boundary): the warden always paces")
         q.add_argument("--watermark", action="store_true",
                        help="also send the server the watermark stream, a chunked POST /verity/watermark on its own "
                             "connection, one line 't n l...' a tick: bucket t has closed, its releases are N < n, and "
                             "each l is one of its releases that the release's server connection lost")
     schedule_flags(s, "id")
     schedule_flags(r, None)
+    for q in (s, r):
+        crr.flags(q)
     s.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT")
     s.add_argument("--key", required=True, type=Path, help="the network certifier's key directory (keys)")
     s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex")
@@ -1306,6 +1337,7 @@ def main(argv=None) -> int:
         asyncio.run(fake())
         return 0
     if args.command == "serve":
+        _check_paced(args)
         out = args.out.resolve()
         if out == args.key.resolve() or out in args.key.resolve().parents:
             raise SystemExit(f"the key {args.key} is inside --out {args.out}, which is published")
@@ -1316,7 +1348,7 @@ def main(argv=None) -> int:
         if own and os.environ.get("PYTHONMALLOC") != "malloc" and C_ALLOCATOR not in os.environ:
             os.execve(sys.executable, [sys.executable, *sys.orig_argv[1:]],
                       os.environ | {"PYTHONMALLOC": "malloc", C_ALLOCATOR: "1"})
-        params = _params(args)
+        params = crr.schedule(_params(args), args)
         ar._quiet_runtime()
         process = prepare_process(params)
         for name in ("PYTHONMALLOC", C_ALLOCATOR):

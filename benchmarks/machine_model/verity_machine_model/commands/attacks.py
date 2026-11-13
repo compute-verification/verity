@@ -2,19 +2,21 @@
                                           the N cheapest attacks of each design (or of D) at NAME's prices"""
 from __future__ import annotations
 
+import argparse
+
 from verity_machine_model import attacks as atk
 from verity_machine_model.model import model
 from verity_machine_model.resolve import resolve
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     a = sub.add_parser("attacks")
     a.add_argument("name", nargs="?")
     a.add_argument("--design")
     a.add_argument("-n", type=int, default=3)
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     r = resolve(args.name or model(args.data).current, args.data)
     designs = [args.design] if args.design else sorted({a.design for a in r.attacks})
     for d in designs:

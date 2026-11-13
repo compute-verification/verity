@@ -2,7 +2,13 @@
 a few steps at a small shape through its route, and the same steps written here against torch's own optimizers and
 its own average of the weights, or against the published rule where torch has none. The two end at the same output
 model. An entry whose output is an average over a horizon is held to torch's average of the weights the entry beside
-it writes, the one whose output is those weights, which has its own reference."""
+it writes, the one whose output is those weights, which has its own reference.
+
+What is held to a reference is the update's rule, so both sides run their forward in float32 (`forward_in_float32`):
+a reference sums a gradient in another order than its route (accumulation's micro-batches against the whole batch,
+LoRA's two factors against the merged matrix), and under the routes' bf16 autocast the two orders differ in the
+gradient's third digit, enough to turn the sign of an Adam step."""
+import contextlib
 import fnmatch
 import math
 import tomllib
@@ -13,12 +19,12 @@ import torch.nn.functional as F
 from synthetic import SHAPE as TINY
 from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 
-from training_slowdown import config, library
+from training_slowdown import config, library, starts
 from training_slowdown.model import LM
 from training_slowdown.routes import subset
 from training_slowdown.routes._optimizers import Muon, newton_schulz
 
-#: six blocks, as the entries' patterns name them, 16 wide
+#: 16 wide; an entry's own test runs it at its start's depth (`at_its_depth`), so each block its patterns name is there
 SHAPE = TINY | {"n_layer": 6}
 STEPS, BATCH, CTX = 3, 4, 8
 #: the steps of an entry whose average has a horizon: enough that a tenth of them is over a step, where the average
@@ -26,11 +32,24 @@ STEPS, BATCH, CTX = 3, 4, 8
 LONG = 24
 
 
+@pytest.fixture(autouse=True)
+def forward_in_float32(monkeypatch):
+    """The routes' forward in float32: their bf16 autocast (`subset.step`'s and `qat.step`'s) is switched off for
+    these tests."""
+    monkeypatch.setattr(torch, "autocast", lambda *args, **kwargs: contextlib.nullcontext())
+
+
 def entry(name: str):
     """An entry's route and its dials, the route's defaults filled in, as a job reads them."""
     raw = tomllib.loads((library.ENTRIES / f"{name}.toml").read_text())
     route = config.route(raw["route"])
     return route, config.dials(route, raw.get("dials", {}), name)
+
+
+def at_its_depth(name: str, monkeypatch) -> None:
+    """`SHAPE` with the blocks of the entry's start."""
+    raw = tomllib.loads((library.ENTRIES / f"{name}.toml").read_text())
+    monkeypatch.setitem(SHAPE, "n_layer", starts.start(raw["start"]).shape["n_layer"])
 
 
 def steps_of(dials: dict) -> int:
@@ -262,7 +281,10 @@ REFERENCES = {
     "l16-t20-1.1x-fullmuon-fe-wsd-5383-ema": (averaged, CLOSE),
     "l16-t20-1.1x-fullmuon-fe-wsd-ema": (averaged, CLOSE),
     "l16-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
+    "l16-t20-1.1x-ref-optim-fullmuon-fe-wsd-102": (under(muon), CLOSE_BF16),
     "l16-t20-1.1x-ref-optim-fullmuon-wsd": (under(muon), CLOSE_BF16),
+    "l16-t20-1.1x-shallow-depthshare-4": (under(muon), CLOSE_BF16),
+    "l16-t20-2x-fullmuon-fe-wsd-40326": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-fullmuon-wsd-4611-ema": (averaged, CLOSE),
@@ -301,6 +323,8 @@ REFERENCES = {
     "s-t20-1.1x-shampoo-whole": (under(shampoo), CLOSE),
     "s-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
     "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd": (under(muon), CLOSE_BF16),
+    "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd-3884": (under(muon), CLOSE_BF16),
+    "xl-t20-1.1x-shallow-depthshare-4": (under(muon), CLOSE_BF16),
 }
 
 
@@ -310,7 +334,8 @@ def test_every_entry_of_the_library_has_a_reference():
 
 
 @pytest.mark.parametrize("name", sorted(REFERENCES))
-def test_an_entrys_steps_end_at_its_references_weights(name):
+def test_an_entrys_steps_end_at_its_references_weights(name, monkeypatch):
+    at_its_depth(name, monkeypatch)
     route, dials = entry(name)
     reference, close = REFERENCES[name]
     got, want = routed(route, dials), reference(dials)

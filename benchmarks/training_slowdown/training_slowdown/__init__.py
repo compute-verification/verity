@@ -1,7 +1,7 @@
 """training_slowdown: the code that measures a training run's slowdown (README.md). A change to what it measures bumps
 VERSION, which every record carries."""
 
-VERSION = "4.22.0"
+VERSION = "4.23.0"
 #: a job's exit status when it was told to stop (SIGTERM) and left its state: sysexits' "temporary failure, try again".
 #: Nothing reads it, since what stops a job may report a status of its own (a lease out of time, `timeout`'s 124): a
 #: stop is read from the job's record

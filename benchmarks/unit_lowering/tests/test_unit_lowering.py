@@ -1,15 +1,11 @@
 """run.py's reading of a circuit file (its SHA-512, bytes and each section's AND rows, against `ir_lower`'s own layout of a
-small circuit) and the guard at the smallest shape the H1 tile takes."""
+small circuit), the file `lanes.py` takes a tree's leaf module from, and the guard at the smallest shape the H1 tile takes."""
 from __future__ import annotations
 
 import hashlib
-import sys
-from pathlib import Path
 
+import lanes
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 import run
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import ONE, Circuit
@@ -43,19 +39,28 @@ def test_scan_counts_the_and_rows_ir_lower_lays_out(tmp_path):
     assert got["ands"] == 10 and got["sections"] == {"unit": want, "again": want}
 
 
-def test_scan_refuses_a_section_whose_line_count_is_not_its_netlist(tmp_path):
+def test_scan_refuses_a_section_whose_line_count_is_not_its_rows(tmp_path):
     text = IL.netlist(small(), "unit")
     path = tmp_path / "short.circuit.txt"
     path.write_bytes(b'flock-circuit short\nMETA {"k_log": 11}\n' + b"CIRCUIT unit %d\n" % (text.count("\n") - 1) + text.encode())
-    with pytest.raises(ValueError, match="holds a netlist of"):
+    with pytest.raises(ValueError, match="whose first line counts"):
         run.scan(path)
+
+
+def test_lanes_takes_a_trees_leaf_py_and_the_run_py_of_a_tree_that_has_none(tmp_path):
+    h1 = tmp_path / "benchmarks" / "pouw" / "h1_lanes"
+    h1.mkdir(parents=True)
+    (h1 / "run.py").touch()
+    assert lanes.leaf_file(tmp_path) == h1 / "run.py"
+    (h1 / "leaf.py").touch()
+    assert lanes.leaf_file(tmp_path) == h1 / "leaf.py"
 
 
 @pytest.mark.slow
 def test_the_guard_passes_at_the_smallest_shape(tmp_path):
     """The flat file at K = 64 on the 4 x 8 tile, the smallest the H1 tile takes (32 | K, K >= 64; 4 | R, 8 | C), is
     byte for byte reference.json's (d40fe21d26's lowering). About 2 min and 5 GiB on that lowering: nothing cheaper catches a
-    change to the flat file's bytes, since the unit's netlist, sha512x3's, hm96's and META all come out of the whole
+    change to the flat file's bytes, since the unit's rows, sha512x3's, hm96's and META all come out of the whole
     lowering."""
     g = run.guard(tmp_path, shapes=[("tile", 64, 4, 8)])
     (shape,) = g["shapes"]
