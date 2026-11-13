@@ -186,7 +186,7 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
   source, so M3's reserved window doesn't spend time on the build.
 - `server_rate.py`: SPOT's proof server's steady rate on one GPU, run inside a one-GPU `gpu-lease` with the GPU build of
-  `flock-circuit`. Each staged type (`served_units/stage.py TYPE full`, every unit drawn) is proved by
+  `flock-circuit`. Each staged type (`served_units/stage.py TYPE full`, every unit sampled) is proved by
   `ProofServer(provers=K)` at each K of `--provers` (a templated one, a table read, with its unit placed by
   `--tmpl-unit-bin`'s `flock-tmpl-unit`, and verified under `verity/flock-circuit/tmpl`), K streaming provers on the one device, each with a K-th of the job's
   threads (the proof server splits them). Every prover finishes its
@@ -303,15 +303,15 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
 - `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
   After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
   (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, and while Pearl+'s
-  verdict rejects a run on a drawn row over its debit cap (over-cap rule `reject`, which `served_passes.py
+  verdict rejects a run on a sampled row over its debit cap (over-cap rule `reject`, which `served_passes.py
   volunteer-needed` reports before anything is served) gives up the passes' rows over a debit cap before the verifier's
   coin (`served_passes.py volunteer --device`: every word's counts from the card's debit cubin, every
   `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays every tile on the CPU,
   far too slow for the default load), refusing to serve with the give-up turned off then; under `uncredited`, where the
   verdict credits such a row nothing, the give-up is off unless `PEARLPLUS_VOLUNTEER` is set. It takes Pearl+'s verdict
   over all of them (`served_passes.py verify`, `--over-cap` from `PEARLPLUS_OVER_CAP`; its coin, where the lane's gate is
-  set, a draw session's of its own there, reserved as the lane's first reserve after its Pearl-C period closed, right
-  before the draw, and opened on the run's commitment, `bench_arm.LiveDraw`), and writes the piece through
+  set, a sample session's of its own there, reserved as the lane's first reserve after its Pearl-C period closed, right
+  before the sample, and opened on the run's commitment, `bench_arm.LiveDraw`), and writes the piece through
   `served_verdicts.py pearlplus`: the verdict, the linears' declared and credited shares
   (`served_shares.pearlplus_shares`), and why it credits nothing.
 - `served_compare.py`: the served compare, `served_verdicts.sh`'s step under `PEARLPLUS_TIE` once Pearl+'s piece wrote W
