@@ -63,7 +63,9 @@ def LedgerLinesOfDevice : Prop :=
         Break dev p.key p.label (Json.mkObj [("ledger", ledger)])
 
 /-- **The device numbers its ledger's lines**: under the key `pk`, line `i` of its ledger is an entry whose number
-is `i`. So it writes one ledger a key, and no two of its lines share a number (module docstring). -/
+is `i`. So it writes one ledger a key, and no two of its lines share a number (module docstring). It is a hypothesis
+only while `History` does not define the device to write line `i` under number `i`: once the device's definition
+carries the numbering, this is a lemma about that definition and no statement takes it. -/
 def Numbered (dev : History) (pk : ByteArray) : Prop :=
   ∀ (i : Nat) (line : Json), (dev.ledger pk)[i]? = some line → ∃ e, ledgerEntry? line = some e ∧ e.seq = i
 
