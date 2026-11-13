@@ -259,8 +259,8 @@ def _scan_executed() -> dict[str, list[dict[str, Any]]]:
                 if not isinstance(obj, CachingAutotuner):
                     continue
                 kname = getattr(getattr(obj, "fn", None), "__name__", None) or name
-                for l in list(getattr(obj, "launchers", None) or []):
-                    c = getattr(l, "config", None)
+                for launcher in list(getattr(obj, "launchers", None) or []):
+                    c = getattr(launcher, "config", None)
                     if c is None:
                         continue
                     d = {"kwargs": {str(a): int(b) for a, b in (getattr(c, "kwargs", None) or {}).items() if isinstance(b, int)},

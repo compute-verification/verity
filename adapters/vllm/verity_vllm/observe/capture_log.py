@@ -6,6 +6,8 @@ import gzip
 import json
 import re
 
+__all__ = ["read_steps", "request_params"]
+
 _TAG_RE = re.compile(r'^\{"\$e":\s*"(\w+)"')
 
 
@@ -23,8 +25,9 @@ def read_steps(log_path: str) -> tuple[dict, dict[int, dict]]:
                 s = int(d["step"])
                 if s in steps:
                     raise ValueError(f"log has two StepStart records for step {s}")
+                indices = d.get("logits_indices")
                 steps[s] = {"rows": [(r, int(p)) for r, p in d["rows"]], "logits_rows": [(r, int(p)) for r, p in d["logits_rows"]],
-                            "logits_indices": [int(x) for x in d.get("logits_indices") or []]}
+                            "logits_indices": [int(x) for x in indices] if indices else []}
             elif tag == "RunHeader":
                 if header is not None:
                     raise ValueError("log has two RunHeader records")
@@ -37,12 +40,15 @@ def read_steps(log_path: str) -> tuple[dict, dict[int, dict]]:
 def request_params(header: dict) -> tuple[list[dict], dict[str, int], dict[str, str]]:
     """(requests in header order = prompt parameter order, request_id -> prompt param index, output id -> parent id).
     Mirrors `fold._header`: a forked child (`workload.children`) reads its PARENT's prompt parameter."""
-    reqs = list((header.get("workload") or {}).get("requests") or [])
-    if not reqs:
+    workload = header.get("workload")
+    requests = workload.get("requests") if workload else None
+    reqs = list(requests) if requests else []
+    if not workload or not reqs:
         raise ValueError("RunHeader.workload has no requests")
     idx = {r["request_id"]: i for i, r in enumerate(reqs)}
     parent = {r["request_id"]: r["request_id"] for r in reqs}
-    for c in (header.get("workload") or {}).get("children") or []:
+    children = workload.get("children")
+    for c in children if children else ():
         if c.get("parent") not in idx:
             raise ValueError(f"child {c.get('request_id')!r} names unknown parent {c.get('parent')!r}")
         idx[c["request_id"]] = idx[c["parent"]]

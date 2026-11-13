@@ -112,3 +112,30 @@ def test_a_malformed_marker_refuses(tmp_path, src):
 def test_an_unpinned_model_refuses():
     with pytest.raises(UsageError, match="no checkpoint or capture map pins it"):
         G.main(G.Options(models=["org/none"], store=False))
+
+
+def test_a_map_that_pins_no_checkpoint_is_no_models_map(tmp_path, monkeypatch):
+    """`verity_vllm.glue.capture_maps`: a map whose `pins`, or whose pinned `checkpoint`, is absent, null or empty is listed
+    when no model is asked for and for no model."""
+    pins: dict[str, dict] = {
+        "a": {}, "b": {"pins": None}, "c": {"pins": {}}, "d": {"pins": {"checkpoint": None}}, "e": {"pins": {"checkpoint": {}}},
+        "f": {"pins": {"checkpoint": {"repo": GLM}}}, "g": {"pins": {"checkpoint": {"repo": DSV4}}},
+    }
+    for name, doc in pins.items():
+        (tmp_path / f"{name}.json").write_text(json.dumps({"id": name, **doc}))
+    monkeypatch.setattr(G.CM, "MAPS", tmp_path)
+    monkeypatch.setattr(G.CM, "load", lambda p: json.loads(Path(p).read_text()))
+    assert [m["id"] for m in G.capture_maps()] == list("abcdefg")
+    assert [m["id"] for m in G.capture_maps(GLM)] == ["f"]
+    assert G.capture_maps("org/none") == []
+
+
+def test_a_family_that_states_no_params_counts_none(monkeypatch):
+    """`verity_vllm.glue._family`: a family's `params` may be absent, null or empty, and counts none; stated, the count is the
+    names in its groups, a group being a dict."""
+    facts = {"arch": "toy", "facts": {"a": 1}, "rules": ["r"]}
+    stated = {"layer": {"x": 1, "y": 2}, "note": "not a group", "head": {"z": 3}}
+    for fam, count in ((facts, 0), ({**facts, "params": None}, 0), ({**facts, "params": {}}, 0), ({**facts, "params": stated}, 3)):
+        monkeypatch.setitem(G.FF.FAMILY_FACTS, "toy_type", fam)
+        got = G._family("toy_type", GLM)
+        assert got is not None and (got["params"], got["arch"], got["facts"], got["shared_with"]) == (count, "toy", 1, [])

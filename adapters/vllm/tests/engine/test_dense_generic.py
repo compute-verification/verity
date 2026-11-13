@@ -12,12 +12,18 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.config import ROOT
+from verity_vllm.engine.profiles import dense_generic as dg
 from verity_vllm.observe.events import RunHeader
 from verity_vllm.observe.fold.patterns import GemmLaunch
-from verity_vllm.engine.profiles import dense_generic as dg
-from verity_vllm.observe.fold.profiles import generic
-from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.observe.fold.profiles.gen_llama_patterns import ADA_TUNED_GEMM, GemmLaunchTuned
+from verity_vllm.observe.fold.profiles import (
+    generic,
+    profile_for_case,
+    profile_module_for_case,
+)
+from verity_vllm.observe.fold.profiles.gen_llama_patterns import (
+    ADA_TUNED_GEMM,
+    GemmLaunchTuned,
+)
 
 MISTRAL_CFG = dg.HF_CONFIG_DIR / "MISTRAL7B.config.json"
 
@@ -30,6 +36,16 @@ def test_shipped_mistral_config_is_the_manifest_bytes():
     entry = dg.checkpoint_entry("MISTRAL7B")
     assert entry is not None and entry["repo"] == "unsloth/mistral-7b-v0.3"
     assert hashlib.sha256(MISTRAL_CFG.read_bytes()).hexdigest() == entry["config_sha256"]
+
+
+@pytest.mark.parametrize("case", [None, {}, 0, "", False, [], {"repo": None}, {"repo": ""}, {"repo": "no/such-repo"}],
+                         ids=["null", "empty", "zero", "empty text", "false", "empty list", "null repo", "empty repo", "unpinned repo"])
+def test_a_role_whose_case_names_no_pinned_repo_has_no_entry(monkeypatch, case):
+    """`verity_vllm.engine.profiles.dense_generic.checkpoint_entry`: a role that is no entry's own is looked up by its case's
+    repo, and a case that names none (a null or an empty row, a null or an empty repo) has no entry."""
+    assert dg.MANIFEST.exists()
+    monkeypatch.setitem(dg.CASES, "ZZ_UNLISTED", case)
+    assert dg.checkpoint_entry("ZZ_UNLISTED") is None
 
 
 def test_shipped_dense_qwen3_config_derives_the_qk_norm_profile():

@@ -12,7 +12,17 @@ from __future__ import annotations
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
-from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, concat, runs, strided_view
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    Explicit,
+    PartLog,
+    Strided,
+    concat,
+    runs,
+    strided_view,
+)
 from verity.circuits.types import Array, Value
 from verity.definitions.replay import _substitute_scattered, replayer, substitute
 
