@@ -11,7 +11,7 @@ and give up decide: the retained values', so neither protocol structure nor a co
 window class's fixed load (`tieAt`, `Tied.load`) publishes its work in the grid form instead:
 
 * **The structural credit** (`structuralCredit`): `creditAtAssumption` over the passes with every record whole
-  (`UnitRecord.whole`: no row excluded or given up), at the same draws, X_O and δ. A whole record's real rows are the
+  (`UnitRecord.whole`: no row excluded or given up), at the same samples, X_O and δ. A whole record's real rows are the
   class's (`heldToLoad`) and its shape and kept width its weight's (`checkRecords`), so the structural credit, MACs and
   credited tiles are the class's and the model's.
 * **The give-up** is the structural credit less the exact one, padded up to H1's window grid (`gridPad`, `window.pad` at
