@@ -99,7 +99,12 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   (each proof block's public o0, the last ingress proof block's o1, a block member's ``x``) is the member's own rows of
   it (`Frame`, value ``frame``), committed under its statement's frame binding (`frame_binding`, over the member's
   input set), so its root is the member's frame root of the port, which the round's registration names before any
-  coin; `stage` refuses a member whose frame root isn't the tree's. A public o0 is opened as before, under the salt the
+  coin; `stage` refuses a member whose frame root isn't the tree's. A scan member's input set is its template's
+  (`set_of`), naming no round and no execution phase, so the frame domain of such a port is its template's and its unit
+  count's in every round. A public o0's rows are committed under the verifier's public salts (`ok_salts`,
+  `scan_ok.salt`), so the o0 frame root of a member whose every proof block is ok is a constant of its template and
+  count, which a period check computes from the schedule's T and holds the registration's ``<member>/o0`` to
+  (`scan_ok.constants`, the period check's `okChecks`); it is opened as before, under that salt, which the
   prover sends.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same
@@ -188,7 +193,7 @@ from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
 from verity.circuits.types import Array, Tuple  # noqa: E402
-from verity.commitments import advice as ADV  # noqa: E402
+from verity.commitments import advice as ADV, domains  # noqa: E402
 from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
@@ -197,7 +202,7 @@ from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row
                                            sha512_row_seg_digest)
 from verity.commitments.crypto import lms  # noqa: E402
 from verity.protocols.accounting.certifier.prover import egress as EG, ingress_scan as IS  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden as W  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import io_tie as IT, scan_ok, warden as W  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.active import DATA, id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
@@ -286,7 +291,7 @@ PROGRAMS = {TEMPLATES: "joint", ("egress",): "solo", UNREAD: "unread", BLOCK: "b
 #: Flock's tag of a frame domain's binding (`verity_flock.circuit.BINDING_TAG`), under which a block member's o0 rows
 #: are committed and so its lane's ``prog<j>`` tree (`block_binding`), and a member's own rows of a port (`Frame`;
 #: `stage` refuses a member whose frame root of such a port isn't its tree's)
-FRAME_BINDING = "verity/flock-circuit/binding/v2"
+FRAME_BINDING = domains.FLOCK_CIRCUIT_BINDING
 
 
 def value(kind: str) -> str:
@@ -420,6 +425,13 @@ def block_set(heads: list, session: bytes, j: int) -> str:
     return f"scan-block-{_bound(f'prog{j}', heads, session).hex()}"
 
 
+#: A scan template's statements' input set, which their frame domains bind (`frame_binding`): the template's alone
+#: (`scan_ok.set_of`, the verifier's, which computes each member's ok bits' frame domain from it), naming no round and
+#: no execution phase, so a member's frame domain of a port is its template's, its unit count's and the port's, the
+#: same in every round and in every execution phase of a group. A block member's is its run's (`block_set`).
+set_of = scan_ok.set_of
+
+
 def frame_binding(set_name: str, n: int, port: str, schema: str = BitRowLeaf.hiding_schema) -> bytes:
     """The binding of a statement's frame domain of ``port`` over its ``n`` units (`verity_flock.circuit.statement`'s,
     at instances 0 … n of input set ``set_name``, its rows of leaf schema ``schema``): a tree under it has the leaves,
@@ -456,10 +468,21 @@ class Frame(ADV.Committed):
             object.__setattr__(self, "root", ADV._scheme(self.binding, n, self.n_bits).root(ADV.PORT, leaves))
 
 
-def frame(set_name: str, port: str, rows: list, n_bits: int, schema: str = BitRowLeaf.hiding_schema) -> Frame:
-    """A member's own rows of ``port``, each unit's (bits or bytes), as `Frame` commits them, under fresh salts."""
+def frame(set_name: str, port: str, rows: list, n_bits: int, schema: str = BitRowLeaf.hiding_schema,
+          salts: Sequence[bytes] | None = None) -> Frame:
+    """A member's own rows of ``port``, each unit's (bits or bytes), as `Frame` commits them, under fresh salts, or
+    under ``salts`` (a public word's public ones, `ok_salts`)."""
     return Frame(frame_binding(set_name, len(rows), port, schema), n_bits, tuple(_bytes(r) for r in rows),
-                 tuple(ADV.INST.fresh_salt() for _ in rows), schema)
+                 tuple(ADV.INST.fresh_salt() for _ in rows) if salts is None else tuple(salts), schema)
+
+
+def ok_salts(n: int) -> list[bytes]:
+    """The salts a member's ``n`` proof blocks' public o0 rows are committed under: the verifier's public ones
+    (`scan_ok.salt`), row i's by its index in the member. A proof block's public word is its ok bit, so a member
+    whose every proof block is ok has the o0 frame root anyone computes from its template and count, and a period
+    check holds the round's registration to it (`scan_ok.constants` at the schedule's T, `NetworkCheck.ScanOk`): a
+    proof block's ok bit is then no row the prover stated."""
+    return [scan_ok.salt(i) for i in range(n)]
 
 
 def _schema(reg: ADV.Committed) -> str:
@@ -910,7 +933,9 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     that entry, is a registered read of ``prog<j>``'s leaf b, no public word (``outputs`` None). A port no tree or
     network certifier row registration holds (each proof block's public o0, the last proof block's o1, a block member's
     x) is the member's own rows of it (`Frame`, value ``frame``), registered as its frame root in its statement's input
-    set ``set_name`` (a block member's its lane's `block_set`), which the round's registration names before any coin;
+    set ``set_name`` (its template's, `set_of`, which names no round and no execution phase; a block member's its
+    lane's `block_set`), which the round's registration names before any coin; a public o0's rows are under the
+    public salts (`ok_salts`), every other own row's under fresh ones;
     ``framed`` names the ports `stage` holds to their frame roots (those, and a block member's o0)."""
     ch, T, cls = at.chain, at.T, at.setup.cls
     tp, w, bs = mb.template, mb.window, list(mb.buckets)
@@ -950,7 +975,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         made = {"o1": [s for _o, s, _v in got], "o2": [v for _o, _s, v in got]}
     units = [tuple(ch.ingress[b] if r == "row" else made["o0"][k] if r == "x" else _bits(reads[r][1], reads[r][2][k])
                    for r, _b in ins) for k, b in enumerate(bs)]
-    set_name = at.block_sets[mb.lane] if tp == "block" else f"unit-scan-{tp}-{name}-{mb.name}"
+    set_name = at.block_sets[mb.lane] if tp == "block" else set_of(tp)
     sig = (*ins, *(() if tp in ROWS_O0 else (("o0", 16),)), *outs)
     own = {**{r: [u[i] for u in units] for i, (r, _b) in enumerate(ins)}, **made,
            **({} if outputs is None else {"o0": [[o] for o in outputs]})}
@@ -960,7 +985,9 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
                 raise SystemExit(f"{name}/{mb.name}: a unit's {p} row is none the reference gives, and a port no tree "
                                  "or network certifier row holds is registered as the member's own rows before any "
                                  "coin")
-            reads[p] = ("frame", frame(set_name, p, own[p], n_bits, ROW_SCHEMAS.get((tp, p), BitRowLeaf.hiding_schema)),
+            public = p == scan_ok.PORT and tp not in ROWS_O0
+            reads[p] = ("frame", frame(set_name, p, own[p], n_bits, ROW_SCHEMAS.get((tp, p), BitRowLeaf.hiding_schema),
+                                       ok_salts(len(bs)) if public else None),
                         list(range(len(bs))))
     salts, entries, ports, bcs, refs = {}, {}, {}, {}, {}
     for p, side in warden.items():
