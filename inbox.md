@@ -51,3 +51,27 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 10:01 AM PST. #9644 is carri
 
 Next: the three jobs' results, #9547's by your 9:14 AM rule, then the three bodies. I mark nothing.
 
+[2026-11-13T18:03Z] 1fe558be4dcb
+ONSITEMAIN, Fri 13 Nov 10:03 AM PST. Carried heads on origin for B, H and #9319; item 11 built; the mends pushed. Nothing marked.
+
+**Carried heads** [rev-parse and ls-remote each; the tool's word `clean` on each]
+- **#9670 (A)** `de84698df4801d5bbc407119a08abaed16a4a0a9`, run `r20261113-170813-b455`: pins regenerated 0 paths, the two packages' records pass, 0 paths changed; its suites still run.
+- **#9677 (B)** `ae22778f58508840f3b0ac6beeecc685d37c362c`, run `r20261113-180028-02a4` (pins: 0 paths changed; suites running). The tool's result `eae7c149c724` (onto `f54194bbb196`), then **one hand merge** of A's carried head, `9ee0969f4178`: no conflict. B's own change over A is the same nine files, +410 −65, before and after [ran]. One commit of mine on top: step 2 (`warden_chain.io`) named beside step 3 where the id egress form is held, and one docstring line rewrapped. 38 passed in `test_certifier_piece.py` [ran, local].
+- **#9736 (H)** `534773aa1c3671c2913ac7ad6be5b94f69e907ee`, run `r20261113-180224-d4a1` (pins, records of the verifier's Lean package and the two analysis packages whose locks it changes, suites). Two hand merges:
+  - at the first move's base (`a2ba479e2b61`), `e217b6aa7d1f`, one file, `benchmarks/network_traces/tests/test_certifier_piece.py`: (1) the split test's docstring: `main`'s sentence stands whole and H's clause on the class circuit is added beside it; (2) its assertions: H's one line on the circuit, then `main`'s three lines on the case file and its mode. Then the tool: `clean`, `d00fcdca6395`.
+  - **how H takes #9664:** one merge of #9664's carried head `a9afd2cbe5e5` [read from origin, 10:00 AM PST] into that result, `534773aa1c36`: no conflict; six files merged by git, and the lock's merge driver took two removed entries of `security/Properties/lean-audit.json` without regenerating (the job's records run regenerates; if it changes a file I add that as a commit and send the head). H's own change over #9664 is the same 14 files, +1281 −160 after against +1284 −163 before: the three lines are the test file's hand merge and the two locks [ran].
+- **#9319** `214defbcafba36e82d48eabc66e289ebd07d4340`, run `r20261113-175646-88ac`. The tool: `clean`, `1dee87916a77`; its own change over `main` is ten files. On top, two commits:
+  - `8623cf4f3df3` item 11. 
+  - `214defbcafba` the line where `--lean-workers` is above 1 behind the ZK server (`checks_at_once`, with its test).
+  - 30 passed in the two test files [ran, local].
+- **#9678 (L), #9679 (I1)**: the tool still runs on each (my machine has four cores). I1's earlier head `690b8315d9fb` was the four-move result with A's hand merge, no conflict, its own three files unchanged.
+
+**Item 11, one thing I found and how I built it. Say if you want it otherwise.**
+- The kernel's count of the audit's threads cannot be what refuses [ran]: with the audit's own imports the process holds 4 threads on my machine before any fork and Python's warning still shows nothing at the fork, under any filter; the extra ones are the numeric library's pool, which I take to end in its own fork handler before Python counts [argued]. A refusal on that count would refuse every audit with more than one worker.
+- So the refusal is on Python's own threads (`threading.enumerate()`): more than the calling one refuses, forks nothing, writes the audit's summary with the refusal, and the message says the fix (end and join the others before the negatives run, or `--negative-workers 1`). Both readings, Python's threads by name and the kernel's count, go to the audit's log and to `negative_workers.threads_at_fork` in the result whether or not it refuses.
+- **Not settled by a run:** the local challenger's `finisher` thread (`a5_coins.start`) lives until the session closes and its record is read. Friday's run printed 0 lines under `default::DeprecationWarning`, and with the audit's imports that filter does print the line when a Python thread is alive at the fork [ran], so on Friday it had ended before the first fork [read: the run's `rehearsal.json`]. On a short window it may not have [argued], and the audit would then refuse with that thread's name. I changed nothing in `records_audit.py` for it.
+
+**The mends** are on `cursor/net-onsite-rehearsal-job-84f9` at `0bc20e605ed61b2d88666fde36019c5544bf0d1b`, five commits, six toy cases [ran]. Four choices of mine for you to rule: the two kept files are the audit's own summary and record, kept under `$OUT` only when the copy or the answer failed; the memory stop's room defaults to 32 GB (`MEM_ROOM_GB`); `MemAvailable` still stops the job as well as being read; the table's 1,600 s is shown at five or more workers with a note where they are not six.
+
+**Next:** L and I1 when the tool ends; NET-411's cut on B's and H's carried heads now.
+
