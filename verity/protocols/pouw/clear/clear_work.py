@@ -2,8 +2,9 @@
 (statement review item 5; red team F1, F2 and F5–F8).  It is a reference tool, not a verifier: PoUW's served path is the
 served-ZK window, and its verifier is the Lean (`verity/protocols/pouw/verifier/lean/check`).  It runs the records
 core keeps (`verity.protocols.pouw.prover.schemes.pearl_c_work`: `Split`, `UnitRecord`, `records_root`), which vLLM's
-Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory is not a package: callers put it on
-``sys.path``.
+Pearl-C prover writes, through the clear audit (`clear_audit`).  It imports the `clear_audit` of its own name: the
+package's as `verity.protocols.pouw.clear.clear_work`, the bare one for a caller that put this directory on
+``sys.path`` (one process, one of the two: `clear_audit`'s docstring).
 
 * **The one exclusion rule (per row).**
   - An excluded row stays in the unit, and its C̃ and U words are computed and bound as any other's.
@@ -67,7 +68,13 @@ from functools import partial
 from itertools import accumulate
 from math import floor, lcm
 
-from clear_audit import Audit, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash, draw_coin
+if __package__:
+    from .clear_audit import (Audit, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash,
+                              draw_coin)
+else:
+    from clear_audit import (Audit, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash,
+                             draw_coin)
+
 from verity.protocols.pouw.verifier.audit import Epoch, opened_value
 from verity.protocols.pouw.verifier.coins import Challenger
 from verity.protocols.pouw.verifier.protocol import Context, Shape, Tile, tagged
