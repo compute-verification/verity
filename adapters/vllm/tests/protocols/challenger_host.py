@@ -27,11 +27,11 @@ from pathlib import Path
 
 import numpy as np
 from verity.commitments.crypto import lms
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import weights as Wt
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import weights as Wt
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
 
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 

@@ -46,12 +46,12 @@ import numpy as np
 
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.protocols import reporting
-from verity.protocols.pous.verifier import wipe_period
-from verity.protocols.pouw.verifier import period_check
-from verity.protocols.pouw.verifier import window as pouw_window_rules
-from verity.protocols.spot.verifier import parties
-from verity.protocols.spot.device.coins import OwnRandomness, draw_first
-from verity.protocols.spot.verifier.one_stage import registered as R
+from verity.protocols.accounting.pous.verifier import wipe_period
+from verity.protocols.accounting.pouw.verifier import period_check
+from verity.protocols.accounting.pouw.verifier import window as pouw_window_rules
+from verity.protocols.proofs.spot.verifier import parties
+from verity.protocols.proofs.spot.device.coins import OwnRandomness, draw_first
+from verity.protocols.proofs.spot.verifier.one_stage import registered as R
 from verity.channel import Body, Int, Message, Schema
 from verity.circuits import boolean as BL
 from verity.circuits import codec
@@ -944,12 +944,12 @@ word), theta being registered."""
 
 
 def _nci() -> Any:
-    """The inference-only policy's Python check (`verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py`), the
+    """The inference-only policy's Python check (`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py`), the
     reference its Lean check, `NciCheck`, is held to."""
     name = "lifecycle_nci_reference"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(
-            name, ROOT / "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py")
+            name, ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py")
         m = importlib.util.module_from_spec(spec)
         sys.modules[name] = m
         spec.loader.exec_module(m)
