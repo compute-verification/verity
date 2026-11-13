@@ -120,6 +120,7 @@ public import Proofs.Flock.SpotFlock.PortsMember
 public import Proofs.Flock.SpotFlock.ReadWays
 public import Proofs.Flock.SpotFlock.ReadsDesign
 public import Proofs.Flock.SpotFlock.WiringOk
+public import Proofs.Flock.SpotFlock.OwnReads
 public import Proofs.Flock.SpotFlock.RevealsWired
 public import Proofs.Flock.SpotFlock.WiredKS
 public import Proofs.Flock.SpotFlock.WiredRegX
