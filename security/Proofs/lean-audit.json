@@ -179,6 +179,8 @@
   "Proofs.Properties.Verity.Sampled.RecursiveRefused",
   "Proofs.Properties.Verity.Sampled.MemberForm",
   "Proofs.Properties.Verity.Recursive.Audit",
+  "Proofs.Properties.Verity.SampledTwo.SessionLogged",
+  "Proofs.Properties.Verity.SampledTwo.SessionCut",
   "Proofs.Flock.SpotFlock.RunsAs.PopulationOf",
   "Proofs.Properties.Verity.Majority",
   "Proofs.Properties.Verity.SampledTwo.Accepts",
