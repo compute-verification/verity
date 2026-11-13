@@ -1,6 +1,6 @@
-"""Pearl+'s live draw end to end on one CPU machine, against infra's own gate code (`verity/composite/device/live_challenger/auditor.py`)
+"""Pearl+'s live sample end to end on one CPU machine, against infra's own gate code (`verity/composite/device/live_challenger/auditor.py`)
 on a scratch auditor host: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
-are the Lean verifier of record's (``sampled-proofs-verifier``, built first).
+are the Lean verifier's (``sampled-proofs-verifier``, built first).
 
     python benchmarks/one_stage/pearlplus_local_e2e.py run --out OUT [--lean build|EXE]
 
@@ -14,7 +14,7 @@ process of its own (this file's ``serve`` verb, `auditor.run` with no coin link,
    (`pouw_h1_window.reserve_salt` and ``open_session``, as `bench_arm.live_coins`' install does), its salt coin salting
    a toy pass (the pouw suite's `proved_pass`, k = 128 and 16 x 16 tiles, in place of a GPU serve), then closed.
 3. ``served_verdicts.py pearlplus-period close``, once that session has ended.
-4. ``served_passes.py verify --tie W --test-instance`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's draw a draw
+4. ``served_passes.py verify --tie W --test-instance`` under PEARLC_CHALLENGER_GATE/PEER/LANE: the verifier's sample a sample
    session reserved withheld after the period closed and opened on the run's commitment (`bench_arm.LiveDraw`), recorded
    in coin.json. The toy isn't the served instance (k_min 1,024 at 64 x 64 tiles), so its passes are read as a
    test instance's, crediting nothing.
@@ -28,7 +28,7 @@ Stand-ins, named in OUT/e2e.json: the serve (one toy pass, `served.json` written
 registration and records audit (two files tied to W), and, unless ``--lean`` names a ``pouw-pearlplus``, the Lean
 ``PouwCheck.PearlPlus`` verdict (``pearlplus-lean.json``, copied from Pearl+'s answer); with it, `served_pearlplus.sh`'s
 Lean step writes that file (``served_passes.py lean``, both verdicts in OUT/e2e.json's ``lean``). Then, as a control, a
-second draw on the same commitment: the gate refuses its open (one session a root, ever), so no second coin exists, and
+second sample on the same commitment: the gate refuses its open (one session a root, ever), so no second coin exists, and
 the piece written after it composes the same row."""
 from __future__ import annotations
 
@@ -253,7 +253,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
                                   "--gate", gate_cmd]).returncode:
         return 1
 
-    # 4. Pearl+'s verdict, its draw a draw session's coin on the run's commitment
+    # 4. Pearl+'s verdict, its sample a sample session's coin on the run's commitment
     served = scratch / "served"
     served.mkdir()
     (served / "served.json").write_text(json.dumps({"run": T.RUN, "passes": [
@@ -326,7 +326,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     report["row"] = row()
     print(f"[row] {json.dumps(report['row'])[:1500]}", flush=True)
 
-    # control: a second draw session opened on the same commitment leaves a piece the compose refuses
+    # control: a second sample session opened on the same commitment leaves a piece the compose refuses
     import importlib.util
     spec = importlib.util.spec_from_file_location("e2e_bench_arm", TREE / "benchmarks" / "pouw" / "pearl_c_vllm" / "bench_arm.py")
     BA = importlib.util.module_from_spec(spec)
