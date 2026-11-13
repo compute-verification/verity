@@ -37,6 +37,7 @@ from typing import Any
 
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine import env as engine_env
+from verity_vllm.pipeline.row_json import read_json, write_json
 from verity_vllm.query.manifest.format import SERVED_IDS
 
 __all__ = ["Options", "ServedCommit", "main"]
@@ -361,7 +362,7 @@ def main(a: Options) -> int:
     dirs = engine_env.own_compile_dirs(out)
     from verity_vllm.acquire import served_artifact as SA
 
-    of_record = json.load(open(a.build_of_record)) if a.build_of_record else None
+    of_record = read_json(a.build_of_record) if a.build_of_record else None
     if of_record is not None:
         SA.seed(SA.pinned(of_record), dirs["TORCHINDUCTOR_CACHE_DIR"])
 
@@ -377,7 +378,7 @@ def main(a: Options) -> int:
 
     t0 = time.perf_counter()
     log = lambda s: print(f"[served-match {time.perf_counter() - t0:7.1f}s] {s}", flush=True)
-    wl = json.load(open(a.workload))
+    wl = read_json(a.workload)
     schedule, steps = schedule_of(wl)
     reqs = [SimpleNamespace(request_id=s["request_id"], prompt_token_ids=[int(t) for t in r["prompt_token_ids"]],
                             max_tokens=s["max_tokens"], arrive_step=s["arrive"]) for s, r in zip(schedule, wl["requests"])]
@@ -398,7 +399,7 @@ def main(a: Options) -> int:
         device_of(facts)
     except Unmodelled as e:
         log(f"Build refused: {e}")
-        json.dump({"ok": False, "build_refused": str(e), "facts": facts}, open(f"{out}/match.json", "w"), indent=1, default=str)
+        write_json({"ok": False, "build_refused": str(e), "facts": facts}, f"{out}/match.json")
         return 3
 
     com = NativeCollectCommitter(eng, run_id="served-match", arena_bytes=None, wrap=True, gather=True, native_hooks=True,
@@ -414,7 +415,10 @@ def main(a: Options) -> int:
     com.reset()
     src.begin_run()
     com.install()
-    params = lambda r: SamplingParams(temperature=0.0, max_tokens=r.max_tokens, ignore_eos=True, detokenize=False)
+
+    def params(r: SimpleNamespace) -> Any:
+        return SamplingParams(temperature=0.0, max_tokens=r.max_tokens, ignore_eos=True, detokenize=False)
+
     fin, _ = run_requests_arrivals(eng.llm, reqs, params)
     rc = com.finalize()
     facts.update(run_root=bytes(rc.run_root).hex(), tokens={rid: list(o.outputs[0].token_ids) for rid, o in fin.items()},
@@ -425,10 +429,11 @@ def main(a: Options) -> int:
         build = build_here(src, facts, schedule, steps, out)
     except Unmodelled as e:
         log(f"Build refused: {e}")
-        json.dump({"ok": False, "build_refused": str(e), "facts": facts}, open(f"{out}/match.json", "w"), indent=1, default=str)
+        write_json({"ok": False, "build_refused": str(e), "facts": facts}, f"{out}/match.json")
         return 3
-    json.dump(build, open(f"{out}/build.json", "w"), indent=1)
-    json.dump(facts, open(f"{out}/facts.json", "w"), indent=1, default=str)
+    with open(f"{out}/build.json", "w") as f:
+        json.dump(build, f, indent=1)
+    write_json(facts, f"{out}/facts.json")
     log(f"Build: program {build['program_digest'][:16]} manifest {build['manifest_digest'][:16]} identities {len(build['identities'])} "
         f"complete {build['complete']}")
 
@@ -439,8 +444,7 @@ def main(a: Options) -> int:
         of_record = {"program_digest": of_record["program_digest"], "artifact": of_record["artifact"]["digest"], "artifact_differences": diff[:20],
                      "equal": of_record["program_digest"] == build["program_digest"] and not diff}
     ok = bool(rep["ok"] and build["complete"] and not facts["errors"] and (of_record is None or of_record["equal"]))
-    json.dump({"ok": ok, "build": {**{k: build[k] for k in ("program_digest", "manifest_digest", "complete")}, "artifact": build["artifact"]["digest"]},
-               "build_of_record": of_record,
-               "check": rep, "facts": facts}, open(f"{out}/match.json", "w"), indent=1, default=str)
+    write_json({"ok": ok, "build": {**{k: build[k] for k in ("program_digest", "manifest_digest", "complete")}, "artifact": build["artifact"]["digest"]},
+                "build_of_record": of_record, "check": rep, "facts": facts}, f"{out}/match.json")
     log(f"Match {'PASS' if ok else 'FAIL'}: tally {json.dumps(rep['tally'])}")
     return 0 if ok else 1
