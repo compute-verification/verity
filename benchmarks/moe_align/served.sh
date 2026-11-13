@@ -29,7 +29,7 @@ export TMPDIR
 trap 'rm -rf "$TMPDIR"' EXIT
 # shellcheck disable=SC1091
 source "${VENV:-/workspace/cp/venv312}/bin/activate"
-export PYTHONPATH=$TREE:$TREE/benchmarks:$TREE/adapters/vllm:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/flock/prover/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/verity/difftest/python
+export PYTHONPATH=$TREE:$TREE/benchmarks:$TREE/adapters/vllm:$TREE/tools/research/src:$TREE/infra/cluster/src:$TREE/infra/ops:$TREE/benchmarks/numerical/python:$TREE/verity/protocols/flock/prover/python:$TREE/tools/verity/circuit_check/src:$TREE/tools/verity/cli:$TREE/tools/difftest/python
 python "$TREE/benchmarks/moe_align/stress.py" site --out "$TMPDIR/site" > /dev/null
 export PYTHONPATH=$TMPDIR/site:$PYTHONPATH
 mkdir -p "$OUT"
