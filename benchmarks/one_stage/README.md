@@ -81,6 +81,15 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   that request at the roots each owner registered, every registration read before any rank's coin. A received row moved one
   bit (`--altered`), two tokens' rows swapped, another collective's partial, another request's, and the receiving rank's own
   partial read as its peer's (`--made-for`) are each refused by Lean's registered reads on rank 1, rank 0 accepted.
+- `member_seconds.py` (`a5_tp.sh` with `A5_MEMBER_SECONDS=1`): an audit's seconds a member outside its prover's clock and
+  in Lean's verify before its first check, split by what is read. The audit runs on stamping wrappers of its three
+  programs (the prover, Lean's verifier and the ZK server's Lean loop); each member's seconds are its own processes'
+  starts and ends and its logs' lines, and each reader of its files is then run alone (the verifier's and the prover's
+  load, the ZK server's Lean loop's start with and without the window's partition and program, `archive-put` of each
+  file). Behind the ZK server (`ZK_SERVER=1`) one kept process of Lean's verifier (`verify-members`) verifies an audit's
+  members in turn (`a0.VerifyMembers`), and a member's seconds there are from its line to its answer. Among the readers
+  run alone is `verify` on each member's session, a process of its own: it must print the audit's verdict line for that
+  member, byte for byte, or the measurement fails, and its seconds are beside the audit's in one record.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
@@ -200,7 +209,7 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   on a statement under the provisional unit cover says the Program was handed and not held to the circuit. With
   `--wide-leaf` every prover and verifier of the run carries `flock-circuit --wide-leaf`, the wide level-0 leaf's
   statement version, and its rows say so (`wide_leaf`); the script's docstring has the rest: the two statement names
-  their Lean verdict is asked under, what `flock-verify` takes and refuses under them, and how a row is held to the
+  their Lean verdict is asked under, what the Lean verifier takes and refuses under them, and how a row is held to the
   version its sessions ran. A row with a refused session, a server process that exited nonzero, a prover out of device
   memory, or a session that ran another statement version than the row's is void: no rate, its reasons in `void`, a
   `VOID` line, and the run exits 1.
