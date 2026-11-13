@@ -11,10 +11,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 
+from verity.commitments.crypto import lms
+from verity.commitments.scheme import DIGEST_BYTES
 from verity.protocols.poub.verifier.session import verifier
 from verity.protocols.spot.device import challenger as Ch
-from verity.commitments.scheme import DIGEST_BYTES
-from verity.commitments.crypto import lms
 
 ROOT = Path(__file__).resolve().parents[5]
 SERVE = ROOT / "verity" / "composite" / "device" / "live_challenger" / "serve.py"
@@ -32,6 +32,8 @@ def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
 def main(argv: Sequence[str] | None = None) -> int:
     return verifier.main(argv, verify=lms_verify, serve=(sys.executable, str(SERVE)))
 
+
+__all__ = ["lms_verify", "main"]
 
 if __name__ == "__main__":
     sys.exit(main())

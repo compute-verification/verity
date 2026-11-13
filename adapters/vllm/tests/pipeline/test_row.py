@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import dataclasses
 import gzip
+import hashlib
 import json
 import os
 import select
@@ -36,7 +37,7 @@ import pytest
 
 from tests.acquire.call_boundary_programs import LP, PF, T, build_dir, dense_program
 from verity_vllm.check.weights_of_record import SCHEMA, SCHEMA_V1
-from verity_vllm.config import UsageError
+from verity_vllm.config import RowConfig, UsageError, row_file, row_path
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline import row_stages as S
@@ -106,6 +107,41 @@ def test_chain_refuses_its_own_flags_among_the_stage_flags(tmp_path):
     ch = cli.parse("row", ["chain", ROW, "R", "o/r", "rev", "--stages", "build"], {"PY": sys.executable})
     with pytest.raises(UsageError, match="--stages"):
         row.main(ch)
+
+
+def test_a_rows_effective_config_is_its_file_its_stage_configs_and_what_the_caller_moved(tmp_path, monkeypatch):
+    """What a run of a row used (`row.effective_config`, written as the row's ``effective_config.json``): the row's file without its
+    requests and that file's digest, the run's own words and which of them differ from the file's, each stage's config in full, the
+    options a flag or a variable moved from its default, the installed vLLM, and the engine environment the stages inherit, which
+    never holds a credential.  A row id with no file has no config, no file and nothing to differ from."""
+    from importlib import metadata
+
+    from verity_vllm.pipeline import row
+    words = ["run", ROW, "LLAMA32_1B", "unsloth/Llama-3.2-1B", "9535bd9b", "--sweep-dir", str(tmp_path), "--py", sys.executable]
+    environ = {"MATCH_IMPL": "record", "VLLM_BATCH_INVARIANT": "1", "NCCL_ALGO": "Ring", "CUDA_VISIBLE_DEVICES": "3", "HOME": "/home/nobody",
+               "VLLM_API_KEY": "dummy", "NCCL_DUMMY_TOKEN": "dummy"}
+    o = cli.parse("row", [*words, "--build-jobs", "3", "--world", "2"], environ)
+    monkeypatch.setattr(metadata, "version", lambda name: {"vllm": "0.0.test"}[name])
+    eff = row.effective_config(o, "build,match", ("pous:s1",))
+    wl = row_file(ROW)
+    assert list(eff) == ["schema", "row", "config", "file", "run", "run_differs_from_config", "stages", "overrides", "vllm_installed", "engine_env"]
+    assert (eff["schema"], eff["row"], eff["vllm_installed"]) == ("verity-vllm/effective-config/v1", ROW, "0.0.test")
+    assert eff["config"] == {k: v for k, v in RowConfig.load(wl).to_json().items() if k != "requests"} and eff["config"]["model"] == o.repo
+    assert eff["file"] == {"path": row_path(ROW), "sha256": hashlib.sha256(wl.read_bytes()).hexdigest()}
+    assert eff["run"] == {"role": "LLAMA32_1B", "repo": "unsloth/Llama-3.2-1B", "rev": "9535bd9b", "world": 2, "gpu_util": None, "query": o.query,
+                          "protocols": ["pous:s1"], "stages": "build,match"}
+    assert eff["run_differs_from_config"] == ["rev"]                    # the file states the whole revision, the run its first eight digits
+    assert eff["stages"] == {"build": dataclasses.asdict(o.build), "match": dataclasses.asdict(o.match), "commit": dataclasses.asdict(o.commit)}
+    assert eff["overrides"] == {"build.build_jobs": "3", "match.match_impl": "record", "world": 2, "protocols": ["pous:s1"]}
+    assert list(eff["engine_env"].items()) == [("CUDA_VISIBLE_DEVICES", "3"), ("NCCL_ALGO", "Ring"), ("VLLM_BATCH_INVARIANT", "1")]
+
+    def not_installed(name):
+        raise metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(metadata, "version", not_installed)
+    none = row.effective_config(cli.parse("row", [w.replace("__i256__", "__i999__") for w in words], {}), "build", None)
+    assert (none["config"], none["file"], none["run_differs_from_config"], none["overrides"]) == (None, None, [], {})
+    assert (none["run"]["protocols"], none["run"]["stages"], none["vllm_installed"], none["engine_env"]) == (None, "build", None, {})
 
 
 def test_the_commit_flags_the_row_arms_exist():

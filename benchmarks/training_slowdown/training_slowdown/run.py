@@ -3,7 +3,7 @@ computes through torch is counted (flops.py).
 
     python -m training_slowdown.run --config attacks/NAME.toml --seed 0 --split search|final --out OUT \\
         [--state DIR [--continues SHA256|nothing]] [--starts starts.toml] [--starts-root DIR] [--device cuda] \\
-        [--tier 0] [--keep-weights]
+        [--tier 0] [--threads 8] [--keep-weights]
     python -m training_slowdown.run --retrace RUN_JSON --out OUT [--starts starts.toml] [--device cpu]
 
 A job is two processes. Its own (`outside`) runs no route's code: it reads the job's held-out split, starts the
@@ -36,7 +36,8 @@ the optimizers' state; the stream's position; torch's, numpy's and Python's gene
 record so far with its scores, where the clock stands and, in the record's last segment, the SHA-512 of each part
 of the tensors as DIR holds them (`kept_sha512`). DIR is hidden from the route's process as a final set is. A job
 that finds a state in DIR continues from it when the state is its own: the same `training_slowdown` VERSION, seed,
-split and config digest, tensors whose every part hashes to what the record states, and a model that hashes to its
+split, config digest and CPU thread count (`threads`; a state that states none continues at the job's), tensors
+whose every part hashes to what the record states, and a model that hashes to its
 record's last checkpoint (`trained_sha256` where the trained model is not the output, else `output_sha256`). Any
 other it refuses, naming what differs, and trains nothing. The record a state is
 checked against lies beside its tensors; `--continues SHA256` ties it to the copy in the stopped run's record, which
@@ -71,8 +72,9 @@ reads such a record as unmeasured, with the reason. `--retrace` takes a record's
 capture, from the record's own config text, for a record whose trace a later grade doesn't read or that has none.
 
 Writes `OUT/run.json` once, when the route's process has ended: that process's record (the count, the checkpoints,
-the flags, the config with its digest and text, the route, θ's digest, the trace or why there is none, and the job's
-label) with the scores in, over every segment the job ran in; a job told to stop writes the record of the stop there
+the flags, the config with its digest and text, the route, θ's digest, the trace or why there is none, the job's
+label, the device, and torch's switch for TF32 matrix products as it stands when the record is written, `tf32`) with
+the scores in, over every segment the job ran in; a job told to stop writes the record of the stop there
 instead. No weights are kept by default: of the last checkpoint the job keeps E, the bytes that rebuild its output
 from θ, under `OUT` when E is under 50 MiB (`E_KEEP_BYTES`), and with `--keep-weights` the whole state. Torch
 compilation is disabled and CUDA graph replay refused: both run work the counter can't see. For the same reason a run is
@@ -83,10 +85,23 @@ the names that run code it never reads: `exec`, `eval` and `compile` (called or 
 `__import__`, `marshal`, pickle, `FunctionType`, `CodeType`, `__code__` and `sys.meta_path`; while the job runs no
 bytecode cache is read, so what runs is the source that was screened.
 
-On a CPU each of the job's two processes limits oneDNN's instruction set to below AMX before torch computes anything
-(`limit_cpu`, `CPU_ISA`): oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU, so that one step run
-twice gives two results, and a job's products are to be the same every time. The record names the variable and the
-value the route's process set (`cpu_isa`; null on any other device, where nothing is set).
+A job's products are to be the same every time it runs on the same device at the same thread count. On a CPU two
+kernels break that, so before torch computes anything each of the job's two processes does two things:
+
+- It limits oneDNN's instruction set to below AMX (`limit_cpu`, `CPU_ISA`), since oneDNN's AMX kernels can return
+  a wrong bf16 product on a virtual CPU.
+- It holds attention at the math kernel (`cpu_attention`, `CPU_ATTENTION`), since torch's fused CPU attention
+  kernel can return a wrong tile of its result at more than one thread. The job's own process needs this too,
+  because it scores the checkpoints with the model's forward.
+
+A run in which the fused CPU kernel still runs at more than one thread is invalid (`flops.CPU_FUSED_ATTENTION`).
+The record names what the route's process set: `cpu_isa` (the variable and its value) and `cpu_attention` (the
+kernel). On any other device neither is set and both are null.
+
+Each of the two processes also holds torch at the job's CPU thread count (`--threads`, `THREADS`; `set_threads`)
+before torch computes anything, the route's process at the count the job's own process holds. What a job trains
+on a CPU is to be a function of its thread count, never of the cores it runs on. The record states the count
+(`threads`), and a stopped job continues only at the count its kept record states (`Kept.load`).
 """
 from __future__ import annotations
 
@@ -113,8 +128,9 @@ os.environ["TORCHDYNAMO_DISABLE"] = "1"
 import numpy as np
 import torch
 import torch.nn.modules.module as nn_module
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
-from . import BUDGET_SLACK, NOTHING, SCHEMA, STOPPED, VERSION, config, sandbox, starts, stop_record
+from . import BUDGET_SLACK, NOTHING, SCHEMA, STOPPED, VERSION, config, gates, sandbox, starts, stop_record
 from .codecs import Identity, Plan, Unencodable
 from .counterexample import SAMPLE_FINAL, SAMPLE_SEARCH, Family, check
 from .data import SPLITS, Data, Stream
@@ -132,10 +148,18 @@ E_KEEP_BYTES = 50 * 2**20
 #: the `trace.failed` of the record the route's process writes before it takes the trace: what a process that ends
 #: there leaves
 UNTRACED = "the route's process ended before it wrote the trace"
-#: the variable that limits oneDNN's instruction set and the limit of a job on a CPU (`limit_cpu`), the widest below
-#: AMX: oneDNN's AMX kernels return a wrong bf16 product now and then when the process is preempted on a virtual CPU,
-#: on one thread or several, so two calls of one product on one input differ; below AMX it is the same every time
+#: the variable that limits oneDNN's instruction set, and the limit for a job on a CPU (`limit_cpu`): the widest below
+#: AMX, since oneDNN's AMX kernels return a wrong bf16 product now and then when the process is preempted on a
+#: virtual CPU, on one thread or several. It holds oneDNN's products only; torch's own fused attention kernel is
+#: held by `CPU_ATTENTION`
 CPU_ISA = ("ONEDNN_MAX_CPU_ISA", "AVX512_CORE_BF16")
+#: the attention kernel a job runs on a CPU, the record's `cpu_attention` (`cpu_attention`): torch's fused CPU kernel
+#: can return a wrong tile of its result at more than one thread, and the math kernel computes attention as the
+#: products a step's trace holds
+CPU_ATTENTION = "math"
+#: a job's CPU thread count unless `--threads` gives another (`set_threads`); what a job trains on a CPU is to be a
+#: function of it
+THREADS = 8
 
 
 class BudgetExceeded(RuntimeError):
@@ -211,6 +235,20 @@ def no_function_modes():
     finally:
         for mode in reversed(modes):
             torch._C._push_on_torch_function_stack(mode)
+
+
+def tf32() -> dict:
+    """torch's switch for TF32 matrix products, as it stands: on, a GPU computes a float32 GEMM in TF32, which no
+    dtype of an op says. Where torch has `torch.backends.cuda.matmul.fp32_precision`, that reading alone: it reads
+    the switch however a job set it (by it, by `torch.backends.fp32_precision`, by `allow_tf32` or by
+    `set_float32_matmul_precision`), "tf32" when on, while the older two readings raise once a job set it by the
+    first two. Else those two readings, with either on. A record states it beside its device (`Harness.finish`),
+    and `gates.tf32_on` reads it."""
+    matmul = torch.backends.cuda.matmul
+    if hasattr(matmul, "fp32_precision"):
+        return {"cuda_matmul_fp32_precision": matmul.fp32_precision}
+    return {"cuda_matmul_allow_tf32": bool(matmul.allow_tf32),
+            "float32_matmul_precision": torch.get_float32_matmul_precision()}
 
 
 def git_commit() -> str:
@@ -525,6 +563,11 @@ class Harness:
             problems.append(f"ops outside torch's own, whose work the counter can't see: {list(rec['foreign_ops'])[:4]}")
         if rec["unknown_ops"]:
             problems.append(f"ops that compute products training_slowdown has no formula for: {list(rec['unknown_ops'])[:4]}")
+        if rec["unrepeatable_ops"]:
+            problems.append(f"torch's fused CPU attention kernel ran at more than one thread, where a call can return "
+                            f"a wrong tile: {list(rec['unrepeatable_ops'])[:2]}. A job on a CPU runs attention under "
+                            f"the math kernel (`cpu_attention`): leave the kernel to the job (no `sdpa_kernel` in the "
+                            f"route), or run the job at `--threads 1`")
         leaks = [s["step"] for s in [rec["setup"], *rec["steps"], rec["tail"]] if leaked(s)]
         if leaks:
             problems.append(f"token data read out of torch (numpy, tolist, DLPack) at a value per token or more, in steps "
@@ -533,8 +576,8 @@ class Harness:
         rec |= meta | {
             "schema": SCHEMA, "training_slowdown": VERSION, "seed": self.seed, "tier": self.tier,
             "split": self.split, "start": self.start, "theta_sha256": theta_sha256(self.theta), "device": self.device,
-            "forward_macs_per_token": self.forward_macs_per_token, "c": c, "planned_steps": self.n_steps,
-            "checkpoints": self.checkpoints,
+            "tf32": tf32(), "threads": torch.get_num_threads(), "forward_macs_per_token": self.forward_macs_per_token,
+            "c": c, "planned_steps": self.n_steps, "checkpoints": self.checkpoints,
             "flags": flags(rec["totals"], float(meta.get("peak_macs_per_s", 0))) + list(notes or []),
             "invalid": problems, "families": [],
         }
@@ -753,6 +796,9 @@ def parse(argv=None) -> argparse.Namespace:
                          "checks need them)")
     ap.add_argument("--tier", type=int, default=0, choices=(0, 1, 2))
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument("--threads", type=int, default=THREADS,
+                    help=f"torch's CPU thread count in each of the job's processes, which what it trains on a CPU "
+                         f"follows; a stopped job continues only at its kept record's (default {THREADS})")
     ap.add_argument("--keep-weights", action="store_true",
                     help="keep the last checkpoint's whole state under OUT/checkpoints (default: its E alone, when "
                          "under 50 MiB)")
@@ -860,7 +906,8 @@ class Kept:
     def load(self, seed: int, split: str, continues: str | None = None) -> dict | None:
         """The directory's state, for the job of `seed` and `split` to continue from; None where it holds none. One
         this tree didn't write for this job is refused by what differs: its schema, its `training_slowdown` VERSION,
-        its seed or its split, a part of its tensors that doesn't hash to what its record's last segment states,
+        its seed or its split, a CPU thread count other than this process holds (one that states none continues at
+        this process's), a part of its tensors that doesn't hash to what its record's last segment states,
         or a model that doesn't hash to its record's last checkpoint. Its config's digest is compared once the
         route's process, which reads the route's VERSION and dials, names its own (`outside`).
 
@@ -895,6 +942,9 @@ class Kept:
         for what, its, mine in said:
             if its != mine:
                 self.refuse(f"its {what} is {its!r} and this job's is {mine!r}")
+        if (threads := rec.get("threads")) is not None and threads != (held := torch.get_num_threads()):
+            self.refuse(f"its record states {threads} CPU threads and this job holds {held}, and what a job trains "
+                        f"on a CPU follows its thread count: start the job with `--threads {threads}` to continue it")
         if not (self.dir / name).is_file():
             self.refuse(f"its tensors, {name}, are missing")
         try:
@@ -945,7 +995,8 @@ def _added(a: dict, b: dict) -> dict:
 def outside_steps(structures: dict, parts: list[dict]) -> dict:
     """One step record for what several segments counted outside any step, each one's setup and what a stopped one
     counted after its last kept step: their counts and times added, and their structures merged into one, which
-    joins `structures`."""
+    joins `structures`. An op log's rows are added where they are one op at one shape in one dtype: a row names its
+    dtype last, and one written before rows did names none and is added to the rows that name none."""
     out = dict(parts[0])
     for p in parts[1:]:
         for k in ("tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "cpu_s", "wall_s", "gpu_s",
@@ -956,12 +1007,13 @@ def outside_steps(structures: dict, parts: list[dict]) -> dict:
         out["shapes"] = out["shapes"] | p["shapes"]
         mine, its = structures[out["struct"]], structures[p["struct"]]
         log: dict[tuple, list[int]] = {}
-        for *sig, count, macs in mine["log"] + its["log"]:
-            entry = log.setdefault(tuple(sig), [0, 0])
-            entry[0] += count
-            entry[1] += macs
+        for row in mine["log"] + its["log"]:
+            dtype = gates.row_dtype(row)
+            entry = log.setdefault((*row[:4], *([dtype] if dtype else [])), [0, 0])
+            entry[0] += row[4]
+            entry[1] += row[5]
         struct = {"updated": sorted(mine["updated"] + its["updated"], key=lambda u: (u[1], u[0])),
-                  "log": sorted([list(k) + v for k, v in log.items()])}
+                  "log": sorted([*k[:4], *v, *k[4:]] for k, v in log.items())}
         out["struct"] = structure_id(struct)
         structures[out["struct"]] = struct
     return out
@@ -983,8 +1035,8 @@ def joined(prior: dict | None, rec: dict) -> dict:
     find its stopped jobs invalid, never valid where the unbroken job is not. `segments` lists each one's first
     step, its steps, its count and its commit, and of one that was continued the digests of the state it kept last
     (`Kept.write`). Of a job served fresh windows (`windows`), the windows served are every segment's in order and
-    the times their order started again add up. A segment whose record names another job than the kept one's, or
-    leaves other parts out of the fresh windows, is refused."""
+    the times their order started again add up. A segment whose record names another job than the kept one's, holds
+    another CPU thread count than the kept one states, or leaves other parts out of the fresh windows, is refused."""
     first = len(prior["steps"]) if prior else 0
     segment = {"first": first, "steps": len(rec["steps"]), "macs": rec["totals"]["macs"], "commit": rec.get("commit")}
     if prior is None:
@@ -995,6 +1047,7 @@ def joined(prior: dict | None, rec: dict) -> dict:
                             ("seed", prior["seed"], rec["seed"]), ("split", prior["split"], rec["split"]),
                             ("training_slowdown VERSION", prior["training_slowdown"], rec["training_slowdown"]),
                             ("digest key", prior["digest_key"], rec["digest_key"]),
+                            ("CPU threads", prior.get("threads", rec.get("threads")), rec.get("threads")),
                             ("first step", first, rec["steps"][0]["step"] if rec["steps"] else first),
                             ("fresh windows (how many, and the parts left out)", *fresh)):
         if its != mine:
@@ -1014,6 +1067,7 @@ def joined(prior: dict | None, rec: dict) -> dict:
         "new_weights": sorted({*prior["new_weights"], *rec["new_weights"]}),
         "unknown_ops": _added(prior["unknown_ops"], rec["unknown_ops"]),
         "foreign_ops": _added(prior["foreign_ops"], rec["foreign_ops"]),
+        "unrepeatable_ops": _added(prior["unrepeatable_ops"], rec["unrepeatable_ops"]),
         "invalid": prior["invalid"] + [p for p in rec["invalid"] if p not in prior["invalid"]],
         "flags": flags(totals, float(rec.get("peak_macs_per_s", 0))), "segments": prior["segments"] + [segment]}
 
@@ -1078,7 +1132,8 @@ def outside(a: argparse.Namespace, argv: list[str]) -> int:
         hide = [x for d in [*sandbox.final_sets(reg), *([state.dir] if state else []), *store]
                 for x in ("--hide", str(d))]
         route = [sys.executable, "-m", "training_slowdown.sandbox", *hide, "--",
-                 sys.executable, "-m", "training_slowdown.run", *argv, "--inside", str(scratch)]
+                 sys.executable, "-m", "training_slowdown.run", *argv, "--threads", str(a.threads),
+                 "--inside", str(scratch)]
         env |= {"PYTHONPATH": os.pathsep.join([str(HERE.parent), *filter(None, sys.path)])}
         if a.retrace is not None:
             return subprocess.run(route, env=env).returncode
@@ -1240,7 +1295,7 @@ def inside(a: argparse.Namespace) -> int:
                                           "sha256": file_sha256(route.__file__)},
         "label": f"{config.LABEL_KEY}={config.Job(cfg, a.seed, a.split).label}", "commit": git_commit(),
         "hardware": torch.cuda.get_device_name() if torch.cuda.is_available() else "cpu",
-        "cpu_isa": a.cpu_isa,
+        "cpu_isa": a.cpu_isa, "cpu_attention": a.cpu_attention,
         "peak_macs_per_s": a.peak_macs_per_s,
         "sandbox": {"interfaces": sandbox.interfaces(),
                     "final_sets": {str(d): "empty" if d.exists() else "absent" for d in hidden}}}
@@ -1279,11 +1334,35 @@ def limit_cpu(device: str) -> dict[str, str] | None:
     return dict([CPU_ISA])
 
 
+@contextmanager
+def cpu_attention(device: str):
+    """Holds this process's attention at the math kernel (`CPU_ATTENTION`) where the job's device is a CPU, and gives
+    the kernel it holds, the record's `cpu_attention`. On any other device it holds nothing and gives None. Each of a
+    job's processes enters it before torch computes anything (`main`)."""
+    if torch.device(device).type != "cpu":
+        yield None
+        return
+    with sdpa_kernel([SDPBackend.MATH]):
+        yield CPU_ATTENTION
+
+
+def set_threads(n: int) -> int:
+    """Holds torch at `n` CPU threads in this process and returns `n`, the count the record states; a process in
+    which torch then holds another count is refused. What a job trains on a CPU follows the count, so each of a
+    job's processes calls this before torch computes anything (`main`)."""
+    torch.set_num_threads(n)
+    if (held := torch.get_num_threads()) != n:
+        raise SystemExit(f"training_slowdown: this process is to hold {n} CPU threads, and torch holds {held}")
+    return n
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else [str(x) for x in argv]
     a = parse(argv)
     a.cpu_isa = limit_cpu(a.device)
-    return inside(a) if a.inside is not None else outside(a, argv)
+    set_threads(a.threads)
+    with cpu_attention(a.device) as a.cpu_attention:
+        return inside(a) if a.inside is not None else outside(a, argv)
 
 
 def report(rec: dict) -> int:
