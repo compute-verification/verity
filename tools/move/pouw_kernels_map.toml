@@ -42,6 +42,7 @@ paths = ["verity/protocols/pouw/receipts/", "benchmarks/pouw/pearl_c/", "benchma
 # A reference to a directory the map splits follows its larger part; each one here says why that is what it means
 # (`layout.py` fails on any other, and on an entry no reference needs): "old file: old directory" = why.
 "benchmarks/pouw/pearl_c_sm120/README.md: benchmarks/pouw/served_zk" = "served_zk's benchmark as a whole, which stays; only its kernel hm96_rows.cu moves"
+"benchmarks/pouw/pearl_c_sm120/README.md: benchmarks/pouw/pearl_c_sm90" = "sm90's kernel and its build, run and fixture, which move beside pearl_c_sm120; its vLLM Python stays"
 
 [drop]
 paths = []
