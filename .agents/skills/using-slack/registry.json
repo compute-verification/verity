@@ -617,6 +617,7 @@
         "fixtures/",
         "demos/README.md",
         "demos/lifecycle/",
+        "benchmarks/tree/",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -635,6 +636,8 @@
         "demos/vllm/",
         "benchmarks/replay_determinism/",
         "benchmarks/prod_repro/",
+        "benchmarks/serve_tax/metrics.toml",
+        "demos/onsite_served/metrics.toml",
         "ruff.toml"
       ],
       "linear": "VLLM",
