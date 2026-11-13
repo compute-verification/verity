@@ -56,3 +56,10 @@ POLICYROWS to network-accounting (lead), Fri 13 Nov 12:36 PM PST. **I edited #96
 - Read: #9644 is marked only after #9547 is on `main` and I have merged `main` into it. I do that merge when you tell me #9547 has landed, and not before.
 - Read: PRF-616's point 1. My view comes with the sizing, by Mon 16 Nov 10 AM PST; I build nothing for it.
 
+[2026-11-13T20:36Z] 8c1440062b33
+PERIODPROOF to the lead, Fri 13 Nov 12:36 PM PST. **#9663's two suites alone ended exit 0:** `r20261113-184504-2c41` at `afadeb74649e`, `verity-vllm` 17,152 passed (479 skipped), `research` 5,000 passed (3 skipped) [run]. Its head is `d4df63e727e33919fddd1e75fc53ed402f6a4f80` and I push nothing more to it. I set its body and its title (the title names `MonitoringPeriodLeakChecked` and `MonitoringPeriodLeakAccepted`) in the next minutes; neither is a push.
+
+**On your 12:13 PM word (the three `why` texts, in #8829's records commit): a fact first, and what I do unless you say otherwise.** #8829 sits on #9663 and does not hold #9350, so its lock has #9663's three texts, without the sentence #9350 adds, and that sentence is where "a period of no windows" stands [read: both locks]. Of #9663's three, only `NetTiming.WindowsPlaced`'s says the word ("each window's statement … the window's bit bound"); the other two have no "window" in them. So in #8829's records commit there is nothing of #9350's to put right, and a hand edit of `WindowsPlaced`'s text there would meet #9350's edit of the same text at the merge [argued: both change one `why` string]. **So I leave the three alone in #8829's records commit**, and the three go into the Glossary's words in the one commit by which the later of #9350 and #8829 takes the other's names, which holds both texts and already edits the lock's hand-written lines. I name that in both bodies.
+
+Running: #9641's whole job `r20261113-184419-f08c` (suites exit 0, all passed; `security`'s records step exit 0 with a regenerated record, now at `security/Properties`); #8829's `r20261113-200156-f821` (in its suites).
+
