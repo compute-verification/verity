@@ -47,12 +47,14 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     of its value. On those files' reads, reported as Lean reports a held member's, both verifiers' record check
     (`verifier.audit_record`) accepts the round's sample; with the egress member's file naming another root for the
     network certifier's rows, both refuse it at ``registered``, naming the value, and so they do with that file naming
-    the port under a value the registration doesn't list, at its root or another. The evidence for another window,
-    replayed on a stream handed the same certified entries, is refused at its select's coins, not at its
-    registration. The round names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each
-    read, tied, so R8 lets them through and both verifiers' registration verdict publishes them
-    (``rests_on_period_check``): this round's acceptance rests on a period check (`NetworkCheck.Period`'s `wired`),
-    which refuses its stand-in block (`period_case.UNWIRED`).
+    the port under a value the registration doesn't list, at its root or another. The evidence for another window is
+    replayed on a stream handed the same certified entries, so that stream receives the registration and draws the
+    honest sample: with the sessions stubbed it ends where the honest stream does, at the delivery (``sessions``), and
+    not at its registration. That it is then refused at its select's coins is a round with real sessions' to hold
+    (`scan_zk.prove`, which fails a round one of whose altered evidences is not). The round names each lane's
+    ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each read, tied, so R8 lets them through and
+    both verifiers' registration verdict publishes them (``rests_on_period_check``): this round's acceptance rests on
+    a period check (`NetworkCheck.Period`'s `wired`), which refuses its stand-in block (`period_case.UNWIRED`).
 
     Runs 4 to 10 minutes on a node, about 4 alone: the synthetic run, lowering and staging the scan's three templates,
     and the Lean verifier's checks of the stream's registration, sample and run. It catches what no cheaper test
@@ -163,4 +165,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
         assert not unlisted["accepted"]
         assert unlisted["verifiers"]["lean"] == unlisted["verifiers"]["python"] == {"accepted": False,
                                                                                     "failed": ["registered"]}
-    assert res["coin_negatives"] == {"coins-for-another-window": True}, json.loads((out / "coins.json").read_text())
+    told = json.loads((out / "coins.json").read_text())
+    late, other = told["outcome"].get("refused"), told["negatives"]["coins-for-another-window"]
+    assert late is not None and late["codes"] == ["sessions"], json.dumps(told, sort_keys=True)
+    assert other["python"] is not None and other["lean"] == {"refused": late}, json.dumps(told, sort_keys=True)
