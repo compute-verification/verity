@@ -9,13 +9,11 @@ byte where PARTIALS_LIB names an h1u build and CUDA is up (job.sh's partials ben
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import os
-import sys
 import types
-from pathlib import Path
 
 import numpy as np
+import partials as PT
 import pytest
 import torch
 
@@ -23,17 +21,6 @@ from verity.protocols.pouw.prover.circuit import h1tile as HT
 from verity.protocols.pouw.prover.circuit import seeds as SD
 from verity.protocols.pouw.prover.circuit import segment as SG
 
-HERE = Path(__file__).resolve().parents[1] / "served_h1"
-
-
-def _load(name: str):
-    spec = importlib.util.spec_from_file_location(f"served_h1_{name}", HERE / f"{name}.py")
-    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-PT = _load("partials")
 RC = PT.RC
 COM = types.SimpleNamespace(root=bytes(range(7, 71)), epoch=3)
 COIN, ROOT = bytes(range(100, 164)), bytes(range(30, 94))

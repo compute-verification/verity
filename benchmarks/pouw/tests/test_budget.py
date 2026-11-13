@@ -3,18 +3,11 @@ and its allocation is the least ε within each budget."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import math
-import sys
-from pathlib import Path
 
+import budget as B
 import pytest
-
-spec = importlib.util.spec_from_file_location("pouw_budget", Path(__file__).parents[1] / "budget.py")
-B = importlib.util.module_from_spec(spec)
-sys.modules["pouw_budget"] = B
-spec.loader.exec_module(B)
 
 FAM = {f.name: f for f in B.FAMILIES}
 #: 1 + γ at y = 0, the machine model's ratio on each family's measured kernel (budget_fill.json's first point)
@@ -42,12 +35,12 @@ def test_today_on_sm_120_is_notations_terms_and_b_its_parts():
     assert round(100 * t.eps_skip, 3) == 0.362
     assert round(100 * t.eps_machine, 3) == 0.125
     assert t.eps_served == 0
-    assert t.draws == pytest.approx(B.TODAY_DRAWS, rel=1e-6)
-    assert t.eps_sample == pytest.approx(B.LN_INV_DELTA / B.TODAY_DRAWS, rel=0.02)
+    assert t.draws == pytest.approx(B.TODAY_SAMPLES, rel=1e-6)
+    assert t.eps_sample == pytest.approx(B.LN_INV_DELTA / B.TODAY_SAMPLES, rel=0.02)
     assert t.B == pytest.approx(t.B_transform + t.B_hash + t.B_sample)
     assert t.B_transform == pytest.approx(GAMMA["sm_120"] - 1, abs=1e-4)
     assert t.B_hash == pytest.approx(0.060 + 0.016 + 0.019)
-    assert t.B_sample == pytest.approx(B.spend_for(B.TODAY_DRAWS)) and 0.3 < t.B_sample < 0.4
+    assert t.B_sample == pytest.approx(B.spend_for(B.TODAY_SAMPLES)) and 0.3 < t.B_sample < 0.4
 
 
 def test_sampling_data_is_opt2s_frontier_on_the_grid():

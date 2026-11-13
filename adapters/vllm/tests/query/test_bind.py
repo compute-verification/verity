@@ -199,6 +199,13 @@ def test_two_sources_declaring_one_label_differently_are_refused():
         source_ports([S(QUANT), S({"x_q": QUANT["x_s"]})])
 
 
+def test_where_a_row_and_its_identity_disagree_the_identity_is_read():
+    flat, other = row(LIN, "out"), row(ATT, "0", step=1, inv=2)
+    assert Binder([flat]).rows != Binder([other]).rows
+    assert Binder([{**flat, "identity": other}]).rows == Binder([other]).rows, "every field under `identity` is read before the row's own"
+    assert Binder([{**flat, "identity": {"op_path": ATT}}]).rows == Binder([{**flat, "op_path": ATT}]).rows, "and one field alone is"
+
+
 def test_an_incomplete_manifest_covers_nothing_and_names_what_it_leaves_out():
     rows = [row(LIN, "out"), row(LIN, "out", step=1)]
     lay = {0: [{"name": LIN, "numel": 4}], 1: [{"name": LIN, "numel": 4}]}
@@ -227,6 +234,14 @@ def test_a_row_with_no_step_of_its_own_is_on_no_engine_step_unless_it_states_one
     assert not Binder([every]).rows and not Binder([none]).rows
     assert not Binder([every, none], arrivals={"r0": 2}).rows, "an arrival moves a step: it gives a row none"
     assert sorted(Binder([{**every, "engine_step": 3}, {**none, "engine_step": 5}]).rows) == [3, 5]
+
+
+def test_a_row_of_no_request_stays_on_its_own_engine_step_under_a_schedule():
+    null = {**row(LIN, "out", step=1, engine_step=4), "request_id": None}
+    absent = {k: v for k, v in row(ATT, "out", step=1, engine_step=6).items() if k != "request_id"}
+    assert sorted(Binder([null, absent], arrivals={"r0": 2}).rows) == [4, 6], "no request, so no arrival moves its step"
+    assert sorted(Binder([null, absent]).rows) == [4, 6]
+    assert sorted(Binder([{**null, "request_id": "r0"}], arrivals={"r0": 2}).rows) == [3], "the same row of a request is moved"
 
 
 def test_coverage_is_of_one_ranks_rows_and_of_one_requests_when_one_is_named():

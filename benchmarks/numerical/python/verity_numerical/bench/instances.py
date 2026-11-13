@@ -7,7 +7,7 @@ prevent.  This module owns the dataset's byte layout, its loader, the build that
 sensitivity statistic of the negatives.  The relation is not restated here: expected words are ``silicon.tc_dot_chain``
 + ``cast.f32_to_bf16_word`` (``verity.definitions.circuits.targets.target.FIRST``), cross-checked against ``hawkeye_close``.
 
-Tiers (``fixtures/bench-instances/v1/``; the byte layout is in that directory's ``README.md``)::
+Tiers (``benchmarks/numerical/bench-instances/v1/``; the byte layout is in that directory's ``README.md``)::
 
     vu-k1536       4,096 valid VU instances, K=1536, ids 0..4095.  B=1 / 64 / 4096 are the prefixes [0:1], [0:64],
                    [0:4096]; sub-batches are contiguous id ranges.  Every 64-block holds 54 real and 10 corner instances.
@@ -39,7 +39,7 @@ import subprocess
 import sys
 import time
 from array import array
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -60,6 +60,7 @@ __all__ = [
     "K",
     "N_TU",
     "N_VU",
+    "REPO",
     "STEP",
     "STEPS",
     "TIERS",
@@ -72,6 +73,7 @@ __all__ = [
     "read_u16",
     "read_u32",
     "sensitivity",
+    "sha256_file",
     "verify",
     "write_u16",
     "write_u32",
@@ -79,7 +81,7 @@ __all__ = [
 
 DATASET = G.DATASET
 REPO = Path(__file__).resolve().parents[5]
-DEFAULT_ROOT = REPO / "fixtures" / "bench-instances" / "v1"
+DEFAULT_ROOT = REPO / "benchmarks" / "numerical" / "bench-instances" / "v1"
 K, STEP, STEPS = G.K, G.STEP, G.STEPS
 N_VU = 4096
 N_TU = 4096
@@ -377,7 +379,7 @@ def _source_digests() -> dict[str, str]:
 
 
 def build(out: Path | str = DEFAULT_ROOT, procs: int = 1, seeds_dir: Path | str | None = None, cache: Path | str | None = None,
-          log=print) -> dict:
+          log: Callable[[str], None] = print) -> dict:
     """Regenerate every array of the dataset under ``out`` (built and committed alike) and write ``manifest.json``.
     Needs network access to Hugging Face for the real weight rows (cached under ``cache``, default ``<out>/.cache/hf``).
     Stops with ``RuntimeError`` on any seed check failure, silicon domain error or hawkeye_close disagreement: each is an
@@ -735,7 +737,8 @@ def _build_negatives(results: list[dict], kinds: list[str], x: array, w: array, 
 # --- verify ----------------------------------------------------------------------------------------------------------------------
 
 
-def verify(root: Path | str = DEFAULT_ROOT, full: bool = False, sample: int = 64, seeds_dir: Path | str | None = None, log=print) -> dict:
+def verify(root: Path | str = DEFAULT_ROOT, full: bool = False, sample: int = 64, seeds_dir: Path | str | None = None,
+           log: Callable[[str], None] = print) -> dict:
     """Digests of every array against ``manifest.json`` (built arrays: reported missing rather than failed), the seed
     checks, a ``silicon`` recheck of ``sample`` VU and TU instances (every instance with ``full``), and the negatives'
     claims.  Returns a report with ``ok``."""
