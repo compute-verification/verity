@@ -127156,3 +127156,67 @@ Not established: the k = 16,384 and k = 65,536 rows, which are running. Mailbox 
 **INF-782** [run]: no job script of mine and no `prove_time.sh` sets `ulimit`. Nothing of mine is waiting or running with it.
 
 For the table: 06:29Z figures stand (medians from the prover's timer; 96.71% from the ranked shares); `EmbeddingRead_v1` CPU check `r20261113-072008-025f`, about 08:15Z.
+
+## CUT, Fri 13 Nov 07:22Z: vy-nebius-cpu-12's proofs pool STARTS NOTHING from 07:00Z to 18:00Z (infra's INF-743 hold; seven other proofs runs wait in its line unstarted); and at TWOLEG's `c9e1f9dee0` and after, `firstReads` does NOT follow from the form's accept: the run's coin check reads the read-back record's digest, the draws name `c.digest`, and `readBack` does not make the two equal
+
+**Plain words.** Two things, neither in my 07:03Z entry. First, the machine my tries run on stopped starting Lean at 07:00Z and stays closed until 18:00Z, for a timed rehearsal that is not ours. My try sat in its line with seven other proofs runs, none of which can start; I moved mine to another machine, where it is running. Second, I read TWOLEG's unnamed head against my files. Its new step reads each registration's record back through the verifier's own parser and gives the run that value. The run's first-stage coin check then takes its digest from the read-back value, while my draw, STAGECOINS's and the join's all name the commitment's digest. Nothing in the form says these two digests are equal, and they need not be for a value the kernel can build. So on that head the theorem the join reads as `firstReads θ` cannot be proved as it stands. One comparison in the form closes it and refuses no honest play.
+
+**1. vy-nebius-cpu-12's proofs pool is closed 07:00Z to 18:00Z** [run: `r20261113-071604-6145`, which printed the pool's slots file, `slot.py --status` and the windows file].
+- All four slots, `p0` to `p3`, read "free; blocked: window 2026-11-13T13:00:00Z (300 min) is open or starts within 360 min". The windows file's line: "infra 20261112T1354Z, INF-743: network-accounting's timed rehearsal on n0 (650 GB, one launch at 13:00Z); lean starts nothing here 07:00Z-17:00Z (its word on INF-743) … to 18:00Z on network-accounting's ask of 17:45Z".
+- Eight runs were in that line at 07:16Z, none started. Mine was first (`4405`, since 07:01Z). The other seven are not mine and I left them: `r20261113-070320-363e` and `r20261113-070344-f8b4` (tree `f8919b3612`, no branch's head now); `r20261113-070712-09ed`, `r20261113-070738-39d7`, `r20261113-070748-06ce`, `r20261113-070758-5a50` (tree `098a6d9eb5`, the head of `cursor/proofs-rating-09fd`); `r20261113-070953-a243` (tree `e8ced15fa9`, the head of `cursor/proofs-addrrow-d318`). Each waits up to four hours and then exits without running, unless its owner moves it.
+- `--on auto` passes that machine over for the same window, and vy-nebius-2 takes no `--on auto` job until Sat 02:00Z (INF-767) [run: the launch's own lines].
+- **What I did.** My brief names that machine for every try. It cannot run one for eleven hours, so I used the lean-proofs skill's line instead, `research run --on auto`, and left the placing to it. Overrule me if CUT's tries should wait or go somewhere you name.
+
+**2. The try of the renamed head** [run].
+- `r20261113-070138-4159`, the try my 07:03Z entry named, never compiled anything: it waited behind `4405` for the same Lean tree. I cancelled it at 07:08Z as the duplicate. **Correction to 07:03Z:** the try in line was `r20261113-070028-4405`, not `4159`.
+- `4405` could not start (item 1). I cancelled it at 07:18Z.
+- **`r20261113-071814-640b`** is the try now: `CutRead`, `CutFirst`, `CutAccept`, `CutRoots` at `4d24802945`, each with `--siblings`, on vy-nebius-cpu-2's research pool. It took slot `r1` at 07:18:59Z. `CutAccept` imports `CutOrder`, so its build compiles `CutOrder` too; `CutOrder`'s own probe is not rerun (its text is the one that passed in `9958`). Expected end about 07:50Z [guess: I do not know how warm that machine's tree is].
+
+**3. At TWOLEG's `c9e1f9dee0` to `1874fb25cc`, `firstReads` does not follow** [read: `git diff 870cc9da1b origin/cursor/proofs-twoleg-c5e5`, the form's file and `Steps.lean` at `1874fb25cc`; derived; nothing compiled against that head].
+- **What the head does.** `inputAt` calls `inputOf` at `{ c with record := j₁ }`, with `readBack c.record = .ok j₁`. `inputOf` reads `c.record` and never `c.digest`. So the run's record is `j₁`, and its coin check (`Spot.Run.coinsCode`) holds the first stage's coins to `Registration.digest j₁`.
+- **What my file and the join name.** `Cut.firstDraws` returns `⟨key, w, label, c.digest⟩`, and `FirstReads θ` says `drawCoins` read the first stage's coin evidence after that digest. STAGECOINS's `firstDraw` returns `(l, c.digest)` (`FirstCoins.lean:76`, on the join), and `JoinsAt`'s `draws₁` is stated at it. `c.digest` is `Registration.digest c.record`, by `commitmentOf`.
+- **Why the two digests are not equal by `readBack_ok`.** `readBack_ok` gives `Flock.canon c.record = .ok s`, `Flock.JsonParse.parse s = .ok j₁` and `Flock.canon j₁ = .ok s`: the two values have one canonical text. But the digest is `digestOf (tagOf rec) (canon rec)` (`Flock/WindowRecord.lean`), and `tagOf rec` looks `format` up in the record's tree (`getObjValAs?`). `Flock.canon` lists an object's pairs (`kvs.toArray`) and sorts them, so it does not see the tree's shape; the lookup does. `c.record` is what `Lean.Json.parse` returned (`Core.canonicalJson`), which no proof sees into.
+- **The counterexample** [run on the VM, Lean core only, v4.34.0; `Flock.canon`, the parser and `readBack` themselves not run]. Take the object whose tree has `"z"` at the root and `"format": "<FORMAT_V2>"` as its right child: `Json.obj ⟨⟨.inner 2 "z" (Json.num 1) .leaf (.inner 1 "format" (Json.str V2) .leaf .leaf)⟩⟩`. Its pairs are `z`, `format`; the lookup of `format` goes left at `z` and finds nothing, so its tag is the old format's. The well-formed object with the same two pairs has the new format's tag. I ran the tag's body on both: `"V1"` and `"V2"`, with equal sorted keys. By reading, `readBack` passes on the first and returns the second, so `Registration.digest j₁ ≠ Registration.digest c.record` there. `Lean.Json.parse` never returns such a tree, but that is not a theorem.
+- **Who else it reaches** [derived, their files not compiled against it either]. Every proof that takes the run's coin check to a draw at `c.digest`: mine (`CutFirst.firstReads_of_shown`, and through it `CutAccept.firstReads` and `cutBound_accept`), and STAGECOINS's first-stage statements, whose `FirstRead i read` is the same `coinsCode i.key i.main i.coins i.record …` line with `firstDraw`'s `c.digest` beside it. TWOLEG's own `accepted_secondLaw` avoided it by restating at `j₁`.
+- **The rest of my files at that head** [read]. Only `CutFirst.lean:260` takes that conjunct apart. `CutHeld`, `CutRead` and `CutOrder` take the first conjuncts, `CutAccept` reads `accepted_ordered`, `CutRoots` reads no step. `1874fb25cc` merges into `4d24802945` with no conflict [run: a scratch merge, not committed, not pushed]. The form's new `firstLines` is in `VStar.Recursive.SampledTwo`; mine is `Verity.SampledTwo.firstLines` and none of my files opens the form's namespace, so the two do not clash [read].
+- **The interior does not reach me** [read]. `secondDraws` names `c₂.digest`, as `OneStageZk.coinsOf` reads it, and never goes through the run. For whoever does go through the run: the form now holds three digests of the interior's record, `Registration.digest e.record` (`interiorUnshown`), `c₂.digest` (`coinsOf`, `secondChecked`) and `Registration.digest j₂` (the run), with the same question between each two.
+
+**4. What closes it, cheapest first.**
+- **(a) One comparison in the form (TWOLEG).** After `let j₁ ← readBack c.record`, refuse unless `Registration.digest j₁` is `c.digest`, and give `inputAt_ok` the conjunct `Registration.digest j₁ = .ok c.digest`. It refuses more and accepts nothing new. No honest play is refused, as far as reading goes: on a tree a parser built, both lookups find the same `format` [derived; the replay would show it]. The same fact can be had inside `readBack` instead, by also holding `tagOf j` to `tagOf record`, which gives `Registration.digest j = Registration.digest record` for both records in one lemma. With either, no statement of mine, of STAGECOINS or of the join changes. My change is then three lines of `firstReads_of_shown`:
+
+```lean
+  obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, rfl, -, -, hdig⟩ := VStar.Recursive.SampledTwo.inputAt_ok hi
+  -- … unchanged down to the digest …
+  have hac : after = c.digest := by
+    have hd' : Spot.Registration.digest j₁ = .ok after := hd
+    rw [hdig] at hd'
+    exact (Except.ok.inj hd').symm
+```
+
+  (`hdig` is the new conjunct, last; the two lines that read `commitment_of_caseOf` and `digestIsRecord's` go.) Not compiled: the conjunct does not exist.
+- **(b) Restate at the read-back record.** `firstDraws`, STAGECOINS's `firstDraw`, `draws₁` and my `oneRoot_first` would all name `Registration.digest j₁` in place of `c.digest`. It changes a statement in three workers' files and puts a digest in the join that is not the commitment's.
+- **(c) A named premise**, "on every accepted play the read-back record's digest is the commitment's". It is a new field of `JoinsAt` that no check gives. I would not take it while (a) is one line.
+
+**5. This loop** [run]. The machine was replaced again: it booted at 07:04:17Z with no `~/wt`. I made `~/wt/.pen` at 07:04:55Z; no other loop holds it here. I rebuilt the worktrees from the remote. Nothing was unpushed, so nothing was lost. Mailbox read at `11d5030655`: nothing after your 06:09Z. `tests/test_lean_packages.py -k import_all` passes on my head (2 passed) [run on the VM].
+
+### STOP RULE
+Kept. Nothing pushed to my branch this turn: no file, lock, lakefile or statement changed. Item 4(a) asks for a form change that only refuses more; I wrote nothing against it.
+
+### NEEDS
+1. **TWOLEG:** before you name the next head, item 4(a): the comparison, or the tag held in `readBack`, with the conjunct in `inputAt_ok`. Say which, and I adapt `CutFirst.lean` in one commit and one try on the named head. If the answer is no, say (b) or (c).
+2. **Coordinator:** (i) the seven runs of item 1 are other workers'; they will not start before 18:00Z. (ii) Where CUT's tries go until then: I use `--on auto` unless you name a place. (iii) If TWOLEG's head is named without 4(a), `firstReads θ` and `cutBound_accept` do not compile on it, and the join loses the two theorems it took in place of the fields `firstReads` and `orderShown` (`orderShown` itself is untouched).
+3. **STAGECOINS:** check `FirstCoins.lean` against item 3 before merging TWOLEG's next head; I read only your `firstDraw` and `FirstRead`.
+4. Standing from 07:03Z: `OtherRoots` (two refusals, or a field); ASSEMBLY merges `4d24802945` once `640b` passes.
+
+### To post
+Nothing.
+
+### Not established
+- That `640b` compiles the renamed files: no verdict yet.
+- The counterexample on the form's own functions: I ran only the tag's body, in Lean core.
+- That no honest play fails the comparison of 4(a): by reading only.
+- Whether any other step of the run ties `Registration.digest j₁` to `c.digest`: I found none in `inputOf`, `prepare` or `Spot.Run.run`'s coin check, and did not read every line of the run.
+- Any file of mine compiled at TWOLEG's `c9e1f9dee0` or later.
+- Everything my 07:03Z entry listed stands: `OtherRoots` at no play, `PrintsInOrder` of no device, no records run at my head, the earlier period's signature.
+
+Branch `cursor/proofs-cut-9323` at `4d24802945`, pushed; nothing unpushed. Runs: `4159` cancelled (duplicate), `4405` cancelled (could not start), `6145` done rc 0 (the slots' status), `r20261113-071814-640b` running on vy-nebius-cpu-2.
