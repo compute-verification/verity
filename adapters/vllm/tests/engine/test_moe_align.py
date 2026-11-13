@@ -80,7 +80,10 @@ def routing(rng: random.Random, rows: int, how: str) -> list[int]:
 def test_reference_is_the_definitions_schedule_keyed_by_pair_index(how):
     # MoeAlignRanks_v1 over key = ix = the pair index, then MoeAlignBlocks_v1: every pair at blk * BM + rank % BM
     np = pytest.importorskip("numpy")
-    from verity.definitions.numerics.moe_align_rows import moe_align_blocks, moe_align_ranks
+    from verity.definitions.numerics.moe_align_rows import (
+        moe_align_blocks,
+        moe_align_ranks,
+    )
 
     rng = random.Random(how)
     for rows in (1, 3, 16, 50):
@@ -158,6 +161,7 @@ def marlin_module(where: Path, name: str = "fake_marlin_moe", source: str = MARL
     path = where / f"{name}.py"
     path.write_text(source)
     spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     return m
