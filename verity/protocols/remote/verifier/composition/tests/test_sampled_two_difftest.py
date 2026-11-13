@@ -36,8 +36,8 @@ def _key(seed: int) -> dict:
     return sys.modules["test_challenger_difftest"]._ledger_session(random.Random(f"two-stage-form/{seed}"), seed=seed).key.to_json()
 
 
-def _challenged(p: dict, seed: int = 0) -> dict:
-    return {**p, "challenger": {"key": _key(seed), "label": "draw"}}
+def _challenged(p: dict, label: str, seed: int = 0) -> dict:
+    return {**p, "challenger": {"key": _key(seed), "label": label}}
 
 
 @functools.cache
@@ -45,8 +45,10 @@ def _base_text() -> str:
     c = OS._two_stage_case(0)
     it = c["interior"]
     return canonical({
-        "form": T.TWO_STAGE, "boundary": _challenged(c["params"]), "challenger": c["challenger"], "delta": c["delta"],
-        "interior": {"members": {}, "params": _challenged(it["params"]), "replay": it["replay"], "values": it["values"]},
+        "form": T.TWO_STAGE, "boundary": _challenged(c["params"], "draw/first"), "challenger": c["challenger"],
+        "delta": c["delta"],
+        "interior": {"members": {}, "params": _challenged(it["params"], "draw/second"), "replay": it["replay"],
+                     "values": it["values"]},
         "outputs": [], "public": c["public"], "rule": c["rule"], "values": c["values"]})
 
 

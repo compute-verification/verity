@@ -12,12 +12,12 @@ sessions, `LogRead`, and every log it read is the device's), at the same terms (
 
 That an accepted play is one whose logs the cut reads does not follow from the form's acceptance alone:
 
-* **The first stage's coins under the parameters' key** (`FirstReads`, a premise). The run of record's coin check
-  reads the first stage's coin evidence under the key the evidence carries, and takes no evidence where the first stage
-  read no byte (`Spot.Run.coinsHold`). The cut reads it under the parameters' key (`keyOf`, `firstDraws`,
-  `drawCoins`). So that the parameters name a key at the deployed LMS parameters, a window and a family for the first
-  stage, and that `drawCoins` under that key reads its coin evidence, is taken as a hypothesis on every accepted play.
-  It fails on a two-stage audit whose first stage reads no coin, of which the cut then says nothing.
+* **The first stage's coins under the parameters' key** (`FirstReads`, a premise here). The run of record's coin check
+  (`Spot.Run.coinsCode`) reads the first stage's coin evidence with `drawCoins` under the parameters' key, the boundary
+  registration's window and family, after its digest, as the cut does (`keyOf`, `firstDraws`), and takes `null`
+  evidence where the first stage read no byte. `CutFirst` derives `FirstReads` from the form's acceptance on every
+  play whose first stage's coin evidence is not `null` (`FirstShown`); of a two-stage audit whose first stage reads
+  no coin, the cut says nothing.
 * **The first session's log read as coin trees.** The form reads the first session's log only through `drawCoins`,
   which reads no coin tree. The device's run prints its log as coin trees (`PrintsOn`), and the log `drawCoins` read
   is that run's or the record carries a break (`Drawn.drawn_log`); so the first read exists, or a break
