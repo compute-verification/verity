@@ -13,3 +13,4 @@
 - 11:18Z a-d passed at f2bd805cd8 (05a2 8415 b7ff 216d); join branch pushed f2bd805cd8 (ff); mypy cure 392fa75023b, run p2-mypy; waiting a1b3
 - 11:31Z b8f4 mypy: my files 0@95784be (absent) 2@f2bd805 1@392fa75; second cure eee9c706ee, run p2-mypy2; a1b3 running
 - 11:38Z a1b3 done at f2bd805cd8: 42,737 checked 0 mismatches; plants 33/33 and 1/2; waiting 2b54 (mypy at eee9c706ee)
+- 11:44Z 2b54 at eee9c706ee: mypy 0 in my files, seven files 63 passed; report join6.md complete; returning

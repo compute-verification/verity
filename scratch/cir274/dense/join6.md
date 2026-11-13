@@ -118,11 +118,27 @@ Every run below is at `f2bd805cd8`, `--cwd source`, nothing patched (`status.txt
 - `node_window_select.py`: 1 error, line 130, `arg-type`. `got` keeps its `_Free` in its type on the branch where it has
   none.
 
-Neither file exists at `95784be3d25b`. The lint suite passed with the error because `test_the_list_matches_or_warns`
-turns a new error into a warning. The cure, typed rows on that branch with the same values, is `392fa75023b` on the select
-branch; it is not on the join branch.
+The lint suite passed with the error because `test_the_list_matches_or_warns` turns a new error into a warning.
 
-MYPY_RUN
+Runs `r20261113-111729-b8f4` (`--cwd clone`, checking out each commit) and `r20261113-113103-2b54` used `test_mypy.py`'s
+two groups: `verity_vllm` as configured, `tests` under `--follow-imports skip`.
+
+| commit | errors in my two files | all errors | keys over `allowlists/mypy.json` |
+|---|---|---|---|
+| `95784be3d25b` | files absent | 6,758 | 300 |
+| `f2bd805cd8` (the join's head) | 2 | 6,768 | 307 |
+| `392fa75023` | 1 | 6,767 | 306 |
+| `eee9c706ee` | 0 | 6,766 | 305 |
+
+- `f2bd805cd8`'s two errors are `node_window_select.py:130` `arg-type` and `test_node_window_select.py:48` `var-annotated`.
+  The second shows only under the tests group's `skip`.
+- `392fa75023` types the wired rows on the branch with no free row; the values are unchanged. `eee9c706ee` annotates
+  `got: np.ndarray`.
+- At `eee9c706ee`, `2b54` also ran the seven node-window files (63 passed, none xfailed), the select file (6 passed) and ruff
+  (clean).
+- From `95784be3d25b` to `eee9c706ee` the error count changes only in `tests/properties/fp8_read_back_capture_gpu.py`,
+  0 to 8. That file came in with the join's merges; this piece doesn't touch it.
+- The two cures are on the select branch only. The join branch stays at `f2bd805cd8`, the head a to d ran at.
 
 ## The value check
 
