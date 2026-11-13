@@ -14,7 +14,7 @@ it. At the deployed binding, B = 64 tokens of TOK = 18 bits (vocabularies to 2^1
 compressions (`sha512.compress_gadget`, traced with the padding's constant bytes folded).
 
 **The print.** Within a window the memories hold a key's print in its place (`key_print`): Σ_{i<4} δ^i c_i over GF(2^128)
-(`gf128`), c_i the key's 128-bit chunks (words 2i and 2i + 1, the first the low half), δ the window's live coin, drawn after
+(`gf128`), c_i the key's 128-bit chunks (words 2i and 2i + 1, the first the low half), δ the window's live coin, flipped after
 its keys are committed; three products, by Horner's rule. Two distinct keys share a print with probability at most
 3/2^128, so a window's K keys have distinct prints except with probability at most 3·K(K − 1)/2^129. BlockKey_v1 returns a
 computed key with its print; KeyPrint_v1 prints a key carried in from an earlier window.

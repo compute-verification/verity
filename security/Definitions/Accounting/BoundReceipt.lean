@@ -53,7 +53,7 @@ abbrev Mix (N a b h : ℕ) : Type := Fin N × Bits b × Bits a → Bits h
 abbrev Pub (N a b h : ℕ) : Type := Store N a × Mix N a b h
 
 /-- A window's coins: the live coins (`Verity.Coins`) with the tile outputs and the mix as their public part, and the
-`s` sampled blocks as their draw. -/
+`s` sampled blocks as their sample. -/
 abbrev Coins (N a b h s : ℕ) : Type := Verity.Coins (Pub N a b h) s N
 
 instance instFintypeCoins (N a b h s : ℕ) : Fintype (Coins N a b h s) :=
