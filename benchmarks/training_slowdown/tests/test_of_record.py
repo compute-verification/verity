@@ -201,6 +201,18 @@ def test_the_cpus_norm_is_expected_beside_plain_normalisations_the_record_has_to
         assert got["expected"] == [] and any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
 
 
+def test_the_cpus_norm_beside_plain_normalisations_with_no_backward_on_the_configs_side_is_a_difference():
+    """The record has plain normalisations and their backward's products, the config the same normalisations
+    forward with no backward (their scale detached), and the norm's: of each backward product the config's excess
+    over the record is then no whole number for each of the excess's normalisations, so the rule doesn't fire and
+    the config's step is not read as the record's."""
+    n = CTX * D
+    cuda = added(log(*BOTH, ("fwd", "updated", "_fused_rms_norm", [X, G], 3, 3 * n)), log(*norms(0, 0, 2)[2:]))
+    detached = added(log(*BOTH, *norms(3, 2, 5)), log(("fwd", "act", "mul", [X, S], 2, 2 * n)))
+    got = of_record.compare(step(detached), step(cuda), SHAPE)
+    assert got["expected"] == [] and any("fwd/updated _fused_rms_norm" in d for d in got["differences"])
+
+
 def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_has_nothing_of_it():
     """A step that trains no gain: CUDA's counter is shown nothing of the fused kernel, so the record has no entry of
     the norm, and the CPU's side has every gain's multiply as θ's. Expected, with one normalisation a gain; not where
