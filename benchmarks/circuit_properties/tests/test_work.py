@@ -8,7 +8,7 @@ row holding a NaN, rows of one value that are inf there, or a specific operand o
 premise held as facts; a lookup
 whose table is the registered one or the loop's own; a Program with no scan; one array times itself; two
 activations; the largest set of arrays a work multiplies pairwise; a weight decoded from a ternary code; a one-hot
-row; a rank-4 bottleneck between two carried weights; each operand's β at min(16, β(k)); and |C| in Boolean gates."""
+row; a rank-4 bottleneck between two carried weights; what the point's walk holds after a pass; each operand's β at min(16, β(k)); and |C| in Boolean gates."""
 
 from __future__ import annotations
 
@@ -901,6 +901,63 @@ def test_the_point_is_sampled_once_a_program_and_read_at_every_k():
     finally:
         PT.Walk.run = real
     assert len(runs) == 1
+
+
+#: the words a strided take reads in the walk's memory test: an index of them is 8 * WIDE bytes
+WIDE = 8192
+
+
+def _strided_takes(positions: int) -> Program:
+    """`carried_loop` beside a wide carried array that each of ``positions`` rows of an input is added to, the row
+    repeated to the array's length by a `Strided` reference of its own base: the takes an embedding's gradient makes
+    at each of its batch times ctx token positions, each as wide as the table."""
+    e_t = Array(WIDE, F32)
+
+    def step(B, c, z, h):
+        w, g, u, e = c
+        r = h.refs
+        for pos in range(positions):
+            row = Coll(e_t, Strided(r.space, r.idx, r.base + pos * K, K, 0, 1, WIDE))
+            e = B.batch(P.F32Add, e, row, axes=(0, 0))
+        return (*(_add(B, a, z) for a in (w, g, u)), e), B.call(LIN, _mul(B, u, g), w)
+
+    return _loop(f"Strided{positions}", (("w", W_T), ("g", X_T), ("u", X_T), ("e", e_t)),
+                 (("z", X_T), ("h", Array(positions, X_T))), Y_T, step)
+
+
+def _left_by_a_pass(p: Program) -> int:
+    """The bytes a pass leaves allocated while its walk lives (tracemalloc, which counts numpy's arrays)."""
+    import gc
+    import tracemalloc
+
+    from verity.circuits.codec import program_digest
+    _w, R, root, reasons = WK._read(p, KB, WK.PRODUCTS, WK.LOOKUPS)
+    walk = PT.Walk(p, R, root, PT.claims(R, root, reasons), program_digest(p))
+    gc.collect()
+    tracing = tracemalloc.is_tracing()
+    if not tracing:
+        tracemalloc.start()
+    try:
+        before = tracemalloc.get_traced_memory()[0]
+        tally = walk.run()
+        gc.collect()
+        left = tracemalloc.get_traced_memory()[0] - before
+    finally:
+        if not tracing:
+            tracemalloc.stop()
+    assert tally.claims == 2 and not tally.unrun
+    return left
+
+
+def test_what_the_walk_holds_does_not_grow_with_its_strided_takes():
+    """At four times the token positions, each with a `Strided` take of its own base, a pass leaves less than one
+    take's index more: nothing the walk keeps is a take's size, so its memory is not the count of its takes. An
+    index kept for each take would leave 12 more of them. A pass runs first, so what the first pass of a process
+    loads is in neither reading."""
+    few, many = 4, 16
+    _left_by_a_pass(_strided_takes(few))
+    left = [_left_by_a_pass(_strided_takes(n)) for n in (few, many)]
+    assert left[1] - left[0] < 8 * WIDE, left
 
 
 def test_the_product_kernel_is_the_products_body():

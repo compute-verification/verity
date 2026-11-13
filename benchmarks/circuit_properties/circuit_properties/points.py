@@ -29,7 +29,9 @@ an array beside its own view is one array. A batch's members are lanes; a scan r
 distinct contexts, the first of each, and a scan whose contexts repeat before its last iteration leaves its outputs
 unevaluated: a claim that reads them is refused with the scan named. Inside a product, which the reader doesn't
 summarize, every scan runs whole. The pass is about one evaluation of the step, where the reading is in the
-description's size; one pass a Program, memoized by its digest.
+description's size; one pass a Program, memoized by its digest. The walk holds the values a later node still reads
+and, a Definition, its nodes' last readers (`Walk._last`): no array outlives its last reader, and nothing the walk
+keeps grows with the takes it makes.
 
 Each primitive is computed by a numpy twin (`TWINS`), by the kernel `verity.circuits.evaluation.batch` registers,
 or else by the reference a word at a time (`Tally.reference`), and a `DotRef` or an f32 `LinearRef` without a bias
@@ -303,7 +305,6 @@ class Walk:
                      for sid, nodes in cl.items() for node, cs in nodes.items() for i, _n, K in cs)
         self.tally.points = self.P
         self.last: dict = {}
-        self.index: dict = {}
 
     def inputs(self) -> dict:
         """The point: each input node's words at each point, (points, leaves), by ("n", node)."""
@@ -335,7 +336,7 @@ class Walk:
         """The value ``refs`` read, (lanes, count)."""
         if isinstance(refs, (Affine, Strided)):
             v, g = env[refs.space, refs.idx]
-            at = slice(refs.base, refs.base + refs.count) if isinstance(refs, Affine) else self._strided(refs)
+            at = slice(refs.base, refs.base + refs.count) if isinstance(refs, Affine) else _strided(refs)
             return v[:, at], None if g is None else g[:, at]
         if isinstance(refs, Concat):
             parts = [self.take(p, env, L) for p in refs.parts if p.count]
@@ -352,13 +353,6 @@ class Walk:
                 gone = np.zeros(out.shape, np.int32) if gone is None else gone
                 gone[:, j] = g[:, leaf]
         return out, gone
-
-    def _strided(self, r) -> np.ndarray:
-        key = (r.base, r.inner, r.outer_stride, r.inner_stride, r.count)
-        if key not in self.index:
-            j = np.arange(r.count)
-            self.index[key] = r.base + (j // r.inner) * r.outer_stride + (j % r.inner) * r.inner_stride
-        return self.index[key]
 
     def _last(self, fn) -> dict:
         """Each node's last reader in ``fn``'s body (None: the body returns it)."""
@@ -557,6 +551,13 @@ def _rows_of(fn) -> int | None:
     if defn.name == "LinearRef" and st.get("DT") == "f32" and st.get("BIAS") is False:
         return st["N"]
     return None
+
+
+def _strided(r) -> np.ndarray:
+    """The leaves a `Strided` reads, in its order. Built at each take and kept by nothing: an index is as large as
+    the take's own words, and one kept for each take would make the walk's memory the count of its takes."""
+    j = np.arange(r.count)
+    return r.base + (j // r.inner) * r.outer_stride + (j % r.inner) * r.inner_stride
 
 
 def _sources(refs) -> set:
