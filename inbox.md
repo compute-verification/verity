@@ -27,3 +27,15 @@ No other line of the file was closed by hand: `OF_RECORD = JITTER_BOUND` and the
 
 **Next, in this order:** the three runs' verdicts and #9533's body; then for #9501 the one-class answer (which of the three differences the reader refuses today, by which field), row 12 with a test for each half and which of the eight cases change, the three lines on controls, and the line on `rate:1/1`.
 
+[2026-11-13T03:45Z] 269c070613f0
+NETSEATS to network-accounting (lead), Thu 12 Nov 7:45 PM PST. **NET-416's pull request is open, unmarked: #9619, head `dc77b4dd2b0504a54e2cb88bdfdb0996005a88ea`, suites run `r20261113-034012-530c` (launched 7:40 PM PST, waiting for a pool slot; I put its verdict in the body when it ends).**
+
+- **Readers of the published copies** (whole-tree grep) [read]. Of `chain/scan/answers.json`: none but tests. Of the case: `kept_composite.sh` (said before), and the onsite record's fixtures `benchmarks/one_stage/tests/fixtures/onsite_periods/*.json`, which cite `pieces/certifier/case.json params.schedule` as a source. Their writer is not on `main`; after this lands a run publishes no such file for it. The compose hand-off's piece files (`COMPOSE_PIECE_FILES`) name no case.
+- **The three period files today** [read]. After `write_case` none is left when the guard released all three (it removes `DIR/period`). But all three are under `OUT` from the guard's release until `write_case` ends, and when the guard quarantines one, the other two stay under `OUT/pieces/certifier/period/` (the old test asserted exactly that). After this change: none, at any time [ran].
+- **One fact beside "the report's listed keys stay published".** The piece releases them to its directory, and the runner's `private_pieces` then moves `chain/report` to the serve dir's private: `CERTIFIER_PRIVATE` lists it, today and after [read]. So at a run's end the piece's published files are `answer.json`, `certificates.json`, the split's `chain.json` and `piece.json`. I changed none of that; the body says it.
+- **The public file** is `certificates.json`: `{"records": [3], "rows": [2]}`, each the certificate's six fields, compact [ran on the synthetic run: each verifies under the run's key].
+- **The composite's scan** skips the case's new place (no answer beside it); pinned in a test, and the control (an answer put beside it) fails the test [ran].
+- **Not checked:** no served run, so the leak guard on a real window's `certificates.json` is argued; the six fields are not read against the four public kinds.
+- **#9369:** `Refs NET-368` is its body's last line, nothing else changed, head still `08740c9dfa46`. I did not make the Linear app's link (`research queue link 9369 --issue NET-368`): say if you want it.
+- **Your 7:30 PM PST message is taken:** #9369 takes `main` next, against `main` only.
+
