@@ -139301,3 +139301,42 @@ In all `[derived]`: 96 suites, 95 passed, 1 failed, 0 not ended; 49,364 tests pa
 - `wiresChecked`, and `wiresUnlinked` after it: a premise, computed by no check.
 
 **Runs out:** `r20261113-115115-3623` (records at `e9346a9e70`, vy-nebius-cpu-1), 12:40Z [guess]. **Timer:** one, for it. **Next entry:** its verdict, with every line its audit reports besides the two `escapes` lines.
+
+## STAGECOINS, Fri 11:56Z: `a013df7279` COMPILES for ASSEMBLY (`INTERIOR_DIGEST` in the form, `sessionMatches_of` proved); a fresh honest play is accepted at it; the kept plays are refused at the join's tip itself, by `second-inputs`, not by the new check
+
+My head `a013df7279`, on `cursor/proofs-stagecoins-record2-71b1`, is one commit on the join's tip `701559cfdc`. It compiles, and the probe is clean. It writes the second stage's digest comparison in the form and proves the join's `sessionMatches` from it. A fresh honest play is accepted at this head. The kept plays from `241e` are refused, but they are refused the same way at the join's tip without my commit. The refusal is the interior statement check's `second-inputs` code, which the run of record reaches after the new check has passed. So the stop rule is not met.
+
+- **Compile** [run `r20261113-110318-e827`, vy-nebius-cpu-3, rc 0, at `a013df7279`]:
+  - `lean_changed.py --try StageAlone.lean --siblings`: `lean exit 0 in 316 s`.
+  - It rebuilt `VStarRecursive.SampledTwo` (the new `#guard`s run there) and `Steps`.
+  - Siblings: no clash.
+  - The axiom probe says none of `StageAlone`'s 14 theorems uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound`; that covers `sessionMatches_of`, `secondAlone_of_sent` and `firstDrawn_of`.
+  - Then `--build` of the sixteen modules of `SampledTwo/` that nothing imports (`AcceptsOfSteps`, `StageCoins`, `JoinedForm`, `Shown` and the rest): `Build completed successfully (11910 jobs)`, exit 0.
+  - No `sorry` in our files; the two `sorry` warnings are ArkLib's own.
+- **For ASSEMBLY** [derived]: the join's field `sessionMatches : SessionMatches (goodCase C JoinGood)` is `sessionMatches_goodCase (sessionMatches_of C hC)`, from `CaseIsSent C`. So the field can leave `JoinsAt`, as `firstDrawn` did. I did not touch `JoinsAt`.
+- **What changed** [read: my commit]:
+  - The form: `INTERIOR_DIGEST` and `interiorDigestIs`; one line in `inputAt`, `interiorDigestIs e.record j₂ c₂.digest`, after `readBack e.record`; three `#guard`s; the module docstring's step 4.
+  - The mirror: one docstring line in the difftest's `sampled_two.py`.
+  - `Steps`: `interiorDigestIs_ok` and `inputAt_interior` are new; `inputAt_ok`'s proof takes the new step, and its statement is unchanged.
+  - `AcceptsOfSteps`: `interiorDigestIs_of` is new; `inputAt_of_steps` gains two digest hypotheses, and nothing outside its file uses it.
+  - `StageAlone`: `sessionMatches_of` and `secondAlone_of_sent` are new.
+- **A fresh honest play is accepted** [run `r20261113-114033-7c7e`, vy-nebius-cpu-9, rc 0, at `a013df7279`]:
+  - The run: `sampled_two_small.sh` with `SMALL_ARGS='--inline --units 1 --logits'`, an interior of one member (`GreedyCombine_v2{V=128,N=128}`, n 8).
+  - `ROUND_TWO ok`.
+  - `FORM_ON rc=0`: accepted with the switch on, public `{"bound": 2, "drawn": [1, 5], "proved": [1, 5]}`.
+  - `FORM_OFF rc=1`: refused by the shipped switch.
+  - `FORM_TREE rc=1`: the negative play is refused by `FIRST_TREE`.
+- **The kept plays are refused, at my head and at the join's tip alike** [run `r20261113-111751-ae62` at `a013df7279`; run `r20261113-112829-e535` at `701559cfdc`; both vy-nebius-cpu-9, rc 1]:
+  - Both runs replayed `241e`'s kept case (`art:d63a5946…`, commitment `2a24eca4…`) and `241e`'s fresh play's case (its run record's `out/form`, commitment `c4358eca…`), plus the script's default play, which registers `logits`.
+  - In both runs, all three are refused with the reason "two-stage: the run of record: …": the boundary audit is accepted, and the interior audit's `statements` check fails on `second-inputs`, value `logits` ("the interior registration registers a value that is neither one the verifier holds … nor the opened row of a read the auditor's params record …").
+  - `241e` accepted both at `9425ffd35b`, which is `1e20910586` plus MESSAGES's one commit, outside the join. So something the join merged since `1e20910586` refuses an interior that registers `logits`. [guess] It is `4f52809539`, "The model's statement check runs round 2's second-inputs", in `Spot/SecondStage.lean`. I have not bisected it.
+  - [derived] At my head the new check passed on all three plays. A refusal by it would carry `INTERIOR_DIGEST`'s own reason, and the run of record is reached only after `inputAt` returns.
+- **Lock records** [read: every `lean-audit.json`]: none names a declaration of the two-stage form, so I expect none to move. I have not run a records run.
+
+STOP RULE: not met. No honest play was refused by `INTERIOR_DIGEST`.
+
+NEEDS: whoever owns the join's honest plays should know that the kept `241e` cases, and any play that registers `logits`, are refused at the join's tip `701559cfdc` by `second-inputs`. The `--logits` play is accepted there and at my head.
+
+To post: nothing. Head pushed: `a013df7279`; nothing unpushed. No run of mine is going on. Every theorem over the form's accept is true and empty until #9555 is merged and TWOLEG's honest play is accepted in a test.
+
+Not established: which join merge brought the `second-inputs` refusal of the kept cases; that no lock record moves (no records run); the `--logits` play at the join's tip without my commit (not run).
