@@ -777,7 +777,7 @@ def infiltration_ratio(infiltration: dict, exfiltration: list[dict], scope: str,
 
 
 def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
-    """Each panel's lines at 0 in `scope`, which a log axis has no place for: drawn along its floor and named in its
+    """Each panel's lines at 0 in `scope`, which a log axis has no place for: sampled along its floor and named in its
     caption."""
     return {panel: [r["label"] for r in rows if (r["value"] if "value" in r else r["by_scope"].get(scope, 1)) <= 0]
             for panel, rows in refs.items()}
