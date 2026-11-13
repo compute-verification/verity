@@ -121038,3 +121038,33 @@ Not established:
 NEEDS: FRAME merges `85dd57e03fcf` into `cursor/proofs-frame-l1-9c4e`, so the line's `OutputsWritten.lean` is the one that compiles.
 
 I wait on nothing. I have no piece left; I end my turn, and your next word resumes me. Two things I can take if you want them: the clause decided on the 20 files once GATHER keeps them, and any per-template fact of FRAME's `wiresMove` that should read `outputsWritten_at_port`.
+
+## ACCOUNTS, Fri 13 Nov 04:59Z: #9593's head moved to `404624bc1b22`: `main` gained a conflict with it in one test file after my 03:24Z merge, so I merged `main` (`fa0877afdc12`) once more. No Lean input changed in between, so the records run stands; its `security` half passed, its properties half is auditing. The 16 suites rerun at the new head; the ready line follows them
+
+**To act on:** nothing yet. One thing to know: `main` moves faster than a records run. If it gains another conflict with this branch before you mark, I merge again; a merge that changes no Lean input needs only the suites again.
+
+**Why a second merge** [run]
+
+- `main` went from `1e4d5c993c08` to `fa0877afdc12` between 03:24Z and 04:54Z (17 pull requests).
+- One of them changed `benchmarks/certifier_term/tests/test_result.py`, which this branch changes too. `git merge-tree` at 04:56Z: conflict in that file. A head that conflicts with `main` cannot land, so a ready line on `eeef8331792a` would have been of no use.
+- The conflict, resolved by keeping both sides: `main` added the card's figure beside the term of record (its names, the count of measurements, one bullet of the docstring); this branch reads a registered link's rate in bits a second (the word "seconds", the two rates). No line was dropped from either side. `run.py` and the README merged by themselves. The file parses and `ruff` passes; the suite's verdict is the test.
+- No path move: no commit on `main` has a `Layout-move:` or `Move:` line, and `tools/move/restack.py --dry-run` says "no move to cross: merge origin/main as usual".
+
+**Why the records run still stands** [run] `git diff --name-only 1e4d5c993c08 fa0877afdc12`, 113 files: no `.lean` file, no lakefile, no manifest, no toolchain file, no `lean-audit.json`, no `unread-caps.json`. And the new head against `eeef8331792a`: no such file differs. So every Lean input at `404624bc1b22` is the one the records run read. [derived] What did change is the runner (14 files under `tools/verity/lean`); the candidate's own records run uses it.
+
+**Runs**
+
+| Run | What | At | Verdict or state | Tag |
+|---|---|---|---|---|
+| `r20261113-032506-d8fc` | records | `eeef8331792a` | `security`: PASS, 27,883 declarations in 730 modules, 1137 guarantees. `security/Proofs`: PASS, 204,340 declarations in 4051 modules. `check.py` exit 0 in 2684 s. `security/Properties`: built by 04:48Z, auditing at 04:58Z | [run] |
+| `r20261113-045754-3d19` | the 16 suites, `--quick`, vy-nebius-2 | `404624bc1b22` | launched 04:57Z, in line | [run] |
+| `r20261113-032506-f3bd` | the 16 suites | `eeef8331792a` | exit 0, 16 of 16 (my 04:02Z entry) | [run] |
+| `r20261113-032911-eac0` | build of the eleven Lean files | `eeef8331792a` | exit 0 (my 04:02Z entry) | [run] |
+
+**The main lock's regenerated record** [run]: equal to the tree's in every section as JSON. As text it differs in two lines, the order of three keys inside one entry of `shape.inline` (a NetTiming guarantee, not mine; the merge driver's order against the tool's). I commit the record over the tree's with the properties lock's, as the skill says. Against `main`'s it differs as before: `reads` of `Definitions.Core.Site` (`Verity.Site.Link` and `Verity.Site.Loc` changed, `Verity.Site.Kind.auditorHost` new), read by 136 guarantees (99 `Nci`, 18 `Accounting`, 18 `Verity`, 1 `Flock`), and the order of one list. My 03:31Z [guess] that the records run restores `main`'s order there was wrong: it keeps the branch's order. Same items.
+
+**Then:** read the properties half; commit both records (a commit that changes the two locks alone); read the suites; bring #9593's body up to date; the ready line.
+
+**Not mine, for your knowledge:** between 04:04Z and 04:06Z about fifteen of your own notices were delivered to my conversation and not, as far as I can see, to yours: your timers `proofs-1552Z-prf589-opened`, `proofs-1650Z-prf589-read`, `proofs-1905z-marks`, `proofs-1955z-runs`, `proofs-2015z-posts`, `proofs-2108z-daniel-answers`, `two-round-2-25pm-pst`, `proofs-2250z-board`, `board-3pm-pst`, `history-launch-retry`, `launch-retry-2355z`, `gather-five-facts-0030z`, `history-try-4d04`, two firings of `proofs-sweep-30m-v42` (01:30Z, 02:00Z), and five Slack events of #agent-coordination from 02:05Z to 02:09Z. [read] I acted on none. All were hours old when they came.
+
+**Not established:** the properties half of the records run; the suites at `404624bc1b22`; the whole `check` and the kernel replay. Mailbox read at 04:59Z: 355 lines, nothing new.
