@@ -127115,3 +127115,44 @@ In plain words. My last entry named six runs on `vy-nebius-cpu-12` and said when
 - **First rows, k = 8192, n = 8192, Gaussian fill, three salts, whole 64 × 64 tiles formed, admitted, checked and held to the tile rule by the scheme's own code** [run: `r20261113-071508-7f29`]: on each of the three tiles `admissible` is true, `clear_work.check_opened` returns no failure (the per-row rules and the inert-work bound on the tile and on every row pass), both programs' words equal the scheme's on 4,096 of 4,096, and the scalar chain agrees with the scheme's words on 64 of 64. The one-atom program runs 196 of 256 atoms and costs 8,757.4 units a word; the skip-only program runs 216 and costs 9,397.4; the credit is 10,432 and the bound 10,379.9, so the event fires for both on all three. The replayed debit is 9,600 to 10,320 units against the tile's cap of 106,824, and none of the 144 to 162 flagged atoms is in a planted group. These are the figures the census's forming gave at this shape in review 1, now on the scheme's forming and under its deployed rule.
 
 Not established: the k = 16,384 and k = 65,536 rows, which are running. Mailbox read 07:19Z: nothing after the coordinator's 06:58Z message.
+
+## SERVEDCARD, Fri 13 Nov 07:21Z: `EmbeddingRead_v1` prove step on `cursor/prove-time-tmpl-unit-6e08` (`ae27e4331fe1`), CPU check `r20261113-072008-025f` launched; the 06:29Z figures read neither column
+
+**Item 3: no figure posted at 06:29Z reads `gpu_util_mean_pct` or `session_s`.**
+- [run] "The median was 0.58 s to 1.51 s a statement" is each statement's `prove_total_s`. That is the median over its four timed sessions of the prover's own `prove_total_s`, the timer in the prover's session line. Recomputed from the three runs' `prove.tsv`: 0.576 s (`Fp8GroupQuantUe8m0_v2{K=2048}`) to 1.507 s (`MoeExpertFp8ReadGemm_v1` and `ScaledMm…{K=2048}`). For each of the 34 statements it equals the median of its `prove_total_all_s[1:]`. `session_s` spans 0.349 s to 1.313 s and enters neither number.
+- [run] 96.71% is the sum of `bench-rows.tsv`'s shares for the 34 types timed (ranks 1 to 12, 14 to 29, 31 to 36).
+- [read] A type counts as timed when `prove_time.py` gives it a time: exit 0, every session accepted, and the asked number of timed sessions. Neither column enters that rule.
+
+**Item 1, done:** the rehearsal's cross-check is at the top of `inbox/overhead-run/for-benchmarks.md` (`f3d75bcd6b`), under a new Moves line.
+- [run] It records `BatchedGemm_v2{B=1,K=512,…}@full`: restaged in 76 s at 2.89 GiB, pin equal; `l0004-1159772` accepted in 6.822 s at 0.542 GiB, with the verifier's label word for word.
+- [run] The run was cancelled at 07:05:57Z. The head block's restage had started at 06:42:03Z, single-core. My last reading was 99.7 GB RSS at 566 s; it was stopped about 24 minutes in, with no verdict.
+
+**Item 2: the prove-step change.** Branch `cursor/prove-time-tmpl-unit-6e08`, head `ae27e4331fe1`, one commit on `main` `2e99b1cf48`.
+- In `benchmarks/served_units/prove_time.sh`:
+  - [read] The stage step places a templated statement's unit: `flock-tmpl-unit unit.tmpl --layout <unit.layout> --out unit.placed`. This runs outside any lease, and also for a statement staged earlier without it. `flock-tmpl-unit` is built once per Lean source as `pod/90-tmpl-unit.sh` builds it, or comes from `PT_TMPL_UNIT`.
+  - [read] The prove step passes `--tmpl-unit unit.placed` to both `serve` and `prove`. It refuses a templated statement without `unit.placed` before any session, writing exit 1 and done. Flat statements get nothing new.
+- [run] `tests/test_tmpl_unit.py` (6 tests) runs the script's own functions against stubs of `stage.py`, `flock-tmpl-unit` and `flock-circuit`. It and `test_names.py` pass here, 12 of 12. With `--tmpl-unit` dropped from the prove line, the test for it fails, as it should. Ruff is clean.
+- [read] On node A, `/dev/shm` is mounted noexec. So the retry's stage job must hand `PT_TMPL_UNIT` a build on disk, as `stage-job.sh` already does for the prover and its venv.
+
+**The CPU check,** `r20261113-072008-025f`:
+- [run] It runs on vy-nebius-cpu-4's research pool, from the branch's tree, with `--mem-gb 32 --cpus 16`. Its job script is `tmpl-check.sh` in the lane's notes. It was due to start about 07:24Z.
+- What it runs:
+  1. It builds `flock-verify` and `flock-read-tmpl`.
+  2. It runs `prove_time.sh STEPS="build stage prove" PT_DEVICE=cpu` on `EmbeddingRead_v1{V=256,H=4}@2` and `{V=256,H=96}@2`: five sessions each, so ten in all, with H=96 staged for the first time.
+  3. It runs Flock's Lean verifier once on every session.
+- [read] Why 32 GB: H=4 at full staged at a 4.9 GB peak on node A last night. The CPU prover's build is unmeasured here, a guess under 32 GB.
+- [guess] Its end is about 08:15Z, most of it the CPU prover's build. Its last line is `done: A accepted of 10 sessions`.
+
+**Scope of the Lean check's change:**
+- [read] What Lean asks of a templated statement: its check, `ProvedScope.scopeOkT`, wants hidden outputs, `--zk`, at most one table, one input group, no tail stage, and a unit of at most \(2^{32}\) rows. It reads no partition and no Program.
+- [read] What `lean_verify.py` (`verity bench prove lean-verify`) does with them: it hands over a partition or program file only when the statement's directory holds one. A partition is held to the rule the circuit binds, and withheld under the provisional unit cover.
+- So "passing `--partition` and `--program`" is not what's missing. Two things are, both in `lean-shard.sh`, about ten lines:
+  1. Its restage reads `stage.json`'s `word`, which a read's `stage.json` does not have (it names `definition`). The restage would stop at `program-word.json`. For a read, it writes no program file.
+  2. Its verify passes no `--statement`, so the verifier would set up `verity/flock-circuit`, not `verity/flock-circuit/tmpl`. It takes the id from `stage.json`'s `statement.id`.
+- [read] The verifier reads the template from the circuit, so `unit.placed` is the prover's alone.
+- [run, pending] The CPU check runs exactly this verify on its ten sessions: `--statement` from `stage.json`, no program or partition file. Its `lean.tsv` says whether the Lean verdict is within reach and under which label. `meta.tsv` gives each statement's id and partition rule.
+- [guess] Benchmarks' own Lean leg needs the same two things for these types, in whatever tool it uses.
+
+**INF-782** [run]: no job script of mine and no `prove_time.sh` sets `ulimit`. Nothing of mine is waiting or running with it.
+
+For the table: 06:29Z figures stand (medians from the prover's timer; 96.71% from the ranked shares); `EmbeddingRead_v1` CPU check `r20261113-072008-025f`, about 08:15Z.
