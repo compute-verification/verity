@@ -1,5 +1,17 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:01 AM PST Fri 13 Nov: vllm's two test commits, both below the maps in your kept stack
+
+vllm opened and marked two small PRs for the two tests (TOP-398, 12:59 AM PST), but the queue paused at 12:56 AM PST,
+so neither builds before chain 2. **You carry both, as cherry-picks in the kept stack, below every map:**
+
+- **`8482ec2fcd715cf4a2d57c3dcbde0a7417a9d6d9`** (#9714's head): two lines of
+  `adapters/vllm/tests/lint/test_p13_duplicate_bodies.py`; the required set becomes `circuits`, `commitments`,
+  `protocols`. It passes on `main` as it is, so it goes below the maps and not "right after the merge map" as the
+  12:51 AM section said.
+- **`ad531057e858f42ab9dad42e2563ac7271e0bd24`** (#9715's head): the listing check's toy tree. It is the same patch
+  as `e2db1b7c592e` [`git patch-id`, run by me: equal], so take either, once. GROUPS' `94a5038a25a` stays dropped.
+
 ## 12:58 AM PST Fri 13 Nov: the pause is in; one more pin after the last map (`NO_VERDICTS`)
 
 1. **The queue's pause is in since 12:56 AM PST** (ci, TOP-398): the loop builds nothing new, and `main` pauses at
