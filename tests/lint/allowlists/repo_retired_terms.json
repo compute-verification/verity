@@ -2309,7 +2309,7 @@
     {"file": "security/Proofs/NetworkCertifier/PerWindow.lean", "count": 4},
     {"file": "security/Proofs/NetworkCertifier/Period.lean", "count": 13},
     {"file": "security/Proofs/NetworkCertifier/PeriodSum.lean", "count": 1},
-    {"file": "security/Proofs/NetworkCertifier/Pooled.lean", "count": 4},
+    {"file": "security/Proofs/NetworkCertifier/Pooled.lean", "count": 22},
     {"file": "security/Proofs/NetworkCertifier/PooledLeak.lean", "count": 13},
     {"file": "security/Proofs/NetworkCertifier/README.md", "count": 40},
     {"file": "security/Proofs/NetworkCertifier/RecordRows.lean", "count": 33},
