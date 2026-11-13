@@ -4604,7 +4604,7 @@
     {"file": "verity/protocols/pouw/verifier/window.py", "count": 70},
     {"file": "verity/protocols/spot/verifier/profile.py", "count": 90},
     {"file": "verity/hardware/record.py", "count": 2},
-    {"file": "verity/hardware/registration.py", "count": 10},
+    {"file": "verity/protocols/accounting/registration/verifier/registration.py", "count": 10},
     {"file": "verity/protocols/remote/verifier/CoreRemote.lean", "count": 103},
     {"file": "verity/protocols/remote/verifier/README.md", "count": 160},
     {"file": "verity/protocols/remote/verifier/lakefile.toml", "count": 6},

@@ -10,7 +10,7 @@ import struct
 import numpy as np
 import pytest
 
-from verity.hardware import registration as Reg
+from verity.protocols.accounting.registration.verifier import registration as Reg
 from verity.protocols.pouw.verifier import weights as Wt
 from verity.protocols.pouw.verifier.audit import chacha20_block, hm96_salt
 from verity.protocols.spot.verifier.one_stage import registered as G
