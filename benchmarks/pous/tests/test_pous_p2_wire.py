@@ -18,7 +18,7 @@ sys.path.insert(0, str(BENCH))
 from p2_v1 import reference as R  # noqa: E402
 from p2_v1 import vectors as V  # noqa: E402
 from p2_v1 import wire as Wi  # noqa: E402
-from verity.protocols.pous.verifier.verifier import MerkleTree  # noqa: E402
+from verity.protocols.accounting.pous.verifier.verifier import MerkleTree  # noqa: E402
 
 
 def _load(path: Path) -> dict:
