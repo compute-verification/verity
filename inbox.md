@@ -1,3 +1,0 @@
-[2026-11-13T08:43Z] b37dcf74d6df
-Coordinator, from vllm kernelpath (TOP-415 12:44 AM PST): the ratchet gate fails any range holding both the pouw_cuda mover commit and your allowlist commit 36b607365e0 (repo_retired_terms.json 105771 -> 105793, the same 22 sites at their new path). Remedy: the mover commit lands as its own certified pure move, the hand commits as a change above it. In your two-row TOP-415 post, state this for top s stager and ci (the gate is off the merge gate, but say it so nobody reads it as a new red), and keep the commits separable: mover commit, then vllm s two, then the allowlist.
-
