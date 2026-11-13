@@ -23,10 +23,11 @@ judged either: the notes' `main`, which every agent's `research notes sync` push
 repository, a scratch clone. The URL can hold a token, so nothing prints it.
 
 A judged push is refused, too, when it adds a commit whose author or committer is not the checkout's configured identity
-(`authors_reason`): `git config user.name` and `git config user.email` as git reads them where the push runs, less what the
-push's own command line sets (`git -c user.name=NAME push`). Git takes a commit's names from its environment before its
-configuration, so a name a script exported, a shell held or a tool gave reaches a commit whoever typed it, and this hook
-reads the commits themselves. A push adds what the remote lacks as the checkout knows it: for each line git hands the
+(`authors_reason`): `git config user.name` and `git config user.email` as git's configuration files give them where the
+push runs, and not as the push's own command line or environment sets them (`git -c user.name=NAME push`, a
+`GIT_CONFIG_COUNT`). Git takes a commit's names from its environment before its configuration, so a name a script
+exported, a shell held or a tool gave reaches a commit whoever typed it, and this hook reads the commits themselves. A
+push adds what the remote lacks as the checkout knows it: for each line git hands the
 hook, the commits reachable from its local sha and from no remote-tracking ref of that remote (`refs/remotes/REMOTE/`),
 nor from the remote sha any line gives. A merge of the remote's `main` or of a branch another agent pushed adds the merge
 alone, a new branch is held to what it adds to the remote's other branches, and a deletion adds nothing; a push that names
@@ -80,10 +81,14 @@ def git(*args: str, env: dict[str, str]) -> str | None:
 
 def identity(env: dict[str, str]) -> str | None:
     """The checkout's configured identity as a commit carries it, `NAME <ADDRESS>`, or None where it has no name or no
-    address: `user.name` and `user.email` as git reads them here, less a `-c` of the push's own command line, which git
-    hands its hook in GIT_CONFIG_PARAMETERS."""
-    own = {k: v for k, v in env.items() if k != "GIT_CONFIG_PARAMETERS"}
-    name, address = ((git("config", "--get", key, env=own) or "").strip() for key in ("user.name", "user.email"))
+    address: `user.name` and `user.email` as git's configuration files give them here. A value of the scope git calls the
+    command's (a `-c` of the push's own command line, a `GIT_CONFIG_COUNT` in its environment) is not the checkout's."""
+    found = []
+    for key in ("user.name", "user.email"):
+        rows = (git("config", "--show-scope", "--get-all", key, env=env) or "").split("\n")
+        files = [value.strip() for scope, _, value in (row.partition("\t") for row in rows) if scope not in ("", "command")]
+        found.append(files[-1] if files else "")
+    name, address = found
     return f"{name} <{address}>" if name and address else None
 
 
@@ -102,7 +107,7 @@ def authors_reason(remote: str, lines: list[str], env: dict[str, str]) -> str | 
         if listed is None:
             return (f"git could not list the commits this push adds (it failed, or took more than {GIT_S} s), so they can't "
                     f"be held to this checkout's identity. Push again; after `git fetch {there}` it has fewer to list.")
-        for row in listed.splitlines():
+        for row in listed.split("\n"):
             sha, _, names = row.partition("\0")                                       # rev-list's own `commit SHA` lines have none
             if names:
                 author, _, committer = names.partition("\0")

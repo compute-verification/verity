@@ -430,11 +430,18 @@ def test_a_push_whose_commits_git_cannot_list_is_refused(tmp_path):
     assert hook(VERITY[0], f"(delete) {ZERO} refs/heads/x {B}", tmp=tmp_path, GIT_DIR=str(tmp_path / "no-repository")).returncode == 0
 
 
-def test_a_name_given_on_the_pushs_own_command_line_is_not_the_checkouts(vm):
-    """A wrapper that puts `-c user.name=...` on every git of a script puts it on the push too."""
+def test_a_name_given_on_a_command_line_or_in_the_environments_configuration_is_not_the_checkouts(vm):
+    """A wrapper that puts `-c user.name=...` on every git of a script puts it on the push too, and a script that exports a
+    configuration (GIT_CONFIG_COUNT) leaves it in the shell that commits and pushes: neither is what the checkout's files
+    hold."""
     sha = vm.commit("another's", **TRIAL)
     p = vm.shell("git -c user.name=trial -c user.email=trial@invalid push origin HEAD:refs/heads/mine")
     assert p.returncode != 0 and f"{sha[:12]} {AS_TRIAL}." in p.stderr and f"this checkout's identity, {OWN}," in p.stderr
+    vm.git("switch", "-q", "-c", "other", "main")
+    p = vm.shell("export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0=trial GIT_CONFIG_KEY_1=user.email "
+                 "GIT_CONFIG_VALUE_1=trial@invalid\ngit commit -q --allow-empty -m one\ngit push origin HEAD:refs/heads/other\n")
+    assert vm.who("-1") == {"trial <trial@invalid> | trial <trial@invalid>"}
+    assert p.returncode != 0 and AS_TRIAL in p.stderr and f"this checkout's identity, {OWN}," in p.stderr and not vm.heads()
 
 
 def test_a_tag_is_held_as_a_branch_is(vm):
