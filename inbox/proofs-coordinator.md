@@ -160995,3 +160995,49 @@ So link 1's own Python shows no fault. The change's suites (`suites.py --changed
 **Not established.**
 - Whether the push rule, from Sunday, treats a commit that is on the remote under another branch as already there. Its text says commits on the remote are not judged; I have not tested it and it is not in force yet.
 - That the mended job runs on a node: only its identity lines were run, here.
+
+
+## CARRIER, Fri 13 Nov 21:19Z: #9576 and #9593 as reports (nothing settled, nothing pushed for them); the three carries hold slots; a dry run of #9593 waits for one
+
+Clock read with `date -u` at 21:17Z. Mailbox read at 21:17Z: your 20:56Z and 21:03Z messages and nothing newer. [run]
+
+**The carries.** All three hold a slot and are crossing; none has ended. Job 1 `r20261113-210538-d921` took slot r7 on vy-nebius-cpu-5 at 21:08:33Z, so I did not move it. Job 2 `r20261113-210538-72ec` (vy-nebius-cpu-12) finished the tool's checks of the 30 moves in 90 s (27 were kept from earlier runs there under the same `restack.py`). Job 3 `r20261113-210540-425f` (vy-nebius-cpu-14) was at check 27 of 29 at 21:13Z. [run: `research fetch RUN --all`, each run's `slot.json` and `stdout.log`] My timer for their end stands (about 22:13Z).
+
+**#9576 (`338c4ad877ca`): is it still wanted as itself?** Only for two Python commits; its Lean is already carried elsewhere.
+
+- Its head is #9441's old head `51a2e803cb8` plus five commits of its own. [run: `git log 51a2e803cb8..338c4ad877ca`]
+- Three of the five, `cc35d589217`, `fd0515e77f6` and `5d5c7183ca9`, are the Lean of the refusal (`unsampled`, `sampledHeld`, `runMembers_sampled`, `membersRun_sampled` in `Spot/OneStageZk.lean`). Each is an ancestor of FRAME's carried switch `097b85eff21b810113c125694d38ccd7bb112e0b` (`cursor/proofs-carried-members-switch-4ae1`), of `5961fa466d1eb54d41011214f87e35fff8ba568e` and of #9817's head `bbcaac1cf46e5b1a616fa22defae12eea5ed29fa`. [run: `git merge-base --is-ancestor`] None of those three heads is on `main` yet. [run]
+- Two are in none of them, by ancestry or by content: `b0ce796e48e` ("the Python of the per-member run refuses a statement of a member the sample holds no unit of": `_sampled` in `one_stage/members.py`, its test in `tests/test_members_run.py`, rows in `lean/tests/test_members_twin.py`) and `af8682dc824` ("the twin's test audits take their sample in one loop", five lines of `test_members_twin.py`). 37 of the 40 lines the first adds and both lines the second adds are absent from the switch, from #9817 and from `main`; `main`'s `one_stage/members.py` has no `_sampled`. [run: each added line searched with `git grep -F` in the three trees]
+- So [derived]: as itself #9576 would land its Lean a second time beside the switch that already holds it, and the conflict the queue names in `Spot/OneStageZk.lean` is that Lean meeting what `main` has of #9441. What nothing else carries is `b0ce796e48e` and `af8682dc824`. `one_stage/members.py` is under `spot/verifier/`, so `b0ce796e48e` changes what the Python verifier accepts (it refuses more); placing it is your decision, not a settlement of mine. Two ways I see: (a) close #9576 and put those two commits on top of the switch or of #9817, by whoever owns that branch; (b) carry #9576 after the switch lands, when its Lean is already on `main` and only the Python remains. I do neither until you answer.
+- Job 3 carries #9576 as a dry run only (its result goes to the bundle and nowhere else), so that I can tell you where the tool stops. Not yet known; known when job 3 ends, about 22:10Z.
+
+**#9593 (`9eec48aab933`): the ten conflicts, none settled.** Its merge base with `main` is `fa0877afdc12` (04:02Z today) and it lacks 28 moves, the first four being #9697's (`config_map`, `settings_map`, `bench_instances_map`, `flat_files_map`). [run: `research.queue.moves_between`]
+
+A plain merge with `main` conflicts in these ten files (the count is of conflict blocks left in each) [run: `git merge-tree --write-tree`, with the repository's merge drivers registered]:
+
+| file (as `main` names it today) | blocks |
+|---|---|
+| `benchmarks/certifier_term/README.md` | 1 |
+| `benchmarks/certifier_term/run.py` | 2 |
+| `benchmarks/certifier_term/tests/test_result.py` | 2 |
+| `verity/device.py` | 2 |
+| `verity/hardware/README.md` | 1 |
+| `verity/hardware/nodes.py` | 2 |
+| `verity/hardware/registration.py` | 2 |
+| `verity/hardware/tests/test_nodes.py` | 1 |
+| `verity/protocols/proofs/spot/verifier/lean/tests/test_site_difftest.py` | 2 |
+| `verity/tests/tests/test_device.py` | 1 |
+
+What the blocks are, as far as I have read them:
+
+- #9593 merges without conflict with the base of each of the first four moves, and conflicts in the same ten files with the base of the fifth (`92b5727aca40`, the base of `terms_map`) and of every later one. [run: `git merge-tree` of the head with each move's parent] Between the flat files' move `8d22bca0c1c1` and `92b5727aca40` no commit that is not a move touches any of the ten. [run: `git log --no-merges 8d22bca0c1c1..92b5727aca40 -- <the ten>` prints nothing]
+- So [derived] the ten conflicts first appear with the flat files' move itself: that move renamed `verity/hardware/site/__init__.py` to `verity/device.py` and `verity.hardware.site` to `verity.device` on lines #9593 also changes. In the blocks I read (`benchmarks/certifier_term/run.py`, `verity/hardware/registration.py`, `verity/device.py`), `main`'s side differs from the merge base only by the move's renaming (`verity.device`, `verity.channel.canonical`), and #9593's side holds its own change (`site/v2`, bits a second in place of bits a tick, the new views). [read: three of the ten files' blocks; the other seven I have not read]
+- If that holds for all ten, they are not rival content: `restack.py` redoes the move on the branch and they go away. [guess, until the dry run] Rival content can still appear at the tool's last merge: three commits on `main` after the chain's base touch `verity/hardware` (`ffdc9480c03`, "The data sheets' loaders and their readers name the top-level hardware/"; `9f1c0a728e9`, suite inputs; `81bb562c0ec`, the readers find the data sheets through a link). [run: `git log --no-merges 053b8e50fe8a..origin/main -- <the ten>`]
+- To know rather than guess I launched a dry run of #9593 alone with the tool (nothing of it is published). vy-nebius-cpu-13's research slots are closed by a window until Sat 02:00Z, so I cancelled that copy (`r20261113-211406-8a3a`, never started) and launched one copy on vy-nebius-cpu-10: `r20261113-211545-fcd9`, which at 21:17Z waits for memory there (23 GB free, 30 GB needed). If it has no slot by 21:40Z I cancel it and run it on vy-nebius-cpu-12 after job 2 ends. [run]
+- #9593's body names no goal. [run, from my last entry]
+
+**My scripts** are on a branch of my own, `cursor/proofs-carrier-scripts-9257` at `9d159fb42696c050e005b82341a312a90c05661b` (one commit with no parent, never to merge), so that a new machine can take up the work. Its author and committer are my checkout's (`Cursor Agent <cursoragent@cursor.com>`). [run]
+
+**Not established:** where the tool stops on #9576 and on #9593; what the seven unread files' blocks of #9593 hold; any carry's result.
+
+**Waiting on:** jobs 1 to 3 (about 22:10Z), the dry run of #9593, and your answer on #9576 (which does not hold up the others).
