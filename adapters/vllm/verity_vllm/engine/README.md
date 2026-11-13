@@ -25,10 +25,10 @@ what it holds.
   the one wrap of the model runner's step and the parts that run around it (`runner_step`), and the facts of
   models, cards and transports (`profiles.cases`, `profiles.coverage_roles`, `profiles.dense_generic`,
   `profiles.devices`, `profiles.engine_classes`, `profiles.family_facts`, `profiles.transport`,
-  `profiles.admission_calibration`). Each of these lists in `__all__` the names that other packages, the
-  benchmarks and the command line read from it. One more module that other packages read states no `__all__`
-  yet, `profiles.layer_classes`; and `observe.fold.profiles.generic` reads one private name that no `__all__`
-  lists, `profiles.dense_generic._sha256`.
+  `profiles.admission_calibration`). Each of these but `env` lists in `__all__` the names that other packages,
+  the benchmarks and the command line read from it. `env` and one more module that other packages read,
+  `profiles.layer_classes`, state no `__all__` yet; and `observe.fold.profiles.generic` reads one private name
+  that no `__all__` lists, `profiles.dense_generic._sha256`.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `properties`, `check`
   and `commit` packages, its `llm` and `glue`; and the benchmarks that build, serve or time the engine
   (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`, `benchmarks/vllm_encoded`
