@@ -139,9 +139,7 @@ theorem gather_keys {α : Type} {port : α → String × String} {same : α → 
         have hne := Array.findIdx?_eq_none_iff.1 hj e (Array.mem_toList_iff.1 he)
         obtain ⟨y, rs⟩ := e
         exact ne_of_beq_false hne hek
-    · first
-        | exact List.nodup_nil
-        | simp
+    · exact List.nodup_nil
   have h' := Option.some.inj h
   subst h'
   exact nodup_keys_map hQ fun ⟨_, _⟩ => rfl
@@ -169,10 +167,7 @@ theorem wiresOf_keys {defs : Array _root_.Flock.Program.Defn} {d : ℕ} {ws : Ar
 theorem replayWires_keys (P : _root_.Flock.Program.Prog) (key : String) :
     (((Spot.SecondStage.replayWires P key).getD #[]).toList.map fun w => (w.template, w.port)).Nodup := by
   cases hr : Spot.SecondStage.replayWires P key with
-  | none =>
-    first
-      | exact List.nodup_nil
-      | simp
+  | none => exact List.nodup_nil
   | some ws =>
     unfold Spot.SecondStage.replayWires at hr
     obtain ⟨d, -, hr⟩ := Option.bind_eq_some_iff.1 hr
