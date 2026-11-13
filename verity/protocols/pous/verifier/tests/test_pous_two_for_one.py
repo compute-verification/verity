@@ -11,14 +11,23 @@ from __future__ import annotations
 
 import random
 
+import pous_state_game as game
 import pytest
 
-import pous_state_game as game
 from verity.protocols.pous.verifier.labels import mask, salt_value, tag, w_labels
 from verity.protocols.pous.verifier.oracle import Tweak, run
 from verity.protocols.pous.verifier.params import Params
-from verity.protocols.pous.verifier.primitives import (CAPACITY_BITS, FeistelP, FeistelPi, MiyaguchiPreneel, OverwriteChain, Primitives,
-                                    XorSponge, header, pad_block)
+from verity.protocols.pous.verifier.primitives import (
+    CAPACITY_BITS,
+    FeistelP,
+    FeistelPi,
+    MiyaguchiPreneel,
+    OverwriteChain,
+    Primitives,
+    XorSponge,
+    header,
+    pad_block,
+)
 from verity.protocols.pous.verifier.scheme import encode_prog
 
 PARAMS = Params(14, 80, 4)
