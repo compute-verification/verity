@@ -13,7 +13,7 @@ from pathlib import Path
 
 TREE = Path.cwd()
 for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "adapters/vllm",
-           "verity/protocols/flock/prover/python", "."):
+           "verity/protocols/proofs/flock/prover/python", "."):
     sys.path.insert(0, str(TREE / _p))
 
 import numpy as np  # noqa: E402
@@ -51,7 +51,7 @@ def main() -> int:
     import a11
     import a11_kinds as K
     from verity.circuits.codec import canonical_json, encode_program
-    from verity.protocols.spot.verifier.one_stage import partition as P
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity_vllm.pipeline import serving_rows as SRW
 
     from verity.circuits.codec import decode_program

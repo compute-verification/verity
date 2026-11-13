@@ -51,7 +51,7 @@ if [ ! -d "$T" ]; then
   chmod -R u+rwX,go+rX,go-w "$tmp"
   mv "$tmp" "$T"
 fi
-pkg=$T/verity/protocols/spot/verifier/lean
+pkg=$T/verity/protocols/proofs/spot/verifier/lean
 tc=$(tr -d '[:space:]' < "$pkg/lean-toolchain")
 [[ $tc =~ ^leanprover/lean4:v[0-9A-Za-z.-]+$ ]] || die "$pkg/lean-toolchain: $tc"
 if [ ! -x "$ELAN_HOME/bin/elan" ]; then
@@ -74,7 +74,7 @@ find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | whil
 done
 runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$pkg' && lake build sampled-proofs-verifier" \
   | tail -1
-net=$T/verity/protocols/certifier/verifier/lean
+net=$T/verity/protocols/accounting/certifier/verifier/lean
 if [ -d "$net" ] && [ -f "$T/benchmarks/network_traces/certifier_serve.py" ]; then
   runuser -u auditor -- env -i HOME=/var/lib/vy-challenger PATH="$T/.lean-bin:/usr/bin:/bin" sh -c "cd '$net' && lake build network-records" \
     | tail -1

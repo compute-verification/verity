@@ -32,7 +32,7 @@ def test_each_served_key_rows_writer_commits_the_bits_it_returns():
     """Each key rows' writer the served partitions name commits 16 NVIS W bits (`partition._template_bits`, the class the
     partition checks and the weight the leak bound gives a wrong proof block of it), 65,536 at 64 keys of 64 columns: the
     row it returns, which every head's scores and values units read, though it is its input."""
-    from verity.protocols.spot.verifier.one_stage import partition as P
+    from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     writers = sorted({t for f in SERVED for t in json.loads(f.read_text())["templates"]
                       if t.startswith("SparseMlaHeadKeysWire_")})
