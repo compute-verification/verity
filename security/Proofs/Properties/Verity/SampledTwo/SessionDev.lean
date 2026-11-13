@@ -31,7 +31,9 @@ and second stages and nothing else. At `runLocate`, for any `Ls`:
 
 At a stage's round the run's locator puts what `Ls` puts, where `Ls` puts no opening on a round
 (`locAt_run_stage`; the session-round locator puts a release only past the statements' round, `locOf_past`), so the
-coin map reads the same release there at either (`dev_congr`, `dev_run_stage`).
+coin map reads the same release there at either (`dev_congr`, `dev_run_stage`), counts the same elements that fit
+in the round's coin (`fitOf_congr`, `fitOf_run_stage`), and its agreement at the run's locator is its agreement at
+`Ls` on those rounds (`elemAgrees_run_stage`).
 -/
 
 @[expose] public section
@@ -154,30 +156,50 @@ theorem dev_located (h : ∀ pre fr b, CoinMap.locAt L pre fr b = some n ↔ loc
 
 end Located
 
+section Congr
+
+variable {L L' : CoinMap.Locate} {n : ℕ}
+
+/-- **Two locators that put the same releases on round `n` count the same elements there.** -/
+theorem usedOf_congr (h : ∀ pre fr b, CoinMap.locAt L pre fr b = some n ↔ CoinMap.locAt L' pre fr b = some n) :
+    ∀ pre log : List Release, CoinMap.usedOf L n pre log = CoinMap.usedOf L' n pre log
+  | _, [] => rfl
+  | pre, r :: log => by
+    simp only [CoinMap.usedOf, usedOf_congr h (pre ++ [r]) log]
+    by_cases hl : CoinMap.locAt L pre r.frame r.answers = some n
+    · rw [if_pos hl, if_pos ((h pre r.frame r.answers).1 hl)]
+    · rw [if_neg hl, if_neg (mt (h pre r.frame r.answers).2 hl)]
+
+/-- **Two locators that put the same releases on round `n` read the same bits for it.** -/
+theorem devBits_congr (h : ∀ pre fr b, CoinMap.locAt L pre fr b = some n ↔ CoinMap.locAt L' pre fr b = some n) :
+    ∀ pre log : List Release, CoinMap.devBits L n pre log = CoinMap.devBits L' n pre log
+  | _, [] => rfl
+  | pre, r :: log => by
+    simp only [CoinMap.devBits, devBits_congr h (pre ++ [r]) log]
+    by_cases hl : CoinMap.locAt L pre r.frame r.answers = some n
+    · rw [if_pos hl, if_pos ((h pre r.frame r.answers).1 hl)]
+    · rw [if_neg hl, if_neg (mt (h pre r.frame r.answers).2 hl)]
+
+/-- **Two locators that put the same releases on round `n` count the same elements that fit in its coin.** -/
+theorem fitOf_congr (h : ∀ pre fr b, CoinMap.locAt L pre fr b = some n ↔ CoinMap.locAt L' pre fr b = some n) :
+    ∀ pre log : List Release, CoinMap.fitOf L n pre log = CoinMap.fitOf L' n pre log
+  | _, [] => rfl
+  | pre, r :: log => by
+    simp only [CoinMap.fitOf, fitOf_congr h (pre ++ [r]) log, usedOf_congr h [] pre]
+    by_cases hl : CoinMap.locAt L pre r.frame r.answers = some n
+    · have hl' := (h pre r.frame r.answers).1 hl
+      by_cases hw : CoinMap.usedOf L' n [] pre + CoinMap.widthOf r.frame ≤ 65536
+      · rw [if_pos ⟨hl, hw⟩, if_pos ⟨hl', hw⟩]
+      · rw [if_neg (fun c => hw c.2), if_neg (fun c => hw c.2)]
+    · rw [if_neg (fun c => hl c.1), if_neg (fun c => hl ((h pre r.frame r.answers).2 c.1))]
+
 /-- **Two locators that put the same releases on round `n` read the same release there.** -/
-theorem dev_congr {L L' : CoinMap.Locate} {n : ℕ}
-    (h : ∀ pre fr b, CoinMap.locAt L pre fr b = some n ↔ CoinMap.locAt L' pre fr b = some n) (log : List Release) :
-    CoinMap.dev L log n = CoinMap.dev L' log n := by
-  have hu : ∀ pre log : List Release, CoinMap.usedOf L n pre log = CoinMap.usedOf L' n pre log := by
-    intro pre log
-    induction log generalizing pre with
-    | nil => rfl
-    | cons r log ih =>
-      simp only [CoinMap.usedOf, ih (pre ++ [r])]
-      by_cases hl : CoinMap.locAt L pre r.frame r.answers = some n
-      · rw [if_pos hl, if_pos ((h pre r.frame r.answers).1 hl)]
-      · rw [if_neg hl, if_neg (mt (h pre r.frame r.answers).2 hl)]
-  have hb : ∀ pre log : List Release, CoinMap.devBits L n pre log = CoinMap.devBits L' n pre log := by
-    intro pre log
-    induction log generalizing pre with
-    | nil => rfl
-    | cons r log ih =>
-      simp only [CoinMap.devBits, ih (pre ++ [r])]
-      by_cases hl : CoinMap.locAt L pre r.frame r.answers = some n
-      · rw [if_pos hl, if_pos ((h pre r.frame r.answers).1 hl)]
-      · rw [if_neg hl, if_neg (mt (h pre r.frame r.answers).2 hl)]
+theorem dev_congr (h : ∀ pre fr b, CoinMap.locAt L pre fr b = some n ↔ CoinMap.locAt L' pre fr b = some n)
+    (log : List Release) : CoinMap.dev L log n = CoinMap.dev L' log n := by
   unfold CoinMap.dev
-  rw [hu, hb]
+  rw [usedOf_congr h, devBits_congr h]
+
+end Congr
 
 /-- **The coin map's release at a stage's round is the same at the run's locator as at the stages'**, where the
 stages' locator puts no opening on a round. -/
@@ -185,6 +207,27 @@ theorem dev_run_stage (A : Live₂) (Ls : CoinMap.Locate) (tab : ℕ → String)
     (hLs : ∀ pre i s c b, Ls pre (.opening i s c) b = none) {n : ℕ} (hn : n ≤ A.h.stage) (log : List Release) :
     CoinMap.dev (runLocate A Ls tab) log n = CoinMap.dev Ls log n :=
   dev_congr (fun pre fr b => locAt_run_stage A Ls tab hLs hn pre fr b) log
+
+/-- **The elements that fit in a stage's round's coin are counted the same at the run's locator as at the
+stages'**, where the stages' locator puts no opening on a round. -/
+theorem fitOf_run_stage (A : Live₂) (Ls : CoinMap.Locate) (tab : ℕ → String)
+    (hLs : ∀ pre i s c b, Ls pre (.opening i s c) b = none) {n : ℕ} (hn : n ≤ A.h.stage) (pre log : List Release) :
+    CoinMap.fitOf (runLocate A Ls tab) n pre log = CoinMap.fitOf Ls n pre log :=
+  fitOf_congr (fun pre fr b => locAt_run_stage A Ls tab hLs hn pre fr b) pre log
+
+/-- **The coin map's agreement at the run's locator is its agreement at the stages', at the stages' rounds**: where
+the run's coins have the elements the releases the run's locator puts on each read round carry, they have those the
+stages' locator's releases carry, at each read round at most the second stage's last. -/
+theorem elemAgrees_run_stage (A : Live₂) (x : Claims.Msg) (Ls : CoinMap.Locate) (tab : ℕ → String)
+    (hLs : ∀ pre i s c b, Ls pre (.opening i s c) b = none) (reads : ℕ → Prop) {o : Exchange} {r : Coins A x}
+    (h : CoinMap.ElemAgrees (runLocate A Ls tab) A x reads o r) :
+    CoinMap.ElemAgrees Ls A x (fun i => reads i ∧ i ≤ A.h.stage) o r := by
+  intro i hi c hc j hj
+  refine h i hi.1 c ?_ j ?_
+  · rw [dev_run_stage A Ls tab hLs hi.2]
+    exact hc
+  · rw [fitOf_run_stage A Ls tab hLs hi.2]
+    exact hj
 
 /-- The session-round locator puts only openings on a round, and the coin map gives an opening its count of coins. -/
 theorem widthOf_locOf {A : Live₂} {tab : ℕ → String} {n : ℕ} :
