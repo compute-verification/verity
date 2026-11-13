@@ -105,8 +105,7 @@ def _run(code: str, *args: str) -> subprocess.CompletedProcess:
 def test_every_consumers_registry_holds_every_registered_definition():
     """The global Program (`pipeline.global_program`) and the word check's Definitions (`program_view.specialization`) look Definitions up
     through entry points of their own, beside the `catalog.load` the Match, the query views and the descriptor equivalence read: in
-    a fresh interpreter each one's
-    registry holds every Definition and primitive the registry package registers."""
+    a fresh interpreter each one's registry holds every Definition and primitive the registry package registers."""
     want = _run("from verity.definitions.registry.catalog import load\nprint(len(load()[0].defs))")
     assert want.returncode == 0, want.stderr[-2000:]
     n = int(want.stdout.split()[-1])
