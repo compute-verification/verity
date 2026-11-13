@@ -13,7 +13,7 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           "verity/protocols/proofs/spot/verifier/__init__.py",
           "verity/claims/__init__.py",
           "verity/protocols/proofs/spot/device/challenger.py", "verity/protocols/proofs/spot/device/remote.py",
-          # one_stage's registration, which core_check imports, and its draw and verdict
+          # one_stage's registration, which core_check imports, and its sampling and verdict
           "verity/protocols/proofs/spot/verifier/one_stage/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
           "verity/protocols/proofs/spot/verifier/one_stage/registration.py",

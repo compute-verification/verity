@@ -4642,7 +4642,7 @@
     {"file": "verity/protocols/accounting/poub/verifier/p2_party.py", "count": 23},
     {"file": "verity/protocols/accounting/poub/verifier/period.py", "count": 11},
     {"file": "verity/protocols/accounting/poub/verifier/pooled.py", "count": 6},
-    {"file": "verity/protocols/accounting/poub/verifier/pyproject.toml", "count": 2},
+    {"file": "verity/protocols/accounting/poub/verifier/pyproject.toml", "count": 1},
     {"file": "verity/protocols/accounting/poub/verifier/session/challengers.py", "count": 1},
     {"file": "verity/protocols/accounting/poub/verifier/session/checks.py", "count": 4},
     {"file": "verity/protocols/accounting/poub/verifier/session/lean_verifier.py", "count": 4},
