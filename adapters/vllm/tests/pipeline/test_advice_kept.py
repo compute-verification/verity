@@ -320,8 +320,13 @@ def test_a_request_admitted_before_its_bodys_window_is_carried_where_no_length_i
     assert any(i == 2 for ks in _terms(data, late, unsent).windows[:2] for i, _ in ks)
 
 
-def test_a_drafted_string_over_the_cap_is_refused_by_name_at_encode_and_unread_at_decode():
-    """A string over the registered cap ℓ is neither written nor read. With ℓ one bit under a drafted string,
+def _with_l(reg: V.Registered, bits: int) -> V.Registered:
+    """`reg` with ℓ = `bits`."""
+    return V.Registered(reg.engine, reg.stop_ids, reg.row_order, reg.T, reg.book, bits, reg.tick, reg.send_lengths)
+
+
+def test_a_drafted_string_over_the_registered_length_is_refused_by_name_at_encode_and_unread_at_decode():
+    """A string over the registered ℓ is neither written nor read. With ℓ one bit under a drafted string,
     `schedule_code.encode` refuses it itself, with or without its decode back: by name, with the string's bits, ℓ and
     how many of its windows' charges fit. `schedule_code.decode` and `bits_by_window` refuse it before they read a
     bit, so other bytes of its length get the same refusal. With ℓ its bits, all three take it. Without a draft both
@@ -329,31 +334,30 @@ def test_a_drafted_string_over_the_cap_is_refused_by_name_at_encode_and_unread_a
     record, reg, served = _case(3, tick=True)
     data = SC.encode(served, record, reg)
     charge, n = V.bits_by_window(data, record, reg), 8 * len(data)
-    assert list(charge.values()) == [17, 11, 4, 4] and n == 40
-    short, exact = replace(reg, cap_bits=n - 1), replace(reg, cap_bits=n)
-    written = ("^the string is 40 bits, over the cap ℓ = 39: its 4 windows are charged 36 bits, and the first 3 of them 32, "
-               "the most that fit under ℓ; end the session by then, or register a larger ℓ$")
+    assert list(charge.values()) == [17, 11, 4, 4] and n == 40 and _with_l(reg, 1 << 23) == reg
+    short, exact = _with_l(reg, n - 1), _with_l(reg, n)
+    written = ("^the string is 40 bits, over the registered ℓ = 39: its 4 windows are charged 36 bits, and the first 3 of them "
+               "32, the most that fit under ℓ; end the session by then, or register a larger ℓ$")
     for check in (True, False):
         with pytest.raises(V.AdviceCodeError, match=written):
             SC.encode(served, record, short, check=check)
     for string in (data, b"\xff" * len(data)):
         for read in (SC.decode, V.bits_by_window):
-            with pytest.raises(V.AdviceCodeError, match="^40 bits, over the cap ℓ = 39$"):
+            with pytest.raises(V.AdviceCodeError, match="^40 bits, over .* ℓ = 39$"):
                 read(string, record, short)
     assert SC.encode(served, record, exact) == data and SC.encode(served, record, exact, check=False) == data
     assert SC.decode(data, record, exact) == served and V.bits_by_window(data, record, exact) == charge
-    with pytest.raises(V.AdviceCodeError, match="^the string is 40 bits, over the cap ℓ = 7: .* and the first 0 of them 0, "):
-        SC.encode(served, record, replace(reg, cap_bits=7), check=False)
+    with pytest.raises(V.AdviceCodeError, match="^the string is 40 bits, over the registered ℓ = 7: .* the first 0 of them 0, "):
+        SC.encode(served, record, _with_l(reg, 7), check=False)
     record, reg, served = _case(0)
     data = SC.encode(served, record, reg)
     advice, n = V.decode(data, record, reg), 8 * len(data)
-    short, exact = replace(reg, cap_bits=n - 1), replace(reg, cap_bits=n)
+    short, exact = _with_l(reg, n - 1), _with_l(reg, n)
     for check in (True, False):
-        with pytest.raises(V.AdviceCodeError, match=f"^the string is {n} bits, over the cap ℓ = {n - 1}: its 4 windows are "):
-            V.encode(advice, record, short, check=check)
-        with pytest.raises(V.AdviceCodeError, match=f"^the string is {n} bits, over the cap ℓ = {n - 1}: its 4 windows are "):
-            SC.encode(served, record, short, check=check)
-        assert V.encode(advice, record, exact, check=check) == data == SC.encode(served, record, exact, check=check)
+        for encode, said in ((V.encode, advice), (SC.encode, served)):
+            with pytest.raises(V.AdviceCodeError, match=f"^the string is {n} bits, over the registered ℓ = {n - 1}: its 4 "):
+                encode(said, record, short, check=check)
+            assert encode(said, record, exact, check=check) == data
 
 
 def test_put_and_get_mirror_each_other():
