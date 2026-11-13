@@ -130145,3 +130145,18 @@ That is a changed statement of a listed guarantee: soundness's file, and Daniel'
 Quick tier of #9576, `r20261113-054307-ec73`: **68 of 75 suites passed, none failed**, 7 left, running at 08:24Z, timeout 08:43Z [run]. Mailbox read at `67c8fba9e1`; my newest message is yours of 07:54Z. No `~/wt/.pen`. No try sent. Branch `cursor/proofs-windowat-5e4b` at `e977fbc96f`, unchanged.
 
 **To post** (PRF-490, for soundness): "WINDOWAT: `Window.hcls` is over every `ω`, and `execSel` samples every unit where the source runs out (`Bridge/Draw.lean:247-249`). So `hcls` needs `mPtsOf g m.n = mPtsOf g (kd / nTab)` at every member, which `link-points` does not check (it reads the samples that end). How does the window's builder get `hcls`? My entry of this hour has the reading and two ways out."
+
+## ADDRWC, Fri 13 Nov 08:28Z: the two-premise theorem is WRITTEN at `cfa7443a49`, NOT compiled: `addressesConnected_of_row` from `RefReadsWf h` and the row, over FRAME's `013955525dbe` (merged, the head the join holds); its try is r20261113-082637-50ae
+
+Run `r20261113-082637-50ae` on vy-nebius-2, launched 08:26Z: `verity lean try security/Proofs/Flock/SpotFlock/AddressFacts/Connected.lean` at head `cfa7443a49` of `cursor/proofs-addrwc-60f3`. Clock: `date -u` read 08:28Z. Pen: mine. Mailbox: nothing after your 06:09Z; ASSEMBLY's 07:39Z entry (its NEEDS: "ADDRWC: your theorem over both lines, at `42bba26494`") is what I act on.
+
+- **Merged** [run: `git merge`, no conflict]: FRAME's `013955525dbe` into my branch (`a0d82aa1be`). The join's `42bba26494` holds that head already, so nothing reaches the join through me that it lacks. I did not merge the join itself. The merge also brings FRAME's two-line mend of `BitsInUnitsOf.lean` and `BlockSize.lean` (HONEST2's 07:39Z item 2); my `e05417eec6` held the unmended bytes and no try of mine ever built them, because none of my files imported them.
+- **Written, not compiled** (`AddressFacts/Connected.lean`, both roots in the same commit):
+  - `wiring_of_refReads (hWf : RefReadsWf h) {r : CheckedRun h.stage} (hr : r.Ok h) : Wiring h`, the term FRAME's `addressesConnected_of_held` builds inline.
+  - `addressesConnected_of_row (hWf : RefReadsWf h) (hRow : RowFact h (wireMap h) (returned h) (addressOf h)) : AddressesConnected h`, by `addressesConnected_of_wiring` with `widthFact_of_runs` and `copyFact_of_runs`.
+- **HONEST2:** both are in the namespace `SpotFlock` under the names and binders of your `SpotFlock.Honest` pair (`h` implicit), so when you delete yours your call sites resolve to mine unchanged. Do not follow `cfa7443a49` yet: I name the compiled head in a title.
+- **Does my older work still stand over FRAME's line?** [run: a script over the declarations the merge changed] None of the 167 names it changed, added or removed is one my eleven files name with a changed or removed statement. Not a build: `50ae` builds all eleven as dependencies and I report what it prints.
+- **Two corrections to my 07:32Z entry.** Its merge-base check ran at 07:31Z, not 07:35Z. And HONEST2's `wiring_of_ownReads` and `addressesConnected_of_row` were compiled then (`5ee3`, `0d4a`), not "written, not compiled".
+- **Unchanged:** no `GAP`; no records run at my head and no ready line; FRAME's `portsOnce` clause is FRAME's to decide.
+
+I end the turn on `50ae` with one timer; its ETA is about 08:40Z if it gets a slot at once, as the last two did.
