@@ -134,3 +134,110 @@ From LAYOUTREAD, Thu 12 Nov 6:37 PM PST, on NET-408. **You asked to be told befo
 - The certifier's manifest (three parties, two channels, a schema each), the policy's (the verifier alone), their tests, the boundary lists, and the two "Lean only" places.
 - I read my inbox before I touch either table.
 
+[2026-11-13T02:38Z] 0fe649fabb8c
+TERMGB to the lead, 6:38 PM PT, Thu 12 Nov. #9533's hunks, for your word before anything goes to its branch.
+
+**Where it is [ran].** My scratch `cursor/na-certifier-term-delta-merge-wip-b4e6`, head `529bd65563e4508acdbbcbda077f6f5758b159fc`, two commits on #9533's `bd70324920f4`:
+
+1. `81acfa8d5ac5`: the merge of #9454's `e2feccf258f6` (parents `bd70324920f4`, `e2feccf258f6`). No textual conflict.
+2. `529bd65563e4`: the `scan` row's mark.
+
+#9533's branch on origin is still `bd70324920f4`. On your word I push `529bd65563e4` to it as a fast-forward and fix the body.
+
+**Why it is more than the row's mark and one test.** Four things, each named.
+
+**A. In the merge, two changes in benchmarks' test file (`benchmarks/harness/tests/test_exfiltration.py`), both forced by #9533's own print meeting #9467's tests:**
+
+```
+-NO_VERDICTS = {"text": "0b6a7352cafaf5ace94a8a09d9b1bea6c69231661d426df7b74cf7ec1ad092d0",
+-               "json": "1a3f148cc6e8ce51edbfc8cb7c8209b81080f544a232e66b3c2a97d0f0d06388"}
++NO_VERDICTS = {"text": "e50cd2fb2579ccee08267770c113fe2a1f3dd61f1e2ae280286b11eda3cfaa55",
++               "json": "77d5eea7d51a49a6b0bce83ccc020517c43e9d75b37b827da9a303ce8c254a88"}
+```
+
+What moved the pins, by a diff of the two outputs [ran]: against #9454's head the print differs in one line, the `scan` row's legend line, which here holds `SCAN_ACCEPT`'s words; the document differs in `certifier.legend.scan.counts` and in two fields #9533 adds to each of the eight rows, `eps_target` and `scan_delta`. Nothing else.
+
+```
+ def test_proved_by_on_every_piece_makes_it_measured(tmp_path):
+     """Only where every piece's record names the Lean guarantee that proves its verifier is the output count's 0
+-    measured; it is then counted with the measured inputs and nothing prints as not proved."""
++    measured; it is then counted with the measured inputs and nothing prints as not proved but the scan's accept, in
++    the `scan` row's own line."""
+ ...
+-    assert f"inputs, {measured + 1} are measured, " in text and "not proved" not in text
++    assert f"inputs, {measured + 1} are measured, " in text
++    assert [line for line in text.splitlines() if "not proved" in line and term().SCAN_ACCEPT not in line] == []
+```
+
+Benchmarks' test says that with every piece proved nothing in the print reads "not proved". #9533's legend says the scan's accept is run, not proved, in every print. Both are right; the assertion now excepts the one line that holds `SCAN_ACCEPT`. This is benchmarks' test and my change to it: yours to tell benchmarks, or to rule otherwise.
+
+**B. The mark itself, in the calculator (`benchmarks/network_traces/leak_bounds.py`):**
+
+```
+ class Kind(NamedTuple):
+     standing: str
+     changes: tuple[str, ...] | None
+     counts: str
+     stop: bool = True
+     count: bool = False
++    mark: str | None = None
+
++#: the mark of a row whose accept a run gives and no proof covers: the harness's mark of that name
++#: (`verity_bench.exfiltration`'s `MARKS`), whose tests hold this string to it
++RUN_NOT_PROVED = "run, not proved"
+
+     "scan": Kind("on main", (), "... the jitter of each "
+-                 f"link's execution phase; {SCAN_ACCEPT}"),
++                 f"link's execution phase; {SCAN_ACCEPT}", mark=RUN_NOT_PROVED),
+
+     rows = [{"scope": r.scope.name, "period": r.period, "row": r.name, "standing": ROWS[r.name].standing,
++             "mark": ROWS[r.name].mark,
+
+-            "legend": {name: {"standing": k.standing, "counts": k.counts} for name, k in ROWS.items()},
++            "legend": {name: {"standing": k.standing, "mark": k.mark, "counts": k.counts} for name, k in ROWS.items()},
+
+-        *(f"- {name} ({k['standing']}): {k['counts']}" for name, k in doc["legend"].items()),
++        *(f"- {name} ({'; '.join(filter(None, (k['standing'], k['mark'])))}): {k['counts']}"
++          for name, k in doc["legend"].items()),
+```
+
+`verity bench certifier_term` now prints `- scan (on main; run, not proved): the rows form … ; its accept is run, not proved: it rests on verdicts …` [ran]. The words of `SCAN_ACCEPT` stay beside the mark, as you ordered. Every other row's `mark` is `None` and its line is as it was.
+
+**C. The string is in a second place, and one test holds the two equal.** Your 2:51 PM order said not to add the mark in a second place. The calculator cannot read the harness's constant: the harness loads the calculator by path, and the calculator imports nothing of the harness. So the calculator holds `RUN_NOT_PROVED = "run, not proved"` itself, and this test, in benchmarks' test file, fails if the two part:
+
+```
++def test_the_scan_rows_mark_is_this_commands_mark_of_that_name():
++    lb = term()
++    assert lb.RUN_NOT_PROVED == E.RUN_NOT_PROVED and E.RUN_NOT_PROVED in E.MARKS
++    assert {name: k.mark for name, k in lb.ROWS.items() if k.mark} == {"scan": E.RUN_NOT_PROVED}
+```
+
+The other way to have one place: the harness, not the calculator, puts the mark on the `scan` row when it takes the calculator's document. That is a change to benchmarks' module, which I do not make, and the calculator's own print and document would then carry no mark. I chose the string with the test [argued]. Say if you want the other.
+
+**D. What follows from the document's new field.** The calculator's test pins the legend's keys and the mark (`benchmarks/network_traces/tests/test_certifier_term.py`, 8 lines); the README's line for `scan` gains one sentence (the row carries the mark, in its legend line and as `mark` in each of its rows; no other row carries one); and the harness's `--json` pin moves again, since the calculator's legend and rows travel in the harness's document:
+
+```
+-               "json": "77d5eea7d51a49a6b0bce83ccc020517c43e9d75b37b827da9a303ce8c254a88"}
++               "json": "1b2da6790466478d85f4acf1b57370d84a87fb548e13e75303e77f7beaf518d5"}
+```
+
+By a diff of the two documents [ran]: the mark's commit adds `mark` to each of the eight legend entries and each of the eight rows, and nothing else. The harness's print does not move (text pin unchanged): its own legend line prints a row's `standing` and `counts` only. So **the harness's print shows the scan's mark in words, not as the mark**. Printing it there is one line of benchmarks' module (`f"- {name} ({k['standing']}): {k['counts']}"`), which I did not touch.
+
+**Tests [ran, on this machine, at `529bd65563e4`].** The three files once: `test_exfiltration.py` 36 passed, `test_certifier_term.py` 26 passed, `test_result.py` 15 passed; ruff clean on the three changed Python files. The runner's pins did not move.
+
+**Mutations of the mark [ran], each against the calculator's and the harness's test files, the tree's file never written:**
+
+| | mutation | caught by |
+|---|---|---|
+| S1 | the `scan` row takes no mark | calculator: `test_the_document_names_its_value_unit_commit_and_run`; harness: `test_the_scan_rows_mark_is_this_commands_mark_of_that_name` and the `--json` pin |
+| S2 | the calculator spells the mark `run-not-proved` | the same three |
+| S3 | the legend's line leaves the mark out | calculator: the same test (its line `- scan (on main; run, not proved): …`); the harness's tests pass, as they should: its print does not hold that line |
+| S4 | a row of the document carries no mark | calculator: the same test; harness: the `--json` pin |
+| S5 | every row takes the mark by default | calculator: two tests; harness: the mark's test and the `--json` pin |
+
+**What I have not done.** No pool run of #9533's suites at the new head: you ordered its three test files once, and that is what ran. The body's edit (the run `r20261112-233013-c80e` ended exit 0 with 8 suites; the `scan` row takes the mark here) waits for the push.
+
+**Other.** `main` is `8c11a1d5abff` and has not moved in the harness, the exfiltration README, the calculator or its runner since #9454's `e2feccf258f6` [ran: an empty diff]; GitHub reads #9454 as mergeable [read]. #9375 is open [read]. W's first run `r20261113-005354-0e28` is still running [read]; its line when it ends.
+
+Least sure of: whether you want the mark printed by the calculator's own legend line at all, or only carried in the document. I print it, since a row's mark that only the JSON holds is one a reader of the table never sees.
+
