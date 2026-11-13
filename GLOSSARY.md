@@ -289,7 +289,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   what it credits, the Notation's ε_W; the fleet's ε_skip is ε_W(1 − ε_undecl) plus the wrong certificates.
 - `verity.circuits`'s `Circuit` is a Program's canonical gate layout and a `query_ast.GateSet` is a set of its gates; its query `Family` is an indexed sequence of gate sets; a primitive's `family` is the id stem of lazily materialised primitives such as `Const<w>`. The `subcircuits` of a `typed-obligation/v0` object are its shared gate bodies; the name is serialized and stays. `verity.circuits`'s gates are word-level: each outputs one `Value<w>` of w bits, not one bit, and so are the gates of the Lean model in `security/Definitions/Core/` (`Verity.Circuit`), whose Boolean profile is width 1.
 - A **template instance** (the queries `Q_template_instance` and `Q_template_instances`) is one occurrence of a subcircuit template in a program, and in a claim id `property/instance`, such as `cr/sha-512`, the instance is the primitive an assumption is about; neither is an input.
-- A **universal unit** (`verity.definitions.private_circuits.universal.UniversalUnit`) is a public Boolean Definition, one per size class, that
+- A **universal unit** (`verity.circuits.private_circuits.universal.UniversalUnit`) is a public Boolean Definition, one per size class, that
   runs any **private circuit** of the class, whose description is given as a value. Circuit hiding is
   recursion (Flock's `--hide`), not the universal unit.
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
@@ -349,7 +349,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   one integer (`boolean.word_type`): under it, `GemmCoordinate_v3` takes and returns what `GemmCoordinate_v2` does.
 - **Subcircuit template** and **subcircuit**: a template is named, with typed parameters for shape and numeric (silicon)
   semantics, such as `gemm_coordinate(K, semantics)`, a semantics value an instruction id of
-  `verity.definitions.silicon.instructions.INSTRUCTIONS`; a subcircuit binds every parameter, such as
+  `verity.circuits.silicon.instructions.INSTRUCTIONS`; a subcircuit binds every parameter, such as
   `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. The proof system proves subcircuits.
 - **Input** and **input set**: one assignment of values to a subcircuit's input gates, with the chip's output beside
   it; an input set is a batch of them for one subcircuit, with provenance (captured or synthetic).
@@ -368,7 +368,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - **Input block** (`INPUT_UNIT` in `verity.circuits.partition`): the part of a partition that holds every input gate.
   It is certified by checking each input's commitment root against its external
   anchor (the registered weights root, the client's request commitment, the randomness source), always, never sampled.
-- **Pinned**, as an instruction's status (`verity.definitions.silicon.instructions`): its silicon model matched every
+- **Pinned**, as an instruction's status (`verity.circuits.silicon.instructions`): its silicon model matched every
   hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records (else hypothesis or
   unprobed). A pinned value or root is one fixed before the run, which a check compares to.
 - **Served MACs**: a hardware count in a circuit's census, the multiply-accumulates of its served steps
