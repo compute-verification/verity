@@ -161180,3 +161180,29 @@ Your 21:18Z (`1c9fdfcafc4c`) read.
 - Item 5, as ordered at 20:19Z (committed on the join's tip once it holds the switch, not before) [run]: no `origin/cursor/proofs-join*` head holds `security/Proofs/Core/CanonicalJson.lean`; the join is at `86874e0e5314` (ASSEMBLY 21:10Z) and SESSIONOF2's locks are at `4d1280e75928`, not merged. So nothing of item 5 is committed; its text is my 20:10Z entry. When the join holds the switch I write it on that tip, commit under this checkout's identity, and try `WiredParse.lean` and `CouplesWired.lean` on a named node.
 - This step ran on a fresh VM: the worktrees are remade and I hold the pen here. No run of mine is out. ASSEMBLY's candidate `543a553d6c78` is what builds the carried line.
 - STOP RULE: not hit. NEEDS: the word when the switch is on the join.
+
+## MEMBERS, Fri 13 Nov 21:35Z: ready to mark #9821 at `d18fa66a95aa0afc90e8b57de2a7bf45ae2ee66a`; the split's head `1527be81d44c` builds in the security trees too
+
+**Ready to mark #9821 at `d18fa66a95aa0afc90e8b57de2a7bf45ae2ee66a`** (the twin, `cursor/proofs-members-membersof-34fd`; GitHub shows that head, open, no label). [read: `gh pr view 9821`]
+- The change since `af9b13440693` reaches 63 suites. [run `r20261113-205009-9cba`, its list at the start]
+- 52 passed with their slow tests: 28,678 tests passed, none failed, 654 skipped. [run `r20261113-174635-438e`, vy-nebius-cpu-1, read from its kept passes]
+- The other 11 passed at the quick tier (`--changed af9b13440693 --quick`): "11 suites: 11 passed (0 cached), 0 failed", 13,007 tests passed, 49 skipped, exit 0. [run `r20261113-205009-9cba`, vy-nebius-cpu-14] They are `verity-flock`, `research`, `verity/protocols/accounting/pouw/verifier`, `verity/circuits`, `verity/circuits/ops`, `verity/definitions`, `verity-numerical`, `verity/commitments`, `verity/commitments/windows`, `verity-core-evaluate` and the recursive audit's command-line suite.
+- The pull request's body now says this (`research queue edit`, the `Lane`, `Refs` and `Goal` lines kept).
+
+**The split's head `1527be81d44c6d92561224cacc81069c3d2de4c2` builds where the security trees import it.** [run `r20261113-212306-6af2`, vy-nebius-cpu-11, exit 0, ended 21:29Z]
+- `security/Properties`: `Properties.Challenger` and `Properties.Spot.Tables` compiled (230 jobs).
+- `security/Proofs`: `Proofs.Properties.Spot.Units`, `Proofs.Properties.Verity.Recursive.BaseSetup` and `Proofs.Properties.Verity.Sampled.MemberForm.Evidence` compiled (9,913 jobs). One warning, an unused simp argument at `BaseSetup.lean:192`, which is that file's own text.
+- With my 21:20Z, every module that imports `Spot.OneStageZk` by name now has a build on the split: eleven modules in six packages.
+- My first launch of this build, `r20261113-211522-423f` on vy-nebius-cpu-1, waited seven minutes for a slot behind two runs; I cancelled it by its id and launched it on cpu-11.
+
+**The two records runs are launched**, as my 21:20Z said, each in a clone, writing to no branch, the regenerated locks kept in the run.
+- `r20261113-213148-8dd9`, vy-nebius-cpu-11: the split's head, `lean_changed.py --records verity/protocols/proofs/spot/verifier/lean --update --moved MOVES.json`.
+- `r20261113-213157-038b`, vy-nebius-cpu-14: the carried head `097b85eff21b`, the same without `--moved`.
+- Each has a 180-minute limit from its slot. Two launches before these were refused by the runner before anything ran on a node (my launcher gave `--send` two files at once); mended.
+
+**Still running.** `r20261113-204756-e64b` (#9820's quick tier, one of eight suites passed at 21:34Z, none failed) and `r20261113-211822-06c4` (the split's quick tier, 63 suites reached, none ended at 21:34Z), both on vy-nebius-cpu-14.
+
+**Not established.**
+- #9820's quick tier: no verdict yet.
+- That the split's suites pass.
+- That no record's text moves: the two records runs have not ended.
