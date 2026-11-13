@@ -81,7 +81,7 @@ M32 = 0xFFFFFFFF
 INT8 = range(-128, 128)
 WEIGHT = range(-63, 64)
 
-# Per device, its card (verity/hardware/cards), whose numbers are read from it.
+# Per device, its card (hardware/cards), whose numbers are read from it.
 CARDS = {"sm_120 RTX PRO 6000": cards.load("rtx-pro-6000-server"), "H200 sm_90": cards.load("h200-sxm-141gb"),
          "B200 sm_100": cards.load("b200-sxm-180gb")}
 # Per device: s8 dense MACs a SM clock, SMs, f_max (Hz, the SM clock).
