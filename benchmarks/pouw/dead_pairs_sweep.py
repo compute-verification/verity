@@ -13,6 +13,7 @@ device record's own atom and compared. `--raised-pearlc` does that on a whole 64
     python benchmarks/pouw/dead_pairs_sweep.py --raised 8192:8192:20:zero,8192:8192:20:gauss --units 1 --out "$OUT/raised.json"
     python benchmarks/pouw/dead_pairs_sweep.py --raised-scheme 8192:20:zero --salts 3 --tile 4x4 --out "$OUT/scheme.json"
     python benchmarks/pouw/dead_pairs_sweep.py --raised-pearlc 65536:8192+65536:170:gauss --salts 3 --units 1 --out "$OUT/pearlc.json"
+    python benchmarks/pouw/dead_pairs_sweep.py --raised-pearlc 65536:8192+65536:32:ends,65536:8192+65536:170:edge --salts 3 --units 1 --out "$OUT/two.json"
 """
 from __future__ import annotations
 
@@ -134,6 +135,42 @@ def raised_scheme_check(k: int, groups: int, fill: str, salt: bytes, rows: int, 
             "reference_atoms": k // 32}
 
 
+#: the two-raiser variants of the raised adder (`_two_raiser_rows`), named as `--raised-pearlc`'s fill
+TWO_RAISER = ("ends", "edge")
+#: how far "edge" moves B's planted entries off their cells' centres: past the cell's edge at one end of the noise
+#: support (about 6 codes off), inside the cell at the salts drawn
+EDGE_OFF, EDGE_RAISER = 3.0, 436.0
+
+
+def _two_raiser_rows(side: str, rows: int, k: int, groups: int, rng: np.random.Generator, fill: str) -> np.ndarray:
+    """`rows` rows of one operand of a raised-adder variant aimed at the debit's forced-zero term, which charges a product
+    only where the adder cuts it at both ends of the noise support. Each of the first `groups` promotion groups holds two
+    top-code entries (positions 1 and 2 of its first atom, −448 on B in an odd group), the raised rows' plants at position
+    1 of each later atom, and zero at its other 123 positions, whose codes are noise alone. Two top codes make the
+    group's accumulator 2·448² = 401,408, under 2^19, so the adder cuts a later product under 32, not under 64: at
+    either end of the support two zero entries' codes are both 6 or both −6 and their product 36 is kept, while at a
+    salt drawn their product is far under 32 and is cut.
+
+    With `fill` "edge" B's planted entries are moreover not salt-dead: its raisers sit at α·x = ±436 (448 at a salt
+    drawn, 416 at one end) and its plants 3 off their cells' centres (the centre's code at a salt drawn, the next cell's
+    at one end), with one spike a row at k − 2 holding α. No planted pair is then dead in both rows."""
+    assert fill in TWO_RAISER and groups % 2 == 0 and 5 * groups * 64 + 64 <= k, "liveness admits k/64 large entries a row"
+    X = rng.standard_normal((rows, k))
+    X[:, :128 * groups] = 0.0
+    rho = np.sqrt((X[:, ::8] ** 2).mean(1))
+    alpha = C.Q_MAX / ((T.SPIKE + 4.0) * rho)
+    edge = fill == "edge" and side == "B"
+    if edge:
+        X[:, k - 2] = T.SPIKE * rho
+    for g in range(groups):
+        sign = -1.0 if side == "B" and g % 2 else 1.0
+        for l in (1, 2):
+            X[:, 128 * g + l] = sign * EDGE_RAISER / alpha if edge else sign * T.SPIKE * rho
+        for t, v in zip((1, 2, 3), (T.PLANT_A if side == "A" else T.PLANT_B)[g % 2]):
+            X[:, 128 * g + 32 * t + 1] = (v + (np.sign(v) * EDGE_OFF if edge else 0.0)) / alpha
+    return X.astype(np.float32).astype(np.float64)
+
+
 def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: bytes, rows: int = 64, cols: int = 64,
                        units: int = 1, cross: int = 64, scalar: bool = False) -> list[dict]:
     """The raised adder on a whole audit tile that the scheme's own code forms, admits, checks and holds to its tile rule:
@@ -166,8 +203,9 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
         tile = Tile(tuple(range(rows)), tuple(range(cols)))
         u = Matmul(0, Shape(8192, k, ns[0]), 0)
         ctx = Context(salt, u, hashlib.sha512(b"root-a" + salt).digest(), hashlib.sha512(b"root-b").digest())
-        XA = T._raised_rows("A", rows, k, groups, C._rng("scheme", "raised", k, "A", salt.hex()), fill)
-        XB = T._raised_rows("B", cols, k, groups, C._rng("scheme", "raised", k, "B"), fill)
+        make = _two_raiser_rows if fill in TWO_RAISER else T._raised_rows
+        XA = make("A", rows, k, groups, C._rng("scheme", "raised", k, "A", salt.hex()), fill)
+        XB = make("B", cols, k, groups, C._rng("scheme", "raised", k, "B"), fill)
         a_rows = [bytes(r) for r in XA.astype("<f4").view("u1").reshape(rows, 4 * k)]
         b_rows = [bytes(r) for r in XB.astype("<f4").view("u1").reshape(cols, 4 * k)]
         ops = sch.encode(ctx, sch.noise(ctx), a_rows, b_rows, tile)
@@ -178,15 +216,16 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
         lap("checked")
         a, b = np.array(ops.a.codes, dtype=np.uint8), np.array(ops.b.codes, dtype=np.uint8)
         value = np.array([np.nan if c & 0x7F == 0x7F else PC.P.fp8_to_f32(c) for c in range(256)])
-        planted_ok, largest = True, 0.0
+        planted_ok, largest, peak = True, 0.0, []
         later = np.array([128 * g + l for g in range(groups) for l in range(32, 128) if l % 32 != 1])
         for side, codes, plant in (("A", a, T.PLANT_A), ("B", b, T.PLANT_B)):
             vals = value[codes]
             for g in range(groups):
                 top = -448.0 if side == "B" and g % 2 else 448.0
-                planted_ok &= bool((vals[:, 128 * g + 1:128 * g + 4] == top).all())
+                planted_ok &= bool((vals[:, 128 * g + 1:128 * g + (3 if fill in TWO_RAISER else 4)] == top).all())
                 planted_ok &= all(bool((vals[:, 128 * g + 32 * t + 1] == v).all()) for t, v in zip((1, 2, 3), plant[g % 2]))
             largest = max(largest, float(np.abs(vals[:, later]).max()))
+            peak.append(np.abs(vals[:, later]).max(0))
         want = np.array(checked.c, dtype=np.uint32).reshape(-1)
         sample = [(i * rows // cross, (5 * i) % cols) for i in range(min(cross, rows * cols))]
         scalar_equal = sum(scalar_chain(ops.a.codes[i], ops.b.codes[j], H100) == int(want[i * cols + j]) for i, j in sample)
@@ -225,11 +264,14 @@ def raised_pearlc_tile(k: int, ns: list[int], groups: int, fill: str, salt: byte
             per_word = Fraction(sch.credit_of(s), s.m * s.n)
             for name, (equal, atoms) in programs.items():
                 cost, credit = T._raised_cost(s, atoms, units), units * Fraction(sch.credit_of(s))
-                out.append({"class": "raised-adder", "forming": "PearlC v1, -h3 SHA-512 lines",
+                out.append({"class": "two-raiser" if fill in TWO_RAISER else "raised-adder",
+                            "forming": "PearlC v1, -h3 SHA-512 lines",
                             "forms": "scalar reference" if scalar else "fast_tile batch", "program": name, "fill": fill,
                             "shape": (s.m, k, n), "groups": groups, "units": units, "salt": salt.hex()[:16],
                             "admitted": admitted, "tile_rule": rule, "planted_codes_as_designed": planted_ok,
-                            "largest_other_code_in_later_atoms": largest, "words": rows * cols, "equal": equal,
+                            "largest_other_code_in_later_atoms": largest,
+                            "largest_other_product_in_later_atoms": float((peak[0] * peak[1]).max()),
+                            "words": rows * cols, "equal": equal,
                             "scalar_chain_agrees": f"{scalar_equal}/{len(sample)}", "atoms": atoms,
                             "reference_atoms": k // 32, "flagged": atoms_f, "flagged_in_planted_groups": in_planted,
                             "later_zero": int(zeros), "elements": int(elements),
@@ -254,7 +296,8 @@ def main() -> None:
     ap.add_argument("--raised-scheme", default="", help="k:groups:fill, comma separated")
     ap.add_argument("--salt-from", type=int, default=0, help="the first salt's index, for --raised-pearlc")
     ap.add_argument("--scalar", action="store_true", help="--raised-pearlc on the scalar reference, without fast_tile's batch forms")
-    ap.add_argument("--raised-pearlc", default="", help="k:n[+n...]:groups:fill, comma separated: whole tiles on the scheme's code")
+    ap.add_argument("--raised-pearlc", default="", help="k:n[+n...]:groups:fill (fill: gauss, zero, or the two-raiser variants ends and edge), comma separated: "
+                                                    "whole tiles on the scheme's code")
     ap.add_argument("--salts", type=int, default=1)
     ap.add_argument("--tile", default="4x4")
     ap.add_argument("--out", required=True)
