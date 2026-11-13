@@ -57,3 +57,24 @@ Final theorems in `Properties.Spot.SecurityProofs`.
    (`st.undecided = none → Good pre st`), `acceptMeans : AcceptMeans`, `committedOnce : CommittedOnce`.
 7. A24: `SeqInv`/`verifyLedger_seq` after `verifyLedger_sig`; `LedgerLinesOfDevice` from `line_of_device` per line;
    `LedgerOfDevice` from it plus `Numbered` and `entry_fields_equiv` on `"seq"`.
+
+## State at Fri 01:02Z (for whoever resumes on a new machine)
+
+- PR 4's branch `cursor/proofs-prf600-period-proofs-4c9a` holds both proofs files, written blind, never compiled:
+  `security/Proofs/Properties/Spot/Period.lean` (`ledgerMeans`, `acceptMeans`, `committedOnce`) and
+  `security/Proofs/Properties/Spot/PeriodLedger.lean` (`ledgerLinesOfDevice`, `ledgerOfDevice`), both roots in
+  `security/Proofs/lakefile.toml`; `Window.lean` has `line_of_device` carved out and `sig_lms` added.
+- The compile loop: `run-pr4-try.sh` in a `research run --cwd clone --source <PR 4 worktree> --pool proofs --as proofs
+  --mem-gb 16 --timeout 3600`. `--try` prints every error of the file; `--build` only each file's first.
+- Every mvcgen closer ends in `fail "<name>: a goal mvcgen left is not closed"`, which prints the goal and its
+  hypotheses: read those to write the closer.
+- Known risks, in the order I expect them: `partition_toList` (invariant syntax and `simp_all`; fallback is two
+  `filter`s in `windowsIn`, a PR 2 change: say before doing it); `read_ok`'s `rfl` (the copy of `read`'s lambda in
+  `sessionAt`); the leaf closers of `windowsIn_ok`, `caseAt_ok`, `windowAt_raw`, `run_ok`; `checked_lines`'s invariant
+  (copied from `checked_ok`); `recordOfJson_seq`'s `by assumption` for `getD j "seq" = .num n`.
+- Machines: vy-nebius-2 and vy-nebius-cpu-11 were both full at 01:00Z (cpu-11: free slots blocked by memory
+  reserved by live runs). Coordinator's rule: stay on vy-nebius-2; after 15 min in line, cancel and resend to cpu-11;
+  never `--on auto`, never cpu-13.
+- PR 2 (`…-period-audit-9c4e` at `5dacc95eab`): build + 24 difftests pass (`e334`); opens when its quick tier
+  (`a005`) passes; then a records run.
+- #9537 waits on its records run `ddb2`; #9546 on its quick tier `090e`.
