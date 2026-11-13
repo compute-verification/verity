@@ -148,8 +148,11 @@ The stream's path is the network certifier's alone, with `watermark` or without:
 would reach the server under the run's id, as the stream does, and a server would read its body as the watermark's
 lines. So a request whose first cell opens as one to that path (`release.to_watermark`: the path as a server reads it
 off the request line) is refused before that cell is cut: none of its bytes is cut into a cell or reaches the server,
-its ingress is padding and it fails as its client's (malformed). Only the first cell is read: a path that ends past
-it, or a second request on the connection, the network certifier doesn't see.
+its ingress is padding and it fails as its client's (malformed). A request line that ends past the first cell (line
+breaks before it, a long authority) is read at the request's `END`, with the request whole, before that cell is cut:
+the cells before it are in the ingress record, and the request has no `END`, no place in the release order and no
+byte for the server. Past a request's first line the network certifier reads nothing here: a second request on the
+connection is the server's to refuse.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
 cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included.
@@ -471,7 +474,7 @@ class _Connection:
     egress_cells: int = 0  # egress slots past s + D, released
     problem: str | None = None  # the client's: failed at the next slot
     max_tokens: int | None = None  # under a response cap, its request's, read at its first request cell
-    refused: bool = False  # its request was refused (under a response cap, or to the watermark's path): none is cut
+    refused: bool = False  # its request was refused (under a response cap, or to the watermark's path): no more is cut
     left: int = 0  # with lengths rows, its request's bytes still to be cut (`io_request.read`'s carry)
     upstream: str | None = None  # the server connection's: failed at the first egress slot without a whole cell
     failed: str | None = None  # one of REASONS
@@ -829,8 +832,9 @@ class Warden:
     def _ingress(self, c: _Connection, t: int) -> list[bytes]:
         """Connection c's r ingress cells at bucket t, their payloads held for the server until the `END`'s release,
         then written whole with the release order, or kept until its connection opens (at most the ingress bound's
-        bytes): the release never waits on the server. A request whose first cell opens as one to the watermark's path
-        (`release.to_watermark`) is refused there, with the client's reason malformed: no cell of it is cut."""
+        bytes): the release never waits on the server. A request that opens as one to the watermark's path
+        (`release.to_watermark`) is refused with the client's reason malformed, where its first cell says so before any
+        cell of it is cut, and where only the whole request does before its `END` is: either way nothing is released."""
         B, p, r = self.params.cell_bytes, self.params.payload, self.params.slots
         out, sent, pad = [], [], _pad(c, B)
         for _ in range(r):
@@ -843,7 +847,8 @@ class Warden:
                 out.append(pad)
             elif len(c.ingress) > p or (len(c.ingress) == p and not c.ingress_ended) or c.ingress_ended:
                 kind = DATA if len(c.ingress) > p or not c.ingress_ended else END
-                if not (c.ingress_cells or sent) and to_watermark(bytes(c.ingress[:p])):
+                if (kind == END or not (c.ingress_cells or sent)) and \
+                        to_watermark(bytes(c.held) + b"".join(sent) + bytes(c.ingress[:p])):
                     c.refused, c.problem = True, c.problem or "malformed"
                     out.append(pad)
                     continue

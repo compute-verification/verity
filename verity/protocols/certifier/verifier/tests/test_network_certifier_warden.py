@@ -19,8 +19,8 @@ from verity.protocols.certifier.verifier import active, io_tie as IT
 from verity.protocols.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.protocols.certifier.verifier.grid import Reason
 from verity.protocols.certifier.verifier.pacer import Report
-from verity.protocols.certifier.verifier.release import (WATERMARK_END, read_watermark, release_of, watermark_chunk,
-                                                     watermark_head, with_release)
+from verity.protocols.certifier.verifier.release import (WATERMARK_END, read_watermark, release_of, to_watermark,
+                                                     watermark_chunk, watermark_head, with_release)
 from verity.protocols.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, PARAMETERS_TAG, REASONS,
                                                     REFUSED, WRITE_BACKLOG, Shim, Warden, WardenParams, audit, cell,
                                                     cells, read_cell, read_reason, reason_frame)
@@ -1164,6 +1164,51 @@ def test_a_schedule_that_bounds_max_tokens_refuses_it_before_its_path_is_read():
     """Under `CAPPED` the request is refused as every request whose `max_tokens` isn't where an id request has it,
     with that refusal's own reason: none of its bytes is cut into a cell or reaches the server."""
     refused(client_stream(OWN_LINE))
+
+
+#: request lines that end past the first cell, each of which a server still routes as it routes the stream's own
+LONG_LINES = {
+    "line breaks first": b"\r\n" * 28 + OWN_LINE,
+    "a long authority": b"POST http://" + b"a" * 44 + b"/verity/watermark HTTP/1.1",
+    "a long method": b"A" * 56 + b" /verity/watermark HTTP/1.1",
+}
+
+
+@pytest.mark.parametrize("name", sorted(LONG_LINES))
+def test_a_request_line_that_ends_past_the_first_cell_is_refused_at_its_end_and_no_server_gets_it(name):
+    """A client's copy of the stream whose first cell says nothing of its path. Its cells before the last are cut and
+    signed, and the request is read whole before its `END` is cut: it has no `END`, no place in the release order and
+    no byte for the server, it fails as its client's (malformed) in that bucket, and the server sees the run without
+    it. The same bytes to another path are released whole."""
+    honest, mine = cells(http(b"{}"), B), client_stream(LONG_LINES[name])
+    assert not to_watermark(mine[:P]) and to_watermark(mine) and -(-len(mine) // P) == 2 * R + 1
+    alone = streamed({1: [honest]}, True)[2]
+    certifier, clients, server = streamed({1: [honest, cells(mine, B)]}, True)
+    log = {e["ordinal"]: e for e in certifier.log}
+    assert (log[2]["failed"], log[2]["release"], log[2]["ingress_end"], log[2]["ingress_cells"]) == \
+        ("malformed", None, None, 2 * R)
+    assert server.conns[1].received == b"" and server.events == alone.events
+    ingress = [f for r in records(certifier)[0] for row in r.grid for f in row if f is not None]
+    assert [f[0] for f in ingress if HEADER.unpack_from(f)[1] == 2] == [PAD] * R + [DATA] * (2 * R) + [PAD] * R
+    assert reasons(certifier) == [(4, 2, "malformed")] and clients[1].shim().outcome == "fail"
+    assert certifier.requests_released == 1 and certifier.watermark_lost == [] and log[1]["release"] == 0
+    other = client_stream(LONG_LINES[name].replace(b"verity", b"verify"))
+    certifier, _, server = streamed({1: [honest, cells(other, B)]}, True)
+    log = {e["ordinal"]: e for e in certifier.log}
+    assert log[2]["failed"] is None and certifier.requests_released == 2
+    assert server.conns[1].received == with_release(other, log[2]["release"], STREAM_RUN, log[2]["ingress_end"])
+
+
+def test_a_second_request_on_a_connection_is_not_read_and_is_released_with_the_first():
+    """What the network certifier doesn't read is what follows a request's first line. A request to another path with
+    a copy of the stream after it, on one connection, is released whole, the copy in its bytes: what a server makes of
+    bytes after a request's end is the server's to refuse."""
+    both = http(b"{}") + client_stream(OWN_LINE)
+    certifier, _, server = streamed({1: [cells(both, B)]}, True)
+    (entry,) = certifier.log
+    assert entry["failed"] is None and not to_watermark(both)
+    assert server.conns[0].received == with_release(both, 0, STREAM_RUN, entry["ingress_end"])
+    assert server.conns[0].received.endswith(client_stream(OWN_LINE))
 
 
 def test_the_parameters_digest_binds_every_parameter():

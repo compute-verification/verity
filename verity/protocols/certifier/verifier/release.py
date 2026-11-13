@@ -28,8 +28,8 @@ last frame). A client's own release headers are dropped; bytes that aren't an HT
 unchanged. A live shim that rebuilds the POST copies the headers onto it (`release_of`, `release_head`).
 
 The watermark's path is the network certifier's alone: it releases no client's request that opens as one to that path
-(`to_watermark`, read on the request's first cell), which would reach the server under the run's id as the stream
-does."""
+(`to_watermark`, read on the request's first cell and on the whole request at its `END`), which would reach the server
+under the run's id as the stream does."""
 
 from __future__ import annotations
 
