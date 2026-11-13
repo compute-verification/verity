@@ -19,8 +19,9 @@ blobs sent (`sentEvidenceAt`) and the proof files decoded from it at the stateme
 (`statementFiles statementTable`).
 
 The sample's family's releases precede every opening (`accept_read`'s `SampleLinkFirst`). At coins whose bytes are
-the window's, the window's sample is the units v1's check proved (`joint_draw_of_drew`, `checkAt_proved`, at the
-registration's population, `WindowOn.population`), so each member with a proof block in it has a statement with one
+the window's, the window's draw ends on them, so its sample ended (`joint_drawUnits_of_drew`), and the sample is the
+units v1's check proved (`joint_draw_of_drew`, `checkAt_proved`, at the registration's population,
+`WindowOn.population`), so each member with a proof block in it has a statement with one
 session (`member_session`), which the check names at its place (`named_at`), whose record and evidence are the ones
 sent for that place (`sentRecordAt_session`, `sentEvidenceAt_session`), which the verifier's read holds the device's
 log to (`sessionRead_logged`), and whose proof files are the evidence's (`statementFiles_evidence`). The log opens
