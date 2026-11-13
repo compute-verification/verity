@@ -68,7 +68,7 @@ abbrev Oracle (N ρ h : ℕ) (X Dg : Type) : Type := (Fin ρ → X) × Fin N × 
 abbrev Pub (N ρ h : ℕ) (X Sig Dg : Type) : Type := Sig × Oracle N ρ h X Dg
 
 /-- A window's coins besides its stream: the live coins (`Verity.Coins`) with the signs and the oracle at the fresh seed
-as their public part, and the `s` sampled tiles as their draw. -/
+as their public part, and the `s` sampled tiles as their sample. -/
 abbrev Coins (N ρ h s : ℕ) (X Sig Dg : Type) : Type := Verity.Coins (Pub N ρ h X Sig Dg) s N
 
 instance instFintypeCoins (N ρ h s : ℕ) (X Sig Dg : Type) [Fintype X] [DecidableEq X] [Fintype Sig] [Fintype Dg]

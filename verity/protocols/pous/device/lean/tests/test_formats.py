@@ -253,7 +253,7 @@ def test_lms_verify(server):
 SETUP_RECORD = st.fixed_dictionaries({
     "blocks": WIDE(64), "commitment": hexed(st.binary(max_size=70)), "salt": hexed(st.binary(max_size=30)),
     "root": hexed(st.binary(max_size=70))})
-#: A setup record's fields, well formed: the message's inputs, whose record's malformed fields `SETUP_RECORD` draws.
+#: A setup record's fields, well formed: the message's inputs, whose record's malformed fields `SETUP_RECORD` samples.
 WELL_FORMED_SETUP_RECORD = st.fixed_dictionaries({
     "blocks": st.integers(0, 2 ** 64 - 1), "commitment": hexed(st.binary(max_size=70)),
     "salt": hexed(st.binary(max_size=30)), "root": hexed(st.binary(max_size=70))})

@@ -266,7 +266,7 @@ def _agree(port, server, cases: dict[str, tuple[dict, str | None]]) -> dict[str,
 def test_each_refusal_agrees(test_server) -> None:
     """Under `--test`: the honest run is accepted with nothing certified and the signed run's two gaps after the point's;
     each edit is refused, by the Lean and the Python alike and in the same words, for the refusal it names. The honest
-    session draws one block in two rounds, and the opening of the later round is checked as its own."""
+    session samples one block in two rounds, and the opening of the later round is checked as its own."""
     cases = edited(M.test_signer(M.SECRETS[0], 2, 1))
     got = _agree(TEST, test_server, cases)
     honest = got["honest"]
@@ -305,7 +305,7 @@ def test_setup_accepted_is_the_certificates_hypothesis() -> None:
 
 @pytest.mark.slow
 def test_drawn_sessions_agree(test_server) -> None:
-    """Sessions under drawn coins on the one setup, honest or under one bit off in one opening's row or path, or in the
+    """Sessions under flipped coins on the one setup, honest or under one bit off in one opening's row or path, or in the
     setup record's signature."""
     signer = M.test_signer(M.SECRETS[0], 2, 1)
 

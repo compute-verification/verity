@@ -1,4 +1,4 @@
-"""C-Flock lowers the hashing Definitions traced with calls (each SHA-512 compression a call of
+"""Flock lowers the hashing Definitions traced with calls (each SHA-512 compression a call of
 `commitments.gates.sha512.Sha512CompressFolded`, which has no builder) to the circuit it lowered them to before: an activation
 of a part is lowered by its builder (`ir_lower._boolean_activation`), never through the calls. Each pin is the flock-ir-unit/v2
 netlist's sha256 and useful rows that `ir_lower.whole` gave with every compression's gates written out in the parts' bodies:
