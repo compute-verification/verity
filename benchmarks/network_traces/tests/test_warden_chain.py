@@ -12,6 +12,7 @@ run's."""
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
 import re
@@ -28,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/device/live_challenger"))
 
 import auditor as G  # noqa: E402
+from test_connection_rows_run import ANSWERS, CR, ENDS, PROMPTS, T, device_key, served  # noqa: E402
 from test_scan_zk import published, sz  # noqa: E402
 
 import warden_chain as WC  # noqa: E402
@@ -152,6 +154,39 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
     with pytest.raises(SystemExit, match="--extra and --late are certifier-serve's runs"):
         n2.main(["prove", "--warden-run", str(run), "--extra", str(certifier_run), "--dry", "--out",
                  str(tmp_path / "n2x")])
+
+
+def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_reader_checks_it(tmp_path):
+    """A run at the lengths rows' form 2 whose first two execution phases end in the network certifier's word that
+    they have no head, and its last two in their heads. Of each line of its `rows.jsonl` the gate publishes one
+    certificate in the same six fields and nothing of the line's cost. The word's fields, with the schedule's digest,
+    are the word's public record whole, which `connection_rows.check_no_head` accepts under the deployment's key and
+    session for its own execution phase alone; a head's certificate read as the word is refused. So a reader tells
+    the two apart from what the gate publishes, and nothing but the word's record leaves by the word's line."""
+    out = tmp_path / "run"
+    params = dataclasses.replace(ENDS, queue=5)
+    served(out, tmp_path / "key", params=params, prompts=(*PROMPTS, (14,), (15, 16)),
+           answers=(*ANSWERS[:5], (3,), (4, 5)), arrive={6: T + 2, 7: 2 * T + 2})
+    key, session = device_key(out)
+    lines = [json.loads(x) for x in (out / "rows.jsonl").read_text().splitlines()]
+    assert [sorted(x) for x in lines] == [["cost", G.ROWS_NO_HEAD]] * 2 + [["cost", "registration"]] * 2
+    for w, line in enumerate(lines):
+        public = G.row_certificate(line)
+        c = public["certificate"]
+        assert sorted(public) == ["certificate"]
+        assert sorted(c) == ["digest", "direction", "key_id", "link", "signature", "window"]
+        assert (c["link"], c["direction"], c["window"]) == (WC.WS.LINK, G.ROWS_DIRECTION, w)
+        word = {"format": CR.NO_HEAD, "link": c["link"], "window": c["window"], "parameters": params.digest.hex(),
+                "certificate": {"key": c["key_id"], "digest": c["digest"], "signature": c["signature"]}}
+        if G.ROWS_NO_HEAD in line:
+            assert word == line[G.ROWS_NO_HEAD]
+            CR.check_no_head(word, key, session, params, c["link"], w)
+            with pytest.raises(ValueError, match="the word's window"):
+                CR.check_no_head(word, key, session, params, c["link"], w + 1)
+        else:
+            assert c["digest"] == line["registration"]["certificate"]["digest"]
+            with pytest.raises(ValueError, match="doesn't sign that the execution phase has no head"):
+                CR.check_no_head(word, key, session, params, c["link"], w)
 
 
 def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_signed_digest(tmp_path):
