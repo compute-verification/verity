@@ -228,6 +228,7 @@
   "Proofs.Properties.Verity.SampledTwo.Accepts",
   "Proofs.Properties.Verity.SampledTwo.AcceptsProof",
   "Proofs.Properties.Verity.SampledTwo.AcceptsTop",
+  "Proofs.Properties.Verity.SampledTwo.PremisesAt",
   "Proofs.Properties.Verity.SampledTwo.Apart",
   "Proofs.Properties.Verity.SampledTwo.Binding",
   "Proofs.Properties.Verity.SampledTwo.Claim",
