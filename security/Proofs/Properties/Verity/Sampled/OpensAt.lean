@@ -313,28 +313,30 @@ end Instance
 /-- **`remote_soundness_deployedAt` with its openings and registered files discharged**: its openings premise
 `OpensAt` holds at every instance (`Instance.opensAt`), as does the registered files' file check (`RegisteredFiles`,
 `Instance.registeredFiles`); its session premise `SessionAt` is `sessionAt_of_registered`'s from `SessionRegistered`,
-which owes only the session's setup on the registered files, the ports and roots check being v2's own on the accepted
-play (`opensReady_of_accepted`), and the coupling's, the device's log opening only the record's rounds (`LogOpensRecorded`), is v2's record check's,
+the ports and roots check being v2's own on the accepted play (`opensReady_of_accepted`), and `SessionRegistered` is
+`Instance.sessionRegistered`'s from the session's construction (`Instance.sessionOf`) and `FamiliesPinned`, which owes
+only that the coin commitment's families hold the family v2's parameters name; the coupling's, the device's log opening only the record's rounds (`LogOpensRecorded`), is v2's record check's,
 which refuses a session whose coin tree opens a round its record doesn't give (`Instance.logOpensRecorded`). -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hSr : I.SessionRegistered .remote)
+    (hFP : I.FamiliesPinned .remote)
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
   remote_soundness_deployedAt I K₀ reg record recordDigest I.opensAt I.registeredFiles
-    (I.sessionAt_of_registered .remote hSr) (I.logOpensRecorded .remote) hW hI
+    (I.sessionAt_of_registered .remote (I.sessionRegistered hFP)) (I.logOpensRecorded .remote) hW hI
 
 open scoped ENNReal in
 /-- **`remote_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
-reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: the session
-premise speaks of the sessions the deployment runs, and the base's PoUW and inference-only targets hold at `⊤`. -/
+reading (`Instance.Honest.inst`), whose coin commitment holds the family v2's parameters name
+(`Instance.Honest.familiesPinned`) and whose base publishes `⊤` for every subprotocol, where the base's PoUW and
+inference-only targets hold. -/
 theorem remote_soundness_deployedReady_honest :
-    (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .remote ∧
-      (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .remote :=
-  ⟨Instance.Honest.sessionRegistered_none ⊤ .remote,
+    (Instance.Honest.inst ⊤ Instance.Honest.bound).FamiliesPinned .remote ∧
+      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.PouwSound .remote ∧
+      (Instance.Honest.inst ⊤ Instance.Honest.bound).base.InferenceOnlySound .remote :=
+  ⟨Instance.Honest.familiesPinned ⊤ Instance.Honest.bound .remote,
     Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
 
 /-- **`remote_soundness_deployedReady`'s nontrivial lemma**: its conclusion, soundness at remote's compiled verifier,
