@@ -13,18 +13,19 @@ that y, at the registration record W's entries, to the call's function of the ca
 on that circuit. These are statements only: none is proved here, and none is a guarantee yet. The statements about
 Pearl+ are `Properties.Pouw.PearlPlus`'s, read by name and restated nowhere here.
 
-* **The tied circuit** (`Tying`). The served circuit with each credited cell's y gate computed by added gates from the
-  call's A row, served gates, and the weight's row, added registered inputs. No circuit Definition of the call is in
-  Lean, so the tied circuit is a parameter held to one property (`Tying.AtW`): at each y gate's cell, a credited cell of
-  the run whose call and weight W registers, its gates compute `yCell` under the pass's salt and the root W registers
-  for the weight.
+* **The tied circuit** (`Verity.ValueTie.Tying`, with its blocks and its untied gates in `Properties.Verity.Tied`).
+  The served circuit with each cell's y computed by the tie's gates from the call's A row, served gates, and the
+  weight's row, added registered inputs. No circuit Definition of the call is in Lean, so the tied circuit is a
+  parameter held to one property (`Tying.AtW`): at each cell it ties, a real cell of the run whose call and weight W
+  registers, its gates compute `yCell` under the pass's salt and the root W registers for the weight.
 * **The composite step** (`Phases.YIsTheGates`, `Phases.FleetYIsTheGates`). Over a monitoring period's execution
   phases, each remote's play, on the period's coins: the phases of a sequence up to some phase are accepted by remote's
   compiled verifier on a W that registers the weights while the claim fails on them, with probability at most the
   error. The claim (`Phases.TiedUpTo`) is, at each of those phases, on the transcript SPOT's extractor reads
   off the prover (`Commit.TiedBy`): every served y of a tile that the run's table ties at W's entries, bound in that
-  transcript with its A row, holds the tied gates' output; and the policy's verdict on the tied circuit bounds each
-  block's fresh input with the other y's counted as fresh input (`Tying.CompliesBut`). And over those phases
+  transcript with its A row, holds the tied gates' output; and where the registered file's circuit complies with the
+  inference-only policy, the tied circuit's blocks hold `Γ` on their registered rows with the untied cells' y counted
+  as fresh input (`Tying.CompliesBut`). And over those phases
   ∏ (1 − wrong share) is at least 1 − ε, the wrong share (`Properties.Pouw.PearlPlus.Run.wrongShare`) the ticket weight
   of the tiles the table does not tie. `Phases.FleetYIsTheGates` is the same claim pooled across sequences, at
   `FleetYAtWIsTheCall`'s threshold.
@@ -57,11 +58,12 @@ prefix to any end; `Phases.FleetYIsTheGates` pools the prefixes to ends fixed be
 
 **What is not tied**, and counts as fresh input:
 
-* the y of a tile in the wrong share;
-* the y of a cell that is not credited, of a dropped round's call or of a version-1 W
-  (`Properties.Pouw.PearlPlus`'s list): no tied circuit that is the run's calls at W's entries computes it, so it stays
-  an input gate that is not registered. A phase accepted on a version-1 W is not counted, and ends its sequence's
-  prefix as a refusal does;
+* the y of a cell that is not credited, of a tile in the wrong share, or that is not shown at W's entries: the tie
+  computes it, and the claim reads it nowhere, so it counts as fresh input wherever its served y is not the tie's
+  output;
+* the y of a dropped round's call or of a version-1 W (`Properties.Pouw.PearlPlus`'s list): no tied circuit that is
+  the run's calls at W's entries computes it, so it stays an input gate that is not registered. A phase accepted on a
+  version-1 W is not counted, and ends its sequence's prefix as a refusal does;
 * a y that no unit bound in the extractor's transcript reads, or whose A row holds a gate no such unit reads or writes
   (`Commit.BoundAt`): SPOT's own claim (`Verity.Vocab.SpotSound`) bounds the unbound units' share.
 
@@ -75,115 +77,15 @@ namespace Verity.ValueTie
 
 open Accounting Core
 
-/-! ## The tied circuit -/
+/-! ## The tied circuit at W's entries -/
 
-/-- A cell of a served run: the pass, the tile of the pass that holds it, the call's position in the pass, and the row
-and the column of the call. -/
-structure Cell where
-  pass : ℕ
-  tile : ℕ
-  pos : ℕ
-  row : ℕ
-  col : ℕ
-
-/-- **A tied circuit of the served circuit `C` with registered inputs `θ`.** The served gates are gates of the tied
-circuit of the same width (`emb`). The served y gates (`y`), input gates of `C` that are not registered, are computed in
-the tied circuit; every other served gate is as served: an input gate stays one, registered or not as it was, and a
-computed gate reads the same gates and applies the same operation. The gates the tied circuit adds compute each y from
-its call's A row, served gates (`row`), and the weight's row, added input gates, which are registered and hold
-`weights`. `cell` names the cell a y gate holds, `aRow` and `bRow` the bytes of the cell's A row and of its weight's
-row as their trees store them, the A row read from the served values at `row` alone, and `word` a y gate's value as the
-word its tree stores, one word for each value. -/
-structure Tying (C : Verity.Circuit) (θ : Finset (Fin C.N)) where
-  /-- the tied circuit, with its registered inputs -/
-  tied : Verity.RegisteredCircuit
-  emb : Fin C.N → Fin tied.D.N
-  emb_inj : Function.Injective emb
-  emb_w : ∀ g, tied.D.w (emb g) = C.w g
-  /-- the served y gates the tied circuit computes -/
-  y : Finset (Fin C.N)
-  y_fresh : ∀ g ∈ y, C.isInput g = true ∧ g ∉ θ
-  y_gate : ∀ g ∈ y, tied.D.isInput (emb g) = false
-  isInput_emb : ∀ g, g ∉ y → tied.D.isInput (emb g) = C.isInput g
-  reads_emb : ∀ g, C.isInput g = false → tied.D.reads (emb g) = (C.reads g).map ⟨emb, emb_inj⟩
-  op_emb : ∀ g, C.isInput g = false → ∀ v : tied.D.Trace,
-    (tied.D.op (emb g) v).cast (emb_w g) = C.op g fun a => (v (emb a)).cast (emb_w a)
-  outputs_emb : ∀ o ∈ C.outputs, emb o ∈ tied.D.outputs
-  theta_emb : ∀ g, emb g ∈ tied.θ ↔ g ∈ θ
-  /-- an input gate the tied circuit adds is registered -/
-  added_registered : ∀ h, (∀ g, emb g ≠ h) → tied.D.isInput h = true → h ∈ tied.θ
-  /-- the registered values of the added input gates, the weights' rows; read at those gates alone -/
-  weights : tied.D.Trace
-  /-- the cell a served y gate holds -/
-  cell : Fin C.N → Cell
-  /-- the served gates of the A row of a y gate's cell -/
-  row : Fin C.N → Finset (Fin C.N)
-  /-- the bytes of the A row of a y gate's cell, as its tree stores the row -/
-  aRow : C.Trace → Fin C.N → ByteArray
-  aRow_reads : ∀ (X X' : C.Trace) (g : Fin C.N), (∀ a ∈ row g, X a = X' a) → aRow X g = aRow X' g
-  /-- the bytes of the weight's row of a y gate's cell, as its tree stores the row -/
-  bRow : Fin C.N → ByteArray
-  /-- a y gate's value as the 32-bit word its tree stores -/
-  word : (g : Fin C.N) → BitVec (C.w g) → ℕ
-  word_inj : ∀ g, Function.Injective (word g)
-
-namespace Tying
-
-variable {C : Verity.Circuit} {θ : Finset (Fin C.N)} (T : Tying C θ)
-
-/-- The served gates' values in the tied circuit's transcript `X'`. -/
-def served (X' : T.tied.D.Trace) : C.Trace := fun g => (X' (T.emb g)).cast (T.emb_w g)
-
-/-- The tied circuit's transcript `X'` holds the weights' registered rows at the input gates the tied circuit adds. -/
-def HoldsWeights (X' : T.tied.D.Trace) : Prop :=
-  ∀ h, (∀ g, T.emb g ≠ h) → T.tied.D.isInput h = true → X' h = T.weights h
-
-/-- **`X'` is the served transcript `X` in the tied circuit**: it holds `X`'s value at every served gate, and the
-weights' registered rows at the added input gates. -/
-def Extends (X : C.Trace) (X' : T.tied.D.Trace) : Prop := T.served X' = X ∧ T.HoldsWeights X'
-
-/-- **The added gates are evaluated in `X'`**: every computed gate the tied circuit adds holds its operation's value on
-`X'`. With `Extends` it fixes `X'`, the served transcript with the linears' interiors filled in. -/
-def Evaluated (X' : T.tied.D.Trace) : Prop :=
-  ∀ h, (∀ g, T.emb g ≠ h) → T.tied.D.isInput h = false → X' h = T.tied.D.op h X'
-
-/-- **The served gate `g` holds the tied gates' output in `X'`**: its value is its tied gate's operation on `X'`. -/
-def IsGates (X' : T.tied.D.Trace) (g : Fin C.N) : Prop :=
-  X' (T.emb g) = T.tied.D.op (T.emb g) X'
-
-open Classical in
-/-- **The served y's that are not the gates' output in `X'`**: the y's that count as fresh input. -/
-noncomputable def untied (X' : T.tied.D.Trace) : Finset (Fin C.N) :=
-  T.y.filter fun g => ¬ T.IsGates X' g
-
-/-- The bits of the served y's `B` that the gates `R` of the tied circuit hold or read. -/
-def untiedBits (B : Finset (Fin C.N)) (R : Finset (Fin T.tied.D.N)) : ℕ :=
-  T.tied.D.width (B.map ⟨T.emb, T.emb_inj⟩ ∩ (R ∪ T.tied.D.into R))
-
-/-- **The fresh input the gates `R` of the tied circuit read, the served y's `B` counted as fresh input**, in bits:
-`R`'s novel reads in the tied circuit (`Nci.novelReads`), and the y's of `B` that `R` holds or reads. -/
-def freshInput (B : Finset (Fin C.N)) (R : Finset (Fin T.tied.D.N)) : ℕ :=
-  Nci.novelReads T.tied R + T.untiedBits B R
-
-/-- **The inference-only policy on the tied circuit, the served y's `B` counted as fresh input**: the tied circuit
-divides into blocks of at most `Γ` gates, each reading at most `a` bits of fresh input a gate and the y's of `B` it
-holds or reads. It is `Nci.CompliesRate Γ a` on the tied circuit with those y's added to both sides, so what it says
-beyond the policy's verdict is which y's are in `B`. -/
-def CompliesBut (Γ : ℕ) (a : ℝ) (B : Finset (Fin C.N)) : Prop :=
-  ∃ (n : ℕ) (P : Verity.Partition T.tied.D n), ∀ u,
-    T.tied.D.size (P.gates u) ≤ Γ ∧
-      (T.freshInput B (P.gates u) : ℝ) ≤ a * T.tied.D.size (P.gates u) + T.untiedBits B (P.gates u)
-
-/-- **The served y gate `g` holds a credited cell of the run `R`, at W's entries.** Its cell is a credited cell of the
-tile `(T.cell g).tile` of the pass `p`, the call's record `r`, and W registers the call's A rows, the weight's B rows
-and the call's y (`Properties.Pouw.PearlPlus.Registers`) under the roots `rootA`, `rootB` and `yRoot` and the call's
-domains `da`, `db` and `dy`, at the pass's salt: the entries `TieMeans` says W registers, as `CellAtW` reads them. -/
-def CellOf (R : Properties.Pouw.PearlPlus.Run) (g : Fin C.N) (p : PouwCheck.PearlPlus.Pass)
+/-- **The cell `c` is a real cell of the run `R`, at W's entries.** Its pass `p`, the call's record `r`, a row below
+the call's real rows and a column below its width; and W registers the call's A rows, the weight's B rows and the
+call's y (`Properties.Pouw.PearlPlus.Registers`) under the roots `rootA`, `rootB` and `yRoot` and the call's domains
+`da`, `db` and `dy`, at the pass's salt: the entries `TieMeans` says W registers, as `CellAtW` reads them. -/
+def CellAt (R : Properties.Pouw.PearlPlus.Run) (c : Cell) (p : PouwCheck.PearlPlus.Pass)
     (r : PouwCheck.PearlPlus.UnitRecord) (da db dy : PouwCommit.RowsDomain) (rootA rootB yRoot : ByteArray) : Prop :=
-  ∃ rows cols : List ℕ,
-    R.passes[(T.cell g).pass]? = some p ∧ p.records[(T.cell g).pos]? = some r ∧
-    p.tile? (T.cell g).tile = some ((T.cell g).pos, rows, cols) ∧
-    (T.cell g).row ∈ (r.credited rows cols).1 ∧ (T.cell g).col ∈ (r.credited rows cols).2 ∧
+  R.passes[c.1]? = some p ∧ p.records[c.2.1]? = some r ∧ c.2.2.1 < r.realRows ∧ c.2.2.2 < r.matmul.n ∧
     PouwCommit.rowsDomain (PouwCommit.activationBinding p.salt r.matmul.index) r.matmul.index r.matmul.m
       PouwCheck.PearlPlus.HM96 false = .ok da ∧
     PouwCommit.rowsDomain (PouwCommit.weightBinding r.matmul.weight) (-2) r.matmul.n
@@ -191,26 +93,20 @@ def CellOf (R : Properties.Pouw.PearlPlus.Run) (g : Fin C.N) (p : PouwCheck.Pear
     PouwCommit.rowsDomain (PouwCheck.PearlPlus.yBinding p.salt r.matmul.index) r.matmul.index r.realRows
       PouwCheck.PearlPlus.HM96 false = .ok dy ∧
     Properties.Pouw.PearlPlus.Registers R.w
-      s!"pearl-a/{Properties.Pouw.PearlPlus.roundOf R.rounds R.passes.length (T.cell g).pass}/{(T.cell g).pos}"
+      s!"pearl-a/{Properties.Pouw.PearlPlus.roundOf R.rounds R.passes.length c.1}/{c.2.1}"
       rootA r.matmul.m r.matmul.k da ∧
     Properties.Pouw.PearlPlus.Registers R.w s!"pearl-b/{r.matmul.weight}" rootB r.matmul.n r.matmul.k db ∧
     Properties.Pouw.PearlPlus.Registers R.w
-      s!"pearl-y/{Properties.Pouw.PearlPlus.roundOf R.rounds R.passes.length (T.cell g).pass}/{(T.cell g).pos}"
+      s!"pearl-y/{Properties.Pouw.PearlPlus.roundOf R.rounds R.passes.length c.1}/{c.2.1}"
       yRoot r.realRows r.matmul.n dy
 
-/-- **The tied circuit is the run's calls at W's entries.** Each served y gate holds a credited cell of the run `R` at
-W's entries (`CellOf`), and the tied gates compute the call's function there: in every transcript of the tied circuit
-whose added gates are evaluated on the weights' registered rows, the tied gate's output at the y gate is, as a word,
-`yCell` of the cell's served A row and its weight's row under the pass's salt and the root W registers for the
-weight. -/
-def AtW (R : Properties.Pouw.PearlPlus.Run) : Prop :=
-  ∀ g ∈ T.y, ∃ (p : PouwCheck.PearlPlus.Pass) (r : PouwCheck.PearlPlus.UnitRecord)
-      (da db dy : PouwCommit.RowsDomain) (rootA rootB yRoot : ByteArray),
-    T.CellOf R g p r da db dy rootA rootB yRoot ∧
-    ∀ X' : T.tied.D.Trace, T.Evaluated X' → T.HoldsWeights X' →
-      Properties.Pouw.PearlPlus.yCell p.salt rootB r.matmul.index r.matmul.k (T.cell g).row (T.cell g).col
-          (T.aRow (T.served X') g) (T.bRow g) =
-        some (T.word g ((T.tied.D.op (T.emb g) X').cast (T.emb_w g)))
+/-- **The cell `c` is credited in a tile the run `R`'s table ties at W's entries**: a credited cell
+(`UnitRecord.credited`) of a tile of its pass and call, and that tile tied (`Properties.Pouw.PearlPlus.TileTiedAtW`). -/
+def CreditedTied (R : Properties.Pouw.PearlPlus.Run) (c : Cell) : Prop :=
+  ∃ (p : PouwCheck.PearlPlus.Pass) (tile : ℕ) (rows cols : List ℕ),
+    R.passes[c.1]? = some p ∧ p.tile? tile = some (c.2.1, rows, cols) ∧
+    c.2.2.1 ∈ (p.records[c.2.1]!.credited rows cols).1 ∧ c.2.2.2 ∈ (p.records[c.2.1]!.credited rows cols).2 ∧
+    Properties.Pouw.PearlPlus.TileTiedAtW R.w R.rounds R.passes R.table (c.1, tile)
 
 /-- **The row `e` opens W's value `v` at position `i`** under the domain `d` and the root `root`: it is a row of that
 value, domain and root, and its opening is of position `i` and opens against the root. -/
@@ -219,28 +115,42 @@ def OpensAt (e : Properties.Pouw.PearlPlus.RowAtW) (v : String) (d : PouwCommit.
   e.value = v ∧ e.domain = .ok d ∧ e.root = root ∧ e.opening.position = i ∧
     PouwCheck.PearlPlus.opens (.ok d) root PouwCommit.ROW_SCHEMA e.opening = true
 
-/-- **The served y gate `g` is shown at W's entries by the rows `S`**, in the served transcript `X` and the run `R`:
-its cell is a credited cell of the run at W's entries (`CellOf`), and rows of `S` open W's y entry at the cell's row to
-a row whose word at the cell's column is `g`'s served value, W's A entry at the cell's row to the cell's served A row,
-and W's B entry at the cell's column to the weight's row. -/
+namespace Tying
+
+variable {C : Verity.Circuit} {θ : Finset (Fin C.N)} {L : Layout C} (T : Tying C θ L)
+
+/-- **The tied circuit is the run's calls at W's entries: its gates compute the product Pearl+ proved.** Each cell it
+ties is a real cell of the run `R` at W's entries (`CellAt`), and in every transcript of the tied circuit whose added
+gates are evaluated on the weights' registered rows, the tie's output at the cell's y gates is, as the word its tree
+stores, `yCell` of the cell's served A row and its weight's row under the pass's salt and the root W registers for the
+weight: the unscale of the tile, one function from a call's x and weight rows to its y. -/
+def AtW (R : Properties.Pouw.PearlPlus.Run) : Prop :=
+  ∀ c ∈ T.cells, ∃ (p : PouwCheck.PearlPlus.Pass) (r : PouwCheck.PearlPlus.UnitRecord)
+      (da db dy : PouwCommit.RowsDomain) (rootA rootB yRoot : ByteArray),
+    CellAt R c p r da db dy rootA rootB yRoot ∧
+    ∀ X' : T.tied.D.Trace, T.Evaluated X' → T.HoldsWeights X' →
+      Properties.Pouw.PearlPlus.yCell p.salt rootB r.matmul.index r.matmul.k c.2.2.1 c.2.2.2
+          (T.aRow (T.served X') c) (T.bRow c) =
+        some (L.word c (T.gatesOut X'))
+
+/-- **The cell `c` is shown at W's entries by the rows `S`**, in the served transcript `X` and the run `R`: it is a
+real cell of the run at W's entries (`CellAt`), and rows of `S` open W's y entry at the cell's row to a row whose word
+at the cell's column is the cell's served word, W's A entry at the cell's row to the cell's served A row, and W's B
+entry at the cell's column to the weight's row. -/
 def ShownAt (R : Properties.Pouw.PearlPlus.Run) (S : List Properties.Pouw.PearlPlus.RowAtW) (X : C.Trace)
-    (g : Fin C.N) : Prop :=
+    (c : Cell) : Prop :=
   ∃ (p : PouwCheck.PearlPlus.Pass) (r : PouwCheck.PearlPlus.UnitRecord)
       (da db dy : PouwCommit.RowsDomain) (rootA rootB yRoot : ByteArray),
-    T.CellOf R g p r da db dy rootA rootB yRoot ∧
+    CellAt R c p r da db dy rootA rootB yRoot ∧
     (∃ e ∈ S,
-      OpensAt e
-        s!"pearl-y/{Properties.Pouw.PearlPlus.roundOf R.rounds R.passes.length (T.cell g).pass}/{(T.cell g).pos}"
-        dy yRoot (T.cell g).row ∧
-      (PouwCheck.PearlPlus.words32 (PouwCheck.PearlPlus.openedValue e.opening.value))[(T.cell g).col]? =
-        some (T.word g (X g))) ∧
+      OpensAt e s!"pearl-y/{Properties.Pouw.PearlPlus.roundOf R.rounds R.passes.length c.1}/{c.2.1}" dy yRoot c.2.2.1 ∧
+      (PouwCheck.PearlPlus.words32 (PouwCheck.PearlPlus.openedValue e.opening.value))[c.2.2.2]? =
+        some (L.word c X)) ∧
     (∃ e ∈ S,
-      OpensAt e
-        s!"pearl-a/{Properties.Pouw.PearlPlus.roundOf R.rounds R.passes.length (T.cell g).pass}/{(T.cell g).pos}"
-        da rootA (T.cell g).row ∧
-      PouwCheck.PearlPlus.openedValue e.opening.value = T.aRow X g) ∧
-    ∃ e ∈ S, OpensAt e s!"pearl-b/{r.matmul.weight}" db rootB (T.cell g).col ∧
-      PouwCheck.PearlPlus.openedValue e.opening.value = T.bRow g
+      OpensAt e s!"pearl-a/{Properties.Pouw.PearlPlus.roundOf R.rounds R.passes.length c.1}/{c.2.1}" da rootA c.2.2.1 ∧
+      PouwCheck.PearlPlus.openedValue e.opening.value = T.aRow X c) ∧
+    ∃ e ∈ S, OpensAt e s!"pearl-b/{r.matmul.weight}" db rootB c.2.2.2 ∧
+      PouwCheck.PearlPlus.openedValue e.opening.value = T.bRow c
 
 end Tying
 
@@ -250,14 +160,14 @@ variable {ι : Type} {dev : Device ι} {α : Type} [Fintype α]
 
 /-- **An execution phase's play at remote, as the one vocabulary reads it**: the parameters, the committed files and the
 commitment, the prover's strategy in the game after them (`Verity.Vocab.game`), and the tied circuit of the committed
-circuit with its registered inputs. -/
+circuit with its registered inputs at the vocabulary's cut (`Verity.Vocab.cut`), whose y no registered input is. -/
 structure Commit (V : Vocab dev α) where
   params : ByteArray
   files : Array ByteArray
   commitment : ByteArray
   strategy : Game.Strategy (V.game params files commitment)
   /-- the tied circuit of the phase's committed circuit -/
-  tying : Tying (V.circuitOf params files) (V.theta params files)
+  tying : Tying (V.circuitOf params files) (V.theta params files) (V.cut params files)
 
 namespace Commit
 
@@ -274,30 +184,29 @@ def BoundAt (g : Fin (V.circuitOf c.params c.files).N) : Prop :=
     u ∉ unbound (V.partsOf c.params c.files) (V.Opens c.params c.files c.commitment) c.served ∧
     g ∈ (V.partsOf c.params c.files).io u
 
-/-- **The served y gate `g` is one the claim reads**, at the run `R`: the run's table ties its tile at W's entries
-(`Properties.Pouw.PearlPlus.TileTiedAtW`), and it and the gates of its A row are bound in the served transcript. -/
-def Reads (R : Properties.Pouw.PearlPlus.Run) (g : Fin (V.circuitOf c.params c.files).N) : Prop :=
-  Properties.Pouw.PearlPlus.TileTiedAtW R.w R.rounds R.passes R.table
-      ((c.tying.cell g).pass, (c.tying.cell g).tile) ∧
-    c.BoundAt g ∧ ∀ a ∈ c.tying.row g, c.BoundAt a
+/-- **The cell `e` is one the claim reads**, at the run `R`: it is credited in a tile the run's table ties at W's
+entries (`CreditedTied`), and its y gates and the gates of its A row are bound in the served transcript. -/
+def Reads (R : Properties.Pouw.PearlPlus.Run) (e : Cell) : Prop :=
+  CreditedTied R e ∧ (∀ g ∈ (V.cut c.params c.files).yAt e, c.BoundAt g) ∧ ∀ a ∈ c.tying.row e, c.BoundAt a
 
 /-- **The phase is tied by the run `R`**: the served transcript extends to one of the tied circuit, the added gates
 evaluated on the weights' registered rows, in which
 
-* every served y the claim reads (`Reads`: of a tile the run's table ties at W's entries, bound in the served
-  transcript with the gates of its A row) holds the tied gates' output; and
-* where the tied circuit complies with the inference-only policy at the published `Γ` and `α`, it does with the y's
-  that are not the gates' output counted as fresh input (`Tying.CompliesBut`). -/
+* every y the claim reads (`Reads`: of a cell the tie ties, credited in a tile the run's table ties at W's entries,
+  bound in the served transcript with the gates of its A row) holds the tied gates' output; and
+* where the registered file's circuit complies with the inference-only policy at the published `Γ` and `α`
+  (`Verity.Vocab.declaration`), the tied circuit does with each block held to `Γ` on its registered rows and the
+  untied cells' y counted as fresh input (`Tying.CompliesBut`). -/
 def TiedBy (R : Properties.Pouw.PearlPlus.Run) : Prop :=
   ∃ X' : c.tying.tied.D.Trace, c.tying.Extends c.served X' ∧ c.tying.Evaluated X' ∧
-    (∀ g ∈ c.tying.y, c.Reads R g → c.tying.IsGates X' g) ∧
-    (Nci.CompliesRate (V.gates c.params) (V.fresh c.params) c.tying.tied →
-      c.tying.CompliesBut (V.gates c.params) (V.fresh c.params) (c.tying.untied X'))
+    (∀ e ∈ c.tying.cells, c.Reads R e → ∀ g ∈ (V.cut c.params c.files).yAt e, c.tying.IsGates X' g) ∧
+    (Nci.CompliesRate (V.gates c.params) (V.fresh c.params) (V.declaration c.params c.files) →
+      c.tying.CompliesBut (V.gates c.params) (V.fresh c.params) (c.tying.untiedCells X'))
 
-/-- **A served y the claim reads is not shown at W's entries** by the rows `S`, at the run `R`
-(`Tying.ShownAt` in the served transcript). -/
+/-- **A y the claim reads is not shown at W's entries** by the rows `S`, at the run `R` (`Tying.ShownAt` in the served
+transcript). -/
 def Unshown (R : Properties.Pouw.PearlPlus.Run) (S : List Properties.Pouw.PearlPlus.RowAtW) : Prop :=
-  ∃ g ∈ c.tying.y, c.Reads R g ∧ ¬ c.tying.ShownAt R S c.served g
+  ∃ e ∈ c.tying.cells, c.Reads R e ∧ ¬ c.tying.ShownAt R S c.served e
 
 end Commit
 

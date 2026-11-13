@@ -17,6 +17,7 @@
   "Properties.Pouw.Lead.V2",
   "Properties.Pouw.PearlPlus",
   "Properties.Pouw.PearlPlus.Witnesses",
+  "Properties.Pouw.PearlPlusTie",
   "Properties.Pouw.PearlPlusDraw",
   "Properties.Nci",
   "Properties.Nci.Threads",
@@ -86,11 +87,13 @@
   "Properties.Verity.Sha512",
   "Properties.Verity.Subprotocols",
   "Properties.Verity.Coupling",
+  "Properties.Verity.Tied",
   "Properties.Flock.Nets",
   "Properties.Flock.ReadNet",
   "Properties.Assumptions",
   "Properties.Verity.Idle",
   "Properties.Remote",
+  "Properties.Remote.ValueTie",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
   "Properties.Accounting.JointBridge.ServiceSoundOfSessions",
@@ -2132,7 +2135,8 @@
     "Properties.Pouw.Lead.V2",
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlus.Witnesses",
-    "Properties.Pouw.PearlPlusDraw"
+    "Properties.Pouw.PearlPlusDraw",
+    "Properties.Pouw.PearlPlusTie"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -2150,6 +2154,17 @@
    ],
    "except": [],
    "why": "the run draw is stated against Pearl+'s own draw (`pouw_pearlplus`) as the law `MissBound` reads (`Definitions.Pouw.Game.Defs`'s `Ticket` and `pr`), tickets numbered in `finSigmaFinEquiv`'s order (`Mathlib.Algebra.BigOperators.Fin`), over streams read as sampled proofs' are (`Properties.Spot.bytesOf`), never a proof"
+  },
+  "Properties.Pouw.PearlPlusTie": {
+   "imports": [
+    "Properties.Pouw.PearlPlus",
+    "Properties.Pouw.PearlPlusDraw",
+    "Properties.Challenger",
+    "Properties.Verity.Game",
+    "Properties.Flock.Circuit.CircuitOf"
+   ],
+   "except": [],
+   "why": "the value tie is stated against Pearl+'s verdict's own functions through its properties (`Properties.Pouw.PearlPlus`, `Properties.Pouw.PearlPlusDraw`), the play's collision finder as the challenger's (`Properties.Challenger.collisionIn`) under the composite's SHA-512 (`Properties.Verity.Game`), and a cell's rows in the committed files as core's circuit (`Properties.Flock.Circuit.CircuitOf`)"
   },
   "Properties.Pouw.Commit": {
    "imports": ["PouwCommit"],
@@ -2342,7 +2357,8 @@
     "Properties.Verity.Coupling",
     "Definitions.Accounting.JointPeriod",
     "Properties.Pouw.PearlPlus",
-    "Properties.Pouw.PearlPlusDraw"
+    "Properties.Pouw.PearlPlusDraw",
+    "Properties.Verity.Tied"
    ],
    "except": [],
    "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 (`Properties.Verity.Sha512`, read in the hash area's message and digest, `Definitions.Core.Hash`) and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, Pearl+'s properties its remote PoUW target takes as hypotheses, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
@@ -2361,8 +2377,13 @@
     "Properties.Nci.Desc",
     "Properties.Spot"
    ],
-   "except": [],
+   "except": ["Properties.Remote.ValueTie"],
    "why": "remote's acceptance is stated over the composite's own function (CoreRemote), the composition's properties, the shared definitions and the policy's properties it reads, never over a proof"
+  },
+  "Properties.Remote.ValueTie": {
+   "imports": ["Properties.Verity.Game", "Properties.Pouw.PearlPlusTie"],
+   "except": [],
+   "why": "the value tie is stated over the one vocabulary (`Properties.Verity.Game`, whose cut and tied circuit are `Properties.Verity.Tied`'s) and Pearl+'s statements at W's entries, read by name (`Properties.Pouw.PearlPlusTie`), never over a proof"
   },
   "Properties.Core.Period": {
    "imports": ["CoreProtocol.Period", "Definitions.Core.Period"],
@@ -13165,7 +13186,14 @@
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet",
-   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet"
+   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
+   "Properties.Pouw.PearlPlus.TieMeans": "unstated: what `tieOf` establishes of W: its format and digest, one round a pass, its version against the tie's weights, and each call's A rows, y and weight rows registered once under the pass's roots; a draft statement, unproved",
+   "Properties.Pouw.PearlPlus.AcceptedIsHeldToW": "unstated: an accepted verdict on an input that names W is a run held to W whose opened tiles are accepted (`Run.Accepts`), read off `check` and `plan`; a draft statement, unproved",
+   "Properties.Pouw.PearlPlus.YAtWIsTheCall": "unstated: over t uniform work-weighted tickets, an accepted run whose table holds its openings has its untied tiles hold more than ε of its ticket weight with probability at most δ + q / 2^256, at (1 − ε)^t ≤ δ under ecr/sha-512 at the play's finder; a draft statement, unproved, whose acceptance is an abstract run's (`Run.Accepts`), not one function's",
+   "Properties.Pouw.PearlPlus.PeriodYAtWIsTheCall": "unstated: each sequence's accepted prefix of a monitoring period's runs has ∏ (1 − wrong share) below 1 − ε with probability at most δ + q / 2^256, each run committed before its coin and each sample t tickets on its coin; a draft statement over the period's runs as functions of its coins, unproved",
+   "Properties.Pouw.PearlPlus.FleetYAtWIsTheCall": "unstated: the period's runs pooled convexly across sequences at ends fixed before the coins, at one δ; a draft statement over the period's runs as functions of its coins, unproved",
+   "Verity.ValueTie.Shared": "unstated: the two Pearl+ statements the value tie's composite step reads beside PoUW's period statement, `AcceptedIsHeldToW` and `OpeningBinds`, as one premise; a conjunction of draft statements, unproved",
+   "Verity.ValueTie.PeriodOutsideG": "unstated: the blocks outside each window's G, charged whole, pooled over a monitoring period's windows: (w + 1) times their charge is at most c times the period's untied words; proved in security_proofs by Verity.ValueTie.periodOutsideG (Proofs.Properties.Verity.Tied), a counting fact with no probability in it, which gets a guarantee entry with the per-window clause it pools"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
