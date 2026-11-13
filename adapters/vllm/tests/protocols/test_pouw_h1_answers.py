@@ -16,12 +16,12 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.pouw.verifier import credit as Cr
-from verity.protocols.pouw.verifier import verifier as V
-from verity.protocols.spot.verifier.one_stage import proofs as PF
+from verity.protocols.accounting.pouw.verifier import credit as Cr
+from verity.protocols.accounting.pouw.verifier import verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity_vllm.protocols.pouw.h1 import answers as A
 
-STATEMENTS = Path(__file__).resolve().parents[4] / "verity/protocols/pouw/verifier/tests/test_pouw_credit_statements.py"
+STATEMENTS = Path(__file__).resolve().parents[4] / "verity/protocols/accounting/pouw/verifier/tests/test_pouw_credit_statements.py"
 SEEDS = range(2)
 
 
