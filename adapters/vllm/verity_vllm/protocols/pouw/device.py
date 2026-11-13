@@ -26,12 +26,13 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.kernels import SHA512
+from verity.protocols.pouw import prover
 from verity.protocols.pouw.prover.circuit import ncp2
 
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import native as PN
 
-HERE = Path(__file__).with_name("pouw_cuda")
+HERE = Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
 #: the GPU's one SHA-512 (`verity.circuits.kernels.SHA512`), which ncp2.cuh includes: a source of every build, by its absolute path
 #: (``HERE / s`` is then the path itself, so its bytes are in `source_digest`), and its directory on every build's include path
 SHA512_SOURCE, SHA512_INCLUDE = str(SHA512.resolve()), f"-I{SHA512.resolve().parent}"
