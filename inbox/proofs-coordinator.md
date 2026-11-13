@@ -138432,3 +138432,319 @@ theorem canonicalJson_accepts_iff (b : ByteArray) :
 `ScopeTable.lean`'s text is unchanged since `b49c6e4061`: I made no commit on `cursor/proofs-sessionof2-7c3a` after it.
 
 Heads: `cursor/proofs-sessionof2-parser-defe` `013786beeaadd1708a2567e77d34ae8a55190966` (new, not compiled); `cursor/proofs-sessionof-9b17` `9a548b2f975d` and `cursor/proofs-sessionof2-7c3a` `b49c6e40619f`, both as before. The two jobs' scripts were sent with the runs (`inputs/`), are in no branch, and the VM did no build.
+
+## STOPDRIVER, Fri 13 Nov 11:43Z: NET-403's four sizings: the stop audit's session, the head, the ledger, the record
+
+Read only, as ordered: nothing written to a branch, nothing run on a node. Lines are `main` `053b8e50fe8a`.
+
+### STOP RULE
+
+- Nothing I read says a listed guarantee is false or empty. [read]
+- One thing a reader of a verdict record should know today. It is not new: I gave its substance at 10:46Z
+  (answer 2). A record has no field that says which challenger its run used. [run] So a record from a run on
+  a challenger the command started itself reads, field for field, as one from a run on the auditor's device.
+  [derived]
+- Its reach today is small: no launcher in the tree runs the record writer, and network's reader lists no
+  format for the stop audit or the compute audit. [read, the reader at #9501's `f4d2e20e290d`, earlier today]
+  Item 4 sizes the fix.
+
+### In short
+
+1. **The stop audit's session.** About 55 lines in two files and about 115 of tests. No Lean file changes, and
+   no record of a lock reads what changes. [derived] A run without the new flag is today's command. [derived]
+2. **The head before the sampling challenge.** About 25 lines and 40 of tests more than I said: about 115 and
+   200 in all. [derived] The first stage then refuses a whole window whose head does not hold. [derived]
+3. **The ledger's verifier exists.** It is `verify_ledger` in `verity/protocols/spot/device/challenger.py`, with
+   its Lean twin. [read] It returns, for each root, the signed reserve, open and end. [run] What is missing is
+   a command that writes that for a reader with no key: about 70 lines and 90 of tests. [derived]
+4. **The two questions back: no, and no.** [run] The root and the session's id: about 16 lines and 40 of tests.
+   [derived] The challenger's kind: about 10 lines and 25 of tests. [derived] Both fit the writer's follow-up.
+
+### Words
+
+- The **gate** is the service on the auditor's device that runs the challenger. It hands out challenger
+  sessions and signs one line for every reserve, open and end.
+- The **ledger** is the gate's file of those lines, `/var/lib/vy-challenger/windows.jsonl`. Each line is signed
+  under the challenger's key and names the SHA-512 of the line before it.
+- A session's **root** is the 64 bytes it is opened on. The gate opens a root once, ever.
+- The **development challenger** is `--challenger local`: a challenger the command starts on its own machine,
+  in a scratch directory, under a key it makes there.
+- The **hand-off** is `stage1.json`, the file the first stage's command writes for one class. The second
+  stage's command and the stop audit's command read it.
+- A **registration digest** is the SHA-512 identity of a registration record. D_b is the boundary record's.
+  D_s is the stop record's, the record that registers a class's stop blocks.
+- A **monitoring period** in the ledger is a lane's signed open and close around its sessions, with a cap.
+- The **stop audit** is `stop_audit.py`. It proves the sampled stop blocks in one proof session.
+- The **writer** is `verdict_record.py`. The **reader** is network's `stop_verdicts.py`, on #9501.
+- The **head** is the head of the registration of connection rows: its link, its window, the digest of the
+  schedule and its tables. The **schedule** is the registered parameters that list the classes.
+- Each of these is as the code and NET-403 have it. [read]
+
+### How I know
+
+- [read] The files named below, on `main`.
+- [run] Two one-off scripts on my VM against `main`. `q4_record.py` writes one record of each kind and looks
+  for a root, a session or a challenger in it. `q1_session.py` runs five cases on development challengers,
+  (a) to (e) below. Their text and output go to the notes.
+- [run] One side effect to own up to. The development challenger takes its randomness from the Lean
+  verifier's executable, and on this fresh machine it built that executable first: `lake build
+  sampled-proofs-verifier`, about six minutes on four cores. My first run failed on it (the local gate waits
+  60 seconds for the challenger's signed record); the second ran in 5 seconds.
+
+### 1. The stop audit's session on the challenger's ledger
+
+**The root's function, beside the other two.** Each root is the lowercase hex of SHA-512 over a tag, a zero
+byte and a body.
+
+| session | tag | body | function |
+|---|---|---|---|
+| first stage | the boundary commitment's schema name | serve's nonce, 0x00, window's index | `run_root` |
+| second stage | `verity-vllm/interior-run/v1` | `{"boundary":"D_b","replay_sample":[u1,...]}` | `interior_run` |
+| stop audit | `verity/one-stage/stop-audit-run/v1` | `{"stop":"D_s"}` | new |
+
+- [read] The first two rows are today's: `boundary_rows.run_root` (260) and `interior_rows.interior_run` (308).
+  A window's classes share one first-stage session. Each class has a second-stage session of its own.
+- [read] The second row is defined three times: the adapter's, the verifier's Python
+  (`second_stage.interior_root`, 838 to 846) and Lean's (`SecondStage.interiorRoot`, 731 to 740).
+- [read] The first stage's root is also the boundary record's own `window.run` (`boundary_rows.py` 613 and 629,
+  `two_stage.py` 900). That settles open point 5 of 10:46Z: a reader finds that root in the boundary record.
+- [derived] The third row is my proposal, in `stop_audit.py`: one session a stop record. The body is
+  canonical JSON, D_s as 128 hex characters. The tag is new.
+- [derived] The body holds D_s alone. The stop record names D_b as its `previous`, so D_s fixes the class. A
+  verdict record already carries D_s as `stream_registration`, so a reader computes this root from the record,
+  or from the class's registrations where no record was written. The sample is left out for that reason.
+- [derived] The three tags differ, so no two of a class's sessions share a root.
+- [read] One difference from the second stage. Lean computes the second stage's root itself and refuses an
+  interior record registered on any other (`Run.interiorWindowOk`, `Run.lean` 197 to 203). [derived] The stop
+  audit registers nothing in its new session, so only the command computes its root. Nothing proved says it.
+
+**What the command does.**
+
+- [derived] After every check it makes today and before its proof session (between lines 527 and 529), it
+  opens one session on that root with no sample of its own: `a5_coins.start(challenger, root, [], ...)`.
+- [run] (a) With that empty list the session opens, releases its one challenge after the root, and closes.
+  The ledger gains a reserve, an open on the root and a closed end. The evidence is the second stage's kind:
+  the key, the ledger, the session's files, and the check that its commit is on `main`. 1.7 seconds here.
+- [derived] The command then refuses unless that evidence shows no error, a clean close and a pinned commit.
+  It writes the root, the challenger's kind and the session's id into `summary.json`, on its error paths too.
+- [derived] So a wrong path, a wrong stop rule or a prover's tree that is not the registered one spends no
+  root. The open sits where the ruled line already is: "from the start of its own proof session".
+
+**The files and lines.** [derived, nothing written]
+
+- `benchmarks/one_stage/stop_audit.py`, about 47 lines: the root's function and tag (8), a function that
+  opens the session and checks its evidence (16), five flags as `two_stage.py second` has them at 1127 to
+  1131, none required (7), the call and the summary's field (8), the docstring (8).
+- `benchmarks/one_stage/a5_coins.py`, about 8 lines: `GateClient.open` reads the gate's ledger before it
+  reserves, and refuses in the gate's words if the root is there. The next heading says why.
+- Tests, about 115 lines. In `test_stop_audit.py`, about 100: the root's bytes; the session on a development
+  challenger and what the summary names; a refused open stops the command before its proof session; no flag,
+  no session; a failed check opens nothing. In `test_a5_coins.py`, about 15: the look before the reserve.
+- [read] No test runs the stop audit's command end to end. That is `stop_audit_small.sh`, on a node. Its
+  `SMALL_AUDIT` variable passes the command more flags (line 65), so a try can run the new path unchanged.
+- [read] The command adds no import: it loads `two_stage`, which loads `a5_coins` inside its functions.
+  [guess] So the import listing stays as it is. I did not run its generator.
+- [read] #9699 and #9458 both change `stop_audit.py`. [derived] So this waits on the carries, as before.
+
+**Under the gate: a second run on the same hand-off.**
+
+- [read] The second run reserves a session, asks the gate to open the root, and the gate refuses: "root ...
+  already has its session (S) in the ledger: one session a root, ever" (`auditor.py` 1156, `a5_coins.py` 671
+  to 678). [run] (c) A development challenger asked twice for one root answers with those words.
+- [derived] The command then stops before its proof session with that reason in `summary.json`. It proves
+  nothing and, by the ruled line, writes no record. The first run's record stands.
+- [run] (c) The refused run leaves its reserve in the ledger, signed and never opened. [read] In a lane's
+  open monitoring period every reserve counts toward the cap, and the period's close lists a reserve never
+  opened with root null and is then not complete (`auditor.py` 126 to 130). [derived] That is why the 8 lines
+  in `GateClient.open`: look first, reserve only a root not yet opened. The second stage has the same gap.
+
+**Under the gate: a run that crashed after the open.**
+
+- [run] (d) A client that dies after the open leaves an open and an end marked not closed. The root cannot be
+  opened again. `verify_ledger` still returns both lines. `audited_session` refuses: "ends session S unclosed".
+- [derived] In the form sized here the session closes before the proof session starts, so a crash during the
+  proof leaves an open and a closed end, and no record.
+- [derived] Either way the run needs nothing, because nothing can help it. No command can open that root
+  again, and a new stop record needs a new first stage, whose own root also opens once. That stop record has
+  no verdict, and the next window is the next chance. A machine replaced in mid-run costs that.
+- [derived] What the ledger then gives the reader: an opened root with no record. With the root a function
+  of D_s, a reader that holds the class's registrations names the class. That is a try with no verdict.
+- [derived] A failure between the open and the proof session's start also spends the root. Under the gate
+  that gap is the wait for the session's end entry, polled every 10 seconds (`a5_coins.py` 693 to 696).
+- [read] The second stage pays the same price today (`two_stage.py` 1032 to 1034).
+
+**Under `--challenger local`, and Friday's demo.**
+
+- [run] (e) Every run starts a development challenger of its own, with its own key and ledger. A second run
+  on the same root opens. [derived] So nothing refuses, and the ledger on the auditor's device gains no line.
+- **Friday's demo does not change**, on three counts:
+  1. [read] Its tree is the cards branch at `08b5d4b3c0a6`. Nothing here is in it, and I change nothing in it.
+  2. [read] Its script calls the stop audit with no `--challenger` (`stop_audit_small.sh` 64). [derived] The
+     flag is not required, and without it the command opens no session and runs line for line as today.
+  3. [derived] Its first stage and second stage, which do run `--challenger local`, are not touched by item 1.
+     Items 2 and 4 add flags that are absent unless handed, and keys in output files that no command reads.
+
+**Lean, and the listed guarantees.**
+
+- [derived] No Lean file changes. The change is two Python files under `benchmarks/one_stage`.
+- [run] `rg` over every Lean file and lock finds one place that names either tag: the second stage's,
+  `SecondStage.lean` 731. It does not change.
+- [run] Two locks, `security/lean-audit.json` and `security/Properties/lean-audit.json`, record under `reads`
+  the Lean definitions the new session's evidence is checked by: `Spot.Challenger.verifyLedger`,
+  `auditedSession`, `pinnedSession`, `trustedSessionOf`, `withheldOn`. [derived] None of them changes, so no
+  record changes and no guarantee's statement reads what changes. As you expected.
+- [derived] The other side of that: no guarantee says the stop audit ran once. It rests on the gate's rule
+  and on the command's own refusal. A Lean check of this root would be a new check in the read across the two
+  streams (`Record.across`), in files #9458 also changes. Not sized.
+
+### 2. Question 2's cost: the head before the sampling challenge
+
+**What the hand-off gains.** [derived] One object, `head`: `{link, window, digest, class}`. The digest is the
+head's, and `class` is the index of this class in the schedule. [read] The hand-off holds 15 fields today
+and a stop class's `stop` (`two_stage.py` 330 to 335 and 929 to 973); none names a head.
+
+**Which commands change.** [derived, nothing written]
+
+- `two_stage.py first`, about 20 lines: two flags (the registration and the schedule), the three checks before
+  `_first_all` opens anything, and `head` in each class's hand-off at line 929.
+- The function with the three checks is the same 45 lines. It takes every class of the window at once.
+- `stop_audit.py` and `two_stage.py second`, about 12 lines each: they copy the hand-off's `head` into their
+  summary. Where the two files are handed again, they refuse a head whose digest or class index differs.
+- The writer, about 25 lines, as before: the four fields into the ruled object, and the registrations' file.
+
+**What it does to the estimate.** [derived]
+
+| | lines | tests |
+|---|---|---|
+| 10:46Z: the two later commands take the head | about 90 | about 160 |
+| now: the first stage takes it, later commands refuse another | about 115 | about 200 |
+| now, if later commands only copy the hand-off's | about 95 | about 160 |
+
+- [derived] The 40 lines of tests more: a first stage that refuses before any session (the pattern is at
+  `test_two_stage_driver.py` 179 to 196), the hand-off carrying the head, each later command refusing another.
+- [derived] It stays the pull request after the writer's follow-up. So the cost is small in lines.
+
+**Two things the yes brings, for the lead.**
+
+- [read] The first stage is one command and one session for every class of a window, and a class that ends
+  before its sample is planned stops the whole session from opening (`a5_coins.py` 780 to 790). [derived] So
+  a class the schedule does not list has to be refused before the session: the whole window is refused, with
+  the class named. The launcher hands the first stage only the classes the schedule lists.
+- [derived] Nothing signed holds the hand-off's `head`. `resume` checks the hand-off's record, digest and
+  sample (`two_stage.py` 380 to 394), and the challenger's signed log orders the sample after D_b. The `head`
+  field is the file's word. One line closes that: the boundary record's `window` names the head's digest.
+  D_b then binds the head, and the signed log shows the sampling challenge came after it.
+- [read] The registration check accepts a key more in a record's `window`, in Python (`registration.py` 45)
+  and in Lean (`Registration.lean` 556 to 604); the advice's binding gets in that way (`two_stage.py` 1143).
+  [derived] Its price: a class handed a head registers under another digest than the same class handed none.
+
+### 3. "That verifier is yours": yes, it exists
+
+**The code.** [read]
+
+- `verify_ledger(lines, I, verify)`, `verity/protocols/spot/device/challenger.py` 1280. It takes the ledger's
+  lines as bytes, the key's 16-byte identifier and a function that checks one signature. Every line must be
+  signed and chained from line 0, at rising leaves of the key. One open a root, one end a session.
+- It returns a map from each root to its signed lines: `{reserve, open, end}`, `end` null while the session
+  runs. It raises at the first line that fails. `verify_periods` (1296) returns the monitoring periods.
+- Around it, same file: `ledger_head` (1682) takes several published copies, checks each, refuses two that
+  do not extend one another and returns the longest. `audited_session` (1618) returns the one session opened
+  on a root and ended closed. `pinned_session` (1869) also holds its commit to `main`.
+- Lean has the twin, `Spot.Challenger.verifyLedger` (`ChallengerSession.lean` 561), with `checked`,
+  `auditedSession` and `ledgerHead`. The Lean verifier reads the ledger through them when it checks a
+  sample's challenges (`ChallengerCoins.lean` 117). A difftest holds the Python to the Lean.
+- Its checks run today under our commands' own session check (`a5_coins.py` 807 and 813) and under PoUW's
+  and PoUB's verifiers. `benchmarks/remote_session/auditor_line.py` 777 to 794 calls it by name and writes a
+  short account of what it read.
+
+**What I ran.** [run] (b)
+
+- On a development challenger's ledger of three lines, `verify_ledger` returned the root with its reserve,
+  open and end. An end line altered was refused: "entry 2: its signature doesn't verify under the challenger
+  key". The first line cut was refused: "entry 0: not entry 0 of a ... ledger chained to its predecessor".
+- [run] (e) The same ledger under another challenger's key was refused at its open: "signed under challenger
+  key ..., not the window's pinned key ...".
+
+**What key.** [read] The challenger key the deployment publishes (a `challenger-key/v1` record, read by
+`challenger.key_of_record`). Never the key inside a run's own evidence, and never the ledger's own
+`key_sha512`. [derived] That is the whole defence against a development challenger's ledger: it verifies
+under its own key and fails under the deployment's.
+
+**What is missing, sized.** [derived, nothing written]
+
+- No command writes the map to a file. Our commands check the one session they opened and keep the rest in
+  memory. [read] A run on the gate does leave a whole copy of the ledger, as of its session's end, at
+  `OUT/challenger/windows.jsonl` (`a5_coins.py` 700).
+- A command beside the writer, `benchmarks/one_stage/ledger_read.py`, about 70 lines and 90 of tests. It
+  takes the published copies and the deployment's key record, and runs `ledger_head` and `verify_ledger`.
+- It writes one object: the SHA-512 of the key it checked under, the copy's SHA-512 and line count, and one
+  entry a root: `{root, session, prover, opened_utc, withheld, ended, closed}`, with the reserves never opened.
+- [derived] The reader then needs no key. It matches a record's root and session to an entry, and counts a
+  root that no record names. It trusts whoever ran the command with the right key, as it does for the head.
+- [relayed] The lead's "the fetch is the launcher's" stands: this command reads files it is handed.
+
+### 4. The two questions back
+
+**1. Does a verdict record say the root its session opened on? No.** [run]
+
+- [run] `q4_record.py`: the writer's record has 13 fields on both pieces, and none is a root or a session. I
+  put two roots and a session id into the files it reads; none of the three is in what it writes.
+- [read] What the files hold today. The first stage's root is in the hand-off (`window_root`) and in the
+  boundary record (`window.run`). The second stage's root is in its summary only once its interior is
+  registered (`two_stage.py` 1048), so not on a path that stops earlier. The session's id is there only after
+  the proofs (1058). The stop audit opens no session, so its summary names none.
+- To add, in the writer's follow-up [derived]:
+  - `two_stage.py second`, about 4 lines: the summary names the root at line 1032, as soon as it is
+    computed, and the session's id on the stopped path too.
+  - The writer, about 12 lines: `window_root`, the first stage's root, from the boundary record, and `session`,
+    `{root, id}` of the session the record's own command opened, null where it opened none.
+  - Tests, about 40 lines: each piece's two fields; a stopped second stage still names its root; a stop audit
+    that opened no session writes null.
+- [derived] On the lead's second sentence: for the second stage and, after item 1, the stop audit, the root
+  is a function of the class's registrations. So an opened root that no record names can still be charged to
+  a class, by a reader handed D_b with the first stage's sample, and D_s.
+
+**2. Does a record say whether its challenger was the gate's or `local`? No.** [run]
+
+- [read] No file says it. The summaries keep the session's plan and what was checked, never the flag
+  (`two_stage.py` 969 and 1058).
+- To add [derived]: about 2 lines in `two_stage.py` (the first stage's hand-off and the second stage's
+  summary each name the kind: `gate`, `local` or `loopback`), about 8 in the writer (`challenger`: `gate`
+  only where the first stage's session and the command's own were both the gate's), and about 25 of tests.
+- [derived] What the word is worth: it is the command's own flag, written by the command. [read] The Lean
+  verifier checks a sample's challenges under the key the evidence itself names, and says so: "what holds
+  the evidence's to the verifier's is its caller" (`security/Properties/Challenger.lean` 431 to 432).
+- [derived] Two stronger things at the same cost. The record names the SHA-512 of the key its evidence was
+  checked under, which the reader compares with the key in item 3's object. Or the reader uses no word: a
+  record is the gate's where item 3's object has its root and its session's id.
+- [derived] The session's id is needed either way. A development challenger's run and a gate's run can name
+  one root; only the id tells which record the ledger's open belongs to.
+
+### The order I would do it in
+
+1. The writer's follow-up, after the carries: `withheld`, `codes`, the control's `reason`, `stopped`, and now
+   the root, the session's id and the challenger's kind. About 26 lines and 65 of tests more than planned.
+2. The stop audit's session (item 1) and the ledger's reader (item 3), one pull request each.
+3. The commands handed the head (item 2).
+
+### Branches
+
+Unchanged: #9699 `725720f8a4a0`, #9624 `64364792ed70`, cards `08b5d4b3c0a6`, #9458 `049c5875989c`. No run is
+out. No timer is set.
+
+### Not established
+
+1. Whether the lead wants the root to hold the sample, or D_b beside D_s. I left both out on purpose.
+2. Whether the flag should be required once Friday's demo is past. Not required, the stop audit's run that
+   opens no session still writes a record, with `session` null.
+3. Whether the lane that will run these under the gate has a monitoring period open. If it does, each stop
+   audit is one session more against its cap, and a refused reserve marks the period incomplete.
+4. Where the ruled line for the stop audit should sit after item 1: the proof session's start, or the return
+   of the open as for the second stage. They differ only by the gap described above.
+5. Whether a reader may trust a file written by `ledger_read.py`, and who runs it. That is the lead's.
+6. Nothing here ran on the gate. Every [run] is a development challenger on my VM. The gate's refusal of a
+   second open is read from `auditor.py` and run on the development challenger, which calls the same
+   `gate` function (`a5_coins.py` 603 and 615). [read]
+7. [read] `--challenger loopback:` cannot open a session on `main`: `start` passes `withhold=True`
+   (`a5_coins.py` 792) and `Loopback.open` takes no such argument (723). Not run. It touches nothing above.
+8. The line counts are estimates from reading. No line of any of this is written.
