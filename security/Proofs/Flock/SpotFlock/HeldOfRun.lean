@@ -244,10 +244,12 @@ theorem two_held₀ {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {
     (hm : (held₀ i it u first ns ks (requests l) hz).ms.all memberOk = true) (hdes : designOk d l = true)
     (hk : ks.size = it.circuits.size) (hk1 : ∀ x ∈ ks.toList, 1 ≤ x)
     (ht : ∀ t < (held₀ i it u first ns ks (requests l) hz).ms.length,
-      templateOk (held₀ i it u first ns ks (requests l) hz) t = true) :
+      templateOk (held₀ i it u first ns ks (requests l) hz) t = true)
+    (hsc : membersScoped (held₀ i it u first ns ks (requests l) hz) = true)
+    (hw : wiringOk (held₀ i it u first ns ks (requests l) hz) = true) :
     (two (withFrame (held₀ i it u first ns ks (requests l) hz) u.c₀) s).isSome := by
-  rw [two_eq, ms_withFrame, reg_withFrame, k_withFrame, xS₀_withFrame, ← two_eq _ s]
-  exact two_of_descOk _ s (built_of_templates _ ht) (descOk_held₀ hl hd hp hT hm hdes hk hk1) ht
+  rw [two_withFrame]
+  exact two_of_descOk _ s (built_of_templates _ ht) (descOk_held₀ hl hd hp hT hm hdes hk hk1) ht hsc hw
 
 /-- **The boundary registration `heldOf` hands the first stage reads the params' program and query.** -/
 theorem firstOf_program {i : Spot.Run.Input} {first : Reg} (hf : firstOf i = some first) :
@@ -269,8 +271,7 @@ theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {
   unfold decided at hd
   simp only [Bool.and_eq_true] at hd
   have hcore := hd.2
-  rw [descCore_eq, reg_withFrame, ms_withFrame, k_withFrame, xS₀_withFrame,
-    ← descCore_eq (held₀ i it u first ns ks (requests l) hz)] at hcore
+  rw [descCore_withFrame] at hcore
   have hlen := ms_length_held₀ i it u first ns ks (requests l) hz
   have e1 : (Spot.Slots.layout (held₀ i it u first ns ks (requests l) hz).reg.first.program
       (held₀ i it u first ns ks (requests l) hz).reg.first.query).toOption = some l := by
@@ -285,7 +286,7 @@ theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {
   rw [hdz] at hcore
   dsimp only at hcore
   simp only [Bool.and_eq_true, beq_iff_eq] at hcore
-  obtain ⟨⟨⟨⟨⟨hm, hdes⟩, hk⟩, hk1⟩, hT⟩, ht⟩ := hcore
+  obtain ⟨⟨⟨⟨⟨⟨⟨hm, hdes⟩, hk⟩, hk1⟩, hT⟩, ht⟩, hsc⟩, hw⟩ := hcore
   have hd' : (slotDesign first.rule first.program first.query first.table).toOption = some d := hdz
   have hk' : ks.size = it.circuits.size := by
     rw [← hlen, ← Array.length_toList]
@@ -296,10 +297,10 @@ theorem twoHolds_of {i : Spot.Run.Input} {it : Spot.Run.Interior} {u : Unread} {
   intro s
   exact two_held₀ s hl (ok_of_toOption hd') hp hT' hm hdes hk'
     (fun x hx => of_decide_eq_true (List.all_eq_true.1 hk1 x hx))
-    (fun t htl => List.all_eq_true.1 ht t (List.mem_range.2 htl))
+    (fun t htl => List.all_eq_true.1 ht t (List.mem_range.2 htl)) hsc hw
 
 theorem twoHolds_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {n : ℕ} (u : Unread)
-    (hk : heldOk i it u.xs = true)
+    (hk : heldOk i it u = true)
     (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) :
     ∃ h, heldOf i it u = some h ∧ TwoHolds h := by
   obtain ⟨h, hh⟩ := heldOf_of_ok u hk
@@ -307,16 +308,15 @@ theorem twoHolds_of_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {n : ℕ} (
 
 /-- **The form's check of the held copies gives `TwoHolds`** where the run's population check passes. -/
 theorem twoHolds_of_files {p : VStar.Recursive.SampledTwo.Params} {bs : Core.Blobs} {i : Spot.Run.Input}
-    {it : Spot.Run.Interior} {n : ℕ} (desc : Msg) (query : Query) (c₀ : Code) (more : ℕ)
-    (hk : heldOkDesc p bs i it = true)
+    {it : Spot.Run.Interior} {n : ℕ} (u₀ : Unread) (hk : heldOkDesc p bs i it u₀ = true)
     (hp : Spot.Slots.popOk i.params.verifier.program i.params.verifier.query n = true) :
-    ∃ u h, unreadOf p bs desc query c₀ more = some u ∧ heldOf i it u = some h ∧ TwoHolds h := by
+    ∃ u h, unreadOf p bs u₀.desc u₀.query u₀.c₀ u₀.more = some u ∧ heldOf i it u = some h ∧ TwoHolds h := by
   unfold heldOkDesc at hk
   cases hx : refStmtsOf p bs with
   | none => rw [hx] at hk; simp at hk
   | some xs =>
     rw [hx] at hk
-    obtain ⟨h, hh, ht⟩ := twoHolds_of_ok ⟨desc, query, xs, c₀, more⟩ hk hp
+    obtain ⟨h, hh, ht⟩ := twoHolds_of_ok { u₀ with xs } hk hp
     exact ⟨_, h, by simp [unreadOf, hx], hh, ht⟩
 
 /-- **A held copy's reference statements are the form's** (`refRawOf`'s bytes, template by template) where `heldOf`
