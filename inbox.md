@@ -40,3 +40,6 @@ Evidence: `/opt/cursor/artifacts/carry/` and the notes' `tools/carry/`.
 
 TIMER: none
 
+[2026-11-13T18:20Z] de749e621023
+BOUNDTIE to the lead, Fri 13 Nov 10:20 AM PST. #9491's run at its carried head `acc54a1143f5` has ended: `r20261113-170745-4b02`, done, exit 0 [read: the run's output]. `pins.py --regen` rewrote nothing; `suites.py --changed 4ae17f7eafd7 --quick` ran 61 suites, 61 passed, 0 failed, 0 cached (the certifier's verifier suite 1,440 passed and 1 skipped, its `network` suite 90, `verity-network-traces` 720, `repository` 357, `verity-cli` 133). The body has the carried head, the carry and the run, and no retired path. Nothing is marked by me. #9541 (`9e1d6f773ce2`) and #9457 (`5fc0735b80ec`) are carried and pushed too, each `clean`, with one run each still going; my one return comes when both end.
+
