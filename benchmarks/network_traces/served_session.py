@@ -19,8 +19,8 @@ answered greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS
 FLAGS: [--peer PEER] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
        [--prompt-ids 256] [--tokens 64] [--vocab 128000]
 
-``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by the endpoint's sizing; ``--tokens`` is each
-request's max_tokens, at most KO.
+``--requests`` is by default `REQUESTS`, what the served node's free disk seals by the endpoint's sizing; ``--tokens``
+is each request's max_tokens, at most KO.
 
 * **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.warden_minutes` of its
   requests and height plus `MARGIN`), the prompts' size, the endpoint's flags and each run's command. The request and
@@ -89,7 +89,7 @@ deployment's challenger-key/v1 record (labelled ``challenger-key current``), sen
 CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
 
 **The endpoint.** It is started by hand on `PEER` (`HAND_START`) ahead of the session's ``--at``, and it
-listens within about 35 s. Its records stay in its serve dir on h200-2: requests.jsonl (prompt and streamed ids) and
+listens within about 35 s. Its records stay in its serve dir on the served node: requests.jsonl (prompt and streamed ids) and
 advice_trace.jsonl (prompt lengths, sampling, rows, emitted ids) are request values, and this runbook neither fetches
 nor publishes them. The endpoint step's advice (`verity-vllm advice`) needs both, so ``endpoint`` runs it there, on a
 copy whose requests.jsonl is rebuilt from `USERS` (each engine request's id and its network certifier user,
@@ -194,15 +194,15 @@ TRACED = ("arrive", "step", "finish")
 #: or a record with one of these fields: the trace's, requests.jsonl's and the certified I/O's request values
 VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
 HAND_START = ("serve-openai run directly, not demos/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
-              "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
+              "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
-              "h200-2 under its 300 GB disk floor "
+              "a served node with less than its 300 GB disk floor free "
               "and sends its own smoke and load requests into the records. VERITY_STAGING_BOUNDED stays unset: bounded "
               "staging, on by default under windowed staging, is what --retain-exclude needs, and the collector refuses "
               "VERITY_STAGING_BOUNDED=0 beside it. Its --copy-records-to copies requests.jsonl and advice_trace.jsonl "
-              "too, so it is left off or points at a private dir on h200-2: the serve dir's records stay there, and "
-              "the endpoint's art is `endpoint`'s $OUT, its report.json, windows.jsonl and serve.json")
+              "too, so it is left off or points at a private dir on the served node: the serve dir's records stay "
+              "there, and the endpoint's art is `endpoint`'s $OUT, its report.json, windows.jsonl and serve.json")
 
 
 class Refused(Exception):
