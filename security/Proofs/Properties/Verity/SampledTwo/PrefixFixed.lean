@@ -35,7 +35,7 @@ At the form's reading `SessionsAsk` is a fact about the session reading alone, `
 What this does not prove: `Messages.SessionMsgsAsk`, that on an accepted play each session's slot a release is put on
 is one whose session's statement sets up and whose session's messages up to it are of tag `0`. `SessionAsk.lean`
 proves it at the form's reading, where no release of such a play is put on the round a session is decided on
-(`Messages.LastSlotFree`, which `LastSlot.lean` takes from the session's record).
+(`Messages.LastSlotFree`, which `LastSlot.lean` proves from the sessions' rounds).
 -/
 
 @[expose] public section

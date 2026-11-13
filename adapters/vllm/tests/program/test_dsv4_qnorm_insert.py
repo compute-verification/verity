@@ -24,20 +24,28 @@ from fractions import Fraction
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.ops.mufu import RsqrtApprox
 from verity.definitions import boolean as SW
 from verity.definitions.numerics import dsv4_qnorm_insert_twin as T
+from verity.definitions.ops.mufu import RsqrtApprox
 from verity.definitions.registry import boolean_dsv4_qnorm_insert as BQ
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import dsv4_qnorm_insert as Q
 from verity.definitions.registry import flashmla as F
+
 from tests.program.test_dsa import _bf16 as _bf16_words
-from tests.program.test_dsa import _butterfly, _ceil_ftz, _e4m3, _fadd, _fmax, _is_nan, _val
+from tests.program.test_dsa import (
+    _butterfly,
+    _ceil_ftz,
+    _e4m3,
+    _fadd,
+    _fmax,
+    _is_nan,
+    _val,
+)
 from tests.program.test_fp8_moe import _bf16 as _rn_bf16
 from tests.program.test_fp8_moe import _ffma, _fmul, _q, _rn
 
@@ -162,8 +170,8 @@ IHEAD = bind(Q.Dsv4IndexerQHead, D=X["D"], DR=X["DR"], SCALE=X["SCALE"])
 # --- the constants ---------------------------------------------------------------------------------------------------------------
 
 def test_the_constants_are_the_kernels():
-    assert Q.F_INV448 == D.f32_bits(1.0 / 448.0)
-    assert (Q.F_448, Q.F_NEG448, Q.F_127, Q.F_255) == tuple(D.f32_bits(v) for v in (448.0, -448.0, 127.0, 255.0))
+    assert D.f32_bits(1.0 / 448.0) == Q.F_INV448
+    assert tuple(D.f32_bits(v) for v in (448.0, -448.0, 127.0, 255.0)) == (Q.F_448, Q.F_NEG448, Q.F_127, Q.F_255)
     assert D.F_1EM4 == 0x38D1B717 == D.f32_bits(1e-4)
 
 
@@ -325,9 +333,9 @@ def test_the_stored_row_is_what_flashmla_dequantises():
     kvs = [kv for kv, _ in _kv_cases(rng, DN + DR, DR)[:5]]
     css = [_cs(rng, DR) for _ in kvs]
     outs = [_flat(evaluate(KVROW, kv, cs)) for kv, cs in zip(kvs, css)]
-    nope = np.asarray([o[:DN] for o in outs], dtype=np.uint8)
-    scale = np.asarray([o[DN:DN + DN // QB + 1] for o in outs], dtype=np.uint8)
-    rope = np.asarray([o[DN + DN // QB + 1:] for o in outs], dtype=np.uint16)
+    nope: np.ndarray = np.asarray([o[:DN] for o in outs], dtype=np.uint8)
+    scale: np.ndarray = np.asarray([o[DN:DN + DN // QB + 1] for o in outs], dtype=np.uint8)
+    rope: np.ndarray = np.asarray([o[DN + DN // QB + 1:] for o in outs], dtype=np.uint16)
     tn, ts, tr = T.kv_rows(np.asarray(kvs, dtype=np.uint16), np.asarray(css, dtype=np.uint32), DR=DR, QB=QB)
     assert np.array_equal(tn, nope) and np.array_equal(ts, scale) and np.array_equal(tr, rope)
     data, sbytes = T.cache_rows(nope, scale, rope)
@@ -444,7 +452,8 @@ def test_the_twin_is_the_reference(target):
 def test_the_twin_pads_heads_with_zero():
     rng = np.random.default_rng(13)
     q = np.asarray([[_bf16_words(rng, 64) for _ in range(2)]], dtype=np.uint16)
-    kv, cs = np.asarray([_bf16_words(rng, 64)], dtype=np.uint16), np.asarray([_cs(rng, 16)], dtype=np.uint32)
+    kv: np.ndarray = np.asarray([_bf16_words(rng, 64)], dtype=np.uint16)
+    cs: np.ndarray = np.asarray([_cs(rng, 16)], dtype=np.uint32)
     out = T.insert(q, kv, cs, NHP=5, DR=16, QB=16, EPS=1e-6)[0]
     assert out.shape == (1, 5, 64) and not out[:, 2:].any() and out[:, :2].any()
 
@@ -463,7 +472,7 @@ def test_the_twin_pads_heads_with_zero():
 ])
 def test_bad_statics_are_refused_by_name(fn, kw, needle):
     with pytest.raises(ValueError, match=needle.replace("[", r"\[").replace("]", r"\]")):
-        bind(fn, **kw).body
+        _ = bind(fn, **kw).body
 
 
 # --- the Boolean Definitions -----------------------------------------------------------------------------------------------------
@@ -472,7 +481,7 @@ def test_the_boolean_scale_byte_is_its_word():
     target = bind(BQ.F32ToU32RzByteV2)
     word = word_of(target)
     assert word.id == Q.F32ToU32RzByte.id and SW.boolean_version(word).id == target.id
-    x = np.asarray(_byte_words(np.random.default_rng(14)), dtype=np.uint64)
+    x: np.ndarray = np.asarray(_byte_words(np.random.default_rng(14)), dtype=np.uint64)
     got = np.asarray(evaluate_words(target, x), dtype=np.uint64).reshape(-1)
     assert got.tolist() == [_byte(int(w)) for w in x]
 

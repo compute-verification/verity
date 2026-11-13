@@ -81,14 +81,16 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics import dsv4_decode_metadata_twin as T
+from verity.definitions.registry import dsv4_decode_metadata as R
 
 from tests.properties import dsv4_compressor_capture_gpu as CX
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import dsv4_indices_capture_gpu as IX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.numerics import dsv4_decode_metadata_twin as T
-from verity.definitions.registry import dsv4_decode_metadata as R
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-decode-metadata-capture/v1"
@@ -202,7 +204,7 @@ def edge_table(nb: int, bs: int, rows: int, rng) -> np.ndarray:
     """``rows`` block rows of six kinds in turn: block numbers 2^31 / BS + j (each product by BS wraps int32); INT32_MAX,
     INT32_MIN, -1, 0, 1 and the wrap's neighbours; random words; ids below NUM_BLOCKS; every word -1; random words."""
     wrap = (1 << 31) // bs
-    special = np.resize(np.array([I32_MAX, I32_MIN, -1, 0, 1, 2 * wrap - 1, wrap, wrap - 1]), nb)
+    special: np.ndarray = np.resize(np.array([I32_MAX, I32_MIN, -1, 0, 1, 2 * wrap - 1, wrap, wrap - 1]), nb)
     words = rng.integers(0, 1 << 32, (2, nb), dtype=np.uint64).astype(np.int64)
     kinds = np.stack([wrap + np.arange(nb), special, words[0], rng.integers(0, NUM_BLOCKS, nb), np.full(nb, -1), words[1]])
     return _w(kinds[np.arange(rows) % len(kinds)])
@@ -221,15 +223,15 @@ def swa_requests(case: str, kind: str, seed: int) -> dict[str, Any]:
     rng = np.random.default_rng(seed)
     st = statics(case)
     if kind == "served":
-        pos = np.asarray(POSITIONS[case], dtype=np.int64)
+        pos: np.ndarray = np.asarray(POSITIONS[case], dtype=np.int64)
         nreq = pos.size
         table = block_rows(rng, [_cdiv(int(p) + 1, st["BS"]) for p in pos], st["NB"])
         req = np.concatenate([np.arange(nreq), np.zeros(PADDING)]).astype(np.int32)
         valid = np.concatenate([np.ones(nreq), np.zeros(PADDING)]).astype(np.uint8)
         return {"qsl": _w(np.arange(nreq + 1)), "seq": _w(pos + 1), "req": req, "valid": valid, "table": table,
                 "pos": np.concatenate([pos, pos[:1].repeat(PADDING)])}
-    edges = np.asarray(swa_edges(case), dtype=np.int64)
-    qlen = np.asarray(SWA_EDGE_QLEN, dtype=np.int64)
+    edges: np.ndarray = np.asarray(swa_edges(case), dtype=np.int64)
+    qlen: np.ndarray = np.asarray(SWA_EDGE_QLEN, dtype=np.int64)
     nreq = qlen.size
     req = rng.permutation(np.repeat(np.arange(nreq), qlen)).astype(np.int32)
     t = np.arange(req.size)
@@ -263,9 +265,9 @@ def c128_requests(case: str, kind: str, seed: int) -> dict[str, Any]:
     rng = np.random.default_rng(seed)
     st = statics(case, kind)
     W, R, BS, NB = st["W"], st["R"], st["BS"], st["NB"]
-    pre = np.asarray([min(W * R, MAX_LEN[case]) - 1, 300], dtype=np.int64)
+    pre: np.ndarray = np.asarray([min(W * R, MAX_LEN[case]) - 1, 300], dtype=np.int64)
     if kind != "edge":
-        pos = np.asarray(POSITIONS[case][-1:] if kind == "one" else POSITIONS[case], dtype=np.int64)
+        pos: np.ndarray = np.asarray(POSITIONS[case][-1:] if kind == "one" else POSITIONS[case], dtype=np.int64)
         nreq, pad = pos.size, PADDING if kind == "served" else 0
         table = block_rows(rng, [_cdiv(min((int(p) + 1) // R, W), BS) for p in pos], NB)
         slot = rng.integers(0, 1 << 31, nreq)
@@ -273,8 +275,8 @@ def c128_requests(case: str, kind: str, seed: int) -> dict[str, Any]:
                 "pos": _w64(np.concatenate([pos, np.zeros(pad), pre])),
                 "slot": _w64(np.concatenate([slot, np.full(pad, -1), rng.integers(0, 1 << 31, PREFILL)]))}
     n = EDGE_REQUESTS * EDGE_PER_REQUEST
-    req = rng.permutation(np.repeat(np.arange(EDGE_REQUESTS), EDGE_PER_REQUEST)).astype(np.int32)
-    slots = np.resize(np.array([5, 0, -1, -2, I64_MIN, I64_MAX, 1 << 40]), n)
+    req: np.ndarray = rng.permutation(np.repeat(np.arange(EDGE_REQUESTS), EDGE_PER_REQUEST)).astype(np.int32)
+    slots: np.ndarray = np.resize(np.array([5, 0, -1, -2, I64_MIN, I64_MAX, 1 << 40]), n)
     slot = rng.permutation(np.where(rng.random(n) < 0.3, rng.integers(0, 1 << 40, n), slots))
     return {"req": req, "table": edge_table(NB, BS, EDGE_REQUESTS, rng),
             "pos": _w64(np.concatenate([c128_edge_positions(case, n, rng), pre])),
@@ -290,7 +292,7 @@ def prefill_rows(pos: np.ndarray, W: int, R: int) -> np.ndarray:
     (int64, truncating), else -1, as words."""
     t = (np.asarray(pos, dtype=np.uint64) + np.uint64(1)).view(np.int64)
     q = np.where(t < 0, (t + (R - 1)) // R, t // R)
-    j = np.arange(W, dtype=np.int64)
+    j: np.ndarray = np.arange(W, dtype=np.int64)
     return _w(np.where(j < q[:, None], j, -1))
 
 
@@ -401,7 +403,10 @@ def launch_c128(case: str, kind: str, o: dict[str, Any]) -> dict[str, Any]:
     arguments into sentinel buffers at an offset: the buffers as words, whether each launch returned the buffers' [:tokens,
     :width] views, and whether every operand buffer is the bytes it was."""
     import torch
-    from vllm.models.deepseek_v4.sparse_mla import _build_c128a_topk_metadata_kernel, build_c128a_topk_metadata
+    from vllm.models.deepseek_v4.sparse_mla import (
+        _build_c128a_topk_metadata_kernel,
+        build_c128a_topk_metadata,
+    )
 
     st, S = statics(case, kind), stride(case)
     W, nd, nreq = st["W"], o["req"].size, o["table"].shape[0]
@@ -446,7 +451,7 @@ def launch_case(work: Path, case: str, quick: bool) -> tuple[list[dict[str, Any]
 
 def _outside(shape: tuple[int, ...], *spans: tuple[int, int]) -> np.ndarray:
     """A mask of ``shape`` true outside the box ``spans`` (one (lo, hi) per axis)."""
-    m = np.ones(shape, dtype=bool)
+    m: np.ndarray = np.ones(shape, dtype=bool)
     m[tuple(slice(lo, hi) for lo, hi in spans)] = False
     return m
 
@@ -513,9 +518,6 @@ def observe(work: Path, case: str, ops: dict[str, Any], rows: dict[str, dict[str
 # ------------------------------------------------------------------------------------------------------------------ comparisons
 def compare_swa(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [lo, hi): each window row and its length against the twin, the reference `Dsv4SwaIndices_v1` on every ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     st = job["statics"]
@@ -541,9 +543,6 @@ def compare_swa(job: dict[str, Any], rec: dict[str, Any]) -> None:
 def compare_c128(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Decode tokens [lo, hi): each row and its length against the twin, the reference `Dsv4C128aGlobalTopk_v1` on every
     ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     st = job["statics"]
@@ -592,7 +591,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
         tool = shutil.which("cuobjdump")
     rec: dict[str, Any] = {"kernels": {}}
     for key, kernel in KERNELS.items():
-        entries = []
+        entries: list[dict[str, Any]] = []
         for f in sorted(glob.glob(str(triton_cache / "**" / f"{kernel}.ptx"), recursive=True)):
             text = Path(f).read_text(errors="replace")
             sha = hashlib.sha256(text.encode()).hexdigest()
@@ -619,9 +618,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Programs bind at DeepSeek-V4-Pro's statics and the edge width."""
-    from verity.circuits.defs import bind
-
-    out = {}
+    out: dict[str, bool | str] = {}
     for case in CASES_L:
         fn = R.Dsv4SwaIndices if PHASE[case] == "swa" else R.Dsv4C128aGlobalTopk
         for kind in ("served", "edge"):

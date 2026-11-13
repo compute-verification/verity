@@ -19,7 +19,7 @@ uv run tools/verity/check/suites.py benchmarks/torch_gpu/DIR
 
 Each GPU script's header gives its command and the hardware it needs: CUDA's nvcc (12.8 or later), a GPU taken through
 `gpu-lease`, and an `OUT` directory for what it writes. Some build on a CPU node first, into a ship the GPU run unpacks:
-those builds (`attn_bf16`, `s8_linear` and `p2_stage`) source `ship.sh`, the one statement of a
+those builds (`s8_linear` and `p2_stage`) source `ship.sh`, the one statement of a
 ship's toolkit, cubin flags and layout (`toolchain.txt`, `source.txt`, `MANIFEST.sha256`). nvcc's PTX can depend on its
 heap layout, on the lengths of the paths it reads and on how long its passes take, so they build with address randomization
 off, from a copy of their sources and with TMPDIR at paths of one length, and with a counted clock inside nvcc's front end
@@ -45,8 +45,6 @@ doesn't follow its place either, and nothing holds a rebuild to the same bytes f
   receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
   `bw.sh` the receipts to their fixture.
   The served path loads through it.
-- `attn_bf16/`: attention's QK^T and PV, a fast path and a reference path, each word `GemmCoordinate_v2`'s. `run.sh`
-  runs every case under poison in each tiling of both paths, on an H200.
 - `s8_linear/`: the exact W8A8 linear that `ScaledMmS8Coordinate_v1` defines, three backends under one gate.
   `run.sh "run.py"` holds every cell to the twin, on an H200.
 - `j10r_sm90/`: J10-R's proof blocks on the H200: fixtures from the Definition, a check that holds a build to them bit
@@ -69,6 +67,5 @@ without a word to another directory.
 
 That bundle check also reads two private names of `slots.py`, `_unit_tree` and `_strings`; a private name is not an
 interface. `verity/commitments/layout.py` names `commit_slots/README.md` as the commit call's specification. A test
-of `benchmarks/pouw` loads `attn_bf16/sass_gate.py` and `s8_linear/sass_gate.py` by file, which fixes their paths,
-nothing more. `commit_slots/fixtures/families-shared.layout.json` is the path a registered fixture is fetched to; it is
-not tracked.
+of `benchmarks/pouw` loads `s8_linear/sass_gate.py` by file, which fixes its path, nothing more.
+`commit_slots/fixtures/families-shared.layout.json` is the path a registered fixture is fetched to; it is not tracked.

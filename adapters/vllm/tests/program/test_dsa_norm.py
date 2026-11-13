@@ -12,10 +12,9 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import numpy as np
 import pytest
-
+from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.circuits.boolean import trace as TR
 from verity.definitions import boolean as SW
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import dsa_norm_rows as NR
@@ -24,6 +23,7 @@ from verity.definitions.registry import boolean_dsa_norm as BN
 from verity.definitions.registry import boolean_rope as BR
 from verity.definitions.registry import dsa_norm as DN
 from verity.definitions.registry import prims as P
+
 from tests.program.test_dsa import _butterfly, _fadd
 from tests.program.test_fp8_moe import _bf16, _ffma, _fmul
 
@@ -125,7 +125,7 @@ def test_layout_is_the_ptx_loads() -> None:
                                           (512, 1e-39, "below 2\\^-126")])
 def test_statics_are_checked(N: int, EPS_: float, match: str) -> None:
     with pytest.raises(ValueError, match=match):
-        bind(DN.DsaRMSNorm, N=N, EPS=EPS_).body
+        _ = bind(DN.DsaRMSNorm, N=N, EPS=EPS_).body
 
 
 @pytest.mark.parametrize("N", [512, 2048])
@@ -208,7 +208,7 @@ def test_dsa_rmsnorm_is_the_unmasked_four_warp_block(N: int) -> None:
                                            ({"N": 4096, "BLOCK": 2048, "WARPS": 8}, "whole vectors")])
 def test_block_statics_are_checked(statics: dict, match: str) -> None:
     with pytest.raises(ValueError, match=match):
-        bind(DN.TritonBlockRMSNorm, EPS=EPS, **statics).body
+        _ = bind(DN.TritonBlockRMSNorm, EPS=EPS, **statics).body
 
 
 def test_block_registrations() -> None:

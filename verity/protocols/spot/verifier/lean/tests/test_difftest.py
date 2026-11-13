@@ -1675,7 +1675,9 @@ def _interior_of(it) -> dict:
 
 
 def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
-    """`Run.interiorSteps`: the interior registration over the replay sample's proof blocks, in the boundary
+    """`Run.interiorSteps`: the interior registration over the replay sample's proof blocks, its strata the parts the
+    replay block's cells give the check's templates (`service.cell_parts`: else `interior-parts`, and rejected where
+    the check's query doesn't apply to its program), in the boundary
     registration's window or the one the verifier computes (`Run.interiorWindowOk`), then the second stage on its own
     coins, the rule's counts `k` over the replay block's cells; its receipt, sample, law and bytes read, or the step's
     refusal."""
@@ -1687,13 +1689,20 @@ def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
     try:
         ns = service.replay_cells(it["replay_program"], p["query"])
         params = p["query"]["params"]
-        ks = service.second_counts(k, params["templates"] if "templates" in params else [params["template"]], ns)
+        ids = params["templates"] if "templates" in params else [params["template"]]
+        ks = service.second_counts(k, ids, ns)
     except ValueError as e:
         raise D.Reject(str(e)) from None
     m = len(sample) * sum(ns)
     population = rec.get("population") if isinstance(rec, dict) else None
     if not (_nat(population) and population == m):
         return {"codes": ["interior-population"], "step": "interiors"}
+    try:
+        strata = P.strata(p["program"], p["query"])
+    except (P.QueryRefused, ValueError) as e:
+        raise D.Reject(str(e)) from None
+    if SS.parts(len(sample), strata) != service.cell_parts(len(sample), ids, ns):
+        return {"codes": ["interior-parts"], "step": "interiors"}
     window, boundary = it["params"].get("window_root"), j["params"].get("window_root")
     if window != boundary and (window is None or window != SS.interior_root(R.digest(j["record"]), sample)):
         return {"codes": ["interior-window"], "step": "interiors"}
@@ -5394,6 +5403,23 @@ PROGRAMS.update({PO.program_sha512(p): p for p, _ in REPLAY_PROGRAMS})
 SECOND_SELECTS = [Setup(P.mixed_population_program(list(ts)), P.template_instances_query([t.id for t, _n in ts]))
                   for ts in (((DUO, 8), (MERGE, 4)), ((UNIT, 8), (JOIN, 4)), ((SWAP, 4), (KEEP, 4), (LAST, 4)))]
 PROGRAMS.update({s.sha512: s.program for s in SECOND_SELECTS})
+#: An interior under a check of two templates (`SECOND_MIXED`'s query, PAIR then TRIPLE) that its replay block's cells
+#: don't give: after a replay sample of two of `REPLAYS`' Two (PAIR, then TRIPLE), TRIPLE's two slots ahead of PAIR's.
+CROSSED_INTERIOR = Setup(P.mixed_population_program([(TRIPLE, 2), (PAIR, 2)]), SECOND_MIXED.query)
+PROGRAMS.update({PO.program_sha512(p): p for p in (CROSSED_INTERIOR.program, Program(REPLAYS[4]))})
+
+
+def _two_template_interior(c: dict, replay, s: Setup) -> dict:
+    """The two-stage run `c` with its interior under a check of two templates, `s`'s query, its params naming no circuit
+    file: one replay block `replay`, and the interior registration over `s`'s program, in the run's window after its
+    boundary registration."""
+    it = c["interior"]
+    rec = R.record(s.program, s.query, {"law": "subset", "k": s.population}, SCHEME,
+                   [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports], it["record"]["window"],
+                   leaf_layer=LEAF, previous=it["record"]["previous"])
+    return {**c, "interior": {**it, "record": rec, "replay": _json(codec.encode_program(Program(replay))),
+                              "params": {**it["params"], "law": rec["law"], "ports": s.ports, "program": s.desc,
+                                         "query": s.query, "proofs": None}}}
 
 
 def replay_links(j):
@@ -6933,7 +6959,9 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     reading its linked `x` from the interior's own (`second-read`), a statement whose verifier of record checked its
     session against a public file whose header names another circuit file (`second-verified`), and an interior naming
     links is no run's. Then refused at each step: a grain the registration's query isn't (`grain`); no
-    interior registration (`interior`); an interior registration of another population (`interior-population`), in a
+    interior registration (`interior`); an interior registration of another population (`interior-population`), of
+    strata that aren't the parts its replay block's cells give (`interior-parts`: three slots, which a sample of two
+    doesn't divide; and, under a check of two templates, the second's slots ahead of the first's), in a
     window that is neither the boundary registration's nor the one the verifier computes (`interior-window`: the
     second session opened on a sampled root, which signs and opens as the honest one does; a root no session opened;
     no root), not after the boundary registration (`R6-previous`), or declaring a value the Spec doesn't hold;
@@ -6942,7 +6970,8 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     a family whose log shows a root before its registration's digest (`family`, at `select` and at `second`: the rule
     holds for the interior registration as for the first). Rejected where a verdict didn't accept, and refused before
     it starts for `k` =
-    n_rho (it would prove whole replay blocks) and an interior registration under a one-stage rule."""
+    n_rho (it would prove whole replay blocks) and an interior registration under a one-stage rule; and no run's is a
+    check naming a template its replay block has no instance of (no cell of no proof blocks reaches the second stage)."""
     case = _two_stage_case()
     out = run(copy.deepcopy(case))
     assert D.replay(RUN, case, pieces) == ("output", D.canonical(out))
@@ -6993,6 +7022,8 @@ def test_a_two_stage_run_reaches_every_step(pieces):
         ({**case, "rule": {**case["rule"], "grain": INTERIOR.query}}, ("register", ["grain"])),
         ({**case, "interior": None}, ("interiors", ["interior"])),
         (_inner_record(population=9)(case, 0), ("interiors", ["interior-population"])),
+        (_inner_params(program=SETUPS[1].desc)(case, 0), ("interiors", ["interior-parts"])),
+        (_two_template_interior(case, REPLAYS[4], CROSSED_INTERIOR), ("interiors", ["interior-parts"])),
         (_two_stage_case(elsewhere=True), ("interiors", ["interior-window"])),
         (_inner_params(window_root="22" * 64)(case, 0), ("interiors", ["interior-window"])),
         (_inner_params(window_root=None)(case, 0), ("interiors", ["interior-window"])),
@@ -7021,6 +7052,11 @@ def test_a_two_stage_run_reaches_every_step(pieces):
         assert D.replay(RUN, refused, pieces)[0] == "reject", refused["rule"]
         with pytest.raises(D.Reject):
             run(copy.deepcopy(refused))
+    absent = _two_template_interior(case, BLOCK, SECOND_MIXED)
+    kind, why = D.replay(RUN, absent, pieces)
+    assert kind == "reject" and "no instance of" in why, (kind, why)
+    with pytest.raises(D.Reject, match="doesn't apply to the replay block.*no instance of"):
+        run(copy.deepcopy(absent))
 
 
 def _second_with(c: dict, i: int, **fields) -> dict:

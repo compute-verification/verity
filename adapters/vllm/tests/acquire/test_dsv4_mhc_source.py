@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 import torch
 
-from tests.acquire.dsv4_model import CMAP, ENV, FMA_CALLS, H, HC, L, STEPS, dsv4_model
+from tests.acquire.dsv4_model import CMAP, ENV, FMA_CALLS, HC, STEPS, H, L, dsv4_model
 from tests.acquire.test_dsv4_route_source import Run, map_names
 from verity_vllm.acquire.sources import mhc_source as MS
 from verity_vllm.acquire.sources import route_source as RS

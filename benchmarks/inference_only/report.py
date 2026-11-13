@@ -7,7 +7,8 @@ tree builds, which is not served (`built.py`): its policy by the integration's c
 its number, and the record's three divisions. Then both over monitoring periods. Then the served class under the value
 tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW check credits: `--uncredited-share`, which has
 no default, so without it no figure of the tied policy prints, and with it every one prints under a label saying it
-rests on no PoUW verdict. Then one JSON object, printed last and written to `--out`.
+rests on no PoUW verdict. Then one JSON object, printed last and written to `--out`, where the served policy's number
+is also written into the run's result under the metric's id (`METRIC`).
 """
 from __future__ import annotations
 
@@ -24,10 +25,13 @@ import built as B
 import policy as P
 import tied as T
 from rho import lean, min_cut
+from verity_bench import kit
 from verity_config.settings import SHARED
 
 UNIT = ("the least slowdown of training run inside one inference block of the policy, max(1, N / limit): N the block's "
         "work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
+#: the metric's id (benchmarks/metrics.toml), the name the served policy's value is written under in the run's result
+METRIC = "training/inference-only-slowdown"
 #: rho's command for a deployment's slowdown per monitoring period
 CALCULATOR = "uv run python verity/protocols/inference_only/rho/periods.py"
 #: the tied policy's label: what its figures are and what they rest on
@@ -376,5 +380,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)
         (args.out / "inference_only.json").write_text(text + "\n")
+        if stated.label == "served":
+            kit.writer(args.out).measurement(METRIC, doc["value"], UNIT)
     print("\n" + text)
     return doc

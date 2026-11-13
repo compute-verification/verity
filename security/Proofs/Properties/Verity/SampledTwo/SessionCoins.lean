@@ -91,12 +91,13 @@ def treesOpened (log : List Release) : List ℕ :=
 
 /-- **The round of a session a stream's opening is**, at the session's table `tab` and `R` rounds a rep: the link's
 at the session stream's first opening, round `k + 1` at the `k`-th opening of the table's rep 0 stream below `R`,
-round `R + 1 + k` at the `k`-th opening of its rep 1 stream (`slotStream`); none for any other stream, a later opening
-of the session stream or an opening of the rep 0 stream past its `R` rounds. -/
+round `R + 1 + k` at the `k`-th opening of its rep 1 stream below `R` (`slotStream`); none for any other stream, a
+later opening of the session stream or an opening of a rep's stream past its `R` rounds. So at a session of at least
+two rounds no opening is its last round's (`roundOf_ne_last`), the round its verifier gives its verdict on. -/
 def roundOf (tab : String) (R : ℕ) (name : Option String) (k : ℕ) : Option ℕ :=
   if name = some Spot.Challenger.TREE_SESSION ∧ k = 0 then some 0
   else if name = some (repStreamName tab 0) ∧ k < R then some (k + 1)
-  else if name = some (repStreamName tab 1) then some (R + 1 + k)
+  else if name = some (repStreamName tab 1) ∧ k < R then some (R + 1 + k)
   else none
 
 /-- **The session-round locator** at the sessions' first rounds `off`, their round counts `K`, their number `M` and
@@ -468,7 +469,55 @@ theorem roundOf_slot {tab : String} {R : ℕ} {name : Option String} {k j : ℕ}
       congr 1
       omega
     rw [hs]
-    exact ⟨h3, rfl⟩
+    exact ⟨h3.1, rfl⟩
+
+/-- **No stream's opening is a session's last round**, at a session of at least two rounds: the link's is round 0,
+and a rep's stream's openings below a rep's rounds end a round before the last. -/
+theorem roundOf_ne_last (tab : String) {K : ℕ} (hK : 2 ≤ K) (name : Option String) (k : ℕ) :
+    roundOf tab (repsOf K) name k ≠ some (K - 1) := by
+  intro h
+  unfold roundOf at h
+  by_cases h1 : name = some Spot.Challenger.TREE_SESSION ∧ k = 0
+  · rw [ite_eq_left h1] at h
+    have hj := Option.some.inj h
+    omega
+  · rw [ite_eq_right h1] at h
+    by_cases h2 : name = some (repStreamName tab 0) ∧ k < repsOf K
+    · rw [ite_eq_left h2] at h
+      have hk := h2.2
+      have hj := Option.some.inj h
+      unfold repsOf at hk
+      omega
+    · rw [ite_eq_right h2] at h
+      by_cases h3 : name = some (repStreamName tab 1) ∧ k < repsOf K
+      · rw [ite_eq_left h3] at h
+        have hk := h3.2
+        have hj := Option.some.inj h
+        unfold repsOf at hk hj
+        omega
+      · rw [ite_eq_right h3] at h
+        cases h
+
+/-- **The session-round locator puts no release on a session's last round**, at a session of at least two rounds:
+the round its verifier gives its verdict on. -/
+theorem locOf_ne_last (A : Live₂) (tab : ℕ → String) (pre : List Release) (fr : Verity.Frame) {t : ℕ}
+    (hK : 2 ≤ SpotFlock.k₀ A.h t) :
+    locOf A tab pre fr ≠ some (SpotFlock.off A.h t + (SpotFlock.k₀ A.h t - 1)) := by
+  intro h
+  cases fr with
+  | fresh _ => simp [locOf, sessLoc] at h
+  | hello _ => simp [locOf, sessLoc] at h
+  | opening i s c =>
+    simp only [locOf, sessLoc] at h
+    obtain ⟨j, hr, hif⟩ := Option.bind_eq_some_iff.1 h
+    have hc : (treesOpened pre).idxOf i < A.h.ms.length ∧ j < SpotFlock.k₀ A.h ((treesOpened pre).idxOf i) := by
+      by_contra hc
+      rw [ite_eq_right hc] at hif
+      cases hif
+    rw [ite_eq_left hc] at hif
+    have hlast : SpotFlock.k₀ A.h t - 1 < SpotFlock.k₀ A.h t := by omega
+    obtain ⟨rfl, rfl⟩ := off_sep (SpotFlock.off_succ A.h) hc.2 hlast (Option.some.inj hif)
+    exact roundOf_ne_last _ hK _ _ hr
 
 theorem mem_firstsOf {x : ℕ} : ∀ (acc xs : List ℕ), x ∈ acc ∨ x ∈ xs → x ∈ firstsOf acc xs
   | acc, [], h => by simpa [firstsOf] using h

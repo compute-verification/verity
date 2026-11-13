@@ -16,8 +16,9 @@ the request's two units reading its own row of the port (`Ref.rows`), there are 
 stage reads the first stage's coins only (`more := 0`). This is the token select's shape: one template over every
 port, its input and output each at the boundary record.
 
-What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what an accepted run of it is, are stated here as
-`Premises`, `InScope` and `Accepts`; `HonestExists` says one registration has all three. At the instance:
+What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what it is for its verifier to accept, are stated here
+as `Premises`, `InScope` and `AcceptsPlay`; `HonestExists` says one registration has all three. `Accepts` is the run
+with a checked unit and its witness, which the knowledge-soundness proofs read. At the instance:
 * `builtWired_held`: the frame is SPOT's own at the wired program;
 * `wiresFirst_held`, `heldWire_held`: there are no wires;
 * `heldLink_held`: each of `R`'s ports has a link, and every row its units read source bits at is one of them
@@ -26,14 +27,14 @@ What `SpotKSTwo` and `SpotExfilTwo` take of a registration, and what an accepted
 * `two_held`, `scope_held`: where every member's circuit is in the scope Flock's hidden-output proof covers and the
   registered wiring passes its check (`membersScoped`, `wiringOk`), the design evaluates, and every statement that
   decodes is in the two-stage scope at the compiled code;
-* `inScope_of_accepts`: an accepted run's held code passes both, so an accepted run gives `InScope`.
+* `inScope_of_accepts`: an accepted play's held code passes both, so a play the verifier accepts gives `InScope`.
 
 ## What this does not show
 
 * `AddressesConnected` at the instance: it holds only where the first stage's record carries each linked port and the
   interior registers none (`CheckedRun.not_addresses_of_input`, `CheckedRun.not_addresses_of_readsInterior`).
   `Honest.Sits` proves it from `R`'s reference reads being well formed (`addressesConnected_held`);
-* an accepted run (`Accepts`): it needs a concrete `Ref`, a reference statement with hidden outputs and
+* a play the verifier accepts (`AcceptsPlay`): it needs a concrete `Ref`, a reference statement with hidden outputs and
   `sha512/row/v2` ports in the two-stage scope at two units a request, and an honest session of it. No such statement is
   defined in Lean yet.
 -/
@@ -61,13 +62,25 @@ def Premises (h : Held) : Prop :=
 (`CompiledTwo.Scope`), and with it `InScopeTwo`, which `SpotExfilTwo` reads. -/
 def InScope (h : Held) : Prop := ∃ x, (compiled h).Scope x
 
-/-- **Some run is accepted with a checked unit** (`CheckedRun.Ok`). Where none is, `AddressesConnected` holds
-vacuously and the two-stage guarantees say nothing at the registration. -/
+/-- **Some run is accepted with a checked unit** (`CheckedRun.Ok`), which holds a witness in Flock's relation at the
+unit's session statement. Where none is, `AddressesConnected` holds vacuously. -/
 def Accepts (h : Held) : Prop := ∃ r : CheckedRun h.stage, CheckedRun.Ok h r
 
+/-- **SPOT[Flock]'s verifier accepts a play**: at SHA-512, the hash the two-stage guarantees are stated at, the
+verifier at the registration (`V h`, the compiled verifier's: `compiled_V`) accepts some prover at some statement on
+some coins. Where it accepts none, the two-stage guarantees bound an event that never happens. -/
+def AcceptsPlay (h : Held) : Prop :=
+  ∃ (Ω : Type) (P : Claims.Prover Ω) (x : Msg) (ω : Ω) (r : Fin ((V h).k x) → FlockDeploy.Coin),
+    (Claims.run FlockDeploy.sha512 P (V h) x ω r).out = .acc
+
+/-- The compiled two-stage verifier at the connected program runs SPOT[Flock]'s verifier. -/
+theorem compiled_V (h : Held) : (compiled h).V = V h := rfl
+
 /-- **The two-stage guarantees are not vacuous**: one registration meets their premises, has a statement in scope and
-accepts a run. -/
-def HonestExists : Prop := ∃ h : Held, Premises h ∧ InScope h ∧ Accepts h
+its verifier accepts a play. It asks for a play the verifier accepts and not for a witness (`Accepts`), since a play is
+what a verifier's accept gives of a run, while a witness in Flock's relation is the prover's and follows from an
+accept only through knowledge soundness, with its error. -/
+def HonestExists : Prop := ∃ h : Held, Premises h ∧ InScope h ∧ AcceptsPlay h
 
 /-! ## The registration -/
 
@@ -353,22 +366,25 @@ theorem scope_held (hS : membersScoped (held R B desc q c₀) = true) (hW : wiri
     exact inScopeTwo_filter (s := { s₁ with prog := bitsProgs (held R B desc q c₀).ms }) _
       (scopeOk_sound R.scope _ rfl) rfl
 
-/-- **An accepted run's statement is in scope**: its statement decodes, and the design evaluates at it, so the held
-code passes what the design's evaluation decides (`scoped_wiring_of_two`). -/
-theorem inScope_of_accepts (hA : Accepts (held R B desc q c₀)) : InScope (held R B desc q c₀) := by
-  obtain ⟨r, Pt, d, spec, hp, -, h2, -⟩ := hA
+/-- **An accepted play's statement is in scope**: the verifier's accept passed the session statements' check, at
+which the statement decodes and the design evaluates (`refusesTwo`), so the held code passes what the design's
+evaluation decides (`scoped_wiring_of_two`). -/
+theorem inScope_of_accepts (hA : AcceptsPlay (held R B desc q c₀)) : InScope (held R B desc q c₀) := by
+  obtain ⟨Ω, P, x, ω, r, hacc⟩ := hA
+  obtain ⟨s, Pt, d, hp, -, h2, -⟩ := refusesTwo (held R B desc q c₀) FlockDeploy.sha512 x Ω P ω r hacc
+  have hp' : parse (held R B desc q c₀) x = some s := hp
   obtain ⟨hS, hW⟩ := scoped_wiring_of_two _ h2
-  cases hx : decode r.x with
-  | none => simp [parse, hx] at hp
-  | some st => exact ⟨r.x, scope_held R B desc q c₀ hS hW r.x st hx⟩
+  cases hx : decode x with
+  | none => simp [parse, hx] at hp'
+  | some st => exact ⟨x, scope_held R B desc q c₀ hS hW x st hx⟩
 
 /-! ## The statements the instance owes -/
 
-/-- **What the instance owes for `HonestExists`**: its address premise and an accepted run, at some reference statement
-and boundary registration. -/
+/-- **What the instance owes for `HonestExists`**: its address premise and a play its verifier accepts, at some
+reference statement and boundary registration. -/
 def Owed : Prop :=
   ∃ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code),
-    AddressesConnected (held R B desc q c₀) ∧ Accepts (held R B desc q c₀)
+    AddressesConnected (held R B desc q c₀) ∧ AcceptsPlay (held R B desc q c₀)
 
 /-- **What the instance owes is all `HonestExists` lacks.** -/
 theorem honest_of_owed (hO : Owed) : HonestExists := by

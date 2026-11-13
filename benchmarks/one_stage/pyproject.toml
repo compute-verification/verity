@@ -23,7 +23,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_a0_archive_once.py",
-    "tests/test_audit_two_members.py",
+    "tests/test_audit_two_members.py", "tests/test_a0_verify_members.py",
     "tests/test_a5_coins.py",
     "tests/test_a5_memo.py",
     "tests/test_a5_outputs.py",
@@ -32,6 +32,7 @@ untraced = [
     "tests/test_a5_tp_store.py",
     "tests/test_a5_warden.py",
     "tests/test_commit_records.py",
+    "tests/test_member_seconds.py",
     "tests/test_served_bandwidth.py",
     "tests/test_served_overhead.py",
     "tests/test_served_verdicts.py",
@@ -77,7 +78,7 @@ worker_gb = 6
 # circuit under a φ (`prove_path.registered_of_serve`), which refuses a BF16 checkpoint under the int8 serve's.
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
-inputs = ["verity/configuration/config/verity_config", "verity/protocols/pouw/clear", "benchmarks/pouw/pearl_c", "benchmarks/pouw/pearl_c_sm120",
+inputs = ["tools/config/verity_config", "verity/protocols/pouw/clear", "benchmarks/pouw/pearl_c", "benchmarks/pouw/pearl_c_sm120",
           "benchmarks/pouw/pearl_c_sm90", "benchmarks/pouw/pearl_c_vllm", "benchmarks/pouw/tests/test_pearl_c_vllm.py",
           "benchmarks/pouw/tests/test_pearl_c_hash_decode.py", "benchmarks/pouw/tests/test_pearl_c_sm90_prefill.py",
           "benchmarks/pouw/run_result.py", "benchmarks/pouw/settings.py",

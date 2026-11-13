@@ -13,6 +13,15 @@ module
 public import Spot.OneStageZk
 meta import Spot.OneStageZk
 
+/-!
+# `members`: what the per-member form's parsers read, and no check
+
+`membersParsed` runs `membersParamsOfJson`, `membersEvidenceOf` and `membersHeld` on a case's parameters and evidence
+and returns one object whose `parsed` is `PARSED`; `Member.parsed` and `StatementFiles.parsed` are how it prints a
+member and a statement. `membersMain` is `main` with the command `members PARAMS EVIDENCE` beside it: the one-stage v2
+executable's entry point (`Spot.ZkMain`), whose `members` `one_stage/proofs.py`'s `members_parsed` runs.
+-/
+
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
