@@ -485,7 +485,8 @@ def _address(text: str) -> tuple[str, int]:
 
 
 def line(answer: Mapping[str, Any]) -> str:
-    pub = answer.get("public") or {}
+    # said of the certified bits until an answer names its tier and leaf
+    pub = f"{answer.get('public') or {}} through the device model, not the answer"
     w = (answer.get("profile") or {}).get("weights") or {}
     if answer["verdict"] == "accept":
         return (f"POUS: accept: {w.get('model')}@{str(w.get('revision'))[:10]}'s {w.get('linears')} linears, "
