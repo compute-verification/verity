@@ -543,7 +543,7 @@ def _window(table: H.HistoryTable, seed: int = 0, n: int = 4) -> tuple:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_batch
-    from verity.definitions.ops import gemm as G
+    from verity.circuits.ops import gemm as G
     from verity.commitments.windows import interface as I
 
     g8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)

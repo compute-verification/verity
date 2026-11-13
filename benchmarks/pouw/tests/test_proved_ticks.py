@@ -134,7 +134,7 @@ def test_placed_on_a_tiles_program_reads_census_v1(r, c, k, version):
     from verity.protocols.pouw.prover.circuit import h1tile as H
     from verity.definitions.circuits.census import PRODUCTS, census
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     from verity.circuits.program import Program
 
     exact = bind(BG.GemmAccumulatorS8, K=k, **BG.GEMM_SM120_S8)
