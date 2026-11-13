@@ -157281,3 +157281,89 @@ def runOpenCalls (T : TabZK F mPts) : ℕ :=
 - Whether `decide`, `decide +kernel` or `rfl` closes the deployed bound, and how long it takes: the run above.
 - That `T.q = 168` and `T.N ≤ 8192` are lemmas for every table `planZHJ` admits.
 - That the executable verifier's `Zk.shaCalls` on an accepted run counts at least `runOpenCalls`. It would, if it checks every path separately; I haven't read whether frame-v3's multi-openings share nodes, which would make it count fewer.
+
+## REDRAW, Fri 13 Nov 19:17Z: #9717 and #9555 do NOT conflict: the queue's own merge of the two is clean; the two "conflicts" in `ChallengerCoins.lean` are #9555's old head against the chain, which both carried heads already settle the same way. Nothing to settle; I stack it as ordered, the tree unchanged
+
+Your 19:01Z and 19:11Z are read (mailbox to line 663).
+
+### What the two conflicts are
+
+**They are not between the two pull requests.** The two heads have two merge bases: `main` at `4ae17f7eafd7` and #9555's
+head before any carry, `38b7c6df38ba`. Git merges the bases first, and that merge is what conflicts; the merge of the heads
+over it is clean. [run]
+
+- `git merge-tree --write-tree --name-only` of the two bases alone, `4ae17f7eafd7` and `38b7c6df38ba`: exit 1, four files
+  (`ChallengerCoins.lean`, `RecordAcross.lean`, `security/Proofs/Properties/Challenger/Coins.lean`, `service.py`), and the
+  driver's lines word for word as you quote them: "ChallengerCoins.lean: 2 conflict(s) beyond import lists",
+  "RecordAcross.lean: 3", "Coins.lean: 2", and the three "taken without regenerating it" lines of the properties lock. [run]
+- The same lines come out on stderr of any merge of the two heads, with exit 0. `RecordAcross.lean`, `Coins.lean` and
+  `service.py` are the same blob in both heads, so those lines cannot be about the heads. [run]
+
+**The two in `ChallengerCoins.lean`, and the side each takes** (in the merge of the bases; ours is `main`, theirs #9555's
+old head): [read]
+
+1. **The module docstring's paragraph on `coinsReason`.** `main` (the chain) renamed two names in it, `trustedSessionOf`
+   to `trustedChallengePhaseOf` and `pinnedSession` to `pinnedChallengePhase`. #9555 replaced the paragraph by a shorter
+   one ("coin opened (`startReason`). The commitment and the roots it is given come from the code that already trusts
+   them (…, through `drawCoins` and `coinsReason`, `ChallengerDraw.lean`)"). **Takes #9555's paragraph, with the chain's
+   name `trustedChallengePhaseOf` in it.**
+2. **The definition `coinsReason`.** `main` renamed `trustedSessionOf` in its body. #9555 moved the definition out, to
+   `ChallengerDraw.lean`. **Takes #9555's side: it is gone from `ChallengerCoins.lean`, and `ChallengerDraw.lean` holds it
+   with the chain's names.**
+
+**Both carried heads already read exactly so**, byte for byte the same in both places: #9555's at `38e1ad9938f6` and
+#9717's at `890a84bf6067` each have the short paragraph with `trustedChallengePhaseOf` and no `coinsReason` in
+`ChallengerCoins.lean`. The whole of that file differs between the two heads in one line, #9717's own
+(`challengerStream`: `jsonStrIs (getD segment "after") …` for `==`), which is in neither place. [run] So there is no
+settlement to write, and **no statement of either pull request changes.**
+
+### What the queue would do, by its own code
+
+I ran `research.queue.merged_tree` of `main`'s copy (`ff95b899ecf8`), the function the mark's preflight (`_collide`) and
+the queue's merge both call: [run]
+
+| merge | exit | conflicted files |
+| --- | --- | --- |
+| #9555 (`38e1ad9938f6`) onto `main` | 0 | none |
+| #9717 (`890a84bf6067`) onto `main` | 0 | none |
+| #9717 onto `main` with #9555 merged, as a candidate holding both | 0 | none |
+| the two heads onto each other, either way | 0 | none |
+
+- The candidate holding both differs from #9717 onto `main` alone in **one line**: the place of
+  `Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase` in one `trust_gap` list of the properties lock (the order
+  my 18:57Z entry named). No `.lean` file differs. [run]
+- Merging `38e1ad9938f6` into #9717's head gives #9717's tree exactly (`91e539717b9b`), the locks included. So no record
+  of `reads[Spot.ChallengerCoins]` changes: the "taken without regenerating it" lines are the bases' merge speaking, and
+  the head's two locks are still the files `71b3` wrote. [run]
+
+So `890a84bf6067` could be marked as it stands; a stack is not needed for the merge. [derived]
+
+### What I do now
+
+**I stack it all the same, as you ordered**, since it costs nothing and makes the order the queue's own (a head that
+holds #9555's head goes in after it):
+
+1. Merge `38e1ad9938f699d92a3c8cea6d5dc990821c2e24` into `cursor/proofs-honest-draw-5b2f`: one merge commit, no file
+   changed, pushed as a fast-forward.
+2. The pull request's body says it is stacked on #9555 and lands after it, and its Checks say what ran at the carried
+   head.
+3. A records run at the new head on vy-nebius-cpu-8. The tree is the same, so I expect the reused `pass` again and
+   nothing for `--update` to write; I give its outcome line as it is. The quick suites of what changed since
+   `890a84bf6067` are none, since no file changed.
+4. The ready line at the new head.
+
+If you would rather mark `890a84bf6067` and have no new head, say so before I push: I hold the push until 19:27Z.
+
+### Not established
+
+- **Why your `git merge-tree` stopped**, if it exited 1: here it exits 0 with git 2.43 and `main`'s drivers. If yours
+  gave another exit, tell me its command line and I run that.
+- The preflight's own warning at a mark of #9717: not run, since I do not mark.
+
+### State
+
+- `commitOf?`, #9795: its records run at `a669fecb` is `r20261113-190838-cc57`, placed by `--on auto` on
+  vy-nebius-cpu-7, holding a Lean slot since 19:14Z. "ready to mark #9795 at …" follows when it is back.
+- #9717's suites beside the 18:49Z run (`7856`), at `890a84bf6067`: "10 suites: 10 passed (0 cached), 0 failed", exit 0. [run]
+- Then #9728's two names on `cursor/proofs-carried-9728-4ae1`, as your 19:11Z orders. Names run: 1 ahead in line on
+  vy-nebius-cpu-5 at 19:03Z.
