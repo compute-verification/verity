@@ -111081,3 +111081,29 @@ because `membersTreeReason` runs `membersOrder` only (`verity/protocols/spot/ver
 **Not established.** That `Place.lean` and `Sessions.lean` elaborate: neither has been through Lean, and `Sessions.lean`'s proofs were written against lemma statements I read, with only four small lemmas checked on the VM in a core-only model. That the undrawn refusal's third file and its tests pass. Who writes the link-first refusal. Whether `WindowSessions.members` is restated on the read (Finding A). I did not read whether cpu-11's memory reservations are other lanes' or ours.
 
 **To post:** nothing new.
+
+
+## MESSAGES, Fri 00:51Z: the run's coins are what its history shows, for SPOT[Flock]'s verifier, written; my last NEEDS #1 was wrong
+
+A Lean slot made my try wait 29 minutes on vy-nebius-2 (try `r20261112-235532-e8e9`, launched 23:55Z, never started); I cancelled it at 00:25Z as you said and sent it to vy-nebius-cpu-11, where `r20261113-002512-a1ba` took a slot within a minute and is still building the imports (11,339 of 11,383 modules at 00:45Z, the tree being far from main) [run]. Its verdict on `Messages.lean` is not in yet.
+
+In plain words: in the two-stage audit, each message the prover sends is fixed by a digest the auditor's device recorded before the coins that follow it, and this piece shows the messages cannot be changed afterwards except by a SHA-512 collision. One step of that needs the verifier's answers to show the coins they used, so that a prover who sees the history knows the coins; I wrote that step for SPOT[Flock]'s verifier, the inner blocks' sessions included, and it waits on a compile.
+
+- **Correction of my 00:09Z NEEDS #1** [read]: I said `RunShown` fails at a session's first round when Flock decides there. It cannot decide there: Flock's step decides only when the session's first message is a link (tag `0`, `FlockDeploy.linkOf`) and its last is final (tag `1`, `finalOf`), so one message can't be both, and a lone non-coin-request message is refused (`act_single`). Nothing is needed from TWOLEG for it.
+- **New in `MessagesShown.lean`** (pushed, not compiled) [derived]: `answersOwn` and `answersShown` for `SpotFlock.V h` (round 0 to the end of the second stage: each answers its own coin; the statements' round reads only shown coins; a session round reads its session's earlier coins, each shown because Flock asked for it, and its own only where it is a coin request, `act_eq_last`; the verdict reads only whether each prefix is decided, which depends on the coins' count alone, `decidedAt_congr`). Then `L_V : A.L.V = SpotFlock.V A.h := rfl` and `runShown A x : RunShown A x` with no hypothesis. Its statement rests on nothing from the switch.
+- **The earlier-period signature hole** is not met here: `RunShown` is about the verifier's step and the run, no signature is read.
+
+STOP RULE: kept. No listed guarantee, lock or named assumption changed; nothing wired into `Sampled.lean`; the accept not turned on.
+
+NEEDS:
+1. COINMAP: the run's coins at rounds no answer shows (the statements' round `stage+1`, and a session's deciding round, whose coin Flock never reads: `act` drops the last coin unless it is a coin request) must not be placed from the device; `readsAt` counts a session's deciding round as read. A word from COINMAP on whether its law skips those rounds.
+2. TWOLEG: `MessagesFixed`/`AcceptsRun` only at rounds the run reaches (unchanged from 00:09Z).
+3. `SessionReading.stmts`/`msg`: RUNCOINS's `SpotRunAcceptsPlay` takes the session messages from abstract Flock provers `P' t` (`SessionsAccept`), not from files; SESSIONCOINS gives the sessions' records (`sessionRecords`) and their layout (`slotStream`), and one-stage's `linkMsg`/`roundMsg` read the record's message bytes, which are what the device's digests hash, but are not SpotFlock's tagged Flock messages. Which bytes the reading's `msg` is (the record's, the Flock message, or both with a map between them) is TWOLEG's to say before I define it.
+
+To post: nothing.
+
+Not established: nothing of `Messages.lean` or `MessagesShown.lean` has compiled yet; `L_V` by `rfl` is a guess about how `compiledTwo` unfolds [guess].
+
+Ready for soundness's reading: none yet.
+
+Branch `cursor/proofs-messages-f55d`, head `4e8f7a0b06`, pushed; nothing unpushed. Next: read the try's errors as soon as it ends, fix, resend to cpu-11 with `MessagesShown.lean` (which builds `Messages.lean` as an import), one try at a time.
