@@ -8,7 +8,7 @@ prints its usage and exits 2.
     python tools/verity/lean/lean_changed.py --try FILE [--siblings]   a lane's edit loop on a node (`verity lean try FILE --on NODE`)
     python tools/verity/lean/lean_changed.py [--no-wait] --build FILE...   the ready mark's preflight's Lean step (`build_files`)
     python tools/verity/lean/lean_changed.py --inputs-key PKG... [--head SHA] [--repo DIR]   each PKG's inputs key at SHA
-    python tools/verity/lean/lean_changed.py --ask PKG... [--head SHA] [--repo DIR]   the GB a `--records` run of PKG asks (`ask`)
+    python tools/verity/lean/lean_changed.py --ask PKG...   the GB a `--records` run of PKG asks (`ask`)
 
 `--try` elaborates one file (FILE: its path from the repository's root) on the slot tree `--records` builds on, under the same
 `build` slot, tree lock, sync, `repair` and dependencies, for the closure of the package that owns FILE only: there it runs
@@ -277,23 +277,16 @@ def audited(todo: list[str], read=read_here) -> list[str]:
     return list(dict.fromkeys(q for p in todo for q in (p, *provers(p, read))))
 
 
-def ask(names: list[str], commit: str | None = None, repo: Path | None = None) -> tuple[int, str]:
+def ask(names: list[str]) -> tuple[int, str]:
     """`--ask`: (the GB a `--records` run of any of the packages ``names`` names asks, the line that says it in GiB,
     `check.py`'s `ask_lines`): the largest need of the build of each package their runs audit (`requirers`, `audited`),
-    with no replay. Read from this checkout, or with ``commit`` from git's objects at that commit in ``repo`` alone.
-    ValueError when a name matches no single package or git can't list the checkout or ``commit``."""
-    if commit is None:
-        files, read = LA.COMMON.tracked_files(ROOT), read_here
-        if files is None:
-            raise ValueError(f"git can't list the tree at {ROOT}")
-    else:
-        if (got := at_commit(commit, [], repo)) is None:
-            raise ValueError(f"git can't list {commit} in {repo or ROOT}")
-        files, blobs = got
-        read = blob_reader({f: b for f, b in blobs.items() if f.endswith(("/lake-manifest.json", f"/{LOCK}"))}, repo)
-    pkgs, todo = LA.packages(files), []
+    with no replay, read from this checkout. ValueError when a name matches no single package or git can't list the
+    checkout."""
+    if (files := LA.COMMON.tracked_files(ROOT)) is None:
+        raise ValueError(f"git can't list the tree at {ROOT}")
+    pkgs, todo, read = LA.packages(files), [], read_here
     for name in names:
-        if len(match := matching(name, pkgs, ROOT if commit is None else None)) != 1:
+        if len(match := matching(name, pkgs, ROOT)) != 1:
             raise ValueError(f"{name!r} matches {len(match)} packages: {', '.join(match or pkgs)}")
         todo += [match[0], *requirers(match[0], pkgs, read)]
     return AUDIT.ask_lines({q: AUDIT.pinned(read(f"{q}/lake-manifest.json")) for q in audited(todo, read)}, ("build",))
@@ -2377,20 +2370,20 @@ def main(argv: list[str]) -> int:
                     "keeps and passes on, from git's objects alone (no checkout, no build)")
     ap.add_argument("--ask", nargs="+", metavar="PKG", help="print the GB a --records run of any PKG would ask `research run "
                     "--mem-gb` for, a whole number alone on stdout, and on stderr the GiB that holds and the build that needs "
-                    "it (check.py's `ask_lines`): of this checkout, or with --head of that commit, from git's objects alone")
-    ap.add_argument("--head", default="HEAD", metavar="SHA", help="with --inputs-key or --ask: the commit (default HEAD)")
-    ap.add_argument("--repo", type=Path, metavar="DIR", help="with --inputs-key or --ask: the git repository to read --head "
-                    "from (default this file's checkout); a clone with no worktree checked out serves")
+                    "it (check.py's `ask_lines`), of this checkout")
+    ap.add_argument("--head", default="HEAD", metavar="SHA", help="with --inputs-key: the commit (default HEAD)")
+    ap.add_argument("--repo", type=Path, metavar="DIR", help="with --inputs-key: the git repository to read --head from "
+                    "(default this file's checkout); a clone with no worktree checked out serves")
     a = ap.parse_args(argv)
     if a.allow and not a.records:
         ap.error("--allow goes with --records, a lane's fast path, and with nothing else: no other mode takes an "
                  "allowance, --try, --build (the ready mark's preflight) and --inputs-key among them")
     if a.ask:
         if a.inputs_key or a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or a.try_ or a.build \
-                or a.no_wait or a.tree:
-            ap.error("--ask takes only --head and --repo")
+                or a.no_wait or a.tree or a.head != "HEAD" or a.repo:
+            ap.error("--ask takes no other option")
         try:
-            asked = ask(a.ask, a.head if a.head != "HEAD" or a.repo else None, a.repo)
+            asked = ask(a.ask)
         except (OSError, ValueError, subprocess.CalledProcessError) as e:
             print(f"lean_changed: --ask: {e}", file=sys.stderr)
             return 2
@@ -2406,7 +2399,7 @@ def main(argv: list[str]) -> int:
             return 2
         return 0
     if a.head != "HEAD" or a.repo:
-        ap.error("--head and --repo go with --inputs-key or --ask")
+        ap.error("--head and --repo go with --inputs-key")
     if a.try_ or a.build:
         if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or (a.try_ and a.build) or (a.try_ and a.no_wait):
             ap.error("--try and --build take only --deps and --tree (--build also --no-wait), and not each other")

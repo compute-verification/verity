@@ -17,7 +17,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -896,25 +895,19 @@ def test_the_inputs_key_at_a_commit_is_read_from_git_alone_and_is_the_runs(tmp_p
     assert LC.main(["--inputs-key", S, "--head", "0" * 40, "--repo", str(clone)]) == 2
 
 
-def test_the_ask_of_a_records_run_is_its_largest_build_here_or_at_a_commit(tmp_path, monkeypatch, capsys):
+def test_the_ask_of_a_records_run_is_its_largest_build(tmp_path, monkeypatch, capsys):
     """`--ask PKG…` prints the GB a `--records` run of any PKG asks, one line on stdout holding a whole number and nothing
-    else, which the records gate reads, and the GiB on stderr: the largest build among every package their runs audit
-    (each PKG, its requirers and the packages their `proved_in` names), and no replay, which a records run doesn't run.
-    With `--head` it reads the commit's objects alone, as `--inputs-key` does, so the queue can ask a head it never
-    checked out, running this file as a process of its own."""
+    else, and the GiB on stderr: the largest build among every package their runs audit (each PKG, its requirers and the
+    packages their `proved_in` names), and no replay, which a records run doesn't run. It reads this checkout and takes
+    no other option."""
     heavy = json.dumps({"packages": [{"type": "path", "dir": ".."}, {"type": "path", "dir": "../props"},
                                      {"type": "git", "name": "Arklib"}]})
     root = tmp_path / "root"
     for f, text in {**PAIR, "s/proofs/lake-manifest.json": heavy, "tools/verity/lean/check.py": "x\n"}.items():
         (root / f).parent.mkdir(parents=True, exist_ok=True)
         (root / f).write_text(text)
-    git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "-C", str(root)]
     subprocess.run(["git", "init", "-q", str(root)], check=True)
-    subprocess.run([*git, "add", "-A"], check=True)
-    subprocess.run([*git, "commit", "-qm", "c"], check=True)
-    sha = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
-    clone = tmp_path / "clone"
-    subprocess.run(["git", "clone", "-q", "--no-checkout", str(root), str(clone)], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
     monkeypatch.setattr(LC, "ROOT", root)
     monkeypatch.setattr(LC.LA, "ROOT", root)
     R = LC.AUDIT.reserve()
@@ -926,19 +919,14 @@ def test_the_ask_of_a_records_run_is_its_largest_build_here_or_at_a_commit(tmp_p
 
     heavy_gb, light_gb = R.gb(R.BUILD_HEAVY_GIB), R.gb(R.LIGHT_GIB)
     for pkgs in ([P], [S], [P, S]):         # s/proofs reads s/props' build, and s names s/proofs under `proved_in`
-        out, err = asked([*pkgs, "--head", sha, "--repo", str(clone)])
+        out, err = asked(pkgs)
         assert out == f"{heavy_gb}\n", pkgs
         assert f"--mem-gb {heavy_gb}: " in err and f"for the {R.BUILD_HEAVY_GIB} GiB the build of s/proofs needs" in err, err
-    assert asked([P])[0] == f"{heavy_gb}\n", "the checkout as it is"
     (root / "s/proofs/lake-manifest.json").write_text(PAIR["s/proofs/lake-manifest.json"])
     assert asked([P])[0] == f"{light_gb}\n", "no heavy pin left"
-    assert asked([P, "--head", sha, "--repo", str(clone)])[0] == f"{heavy_gb}\n", \
-        "the commit's ask reads the commit, not the checkout"
-    assert LC.main(["--ask", "s/p", "--head", sha, "--repo", str(clone)]) == 2, "`s/p` names two packages"
-    capsys.readouterr()
-    r = subprocess.run([sys.executable, str(HERE.parent / "lean_changed.py"), "--ask", P, S, "--head", sha, "--repo",
-                        str(clone)], cwd=tmp_path, capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    assert (r.returncode, r.stdout) == (0, f"{heavy_gb}\n"), (r.returncode, r.stdout, r.stderr[-2000:])
+    assert LC.main(["--ask", "s/p"]) == 2, "`s/p` names two packages"
+    with pytest.raises(SystemExit):
+        LC.main(["--ask", P, "--head", "HEAD~1"])
 
 
 def test_a_records_run_below_the_floor_of_any_build_it_runs_is_refused_with_its_ask(pair, tmp_path, monkeypatch):
