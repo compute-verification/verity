@@ -190,6 +190,7 @@
   "Proofs.Flock.SpotFlock.AddressFacts.CopyOut",
   "Proofs.Flock.SpotFlock.AddressFacts.PortsOnceOf",
   "Proofs.Flock.SpotFlock.AddressFacts.OfRuns",
+  "Proofs.Flock.SpotFlock.AddressFacts.Connected",
   "Proofs.Properties.Verity.SampledTwo.CoinPrefix",
   "Proofs.Properties.Verity.SampledTwo.CutFirst",
   "Proofs.Properties.Verity.SampledTwo.CutAccept",
