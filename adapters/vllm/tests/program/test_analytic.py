@@ -48,6 +48,14 @@ def test_config_of_untied_and_hand_fields():
     assert analytic.weights_type(b1.B0_CONFIG) == b1.weights_type(b1.B0_CONFIG)
 
 
+@pytest.mark.parametrize("qc", [None, {}, False, 0, "", [], ()])
+def test_an_absent_or_empty_quantization_config_is_not_the_int8_profile(qc):
+    """A config.json may hold `quantization_config` as null, an empty mapping or another empty value: none of them is refused, and none
+    is read as a mapping."""
+    assert analytic.is_int8_exact(qc) is False
+    assert analytic.quant_refusal(qc) is None
+
+
 def test_cos_sin_table_shape_and_first_row():
     tab = analytic.cos_sin_table(b1.B0_CONFIG, max_pos=4)
     assert tab.shape == (4, 64) and tab.dtype == np.uint16

@@ -2,7 +2,9 @@
 `TargetProfile`, fail-closed refusal of unregistered geometry/targets, and Bet A's pins following the registry."""
 from __future__ import annotations
 
+import dataclasses
 import json
+import sys
 
 import pytest
 from verity.definitions.registry import b1
@@ -12,6 +14,7 @@ from verity.definitions.silicon.models import (
     HOPPER_BF16_WGMMA_K16,
 )
 
+from tests import fake_vllm
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import (
@@ -216,6 +219,41 @@ def test_profile_mismatches_checks_the_applied_family():
     ada_applied = {**applied, "compute_capability": [8, 9], "num_sms": 128, "tuned_gemm_arch_family": "ada"}
     assert profile_mismatches(DEFAULT_TARGET, ada_applied) == []
     assert any("tuned_gemm_arch_family" in m for m in profile_mismatches(DEFAULT_TARGET, {**ada_applied, "tuned_gemm_arch_family": None}))
+
+
+def test_a_tagged_build_is_held_to_its_commit_through_the_read_back(monkeypatch):
+    """A tagged vLLM's version carries no commit. The read-back's version has it (`config.vllm_revision`), so a profile at
+    that commit is not refused for its revision, one at another commit is, and the bare version still is."""
+    pytest.importorskip("torch")
+    from verity_vllm.program.frontend.export_compat import read_back_applied
+    fake = fake_vllm.install(monkeypatch)
+    fake["vllm"].__version__, fake["vllm.envs"].VLLM_BATCH_INVARIANT = "0.34.0rc1", True
+    fake.set("vllm._version:__commit_id__", "g52aeb5806")
+    got = read_back_applied()
+    assert got["vllm_version"] == "0.34.0rc1+g52aeb5806" and got["batch_invariant"] is True
+
+    def refused(revision: str, running: str) -> list[str]:
+        applied = {"compute_capability": [8, 0], "num_sms": 108, "batch_invariant": True, "vllm_version": running}
+        return [m for m in profile_mismatches(dataclasses.replace(AMPERE_TP, vllm_revision=revision), applied) if m.startswith("vllm_revision")]
+
+    assert refused("52aeb5806", got["vllm_version"]) == []
+    assert refused("d9105ea80", got["vllm_version"]) == ["vllm_revision declared 'd9105ea80', running vllm '0.34.0rc1+g52aeb5806'"]
+    assert refused("52aeb5806", "0.34.0rc1") == ["vllm_revision declared '52aeb5806', running vllm '0.34.0rc1'"]
+    fake.set("vllm._version:__commit_id__", "g000000000")
+    fake["vllm"].__version__ = "0.28.1rc1.dev472+gd9105ea80"   # the pin: its version, as it is
+    assert read_back_applied()["vllm_version"] == "0.28.1rc1.dev472+gd9105ea80"
+
+
+def test_a_vllm_without_its_tuned_gemm_module_is_read_back_as_no_family_with_the_error(monkeypatch):
+    """An answer the running vLLM can't give is read back as None, with the probe's error beside it."""
+    pytest.importorskip("torch")
+    from verity_vllm.program.frontend.export_compat import read_back_applied
+    fake_vllm.install(monkeypatch)
+    assert "tuned_gemm_arch_family_error" not in read_back_applied()
+    monkeypatch.setitem(sys.modules, "vllm.model_executor.determinism.batch_invariant_configs", None)
+    got = read_back_applied()
+    assert got["tuned_gemm_arch_family"] is None
+    assert got["tuned_gemm_arch_family_error"].startswith("ModuleNotFoundError: ")
 
 
 # -- Bet A: the GEMM rule's pins follow the registry (needs torch) ----------------------------------------------------------

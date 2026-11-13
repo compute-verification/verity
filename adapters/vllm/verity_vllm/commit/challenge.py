@@ -25,17 +25,14 @@ import random
 from bisect import bisect_right
 from collections.abc import Callable, Sequence
 from itertools import accumulate
-from typing import Any, TypeVar
+from typing import Any
 
 import numpy as np
-
 from verity.commitments.randomness import Key, derive
 
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
 IDENTITIES_DOMAIN = "verity/vllm-commit/opening-identities/v1"
 REPLAY_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
-
-T = TypeVar("T")
 
 
 def _source(source: bytes | None) -> bytes:
@@ -56,7 +53,9 @@ def run_root_of(run: Any) -> bytes:
     if len(root) in (32, 64):
         return root
     bad = [s.step for s in run.steps if len(s.root) not in (32, 64)]
-    errors = list((run.extra or {}).get("errors") or [])
+    extra = run.extra
+    listed = extra.get("errors") if extra else None
+    errors = list(listed) if listed else []
     raise NoRunRoot(f"no run root: {len(bad)} of {len(run.steps)} steps not committed (steps {bad[:8]}"
                     f"{' ...' if len(bad) > 8 else ''}); first error: {errors[0] if errors else 'none recorded'}")
 
@@ -102,18 +101,18 @@ def replay_key(source: bytes, run_root: bytes) -> Key:
     return derive(_source(source), REPLAY_DOMAIN, {"run_root": bytes(run_root)})
 
 
-def stratum_picks(pools: Sequence[Sequence[T]], per_stratum: int, seed: int | None, key: Key | None = None) -> list[list[T]]:
+def stratum_picks[T](pools: Sequence[Sequence[T]], per_stratum: int, seed: int | None, key: Key | None = None) -> list[list[T]]:
     """`per_stratum` members of each pool (all of a smaller pool), in pool order.
 
     With `seed` (legacy; pass None with a key): one `random.Random(seed)` samples the pools in turn.  With `key`: pool i's
     members at the positions of `key.subset(min(per_stratum, len(pool)), len(pool), ("vu", i))`."""
-    if (seed is None) == (key is None):
-        raise ValueError("stratum_picks takes a legacy seed or a key, not both")
-    if key is not None:
+    if key is not None and seed is None:
         if int(per_stratum) < 0:
             raise ValueError("stratum_picks needs per_stratum >= 0")
         return [[pool[j] for j in key.subset(min(int(per_stratum), len(pool)), len(pool), ("vu", i))]
                 for i, pool in enumerate(pools)]
+    if key is not None or seed is None:
+        raise ValueError("stratum_picks takes a legacy seed or a key, not both")
     rng = random.Random(int(seed))
     out = []
     for pool in pools:

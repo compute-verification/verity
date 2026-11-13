@@ -6,7 +6,11 @@ code; without the tick the admission is charged and the hits still aren't. The o
 evictions, the lookups they cut short, the waits with what held them, and the preemptions. The report counts each
 class's events beside its bits, a class with no bits and no event reading "not exercised"; its hits are the engine's
 own; where the decoder refuses the string it gives the decoder's reason and the first step at which the replay
-differs from the engine's schedule; and a trace with an abort is its refusal and the aborts its directory records."""
+differs from the engine's schedule; and a trace with an abort is its refusal, the aborts its directory records, by
+window, and that the run shows none of its windows. It prints ℓ beside each window's charge, the lengths' rule with
+the load's `max_tokens`, and the charge scaled to a week, a month and a year at the serve's own rate; it refuses a
+trace served with a draft; and set beside another serve's trace, read under that serve's own stop ids, it names what
+that serve exercised and this one did not, and where the two serves differ."""
 
 from __future__ import annotations
 
@@ -106,7 +110,7 @@ def test_under_the_tick_only_the_lengths_are_charged(asy):
 
 def test_without_the_tick_the_admission_is_charged():
     """The same run registered without the tick: its decisions are charged, each window's segment ends in the
-    termination's 2 bits, and no window sends a hit, a resume or a lag bit, which v1's own caps hold at 0. A book with
+    termination's 2 bits, and no window sends a hit, a resume or a lag bit, which v1's own bounds hold at 0. A book with
     room for hits charges their count even at none, so there the hits aren't 0 by construction."""
     cases = registrations(False)
     for name in ("plain", "plain, fit book"):
@@ -241,7 +245,9 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_events(tmp_path, caps
     engine's own; every class's events are counted by window, and the plan's small engine makes each happen: hits,
     evictions that cut a later admission's lookup, waits on a full batch, a preemption, releases in several buckets
     and both ends. A class with no bits and no event in a window reads "not exercised" there, and one with events and
-    no bits reads 0. Both strings decode back to their traces."""
+    no bits reads 0. Both strings decode back to their traces. Each row has ℓ beside its charge; the lengths are their
+    rule's line, the plan's `max_tokens` and the widths they give; the charge is scaled to each monitoring period by the
+    seconds from the first release to the last; and the aborted requests are 0 in every window, a count and no blank."""
     e, (ios, times) = engine(False), plan()
     run = serve(e, ios, times, seed=1)
     tick = write_corpus(tmp_path / "tick", e, ios, times, run, tick=True)
@@ -293,8 +299,23 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_events(tmp_path, caps
         assert ev["waited"] >= ev["waited_full"] and ev["segments"] == sum(w["classes"]["segment end"] > 0 for w in row["by_window"])
         assert row["engine"] == {"num_gpu_blocks": e.num_gpu_blocks, "block_size": e.block_size, "max_num_seqs": e.max_num_seqs,
                                  "max_num_batched_tokens": e.max_num_batched_tokens, "async_scheduling": False}
+        held = len({(a - min(buckets(times))) // 10 for a in buckets(times)})
         assert row["aborts"] == {"freed": N, "finishes": {"length": ev["ended_length"], "stop": ev["ended_stop"]}, "aborted": 0,
+                                 "windows_released": held if row is t else None, "by_window": [] if row is t else None,
                                  "released_never_freed": None, "certifier_failed": None}
+        assert ev["aborted"] == 0 and row["ell"] == 1 << 23
+        assert row["serve"] == {"model": None, "cards": 1, "draft": False, "vllm": None, "certifier": None}
+        n, widths = row["lengths"], [io.max_tokens.bit_length() for io in ios]
+        assert (n["terms"], n["bits"]) == (N, lengths) and n["rule"]["file"] == "advice_code/lengths.py"
+        assert "C.width(requests[k].max_tokens + 1), 1)" in (Path(BC.__file__).parent / "lengths.py").read_text().splitlines()[
+            n["rule"]["line"] - 1]
+        assert n["max_tokens"] == {"min": min(io.max_tokens for io in ios), "max": max(io.max_tokens for io in ios),
+                                   "mean": sum(io.max_tokens for io in ios) / N}
+        assert n["width"] == {"min": min(widths), "max": max(widths), "mean": sum(widths) / N}
+        assert row["scaled"] == {name: round(row["bits"] * s / n["release_span_s"]) for name, s in BYC.PERIODS.items()}
+    span = (max(buckets(times)) - min(buckets(times)) + 1) * 0.1
+    assert t["lengths"]["release_span_s"] == pytest.approx(span) and BYC.PERIODS["week"] == 604800
+    assert t["scaled"]["year"] == round(lengths * 365 * 86400 / t["lengths"]["release_span_s"]) > t["scaled"]["month"]
     ev = t["total"]["events"]
     assert ev["waited_full"] > 0 and t["total"]["steps_waiting"]["tokens"] > 0 == t["total"]["steps_waiting"]["in flight"]
     assert ev["release_buckets"] == len(set(buckets(times))) > 1 and ev["segments"] == 0 < p["total"]["events"]["segments"]
@@ -306,6 +327,22 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_events(tmp_path, caps
     assert text.count("- hits: 0 by construction: ") == 2 and BYC.render_all([t, p]) == text
     assert f"The pool evicted {ev['evicted_blocks']} cached blocks; {ev['admissions_cut']} admissions' lookups" in text
     assert f"Aborts in its record: the engine freed {N} requests" in text and ", 0 of them aborted." in text
+    assert text.count("| window | charge | ℓ | hits |") == 2 and text.count("| aborts | aborted requests |") == 2
+    assert all(line.split("|")[3].strip() == f"{1 << 23:,}" for line in text.splitlines() if line.startswith(("| all", "| 0")))
+    assert text.count(f"ℓ = {1 << 23:,} bits bounds the whole string, every window's charge together.") == 2
+    assert text.count("`decode`, the registered codebook and ℓ are held by Python.") == 2
+    assert f"{lengths:,} bits charged by the registered code." in text and text.count("served with the draft off") == 2
+    n = t["lengths"]
+    assert (f"(`advice_code/lengths.py:{n['rule']['line']}`). The load's `max_tokens` runs from {n['max_tokens']['min']} to "
+            f"{n['max_tokens']['max']}, mean {n['max_tokens']['mean']:.1f}; the widths from") in text
+    assert f"{N} terms are {lengths:,} bits, {lengths / N:.3f} a request." in text
+    assert (f"Scaled, not measured: at this serve's own rate on its 1 card, its {lengths:,} bits over the {span:,.1f} s from its first "
+            f"release to its last, the charge is {t['scaled']['week']:,} bits a week, {t['scaled']['month']:,} a month of "
+            f"30 days and {t['scaled']['year']:,} a year.") in text
+    _, rec, _, reg = tick_case(False)
+    none = BYC.length_terms(rec, dataclasses.replace(reg, send_lengths=False), 0.1)
+    assert (none["terms"], none["bits"], none["max_tokens"], none["width"]) == (0, 0, None, None)
+    assert "The lengths: the registration sends none." in BYC.render({**t, "lengths": none})
     twice = BYC.render_all([t, dict(t, trace="again"), p])
     assert twice.count("- output lengths: charged.") == 2 and twice.count("decode(encode(a)) == a: yes.") == 3
 
@@ -313,7 +350,9 @@ def test_the_report_splits_a_trace_by_class_and_counts_its_events(tmp_path, caps
 def test_a_trace_with_an_abort_is_its_refusal_and_its_aborts(tmp_path, capsys):
     """The plan's run with one request the engine ended `abort`: the reader refuses the trace, so it has no table, and
     the report is the refusal and what the directory records: the engine's finishes, the released requests it never
-    freed, and the connections the network certifier failed, apart for those whose request it had released."""
+    freed, and the connections the network certifier failed, apart for those whose request it had released. The
+    aborted request is counted in the window its release falls in, and the report says that the run shows the advice
+    of none of the record's windows."""
     e, (ios, times) = engine(False), plan()
     d = write_corpus(tmp_path / "tick", e, ios, times, serve(e, ios, times, seed=1), tick=True)
     reqs = [json.loads(line) for line in (d / "requests.jsonl").read_text().splitlines()]
@@ -328,14 +367,157 @@ def test_a_trace_with_an_abort_is_its_refusal_and_its_aborts(tmp_path, capsys):
     assert BYC.main([f"abort={d}", "--stops", str(EOS), "--T", "10", "--out", str(out)]) == 1
     row = json.loads(out.read_text())["rows"][0]
     stops = sum(io.eos for k, io in enumerate(ios) if k != 5)
-    assert set(row) == {"trace", "error", "aborts"} and "request r5: finish 'abort'" in row["error"]
+    a = buckets(times)
+    held, at = len({(x - min(a)) // 10 for x in a}), (a[5] - min(a)) // 10
+    assert set(row) == {"trace", "error", "T", "serve", "aborts"} and "request r5: finish 'abort'" in row["error"]
     assert row["aborts"] == {"freed": N, "finishes": {"abort": 1, "length": N - 1 - stops, "stop": stops}, "aborted": 1,
+                             "windows_released": held, "by_window": [{"window": at, "aborted": 1}],
                              "released_never_freed": 2,
                              "certifier_failed": {"released": {"limit": 2, "late": 1}, "unreleased": {"ingress": 1}}}
     text = capsys.readouterr().out
     assert text.startswith("**abort**: refused, so it has no table: request r5: finish 'abort'") and "|" not in text
     assert f"Aborts in its record: the engine freed {N} requests (1 `abort`, " in text and "1 of them aborted; 2 released" in text
     assert "after their request's release: 1 `late`, 2 `limit`; and before it: 1 `ingress`." in text
+    assert held > 1 and (f"Aborted requests: 1, by the window of T = 10 buckets their release falls in: window {at}: 1. The "
+                         f"code has no field for an abort and the reader refuses the whole record for one: this run does not "
+                         f"show the advice of any of its {held} windows that hold a release.") in text
+    (d / "requests.jsonl").write_text("".join(json.dumps({k: v for k, v in r.items() if k != "bucket"}) + "\n" for r in reqs))
+    assert BYC.aborts(d, 10)["by_window"] is None is BYC.aborts(d, 10)["windows_released"]
+    assert "so they are not counted by window. The record is refused whole" in BYC._unshown(BYC.aborts(d, 10), 10)
+
+
+def _name(d: Path, model: str, cards: int, where: str, engine: bool = True) -> None:
+    """Give a trace-corpus directory a serve's own facts: its model's name, its cards, where its network certifier ran
+    and the version its server's log prints: another program's version and the banner's, which are not read, then
+    with `engine` the engine's own line, which is."""
+    meta = json.loads((d / "meta.json").read_text())
+    meta["server_argv"] += ["--served-model-name", model, "--tensor-parallel-size", str(cards)]
+    meta["tick"]["where"] = where
+    (d / "meta.json").write_text(json.dumps(meta))
+    with (d / "server.log").open("a") as log:
+        log.write("INFO CUDA version 12.4\nINFO vLLM API server version 0.9.1rc2.dev3+gabc123\n")
+        if engine:
+            log.write("INFO [core.py:123] Initializing a V1 LLM engine (v0.9.1rc2.dev3+gabc123) with config: model='m'\n")
+
+
+def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path, capsys):
+    """The plan served by an engine with room for all of it, so that nothing is evicted or preempted, set beside the
+    plan's run on the small engine and beside that run with an abort, which is refused: the report's own table is the
+    roomy serve's alone; beside it are each class it did not exercise, the events with none in it and some in the small
+    serve with that serve's counts, the refused trace's aborted request, and the two serves' facts, those that are the
+    same (the vLLM version, the tick, the codebook, ℓ, the draft) apart from those that differ (the model, the cards,
+    the pool, where the network certifier ran). A refused trace beside it doesn't fail the report."""
+    small, (ios, times) = engine(False), plan()
+    roomy = dataclasses.replace(small, num_gpu_blocks=4096)
+    here = write_corpus(tmp_path / "here", roomy, ios, times, serve(roomy, ios, times, seed=1), tick=True)
+    there = write_corpus(tmp_path / "there", small, ios, times, serve(small, ios, times, seed=1), tick=True)
+    gone = write_corpus(tmp_path / "gone", small, ios, times, serve(small, ios, times, seed=1), tick=True)
+    _name(here, "big", 8, "on the auditor's host")
+    _name(there, "little", 1, "beside the server")
+    _name(gone, "little", 1, "beside the server", engine=False)
+    reqs = [json.loads(line) for line in (gone / "requests.jsonl").read_text().splitlines()]
+    reqs[5]["finish_reason"] = "abort"
+    (gone / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in reqs))
+    out = tmp_path / "report.json"
+    assert BYC.main([f"here={here}", "--beside", f"there={there}", "--beside", f"gone={gone}", "--stops", str(EOS),
+                     "--T", "10", "--out", str(out)]) == 0
+    doc, text = json.loads(out.read_text()), capsys.readouterr().out
+    row, (other, refused) = doc["rows"][0], doc["beside"]
+    assert [r["trace"] for r in doc["rows"]] == ["here"] and "error" in refused and "error" not in other
+    assert row["serve"] == {"model": "big", "cards": 8, "draft": False, "vllm": "0.9.1rc2.dev3+gabc123",
+                            "certifier": "on the auditor's host"}
+    ev, theirs = row["total"]["events"], other["total"]["events"]
+    assert ev["preemptions"] == ev["evicted_blocks"] == ev["admissions_cut"] == 0 < theirs["preemptions"]
+    a, b = row["beside"]
+    assert (a["trace"], a["refused"], b["trace"]) == ("there", None, "gone") and b["refused"] == refused["error"]
+    quiet = {c for c in BYC.OF if BYC._cell(c, row["total"]) == "not exercised"}
+    assert quiet == {"aborts", "resumes and lag", "segment end"} == set(a["not_exercised"]) == set(b["not_exercised"])
+    assert a["events"] == {"admissions_cut": theirs["admissions_cut"], "preemptions": theirs["preemptions"]} and not b["events"]
+    assert set(BYC.CLASS_OF) == set(BYC.HEADS) and set(BYC.CLASS_OF.values()) == set(BYC.OF)
+    assert a["not_exercised"]["aborts"] == {"aborted": 0} and b["not_exercised"]["aborts"] == {"aborted": 1}
+    assert a["not_exercised"]["resumes and lag"] == {"resumptions": theirs["resumptions"], "lagged": 0}
+    assert b["not_exercised"]["resumes and lag"] == {"resumptions": None, "lagged": None}
+    assert b["not_exercised"]["segment end"] == {"segments": None} and a["not_exercised"]["segment end"] == {"segments": 0}
+    assert refused["serve"]["vllm"] is None and other["serve"]["vllm"] == row["serve"]["vllm"]
+    assert b["differs"]["vLLM"] == ["0.9.1rc2.dev3+gabc123", "not in the server's log"]
+    assert a["differs"] == {"model": ["big", "little"], "cards": ["8", "1"],
+                            "where the network certifier ran": ["on the auditor's host", "beside the server"],
+                            "the pool": ["4,096 blocks of 16 tokens", "8 blocks of 16 tokens"]}
+    assert set(a["same"]) == {"vLLM", "the draft", "requests a step", "tokens a step", "admission", "the prefix cache",
+                              "the registered codebook", "ℓ", "T"}
+    assert a["same"]["admission"] == "under the certified tick (τ_b = 100,000, τ_sat = 30,000, τ_free = 40,000 µs)"
+    assert set(b["differs"]) == {"model", "cards", "vLLM", "where the network certifier ran"} and set(b["same"]) == {"the draft"}
+    assert text.count("| all |") == 1 and "**there**" not in text and "**gone**" not in text
+    assert "Beside `there`:\n\n- aborts: not exercised here; not exercised in `there` either.\n" in text
+    assert f"- resumes and lag: not exercised here; in `there`: resumptions {theirs['resumptions']}.\n" in text
+    assert (f"- in the classes exercised here, none here and some in `there`: admissions an eviction cut "
+            f"{theirs['admissions_cut']}, preemptions {theirs['preemptions']}.\n") in text
+    assert "none here and some in `gone`" not in text
+    assert ("- the same in both serves: vLLM: 0.9.1rc2.dev3+gabc123; the draft: off; requests a step: at most 4; tokens a "
+            "step: at most 64; admission: under the certified tick") in text
+    assert ("- differing: model: big here, little in `there`; cards: 8 here, 1 in `there`; where the network certifier "
+            "ran: on the auditor's host here, beside the server in `there`; the pool: 4,096 blocks of 16 tokens here, 8 "
+            "blocks of 16 tokens in `there`.\n") in text
+    assert "Scaled, not measured: at this serve's own rate on its 8 cards, its " in text
+    assert "request r5: finish 'abort'" in refused["error"]
+    assert (f"Beside `gone`, which is refused ({refused['error']}), so that only its aborts and its directory's facts "
+            f"are read:\n\n- aborts: not exercised here; in `gone`: aborted requests 1.\n") in text
+    assert "- segment end: not exercised here; `gone` has no table to say.\n" in text
+    assert text.index("Beside `there`") < text.index("Beside `gone`") < text.index("- hits: 0 by construction")
+    assert BYC.render_all(doc["rows"]) == text and doc["beside_stops"] == doc["stops"] == [EOS]
+
+
+def test_a_serve_of_another_model_is_set_beside_under_its_own_stop_ids(tmp_path, capsys):
+    """The small engine's serve as another model's, each of its stops on that model's stop id, set beside the roomy
+    serve: read under the report's stop ids its record is refused, so it has no table to set beside and its line says
+    why; read under its own (``--beside-stops``) it is set beside as the same serve on the report's stop id is."""
+    small, (ios, times) = engine(False), plan()
+    roomy = dataclasses.replace(small, num_gpu_blocks=4096)
+    here = write_corpus(tmp_path / "here", roomy, ios, times, serve(roomy, ios, times, seed=1), tick=True)
+    same = write_corpus(tmp_path / "same", small, ios, times, serve(small, ios, times, seed=1), tick=True)
+    there = write_corpus(tmp_path / "there", small, ios, times, serve(small, ios, times, seed=1), tick=True)
+    theirs = EOS + 7
+    reqs = [json.loads(line) for line in (there / "requests.jsonl").read_text().splitlines()]
+    assert any(r["eos"] for r in reqs) and not any(theirs in r["prompt_ids"] + r["output_ids"] for r in reqs)
+    for r in reqs:
+        if r["eos"]:
+            r["output_ids"][-1] = theirs
+    (there / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in reqs))
+    out = tmp_path / "report.json"
+    args = [f"here={here}", "--stops", str(EOS), "--T", "10", "--out", str(out)]
+
+    def beside(d: Path, *more: str) -> tuple[dict, dict, str]:
+        assert BYC.main([*args, "--beside", f"there={d}", *more]) == 0
+        doc = json.loads(out.read_text())
+        return doc, doc["rows"][0]["beside"][0], capsys.readouterr().out
+
+    doc, b, text = beside(there)
+    assert doc["beside_stops"] == [EOS] and f"stopped on a stop id, its last id {theirs}" in b["refused"]
+    assert f"Beside `there`, which is refused ({b['refused']}), so that only its aborts" in text
+    assert "- segment end: not exercised here; `there` has no table to say.\n" in text
+    doc, b, text = beside(there, "--beside-stops", str(theirs))
+    assert doc["beside_stops"] == [theirs] and doc["stops"] == [EOS] and b["refused"] is None
+    assert "Beside `there`:\n" in text and "no table to say" not in text and b["events"]["preemptions"] > 0
+    assert beside(same)[1] == b
+
+
+def test_a_trace_served_with_a_draft_is_refused(tmp_path, capsys):
+    """The reader takes no draft from the server's arguments, so its replay of a serve that had one would be of
+    another serve: such a trace is refused by name before it is read, and so a trace that has a table was served with
+    the draft off."""
+    e, (ios, times) = engine(False), plan()
+    d = write_corpus(tmp_path / "tick", e, ios, times, serve(e, ios, times, seed=1), tick=True)
+    meta = json.loads((d / "meta.json").read_text())
+    meta["server_argv"] += ["--speculative-config", "{}"]
+    (d / "meta.json").write_text(json.dumps(meta))
+    out = tmp_path / "report.json"
+    assert BYC.main([f"draft={d}", "--stops", str(EOS), "--T", "10", "--out", str(out)]) == 1
+    row = json.loads(out.read_text())["rows"][0]
+    assert row["serve"]["draft"] and row["error"].startswith("the server had a draft") and "bits" not in row
+    text = capsys.readouterr().out
+    assert text.startswith("**draft**: refused, so it has no table: the server had a draft") and "|" not in text
+    assert "Aborted requests: 0, by the window of T = 10 buckets their release falls in: none in any window. The record is " \
+           "refused whole: this run does not show the advice of any of its" in text
 
 
 def test_the_report_names_the_first_step_that_differs(tmp_path, capsys):
