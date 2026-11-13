@@ -33,7 +33,7 @@ def widen (A : SketchSummaryRun a n P N m ρ h S L q ks G d) (b : ℕ) :
     SketchSummaryRun (a + b) n P N m ρ h S L q ks G d :=
   ⟨fun s => A.session fun i => s (Fin.castAdd b i)⟩
 
-theorem widen_session (A : SketchSummaryRun a n P N m ρ h S L q ks G d) {b : ℕ} (s : Pous.Bits a)
+theorem widen_run (A : SketchSummaryRun a n P N m ρ h S L q ks G d) {b : ℕ} (s : Pous.Bits a)
     (t : Pous.Bits b) : (A.widen b).session (Fin.append s t) = A.session s := by
   simp only [widen, Fin.append_left]
 
@@ -122,7 +122,7 @@ theorem scheduledRequirement : ScheduledRequirement := by
     fun c y h pc => pass_congr (k := k) (A := A) (A' := A.widen (cap + 1)) (steer := steer)
       (steer' := fun c y => Fin.append (steer c y) (sched c y)) (enc := enc) (choose := choose) (layout := layout)
       (layout' := fun c y => slot c (sched c y)) (c := c) (y := y)
-      (SketchSummaryRun.widen_session A (steer c y) (sched c y)) (hslot c y h).symm pc
+      (SketchSummaryRun.widen_run A (steer c y) (sched c y)) (hslot c y h).symm pc
   have hX : ∀ (c : SketchPrefix n P N 128 ρ 512 16 G 2773) (y : Ω × (Fin T → Ca)) (g : Fin G)
       (R : RateSketch.SketchStream ρ) (O : RateSketch.Oracle N ρ 512 RateSketch.Sector (Fin 16 → ZMod (2 ^ 32))),
       ((passDev A steer c y g).prog c.signs (Data.ofParts (steeredStore enc choose layout c y) R)).rebuildsIn
