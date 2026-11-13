@@ -39,11 +39,12 @@ open Claims.Json (Wf)
 /-! ## Well-formed values under `setKey` and `Json.mkObj` -/
 
 theorem wf_obj {m : Std.TreeMap.Raw String Json compare} (h : Wf (.obj m)) :
-    m.WF ∧ ∀ k v, m[k]? = some v → Wf v := by
+    m.WF ∧ ∀ (k : String) (v : Json), m[k]? = some v → Wf v := by
   cases h with
   | obj hm hv => exact ⟨hm, fun k v hk => hv k v (by rw [Std.TreeMap.Raw.get?_eq_getElem?]; exact hk)⟩
 
-theorem wf_mk {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hv : ∀ k v, m[k]? = some v → Wf v) :
+theorem wf_mk {m : Std.TreeMap.Raw String Json compare} (hm : m.WF)
+    (hv : ∀ (k : String) (v : Json), m[k]? = some v → Wf v) :
     Wf (.obj m) :=
   Wf.obj hm fun k v hk => hv k v (by rw [← Std.TreeMap.Raw.get?_eq_getElem?]; exact hk)
 
@@ -173,7 +174,8 @@ theorem field?_of_equiv {a b : Json} (ha : Wf a) (hb : Wf b) (h : FlockDeploy.Js
   | some y =>
     rw [hy] at he
     refine ⟨y, rfl, ?_⟩
-    simpa using he
+    have he' : FlockDeploy.jsonForm x = FlockDeploy.jsonForm y := by simpa using he
+    exact he'
 
 /-! ## What `blankReads` does -/
 
@@ -194,7 +196,7 @@ theorem blankReads_obj (own : Spot.SecondStage.Own) (t : String) {r : Json} {kvs
     Spot.SecondStage.blankReads own t r = Spot.SecondStage.setKey r "ports" (Json.mkObj (blankList own t kvs)) := by
   unfold Spot.SecondStage.blankReads
   rw [h]
-  all_goals first | rfl | simp [blankList, blankEntry, Spot.entries]
+  all_goals rfl
 
 theorem blankReads_not_obj (own : Spot.SecondStage.Own) (t : String) {r : Json}
     (h : ∀ kvs, Spot.getD r "ports" ≠ .obj kvs) : Spot.SecondStage.blankReads own t r = r := by
@@ -208,12 +210,8 @@ theorem value_not_blanked (own : Spot.SecondStage.Own) (t p : String) (e : Json)
       Spot.SecondStage.READ_RUN_FIELDS ++ Spot.SecondStage.READ_ROW_FIELDS
     else Spot.SecondStage.READ_RUN_FIELDS) := by
   split
-  · first
-      | decide
-      | simp [Spot.SecondStage.READ_RUN_FIELDS, Spot.SecondStage.READ_ROW_FIELDS]
-  · first
-      | decide
-      | simp [Spot.SecondStage.READ_RUN_FIELDS]
+  · decide
+  · decide
 
 theorem wf_blankEntry (own : Spot.SecondStage.Own) (t p : String) {e : Json} (he : Wf e) :
     Wf (blankEntry own t p e) :=
@@ -335,10 +333,13 @@ theorem wf_of_jsonOf {what : String} {b : ByteArray} {j : Json} (h : FlockDeploy
     cases h
   | some s =>
     rw [hu] at h
+    dsimp only at h
     cases hp : Flock.JsonParse.parse s with
     | error e =>
       rw [hp] at h
-      cases h
+      first
+        | cases h
+        | simp [Except.mapError] at h
     | ok j' =>
       rw [hp] at h
       have hj : j' = j := by
@@ -537,9 +538,7 @@ theorem ownReads_of (hc : refReadsOwn h = true) (hW : RefReadsWf h) : OwnReads h
   try dsimp only at h2
   simp only [hnt, hl, hw, hv, Option.isSome_none, Bool.false_or] at h2
   have hpv : reg.value ∈ h.interiorNames.ports := by
-    first
-      | exact List.contains_iff_mem.1 h2
-      | simpa using h2
+    exact List.contains_iff_mem.1 h2
   obtain ⟨Pt, d, spec, hx, hP, h2', hin, hok, -⟩ := hr
   obtain ⟨st, rec', -, hrec', -, hrok⟩ := recordsOk_spec h (recordsOk_of_stmtOk h hok)
   rw [hrec] at hrec'
