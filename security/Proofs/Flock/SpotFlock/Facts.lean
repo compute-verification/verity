@@ -346,6 +346,26 @@ theorem scoped_wiring_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s
         exact ⟨hc.1.2, hc.2⟩
       · cases hd
 
+/-- **Where the design evaluates, every member's circuit is in the scope Flock's hidden-output proof covers**, at
+the members as the partition lists them (`Held.ms`). -/
+theorem scoped_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
+    ∀ ci ∈ h.ms, _root_.Flock.ProvedScope.scopeOkH ci.1 = true := by
+  intro ci hci
+  have hsc := (scoped_wiring_of_two h hd).1
+  unfold membersScoped at hsc
+  rw [List.all_eq_true] at hsc
+  have hlen : h.ms.length = h.vus.length := by
+    unfold Held.ms
+    simp
+  unfold Held.ms at hci
+  obtain ⟨t, ht, hci'⟩ := List.mem_map.1 hci
+  have ht' : t ∈ List.range h.ms.length := by
+    rw [hlen]
+    exact ht
+  have h1 := hsc t ht'
+  rw [← hci']
+  exact h1
+
 /-- **What the registered wiring's check decides** (`wiringOk`), clause by clause. -/
 theorem wiringOk_iff : wiringOk h = true ↔
     namesOnce h = true ∧ writersFirst h = true ∧ sourcesNamed h = true ∧ wiresMove h = true ∧
