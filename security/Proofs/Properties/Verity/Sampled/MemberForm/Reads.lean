@@ -56,7 +56,7 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
       _root_.Spot.Challenger.MAX_COINS x := by
   obtain ⟨p, ms, vms, hp, hms, hperm, hsorted, hall, hlaw, -⟩ := hset.members
   obtain ⟨a, b, e, c, ev, ξ, dr, sts, r, hcase, hacc, hM⟩ := accept_members hF hp hms hv
-  obtain ⟨lines, lr, trees, held, named, hcs, hlogged, hlr, hct, hreason, hheld, hnamed, hslf⟩ :=
+  obtain ⟨lines, lr, trees, held, named, hcs, hlogged, hlr, hct, hreason, hheld, hnamed, hslf, hlogRead⟩ :=
     accept_read hv.2.1 hcase hacc hM hl
   have hlab : dr.label = labelAt x.params := draw_label hv.2.1 hcase hacc hp
   have haft : dr.after = after := hsd a b e p c ev ξ dr hcase hacc
@@ -76,7 +76,7 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
     have h1 := lawAt_of_lawOf hlawOf
     rw [← hnJ] at h1
     exact Except.ok.inj (hlaw.symm.trans h1)
-  have hs := shows_of_readsV2 (drawReadAll_coinsRead k) hv.2.1 hcase hacc hl
+  have hs := shows_of_read hv.2.1 hcase hacc hlogRead hl
   unfold ShowsDraw at hs
   rw [hlab, haft] at hs
   have hξ := coins_size_le hacc

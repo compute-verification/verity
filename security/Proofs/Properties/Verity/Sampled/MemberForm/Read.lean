@@ -36,8 +36,8 @@ in it accepts at the coins it read (`V2Accepts`), the accept is one of the form 
 check read is the device's, v2 read the release log `lines` as the releases `lr` (`readLog`), whose reads are the
 device's log's, at the records `membersTreesHeld` parsed; `coinTreesOf` reads `lines` as the trees `trees`, which
 `membersTreeReason` accepts those sessions against; the statements are the members `held`'s, one session each as
-`membersTreesHeld` names it (`NamedAt`); and the device's log is in order at the sample's family and digest
-(`SampleLinkFirst`). -/
+`membersTreesHeld` names it (`NamedAt`); the device's log is in order at the sample's family and digest
+(`SampleLinkFirst`); and `lr` is what v2's read of what the prover sent returns (`logRead`). -/
 theorem accept_read {k : Verity.Registration.Composite} {x : Verity.Exchange} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k x.sent)
@@ -55,7 +55,7 @@ theorem accept_read {k : Verity.Registration.Composite} {x : Verity.Exchange} {a
       coinTreesOf lines = .ok trees ∧ membersTreeReason trees lines named = none ∧
       _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧
       List.Forall₂ (NamedAt (_root_.Core.Blobs.ofArray x.sent.blobs)) (sts.zip held).toList named.toList ∧
-      SampleLinkFirst dr.label dr.after x.log := by
+      SampleLinkFirst dr.label dr.after x.log ∧ logRead x.sent = some lr := by
   obtain ⟨hp, hc, hev, hξ, hdr, -⟩ := hacc
   obtain ⟨key, hch, hafter⟩ := source_of hdr
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
@@ -96,7 +96,7 @@ theorem accept_read {k : Verity.Registration.Composite} {x : Verity.Exchange} {a
     show lr.map Binding.Read.ofV2 ∈ (logRead x.sent).map (·.map Binding.Read.ofV2)
     rw [hread, hlr]
     exact Option.mem_def.2 rfl)
-  refine ⟨lines, lr, ts, held, named, hcs, hlogged, hlr, hct, hreason, hheld, hone, ?_⟩
+  refine ⟨lines, lr, ts, held, named, hcs, hlogged, hlr, hct, hreason, hheld, hone, ?_, hread.trans hlr⟩
   rw [hafter]
   exact sampleLinkFirst_congr (ofV2_frames hlogged) (sampleLinkFirst_readLog (orderHeld_ok hord hch hL) hlr)
 

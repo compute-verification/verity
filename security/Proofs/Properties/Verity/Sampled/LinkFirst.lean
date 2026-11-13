@@ -111,17 +111,17 @@ theorem ofV2_frames :
     exact .cons ⟨h.1.1, h.1.2.1⟩ (ofV2_frames h.2)
 
 /-- **The device's log is in order where v2's case accepts**: where composite `k` accepted what the prover sent, v2's
-case in it accepts at the sample `dr` and the log v2's check read is the device's, the device's log releases the sample's
+case in it accepts at the sample `dr` on parameters that name no members and the log v2's check read is the device's, the device's log releases the sample's
 coins (of `dr`'s family, after `dr`'s digest) before every opening and opens the stream `TREE_SESSION` first, since
 v2's check passed its order refusal (`checkBlobsAt_orderHeld`, `orderHeld_ok`). -/
 theorem sampleLinkFirst_logged {k : Verity.Registration.Composite} {x : Verity.Exchange} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws}
     (hS : Verity.SameAccepts k x.sent) (hcase : V2Case k x.sent a b e)
-    (hacc : V2Accepts (_root_.Core.Blobs.ofArray x.sent.blobs) a b e p c ev ξ dr)
+    (hacc : V2Accepts (_root_.Core.Blobs.ofArray x.sent.blobs) a b e p c ev ξ dr) (hm : p.members = none)
     (hl : Binding.Logged Binding.readsV2 x) :
     SampleLinkFirst dr.label dr.after x.log := by
-  obtain ⟨lr, hlr⟩ := Option.isSome_iff_exists.1 (logRead_isSome hS hcase hacc)
+  obtain ⟨lr, hlr⟩ := Option.isSome_iff_exists.1 (logRead_isSome hS hcase hacc hm)
   have hlog := hl (lr.map Binding.Read.ofV2) (by
     show lr.map Binding.Read.ofV2 ∈ (logRead x.sent).map (·.map Binding.Read.ofV2)
     rw [hlr]
@@ -155,7 +155,7 @@ theorem sampleLinkFirst_verdict {V : Vocab d α} {k : Verity.Registration.Compos
   obtain ⟨p', hp', -⟩ := hA.params
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp' (verdict_case hv)
   obtain ⟨rfl, rfl⟩ := hN a b e p c ev ξ dr hcase hacc
-  exact sampleLinkFirst_logged hv.2.1 hcase hacc hl
+  exact sampleLinkFirst_logged hv.2.1 hcase hacc (single_of_case hv.2.1 hcase hacc hA.single) hl
 
 /-- **The sample's coins are released before every opening** (`SampleLinkFirst`'s first half, the record's sample's
 form), at the sampled verdict. -/
@@ -178,7 +178,9 @@ theorem linkFirst_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {
   subst hθ
   obtain ⟨p', hp', -⟩ := hA.params
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp' (verdict_case hv)
-  exact fun pre r post he i s n hr => (sampleLinkFirst_logged hv.2.1 hcase hacc hl pre r post he i s n hr).2
+  exact fun pre r post he i s n hr =>
+    (sampleLinkFirst_logged hv.2.1 hcase hacc (single_of_case hv.2.1 hcase hacc hA.single) hl
+      pre r post he i s n hr).2
 
 /-! ## What v2 reads of the order -/
 
