@@ -435,9 +435,10 @@ def counts_of(run: RunArtifacts, gates: dict, provenance: dict | None) -> dict:
 
 
 def build_card(run_dir: str | Path, results: list[GateResult] | None = None, *, config_id: str | None = None,
-               mechanism_notes: list[str] | None = None, notes: list[str] | None = None, hf_config: dict | None = None) -> ReportCard:
+               mechanism_notes: list[str] | None = None, notes: list[str] | None = None) -> ReportCard:
     """Assemble the card of a run directory.  `results` default to `gates.json` when present, else the gates are evaluated
-    here.  `hf_config` is `analytic.config_of(<hf config.json>)` when the driver could obtain it (per-field provenance)."""
+    here.  The manifest's `hf_config` is `analytic.config_of(<hf config.json>)` when the driver could obtain it (per-field
+    provenance)."""
     run = RunArtifacts(run_dir)
     man = run.manifest
     if results is None:
@@ -479,11 +480,10 @@ def build_card(run_dir: str | Path, results: list[GateResult] | None = None, *, 
     if unknown:
         roots["unknown_names"] = unknown
     spend = run.json("spend") or {}
-    hf_C = hf_config if hf_config is not None else man.get("hf_config")
     g4, g5 = _detail(gates, G.PRIMITIVE), _detail(gates, G.COMPOSITION)
     card = ReportCard(
         schema=CARD_SCHEMA, utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), config_id=cid, model=model,
-        C=c_with_provenance(C, hf_C), engine_args=engine_args,
+        C=c_with_provenance(C, man.get("hf_config")), engine_args=engine_args,
         workload={**{k: wl.get(k) for k in ("path", "sha256", "n_requests", "prompt_lens", "max_tokens")},
                   # [coverage D87] serving regime + the realized shape (run.json["realized"], written by the driver after the GPU phase)
                   **{k: wl.get(k) for k in ("serving_profile", "context_class", "arrive_steps", "expected_engine_steps") if wl.get(k) is not None},
@@ -517,10 +517,10 @@ def _row(label: str, n: Any, status: str | None = None) -> str:
     return (s + status) if status else s.rstrip()
 
 
-def _pf(n: Any, zero_passes: bool = True) -> str:
+def _pf(n: Any) -> str:
     if n is None:
         return "n/a"
-    return "PASS" if (n == 0) == zero_passes else "FAIL"
+    return "PASS" if n == 0 else "FAIL"
 
 
 def _attention_short(backend: Any) -> str:
