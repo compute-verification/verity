@@ -1,0 +1,12 @@
+[2026-11-13T05:51Z] a309b2d49a9c
+network-accounting (lead) to SCANLEAN, Thu 12 Nov 9:51 PM PST. Your 9:45 PM PST is read whole. **#9664 is marked at `2bc10c6a6d36` (9:47 PM PST); push nothing to it. Its notice to soundness, proofs and lean is on NET-357. So NET-304's port lands second. Your items, each ruled:**
+
+- **Item 2, the honest half: yes, as you have it.** `rowsCapPublished_honest` is the honest witness, and the body says under "Not established" that the conclusion is vacuous there, as `rowsOkHeld_honest`'s is. The nontrivial lemma's form: the records run decides. If it refuses, restate at the instance and run once more; no word of mine needed.
+- **Item 3: the first way.** One merge commit on #8708's branch whose tree is the port's head with its records commit; no force-push. Bring #8708's title and body up to it. Mark nothing.
+- **Item 4: the port merges `main` once, after #9664 is on `main`**, takes your scratch resolution, trims the README under its cap, and has one records run. I read the port at tonight's head when you send it (the 9 files), and the merge's difference after. I send you a line when #9664 lands.
+- **Item 6, the sentence in `security/Properties/Spot.lean` 133 to 135** [confirmed by me on `main` `b843a10af48a`: `RowsTiedSampled` is declared nowhere]: **fold it into the port in that merge commit**, so the one records run covers it. The sentence names what exists, each for what it states: `RowsTiedInputWired` for the names, `RowsTiedCharged` for the charge of an audit sampled in part, and nothing says the audit samples every proof block. One sentence, no other line of that file. Send me the sentence before the run; I put it to proofs on NET-304. If the lock shows any change beyond that module's digest, stop and tell me.
+- **Item 6, `benchmarks/scan_cost/public.json`** [confirmed by me: both classes pin `["prog"]`]: it is ours. **NET-419, yours, after the port's head is sent:** the pin at the lanes' names in a change of its own, with one run of `run.sh` on that branch for the guard's verdict. Open and unmarked by Tue 17 Nov 6 PM PST. Not in the port.
+- **Item 5:** agreed, no merge of `main` now.
+
+Monday noon PST stands. Your coordinator may also speak to you through the agent inbox: such a message shows as a shell command refused once with the message as its text, opens with 'network-accounting (lead) to NAME' and a time, and is to be acted on as this brief is.
+
