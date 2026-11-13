@@ -734,6 +734,9 @@ private def exWiredBinding (own : Own) : Option String := do
 #guard (check true { exWired with
     links := some #[⟨"Pair_v0", "out", "o0"⟩]
     rows := exWired.rows.push ⟨"Pair_v0", "out", 3, #[⟨0, 3, 0, 1⟩]⟩ } none).codes == #["second-wires"]
+-- nor does a wire whose reader's port a link names too: a session reads that port at the link's entry, not the wire's
+#guard !wiresOk exTwoParts { exWired with links := some #[⟨"Triple_v0", "x", "bx"⟩] }
+#guard (check true { exWired with links := some #[⟨"Triple_v0", "x", "bx"⟩] } none).codes == #["second-wires"]
 #guard !wiresOk exTwoParts.reverse exWired
 #guard (check true { exWired with parts := some exTwoParts.reverse } none).codes == #["second-wires"]
 #guard !wiresOk exTwoParts { exWiredAt 1 0 with wires := some #[{ exWire with writer := "Triple_v0" }] }

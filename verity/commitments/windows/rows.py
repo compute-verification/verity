@@ -812,12 +812,22 @@ def port_leaves(m: Member) -> dict[str, int]:
     return {p: tables.get(p, m.n) for p, _ in m.all_rows if p not in held}
 
 
+def wired_ports(window: Binding) -> dict[str, str]:
+    """Each wired port that has no tree of its own (`Member.wired_trees`), by its reader's name for it, and the port
+    whose tree holds its rows (`Binding.held`): ``{<reader>/<wired port>: <writer>/<output port>}``."""
+    return {m.port(p): window.held(m, p) for m in window.members if not m.wired_trees for p, _o, _ws in m.wired}
+
+
 def expected_ports(window: Binding) -> dict[str, dict[str, Any]]:
     """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
-    domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the window's program, partition and run."""
+    domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the window's program, partition and run.
+    A wired port with no tree of its own is named under its reader too, at the leaves and domain of the port whose
+    tree holds it (`wired_ports`), which its entry names (``wired``): one tree at two ports, whose two roots R3 holds
+    equal."""
     prog, part, segs = window.partition["program"], window.partition_digest, len(window.segments)
-    return {m.port(p): {"leaves": n, "domain": window_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
-            for m in window.members for p, n in port_leaves(m).items()} | \
+    own = {m.port(p): {"leaves": n, "domain": window_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
+           for m in window.members for p, n in port_leaves(m).items()}
+    return own | {a: {**own[q], "wired": q} for a, q in wired_ports(window).items()} | \
         ({TABLE_PORT: {"leaves": segs, "domain": window_domain(prog, part, TABLE_PORT, ROOTS_SCHEMA, segs, window.run)}}
          if segs else {})
 
@@ -867,6 +877,8 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
         raise ValueError(f"window kind {kind!r} is not one of {registrar.KINDS}")
     w = c.window
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
+    roots += [{"port": a, "root": c.roots[q].hex(), "leaves": c.domains[q].count, "domain": c.domains[q].domain_id.hex()}
+              for a, q in wired_ports(w).items()]
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
                             leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table,

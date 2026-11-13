@@ -96,7 +96,8 @@ theorem byPort_root_str {rec : Json} {v : Spot.Registration.Verifier} (h : Spot.
     (hn : (v.ports.map (·.1)).toList.Nodup) {p : String} {x : Json} (hx : (p, x) ∈ Spot.Record.byPort rec) :
     ∃ s, Spot.getD x "root" = .str s := by
   obtain ⟨law, -, -, h3, -⟩ := (Properties.Spot.registration_nil rec v).1 h
-  obtain ⟨-, -, -, -, -, -, hroot⟩ := h3
+  -- `Properties.Spot.R3` by position: `hroot` is its roots clause (`RootIs`), the seventh of its eight
+  obtain ⟨-, -, -, -, -, -, hroot, -⟩ := h3
   obtain ⟨⟨ps, hps, -, hmem⟩, -⟩ := recordOk_spec (RecordNames.recordOk_of_check h hn)
   have hp : p ∈ ps := (AddressRow.byPort_isSome_iff hps p).1 (find?_isSome_of ⟨(p, x), hx, rfl⟩)
   have hp' : p ∈ (v.ports.map (·.1)).toList := (hmem p).1 hp

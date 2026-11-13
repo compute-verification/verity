@@ -13,7 +13,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 
 * **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
-  ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window, the
+  ports, roots, leaves and domains, a wired port at the root of the port that holds it (`R3`); its leaf layer (`R4`),
+  anchors (`R5`), previous record, window, the
   window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); for a v2 record its registered
   values (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public
   rule or its reset restarts it, for a verifier with a pool (`PoolChained`); and under a template query, no run Input
@@ -106,14 +107,28 @@ def RootIs (r want : Json) : Prop :=
   (∃ s, getD r "root" = .str s ∧ isHex s = true) ∧ jeq (getD r "leaves") (getD want "leaves") ∧
   jeq (getD r "domain") (getD want "domain")
 
+/-- One port of the verifier's layout that names the port it is wired to (`want`'s `"wired"`, a port whose rows are the
+leaves of that port's tree): the record has a root under its own name `p` and one under the port it names, each a
+string, and the two are one string. One tree is registered at both names. It says nothing of a port whose entry names
+none: the clause is only as good as the layout's `wired` entries, and a layout that leaves `wired` out is not refused
+for it. It is a second check of what `SecondStage.readOk_wired` gives, which holds each session's read of a wired port
+to its writer's root; where the verifier's parameters come from is the composite's to hold, not R3's. -/
+def WiredIs (rec : Json) (p : String) (want : Json) : Prop :=
+  ∀ q, getD want "wired" = .str q →
+    ∃ r h s, rootFor rec p = some r ∧ rootFor rec q = some h ∧ getD r "root" = .str s ∧ getD h "root" = .str s
+
 /-- R3: the record's scheme is the verifier's; it registers at least one root, each exactly `{port, root, leaves,
-domain}`; no port twice, and exactly the verifier's ports; and each of the verifier's ports has its root as derived. -/
+domain}`; no port twice, and exactly the verifier's ports; each of the verifier's ports has its root as derived; and
+each port the layout wires to another has that port's root (`WiredIs`: a second check of what
+`SecondStage.readOk_wired` gives, over the `wired` entries the verifier's parameters bring, whose provenance is the
+composite's and not R3's). -/
 def R3 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "scheme") (.str v.scheme) ∧
   rootsOf rec ≠ #[] ∧ (∀ r ∈ rootsOf rec, keys? r = some Registration.ROOT_KEYS) ∧
   (portsOf rec).size = (rootsOf rec).size ∧ (portsOf rec).size = v.ports.size ∧
   (∀ pw ∈ v.ports, ∃ q ∈ portsOf rec, jeq q (.str pw.1)) ∧
-  ∀ pw ∈ v.ports, ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2
+  (∀ pw ∈ v.ports, ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2) ∧
+  ∀ pw ∈ v.ports, WiredIs rec pw.1 pw.2
 
 /-- R4: the record names the verifier's leaf layer (the SHA-512 of its public file), or null when the verifier holds none. -/
 def R4 (rec : Json) (v : Registration.Verifier) : Prop :=
