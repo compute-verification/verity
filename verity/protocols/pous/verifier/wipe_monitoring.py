@@ -152,15 +152,15 @@ def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, 
         periods[name] = row | {str(d): pooled_step(t, eps, d) for d in DELTAS} | {"per_wipe": per_wipe(t, eps)}
     return head | {"periods": periods,
                    "scaled": [f"the wipes: {machines} machines, one wipe every {cadence_s} s each",
-                              f"every wipe as this one: {head['each']['foreign_bits']} of {head['each']['memory_bits']} "
-                              f"bits foreign at most ({head['memory']['tier']}), at eps {head['each']['eps_float']:.4g} "
-                              f"+ its {PRF_TERMS}"]}
+                              (f"every wipe as this one: {head['each']['foreign_bits']} of {head['each']['memory_bits']} "
+                               f"bits foreign at most ({head['memory']['tier']}), at eps {head['each']['eps_float']:.4g} "
+                               f"+ its {PRF_TERMS}")]}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m verity.protocols.pous.verifier.wipe_monitoring",
                                  description=__doc__.split("\n\n")[0])
-    ap.add_argument("answer", type=Path, help="the wipe's answer, or a leg's wipe.json carrying it")
+    ap.add_argument("answer", type=Path, help="the wipe's answer, or a run's wipe.json carrying it")
     ap.add_argument("--machines", type=int, required=True)
     ap.add_argument("--cadence-s", type=int, default=CADENCE_S, help="seconds between one machine's wipes")
     ap.add_argument("--egress", type=Path, default=None,
@@ -174,7 +174,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     text = json.dumps(result, indent=1, sort_keys=True)
     if a.out:
         a.out.write_text(text + "\n")
-    print(text)
+    sys.stdout.write(text + "\n")
     return 0
 
 
