@@ -551,14 +551,16 @@ class Kind(NamedTuple):
     makes to the scan's check (`CHANGES`; None for the clock form, which is another check), what it counts and by
     which rule, whether a stop block holds a response's output count to its ids (`terms`' ``stop``), whether its
     check reads the head that states each content class's held rows, so that it is charged the count (`counted`),
-    and whether its stop block holds that count only as a served run's verdict records say (`Stop`), so that with
-    no such records each connection is charged its schedule: every row that holds the lengths by a stop block."""
+    whether its stop block holds that count only as a served run's verdict records say (`Stop`), so that with
+    no such records each connection is charged its schedule: every row that holds the lengths by a stop block,
+    and the mark its accept carries (`RUN_NOT_PROVED`; None where it carries none)."""
     standing: str
     changes: tuple[str, ...] | None
     counts: str
     stop: bool = True
     count: bool = False
     verdicts: bool = False
+    mark: str | None = None
 
 
 class Stop(NamedTuple):
@@ -583,7 +585,9 @@ class Stop(NamedTuple):
         return Fraction(1) if self.held >= phases else Fraction(self.held) / Fraction(phases)
 
 
-#: the mark a verdict a run produced is printed under: a verifier judged it, and no proof of that verifier is read
+#: the mark of what a run gives and no proof covers, the harness's mark of that name (`verity_bench.exfiltration`'s
+#: `MARKS`), whose tests hold this string to it: a verdict a run produced is printed under it, since a verifier judged
+#: it and no proof of that verifier is read, and the `scan` row's accept carries it
 RUN_NOT_PROVED = "run, not proved"
 #: the four verdicts a stop class owes, as the network certifier's rule names them
 VERDICTS = CC.VERDICTS
@@ -602,7 +606,8 @@ NO_RECORDS = Stop(0, (f"no verdict record was read, so each connection is charge
 #: why a row that holds the lengths by a stop block, and is not the design's, is charged no count
 NO_COUNT = ("it is charged no count: its tables are of the lengths rows' form 1, the schedule's rows whatever the "
             "load, so the head states none")
-#: where the scan's accept stands, said in the `scan` row's own line, whatever the row's bound and its scans' δ
+#: where the scan's accept stands, said in the `scan` row's own line beside its mark, whatever the row's bound and its
+#: scans' δ
 SCAN_ACCEPT = ("its accept is run, not proved: it rests on verdicts the scan's driver hands the compiled record check, "
                "and nothing compiled ties them to the sessions' runs")
 #: a scope's eight rows over a monitoring period: the two checks on main, the scan under each of `CHANGES` and under
@@ -611,7 +616,7 @@ ROWS = {
     "scan": Kind("on main", (),
                  "the rows form on the network certifier's own run, as the check charges it: a schedule and a fail "
                  "cell for each connection of the period's parameters, counted by request, and the jitter of each "
-                 f"link's execution phase; {SCAN_ACCEPT}"),
+                 f"link's execution phase; {SCAN_ACCEPT}", mark=RUN_NOT_PROVED),
     "N2": Kind("on main", None,
                "the clock form: the schedules, ⌈log2 #Σ_sync^m⌉ over a link's m execution phases, counted by link "
                "whatever it serves; no fail cell, its parameters listing no connection; and the jitter of each "
@@ -1045,6 +1050,7 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
 
     def row(r: Row) -> dict:
         return {"scope": r.scope.name, "period": r.period, "row": r.name, "standing": ROWS[r.name].standing,
+                "mark": ROWS[r.name].mark,
                 "with_set_time_card": SET_TIME if "timing" in (ROWS[r.name].changes or ()) else None,
                 "machines": r.scope.machines, "gpu_seconds": r.scope.gpus * PERIODS[r.period],
                 "request_count": request_count, "requests": float(r.requests), "phases": float(r.phases),
@@ -1101,7 +1107,7 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
                             "execution phase, whatever it serves",
             "scan": {"delta": float(scan.delta), "given": scan.given, "mark": stated.mark, "eps_target": eps_target,
                      "scope": scan.scope, "period": scan.period, "phases": float(scan.phases)},
-            "legend": {name: {"standing": k.standing, "counts": k.counts} for name, k in ROWS.items()},
+            "legend": {name: {"standing": k.standing, "mark": k.mark, "counts": k.counts} for name, k in ROWS.items()},
             "inputs": {k: {"value": float(i.value) if isinstance(i.value, Fraction) else i.value, "unit": i.unit,
                            "mark": i.mark, "source": i.source} for k, i in {**inp, "scan_delta": stated}.items()},
             "rows": [r for r in rows if r["scope"] in only and r["period"] in periods]}
@@ -1182,7 +1188,8 @@ def render(doc: dict) -> str:
         f"Request count {counted}: {COUNTS[counted]}. Every row names its request count, and rows of two request "
         "counts don't compare.",
         "The rows of a scope and a monitoring period:",
-        *(f"- {name} ({k['standing']}): {k['counts']}" for name, k in doc["legend"].items()),
+        *(f"- {name} ({'; '.join(filter(None, (k['standing'], k['mark'])))}): {k['counts']}"
+          for name, k in doc["legend"].items()),
         f"The entries as the scan's check charges them today: {doc['entries_rule']}.",
         f"A link's execution phase is {_n(ph['seconds'])} s of {_n(ph['buckets'])} buckets: {_n(ph['requests'])} "
         f"requests, each charged {ph['connection_bits']} bits for its schedule and again for its fail cell; N2's "
