@@ -299,10 +299,10 @@ def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions
 
 def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     """`a5.link_points` over the staged members, each its units at its circuit's units a proof block: under `subset:20`
-    over 40 units a draw that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
-    so it is recorded refused, and not at four; one of 8, or of 4 at two a proof block, is not. Under `subset:2` a draw
+    over 40 units a sample that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
+    so it is recorded refused, and not at four; one of 8, or of 4 at two a proof block, is not. Under `subset:2` a sample
     that ends holds at most 2 of it, so it is not refused (one that runs out of coins fails the window:
-    `a5.draw_ran_out`). A law that doesn't apply refuses every member, recorded with why."""
+    `a5.draw_ran_out`). A sampling design that doesn't apply refuses every member, recorded with why."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
         return {"k": k, "m": SimpleNamespace(template=template, base=base, n=n), "st": {"meta": {"vus_per_block": g}}}
 
@@ -316,8 +316,8 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
 
 
 def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
-    """`a5.link_points` records the registration's refusal of a law no draw of which ends (`link_points.NEVER_ENDS`),
-    which `coins.law_problem` refuses first for every law it reads: past it, `subset:41` over 40 units is refused for
+    """`a5.link_points` records the registration's refusal of a sampling design no sample of which ends (`link_points.NEVER_ENDS`),
+    which `coins.law_problem` refuses first for every sampling design it reads: past it, `subset:41` over 40 units is refused for
     every member."""
     from verity.protocols.spot.verifier.one_stage import link_points as LP
 
@@ -329,7 +329,7 @@ def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
 def test_a5_records_whether_the_draw_ran_out_of_the_challengers_coins():
     """`a5.draw_ran_out`, which fails the window: `subset:9` over 10 units first reads a stream
     of 226 bytes (`2 k · width(n) + 64`), so it runs out of one coin's 64 bytes and not of 256 zero bytes, which reject
-    no word; a law that doesn't apply records why."""
+    no word; a sampling design that doesn't apply records why."""
     law = {"k": 9, "law": "subset"}
     assert a5.draw_ran_out(law, 10, bytes(64)) is True
     assert a5.draw_ran_out(law, 10, bytes(256)) is False

@@ -38,7 +38,7 @@
 #     SHA-512, the run root, the registered entries and its supplied values), audits the window against it under the
 #     tie's own design, work:N over its N units in members of PP_TIE_CAP units (default 16), which the audit's rule
 #     samples at the rate N/N, so every unit is proved and no output class is passed, and pins the roots only on an
-#     accepting audit whose draw holds every unit. Two refused arms: a
+#     accepting audit whose sample holds every unit. Two refused arms: a
 #     committer serving checkpoint Y's words as X's (its last units' digest reads open no root), and the same with those
 #     digests forged to X's (those units aren't their Definition's); each must be refused, and pin nothing.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256},

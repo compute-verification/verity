@@ -39,7 +39,7 @@ public import Proofs.Flock.Bridge.QsRows.FirstReads
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
 the sampled statement at `RowsOk` circuit files (row/v1, row/v2 and row-seg/v1 ports) and the constants `κ` and
 `canonAt`, proved (`Flock.Bridge.assemblyTargetC` with every target it takes), and
-`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`, V2 with its statement, file and draw
+`Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3`, V2 with its statement, file and sample
 preconditions read off the verifiers' acceptance (`Refused`, `ScopeGate`). `Lowers`: the claims program `progOf C κ`
 lowers every unit of every circuit
 (`Flock.Bridge.lowers`). `FilePart`: `FilePartTarget`, proved (`Flock.Bridge.filePartTarget`), and `RelDeployTarget`

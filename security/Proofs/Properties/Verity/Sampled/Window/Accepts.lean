@@ -14,7 +14,7 @@ every session exactly where each session's verdict was `.ok`, in order:
 * **What one session's `step` reads of its statement** (`StepAt`): the inputs, the verifier's registered reads, the
   scope, files and population checks, and the program's digest against the partition object's. A window whose members
   have their own statements has one per member; v2's `run` on one statement has the same one at every session.
-* **One session's verdict after the run `r`** (`SessionVerdict`): its record is a blob, UTF-8, whose draw fits the
+* **One session's verdict after the run `r`** (`SessionVerdict`): its record is a blob, UTF-8, whose sample fits the
   statement's length words; it is set up at its record's own sample; its proof files are the blobs it names; its
   coin-tree key is fresh among the keys the earlier sessions used (`r.coinKeys`); `Flock.Zk.verify` accepts them; the
   whole of `verdictOf` is `.ok`; the verdict names the partition object's program; and its record proves its units.
@@ -69,7 +69,7 @@ def StepAt.coinKey (a : StepAt) (record : String) : Option String :=
     (_root_.Spot.OneStageZk.setupAt a.I a.rd (Flock.Witness.recordDraw record))
 
 /-- **One session's verdict at the statement `a`, after the earlier sessions' coin-tree keys `keys`**: the session's
-record is a blob, as UTF-8 `record`, whose draw fits the statement's length words; v2 sets it up at its record's own
+record is a blob, as UTF-8 `record`, whose sample fits the statement's length words; v2 sets it up at its record's own
 sample as `(spec, tabs, rest)`; its proof files are the blobs it names, `proofs`; its coin-tree key, where its setup
 flips coins from a coin tree, is none of `keys`; `Flock.Zk.verify` accepts the record and the proof files; `verdictOf`
 is `.ok` on them; the verdict's program is the partition object's, as `push` compares them; and its record proves the
