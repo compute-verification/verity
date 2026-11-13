@@ -8,7 +8,7 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
-from verity.definitions.circuits.constants import program_data
+from verity.circuits.constants import program_data
 from verity.definitions.registry import b1, hopper
 from verity.definitions.registry import fa2_check_inf as F2
 from verity.definitions.registry import prims as P

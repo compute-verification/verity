@@ -39,7 +39,7 @@ python tools/verity/lean/check.py verity/definitions/requirement   # the Lean ch
 uv run tools/verity/check/suites.py verity/definitions/requirement # the difftest against the Python
 ~~~
 
-`tests/test_requirement_difftest.py` holds it to `verity.definitions.circuits.requirement` through `verity_difftest`, output for
+`tests/test_requirement_difftest.py` holds it to `verity.circuits.requirement` through `verity_difftest`, output for
 output and refusal for refusal: sampled wirings with executions that follow them and some that don't, under `pack`'s store
 placement and store, a KV pool's (`paged`, whose blocks fill over several steps and credit nothing until complete), either with its
 coins back late (`deferred`, each block credited from its first encoded read, withdrawn when its values are dead by
