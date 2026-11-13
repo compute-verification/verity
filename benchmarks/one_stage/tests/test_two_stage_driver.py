@@ -457,6 +457,36 @@ def _stop_class(held: bool = True) -> BR.Committed:
     return BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held), 0)
 
 
+def test_a_classs_place_in_its_windows_session_is_its_layouts_alone():
+    """`place` is ((prompt · 2^32 + outputs) · 2 + stopped) · 2 + blocks, and a record's window says the same four: its
+    ``prompt``, its ``outputs``, ``stopped`` true and, on a stop record, ``population`` "stop". The class's family is
+    ``draw/<place>``, the place in decimal. Classes that differ in a size or in being a stop class have places apart,
+    and a stop class's stop blocks the place after its spans'. A class filed without a stop block has its sizes' place
+    with no stop bit, as a class under no rule has. Refused: the stop blocks of a class that is no stop class, and a
+    size of 2^32 or more."""
+    def layout(prompt: int = 4, outputs: int = 4, **more: object) -> BR.Layout:
+        return BR.Layout(PAIR, 0, 1, prompt, outputs, N, ROOT, **more)
+
+    def of_window(w: dict) -> int:
+        return ((w["prompt"] * 2**32 + w["outputs"]) * 2 + (w.get("stopped") is True)) * 2 + (w.get("population") == "stop")
+
+    plain, filed, stopped = layout(), layout(stop=STOP, held=False), layout(stop=STOP)
+    assert TS.place(plain) == TS.place(filed) == 68719476752
+    assert (TS.place(stopped), TS.place(stopped, blocks=True)) == (68719476754, 68719476755)
+    assert [TS.place(c) for c in (plain, filed, stopped)] == [of_window(c.provenance()) for c in (plain, filed, stopped)]
+    assert TS.place(stopped, blocks=True) == of_window({**stopped.provenance(), "population": "stop"})
+    assert (TS.family_of(plain), TS.family_of(stopped)) == ("draw/68719476752", "draw/68719476754")
+    assert TS.family_of(stopped, blocks=True) == AC.family(TS.place(stopped, blocks=True)) == "draw/68719476755"
+    places = [TS.place(layout(p, o, **more), blocks) for p in (2, 4, 8) for o, more, blocks in (
+        (2, {}, False), (4, {}, False), (8, {}, False), (4, {"stop": STOP}, False), (4, {"stop": STOP}, True))]
+    assert len(set(places)) == len(places) == 15
+    for c in (plain, filed):
+        with pytest.raises(ValueError, match="is no stop class"):
+            TS.place(c, blocks=True)
+    with pytest.raises(ValueError, match="no place in a window's session"):
+        TS.place(layout(prompt=1 << 32))
+
+
 class OneSession(CC.ChallengerCoins):
     """One in-process challenger session of the window's family and ``ranks`` ranks' (`a5_coins.families`), as a
     window's first stage has: the session's client (`open`, `open_many`, `close`), whose signed release log holds every

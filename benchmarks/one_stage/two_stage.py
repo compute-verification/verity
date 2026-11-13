@@ -143,6 +143,8 @@ COUNTS = "spot-two-stage-counts/v1"
 #: seconds on the challenger's clock from the sample to the proofs: the replay, the interior registration and the second
 #: stage's proofs all come inside it
 PROOF_DEADLINE_S = 86400.0
+#: a class's two sizes are each below this, so that its place (`place`) names it and no other class
+PLACE_SIZES = 1 << 32
 
 
 def interior_values(member: CS.Member) -> tuple[tuple[str, str], ...]:
@@ -259,6 +261,34 @@ def stream_of(layout: BR.Layout, rule: Rule, coins: CC.ChallengerCoins, *, delta
     ts = layout.templates
     return S.Stream(spec_of(layout, rule), ts[0] if len(ts) == 1 and not rule.span_values else ts, budget=1, delta=delta,
                     challenger=CHALLENGER, coins=coins, replay=layout.replay, span_values=rule.span_values, **kwargs)
+
+
+def place(layout: BR.Layout, blocks: bool = False) -> int:
+    """A class's place in its window's session, a number its layout alone fixes: ((prompt · 2^32 + outputs) · 2 +
+    stopped) · 2 + blocks. ``prompt`` and ``outputs`` are the class's two sizes, each below 2^32 (`PLACE_SIZES`);
+    stopped is 1 for a stop class (`Layout.stopped`) and 0 for any other; ``blocks`` is 1 for the sample of a stop
+    class's stop blocks and 0 for the sample of the class's spans. A record's window says the same four: its
+    ``prompt``, its ``outputs``, ``stopped`` true, and ``population`` "stop" on a stop record
+    (`boundary_stop.stop_record`). So two classes of one window have two places, and a stop class's spans and its stop
+    blocks have two. ValueError for a size of 2^32 or more, and for the stop blocks of a class that is no stop
+    class."""
+    if blocks and not layout.stopped:
+        raise ValueError(f"class (prompt {layout.prompt}, outputs {layout.outputs}) is no stop class: it has no stop "
+                         f"blocks, and no place for a sample of them")
+    if not (layout.prompt < PLACE_SIZES and layout.outputs < PLACE_SIZES):
+        raise ValueError(f"class (prompt {layout.prompt}, outputs {layout.outputs}) has no place in a window's session: "
+                         f"a place names sizes below {PLACE_SIZES}")
+    return ((layout.prompt * PLACE_SIZES + layout.outputs) * 2 + int(layout.stopped)) * 2 + int(bool(blocks))
+
+
+def family_of(layout: BR.Layout, blocks: bool = False) -> str:
+    """The family of its window's session that a class's sample reads its challenges from (``blocks``: its stop
+    blocks' sample): the one of its place (`place`), ``draw/<place>`` with the place in decimal (`a5_coins.family`).
+    The first stage reserves it and samples from it, and whoever reads the sample again names it from the class's
+    layout, never from a file the prover wrote."""
+    import a5_coins as AC
+
+    return AC.family(place(layout, blocks))
 
 
 class Recorded(CC.ChallengerCoins):
