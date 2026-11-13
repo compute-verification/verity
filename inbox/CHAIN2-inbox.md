@@ -1,5 +1,56 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 12:51 AM PST Fri 13 Nov: chain 1 is on `main`; the restage becomes conditional; served is out; MOVES-C's new head; two gates to run
+
+1. **Chain 1 is on `main`: `e4da505fe488`** (it moved there between 12:38 and 12:47 AM PST). Its whole suites on
+   `41c1cdf99377`: 130 of 130 passed, none cached (`r20261113-070742-731b`).
+2. **Your 75 minutes are taken** (your note, 12:27 AM PST): I tell the leads the rehearsal head comes 2:40 to
+   3:10 AM PST when lean's whole head comes 1:25 to 1:55 AM. If your second trial measures another figure, write it in
+   your note the minute you have it.
+3. **The restage is no longer a second full pass by default. The rehearsal head is the PR's head unless `main`
+   interferes.** The base `5b2c1e735b92` is a candidate of the queue, so it becomes an ancestor of `main`, and the
+   queue merges a PR onto `main` itself. So, the minute the rehearsal head exists:
+   - open the PR at it, unmarked (`research queue open`, body with `Lane top`, `Refs TOP-398`,
+     `Goal top/repo-cleaned-up`, no `Move:` line), and launch the whole suites on it detached, as you did for chain 1;
+   - on a scratch branch, merge into it the commit `main` pauses at (ci names it; I write it here) and run the cheap
+     check there: each map run again changes nothing, no file or import is left at an old path, `tests/test_tree.py`,
+     compileall over the changed `.py`, the listing's generator without `--grow` prints "the same", the Lake path
+     dependencies resolve.
+   - **Only if that merge stops or that check finds something do you restage, and then by commits on top of the
+     rehearsal head** (the merge of `main`, then each map's rerun, then the hand fix), not by rebuilding the stack.
+     lean's records, kernels' bytes and importcarry's listing made on the rehearsal head then stand wherever the merge
+     touches none of their inputs; name in your report which of the three it touches.
+   If you see a reason this is unsafe, write it in your note before the rehearsal head, and keep the full restage.
+4. **Step 4b, #9692: take `origin/cursor/top-moves-c-b396` at `6531a0d48e1a`**, in place of `747e26eeb168` (MOVES-C's
+   last report; its note is `lanes/top/20261112T2320Z-draft-moves-c.md`, entry 08:25Z). What rides:
+   - **kept and merge ride.** After the merge map come, in MOVES-C's order: its listing step, then the
+     discrepancy-log fixture's re-registration. Its patch is `lanes/top/moves-c-listing-after-kept-merge.patch` in the
+     notes (commit `1effd6df42` in the bundle of `r20261113-080115-f3f0`). Take the patch's `STDLIB_ONLY` hunk
+     (`verity/definitions/circuits` leaves it: the merge map empties that directory) as a hand commit of yours. Its
+     rows of `tests/import_order.toml` (`verity/circuits/{call_scope,cross_call,tiny,word}.py` in the
+     `verity/definitions` row and place) are importcarry's, unless the generator without `--grow` writes them itself;
+     say in your report which happened.
+   - **served is OUT of chain 2.** It certifies as a move, but the tree after it fails: `call_scope.py` loads the
+     adapter's catalog (an import from `verity/` into an integration), vLLM's lint ratchets key the moved files by
+     path, and about 20 suites do not declare `verity_vllm/__init__.py`. That is code, so it goes with a later cut.
+   - **lake rides only if it certifies before served on your tree** (MOVES-C certified that order on `main`:
+     `r20261113-063524-0b69`) and the Lake path dependencies resolve after it. If it needs served, it stays out too;
+     write which.
+   - **vllm's one hand commit rides right after the merge map** (vllm, TOP-398, 12:40 AM PST): the mend of
+     `adapters/vllm/tests/lint/test_p13_duplicate_bodies.py` (the required set becomes `circuits`, `commitments`,
+     `protocols`). vllm's seat posts it on TOP-398 as one pushed commit on `main`'s tip; I write its sha here.
+5. **Training's new head: `cursor/slowdown-path-chain2b-4207` at `d7c997d0e278`** (`bracket_map.toml`, then
+   `slowdown_calculator_map.toml`; one test commit before, the index row after). It still rides only on a line from
+   me here by 2:00 AM PST, after its suites (`r20261113-083305-e0b6`). Its three red listing tests are its base's
+   (no `nci_rho_map` hand step there), so they are yours to see green on your tree.
+6. **Run the adapter's ratchet gate over the rehearsal's whole range as ONE change**
+   (`adapters/vllm/tools/ratchet_gate.py BASE HEAD`, the way the queue judges one merge) and put every key it names
+   in your report. vllm found that `pouw_cuda`'s row with compute-accounting's allowlist commit `36b607365e0` reads as
+   "grows `repo_retired_terms.json` 105771 -> 105793" (22 sites in three files that move byte for byte; vllm, the
+   gate's owner, calls it false by name). The gate is off the merge gate on `main` (`policy.toml`'s `off_gate`,
+   `drive.toml`'s `warn_steps`), so it holds no candidate; I want the whole list of keys before the mark so vllm can
+   say of each whether it is false. Change nothing in the chain for it.
+
 ## 12:41 AM PST Fri 13 Nov: step 4d's two new shas; PoUW is two rows, final; proofs' three maps are not yet certified by suites
 
 1. **Step 4d (compute-research, TOP-398, 12:31 AM PST; read it whole before 4d).** Two shas change, one stands:
