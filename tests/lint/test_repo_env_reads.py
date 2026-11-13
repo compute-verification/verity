@@ -43,7 +43,7 @@ LEFT_OUT = ("adapters/vllm/",)
 #: a settings registry's module name: reads belong there
 REGISTRY = "settings.py"
 TEMPLATE = "tools/config/verity_config/settings.py"
-FIX = (f"Read the variable through your area's settings registry, which declares each one once (under verity/, verity/settings.py, "
+FIX = (f"Read the variable through your area's settings registry, which declares each one once (under verity/, tools/config/verity_config/verity_settings.py, "
        f"the distribution's one, on the machinery every registry is built on; elsewhere the one beside your pyproject.toml, as "
        f"{TEMPLATE} says, with tools/config/tests/test_settings.py), or create one: a module named `{REGISTRY}`, or one "
        f"tests/lint/allowlists/{NAME}.json marks "
