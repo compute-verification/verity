@@ -18,6 +18,7 @@ import os
 import socket
 import sys
 import threading
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -188,16 +189,16 @@ def test_the_split_wipe(how: str) -> None:
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
-    local = WP.side_of({}, "cpu-node", tmp_path)
+    local = Side.of({}, "cpu-node", "wipe", WP.command(tmp_path), "the wipe")
     assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
     with pytest.raises(RuntimeError, match="auditor-host isn't wired for the wipe"):
-        WP.side_of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
-                   "cpu-node", tmp_path)
-    wired = WP.side_of({"challenger_host": "auditor-host", "challenger": {"wipe": {
-        "command": ["gate", "wipe"], "address": "127.0.0.1:7962"}}}, "cpu-node", tmp_path,
-        ("--streamer", "build"))
+        Side.of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
+                "cpu-node", "wipe", WP.command(tmp_path), "the wipe")
+    wired = Side.of({"challenger_host": "auditor-host", "challenger": {"wipe": {
+        "command": ["gate", "wipe"], "address": "127.0.0.1:7962"}}}, "cpu-node", "wipe",
+        WP.command(tmp_path, ("--streamer", "build")), "the wipe")
     assert wired == Side("auditor-host", ("gate", "wipe"), ("127.0.0.1", 7962))
-    native = WP.side_of({}, "n0", tmp_path, ("--streamer", "build", "--threads", "8"))
+    native = Side.of({}, "n0", "wipe", WP.command(tmp_path, ("--streamer", "build", "--threads", "8")), "the wipe")
     assert native.command[-4:] == ("--streamer", "build", "--threads", "8")
     assert WP.placement("n0", "n0")[WP.PREMISE].startswith("unmet: ") and WP.placement("n0", "n0")["kind"] == "prover-node"
     assert WP.placement("n0", "a")["kind"] == "own-host"
@@ -210,8 +211,9 @@ def test_the_party_follows_period_json(tmp_path) -> None:
 CONTROL = {"name": "control", "to": "outside", "via": "eth0 192.0.2.13: ssh"}
 
 
-def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
-    """A period whose challenger is `wipe_side.py` on a host of its own, its key the pinned one unless `wipe` says."""
+def _side(tmp_path, wipe: dict) -> tuple[Path, Callable[..., Side]]:
+    """A period whose challenger is `wipe_side.py` on a host of its own, its key the pinned one unless `wipe` says, and
+    what hands the wipe that side."""
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
     (period / "period.json").write_text(json.dumps({"challenger_host": "auditor",
@@ -219,8 +221,12 @@ def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): side)
-    return period
+
+    def side_of(doc, node, key, local, what=None):
+        assert (key, what) == ("wipe", "the wipe"), "the wipe's side is period.json's challenger.wipe"
+        return side
+
+    return period, side_of
 
 
 def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
@@ -229,9 +235,9 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     egress, so its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
     the two links leaving the node (period.json's control link, and the challenger's as the prover connected), and
     carries the session's window on the challenger's clock."""
-    period = _side(tmp_path, monkeypatch, {"links": [CONTROL]})
+    period, side_of = _side(tmp_path, {"links": [CONTROL]})
     out = tmp_path / "out"
-    answer = W.leg(period, "n0", out)
+    answer = W.leg(period, "n0", out, side_of=side_of)
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
     assert answer["profile"]["placement"]["trusted-host"] == "holds: the memory challenger ran on auditor, not the developer's n0"
@@ -280,18 +286,22 @@ def test_who_decided_is_the_leans_file_name_or_python_on_this_host(tmp_path) -> 
 def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None:
     """`wipe.reads` starts a challenger on this node with `--reads`; one on its own host chooses its own (here
     `wipe_side.py`'s default), and the leg refuses a session at another count."""
-    period = _side(tmp_path, monkeypatch, {"reads": 5231})
-    extras, of = [], WP.side_of
-    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or of(doc, node, d, extra))
+    period, of = _side(tmp_path, {"reads": 5231})
+    extras = []
+
+    def side_of(doc, node, key, local, what=None):
+        extras.append(tuple(local[len(WP.command("d")):]))
+        return of(doc, node, key, local, what)
+
     with pytest.raises(RuntimeError, match="ran 2152 reads, not period.json's wipe.reads 5231"):
-        W.leg(period, "n0", tmp_path / "out")
+        W.leg(period, "n0", tmp_path / "out", side_of=side_of)
     assert extras == [("--reads", "5231")]
 
 
 def test_a_challenger_on_its_own_host_takes_no_egress_from_the_prover(tmp_path, monkeypatch) -> None:
-    period = _side(tmp_path, monkeypatch, {"egress_bits": 0})
+    period, side_of = _side(tmp_path, {"egress_bits": 0})
     with pytest.raises(ValueError, match="reaches only a challenger on this node"):
-        W.leg(period, "n0", tmp_path / "out")
+        W.leg(period, "n0", tmp_path / "out", side_of=side_of)
 
 
 UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"
@@ -317,10 +327,10 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(tmp_
     pins: the session, honest in every read, is rejected, by a case that trusts no key, and the record and the printed
     summary say whose key it was and that it wasn't the pinned one."""
     other = hashlib.sha512(b"another key").hexdigest()
-    period = _side(tmp_path, monkeypatch, {"trusted_sha512": other})
+    period, side_of = _side(tmp_path, {"trusted_sha512": other})
     out = tmp_path / "out"
     argv = ["--period", str(period), "--out", str(out), "--node", "n0"]
-    assert W.main(argv) == 1
+    assert W.main(argv, side_of=side_of) == 1
     s = json.loads(capsys.readouterr().out)
     assert (s["verdict"], s["reason"], s["public"]) == ("reject", UNTRUSTED, None)
     assert (s["key_pinned"], s["key_sha512"]) == (False, wipe_side.key_sha512())
@@ -333,11 +343,11 @@ def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(tmp_
 def test_a_challenger_on_its_own_host_with_no_key_pinned_is_refused(tmp_path, monkeypatch) -> None:
     """With no pin the verifier trusts the key the session came with, which only a challenger whose key the run made
     may be given: one on its own host is refused before its session starts."""
-    period = _side(tmp_path, monkeypatch, {"trusted_sha512": None})
+    period, side_of = _side(tmp_path, {"trusted_sha512": None})
     started = []
     monkeypatch.setattr(W, "run", lambda *a, **kw: started.append(a))
     with pytest.raises(ValueError, match="wipe.trusted_sha512 is unset with the memory challenger on auditor"):
-        W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"])
+        W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"], side_of=side_of)
     assert not started and not (tmp_path / "out").exists()
 
 

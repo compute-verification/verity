@@ -389,13 +389,7 @@ RUNTIME = ("verity.configuration.deploy.channels", "verity.configuration.deploy.
 RUNTIME_FREE = ("verity/protocols/", "adapters/")
 #: Files of ``RUNTIME_FREE``, outside its tests, that import the runtime all the same, each with its owner and what it
 #: imports.  It only shrinks.
-RUNTIME_IMPORTERS: dict[str, str] = {
-    "verity/protocols/poub/verifier/verifier_party.py": "memory-accounting: `Side` (`stream`)",
-    "verity/protocols/pous/device/challenger_session.py": "memory-accounting: `Side` (`stream`)",
-    "verity/protocols/pous/verifier/period.py": "memory-accounting: `Side` (`stream`)",
-    "verity/protocols/pous/verifier/wipe_party.py": "memory-accounting: `Side` (`stream`)",
-    "verity/protocols/pous/verifier/wipe_period.py": "memory-accounting: `Side` (`stream`)",
-}
+RUNTIME_IMPORTERS: dict[str, str] = {}
 
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}

@@ -4,7 +4,8 @@ the id `period.run` does in one process and challenges the same indices. The run
 the honest prover and refuses it against one that answers zeros. The warm-ups before round 0 are on a public index,
 and neither timed nor judged. The prover answers with the collector paused, as the challenger does. The deployment
 layer's runtime, running the same two parties on the same coins and clock readings, signs the session the stream
-does. `side_of` reads `period.json`'s challenger host, and `placement` says whether `trusted-host`'s premise holds."""
+does. The runtime's `Side.of` reads `period.json`'s challenger host for `command`, and `placement` says whether
+`trusted-host`'s premise holds."""
 
 from __future__ import annotations
 
@@ -343,19 +344,42 @@ def test_the_side_serves_a_salt_request_and_refuses_before_it_listens(tmp_path) 
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
-    local = CS.side_of({}, "cpu-node", tmp_path)
+    local = Side.of({}, "cpu-node", "pous", CS.command(tmp_path))
     assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
-    assert CS.side_of({"challenger_host": "cpu-node"}, "cpu-node", tmp_path) == local
+    assert Side.of({"challenger_host": "cpu-node"}, "cpu-node", "pous", CS.command(tmp_path)) == local
     with pytest.raises(RuntimeError, match="auditor-host isn't wired for pous"):
-        CS.side_of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {"command": ["x"]}}},
-                   "cpu-node", tmp_path)
-    wired = CS.side_of({"challenger_host": "auditor-host", "challenger": {"pous": {
-        "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "cpu-node", tmp_path)
+        Side.of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {"command": ["x"]}}},
+                "cpu-node", "pous", CS.command(tmp_path))
+    wired = Side.of({"challenger_host": "auditor-host", "challenger": {"pous": {
+        "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "cpu-node", "pous",
+        CS.command(tmp_path))
     assert wired == Side("auditor-host", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
     assert CS.placement("n0", "n0")[CS.PREMISE].startswith("unmet: ")
     assert CS.placement("n0", "auditor-host") == {
         "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"},
         CS.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}
+
+
+class Handed(Exception):
+    """What a stand-in for the runtime's `Side.of` raises once it has seen what the leg hands it."""
+
+
+def test_the_leg_asks_its_caller_for_pous_s_side(tmp_path) -> None:
+    """`period.leg` takes the side from the program that starts the run: `period.json`'s challenger under PoUS's key,
+    started on this node by `challenger_session.command`, its key and session log in `pous-challenger` beside the
+    periods."""
+    period_dir = tmp_path / "periods" / "p0"
+    period_dir.mkdir(parents=True)
+    (period_dir / "period.json").write_text("{}")
+    handed = []
+
+    def side_of(doc, node, key, local, what=None):
+        handed.append((doc, node, key, local, what))
+        raise Handed
+
+    with pytest.raises(Handed):
+        period.leg(period_dir, "n0", tmp_path / "out", side_of=side_of)
+    assert handed == [({}, "n0", "pous", CS.command(tmp_path / "periods" / "pous-challenger"), None)]
 
 
 def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_session_privately(tmp_path) -> None:

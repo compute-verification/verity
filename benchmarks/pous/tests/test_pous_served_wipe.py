@@ -326,3 +326,13 @@ def test_demo_sh_takes_a_challenger_on_its_own_host_only_with_its_key_pinned(tmp
                         *pin], env=os.environ | {"OUT": str(tmp_path / "out")}, capture_output=True, text=True)
     assert r.returncode == 2 and r.stdout.strip().startswith(said), r.stdout + r.stderr
     assert not any((tmp_path / "out").iterdir())
+
+
+def test_the_start_file_demo_sh_runs_starts() -> None:
+    """`wipe_on_node.py`, which demo.sh runs on the card and no CPU test runs whole, imports what it starts and answers
+    `--help` with `wipe_period.main`'s options."""
+    start = WRAPPER.parent / "wipe_on_node.py"
+    assert f"python {start.relative_to(ROOT)} --period" in DEMO.read_text()
+    r = subprocess.run([sys.executable, str(start), "--help"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert all(f"--{o}" in r.stdout for o in ("period", "out", "node", "expect")), r.stdout

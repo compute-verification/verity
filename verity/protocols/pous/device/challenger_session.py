@@ -1,5 +1,5 @@
 """The memory challenger's session as PoUS runs it: the wire both sides speak, the prover's side, the request and the id
-a session runs under, and how PoUS starts the challenger's side and talks to it. The challenger's side is the
+a session runs under, and one session with the challenger's side as PoUS is handed it. The challenger's side is the
 auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-host`),
 which imports this module and which this module never imports; how it runs a session is its docstring's.
 
@@ -33,10 +33,10 @@ outputs and P2's parameters (`PARAMS`), which `setup_of` reads back. The challen
 its own host under `SETUPS`, from which PoUB's verifier on the same host builds its registration
 (`verity.protocols.poub.verifier.p2_party --pous-record`).
 
-`side_of(period, node, device)` is where `period.json` puts the challenger's side (`stream.Side`, started by `command`),
-`salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is PoUS's: it starts the
-side, connects to it and answers each index with `respond(index)` (`answer`). `placement` says which host ran each
-party and whether `trusted-host`'s premise holds.
+`Side` is the challenger's side as what starts a run hands it over, wherever `period.json` puts it, and
+`command(device)` the argv that starts it on this machine. `salt(side, audit, commitment)` asks it for a salt, and
+`session(side, request, respond)` is PoUS's: one session with the side, each index answered with `respond(index)`
+(`answer`). `placement` says which host ran each party and whether `trusted-host`'s premise holds.
 """
 
 from __future__ import annotations
@@ -50,12 +50,11 @@ import time
 from collections import deque
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, BinaryIO, Protocol
+from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.commitments.randomness import derive
 from verity.configuration.deploy.manifest import Channel, Manifest, Role
 from verity.configuration.deploy.party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
-from verity.configuration.deploy.stream import Side
 from verity.configuration.wire import Body, Int, Message, Schema
 from verity.protocols.pous.verifier import run as R
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
@@ -120,6 +119,21 @@ class Polled:
 
     def flush(self) -> None:
         pass
+
+
+T = TypeVar("T")
+
+
+class Side(Protocol):
+    """The challenger's side as what starts a run hands it to PoUS (the runtime's `Side` is one): the machine it runs
+    on, the argv that starts it there, where its stream connects, and `talk(request, drive)`, one session with it:
+    `request` sent, `drive` handed the connected socket, the side's report back with what `drive` returned."""
+
+    host: str
+    command: tuple[str, ...]
+    address: tuple[str, int] | None
+
+    def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]: ...
 
 
 class Codec(Protocol):
@@ -262,13 +276,6 @@ def command(device: str | Path) -> tuple[str, ...]:
     return (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0")
 
 
-def side_of(period: Mapping[str, Any], node: str, device: str | Path) -> Side:
-    """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
-    node, else `challenger.pous`'s `command` and `address`, which infra writes once the host serves the challenger's
-    side (the bandwidth gate's path, `verity/protocols/poub/device/live_verifier`)."""
-    return Side.of(period, node, "pous", command(device))
-
-
 def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
     machine the developer doesn't control, which is never the developer's node."""
@@ -350,4 +357,4 @@ def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
 __all__ = ["CHALLENGER", "END", "ID", "MANIFEST", "MODULE", "PARAMS", "PREMISE", "PROVER",
            "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Codec", "Frames", "Polled", "Prover", "answer",
            "coin_session_id", "command", "placement", "request_of", "run", "salt", "session", "session_id", "setup_of",
-           "side_of", "sleep_until"]
+           "sleep_until"]
