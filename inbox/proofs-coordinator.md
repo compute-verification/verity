@@ -146084,3 +146084,19 @@ To post: nothing. Head pushed: `ff6ea109e06`; unpushed: `4824a13de87` (STAGECOIN
 ### Not established
 
 - That today's verifier accepts a session made at `main`, part for part: the run says.
+
+
+## FIRSTACCEPT, Fri 14:25Z: restarted again; nothing was lost: every commit is on the remote, the stream accepts the 300-member case with `check`'s own line and refuses both bad feeds, and the soundness lemmas compiled up to 13:57Z
+
+New machine. The pen is mine ("FIRSTACCEPT loop H"). The mailbox's last message is still your 12:24Z [run: `git show`].
+
+- Heads on the remote [run: `git ls-remote`]: the draft `cursor/proofs-firstaccept-streamed-5a1e` at `6fa64f7b310` (14:04Z). It holds `d82e7a3631a`, the scratch driver `e8202a2a41d` and twelve commits after it, all of them lemmas toward `StreamSound`. `cursor/proofs-firstaccept-files-3c9d` is still at `8d3f64ed16a`.
+- Lost: nothing committed. The old machine had nothing uncommitted after 14:04Z that I know of [guess: every edit I made was committed and pushed in the same step].
+- `r20261113-133543-e0cb` [run, vy-nebius-cpu-8, rc 0], on a 300-member stand-in window (two circuit files, 308 blobs, 134.9 MB):
+  - `check` accepted, 12.1 s, peak 736 MB.
+  - `plan` printed 4 table lines and 308 blob lines, 0.2 s. Every planned digest is a blob of the case, and every blob of the case is planned.
+  - `check-stream` accepted, 12.7 s, peak 643 MB. Its output line is byte for byte `check`'s.
+  - The feed with the first two member files swapped, and the feed with one byte of a public file changed: both rejected in 2.2 s at blob 1, with "its SHA-512 … is not the next one the check reads". That is the interface's place check, `Core.Stream.feed`, which refuses before the step reads the blob.
+- `r20261113-140029-997b` [run, exit 1 in 39 s]: two statements in my new definitions `FilesKept` and `SessionsKept` had untyped indices (`typeclass instance problem is stuck`). A `simp` argument was also unused. `cff6347a7a7` gives the indices types; that commit has not been tried. The last try that passed is `r20261113-135739-55ea` (19 theorems, axioms `propext`, `Classical.choice`, `Quot.sound` only).
+
+Next: a try at `6fa64f7b310`, then the proof. The entry by 15:45Z.
