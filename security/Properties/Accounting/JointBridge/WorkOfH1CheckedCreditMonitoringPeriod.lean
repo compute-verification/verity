@@ -38,12 +38,12 @@ import Mathlib.Topology.Sheaves.Init
 # The joint period's PoUW guarantee from H1's checked credit over the torch loop
 
 Each audit's per-period guarantee in the coins model is `Accounting.PeriodRun.Sound`, which the one theorem's targets
-couple into the causal game (`Accounting.PeriodLive`). `WorkOfH1CheckedCreditPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
+couple into the causal game (`Accounting.PeriodLive`). `WorkOfH1CheckedCreditMonitoringPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
 for a period whose PoUW audit credits H1's checked words (`Accounting.RealizesCreditedWords` at the play's acceptance
 and the check's credit over the accepted prefix, `m = Accounting.Compose.minWordMacs Sc Cd macs` multiply-adds a word,
 `u` a unit and `b_unit` bits a unit), from `Properties.Pouw.Period.H1CheckedCreditPeriod` and its premises, with its
 error `δ_s + n·(δ_bind + δ_ks)`. It is `Properties.Accounting.JointBridge.WorkOfCreditedWords` at H1's instance.
-`WorkOfH1CheckedCreditPeriod` is it at every price, word and unit count and unit width. Its instance at the H200's INT8
+`WorkOfH1CheckedCreditMonitoringPeriod` is it at every price, word and unit count and unit width. Its instance at the H200's INT8
 price is a corollary, stated beside its proof.
 
 The other audits' coins fix the adversary the device is in H1's game, so the windows, the service's openings, the
@@ -75,7 +75,7 @@ outsourced units), at most `K / b_unit` units outsourced (`HelpWithinCertifier`)
 value `ξ` of the coins meeting `H1CheckedCreditPeriod`'s premises: PoUW's per-period guarantee holds at certificates
 `c`, price `p` and error `δ_s + n·(δ_bind + δ_ks)`, i.e. at any value of the other coins, the probability over PoUW's
 own coins that it accepts while the compute account did less than `W` of work at `p` is at most that. -/
-def WorkOfH1CheckedCreditPeriodAt (p : Accounting.Price) (macs : Accounting.Compose.Kind → ℕ) (u bUnit : ℕ) : Prop :=
+def WorkOfH1CheckedCreditMonitoringPeriodAt (p : Accounting.Price) (macs : Accounting.Compose.Kind → ℕ) (u bUnit : ℕ) : Prop :=
   ∀ (ι α I : Type) [Fintype α] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     (d : Accounting.Device ι) (C : Verity.Circuit) (r : Accounting.PeriodRun d α C Ω) (c : Accounting.Certificates)
     {ι' K T L U Cn Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype Cn] [Fintype Ξ]
@@ -86,7 +86,7 @@ def WorkOfH1CheckedCreditPeriodAt (p : Accounting.Price) (macs : Accounting.Comp
     (opened : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (salt : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ByteArray)
     (Wp : ((i : I) → Ω i) →
-      WindowPlay Cn (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) (Fin 144) Cd.rounds n)
+      ExecutionPhasePlay Cn (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) (Fin 144) Cd.rounds n)
     (Pl : ((i : I) → Ω i) → Play (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n K T L U)
     (folded : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ)
     (help : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ)
@@ -101,7 +101,7 @@ def WorkOfH1CheckedCreditPeriodAt (p : Accounting.Price) (macs : Accounting.Comp
     (∀ t : Fin 144, (8 / 9 : ℝ) * (144 : ℕ) * shareCone Sc Cd 144 t ≤ 1) →
     (∀ j, stageShare (tileStage Cd 144) (shareCone Sc Cd 144) j ≤ 1) →
     (∀ t : Fin 144, 0 < shareCone Sc Cd 144 t → tileLuck Sc Cd 144 t ≤ 7 / 8 ∧ tileLuck0 Sc Cd 144 t ≤ 1 / 2) →
-    (∀ ξ, (Pl ξ).game = periodGame (tileStage Cd 144) (liveCone Sc Cd 144) 1 1 24 (Wp ξ)) →
+    (∀ ξ, (Pl ξ).game = monitoringPeriodGame (tileStage Cd 144) (liveCone Sc Cd 144) 1 1 24 (Wp ξ)) →
     (∀ ξ, (Wp ξ).EveryWindow (fun live _ => DeadConeDead Sc Cd 144 live)) →
     (∀ ξ, PrefixOf (checkedLayer Cd hr hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat))
       (Pl ξ).game) →
@@ -116,14 +116,14 @@ def WorkOfH1CheckedCreditPeriodAt (p : Accounting.Price) (macs : Accounting.Comp
     (∀ ξ, (Wp ξ).EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0))) →
     (∀ ξ, UnitFixed (Pl ξ)
       (checkedLayer Cd hr hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat))
-      (periodMode Cd (Wp ξ) (checkedRun hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat)))
+      (monitoringPeriodMode Cd (Wp ξ) (checkedRun hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat)))
       (fun _ t => (tileWords Sc Cd 144 t : ℝ)) (folded ξ)) →
     r.Sound c p .pouw (δs + n * (δbind + δks))
 
 /-- **PoUW's per-period guarantee in the joint period from H1's checked credit**, at every price `p`, per-kind
-multiply-add count `macs`, unit count `u` and unit width `b_unit` (`WorkOfH1CheckedCreditPeriodAt`). -/
-def WorkOfH1CheckedCreditPeriod : Prop :=
+multiply-add count `macs`, unit count `u` and unit width `b_unit` (`WorkOfH1CheckedCreditMonitoringPeriodAt`). -/
+def WorkOfH1CheckedCreditMonitoringPeriod : Prop :=
   ∀ (p : Accounting.Price) (macs : Accounting.Compose.Kind → ℕ) (u bUnit : ℕ),
-    WorkOfH1CheckedCreditPeriodAt p macs u bUnit
+    WorkOfH1CheckedCreditMonitoringPeriodAt p macs u bUnit
 
 end Properties.Accounting.JointBridge
