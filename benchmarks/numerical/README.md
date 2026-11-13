@@ -9,7 +9,7 @@ as a Boolean circuit. It has three parts:
   `fixture_sets`, `instances`), one measured cell on its prover and verifier pods (`cell`, `placement`, `drivers`), the
   subcircuit catalog and the per-unit-type cost inventory (`unit_costs` and its padding, prover and menu tables).
 - `reference`: the pinned GPU simulator's tensor-core step as integer operations (`hawkeye_close`), an independent reference
-  for `verity.definitions.circuits.targets.target.FIRST`.
+  for `verity.circuits.targets.target.FIRST`.
 - `checker`: a reference checker of that step with auxiliary witnesses, and the search for an output it accepts and should not.
 
 **What a caller may import** is each module's `__all__`: every public name a file outside this directory reads is in one,
@@ -200,6 +200,6 @@ What changed (`python/verity_numerical/checker/`):
   the zero-product truncation of D10, the E4M3 NaN words, rescale-hint mutations rejected, the E5M2 hypotheses through the same
   `Params`, and an exhaustive slice of `TOY_LOSSY`.
 
-The FP8 drafts these serve are `verity.definitions.circuits.targets.target.FP8_HOPPER_WGMMA` / `FP8_ADA_MMA` (`status="draft"`, no guest bound);
+The FP8 drafts these serve are `verity.circuits.targets.target.FP8_HOPPER_WGMMA` / `FP8_ADA_MMA` (`status="draft"`, no guest bound);
 their instructions and evidence are in `verity.circuits.silicon.instructions`, the replicas in `verity/circuits/silicon/captures/`, the open hardware questions
 in `verity/circuits/silicon/discrepancy_log.json` D13-D15.
