@@ -62,30 +62,49 @@ def groupsOf (ms : Array Member) : Array (String × Array Nat) :=
     (#[], {})
   order.map fun d => (d, at_.getD d #[])
 
+/-- A planned blob: its SHA-512, read off the digest `d` (`digestBytes`), and its role. -/
+def blob (d what : String) (r : Role) : V (ByteArray × Role) := do
+  pure (← digestBytes d what, r)
+
+/-- Member `i`'s blobs: its public file, and where statement `k` names it (`stOf`), that statement's session's record
+and rep files. -/
+def memberPlan (ms : Array Member) (sts : Array StatementFiles) (stOf : Std.HashMap String Nat) (i : Nat) :
+    V (Array (ByteArray × Role)) := do
+  let some m := ms[i]? | throw "plan: a member out of range"
+  let st := stOf[m.name]?
+  let pub ← blob m.own.pub s!"member {m.name}'s public file" (.pub i st)
+  match st with
+  | none => pure #[pub]
+  | some k =>
+    let some s := (sts[k]?.bind (·.sessions[0]?)) | throw s!"member {m.name}: its statement names no session"
+    let record ← blob s.record s!"session {s.name}'s record" (.record k)
+    let reps ← s.reps.zipIdx.mapM fun ((f, rd), j) => blob rd s!"session {s.name}'s files: {f}" (.rep k j)
+    pure (#[pub, record] ++ reps)
+
+/-- One circuit file's blobs: the file, then each member that names it, in the members' order. -/
+def groupPlan (ms : Array Member) (sts : Array StatementFiles) (stOf : Std.HashMap String Nat)
+    (g : String × Array Nat) : V (Array (ByteArray × Role)) := do
+  let c ← blob g.1 "circuit" (.circuit g.1)
+  let members ← g.2.mapM (memberPlan ms sts stOf)
+  pure (#[c] ++ members.flatten)
+
+/-- The planned blobs' SHA-512 are distinct and none a pinned table's, else a refusal naming the first that is. -/
+def distinctFrom : Std.HashSet String → List ByteArray → V Unit
+  | _, [] => pure ()
+  | seen, b :: bs =>
+    let h := Flock.hexOf b
+    if pinned.any (fun t => decide (t = b)) then throw s!"plan: {h} is a pinned table's SHA-512, and the tables come first"
+    else if seen.contains h then throw s!"plan: {h} is named twice, and the streamed check reads each blob once"
+    else distinctFrom (seen.insert h) bs
+
 /-- **The per-member form's order** (module docstring): its statements' structure held first (`membersHeld`), each
-blob under its SHA-512 with its role. -/
+blob under its SHA-512 with its role, group by group (`groupPlan`), the SHA-512 distinct and none a pinned table's
+(`distinctFrom`). -/
 def planOf (ms : Array Member) (sts : Array StatementFiles) : V (Array (ByteArray × Role)) := do
   let held ← membersHeld ms sts
   let stOf : Std.HashMap String Nat := held.zipIdx.foldl (fun acc (m, i) => acc.insert m.name i) {}
-  let mut out : Array (ByteArray × Role) := #[]
-  for (d, is) in groupsOf ms do
-    out := out.push (← digestBytes d "circuit", .circuit d)
-    for i in is do
-      let some m := ms[i]? | throw "plan: a member out of range"
-      let st := stOf[m.name]?
-      out := out.push (← digestBytes m.own.pub s!"member {m.name}'s public file", .pub i st)
-      if let some k := st then
-        let some s := (sts[k]?.bind (·.sessions[0]?)) | throw s!"member {m.name}: its statement names no session"
-        out := out.push (← digestBytes s.record s!"session {s.name}'s record", .record k)
-        for ((f, rd), j) in s.reps.zipIdx do
-          out := out.push (← digestBytes rd s!"session {s.name}'s files: {f}", .rep k j)
-  let tables : Std.HashSet String := Std.HashSet.ofList (Flock.MUFU_TABLES.map (·.sha512))
-  let mut seen : Std.HashSet String := {}
-  for (b, _) in out do
-    let h := Flock.hexOf b
-    if tables.contains h then throw s!"plan: {h} is a pinned table's SHA-512, and the tables come first"
-    if seen.contains h then throw s!"plan: {h} is named twice, and the streamed check reads each blob once"
-    seen := seen.insert h
+  let out := (← (groupsOf ms).mapM (groupPlan ms sts stOf)).flatten
+  distinctFrom {} (out.toList.map (·.1))
   pure out
 
 /-- `verdictOf` past the coin-tree key's freshness, on the session's proof files `proofs`. -/
