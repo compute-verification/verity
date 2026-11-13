@@ -1649,7 +1649,7 @@ def jobs() -> int:
     raw = os.environ.get("RATCHET_GATE_JOBS", "")
     if not raw:
         return min(16, len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1)
-    if not raw.isdigit() or int(raw) < 1:
+    if not raw.isdecimal() or int(raw) < 1:
         raise GitError(f"RATCHET_GATE_JOBS is {raw!r}: set it to a number of processes, 1 to judge the changes in turn")
     return int(raw)
 

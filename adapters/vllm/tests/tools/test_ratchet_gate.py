@@ -561,6 +561,14 @@ def test_changes_judged_at_once_report_what_changes_judged_in_turn_report(linted
     assert G.main(["main", "next"]) == 2 and "RATCHET_GATE_JOBS is 'none'" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("raw", ["none", "0", "-1", "1.5", " 4", "²"])
+def test_a_job_count_that_is_no_number_from_one_up_is_refused_in_the_gates_own_words(monkeypatch, raw):
+    """`²` is a digit to `str.isdigit` and no number to `int`, whose own error names no variable."""
+    monkeypatch.setenv("RATCHET_GATE_JOBS", raw)
+    with pytest.raises(G.GitError, match=f"RATCHET_GATE_JOBS is {raw!r}"):
+        G.jobs()
+
+
 def test_a_new_ratchet_is_its_own_baseline_and_a_moved_or_renamed_one_is_still_compared(repo):
     repo.git("checkout", "-q", "-b", "pr")
     moved = "adapters/vllm/tests/lint/moved/allowlists/p01_core.json"
