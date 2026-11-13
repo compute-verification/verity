@@ -1,4 +1,4 @@
-"""The machine model's sm_89 census (`benchmarks/pouw/machine_model/data/devices/sm_89/`) from a run of `run.sh`
+"""The machine model's sm_89 census (`benchmarks/machine_model/data/devices/sm_89/`) from a run of `run.sh`
 (scalar.cu), a run of tensor_kinds with TK_ARCH=89, a run of `SRC=uniform run.sh` (uniform.cu) and runs of `SRC=ji32
 run.sh` (ji.py's grid), in the machine model's schema with one epoch (no `since` or `until`).
 
