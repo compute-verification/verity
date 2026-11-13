@@ -13,10 +13,10 @@ public import Definitions.Assumptions.PearlC
 * **A simulation is a domination** (`CostModel.dominatedBy_of_simulatedBy`): a program of `CM'` with the same run at no
   more cost and calls (`CostModel.SimulatedBy`) commits the same good tiles. `ttOutTile_of_simulatedBy` is the
   transfer along it.
-* **A compression and a first fetch at 0 is the best case** (`W1.w1Priced_s8H100_simulatedBy_best`): the run's memory
+* **A compression and a first fetch at 0 is the best case** (`W1.w1Priced_s8H100Tensor_simulatedBy_best`): the run's memory
   and its fetched words never read a price, and its cost only grows with each, so at any `sha, fetch ≥ 0`
-  `W1Device.s8H100 sha fetch` is simulated by `W1Device.s8H100Best`, each program by itself.
-  `ttOutTilePearlCDevRev1W1_s8H100_of_best` is the consequence for TT_OUT: `TTOutTilePearlCH100Rev1S8` holds at every
+  `W1Device.s8H100Tensor sha fetch` is simulated by `W1Device.s8H100Best`, each program by itself.
+  `ttOutTilePearlCDevRev1W1_s8H100Tensor_of_best` is the consequence for TT_OUT: `TTOutTilePearlCH100Rev1S8` holds at every
   such price.
 -/
 
@@ -69,81 +69,81 @@ namespace Pouw.PearlC.W1
 
 variable {a b a' b' : ℚ}
 
-theorem exec_s8H100 (M : Mem) (i : Instr) :
-    i.exec (W1Device.s8H100 a' b') M = i.exec (W1Device.s8H100 a b) M := by
+theorem exec_s8H100Tensor (M : Mem) (i : Instr) :
+    i.exec (W1Device.s8H100Tensor a' b') M = i.exec (W1Device.s8H100Tensor a b) M := by
   cases i <;> rfl
 
-theorem reads_s8H100 (M : Mem) (i : Instr) :
-    i.reads (W1Device.s8H100 a' b') M = i.reads (W1Device.s8H100 a b) M := by
+theorem reads_s8H100Tensor (M : Mem) (i : Instr) :
+    i.reads (W1Device.s8H100Tensor a' b') M = i.reads (W1Device.s8H100Tensor a b) M := by
   cases i <;> rfl
 
-theorem price_s8H100_le (h : a' ≤ a) (t : Bool) (i : Instr) :
-    i.price (W1Device.s8H100 a' b') t ≤ i.price (W1Device.s8H100 a b) t := by
+theorem price_s8H100Tensor_le (h : a' ≤ a) (t : Bool) (i : Instr) :
+    i.price (W1Device.s8H100Tensor a' b') t ≤ i.price (W1Device.s8H100Tensor a b) t := by
   cases i <;> first | exact le_rfl | exact add_le_add h le_rfl
 
-/-- A run on `s8H100 a' b'` and one on `s8H100 a b` from states with one memory and one fetch list keep them equal,
+/-- A run on `s8H100Tensor a' b'` and one on `s8H100Tensor a b` from states with one memory and one fetch list keep them equal,
 and the first's cost stays at most the second's when `a' ≤ a`. -/
-theorem exec_s8H100_le (h : a' ≤ a) (c : Code) : ∀ (t : Bool) (st st' : St), st'.mem = st.mem →
+theorem exec_s8H100Tensor_le (h : a' ≤ a) (c : Code) : ∀ (t : Bool) (st st' : St), st'.mem = st.mem →
     st'.fetched = st.fetched → st'.cost ≤ st.cost →
-    (exec (W1Device.s8H100 a' b') t c st').mem = (exec (W1Device.s8H100 a b) t c st).mem ∧
-      (exec (W1Device.s8H100 a' b') t c st').fetched = (exec (W1Device.s8H100 a b) t c st).fetched ∧
-      (exec (W1Device.s8H100 a' b') t c st').cost ≤ (exec (W1Device.s8H100 a b) t c st).cost := by
+    (exec (W1Device.s8H100Tensor a' b') t c st').mem = (exec (W1Device.s8H100Tensor a b) t c st).mem ∧
+      (exec (W1Device.s8H100Tensor a' b') t c st').fetched = (exec (W1Device.s8H100Tensor a b) t c st).fetched ∧
+      (exec (W1Device.s8H100Tensor a' b') t c st').cost ≤ (exec (W1Device.s8H100Tensor a b) t c st).cost := by
   induction c with
   | done => intro t st st' hm hf hc; exact ⟨hm, hf, hc⟩
   | op i k ih =>
     intro t st st' hm hf hc
     simp only [exec]
-    rw [hm, hf, exec_s8H100 (a' := a') (b' := b') (a := a) (b := b),
-      reads_s8H100 (a' := a') (b' := b') (a := a) (b := b)]
+    rw [hm, hf, exec_s8H100Tensor (a' := a') (b' := b') (a := a) (b := b),
+      reads_s8H100Tensor (a' := a') (b' := b') (a := a) (b := b)]
     refine ih t _ _ ?_ ?_ ?_
     · rfl
     · rfl
-    · exact add_le_add hc (price_s8H100_le h t i)
+    · exact add_le_add hc (price_s8H100Tensor_le h t i)
   | ite p ct ce k iht ihe ihk =>
     intro t st st' hm hf hc
     simp only [exec]
     rw [hm, hf]
     split_ifs
-    · have e := ihe true ⟨st.mem, st.fetched ++ [p].filter preSalt, st.cost + (W1Device.s8H100 a b).prices.int32⟩
-        ⟨st.mem, st.fetched ++ [p].filter preSalt, st'.cost + (W1Device.s8H100 a' b').prices.int32⟩ rfl rfl
+    · have e := ihe true ⟨st.mem, st.fetched ++ [p].filter preSalt, st.cost + (W1Device.s8H100Tensor a b).prices.int32⟩
+        ⟨st.mem, st.fetched ++ [p].filter preSalt, st'.cost + (W1Device.s8H100Tensor a' b').prices.int32⟩ rfl rfl
         (add_le_add hc le_rfl)
       exact ihk t _ _ e.1 e.2.1 e.2.2
-    · have e := iht true ⟨st.mem, st.fetched ++ [p].filter preSalt, st.cost + (W1Device.s8H100 a b).prices.int32⟩
-        ⟨st.mem, st.fetched ++ [p].filter preSalt, st'.cost + (W1Device.s8H100 a' b').prices.int32⟩ rfl rfl
+    · have e := iht true ⟨st.mem, st.fetched ++ [p].filter preSalt, st.cost + (W1Device.s8H100Tensor a b).prices.int32⟩
+        ⟨st.mem, st.fetched ++ [p].filter preSalt, st'.cost + (W1Device.s8H100Tensor a' b').prices.int32⟩ rfl rfl
         (add_le_add hc le_rfl)
       exact ihk t _ _ e.1 e.2.1 e.2.2
 
-theorem final_s8H100 (h : a' ≤ a) (salt : List ℕ) (pr : CodeImage) (U : Workload) (act : ℕ → Codes)
+theorem final_s8H100Tensor (h : a' ≤ a) (salt : List ℕ) (pr : CodeImage) (U : Workload) (act : ℕ → Codes)
     (σ : State) :
-    (final (W1Device.s8H100 a' b') salt pr U act σ).mem = (final (W1Device.s8H100 a b) salt pr U act σ).mem ∧
-      (final (W1Device.s8H100 a' b') salt pr U act σ).fetched =
-        (final (W1Device.s8H100 a b) salt pr U act σ).fetched ∧
-      (final (W1Device.s8H100 a' b') salt pr U act σ).cost ≤ (final (W1Device.s8H100 a b) salt pr U act σ).cost :=
-  exec_s8H100_le h _ false _ _ rfl rfl le_rfl
+    (final (W1Device.s8H100Tensor a' b') salt pr U act σ).mem = (final (W1Device.s8H100Tensor a b) salt pr U act σ).mem ∧
+      (final (W1Device.s8H100Tensor a' b') salt pr U act σ).fetched =
+        (final (W1Device.s8H100Tensor a b) salt pr U act σ).fetched ∧
+      (final (W1Device.s8H100Tensor a' b') salt pr U act σ).cost ≤ (final (W1Device.s8H100Tensor a b) salt pr U act σ).cost :=
+  exec_s8H100Tensor_le h _ false _ _ rfl rfl le_rfl
 
 /-- **A compression and a first fetch at 0 is the adversary's best case**: at `sha, fetch ≥ 0`, W1 priced on
-`s8H100 sha fetch` is simulated by W1 priced on `s8H100Best`, each program by itself. -/
-theorem w1Priced_s8H100_simulatedBy_best {Q R S : Type} {sha fetch : ℚ} (hs : 0 ≤ sha) (hf : 0 ≤ fetch)
+`s8H100Tensor sha fetch` is simulated by W1 priced on `s8H100Best`, each program by itself. -/
+theorem w1Priced_s8H100Tensor_simulatedBy_best {Q R S : Type} {sha fetch : ℚ} (hs : 0 ≤ sha) (hf : 0 ≤ fetch)
     (salt : S → List ℕ) :
-    (w1Priced (W1Device.s8H100 sha fetch) salt : CostModel Q R S).SimulatedBy
+    (w1Priced (W1Device.s8H100Tensor sha fetch) salt : CostModel Q R S).SimulatedBy
       (w1Priced W1Device.s8H100Best salt) := by
   intro p
   refine ⟨p, fun H U act σ s => ?_⟩
-  obtain ⟨e1, e2, e3⟩ := final_s8H100 (a := sha) (b := fetch) (a' := 0) (b' := 0) hs (salt s) p U act σ
+  obtain ⟨e1, e2, e3⟩ := final_s8H100Tensor (a := sha) (b := fetch) (a' := 0) (b' := 0) hs (salt s) p U act σ
   refine ⟨?_, ?_, le_rfl⟩
-  · show readout U act (final (W1Device.s8H100 0 0) (salt s) p U act σ).mem =
-      readout U act (final (W1Device.s8H100 sha fetch) (salt s) p U act σ).mem
+  · show readout U act (final (W1Device.s8H100Tensor 0 0) (salt s) p U act σ).mem =
+      readout U act (final (W1Device.s8H100Tensor sha fetch) (salt s) p U act σ).mem
     rw [e1]
-  · show (((final (W1Device.s8H100 0 0) (salt s) p U act σ).cost +
-        (0 : ℚ) * w1Read (W1Device.s8H100 0 0) (salt s) p U act σ : ℚ) : ℝ) ≤
-      (((final (W1Device.s8H100 sha fetch) (salt s) p U act σ).cost +
-        fetch * w1Read (W1Device.s8H100 sha fetch) (salt s) p U act σ : ℚ) : ℝ)
-    have hr : w1Read (W1Device.s8H100 0 0) (salt s) p U act σ =
-        w1Read (W1Device.s8H100 sha fetch) (salt s) p U act σ := by
+  · show (((final (W1Device.s8H100Tensor 0 0) (salt s) p U act σ).cost +
+        (0 : ℚ) * w1Read (W1Device.s8H100Tensor 0 0) (salt s) p U act σ : ℚ) : ℝ) ≤
+      (((final (W1Device.s8H100Tensor sha fetch) (salt s) p U act σ).cost +
+        fetch * w1Read (W1Device.s8H100Tensor sha fetch) (salt s) p U act σ : ℚ) : ℝ)
+    have hr : w1Read (W1Device.s8H100Tensor 0 0) (salt s) p U act σ =
+        w1Read (W1Device.s8H100Tensor sha fetch) (salt s) p U act σ := by
       unfold w1Read
       rw [e2]
     rw [hr, Rat.cast_le]
-    have hn := mul_nonneg hf (Nat.cast_nonneg (α := ℚ) (w1Read (W1Device.s8H100 sha fetch) (salt s) p U act σ))
+    have hn := mul_nonneg hf (Nat.cast_nonneg (α := ℚ) (w1Read (W1Device.s8H100Tensor sha fetch) (salt s) p U act σ))
     linarith
 
 end Pouw.PearlC.W1
@@ -155,11 +155,11 @@ open Pouw.PearlC.Assumptions Pouw.PearlC.TTOutW1
 variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
 /-- **`TTOutTilePearlCH100Rev1S8` holds at every price of a compression and a first fetch**: TT_OUT rev1 per tile at
-the H100 record on `W1Device.s8H100 sha fetch`, at any `sha, fetch ≥ 0`. -/
-theorem ttOutTilePearlCDevRev1W1_s8H100_of_best {sha fetch : ℚ} (hs : 0 ≤ sha) (hf : 0 ≤ fetch)
+the H100 record on `W1Device.s8H100Tensor sha fetch`, at any `sha, fetch ≥ 0`. -/
+theorem ttOutTilePearlCDevRev1W1_s8H100Tensor_of_best {sha fetch : ℚ} (hs : 0 ≤ sha) (hf : 0 ≤ fetch)
     {salt : S → List ℕ} {sem : PearlCSem Q R S} {ρ : ℚ} (h : TTOutTilePearlCH100Rev1S8 salt sem ρ) :
-    TTOutTilePearlCDevRev1W1 (W1.W1Device.s8H100 sha fetch) salt devH100 sem ρ :=
+    TTOutTilePearlCDevRev1W1 (W1.W1Device.s8H100Tensor sha fetch) salt devH100Tensor sem ρ :=
   (ttOutTileW1_iff _ _ _ _ _ _ _).2 (ttOutTile_of_simulatedBy (w1Priced_queries _ salt)
-    (W1.w1Priced_s8H100_simulatedBy_best hs hf salt) ((ttOutTileW1_iff _ _ _ _ _ _ _).1 h))
+    (W1.w1Priced_s8H100Tensor_simulatedBy_best hs hf salt) ((ttOutTileW1_iff _ _ _ _ _ _ _).1 h))
 
 end Pouw.PearlC

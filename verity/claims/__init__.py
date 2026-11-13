@@ -331,16 +331,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("w1-complete-h100", "assumption",
           "W1 is complete for the H100's credited work: for every adversary of the cost model at an in-domain "
           "workload, a W1 program on the H100 (or the H200) with INT8, run on the adversary's inputs, costs no more "
-          "and makes no more oracle calls, and its good tiles at the H100 record (rev1) earn at least the adversary's "
-          "credit; W1's prices are the data sheets' per-MAC tensor-core ratios per SM clock (H100 whitepaper Table 1, "
-          "H200 data sheet), with SHA-512 compressions and first fetches free; refuted by a program on the card that "
-          "earns more good-tile credit for its cost than every W1 program at that cost", "W1 complete (H100)",
+          "and makes no more oracle calls, and its good tiles at the H100 record per second at the tensor clock (rev1) "
+          "earn at least the adversary's credit; W1's prices are the data sheets' per-MAC tensor-core ratios with the "
+          "SM pipes priced per second at the 1830 MHz tensor clock beside the 1980 MHz SM clock (H100 whitepaper "
+          "Tables 1 and 3, H200 data sheet), with SHA-512 compressions and first fetches free; refuted by a program on "
+          "the card that earns more good-tile credit for its cost than every W1 program at that cost", "W1 complete (H100)",
           "measured"),
     Entry("tt-out-tile-pearl-c-h100-rev1", "assumption",
-          "Pearl-C's TT_OUT(1/400) per audit tile at the H100 record, rev1, over W1 on the H100 with INT8 at its best "
-          "case for the adversary: no W1 program outputs a good tile's words, before the salt is drawn, at a cost "
-          "below (1 − g₀) of the tile's credit except with probability δ; refuted by such a program for a tile in the "
-          "domain", "TT_OUT tile (H100, rev1)", "conjectured"),
+          "Pearl-C's TT_OUT(1/400) per audit tile at the H100 record per second at the tensor clock, rev1, over W1 on "
+          "the H100 with INT8 at its best case for the adversary: no W1 program outputs a good tile's words, before the "
+          "salt is drawn, at a cost below (1 − g₀) of the tile's credit except with probability δ; refuted by such a "
+          "program for a tile in the domain", "TT_OUT tile (H100, rev1)", "conjectured"),
     # the min-cut bound's cut conjectures (security/Definitions/Assumptions.lean): (H) is
     # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
     Entry("training-cut-hardness", "assumption",
