@@ -13,8 +13,8 @@ What is checked, per program (`Serve{TINY}` as the control, `ServeHopper{TINY}`,
 3. the equivalence is discriminating across bindings: `ServeHopper{TINY}` vs `Serve{TINY}` is a `Mismatch`
    (definition sets differ), and so is `ServeTP2` vs `Serve`;
 4. a *fresh* process that imports only `verity.circuits` (not `verity.definitions.registry.hopper`) can or cannot decode the Hopper
-   descriptor -- the descriptor carries every composite body but only *names* its primitives, and the CLI
-   `verity-vllm descriptor-equivalence` loads with the process's `REGISTRY` (`_load`).
+   descriptor -- the descriptor carries every composite body but only *names* its primitives, which a decoder finds
+   in the process's `REGISTRY`.
 """
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ def _fresh_decode(path: Path, imports: str) -> subprocess.CompletedProcess:
 def test_hopper_descriptor_decodes_in_a_fresh_process_only_if_the_binding_module_is_imported(tmp_path):
     """The descriptor names `HopperBF16WgmmaDot16` / `Fa3InvSum` as primitives; they exist in `REGISTRY` only after
     `verity.definitions.registry.hopper` is imported. `verity.circuits` itself imports neither `registry.b1` nor `registry.hopper`,
-    so `verity-vllm descriptor-equivalence --old <hopper descriptor>` depends on what the process imported."""
+    so decoding a Hopper descriptor depends on what the process imported."""
     P = Program(PROGRAMS["ServeHopper{TINY}"]())
     desc = encode_program(P)
     path = tmp_path / "hopper-tiny.json"
@@ -101,7 +101,7 @@ def test_hopper_descriptor_decodes_in_a_fresh_process_only_if_the_binding_module
     with_b1 = _fresh_decode(path, "import verity.circuits, verity.definitions.registry.b1")
     with_hopper = _fresh_decode(path, "import verity.circuits, verity.definitions.registry.hopper")
     assert with_hopper.returncode == 0, with_hopper.stderr[-800:]
-    # Record the facts for the report; the finding (if any) is the CLI's dependence on the importer.
+    # Record the facts for the report; the finding (if any) is the decoder's dependence on the importer.
     report = {"bare": (bare.returncode, bare.stderr.strip().splitlines()[-1] if bare.stderr.strip() else ""),
               "with_b1": (with_b1.returncode, with_b1.stderr.strip().splitlines()[-1] if with_b1.stderr.strip() else ""),
               "with_hopper": (with_hopper.returncode, with_hopper.stdout.strip())}

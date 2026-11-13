@@ -152,16 +152,18 @@ def test_a_kept_state_with_other_buffers_than_the_route_built_is_refused(tiny, s
 
 #: the routes with an `output`, each with dials for the tiny start
 OUTPUTS = {"ema": {"trainable": "blocks.0.w_*", "lr": 1e-2, "ema_decay": 0.9},
-           "lora": {"targets": "blocks.0.w_*.weight", "rank": 2, "lr": 1e-2}}
+           "lora": {"targets": "blocks.0.w_*.weight", "rank": 2, "lr": 1e-2},
+           "qat": {"targets": "blocks.0.w*.weight", "keep": 0.5, "lr": 1e-2}}
 
 
 def bare(state: dict) -> dict:
-    """A kept state without what a route with an `output` carries beside the weights θ holds: `ema`'s averages and
-    `lora`'s B, each zeros, as `build` leaves it."""
+    """A kept state without what a route with an `output` carries beside the weights θ holds: `ema`'s averages,
+    `lora`'s B, and `qat`'s latents and its codes (`scales`, `plus`, `minus`), each zeros, as `build` leaves it."""
     def zeros(tensors: dict, named) -> dict:
         return {k: torch.zeros_like(v) if named(k) else v for k, v in tensors.items()}
-    return state | {"buffers": zeros(state["buffers"], lambda k: k.startswith("average_")),
-                    "model": zeros(state["model"], lambda k: k.endswith(".b"))}
+    return state | {"buffers": zeros(state["buffers"], lambda k: k.startswith("average_")
+                                     or k.endswith((".scales", ".plus", ".minus"))),
+                    "model": zeros(state["model"], lambda k: k.endswith((".b", ".v")))}
 
 
 @pytest.mark.parametrize("route", sorted(OUTPUTS))

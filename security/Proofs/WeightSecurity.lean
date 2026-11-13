@@ -13,6 +13,9 @@ public import Proofs.WeightSecurity.Stop
 public import Proofs.WeightSecurity.Theft
 public import Proofs.WeightSecurity.Tied
 public import Proofs.WeightSecurity.Two
+public import Proofs.WeightSecurity.TwoProd
+public import Proofs.WeightSecurity.TwoProdPeriod
+public import Proofs.WeightSecurity.TwoProdWitnesses
 public import Proofs.WeightSecurity.TwoReg
 public import Proofs.WeightSecurity.TwoRegPeriod
 public import Proofs.WeightSecurity.TwoRegWitnesses
@@ -38,6 +41,12 @@ statement `PeriodTwoReg` in `period_undetected`'s form. `TwoRegPeriod`: `PeriodT
 form and miss bound (`periodTwoReg_of`), so **`CompilerPeriodTwoReg` is proved** (`compilerPeriodTwoReg`).
 `TwoRegWitnesses`: its premises hold together at `twoLTwo` (`periodTwoReg_honest`), and `PeriodTwoReg` fails at
 `sksLTwo` (`periodTwoReg_nontrivial`).
+`TwoProd`: a period of two-stage verification phases at boundary traces its caller names, with one failure probability
+`δ` for the whole period: the statements `PeriodTwoLead` and `PeriodTwoProd`, in which the phases' escapes multiply.
+`TwoProdPeriod`: both from each verifier's two-stage contract (`compilerPeriodTwoProd`), and both at the committed
+boundary trace under `CompilerPeriodTwoReg`'s premises (`periodTwoLead_regVal`, `periodTwoProd_regVal`).
+`TwoProdWitnesses`: those premises hold together at `twoLTwo` (`periodTwoProd_honest`), and both statements fail at
+`sksLTwo` (`periodTwoLead_nontrivial`, `periodTwoProd_nontrivial`).
 `Faulted`: the leakage lemma with the audit's incorrect proof blocks as inputs
 to a faulted circuit rather than overwrites of releases, `WeightSecurity.Guarantees.TheftFaulted`, with its witnesses at
 the toy deployment, the releases' faithfulness from a checked dataflow, and the range clamp. `FaultedTwo`:

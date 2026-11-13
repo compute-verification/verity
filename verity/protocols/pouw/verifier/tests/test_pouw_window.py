@@ -329,7 +329,11 @@ def test_a_side_tree_is_its_rows_then_frame_v3_pads_to_two_to_the_d():
             Wd.side_levels(small, (leaves * 2)[:n])
 
 
-def _registration(n=9, k=3, root=_d(7), dom=_d(8)):
+#: the registered window root and its domain id
+ROOT, DOMAIN = _d(7), _d(8)
+
+
+def _registration(n=9, k=3, root=ROOT, dom=DOMAIN):
     return {"population": n, "law": {"law": "subset", "k": k},
             "roots": [{"port": "entries", "root": root.hex(), "leaves": 4, "domain": dom.hex()},
                       {"port": "W", "root": _d(9).hex(), "leaves": 1, "domain": _d(10).hex()}]}

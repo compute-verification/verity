@@ -216,7 +216,7 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity/protocols/spot/verifier", "verity/protocols/certifier/verifier", "verity-pouw-benchmarks",
               "verity/definitions/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
               "verity-network-e2e",
-              "verity/protocols/poub/device/live_verifier", "verity-network-traces", "verity-vllm")
+              "verity/protocols/poub/device/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '

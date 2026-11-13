@@ -181,7 +181,7 @@ MEASURED: dict[str, str] = {
                       "over the block's steps",
     "COMMITTED_BYTES": "the block run: the bytes those commit calls hashed",
     "BLOCK_ROOT": "the block root of the block run's drawn-unit bundle (`verity/drawn-unit-bundle`)",
-    "REGISTRATION_ROOT": "the seeded weights' registration root (`e2e_h200/served_weights.py`)",
+    "REGISTRATION_ROOT": "the seeded weights' registration root",
     "CHALLENGER_RUN": "the block run: the challenger's coin record for the block's draw",
     "ZK_SESSIONS": "the prove run: its C-Flock --zk sessions behind the firewall (`sessions/index.jsonl`)",
     "PROVE_RUN": "the prove run's id",
@@ -589,8 +589,8 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
         lines.append("JointPooledLive is stated, not yet proved: the error sum in part 1 is the sum it states.")
     lines.append("PRF-167: the state carried across a wipe has no cross-session binding term yet, so the bound holds "
                  "per server-time block.")
-    lines.append("`pous-ring-instantiation` is M4's: PoUS's S_cert, the bandwidth audit's Q_cert and the wipe's foreign_bits "
-                 "compose at M4 (Demo B), not in Demo A.")
+    lines.append("`pous-ring-instantiation` is M4's: PoUS's state bound S0, the bandwidth audit's Q_cert and the wipe's "
+                 "foreign_bits compose at M4 (Demo B), not in Demo A.")
     labels = sorted({v.label for v in values.values() if v.label})
     if quiet:
         lines.append(f"The numbers read from the block records, and the measurements labelled *({quiet})*, are the "

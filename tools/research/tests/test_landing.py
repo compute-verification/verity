@@ -11,6 +11,7 @@ import contextlib
 import dataclasses
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -226,12 +227,34 @@ def test_a_failed_pytest_step_points_at_its_tests_and_the_paths_its_failures_nam
 
 
 def test_a_failure_outside_the_suites_or_without_a_failing_test_points_at_no_file(tmp_path):
+    """A frame in the check's tree (job.json's `run.cwd`) points at its repository path, one outside it at nothing."""
     from research.landing import implicated
 
-    d = _failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/x/site/pkg/conftest.py", line 3')
-    assert implicated(d) >= {"pkg/tests/test_x.py", "/x/site/pkg/conftest.py"}
+    d = _failed_run(tmp_path, "tests/test_x.py::test_y", 'File "/x/site/pkg/conftest.py", line 3\n'
+                                                         'File "/usr/lib/python3.12/runpy.py", line 9')
+    assert implicated(d) == {"pkg/tests/test_x.py"}
+    (d / "job.json").write_text(json.dumps({"run": {"cwd": "/x/site"}}))
+    assert implicated(d) == {"pkg/tests/test_x.py", "pkg/conftest.py"}
     (d / "steps.jsonl").write_text('{"step": "circuit-check", "status": "failed"}\n')
     assert implicated(d) is None
+
+
+def test_a_runs_tree_root_is_its_job_jsons_run_cwd_and_a_malformed_job_json_raises(tmp_path):
+    """No job.json, or one naming no absolute `run.cwd`, gives no root; a job.json that isn't a JSON object raises rather than
+    reading as a run with no root."""
+    from research.landing import tree_root
+
+    assert tree_root(tmp_path) is None
+    for doc, root in (({"run": {"cwd": "/x/site/"}}, "/x/site"), ({"run": {"cwd": "site"}}, None), ({"run": None}, None),
+                      ({"environment": {}}, None)):
+        (tmp_path / "job.json").write_text(json.dumps(doc))
+        assert tree_root(tmp_path) == root, doc
+    (tmp_path / "job.json").write_text('{"run": {"cwd": "/x/si')
+    with pytest.raises(ValueError):
+        tree_root(tmp_path)
+    (tmp_path / "job.json").write_text("[]")
+    with pytest.raises(AttributeError):
+        tree_root(tmp_path)
 
 
 def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_and_their_readers(tmp_path):
@@ -1048,11 +1071,24 @@ def test_planned_takes_a_plan_of_a_shard_or_more_once_its_job_exited_0_and_says_
     assert planned({"dir": str(job), "pid": pid, "out": str(out)}) == got
 
 
+#: `git` as on the control pod's NFS TMPDIR, where `worktree remove` stops at a directory a silly-renamed file (one something
+#: still held when git unlinked it) keeps from emptying, and exits 255
+NFS_GIT = """#!/bin/sh
+if [ "$1 $2" = "worktree remove" ]; then
+  eval "t=\\${$#}"; echo "error: failed to delete '$t': Directory not empty" >&2; exit 255
+fi
+exec GIT "$@"
+"""
+
+
+@pytest.mark.parametrize("removal", ["git", "rm", "none"])
 @pytest.mark.parametrize("rc", [0, 2])
-def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(tmp_path, rc):
+def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(tmp_path, rc, removal):
     """`PLAN_JOB`, as `detach` runs it (here to its end): `check.py --shard-plan` in a worktree of the tip under TRAIN_TREES,
     its venv kept beside, the plan written into the plan's directory, the worktree removed after; `planned` gives the plan,
-    or why there is none, and keeps the plan's directory (its shards send the file) but not the job's."""
+    or why there is none, and keeps the plan's directory (its shards send the file) but not the job's.  The job exits as
+    check.py did however the worktree goes: by `git worktree remove`; by `rm -rf` once that fails as on the control pod
+    (`NFS_GIT`); or not at all, when `rm -rf` fails too."""
     from research.landing import AUTO_PLAN, DETACH_JOB, PLAN_JOB, planned
 
     repo, out, job, trees, bin_ = (tmp_path / x for x in ("repo", "plan", "job", "trees", "bin"))
@@ -1066,7 +1102,13 @@ def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(
                              f'printf "%s\\n" "$PWD" "$UV_PROJECT_ENVIRONMENT" "$(git rev-parse HEAD)" "$@" > {tmp_path}/argv\n'
                              'while [ "$1" != --out ]; do shift; done\n'
                              f"echo '{json.dumps(doc)}' > \"$2\"\necho 'shard plan: N = 3'\nexit {rc}\n")
-    (bin_ / "uv").chmod(0o755)
+    if removal != "git":
+        (bin_ / "git").write_text(NFS_GIT.replace("GIT", shutil.which("git")))
+    if removal == "none":
+        (bin_ / "rm").write_text("#!/bin/sh\nfor a; do t=$a; done\necho \"rm: cannot remove '$t': Directory not empty\" >&2\n"
+                                 "exit 1\n")
+    for f in bin_.iterdir():
+        f.chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_}:/usr/bin:/bin", "TRAIN_TREES": str(trees)}
     subprocess.run(["sh", "-c", DETACH_JOB, "sh", str(job), "sh", "-c", PLAN_JOB, "sh", str(out), tip, "--deferred", "pytest",
                     "--max-shards", "3"], cwd=repo, env=env, check=True)
@@ -1074,9 +1116,13 @@ def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(
     assert (cwd, venv, head) == (str(trees / "plan-plan"), str(trees / "plan-venv"), tip)
     assert argv == ["run", "-q", "python", "tools/verity/check/check.py", "--shard-plan", "--out", str(out / AUTO_PLAN),
                     "--deferred", "pytest", "--max-shards", "3"]
-    assert not (trees / "plan-plan").exists() and _git(repo, "worktree", "list").count("\n") == 0, "the worktree is removed"
+    left = removal == "none"
+    assert (trees / "plan-plan").exists() == left and len(_git(repo, "worktree", "list").splitlines()) == 1 + left, \
+        "the worktree is removed, and pruned, unless nothing can remove it"
     got = planned({"dir": str(job), "pid": None, "out": str(out)})
-    assert got == ((doc, None) if rc == 0 else (None, "`check.py --shard-plan` exited 2: shard plan: N = 3"))
+    why = "`check.py --shard-plan` exited 2: shard plan: N = 3" + \
+        f"\nrm: cannot remove '{trees / 'plan-plan'}': Directory not empty" * left
+    assert got == ((doc, None) if rc == 0 else (None, why))
     assert not job.exists() and (out / AUTO_PLAN).is_file()
 
 

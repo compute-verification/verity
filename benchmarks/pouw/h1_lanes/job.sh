@@ -96,7 +96,7 @@ while IFS=$'\t' read -r kind tag D pub reg prog part _expect regrec prodrec desc
   [ -n "$s" ] || { echo "no session under $D" > "$OUT/lean/$tag.err"; continue; }
   "$OWN" "$desc" "$rounds" "$regrec" "$prodrec" "$reg" "$unit" "$stmt" $s > "$OUT/lean/$tag.own" 2>&1
   while [ "$(jobs -rp | wc -l)" -ge "$LPAR" ]; do wait -n; done
-  $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $LEAN verify --zk --circuit $D/circuit.txt \
+  $TIME "$OUT/lean/$tag.time" bash -c "$(vlimit $cap) exec $(verifier_env) $LEAN verify --zk --circuit $D/circuit.txt \
     --statement $fstmt --public $pub --partition $part --program $prog --registered $reg --session $s" \
     > "$OUT/lean/$tag.out" 2> "$OUT/lean/$tag.err" &
 done < "$WK/plan.tsv"

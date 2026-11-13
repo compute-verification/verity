@@ -112,16 +112,16 @@ def test_the_queue_transport_pulls_every_key_not_passed_here(monkeypatch):
 
 
 def test_the_comparison_is_per_task_where_the_run_records_one_and_per_job_where_it_records_the_job_whole():
-    ids = {"pytest:pkg": "k1", "circuit-check:1/2": "k2", "circuit-check:2/2": "k3", "lean-changed": "k4"}
-    old = {"pytest": "pass", "pytest:pkg": "pass", "circuit-check": "fail", "lean-changed": "pass"}
+    ids = {"pytest:pkg": "k1", "circuit-check:1/2": "k2", "circuit-check:2/2": "k3", "lean-unit-cut": "k4"}
+    old = {"pytest": "pass", "pytest:pkg": "pass", "circuit-check": "fail", "lean-unit-cut": "pass"}
     got = compare(ids, old, {"k1": "pass", "k2": "pass", "k3": "fail", "k4": "pass"})
     assert got == {"units": 4, "agree": 4, "pending": [], "disagree": [], "missing": [], "executor_only": []}
     assert agrees(got)
 
 
 def test_a_graph_missing_a_part_the_run_has_never_agrees_fully():
-    ids = {"pytest:pkg": "k1", "lean-changed": "k4"}
-    old = {"pytest": "pass", "pytest:pkg": "pass", "pytest:other": "pass", "lean-changed": "pass", "ratchet-gate": "pass"}
+    ids = {"pytest:pkg": "k1", "lean-unit-cut": "k4"}
+    old = {"pytest": "pass", "pytest:pkg": "pass", "pytest:other": "pass", "lean-unit-cut": "pass", "ratchet-gate": "pass"}
     got = compare(ids, old, {"k1": "pass", "k4": "pass"})
     assert got["missing"] == ["pytest:other", "ratchet-gate"] and got["executor_only"] == [] and not agrees(got)
     assert {"unit": "ratchet-gate", "old": "pass", "executor": "missing"} in got["disagree"] and got["agree"] == 3
@@ -130,12 +130,12 @@ def test_a_graph_missing_a_part_the_run_has_never_agrees_fully():
 
 
 def test_an_executor_only_task_is_listed_and_disagrees():
-    ids = {"pytest:pkg": "k1", "pytest:new": "k2", "lean-changed": "k3", "circuit-check:1/1": "k4"}
+    ids = {"pytest:pkg": "k1", "pytest:new": "k2", "lean-unit-cut": "k3", "circuit-check:1/1": "k4"}
     old = {"pytest": "pass", "pytest:pkg": "pass", "circuit-check": "pass"}
     got = compare(ids, old, {"k1": "pass", "k2": "pass", "k3": "pending", "k4": "pass"})
-    # pytest's suites are recorded one by one, so pytest:new has no counterpart; lean-changed the run didn't run at all
-    assert got["executor_only"] == ["lean-changed", "pytest:new"] and got["missing"] == [] and not agrees(got)
-    assert {"unit": "lean-changed", "old": "none", "executor": "pending"} in got["disagree"] and got["pending"] == []
+    # pytest's suites are recorded one by one, so pytest:new has no counterpart; lean-unit-cut the run didn't run at all
+    assert got["executor_only"] == ["lean-unit-cut", "pytest:new"] and got["missing"] == [] and not agrees(got)
+    assert {"unit": "lean-unit-cut", "old": "none", "executor": "pending"} in got["disagree"] and got["pending"] == []
     text, _ = shadow_report([Shadowed("1" * 40, "2026-11-01T01:00:00Z", got)], 10)
     assert "executor only 2" in text and "    pytest:new: executor only (executor pass)" in text, text
     assert not agrees({k: v for k, v in compare({"a": "k"}, {"a": "pass"}, {"k": "pass"}).items()

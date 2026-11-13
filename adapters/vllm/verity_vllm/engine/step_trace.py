@@ -4,7 +4,13 @@ A served run's batches, positions, chunked prefills, preemptions, cache hits and
 serving, so nothing declared before the run predicts them.  `StepTrace` records them from the in-process engine core
 (``VLLM_ENABLE_V1_MULTIPROCESSING=0``, `engine.env`), through `engine.hooks`, without changing what the engine does:
 
-- ``scheduler.add_request``: a request's arrival, its prompt length and sampling parameters, and the step it arrived before;
+- ``scheduler.add_request``: a request's arrival, its prompt length and sampling parameters, and the step it arrived before.
+  Where the scheduler's last schedule scheduled nothing (every request it held was held back, as a request at its token
+  limit is until its last step's output is back, or it held none), the arrival also says after how many such empty
+  schedules it came (``after_empty``). Under async scheduling the engine processes the step in flight after an empty
+  schedule, so such a request is first scheduled once that step has finished its requests and cached their last blocks;
+  put back before the empty schedule, it is scheduled while that step is in flight, and one whose prompt goes on from a
+  request that step finished hits a block less;
 - ``scheduler.schedule``: the step's index among the steps that schedule tokens (an empty schedule runs no forward);
 - ``scheduler.update_from_output(scheduler_output, model_runner_output)``: the step's rows in the model runner's order
   (``model_runner_output.req_ids``: the order the step's tokens are laid out in, Model Runner V2's ``sort_batch_req_ids``), each
@@ -44,6 +50,15 @@ FINISH = {0: "stop", 1: "length", 2: "abort", 3: "error", 4: "repetition"}
 #: the sampling parameters a request carries into the engine core, as `SamplingParams` names them
 SAMPLING = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens", "min_tokens", "presence_penalty", "frequency_penalty",
             "repetition_penalty", "stop_token_ids", "stop", "ignore_eos", "logit_bias", "n")
+#: the speculative decoding an engine is built with, as vLLM's ``SpeculativeConfig`` names it: the settings that decide which
+#: draft tokens a step verifies, which it accepts and which prefix-cache blocks a request hits. The draft model's path is the
+#: engine's own, so it is left out. A name the engine's vLLM does not have is skipped: the lookahead block hashes, the
+#: draft head's quantization and FLy's acceptance are later vLLM's.
+SPECULATIVE = ("method", "num_speculative_tokens", "num_speculative_tokens_per_batch_size", "draft_sample_method",
+               "rejection_sample_method", "synthetic_acceptance_rates", "index_share_for_mtp_iteration", "parallel_drafting",
+               "disable_padded_drafter_batch", "disable_eagle_block_drop", "use_local_argmax_reduction",
+               "enable_adaptive_verification", "disable_lookahead_block_hashes", "draft_lm_head_quantization",
+               "fly_window_size", "fly_entropy_threshold", "fly_entropy_top_k")
 
 
 def _plain(v: Any) -> Any:
@@ -58,7 +73,13 @@ def _plain(v: Any) -> Any:
 
 def scheduler_config(sched: Any) -> dict[str, Any]:
     """What of the scheduler's configuration decides its schedules (``max_model_len`` the scheduler's own where its
-    scheduler config no longer holds it, as in vLLM 0.11 on)."""
+    scheduler config no longer holds it, as in vLLM 0.11 on), and what an engine at vLLM's defaults does not have: the
+    KV cache's format where it is not ``auto`` (``kv_cache_dtype``, as the engine's arguments name it), and under
+    speculative decoding its ``speculative`` settings (`SPECULATIVE`, those that are set): an engine built with them
+    as its ``kv_cache_dtype`` and ``speculative_config`` stores, drafts and accepts as this one does. Where the launch
+    left the context limit to vLLM (``max_model_len`` -1, the command line's ``auto``), ``max_model_len_auto`` says so:
+    vLLM then builds the model at the checkpoint's own limit and fits ``max_model_len`` to the KV pool afterwards, so
+    an engine launched at the fitted number is built at another length than this one."""
     sc = getattr(sched, "scheduler_config", None)
     cc = getattr(sched, "cache_config", None)
     pick = lambda o, names: {n: _plain(getattr(o, n)) for n in names if o is not None and hasattr(o, n)}   # noqa: E731
@@ -66,11 +87,18 @@ def scheduler_config(sched: Any) -> dict[str, Any]:
            **pick(sc, ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "enable_chunked_prefill", "long_prefill_token_threshold",
                        "max_num_partial_prefills", "policy", "async_scheduling")),
            **pick(cc, ("block_size", "enable_prefix_caching", "num_gpu_blocks"))}
+    mc = getattr(getattr(sched, "vllm_config", None), "model_config", None)
     if "max_model_len" not in out:
-        mc = getattr(getattr(sched, "vllm_config", None), "model_config", None)
         n = getattr(sched, "max_model_len", None) or getattr(mc, "max_model_len", None)
         if n is not None:
             out["max_model_len"] = int(n)
+    if getattr(mc, "original_max_model_len", None) == -1:
+        out["max_model_len_auto"] = True
+    if getattr(cc, "cache_dtype", "auto") != "auto":
+        out["kv_cache_dtype"] = _plain(cc.cache_dtype)
+    spec = getattr(getattr(sched, "vllm_config", None), "speculative_config", None)
+    if spec is not None:
+        out["speculative"] = {n: v for n, v in pick(spec, SPECULATIVE).items() if v is not None}
     return out
 
 
@@ -109,6 +137,7 @@ class StepTrace:
         self.records: list[dict[str, Any]] = []
         self.hooks = Hooks(tag="step-trace")
         self.scheduled = 0                      # steps scheduled with tokens so far: the index the next such step gets
+        self.empty = 0                          # schedules that scheduled nothing since the last such step
         self.executed = 0
         self._pending: dict[int, int] = {}      # id(SchedulerOutput) -> its step
         self._fh = None
@@ -181,10 +210,11 @@ class StepTrace:
         def add_request(orig):
             def wrapped(request, *a, **kw):
                 fresh = request.request_id not in sched.requests
+                after = {"after_empty": me.empty} if me.empty else {}
                 out = orig(request, *a, **kw)
                 if fresh:
                     sp = getattr(request, "sampling_params", None)
-                    me._emit({"kind": "arrive", "request": me.request_id(request.request_id), "before_step": me.scheduled,
+                    me._emit({"kind": "arrive", "request": me.request_id(request.request_id), "before_step": me.scheduled, **after,
                               "prompt_len": int(getattr(request, "num_prompt_tokens", 0) or len(request.prompt_token_ids or ())),
                               "eos_token_id": _plain(getattr(request, "eos_token_id", None)),
                               "sampling": {n: _plain(getattr(sp, n)) for n in SAMPLING if sp is not None and hasattr(sp, n)}})
@@ -197,6 +227,9 @@ class StepTrace:
                 if int(getattr(so, "total_num_scheduled_tokens", 0) or 0) > 0:
                     me._pending[id(so)] = me.scheduled
                     me.scheduled += 1
+                    me.empty = 0
+                else:
+                    me.empty += 1
                 return so
             return wrapped
 

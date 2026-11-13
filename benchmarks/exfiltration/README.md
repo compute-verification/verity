@@ -11,6 +11,7 @@ verity bench exfiltration                 the figure, the inputs, each part, and
 verity bench exfiltration --json          the same as one document: value, unit, inputs, parts, periods
 verity bench exfiltration --share 0.05    read at another share of total compute
 verity bench exfiltration --variant V     read one variant of the row, in a run that holds several
+verity bench exfiltration --response-ids N the network certifier's part for a class of at most N ids a response
 verity bench exfiltration --local-only    read this machine's catalog alone, not the store's remote
 verity bench exfiltration --help          every parameter and its default
 ```
@@ -27,22 +28,39 @@ verity bench exfiltration --help          every parameter and its default
   `--step` take another case of the plan.
 - **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
   the fail cells and the jitter, for the scan and N2 as the monitoring-period check charges them today, for the scan
-  under each change to its check, and for the design with no run behind it.
+  under each change to its check, and for the design with no run behind it, before a served audit has sampled a
+  stop block and once one has. The command reads that command's document (`certifier-term/v2`) and refuses another
+  schema.
+  - **Its figures of record are at two release schedules**, D_j = 2, the jitter bound of that document's term of
+    record. A figure at D_j = 1, and every figure of a row whose release times are taken once (`timing`,
+    `all three`), is what a network certifier with a set-time card would be charged, and no timing test has shown
+    such a card. Each is printed only under the label the document gives it, in a line, a column or a row's name
+    that carries the label. The command reads the label from the document, at its top and on each row that carries
+    it, and holds no copy.
+  - **Its class is the one the plan of record serves**: at most 1,024 ids a response (`--response-ids`), assumed, as
+    every class is while no run has certified one. `verity bench certifier_term` assumes a wider class by default,
+    so the headline gives that command's own term of record beside this one's.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output bits
 at δ). The first three terms are the network certifier's part and the last term's second branch is the compute
 audit's, so the command also prints their sum under the network certifier's rows: the scan and N2 as charged today,
-the scan with all three changes, and the design. Where a row charges the entries and they are fewer than the compute
-audit's part, they stand in its place. The command prices no advice, and says so among its inputs.
+the scan with all three changes, and the design, before its stop block and with it. Where a row charges the entries
+and they are fewer than the compute audit's part, they stand in its place. The command prices no advice, and says
+so among its inputs.
 
-Both parts count the same requests: the planner's, which the command reads from the planner in the tree and hands to
-the network certifier's calculator as the world's requests a year. They are fewer than the census's, which
-`verity bench certifier_term` counts by default: a request of the plan has fewer computed tokens at more served MACs
-a token. The requests a row of record is priced over are its `replay_sample / q`, the sampled replays over the
-probability a request is sampled; the row's `requests` field is the planner's default scope's count, another
-request's, and is not read. The command refuses if the two parts don't cover the same GPU-seconds, if the rows of
-record are priced over other requests than the network certifier's part counts, or if the two aren't shares of the
-same weights.
+The sums under the rows whose schedules are 0 (`all three`, `design`) take a response's output count at 0: a stop
+block, sampled on a served audit, holds that count to the response's ids. Until a served audit has sampled one the
+server chooses the count, and the network certifier's row `design, no stop block` charges it, as its schedules.
+The command reads the output count from that row and prints it beside those sums, marked assumed, in every
+monitoring period and where it says no advice is priced.
+
+Both parts count the same requests: the sampling plan's, which the network certifier's calculator counts by default
+and reads from the planner in the tree. The command holds no count of its own, so its inputs list that calculator's
+request count and what its request is, as the calculator marks them. The requests one of the planner's rows is
+priced over are its `replay_sample / q`, the sampled replays over the probability a request is sampled; the row's `requests`
+field is the planner's default scope's count, another request's, and is not read. The command refuses if the two
+parts don't cover the same GPU-seconds, if the rows of record are priced over other requests than the network
+certifier's part counts, or if the two aren't shares of the same weights.
 
 ## The records it reads
 
@@ -84,7 +102,8 @@ plan of the case, is left out and listed under "Refused".
 
 - **The figure**: over the world's year, the compute audit's part in GB with its copies of the weights, its bits a
   request and the requests it is priced over, how its proving time is priced by the row's plan, then the network
-  certifier's part under each of its rows, then the two summed. Beside them are the
+  certifier's part under each of its rows at D_j = 2, then the two summed, each followed by a line under the
+  network certifier's label for what rests on the set-time card, then the output count. Beside them are the
   errors: the compute audit's δ over the monitoring period, and the scan's ε, its execution phases' δ summed, which
   bounds nothing at 1 or more. One more line gives the compute audit's part with the network check's own proving
   taken off the audit budget (`--network-check-share`, assumed: no run measures it and the planner's rows don't
@@ -93,13 +112,19 @@ plan of the case, is left out and listed under "Refused".
   (derived from other figures) or `assumed`. The compute audit's come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
   pricing a block family covers (measured statements, computed, or both). The network certifier's are its
-  calculator's own marks. The fleet, a request of the plan and the weights are read by both.
+  calculator's own marks. The fleet, the request counted, a request of the plan and the weights are read by both.
+  The advice and the output count are listed at 0, each with what it leaves out.
 - **The compute audit's part**: each scope of record, with its run, its β at the share, its bound at λ = 1 and at the
   row's λ, the requests its rows are priced over, and each part of the total there. A β outside the pinned budgets is
   marked extrapolated. Under it, for each scope whose plan is read, its proving time by how its block families are
   priced, with the plan and its budget.
-- **The network certifier's part over the world's year**: each of its rows' schedules, cells, term at D_j = 1 and
-  D_j = 2, and the entries.
+- **The network certifier's part over the world's year**: each of its rows' schedules, cells, term at D_j = 2 with
+  its multiple of the weights, term at D_j = 1 in a column whose header carries the label, and the entries. A row
+  whose release times are taken once carries the label in its name.
 - **Each monitoring period over all compute**: a week, a month and a year of the reference datacenter and of the
-  world, with the compute audit's part as a pooled total and in bits a request, the network certifier's term at
-  D_j = 1 under four of its rows, and the two together.
+  world, with the compute audit's part as a pooled total and in bits a request, the network certifier's term of
+  record under the scan, N2 and the design before its stop block and with it, the two together, and the output
+  count.
+- **Each monitoring period over all compute, under the label**: the same scopes, with the network certifier's term
+  and the two together under `all three`, and under each other row at D_j = 1. Every column's header carries the
+  label, and no figure of the table is of record.

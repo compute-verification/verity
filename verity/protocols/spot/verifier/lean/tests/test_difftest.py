@@ -1567,9 +1567,10 @@ def _interior_of(it) -> dict:
 
 
 def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
-    """`Run.interiorSteps`: the interior registration over the replay sample's proof blocks, then the second stage on its
-    own coins, the rule's counts `k` over the replay block's cells; its receipt, sample, law and bytes read, or the
-    step's refusal."""
+    """`Run.interiorSteps`: the interior registration over the replay sample's proof blocks, in the boundary
+    registration's window or the one the verifier computes (`Run.interiorWindowOk`), then the second stage on its own
+    coins, the rule's counts `k` over the replay block's cells; its receipt, sample, law and bytes read, or the step's
+    refusal."""
     p, rec = it["decoded"], it["record"]
     pub = check_public({"public": j["public"], "query": it["params"]["query"], "record": rec, "scheme": p["scheme"],
                         "values": it["values"]})
@@ -1585,6 +1586,9 @@ def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
     population = rec.get("population") if isinstance(rec, dict) else None
     if not (_nat(population) and population == m):
         return {"codes": ["interior-population"], "step": "interiors"}
+    window, boundary = it["params"].get("window_root"), j["params"].get("window_root")
+    if window != boundary and (window is None or window != SS.interior_root(R.digest(j["record"]), sample)):
+        return {"codes": ["interior-window"], "step": "interiors"}
     codes = _registration({**p, "law": {"law": "subset", "k": m}}, rec)
     if codes:
         return {"codes": list(codes), "step": "interiors"}
@@ -3968,12 +3972,13 @@ def _as_stated(c: dict) -> dict:
 
 
 @functools.cache
-def _two_stage_text(seed: int) -> str:
+def _two_stage_text(seed: int, elsewhere: bool = False) -> str:
     """A two-stage run's input (canonical text; the coins' sessions are signed once): the boundary registration over
     `BOUNDARY`'s replay blocks, its first stage from a ledger session's challenger opened after its digest, then the
     interior registration over the replay sample's six proof blocks, logged after it in a window of its own that names
-    the replay sample in order, its second stage from another session's challenger opened after the interior
-    registration's digest; the verdicts accepting, the second-stage session's statement the honest one
+    the replay sample in order, its second stage from another session's challenger, its window's root the one the
+    verifier computes from the boundary registration's digest and the replay sample (`second_stage.interior_root`), or
+    when `elsewhere` a sampled one, opened after the interior registration's digest; the verdicts accepting, the second-stage session's statement the honest one
     (`_second_statement`), each slot reading the boundary's `x` and `o0` at its PAIR instance's row of its cell's replay
     block, which the verifier names as it checked it (`_checked_names`), and the auditor's
     params naming its template's circuit file, reference header (`_second_reference`) and the registered reads its
@@ -4009,7 +4014,8 @@ def _two_stage_text(seed: int) -> str:
 
     def second_stage(source):
         second["draw"] = service.select_second(sample, ns, ks, source)
-    d2 = Drawn(rng, before=True, after=bytes.fromhex(R.digest(irec)), reads=reads(second_stage))
+    d2 = Drawn(rng, before=True, after=bytes.fromhex(R.digest(irec)), reads=reads(second_stage),
+               window=None if elsewhere else {"root": SS.interior_root(R.digest(rec), sample)})
     n = sum(ns)
     linked = {p: {"value": v, "root": BOUNDARY_ROOTS[v], **b.ports[v], "reads_from": 0,
                   "reads": [b.ports[v]["leaves"] // b.population * sample[u // n] + u % n for u in range(m)]}
@@ -4043,8 +4049,8 @@ def _two_stage_text(seed: int) -> str:
                      "served": None, "session_roots": dict(ROOTS), "statements": statements}})
 
 
-def _two_stage_case(seed: int = 0) -> dict:
-    return json.loads(_two_stage_text(seed))
+def _two_stage_case(seed: int = 0, elsewhere: bool = False) -> dict:
+    return json.loads(_two_stage_text(seed, elsewhere))
 
 
 def _inner(change):
@@ -4058,6 +4064,16 @@ def _inner(change):
 
 def _inner_record(**fields):
     return _inner(lambda it, x: {**it, "record": {**it["record"], **fields}})
+
+
+def _inner_params(**fields):
+    return _inner(lambda it, x: {**it, "params": {**it["params"], **fields}} if isinstance(it.get("params"), dict) else it)
+
+
+def _inner_window(c, x: int):
+    """The interior registration's window root changed: none, one no session opened, or the boundary registration's."""
+    boundary = c["params"].get("window_root") if isinstance(c.get("params"), dict) else None
+    return _inner_params(window_root=[None, "22" * 64, boundary][x % 3])(c, x)
 
 
 def _restated(ss, x: int):
@@ -4161,6 +4177,7 @@ TWO_STAGE_CHANGES = [
     (_with("rule", None), st.sampled_from([{"law": "rate:1/2", "rule": "law"}, {"rule": "all"}])),
     (_with("interior", None), st.sampled_from([None, 5, {}, []])),
     (_inner_record(population=5), st.just(0)), (_inner_record(population=12), st.just(0)),
+    (_inner_window, st.integers(0, 63)),
     (_inner_record(previous="11" * 64), st.just(0)), (_inner_record(window=WINDOW), st.just(0)),
     (_inner(lambda it, x: {**it, "record": {k: v for k, v in it["record"].items() if k != "previous"}}), st.just(0)),
     (_inner(lambda it, x: {**it, "values": it["values"][1:] if x % 2 else [*it["values"], {"name": "z", "registered": False}]}),
@@ -4812,9 +4829,22 @@ MULTI_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, b
          B.call(DUO, x[0]), B.call(DUO, x[1]))),
     ("Uneven", lambda S: ((("x", Array(2, Array(2, Value(8)))),), Array(2, Value(8))),
      lambda B, S, x: array_of([B.call(DUO, x[0])[0], B.call(DUO, x[1])[1]])))]
+ID18 = PrimitiveDefinition("CoreSpotId18", 1, (("a", Value(8)),), Value(18), lambda a: a, register=False)
+WIDE = bind(CompositeDefinition("CoreSpotWide", 0, (), lambda S: ((("x", Value(8)),), Value(18)),
+                                lambda B, S, x: B.call(ID18, x), register=False))
+PACK = bind(CompositeDefinition("CoreSpotPack", 0, (), lambda S: ((("x", Array(8, Value(8))),), Array(8, Value(18))),
+                                lambda B, S, x: array_of([B.call(ID18, x[i]) for i in range(8)]), register=False))
+#: Replay blocks whose units return fields wider than a word, to count what a replay block returns
+#: (`second_stage.returned_bits`): four units of one 18-bit value each, and two of eight such values as one field.
+WIDE_REPLAYS = [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, body, register=False))
+                for name, sig, body in (
+    ("Wides", lambda S: ((("x", Array(4, Value(8))),), Array(4, Value(18))),
+     lambda B, S, x: B.batch(WIDE, x, axes=(0,))),
+    ("Packs", lambda S: ((("x", Array(2, Array(8, Value(8)))),), Array(2, Array(8, Value(18)))),
+     lambda B, S, x: B.batch(PACK, x, axes=(0,))))]
 REPLAY_PROGRAMS = [(P.population_program(r, 2), codec.descriptor_id(r)) for r in REPLAYS] + [
     (P.mixed_population_program([(BLOCK, 2), (PAIR, 3)]), codec.descriptor_id(BLOCK))] + [
-    (P.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS]
+    (P.population_program(r, 2), codec.descriptor_id(r)) for r in WIRE_REPLAYS + MULTI_REPLAYS + WIDE_REPLAYS]
 PROGRAMS.update({PO.program_sha512(p): p for p, _ in REPLAY_PROGRAMS})
 
 
@@ -4897,6 +4927,25 @@ def replay_rows(j):
 #: The replay_rows piece's input: replay_links' (`replay_link_inputs`), whose boundary record it doesn't read.
 REPLAY_ROWS = D.Port(PIECES, "replay_rows", replay_rows,
                      st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
+
+
+def replay_returned(j):
+    """`Pieces.replayReturned`: the bits a replay block returns (`second_stage.replay_returned`), the replay block of
+    descriptor id `replay` in `program`; null for none."""
+    desc = _obj(j.get("program") if isinstance(j, dict) else None, "program")
+    if not isinstance(j.get("replay"), str):
+        raise D.Reject("replay is not a string")
+    if not desc:
+        raise D.Reject("not a program descriptor")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    return SS.replay_returned(PROGRAMS[sha], j["replay"])
+
+
+#: The replay_returned piece's input: replay_links' (`replay_link_inputs`), whose boundary record it doesn't read.
+REPLAY_RETURNED = D.Port(PIECES, "replay_returned", replay_returned,
+                         st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
 
 
 def second_schedule(j):
@@ -5327,7 +5376,8 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400),
-              (SECOND_INTERIOR_READS, 200), (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (SECOND_SCHEDULE, 300),
+              (SECOND_INTERIOR_READS, 200), (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_RETURNED, 300),
+              (SECOND_SCHEDULE, 300),
               (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
 
 
@@ -6232,9 +6282,12 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     reading its linked `x` from the interior's own (`second-read`), a statement whose verifier of record checked its
     session against a public file whose header names another circuit file (`second-verified`), and an interior naming
     links is no run's. Then refused at each step: a grain the registration's query isn't (`grain`); no
-    interior registration (`interior`); an interior registration of another population (`interior-population`), not
-    after the boundary registration (`R6-previous`), or declaring a value the Spec doesn't hold; second-stage coins
-    without their evidence (`coins`). Rejected where a verdict didn't accept, and refused before it starts for `k` =
+    interior registration (`interior`); an interior registration of another population (`interior-population`), in a
+    window that is neither the boundary registration's nor the one the verifier computes (`interior-window`: the
+    second session opened on a sampled root, which signs and opens as the honest one does; a root no session opened;
+    no root), not after the boundary registration (`R6-previous`), or declaring a value the Spec doesn't hold;
+    second-stage coins without their evidence, or held to the boundary registration's window, which the second
+    session didn't open (`coins`). Rejected where a verdict didn't accept, and refused before it starts for `k` =
     n_rho (it would prove whole replay blocks) and an interior registration under a one-stage rule."""
     case = _two_stage_case()
     out = run(copy.deepcopy(case))
@@ -6286,9 +6339,13 @@ def test_a_two_stage_run_reaches_every_step(pieces):
         ({**case, "rule": {**case["rule"], "grain": INTERIOR.query}}, ("register", ["grain"])),
         ({**case, "interior": None}, ("interiors", ["interior"])),
         (_inner_record(population=9)(case, 0), ("interiors", ["interior-population"])),
+        (_two_stage_case(elsewhere=True), ("interiors", ["interior-window"])),
+        (_inner_params(window_root="22" * 64)(case, 0), ("interiors", ["interior-window"])),
+        (_inner_params(window_root=None)(case, 0), ("interiors", ["interior-window"])),
         (_inner_record(previous="11" * 64)(case, 0), ("interiors", ["R6-previous"])),
         (_inner(lambda it, x: {**it, "values": it["values"][1:]})(case, 0), ("interiors", None)),
         (_inner(lambda it, x: {**it, "coins": None})(case, 0), ("second", ["coins"])),
+        (_inner_params(window_root=case["params"]["window_root"])(case, 0), ("second", ["coins"])),
     ]
     for changed, (step, codes) in steps:
         got = run(copy.deepcopy(changed))
@@ -6907,6 +6964,26 @@ def test_the_designs_rows_place_each_callers_units(pieces):
                                        (REPLAY_ROWS, replay_rows, want)):
             got = mirror(copy.deepcopy(c))
             assert got == expected and D.replay(port, c, pieces) == ("output", D.canonical(got)), (c["replay"], got)
+
+
+def test_a_replay_block_returns_its_units_fields_on_words_of_their_own(pieces):
+    """The bits a replay block returns, Lean's the Python's whole, counted from its Definition's return: each unit's
+    returned field on 16-bit words of its own. `BLOCK` returns three PAIR outputs of 8 bits, a word each; ID8 over DUO's
+    second output one word; DUO over each of two rows two words where one field of each is returned and four where
+    both are; four units of an 18-bit value two words each, twice their 72 bits; and two units of eight such values in
+    one field nine words each, the 144 bits they hold. A replay block whose links can't be derived returns none, as do
+    a key naming one of its templates and a key naming no Definition."""
+    pairs, crossed, fan, field, apart, askew, members, kinds, gathered, heads, tails, halves, uneven = MULTI_REPLAYS
+    wides, packs = WIDE_REPLAYS
+    cases = [(BLOCK, None, 3 * 16), (pairs, None, 2 * 16), (fan, None, 3 * 16), (field, None, 16), (heads, None, 2 * 16),
+             (halves, None, 4 * 16), (wides, None, 4 * 32), (packs, None, 2 * 144), (apart, None, None),
+             (uneven, None, None), (REPLAYS[3], None, None), (BLOCK, codec.descriptor_id(PAIR), None),
+             (BLOCK, "Other_v0", None)]
+    for r, key, want in cases:
+        c = {"program": _json(codec.encode_program(P.population_program(r, 2))),
+             "replay": key or codec.descriptor_id(r), "boundary": None}
+        got = replay_returned(copy.deepcopy(c))
+        assert got == want and D.replay(REPLAY_RETURNED, c, pieces) == ("output", D.canonical(got)), (c["replay"], got)
 
 
 def test_a_windows_run_from_the_challengers_coins(pieces):

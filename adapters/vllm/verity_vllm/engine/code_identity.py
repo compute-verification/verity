@@ -328,7 +328,7 @@ def loaded_code_objects() -> dict[str, Any]:
         norm_set = sorted((k, e.get("code_sha256_normalized")) for k, v in kernels.items() for e in v["executed"] if e.get("code_sha256_normalized"))
         return {"modules": len(mods), "kernels": len(kernels), "kernels_with_binaries": sum(1 for v in kernels.values() if v["binaries"]),
                 "kernel_set_sha256": _sha(json.dumps(kset)) if kset else None, "binary_set_sha256": _sha(json.dumps(sorted(bins_all))) if bins_all else None,
-                "cubin_set_sha256": _sha(json.dumps(sorted(bins_all))) if bins_all else None,     # alias (compiled_merge reads it)
+                "cubin_set_sha256": _sha(json.dumps(sorted(bins_all))) if bins_all else None,     # alias of binary_set_sha256
                 "executed_set_sha256": _sha(json.dumps(exec_set)) if exec_set else None,
                 "executed_code_set_sha256": _sha(json.dumps(code_set)) if code_set else None,
                 "executed_code_set_sha256_normalized": _sha(json.dumps(norm_set)) if norm_set else None,

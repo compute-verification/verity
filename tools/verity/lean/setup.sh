@@ -5,7 +5,7 @@
 # main's cached build of the package itself (`cache.py get`, every file checked against its sha256). Idempotent.
 # `LEAN_CACHE=off` skips the build cache, as the audit does. A PACKAGE_DIR that holds no package here is taken through
 # the recorded layout moves (`moved.py`: a path the package had in an earlier layout is the package's path now), with a
-# line saying so: the Cloud Agent environment's install command names a path only Daniel can change, and a move must not
+# line saying so: the Cloud Agent environment's install command names a path the repository can't change, and a move must not
 # fail its builds.
 #   bash tools/verity/lean/setup.sh PACKAGE_DIR
 set -euo pipefail

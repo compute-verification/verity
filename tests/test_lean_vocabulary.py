@@ -33,7 +33,6 @@ takes a slot a removal freed; lowering it is welcome in any change.
 The scan reads every tracked `.py` and `.lean` file (`git ls-files`, so `.lake`, `.venv` and build trees are never read)
 except:
 
-- `archive/`: kept, not developed (`archive/AGENTS.md`), so nothing there is renamed or merged;
 - tests (a `tests/` directory, `test_*.py`, `conftest.py`) and `scripts/` directories: fixtures and one-off drivers state
   their own small types, which no guarantee or protocol reads;
 - difftest drivers (`*Difftest*.lean`, `*TestMain.lean`): each wraps its port's inputs for the JSON server and is held to
@@ -55,7 +54,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY = ".agents/skills/using-slack/registry.json"
 SPEC = ("security/Definitions/Core/", "security/Definitions/Hash/")
-EXCLUDED_PREFIXES = ("archive/",)
 EXCLUDED_DIRS = ("tests", "scripts")
 EXCLUDED_FILES = re.compile(r"(^test_.*\.py|^conftest\.py|Difftest.*\.lean|TestMain\.lean)$")
 FIX = "see AGENTS.md 'One vocabulary' and this module's docstring"
@@ -339,8 +337,8 @@ def tracked() -> list[str]:
     out = subprocess.run(["git", "ls-files", "-z", "--", "*.py", "*.lean"], cwd=ROOT, check=True,
                          capture_output=True).stdout
     paths = [p.decode() for p in out.split(b"\0") if p]
-    return sorted(p for p in paths if not p.startswith(EXCLUDED_PREFIXES)
-                  and not set(p.split("/")[:-1]) & set(EXCLUDED_DIRS) and not EXCLUDED_FILES.search(p.rpartition("/")[2]))
+    return sorted(p for p in paths if not set(p.split("/")[:-1]) & set(EXCLUDED_DIRS)
+                  and not EXCLUDED_FILES.search(p.rpartition("/")[2]))
 
 
 @dataclass
@@ -723,12 +721,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
     # demos/
-    "demos/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
-    "demos/h200/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
-        "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
-    "archive/examples/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
-    "archive/examples/h200/e2e_h200/window.py::Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (compute-accounting)",
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
     "demos/lifecycle/lifecycle.py::Block":

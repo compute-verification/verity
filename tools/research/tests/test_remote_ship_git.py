@@ -105,28 +105,47 @@ def test_a_shipped_checkouts_origin_main_is_the_newest_launchers_and_never_moves
 
 
 def test_a_machine_without_git_gets_the_archive_stream_with_one_line(repo, tmp_path, capsys):
-    root = tmp_path / "root"
-    sha, dest, doc = remote.ship_source(_no_git_machine(tmp_path), str(root), repo)
+    root, machine = tmp_path / "root", _no_git_machine(tmp_path)
+    sha, dest, doc = remote.ship_source(machine, str(root), repo)
     assert doc["verified"] == "archive-sha256+file-manifest" and doc["transport"] == "stream"
     err = capsys.readouterr().err
     assert "git ship to" in err and "(the machine has no git); shipping the archive stream" in err
     assert _tree(Path(dest)) == remote.archive_manifest_git(repo)["files"] and not (root / remote.POD_GIT_REPO).exists()
     assert not (Path(dest) / ".git").exists() and "checkout" not in doc
+    assert remote.ship_source(machine, str(root), repo) == (sha, dest, doc)
+    assert f"could not make {dest} a checkout (the machine has no git)" in capsys.readouterr().err, \
+        "a later launch tries again, and says why the tree still has no .git"
 
 
-def test_a_clone_launch_makes_a_stream_shipped_tree_a_checkout_and_a_source_launch_leaves_it(repo, tmp_path, monkeypatch, capsys):
-    """`checkout` (a `--cwd clone` launch) gives a READY tree the archive stream shipped a .git in place; a `--cwd source`
-    launch reuses it as it is.  A tree a run edited is not made a checkout of the commit: it is set aside and shipped afresh."""
+def _files(d: Path) -> dict[str, tuple[int, int]]:
+    """Each file of `d` outside .git (READY.json included): (inode, mtime ns), which change if the file is rewritten or moved."""
+    return {p.relative_to(d).as_posix(): (p.stat().st_ino, p.stat().st_mtime_ns) for p in sorted(d.rglob("*"))
+            if p.is_file() and p.relative_to(d).parts[0] != ".git"}
+
+
+def test_any_launch_makes_a_stream_shipped_tree_a_checkout_in_place_and_a_run_in_it_is_not_disturbed(repo, tmp_path, monkeypatch,
+                                                                                                    capsys):
+    """A tree the archive stream shipped stays in place for every later run of its commit; the next launch that can push the
+    commit, whatever its --cwd, gives it .git in place.  A run already working in the tree keeps its directory, every file and
+    what it wrote there; READY.json alone is replaced, by one rename.  A tree a run edited is not made a checkout of the commit:
+    it is set aside and shipped afresh."""
     root = tmp_path / "root"
     monkeypatch.setenv(remote.SHIP_ENV, "stream")
     sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
-    assert remote.ship_source(LOCAL, str(root), repo, checkout=True) == (sha, dest, doc), "RESEARCH_SHIP=stream: no git added"
+    assert remote.ship_source(LOCAL, str(root), repo) == (sha, dest, doc), "RESEARCH_SHIP=stream: no git added"
     monkeypatch.delenv(remote.SHIP_ENV)
-    assert remote.ship_source(LOCAL, str(root), repo) == (sha, dest, doc) and not (Path(dest) / ".git").exists()
-    _, _, doc2 = remote.ship_source(LOCAL, str(root), repo, checkout=True)
+    (Path(dest) / ".venv").mkdir()
+    (Path(dest) / ".venv" / "written-by-a-run").write_text("mine\n")
+    before, inode = _files(Path(dest)), Path(dest).stat().st_ino
+    with open(Path(dest) / "pkg" / "b.py") as held:
+        _, _, doc2 = remote.ship_source(LOCAL, str(root), repo)
+        assert held.read() == "B = 2\n" and os.fstat(held.fileno()).st_ino == before["pkg/b.py"][0]
     assert doc2 == {**doc, "checkout": True, "transport": "stream+git", "git_added_utc": doc2["git_added_utc"]}
-    assert _git(Path(dest), "rev-parse", "HEAD") == sha and _git(Path(dest), "status", "--porcelain") == ""
-    assert remote.require_ready_source(dest, sha) == doc2 and remote.ship_source(LOCAL, str(root), repo, checkout=True)[2] == doc2
+    assert Path(dest).stat().st_ino == inode, "the tree is not moved"
+    after = _files(Path(dest))
+    assert {k: v for k, v in after.items() if k != remote.READY_FILE} == {k: v for k, v in before.items() if k != remote.READY_FILE}
+    assert _git(Path(dest), "rev-parse", "HEAD") == sha and _git(Path(dest), "status", "--porcelain", "--untracked-files=no") == ""
+    assert remote.require_ready_source(dest, sha) == doc2 and remote.ship_source(LOCAL, str(root), repo)[2] == doc2
     assert sorted(p.name for p in (root / "src").iterdir()) == [sha]
 
     other = tmp_path / "other"
@@ -134,21 +153,83 @@ def test_a_clone_launch_makes_a_stream_shipped_tree_a_checkout_and_a_source_laun
     _, dest3, _ = remote.ship_source(LOCAL, str(other), repo)
     monkeypatch.delenv(remote.SHIP_ENV)
     (Path(dest3) / "pkg" / "b.py").write_text("B = 99\n")
-    _, _, doc3 = remote.ship_source(LOCAL, str(other), repo, checkout=True)
+    _, _, doc3 = remote.ship_source(LOCAL, str(other), repo)
     assert doc3["transport"] == "git" and (Path(dest3) / "pkg" / "b.py").read_text() == "B = 2\n"
     (moved,) = (other / "src" / ".quarantine").iterdir()
     assert (moved / "pkg" / "b.py").read_text() == "B = 99\n" and "an earlier run edited (pkg/b.py)" in capsys.readouterr().err
 
 
-def test_a_tampered_extraction_is_never_marked_ready_and_the_stream_ships_instead(repo, tmp_path, monkeypatch, capsys):
+def test_a_tampered_extraction_is_never_marked_ready_and_the_streamed_tree_still_ends_a_checkout(repo, tmp_path, monkeypatch, capsys):
+    """The git ship fails after its push (here the checkout on the machine isn't the archive): the stream ships the tree, and the
+    same launch gives it .git, so no run of the commit starts in a tree without it."""
     root = tmp_path / "root"
     real = remote._git_ship_script
     monkeypatch.setattr(remote, "_git_ship_script", lambda root_, repo_, partial, sha: real(root_, repo_, partial, sha).replace(
         "trap - EXIT", f"echo tampered >> {partial}/a.txt; trap - EXIT"))
     sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
     err = capsys.readouterr().err
-    assert "extracted tree does not match the archive manifest (1: differs a.txt)" in err and doc["transport"] == "stream"
+    assert "extracted tree does not match the archive manifest (1: differs a.txt)" in err and doc["transport"] == "stream+git"
     assert (Path(dest) / "a.txt").read_text() == "alpha\n" and not list((root / "src").glob("*.partial-*"))
+    assert doc["checkout"] is True and _git(Path(dest), "rev-parse", "HEAD") == sha and remote.require_ready_source(dest, sha) == doc
+
+
+def test_a_push_that_fails_leaves_the_stream_tree_for_the_next_launch_to_mend(repo, tmp_path, monkeypatch, capsys):
+    """A push that fails isn't retried in the same launch (a push that timed out would time out twice): the tree ships by stream
+    without .git, and the next launch whose push lands makes it a checkout."""
+    root = tmp_path / "root"
+    real, pushes = remote._push_commit, []
+
+    def flaky(*a, **k):
+        pushes.append(a[3])
+        return "git push timed out" if len(pushes) == 1 else real(*a, **k)
+
+    monkeypatch.setattr(remote, "_push_commit", flaky)
+    sha, dest, doc = remote.ship_source(LOCAL, str(root), repo)
+    assert len(pushes) == 1 and doc["transport"] == "stream" and "checkout" not in doc
+    assert not (Path(dest) / ".git").exists() and "(git push timed out); shipping the archive stream" in capsys.readouterr().err
+    _, _, doc2 = remote.ship_source(LOCAL, str(root), repo)
+    assert pushes == [sha, sha] and doc2["transport"] == "stream+git" and _git(Path(dest), "rev-parse", "HEAD") == sha
+
+
+@pytest.mark.parametrize("first", ["stream", "git"])
+def test_two_launches_of_one_commit_leave_one_checkout_whichever_wins(repo, tmp_path, monkeypatch, first):
+    """Two launches ship one commit at once, one by stream (its git ship failed, or RESEARCH_SHIP=stream) and one by git; the one
+    that renames its tree into place first wins, and the other drops its own.  Either way the second launch returns a checkout,
+    and the tree on the machine is one, with no partial or half-made .git beside it."""
+    root = tmp_path / "root"
+    real, seen = remote._mark_ready, {}
+
+    def ship(transport: str) -> tuple[str, str, dict]:
+        if transport == "stream":
+            monkeypatch.setenv(remote.SHIP_ENV, "stream")
+        else:
+            monkeypatch.delenv(remote.SHIP_ENV, raising=False)
+        return remote.ship_source(LOCAL, str(root), repo)
+
+    def race(ssh, partial, dest, sha, doc):
+        if doc["transport"] != first and not seen:      # the second launch is about to rename its tree in: the first one lands
+            seen["first"] = "racing"
+            seen["first"] = ship(first)[2]
+        return real(ssh, partial, dest, sha, doc)
+
+    monkeypatch.setattr(remote, "_mark_ready", race)
+    sha, dest, doc = ship("git" if first == "stream" else "stream")
+    assert seen["first"]["transport"] == first and (first == "git") == bool(seen["first"].get("checkout"))
+    assert doc["checkout"] is True and doc["transport"] == ("stream+git" if first == "stream" else "git")
+    assert json.loads((Path(dest) / remote.READY_FILE).read_text()) == doc and remote.require_ready_source(dest, sha) == doc
+    assert _git(Path(dest), "rev-parse", "HEAD") == sha and _git(Path(dest), "status", "--porcelain", "--untracked-files=no") == ""
+    assert sorted(p.name for p in (root / "src").iterdir()) == [sha], "no partial or .git-* directory left beside the tree"
+
+
+def test_needs_git_names_the_known_programs_wherever_the_command_carries_them():
+    slot = ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by", "infra", "--"]
+    assert remote.needs_git(["bash", "-lc", "uv sync -q && uv run tools/verity/check/suites.py --changed abc --quick"]) == \
+        "tools/verity/check/suites.py"
+    assert remote.needs_git([*slot, "nice", "-n", "19", "uv", "run", "python", "tools/verity/check/check.py"]) == "tools/verity/check/check.py"
+    assert remote.needs_git(["python3", "tools/verity/lean/lean_changed.py", "--records"]) == "tools/verity/lean/lean_changed.py"
+    assert remote.needs_git(["uv", "run", "--extra", "torch-cpu", "verity", "check"]) == "verity check"
+    assert remote.needs_git([*slot, "bash", "-lc", "uv run pytest tools/research/tests/test_x.py"]) is None
+    assert remote.needs_git([sys.executable, "-c", "print(1)"]) is None
 
 
 def test_stream_opt_out_and_the_push_url_carries_no_credential(repo, tmp_path, monkeypatch):

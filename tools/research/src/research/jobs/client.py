@@ -34,17 +34,25 @@ class Unreachable(Exception):
     """No answer from the Job queue (network, DNS, a 5xx); the caller tries again later."""
 
 
-def load_token(environ: dict[str, str] | None = None, path: Path | None = None, var: str = TOKEN_ENV) -> str:
-    """The token in `$var`, else in the token file."""
+def kept_token(environ: dict[str, str] | None = None, path: Path | None = None, var: str = TOKEN_ENV) -> str | None:
+    """The token in `$var`, else in the token file, else None; a token file others can read is refused."""
     env = os.environ if environ is None else environ
     if env.get(var):
         return env[var].strip()
     p = path or TOKEN_FILE
     if not p.exists():
-        raise SystemExit(f"research jobs: no token: set ${var} or write it to {p} (mode 600)")
+        return None
     if p.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO):
         raise SystemExit(f"research jobs: {p} is readable by others; chmod 600 it")
     return p.read_text().strip()
+
+
+def load_token(environ: dict[str, str] | None = None, path: Path | None = None, var: str = TOKEN_ENV) -> str:
+    """The token in `$var`, else in the token file."""
+    token = kept_token(environ, path, var)
+    if token is None:
+        raise SystemExit(f"research jobs: no token: set ${var} or write it to {path or TOKEN_FILE} (mode 600)")
+    return token
 
 
 class HTTPClient:

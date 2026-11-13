@@ -220,7 +220,7 @@ COIN_BYTES = 64
 HM96 = hm96.SHA512
 KEY = HM96.default_key
 #: the most coins one commitment holds
-MAX_COINS = 1 << 20
+MAX_COINS = 1 << 24
 _NAME = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-/")
 _HEX = re.compile(r"(?:[0-9a-f]{2})*")
 COMMITMENT_FORM = ("a live coin commitment is {epoch, families, root, scheme}: families a list of [label, count], root "
@@ -244,7 +244,7 @@ CLOSE_ROLE = "verity/challenger-close/v1"
 LOG_TAG = "verity/challenger/release-log/v1"
 MAX_SESSION_ID = 128
 #: a release log's most coin-tree lines (`coin_trees_of`): each tree the challenger sampled and each round it opened
-MAX_TREE_LINES = 1 << 20
+MAX_TREE_LINES = 1 << 23
 #: a release log's most lines: its head, then a root and its release per coin, and its coin-tree lines
 MAX_LOG_LINES = 2 * MAX_COINS + 1 + MAX_TREE_LINES
 #: a release log line's most characters

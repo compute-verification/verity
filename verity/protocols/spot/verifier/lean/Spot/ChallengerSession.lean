@@ -82,7 +82,7 @@ def LOG_TAG : String := "verity/challenger/release-log/v1"
 def MAX_SESSION_ID : Nat := 128
 /-- A release log's most coin-tree lines (`ChallengerTrees.coinTreesOf`): each tree the challenger sampled and each
 round it opened. -/
-def MAX_TREE_LINES : Nat := 2 ^ 20
+def MAX_TREE_LINES : Nat := 2 ^ 23
 /-- A release log's most lines: its head, then a root and its release per coin, and its coin-tree lines. -/
 def MAX_LOG_LINES : Nat := 2 * MAX_COINS + 1 + MAX_TREE_LINES
 def MAX_LOG_LINE : Nat := 4096

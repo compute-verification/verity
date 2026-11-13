@@ -263,7 +263,7 @@ def test_a_request_at_its_max_tokens_preempts_nothing() -> None:
 
 def test_the_preemption_test_is_the_references() -> None:
     """`tick_step._preempts` against `replay_step.reference` on random running lists, budgets, block sizes, length
-    caps and prefill thresholds. The reference says whether it preempted only through the next waiting list: it
+    bounds and prefill thresholds. The reference says whether it preempted only through the next waiting list: it
     requeues the last running request first, unless that request's last output is in flight (`fin`). `fin` changes
     a token count only with `cap`, so with it cleared elsewhere the list shows every preemption, except where the
     last running request is `fin` and `cap`, and there a requeued request still shows one."""

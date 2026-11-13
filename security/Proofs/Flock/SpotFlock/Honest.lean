@@ -6,11 +6,15 @@ public import Proofs.Flock.SpotFlock.Sessions
 /-!
 # SPOT[Flock] accepts where Flock accepts every template's session
 
-`proverSeq m₀ m₁ m₂ P'`: rounds 0 to 2 send `m₀`, `m₁` and `m₂`; a round of template `t`'s session plays `P' t` at the
-statement `m₂` states for it on the session's history, until a round of the session is answered `[]`, Flock's acceptance
-as the run shows it, and then sends `[]`; the verdict's round sends `[]`. `accepts_seq`: where the round-2 check passes
-`m₁` and `m₂` at some coins of rounds 0 and 1, and Flock's masked verifier accepts each `P' t` at its statement on some
-coins, SPOT[Flock] accepts `proverSeq m₀ m₁ m₂ P'` on a positive share of its coins.
+`proverSeq m₀ m₁ m₂ P'`: rounds 0 and 1 send `m₀` and `m₁`, rounds 2 to `stage` send `[]` and round `stage + 1` sends
+`m₂` (`preMsg`); a round of template `t`'s session plays `P' t` at the statement `m₂` states for it on the session's
+history, until a round of the session is answered `[]`, Flock's acceptance as the run shows it, and then sends `[]`;
+the verdict's round sends `[]`. `accepts_seq`: where the statement check passes `m₁` and `m₂` at some coins of round 0
+and of the second stage's rounds, and Flock's masked verifier accepts each `P' t` at its statement on some coins,
+SPOT[Flock] accepts `proverSeq m₀ m₁ m₂ P'` on a positive share of its coins.
+
+The run's first `stage + 2` rounds are the messages `preMsg` names, each answered with a message (`stepWith_pre`,
+`next_preMsg`, `next_preMsg_stmt`).
 
 The run follows each session's Flock run round for round while Flock answers with messages (`slot_run`); Flock's
 acceptance leaves an accepted prefix of the session's messages, and the session's remaining rounds answer `[]` to `[]`
@@ -42,6 +46,35 @@ theorem drop_map_range {α : Type} (f : ℕ → α) (o l : ℕ) :
 
 theorem getD_append_left {l l' : List Msg} {n : ℕ} (hn : n < l.length) : (l ++ l').getD n [] = l.getD n [] := by
   simp [List.getD_eq_getElem?_getD, List.getElem?_append_left hn]
+
+/-- **A run's first rounds, their messages known**: where the prover sends `a j` on a history of `j < n` rounds with no
+`H` call, and the verifier answers `a 0, …, a j` with the message `b j` and no `H` call, the run's first `j ≤ n` rounds
+leave a history of `j` rounds and the messages `a 0, …, a (j - 1)`. -/
+theorem stepWith_pre {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out)
+    (a b : ℕ → Msg) (n : ℕ) (hP : ∀ hist : List (Msg × Msg), hist.length < n → P.next x hist ω = .ret (a hist.length))
+    (hV : ∀ j < n, v ((List.range (j + 1)).map a) = .ret (.msg (b j))) :
+    ∀ j ≤ n, ∃ (hist : List (Msg × Msg)) (tr : Transcript), hist.length = j ∧
+      ∀ rest, stepWith H P x ω v (j + rest) [] [] ⟨[], [], [], .rej⟩ =
+        stepWith H P x ω v rest hist ((List.range j).map a) tr := by
+  intro j
+  induction j with
+  | zero => exact fun _ => ⟨[], ⟨[], [], [], .rej⟩, rfl, fun rest => by rw [Nat.zero_add]; rfl⟩
+  | succ j ih =>
+    intro hj
+    obtain ⟨hist, tr, hl, heq⟩ := ih (by omega)
+    have hpe : ((P.next x hist ω).eval H).1 = a j := by
+      rw [hP hist (by omega), hl]
+      rfl
+    have hr : (List.range j).map a ++ [((P.next x hist ω).eval H).1] = (List.range (j + 1)).map a := by
+      simp [hpe, List.range_succ]
+    have hv : v ((List.range j).map a ++ [((P.next x hist ω).eval H).1]) = .ret (.msg (b j)) := by
+      rw [hr]
+      exact hV j (by omega)
+    refine ⟨hist ++ [(((P.next x hist ω).eval H).1, b j)],
+      ⟨tr.msgs ++ [(((P.next x hist ω).eval H).1, .msg (b j))], tr.pLog ++ ((P.next x hist ω).eval H).2, tr.vLog,
+        tr.out⟩, by simp [hl], fun rest => ?_⟩
+    rw [show j + 1 + rest = j + (rest + 1) by omega, heq (rest + 1),
+      stepWith_msg H P x ω v rest hist _ tr (b j) hv, hr]
 
 section Slot
 
@@ -205,78 +238,133 @@ theorem next_take {xS : Msg} {k : ℕ} (r : Fin k → FlockDeploy.Coin) (bs : Li
       FlockDeploy.next true xS (bs.take j) ((List.range (bs.take j).length).map (coinSeq r)) := by
   rw [take_map_range _ hj, List.length_take, Nat.min_eq_left hj]
 
-/-- **SPOT[Flock]'s prover from a Flock prover per template**: rounds 0 to 2 send `m₀`, `m₁` and `m₂`; a round of
-template `t`'s session plays `P' t` at the statement `m₂` states for it on the session's history, until a round of the
-session is answered `[]`, and then sends `[]`; the verdict's round sends `[]`. -/
+/-- **The honest prover's first messages**: `m₀`, the interior record `m₁`, `[]` in the second stage's later rounds,
+and the session statements `m₂` in round `stage + 1`. -/
+def preMsg (m₀ m₁ m₂ : Msg) (j : ℕ) : Msg :=
+  if j = 0 then m₀ else if j = 1 then m₁ else if j ≤ h.stage then [] else m₂
+
+theorem preMsg_one (m₀ m₁ m₂ : Msg) : preMsg h m₀ m₁ m₂ 1 = m₁ := by
+  simp [preMsg]
+
+theorem preMsg_mid (m₀ m₁ m₂ : Msg) {j : ℕ} (h2 : 2 ≤ j) (hj : j ≤ h.stage) : preMsg h m₀ m₁ m₂ j = [] := by
+  unfold preMsg
+  rw [ite_eq_right (show ¬j = 0 by omega), ite_eq_right (show ¬j = 1 by omega), ite_eq_left hj]
+
+theorem preMsg_last (m₀ m₁ m₂ : Msg) : preMsg h m₀ m₁ m₂ (h.stage + 1) = m₂ := by
+  have hpos : 0 < h.stage := Nat.succ_pos _
+  unfold preMsg
+  rw [ite_eq_right (show ¬h.stage + 1 = 0 by omega), ite_eq_right (show ¬h.stage + 1 = 1 by omega),
+    ite_eq_right (show ¬h.stage + 1 ≤ h.stage by omega)]
+
+/-- **The verifier answers the first messages with its coins**, in rounds 0 to `stage`. -/
+theorem next_preMsg (x m₀ m₁ m₂ : Msg) {k : ℕ} (r : Fin k → FlockDeploy.Coin) {j : ℕ} (hj : j ≤ h.stage) :
+    next h x ((List.range (j + 1)).map (preMsg h m₀ m₁ m₂))
+        ((List.range ((List.range (j + 1)).map (preMsg h m₀ m₁ m₂)).length).map (coinSeq r)) =
+      .ret (.msg (coinSeq r j).bytes) := by
+  have hlen : ((List.range (j + 1)).map (preMsg h m₀ m₁ m₂)).length = j + 1 := by simp
+  have h0 : (List.range (j + 1)).map (preMsg h m₀ m₁ m₂) ≠ [] :=
+    List.ne_nil_of_length_pos (by rw [hlen]; exact Nat.succ_pos j)
+  have hle : ((List.range (j + 1)).map (preMsg h m₀ m₁ m₂)).length ≤ h.stage + 1 := by rw [hlen]; omega
+  have hc : j + 1 ≤ 2 ∨ preMsg h m₀ m₁ m₂ j = [] := by
+    rcases Nat.lt_or_ge j 2 with h2 | h2
+    · exact Or.inl (by omega)
+    · exact Or.inr (preMsg_mid h m₀ m₁ m₂ h2 hj)
+  rw [hlen, next_coin h x h0 (by simp) hle, hlen, Nat.add_sub_cancel,
+    getD_map_range (preMsg h m₀ m₁ m₂) (Nat.lt_succ_self j), getD_map_range (coinSeq r) (Nat.lt_succ_self j),
+    ite_eq_left hc]
+
+/-- **The verifier's statement check on the first messages**, in round `stage + 1`: at round 0's coin and the second
+stage's. -/
+theorem next_preMsg_stmt (x m₀ m₁ m₂ : Msg) {k : ℕ} (r : Fin k → FlockDeploy.Coin) :
+    next h x ((List.range (h.stage + 2)).map (preMsg h m₀ m₁ m₂))
+        ((List.range ((List.range (h.stage + 2)).map (preMsg h m₀ m₁ m₂)).length).map (coinSeq r)) =
+      .ret (if stmtOk h x m₁ m₂ (coinSeq r 0) (fun i => coinSeq r (i.val + 1)) then .msg [] else .rej) := by
+  have hlen : ((List.range (h.stage + 2)).map (preMsg h m₀ m₁ m₂)).length = h.stage + 2 := by simp
+  have hst : stageOf h ((List.range (h.stage + 2)).map (coinSeq r)) = fun i => coinSeq r (i.val + 1) :=
+    funext fun i => getD_map_range (coinSeq r) (show i.val + 1 < h.stage + 2 by have := i.isLt; omega) default
+  rw [hlen, next_stmt h x (by simp) hlen, getD_map_range _ (show 1 < h.stage + 2 by omega),
+    getD_map_range _ (show h.stage + 1 < h.stage + 2 by omega), getD_map_range _ (show 0 < h.stage + 2 by omega), hst,
+    preMsg_one, preMsg_last]
+
+/-- **SPOT[Flock]'s prover from a Flock prover per template**: rounds 0 to `stage + 1` send `preMsg`'s messages (`m₀`,
+`m₁`, `[]` in the second stage's later rounds, `m₂`); a round of template `t`'s session plays `P' t` at the statement
+`m₂` states for it on the session's history, until a round of the session is answered `[]`, and then sends `[]`; the
+verdict's round sends `[]`. -/
 def proverSeq {Ω : Type} (m₀ m₁ m₂ : Msg) (P' : ℕ → Prover Ω) : Prover (ℕ → Ω) :=
-  ⟨fun _ hist ω => match hist with
-    | [] => .ret m₀
-    | [_] => .ret m₁
-    | [_, _] => .ret m₂
-    | _ :: _ :: _ :: _ =>
+  ⟨fun _ hist ω =>
+    if hist.length < h.stage + 2 then .ret (preMsg h m₀ m₁ m₂ hist.length)
+    else
       match slotOf h (hist.length + 1) with
       | some t =>
         if marked (hist.drop (off h t)) then .ret [] else (P' t).next (stmtAt h m₂ t) (hist.drop (off h t)) (ω t)
       | none => .ret []⟩
 
+theorem proverSeq_pre {Ω : Type} (m₀ m₁ m₂ : Msg) (P' : ℕ → Prover Ω) (x : Msg) (hist : List (Msg × Msg))
+    (ω : ℕ → Ω) (hl : hist.length < h.stage + 2) :
+    (proverSeq h m₀ m₁ m₂ P').next x hist ω = .ret (preMsg h m₀ m₁ m₂ hist.length) :=
+  ite_eq_left hl
+
 theorem proverSeq_next {Ω : Type} (m₀ m₁ m₂ : Msg) (P' : ℕ → Prover Ω) (x : Msg) (hist : List (Msg × Msg))
-    (ω : ℕ → Ω) (h3 : 3 ≤ hist.length) :
+    (ω : ℕ → Ω) (h3 : h.stage + 2 ≤ hist.length) :
     (proverSeq h m₀ m₁ m₂ P').next x hist ω = match slotOf h (hist.length + 1) with
       | some t =>
         if marked (hist.drop (off h t)) then .ret [] else (P' t).next (stmtAt h m₂ t) (hist.drop (off h t)) (ω t)
-      | none => .ret [] := by
-  rcases hist with _ | ⟨e₀, _ | ⟨e₁, _ | ⟨e₂, rest⟩⟩⟩ <;> simp at h3
-  rfl
+      | none => .ret [] :=
+  ite_eq_right (Nat.not_lt.2 h3)
 
-/-- **The run's coins from the sessions'**: rounds 0 and 1 are `c₀` and `c₁`, and round `off t + i` of template `t`'s
-session is `r' t`'s round `i`. -/
-def seqCoins {x m₂ : Msg} (c₀ c₁ : FlockDeploy.Coin)
+/-- **The run's coins from the sessions'**: round 0 is `c₀`, rounds 1 to `stage` are the second stage's `c₁`, and round
+`off t + i` of template `t`'s session is `r' t`'s round `i`. -/
+def seqCoins {x m₂ : Msg} (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin) :
     Fin ((V h).k x) → FlockDeploy.Coin := fun n =>
-  if n.val = 0 then c₀ else if n.val = 1 then c₁ else
+  if n.val = 0 then c₀ else if hn : n.val - 1 < h.stage then c₁ ⟨n.val - 1, hn⟩ else
     match slotOf h (n.val + 1) with
     | some t =>
       if ht : n.val - off h t < (FlockDeploy.V true).k (stmtAt h m₂ t) then r' t ⟨n.val - off h t, ht⟩ else default
     | none => default
 
-theorem seqCoins_at {x m₂ : Msg} (c₀ c₁ : FlockDeploy.Coin)
+theorem seqCoins_at {x m₂ : Msg} (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin) {t i : ℕ} (ht : t < h.ms.length)
     (hk : (FlockDeploy.V true).k (stmtAt h m₂ t) = k₀ h t) (hi : i < k₀ h t) :
     coinSeq (seqCoins h (x := x) c₀ c₁ r') (off h t + i) = coinSeq (r' t) i := by
-  have h3 := three_le_off h t
-  have hle : off h t + k₀ h t ≤ off h h.ms.length := sessOff_add_le 3 (k₀ h) ht
+  have h3 := stage_le_off h t
+  have hle : off h t + k₀ h t ≤ off h h.ms.length := sessOff_add_le (h.stage + 2) (k₀ h) ht
   have hlt : off h t + i < (V h).k x := by
     show off h t + i < off h h.ms.length + 1
     omega
   unfold coinSeq seqCoins
   rw [dite_eq_left hlt, dite_eq_left (show i < (FlockDeploy.V true).k (stmtAt h m₂ t) by omega)]
   dsimp only
-  rw [ite_eq_right (show ¬off h t + i = 0 by omega), ite_eq_right (show ¬off h t + i = 1 by omega),
+  rw [ite_eq_right (show ¬off h t + i = 0 by omega), dite_eq_right (show ¬off h t + i - 1 < h.stage by omega),
     slotOf_eq h ht (by omega) (by omega)]
   dsimp only
   rw [dite_eq_left (show off h t + i - off h t < (FlockDeploy.V true).k (stmtAt h m₂ t) by omega)]
   exact congrArg (r' t) (Fin.ext (by simp))
 
-/-- **SPOT[Flock] accepts with positive probability where Flock accepts every template's session**: if the round-2
-check passes `m₁` and `m₂` at some coins `c₀` and `c₁` of rounds 0 and 1, and Flock's masked verifier accepts `P' t` at
-the statement `m₂` states for each template `t` on some coins, then `proverSeq m₀ m₁ m₂ P'` is accepted on a positive
-share of SPOT[Flock]'s coins. -/
-theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin)
+/-- **SPOT[Flock] accepts with positive probability where Flock accepts every template's session**: if the statement
+check passes `m₁` and `m₂` at some coins `c₀` of round 0 and `c₁` of the second stage's rounds, and Flock's masked
+verifier accepts `P' t` at the statement `m₂` states for each template `t` on some coins, then `proverSeq m₀ m₁ m₂ P'`
+is accepted on a positive share of SPOT[Flock]'s coins. -/
+theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h)
     (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) (P' : ℕ → Prover Ω) (ω : ℕ → Ω)
     (r' : ∀ t, Fin ((FlockDeploy.V true).k (stmtAt h m₂ t)) → FlockDeploy.Coin)
     (hacc : ∀ t < h.ms.length, (run H (P' t) (FlockDeploy.V true) (stmtAt h m₂ t) (ω t) (r' t)).out = .acc) :
     0 < Pr fun r : Fin ((V h).k x) → FlockDeploy.Coin =>
       (run H (proverSeq h m₀ m₁ m₂ P') (V h) x ω r).out = .acc := by
   refine Claims.SamplingGeneric.Pr_pos_of (seqCoins h (x := x) c₀ c₁ r') ?_
-  have hT3 := three_le_off h h.ms.length
+  have hT3 := stage_le_off h h.ms.length
   have e0 : coinSeq (seqCoins h (x := x) c₀ c₁ r') 0 = c₀ := by
     unfold coinSeq
     rw [dite_eq_left (show 0 < (V h).k x by show 0 < off h h.ms.length + 1; omega)]
     rfl
-  have e1 : coinSeq (seqCoins h (x := x) c₀ c₁ r') 1 = c₁ := by
-    unfold coinSeq
-    rw [dite_eq_left (show 1 < (V h).k x by show 1 < off h h.ms.length + 1; omega)]
-    rfl
+  have e1 : ∀ i : Fin h.stage, coinSeq (seqCoins h (x := x) c₀ c₁ r') (i.val + 1) = c₁ i := by
+    intro i
+    have hi := i.isLt
+    unfold coinSeq seqCoins
+    rw [dite_eq_left (show i.val + 1 < (V h).k x by show i.val + 1 < off h h.ms.length + 1; omega)]
+    dsimp only
+    rw [ite_eq_right (show ¬i.val + 1 = 0 by omega), dite_eq_left (show i.val + 1 - 1 < h.stage by omega)]
+    exact congrArg c₁ (Fin.ext (by simp))
   have hsc : ∀ t < h.ms.length, ∀ i < k₀ h t,
       coinSeq (seqCoins h (x := x) c₀ c₁ r') (off h t + i) = coinSeq (r' t) i := fun t ht i hi =>
     seqCoins_at h c₀ c₁ r' ht (stmtOk_at h hok ht).1 hi
@@ -286,53 +374,49 @@ theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀
   have hslot : ∀ t < h.ms.length, ∀ l ≤ k₀ h t,
       (List.range l).map (fun i => coinSeq r (off h t + i)) = (List.range l).map (coinSeq (r' t)) :=
     fun t ht l hl => List.map_congr_left fun i hi => hsc t ht i (by rw [List.mem_range] at hi; omega)
-  obtain ⟨b₀, h1⟩ : ∃ b₀, vS [m₀] = .ret (.msg b₀) := ⟨_, rfl⟩
-  obtain ⟨b₁, h2⟩ : ∃ b₁, vS [m₀, m₁] = .ret (.msg b₁) := ⟨_, rfl⟩
-  have h3 : vS [m₀, m₁, m₂] = .ret (.msg []) := by
-    show OC.ret (if stmtOk h x m₁ m₂ (coinSeq r 0) (coinSeq r 1) then Out.msg [] else Out.rej) = _
-    rw [e0, e1, ite_eq_left hok]
-  have hrun : (run H (proverSeq h m₀ m₁ m₂ P') (V h) x ω r).out =
-      (stepWith H (proverSeq h m₀ m₁ m₂ P') x ω vS (off h h.ms.length - 3 + 1) [(m₀, b₀), (m₁, b₁), (m₂, [])]
-        [m₀, m₁, m₂] ⟨[(m₀, .msg b₀), (m₁, .msg b₁), (m₂, .msg [])], [], [], .rej⟩).out := by
-    show (stepWith H (proverSeq h m₀ m₁ m₂ P') x ω vS (off h h.ms.length + 1) [] [] ⟨[], [], [], .rej⟩).out = _
-    rw [show off h h.ms.length + 1 = (off h h.ms.length - 3 + 1) + 1 + 1 + 1 by omega,
-      stepWith_msg H (proverSeq h m₀ m₁ m₂ P') x ω vS _ [] [] ⟨[], [], [], .rej⟩ b₀ h1]
-    show (stepWith H (proverSeq h m₀ m₁ m₂ P') x ω vS (off h h.ms.length - 3 + 1 + 1 + 1) [(m₀, b₀)] [m₀]
-      ⟨[(m₀, .msg b₀)], [], [], .rej⟩).out = _
-    rw [stepWith_msg H (proverSeq h m₀ m₁ m₂ P') x ω vS _ [(m₀, b₀)] [m₀] ⟨[(m₀, .msg b₀)], [], [], .rej⟩ b₁ h2]
-    show (stepWith H (proverSeq h m₀ m₁ m₂ P') x ω vS (off h h.ms.length - 3 + 1 + 1) [(m₀, b₀), (m₁, b₁)]
-      [m₀, m₁] ⟨[(m₀, .msg b₀), (m₁, .msg b₁)], [], [], .rej⟩).out = _
-    rw [stepWith_msg H (proverSeq h m₀ m₁ m₂ P') x ω vS _ [(m₀, b₀), (m₁, b₁)] [m₀, m₁]
-      ⟨[(m₀, .msg b₀), (m₁, .msg b₁)], [], [], .rej⟩ [] h3]
-    rfl
+  -- the first `stage + 2` rounds
+  have hokr : stmtOk h x m₁ m₂ (coinSeq r 0) (fun i => coinSeq r (i.val + 1)) = true :=
+    (congrArg₂ (stmtOk h x m₁ m₂) e0 (funext e1)).trans hok
+  have hVpre : ∀ j < h.stage + 2, vS ((List.range (j + 1)).map (preMsg h m₀ m₁ m₂)) =
+      .ret (.msg (if j ≤ h.stage then (coinSeq r j).bytes else [])) := by
+    intro j hj
+    by_cases hle : j ≤ h.stage
+    · rw [ite_eq_left hle]
+      exact next_preMsg h x m₀ m₁ m₂ r hle
+    · have hj' : j = h.stage + 1 := by omega
+      subst hj'
+      rw [ite_eq_right hle]
+      exact (next_preMsg_stmt h x m₀ m₁ m₂ r).trans (by rw [ite_eq_left hokr])
+  obtain ⟨hist₀, tr₀, hl₀, heq₀⟩ := stepWith_pre H (proverSeq h m₀ m₁ m₂ P') x ω vS (preMsg h m₀ m₁ m₂)
+    (fun j => if j ≤ h.stage then (coinSeq r j).bytes else []) (h.stage + 2)
+    (fun hist hl => proverSeq_pre h m₀ m₁ m₂ P' x hist ω hl) hVpre (h.stage + 2) le_rfl
   -- the run's coins, all its rounds
   let cs := (List.range (off h h.ms.length + 1)).map (coinSeq r)
   have hcs : ∀ t < h.ms.length, ∀ j ≤ k₀ h t, (cs.drop (off h t)).take j = (List.range j).map (coinSeq (r' t)) := by
     intro t ht j hj
-    have hle : off h t + k₀ h t ≤ off h h.ms.length := sessOff_add_le 3 (k₀ h) ht
+    have hle : off h t + k₀ h t ≤ off h h.ms.length := sessOff_add_le (h.stage + 2) (k₀ h) ht
     show (((List.range (off h h.ms.length + 1)).map (coinSeq r)).drop (off h t)).take j = _
     rw [show off h h.ms.length + 1 = off h t + (off h h.ms.length + 1 - off h t) by omega, drop_map_range,
       take_map_range _ (by omega), hslot t ht j hj]
   have key : ∀ t, t ≤ h.ms.length → ∃ (hist : List (Msg × Msg)) (as : List Msg) (tr : Transcript),
-      hist.length = off h t ∧ as.length = off h t ∧ as.getD 2 [] = m₂ ∧
+      hist.length = off h t ∧ as.length = off h t ∧ as.getD (h.stage + 1) [] = m₂ ∧
       (∀ s < t, ∃ j, 0 < j ∧ j ≤ k₀ h s ∧
         decidedAt (stmtAt h m₂ s) (as.drop (off h s)) (cs.drop (off h s)) j = true) ∧
-      ∀ rest, stepWith H (proverSeq h m₀ m₁ m₂ P') x ω vS (off h t - 3 + rest) [(m₀, b₀), (m₁, b₁), (m₂, [])]
-          [m₀, m₁, m₂] ⟨[(m₀, .msg b₀), (m₁, .msg b₁), (m₂, .msg [])], [], [], .rej⟩ =
+      ∀ rest, stepWith H (proverSeq h m₀ m₁ m₂ P') x ω vS (off h t + rest) [] [] ⟨[], [], [], .rej⟩ =
         stepWith H (proverSeq h m₀ m₁ m₂ P') x ω vS rest hist as tr := by
     intro t
     induction t with
     | zero =>
       intro _
-      refine ⟨[(m₀, b₀), (m₁, b₁), (m₂, [])], [m₀, m₁, m₂],
-        ⟨[(m₀, .msg b₀), (m₁, .msg b₁), (m₂, .msg [])], [], [], .rej⟩,
-        rfl, rfl, rfl, fun s hs => absurd hs (Nat.not_lt_zero s), fun rest => ?_⟩
-      rw [show off h 0 - 3 + rest = rest by rw [show off h 0 = 3 from rfl]; omega]
+      have ho : off h 0 = h.stage + 2 := rfl
+      refine ⟨hist₀, (List.range (h.stage + 2)).map (preMsg h m₀ m₁ m₂), tr₀, hl₀.trans ho.symm, by simp [ho], ?_,
+        fun s hs => absurd hs (Nat.not_lt_zero s), fun rest => heq₀ rest⟩
+      rw [getD_map_range _ (show h.stage + 1 < h.stage + 2 by omega), preMsg_last]
     | succ t ih =>
       intro ht1
       have ht : t < h.ms.length := ht1
-      have h3t := three_le_off h t
-      have hle : off h t + k₀ h t ≤ off h h.ms.length := sessOff_add_le 3 (k₀ h) ht
+      have h3t := stage_le_off h t
+      have hle : off h t + k₀ h t ≤ off h h.ms.length := sessOff_add_le (h.stage + 2) (k₀ h) ht
       obtain ⟨hist, as, tr, hhl, hal, ha2, hdec, heq⟩ := ih (by omega)
       have hkt := (stmtOk_at h hok ht).1
       have hacc' : (stepWith H (P' t) (stmtAt h m₂ t) (ω t)
@@ -418,7 +502,7 @@ theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀
         by rw [getD_append_left (by omega), ha2], fun s hs => ?_, fun rest => ?_⟩
       · rcases Nat.lt_or_ge s t with hst | hst
         · obtain ⟨j, hj0, hjk, hd⟩ := hdec s hst
-          have hle' : off h s + k₀ h s ≤ off h t := sessOff_add_le 3 (k₀ h) hst
+          have hle' : off h s + k₀ h s ≤ off h t := sessOff_add_le (h.stage + 2) (k₀ h) hst
           exact ⟨j, hj0, hjk, by rw [decidedAt_append (by omega)]; exact hd⟩
         · rw [show s = t by omega]
           obtain ⟨j, hj0, hjK, hja⟩ := hd'
@@ -431,9 +515,11 @@ theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀
           exact Out.noConfusion hm
       · have := heq' rest
         rw [List.append_nil, List.append_nil] at this
-        rw [show off h (t + 1) - 3 + rest = off h t - 3 + (k₀ h t + rest) by rw [off_succ]; omega, heq, this]
+        rw [show off h (t + 1) + rest = off h t + (k₀ h t + rest) by rw [off_succ]; omega, heq, this]
   obtain ⟨histT, asT, trT, hhT, haT, ha2T, hdecT, heqT⟩ := key h.ms.length le_rfl
-  rw [hrun, heqT 1]
+  have hrun : (run H (proverSeq h m₀ m₁ m₂ P') (V h) x ω r).out =
+      (stepWith H (proverSeq h m₀ m₁ m₂ P') x ω vS 1 histT asT trT).out := congrArg Transcript.out (heqT 1)
+  rw [hrun]
   have hPT : (proverSeq h m₀ m₁ m₂ P').next x histT ω = .ret [] := by
     rw [proverSeq_next h m₀ m₁ m₂ P' x histT ω (by omega), hhT, slotOf_last]
   have hver : verdict h m₂ (asT ++ [[]]) cs = true := by
@@ -442,7 +528,7 @@ theorem accepts_seq {Ω : Type} (H : Msg → Msg) (x m₀ m₁ m₂ : Msg) (c₀
     intro t ht
     rw [List.mem_range] at ht
     obtain ⟨j, hj0, hjk, hd⟩ := hdecT t ht
-    have hle : off h t + k₀ h t ≤ off h h.ms.length := sessOff_add_le 3 (k₀ h) ht
+    have hle : off h t + k₀ h t ≤ off h h.ms.length := sessOff_add_le (h.stage + 2) (k₀ h) ht
     rw [List.any_eq_true]
     refine ⟨j, List.mem_range.2 (by omega), ?_⟩
     rw [decidedAt_append (by omega), hd]

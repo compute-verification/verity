@@ -15,7 +15,7 @@ SMALL, TABLE = 1507, 12343986
 TABLES = 200
 #: the most sessions holding one gate the designs are compared at
 SESSIONS = 167
-#: GLM-5.3's K at one proof block a stratum, the design with no cap on a stratum's sample
+#: GLM-5.3's K at one proof block a stratum, the design with no limit on a stratum's sample
 UNCAPPED = 27191776
 #: K at the two ends of the designs the cost rows price, 2^40.23 and 2^43.23 rounded up
 LEAST, MOST = b.natural("2^40.23"), b.natural("2^43.23")
@@ -199,7 +199,7 @@ def test_a_run_has_its_first_stages_replay_blocks_sessions_and_gates():
     assert b.terms(one)["rewinding"] < b.terms(six)["rewinding"] < 6 * b.terms(one)["rewinding"]
 
 
-def test_the_waits_term_at_each_cap():
+def test_the_waits_term_at_each_limit():
     assert b.CAPS == (128, 192) and [b.bits(b.waits(cap)) for cap in b.CAPS] == ["2^-125.99", "2^-183.64"]
     e_128 = 1 / b.E_LOW ** 128
     exact = [(1 + b.INNER) * (Fraction(2, 2 ** cap) + e_128) for cap in b.CAPS]
@@ -214,7 +214,7 @@ def test_the_waits_term_at_each_cap():
 
 # The designs the options are compared at, per sampled replay block, a run at 2^80 compressions.
 
-def test_no_cap_on_a_stratums_sample_at_the_smallest_session():
+def test_no_limit_on_a_stratums_sample_at_the_smallest_session():
     assert tenths(at(UNCAPPED, SMALL)) == Fraction("132.0")
     assert b.bits(at(UNCAPPED, SMALL)) == "2^-132.03"
 
@@ -455,7 +455,7 @@ def test_the_command_prints_by_position_each_term_with_its_premise_and_what_it_c
         ["sum", "2^-105.03", "2^-96.03!"], ["sum", "2^-47.68!", "2^-43.18!"], ["sum", "2^-102.45", "2^-93.45!"]]
     assert covered(out) and len(out) == 21
     premise = ["not given, counted as 0", "`ExpectedCR` at B", "`StrictBirthday` at B",
-               "`ExpectedCR` at the conflict finder", "`ExpectedCR` at the two first-hit finders, at every cap"]
+               "`ExpectedCR` at the conflict finder", "`ExpectedCR` at the two first-hit finders, at every limit"]
     assert all(text in line for text, line in zip(premise, out[2:7]))
     assert all("per run at a padded first stage of K0 = 6 replay blocks" in line for line in out[9:19])
     assert [line.split()[0] for line in out[11:19]] == ["week", "week", "month", "month", "year", "year", "waits",

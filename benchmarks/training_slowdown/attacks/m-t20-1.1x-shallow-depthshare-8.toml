@@ -1,0 +1,19 @@
+# Every block and the final gain trained in full, the matrices with Muon and the gains with AdamW at a rate of
+# their own, the embedding untrained, each step two forwards of 32 rows, the rate falling linearly after a
+# warmup of 50 steps; E is each trained tensor's delta in 8-bit codes.
+start = "m-t20"
+route = "subset"
+target = { gain = 1.1 }
+budget = { steps = 6016, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+trainable = "blocks.*,norm"
+opt = "muon"
+lr = 1e-3
+gain_lr = 2.5e-4
+warmup = 50
+micro_batches = 2
+store = "q8"
+fused = true

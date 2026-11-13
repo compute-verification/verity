@@ -99,20 +99,21 @@ research pods SUBCOMMAND ...             # the machines: registry, ssh, sync, le
 research tele SUBCOMMAND ...             # the harness's own surface (below)
 research jobs add|list|show|cancel|events ...   # the Job queue (below)
 research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page (goals.py)
+research velocity [--line|--json]  # the velocity score from records, never a gate (velocity.py)
 research compare ORIGINAL... REPLAY [--expect E] [--json]   # a replay's verdict against the runs it replays (compare.py)
 research digest --as LANE   # what changed for a lane since its last digest (digest.py)
 research merge REF [--into main] [--tool check] [-m MSG] [--push] [--dry-run]   # the merge gate (merge.py)
 research merge --train A B C [--on MACHINE --project P] [--command CMD] [--push]  # several refs, one checked candidate
 research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@SHA ...  # build, lint, push a train
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
-research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
+research merge --mirror [SHA]  # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue vqueue|status|ready|review|eject|open|edit|link  # the verified queue onto `main` (vqueue_loop.py, queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research queue stats [--json] [--short] [--rounds] [--until TS]  # queue_table.py; --log FILE: queue_stats.py
 research lean-times ...  # Lean tasks' p95
 research run-times [--hours 12] [--on MACHINE,...] [--json]  # each run's wait to start, setup and run time, by kind, machine and pool (run_times.py)
-research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
+research git old2new|remap|check|build ...  # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
 
@@ -262,7 +263,8 @@ carries the history). The machine checks the commit's tree hash, extracts
 launcher's archive manifest (`READY.json` `verified:
 git-push+tree+file-sha256`, `transport: git`; job.json
 `run.remote.source_transport`). A machine without git, or any failure of that
-path, prints one line and ships the archive stream as above; nothing is ever
+path, prints one line and ships the archive stream as above, given `.git` in
+place once a push lands; nothing is ever
 marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs

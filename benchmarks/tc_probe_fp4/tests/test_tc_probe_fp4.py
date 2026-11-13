@@ -410,8 +410,8 @@ def test_sparse_e4m3_packs_registers_and_verify_derives_every_word(no_nvcc: None
     assert np.array_equal(SP.unpack_d(SP.pack_c(C)), C)
     assert np.array_equal(SP.expand(As, M)[..., SP.logical_columns(M)[0, 0]][0, 0], As[0, 0])
 
-    cap = ["capture", "--seeds", "5", "--n-random", "16", "--fake-silicon", "gather_g32", "--budget-s", "0", "--out", str(tmp_path / "c")]
-    rcs = [SP.main(cap) for _ in range(14)]
+    capture = ["capture", "--seeds", "5", "--n-random", "16", "--fake-silicon", "gather_g32", "--budget-s", "0", "--out", str(tmp_path / "c")]
+    rcs = [SP.main(capture) for _ in range(14)]
     assert rcs[0] == 99 and rcs[-1] == 0
     ver = ["verify", "--seed", "5", "--n-random", "16", "--capture", str(tmp_path / "c"), "--procs", "1"]
     assert SP.main(ver + ["--out", str(tmp_path / "fake")]) == 1

@@ -17,9 +17,18 @@
   },
   "accepted": 13,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.273134491423577,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 3.1807
  },
  {
@@ -40,9 +49,18 @@
   },
   "accepted": 16,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.2720718269623181,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.3253
  },
  {
@@ -63,9 +81,18 @@
   },
   "accepted": 33,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.2509221388603116,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 4.3583
  },
  {
@@ -86,9 +113,18 @@
   },
   "accepted": 8,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.25945048387515246,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 5.1886
  },
  {
@@ -109,9 +145,18 @@
   },
   "accepted": 9,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.2665671482646479,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 3.1325
  },
  {
@@ -132,9 +177,18 @@
   },
   "accepted": 7,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.2660140455416046,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 3.4757
  },
  {
@@ -155,9 +209,18 @@
   },
   "accepted": 30,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.23751276631118923,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 6.1182
  },
  {
@@ -178,9 +241,18 @@
   },
   "accepted": 32,
   "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
   "gpus": 1,
   "flat": true,
   "statements_per_s": 0.18819986826009222,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
   "verify_s": 6.2611
  }
 ]

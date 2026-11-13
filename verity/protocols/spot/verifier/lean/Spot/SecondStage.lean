@@ -703,6 +703,18 @@ def runOf (rec : Json) : Option String :=
   | .str r => some r
   | _ => none
 
+/-- The tag `interiorRoot` hashes under, a zero byte after it. -/
+def INTERIOR_ROOT : String := "verity-vllm/interior-run/v1"
+
+/-- **The interior window's open root**, for the boundary registration of digest `boundary` (lowercase hex) and the
+replay sample `sample`, in order: SHA-512 over `INTERIOR_ROOT`, a zero byte and the canonical JSON
+`{"boundary", "replay_sample"}`, in lowercase hex. The verifier computes it, so a second stage sampled on a session of
+its own is sampled on the one window its boundary registration and replay sample name (`Run.interiorWindowOk`). None
+where `Flock.canon` fails. -/
+def interiorRoot (boundary : String) (sample : Array Nat) : Option String := do
+  let m ← (Flock.canon (Json.mkObj [("boundary", .str boundary), ("replay_sample", Lean.toJson sample)])).toOption
+  pure (sha512Hex (INTERIOR_ROOT.toUTF8.push 0 ++ m.toUTF8))
+
 /-- The input set of the `k`-th part's session in run `run`, as the served path names it: `served/<run>/m<k>`, the
 interior's `k`-th member being the `k`-th part. -/
 def setName (run : String) (k : Nat) : String := "served/" ++ run ++ "/m" ++ toString k
