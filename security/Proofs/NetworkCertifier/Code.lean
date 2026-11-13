@@ -36,7 +36,7 @@ here say that what it evaluates is the reference's, so the chain is Python ≈ t
   the same tables and priors and windows with the same fields, length terms included.
 
 Each statement relates the two sides by their fields rather than by a transport, so that it reads only the two sides'
-definitions. The transports (`tallyRef`, `carryRef`, `tableRef`, `bookRef`, `wcarryRef`, `windowRef`) are the proofs'
+definitions. The transports (`tallyRef`, `carryRef`, `tableRef`, `bookRef`, `wcarryRef`, `executionPhaseRef`) are the proofs'
 own.
 -/
 
@@ -273,7 +273,7 @@ theorem code_arrive (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book) 
     · exact code_countStep _ _ _ _
     · rfl
 
-theorem code_window (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book) (harr : bk.arrived = bk'.arrived)
+theorem code_executionPhase (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book) (harr : bk.arrived = bk'.arrived)
     (htot : bk.total = bk'.total) (hz : bk.zeros = bk'.zeros) (N : ℕ) (cy : NetworkCertifier.AdviceV1.Carry)
     (ds : List Bool) :
     (NetworkCertifier.AdviceV1.window bk N cy ds).map (fun p => (p.1, carryRef p.2)) =
@@ -299,18 +299,18 @@ theorem code_window (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book) 
           cases AdviceV1.finish (tallyRef st₂) <;> rfl
   · rfl
 
-theorem code_session (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book) (harr : bk.arrived = bk'.arrived)
+theorem code_attachment (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book) (harr : bk.arrived = bk'.arrived)
     (htot : bk.total = bk'.total) (hz : bk.zeros = bk'.zeros) (N : ℕ) :
     ∀ (cy : NetworkCertifier.AdviceV1.Carry) (ws : List (List Bool)),
       NetworkCertifier.AdviceV1.session bk N cy ws = AdviceV1.session bk' N (carryRef cy) ws
   | _, [] => rfl
   | cy, ds :: ws => by
-    simp only [NetworkCertifier.AdviceV1.session, AdviceV1.session, ← code_window bk bk' harr htot hz N cy ds]
+    simp only [NetworkCertifier.AdviceV1.session, AdviceV1.session, ← code_executionPhase bk bk' harr htot hz N cy ds]
     cases NetworkCertifier.AdviceV1.window bk N cy ds with
     | none => rfl
     | some p =>
       simp only [Option.bind_some, Option.map_some]
-      rw [code_session bk bk' harr htot hz N p.2 ws]
+      rw [code_attachment bk bk' harr htot hz N p.2 ws]
 
 /-- **Advice v1's charge in the program is the reference's** (`CodeChargesV1`): for books with the same fields, the
 program's `charges` of the windows' decision streams, listed in order, is the reference's. -/
@@ -318,7 +318,7 @@ theorem CodeChargesV1 (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book
     (htot : bk.total = bk'.total) (hz : bk.zeros = bk'.zeros) (hp : bk.priors = bk'.priors) (N : ℕ) {W : ℕ}
     (a : Fin W → List Bool) :
     NetworkCertifier.AdviceV1.charges bk N (List.ofFn a) = AdviceV1.charges bk' N a := by
-  rw [NetworkCertifier.AdviceV1.charges, AdviceV1.charges, code_session bk bk' harr htot hz N]
+  rw [NetworkCertifier.AdviceV1.charges, AdviceV1.charges, code_attachment bk bk' harr htot hz N]
   simp only [carryRef, hp]
 
 /-- The reference form of the program's table. -/
@@ -333,7 +333,7 @@ def bookRef (bk : NetworkCertifier.WindowCharge.Book) : WindowCharge.Book :=
 def wcarryRef (c : NetworkCertifier.WindowCharge.Carry) : WindowCharge.Carry := ⟨carryRef c.dec, c.pos, c.rank⟩
 
 /-- The reference form of the program's window. -/
-def windowRef (x : NetworkCertifier.WindowCharge.Advice) : WindowCharge.Advice := ⟨x.ds, x.hits, x.order, x.lens⟩
+def executionPhaseRef (x : NetworkCertifier.WindowCharge.Advice) : WindowCharge.Advice := ⟨x.ds, x.hits, x.order, x.lens⟩
 
 theorem code_codeAll : ∀ (st : NetworkCertifier.AdviceV1.Tally) (ss : List (ℕ × ℕ × ℕ)),
     (NetworkCertifier.WindowCharge.codeAll st ss).map tallyRef = WindowCharge.codeAll (tallyRef st) ss
@@ -406,9 +406,9 @@ theorem code_entrySyms (bk : NetworkCertifier.WindowCharge.Book) : ∀ (pos rank
 theorem code_syms (bk : NetworkCertifier.WindowCharge.Book) (N H O : ℕ) (cy : NetworkCertifier.WindowCharge.Carry)
     (x : NetworkCertifier.WindowCharge.Advice) :
     (NetworkCertifier.WindowCharge.syms bk N H O cy x).map (fun q => (q.1, wcarryRef q.2)) =
-      WindowCharge.syms (bookRef bk) N H O (wcarryRef cy) (windowRef x) := by
+      WindowCharge.syms (bookRef bk) N H O (wcarryRef cy) (executionPhaseRef x) := by
   obtain ⟨⟨c, r⟩, pos, rank⟩ := cy
-  simp only [NetworkCertifier.WindowCharge.syms, WindowCharge.syms, wcarryRef, carryRef, windowRef]
+  simp only [NetworkCertifier.WindowCharge.syms, WindowCharge.syms, wcarryRef, carryRef, executionPhaseRef]
   rw [← code_decSyms, ← code_hitSyms, ← code_entrySyms]
   cases NetworkCertifier.WindowCharge.decSyms ⟨c, r⟩ x.ds with
   | none => rfl
@@ -432,7 +432,7 @@ theorem code_tailBits : ∀ ts : List (ℕ × ℕ),
 theorem code_wwindow (bk : NetworkCertifier.WindowCharge.Book) (N H O L : ℕ)
     (cy : NetworkCertifier.WindowCharge.Carry) (x : NetworkCertifier.WindowCharge.Advice) :
     (NetworkCertifier.WindowCharge.window bk N H O L cy x).map (fun p => (p.1, wcarryRef p.2)) =
-      WindowCharge.window (bookRef bk) N H O L (wcarryRef cy) (windowRef x) := by
+      WindowCharge.window (bookRef bk) N H O L (wcarryRef cy) (executionPhaseRef x) := by
   simp only [NetworkCertifier.WindowCharge.window, WindowCharge.window]
   show (if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ x.lens.length ≤ L ∧ cy.dec.run < 3 ∧
       cy.rank ≤ WindowCharge.INDEX_CAP + 1 then _ else none).map _ =
@@ -448,7 +448,7 @@ theorem code_wwindow (bk : NetworkCertifier.WindowCharge.Book) (N H O L : ℕ)
       cases NetworkCertifier.WindowCharge.codeAll NetworkCertifier.AdviceV1.Tally.fresh q.1 with
       | none => rfl
       | some st =>
-        simp only [Option.bind_some, Option.map_some, code_finish, code_tailBits, windowRef]
+        simp only [Option.bind_some, Option.map_some, code_finish, code_tailBits, executionPhaseRef]
         cases AdviceV1.finish (tallyRef st) with
         | none => rfl
         | some c =>
@@ -465,7 +465,7 @@ theorem code_wwindow (bk : NetworkCertifier.WindowCharge.Book) (N H O L : ℕ)
 theorem code_wsession (bk : NetworkCertifier.WindowCharge.Book) (N H O L : ℕ) :
     ∀ (cy : NetworkCertifier.WindowCharge.Carry) (ws : List NetworkCertifier.WindowCharge.Advice),
       NetworkCertifier.WindowCharge.session bk N H O L cy ws =
-        WindowCharge.session (bookRef bk) N H O L (wcarryRef cy) (ws.map windowRef)
+        WindowCharge.session (bookRef bk) N H O L (wcarryRef cy) (ws.map executionPhaseRef)
   | _, [] => rfl
   | cy, x :: ws => by
     simp only [NetworkCertifier.WindowCharge.session, WindowCharge.session, List.map_cons,
@@ -495,12 +495,12 @@ theorem CodeChargesWhole (bk : NetworkCertifier.WindowCharge.Book) (bk' : Window
     dsimp only at hp
     subst hp
     rfl
-  have hw : a' = fun w => windowRef (a w) := by
+  have hw : a' = fun w => executionPhaseRef (a w) := by
     funext w
     obtain ⟨h1, h2, h3, h4⟩ := ha w
     rcases e : a' w with ⟨d, h, o, l⟩
     rw [e] at h1 h2 h3 h4
-    simp only [windowRef, h1, h2, h3, h4]
+    simp only [executionPhaseRef, h1, h2, h3, h4]
   rw [NetworkCertifier.WindowCharge.charges, WindowCharge.charges, code_wsession, hb, hw, List.map_ofFn]
   rfl
 

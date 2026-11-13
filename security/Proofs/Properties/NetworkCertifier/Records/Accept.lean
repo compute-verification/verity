@@ -52,7 +52,7 @@ The check accepts exactly when the evidence fits, the parameters have their dige
 @[expose] public section
 
 open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile LinkWindow manifestSet)
+open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks manifestSet)
 open Properties.NetworkCertifier (EvidenceFits ParamsDigests)
 open Properties.NetworkCertifier.CheckProofs (fits_iff any_ne zip_left)
 open NetworkCheck.RecordsBytes (frameBytes_toEvidence)
@@ -86,7 +86,7 @@ theorem fits_bytes {p : Params} {e : Records.ByteEvidence} : EvidenceFits p e.to
   exact Iff.rfl
 
 theorem verdicts_all {p : Params} {c : Records.Commitment} {e : Records.ByteEvidence} {eg ig : ByteArray}
-    (P : LinkWindow → Prop) :
+    (P : TransferBlocks → Prop) :
     (∀ v ∈ (Records.verdicts p c e eg ig).toList, P v) ↔
       (∀ l link, (l, link) ∈ p.egress.toList.zip e.links.toList → ∀ w < p.windows,
         P ⟨.egress, l, w, Records.egressVerdict p c e eg l link

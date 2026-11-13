@@ -33,7 +33,7 @@ is the record head of the Program's grid, or two distinct strings the two heads'
 @[expose] public section
 
 open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile LinkWindow)
+open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile TransferBlocks)
 open NetworkCertifier (ClockSync)
 open Properties.NetworkCertifier (EvidenceFits ParamsDigests Declares SyncAdmitted programGrid LmsVerifies headStrings)
 
@@ -181,13 +181,13 @@ def AnswerAcceptMeans : Prop :=
 
 /-- Link-window `v'` is `v` but for the egress grid comparison: the same link-window, with the same verdict, or `v` an
 egress `mismatch` that `v'` accepts. So `v'` accepts every link-window `v` accepts. -/
-def GridOnly (v v' : LinkWindow) : Prop :=
+def GridOnly (v v' : TransferBlocks) : Prop :=
   v'.direction = v.direction ∧ v'.link = v.link ∧ v'.window = v.window ∧
     (v'.violation = v.violation ∨ v.direction = .egress ∧ v.violation = some "mismatch" ∧ v'.violation = none)
 
 /-- `vs'` is `vs` but for the egress grid comparison: as many link-windows, each `GridOnly` the one at its place in
 `vs`. -/
-def AllGridOnly (vs vs' : Array LinkWindow) : Prop :=
+def AllGridOnly (vs vs' : Array TransferBlocks) : Prop :=
   vs.size = vs'.size ∧ ∀ x ∈ vs.toList.zip vs'.toList, GridOnly x.1 x.2
 
 /-- A raw or committed record names an egress link of the unit: a record whose grid nothing but a comparison with the
@@ -201,7 +201,7 @@ def UncertifiedEgress (p : Params) (c : Records.Commitment) : Prop :=
 names an egress link, and `evaluate`, the check with the grid compared, gives verdicts that `vs'` is but for the egress
 grid comparison: the same link-windows in order, each with the same verdict, or an egress `mismatch` accepted. -/
 def NoGridMeans : Prop :=
-  ∀ (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence) (vs' : Array LinkWindow),
+  ∀ (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence) (vs' : Array TransferBlocks),
     Records.evaluateNoGrid p c e = .ok vs' →
       ¬ UncertifiedEgress p c ∧ ∃ vs, Records.evaluate p c e = .ok vs ∧ AllGridOnly vs vs'
 
@@ -209,7 +209,7 @@ def NoGridMeans : Prop :=
 when a raw or committed record names an egress link, and otherwise gives verdicts that are `vs` but for the egress grid
 comparison, so it accepts every link-window `evaluate` accepts. -/
 def NoGridAcceptsMore : Prop :=
-  ∀ (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence) (vs : Array LinkWindow),
+  ∀ (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence) (vs : Array TransferBlocks),
     Records.evaluate p c e = .ok vs →
       UncertifiedEgress p c ∧ (∃ why, Records.evaluateNoGrid p c e = .error why) ∨
         ∃ vs', Records.evaluateNoGrid p c e = .ok vs' ∧ AllGridOnly vs vs'
