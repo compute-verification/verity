@@ -39,9 +39,9 @@ from __future__ import annotations
 from typing import Any
 
 from verity.circuits.defs import bind, composite
-from verity.definitions.ops.fp32 import F32AddV2
-from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity.circuits.ops.fp32 import F32AddV2
+from verity.circuits.ops.prims import const
+from verity.circuits.ops.scalar import BitAnd, BitNot, BitOr, I32Add, I32Eq, I32Le, SelectF32, SelectI32
 from verity.circuits.refs import Coll, Strided, array_of, broadcast, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.evidence import EVIDENCE
