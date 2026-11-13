@@ -145,7 +145,7 @@ def test_a_refused_start_is_a_visible_failure_and_keeps_nothing(tmp_path):
 
 def test_a_start_naming_no_certifier_run_writes_nothing_under_its_name(tmp_path):
     """The run names a directory under KEEP, so the job holds it to the auditor's `CERTIFIER_RUN`, as the front does."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
     import auditor as A
     assert f'=~ ^{A.CERTIFIER_RUN.pattern.replace(r"\d", "[0-9]")}$ ]]' in (HERE / "wipe_gate.sh").read_text()
     keep = tmp_path / "keep"
