@@ -123860,3 +123860,43 @@ Not established: the forged stop audit at a served class's statics; anything in 
 Heads, all pushed: across `64364792ed70bb0b934d5cb5fac96f3779d8047f` (#9624); records
 `b3d3c01f9983e49de9ab05dd1eea330473848e95` (#9662); rows `08acea32de756f0f1a06168baf62c088fd24c630` (#9655, marked);
 cards `08b5d4b3c0a69b319826fcb86ed338cf7ba17e04`.
+
+## ONSITE, Fri 13 Nov 05:59Z: the world to `verity/protocols/interface/world/`: items 1, 2 and 4 pass, item 3's Lean run is out; nothing has stopped
+
+To your 05:36Z message (mailbox 05:35Z) and your 05:49Z one. The move was staged on a node and on my VM; the two trees are the same tree (`7aa1f236a403`) [run on my VM: `git rev-parse` of both].
+
+**Branch:** `cursor/proofs-world-map-interface-4d1c`, head `b446d85535be7db03b30eb9dec7cbeec564cb1cb`; `main` (`b843a10af48a`) is in it. No pull request yet: I open it when the head's certificate is in. Two changes to `tools/move/world_map.toml`, nothing else:
+- `9c314ca4c7ca`: the destination is `verity/protocols/interface/world/`.
+- `202527f88111`: `tests/tree.toml` is left out of the map's rewrite, as `hardware_map.toml` leaves it out. Without this the mover rewrote the `path` of top's not-yet line to the new place, and the line then said the moved directory was still to move. With it the line goes stale and the tree test warns that its move landed [run `r20261113-054503-d0f0`: `tests/test_tree.py` over the staged commit, rc 0].
+
+**The rehearsal** [run `r20261113-054503-d0f0`, cpu-7, at `202527f88111` on `main` `99cc585fa8f2`; `main` has since gained 87 commits, none touching a file the move reads or rewrites: read, `git diff --name-only`]:
+- `stage.py` staged `1b7176203b1e`: "certified … is a pure move (6 renames, 11 path-only edits)"; run again it changes nothing; `move_check.py` rc 0; `resolve_check.py` 0 issues.
+- Pins: 4 stale before (the four that record `security/Proofs/lake-manifest.json`), `pins.py --regen` rewrote those four, 0 stale after.
+- Still running in it: the suites `repository`, `verity/hardware`, `verity/protocols/certifier/verifier` and `verity-lean-audit` on the moved tree.
+
+**1. Does the Lean check of `core_protocol` count `world/World.lean` as its own orphan? No.**
+- [run `r20261113-054946-0698`, cpu-11, rc 0] `check.py --build verity/protocols/interface` on the moved tree: `AUDIT … PASS 2486 declarations in 16 modules`, `failures: []`, with the kernel replay.
+- [run on my VM] `lean_modules()` of `tools/verity/lean/check.py`, the list the orphan rule reads, gives 19 files for `verity/protocols/interface` on the moved tree, none under `world/`. Control: in a copy with `world/lakefile.toml` deleted it gives 20, and the twentieth is `world/World.lean`. So the nested lakefile is what keeps the file out.
+
+**2. The four tests on the moved tree: pass.**
+- [run on my VM, the files by name] `tests/test_tree.py`, `tests/test_lean_packages.py`, `tests/test_boundaries.py`, `tests/test_doc_paths.py`, with `tests/test_public_boundary.py`, `tests/test_drive_toml.py`, `tests/test_repository.py` and `tests/test_lean_vocabulary.py`: 193 passed, 9 warnings. The same eight on the base: 193 passed, 8 warnings. The ninth warning is top's not-yet line for `verity/hardware/world/`, landed.
+- On a node: the `repository` suite on the moved tree is still running in `d0f0`.
+
+**3. The device's build and the fast path of `security/Properties` and `security/Proofs`: not established yet.** [run `r20261113-054946-f77d`, cpu-10, running] `lean_changed.py --records verity/protocols/interface/world` on the moved tree, which audits `core_world` and then every package that reaches it.
+
+**4. The manifests and the README: the move rewrites all of them** [read: the staged commit's diff].
+- `verity/protocols/certifier/device/lean/lakefile.toml`: `path = "../../../interface/world"`; its `lake-manifest.json`: `"dir": "../../../interface/world"`.
+- `security/Properties/lake-manifest.json` and `security/Proofs/lake-manifest.json`: both `"../../verity/protocols/interface/world"`. This is the path's normal form. Lake itself would write the longer form through the device's directory; the mover writes the normal form for an inherited path it changes. Every Lake path resolves, on the base and on the moved tree (36 lakefiles, 402 paths, 0 unresolved) [run on my VM]. Whether Lake builds from it is item 3's run.
+- `verity/protocols/certifier/device/README.md`: both lines now read `verity/protocols/interface/world`, from the root.
+- Also rewritten: one row each of `tools/verity/check/public_boundary.toml` and `drive.toml`, two test logs under `tools/research/tests/`, the owners' registry, `moves.json`.
+
+**No hand commit is needed after the move** [derived]. `CERTIFIER_LEAN` gains nothing. One entry becomes redundant: `drive.toml`'s `lowrisk_excludes` already holds `verity/protocols/interface/` [read], so the world's own entry there repeats it.
+
+**Your 05:49Z ask.** Of my three maps only `configurations_map.toml` (#9602) names the exclusion of `tests/test_tree.py` [read: the three files]. `compose_map.toml` and `world_map.toml` never did; `world_map.toml` leaves out `tests/tree.toml`, a different file. The check with #9651 is out [run `r20261113-055430-5b8f`, cpu-3]: `main` `b843a10af48a`, #9602's head, the world's branch and #9651's head `16e8b7a60af1` merged (all clean), `configurations_map.toml` without that exclusion, then the three maps in order, pins and the `repository` suite. I have not changed #9602: its head stays `c0ebc52445e2` for its ready line.
+
+**Other runs.**
+- `r20261113-041521-46a8` (#9602's quick tier): 9 of 13 suites passed at 05:55Z, `verity-vllm` among them; four still to end.
+- `r20261113-042954-f29b`: done rc 0, 17 of 17 suites passed on the carve's moved tree `88597ed28b6f`.
+- At the world's head: `r20261113-055642-6740` (the certificate of record) and `r20261113-055641-89f9` (the changed suites' quick tier). Ratchet gate `origin/main..b446d85535be`: passed [run on my VM].
+
+**Not established:** item 3; any suite on the moved tree on a node; the certificate at the head `b446d85535be`.
