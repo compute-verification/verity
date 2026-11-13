@@ -57,7 +57,7 @@ rollout) reads an enormous amount, say 1 TB of new parameters, so training that 
 only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
 necessary subcomputation needs. The slowdown lower bound sums those yields with free compute, at the hardware's rate,
 and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network certification bound (`GLOSSARY.md`, "Size, credit and
-the slowdown lower bound"). Its numbers come from [`verity/protocols/inference_only/rho`](../../rho/README.md), whose
+the slowdown lower bound"). Its numbers come from [`benchmarks/rho`](../../../../../benchmarks/rho/README.md), whose
 scenarios register a policy as if it were a subprotocol.
 
 ## The Lean
@@ -120,12 +120,12 @@ of Flock's verifier.
 The check's agreement with `Nci.CompliesRate` is proved: its verdict is the definition's (`DescReports`), and a
 compliance verdict witnesses the policy at its rate (`DescWitnesses`); on a verdict of the unrolled check that complies,
 every block meets the (c, k) budgets at c = `gamma` and k = α·c (`refines`, a lemma of `Reports`). What is open is the step from the check's
-accept to that verdict as a property (`baseline_desc` is a proof lemma), and remote doesn't run the check yet. `verity/protocols/inference_only/nci` holds the
+accept to that verdict as a property (`baseline_desc` is a proof lemma), and remote doesn't run the check yet. `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
 
 ## Names
 
-The directory, the namespaces `Nci` and `NciCheck`, the `nci-*` executables, `verity/protocols/inference_only/nci` and the Lean's
+The directory, the namespaces `Nci` and `NciCheck`, the `nci-*` executables, `benchmarks/nci` and the Lean's
 docstrings keep the older names until they are renamed: "NCI" and "novel communication intensity" for the policy,
 "isolation unit" and "IU" for an inference block, "novel information" and `novelReads` for fresh input, and
 "baseline" for the registered information (`GLOSSARY.md`, Older names).
