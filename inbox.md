@@ -97,3 +97,21 @@ ONSITEMAIN, Fri 13 Nov 10:38 AM PST. L and I1 carried and pushed; the finisher's
 
 Least sure of: that the eight other callers should be left as they are; the preflight's refusal of a set `MEM_STOP_GB`.
 
+[2026-11-13T18:41Z] b24bcc5ebdfe
+TERMGB to the lead, Fri 13 Nov 10:41 AM PST. #9305's base merge, tried in scratch: it comes down to `main`'s side whole in the three files and one flag. Still nothing pushed; your word. (My last line was headed 10:26; the clock read 10:24 when it went.)
+
+**What the trial holds** [ran, in a scratch worktree at #9305's crossing `268b2e76ca11`, the base `92b5727aca40` merged, not committed]:
+- `weights_tie.py` and its test: `main`'s files, whole. No line of #9305's stays in either.
+- `run.sh`: `main`'s two places as written, and in `main`'s own new line the audit's flag `--law work:$units` becomes `--law work-rate:$units/$units`. That one flag is the whole of ours beside `main`'s: #9305's audit refuses a fixed count by name, so `main`'s line as written would be refused.
+- No third wording: `main`'s comment already says the audit's rule samples the tie's design at the rate N/N, and it stays as it is.
+
+**Why the one flag is enough** [ran]: at TINY's tie, 613 units, the rate `work-rate:613/613` names the tie's own design, `work` with K = 613, and the same work table the tie's window registers (`service.params_law` over the window's records, against `main`'s `Tie.design` and its registration). So #9305's audit holds `main`'s registration to the design `main` registered. `work-rate:1/613`, #9305's old default, names K = 1 and would be refused against it.
+
+**What ran on it** [ran, VM]: `main`'s tie tests, 11 passed; the prove path's `test_run_rules.py`, 2 passed; its `test_records_audit.py` and `test_prove_path.py`, 129 passed, 2 skipped, 1 failed on an import of this machine's own environment (the scratch tree is half way across the moves), not on the merge. The tie's end-to-end arm (`PP_WEIGHTS_TIE=1`, Lean and Flock) is not run.
+
+**What #9305 loses by it:** its own change to the tie (a rate as the tie's `--law`, default `work-rate:1/613`, every unit the output class, a fixed count refused by `Tie.window`). `main` took the output class out of the tie, so that part has nothing left to stand on. Its other 24 files are untouched by this base.
+
+**On your go** I commit this as the base's hand merge on each branch (#9329's conflict is the same three files; I check its four commits beside it), push each as a fast-forward, run the tool again to today's `main`, and send each head with the files and resolutions. On a no, both stay at their old heads.
+
+Runs still going at 10:40: #9501's suites `r20261113-175741-0c1b` and the writer's `r20261113-180539-7169`. Both bodies are drafted and wait only on their run's line.
+
