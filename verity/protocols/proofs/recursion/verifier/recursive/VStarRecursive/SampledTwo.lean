@@ -11,7 +11,8 @@ package's audit builds and reads it.
 
 * **params**: exactly `{"boundary", "challenger", "delta", "interior", "outputs", "public", "rule", "values"}`, the
   auditor's, fixed before any coin:
-  * `boundary`: the boundary registration's parameters, as the stream's run reads them (`OneStage.paramsParsed`); its
+  * `boundary`: the boundary registration's parameters, as the stream's run reads them (`OneStage.paramsParsed`),
+    naming the registration head they were filled from (`NO_HEAD`), so their day and declarations too; its
     program's proof blocks under its query are one stratum, the replay block's one Definition (`ONE_DEFINITION`), so a
     share of replay blocks by count is their share by weight; it names the challenger at the interior's key
     (`ONE_KEY`), so both stages' coins are read under one key, and a coin family other than the interior's
@@ -116,6 +117,11 @@ def ONE_DEFINITION : String :=
 def ONE_KEY : String :=
   "the boundary and the interior name one challenger key: both stages' coins are read under the run's one key"
 
+/-- The refusal of a boundary whose parameters name no registration head (`Registration.Verifier.head`). -/
+def NO_HEAD : String :=
+  "the boundary's parameters name no registration head: they are filled from the prefix of the registration log a " ++
+    "head names, with its day and declarations"
+
 /-- The refusal of parameters whose two stages name one coin family (`familiesApart`). -/
 def SAME_FAMILY : String :=
   "the boundary and the interior name one coin family: each stage's coins are a family of their own, released " ++
@@ -197,6 +203,7 @@ def paramsOfJson (j : Json) : V Params := do
   let .arr ds := getD j "public" | throw "public is not a list"
   let declared ← ds.mapM fun | .str s => pure s | _ => throw "a declared item is not a string"
   let bp ← paramsAt (getD j "boundary")
+  if bp.verifier.head.isNone then throw NO_HEAD
   if (Select.strataSizes bp.verifier.program bp.verifier.query).length != 1 then throw ONE_DEFINITION
   let it := getD j "interior"
   keysAre it #["members", "params", "replay", "values"] "the interior's parameters"

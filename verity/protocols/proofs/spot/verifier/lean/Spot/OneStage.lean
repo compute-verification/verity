@@ -29,7 +29,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `ChallengerKey.ofJson`) and the family they are sampled from, which needs `window_root`, refused in any other form; and
   it may add `day` and `declarations`, both or neither: the window's day (a natural number) and the registration log's
   declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which R2 holds the
-  record's program to (`Registration.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
+  record's program to (`Registration.declaredCode`), refused in any other form; and it may add `head`: the head of the
+  prefix of the registration log it filled `day` and `declarations` from (lowercase hex of 64 bytes, `HEAD_FORM`),
+  which needs `day` and `declarations` (`HEAD_UNDECLARED`); and it may add `seed_salt`: the window's
   seed salt it read from the challenger's log (`Challenger.seedSaltOf`), lowercase hex of 64 bytes, which needs
   `window_root` and which R6 holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
   add `pool`, `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window
@@ -162,6 +164,12 @@ def design (program : Program) (query : Json) (law : Json) (table : Option Json)
 def PARAM_KEYS : Array String := #["anchors", "delta", "law", "leaf_layer", "log", "partition", "ports", "program", "query",
   "registered", "scheme", "work_table"]
 
+def HEAD_FORM : String := "a registration head is lowercase hex of 64 bytes"
+
+def HEAD_UNDECLARED : String :=
+  "the parameters name a registration head and no day and declarations: parameters filled from a registration log " ++
+    "carry the day and the declarations of the prefix that head names"
+
 /-- A record of the log: an object whose `registered`, when truthy, lists objects with a string `value`, `root` and
 `domain`, which `Registration.heldRoots` reads (Python's `held_roots` raises on anything else). -/
 private def logRecord (j : Json) : V Json := do
@@ -242,6 +250,7 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "challenger").isSome then keys.push "challenger" else keys
   let keys := if (field? j "day").isSome || (field? j "declarations").isSome then keys ++ #["day", "declarations"]
     else keys
+  let keys := if (field? j "head").isSome then keys.push "head" else keys
   let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   let keys := if (field? j "pool").isSome then keys.push "pool" else keys
   let keys := if (field? j "history").isSome then keys.push "history" else keys
@@ -381,12 +390,17 @@ def paramsParsed (j : Json) : V Params := do
       | some n, .str p => pure (n, p)
       | _, _ => throw "a declaration's day is not a natural number or its program not a string"
     pure (some (day, ds))
+  let head ← match getD j "head" with
+    | .null => pure none
+    | .str h => if h.length == 128 && isHex h then pure (some h) else throw HEAD_FORM
+    | _ => throw HEAD_FORM
+  if head.isSome && declared.isNone then throw HEAD_UNDECLARED
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt, pool, tied },
+                                    declared, head, seedSalt, pool, tied },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then

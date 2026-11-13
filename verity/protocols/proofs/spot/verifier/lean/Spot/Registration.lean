@@ -198,6 +198,9 @@ structure Verifier where
   /-- the window's day and the registration log's declarations as `(day, program)` each, from the log it holds when it
   samples; none when it reads no declarations -/
   declared : Option (Nat × Array (Nat × String)) := none
+  /-- the head of the prefix of the registration log the auditor filled `declared` from, lowercase hex of 64 bytes;
+  none when it names none -/
+  head : Option String := none
   /-- the window's seed salt, lowercase hex of 64 bytes: the coin of the challenger's seed-salt family it read from the
   challenger's log (`Challenger.seedSaltOf`), which the window must name; none when it read none -/
   seedSalt : Option String := none

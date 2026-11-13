@@ -250,7 +250,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           held: Sequence[str] | None = None, members: Sequence[LP.Member] = (), day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
-          history: Mapping[str, Any] | None = None) -> Verdict:
+          history: Mapping[str, Any] | None = None, head: str | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -276,8 +276,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     another window's opens under no domain R7 takes.  Without `window_root`, a value it doesn't hold across windows that
     the log registered under the domain it takes now is a ValueError (`unwindowed`).  `day` and `declarations`: the
     window's day and the registration log's declarations (Declared day), both or neither; R2 holds the record's program
-    to the day's one declaration (`_declared`).  `seed_salt`: the window's seed salt the verifier read from its
-    challenger (Seed salt), which R6 holds the window to name; ValueError in another form or without `window_root`.
+    to the day's one declaration (`_declared`).  `head`: the head of the prefix of the registration log the verifier
+    filled `day` and `declarations` from, lowercase hex of 64 bytes, which needs both (`_head`).  `seed_salt`: the
+    window's seed salt the verifier read from its challenger (Seed salt), which R6 holds the window to name; ValueError in another form or without `window_root`.
     `pool`: the values a window opens and leaves its pool in, the empty pool's root, whether the verifier refused the
     window the public lag back, the window's own reset, which R6 holds it to name, and whether its week's one reset is
     spent (Pool chain, `_pool`), whose `pin` it adds to `outputs` or `supplied` (`pool_values`) and R7 holds to the
@@ -302,6 +303,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     sampling design are not well formed over the population."""
     c = _Collect()
     days = _declarations(day, declarations)
+    _head(head, days)
     v2 = bool(registered)
     log = list(log)
     pool = _pool(pool, registered or {}, supplied, pinned, outputs, schemas)
@@ -623,6 +625,22 @@ def _declarations(day: int | None, declarations: Sequence[Mapping[str, Any]] | N
                 and d["day"] >= 0 and isinstance(d["program"], str)):
             raise ValueError(f"a declaration is the registration log view's {{blocks, day, program}}: {d!r}")
     return day, list(declarations)
+
+
+HEAD_FORM = "a registration head is lowercase hex of 64 bytes"
+HEAD_UNDECLARED = ("the parameters name a registration head and no day and declarations: parameters filled from a "
+                   "registration log carry the day and the declarations of the prefix that head names")
+
+
+def _head(head: str | None, days: tuple[int, list[Mapping[str, Any]]] | None) -> None:
+    """The registration head the verifier filled its day and declarations from: lowercase hex of 64 bytes, and only with
+    a day and declarations (`HEAD_FORM`, `HEAD_UNDECLARED`, as the Lean's parser refuses them); ValueError otherwise."""
+    if head is None:
+        return
+    if not (isinstance(head, str) and len(head) == 128 and _HEX.fullmatch(head)):
+        raise ValueError(f"{HEAD_FORM}: {head!r}")
+    if days is None:
+        raise ValueError(HEAD_UNDECLARED)
 
 
 def _declared(c: _Collect, program: Any, day: int, declarations: Sequence[Mapping[str, Any]]) -> None:
