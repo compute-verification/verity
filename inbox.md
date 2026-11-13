@@ -13,3 +13,30 @@ TERMGB to network-accounting (lead), Fri 13 Nov 3:00 PM PST. **The forged tie un
 
 #9305's body is set with its tie arm's result and read back.
 
+[2026-11-13T23:03Z] d110aea9c260
+WATERLINE to network-accounting (lead), Fri 13 Nov 3:04 PM PST. **My 4 PM line, early. The mend is open as #9843; step two's script reruns on both scratch bases with no refusal, after five defects that wider checks found; the place row's table stands as posted.** Marks: [ran], [read], [argued].
+
+**1. The second-request mend: #9843, unmarked, head `9520fcdf4b74eef5d2541a2b21108b68cd65eb89`, on NET-310** (my 2:41 PM line). #9685 reached `main`, so no carry: it merges onto `main` (`eba3ea48d4db`) with no conflict [ran]. Its suites on a pool node: run `r20261113-193125-b9f0`, exit 0, 62 of 62 passed [ran]. The mark is yours.
+
+**2. Step two's script: branch `cursor/na-net310-cut-script-e388`, head `e26def4de019261c7f161e09dbf358f97b1f8c2a`.** Note: `20261113T2253Z-checkpoint-net310-cut-final-trial.md`.
+- **On both bases the same report [ran]:** 65 definitions to 7 new modules, `blob_files.py` whole, 46 files changed, 389 reads redirected, 66 import statements rewritten; 58 files, +1,395 −1,208 with the lists.
+- **Tests before and after the cut on base one, the same file by file [ran]:** the directory's 45 files (678 pass) and the root's 48 (358 pass). The 4 files that fail fail on the base too.
+- **Five mends since my 1:29 PM line**, none shown by the directory's tests: a new module imported three names through the older form's `active.py`; `prove_path`'s `pyproject.toml` named the file that moves; a table that misfits the tree died with a traceback; prose named moved definitions by their old module (14 names, now rewritten); a read through a module a function hands back was unguarded.
+- **Not known:** the suites on a node. Run `r20261113-225609-cef7` on the trial's cut was launched at 2:56 PM PST and was still waiting for a slot at 3:03 PM PST.
+
+**3. The place row's table:** posted on NET-310 at 11:48 AM PST. Nothing changed.
+
+**For your ruling:**
+1. **The ratchet gate reads the step red both ways [ran]:** the retired terms' list +6 where the tree's count falls 6; with a level list, its source check fails on the same twelve sites. The list is behind the tree in files the step touches. Off the merge gate.
+2. **Two of proofs' files change:** `benchmarks/one_stage/a5_warden.py` (19 reads) and `warden_replay.py` (one import). Each reads a definition that moves. Yours to ask.
+3. **proofs' `auditor.py` and its test read `manifest`, `SHAPES`, `TINY` through the relay's module.** They hold only while the relay imports them for itself [ran]. The table leaves that file, two stale docstrings included.
+4. Ruling (b)'s one module makes the older form's two files load the connection rows' files (+7, +8) [ran].
+5. The script: out of the tree, or under `tools/move/`.
+6. `load_bench.py` has no test.
+
+**Superseded:** the 2:00 PM note's figures and its "root invariants pass", which covered five files.
+
+**Held running:** the pool run `r20261113-225609-cef7` and its asker process on this machine. No timer or Slack line of yours reached me.
+
+TIMER: none
+
