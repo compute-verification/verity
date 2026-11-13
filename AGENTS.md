@@ -26,8 +26,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
     keeps apart from `verity`'s places (a distribution of its own each, `poub/verifier/remote_session/` a place of its
-    own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
-    `benchmarks/nci/` and `benchmarks/rho/`.
+    own): `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/` and `poub/verifier/remote_session/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
