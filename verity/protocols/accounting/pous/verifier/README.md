@@ -152,12 +152,13 @@ A period's wipe is `wipe_period`: one streamed wipe of the node, the memory chal
 Verity's wipe subprotocol, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
 `verity/protocols/accounting/pous/device/lean/`). An accepted wipe publishes `M` (every declared tier), the reads `k` the
 memory challenger chose (`wipe_party --reads`, 2152 by default; the prover never names them), `r = ratio(k)` and the
-foreign content it may leave, `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128` with
-`E` the egress its evidence gives (`R` the declared memory past the fill), and `M` (vacuous) otherwise; an unsigned
-session is undecided. The session signs no egress: the check takes one count as evidence beside the signed session
-(`egress_mib`, whole MiB; none given is `EGRESS_MAX_UNITS`, accepted and not certified; one out of range is rejected),
-and holds it to nothing, so until the check that composes the wipe with the network certifier ties it to the
-certifier's count between the session's marks, it is whoever writes the evidence's to give. `wipe_period.leg(period_dir, node, out)` is the wipe's run in the all-protocols period runner.
+foreign content it may leave, `M` (vacuous), since no network certifier signs the egress `E` the bound is taken at;
+an unsigned session is undecided. The session signs no egress: the check takes one count as evidence beside the signed
+session (`egress_mib`, whole MiB; none given is `EGRESS_MAX_UNITS`; one out of range is rejected) and holds it to
+nothing, so it certifies no wipe on it (`wipe_period.uncounted`) and names it as the evidence writer's
+(`writer_gap`). `certify` gives `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128`
+(`R` the declared memory past the fill), which the check that composes the wipe with the network certifier is to
+publish once it ties `E` to the certifier's count between the session's marks. `wipe_period.leg(period_dir, node, out)` is the wipe's run in the all-protocols period runner.
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one

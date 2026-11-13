@@ -513,12 +513,12 @@ is neither empty nor 128 lowercase hex digits; the Lean judge refuses a signed s
 
 **The egress.** The session signs no egress count. `verity/wipe/v0`'s check takes one as evidence beside the signed
 session: `{"egress_mib": N | null, "signed": …}`, `N` in whole MiB as `egress_units` gives them (rounded up,
-saturating at `EGRESS_MAX_UNITS = 2^15 − 1`). That one value is the `E` its public output is computed at
-(`certify`). With `null` the check takes `EGRESS_MAX_UNITS`, so the wipe is accepted and not certified; a value outside
-0 to `EGRESS_MAX_UNITS` is rejected. The wipe's check holds the value to nothing: whoever writes the evidence gives
-it. That it is the network certifier's count over the span between the session's start and end marks is what the
-check composing the wipe with the network certifier establishes, and until it does, C6 below is a premise about the
-evidence.
+saturating at `EGRESS_MAX_UNITS = 2^15 − 1`), with `null` taken as `EGRESS_MAX_UNITS`; a value outside 0 to
+`EGRESS_MAX_UNITS` is rejected. The wipe's check holds the value to nothing: whoever writes the evidence gives it. So
+it computes no bound at it: an accepted wipe publishes `certify` at `EGRESS_MAX_UNITS` (`uncounted`), not certified,
+and its profile names the value as the evidence writer's. That the value is the network certifier's count over the
+span between the session's start and end marks is what the check composing the wipe with the network certifier is to
+establish, and that check is what is to publish `certify` at it.
 
 The verdict a caller records is the Lean's: `MemoryChallenger.StreamedWipe.verdict`, the executable
 `streamed-wipe-verdict`, which `wipe_verdict.judge` (beside the Lean package) sends the signed session, the commitment,
