@@ -425,7 +425,6 @@
     {"file": "verity_vllm/program/predict/block_counts.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/program/predict/cli.py", "kind": "T201", "symbol": "node_main", "detail": "`print` found"},
     {"file": "verity_vllm/program/predict/compiled.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 4},
-    {"file": "verity_vllm/program/predict/dsa.py", "kind": "E741", "symbol": "_Model.moe", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/program/predict/node_registration.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/program/predict/node_registration.py", "kind": "T201", "symbol": "register", "detail": "`print` found"},
     {"file": "verity_vllm/program/quarantine/act/silu_mul_difftest.py", "kind": "E741", "symbol": "_words", "detail": "Ambiguous variable name: `I`"},

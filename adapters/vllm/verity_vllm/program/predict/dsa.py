@@ -676,7 +676,7 @@ class _Model:
         from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG
         C, M, H, G = self.C, len(x), self.H, self.G
-        E, TOPK, I = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])
+        E, TOPK, INTER = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])
         w = lambda f: self.w[(L, f)]  # noqa: E731
         logits = self.router(x, w("gate_w"))
         shared = self.fp8_linear(self.silu(self.fp8_linear(x, w("sh_gate_up_w"), w("sh_gate_up_ws"))), w("sh_down_w"), w("sh_down_ws"))
@@ -687,19 +687,19 @@ class _Model:
         top = [self.call(rt, lg, w("gate_bias").refs) for lg in logits]
         xq = [self.call(self.k("fp8_group_quant_ue8m0", K=H, G=G), r) for r in x]
         device: Any = self.net.device   # as given: a net that names no device is None's AttributeError
-        cfg = fused_moe_config(E, I, device, "fp8_w8a8", (G, G), self.launch.tokens(M))
+        cfg = fused_moe_config(E, INTER, device, "fp8_w8a8", (G, G), self.launch.tokens(M))
         if cfg is None:
-            _refuse(f"no tuned fused-MoE config for E={E}, N={I} on {self.net.device!r} (engine.profiles.devices.FUSED_MOE_CONFIGS)")
+            _refuse(f"no tuned fused-MoE config for E={E}, N={INTER} on {self.net.device!r} (engine.profiles.devices.FUSED_MOE_CONFIGS)")
         BM, BN, KB, warps = cfg["BLOCK_SIZE_M"], cfg["BLOCK_SIZE_N"], min(cfg["BLOCK_SIZE_K"], G), cfg["num_warps"]
         swap = BM < 64 and BN >= 64
         if (why := TG.moe_fp8_tuned_tile_refusal(self.net.tp, BM, BN, KB, warps, swap)):
             _refuse(why)
         st = {"E": E, "G": G, "KB": KB, "SWAP": swap, "DOT": TG.moe_expert_fp8_launch_dot(self.net.tp, BM, BN, warps, swap)}
-        up, down = self.k("moe_expert_gemm_dot", K=H, N=2 * I, **st), self.k("moe_expert_gemm_w_dot", K=I, N=H, **st)
+        up, down = self.k("moe_expert_gemm_dot", K=H, N=2 * INTER, **st), self.k("moe_expert_gemm_w_dot", K=INTER, N=H, **st)
         pairs = range(M * TOPK)
         ids = [top[p // TOPK][1].refs.slice(p % TOPK, p % TOPK + 1) for p in pairs]
         u = [self.call(up, xq[p // TOPK][0].refs, xq[p // TOPK][1].refs, ids[p], w("w13").refs, w("w13_ws").refs).refs for p in pairs]
-        aq = [self.call(self.k("fp8_group_quant_ue8m0", K=I, G=G), a) for a in self.silu(u)]
+        aq = [self.call(self.k("fp8_group_quant_ue8m0", K=INTER, G=G), a) for a in self.silu(u)]
         d = [self.call(down, aq[p][0].refs, aq[p][1].refs, ids[p], top[p // TOPK][0].refs.slice(p % TOPK, p % TOPK + 1), w("w2").refs,
                        w("w2_ws").refs).refs for p in pairs]
         msum = self.k("moe_sum", TOPK=TOPK, H=H)
