@@ -4,7 +4,7 @@ takes DeepGEMM's branch (M >= 32) at its prefill and FlashInfer's at its decode.
 word a unit, so the DSA norm's sum of squares, which reads q_a's 2,048 words whole, reads them through the two-level
 gather (64 coordinates a chunk, then 32 chunks a row), and its apply units read those chunks, four a block of 256. Every
 other family's rows, and every other rank's partials, are free inputs listed by name; every template's unit is a proof
-block C-Flock's composer proves, and the Circuit passes its wiring and input checks.
+block Flock's composer proves, and the Circuit passes its wiring and input checks.
 """
 from __future__ import annotations
 

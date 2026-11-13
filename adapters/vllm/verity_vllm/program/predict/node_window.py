@@ -31,7 +31,7 @@ The window is completeness only: that it computes what serving ran is held by th
 Refused by name (`Unexpressible`): a Program with no weights record, an input that is neither the prompt, the weights nor a
 ``peers_*`` partial, a lowered family's argument batched on an axis other than 0 or None, a read that cuts a writer's row,
 a gather whose rows are not one width or whose two levels don't fit, and at `_Builder.settle`, every template whose ports
-aren't cut a writer row or whose unit C-Flock's composer wouldn't prove.
+aren't cut a writer row or whose unit Flock's composer wouldn't prove.
 """
 from __future__ import annotations
 
