@@ -11,6 +11,7 @@ import importlib.util
 import io
 import json
 import multiprocessing as mp
+import os
 import pickle
 import re
 import resource
@@ -112,12 +113,31 @@ def main() -> None:
         workload = TpWorkload(digests, bindings)
         rec["compile_s"] = round(time.perf_counter() - t0, 1)
         live = [b for b in bindings if b is not None]
+        prof = None
+        if os.environ.get("COLLECT_PROFILE"):
+            import cProfile
+            prof = cProfile.Profile()
+            prof.enable()
+        t = time.perf_counter()
         sites = TW.sites_circuit(bindings, "class-g")
+        rec["sites_s"] = round(time.perf_counter() - t, 1)
+        t = time.perf_counter()
         try:
             in_order(sites)
             backward = None
         except AssertionError as e:
             backward = str(e)[:2000]
+        rec["in_order_s"] = round(time.perf_counter() - t, 1)
+        t = time.perf_counter()
+        blocks = proof_blocks(sites)
+        rec["proof_blocks_s"] = round(time.perf_counter() - t, 1)
+        if prof is not None:
+            import pstats
+            prof.disable()
+            s = io.StringIO()
+            pstats.Stats(prof, stream=s).sort_stats("cumulative").print_stats(60)
+            pstats.Stats(prof, stream=s).sort_stats("tottime").print_stats(40)
+            (out / f"profile_{lp}_l{layers}.txt").write_text(s.getvalue())
         kinds = Counter(re.sub(r"\[\d+, \d+\)", "[..)", re.sub(r"request \d+'s collective \d+ \[\d+, \d+\): rank \d+'s node \d+ ",
                                                                 "", u)) for u in sites.unwired)
         rec.update({"workload": workload.digest, "sites": [len(x.sites) for x in live],
@@ -125,14 +145,15 @@ def main() -> None:
                     "units": dict(sorted(sites.circuit.units.items())), "templates": len(sites.circuit.templates),
                     "template_ids": sorted(descriptor_id(fn) for fn, _ in sites.circuit.templates),
                     "wires": len(sites.circuit.wires), "unwired": dict(sorted(kinds.items())),
-                    "proof_blocks": proof_blocks(sites), "backward": backward})
+                    "proof_blocks": blocks, "backward": backward})
     except BaseException as e:  # noqa: BLE001 - a refusal is a result
         rec.update({"error": f"{type(e).__name__}: {e}"[:3000], "trace": traceback.format_exc()[-3000:]})
     rec["wall_s"] = round(time.perf_counter() - t0, 1)
     rec["peak_gib"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1048576, 2)
     (out / f"collect_{lp}_l{layers}.json").write_text(json.dumps(rec, indent=1) + "\n")
     print("REQBLOCK collect_par " + json.dumps({k: rec.get(k) for k in ("layers", "LP", "sites", "wires", "templates", "unwired",
-                                                                       "proof_blocks", "backward", "compile_s", "wall_s",
+                                                                       "proof_blocks", "backward", "compile_s", "sites_s",
+                                                                       "in_order_s", "proof_blocks_s", "wall_s",
                                                                        "peak_gib", "error")}))
 
 
