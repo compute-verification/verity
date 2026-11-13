@@ -679,7 +679,7 @@ def verifier_reads(d: Design, window: CS.Binding, interior: Mapping[str, Any], b
     return out
 
 
-def references(d: Design, q: int, out: Path) -> dict[str, Any]:
+def references(d: Design, q: int, out: Path, counts: Sequence[int] | None = None) -> dict[str, Any]:
     """Params for a development run (`service.template_circuits`' ``proofs``): by template, in the check's order, its
     circuit file's SHA-512 and its reference statement's header and registered reads. The reference is
     `member_stager`'s statement of the template's member in the interior window of ``q`` replay blocks (`Design.window`,
@@ -689,7 +689,14 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     port the value it reads (`verifier_reads`: a link's value, a return's that round 1 commits, else the port holding
     it), its words and schema. Both are
     a function of the class's layout and ``q`` alone, so an auditor fixes them before the run, one a sample size its
-    first-stage law can draw; this command builds them after the sample, which is why its run is a development run."""
+    first-stage law can draw; this command builds them after the sample, which is why its run is a development run.
+
+    ``counts``: for a run whose statements hold only their sampled proof blocks (``--sampled-only``), the stream's count
+    of sampled proof blocks in a cell, by member (`Stream.counts`). A member the second stage samples short of whole
+    then has its reference staged at its ``q·counts[k]`` sampled proof blocks alone, its first slots, one zero row a
+    table: placed at any such slots (`second_stage.at_sampled`) its header is the whole one's but for the run's fields
+    and the bindings, which round 2 computes itself (`at_run`), so the auditor stages nothing of the member's size. A
+    member sampled whole keeps the whole reference, which round 2 holds its statement to as today."""
     from verity_flock.class_statement import member_stager
 
     window = d.window("00" * 64, range(q))
@@ -697,11 +704,13 @@ def references(d: Design, q: int, out: Path) -> dict[str, Any]:
     linked = {(x.template, x.port): x.value for x in (*d.links, *(x for x in d.returns if x.held))}
     named = []
     for k, m in enumerate(window.members):
-        at, rows = Path(out) / f"m{k}", {r: np.zeros((m.n, w), dtype=np.uint16) for r, w in m.rows}
+        whole = counts is None or q * int(counts[k]) >= m.n
+        n = m.n if whole else q * int(counts[k])
+        at, rows = Path(out) / f"m{k}", {r: np.zeros((n, w), dtype=np.uint16) for r, w in m.rows}
         member_stager(template_fn(m.template), m, bind).stage(
-            rows, at, REFERENCE_KEY, indices=range(m.base, m.base + m.n),
-            tables={r: np.zeros((dict(m.tables)[r], w), dtype=np.uint16) for r, w in m.rows},
-            refs={r: np.asarray(window.held_leaves(m, r)) for r in rows})
+            rows, at, REFERENCE_KEY, indices=range(m.base, m.base + n),
+            tables={r: np.zeros((dict(m.tables)[r] if whole else 1, w), dtype=np.uint16) for r, w in m.rows},
+            refs={r: np.asarray(window.held_leaves(m, r)) if whole else np.zeros(n, dtype=np.int64) for r in rows})
         (at / "inst.bin").unlink()
         with open(at / "pub.bin", "rb") as f:
             header = json.loads(f.readline())
@@ -909,12 +918,14 @@ def prove(a: argparse.Namespace, r: Replayed, out: Path,
     stream's second sample over the written window (`second_stage`). It hands over, by template, the composer and
     Definition (`composer`, on the check's own templates); by member key, the reads each port is verified against
     (`verifier_reads`); the second stage's draw, law and receipt; and the verifier's own window (`Design.window`) and
-    copies (``r.tie``). ``proofs``: the auditor's params, else a development run's built here (`references`).
+    copies (``r.tie``). ``proofs``: the auditor's params, else a development run's built here (`references`, at
+    the sampled count for ``--sampled-only``).
     -> (a5's summary, what the run reports, the sessions' statements, the params)."""
     d, sample, layout = r.design, r.sample, r.first.layout
     mine = d.window(r.first.registration.digest, sample)
     if proofs is None:
-        proofs = references(d, len(sample), out / "references")
+        proofs = references(d, len(sample), out / "references",
+                            r.first.stream.counts if getattr(a, "sampled_only", False) else None)
     S.template_circuits(proofs, r.first.stream.spec.check.query)
     (out / "proofs.json").write_text(json.dumps(proofs, indent=1, sort_keys=True))
     sets = {m.template: (composer(template_fn(m.template), m), template_fn(m.template)) for m in mine.members}
