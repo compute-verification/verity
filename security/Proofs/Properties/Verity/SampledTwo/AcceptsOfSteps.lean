@@ -24,7 +24,7 @@ step before it returned, so no step holds the evidence to anything the listed on
   (`sourceRead`), the first session shows none of the second stage's coins (`interiorUnshown`), the stages' sessions
   are in order (`stagesOrdered`), the first session's log holds no coin tree's line (`firstTreeless`), the second
   session's log opens each coin tree's rounds stream by stream (`repStreamsOrdered`), the second stage's law is
-  computed (`secondLawOf`) and the interior audit's check at that law accepts (`secondCheck`).
+  computed (`secondLawOf`) and the interior audit's check at that sampling design accepts (`secondCheck`).
 * `accepts_iff_steps`: the check accepts exactly there.
 
 That an honest prover's evidence passes each step is not shown here.

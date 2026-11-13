@@ -1,11 +1,11 @@
 """``served_passes.py lean``, the served Pearl+ flow's Lean step, against a stand-in ``pouw-pearlplus`` (a shell script that
 records its command line and prints what a test gives it) over a served run ``verify`` judged: two honest passes of one
-epoch (`test_pearl_c_vllm.proved_pass`) in a serve dir, verified at 3 draws on the node's draw, its coins fixed.
+epoch (`test_pearl_c_vllm.proved_pass`) in a serve dir, verified at 3 samples on the node's sample, its coins fixed.
 
-The step runs the executable on the passes that run's document names, the epoch's coins, its draws, its coin record, the W
+The step runs the executable on the passes that run's document names, the epoch's coins, its samples, its coin record, the W
 ``verify --tie`` held the passes to and, on a live session's coins, ``--of-record`` (`lean_argv`), and writes the Lean's
 answer, W at ``tie``, only where the Lean's printout is the Python's on every field #7221's difftest holds (`LEAN_HELD`),
-its ``drawn`` the draws and its W the Python's (or none on both).
+its ``drawn`` the samples and its W the Python's (or none on both).
 Anything else (a field that differs, an exit code that isn't its verdict's, a printout that isn't one, no coin record,
 passes other than those the verdict read, no executable) writes none and removes one there, and both verdicts go to the
 check document either way. The real executable's run is `benchmarks/one_stage`'s ``test_served_pearlplus_lean``.
@@ -85,7 +85,7 @@ def lean(tmp_path: Path, verify: Path, d: Path, exe: Path, *more: str) -> tuple[
 
 
 def test_an_agreeing_lean_verdict_is_written_where_the_compose_reads_it_with_both_verdicts_and_its_command_line(run, tmp_path):
-    """The step runs the executable on the run's passes in order, the epoch's coins, the draws and the coin record verify
+    """The step runs the executable on the run's passes in order, the epoch's coins, the samples and the coin record verify
     wrote, and writes the Lean's printout as its answer; the check document holds both verdicts, the command line and
     the executable's SHA-256."""
     d, verify, doc = run
@@ -198,8 +198,8 @@ def case(d: Path, verify: Path, answer: Path, out: Path) -> int:
 
 
 def test_case_writes_the_runs_case_parts_and_each_file_its_opened_tiles_read_privately(run, tmp_path, capsys):
-    """The params are the epoch's coins, the draws and the coin record's run and source; the manifests the retained
-    passes' in order; the evidence, per pass, each file the Lean's opened tiles read (`tile_files`, drawn and exclusion
+    """The params are the epoch's coins, the samples and the coin record's run and source; the manifests the retained
+    passes' in order; the evidence, per pass, each file the Lean's opened tiles read (`tile_files`, sampled and exclusion
     tiles alike) under the SHA-512 of its bytes, and the blobs exactly those files, each once, 0700 with files 0600."""
     d, verify, doc = run
     assert lean(tmp_path, verify, d, stub(tmp_path, printout(doc), 0))[0] == 0

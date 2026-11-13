@@ -480,7 +480,7 @@ def pubOf (θ : ByteArray) : ByteArray := ((keyOf θ).map (·.pub)).getD .empty
 
 /-- **A two-session deployment of the device**: the first stage's session (`one`) and the interior's (`two`), each a
 one-stage deployment (`Sampled.Device.Deployment`: its run's setup, its ledger lines before any coin and at the close).
-The device's draws at the close and its signatures are the first's. -/
+The device's samples at the close and its signatures are the first's. -/
 structure Deployment where
   one : Verity.Sampled.Device.Deployment
   two : Verity.Sampled.Device.Deployment

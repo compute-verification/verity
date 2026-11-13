@@ -39,7 +39,7 @@ harness (`verity/core/difftest`):
   lowercase hex, which no limit on decimal digits touches, with `text`, the ratio written back by `Core.Ratio.toString`
   (`window.ratio_str`), and `back`, that text read again; or `{"refused": why}`.
 
-The lead's window (`PouwCheck.Lead`, `circuit/lead.py`'s), a refusal as `{"refused": why}` where Python raises
+The lead's execution phase (`PouwCheck.Lead`, `circuit/lead.py`'s), a refusal as `{"refused": why}` where Python raises
 `ValueError`, and a malformed input a reject:
 
 * `lead-record` (`weights_root`, `stream`, `prover`, `key_leaf` as hex, `calls`): `lead_record` as `{"record": hex}`.
@@ -50,7 +50,7 @@ The lead's window (`PouwCheck.Lead`, `circuit/lead.py`'s), a refusal as `{"refus
 * `lead-egress` (`count`, `shapes` the forward's, admitted, `cap`, `fwd_macs`, `buckets` a list of `[r, [bits, …]]`,
   `release`): `egress_refused` and `forward_count` as `{"refused": bool, "count": n}`.
 * `lead-window` (`record`, `weights_root`, `stream`, `prover`, `key_leaf` as hex, `calls`, `events` the certifier's
-  record): `window_refusal` as `{"reason"}`, null when the window holds.
+  record): `window_refusal` as `{"reason"}`, null when the execution phase holds.
 -/
 
 @[expose] public section
