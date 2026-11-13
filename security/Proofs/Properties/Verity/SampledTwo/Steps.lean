@@ -139,23 +139,23 @@ theorem sourceRead_le {ξ : ByteArray} {run : Json} (h : sourceRead ξ run = .ok
   · omega
 
 /-- **On two windows the first session's log shows no second-stage coin after the interior's digest**: where the
-check's `interiorUnshown` passed, the boundary's window is `w` and not the interior's, the second stage's family is
-`label`, the interior registration's digest is `after` and the first session `e.coins` names on `w` has the roots
-`roots`, those roots show no coin of `label` released after `after`. -/
+check's `interiorUnshown` passed, the interior audit's parameters name the challenger key `k` and the family `label`,
+the boundary's window is `w` and not the interior audit's, the interior registration's digest is `after` and the
+first session `e.coins` names on `w` under `k` has the roots `roots`, those roots show no coin of `label` released
+after `after`. -/
 theorem interiorUnshown_roots {p : Params} {e : Evidence} (h : interiorUnshown p e = .ok ()) {w label : String}
     {after : ByteArray} {k : Spot.Challenger.ChallengerKey} {c : Spot.Challenger.LiveCommitment}
-    {roots : Spot.Challenger.Roots} (hw : p.boundary.verifier.windowRoot = some w)
-    (hne : some w ≠ p.interior.verifier.windowRoot)
-    (hl : Spot.getD (Spot.getD e.interior.base.coins "segment") "label" = .str label)
+    {roots : Spot.Challenger.Roots} (hk : p.audit.base.challenger = some (k, label))
+    (hw : p.boundary.verifier.windowRoot = some w)
+    (hne : some w ≠ p.audit.base.verifier.windowRoot)
     (ha : Spot.Registration.digest e.record = .ok after)
-    (hk : Spot.Challenger.ChallengerKey.ofJson (Spot.getD e.coins "key") = .ok k)
     (ht : Spot.Challenger.trustedSessionOf (Spot.getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
       (Spot.getD e.coins "pins") (Spot.getD e.coins "main") (Spot.getD e.coins "session") = .ok (c, roots)) :
     interiorShown roots label after = false := by
-  have hb : (some w == p.interior.verifier.windowRoot) = false := by simpa using hne
+  have hb : (some w == p.audit.base.verifier.windowRoot) = false := by simpa using hne
   unfold interiorUnshown at h
-  rw [hw, hl] at h
-  simp only [hb, Bool.false_eq_true, ↓reduceIte, ha, hk, ht, bind, Except.bind] at h
+  rw [hk, hw] at h
+  simp only [hb, Bool.false_eq_true, ↓reduceIte, ha, ht, bind, Except.bind] at h
   cases hc : interiorShown roots label after
   · rfl
   · rw [hc] at h
