@@ -346,7 +346,7 @@ def _path_readers(art: Path) -> dict[str, tuple[Path, Callable[[Any], Any]]]:
 
 
 @pytest.mark.parametrize("reader", ["parse_wrapper", "split_graph_wiring", "_graph_output", "_final_value"])
-def test_a_file_is_opened_at_the_path_as_given(art: Path, reader: str) -> None:
+def test_a_file_is_opened_at_the_path_as_given(art: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reader: str) -> None:
     """A wrapper's or a split graph's path is opened as it is given, nothing normalised on the way: bytes name the same file, a
     file's name with a slash after it names no directory, and the empty path names nothing."""
     path, read = _path_readers(art)[reader]
@@ -357,6 +357,7 @@ def test_a_file_is_opened_at_the_path_as_given(art: Path, reader: str) -> None:
     assert less_path(read(os.fsencode(path))) == less_path(read(str(path)))
     with pytest.raises(NotADirectoryError):
         read(f"{path}/")
+    monkeypatch.chdir(tmp_path)     # the suite's read guard takes an open of "" for a read of the directory the test runs in
     with pytest.raises(FileNotFoundError):
         read("")
 
