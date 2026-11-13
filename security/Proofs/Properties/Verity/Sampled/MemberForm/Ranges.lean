@@ -23,6 +23,11 @@ in one order, with no verifier and no window in it: arrays and lists of natural 
 * **Lists related member by member** (`forall₂_countP`, `forall₂_at`, `forall₂_at_left`, `forall₂_trans`,
   `forall₂_pairwise`): they count alike before each place where the relation carries the predicate, are related
   at each place, compose, and carry a pairwise relation from one to the other.
+* **Sessions' units over members of one range each** (`UnitsOver`, `UnitsOver.kept`, `UnitsOver.mem_units`): where
+  the members' ranges share no unit, the statements' members are members in order, each session's units are in its
+  statement's member's range and the units wanted are the sessions', the statements' members are the members with
+  a wanted unit, in the members' order, and a unit of a statement's member's range is wanted exactly when that
+  statement's session proved it.
 -/
 
 @[expose] public section
@@ -242,5 +247,97 @@ theorem forall₂_pairwise {α β : Type} {R : α → β → Prop} {P : β → �
     obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem ha'
     obtain ⟨b', hb', hr⟩ := forall₂_at_left ht i _ (List.getElem?_eq_getElem hi)
     exact hPQ _ _ _ _ hab hr (hb b' (List.mem_of_getElem? hb'))
+
+/-! ## The sessions' units over the members' ranges -/
+
+/-- A member of a list strictly ascending under a key is at one place. -/
+theorem idx_of_sorted {α : Type} {key : α → ℕ} {l : List α} (h : l.Pairwise fun x y => key x < key y)
+    {i j : ℕ} {a : α} (hi : l[i]? = some a) (hj : l[j]? = some a) : i = j := by
+  obtain ⟨hi', ei⟩ := List.getElem?_eq_some_iff.1 hi
+  obtain ⟨hj', ej⟩ := List.getElem?_eq_some_iff.1 hj
+  rcases Nat.lt_trichotomy i j with hij | rfl | hij
+  · have hlt := List.pairwise_iff_getElem.1 h i j hi' hj' hij
+    rw [ei, ej] at hlt
+    exact absurd hlt (Nat.lt_irrefl _)
+  · rfl
+  · have hlt := List.pairwise_iff_getElem.1 h j i hj' hi' hij
+    rw [ei, ej] at hlt
+    exact absurd hlt (Nat.lt_irrefl _)
+
+/-- A unit `lo + u` is among the units `lo + ·` of slots exactly when `u` is among the slots. -/
+theorem mem_map_add {lo u : ℕ} {us : Array ℕ} : lo + u ∈ us.map (lo + ·) ↔ u ∈ us := by
+  rw [Array.mem_map]
+  constructor
+  · rintro ⟨v, hv, e⟩
+    obtain rfl : v = u := Nat.add_left_cancel e
+    exact hv
+  · intro hu
+    exact ⟨u, hu, rfl⟩
+
+/-- **Sessions' units over members of one range each.** The members `vms`, each of the range `[lo, hi)`, are
+strictly ascending by `lo` and no unit is in two members' ranges; the statements' members `held` are members of
+`vms`, different members in the order of `lo`; the units `U` the sessions proved, a session a statement in order,
+are each in its statement's member's range; and the units `want` are exactly the units some session proved. -/
+structure UnitsOver {α : Type} (lo hi : α → ℕ) (vms held : List α) (U : List (Array ℕ)) (want : Array ℕ) :
+    Prop where
+  sorted : vms.Pairwise fun a b => lo a < lo b
+  apart : ∀ a ∈ vms, ∀ b ∈ vms, ∀ x, lo a ≤ x → x < hi a → lo b ≤ x → x < hi b → a = b
+  order : held.Pairwise fun a b => a ≠ b ∧ lo a ≤ lo b
+  among : ∀ a ∈ held, a ∈ vms
+  units : ∀ (j : ℕ) (a : α) (us : Array ℕ), held[j]? = some a → U[j]? = some us → ∀ x ∈ us, lo a ≤ x ∧ x < hi a
+  each : ∀ (j : ℕ) (us : Array ℕ), U[j]? = some us → ∃ a, held[j]? = some a
+  want : ∀ x, x ∈ want ↔ ∃ us ∈ U, x ∈ us
+
+namespace UnitsOver
+
+variable {α : Type} {lo hi : α → ℕ} {vms held : List α} {U : List (Array ℕ)} {want : Array ℕ}
+
+/-- The statements' members are strictly ascending by `lo`: two of them with one `lo` are one member of `vms`. -/
+theorem strict (h : UnitsOver lo hi vms held U want) : held.Pairwise fun a b => lo a < lo b :=
+  h.order.imp_of_mem fun {a b} ha hb hab =>
+    Nat.lt_of_le_of_ne hab.2 fun e => hab.1 (eq_of_key_eq h.sorted (h.among a ha) (h.among b hb) e)
+
+/-- A unit of `want` is one a session proved, in its statement's member's range. -/
+theorem want_at (h : UnitsOver lo hi vms held U want) {x : ℕ} (hx : x ∈ want) :
+    ∃ (j : ℕ) (a : α) (us : Array ℕ), held[j]? = some a ∧ U[j]? = some us ∧ x ∈ us ∧ lo a ≤ x ∧ x < hi a := by
+  obtain ⟨us, hus, hxu⟩ := (h.want x).1 hx
+  obtain ⟨j, hj⟩ := List.getElem?_of_mem hus
+  obtain ⟨a, ha⟩ := h.each j us hj
+  exact ⟨j, a, us, ha, hj, hxu, h.units j a us ha hj x hxu⟩
+
+/-- **The statements' members are the members with a unit in `want`, in the members' order**: where `s` says of a
+member of `vms` that `want` holds a unit of its range, and says so of every statement's member. -/
+theorem kept (h : UnitsOver lo hi vms held U want) {s : α → Bool}
+    (hs : ∀ a ∈ vms, s a = true ↔ ∃ x ∈ want, lo a ≤ x ∧ x < hi a) (hsam : ∀ a ∈ held, s a = true) :
+    held = vms.filter s := by
+  refine eq_of_sorted (key := lo) h.strict (h.sorted.filter s) fun a => ?_
+  rw [List.mem_filter]
+  constructor
+  · intro ha
+    exact ⟨h.among a ha, hsam a ha⟩
+  · rintro ⟨ha, hsa⟩
+    obtain ⟨x, hx, hlo, hhi⟩ := (hs a ha).1 hsa
+    obtain ⟨j, b, us, hb, -, -, hlo', hhi'⟩ := h.want_at hx
+    have hbm : b ∈ held := List.mem_of_getElem? hb
+    obtain rfl : a = b := h.apart a ha b (h.among b hbm) x hlo hhi hlo' hhi'
+    exact hbm
+
+/-- **A unit of a statement's member's range is in `want` exactly when the statement's session proved it.** -/
+theorem mem_units (h : UnitsOver lo hi vms held U want) {j : ℕ} {a : α} {us : Array ℕ}
+    (ha : held[j]? = some a) (hu : U[j]? = some us) {x : ℕ} (hlo : lo a ≤ x) (hhi : x < hi a) :
+    x ∈ want ↔ x ∈ us := by
+  constructor
+  · intro hx
+    obtain ⟨j', b, us', hb, hu', hxu, hlo', hhi'⟩ := h.want_at hx
+    have ham : a ∈ held := List.mem_of_getElem? ha
+    have hbm : b ∈ held := List.mem_of_getElem? hb
+    obtain rfl : a = b := h.apart a (h.among a ham) b (h.among b hbm) x hlo hhi hlo' hhi'
+    obtain rfl : j = j' := idx_of_sorted h.strict ha hb
+    obtain rfl : us = us' := Option.some.inj (hu.symm.trans hu')
+    exact hxu
+  · intro hx
+    exact (h.want x).2 ⟨us, List.mem_of_getElem? hu, hx⟩
+
+end UnitsOver
 
 end Verity.Sampled.MemberForm
