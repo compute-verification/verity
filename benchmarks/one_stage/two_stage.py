@@ -119,6 +119,7 @@ A ``local`` session's challenger reads its coins through
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import sys
@@ -919,7 +920,8 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     stops = {k: len(pubs) + j for j, k in enumerate(k for k, p in enumerate(pubs) if p.get("stopped") is True)}
     manager, turns, finisher = AC.start(a.challenger, root, list(range(len(pubs) + len(stops))),
                                         Path(a.out) / "challenger", a.main, ssh_key=a.ssh_key, peer=a.peer,
-                                        key_record=a.challenger_key, host=challenger_host(a, Path(a.out) / HOST_DIR))
+                                        key_record=a.challenger_key, host=challenger_host(a, Path(a.out) / HOST_DIR),
+                                        deployed=getattr(a, "deployed_key", False))
     ours = AC.held(turns)
     out: list[dict] = [{} for _ in pubs]
     stop_design = a.stop_design or a.replay
@@ -1074,7 +1076,7 @@ def _second(a: argparse.Namespace) -> int:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         r2, o = summary.get("round_two"), summary.get("outcome") or {}
         print("TWO " + json.dumps({**{x: summary.get(x) for x in ("refused", "sample", "second_stage", "pins", "held",
-                                                                  "proof_server_refused")},
+                                                                  "proof_server_refused", "form_case")},
                                    "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
                                    "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                      "refused")}}, default=str))
@@ -1101,7 +1103,7 @@ def _second(a: argparse.Namespace) -> int:
     trees = bool(getattr(a, "interior_trees", False))
     manager, draws, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.ssh_key,
                                         peer=a.peer, key_record=a.challenger_key, host=host,
-                                        stage=AC.SECOND if trees else "")
+                                        stage=AC.SECOND if trees else "", deployed=getattr(a, "deployed_key", False))
     ours = AC.held(draws)
     again.stream.key, again.stream.main = ours["key"], tuple(ours["main"])
     coins = AC.RankCoins(draws, 0)
@@ -1140,7 +1142,11 @@ def _second(a: argparse.Namespace) -> int:
         (out / "coins.json").write_text(json.dumps({"evidence": evidence, "read": [stage1["read"], coins.read.hex()]},
                                                    indent=1, sort_keys=True))
         if "handed" in s:
-            summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
+            import sampled_two_case as SC
+            with SC.capture(out / "run-input.json") if getattr(a, "form_case", False) else contextlib.nullcontext():
+                summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
+            if getattr(a, "form_case", False):
+                summary["form_case"] = SC.from_run(out)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
         return done(0 if ok else 1, held=ok)
     finally:
@@ -1184,6 +1190,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--challenger-host", help="--challenger local: the directory its challenger is kept in for the "
                                              f"second stage to reopen (default: OUT/{HOST_DIR})")
     f.add_argument("--ssh-key")
+    f.add_argument("--deployed-key", action="store_true", help="--challenger local: its key at the deployed LMS parameters (a5_coins.start's deployed), "
+                        "as SPOT's v2 and the two-stage form read keys; the first stage makes it, the second reopens it")
     f.add_argument("--out", required=True)
     g = sub.add_parser("second", help="one class's interior registration, second stage, proofs and outcome")
     g.add_argument("--stage1", required=True, help="the class's stage1.json (first)")
@@ -1215,10 +1223,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                                              "(first's --challenger-host), required and reopened: both stages' coins "
                                              "are one challenger's, read under its one key")
     g.add_argument("--ssh-key")
+    g.add_argument("--deployed-key", action="store_true", help="--challenger local: its key at the deployed LMS parameters (a5_coins.start's deployed), "
+                        "as SPOT's v2 and the two-stage form read keys; the first stage makes it, the second reopens it")
     g.add_argument("--interior-trees", action="store_true",
                    help="the interior's sessions take their coin trees from this stage's challenger session, whose "
                         "families carry the second stage's tag (a5_coins.SECOND), as the two-stage form's check reads "
                         "two windows; needs FLOCK_CHALLENGER=1 and two members or more (a5.drawn_trees)")
+    g.add_argument("--form-case", action="store_true",
+                   help="write the two-stage form's case of this run under OUT/form (sampled_two_case.from_run)")
     g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "second":
