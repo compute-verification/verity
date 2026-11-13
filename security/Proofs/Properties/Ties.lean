@@ -85,13 +85,13 @@ theorem certifiedKeys_take_mono (D : Digests) (c : Composite) (log : Registratio
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-theorem declaredIn_take_mono (V : Vocab d α) (tags : Flock.Tags) (tables : List (String × ByteArray))
-    (θ : ByteArray) (F : Array ByteArray) (j : ℕ) (D : Digests) (c : Composite) (log : Registration) {n m : ℕ}
-    (h : n ≤ m) (hd : DeclaredIn V tags tables θ F j (view D c (log.take n))) :
-    DeclaredIn V tags tables θ F j (view D c (log.take m)) := by
+theorem declaredIn_take_mono (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (mp : MonitoringPeriod) {k : ℕ}
+    (cut : mp.span.Cut k) (w : TickSpan) (D : Digests) (c : Composite) (log : Registration) {n m : ℕ}
+    (h : n ≤ m) (hd : DeclaredIn V θ F mp cut w (view D c (log.take n))) :
+    DeclaredIn V θ F mp cut w (view D c (log.take m)) := by
   obtain ⟨-, hdecl, -⟩ := view_take_prefix D c log h
-  obtain ⟨p, hp, hn⟩ := hd
-  refine ⟨p, hp, hn.mono fun e he => ?_⟩
+  obtain ⟨j, hw, p, hp, hn⟩ := hd
+  refine ⟨j, hw, p, hp, hn.mono fun e he => ?_⟩
   simp only [Set.mem_ofPred_eq] at he ⊢
   exact ⟨hdecl.subset he.1, he.2⟩
 

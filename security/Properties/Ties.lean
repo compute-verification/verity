@@ -20,8 +20,8 @@ entry. For the circuit, the parameters name the circuit file and the view holds 
 side is read through the one public map from the first to the second (`Registration.boundProgram`, the circuit file's
 META `program_sha512`), and `f` then projects a declaration to its program.
 
-* `Registration.DeclaredIsParams`: the Program the parameters' circuit file binds is the program the prefix declares
-  for the day.
+* `Registration.DeclaredIsParams`: the Program the circuit file the verifier reads binds is the program the prefix
+  declares for the day the window lies in.
 * `Registration.CertifiedIsParams`: a network certifier check's links, each with its key, are registered boundary links
   with that key pinned for their certifier.
 * `Registration.RootIsRegistered`: a θ entry an answer names, root, rows and domain, is the one θ registers for its
@@ -53,10 +53,12 @@ def boundProgram (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × 
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The parameters' circuit is the one the view declares for day `j`**: the circuit file the parameters `θ` name
-among the committed files `F` (`Vocab.circuitFile`, the file whose SHA-512 is `Vocab.programDigest θ`) binds a Program
-(`boundProgram`, read at the statement's `tags` and `tables`), and that Program's digest is the program of the view's
-declaration of day `j` (`NamesRegistered`, `f` = `Declared.program`).
+/-- **The parameters' circuit is the one the view declares for the window's day**: the days are the cut `cut` of the
+monitoring period `m`'s span into `n` consecutive spans, as in `RunsDeclared`, and the window's span `w` lies within
+day `j`'s; the circuit file the verifier reads at the parameters `θ` and the committed files `F` (`Vocab.read`, which
+also gives the statement's tags and tables) binds a Program (`boundProgram`); and that Program's digest is the program
+of the view's declaration of day `j` (`NamesRegistered`, `f` = `Declared.program`). Nothing it reads is free: the tags,
+the tables and the circuit file are the verifier's reading, and the day is the one the window lies in.
 
 The two digests are of different objects: `programDigest θ` is the circuit file's SHA-512, and a declaration's
 `program` is the Program descriptor's. `boundProgram` is the public map from the first to the second. The log declares no
@@ -66,16 +68,17 @@ No theorem reads it, and no Lean check holds the circuit file the parameters nam
 verifier holds its own Program to the circuit file's META, and registration's view holds the declaration, but nothing
 compares the two. It becomes a lemma when the composite's check refuses parameters whose circuit file binds a Program
 other than the day's declared one, or when the parameters are derived from the log. -/
-def DeclaredIn (V : Vocab d α) (tags : Flock.Tags) (tables : List (String × ByteArray)) (θ : ByteArray)
-    (F : Array ByteArray) (j : ℕ) (v : View) : Prop :=
-  ∃ p, boundProgram tags (V.circuitFile θ F) tables = some p ∧
-    NamesRegistered {e | e ∈ v.declarations ∧ e.day = j} Declared.program p
+def DeclaredIn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (m : MonitoringPeriod) {n : ℕ}
+    (cut : m.span.Cut n) (w : TickSpan) (v : View) : Prop :=
+  ∃ j : Fin n, w.Within (cut.part j) ∧
+    ∃ p, boundProgram (V.read θ F).tags (V.read θ F).circuitFile (V.read θ F).tables = some p ∧
+      NamesRegistered {e | e ∈ v.declarations ∧ e.day = j} Declared.program p
 
-/-- **The parameters' circuit is the one declared for day `j` at the head `h`**: `DeclaredIn` at the view of the prefix
-of the log `h` heads (`AtHead`, under the digests `D` and the composite `c`). -/
-def DeclaredIsParams (V : Vocab d α) (tags : Flock.Tags) (tables : List (String × ByteArray)) (θ : ByteArray)
-    (F : Array ByteArray) (j : ℕ) (D : Digests) (c : Composite) (log : Registration) (h : String) : Prop :=
-  AtHead D c log h (DeclaredIn V tags tables θ F j)
+/-- **The parameters' circuit is the one declared for the window's day at the head `h`**: `DeclaredIn` at the view of
+the prefix of the log `h` heads (`AtHead`, under the digests `D` and the composite `c`). -/
+def DeclaredIsParams (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (m : MonitoringPeriod) {n : ℕ}
+    (cut : m.span.Cut n) (w : TickSpan) (D : Digests) (c : Composite) (log : Registration) (h : String) : Prop :=
+  AtHead D c log h (DeclaredIn V θ F m cut w)
 
 /-- **The links network certifiers certify, each with its certifier's key**: the id of a boundary link of the view's
 Site (`Site.Boundary`) with a network certifier at an end, beside that certifier's registered key (`Site.Loc.key`: its
