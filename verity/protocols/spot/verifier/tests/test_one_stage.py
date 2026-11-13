@@ -14,7 +14,7 @@ import pytest
 import verity.definitions.ops.prims  # noqa: F401  (with verity.definitions.ops.scalar, the primitives partition_vectors.json's descriptor names)
 import verity.definitions.ops.scalar  # noqa: F401
 from verity.circuits import codec, partition_object as PO
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
@@ -143,8 +143,8 @@ V1_PAIR_3_XOR3_5 = ("dedeaac905807d8b5da6852a43f4295a99d2930029074edbf330484051a
                     "01af2b4de0207fb2cc295498f99064fe08c39cd46aae77bd532989cbc509f29a")
 
 
-def _xor8_registry() -> Registry:
-    reg = Registry()
+def _xor8_registry() -> DefinitionTable:
+    reg = DefinitionTable()
     reg.add(XOR8)
     return reg
 
@@ -646,7 +646,7 @@ QWORD = json.loads((CORE_VECTORS / "partition_vectors.json").read_text())
 TEMPLATE = json.loads((CORE_VECTORS / "template_instance_vectors.json").read_text())
 V32 = Value(32)
 #: the primitives template_instance_vectors.json's descriptors name (a partition reads their ids and types only)
-TEMPLATE_REG = Registry()
+TEMPLATE_REG = DefinitionTable()
 for _name in ("TAdd32", "TMul32"):
     TEMPLATE_REG.add(PrimitiveDefinition(_name, 1, (("a", V32), ("b", V32)), V32, lambda a, b: (a + b) & 0xFFFFFFFF, register=False))
 
