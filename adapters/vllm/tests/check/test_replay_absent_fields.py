@@ -1,16 +1,18 @@
 """What the readers of `verity_vllm.check.replay` answer for a field its document leaves out: a Program row without operands and
 an instances document without supplied inputs (`verity_vllm.check.replay.index`, and the row's readers in `evaluate`, `population`
 and `driver`), a binding map without entries and an entry without an identity or an encoding (`verity_vllm.check.replay.opening`),
-a manifest without a query, aliases or a cross-check's counts, an engine schedule without observed arrive steps
-(`verity_vllm.check.replay.linkage`), a population without reasons (`verity_vllm.check.replay.replay_codes`).  Each field is given
-absent, null and empty, and the answer is the same for the three; where a document can state the field, the stated answer stands
-beside them."""
+a manifest without a query, aliases or a cross-check's counts, an engine schedule without observed arrive steps and a workload
+request without steps or prompt ids (`verity_vllm.check.replay.linkage`), a population without reasons
+(`verity_vllm.check.replay.replay_codes`), a row's description without statics and a stop rule's block without problems
+(`verity_vllm.check.replay.population`), a step's geometry without a plane row's module.  Each field is given absent, null and
+empty, and the answer is the same for the three; where a document can state the field, the stated answer stands beside them."""
 from __future__ import annotations
 
 import copy
 from types import SimpleNamespace
 from typing import Any
 
+import numpy as np
 import pytest
 
 from tests.check import test_sampled_replay as T
@@ -53,6 +55,14 @@ def inst() -> dict:
 @pytest.fixture(scope="module")
 def pi(inst: dict) -> IX.ProgramIndex:
     return IX.ProgramIndex(inst)
+
+
+@pytest.fixture(scope="module")
+def world() -> Any:
+    """The Program served honestly to two requests, three steps each."""
+    inst, woff = T._program()
+    weights = T._bf16(np.random.default_rng(7), max(hi for _lo, hi in woff.values()), 0.5)
+    return T.Honest(inst, woff, weights, {"r0": [1, 2], "r1": [5, 3]})
 
 
 @NO_DICT
@@ -211,3 +221,67 @@ def test_a_population_without_reasons_has_no_codes(left_out):
     assert RC.not_evaluable_codes(_with({"evaluable": 4}, "not_evaluable", left_out)) == {}
     why = "no evaluator for family X_v1"
     assert RC.not_evaluable_codes({"not_evaluable": {why: 3}}) == {why: {"class": "no-evaluator", "family": None, "domain": False, "tags": []}}
+
+
+@NO_LIST
+def test_a_request_that_states_no_steps_is_linked_over_none(left_out, world):
+    bmap, committed = world.bmap_and_reader()
+    stated = {"request_id": "r0", "arrive_step": 0, "prompt_token_ids": [1, 2], "steps": [0, 1, 2], "max_tokens": 3, "seed": 3}
+    request = _with(stated, "steps", left_out)
+    lk = LK.boundary_linkage(bmap, committed, [request])
+    assert (lk["pairs"], lk["linked"], lk["horizon"]["r0"]["linked_steps"]) == (0, 0, 0)
+    seed = LK.prescribed_input_linkage(OP.CommittedStore(bmap, committed), [request])
+    assert seed["seed"]["checked"] == 0 and [(u["kind"], u["engine_step"]) for u in seed["unlinked"]] == [("seed", None)]
+    assert seed["unlinked"][0]["why"].startswith("r0: no committed sampled_token_ids at any of its 0 declared steps")
+    lk = LK.boundary_linkage(bmap, committed, [stated])
+    assert (lk["pairs"], lk["linked"], lk["horizon"]["r0"]["linked_steps"]) == (3, 3, 3)
+    assert LK.prescribed_input_linkage(OP.CommittedStore(bmap, committed), [stated])["seed"]["checked"] == 3
+
+
+@NO_LIST
+def test_a_request_that_states_no_prompt_ids_declares_an_empty_prompt(left_out, world):
+    """Its arrival step is still a pair; a later step's link reads no prompt."""
+    bmap, committed = world.bmap_and_reader()
+    stated = {"request_id": "r0", "arrive_step": 0, "prompt_token_ids": [1, 2], "steps": [0, 1, 2]}
+    lk = LK.boundary_linkage(bmap, committed, [_with(stated, "prompt_token_ids", left_out)])
+    assert (lk["pairs"], lk["linked"]) == (3, 3)
+    assert LK.boundary_linkage(bmap, committed, [stated | {"prompt_token_ids": [1, 3]}])["unlinked"][0]["kind"] == "prompt"
+
+
+@NO_LIST
+def test_a_stop_rule_s_block_that_states_no_problems_found_none(left_out):
+    block = {"executed_prefix_len": 2, "eos_step": 1, "lag_steps": 0, "first_eos_index": 1, "served_past_first_eos": 0, "cap_exhausted": False,
+             "eos_stop": True}
+
+    def prefix(problems: Any) -> dict:
+        return POP.executed_prefix_of_record("r0", a_r=2, lag=0, cap=4, eos_declared=True, served_len_commit=2, linked=True, lag_attested=True,
+                                             a_r_source="a Match record", served=[7, 9], eos_ids=[9],
+                                             rule=lambda served, *, cap, A, eos: _with(block, "problems", problems))
+
+    record = prefix(left_out)
+    assert (record["faults"], record["n_exec"], record["r3_one_mechanism"]) == ([], 2, True)
+    assert record["by_rule"]["problems"] == (None if left_out is ABSENT else left_out)
+    assert prefix(["the last served token is no declared EOS"])["faults"] == ["Continuation_v1 rule: the last served token is no declared EOS"]
+
+
+@NO_DICT
+def test_a_description_that_states_no_statics_keys_its_stratum_by_its_spec(left_out, pi):
+    class NoStatics:
+        def __getattr__(self, name: str) -> Any:
+            return getattr(pi, name)
+
+        def describe(self, row: dict) -> dict | None:
+            d = pi.describe(row)
+            return d if d is None else _with(d, "statics", left_out)
+
+    index: Any = NoStatics()
+    assert [v["stratum"] for v in POP.population(index, "r0")[0]] == [v["stratum"] for v in POP.population(pi, "r0")[0]]
+
+
+@NO_DICT
+def test_a_plane_row_of_a_module_its_step_s_geometry_does_not_hold_has_no_router_rows_by_name(left_out):
+    module = "model.layers.3.mlp.experts"
+    index: Any = SimpleNamespace(step_of=lambda i: 0, _moe_geo=[_with({}, module, left_out)], _moe_ord={5: 0})
+    d = IX.ProgramIndex._describe_plane(index, 5, "MoeSum_v1", {}, module, "", None, "sum")
+    assert (d["op_path"], d["members"]) == ("moe/L3", [])
+    assert d["plane_error"] == f"MoE module {module!r} step 0: no router rows / TOPK in the Program (M=0, TOPK=0)"

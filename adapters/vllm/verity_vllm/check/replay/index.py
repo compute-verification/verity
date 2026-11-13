@@ -387,7 +387,8 @@ class ProgramIndex:
         `[k]` name index when the Program names one; a violation yields members [] + `plane_error` -> counted by NAME as a mapping failure
         (population), never a silent read of another pair's words."""
         s = self.step_of(i)
-        g = self._moe_geo[s][mod]                 # there: the kind that sends the row here put its module in its step's geometry
+        geometry = self._moe_geo[s].get(mod)      # a module its step's geometry does not hold has no router rows: M = TOPK = 0, named below
+        g = geometry if geometry else {}
         layer = RM.layer_of(mod)
         M, TOPK = int(g.get("M", 0) or 0), int(g.get("TOPK", 0) or 0)
         ord_ = int(self._moe_ord.get(i, -1))

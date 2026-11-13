@@ -1,10 +1,12 @@
 """`verity_vllm.check.replay.served_check.population` over the notes of single steps: what the reconciliation reads of a
-step's notes, and what it needs each to state.
+step's notes, and what it answers where they leave a note out.
 
 The served check's own tests reconcile the reports of whole served runs; these hold the cases a run of theirs does not
 reach: a step the Build plans nothing for, and notes that are not the check's.
 """
 from __future__ import annotations
+
+from typing import Any
 
 import pytest
 
@@ -45,8 +47,29 @@ def test_the_ids_are_reached_for_the_requests_their_note_names_and_no_other():
     assert checks["rows_disagree"]["n"] == 0 and checks["accounted"]
 
 
-@pytest.mark.parametrize("notes, missing", [({}, "batch"),
-                                            ({"batch": {"ok": True, "rows": {"r0": 2}}, SERVED_IDS: {"ok": True}}, "requests")])
-def test_notes_that_do_not_state_what_the_check_always_writes_are_no_report_of_it(notes, missing):
-    with pytest.raises(KeyError, match=missing):
-        SC.population(_build(), {"steps": {"0": notes}}, ranks=[0])
+ABSENT: Any = object()
+
+
+def _checks(build: dict, notes: dict) -> dict:
+    return SC.population(build, {"steps": {"0": notes}}, ranks=[0])["query_checks"]
+
+
+@pytest.mark.parametrize("batch", [ABSENT, None, {}, {"ok": True}, {"ok": True, "rows": None}, {"ok": True, "rows": {}}],
+                         ids=["absent", "null", "empty", "no rows", "rows null", "rows empty"])
+def test_a_step_whose_notes_state_no_rows_reaches_no_value_of_a_batch(batch):
+    """The check writes the batch note at every step; notes without it, or without its rows, are a step with no request."""
+    build = _build([_identity(0, "r0", "h", "out", width=H)])
+    checks = _checks(build, ({} if batch is ABSENT else {"batch": batch}) | {"h": {"ok": True}})
+    assert checks["identities_without_rows"] == {"n": 1, "first": [{"request_id": "r0", "step": 0, "op_path": "h", "member": "out"}]}
+    assert (checks["vus_outside_query"]["n"], checks["rows_disagree"]["n"], checks["accounted"], checks["ok"]) == (0, 0, True, False)
+    reached = _checks(build, {"batch": {"ok": True, "rows": {"r0": 1}}, "h": {"ok": True}})
+    assert reached["identities_without_rows"]["n"] == 0 and reached["ok"]
+
+
+@pytest.mark.parametrize("requests", [ABSENT, None, []], ids=["absent", "null", "empty"])
+def test_an_ids_note_that_names_no_request_reaches_no_request_s_ids(requests):
+    build = _build([_identity(0, "r0", "c00.input", "ids", rows=2)])
+    note = {"ok": True} | ({} if requests is ABSENT else {"requests": requests})
+    checks = _checks(build, {"batch": {"ok": True, "rows": {"r0": 2}}, SERVED_IDS: note})
+    assert checks["identities_without_rows"] == {"n": 1, "first": [{"request_id": "r0", "step": 0, "op_path": "c00.input", "member": "ids"}]}
+    assert (checks["vus_outside_query"]["n"], checks["rows_disagree"]["n"], checks["accounted"], checks["ok"]) == (0, 0, True, False)
