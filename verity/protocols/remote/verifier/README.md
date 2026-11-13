@@ -6,6 +6,9 @@ subprotocols into one verdict over one commitment: sampled proofs (the committed
 except on few proof blocks), PoUW (the hardware's time went to the registered circuit) and the inference-only policy (the
 registered circuit is inference, not training).
 
+**Remote is `verity/remote/v1`.** Its work component is Pearl+'s run verdict (`verity/pouw/pearl-plus/v1`), and
+`Core.Composites.ofIds`, which names the composite a configuration's verifier runs, refuses v0's subprotocols.
+
 **The open gap.** Remote's composed guarantee, `Verity.remote_soundness_of_subprotocols`, is proved at its compiled
 verifier from its three subprotocols' targets (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`), each an open
 premise until proved at remote.
@@ -48,12 +51,13 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../../spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`service/vstar/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
+| Sampled proofs ([README](../../spot/verifier/README.md)) | the committed values satisfy the registered circuit outside the blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/protocols/recursion/verifier/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../../pouw/verifier/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted draw | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw/verifier/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW, v0 | the period's credited work, windows all or nothing | `PouwCheck.Period.protocol` (`pouw/verifier/lean/check`) | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../../inference_only/verifier/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets; θ is registered | `NciCheck.Protocol.protocol` (`inference_only/verifier/nci/lean`) | `verity/inference-only/v0` |
 
-The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied [run] components` (`remote-v1`), which
+The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied [run, window] components`
+(`remote-v1`), which
 `Verity.SoundnessOf` reads, and v0, `protocol = tiedSameB "verity/remote/v0" tied [windows] components`, which no
 soundness theorem covers and no configuration names. Pearl+'s run names its record's digest, tied to the policy's by `V1.run`; its check doesn't
 read that record yet. The policy and sampled proofs commit to the run's record, which names the registered circuit; once

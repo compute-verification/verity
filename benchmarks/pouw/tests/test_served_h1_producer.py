@@ -17,7 +17,6 @@ unit's blocks: on the CPU through the torch chain (and through `Served`, slow), 
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import os
 import re
 from pathlib import Path
@@ -26,9 +25,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from verity.protocols.pouw.prover.circuit import h1tile as HT
+
 torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.prover.circuit import h1tile as HT  # noqa: E402
+import producer as PR  # noqa: E402
+
 from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
 
 SERVED_H1 = Path(__file__).resolve().parents[1] / "served_h1"
@@ -36,16 +38,6 @@ SALT, RA, RB = hashlib.sha512(b"salt").digest(), hashlib.sha512(b"A").digest(), 
 #: Llama-3.1-8B's linears (n, K): qkv, o, gate_up, down
 LLAMA = [(6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336)]
 SO = "VERITY_POUW_H1U_SO"
-
-
-def _producer():
-    spec = importlib.util.spec_from_file_location("served_h1_producer", SERVED_H1 / "producer.py")
-    m = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(m)
-    return m
-
-
-PR = _producer()
 
 
 def _ref(a: np.ndarray, b: np.ndarray, u: int, position: int, roots=(RA, RB), salt=SALT, served=None) -> list[int]:

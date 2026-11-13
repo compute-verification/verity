@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import bisect
 import contextlib
 import json
 import os
@@ -255,7 +256,6 @@ def analyze(db: Path) -> dict:
     if "CUPTI_ACTIVITY_KIND_MEMCPY" in tables:
         for s, e, b, g in con.execute("SELECT start, end, bytes, globalPid FROM CUPTI_ACTIVITY_KIND_MEMCPY"):
             copies[pid(g)].append((s, e, b))
-    import bisect
 
     def window(rows, s, e):
         i = bisect.bisect_left(rows, (s,))
