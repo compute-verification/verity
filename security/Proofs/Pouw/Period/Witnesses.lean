@@ -64,6 +64,9 @@ open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs Properties.Pou
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
+/-- The uniform measure's instance on `64` windows' coins: instance search unfolds `Paths` 64 levels deep and fails. -/
+instance (priority := high) fintypePaths64 : Fintype (Paths Ω1 64) := Paths.instFintype Ω1 64
+
 /-- **The deployed check accepts the period**: `PouwCheck.protocol.check` accepts every window on the coins `x`. -/
 def checkedAccepts (n : ℕ) (x : Paths Ω1 n) : Prop :=
   ∀ w, Accepts prm ((windows n).reg x w) ((windows n).ev x w)
