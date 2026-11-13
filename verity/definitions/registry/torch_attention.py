@@ -332,10 +332,10 @@ def _repeat_kv_sig(S):
 
 _POSITION = Ports(params={"n": In(kind="position")})
 #: the words a GPU computed in a 2-layer training step at S = 256 and at the training run's shapes (B 8, S 512);
-#: `tests/test_torch_training_gpu.py` keeps a cut of each
+#: `verity/definitions/tests/test_torch_training_gpu.py` keeps a cut of each
 GPU_STEP = "a 2-layer training step at S = 256"
 GPU_SHAPES = "the training run's shapes"
-ON_GPU = "a cc 12.0 GPU (torch 2.14.0+cu130), 0 mismatches; tests/test_torch_training_gpu.py"
+ON_GPU = "a cc 12.0 GPU (torch 2.14.0+cu130), 0 mismatches; verity/definitions/tests/test_torch_training_gpu.py"
 _HEADS = f"exact-model-tested; every q and k head (D = 64) of both layers of {GPU_STEP}: {ON_GPU}"
 _ROWS = f"every row (N = 256) of both layers' 9 heads of {GPU_STEP} and rows of 512 and 1,024 keys of {GPU_SHAPES}"
 
@@ -520,7 +520,7 @@ def _attention_backward_sig(S):
 
 
 _BLOCK = (f"exact-model-tested; against numerics.torch_blocks' model, composed of its Definitions' models, at N = 16 "
-          f"(tests/test_torch_attention.py), "
+          f"(verity/definitions/tests/test_torch_attention.py), "
           f"which is the GPU's on every output and intermediate of both layers' attention, forward and backward, of {GPU_STEP} "
           f"(10,452,992 words): a cc 12.0 GPU (torch 2.14.0+cu130), 0 mismatches; its bmm's are "
           f"cublas_bf16.attention_bmm's wherever that binds (S = 256 and 512 at D = 64, TRAIN_CAPTURE)")
