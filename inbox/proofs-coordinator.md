@@ -160680,3 +160680,48 @@ Clock: `date -u` read 21:08Z. Both your messages reached me by the shell hook (2
 **Not established.** Anything of any carry. Whether the cancelled jobs' scratch directories were removed by their traps: the new jobs print how many earlier ones they find.
 
 **Pushed.** This entry only. **Timer.** One, for 22:13Z, on the three runs.
+
+## SESSIONOF2, Fri 13 Nov 21:09Z: a correction before you mark: 77 guarantees of the properties lock also read `Core.canonicalJson`, two of them deployed, across five owners; their own records do not move; both locks' records are pushed at `4d1280e75928`
+
+SESSIONOF2 (bc-21526b41-3d76-5d8c-87fa-3839a84ce464), to the coordinator. This is not the ready line: the suites are still out. It corrects what my 19:28Z entry gave you for soundness.
+
+### STOP RULE
+**Correction.** My 19:28Z entry said four listed guarantees read the changed definition and that none is deployed. That was `security`'s lock alone. The properties lock, which the first run never reached, has 77 more, and two of them are in its `deployed` list `[run: `r20261113-200014-7d41`, the audit's own line; owners and `deployed` read from the lock]`.
+- **Deployed readers:** `Verity.remote_soundness_of_subprotocols` (`@soundness`) and `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` (`@compute-accounting`).
+- **By owner, 77:** `@soundness` 33, `@memory-accounting` 17, `@network-accounting` 12, `@compute-accounting` 11, `@proofs` 3, `@lean` 1. With `security`'s four that is 81 listed guarantees in the two locks.
+- **What moves in their records: nothing.** The regenerated properties lock differs from the committed one in the same two lines as `security`'s, under `reads["CoreProtocol.Protocol"]`: its `digest` and `definitions["Core.canonicalJson"]`, with the same four values. Guarantees 540 before and after, none added or removed, no record differs in any field `[run + derived: my comparison on the VM, and a two-line diff of the whole file]`.
+- **What does change for them** is the definition they read, as at 19:28Z: `match Json.parse s with` became `match Flock.JsonParse.parse s with`. Each of these guarantees is about the interface's reader, which every protocol's check calls, and the compiled reader changes with it. Their proofs compile: the proofs package passes whole at `3a7fe4d0b1af`.
+- By your 20:19Z rule (only `reads` moved: commit) I committed and pushed both records. The pull request stays unmarked. Whether the two deployed readers and the four other owners change whom you tell before marking is yours.
+
+**In plain words.** Every protocol reads its parameters through this one function, so most guarantees about a protocol's check mention it. I under-counted them at 19:28Z because only one of the two locks had been regenerated. No guarantee's wording or premises changed; the function they all mention now uses the other parser.
+
+**1. The second records run, so far** `[run: `r20261113-200014-7d41`, cpu-1, at `3a7fe4d0b1af`]`
+- `security/Proofs`: "PASS 204343 declarations in 4052 modules; axioms propext, Classical.choice, Quot.sound", build 2,717 s. **The root in the lock alone builds:** the lakefile's targets, "Build completed successfully (14578 jobs)", then the lock's roots, "Built Proofs.Core.CanonicalJson (5.1s)", "Build completed successfully (14581 jobs)". So `security/Proofs/lakefile.toml` stays as on `main` and the grader's pin is untouched.
+- `security/Properties`: "PASS 3485 declarations in 107 modules; … 540 guarantees" with the record regenerated; "check.py exit 0 in 3761 s".
+- Still running: its audit of `security` with the record committed at `3a7fe4d0b1af`. It ends by 22:01Z at the latest.
+- Memory so far: peak 23.8 GiB by proportional size, 108.4 GiB by the sum of resident sizes, under `--mem-gb 32`.
+
+**2. The suites at `3a7fe4d0b1af`** `[run: `r20261113-200124-a38f`, cpu-1]`: 68 suites reached; 62 passed and none failed so far.
+
+**3. Infra's rule on identities (your 21:02Z): read.** Item 4: nothing was unpushed when it arrived; the one commit I pushed after it, and with it all 72 commits of the carried branch that are not on `main`, have my checkout's identity as author and committer `[run]`. No job of mine that is out makes a commit.
+
+**4. Next**
+- When the suites at `3a7fe4d0b1af` end: `suites.py --changed 3a7fe4d0b1af --quick` at `4d1280e75928`, which runs only the suites the properties lock reaches. I wait for the first to end so that two suites runs do not overlap.
+- #9776's body gets both locks' two lines and the 81 readers by owner, now.
+- Then the ready line, with this correction repeated at its top.
+
+### NEEDS
+1. **You:** the correction above, for soundness on PRF-490 and for the owners of the other readers (`@memory-accounting`, `@network-accounting`, `@compute-accounting`, `@lean`). The names by owner are in #9776's body under "Records".
+2. Still open: the link to PRF-490; the friction note's line. The lakefile question is closed by section 1 unless you want the root there too.
+
+### To post
+Nothing.
+
+### Not established
+- `security`'s audit with its committed record (running).
+- The last 6 suites at `3a7fe4d0b1af`; the suites the properties lock reaches at `4d1280e75928`.
+- The Lean check with the kernel replay.
+- That the two parsers agree on every text: by test, not proved, as before.
+
+### Heads, all pushed
+`cursor/proofs-sessionof2-parser-carried-e464` `4d1280e75928efe3b29d89635353ef2935ed2a34` (pull request #9776). Runs out: `r20261113-200014-7d41` (records, cpu-1, by 22:01Z), `r20261113-200124-a38f` (suites, cpu-1, by 22:02Z).
