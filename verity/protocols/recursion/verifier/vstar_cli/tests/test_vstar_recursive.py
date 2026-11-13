@@ -228,8 +228,11 @@ def test_plain_leaves_under_zk_are_refused_with_the_compiled_checks_reason(tmp_p
 # --- a whole recursive session: a recursion_e2e run's kept data ---------------------------------------------------------------
 
 DATA = settings.recursive_data()
-DEPLOYED = pytest.mark.skipif(not DATA, reason="a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean): set "
-                              "VERITY_VSTAR_RECURSIVE_DATA=DIR, or =fetch for the kept run recursive_data.json names")
+#: the whole-session tests, about half an hour on a node: a cold check runs them by name with VERITY_VSTAR_RECURSIVE_DATA=1
+#: (check.py's `OPT_IN`), and they run wherever else the variable names the data
+DEPLOYED = pytest.mark.skipif(not DATA, reason="a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean), about half "
+                              "an hour on a node: set VERITY_VSTAR_RECURSIVE_DATA=DIR, or =fetch (or =1) for the kept run "
+                              "recursive_data.json names")
 KEPT = json.loads((Path(__file__).with_name("recursive_data.json")).read_text())["art"]
 
 

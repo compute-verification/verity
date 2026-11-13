@@ -9,8 +9,10 @@ from pathlib import Path
 def recursive_data() -> str:
     """``VERITY_VSTAR_RECURSIVE_DATA``: a recursion_e2e run's kept data/TAG (KEEP_DATA=1, after STEP=lean), which the
     whole-session recursive tests read and skip without, or ``fetch``: the kept run `recursive_data.json` names, fetched
-    from the evidence store when they run (about 2 GB); else empty."""
-    return os.environ.get("VERITY_VSTAR_RECURSIVE_DATA", "")
+    from the evidence store when they run (about 2 GB); else empty. ``1`` is ``fetch``: a cold check sets an opt-in
+    test's variable to 1 (check.py's `OPT_IN`)."""
+    v = os.environ.get("VERITY_VSTAR_RECURSIVE_DATA", "")
+    return "fetch" if v == "1" else v
 
 
 def lean_jobs() -> int:
