@@ -6,9 +6,10 @@ watch `stranded` (research/monitors.py) that rings when one has waited so for ST
 A job is put in one line when it is launched (a machine's pool, a check line) and nothing looks again. Each CPU machine of the
 registry (`auto.spill`, none named here) is read at once, one `python3 -` a machine (`program`): `auto.PROBE`'s own functions,
 cut at its `out = {}` line, with this tree's slot.py and lean_slot.py inlined as `auto.payload` inlines them, so the watch and
-the placer count memory, floors and Lean slots with one code. Its ending reads every pool the machine has (`locks/slots` is pool
-`check`, `locks/NAME/slots` pool NAME), each in POOL_S of its own, the Lean slots, the disk floor, the memory available, the
-names in /etc/vy/peers, and of each waiter's request.json the `auto` key alone (why `research run --on auto` put it there).
+the placer count memory, floors and Lean slots with one code. A machine that has its own copy of slot.py
+(`slot_only.NODE_SLOT`, the one its pools' runs wait by) reads its pools with that copy, as the placer does. Its ending reads
+every pool the machine has (`locks/slots` is pool `check`, `locks/NAME/slots` pool NAME), each in POOL_S of its own, the Lean
+slots, the disk floor, the memory available, the names in /etc/vy/peers, and of each waiter's request.json the `auto` key alone (why `research run --on auto` put it there).
 Every `cmd` key is dropped on the machine before the document leaves it. A machine or a pool that can't be read is listed with
 why (`unread`), never dropped, so the counts beside it read as a floor.
 
@@ -149,8 +150,13 @@ print(json.dumps(scrub(out)))
 '''
 
 
-def program(tree: Path | None = None, root: str = remote.DEFAULT_ROOT, peers: str = PEERS, disk: str = auto.DISK_PATH) -> bytes:
-    """What each machine runs as `python3 -`: auto.PROBE's functions with ENDING, and ``tree``'s (TREE's) slot.py and lean_slot.py."""
+def program(tree: Path | None = None, root: str = remote.DEFAULT_ROOT, peers: str = PEERS, disk: str = auto.DISK_PATH,
+            node_slot: str | None = None) -> bytes:
+    """What each machine runs as `python3 -`: auto.PROBE's functions with ENDING, and ``tree``'s (TREE's) slot.py and
+    lean_slot.py. ``node_slot`` is where a machine keeps its own slot.py (slot_only.NODE_SLOT), which reads its pools where
+    it is there."""
+    from .pods.nebius import slot_only
+
     tree = TREE if tree is None else tree
     defs, mark, _ = auto.PROBE.partition(MARK)
     if not mark:
@@ -168,7 +174,8 @@ def program(tree: Path | None = None, root: str = remote.DEFAULT_ROOT, peers: st
             "NOW": None, "POOLS": {}, "DISK": disk, "MIN_INODES": auto.MIN_FREE_INODES, "MIN_GB": auto.MIN_FREE_GB,
             "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE, "LEAN_SLOTS": f"{root}/locks/lean-slots", "NULL": auto.NULL_DEVICE,
             "GIT": auto.GIT, "NO_START": auto.NO_START, "POOL_S": POOL_S, "LOCKS": f"{root}/locks",
-            "REQUESTS": f"{root}/requests", "PEERS": peers}
+            "REQUESTS": f"{root}/requests", "PEERS": peers,
+            "NODE_SLOT": slot_only.NODE_SLOT if node_slot is None else node_slot}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + defs + ENDING).encode()
 
 

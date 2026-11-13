@@ -316,7 +316,8 @@ def test_the_node_program_reads_every_pool_drops_every_cmd_and_reads_only_the_au
         "auto": {"machine": A, "pool": "research", "said": "the most places", "cmd": SECRET}}))
     (tmp_path / "peers").write_text(f"# who\n{B} -i KEY research@10.0.0.2\n{C} -i KEY research@10.0.0.3\nlonely\n")
     monkeypatch.setenv("CHECK_SLOTS", "unset")
-    src = stranded.program(tree, root=str(root), peers=str(tmp_path / "peers"), disk=str(tmp_path / "no-disk")).decode()
+    src = stranded.program(tree, root=str(root), peers=str(tmp_path / "peers"), disk=str(tmp_path / "no-disk"),
+                           node_slot=str(tmp_path / "no-copy-of-its-own")).decode()
     exec(compile(src, "stranded-program", "exec"), {"__name__": "__main__"})  # noqa: S102  (the program each machine runs)
     printed = capsys.readouterr().out
     assert SECRET not in printed and '"cmd"' not in printed
@@ -331,6 +332,23 @@ def test_the_node_program_reads_every_pool_drops_every_cmd_and_reads_only_the_au
     out = json.dumps(analysed) + stranded.text(analysed, True)
     assert SECRET not in out and '"cmd"' not in out
     assert analysed["lean_waits"] == [{"machine": A, "pool": "audit", "job": "r-lean", "minutes": 3}]
+
+
+def test_a_machine_with_its_own_slot_py_reads_its_pools_with_that_copy(tmp_path, monkeypatch, capsys):
+    """The placer reads a machine's pools with the copy of slot.py its runs wait by (`auto.PROBE`'s `pool_src`), so the reader
+    does too: here the machine's copy counts 500 GB where the tree's counts 300."""
+    tree, root, own = tmp_path / "tree", tmp_path / "root", tmp_path / "own" / "slot.py"
+    for path, text in ((tree / stranded.SLOT_PY, SLOT_STUB), (tree / stranded.LEAN_SLOT_PY, LEAN_STUB),
+                       (own, SLOT_STUB.replace("return 300", "return 500"))):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    (root / "locks" / "research").mkdir(parents=True)
+    (root / "locks" / "research" / "slots").write_text(json.dumps(pool(slot("r0", held=True))))
+    monkeypatch.setenv("CHECK_SLOTS", "unset")
+    src = stranded.program(tree, root=str(root), peers=str(tmp_path / "peers"), disk=str(tmp_path / "no-disk"),
+                           node_slot=str(own)).decode()
+    exec(compile(src, "stranded-program", "exec"), {"__name__": "__main__"})  # noqa: S102  (the program each machine runs)
+    assert json.loads(capsys.readouterr().out)["pools"]["research"]["free_gb"] == 460
 
 
 def test_read_lists_each_machine_it_couldnt_read_with_why():
