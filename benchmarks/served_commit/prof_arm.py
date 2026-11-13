@@ -81,12 +81,12 @@ class RootsArm(ProfArm):
     dumped: ClassVar[set[str]] = set()
 
     def ready(self, target: Any) -> None:
-        import hashlib
+        from verity_vllm.commit import step_rows
 
         super().ready(target)
         com, self.plan_log = self.committer, []
         com.run_id = "bench:roots"
-        com.program_digest = hashlib.sha256(b"cmt-integ/no-program-digest/" + com.run_id.encode()).digest()
+        com.program_digest = step_rows.run_program_digest(com.run_id)
         if self.retain_levels is not None:
             com.retain_levels = self.retain_levels
         orig = com._begin_step
