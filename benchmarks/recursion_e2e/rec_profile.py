@@ -1,21 +1,27 @@
-"""The recursion bench's result (``recursion-e2e/v1``) from a job's ``out/`` (``job.sh``), and its table (README.md).
+"""The recursion bench's result (``recursion-e2e/v1``) from a job's ``out/`` (``job.sh``); ``rec_table`` renders its table
+(README.md).
 
 ``read(OUT)`` walks ``OUT/steps/<step>/r<i>/out/``, the records 85-rec-reprice.sh wrote for each invocation, and returns one
 row per timed thing: a prover's runs (``inner``, ``oprove``: the timed runs' ``LIVE`` lines), or a tool's
 ``/usr/bin/time -v`` over the repeats (``icheck``, ``vstage``, ``vcap``, ``oreplay``, ``lean``), or the build once, and one row
 per flipped inner coin (``negative``). Every time is a ``Stat`` (median, min, max and the values); nothing is averaged across
 different things. ``headline`` says whether the run is a whole recursive run (every step ran) and was accepted (every
-step exited 0, every honest verdict accepted, every flipped coin refused). Stdlib only: the job runs it on the node's
-``python3``.
+step exited 0, every honest verdict accepted, every flipped coin refused). A record line or file that doesn't parse (a
+line cut short when its run stopped) is read as absent, and each one is logged at debug level. Stdlib only: the job runs
+it on the node's ``python3``.
 """
 from __future__ import annotations
 
 import json
+import logging
 import re
 import statistics
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, TypedDict
+
+log = logging.getLogger(__name__)
 
 SCHEMA = "recursion-e2e/v1"
 #: the steps one recursive run needs, in order (vcap stages RecCap, which V*'s verdict needs; ``negative`` checks the
@@ -56,7 +62,7 @@ class Stat:
     values: tuple[float, ...]
 
     @classmethod
-    def of(cls, xs: Iterable[float | None]) -> "Stat | None":
+    def of(cls, xs: Iterable[float | None]) -> Stat | None:
         v = tuple(float(x) for x in xs if x is not None)
         return cls(statistics.median(v), min(v), max(v), v) if v else None
 
@@ -72,7 +78,7 @@ class Row:
     peak_rss_gb: float | None = None
     gpu_peak_mib: float | None = None
     proof_bytes: int | None = None
-    wire_bytes: dict[str, int] | None = None
+    wire_bytes: dict[str, int | None] | None = None
     dominant: dict[str, Any] | None = None
     ok: bool | None = None
     note: str = ""
@@ -82,7 +88,7 @@ class Row:
         return json.loads(json.dumps(asdict(self)))
 
     @classmethod
-    def from_json(cls, d: dict[str, Any]) -> "Row":
+    def from_json(cls, d: dict[str, Any]) -> Row:
         st = {k: Stat(d[k]["median"], d[k]["min"], d[k]["max"], tuple(d[k]["values"])) if d.get(k) else None
               for k in ("wall_s", "e2e_s")}
         return cls(**{**{k: v for k, v in d.items() if k in cls.__dataclass_fields__}, **st})
@@ -105,7 +111,13 @@ def wall_seconds(s: str) -> float:
     return sum(p * 60 ** i for i, p in enumerate(reversed(parts)))
 
 
-def timev(p: Path) -> dict[str, float] | None:
+class TimeV(TypedDict):
+    wall_s: float
+    peak_rss_gb: float | None
+    cpu_s: float
+
+
+def timev(p: Path) -> TimeV | None:
     """Wall seconds, peak RSS (GB) and CPU seconds of one ``/usr/bin/time -v`` file; None when it has no wall line."""
     t = text(p)
     m = _WALL.search(t)
@@ -126,13 +138,13 @@ def live_lines(p: Path) -> list[tuple[float | None, dict[str, Any]]]:
         if rest.startswith("LIVE"):
             try:
                 t, ln = float(head), rest
-            except ValueError:
-                pass
+            except ValueError as e:
+                log.debug("%s: a LIVE line's stamp %r is no time (%s), so the line is read unstamped", p, head, e)
         if ln.startswith("LIVE"):
             try:
                 out.append((t, json.loads(ln[5:])))
-            except ValueError:
-                pass
+            except ValueError as e:
+                log.debug("%s: a LIVE line that isn't JSON is skipped (%s)", p, e)
     return out
 
 
@@ -143,8 +155,8 @@ def tagged(p: Path, tag: str) -> list[dict[str, Any]]:
         if ln.startswith(tag + "\t"):
             try:
                 out.append(json.loads(ln.split("\t", 1)[1]))
-            except ValueError:
-                pass
+            except ValueError as e:
+                log.debug("%s: a %s line that isn't JSON is skipped (%s)", p, tag, e)
     return out
 
 
@@ -155,7 +167,8 @@ def lean_verdict(p: Path) -> dict[str, Any] | None:
         return None
     try:
         return json.JSONDecoder(strict=False).raw_decode(t[at + 8:])[0]
-    except ValueError:
+    except ValueError as e:
+        log.debug("%s: its VERDICT isn't JSON, read as no verdict (%s)", p, e)
         return None
 
 
@@ -191,7 +204,7 @@ def dominant(v: dict[str, Any]) -> dict[str, Any] | None:
     if e2e and total is not None:
         parts["h.witness"] = v.get("witness_s") or 0.0
         parts["wait.verifier"] = max(0.0, e2e - total - parts["h.witness"])
-    k = max(parts, key=parts.get)
+    k = max(parts, key=lambda name: parts[name])
     whole = e2e or total
     return {"phase": k, "s": round(parts[k], 4), "share": round(parts[k] / whole, 3) if whole else None,
             "of": "e2e_s" if e2e else "prove_total_s",
@@ -311,10 +324,10 @@ def read(root: Path) -> dict[str, Any]:
                 ok=text(o.parent / "rc").strip() == "0")
         r.extra = {"binary": text(o / "binary.sha256").split()[:1], "lean": text(o / "lean.sha").split()[:1],
                    "rebuilt_prover": (o / "build.log").exists()}
-        for s in ("stage", "stage-zk"):
-            st = timev(o / s / "time-stage.txt")
-            r.extra[s] = {"wall_s": st and st["wall_s"], "peak_rss_gb": st and st["peak_rss_gb"],
-                          "sizes": text(o / s / "sizes.txt").strip()}
+        for sub in ("stage", "stage-zk"):
+            st = timev(o / sub / "time-stage.txt")
+            r.extra[sub] = {"wall_s": st and st["wall_s"], "peak_rss_gb": st and st["peak_rss_gb"],
+                            "sizes": text(o / sub / "sizes.txt").strip()}
         rows.append(r)
     for o in repeats(root, "inner")[:1]:
         for sub, stage, what in (("proxy", "inner M0", "the inner statement (plain leaves), ZK off, against the rec_live proxy"),
@@ -390,15 +403,15 @@ def read(root: Path) -> dict[str, Any]:
             splits = [lean_split(o / "lean" / f"{name}.err") for o in ln]
             parts = {}
             for k in ("inputs_s", "setup_s", "session_s"):
-                s = Stat.of(x.get(k) for x in splits)
-                if s:
-                    r.extra[k] = asdict(s)
-                    parts[k] = s.median
+                stat = Stat.of(x.get(k) for x in splits)
+                if stat:
+                    r.extra[k] = asdict(stat)
+                    parts[k] = stat.median
             # flock-verify's own split: its inputs read, the verification's setup, and its checks after it
             if parts and r.wall_s:
                 parts = {"lean.inputs": parts.get("inputs_s", 0.0), "lean.setup": parts.get("setup_s", 0.0),
                          "lean.checks": max(0.0, parts.get("session_s", 0.0))}
-                k = max(parts, key=parts.get)
+                k = max(parts, key=lambda name: parts[name])
                 r.dominant = {"phase": k, "s": round(parts[k], 4), "share": round(parts[k] / r.wall_s.median, 3), "of": "wall_s",
                               "phases": {p: round(x, 4) for p, x in sorted(parts.items(), key=lambda kv: -kv[1])}}
             why = [str((lean_verdict(o / "lean" / f"{name}.log") or {}).get("why"))[:200] for o in ln]
@@ -429,15 +442,15 @@ def read(root: Path) -> dict[str, Any]:
           "rec_live's proxy")}
     doc = {"schema": SCHEMA, "params": params(root), "inputs": inputs, "rows": [r.to_json() for r in rows], "summary": s,
            "steps": steps, **({"staged": staged} if staged else {})}
-    rel = release(root)
-    if rel:
-        doc["release"] = rel
-    doc["headline"] = headline(rows, s, steps) | ({"released": rel["ok"]} if rel else {})
+    side = release(root)
+    if side:
+        doc["release"] = side
+    doc["headline"] = headline(rows, s, steps) | ({"released": side["ok"]} if side else {})
     if doc["params"].get("release") == "1":
-        doc["headline"]["ok"] = doc["headline"]["ok"] and bool(rel and rel["ok"])
+        doc["headline"]["ok"] = doc["headline"]["ok"] and bool(side and side["ok"])
     # each session step's first invocation's /usr/bin/time -v (None for a step that didn't run), what a session's cost is
     # scaled from
-    doc["session_times"] = {x: timev(r[0].parent / "time-step.txt") if (r := repeats(root, x)) else None
+    doc["session_times"] = {x: timev(outs[0].parent / "time-step.txt") if (outs := repeats(root, x)) else None
                             for x in SESSION_STEPS}
     return doc
 
@@ -447,10 +460,12 @@ def release(root: Path) -> dict[str, Any] | None:
     release time against when the Lean loop decided it), each part's prove wall (``release-wall.tsv``), the schedule the
     inner step fixed and the inner coin trees' audit against the challenger's release log (``tree-held.json``)."""
     o = next(iter(repeats(root, "oprove")), None)
-    rep = json.loads(text(o / "oprove" / "release.json") or "null") if o else None
+    if o is None:
+        return None
+    rep = json.loads(text(o / "oprove" / "release.json") or "null")
     if rep is None:
         return None
-    wall = {}
+    wall: dict[str, dict[str, Any]] = {}
     for ln in text(o / "oprove" / "release-wall.tsv").splitlines():
         part, d, t0, t1, rc = ln.split("\t")
         wall[part] = {"dir": d, "started_ms": int(t0), "ended_ms": int(t1), "rc": int(rc)}
@@ -471,7 +486,8 @@ def staged_units(p: Path) -> dict[str, dict[str, Any]]:
     name."""
     try:
         st = json.loads(text(p) or "{}").get("statements") or {}
-    except ValueError:
+    except ValueError as e:
+        log.debug("%s isn't JSON, read as no staged statement (%s)", p, e)
         return {}
     keep = ("template", "instances", "unit_rows", "unit_log", "k_log", "stage_s", "build_s", "circuit_bytes")
     out: dict[str, dict[str, Any]] = {}
@@ -573,7 +589,8 @@ def forge_after_rows(p: Path) -> list[Row]:
     VERDICT) or the honest control accepted, Lean's why as its note; none when the file is missing."""
     try:
         doc = json.loads(text(p) or "null")
-    except ValueError:
+    except ValueError as e:
+        log.debug("%s isn't JSON, read as no case (%s)", p, e)
         doc = None
     if not doc:
         return []
@@ -631,7 +648,8 @@ def processes(p: Path, comm: str) -> list[dict[str, Any]]:
             continue
         try:
             d = json.loads(ln)
-        except ValueError:
+        except ValueError as err:
+            log.debug("%s: a process sample that isn't JSON is skipped (%s)", p, err)
             continue
         for q in d.get("processes", []):
             if q.get("comm") == comm:
@@ -717,104 +735,11 @@ def merge(docs: list[dict[str, Any]]) -> dict[str, Any]:
             "steps": {f"{k} ({d.get('ref') or d.get('run')})": v for d in docs for k, v in d.get("steps", {}).items()}}
 
 
-def _fmt(s: dict[str, Any] | None) -> str:
-    if not s:
-        return "—"
-    if len(s["values"]) == 1:
-        return f"{s['median']:.3g}"
-    return f"{s['median']:.3g} [{s['min']:.3g}–{s['max']:.3g}] (n={len(s['values'])})"
-
-
-def _bytes(n: int | None) -> str:
-    if not n:
-        return "—"
-    for unit, k in (("GB", 1 << 30), ("MB", 1 << 20), ("kB", 1 << 10)):
-        if n >= k:
-            return f"{n / k:.3g} {unit}"
-    return f"{n} B"
-
-
-def markdown(doc: dict[str, Any]) -> str:
-    p = doc.get("params", {})
-
-    def each(q: dict[str, Any]) -> str:
-        return (f"commit {str(q.get('commit'))[:12]}, the inner's {q.get('RUNS')} timed runs after {q.get('WARM')} warm, "
-                f"each V* statement's {q.get('OPROVE_RUNS')} after {q.get('OPROVE_WARM')} "
-                f"(lease {q.get('GPU_MAX_MIN', '?')} min)"
-                + (f", V* statements {q['OPROVE_JOBS']} at a time" if q.get("OPROVE_JOBS") else "")
-                + f", {q.get('REPEAT')} repeats per CPU step")
-    runs = doc.get("run_params")
-    h = doc.get("headline") or {}
-    verdict = ("one whole recursive run, accepted" if h.get("ok") else
-               "one whole recursive run, **not accepted** (see ok and the steps' exits)" if h.get("complete") else
-               "**not a whole recursive run**: some of " + ", ".join(E2E_STEPS) + " did not run")
-    st = doc.get("staged")
-    shape = (f"{st['subcircuit']} x {st['n']} (m = {st['m']}, {'served window' if st.get('window') else 'generated values'})"
-             if st else f"K = {p.get('K')}, N = {p.get('N')}")
-    lines = [f"Recursion bench: {shape}, oprove modes {p.get('modes', '?')}, "
-             + ("; ".join(f"{k}: {each(q)}" for k, q in runs.items()) if runs else each(p))
-             + f". Seconds: median [min–max] (n). Verdict: {verdict}"
-             + (" (merged runs)" if h.get("merged") else "") + ".", "",
-             "| stage | step | what | time s | run e2e s | pace s | peak RSS GB | GPU peak MiB | proof | dominant phase | ok |"
-             + (" run |" if doc.get("runs") else ""),
-             "|---|---|---|---|---|---:|---:|---:|---:|---|---|" + ("---|" if doc.get("runs") else "")]
-    for r in doc["rows"]:
-        run = f" {r.get('extra', {}).get('run')} |" if doc.get("runs") else ""
-        dom = r.get("dominant")
-        dom_s = (f"{dom['phase']} {dom['s']:.3g} s" + (f" ({dom['share']:.0%} of {dom['of']})"
-                                                       if dom.get("share") else "")) if dom else "—"
-        pace = r.get("extra", {}).get("session_s")
-        pace_s = f"{pace:.3g}" if isinstance(pace, (int, float)) else "—"
-        ok = {True: "yes", False: "**no**", None: "—"}[r.get("ok")]
-        note = f" {r['note'][:120]}".replace("|", "/") if r.get("note") else ""
-        rss = f"{r['peak_rss_gb']:.3g}" if r.get("peak_rss_gb") is not None else "—"
-        gpu = f"{r['gpu_peak_mib']:.0f}" if r.get("gpu_peak_mib") else "—"
-        lines.append(f"| {r['stage']} | {r['step']} | {r['what']} | {_fmt(r.get('wall_s'))} | {_fmt(r.get('e2e_s'))} | {pace_s} | {rss} | "
-                     f"{gpu} | {_bytes(r.get('proof_bytes'))} | {dom_s} | {ok}{note} |{run}")
-    s = doc["summary"]
-    lines += ["", "Outer (V*'s statements, sum of each statement's median): " + "; ".join(
-        f"{m}: prove {v['prove_s']:.3g} s, run e2e {v['e2e_s']:.3g} s, proofs {_bytes(int(v['proof_bytes']))} over "
-        f"{v['statements']} statements" for m, v in s["outer"].items()) if s["outer"] else "Outer: not run."]
-    if s.get("slowest"):
-        lines.append(f"Slowest row (a run's e2e, else a tool's wall): {s['slowest']['stage']} ({s['slowest']['step']}), "
-                     f"{s['slowest']['median_s']:.3g} s.")
-    if s.get("pipeline_sum_s"):
-        lines.append("One recursive run, sum of medians along its path: " + ", ".join(
-            f"{k} {v:.3g}" for k, v in s["pipeline"].items() if v) + f"; total {s['pipeline_sum_s']:.3g} s.")
-    if s.get("flock_firewall"):
-        lines.append("The Lean session loop (flock-firewall, from the run's process samples): " + "; ".join(
-            f"{e['cpu_s']:.0f} CPU s, peak RSS {e['rss_hwm_gb']} GB, {e['threads']} threads, seen {e['first'][11:19]}–"
-            f"{e['last'][11:19]}Z" + (f" ({e['run']})" if e.get("run") else "") for e in s["flock_firewall"]) + ".")
-    if h.get("forged_refused"):
-        lines.append("Forgeries (85's forged statements and forge-after's cases), each refused: " + ", ".join(
-            f"{k} {'yes' if v else '**no**'}" for k, v in h["forged_refused"].items()) + ".")
-    if s.get("not_ok"):
-        lines.append("Not accepted or not run: " + ", ".join(s["not_ok"]) + ".")
-    lines.append("Steps' exit codes: " + ", ".join(f"{k} {'/'.join(v)}" for k, v in doc.get("steps", {}).items()) + ".")
-    rel = doc.get("release")
-    if rel:
-        lines += ["", f"**Release side.** Recursive session {rel['session']} on stream {rel['stream']}, inner coins from "
-                  f"{rel.get('tree_source') or '?'} (challenger's log holds them: {_yn(rel.get('trees_held'))}); every part released "
-                  f"at its time: {_yn(rel['ok'])}. Times are seconds from the inner connection (the schedule's start).", "",
-                  "| part | window s | release at s | decided at s | slack s | prove wall s | decided | record |",
-                  "|---|---:|---:|---:|---:|---:|---|---|"]
-        t0 = rel.get("start_ms") or 0
-        for p in rel["parts"]:
-            at = {k: f"{(p[k] - t0) / 1000:.1f}" if p.get(k) is not None else "—" for k in ("release_ms", "ready_ms")}
-            lines.append(f"| {p['part']} | {_s(p.get('window_ms'))} | {at['release_ms']} | {at['ready_ms']} | {_s(p.get('slack_ms'))} | "
-                         f"{_fmt3(p.get('prove_wall_s'))} | {p.get('decided') or '—'} | {'/'.join(p.get('record') or []) or '—'} |")
-        if rel.get("stops"):
-            lines.append("Stops: " + "; ".join(f"{e.get('part')}: {e.get('why', e.get('event'))}" for e in rel["stops"]) + ".")
-    return "\n".join(lines) + "\n"
-
-
-def _yn(v: Any) -> str:
-    return {True: "yes", False: "**no**"}.get(v, "—")
-
-
-def _s(ms: Any) -> str:
-    return f"{ms / 1000:.1f}" if isinstance(ms, (int, float)) else "—"
-
-
-def _fmt3(x: Any) -> str:
-    return f"{x:.3g}" if isinstance(x, (int, float)) else "—"
+def loop_line(s: dict[str, Any]) -> str | None:
+    """The table's line on the Lean session loop, from the run's process samples (``processes``); None where they hold
+    none."""
+    if not s.get("flock_firewall"):
+        return None
+    return "The Lean session loop (flock-firewall, from the run's process samples): " + "; ".join(
+        f"{e['cpu_s']:.0f} CPU s, peak RSS {e['rss_hwm_gb']} GB, {e['threads']} threads, seen {e['first'][11:19]}–"
+        f"{e['last'][11:19]}Z" + (f" ({e['run']})" if e.get("run") else "") for e in s["flock_firewall"]) + "."

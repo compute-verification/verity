@@ -9,8 +9,9 @@ gives, in the record's ordinals:
 - `kept`: the drafts each request's emitting rows kept (`kept`), and without a draft one 0 an output.
 
 `encode(schedule, record, registered) -> bytes` and `decode(bytes, record, registered) -> Schedule`. The string is
-`codec`'s under the same registration: its windows, its length terms and, under a draft, its kept terms, which
-`codec.bits_by_window` charges. Without a draft it is the string `codec.encode` gives the same serve, bit for bit.
+`codec`'s under the same registration: its windows, its length terms and, under a draft, its kept terms, each row's
+count in its step's window, which `codec.bits_by_window` charges. Without a draft it is the string `codec.encode`
+gives the same serve, bit for bit.
 `decode` is total as `codec.decode` is, and `decode(encode(s))` is s with each step's rows in the scheduler's order:
 `encode` reads a step's rows as a set, since their order is derived and no bit of the string says it.
 """
@@ -24,7 +25,6 @@ from verity_vllm.pipeline.advice_code import codec as V
 from verity_vllm.pipeline.advice_code import kept as KP
 from verity_vllm.pipeline.advice_code import replay as R
 from verity_vllm.pipeline.advice_code import schedule as S
-from verity_vllm.pipeline.advice_code import window_code as CV
 from verity_vllm.pipeline.advice_code.codec import AdviceCodeError, Record, Registered
 
 __all__ = ["decode", "encode", "Schedule"]
@@ -46,8 +46,9 @@ def _schedule(record: Record, order: list[int], rp: R.Replay, kept: list[tuple[i
 
 
 def encode(schedule: Schedule, record: Record, reg: Registered, *, check: bool = True) -> bytes:
-    """The schedule's v1 string under the record; refuses a schedule v1 can't carry: one that isn't the replay's
-    under its arrival order and kept counts. `check` decodes the string back and holds it to the schedule."""
+    """The schedule's v1 string under the record; refuses a schedule v1 can't carry (one that isn't the replay's
+    under its arrival order and kept counts) and a string over ℓ, which no reader reads (`codec.Registered.packed`).
+    `check` decodes the string back and holds it to the schedule."""
     def run() -> bytes:
         if type(schedule) is not Schedule:
             raise AdviceCodeError(f"v1 encodes a Schedule here, not a {type(schedule).__name__}")
@@ -76,8 +77,8 @@ def encode(schedule: Schedule, record: Record, reg: Registered, *, check: bool =
         with KP.emitting() if kept is not None else nullcontext() as emitted:
             rp, decisions, looks = V.replay_record(record, reg, engine, order, lambda i, k: k >= first[i], kept)
         wins = V._residual(record, reg, order, rp, decisions, looks, V.windows(record, reg.T), emitted)
-        terms = KP.tails(record.requests, V.kept_terms(record, reg), kept)
-        data = CV.pack(V.string_of(wins, reg, V.length_tails(record, reg), terms)[0])[0]
+        terms = V.kept_terms(record, reg, order, rp, emitted)
+        data = reg.packed(*V.string_of(wins, reg, V.length_tails(record, reg), terms))
         if check:
             m = R.compare(rp.steps, theirs)
             if m.first_mismatch is not None:
@@ -96,7 +97,6 @@ def encode(schedule: Schedule, record: Record, reg: Registered, *, check: bool =
 def decode(data: bytes, record: Record, reg: Registered) -> Schedule:
     """The schedule the string `data` carries under the record, or `AdviceCodeError`."""
     def run() -> Schedule:
-        wins, tails, kept = V._parse(data, reg, record)
-        _, order, rp = V._replayed(wins, tails, kept, record, reg)
-        return _schedule(record, order, rp, kept)
+        _, order, rp, kept = V._replayed(*V._parse(data, reg, record), record, reg)
+        return _schedule(record, order, rp, kept and [c for _, c in sorted(zip(order, kept.by_request()))])
     return V._total(run)
