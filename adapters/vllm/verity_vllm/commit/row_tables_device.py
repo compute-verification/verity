@@ -38,7 +38,7 @@ from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
 from verity.circuits.kernels import ROW_COMMIT, SHA512
-from verity.protocols.pouw import prover
+from verity.protocols.accounting.pouw import prover
 
 from . import row_tables as RTB
 

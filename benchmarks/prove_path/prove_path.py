@@ -203,8 +203,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
-from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.windows import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
@@ -1489,7 +1489,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
     certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
     None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
-    from verity.protocols.certifier.verifier import warden_rows as WRW
+    from verity.protocols.accounting.certifier.verifier import warden_rows as WRW
     from verity_vllm.program.predict import scan_state as SS
 
     with network_traces():
@@ -1689,8 +1689,8 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity.protocols.spot.verifier.one_stage import draw as DR
-    from verity.protocols.spot.verifier.one_stage import registered as CR
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as CR
 
     seconds: dict[str, float] = {}
     t = time.time()
