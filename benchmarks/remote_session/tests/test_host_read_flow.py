@@ -17,7 +17,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/poub/prover/remote_session/device.py").parent))
+sys.path.insert(0, str((HERE.parents[2] / "verity/protocols/accounting/poub/prover/remote_session/device.py").parent))
 
 torch = pytest.importorskip("torch")
 

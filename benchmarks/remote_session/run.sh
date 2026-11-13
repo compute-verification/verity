@@ -30,7 +30,7 @@
 # connections to its own 127.0.0.1:PORT cross the network; then ROLE=prover on PEER, which connects there, and which
 # takes its lease only once that tunnel listens (up to TUNNEL_WAIT_S, default 7200).
 #
-# Against the auditor's verifier host (`verity/protocols/poub/device/live_verifier/host.py`), the lane starts the run there with its
+# Against the auditor's verifier host (`verity/protocols/accounting/poub/device/live_verifier/host.py`), the lane starts the run there with its
 # gate key (its gate's `run --port PORT ...`) and ROLE=prover gets VERIFIER_SSH, ssh's `-i KEY prover@HOST`: the
 # prover opens `ssh -L PORT` to the host's tunnel account, which forwards only to the run ports, and takes its lease once
 # that account says the run's verifier listens.
@@ -113,7 +113,7 @@ if [ "$ROLE" = verifier ]; then
   REGISTRY=${REGISTRY:-$HOME/.local/state/remote-session/registry.json}
   mkdir -p "$(dirname "$REGISTRY")" || exit 3
   if [ -n "${CLOSE:-}" ]; then
-    "$PY" verity/protocols/poub/verifier/remote_session/verifier_process.py --registry "$REGISTRY" --close "$CLOSE" \
+    "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --registry "$REGISTRY" --close "$CLOSE" \
       > "$O/verifier.log" 2>&1; W=$?
     cat "$O/verifier.log"
     cp "$REGISTRY" "$O/registry.json"
@@ -130,7 +130,7 @@ if [ "$ROLE" = verifier ]; then
     -R "127.0.0.1:$PORT:127.0.0.1:$PORT" "${TO[@]}" "sleep 86400" < /dev/null > "$O/tunnel.log" 2>&1 & T=$!
   eval "VA=(${VERIFIER_ARGS:-})"
   # shellcheck disable=SC2086
-  "$PY" verity/protocols/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
+  "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py --host 127.0.0.1 "${VERIFY[@]}" --registry "$REGISTRY" "${VA[@]}" \
     > "$O/verifier.log" 2>&1 & V=$!
   while kill -0 $V 2> /dev/null; do
     kill -0 $T 2> /dev/null || { echo "the tunnel to $PEER ended"; cat "$O/tunnel.log"; kill $V; break; }
@@ -196,8 +196,8 @@ fi
     nvidia-smi --query-gpu=index,uuid,name,clocks.sm,clocks.max.sm,power.draw,temperature.gpu,memory.used,memory.total \
       --format=csv,noheader -i "$GPU_LEASE_UUID" >> "$O/gpu.txt" 2>&1
     FLAGS=(-O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
-    nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
-    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
+    nvcc "${FLAGS[@]}" -o "$B/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$O/session.ptxas" 2>&1 & S=$!
+    nvcc "${FLAGS[@]}" -DKV_FIELD=1024 -DKV_MASK=1 -o "$B/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv.ptxas" 2>&1 & K=$!
     wait $S || { tail -40 "$O/session.ptxas"; exit 4; }
     wait $K || { tail -40 "$O/kv.ptxas"; exit 4; }
     sha256sum "$B"/*.so > "$O/libs.sha256"
@@ -207,7 +207,7 @@ fi
   if [ "$ROLE" = both ]; then
     eval "VA=(${VERIFIER_ARGS:-})"
     # shellcheck disable=SC2086
-    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/poub/verifier/remote_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
+    taskset -c "$VERIFIER_CPUS" "$PY" verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py $VERIFY_ARGS "${VA[@]}" > "$O/verifier.log" 2>&1 & V=$!
   fi
   PIN=(taskset -c "$PROVER_CPUS")
   if [ -n "${PROVER_SLICE:-}" ]; then
@@ -217,7 +217,7 @@ fi
       --nice=0 -p AllowedCPUs="$PROVER_CPUS" -p MemoryMax="${PROVER_MEM_GB:-300}G" -p MemorySwapMax=0 --
       setpriv --reuid="$(id -u)" --regid="$(id -g)" --init-groups -- "${PIN[@]}")
   fi
-  "${PIN[@]}" "$PY" verity/protocols/poub/prover/remote_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
+  "${PIN[@]}" "$PY" verity/protocols/accounting/poub/prover/remote_session/prover.py --connect "127.0.0.1:$PORT" --out "$O" --plan "$PLAN" \
     "${DEV[@]}" ${PROVER_ARGS:-} > "$O/prover.log" 2>&1
   P=$?
   W=0

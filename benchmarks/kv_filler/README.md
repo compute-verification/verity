@@ -2,7 +2,7 @@
 
 The filler top-up beside vLLM serving: how close a period's registered reads come to the read rate R (η, reads over
 R·T) when a top-up reads idle registered memory beside the serving workload, and what the top-up costs inference.
-`topup.cu` is the top-up (it includes `verity/protocols/poub/prover/codec_tensor/sha512.cuh`, readers in `readers.cu` and the fill in
+`topup.cu` is the top-up (it includes `verity/protocols/accounting/poub/prover/codec_tensor/sha512.cuh`, readers in `readers.cu` and the fill in
 `fill.cu`, whose reference is `fill_ref.py`). `bench.py` times it beside serving phases, `serve.py` serves Llama-3.1-8B
 under a bursty trace with it.
 `green.py` is the SM partition, and `lag.py` and `analyze.py` price the conversion lag.
@@ -13,7 +13,7 @@ the top-up), and `benchmarks/harness` builds `topup.cu`. Decided by `rg kv_fille
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/kv_filler` runs what needs no GPU: the fill's reference, the
 lag's replay, the analysis, and the serving script's pure parts. `bench.py` and `serve.py` run on one GPU with a build
-of `topup.cu` and one of `verity/protocols/poub/prover/word_codec/kv.cu` at p512 (`--topup-lib`, `--kv-lib`); no script
+of `topup.cu` and one of `verity/protocols/accounting/poub/prover/word_codec/kv.cu` at p512 (`--topup-lib`, `--kv-lib`); no script
 here builds the two.
 
 **Reads and writes:** `bench.py` writes `bench.json` and `serve.py` `serve-<arm>.json`, each with its log, into `--out`;

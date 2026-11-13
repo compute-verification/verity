@@ -1,5 +1,5 @@
 """A PoUB session over PoUS's P2 store on the card that serves from it: the prover's side of
-`verity.protocols.poub.verifier.p2_party`, whose verifier runs on another host.
+`verity.protocols.accounting.poub.verifier.p2_party`, whose verifier runs on another host.
 
     bandwidth.py toy OUT                                  # the toy's C* as an encoded store, and its registration
     bandwidth.py registration --store ENC --node NODE --layout F --out FILE
@@ -72,13 +72,13 @@ ROOT = HERE.parents[2]
 STAGE = ROOT / "benchmarks" / "torch_gpu" / "p2_stage"
 if __package__ in (None, ""):
     sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str((ROOT / "verity/protocols/pous/prover/p2/p2_store/store.py").parents[1]))
+sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
 sys.path.insert(0, str(STAGE))
 
-from verity.protocols.pous.verifier import verifier as V
-from verity.protocols.pous.verifier.labels import salt_value, tag
-from verity.protocols.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.poub.verifier import coins, p2, p2_case, p2_party, receipts
+from verity.protocols.accounting.pous.verifier import verifier as V
+from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
+from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
+from verity.protocols.accounting.poub.verifier import coins, p2, p2_case, p2_party, receipts
 from verity.commitments.merkle import merkle_depth
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS

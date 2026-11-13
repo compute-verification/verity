@@ -19,11 +19,11 @@ round j    x ↦ ρ(x + c_j + t(i)); encode is rounds 0 … k − 1 from the pay
 K          a masked key's (`key(..., mask=True)`): LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be 2^32 − 2)[0 : S]) mod 2^n, not
            reduced mod p
 σ_K(x)     x ⊕ K if that is below p, else x: an involution on [0, p), applied to x before each round j ≥ 1 of a masked
-           word's encode and after each inverted round j ≥ 1 of its decode (`verity/protocols/poub/prover/word_codec/kv.py`'s)
+           word's encode and after each inverted round j ≥ 1 of its decode (`verity/protocols/accounting/poub/prover/word_codec/kv.py`'s)
 ~~~
 
 The field, the key derivation (under this module's `DOMAIN`), ρ and the rounds are the store codec's
-(`verity.protocols.poub.verifier.codec`: `Field`, `derive` over a `Sloth`, `encode_word` and `decode_word`),
+(`verity.protocols.accounting.poub.verifier.codec`: `Field`, `derive` over a `Sloth`, `encode_word` and `decode_word`),
 with the payload check around them; this module keeps the tasks' layout and the tensor-core squaring.
 
 The seed is sampled after the weights are registered. Decoding a word costs k squarings; encoding it k roots, each
@@ -36,9 +36,9 @@ consecutive words (L·S a multiple of 16 so a task is one bulk copy), word w of 
 
 from __future__ import annotations
 
-from verity.protocols.poub.verifier.codec import (  # noqa: F401  the store codec's, which this module's users take
+from verity.protocols.accounting.poub.verifier.codec import (  # noqa: F401  the store codec's, which this module's users take
     MASK_INDEX, P512, P1024, SEED_BYTES, Field, Key, Sloth, derive, rho, rho_inv)
-from verity.protocols.poub.verifier import codec as RB
+from verity.protocols.accounting.poub.verifier import codec as RB
 
 DOMAIN = b"verity/word-codec/wide/v0\0"
 TASK_BYTES = 8192

@@ -25,8 +25,8 @@ import gemm as G  # noqa: E402
 import stage as S  # noqa: E402
 
 ROOT = HERE.parents[2]
-VECTORS = json.loads((ROOT / "verity/protocols/pous/verifier/p2_v1/vectors.json").read_text())
-TOY = ROOT / "verity/protocols/pous/prover/p2/p2_store/store-toy"
+VECTORS = json.loads((ROOT / "verity/protocols/accounting/pous/verifier/p2_v1/vectors.json").read_text())
+TOY = ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store-toy"
 PREFIX = L.registered_prefix(bytes(range(24)))
 # what a weights manifest written here names its weights, and a setup.json written here its store's
 NAME = "p2-stage-tests/weights"
@@ -131,7 +131,7 @@ def test_store_layout_reads_the_toy_doc_and_refuses_other_layouts() -> None:
         L.store_layout(doc, PREFIX[:-1])
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/pous/prover/p2/p2_store/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/accounting/pous/prover/p2/p2_store/store-toy) isn't here")
 def test_layout_doc_is_the_toys() -> None:
     toy = json.loads((TOY / "toy.json").read_text())["layout"]
     assert layout_doc(model(64, 2, 1, 64), per_segment=11) == {k: toy[k] for k in layout_doc([]).keys()}
@@ -286,7 +286,7 @@ class RefKernels:
         return 0
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/pous/prover/p2/p2_store/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/accounting/pous/prover/p2/p2_store/store-toy) isn't here")
 def test_toy_store_stages_as_the_fixture_says(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The toy's C* through `decode_layer` under P2's reference: each layer's load buffer by its digest, each negative
     block refused with its flag bit, another salt refused, and the spot vectors at the real store's indices."""
@@ -417,7 +417,7 @@ def encoded_store(root: Path, rows: np.ndarray, per_segment: int, setup: dict) -
         L.segment_path(root, s, "json").write_text(json.dumps({"segment": s, "sha512": hashlib.sha512(data).hexdigest()}))
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/pous/prover/p2/p2_store/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/accounting/pous/prover/p2/p2_store/store-toy) isn't here")
 def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The toy's coin and commitment give its salt; its C* as an encoded store's segment files, opened with no weights
     manifest, loads each layer to toy.json's digest under P2's reference; a setup of another commitment, layout,
@@ -519,7 +519,7 @@ def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path: Path,
     padding control's last block from the generator. Refused: an encode step, another commitment, a store of other
     weights, a manifest that names none, an unfinished segment; a tensor whose digest differs fails the run."""
     import layer
-    from verity.protocols.pous.verifier import setup as P
+    from verity.protocols.accounting.pous.verifier import setup as P
 
     monkeypatch.setattr(S.gpu, "Kernels", XorKernels)
     monkeypatch.setattr(layer.gpu, "Kernels", XorKernels)
@@ -637,7 +637,7 @@ def toy_stream(doc: dict) -> tuple[dict, bytes]:
     return {"model": NAME, "tensors": rows, "stream_bytes": len(w) + len(scales)}, bytes(w + scales)
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/pous/prover/p2/p2_store/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (verity/protocols/accounting/pous/prover/p2/p2_store/store-toy) isn't here")
 def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """The toy's C* as an encoded store through `full.py` under P2's reference: every tensor of every layer and the head
     loaded and held to the manifest's SHA-256, the step's decode summed over them, one layer's GEMM in chunks of output

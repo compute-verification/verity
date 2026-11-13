@@ -16,11 +16,11 @@ pytest.importorskip("verity")
 
 BENCH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BENCH))
-sys.path.insert(0, str((BENCH.parents[1] / "verity/protocols/pous/prover/p2/p2_store/store.py").parents[1]))
+sys.path.insert(0, str((BENCH.parents[1] / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
 from p2_v1 import serve as V  # noqa: E402
 from p2_store import store as S  # noqa: E402
 
-from verity.protocols.poub.verifier import p2, receipts  # noqa: E402
+from verity.protocols.accounting.poub.verifier import p2, receipts  # noqa: E402
 
 STORE, DOC, C_STAR = V.toy()
 SALT = bytes.fromhex(DOC["salt"])

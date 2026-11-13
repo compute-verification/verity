@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/pous/prover/p2/p2_store/gpu.py").parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py").parents[1]))
 
 BPS = 1 << 16
 WIDTH, C0, PAYLOAD = 16_448, 21_065, 2_054
@@ -97,7 +97,7 @@ class Chain:
         raise ArithmeticError("p is not a prime congruent to 3 mod 4")
 
     def encode(self, P: Any, m: int, k: int, t: int) -> int:
-        from verity.protocols.pous.verifier.p2_v1 import reference as R
+        from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
 
         return self.rho(R.sigma(P, self.rho((m + t) % P.p), k))
 
@@ -112,7 +112,7 @@ class Powmod(Chain):
 def _block_inputs(seed: int, i: int) -> tuple[Any, int, int, int]:
     import hashlib
 
-    from verity.protocols.pous.verifier.p2_v1 import reference as R
+    from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
 
     P = R.DEPLOYMENT
     prefix = R.expand_prefix(hashlib.sha256(b"scale/salt").digest(), P, hashlib.sha512(b"scale/model").digest())
@@ -123,7 +123,7 @@ def _block_inputs(seed: int, i: int) -> tuple[Any, int, int, int]:
 
 def _cpu_worker(job: tuple[int, str, int, int]) -> dict[str, Any]:
     cpu, mode, blocks, seed = job
-    from verity.protocols.pous.verifier.p2_v1 import reference as R
+    from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
 
     os.sched_setaffinity(0, {cpu})
     roots = Chain() if mode == "gmp-chain" else Powmod()
@@ -142,8 +142,8 @@ def cpu_cmd(a: argparse.Namespace) -> int:
 
     import gmpy2
 
-    from verity.protocols.pous.verifier.p2_v1 import reference as R
-    from verity.protocols.pous.verifier.schemes import p2 as S
+    from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
+    from verity.protocols.accounting.pous.verifier.schemes import p2 as S
 
     out = Path(a.out)
     cpus = [int(x) for x in a.cpus.split(",") if x]
@@ -204,7 +204,7 @@ def _lscpu_model() -> str:
 
 def _setup_encode(job: tuple[Any, bytes, bytes, int, int]) -> list[bytes]:
     q, salt, w_seg, lo, hi = job
-    from verity.protocols.pous.verifier.schemes import p2 as S
+    from verity.protocols.accounting.pous.verifier.schemes import p2 as S
 
     chain, keys, p = Chain(q.w, q.c0), S.segment_keys(q, salt, 0), (1 << q.w) - q.c0
     pb, nb, out = q.payload_bytes, q.block_bytes, []
@@ -220,8 +220,8 @@ def _setup_encode(job: tuple[Any, bytes, bytes, int, int]) -> list[bytes]:
 def setup_check_cmd(a: argparse.Namespace) -> int:
     import multiprocessing as mp
 
-    from verity.protocols.pous.verifier import setup
-    from verity.protocols.pous.verifier.schemes import p2 as S
+    from verity.protocols.accounting.pous.verifier import setup
+    from verity.protocols.accounting.pous.verifier.schemes import p2 as S
     from verity.commitments.identity import canonical_json_bytes
 
     out = Path(a.out)
@@ -295,7 +295,7 @@ def _smi(query: str) -> list[str]:
 def gpu_cmd(a: argparse.Namespace) -> int:
     import torch
 
-    from verity.protocols.pous.verifier.p2_v1 import reference as R
+    from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
     from p2_store.gpu import Kernels
 
     out = Path(a.out)
@@ -369,7 +369,7 @@ def _segment(seed: int, s: int) -> Any:
 
 def _leaves_job(job: tuple[int, int, bytes]) -> tuple[int, bytes]:
     seed, s, salt = job
-    from verity.protocols.pous.verifier.p2_v1 import reference as R
+    from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
 
     raw = _segment(seed, s).tobytes()
     return s, b"".join(R.leaf(salt, s, v, raw[v * NB:(v + 1) * NB]) for v in range(BPS))
@@ -539,7 +539,7 @@ def fit_driver_cmd(a: argparse.Namespace) -> int:
 def audit_cmd(a: argparse.Namespace) -> int:
     import numpy as np  # noqa: F401  (the leaf pool's)
 
-    from verity.protocols.pous.verifier.p2_v1 import reference as R
+    from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
 
     out, scratch = Path(a.out), Path(a.scratch)
     scratch.mkdir(parents=True, exist_ok=True)
@@ -628,7 +628,7 @@ def fit_beside(a: argparse.Namespace, backend: Any, c: Any, st: dict[str, Any], 
     import torch
 
     from band_gpu import harness as H
-    from verity.protocols.pous.verifier.p2_v1 import reference as R
+    from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
 
     # the decode passes' cached labels would otherwise count against vLLM: only the store and the responder stay
     torch.cuda.empty_cache()

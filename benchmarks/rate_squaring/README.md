@@ -1,13 +1,13 @@
 # benchmarks/rate_squaring
 
 How fast a node can square modulo the store codec's Sloth primes, which bounds how fast it can rebuild an encoded store:
-the evidence for the bandwidth audit's (PoUB, `verity/protocols/poub/verifier`) stated squaring ceiling.
+the evidence for the bandwidth audit's (PoUB, `verity/protocols/accounting/poub/verifier`) stated squaring ceiling.
 `sq.cu` (run by `sq.sh`) squares mod 2^512 − 569 (or another width, `BITS` and `C`) on the GPU's CUDA cores in every
 (FOLD, ILP) form, each gated against Python's `pow` by `sq_gate.py` before it is timed, with its SASS opcode mix
 (`sass_mix.py`) and Nsight Compute's counts. `ifma.c` (run by `ifma.sh`) is the host's AVX-512 IFMA rate, and `gamma.py`
 turns the rates into x₁ and γ tables.
 
-**Status: active.** `verity/protocols/poub/prover/word_codec/kv.cu` and `benchmarks/codec_tensor/wt.cu` take their FOLD
+**Status: active.** `verity/protocols/accounting/poub/prover/word_codec/kv.cu` and `benchmarks/codec_tensor/wt.cu` take their FOLD
 6 form from `sq.cu`, and the audit's `timing.py` cites `gamma.py`. Decided by `rg rate_squaring` over `verity/`,
 `benchmarks/`, `demos/`, `tests/` and `adapters/`. `gamma.py` is a finished study.
 

@@ -18,8 +18,8 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/../ship.sh"
 OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
-P2=$(dirname verity/protocols/pous/prover/p2/p2_store/Makefile)
-ship_stage "$P2" "$(dirname verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu)" verity/circuits/kernels
+P2=$(dirname verity/protocols/accounting/pous/prover/p2/p2_store/Makefile)
+ship_stage "$P2" "$(dirname verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu)" verity/circuits/kernels
 P2=$SRC/$P2
 S=$(mktemp -d "${TMPDIR:-/tmp}/p2-stage-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 mkdir -p "$OUT/lib"
@@ -33,7 +33,7 @@ if ! echo '#include <gmp.h>' | cpp >/dev/null 2>&1; then
   [ -n "$GMPINC" ] || { echo "gmpy2's wheel has no gmp.h" >&2; exit 2; }
 fi
 git clone -q https://github.com/NVlabs/CGBN "$S/CGBN"
-git -C "$S/CGBN" checkout -q "$(cat "$ROOT/verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit")"
+git -C "$S/CGBN" checkout -q "$(cat "$ROOT/verity/protocols/accounting/pous/prover/p2/p2_gpu/CGBN.commit")"
 
 mk=(make -C "$P2" NVCC="$SHIP_NVCC" CGBN="$S/CGBN" BIN="$OUT/lib" ARCH="$ARCH" ${GMPINC:+"INC=-I $GMPINC"})
 { "$CUDA/bin/nvcc" --version; echo "${mk[*]}"; } > "$OUT/toolchain.txt"
@@ -45,9 +45,9 @@ if grep -E "spill (stores|loads)" "$OUT/lib/libp2v1.so.ptxas" | grep -vq " 0 byt
   echo "ptxas reports spills (lib/libp2v1.so.ptxas)" >&2
 fi
 { git -C "$ROOT" rev-parse HEAD
-  (cd "$ROOT" && sha256sum verity/protocols/pous/prover/p2/p2_store/p2v1.cu verity/protocols/pous/prover/p2/p2_store/p2sq.cuh verity/protocols/pous/prover/p2/p2_store/p2keys.cuh \
-    verity/protocols/pous/prover/p2/p2_store/p2keys4.cuh verity/protocols/pous/prover/p2/p2_store/Makefile \
-    verity/protocols/pous/prover/p2/p2_gpu/p2dec.cu verity/protocols/pous/prover/p2/p2_gpu/CGBN.commit verity/circuits/kernels/sha512.cuh); } > "$OUT/source.txt"
+  (cd "$ROOT" && sha256sum verity/protocols/accounting/pous/prover/p2/p2_store/p2v1.cu verity/protocols/accounting/pous/prover/p2/p2_store/p2sq.cuh verity/protocols/accounting/pous/prover/p2/p2_store/p2keys.cuh \
+    verity/protocols/accounting/pous/prover/p2/p2_store/p2keys4.cuh verity/protocols/accounting/pous/prover/p2/p2_store/Makefile \
+    verity/protocols/accounting/pous/prover/p2/p2_gpu/p2dec.cu verity/protocols/accounting/pous/prover/p2/p2_gpu/CGBN.commit verity/circuits/kernels/sha512.cuh); } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 cat "$OUT/elf.txt"
 grep -E "registers|spill" "$OUT/lib/libp2v1.so.ptxas" | sort | uniq -c | head -20

@@ -43,7 +43,7 @@ echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
 # sources here, verity/circuits/kernels/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
 # MANIFEST.sha256 holds and lake build --no-build then finds the coins' verifier built, so one ship serves every commit
 # that leaves those alone.  Neither covers --bw-passes.
-COINS_PKG=verity/protocols/pouw/verifier/lean/check
+COINS_PKG=verity/protocols/accounting/pouw/verifier/lean/check
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC HB_H1U_KC_B DITHER_H1C_KC"
 # the coins' package and every path package its manifest lists (the inherited ones too), from the tree's root
@@ -138,10 +138,10 @@ esac
 # --bw-passes (dbw.py): PoUB's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
 case " $* " in *" --bw-passes"*)
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
-    -o "$S/session.so" verity/protocols/poub/prover/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
+    -o "$S/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL session"; grep -v "^ptxas info" "$OUT/build-session.log" | tail -30; exit 11; }
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
-    -DKV_MASK=1 -o "$S/kv.so" verity/protocols/poub/prover/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
+    -DKV_MASK=1 -o "$S/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL kv"; grep -v "^ptxas info" "$OUT/build-kv.log" | tail -30; exit 11; }
   export BW_LIB=$S/session.so BW_KV=$S/kv.so ;;
 esac
@@ -164,16 +164,16 @@ fi
 # the dither execution phases' coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-(cd verity/protocols/pouw/verifier/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
+(cd verity/protocols/accounting/pouw/verifier/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
 # and with --bw-passes PoUB's verifier, under the lock lean_verifier.build takes (BW_LEAN_EXE);
 # BW_PY runs the audit's side (verifier and prover), by default remote_session/run.sh's torch venv
 if [ -n "${BW_LIB:-}" ]; then
-  (mkdir -p verity/circuits/difftest/.lake && cd verity/protocols/poub/verifier/lean \
+  (mkdir -p verity/circuits/difftest/.lake && cd verity/protocols/accounting/poub/verifier/lean \
     && flock "$ROOT/verity/circuits/difftest/.lake/harness-build.lock" lake build remote-audit-verifier) \
     > "$OUT/lean-bw-build.log" 2>&1 || { echo "sbench: LEAN_BUILD_FAIL bw"; tail -20 "$OUT/lean-bw-build.log"; exit 13; }
-  export BW_LEAN_EXE=$ROOT/verity/protocols/poub/verifier/lean/.lake/build/bin/remote-audit-verifier
+  export BW_LEAN_EXE=$ROOT/verity/protocols/accounting/poub/verifier/lean/.lake/build/bin/remote-audit-verifier
   export BW_PY=${BW_PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
   [ -x "$BW_PY" ] || { echo "sbench: no BW_PY at $BW_PY"; exit 3; }
 fi
@@ -224,7 +224,7 @@ fi
 # it does (h1v3_ref.py's OLDER); a pinned tree keeps its own layout, so the older two are joined from their parts
 has_h1tile() {
   local d
-  for d in verity/protocols/pouw/prover/circuit "$(printf '%s/' verity ml protocols pouw)circuit" \
+  for d in verity/protocols/accounting/pouw/prover/circuit "$(printf '%s/' verity ml protocols pouw)circuit" \
            "$(printf '%s/' verity core protocols pouw)circuit"; do
     [ -f "$1/$d/h1tile.py" ] && return 0
   done

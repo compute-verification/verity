@@ -1,4 +1,4 @@
-"""`p2-audit-wire/v4` (`verity/protocols/pous/verifier/p2_v1/wire.py`) against its pinned vectors: every negative transcript gives its pinned
+"""`p2-audit-wire/v4` (`verity/protocols/accounting/pous/verifier/p2_v1/wire.py`) against its pinned vectors: every negative transcript gives its pinned
 FINAL, the small end-to-end audit is accepted and rebuilt byte for byte, every hash `reference.py` pins is the files', and the
 package's copy of the keys is `vectors.json`'s."""
 from __future__ import annotations
@@ -15,10 +15,10 @@ pytest.importorskip("verity")
 BENCH = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BENCH))
 
-from verity.protocols.pous.verifier.p2_v1 import reference as R  # noqa: E402
-from verity.protocols.pous.verifier.p2_v1 import vectors as V  # noqa: E402
-from verity.protocols.pous.verifier.p2_v1 import wire as Wi  # noqa: E402
-from verity.protocols.pous.verifier.verifier import MerkleTree  # noqa: E402
+from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R  # noqa: E402
+from verity.protocols.accounting.pous.verifier.p2_v1 import vectors as V  # noqa: E402
+from verity.protocols.accounting.pous.verifier.p2_v1 import wire as Wi  # noqa: E402
+from verity.protocols.accounting.pous.verifier.verifier import MerkleTree  # noqa: E402
 
 
 def _load(path: Path) -> dict:
@@ -26,11 +26,11 @@ def _load(path: Path) -> dict:
 
 
 def test_the_files_are_the_pinned_ones_under_this_randomness():
-    """A failure here after `verity.commitments.randomness` moves is the cue to rerun `python -m verity.protocols.pous.verifier.p2_v1.vectors`."""
+    """A failure here after `verity.commitments.randomness` moves is the cue to rerun `python -m verity.protocols.accounting.pous.verifier.p2_v1.vectors`."""
     for path, pin in ((R.VECTORS, R.VECTORS_SHA512), (R.AUDIT_VECTORS, R.AUDIT_VECTORS_SHA512),
                       (R.NEGATIVE_VECTORS, R.NEGATIVE_VECTORS_SHA512)):
         assert hashlib.sha512(path.read_bytes()).hexdigest() == pin, path.name
-        assert _load(path)["randomness"] == V.randomness_version(), f"{path.name}: rerun `python -m verity.protocols.pous.verifier.p2_v1.vectors`"
+        assert _load(path)["randomness"] == V.randomness_version(), f"{path.name}: rerun `python -m verity.protocols.accounting.pous.verifier.p2_v1.vectors`"
 
 
 def test_every_negative_transcript_gives_its_pinned_final():
@@ -92,7 +92,7 @@ def test_every_reference_pin_is_the_files_and_the_package_keys_are_the_vectors()
 @pytest.mark.slow
 def test_the_generator_rewrites_the_files_it_pins():
     """Regeneration gives the committed bytes (about a minute: five full-width roots in Python), so the one command that
-    migrates the vectors, `python -m verity.protocols.pous.verifier.p2_v1.vectors`, is the one that made them."""
+    migrates the vectors, `python -m verity.protocols.accounting.pous.verifier.p2_v1.vectors`, is the one that made them."""
     maps, audit = V.map_vectors(), V.audit_vectors()
     negative = V.negative_vectors(audit["small_end_to_end"])
     for doc, path in ((maps, R.VECTORS), (audit, R.AUDIT_VECTORS), (negative, R.NEGATIVE_VECTORS)):

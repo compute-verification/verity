@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/poub/prover/word_codec/kv.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/accounting/poub/prover/word_codec/kv.py").parent))
 
 from kv import Field, chain, from_limbs, low_bits, to_limbs
 

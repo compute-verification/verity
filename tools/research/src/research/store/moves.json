@@ -2425,6 +2425,18 @@
       "paths": {
         "verity/protocols/pouw/receipts/": "verity/protocols/pouw/verifier/receipts/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/flock/": "verity/protocols/proofs/flock/",
+        "verity/protocols/spot/": "verity/protocols/proofs/spot/",
+        "verity/protocols/recursion/": "verity/protocols/proofs/recursion/",
+        "verity/protocols/pouw/": "verity/protocols/accounting/pouw/",
+        "verity/protocols/pous/": "verity/protocols/accounting/pous/",
+        "verity/protocols/poub/": "verity/protocols/accounting/poub/",
+        "verity/protocols/certifier/": "verity/protocols/accounting/certifier/",
+        "verity/protocols/inference_only/": "verity/protocols/policy/inference_only/"
+      }
     }
   ]
 }
