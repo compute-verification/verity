@@ -8,17 +8,17 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import evaluate
-from verity.circuits.defs import bind
-from verity.circuits.boolean import trace as TR
 from verity.definitions import boolean as SW
 from verity.definitions.registry import b1, hopper
 from verity.definitions.registry import boolean_sparse_mla as BM
 from verity.definitions.registry import fa3_check_inf as F3
 from verity.definitions.registry import sparse_mla as M
+
 from tests.program.test_boolean_fp8 import _flat, _inputs
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
@@ -108,9 +108,9 @@ def test_only_a_later_block_takes_the_running_state(first: bool) -> None:
 
 def test_statics_are_checked() -> None:
     with pytest.raises(ValueError, match="multiples of 16"):
-        bind(M.SparseMlaBlock, DR=8, DV=16, NVIS=4, FIRST=True, BN=16, DOT=FA3["DOT"], SCALE=0.0625).body
+        _ = bind(M.SparseMlaBlock, DR=8, DV=16, NVIS=4, FIRST=True, BN=16, DOT=FA3["DOT"], SCALE=0.0625).body
     with pytest.raises(ValueError, match="selected keys"):
-        bind(M.SparseMlaHead, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
+        _ = bind(M.SparseMlaHead, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
 
 
 BOOL = {"DOT": BM.SPARSE_MLA_GLM53["DOT"], "INV": BM.SPARSE_MLA_GLM53["INV"]}

@@ -16,16 +16,19 @@ the GEMMs read).  Both the batched record and the B=1 components are folded unde
 
 from __future__ import annotations
 
-import pytest
+import gzip
+import json
 
-from verity_vllm.program import model as analytic
-from verity_vllm.observe.fold import fold as fold_mod
-from verity_vllm.check.match import batch_decomp as bd
-from verity_vllm.check.match import program_compare as C
-from verity_vllm.check.match import global_match as gm
+import pytest
+from verity.circuits.types import Array, RecordType, Value
+
 from tests.check import test_global_match as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401 - fixture
-from verity.circuits.types import Array, RecordType, Value
+from verity_vllm.check.match import batch_decomp as bd
+from verity_vllm.check.match import global_match as gm
+from verity_vllm.check.match import program_compare as C
+from verity_vllm.observe.fold import fold as fold_mod
+from verity_vllm.program import model as analytic
 
 SCALE_FIELD = ("scale32", Array(4, Value(32)))
 
@@ -98,12 +101,11 @@ def test_gm01_multi_node_weights_keep_the_mutations_failing(memory, inhomogeneou
 def test_header_and_program_input_layout_disagreement_is_named(memory, inhomogeneous_weights, tmp_path):
     # the fold's layout is prompts, seeds, then weights: a header claiming MORE requests than the Program has prompt nodes is refused by name
     # (X-09 raises; GM-01 fails G5 by name and every weight read becomes a cross-request read -- never a guessed boundary)
-    import gzip
-    import json
     gp, oracle = T.assemble([T.R0, T.R1], tmp_path)
     comps = [g["component"]["dir"] for g in gp["requests"]]
     log = f"{oracle}/capture/log.jsonl.gz"
-    lines = gzip.open(log, "rt").read().splitlines()
+    with gzip.open(log, "rt") as fh:
+        lines = fh.read().splitlines()
     hdr = json.loads(lines[0])
     hdr["workload"]["requests"].append({"request_id": "r9", "prompt_token_ids": [1, 2], "max_tokens": 2, "arrive_step": 0})
     lines[0] = json.dumps(hdr)

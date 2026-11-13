@@ -31,7 +31,10 @@ import math
 import os
 from dataclasses import dataclass, field
 from importlib import resources
+from pathlib import Path
 from typing import Any
+
+from verity.definitions.registry.bf16_gemm_check import device_pin
 
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
@@ -45,8 +48,8 @@ from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles.dense_generic import find_hf_config
 from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16
 from verity_vllm.program.model import config_of
-from verity.definitions.registry.bf16_gemm_check import device_pin
-from verity_vllm.query.manifest.format import SERVED_IDS as IDS, SERVED_POSITIONS as POSITIONS
+from verity_vllm.query.manifest.format import SERVED_IDS as IDS
+from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
 
 PINS = resources.files("verity_vllm") / "pins" / "served"
 KINDS = ("first", "middle", "last")
@@ -147,9 +150,10 @@ class _Pieces:
     def launch(self, kind: str, name: str, template: str, binds: dict[str, dict[str, Any]], outs: dict[str, str]) -> list[dict[str, Any]]:
         """Kernel `name` of the pin's `kind` pieces as template `template` at the model's literals and its pinned launch config, its
         parameters bound to `binds` and each write hooked as `outs`; the written values in `outs`' order."""
-        sha = (self.pin["kernels"].get(kind) or {}).get(name)
+        of_kind = self.pin["kernels"].get(kind)   # the pin's kernels by name for this kind of piece; a pin that states none has no kernel
+        sha = of_kind.get(name) if of_kind else None
         if sha is None:
-            raise Unmodelled(f"the pin has no kernel {name} in its {kind} pieces: {self.pin['kernels'].get(kind)}")
+            raise Unmodelled(f"the pin has no kernel {name} in its {kind} pieces: {of_kind}")
         t = T.TEMPLATE[template]
         rec = T.instantiate(name, t, _literals(t, self.m), self.pin["artifact"]["kernels"].get(sha))
         self.kernels[sha] = {"source_sha256": sha, "template": t.name, "literals": rec["literals"], "config": rec["config"]}
@@ -206,25 +210,25 @@ class _Pieces:
     def layer(self, p: int, residual: dict[str, Any], last: bool) -> dict[str, Any]:
         """Piece p: layer p-1 from its attention's output on (its o_proj, MLP or fused-MoE block, the add + norm), then layer p's qkv and
         attention, or the final norm in the last piece; the residual, or the backbone's output."""
-        m, L, l, kind = self.m, self.layout, p - 1, "last" if last else "middle"
+        m, L, li, kind = self.m, self.layout, p - 1, "last" if last else "middle"
         self.p = p
         prev = self.attention[-1]
-        h = self.mm({"value": prev["name"], "width": m["NH"] * m["D"]}, self.w("self_attn.o_proj.weight", m["H"], m["NH"] * m["D"], layer=l),
+        h = self.mm({"value": prev["name"], "width": m["NH"] * m["D"]}, self.w("self_attn.o_proj.weight", m["H"], m["NH"] * m["D"], layer=li),
                     "mm/buf0")
-        post = self.w("post_attention_layernorm.weight", m["H"], layer=l)
+        post = self.w("post_attention_layernorm.weight", m["H"], layer=li)
         if "moe" in L:
             kernel, b1, b2 = L["moe"]["norm"]
             x, _copy = self.launch(kind, kernel, "ADD_NORM_COPY", {"in_ptr0": h, "in_ptr1": residual, "in_ptr2": post},
                                    {"out_ptr1": b1, "out_ptr2": b2})
             out = self.value(L["moe"]["out"], m["H"])
             self.calls.append({"op": "moe_forward", "layer": {"layer_name": True}, "reads": [x], "writes": [out["value"]], "piece": p})
-            self._moe_layer(l)
+            self._moe_layer(li)
         else:
             (nk, nb), (ak, ab) = L["mlp"]["norm"], L["mlp"]["act"]
             x, = self.launch(kind, nk, "ADD_NORM", {"in_ptr0": h, "in_ptr1": residual, "in_ptr2": post}, {"out_ptr1": nb})
-            up = self.mm(x, self.w("mlp.gate_up_proj.weight", 2 * m["I"], m["H"], layer=l), L["mlp"]["up"])
+            up = self.mm(x, self.w("mlp.gate_up_proj.weight", 2 * m["I"], m["H"], layer=li), L["mlp"]["up"])
             act, = self.launch(kind, ak, "SILU_MUL", {"in_ptr0": up}, {"out_ptr0": ab})
-            out = self.mm(act, self.w("mlp.down_proj.weight", m["H"], m["I"], layer=l), L["mlp"]["down"])
+            out = self.mm(act, self.w("mlp.down_proj.weight", m["H"], m["I"], layer=li), L["mlp"]["down"])
         if last:
             kernel, fb = L["final"]
             final, = self.launch(kind, kernel, "ADD2_NORM_FINAL", {"in_out_ptr0": out, "in_ptr0": h, "in_ptr1": residual,
@@ -237,13 +241,13 @@ class _Pieces:
         self.attend("middle", p, x, L["middle"]["qkv"])
         return res
 
-    def _moe_layer(self, l: int) -> None:
-        """Layer l's fused-MoE facts as `served_match.moe_facts` records them, the block `served_moe.REQUIRED` describes."""
+    def _moe_layer(self, li: int) -> None:
+        """Layer li's fused-MoE facts as `served_match.moe_facts` records them, the block `served_moe.REQUIRED` describes."""
         m, names = self.m, self.m["MOE_PARAMS"]
         E = m["NUM_EXPERTS"]
         shapes = {"gate_w": [E, m["H"]], "w13": [E, 2 * m["I"], m["H"]], "w2": [E, m["H"], m["I"]]}
-        name = f"{self.backbone}.layers.{l}.mlp.experts"
-        self.layers[name] = {**{k: self.w(names[f], *shapes[f], layer=l) for k, f in (("gate", "gate_w"), ("w13", "w13"), ("w2", "w2"))},
+        name = f"{self.backbone}.layers.{li}.mlp.experts"
+        self.layers[name] = {**{k: self.w(names[f], *shapes[f], layer=li) for k, f in (("gate", "gate_w"), ("w13", "w13"), ("w2", "w2"))},
                              "E": E, "top_k": int(m["TOPK"]), "renormalize": m["RENORMALIZE"], "VPT": router_vpt_bf16(E), **SM.REQUIRED}
 
     def moe(self, cc: list[int]) -> dict[str, Any] | None:
@@ -251,7 +255,9 @@ class _Pieces:
         if not self.layers:
             return None
         pieces = {str(c["piece"]): f"{self.backbone}.layers.{c['piece'] - 1}.mlp.experts" for c in self.calls if c["op"] == "moe_forward"}
-        return {"layers": self.layers, "pieces": pieces, "configs": (self.pin.get("moe") or {}).get("configs") or {}, "cc": list(cc)}
+        recorded = self.pin.get("moe")   # the fused-MoE launches the pin recorded, by row count; a pin without the block records none
+        configs = recorded.get("configs") if recorded else None
+        return {"layers": self.layers, "pieces": pieces, "configs": configs if configs else {}, "cc": list(cc)}
 
 
 def pin_file(role: str, device: str) -> str:
@@ -291,8 +297,9 @@ def differences(predicted: dict[str, Any], traced: dict[str, Any]) -> list[str]:
     """Where a predicted Build differs from a traced one: its digests, then the first differing call, attention op or step plan."""
     out = [f"{k}: predicted {predicted[k][:16]}, traced {str(traced.get(k))[:16]}" for k in ("program_digest", "manifest_digest")
            if predicted[k] != traced.get(k)]
-    if predicted["artifact"]["digest"] != (traced.get("artifact") or {}).get("digest"):
-        out += [f"artifact: {d}" for d in SA.differences(traced.get("artifact") or {}, predicted["artifact"])] or ["artifact digest"]
+    art = traced.get("artifact")   # a traced Build that states no artifact differs in every kernel and winner of the predicted one
+    if predicted["artifact"]["digest"] != (art.get("digest") if art else None):
+        out += [f"artifact: {d}" for d in SA.differences(art if art else {}, predicted["artifact"])] or ["artifact digest"]
     for key, a, b in (("call", predicted["program"]["calls"], traced["program"]["calls"]),
                       ("attention", predicted["program"]["attention"], traced["program"]["attention"]),
                       ("step plan", predicted["steps_plan"], traced["steps_plan"])):
@@ -309,10 +316,11 @@ def pin_of(build: dict[str, Any], inductor_dir: str, moe: dict[str, Any] | None,
     """A row's served pin from its traced Build and the Inductor dir that Build read (its piece wrappers): each piece kind's kernels by
     name and source digest (every middle piece's the same), the Build's artifact, its dispatch, and the fused-MoE configs of `moe`."""
     prog = build["program"]
+    kernels: dict[str, dict[str, str]]
     wrappers, kernels = prog["piece_wrappers"], {k: {} for k in KINDS}
     for p, rel in enumerate(wrappers):
         kind = KINDS[0] if p == 0 else KINDS[2] if p == len(wrappers) - 1 else KINDS[1]
-        src = T.kernel_sources(open(os.path.join(inductor_dir, rel)).read())
+        src = T.kernel_sources(Path(inductor_dir, rel).read_text())
         got = {c["op"]: T.source_sha256(src[c["op"]]) for c in prog["calls"] if c["piece"] == p and c["op"] in src}
         if kernels[kind] and kernels[kind] != got:
             raise Unmodelled(f"piece {p} ({rel}) launches kernels {got}, another {kind} piece {kernels[kind]}")
@@ -355,17 +363,17 @@ COMMANDS = {"compiled": Options, "compiled-pin": PinOptions}
 
 
 def main(a: Options | PinOptions) -> int:
-    if a.cmd == "compiled-pin":
-        build = json.load(open(a.build))
-        device = json.load(open(os.path.join(os.path.dirname(a.build), "routes.json")))["device"]
-        pin = pin_of(build, a.inductor_dir, json.load(open(a.moe)) if a.moe else None, role=a.role, device=device, evidence=a.evidence)
+    if isinstance(a, PinOptions):
+        build = json.loads(Path(a.build).read_text())
+        device = json.loads(Path(os.path.dirname(a.build), "routes.json").read_text())["device"]
+        pin = pin_of(build, a.inductor_dir, json.loads(Path(a.moe).read_text()) if a.moe else None, role=a.role, device=device, evidence=a.evidence)
         with open(a.out, "w") as f:
             json.dump(pin, f, indent=1)
             f.write("\n")
         print(f"[predict compiled-pin] {a.role} on {device}: {sum(map(len, pin['kernels'].values()))} kernel launches, "
               f"{len(pin['artifact']['winners'])} winners -> {a.out}")
         return 0
-    wl = json.load(open(a.workload))
+    wl = json.loads(Path(a.workload).read_text())
     steps = a.steps or int(wl.get("expected_engine_steps") or 0)
     if not steps:
         raise UsageError("--steps (or the workload's expected_engine_steps) is required")
@@ -379,7 +387,7 @@ def main(a: Options | PinOptions) -> int:
     print(f"[predict compiled] program {m['program_digest'][:16]} manifest {m['manifest_digest'][:16]} artifact {m['artifact']['digest'][:16]} "
           f"identities {len(m['identities'])} complete {m['complete']} -> {a.out}")
     if a.compare:
-        diff = differences(m, json.load(open(a.compare)))
+        diff = differences(m, json.loads(Path(a.compare).read_text()))
         print(f"[predict compiled] against {a.compare}: " + ("equal" if not diff else "\n  ".join(["differs"] + diff)))
         return 5 if diff else 0
     return 0 if m["complete"] else 4

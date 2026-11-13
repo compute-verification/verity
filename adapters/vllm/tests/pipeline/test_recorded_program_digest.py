@@ -6,9 +6,11 @@ from __future__ import annotations
 
 import gzip
 import json
+from typing import Any
 
 from verity.circuits import partition_object as PO
 from verity.circuits.codec import program_digest
+
 from verity_vllm.pipeline import manifest as M
 from verity_vllm.query.required import partition_of
 
@@ -22,7 +24,7 @@ def test_a_record_before_the_re_baseline_is_named_by_its_sha512(tmp_path):
 
 def test_a_sha256_digest_alone_falls_back_to_the_descriptor(tmp_path):
     assert M.recorded_program_digest(str(tmp_path), {"program": {"digest": SHA256}}) is None
-    desc = {"schema": "verity-ir/descriptor/v1", "definitions": [], "root": None}
+    desc: dict[str, Any] = {"schema": "verity-ir/descriptor/v1", "definitions": [], "root": None}
     with gzip.open(tmp_path / "descriptor.json.gz", "wt") as f:
         json.dump(desc, f)
     assert M.recorded_program_digest(str(tmp_path), {"program": {"digest": SHA256}}) == program_digest(desc)

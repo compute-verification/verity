@@ -14,15 +14,26 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
+from verity.circuits.codec import descriptor_id
+from verity.commitments.windows import interface as I
 
-from tests.pipeline.test_tp_wires import in_order, parts_bits, peer_bits, proof_blocks, sent_at_own_slices
-from tests.program.predict.test_steps import GREEDY, _class_g, _mixed, _registered, _session
+from tests.pipeline.test_tp_wires import (
+    in_order,
+    parts_bits,
+    peer_bits,
+    proof_blocks,
+    sent_at_own_slices,
+)
+from tests.program.predict.test_steps import (
+    GREEDY,
+    _class_g,
+    _mixed,
+    _registered,
+    _session,
+)
 from verity_vllm.pipeline.tp import wires as TW
 from verity_vllm.program.predict.steps import compile_steps
 from verity_vllm.program.predict.tp_steps import at_rank, compile_tp
-
-from verity.circuits.codec import descriptor_id
-from verity.commitments.windows import interface as I
 
 ROOT = Path(__file__).resolve().parents[3]
 ONCE = {**GREEDY, "max_tokens": 2, "ignore_eos": True}
