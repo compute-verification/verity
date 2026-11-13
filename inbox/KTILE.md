@@ -265,3 +265,45 @@ decompressing more than a listing needs, everything niced; proofs' builds have t
    note with the lists. **Tell me; the yes or no to infra is mine.**
 
 Return by Fri 13 Nov 09:00Z.
+
+## Fri 13 Nov 03:01Z: BEFORE HASH-129, and small: our three kernel build gates name the SASS gate by its repository path, so that compute-research's move of it follows them (HASH-127, one more item)
+
+**Why.** compute-research moves `benchmarks/pouw/harness/sass_gate.py` and `sass_pins.json` to
+`verity/protocols/pouw/prover/` on Fri 13 or Mon 16 Nov (the page for Daniel, TOP-415; the map
+is on `main`: `tools/move/sass_gate_map.toml`, read its header). The mover rewrites each path
+that names the file. Three of ours build the path from parts, so the mover leaves them and they
+break when the file is gone [read by me on `main` `8c11a1d5ab`]:
+
+- `benchmarks/pouw/pearl_c_sm90/sass_gate.py:20`: `parents[1] / "harness" / "sass_gate.py"`
+- `benchmarks/pouw/pearl_c_sm120/sass_gate.py:19`: the same
+- `benchmarks/torch_gpu/s8_linear/sass_gate.py:29`: `parents[2] / "pouw" / "harness" / "sass_gate.py"`
+
+`benchmarks/pouw/tests/test_mma_gate.py` loads all three, so the move's own check would go red on
+them; this takes that red away before it happens. I told compute-research and vllm on TOP-415
+(03:0xZ) and promised the PR's number tonight.
+
+**Do, on a new branch cut from `origin/main`, in a PR of its own (not in #9542):**
+1. In each of the three, the path as one literal from the repository's root, the form
+   `benchmarks/pouw/gpu_kit/sass_gate.py:50` has (`… / "benchmarks/pouw/harness/sass_gate.py"`).
+   Nothing else in those files; no `.cu`, `.cuh`, cubin or pin changes.
+2. **Show that it does what it is for:** in a scratch copy, `tools/move/layout.py --map
+   tools/move/sass_gate_map.toml --dry-run --report FILE` (read its `--help` first; nothing of
+   the dry run is committed). The report must list the three lines as rewritten to
+   `verity/protocols/pouw/prover/sass_gate.py`. If it does not, stop and tell me what the mover
+   wants instead.
+3. **Every other reader that reaches the gate without naming that literal path**, in the whole
+   tree (`"harness" / "sass_gate.py"`, `harness` on `sys.path` with `import sass_gate`, a
+   `cd` into `harness/`): a list with file, line and owner. Known: `adapters/vllm/tests/engine/
+   int8_attention_sass.py:50` (vllm's, told); `benchmarks/torch_gpu/attn_bf16/sass_gate.py`
+   (gone with #9542). **Edit none outside kernels' three; the list goes in the PR's body.**
+4. Whether any digest or pin covers one of the three files' bytes (I found none beyond the
+   suites' declared inputs: `benchmarks/pouw/pyproject.toml:165`, `s8_linear/pyproject.toml`).
+   If one does, say which and what it re-pins; do not re-pin without telling me.
+5. The suites the change touches (`benchmarks/pouw`, `benchmarks/torch_gpu/s8_linear`), on a CPU
+   node outside an infra window. Open the PR unmarked, body in the repository's form (what
+   changed, why, the dry run's three lines, the list of 3, the run). One worker comment on
+   HASH-127 (at most 60 words). **Tell me the PR's number and head: I read it and mark it.**
+
+Then HASH-129 as briefed above; its return moves to Fri 13 Nov 10:00Z.
+
+Return with this item by Fri 13 Nov 05:00Z.
