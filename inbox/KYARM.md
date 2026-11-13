@@ -483,3 +483,35 @@ merge, mypy finds nothing its shrunk list no longer allows. **I said go (HASH-12
 When you carry #9489 with `tools/move/restack.py` after the card run: if the batch is on
 `main`, merge it in, keep both, rerun the two test files and mypy on the result, and say
 so on HASH-124. Not now.
+
+## Fri 13 Nov 10:46Z: PASS 2, NOW, on a tree with the machine-code check MOVED: compute-research's `cursor/compute-move-chain2-scratch5-a526` at `37304917bcb8`. Return by 11:10Z whatever is in
+
+Read: your return of 09:38Z (the trial tree: same bytes, the job runs, the digest step
+mended). The stager's own rehearsal tree is not pushed yet, and the real head is due
+11:15Z to 11:45Z. **One layout change your job has not met: compute-research's map moves
+`benchmarks/pouw/harness/sass_gate.py` and its pins to `verity/protocols/pouw/prover/`.**
+It rides chain 2, and `build.sh` runs both gates.
+
+**The tree** [fetched and read by me]: `origin/cursor/compute-move-chain2-scratch5-a526`
+at `37304917bcb8a326b0d8012bd97b7a2f19272ede`, on chain 1's head, twelve maps applied
+(definitions kept, merge and lake; difftest; compose; hardware; `sass_gate_map` last),
+**not the group map**. There: the gate is `verity/protocols/pouw/prover/sass_gate.py`
+with `sass_pins.json` beside it; `pearl_c_sm90/sass_gate.py` loads it from
+`parents[3] / "verity" / "protocols" / "pouw" / "prover"`; `build.sh:32` runs
+`$ROOT/verity/protocols/pouw/prover/sass_gate.py`. Our kernel directories are in
+`benchmarks/pouw/`.
+
+**Do:** `moved-head.sh` on it, the cubin's sha256 first and synced at once. What this pass
+is for:
+1. Does the whole `build.sh` pass with the gate at its new place, both gates' verdicts
+   as before (448 flagged, 0 offending)?
+2. **Does your job still find the machine-code check's tests?** They may have moved with
+   the gate. If the job names them by path, make it find them by name, as it finds the
+   sources.
+3. The mended digest step, inside a job for the first time: `source_digest` of both
+   kernels.
+4. The gate's `pins_sha256` on this tree, beside `main`'s `75e6a039…` and the trial's
+   `c56dc407…`.
+**Return by 11:10Z at the latest, with whatever is in: the real head must find you idle.**
+If the run is still going at 11:08Z, return with its id and what it has printed. Commit
+and push the job's changes before the run and before you end.
