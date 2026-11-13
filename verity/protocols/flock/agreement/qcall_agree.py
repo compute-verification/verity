@@ -1,5 +1,5 @@
 """Conformance of the Lean `Q_call` v1 and input decoding (`flock-verify qcall-program`, `input-ids`; `Flock/Qcall.lean`,
-`Flock/Program.lean`) with core's (`verity.circuits.cut`'s "Q_call v1", `verity.circuits.partition_object`, `verity.circuits.program`).
+`Circuits/Program.lean`) with core's (`verity.circuits.cut`'s "Q_call v1", `verity.circuits.partition_object`, `verity.circuits.program`).
 
     python qcall_agree.py --lean BIN --out DIR --qcall qcall_vectors.json --format format_vectors.json
 

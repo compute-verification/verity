@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import re
 import signal
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -47,6 +48,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # ... nor cpu-1's rule that a run comes through a check slot (/etc/vy/runs-via-slot)
     monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-runs-via-slot"))
     monkeypatch.setenv("NODE_SLOT_ONLY_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-slot_only.py"))
+    # ... nor what a node requires of a shipped research package (/usr/local/lib/vy-monitoring/tool_rules.py)
+    monkeypatch.setenv("NODE_TOOL_RULES_FILE", str(tmp_path_factory.mktemp("tool-rules") / "absent-tool_rules.py"))
     # ... nor an auditor host's list of the only commands it runs (/etc/vy/auditor)
     monkeypatch.setenv("AUDITOR_FILE", str(tmp_path_factory.mktemp("auditor") / "absent-auditor"))
     # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
@@ -66,10 +69,20 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{tmp_path_factory.mktemp('routes') / 'absent'}")
     # ... nor does `research run --on auto` read the nodes' cores and pools over ssh (research.auto): unread, it queues on node 2
     monkeypatch.setattr("research.auto._reach", _unreachable)
+    # ... nor is a pod's address or RunPod's call log kept in the developer's state directory (pods/runpod.py), nor a host
+    # asked for its key at an address a test made up: nothing answers at one unless a test says who does
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path_factory.mktemp("state")))
+    monkeypatch.setattr("research.pods.runpod.run", _no_host)
+    monkeypatch.setattr("research.pods.runpod._KEPT", set())
+    monkeypatch.setattr("research.pods.runpod._SAID", set())
 
 
 def _unreachable(name: str) -> list[str]:
     raise RuntimeError(f"a test reaches no machine ({name})")
+
+
+def _no_host(argv: list[str], **_kwargs) -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(argv, 255, "", "ssh: connect to host 203.0.113.1 port 22: Connection refused\r\n")
 
 
 @pytest.fixture(autouse=True)

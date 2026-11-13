@@ -1,9 +1,10 @@
 {
  "format": 1,
- "roots": ["Firewall"],
+ "roots": ["Firewall", "FirewallHonestDifftest"],
  "exempt": {
   "FirewallMain": "the core-firewall executable's entry point: `session` is Core.Firewall.Loop.main, every other command Core.Protocol.main of Core.Firewall.protocol, audited under Firewall and CoreProtocol",
-  "FirewallDifftest": "the core-firewall-difftest executable's entry point, one line: Difftest.serve over Core.Firewall.opFn and outerFn, audited under Firewall and Difftest"
+  "FirewallDifftest": "the core-firewall-difftest executable's entry point, one line: Difftest.serve over Core.Firewall.opFn and outerFn, audited under Firewall and Difftest",
+  "FirewallHonestDifftestMain": "the firewall-honest-difftest server's entry point, one line: Difftest.serve of FirewallHonestDifftest.table, which verity/protocols/flock/prover/tests/test_honest_reqs.py drives against rec_live's requests; audited under FirewallHonestDifftest"
  },
  "escapes": {
   "Core.Firewall.pyJson": "partial def: Python's json.dumps(sort_keys=True) of any JSON value, recursing through it, for the values an open's error message quotes; no proof is about it, and the agreement tests (tests/test_firewall_release_agreement.py) cover it"
@@ -13,8 +14,14 @@
    "imports": ["Lean", "Std", "Flock", "CoreProtocol", "Firewall"],
    "except": [],
    "why": "the release side is code: Lean core and its Std (the wall clock), C-Flock's verifier library (its canonical JSON, SHA-512, the firewall's contract and its session loop) and the core protocol interface, no Mathlib and nothing of Security (the layout rule: Lean code never requires Security)"
+  },
+  "FirewallHonestDifftest": {
+   "imports": ["Difftest", "Flock.Firewall.Honest"],
+   "except": [],
+   "why": "the honest worker's requests' port reads C-Flock's Flock.Firewall.honestReqs and what the firewall's load check takes, through the harness"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
  }

@@ -1,4 +1,4 @@
-"""The annotation check's port: Flock's `Flock.Annot` behind `Difftest.serve` (`lean/AnnotDifftest.lean`, the Lake
+"""The annotation check's port: `Flock.Annot` (`Circuits.Annot`) behind `Difftest.serve` (`lean/AnnotDifftest.lean`, the Lake
 executable `annot-difftest` of this distribution's `lean/` package), for the tests that hold the Python mirror
 (`verity.circuits.query_ast` and `query_codec`) to it.
 
@@ -27,11 +27,7 @@ if TYPE_CHECKING:
 LEAN = Path(__file__).resolve().parents[2] / "lean"
 EXE = "annot-difftest"
 FNS = ("annot.term", "annot.check", "annot.reference", "annot.sets")
-_FLOCK = "verity/protocols/flock/verifier/"
-INPUTS = ("verity/difftest/lean",
-          *(_FLOCK + f for f in ("lakefile.toml", "lake-manifest.json", "lean-toolchain")),
-          *(_FLOCK + f"Flock/{m}.lean" for m in ("Annot", "AnnotExpand", "Bytes", "Canon", "Field", "Hash", "Program",
-                                                   "Sizes", "Steps")))
+INPUTS = ("verity/difftest/lean", "verity/circuits/base", "verity/circuits/lean")
 
 
 def server() -> Server:

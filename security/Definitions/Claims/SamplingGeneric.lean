@@ -283,11 +283,11 @@ def kOut (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ slackExp * (2 * L.nOut x +
 /-- The inner wait stops at `k_in = 2^j·(2·n_in + 1)` accepted runs. -/
 def kIn (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ slackExp * (2 * L.nIn x + 1)
 
-/-- The outer wait gives up after `K_out = 2^128·k_out` reruns. -/
-def capOut (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ 128 * L.kOut x
+/-- The outer wait gives up after `K_out = 2^192·k_out` reruns (as `Sampling.Deploy.cap`). -/
+def capOut (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ 192 * L.kOut x
 
-/-- The inner wait gives up after `K_in = 2^128·k_in` reruns. -/
-def capIn (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ 128 * L.kIn x
+/-- The inner wait gives up after `K_in = 2^192·k_in` reruns. -/
+def capIn (L : Compiled Coin A) (x : Msg) : ℕ := 2 ^ 192 * L.kIn x
 
 /-- Session `u`'s view of a run. -/
 def view (L : Compiled Coin A) (x : Msg) (u : ℕ) (v : Seen) : Seen := ((L.session x u v).map Prod.snd).getD ⟨[], .rej⟩

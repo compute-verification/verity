@@ -6,7 +6,8 @@
  "provisional": true,
  "source": "priced from each configuration's parts against a token's GPU-seconds at serving's MFU on the H200's dense FP8 peak (total_cost.priced_card); measured values replace it configuration by configuration",
  "runs": [
-  "r20261107-155724-3f53"
+  "r20261107-155724-3f53",
+  "r20261111-162328-f498"
  ],
  "owner": "@proofs",
  "value": {
@@ -15,27 +16,54 @@
    {
     "config": "tokens",
     "status": "priced",
-    "tax": 0.020393495934959437,
-    "low": 0.020393495934959437,
-    "high": 0.06816666666666674,
+    "tax": 0.021199400232077538,
+    "low": 0.020418985843830076,
+    "high": 0.07486033922950965,
     "lower_bound": false,
     "parts": [
      {
       "part": "certified-tick rule",
+      "status": "simulated",
       "share": 0.016260162601626105,
       "low": 0.016260162601626105,
       "high": 0.04166666666666674,
       "source": "throughput 0.984 of vLLM's on the mean run and 0.96 on the worst, a queue-dependent tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with certified arrivals and prefix caching off, it leaves no scheduling advice but the response length, which stays advice until a circuit checks the stop rule; the run with the real network certifier is pending (a client stood in for it in the measured runs, which served with prefix caching on)"
      },
      {
-      "part": "step record, token commits and replay-block edge snapshot",
+      "part": "step record",
+      "status": "modeled",
+      "share": 0.0006680299931833674,
+      "low": 0.0,
+      "high": 0.0011792774369461486,
+      "source": "the scheduler's record of each step, written on the engine core's thread: 98 \u00b5s a step, timed on the serving path's writer off the engine, over the step of one engine across eight H200s under the chat load at 384 requests at once (147 ms a step, 143 rows a step, 4.9 requests finished a second, measured on stock compiled vLLM), as if it lengthened every step; the high at a full batch of 256 rows, 173 \u00b5s; the low 0, vLLM's queue of two batches letting the thread write while the cards run; with the record on, GLM-5.3's throughput at TP8 was measured within noise of stock compiled vLLM's at every load"
+     },
+     {
+      "part": "two-stage boundary commitment",
+      "status": "modeled",
+      "share": 9.789308493524199e-05,
+      "low": 0.0,
+      "high": 0.0054356230849352425,
+      "source": "its hooks on the engine core's thread, 11.2 \u00b5s a step and 4.4 \u00b5s a request admitted, timed off the engine, on one engine across eight H200s under the chat load at 384 requests at once (147 ms a step, 143 rows a step, 4.9 requests finished a second, measured on stock compiled vLLM), as if they lengthened every step; the high adds its commit thread's rows, salts, hashes and files, 0.41 to 1.09 ms a finished request, as if each second of that thread, which shares the engine core's interpreter, were taken from serving; the low 0; priced with each size class's replay block's program digested once: a commit thread that builds the program again for every window and class costs more, and that is not in this part"
+     },
+     {
+      "part": "history tables",
+      "status": "modeled",
+      "share": 3.998121899949004e-05,
+      "low": 2.5489908870636987e-05,
+      "high": 7.877204096151688e-05,
+      "source": "2,061 B a token hashed at the commitment card's rate, the range at 446 and 289 GB/s; one attention layer's table for each request, 1,472 B hashed on the card a row (the row's 1,152 B, its 192 B salt and the tree node above its leaf) at 1.4 rows a computed token on the chat load's size classes, 1 to 2 over the range; the hashing alone, without the rows' gather from the layer's state and their copy to the host; no served run has built a table"
+     },
+     {
+      "part": "token commits and replay-block edge snapshot",
+      "status": "measured",
       "share": 0.0016333333333333332,
       "low": 0.0016333333333333332,
       "high": 0.024,
-      "source": "measured on GLM-5.3 at TP8 against stock compiled vLLM: the serving pause at each 600 s replay block's edge to copy and hash the KV pool, 0.98 s at the median and 1.06 s at most; the throughput with the record, the token commits and an edge each 30 s within noise at every load, up to 2.4% at saturation"
+      "source": "measured on GLM-5.3 at TP8 against stock compiled vLLM: the serving pause at each 600 s replay block's edge to copy and hash the KV pool, 0.98 s at the median and 1.06 s at most; the throughput with the step record, the token commits and an edge each 30 s within noise at every load, up to 2.4% at saturation"
      },
      {
       "part": "deterministic top-k",
+      "status": "modeled",
       "share": 0.0025,
       "low": 0.0025,
       "high": 0.0025,
@@ -43,33 +71,61 @@
      }
     ],
     "runs": [
-     "r20261107-155724-3f53"
+     "r20261107-155724-3f53",
+     "r20261111-162328-f498"
     ]
    },
    {
     "config": "tokens_bi",
     "status": "priced",
-    "tax": 0.2573934959349594,
-    "low": 0.1613934959349594,
-    "high": 0.37916666666666676,
+    "tax": 0.25819940023207755,
+    "low": 0.16141898584383005,
+    "high": 0.38586033922950963,
     "lower_bound": false,
     "parts": [
      {
       "part": "certified-tick rule",
+      "status": "simulated",
       "share": 0.016260162601626105,
       "low": 0.016260162601626105,
       "high": 0.04166666666666674,
       "source": "throughput 0.984 of vLLM's on the mean run and 0.96 on the worst, a queue-dependent tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with certified arrivals and prefix caching off, it leaves no scheduling advice but the response length, which stays advice until a circuit checks the stop rule; the run with the real network certifier is pending (a client stood in for it in the measured runs, which served with prefix caching on)"
      },
      {
-      "part": "step record, token commits and replay-block edge snapshot",
+      "part": "step record",
+      "status": "modeled",
+      "share": 0.0006680299931833674,
+      "low": 0.0,
+      "high": 0.0011792774369461486,
+      "source": "the scheduler's record of each step, written on the engine core's thread: 98 \u00b5s a step, timed on the serving path's writer off the engine, over the step of one engine across eight H200s under the chat load at 384 requests at once (147 ms a step, 143 rows a step, 4.9 requests finished a second, measured on stock compiled vLLM), as if it lengthened every step; the high at a full batch of 256 rows, 173 \u00b5s; the low 0, vLLM's queue of two batches letting the thread write while the cards run; with the record on, GLM-5.3's throughput at TP8 was measured within noise of stock compiled vLLM's at every load"
+     },
+     {
+      "part": "two-stage boundary commitment",
+      "status": "modeled",
+      "share": 9.789308493524199e-05,
+      "low": 0.0,
+      "high": 0.0054356230849352425,
+      "source": "its hooks on the engine core's thread, 11.2 \u00b5s a step and 4.4 \u00b5s a request admitted, timed off the engine, on one engine across eight H200s under the chat load at 384 requests at once (147 ms a step, 143 rows a step, 4.9 requests finished a second, measured on stock compiled vLLM), as if they lengthened every step; the high adds its commit thread's rows, salts, hashes and files, 0.41 to 1.09 ms a finished request, as if each second of that thread, which shares the engine core's interpreter, were taken from serving; the low 0; priced with each size class's replay block's program digested once: a commit thread that builds the program again for every window and class costs more, and that is not in this part"
+     },
+     {
+      "part": "history tables",
+      "status": "modeled",
+      "share": 3.998121899949004e-05,
+      "low": 2.5489908870636987e-05,
+      "high": 7.877204096151688e-05,
+      "source": "2,061 B a token hashed at the commitment card's rate, the range at 446 and 289 GB/s; one attention layer's table for each request, 1,472 B hashed on the card a row (the row's 1,152 B, its 192 B salt and the tree node above its leaf) at 1.4 rows a computed token on the chat load's size classes, 1 to 2 over the range; the hashing alone, without the rows' gather from the layer's state and their copy to the host; no served run has built a table"
+     },
+     {
+      "part": "token commits and replay-block edge snapshot",
+      "status": "measured",
       "share": 0.0016333333333333332,
       "low": 0.0016333333333333332,
       "high": 0.024,
-      "source": "measured on GLM-5.3 at TP8 against stock compiled vLLM: the serving pause at each 600 s replay block's edge to copy and hash the KV pool, 0.98 s at the median and 1.06 s at most; the throughput with the record, the token commits and an edge each 30 s within noise at every load, up to 2.4% at saturation"
+      "source": "measured on GLM-5.3 at TP8 against stock compiled vLLM: the serving pause at each 600 s replay block's edge to copy and hash the KV pool, 0.98 s at the median and 1.06 s at most; the throughput with the step record, the token commits and an edge each 30 s within noise at every load, up to 2.4% at saturation"
      },
      {
       "part": "deterministic top-k",
+      "status": "modeled",
       "share": 0.0025,
       "low": 0.0025,
       "high": 0.0025,
@@ -77,6 +133,7 @@
      },
      {
       "part": "batch-invariant kernels",
+      "status": "measured",
       "share": 0.237,
       "low": 0.141,
       "high": 0.311,
@@ -84,7 +141,8 @@
      }
     ],
     "runs": [
-     "r20261107-155724-3f53"
+     "r20261107-155724-3f53",
+     "r20261111-162328-f498"
     ]
    },
    {
@@ -97,6 +155,7 @@
     "parts": [
      {
       "part": "certified-tick rule",
+      "status": "simulated",
       "share": 0.016260162601626105,
       "low": 0.016260162601626105,
       "high": 0.04166666666666674,
@@ -104,6 +163,7 @@
      },
      {
       "part": "token ids",
+      "status": "modeled",
       "share": 7.76032977474574e-08,
       "low": 6.926605671368747e-08,
       "high": 1.0702722956727838e-07,
@@ -111,6 +171,7 @@
      },
      {
       "part": "each layer's state",
+      "status": "modeled",
       "share": 0.02039205135899262,
       "low": 0.0182012495208258,
       "high": 0.02812386619508244,
@@ -118,6 +179,7 @@
      },
      {
       "part": "deterministic top-k",
+      "status": "modeled",
       "share": 0.0025,
       "low": 0.0025,
       "high": 0.0025,
@@ -128,13 +190,14 @@
    {
     "config": "every_block",
     "status": "priced",
-    "tax": 5.706559288737918,
-    "low": 5.09522708062434,
-    "high": 7.889489743224344,
+    "tax": 4.267239155672466,
+    "low": 3.8105390214840913,
+    "high": 5.904439484101186,
     "lower_bound": true,
     "parts": [
      {
       "part": "certified-tick rule",
+      "status": "simulated",
       "share": 0.016260162601626105,
       "low": 0.016260162601626105,
       "high": 0.04166666666666674,
@@ -142,10 +205,11 @@
      },
      {
       "part": "every proof block's outputs",
-      "share": 5.690299126136292,
-      "low": 5.078966918022713,
-      "high": 7.847823076557677,
-      "source": "293,301,924 B a token hashed at the commitment card's rate, the range at 446 and 289 GB/s; the workload card's every_block boundary"
+      "status": "modeled",
+      "share": 4.25097899307084,
+      "low": 3.7942788588824654,
+      "high": 5.862772817434519,
+      "source": "219,113,317 B a token hashed at the commitment card's rate, the range at 446 and 289 GB/s; the workload card's every_block boundary"
      }
     ]
    }

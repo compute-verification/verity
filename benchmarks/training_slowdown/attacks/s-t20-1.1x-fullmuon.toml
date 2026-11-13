@@ -1,0 +1,19 @@
+# Muon on every block's matrices and AdamW on the embedding at the matrices' rate and on the gains at a rate of their
+# own, in two forwards of 32 rows a step. The output is the weights; E is the trained tensors.
+start = "s-t20"
+route = "subset"
+target = { gain = 1.1 }
+budget = { steps = 1249, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+trainable = "*"
+opt = "muon"
+lr = 2e-3
+gain_lr = 3e-4
+weight_decay = 0.05
+warmup = 20
+decay = 0.23
+micro_batches = 2
+fused = true

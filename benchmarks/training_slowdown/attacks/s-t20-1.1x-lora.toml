@@ -1,0 +1,16 @@
+# LoRA: a rank-16 adapter beside every matrix of every block under AdamW, the start's own weights frozen; the output
+# model is the start with each adapter merged into its matrix, and E is those matrices.
+start = "s-t20"
+route = "lora"
+target = { gain = 1.1 }
+budget = { steps = 838, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+targets = "blocks.*.weight"
+rank = 16
+alpha = 32.0
+lr = 1e-3
+warmup = 0.02
+decay = 0.4

@@ -16,7 +16,8 @@
 # NVCC_EXTRA (nvcc flags every build adds, e.g. --no-compress for the SASS gate), JOBS (builds at once, default 8),
 # HB_WHO (the lease owner, default dither/ and the run's id), LEASE (gpu-lease flags, default
 # "--max-min 14"), LIBS (the shipped libraries, default $RESEARCH_RUN_DIR/inputs), VERITY_BENCH_VENV (default
-# benchmarks/harness/env.sh's), NVCC (default CUDA 13.0's).
+# benchmarks/harness/env.sh's), NVCC (default CUDA 13.0's; a library is compiled through benchmarks/torch_gpu/job_nvcc.sh
+# with its toolkit, so its cubin doesn't follow where the tree or this directory sits).
 # Exit: the bench's, 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
 ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a partials}
@@ -40,7 +41,7 @@ if [ "$BENCH" = build ]; then
     file=${file:-$src}
     [ -n "$def" ] && flags+=(${def//,/ })
     [ -n "${NVCC_EXTRA:-}" ] && flags+=($NVCC_EXTRA)
-    "$NVCC" "${flags[@]}" "$HERE/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { echo "build $arch $src failed:"; cat "$dir/build-$src.log"; return 2; }
+    CUDA=$(dirname "$(dirname "$NVCC")") "$ROOT/benchmarks/torch_gpu/job_nvcc.sh" "${flags[@]}" "$HERE/$file.cu" -o "$dir/$src.so" 2> "$dir/build-$src.log" || { echo "build $arch $src failed:"; cat "$dir/build-$src.log"; return 2; }
     "$(dirname "$NVCC")/cuobjdump" --dump-resource-usage "$dir/$src.so" > "$dir/$src.res.txt" 2>&1
     "$(dirname "$NVCC")/cuobjdump" -sass "$dir/$src.so" | gzip > "$dir/$src.sass.gz"
     "$NVCC" -M -std=c++17 "${flags[@]:6:2}" "$HERE/$file.cu" > "$dir/$src.deps" 2>&1 || { cat "$dir/$src.deps"; return 2; }

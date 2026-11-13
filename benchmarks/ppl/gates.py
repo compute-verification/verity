@@ -7,7 +7,11 @@ fixed-point A within uint32 and m - S within the kernel's 32 bits. A run with an
 (`run.py` exits 1)."""
 from __future__ import annotations
 
+from typing import Any
+
 import torch
+
+__all__ = ["Gates", "S32", "absmax", "int8_ok", "within"]
 
 S32 = 2 ** 31 - 1
 NAMES = ("int8_range", "grid_range", "accumulator", "product_exact", "peel", "emulation", "lut", "hf_reference",
@@ -18,7 +22,7 @@ class Gates:
     def __init__(self):
         self.log: dict = {n: {"checked": 0, "failed": 0, "first_failure": None} for n in NAMES}
 
-    def record(self, name: str, ok: bool, where: str = "", detail=None) -> bool:
+    def record(self, name: str, ok: bool, where: str = "", detail: Any = None) -> bool:
         g = self.log[name]
         g["checked"] += 1
         if not ok:

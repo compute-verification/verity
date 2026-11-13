@@ -6,7 +6,9 @@
 #     bash benchmarks/two_stage/audit.sh
 #   TWO_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); TWO_CASES="honest" runs those only;
 #   TWO_ARGS="--n 8 --q 4" passes audit.py more; FLOCK_CHALLENGER=1 gives each session a challenger of its own, audited
-#   at the sessions' end (in Lean too, which builds SPOT's difftest)
+#   at the sessions' end (in Lean too, which builds SPOT's difftest); TWO_GUARD=0 keeps no <case>/guard/ under $OUT, for
+#   a run whose guard nobody reads: the export (guard.py) is nearly all of a run's records, each template's circuit
+#   several times over, and it is what guard_node.py and `guard.py pack` read, so the default keeps it
 set -euo pipefail
 REPO=$(git rev-parse --show-toplevel); cd "$REPO"
 O=${OUT:?research run sets OUT}; mkdir -p "$O"
@@ -39,6 +41,7 @@ UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW
 { git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main \
     || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } > "$O/fetch-main.log" 2>&1 \
   && git rev-list --first-parent refs/remotes/origin/main > "$O/main.txt" || { tail -5 "$O/fetch-main.log"; exit 4; }
+GUARD=(); [ "${TWO_GUARD:-1}" = 0 ] && GUARD=(! -path './guard/*')
 rc=0
 for c in ${TWO_CASES:-honest altered}; do
   flags=(); [ "$c" = altered ] && flags=(--altered)
@@ -48,7 +51,7 @@ for c in ${TWO_CASES:-honest altered}; do
   grep '^TWO ' "$O/$c.log" || tail -20 "$O/$c.log"
   mkdir -p "$O/$c"
   (cd "$W/$c" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' \
-     ! -name index.json ! -name index-salt.bin ! -path './*/archive/*' ! -path '*-work/*' -print0 \
+     ! -name index.json ! -name index-salt.bin ! -path './*/archive/*' ! -path '*-work/*' "${GUARD[@]}" -print0 \
      | xargs -0 -r -I{} cp --parents {} "$O/$c/")
 done
 exit $rc

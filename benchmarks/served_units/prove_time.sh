@@ -20,12 +20,17 @@
 #      PT_PERF=1: each prover process under `perf record -F PT_PERF_HZ` (default 499), its flat profile by symbol in perf.txt
 #      beside prove.tsv (the samples themselves are not kept); upstream's phase traces pass through as arguments
 #      (LIGERITO_TRACE=1 PCS_TRACE=1 LINCHECK_TRACE=1, into prove.err)
+#      PT_STATEMENTS="DIR ...": statement directories staged elsewhere (stage_window.py's served members), each proved as it
+#      is under its directory's name after PT_UNITS' (which then defaults to none)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/served-units-time}/out; mkdir -p $O
 DEV=${PT_DEVICE:-gpu}; case $DEV in gpu | cpu) ;; *) echo "PT_DEVICE is gpu or cpu, not $DEV"; exit 1 ;; esac
 FW=${FLOCK_WORK:-/workspace/tmp/served-units-time-$DEV}; mkdir -p $FW || exit 1
-UNITS=${PT_UNITS:-"fp8-coord:K=6144 fp8-coord:K=6144+public-weights"}; NS=${PT_NS:-"16 64"}; JOBS=${PT_JOBS:-4}
+STMTS=${PT_STATEMENTS:-}; [ -n "$STMTS" ] && UNITS=${PT_UNITS:-} || UNITS=${PT_UNITS:-"fp8-coord:K=6144 fp8-coord:K=6144+public-weights"}
+NS=${PT_NS:-"16 64"}; JOBS=${PT_JOBS:-4}
+for s in $STMTS; do for f in circuit.txt pub.bin inst.bin stage.json; do
+  [ -s $s/$f ] || { echo "PT_STATEMENTS: $s has no $f (stage_window.py stages one)"; exit 1; }; done; done
 WARM=${WARM:-1}; RUNS=${RUNS:-3}; NSESS=$((WARM + RUNS)); SM=${SM:-120}; STEPS=${STEPS:-"build stage prove"}
 TIMEV="/usr/bin/time -v -o"  # each step's time-*.txt record, where GNU time is installed
 [ -x /usr/bin/time ] || { TIMEV=; echo "no GNU time at /usr/bin/time (apt-get install time): no time-*.txt records"; }
@@ -41,7 +46,7 @@ BUILT=$FW/flock-gpu-link/flock/target/release/flock-circuit; B=${PT_BINARY:-$BUI
 has() { case " $STEPS " in *" $1 "*) return 0 ;; esac; return 1; }
 { echo "device=$DEV cpus=$CPUS prover=$PCPU verifier=$VCPU"; lscpu | grep -E 'Model name|^CPU\(s\)'; free -g | head -2
   [ $DEV = gpu ] && has prove && nvidia-smi --query-gpu=name,driver_version,memory.total,clocks.max.sm --format=csv; } > $O/host.txt 2>&1
-echo "device=$DEV units=$UNITS ns=$NS warm=$WARM runs=$RUNS" > $O/config.txt
+echo "device=$DEV units=$UNITS ns=$NS statements=$STMTS warm=$WARM runs=$RUNS" > $O/config.txt
 # PAIRS: one UNIT@N a statement, each unit at its own Ns or PT_NS
 PAIRS=$(for t in $UNITS; do
   u=${t%@*}; ns=$NS; [ "$u" = "$t" ] || ns=$(echo "${t##*@}" | tr , ' ')
@@ -117,9 +122,11 @@ gpu_sample() {
     sleep 0.2
   done > $1/smi.tsv
 }
-# session UNIT N: a verifier process and WARM + RUNS prover sessions against it, into $O/$DEV/NAME
-session() {
-  local nm=$(name "$1" $2) G= GS=; local d=$FW/data/$nm-$KEY o=$O/$DEV/$nm
+# session UNIT N: stage.py's statement's sessions (session_at)
+session() { local nm=$(name "$1" $2); local d=$FW/data/$nm-$KEY; session_at $nm $d; }
+# session_at NAME DIR: a verifier process and WARM + RUNS prover sessions against DIR's statement, into $O/$DEV/NAME
+session_at() {
+  local nm=$1 d=$2 G= GS=; local o=$O/$DEV/$nm
   [ $DEV = gpu ] && G=--gpu
   mkdir -p $o $O/stage/$nm; rm -rf $d/sessions $o/done $o/exit; cp $d/stage.json $O/stage/$nm/; date +%s.%N > $o/start
   local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
@@ -148,13 +155,15 @@ session() {
 if has prove; then
   echo "== prove ($DEV) $(date -u +%T)"
   if [ $DEV = gpu ]; then
-    export -f session name gpu_sample free_port wait_serving stamp
-    export B O FW KEY DEV PCPU VCPU NC VC NSESS WARM RUNS PAIRS TIMEV
+    export -f session session_at name gpu_sample free_port wait_serving stamp
+    export B O FW KEY DEV PCPU VCPU NC VC NSESS WARM RUNS PAIRS TIMEV STMTS
     GPU_LEASE_WHO=${GPU_LEASE_WHO:-served-units-time} gpu-lease 1 --wait --max-min ${LEASE_MIN:-30} -- bash -c '
       set -f; nvidia-smi -L > $O/lease-gpu.txt
-      for p in $PAIRS; do session "${p%@*}" "${p##*@}"; done'
+      for p in $PAIRS; do session "${p%@*}" "${p##*@}"; done
+      for s in $STMTS; do session_at $(basename $s) $s; done'
   else
     for p in $PAIRS; do session "${p%@*}" "${p##*@}"; done
+    for s in $STMTS; do session_at $(basename $s) $s; done
   fi
 fi
 echo "== summary $(date -u +%T)"

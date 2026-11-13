@@ -6,13 +6,31 @@ pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# `verity`: the circuits' Definitions the gate prices compile and the Boolean gather the counter's tests price;
-# `adapters/vllm/verity_vllm`: the training-step frontend `capture.lower` lowers a step to; the lf model
-# (`train_step_lf.py`), loaded by path, whose shapes the policy states; the slowdown calculator (`verity/protocols/inference_only/rho`), whose
-# registry, fleets and periods `calculator.py` reads and whose min-cut module and rows of β(k) test_min_cut holds
-# formalism's copy to; the inference-only policy's calibrations, which the calculator's registry loads from outside its
-# directory; and the census's deployments, whose reference window `calculator.py` reads
+# test files that start a program the read guard can't trace (bash, around the queued job's script; git, for the run's
+# commit): keyed on the suite's whole tree
+untraced = ["tests/test_command.py", "tests/test_grade.py", "tests/test_job_shell.py", "tests/test_resume.py", "tests/test_routes.py",
+            "tests/test_run.py", "tests/test_sandbox.py", "tests/test_windows.py"]
+# `verity`: the circuits' Definitions the gate prices compile and the Boolean gather the counter's tests price; the lf
+# model (`train_step_lf.py`), loaded by path, whose shapes the policy states; the slowdown calculator
+# (`verity/protocols/inference_only/rho`), whose registry, fleets, periods and min-cut module (the bound and its rows
+# of β(k)) `calculator.py` reads, and nothing else here does (tests/test_one_calculator.py); the inference-only
+# policy's calibrations, which the calculator's registry loads from outside its directory; and the census's
+# deployments, whose reference window `calculator.py` reads
+# The command's and the config's: of that registry too, the [policy.*] tables, whose names are the policies a config
+# may give (`config.py`); and `verity/configuration/config/verity_config`, the command's $OUT through its SHARED settings
+# `benchmarks/training_slowdown/grader`: the suite nested here, whose sources tests/test_one_calculator.py holds to the
+# one module that reaches the calculator with the rest of this directory. `adapters/vllm/verity_vllm`: the
+# training-step frontend whose step test_program_reading reads as a Program, and
+# `benchmarks/circuit_properties/circuit_properties`, the reading of a Program's work it holds beside a trace's
 inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
           "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py",
           "verity/protocols/inference_only/rho", "benchmarks/census/deployments.json",
-          "verity/protocols/inference_only/nci/calibrations.json"]
+          "verity/protocols/inference_only/nci/calibrations.json", "verity/configuration/config/verity_config",
+          "benchmarks/training_slowdown/grader", "benchmarks/circuit_properties/circuit_properties"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_one_calculator.py"]
+paths = ["benchmarks/training_slowdown"]

@@ -3,9 +3,10 @@
 verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v1`) as far as they need:
 the callees, each definition's form and nodes (form, callee, members), and the root body.
 
-`Q_template_instance` v0 (`{template}`) and `Q_template_instances` v0 (`{templates}`): every root node other than an input must
-be a `call` or `batch` of a listed template (matched by the descriptor id written in the program's bytes); each call is one unit
-and each batch member one unit, in node then member order; every listed template has at least one unit; no width rule.
+`Q_template_instance` v0 (`{template}`) and `Q_template_instances` v0 (`{templates}`): every root node other than an input
+node (`Desc.isInputNode`: its callee a primitive whose id is an input id) must be a `call` or `batch` of a listed template
+(matched by the descriptor id written in the program's bytes); each call is one unit and each batch member one unit, in node
+then member order; every listed template has at least one unit; no width rule.
 -/
 module
 
@@ -41,8 +42,17 @@ structure Desc where
 
 def Desc.def? (d : Desc) (id : String) : Option DDef := (d.defs.find? (·.1 == id)).map (·.2)
 
-/-- An input primitive, `Input<w>_v1` or `RegisteredInput<w>_v1` (`Program.inputId?`): the input unit's gates, not a Call. -/
+/-- An input id, `Input<w>_v1` or `RegisteredInput<w>_v1` (`Program.inputId?`). The id alone names no input: a composite
+may carry it, so a node is read as an input by `Desc.isInputNode`. -/
 def isInput (id : String) : Bool := Program.isInputId id
+
+/-- Whether `x` is an input node (`program.is_input` of its callee): its callee is a primitive whose id is an input id.
+Its gates are the input unit's, not a Call's. A call of a composite is never one, whatever its id: its gates are computed,
+so a template query counts them in a unit or refuses the program. The id is asked first, so only a node with an input id
+costs a lookup among the definitions. -/
+def Desc.isInputNode (d : Desc) (x : DNode) : Bool :=
+  let id := d.callees.getD x.fn ""
+  isInput id && (d.def? id).any (·.prim)
 
 /-- `Desc.parse` in a verdict monad `M`, the program's SHA-512 by `sha512` (`Flock.With.Setup` runs it on the hash oracle). -/
 def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
@@ -123,7 +133,7 @@ def evaluate (d : Desc) (templates : Array String) : V (Array TRange) := do
   for k in [0:root.nodes.size] do
     let x := root.nodes[k]!
     let tid := d.callees.getD x.fn ""
-    if isInput tid then continue
+    if d.isInputNode x then continue
     if !(x.form == "call" || x.form == "batch") || !templates.contains tid then
       throw s!"query-refused: root node {k} is a {x.form} of '{tid}': an instance is a call or batch of one of {showList templates}"
     let n := if x.form == "batch" then x.n else 1

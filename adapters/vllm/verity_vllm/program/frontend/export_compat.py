@@ -25,6 +25,7 @@ from contextlib import contextmanager
 
 import torch
 
+from verity_vllm.config import vllm_revision
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.marlin_moe_leaf import mxfp4_marlin_moe_leaf
@@ -194,9 +195,8 @@ def read_back_applied() -> dict:
         except Exception as e:  # noqa: BLE001
             out["num_sms_error"] = f"{type(e).__name__}: {e}"
     try:
-        import vllm
         import vllm.envs as envs
-        out["vllm_version"] = str(vllm.__version__)
+        out["vllm_version"] = vllm_revision()
         out["batch_invariant"] = bool(envs.VLLM_BATCH_INVARIANT)
     except Exception as e:  # noqa: BLE001
         out["vllm_error"] = f"{type(e).__name__}: {e}"
