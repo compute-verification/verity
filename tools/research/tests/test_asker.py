@@ -141,16 +141,20 @@ def test_it_asks_every_ten_minutes_and_stays_while_no_other_machines_pool_would_
 
 
 def test_it_asks_only_while_the_run_waits_and_its_last_reason_is_memory_and_its_machine_answers(world):
-    """A run behind others in line, or one whose machine doesn't answer, is not known to wait on memory: no ask."""
+    """A run behind others in line, or one whose machine doesn't answer, is not known to wait on memory: no ask. Nor is one
+    that has just left its line, whose record still names memory while its status still says it runs: a twin launched
+    then would run a job whose wait is over."""
+    over = f"no check slot within --wait-max 14400 s ({MEMORY})"
     world.runs[RUN] = waiting("3 check(s) ahead in line")
     world.at[10] = lambda: setattr(world, "reached", False)
     world.at[20] = lambda: (world.runs.update({RUN: waiting()}))
     world.at[30] = lambda: setattr(world, "reached", True)
     world.at[40] = lambda: world.runs.update({RUN: waiting(None)})
-    world.at[50] = lambda: world.runs.update({RUN: held()})
+    world.at[50] = lambda: world.runs.update({RUN: {**left(over), "state": "running"}})
+    world.at[60] = lambda: world.runs.update({RUN: left(over)})
     world.answers = [(None, NOWHERE)]
-    assert world.run() == f"it started on {A}"
-    assert [minute for minute, _ in world.asked] == [30], "in line at 1 and 10, unreachable at 20, no reason yet at 40"
+    assert world.run() == f"it ended on {A} without starting (failed: {over})"
+    assert [minute for minute, _ in world.asked] == [30], "in line at 1 and 10, unreachable at 20, no reason yet at 40, gone at 50"
 
 
 def test_one_twin_is_live_at_a_time_and_a_machine_whose_twin_left_unrun_is_asked_for_no_other(world):
