@@ -54,7 +54,7 @@ def _host() -> ctypes.CDLL:
 def _device(lib: ctypes.CDLL) -> ctypes.CDLL:
     vp = ctypes.c_void_p
     lib.rt_hist_init.argtypes = [vp, _hp, vp]
-    lib.rt_hist_append.argtypes = [vp, _hp, ctypes.c_uint64, ctypes.c_uint32, *[vp] * 6]
+    lib.rt_hist_append.argtypes = [vp, _hp, ctypes.c_uint64, ctypes.c_uint32] + [vp] * 6
     lib.rt_hist_paths.argtypes = [vp, _hp, vp, vp, ctypes.c_uint32, vp]
     for f in (lib.rt_hist_init, lib.rt_hist_append, lib.rt_hist_paths):
         f.restype = ctypes.c_int
@@ -140,15 +140,14 @@ class Table:
             self._check("rt_hist_append_host", _host().rt_hist_append_host(
                 ctypes.byref(self._h), at, k, host.ctypes.data, D._hm(), D._prefixes(), self._tree, bcs, ys))
         else:
-            self._device_append(self._dev, rows if on_device else None, host, at, k, bcs, ys)
+            self._device_append(rows if on_device else None, host, at, k, bcs, ys)
         self.rows += [r.copy() for r in host]
         self.salts += [salt[SALT_BYTES * i:SALT_BYTES * (i + 1)] for i in range(k)]
         self.bcs += [_bytes(bcs[16 * i:16 * i + 16], ">u8") for i in range(k)]
         return range(at, at + k)
 
-    def _device_append(self, d: D.DeviceLibrary, rows: Any, host: np.ndarray, at: int, k: int, bcs: np.ndarray,
-                       ys: np.ndarray) -> None:
-        torch = self._torch
+    def _device_append(self, rows: Any, host: np.ndarray, at: int, k: int, bcs: np.ndarray, ys: np.ndarray) -> None:
+        torch, d = self._torch, self._dev
         written = torch.cuda.Event()
         written.record(torch.cuda.current_stream(d.hm.device))
         d.stream.wait_event(written)
