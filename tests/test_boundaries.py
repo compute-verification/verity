@@ -81,7 +81,7 @@ STDLIB_ONLY = ("verity/circuits", "verity/definitions/circuits", "verity/definit
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: The listing's distributions that name neither the date they become part of ``verity`` nor the reason they stay their
 #: own: each owner owes one of the two.  It only shrinks.
-NO_DATE_OR_REASON = ("verity/configuration/config", "verity/protocols/inference_only/nci",
+NO_DATE_OR_REASON = ("tools/config", "verity/protocols/inference_only/nci",
                      "verity/composite/device/live_challenger", "verity/protocols/poub/device/live_verifier",
                      "verity/protocols/pouw/clear", "verity/protocols/pouw/receipts")
 #: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
