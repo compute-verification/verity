@@ -239,6 +239,25 @@ def test_a_job_of_a_route_with_an_output_keeps_the_model_it_trains_and_continues
     assert all(a["output_sha256"] != b["output_sha256"] for a, b in zip(other["checkpoints"], rest["checkpoints"]))
 
 
+def test_a_stopped_job_whose_step_draws_continues_to_the_unbroken_jobs_latents(tmp_path):
+    """`qat` under `low_state` draws its roundings from torch's global generator at every step, which the state a
+    stopped job keeps holds (`run.generators`). The segment that continues from step 2 ends at the unbroken job's
+    latents bit for bit, and the two records joined are the unbroken job's (`assert_continues`); given the generator
+    as it stood when the job began, it ends at others. A job's trace (`traced.trace_step`) runs after its last step,
+    so none runs between two of its steps."""
+    reg = tiny_registry(tmp_path / "reg")
+    tiny = tmp_path, reg, write_config(tmp_path / "a.toml", route="qat", budget=BUDGET,
+                                       dials=OUTPUTS["qat"] | {"grad_code": "rtn4", "low_state": True})
+    whole = run.joined(None, segment(tiny))
+    cut = segment(tiny, stop_after=1)
+    rest = segment(tiny, {"step": 2}, cut["state"])
+    assert_continues(whole, run.joined(run.joined(None, cut["record"]), rest), at=2)
+    torch.manual_seed(0)
+    begun = run.plain(run.generators())
+    other = segment(tiny, {"step": 2}, cut["state"] | {"generators": begun})
+    assert all(a["trained_sha256"] != b["trained_sha256"] for a, b in zip(other["checkpoints"], rest["checkpoints"]))
+
+
 def test_the_generators_a_step_may_read_come_back_as_they_were_kept():
     import random
 
