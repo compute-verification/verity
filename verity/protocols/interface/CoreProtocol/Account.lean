@@ -174,7 +174,8 @@ half of an uplink the certifier splits. No answer certifies a boundary link that
 the leaves no answer covers, charged at capacity (`unaudited`). -/
 def certifiable (p : Part) (S : Site) (place : Option String) : List String :=
   match p with
-  | .egress => (p.leavesAt S place).filter fun i => S.links.any fun k => k.id == i && decide (S.Joins k .certifier .host)
+  | .egress =>
+    (p.leavesAt S place).filter fun i => S.links.any fun k => k.id == i && decide (S.Joins k .certifier .host)
   | _ => p.leavesAt S place
 
 /-- Device `d`'s tensor-core MACs a tick, the device model's (`Site.device`) under auditor `A`. -/
@@ -1223,7 +1224,8 @@ private def unrated : Site :=
 -- row, and both links are charged at capacity as what no answer covers; an answer that names the certifier's link
 -- certifies that link, and the uplink stays charged; an amount about every link certifies the certifier's alone
 private def uplinked : Site :=
-  ⟨[sheet], locs, links ++ [{ id := "eth0", ends := ("node0", Site.outside), β := some 400000000000, latency := 0 }]⟩
+  ⟨[sheet], locs,
+    links ++ [{ id := "eth0", ends := ("node0", Site.outside), β := some 400000000000, latency := 0 }]⟩
 private def onLink (link : String) : Answer :=
   accept "toy/sent" [("K", Lean.toJson (3000 : Nat)), ("eps", .str "1/1000"), ("span_ns", Lean.toJson (400 : Nat)),
     ("start_ns", Lean.toJson (0 : Nat))] [("link", .str link)]
