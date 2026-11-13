@@ -135,14 +135,14 @@ or absent; a `stopped` that is neither `true` nor `false`; the stop blocks of a 
 #guard placeOf "{\"prompt\": 40e-1, \"outputs\": 4}" == some none
 
 /-- A window of the sizes `prompt` and `outputs`, with `more`. -/
-private def windowOf (prompt outputs : Nat) (more : List (String × Json) := []) : Json :=
+private def executionPhaseOf (prompt outputs : Nat) (more : List (String × Json) := []) : Json :=
   Json.mkObj ([("prompt", Lean.toJson prompt), ("outputs", Lean.toJson outputs)] ++ more)
 
-#guard family (windowOf 4 4) == some "draw/68719476752"
-#guard family (windowOf 4 4 [("stopped", Json.bool true)]) == some "draw/68719476754"
-#guard family (windowOf 4 4 [("stopped", Json.bool true), ("population", "stop")]) == some "draw/68719476755"
-#guard family (windowOf 4 4 [("population", "stop")]) == none
-#guard family (windowOf 4 4 [("stopped", Json.null)]) == none
+#guard family (executionPhaseOf 4 4) == some "draw/68719476752"
+#guard family (executionPhaseOf 4 4 [("stopped", Json.bool true)]) == some "draw/68719476754"
+#guard family (executionPhaseOf 4 4 [("stopped", Json.bool true), ("population", "stop")]) == some "draw/68719476755"
+#guard family (executionPhaseOf 4 4 [("population", "stop")]) == none
+#guard family (executionPhaseOf 4 4 [("stopped", Json.null)]) == none
 #guard run (Json.mkObj [("run", "ab")]) == some "ab"
 #guard run (Json.mkObj [("run", Json.null)]) == none
 #guard run Json.null == none
