@@ -16,8 +16,6 @@
     {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "union-attr", "symbol": "_load", "detail": "", "count": 3},
     {"file": "tests/pipeline/serve_async_commit_gpu.py", "kind": "arg-type", "symbol": "arm", "detail": ""},
     {"file": "tests/pipeline/serve_async_commit_gpu.py", "kind": "union-attr", "symbol": "arm", "detail": ""},
-    {"file": "tests/pipeline/served_rope.py", "kind": "arg-type", "symbol": "commit", "detail": ""},
-    {"file": "tests/pipeline/served_rope.py", "kind": "assignment", "symbol": "commit", "detail": ""},
     {"file": "tests/pipeline/test_boundary_rows.py", "kind": "var-annotated", "symbol": "test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes", "detail": ""},
     {"file": "tests/pipeline/test_cli.py", "kind": "attr-defined", "symbol": "probe", "detail": "", "count": 2},
     {"file": "tests/pipeline/test_interior_rows.py", "kind": "var-annotated", "symbol": "_ids", "detail": ""},
