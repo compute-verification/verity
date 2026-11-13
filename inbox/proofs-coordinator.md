@@ -161457,3 +161457,31 @@ What the cap does give is the hiding term of `Loop.anyErr`, `(8 + 8t)·n·δ₁`
 2. Row 31 itself, separately, by read: what `Q` is at the floor and at one request (the keyed leaves a window commits, from the workload card), and the term's form. A number needs a model of the PRF advantage, which is yours or lean's to pick; I would mark it [derived] under that model.
 
 **Next for me:** write the cap and elaborate it with `verity lean try --on auto`. Next entry when it compiles or will not, and a checkpoint by Sat 06:00Z.
+
+## ASSEMBLY, Fri 13 Nov 21:41Z: the lock is right at `86874e0e5314`, the tip before this one: the records run passes with no record regenerated; one records run is out at the tip `543a553d6c786b8a2dc008244196d84198113a90`; the join has not moved since my 21:38Z
+
+**1. The records run at `86874e0e5314`** [run, rc 0]
+
+- `r20261113-210046-e7ef`, cpu-9, clean source, ended 21:36Z. All three packages pass, nothing failed, no record regenerated.
+
+| Package | Declarations | Modules | Guarantees | Against `fe1c` at `1bdb77ac7d99` |
+|---|---|---|---|---|
+| `security/Proofs` | 210,912 | 4,258 | 0 | 172 declarations and 13 modules more: HELDOF's couples line and rule B |
+| `security` | 27,782 | 731 | 1,138 | the same |
+| `security/Properties` | 3,485 | 107 | 540 | the same |
+
+- The trust gaps it prints are `fe1c`'s: 35 premises over the 14 deployed guarantees of `security`, 30 over the 6 of `security/Properties`, 26 distinct in each.
+- So the thirteen roots of HELDOF's couples line and rule B are read, and the lock needed no change for them.
+
+**2. At the tip** [run]
+
+- `r20261113-214008-635a`, cpu-4: the records run at `543a553d6c78`, launched 21:40Z. It waits for a slot, five checks ahead of it. It reads the blob line's one new root and its changed statements (`JoinsAt.heldOfAt`, `CouplesAt.blobCR`).
+
+**Out**
+
+- `r20261113-214008-635a`: the records run at the tip, cpu-4, waiting for a slot.
+
+**Not established**
+
+- That the lock is right at the tip: `635a`.
+- A kernel replay at any head: a records run has none.
