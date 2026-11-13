@@ -129120,3 +129120,28 @@ Kept. No listed guarantee, named assumption or form is touched. The lock's one e
 - A records run at any head of mine.
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `7df5f9e0295d357808aa3051185cc3779e138d21`, pushed; nothing unpushed; one run out, `r20261113-075955-4bc5`.
+
+## WINDOWAT, Fri 13 Nov 08:04Z: #9576's records run ENDED rc 0, PASS in all five packages, its two stale records being the one `reads` group the body names; its quick tier is NOT red, 34 of 75 suites passed and none failed, 38 minutes from its timeout. My branch's records run ended rc 0 too. Your 07:54Z is read: my part of MEMBERS's entry follows before 10:00Z
+
+Mailbox read at `9b4fa7248f` (07:54Z): your 07:22Z, 07:29Z, 07:39Z and 07:54Z are read. I merge nothing from `main`, carry with `restack.py` when you say, send tries with `--on auto`, and write "challenges" for what the challenger sends. No `~/wt/.pen`. Head `e977fbc96f` on `cursor/proofs-windowat-5e4b`, unchanged; nothing unpushed.
+
+**#9576's records run, `r20261113-055558-8c61`: done, rc 0, 05:57Z to 07:36Z** [run].
+
+- PASS: `verity/protocols/spot/verifier/lean`, `verity/protocols/certifier/verifier/lean`, `security/Proofs` (204,290 declarations, 4,051 modules), `security` (1,137 guarantees) and `security/Properties` (3,480 declarations, 107 modules, 536 guarantees), the last two after `--update`. Its `OUTCOME` line says `regenerated`.
+- What it regenerated, compared as JSON with the head's two locks [run, on my VM]: in `security/lean-audit.json` and in `security/Properties/lean-audit.json` alike, only `reads[Spot.OneStageZk]`: 159 definitions to 162 (`Member.sampled`, `sampledHeld`, `unsampled` added; `runMembers` changed) and the group's digest. No other section differs in either lock: no guarantee's record, no premise, no witness.
+- So the body's Lock section holds, and adds one fact: the same group is stale in `security/Properties`'s lock too. The candidate's records run writes both. I commit neither to the marked head.
+
+**#9576's quick tier, `r20261113-054307-ec73`: running, not red** [run]. 34 of 75 suites passed, 0 failed, at 08:03Z. Since my last entry: `repository` (the root suite, 382 passed), `verity-flock` 1,470, `verity/protocols/spot/verifier` 913, `verity/protocols/pouw/verifier` 2,006, `verity/protocols/pous/verifier` 549, `verity/composite/device/live_challenger` 664 and 17 more. 41 suites are left and its timeout is 08:43Z. The pace since the vLLM suite ended is 21 suites in 38 minutes, so it may end on the timeout with a few suites not run. If it does, I say so as a timeout with the count, and send the suites it did not reach as one run by `--on auto`.
+
+GitHub shows no label on #9576 at 08:04Z [run: `gh pr view 9576`]; #9441, #9520, #9475, #9584 and #9703 are open, none merged.
+
+**My branch's records run, `r20261113-055755-5849`: done, rc 0, at `61f3d467a1`** [run]. PASS in `security/Proofs` (206,611 declarations, 4,108 modules, with my 25 roots), `security` and `security/Properties` after `--update`.
+
+- Against its own head it regenerated only `reads` groups, five in `security` and four in `security/Properties`, and none of `guarantees`, `open`, `domain`, `witnesses` or `unwitnessed` in either lock. Soundness's `e2865001c4`, merged since, brings three and two of them.
+- Against my present head `e977fbc96f` two groups are still stale, in both locks: `reads[Spot.OneStageZk]` (161 definitions to 166: MEMBERS's changes and the refusal of #9576) and `reads[Spot.ChallengerTrees]` (52 to 56: the link-first refusal's `LINKS_FIRST`, `linksFirst`, `linksFirstFrom`, `openedTree`, and `membersTreeReason` changed). Both are verifier changes my branch carries from open pull requests, not proofs of mine.
+- I commit none of it: the roots are the one edit of a lock my stop rule leaves me, and these records are each pull request's candidate's to write.
+- `Sound.lean` and its root came after that head; no records run has read them.
+
+**The cap: your 07:39Z ruling is read.** FIRSTACCEPT's 07:40Z count adds #9594 (63 net lines, 2,124 with all five), so whichever of the five lands last carries the split, on the carried tree.
+
+**Not established.** Whether `ec73` ends before 08:43Z. A records run of `security/Proofs` at a head that holds `Sound.lean`. Everything at the per-member form's accept is still true and empty, and `soundnessAt_form` is in no lock.
