@@ -2229,6 +2229,12 @@
         "verity/protocols/inference_only/nci/": "benchmarks/nci/",
         "verity/protocols/inference_only/rho/": "benchmarks/rho/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/rho/": "benchmarks/slowdown/",
+        "benchmarks/rho/rho/": "benchmarks/slowdown/slowdown/"
+      }
     }
   ]
 }
