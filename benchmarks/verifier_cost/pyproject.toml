@@ -17,4 +17,4 @@ untraced = ["tests/test_mains.py"]
 inputs = ["verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/inference_only/verifier/nci/lean/lakefile.toml",
           "verity/protocols/spot/verifier/lean/lakefile.toml",
-          "verity", "verity/difftest/python/verity_difftest"]
+          "verity", "tools/difftest/python/verity_difftest"]
