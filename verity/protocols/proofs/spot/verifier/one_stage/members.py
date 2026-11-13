@@ -215,7 +215,8 @@ def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dic
         ms, sts = params["proofs"]["members"], evidence["proofs"]["statements"]
         ok = (set(params["proofs"]) == {"members"} and set(evidence["proofs"]) == {"statements"} and isinstance(ms, dict)
               and bool(ms) and type(sts) is list and type(evidence["sessions"]) is list
-              and type(evidence["proved_units"]) is list and isinstance(evidence["coins"], dict)
+              and type(evidence["proved_units"]) is list and all(_nat(u) for u in evidence["proved_units"])
+              and isinstance(evidence["coins"], dict)
               and isinstance(params["challenger"], dict) and isinstance(params["partition"], dict)
               and isinstance(params["program"], dict))
         for m in ms.values() if ok else ():

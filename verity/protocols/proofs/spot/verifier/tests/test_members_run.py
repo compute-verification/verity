@@ -286,14 +286,17 @@ def test_the_registrations_roots_are_each_one_members_and_none_a_row_tables(tmp_
 
 
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
-    """Parameters or evidence the per-member parsers refuse, a program other than the parameters', and a registered
+    """Parameters or evidence the per-member parsers refuse (among them ``proved_units`` that are no list of natural
+    numbers, which the run compares with the members' units), a program other than the parameters', and a registered
     file whose port is no registered port's."""
     w = Window(tmp_path)
     ms = w.params["proofs"]["members"]
     for params, evidence in ((w.params | {"proofs": {"circuit": "", "public": "", "registered": None}}, None),
                              (w.params | {"proofs": {"members": {A: ms[A] | {"units": [[2, 1]]}, B: ms[B]}}}, None),
                              (None, w.evidence | {"proofs": {"sessions": []}}),
-                             (None, {k: v for k, v in w.evidence.items() if k != "sessions"})):
+                             (None, {k: v for k, v in w.evidence.items() if k != "sessions"}),
+                             (None, w.evidence | {"proved_units": [1, "2", 4]}),
+                             (None, w.evidence | {"proved_units": [True, 2, 4]})):
         with pytest.raises(M.Outside, match="per-member form"):
             w.run(params=params, evidence=evidence)
     with pytest.raises(M.Outside, match="partition object"):
