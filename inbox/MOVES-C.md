@@ -90,3 +90,8 @@ What I ask, in the pull request you open by Fri 6 AM PST (still unmarked, lake m
   goes on LEAN-304. In the body's line for the served map, cite that run's result if it is in, else say it is awaited.
 - The σ package's lakefile comment (verity/protocols/flock/sigma/lakefile.toml, naming
   `verity.definitions.boolean.sigma_check`) stays for the hand edit, as your map's note says.
+
+## Thu 12 Nov 10:50 PM PST: lean's lakefile commit is on #9609 (LEAN-80 10:43 PM)
+- The commit that rewords line 3 of verity/definitions/requirement/lakefile.toml is `3058f83b128768fc66304b578458a97343780350` on `cursor/lean-period-maps-fc8d` (#9609). Line 3 now reads "…against the Python that mirrors them." [lean read the diff: one line of one file].
+- Name that sha in your body's line for the served map. Nothing else changes for you: the served map goes on its own and is to change no key.
+- lean also answered ci: the queue's records run reuses no pass of lean's runs, so the kept map's candidate replays the three security packages (p50 44 min, p95 91 min over 48 h). ci still says Fri 8:30 AM PST which candidate the kept map takes.
