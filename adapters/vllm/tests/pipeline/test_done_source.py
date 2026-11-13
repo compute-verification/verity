@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -106,9 +107,9 @@ def test_the_row_precheck_refuses_a_row_of_record_that_stops_at_eos_before_writi
 
 
 def _swept(path: str, row: str) -> str:
-    m = json.loads(open(path).read())
+    m = json.loads(Path(path).read_text())
     m["sweep"] = {"row_id": row}
-    open(path, "w").write(json.dumps(m))
+    Path(path).write_text(json.dumps(m))
     return path
 
 

@@ -13,12 +13,12 @@ import hashlib
 import numpy as np
 import pytest
 
-from verity_vllm.commitments import vllm_v1 as ref
-from verity_vllm.commitments.vllm_v1 import vectors as V
-from verity_vllm.commitments import leaves as hashing
-from verity_vllm.commit import scheme
 from verity_vllm.commit import hidden_stream as hs
+from verity_vllm.commit import scheme
+from verity_vllm.commitments import leaves as hashing
+from verity_vllm.commitments import vllm_v1 as ref
 from verity_vllm.commitments.leaves import fold_path, path_shape
+from verity_vllm.commitments.vllm_v1 import vectors as V
 
 VECTORS = V.load()
 
@@ -43,7 +43,7 @@ class _Digest:
 
 
 def test_vectors_are_current() -> None:
-    assert VECTORS == V.build()
+    assert V.build() == VECTORS
     assert VECTORS["scheme"] == ref.NAME == scheme.NAME
 
 
@@ -254,7 +254,7 @@ def test_lowering_trace_matches_the_integration_hashes(case: dict) -> None:
 
 def test_stream_commit_matches_reference() -> None:
     layout = hs.StreamLayout(HB=2, M=8, NB=1)
-    stream = np.frombuffer(V.expand("stream", 4 * layout.total_words), dtype="<u4").copy()
+    stream: np.ndarray = np.frombuffer(V.expand("stream", 4 * layout.total_words), dtype="<u4").copy()
     launch_tag, src_mask, cw = 11, 63, 64
     com = hs.commit_stream(stream, layout, launch_tag, src_mask, chunk_words=cw)
     raw = np.concatenate([stream, np.zeros(layout.padded_words(cw) - stream.size, dtype=np.uint32)]).astype("<u4").tobytes()
@@ -275,7 +275,7 @@ def test_thread_commit_matches_reference() -> None:
     geo = hs.ThreadGeometry(HB=1, b=1, h=1, M=64, NB=1, num_m_block=1, seqlens_q=(40,), seqlens_k=(100,), causal=False)
     launch_tag, src_mask = 4, 1
     layout = hs.StreamLayout(HB=1, M=64, NB=1)
-    stream = np.frombuffer(V.expand("thread-stream", 4 * layout.total_words), dtype="<u4").copy()
+    stream: np.ndarray = np.frombuffer(V.expand("thread-stream", 4 * layout.total_words), dtype="<u4").copy()
     messages = [hs.thread_message(stream, layout, geo, src_mask, launch_tag, 0, 0, 0, 0, t) for t in range(128)]
     for t in (0, 77):
         w, lane = t // 32, t % 32
@@ -283,7 +283,7 @@ def test_thread_commit_matches_reference() -> None:
         assert messages[t][:64] == ref.thread_header(src_mask=src_mask, slab=0, m_block=0, n_block=0, tidx=t, seqlen_q=40, seqlen_k=100,
                                                      launch_tag=launch_tag, n_block_max=geo.n_block_max(0, 0), ok0=r0 < 40, ok1=r0 + 8 < 40)
     leaves = [ref.thread_leaf(m) for m in messages]
-    digests = np.frombuffer(b"".join(leaves), dtype=np.uint32)
+    digests: np.ndarray = np.frombuffer(b"".join(leaves), dtype=np.uint32)
     com = hs.ThreadLeafCommitment.from_digests(digests, geo, launch_tag, src_mask)
     assert ref.TREE.root(leaves) == com.merkle_root
     ctx = ref.thread_ctx_digest(launch_tag=launch_tag, src_mask=src_mask)
