@@ -16,8 +16,11 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import Any
 
+from verity_vllm.records.fields import RecordError
+
 _ITEMSIZE = {"bfloat16": 2, "float16": 2, "float32": 4, "float64": 8, "int32": 4, "int64": 8, "int16": 2, "int8": 1, "uint8": 1, "bool": 1,
              "float8_e4m3fn": 1, "float8_e5m2": 1}
+VIEW = "a fold instance's view"
 _ROPE_MEMBER = {"query": "rope.q", "key": "rope.k"}                # RoPE's members (the Build's hints) -> the Match fold's hint suffixes
 
 
@@ -49,6 +52,34 @@ def _sha256_at(name: str) -> str:
     """sha256 of the bytes of the file `name`, opened by that name as it is given."""
     with open(name, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
+
+
+def _refused(view: Mapping[str, Any], key: str, kind: str) -> RecordError:
+    """The refusal, by name, of what a fold view states under `key` where it is not `kind`."""
+    return RecordError(VIEW, key, f"is {view.get(key)!r}, not {kind} (the view: {json.dumps(view, default=str)[:200]})")
+
+
+def _stated_number(view: Mapping[str, Any], key: str) -> int | None:
+    """The number a fold view states under `key`, or None where it leaves the key out or states null.  Anything else there is
+    refused by name."""
+    x = view.get(key)
+    if x is None:
+        return None
+    try:
+        return int(x)
+    except (TypeError, ValueError, OverflowError) as e:
+        raise _refused(view, key, "a number") from e
+
+
+def _stated_numbers(view: Mapping[str, Any], key: str) -> list[int]:
+    """The numbers a fold view lists under `key`, none where it lists none.  Anything else there is refused by name."""
+    xs = _listed(view, key)
+    if not isinstance(xs, (list, tuple)):
+        raise _refused(view, key, "a list of numbers")
+    try:
+        return [int(x) for x in xs]
+    except (TypeError, ValueError, OverflowError) as e:
+        raise _refused(view, key, "a list of numbers") from e
 
 
 def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
@@ -240,17 +271,17 @@ class MatchOracle:
     @staticmethod
     def _view_bytes_range(view: Any) -> tuple[int, int, int] | None:
         """(alloc, byte lo, byte hi) the storage range a fold view spans (contiguous: offset..offset+numel; strided: the span), or None
-        when there is no view, its allocation, offset, shape or strides cannot be read, or its dtype has no itemsize: such a view is skipped."""
-        try:
-            alloc, off = int(view["alloc"]), int(view["offset"])
-            shape, strides = list(_listed(view, "shape")), list(_listed(view, "strides"))
-            isz = _ITEMSIZE.get(str(view.get("dtype")))
-        except (KeyError, TypeError, ValueError):
+        when there is no view, it states no allocation or no offset, or its dtype has no itemsize: such a view is skipped.  One that
+        states an allocation or an offset that is no number, or a shape or strides that are no list of numbers, is refused by name."""
+        if not isinstance(view, Mapping):
             return None
-        if isz is None:
+        alloc, off = _stated_number(view, "alloc"), _stated_number(view, "offset")
+        isz = _ITEMSIZE.get(str(view.get("dtype")))
+        if alloc is None or off is None or isz is None:
             return None
+        shape, strides = _stated_numbers(view, "shape"), _stated_numbers(view, "strides")
         numel = _prod(shape) if shape else 1
-        span = numel if (not strides or _contiguous(shape, strides)) else 1 + sum((int(d) - 1) * int(s) for d, s in zip(shape, strides))
+        span = numel if (not strides or _contiguous(shape, strides)) else 1 + sum((d - 1) * s for d, s in zip(shape, strides))
         return alloc, off * isz, (off + span) * isz
 
     def _step_outputs(self, step: int) -> dict[int, list[tuple[int, int, dict]]]:
