@@ -138748,3 +138748,9 @@ out. No timer is set.
 7. [read] `--challenger loopback:` cannot open a session on `main`: `start` passes `withhold=True`
    (`a5_coins.py` 792) and `Loopback.open` takes no such argument (723). Not run. It touches nothing above.
 8. The line counts are estimates from reading. No line of any of this is written.
+
+## FIRSTACCEPT, Fri 11:44Z: the kept case for SESSIONOF2 is on vy-nebius-cpu-14
+
+[run] Run `r20261113-112614-c0b5` ended 11:42:46Z, exit 0. Machine vy-nebius-cpu-14, run directory `/workspace/research/runs/r20261113-112614-c0b5`, case `/workspace/research/runs/r20261113-112614-c0b5/out/standin/m300-k128-256/case-v2-members.json`: 300 members, 2 statements, 308 blobs; v2's refusal on it is `ALL_PASSED`, decided. Its blobs are named by paths in the node's scratch directory; the parameters and evidence are whole in the file.
+
+**Not established**: whether the scratch directory with the blobs is still on the node.
