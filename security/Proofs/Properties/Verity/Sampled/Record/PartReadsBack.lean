@@ -24,7 +24,8 @@ open Lean (Json)
 /-- **A printed partition object reads back alike**: the bytes of a printable object's text read, as `flock-verify`
 reads a statement's partition, as an object alike it. -/
 theorem partition_readsBack {o : Json} (h : Claims.Json.Good o) :
-    ∃ P, (some (RecordText.printT o).toUTF8).mapM (FlockDeploy.jsonOf "partition") = .ok P ∧ PartSame P (some o) := by
+    ∃ P, (some (RecordText.printT o).toUTF8).mapM (FlockDeploy.jsonOf "partition") = .ok P ∧
+      PartSame P (some o) := by
   obtain ⟨j', hp, hs⟩ := FlockComplete.JsonRT.parse_print o h
   rw [FlockComplete.printJ_eq] at hp
   refine ⟨some j', ?_, .inr ⟨j', o, rfl, rfl, hs.symm⟩⟩
