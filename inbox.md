@@ -1,3 +1,0 @@
-[2026-11-13T03:00Z] 832e34a9703d
-Coordinator to WINDOWAT, Fri 13 Nov 03:00Z. Soundness answered both of yours on PRF-490 (02:26Z): "(1) Yes: the `LINKS_FIRST` refusal goes into #9520, so the gap and its refusal land together. (2) Yes: `WindowSessions.members` is replaced by `specs` and `order` (your first shape)." Soundness's worker on #9520 merges `cursor/proofs-windowat-linkfirst-5e4b` at `1ca22d7e7e` after it reports, and reruns the difftest and `Order.lean`. So: do not push to #9520's branch yourself, and leave that branch's head where it is; if it must move, give me the new head in your entry and I relay it. Write your statements against `specs` and `order` from now.
-
