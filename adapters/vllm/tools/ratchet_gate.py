@@ -31,7 +31,13 @@ when:
   at least as much, so a move from one file to another passes.  A repository list
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
-  so a list behind its tree catches up, while growth past the base's own findings is held as before.  A change that edits
+  so a list behind its tree catches up, while growth past the base's own findings is held as before.  A file the change
+  renames (``git diff -M``) is the base's file where the change puts it: its entry in the base's list is compared at
+  its new path, where its key may rise to what the base's lint finds in the file where the base holds it, and the path
+  it left holds nothing.  So a move and the commit that records its files' entries pass as one change, a site the change
+  writes into a moved file is growth, named at that file's key, and a move buys no room.  A count is the base's at the
+  base's path, never the new path's: a file moved to where a lint comes to count it brings sites no list held, which
+  is growth at its key.  A change that edits
   a counted lint's module may raise that lint's list, as far as it records, at each file it leaves untouched: it adds no
   text there, so the rise records what the edited lint finds in a tree the change didn't write (the base's, or a file of
   a change queued on `next`), which the gate can't count without running the change's code, and a list ahead of its tree
@@ -52,7 +58,9 @@ when:
   below's wherever in its file it stands: it is compared by its file and what it is, with a count, never by its line, so
   an edit above a site moves it and adds none, a second site of the same kind in its file is the change's, and a file's
   count that a mended site lowers is no new violation, whether its entry falls with it or stays (`beyond`); a list
-  lowered under a tree that its base's list covered is one.  In a temporary worktree of the change's top, each
+  lowered under a tree that its base's list covered is one.  What a repository list's lint finds past its list in a file
+  the change renames is compared at the file's new path (`placed_at`), so a move carries the sites its base holds
+  uncovered and one more in the moved file is the change's.  In a temporary worktree of the change's top, each
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
@@ -702,6 +710,19 @@ def changed_sources(lo: str, hi: str, left: tuple[str, ...], holds: Callable[[st
     return out
 
 
+def renamed(lo: str, hi: str) -> dict[str, str]:
+    """Each file ``lo..hi`` renames (``git diff -M``), its new path to its old one."""
+    return {f: o for f, o, *_ in changed_sources(lo, hi, (), lambda _: True) if o not in (None, f)}
+
+
+def carried(before: dict[str, list], moved: dict[str, str]) -> dict[str, list]:
+    """``before`` with each repository list's (``CATCH_UP``) entry for a file the change renames (``moved``: its new path to
+    its old) at the file's new path: what the base's list allows the file, where the change puts it."""
+    to = {o: f for f, o in moved.items()}
+    return {s: [{**e, "file": to[e["file"]]} if s in CATCH_UP and isinstance(e, dict) and isinstance(e.get("file"), str)
+                and e["file"] in to else e for e in entries] for s, entries in before.items()}
+
+
 def repo_list(rev: str) -> Counter:
     """The findings the repository's ruff list at ``rev`` allows, per (file, rule) (none when it has no list)."""
     try:
@@ -910,27 +931,36 @@ def tree_files(rev: str, paths: set[str]) -> dict[str, bytes]:
     return {p: data[sha] for p, sha in shas.items()}
 
 
-def findings_at(rev: str, s: str, files: set[str]) -> Counter:
+def findings_at(rev: str, s: str, files: set[str], moved: dict[str, str] | None = None) -> Counter:
     """Repository list ``s``'s lint (``CATCH_UP``), as ``rev`` has it, on ``files`` in ``rev``'s tree, per key of that list:
-    ruff under ``rev``'s root ``ruff.toml`` and pin per (file, rule), a counted lint's sites per file (none without it)."""
+    ruff under ``rev``'s root ``ruff.toml`` and pin per (file, rule), a counted lint's sites per file (none without it).
+    A file a change renames (``moved``: its new path to its old) is counted where ``rev`` holds it, as the lint counts it
+    there, and named at its new path, and the path it left names nothing: a file moved to where the lint comes to count
+    it, or to count more of it, brings what ``rev``'s lint finds in it at its old path and no more."""
+    moved = moved or {}
+    left_behind = set(moved.values())
+    named = {moved.get(f, f): f for f in files if f in moved or f not in left_behind}
     if s == REPO_RUFF_LINT:
         if (left := left_out(rev)) is None:
             return Counter()
         ruff = [*python_for(ruff_pin(rev), [REPO_RUFF_LINT]), "-m", "ruff"]
         found = ruff_findings(ruff, {REPO_RUFF_CONFIG: git("show", f"{rev}:{REPO_RUFF_CONFIG}")},
-                              tree_files(rev, {f for f in files if not f.startswith(left)}))
-        return Counter(key({"file": f, "rule": rule}) for f, rule, *_ in found)
+                              tree_files(rev, {f for f in named if not f.startswith(left)}))
+        return Counter(key({"file": named[f], "rule": rule}) for f, rule, *_ in found)
     _, sites, noun = next(c for c in COUNTED if c[0] == s)
     if (lint := counted_lint_at(rev, s, sites, noun)) is None:
         return Counter()
     holds, count = counter(lint, sites)
-    data = tree_files(rev, {f for f in files if holds(f) and not f.startswith(tuple(lint.LEFT_OUT))})
-    return Counter({key({"file": f}): len(count(b.decode("utf-8", errors="replace"), f)) for f, b in data.items()})
+    data = tree_files(rev, {f for f in named if holds(f) and not f.startswith(tuple(lint.LEFT_OUT))})
+    return Counter({key({"file": named[f]}): len(count(b.decode("utf-8", errors="replace"), f)) for f, b in data.items()})
 
 
-def held(c: Change, before: dict[str, list], after: dict[str, list]) -> tuple[dict[str, Counter], dict[str, set[str]]]:
+def held(c: Change, before: dict[str, list], after: dict[str, list], moved: dict[str, str] | None = None
+         ) -> tuple[dict[str, Counter], dict[str, set[str]]]:
     """For each repository list (``CATCH_UP``) whose keys the change raises, what its lint, as the change's base has it, finds
     in the base's tree at those keys: the most each may rise to, since a list that records its base's findings adds none.
+    A file the change renames (``moved``: its new path to its old) is the base's file, counted where the base holds it and
+    named at its new path (`findings_at`), with ``before`` its list as `carried` places it.
     And, for a counted lint whose module the change edits, the keys it raises at files the change leaves untouched, which may
     rise as far as the change records: it adds no text there, so the rise records what the change's lint finds in text the
     change didn't write, which the gate can't count without running the change's code.  A list ahead of its tree admits no
@@ -944,7 +974,7 @@ def held(c: Change, before: dict[str, list], after: dict[str, list]) -> tuple[di
                 if isinstance(e, dict) and "count" in e and isinstance(e.get("file"), str):
                     side[key(e)] += count(e)
         if files := {json.loads(k)["file"] for k in hi if hi[k] > lo[k]}:
-            out[s] = findings_at(c.lo, s, files)
+            out[s] = findings_at(c.lo, s, files, moved)
             if s in (slug for slug, *_ in COUNTED):
                 if edited is None:
                     edited = set(git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0"))
@@ -1289,6 +1319,18 @@ def beyond(found: list[str], had: list[str]) -> tuple[list[str], list[str]]:
     return [old[i] for i in sorted(old)], [v for i, v in enumerate(found) if i not in old]
 
 
+def placed_at(found: list[str], moved: dict[str, str]) -> list[str]:
+    """``found``, the base's violations, each as it reads where the change puts its file: one of a repository list's lint
+    (``CATCH_UP``) that names a file the change renames (``moved``: its new path to its old) names the file's new path, so
+    `beyond` compares a moved file's violations with the ones its base holds."""
+    to = {o: f for f, o in moved.items()}
+    out = []
+    for v in found:
+        m = SITE.match(v) or RUFF_PAIR.match(v)
+        out.append(v[:m.start(1)] + to[m[1]] + v[m.end(1):] if m and m[1] in to and v.split(":", 1)[0] in CATCH_UP else v)
+    return out
+
+
 def added_by(rev: str, items: list[str]) -> str:
     """Each violation in ``items`` with the change on ``rev``'s first-parent chain that added the line it names
     (``lint: file:line ...``), by `git blame --first-parent`: ``#N`` for a queue merge, else the commit.  One that names only
@@ -1329,7 +1371,9 @@ def judge(c: Change, base: str) -> None:
         after, now_at, bad = ratchets(c.hi)
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        grown, added, c.pooled = growth(before, after, {**was_at, **now_at}, *held(c, before, after))
+        moved = renamed(c.lo, c.hi)
+        placed_before = carried(before, moved)
+        grown, added, c.pooled = growth(placed_before, after, {**was_at, **now_at}, *held(c, placed_before, after, moved))
         uncalled, public = public_callers(c)
     noqa_grows = c.noqa_added > c.noqa_removed
     inherited: list[str] = []
@@ -1343,9 +1387,12 @@ def judge(c: Change, base: str) -> None:
             c.lints, failures = base_lints(c, selection, after)
             found = violations(failures)
             if found:
-                at_base = violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1])
+                as_named = violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1])
+                at_base = placed_at(as_named, moved)
+                names = dict(zip(at_base, as_named))
                 inherited, new = beyond(found, at_base)
                 had, found = set(at_base) | (set(found) - set(new)), new
+                inherited = [names.get(v, v) for v in inherited]
                 like, rekeyed, rekey = base_form(before, after, {**was_at, **now_at})
                 if found and rekeyed:
                     again = beyond(violations(base_lints(c, selection, like)[1]), at_base)[1]

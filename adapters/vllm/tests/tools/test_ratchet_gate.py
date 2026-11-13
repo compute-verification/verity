@@ -1387,9 +1387,9 @@ def test_the_silent_except_list_may_not_grow_and_loosening_its_lint_fails_naming
         "repo_silent_excepts: tools/s.py:4 except OSError: return None"]), c["why"]
 
 
-def _caught_up(listed: str, total: str, n: int) -> str:
-    return (f"{listed} {total} in total, {n} of it in {n} key(s) catching up to what its lint finds in the base's tree (a list "
-            f"that records its base's findings adds none)")
+def _caught_up(listed: str, total: str, n: int, keys: int | None = None) -> str:
+    return (f"{listed} {total} in total, {n} of it in {n if keys is None else keys} key(s) catching up to what its lint finds "
+            f"in the base's tree (a list that records its base's findings adds none)")
 
 
 def test_a_counted_lint_s_list_catches_up_to_what_its_base_holds_and_no_further(silent_linted):
@@ -1901,3 +1901,137 @@ def test_a_lint_module_whose_own_prose_a_change_cleans_is_counted_on_its_own_cop
     assert (c["verdict"], c["fix"]) == ("failed", [f"repo_lane_text: {LINT}: 1 found, 0 allowed",
                                                    f"repo_lane_text: {LINT}:3 linear: VLLM-136"]), c["why"]
     assert f"{LINT}: 1 found, 0 allowed" in (_lane_lint(lane_linted) or "")
+
+
+def _terms_lint(repo: Repo) -> str | None:
+    """the repository's retired-terms lint, as the root suite runs it after landing, on ``repo``'s checkout"""
+    r = subprocess.run([sys.executable, "-c", ("import sys; sys.path.insert(0, 'tests/lint'); "
+                         "import test_repo_retired_terms as T; T.test_no_new_retired_terms()")],
+                       cwd=repo.root, capture_output=True, text=True)
+    return None if r.returncode == 0 else r.stderr
+
+
+def _queued(repo: Repo, pr: int, head: str) -> dict:
+    """the gate's one change for ``head`` as the queue merges it onto `main`, on a fresh `next`"""
+    repo.git("checkout", "-q", "-B", "next", "main")
+    repo.queue(pr, "a move", head)
+    [c] = G.gate("main", "next")["changes"]
+    return c
+
+
+def test_a_move_and_the_commit_that_carries_its_entries_pass_as_one_change_and_a_new_site_in_a_moved_file_fails(terms_linted):
+    """One queue merge of a mover's commit and the commit that records what the lint finds in the file it moved, where the
+    list is behind its tree: docs/b.md's two unlisted uses go to notes/b.md as they are, and the list takes them there.
+    The merge is no pure move, and it passes: a renamed file's key may rise to what the base's lint finds in the base's
+    file, read where the change puts it, so the two are the base's.  A mover's edit that adds no use passes too, and a
+    third use in the moved file, recorded, fails, naming the file's key."""
+    notes, b = {"file": "notes/b.md", "count": 2}, (terms_linted.root / "docs/b.md").read_text()
+    terms_linted.commit("the mover: docs/b.md goes to notes/ as it is", {"docs/b.md": None, "notes/b.md": b})
+    entries = terms_linted.commit("the moved file's entries", {REPO_TERMS_JSON: _allowlist(DOCS_A, notes)})
+    assert not G.is_pure_move(G.changes("main", "pr")[0], "main")
+    c = _queued(terms_linted, 7, entries)
+    assert (c["name"], c["verdict"], c["lints"], c["pooled"]) == (
+        "#7", "passed", ["repo_retired_terms"], [_caught_up(REPO_TERMS_JSON, "1 -> 3", 2, keys=1)]), c["why"]
+    assert _terms_lint(terms_linted) is None
+    terms_linted.git("checkout", "-q", "-B", "pr", entries)
+    edited = terms_linted.commit("the mover's edit, which adds no use", {"notes/b.md": b.replace("One.", "The first.")})
+    c = _queued(terms_linted, 8, edited)
+    assert (c["verdict"], c["pooled"]) == ("passed", [_caught_up(REPO_TERMS_JSON, "1 -> 3", 2, keys=1)]), c["why"]
+    terms_linted.git("checkout", "-q", "-B", "pr", entries)
+    more = terms_linted.commit("a third use in the moved file, recorded", {
+        "notes/b.md": b + "\nA teapot sings.\n", REPO_TERMS_JSON: _allowlist(DOCS_A, {**notes, "count": 3})})
+    c = _queued(terms_linted, 9, more)
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {REPO_TERMS_JSON} 1 -> 4 in total"), c["why"]
+    assert c["fix"] == [f"{REPO_TERMS_JSON}: {G.key(notes)} 0 -> 3"]
+
+
+def test_a_renamed_file_s_entry_is_compared_at_its_new_path_so_a_move_buys_no_room_and_its_old_path_holds_nothing(terms_behind):
+    """The base's list is read with a renamed file's entry at the file's new path: docs/b.md's entry of two is
+    notes/b.md's, which may rise there to the four uses the base's file holds and no further, each named as that key's
+    rise; and the entry left behind at the old path, where the base's tree holds the file and the change's holds none,
+    catches up to nothing, so a move buys no room."""
+    notes, b = {"file": "notes/b.md", "count": 4}, {"file": "docs/b.md", "count": 2}
+    mover = {"docs/b.md": None, "notes/b.md": B_USES}
+    up = terms_behind.commit("the mover, and the entry takes the file's four", {
+        **mover, REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, notes)})
+    c = _queued(terms_behind, 7, up)
+    assert (c["verdict"], c["pooled"]) == ("passed", [_caught_up(REPO_TERMS_JSON, "4 -> 6", 2, keys=1)]), c["why"]
+    past = terms_behind.commit("and one more", {REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, {**notes, "count": 5})})
+    c = _queued(terms_behind, 8, past)
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_TERMS_JSON}: {G.key(notes)} 2 -> 5"]), c["why"]
+    terms_behind.git("checkout", "-q", "-B", "pr", "main")
+    left = terms_behind.commit("the mover, the file's four at its new path, and its old entry left", {
+        **mover, REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, b, notes)})
+    c = _queued(terms_behind, 9, left)
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {REPO_TERMS_JSON} 4 -> 8 in total"), c["why"]
+    assert c["fix"] == [f"{REPO_TERMS_JSON}: {G.key(b)} 0 -> 2"]
+
+
+def test_a_moved_file_s_uncovered_sites_are_the_bases_still_where_the_change_puts_it_and_one_more_is_the_changes(terms_behind):
+    """The base's violations are read where the change puts their files too: docs/b.md holds four uses against a list that
+    allows two, and a mover takes the file and its entry to notes/b.md as they are, so what the base's lint finds there
+    past the list is the base's, each named as the base holds it, with the change that wrote it; the same mover with a
+    fifth use fails, naming the file's count and the one new site."""
+    wrote = terms_behind.git("rev-parse", "main").strip()[:12]
+    listed = _allowlist({**DOCS_A, "count": 2}, {"file": "notes/b.md", "count": 2})
+    as_it_is = terms_behind.commit("the mover, the file and its entry as they are", {
+        "docs/b.md": None, "notes/b.md": B_USES, REPO_TERMS_JSON: listed})
+    c = _queued(terms_behind, 7, as_it_is)
+    assert (c["verdict"], c["lints"], c["pooled"]) == ("passed", ["repo_retired_terms"], []), c["why"]
+    assert ("finds 5 violation(s) its own tree already holds, which aren't this change's: "
+            f"added by {wrote}: {', '.join(B_SITE.format(n) for n in (3, 5, 7, 9))}, "
+            "repo_retired_terms: docs/b.md: 4 found, 2 allowed") in c["why"], c["why"]
+    terms_behind.git("checkout", "-q", "-B", "pr", "main")
+    more = terms_behind.commit("the mover, and a fifth use in the moved file", {
+        "docs/b.md": None, "notes/b.md": B_USES + "\nA teapot naps.\n", REPO_TERMS_JSON: listed})
+    c = _queued(terms_behind, 8, more)
+    assert c["verdict"] == "failed" and "finds 2 violation(s) on its tree" in c["why"], c["why"]
+    assert c["fix"] == ["repo_retired_terms: notes/b.md: 5 found, 2 allowed",
+                        B_SITE.format(11).replace("docs/b.md", "notes/b.md")], c["why"]
+
+
+C_SITE = "docs/c.md:{} 'teapot' is retired; say kettle (GLOSSARY.md)"
+
+
+def test_a_file_moved_to_where_its_lint_counts_it_is_growth_named_at_the_file_s_key(terms_linted):
+    """fixtures/ is data the retired-terms lint leaves unread, so a file moved out of it comes to count by its path alone.
+    The base's lint finds nothing in it where the base holds it, so no list ever held its use: with the entry for it the
+    list grows, named at the file's key, and without the entry the use is a new site, as any other.  Such a move goes by
+    `move_check`'s certificate, or its author rewords the file first."""
+    c_md = {"file": "docs/c.md", "count": 1}
+    terms_linted.git("checkout", "-q", "main")
+    terms_linted.commit("data that uses the term", {"fixtures/c.md": "# C\n\nA teapot rests.\n"})
+    terms_linted.git("checkout", "-q", "-B", "pr")
+    terms_linted.git("mv", "fixtures/c.md", "docs/c.md")
+    terms_linted.commit("fixtures/c.md goes to docs/ as it is, with its entry", {REPO_TERMS_JSON: _allowlist(DOCS_A, c_md)})
+    assert G.renamed("main", "pr") == {"docs/c.md": "fixtures/c.md"}
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {REPO_TERMS_JSON} 1 -> 2 in total"), c["why"]
+    assert c["fix"] == [f"{REPO_TERMS_JSON}: {G.key(c_md)} 0 -> 1"]
+    terms_linted.git("checkout", "-q", "-B", "pr", "main")
+    terms_linted.git("mv", "fixtures/c.md", "docs/c.md")
+    terms_linted.commit("the same move with no entry, beside an edit", {"docs/a.md": "# A\n\nA teapot boils it now.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(
+        f"adds 1 retired-term site(s) to the files it changes, as the base's {REPO_TERMS_LINT} counts them "
+        f"(docs/c.md 0 -> 1)"), c["why"]
+    assert c["fix"] == [C_SITE.format(3)]
+
+
+def test_a_renamed_file_s_ruff_finding_is_the_bases_at_its_new_path_and_a_second_there_is_growth(both_ruffed):
+    """The repository's ruff list is read the same way, per (file, rule): tools/b.py's unlisted finding goes to
+    tools/sub/b.py as it is and the list takes it there, the base's finding where the change puts the file; a count of
+    two there is growth, named at that key."""
+    b401 = {**TOOLS_F401, "file": "tools/sub/b.py"}
+    both_ruffed.git("checkout", "-q", "main")
+    both_ruffed.commit("a finding with no entry", {"tools/b.py": "import sys\n"})
+    both_ruffed.git("checkout", "-q", "-B", "pr")
+    both_ruffed.commit("the mover: tools/b.py goes to tools/sub/ as it is", {"tools/b.py": None, "tools/sub/b.py": "import sys\n"})
+    entries = both_ruffed.commit("the moved file's entry", {REPO_RUFF_JSON: _allowlist(TOOLS_F401, b401)})
+    c = _queued(both_ruffed, 7, entries)
+    assert (c["verdict"], c["pooled"]) == ("passed", [_caught_up(REPO_RUFF_JSON + " F401", "1 -> 2", 1)]), c["why"]
+    assert _repo_lint(both_ruffed) is None
+    both_ruffed.git("checkout", "-q", "-B", "pr", entries)
+    past = both_ruffed.commit("past it", {REPO_RUFF_JSON: _allowlist(TOOLS_F401, {**b401, "count": 2})})
+    c = _queued(both_ruffed, 8, past)
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_RUFF_JSON}: {G.key(b401)} 0 -> 2"]), c["why"]
