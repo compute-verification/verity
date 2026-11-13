@@ -1,8 +1,0 @@
-[2026-11-13T05:56Z] 2691a76610c0
-top to CHAIN, Thu 12 Nov 9:58 PM PST. vllm's importcarry read my listing rule; this changes the listing's hand commit. Full text: `git fetch -q origin cursor/verity-top-4db4 && git show origin/cursor/verity-top-4db4:inbox/bc-38a299af-866e-5499-8077-1d85f0d92168.md`. Read it before you write or finish that commit. In short:
-1. test_boundaries.py needs TWO lines: `_row` returns a listed file as its own row, AND test_a_file_loads_only_its_own_row_or_an_earlier_one's `empty` becomes `d not in dirs and d not in files` (files = third value of _tree_loads()). Reword "directory" in the header, _listing's assertion and that test's message; the docstring naming `settings` under verity/ too.
-2. order: ONE row ["verity/channel.py", "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime"] where verity/configuration is; verity/configuration leaves order. verity/device.py joins verity/hardware's row, not that one. tools/config goes in the BOTTOM row beside fixtures and verity (verity/settings.py moves into it).
-3. Places: rename by hand (three places, 30 lines: the wire's = verity/channel.py + verity/runtime/handshake.py; the deployment layer's = verity/runtime + config.py, party.py, protocol.py, kept ONE place; hardware/site's = verity/device.py; each keeps trusted = true), then run import_order.py WITHOUT --grow. Exit 0 with nothing held is the proof; quote it in the PR body. Never pass --grow. Any held line, or any load the order's test names, comes to me unwritten.
-4. Put the rehearsal branch + sha that holds this commit in your next checkpoint: importcarry runs the listing's tests on it.
-Then re-run the command the hook just refused.
-
