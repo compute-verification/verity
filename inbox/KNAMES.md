@@ -236,3 +236,45 @@ If a run would wait or build more than 40 minutes, end your turn naming it, as b
 you at its end.
 
 Return by Fri 13 Nov 04:00Z.
+
+## Fri 13 Nov 01:01Z: you stopped where proofs' condition says to, and you separated the three causes. MY RULING on the records commit: the move's names only, never #9375's drift. I resume you when your two runs have ended
+
+Read by me: your return; `knames/hash125-records.md`; `knames/r0482/` (`steps.txt`, the
+summary's PASS lines for the five packages, the guarantee's line "changed (moved from …)", the
+drift's lines, `recdiff.txt`'s four BEYOND lines). **Stopping before the pull request, and
+launching the control on the bare head so that the drift is shown to be the base's and not
+argued, is exactly right.** lean is rung on LEAN-249 (01:05Z) with the PASS and the drift's
+list, the listed guarantee's statement (`rowsCapPublished_nontrivial`, `entries := 0`) named.
+
+**The ruling.**
+1. **The pull request's lock changes are the move's own and nothing else.** #9375's branch
+   holds locks its own Lean has outgrown; the landing's lock commit regenerates them (AGENTS.md,
+   "The lock"). They are lean's to commit, not ours, and a diff that carried them would hide the
+   move's own records among sixty others.
+2. **Condition 1 is judged between two regenerations at one base:** L0, the locks as
+   `r20261113-005541-de0b` regenerates them on bare `34c5cbb3705c` with no moves; L1, the locks
+   as `r20261113-005541-cfc3` regenerates them on your head with the seven-entry moves file.
+   **Every difference of L1 from L0 must be one of the 45 names, as a key or as a name a
+   record reads; `check.py` must say "moved" for the guarantee and "changed" for nothing of
+   the move's. Anything else: stop and say so, as you did.** Show the diff whole in the note
+   and its count in the body.
+3. **What the pull request commits to the locks:** the tree's locks with the move's renames
+   applied (what the move's commit already does to `security/lean-audit.json`'s two keys, plus
+   whatever L0 → L1 shows that the text rewrite does not already make). If L0 → L1 is exactly
+   the text rewrite, there is no records commit at all: say so.
+4. **The moves file has seven entries, and the body says why the seventh is there by hand**
+   (`rename.py --moves` lists guarantees and the definitions they read, not a theorem passed
+   as a proof argument; `Law.windowK_le`). That is a gap in the tool: one line for its owner in
+   the body under "Seen and not changed", with the file and the line where `--moves` builds
+   its list. Do not mend `rename.py` in this pull request.
+5. **Judged again on `main`:** once #9375 has landed with its regenerated locks, the branch
+   takes `main` and the records run once more; then the diff against `main`'s locks must be
+   names only, with no L0 needed. The mark waits for that run and proofs' read.
+6. **Then the pull request, unmarked, as the 00:04Z section has it** (base #9375's branch),
+   its body's first lines saying: zero errors on the new head; the move's records are names
+   only by L0 → L1 (the runs' ids); the base's own drift is not in this diff and is lean's;
+   seven moves; what is not shown (the judgement on `main`).
+7. The comment on HASH-125 (at most 100 words) and tell me: I ring proofs and lean.
+
+If `cfc3` says "changed" for the guarantee even with the seventh entry: stop, say what
+`check.py` hashes that still differs, and return.
