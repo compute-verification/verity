@@ -224,14 +224,17 @@ theorem runMembers_stmt {slice : Spot.OneStageZk.Member → Json} {ms : Array Sp
 statements' sessions `fs`, the member `SessionMsgs.memberAt` names has its circuit and public files on the blobs and
 its registered reads read, the session's record is a text on the blobs, the form set a session up
 (`Spot.OneStageZk.setupAt`) on those files at the record's sample, and Flock's masked verdict accepts the record's
-text with the proof files `fs`'s reps name at that session (`Spot.OneStageZk.filesOf`). -/
+text with the proof files `fs`'s reps name at that session (`Spot.OneStageZk.filesOf`). The member's statement
+passed, so the circuit statement's leaves are not plain (`MemberChecks.statement_ok`): no computation settles that,
+and the statement's setup reads it. -/
 theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) {k : Case} (hk : C o = some k)
     {p : VStar.Recursive.SampledTwo.Params} {e : VStar.Recursive.SampledTwo.Evidence}
     (hf : SessionMsgs.formOf k = some (p, e)) {t : ℕ} {fs : Spot.OneStageZk.RunFiles}
     (hs : SessionMsgs.filesAt e t = some fs) :
     ∃ (m : Spot.OneStageZk.Member) (circuitB pubB : ByteArray) (rd : Spot.OneStageZk.Reads) (record : String)
       (spec : Flock.SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json) (proofs : Array ByteArray),
-      SessionMsgs.memberAt p e t = some m ∧ k.blobs.get m.own.circuit "circuit" = .ok circuitB ∧
+      Flock.Tags.circuit.plainLeaves = false ∧ SessionMsgs.memberAt p e t = some m ∧
+        k.blobs.get m.own.circuit "circuit" = .ok circuitB ∧
         k.blobs.get m.own.pub "public file" = .ok pubB ∧ Spot.OneStageZk.readsOf m.own.registered = .ok rd ∧
         SessionMsgs.recordAt k.blobs fs = some record ∧
         Spot.OneStageZk.setupAt (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB k.blobs) rd
@@ -250,11 +253,11 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
   obtain rfl : held' = held := Except.ok.inj (hheld'.symm.trans hheld)
   obtain ⟨st, m, -, hm, hmem, hfs⟩ := paired_at hheld hs
   obtain ⟨a, ha, hsess⟩ := hz (st, m) hmem
-  obtain ⟨circuitB, pubB, rd, -, hc, hp, hrd, rfl⟩ := MemberChecks.statement_ok ha
+  obtain ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, rfl⟩ := MemberChecks.statement_ok ha
   obtain ⟨coinKeys, b, record, hb, hu, hv⟩ := hsess fs hfs
   dsimp only [Spot.OneStageZk.StepAt.ofOwn] at hv
   obtain ⟨proofs, spec, tabs, rest, hfiles, hst, hzk⟩ := Verity.Sampled.verdictOf_ok hv
-  refine ⟨m, circuitB, pubB, rd, record, spec, tabs, rest, proofs, hm, hc, hp, hrd, ?_, hst, ?_, hzk⟩
+  refine ⟨m, circuitB, pubB, rd, record, spec, tabs, rest, proofs, hpl, hm, hc, hp, hrd, ?_, hst, ?_, hzk⟩
   · have hb' : k.blobs.get fs.record "record" = .ok b := Verity.Sampled.Record.get_what hb
     unfold SessionMsgs.recordAt
     rw [hb']

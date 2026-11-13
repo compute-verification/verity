@@ -29,7 +29,8 @@ This module shows the two sessions are one, and proves `VerdictsAt` from what is
   values rebuild to one.
 * **One session** (`setupOf_of_fields`): a statement with a member's fields, whose printed files read back and whose
   bytes decode as it, sets up under `--zk` the session the form set up on the member's files at the record's sample
-  (`MemberChecks.ins_of_fields`, `Verity.Sampled.Record.setup_of_setupAt`).
+  (`MemberChecks.ins_of_fields`, `Verity.Sampled.Record.setup_of_setupAt`), where the circuit statement's leaves are
+  not plain, which the member's statement passing gives (`verified_at`).
 * **The session digests with SHA-512** (`setupAt_sha512`), as `setupAt_oneTable` gives its one table.
 * **`VerdictsAt`** (`verdictsAt_of`), at the table `Flock.Tags.circuit.table`, and so `MsgsOfRecords`
   (`msgsOfRecords_form`).
@@ -138,13 +139,13 @@ printed files read back and whose bytes decode as `w`, sets up under `--zk` (`Fl
 verified the record at. -/
 theorem setupOf_of_fields {w : FlockDeploy.Raw} {m : Spot.OneStageZk.Member} {circuitB pubB : ByteArray}
     {bs : Core.Blobs} {record : String} {rd : Spot.OneStageZk.Reads}
-    (hf : MemberChecks.MemberFields w m circuitB pubB bs) (hr : MemberChecks.ReadsBack w m record)
-    (hdec : FlockDeploy.decode w.encode = some w) (hrd : Spot.OneStageZk.readsOf m.own.registered = .ok rd)
+    (hpl : Flock.Tags.circuit.plainLeaves = false) (hf : MemberChecks.MemberFields w m circuitB pubB bs)
+    (hr : MemberChecks.ReadsBack w m record) (hdec : FlockDeploy.decode w.encode = some w)
+    (hrd : Spot.OneStageZk.readsOf m.own.registered = .ok rd)
     {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {p o : Json}
     (hst : Spot.OneStageZk.setupAt (Spot.OneStageZk.inputsOf Flock.Tags.circuit m.own circuitB pubB bs) rd
       (Flock.Witness.recordDraw record) = .ok (spec, tabs, p, o)) :
     ∃ si sts, FlockDeploy.setupOf true w.encode = some (si, spec, sts) ∧ tabs = FlockDeploy.tabsOf sts := by
-  have hpl : Flock.Tags.circuit.plainLeaves = false := rfl
   obtain ⟨si, hins, hm, hdraw⟩ := MemberChecks.ins_of_fields hf hr hrd hpl
   obtain ⟨sts, hsu, htabs⟩ := Verity.Sampled.Record.setup_of_setupAt hm hdraw hst
   have hinsOf : FlockDeploy.insOf true w.encode = some si := by
@@ -242,13 +243,13 @@ theorem verdictsAt_of {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ve
   obtain ⟨s', spec', st, hset', hk₀, -⟩ :=
     reps_of_scope (twoHolds_at hof hacc hi hit) (hrounds o m₂ hacc hm₂) (hscope o m₂ hacc hm₂) ht
   obtain ⟨fs, hfs⟩ := SessionMsgs.filesAt_of_stmt hx hf
-  obtain ⟨m, circuitB, pubB, rd, record, spec, tabs, ⟨p0, o0⟩, proofs, hm, hc, hp, hrd, hrec, hsetup, hfiles,
+  obtain ⟨m, circuitB, pubB, rd, record, spec, tabs, ⟨p0, o0⟩, proofs, hpl, hm, hc, hp, hrd, hrec, hsetup, hfiles,
     hzk⟩ := verified_at hacc hk hf hfs
   have hxw := stmtAtCase_of_member hf hm hfs hrec hc hp
   obtain ⟨hgp, hgr⟩ := hprint o k p e hacc hgood hk hf t m hm
   have hdec := hfit.each o k p e hacc hgood hk hf t m fs record circuitB pubB hm hfs hrec hc hp
   obtain ⟨si, sts, hset, htabs⟩ :=
-    setupOf_of_fields
+    setupOf_of_fields hpl
       (memberFields_stmtRaw m circuitB pubB k.blobs (SessionMsgs.drawBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8))
       (readsBack_stmtRaw hgp hgr hsetup) hdec hrd hsetup
