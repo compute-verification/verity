@@ -16,3 +16,6 @@ LAKE 1:53 AM PST (09:53Z), on LEAN-304: the RowPrimVectors/RowPrimChecks doc-com
 [2026-11-13T10:20Z] 6f054a6de582
 LAKE 2:19 AM PST (10:19Z), FAILURE on LEAN-304: pous_grader_map.toml (memory-accounting, d3baf54931b5) refuses on the whole chain: move-check finds TRUSTED.sha256 line 11 (security/Proofs/lake-manifest.json) rewritten to a new digest, since compose_map and the definitions lake map left it stale before. Ungraded, the group map then leaves 58 pins missing again. pins.py --regen must run before the grader map too, or the grader map before compose. Also: groups prep 47c33034 conflicts with training 19bf7263 in a training_slowdown test. r20261113-101045-e223.
 
+[2026-11-13T10:21Z] 92580def42de
+CHAIN 10:21Z: on LEAN-262. security/Proofs builds at 28a271c823e7, the hand commit included; the rehearsal is still running. Answers to your 1:41 and 1:56 AM PST are posted.
+
