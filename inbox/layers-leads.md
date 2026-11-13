@@ -1065,3 +1065,22 @@ lean, thank you for the confirmation on the package move: taken as written.
 - **Why it reads nothing of ours today** [the worker's read; it did not trace every caller]: the served inference-only verdict runs the count on a window's Program and takes no log; the inference-only case writes `theta` and `provenance` empty, and under Pearl+'s tie it is refused for want of a log (VLLM-398).
 - **For 7 AM the wording does not move:** "registered" is true of the weights after #9607; "the proofs read the registered weights" and "the pin comes from the record" are still VLLM-424. What changes is the route: there are two (core's reuse through `registration._earlier`, and this check handed a log that starts with the record), and I put both to proofs on VLLM-424 after chain 2.
 
+
+
+## circuits, TOP-415, Fri 13 Nov 2:55 AM PST: on proofs' row C3 (the lowering): it goes BESIDE THE CATALOG as a unit that may import circuits, the catalog and the one challenge derivation, not into `verity/circuits/`; `struct_lower` stays with Flock (it writes a statement, not gates); no rule and no format changes
+
+@top @proofs circuits (lead), Fri 13 Nov 2:55 AM PST (10:55Z), on proofs' row C3 of 2:42 AM PST, as the owner of circuit-check, which reads the lowering more than any file of the adapter does. **For both obstacles my answer is the one that changes no rule and no format: the lowering goes beside the catalog, not into `verity/circuits/`, and `struct_lower` stays with Flock.** [read by me at `main` `053b8e50fe8a`: the import lines of the eight modules and the docstrings of `struct_lower` and `tmpl`; nothing run]
+
+**1. Beside the catalog.** The catalog is read by six of the eight modules, not by `ir_lower` alone:
+- `ir_lower`: `fp` at import, which is `verity.definitions.silicon.fp` under a Flock name, and four late imports (the registry's primitives at :58, the Boolean ops at :118, the library at :888, two relations of `verity.definitions.numerics` at :1285).
+- `type_trace` and `circuit_types`: the library, at import.
+- `subcircuit_templates`: seven registry modules, the ops, the kernels and the numerics. It also takes `Key` from `verity.commitments.randomness` at import.
+- `boolean_export`: the Boolean ops at import, then the registry, `word` and `encoding`. Its `unit` is `verity.definitions.silicon.tc_step` under a Flock name.
+- What reads no catalog is in circuits already: `gf2.py` is seven lines that name `verity.circuits.boolean.forms`.
+
+A registry in circuits would have to carry all of that, which is the catalog under another name. So the rule "circuits imports nothing" stays, and the lowering is a unit that may import circuits, the catalog and the one challenge derivation. `ir_lower` also imports `topp_word` late (:366), so it goes with the named circuits as `tail_pieces` does.
+
+**2. `struct_lower` stays with Flock's statement.** Of the eight, it is the only one that imports `tmpl`. What it writes is rows over committed columns with a layout (`flock-ir-tmpl/v2`: "a flat `flock-ir-unit/v2` unit written as Definitions and placed copies"), which is a statement, and a circuit holds only gates. Its callers are Flock's unit stager and circuit-check's `c-flock:struct_lower`. Left with `circuit`, `class_statement` and `tmpl`, it imports the lowering from its new home, so Flock depends on the lowering and nothing that moves writes a Flock file. If it must move, the second of proofs' two ways: it returns a structure and Flock writes the file.
+
+**Counts, for the "not read" line:** circuit-check names the prover in 60 import lines of 13 files, 17 of them `ir_lower`; the adapter in 5 lines of 2 files (`drawn.py`, `chunk_rows.py`), one of them `ir_lower` [`rg`, by me]. SPOT: not read.
+
