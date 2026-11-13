@@ -110,7 +110,12 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
     rw [Array.length_toList, Array.length_toList, Array.size_zip, ← hzip.1, Nat.min_self] at h1
     exact h1.symm
   have hMA := hset.toWindowOn.membersAt
-  refine ⟨?_, opensLast_congr hfr hA.opensLast, Nat.le_of_eq (by rw [hplace.1, hcount, hsize]), ?_⟩
+  obtain ⟨read', hok⟩ := joint_drawUnits_of_drew hdrew (W.joint 0) ω hL hnJ hpre
+  have hok' : _root_.Spot.Draw.drawUnits W.law W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) =
+      .ok (drawnUnits ev.base.draw, read') := hok
+  have hended : Flock.Guarantees.sampleEnded W.src W.law W.nJ ω = true := by
+    simp only [Flock.Guarantees.sampleEnded, hok']
+  refine ⟨hended, ?_, opensLast_congr hfr hA.opensLast, Nat.le_of_eq (by rw [hplace.1, hcount, hsize]), ?_⟩
   · rw [← helloSpecs_congr hfr]
     exact hA.specs
   intro i m hi hne
