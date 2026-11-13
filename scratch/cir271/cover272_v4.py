@@ -1,4 +1,4 @@
-"""cover272_v4.py COVER.json PLAN.json RUNS_DIR RUN[:LIST[:NODE[:running]]]...: CIR-272's second pass, `circuits/request-cover/v4`,
+"""cover272_v4.py COVER.json PLAN.json RUNS_DIR RUN:LIST:NODE:MEM_GB[:running]...: CIR-272's second pass, `circuits/request-cover/v4`,
 written over COVER.json, which must be v3 (`art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888`, the record
 NET-390 quoted; `git show 9a0d813ec490:scratch/cir271/cover.json`).
 
@@ -25,7 +25,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-TREE = "33d7c7dfd8c23f5db0c93584aeb7a96391defde9"
+TREE = "33d7c7dfd8c23f5db0c93584aeb7a96391defde9"  # runs a and b; c and d at 82a2979f9601 (scratch/cir272 only)
 CHANGES = [
     "form.py: the list as run stages census:<the lookup's boolean_version> where names.jsonl gives a zk_refusal",
     "session: serve and prove get --tables DIR when the stage wrote tables/",
@@ -36,11 +36,12 @@ CHANGES = [
 
 cover_path, plan_path, runs_dir = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 cover, plan = json.loads(cover_path.read_text()), json.loads(plan_path.read_text())
+split = plan.pop("_split", None)
 assert cover["schema"] == "circuits/request-cover/v3", cover["schema"]
 RUNS = []
 for a in sys.argv[4:]:
-    run, lst, node, *st = a.split(":") + ["", ""]
-    RUNS.append({"run": run, "list": lst, "node": node, "state": "running" if "running" in st else "ended"})
+    run, lst, node, mem, *st = a.split(":") + ["", ""]
+    RUNS.append({"run": run, "list": lst, "node": node, "mem_gb": int(mem), "state": "running" if "running" in st else "ended"})
 J = lambda p: json.loads(p.read_text()) if p.exists() else None  # noqa: E731
 
 
@@ -76,7 +77,7 @@ for R in RUNS:
     for tag in [l.split("\t")[0] for l in (out / "types.tsv").read_text().splitlines() if l]:
         b = by_block[plan[tag]["block"]]
         ce = names[tag].get("census") or {}
-        r = {"run": R["run"], "node": R["node"], "list": R["list"], "tree": TREE, "staged_unit": form[tag][2],
+        r = {"run": R["run"], "node": R["node"], "list": R["list"], "mem_gb": R["mem_gb"], "tree": TREE, "staged_unit": form[tag][2],
              "lookup": {"kind": ce.get("kind"), "zk_refusal": ce.get("zk_refusal"), "error": ce.get("error") or names[tag].get("error"),
                         "boolean_version": ce.get("boolean_version")},
              "lines": [l[:600] for l in log if re.match(rf"^\S+ {tag}: ", l) or l.startswith(f"STAGED {tag} ")
@@ -96,6 +97,9 @@ for R in RUNS:
                                        "statement": st and st.get("statement"), **tm(d / "B" / "stage.time")},
                      verdicts={k: v_of(v, k) for k in ("B.statement.held", "B.statement.no-program", "B.statement.other-def", "B.ks-form",
                                                         "B.verify.held", "B.verify.no-program", "B.verify.other-def")})
+            peaks = [r["stage"]["maxrss_gb"]] + [x["maxrss_gb"] for x in r["verdicts"].values() if x] + \
+                [round(x["maxrss_kb"] / 2 ** 20, 2) for f in ("prove.time", "serve.time") if (x := J(d / "B" / f)) and x.get("maxrss_kb")]
+            r["peak_gb"] = max((x for x in peaks if x is not None), default=None)
             h, np_, od, ks = (r["verdicts"][k] for k in ("B.verify.held", "B.verify.no-program", "B.verify.other-def", "B.ks-form"))
             if h and h["exit"] == 0 and h["accepted"] is True:
                 ok = all(c and c["exit"] == 1 and c["accepted"] is False for c in (np_, od))
@@ -130,8 +134,9 @@ for tag, p in plan.items():
     else:
         assert tag in seen, f"{tag} is planned to run but in none of the runs given"
         r = seen[tag]
-    T[tag] = {**{k: old[k] for k in ("tag", "block", "blocks", "k_log", "extra")}, **r, "estimate": p["estimate"], "plan": {
-        k: p.get(k) for k in ("run", "order", "list", "limit_s")}, "v3": {k: old.get(k) for k in ("run", "outcome", "why", "text", "state",
+    T[tag] = {**{k: old[k] for k in ("tag", "block", "blocks", "k_log", "extra")}, **r, "estimate": p["estimate"],
+        **({"estimate_160": p["estimate_160"]} if "estimate_160" in p else {}), "plan": {
+        k: p.get(k) for k in ("run", "order", "list", "limit_s", "mem_gb")}, "v3": {k: old.get(k) for k in ("run", "outcome", "why", "text", "state",
                                                                                            "verdicts", "stage", "needs", "zk_refusal")}}
 
 for b in cover["blocks"]:
@@ -148,7 +153,7 @@ cnt = Counter(b["bound_outcome"] for b in on)
 cover["schema"] = "circuits/request-cover/v4"
 cover["second_pass"] = {"issue": "CIR-272", "tree": TREE, "branch": "cursor/circuits-cir272-bound-6f04", "plan": "scratch/cir272/p2-plan.json",
                         "runs": RUNS, "threads": 8, "mem_gb": 64, "stage_stop_gb": 62, "lean_gate_gb": 60, "lean_stop_gb": 62,
-                        "budget_s": 21000, "runner_changes": CHANGES, "v3": "art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888"}
+                        "budget_s": 21000, "runner_changes": CHANGES, "split": split, "v3": "art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888"}
 cover["bound_totals"] = {s: [n, sum(b["blocks"] for b in on if b["bound_outcome"] == s)] for s, n in sorted(cnt.items())}
 groups = {"accepted": [s for s in cnt if s.startswith("accepted")], "refused": ["refused"], "held-control-off": ["held-control-off"],
           "not-run": [s for s in cnt if s.startswith("not-run")], "running": ["running"]}
