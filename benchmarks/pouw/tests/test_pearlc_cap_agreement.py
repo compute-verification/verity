@@ -16,14 +16,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "verifier" / "tests"))
-import clear_work as CW  # noqa: E402
-import test_circuit_cap as T  # noqa: E402
-from verity.protocols.pouw.prover.circuit import cap  # noqa: E402
-from verity.circuits.evaluation import evaluate  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape, Tile  # noqa: E402
-from verity.protocols.pouw.prover.schemes import pearl_c as C  # noqa: E402
-from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES  # noqa: E402
-from verity.protocols.pouw.prover.schemes.pearl_c_work import UnitRecord  # noqa: E402
+import clear_work as CW
+import test_circuit_cap as T
+from verity.protocols.pouw.prover.circuit import cap
+from verity.circuits.evaluation import evaluate
+from verity.protocols.pouw.verifier.protocol import Matmul, Shape, Tile
+from verity.protocols.pouw.prover.schemes import pearl_c as C
+from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.pouw.prover.schemes.pearl_c_work import UnitRecord
 
 H100 = DEVICES["h100"]
 H3, H0 = C.PearlC(forming="v1", device=H100, hashing="h3"), C.PearlC(forming="v1", device=H100, hashing="h0")
