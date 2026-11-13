@@ -142,6 +142,15 @@ under (H) at `q = β_w β_x` and (E) at `b` (`training-cut-hardness`, `training-
   and (E) can hold at, since a word's own wires are a cut; `β_x` the rows' `beta(k)` (between two rows the next
   row's, the most the rows allow there), and no bound past their last `k`; `F = 1` (`HE`: at most two of forward,
   input-gradient and weight-gradient products), `share(3)` for all three (`HEShared`).
+- `min_cut.slowdown_of(c, k, n, size=…, work=[Product, …])` is the one way from a work to a slowdown: no source
+  outside this directory calls `bound`, `blocks_at_least` or `slowdown_at_least`. Each `Product` states its MACs, output wires, operands' `β`
+  as its caller charges them, which operand is a weight, `b_y`, contraction length, whether it is forward or a weight
+  gradient, and the pairs of arrays it multiplies where known. It returns the `Bound` of the sub-work it binds at
+  with what it chose (`Chosen`). The sub-works (`SUBWORKS`) are the work, the work without its contractions below
+  `K_thr`, and the weight gradients alone, each at the threshold on `β_w β_x` where its term is largest; `F` is
+  `share(ω)` of the arrays' graph (`clique`) where every product states its pairs, else the kinds' rule. The
+  training benchmark's calculator, `circuit_properties.work.bound` and the inference-only policy read their works
+  into products and call it; `tests/test_one_slowdown.py` at the root holds every other file away from `bound`.
 - `min_cut.bound_charged(c, k, n, blocks=…, untied=…, untied_macs=…, w=…, N=…, O=…, size=…)` is the bound over a
   monitoring period's `blocks` blocks when at most `untied` of the words they read are untied, each at most `word`
   fresh bits in the one block that reads it. It computes Lean's `HECharged` (`min_cut.HE_CHARGED`), the count over a
@@ -190,7 +199,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 |---|---|
 | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
-| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `bound_charged(c, k, n, blocks, untied, untied_macs, w, N, O, size, rows) → Charged`, `best_w`, `capped` |
+| `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `clique`, `slowdown_of(c, k, n, size, work) → Chosen`; `bound_charged(c, k, n, blocks, untied, untied_macs, w, N, O, size, rows) → Charged`, `best_w`, `capped` |
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |

@@ -5,7 +5,7 @@ language, trace, model or optimizer. It is computed once per specialized Definit
 batches and scans, so it never walks the unrolled circuit. Its rules are the training benchmark's reading of a trace
 (`training_slowdown.capture.products`' `_rates`, `_gemm_rate` and `_gathered`, `training_slowdown.work`'s
 `he_of_rows`), each resolved on the side of the smaller bound wherever a Program doesn't state what the rule reads.
-For `min_cut.bound`'s inputs it reads:
+For the inputs of `min_cut.slowdown_of` it reads:
 
 * `|C|` (`Work.gates`, `boolean_gates`): Boolean gates, each primitive at its Boolean version's AND, XOR and NOT
   gates and an input node at none; a primitive with no Boolean version is refused by name.
