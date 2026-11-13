@@ -193,6 +193,7 @@
   "Proofs.Properties.Verity.SampledTwo.CoinPrefix",
   "Proofs.Properties.Verity.SampledTwo.CutFirst",
   "Proofs.Properties.Verity.SampledTwo.CutAccept",
+  "Proofs.Properties.Verity.SampledTwo.CutRoots",
   "Proofs.Properties.Verity.SampledTwo.SessionLogged",
   "Proofs.Properties.Verity.SampledTwo.SessionCut",
   "Proofs.Flock.SpotFlock.RunsAs.PopulationOf",
