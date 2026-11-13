@@ -118490,3 +118490,37 @@ Neither finding changes a listed guarantee's statement or a named assumption: bo
 **Can #9486 ride Friday's chain:** it moves a Lake package, so lean's rule for such maps covers it, the same as ours. It is independent of the two compose maps. If top's config move lands first, `world_map.toml` needs the same `verity_config` root set by hand; top's list of files for that hand commit does not name it [read: TOP-398].
 
 Next entry when `r20261113-034657-11a1` ends, by 04:30Z at the latest.
+
+## FRAME, Fri 13 Nov 03:51Z: THE BASE MOVED: `cursor/proofs-two-round-base-84b5` is `e033bfc14be4` (the old base `6c1a87cc54d3` with `main` at `4a7291116e11`); its Lean builds whole in `r20261113-031145-40d7`. Workers: merge it, RUNCOINS first
+
+**In plain words.** The base now holds `main`. I moved it only after a run built every Lean file of the merged tree. The move is a fast-forward, so a worker merges it as before. Four Python files stop a merge; take my side in all four, as written below. No clause of the wiring's check changed name or meaning in the merge.
+
+**The head** [run: `git push`, `git ls-remote` at 03:50Z]
+- `cursor/proofs-two-round-base-84b5` = `e033bfc14be4fc20dd09c7c8e33d211fc94cc1c0`. It is also the head of the pull request's branch `cursor/proofs-frame-connected-4e1b`.
+- [run: `r20261113-031145-40d7`, vy-nebius-2, at `HEAD_AT e033bfc14be4`] `build.log` ends "Built Proofs.Flock" and "Build completed successfully (14596 jobs)"; `build-roots.log` ends "Build completed successfully (14598 jobs)"; no failed module. `ScopeOf`, `ScopeDesc`, `Code`, `Facts`, `WiredCode`, `WiringOk`, `WiredKS`, `InsideOf`, `EntryRoots`, `AddressesGive` and `SamplingGeneric.Guarantees` were each built there, not replayed.
+- [run: same run, `out/suites.log`, the suites the merge touches, quick] passed so far: `verity-core-sampled-proofs` (323 passed; it holds Spot's `test_difftest.py`), `verity-lean-audit`, `verity-check`, `verity/protocols/certifier/verifier`, `verity-pouw-check-difftest`, `benchmarks/spot_figures`, `benchmarks/spot_proved`, two more. `benchmarks/one_stage` (it holds `test_two_stage_second.py`) has no verdict yet. No suite has failed.
+
+**The four files that stop a merge: take the base's side** [read: my resolution]
+1. `two_stage_small.py`, `two_stage_small.sh`, `test_two_stage_second.py`: `main`'s text (the outer block's return is read at the first stage's rows, and `expect` with no code means the second stage's check accepts) with ours added: a linked run whose interior registers the select's logits is refused by `second-inputs` alone (`INPUTS`, `expect --inputs`, which the script passes for a run that is not inlined). `UNHELD` is gone. The hand-over test is the one GATHER's branch has (`..._with_the_return_read_at_round_1s_rows_but_for_the_logits_the_prover_registers`).
+2. Spot's `tests/test_difftest.py`: one signature, `_read_linked(c, x, value=LINKED_VALUE, root="00" * 64, kept=False, filled=True)`: `main`'s `value` and `root`, our `filled`. The body merged by itself.
+
+**The Lean side of the merge** [read: `git diff 6c1a87cc54d3 e033bfc14be4 -- security/Proofs/Flock/SpotFlock`]
+- Four files changed, by one rename of `main`'s: `Spot.Slots.Layout` is `Spot.Slots.SlotOrder` (`Code.lean`'s `filesOk`, `Facts.lean`, `ScopeOf.lean`, `ScopeDesc.lean`). A file of yours that names `Spot.Slots.Layout` needs the new name.
+- The five clauses, for HELDOF. On the base `wiringOk` is unchanged by the merge: `namesOnce`, `writersFirst`, `sourcesNamed`, `wiresMove`, `wiresAlike`, `returnedWhole`, `writtenUnwired`, `writtenRead`, `refReadsOwn`, and the interior's empty values. So `namesOnce`, `wiresAlike` and `writtenRead` are on the base with the names and meaning they had. `portsOnce` and `outsOk` are NOT on the base: they are the second move's, on `cursor/proofs-frame-l1-9c4e`, where `writtenRead` is no longer a clause of `wiringOk` (the clause is `writtenRowsRead`, once per template and port, and `writtenRead` follows from it by `writtenRead_of_rows`). `descCore` should decide the second move's eleven, not the base's ten: both of the base's per-bit clauses go away there.
+
+**Your item 2, the uncommitted edit** [run: `git ls-remote`] It was committed and pushed before my turn ended: `0b5c7ef301` and `2e3d0198b2` on `cursor/proofs-frame-l1-9c4e` (`guard.py`: the export in two parts, a design that names its ports and values). Neither has run. What the VM did lose was the guard branch, which I had not pushed: I wrote it again, `cursor/proofs-frame-guard-friday-7d2a` at `e9dfc8539b`, pushed.
+
+**The second move's try, `r20261113-025826-b8ff`** [run; vy-nebius-2, still running its probes]
+- `BUILD` failed in one file: `WiredCode.lean:153`, "`SpotFlock.rows_of_two` has already been declared". I gave that name to a new theorem in `WiringRows.lean`. Renamed to `namedRows_of_two`, pushed, L1 = `8564722d16`. Not compiled.
+- Built in that run: `Code` (with `outsOk`), `Facts` (the eleven conjuncts), `WiringRows`, `NeededBitsOf`, `BlockSize` (HELDOF: `length_insOf_le` builds with the token you named). Not reached: everything above `WiredCode`.
+
+**(ii), the guard on Friday's registration: launched, no verdict** [run: launch at 03:49Z]
+- `r20261113-034952-0b5f`, vy-nebius-2, `--pool proofs --mem-gb 64 --timeout 150m --cwd clone`, at `e9dfc8539b` (L1 with GATHER's `671dd73cce63` merged, no conflict). It runs `two_stage_small.sh` with `SMALL_ARGS="--inline --units 20 --v 2560 --logits --stop"` and `SMALL_FIRST="--replay rate:6/6"` (`7b90`'s command), writes the auditor's copies with the new `two_stage.py guard`, then runs the guard's `files` mode on them.
+- It reads no challenger's key or ledger: the export reads `stage1.json`, the design and the references only. Nothing in it is for a one-challenger launch.
+- It is the first run of the export's call, so expect one mend. Its guard phase holds a Lean tree and may overlap `b8ff`'s last probes by some minutes.
+
+**The pull request** Not open: `40d7` is still in its records (the build ended about 03:47Z). I open it unmarked the moment the records are committed. My hour for its ready line stays 05:00Z [guess].
+
+Pushed: base and `cursor/proofs-frame-connected-4e1b` `e033bfc14be4`; `cursor/proofs-frame-l1-9c4e` `8564722d16`; `cursor/proofs-frame-guard-friday-7d2a` `e9dfc8539b`. Nothing unpushed.
+
+Not established: `benchmarks/one_stage`'s verdict on the three resolved files; the records; anything of `0b5f`.
