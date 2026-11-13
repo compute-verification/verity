@@ -407,10 +407,10 @@ def main() -> None:
             "lines_by_side": sides.lines(p, r["lines"]),
             "loads": r["loads"], "loads_own": r["loads_own"],
             "direct": r["direct"],
-            "chain": r["chain_at_import"] or r["chain_at_call"] or r["chain_type_checking"],
-            "chain_kind": "at-import" if r["chain_at_import"] else "at-call" if r["chain_at_call"] else
-                          "type-checking" if r["chain_type_checking"] else None,
-            "chain_own": r["chain_at_import_own"] or r["chain_at_call_own"],
+            "chain": {"chain-at-import": r["chain_at_import"], "chain-at-call": r["chain_at_call"],
+                      "type-checking-only": r["chain_type_checking"]}.get(r["loads"]),
+            "chain_own": {"chain-at-import": r["chain_at_import_own"], "chain-at-call": r["chain_at_call_own"],
+                          "type-checking-only": r["chain_type_checking"]}.get(r["loads_own"]),
             "reason": reason, "reason_basis": basis, "doubt": doubt[0] if doubt else None,
             "split": None, "imports_from_other_side": group(cross.get(p, [])),
             "imports_from_outside_table": group(outside.get(p, [])),
@@ -449,6 +449,15 @@ def main() -> None:
         "files_importing_torch_or_vllm": len(imports_heavy),
         "files_importing_torch_or_vllm_by_dir": {d: sum(1 for r in imports_heavy if (r["rel"].split("/")[0] if "/" in r["rel"] else "top") == d)
                                                   for d in by_dir},
+        "predict_files_importing_program_frontend": sorted(
+            r["path"].rsplit("/", 1)[1] for r in raw["files"] if "/program/predict/" in r["path"]
+            and any(i["target"].startswith("verity_vllm.program.frontend") for i in r["imports"])),
+        "predict_files_naming_program_frontend_in_text": sorted(
+            p.rsplit("/", 1)[1] for p in scope_files if "/program/predict/" in p and "program.frontend" in texts[p]),
+        "predict_import_lines_of_frontend_targets": {
+            r["path"].rsplit("/", 1)[1]: [i["line"] for i in r["imports"] if i["target"] == "verity_vllm.program.frontend.targets"]
+            for r in raw["files"] if "/program/predict/" in r["path"]
+            and any(i["target"] == "verity_vllm.program.frontend.targets" for i in r["imports"])},
         "loads": {k: sum(1 for r in rows if r["loads"] == k) for k in sorted({r["loads"] for r in rows})},
         "loads_own": {k: sum(1 for r in rows if r["loads_own"] == k) for k in sorted({r["loads_own"] for r in rows})},
     }
@@ -502,13 +511,23 @@ def render_md(out: dict) -> str:
          f"record and this its rendering. {c['files']} files, {c['lines']} lines. Paths are under `{out['scope']}`.", "",
          "Columns: lines; side; *loads* is whether importing the file loads torch or vllm (`direct-at-import`, "
          "`direct-at-import-optional`, `chain-at-import`, `direct-at-call`, `chain-at-call`, `type-checking-only`, `no`), and "
-         "*own* the same with the file's own package `__init__` files taken to load nothing; *chain* is the first chain found "
-         "(each step's line and context, then the heavy import); *reason* the side's reason, its basis in brackets. No map in "
+         "*own* the same with the file's own package `__init__` files taken to load nothing; *chain* is, for a direct load, the "
+         "file's own import line, else the first (shortest) chain found for its *loads* value (each step's line and context, "
+         "then the heavy import; `files.json` also holds `chain_own`); *reason* the side's reason, its basis in brackets. No map in "
          "`tools/move/` names a new path for any file, so the new-path column is omitted (each row's `new_path_note` in "
          "`files.json`).", ""]
     L += ["| file | lines | side | loads | own | chain | reason |", "|---|---:|---|---|---|---|---|"]
     for r in rows:
-        ch = render_chain(r["chain"]) or ""
+        if r["loads"].startswith("direct"):
+            want = ("module",) if r["loads"] == "direct-at-import" else ("optional",) if r["loads"].endswith("optional") \
+                else ("function",)
+            d = [x for x in r["direct"] if x["ctx"] in want][0]
+            ch = f"direct :{d['line']} {d['ctx']} `{d['text']}`" + (f" (+{len(r['direct']) - 1} more)" if len(r["direct"]) > 1 else "")
+        else:
+            ch = render_chain(r["chain"]) or ""
+            if not ch and r["direct"]:
+                d = r["direct"][0]
+                ch = f"direct :{d['line']} {d['ctx']} `{d['text']}`"
         reason = f"{r['reason']} [{r['reason_basis']}]" + (f" Doubt: {r['doubt']}." if r["doubt"] else "")
         L.append(f"| `{r['rel']}` | {r['lines']} | {r['side']} | {r['loads']} | {r['loads_own']} | {ch.replace('|', '/')} | "
                  f"{reason.replace('|', '/')} |")
@@ -552,8 +571,8 @@ def render_size(out: dict) -> str:
             whole[r["side"]][1] += r["lines"]
     split = [r for r in rows if r["side"] == "split"]
     L = ["# The size of the split (sized, not done)", "",
-         f"At `{out['commit']}`, over `{out['scope']}`: {c['files']} files, {c['lines']} lines. Generated by `table.py`; the prose "
-         "below the tables is the author's.", "", "## Files whole to each side", "", "| side | files | lines |", "|---|---:|---:|"]
+         f"At `{out['commit']}`, over `{out['scope']}`: {c['files']} files, {c['lines']} lines. Generated by `table.py`, its notes "
+         "from `sides.py`.", "", "## Files whole to each side", "", "| side | files | lines |", "|---|---:|---:|"]
     for s in SIDE_ORDER:
         L.append(f"| {s} | {whole[s][0]} | {whole[s][1]} |")
     sl = c["lines_in_split_files_by_side"]
@@ -593,6 +612,21 @@ def render_size(out: dict) -> str:
                      f"{', '.join(f'`{x}`' for x in p['other_uses'])} |")
     else:
         L.append("None.")
+    circ = [r for r in rows if r["side"] in CIRCUITS
+            or (r["side"] == "split" and any(s in CIRCUITS for s in r["split"]["parts"]))]
+    L += ["", "## Circuits' files that load torch or vllm today", "",
+          f"Of the {len(circ)} files whole on circuits' side or split with a circuits part, by *loads* (as they sit) and *own* "
+          "(their own package `__init__` files taken to load nothing, as in a directory of their own):", "",
+          "| loads | files | own | files |", "|---|---:|---|---:|"]
+    a = sorted(defaultdict(int, {k: sum(1 for r in circ if r["loads"] == k) for k in {r["loads"] for r in circ}}).items())
+    b = sorted({k: sum(1 for r in circ if r["loads_own"] == k) for k in {r["loads_own"] for r in circ}}.items())
+    for i in range(max(len(a), len(b))):
+        x, y = (a[i] if i < len(a) else ("", "")), (b[i] if i < len(b) else ("", ""))
+        L.append(f"| {x[0]} | {x[1]} | {y[0]} | {y[1]} |")
+    imp = [r for r in circ if r["loads"] in ("chain-at-import", "direct-at-import", "direct-at-import-optional")]
+    L += ["", f"Those that load torch at import today ({len(imp)}), each with its first chain:", ""]
+    for r in imp:
+        L.append(f"- `{r['rel']}` ({r['side']}; own: {r['loads_own']}): {render_chain(r['chain'])}")
     L += ["", "## What could not be placed", ""]
     for x in out["not_placed"]:
         L.append(f"- `{x['files']}`: {x['why']}.")

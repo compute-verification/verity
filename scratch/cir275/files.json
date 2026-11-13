@@ -48,6 +48,66 @@
    "predict": 1,
    "quarantine": 2
   },
+  "predict_files_importing_program_frontend": [
+   "batch.py",
+   "build.py",
+   "common.py",
+   "dsa.py",
+   "dsv4.py",
+   "ingress_policy.py",
+   "naming.py",
+   "node.py",
+   "phi.py",
+   "step_needs.py",
+   "steps.py",
+   "template_counts.py",
+   "traced.py",
+   "window_circuit.py"
+  ],
+  "predict_files_naming_program_frontend_in_text": [
+   "__init__.py",
+   "aot.py",
+   "batch.py",
+   "build.py",
+   "common.py",
+   "dsa.py",
+   "dsv4.py",
+   "ingress_policy.py",
+   "naming.py",
+   "node.py",
+   "phi.py",
+   "step_needs.py",
+   "steps.py",
+   "template_counts.py",
+   "traced.py",
+   "window_circuit.py"
+  ],
+  "predict_import_lines_of_frontend_targets": {
+   "build.py": [
+    279
+   ],
+   "common.py": [
+    25,
+    216,
+    232,
+    240,
+    252,
+    274,
+    345,
+    355
+   ],
+   "dsa.py": [
+    113,
+    225,
+    639
+   ],
+   "dsv4.py": [
+    50
+   ],
+   "step_needs.py": [
+    203
+   ]
+  },
   "loads": {
    "chain-at-call": 22,
    "chain-at-import": 40,
@@ -181,8 +241,28 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "the package init of program/, which stays where the package stays",
    "reason_basis": "inferred",
    "doubt": "a two-line init; it goes with whichever side keeps the package path",
@@ -231,8 +311,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/compact.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "the checker's compact form of a Program's operand references as run progressions",
    "reason_basis": "docstring",
    "doubt": "pure circuit tooling over verity.circuits, neither a kernel's circuit nor the period's cut; placed with cut",
@@ -274,35 +380,7 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/compiled_norm_literal.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/__init__.py",
-      "line": 20,
-      "ctx": "type_checking",
-      "to": "adapters/vllm/verity_vllm/config.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/config.py",
-     "line": 323,
-     "ctx": "function",
-     "text": "import vllm"
-    }
-   },
-   "chain_kind": "type-checking",
+   "chain": null,
    "chain_own": null,
    "reason": "literal Triton transcriptions of Inductor's generated RMSNorm kernels, evaluated with torch on CUDA tensors; no Definition",
    "reason_basis": "docstring",
@@ -349,39 +427,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/compiled_relations.py",
-      "line": 22,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/compiled_norm_literal.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/compiled_norm_literal.py",
-     "line": 246,
-     "ctx": "function",
-     "text": "from torch._inductor.codecache import PyCodeCache"
-    }
-   },
-   "chain_kind": "at-call",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/compiled_relations.py",
-      "line": 22,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/compiled_norm_literal.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/compiled_norm_literal.py",
-     "line": 246,
-     "ctx": "function",
-     "text": "from torch._inductor.codecache import PyCodeCache"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "the numerics of Inductor-generated kernels as torch relations on a launch's materialized inputs; no Definition",
    "reason_basis": "docstring",
    "doubt": null,
@@ -430,8 +477,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/descriptor_equivalence.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "compares what two encodings of one Program denote (definitions, gates, calls)",
    "reason_basis": "docstring",
    "doubt": "pure circuit tooling over verity.circuits, neither a kernel's circuit nor the period's cut; placed with cut",
@@ -482,8 +555,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "circuit-check's bindings of dsa_table's Definitions",
    "reason_basis": "docstring",
    "doubt": null,
@@ -534,8 +633,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/dsa_table.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "the two word Definitions DSA's Program calls past INDEX_TOPK keys (DsaTopKIndex_v1, DsaHistoryReads_v1)",
    "reason_basis": "docstring",
    "doubt": null,
@@ -565,39 +690,8 @@
      "text": "import torch as _torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
-      "line": 24,
-      "ctx": "optional",
-      "to": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py",
-     "line": 34,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
-      "line": 24,
-      "ctx": "optional",
-      "to": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py",
-     "line": 34,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "the authoring frontends to Program; it imports torch at module level (optional)",
    "reason_basis": "docstring",
    "doubt": null,
@@ -634,7 +728,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -687,8 +780,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/collective_kinds.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+     "line": 17,
+     "ctx": "optional",
+     "text": "import torch as _torch"
+    }
+   },
    "reason": "the collective kind of a Definition family or id, and the cross-rank families of a world",
    "reason_basis": "docstring",
    "doubt": null,
@@ -727,8 +834,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/compilations.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+     "line": 17,
+     "ctx": "optional",
+     "text": "import torch as _torch"
+    }
+   },
    "reason": "the compiled executions a TargetProfile admits and the vLLM facts each applies",
    "reason_basis": "docstring",
    "doubt": null,
@@ -765,8 +886,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/correspond.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+     "line": 17,
+     "ctx": "optional",
+     "text": "import torch as _torch"
+    }
+   },
    "reason": "Program correspondence across reference encodings, for the frontend's derivations",
    "reason_basis": "docstring",
    "doubt": "pure verity.circuits code; it could go with the cut's tooling",
@@ -794,39 +929,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-      "line": 51,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/outcomes.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/outcomes.py",
-     "line": 8,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-      "line": 51,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/outcomes.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/outcomes.py",
-     "line": 8,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "derivation mode: an ordinary nn.Module to a Program through torch.export",
    "reason_basis": "docstring",
    "doubt": null,
@@ -866,39 +970,8 @@
      "text": "import torch.nn.functional as F"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/derive_examples.py",
-      "line": 19,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_iface.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_iface.py",
-     "line": 32,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/derive_examples.py",
-      "line": 19,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_iface.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_iface.py",
-     "line": 32,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "source modules for the derivation tests: ordinary PyTorch modules",
    "reason_basis": "docstring",
    "doubt": null,
@@ -926,39 +999,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/derive_graph.py",
-      "line": 21,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/derive_graph.py",
-      "line": 21,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "derivation from a functional ATen graph (torch.func, make_fx)",
    "reason_basis": "docstring",
    "doubt": null,
@@ -995,7 +1037,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -1039,39 +1080,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/emit.py",
-      "line": 26,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/value_types.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/value_types.py",
-     "line": 10,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/emit.py",
-      "line": 26,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/value_types.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/value_types.py",
-     "line": 10,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "the frontend's emitter of runtime correspondence, run over a derivation's flat body",
    "reason_basis": "docstring",
    "doubt": null,
@@ -1108,8 +1118,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/errors.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+     "line": 17,
+     "ctx": "optional",
+     "text": "import torch as _torch"
+    }
+   },
    "reason": "the torch frontend's fail-closed refusal (FrontendError)",
    "reason_basis": "docstring",
    "doubt": null,
@@ -1137,39 +1161,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/examples.py",
-      "line": 20,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py",
-     "line": 34,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/examples.py",
-      "line": 20,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py",
-     "line": 34,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "authored PyTorch examples for the torch frontend",
    "reason_basis": "docstring",
    "doubt": null,
@@ -1269,39 +1262,8 @@
      "text": "from torch._library.infer_schema import infer_schema"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/export_compat.py",
-      "line": 31,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/marlin_moe_leaf.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/marlin_moe_leaf.py",
-     "line": 25,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/export_compat.py",
-      "line": 31,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/marlin_moe_leaf.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/marlin_moe_leaf.py",
-     "line": 25,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "export-compatibility shims for idioms in the pinned vLLM source",
    "reason_basis": "docstring",
    "doubt": null,
@@ -1347,23 +1309,7 @@
      "text": "from vllm.model_executor.layers.vocab_parallel_embedding import VocabParallelEmbedding"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/export_ops.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
-     "line": 17,
-     "ctx": "optional",
-     "text": "import torch as _torch"
-    }
-   },
-   "chain_kind": "at-import",
+   "chain": null,
    "chain_own": null,
    "reason": "the collectives of one rank's forward as explicit ops, for deriving a TP rank of the vLLM model",
    "reason_basis": "docstring",
@@ -1416,7 +1362,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": null,
    "reason": "registered GEMM target specializations (kernel circuits), and vLLM's own arch-family function, imported where vLLM is (vLLM side)",
    "reason_basis": "docstring",
@@ -1525,39 +1470,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/graph_translate.py",
-      "line": 16,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/minted_ops.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/minted_ops.py",
-     "line": 12,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/graph_translate.py",
-      "line": 16,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/minted_ops.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/minted_ops.py",
-     "line": 12,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "an exported torch graph guarded and translated node by node",
    "reason_basis": "docstring",
    "doubt": null,
@@ -1594,8 +1508,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/inputs_trace.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+     "line": 17,
+     "ctx": "optional",
+     "text": "import torch as _torch"
+    }
+   },
    "reason": "an audit hook logging every file the construction opens",
    "reason_basis": "docstring",
    "doubt": "generic Python; the construction it audits is the Build's",
@@ -1632,8 +1560,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/kernel_readback.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+     "line": 17,
+     "ctx": "optional",
+     "text": "import torch as _torch"
+    }
+   },
    "reason": "reads back what an instantiated vLLM model's layers execute",
    "reason_basis": "docstring",
    "doubt": null,
@@ -1679,23 +1621,7 @@
      "text": "from vllm.model_executor.layers.attention import MLAAttention"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/loader_parity.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
-     "line": 17,
-     "ctx": "optional",
-     "text": "import torch as _torch"
-    }
-   },
-   "chain_kind": "at-import",
+   "chain": null,
    "chain_own": null,
    "reason": "what vLLM's loader does to a model after loading weights, done on the meta instantiation",
    "reason_basis": "docstring",
@@ -1730,39 +1656,8 @@
      "text": "importlib.import_module(\"vllm.scalar_type\")"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/marlin_moe_leaf.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
-     "line": 17,
-     "ctx": "optional",
-     "text": "import torch as _torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/marlin_moe_leaf.py",
-      "line": 71,
-      "ctx": "function",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_iface.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_iface.py",
-     "line": 32,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "vLLM's MXFP4 Marlin MoE with its expert GEMM launches as leaf ops",
    "reason_basis": "docstring",
    "doubt": null,
@@ -1796,39 +1691,8 @@
      "text": "from torch.utils import _pytree as pytree"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/minted_ops.py",
-      "line": 20,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/value_types.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/value_types.py",
-     "line": 10,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/minted_ops.py",
-      "line": 20,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/value_types.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/value_types.py",
-     "line": 10,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "the custom torch ops the frontend mints for each call, batch or scan",
    "reason_basis": "docstring",
    "doubt": null,
@@ -1856,23 +1720,7 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/outcomes.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
-     "line": 17,
-     "ctx": "optional",
-     "text": "import torch as _torch"
-    }
-   },
-   "chain_kind": "at-import",
+   "chain": null,
    "chain_own": null,
    "reason": "a refused derivation's outcome (Unsupported)",
    "reason_basis": "docstring",
@@ -1910,8 +1758,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/program_identity.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+     "line": 17,
+     "ctx": "optional",
+     "text": "import torch as _torch"
+    }
+   },
    "reason": "that a specialization resolves to one body within a derived program and against the registry",
    "reason_basis": "docstring",
    "doubt": "pure verity.circuits code",
@@ -1948,8 +1810,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/provenance.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+     "line": 17,
+     "ctx": "optional",
+     "text": "import torch as _torch"
+    }
+   },
    "reason": "provenance records of an export",
    "reason_basis": "docstring",
    "doubt": null,
@@ -1986,8 +1862,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/registration.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+     "line": 17,
+     "ctx": "optional",
+     "text": "import torch as _torch"
+    }
+   },
    "reason": "a registered_values derivation's registered inputs: the values record and the rules' tables",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2015,39 +1905,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/relabel.py",
-      "line": 28,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/relabel.py",
-      "line": 28,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "rank r's derive report relabelled from a template rank's derivation",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2084,8 +1943,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/report.py",
+      "line": 12,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/program/frontend/outcomes.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/outcomes.py",
+     "line": 8,
+     "ctx": "module",
+     "text": "import torch"
+    }
+   },
    "reason": "what a derivation produced (DeriveReport) and keeps for a relabel",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2122,7 +1995,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -2181,8 +2053,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/rules/base.py",
+      "line": 27,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
+     "line": 40,
+     "ctx": "module",
+     "text": "import torch"
+    }
+   },
    "reason": "derivation rules: claims that a source pattern lowers to a kind",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2210,39 +2096,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-      "line": 13,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/outcomes.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/outcomes.py",
-     "line": 8,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-      "line": 13,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/outcomes.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/outcomes.py",
-     "line": 8,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "helpers shared by op rules over torch nodes",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2285,7 +2140,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -2341,39 +2195,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/padding.py",
-      "line": 28,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/padding.py",
-      "line": 28,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "padded-serving rules binding the ordinary torch ops a padded module uses",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2401,39 +2224,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/patterns.py",
-      "line": 24,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/patterns.py",
-      "line": 24,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "multi-node pattern rules over the exported torch graph",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2461,39 +2253,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/profile.py",
-      "line": 16,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/profile.py",
-      "line": 16,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "profile-mode rules for the vLLM eager profile: vLLM-style modules to registered kinds",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2536,8 +2297,28 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/rules/ref_kinds.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/rules/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/rules/__init__.py",
+      "line": 35,
+      "ctx": "function",
+      "to": "adapters/vllm/verity_vllm/program/frontend/rules/views.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/rules/views.py",
+     "line": 11,
+     "ctx": "module",
+     "text": "import torch"
+    }
+   },
    "reason": "the width-conversion composite Definitions of the reference vocabulary",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2567,39 +2348,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/reference.py",
-      "line": 16,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/reference.py",
-      "line": 16,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "reference-mode op rules: unannotated torch modules to reference kinds",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2627,39 +2377,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training.py",
-      "line": 50,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/training_attention.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/training_attention.py",
-     "line": 8,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training.py",
-      "line": 50,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/training_attention.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/training_attention.py",
-     "line": 8,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "lowers the ops a torch training step adds to registered Definitions (rules/training: 'Training rules: the ops a training step adds to a forward')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2687,39 +2406,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_attention.py",
-      "line": 14,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py",
-     "line": 19,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_attention.py",
-      "line": 14,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py",
-     "line": 19,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "lowers the ops a torch training step adds to registered Definitions (rules/training: 'Training rules: the ops a training step adds to a forward')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2747,39 +2435,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py",
-      "line": 27,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py",
-      "line": 27,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "lowers the ops a torch training step adds to registered Definitions (rules/training: 'Training rules: the ops a training step adds to a forward')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2807,39 +2464,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_masks.py",
-      "line": 33,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py",
-     "line": 19,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_masks.py",
-      "line": 33,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py",
-     "line": 19,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "lowers the ops a torch training step adds to registered Definitions (rules/training: 'Training rules: the ops a training step adds to a forward')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2867,39 +2493,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_matmul.py",
-      "line": 13,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_matmul.py",
-      "line": 13,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "lowers the ops a torch training step adds to registered Definitions (rules/training: 'Training rules: the ops a training step adds to a forward')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2927,39 +2522,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_reduce.py",
-      "line": 27,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py",
-     "line": 19,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_reduce.py",
-      "line": 27,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py",
-     "line": 19,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "lowers the ops a torch training step adds to registered Definitions (rules/training: 'Training rules: the ops a training step adds to a forward')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -2987,39 +2551,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_softmax.py",
-      "line": 18,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py",
-     "line": 19,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_softmax.py",
-      "line": 18,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py",
-     "line": 19,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "lowers the ops a torch training step adds to registered Definitions (rules/training: 'Training rules: the ops a training step adds to a forward')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3047,39 +2580,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_survey.py",
-      "line": 19,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_survey.py",
-      "line": 19,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "lowers the ops a torch training step adds to registered Definitions (rules/training: 'Training rules: the ops a training step adds to a forward')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3107,39 +2609,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_views.py",
-      "line": 23,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/training_views.py",
-      "line": 23,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "lowers the ops a torch training step adds to registered Definitions (rules/training: 'Training rules: the ops a training step adds to a forward')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3167,29 +2638,7 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/triton_iface.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
-     "line": 17,
-     "ctx": "optional",
-     "text": "import torch as _torch"
-    }
-   },
-   "chain_kind": "at-import",
+   "chain": null,
    "chain_own": null,
    "reason": "the opaque torch op a direct Triton launch becomes under export",
    "reason_basis": "docstring",
@@ -3218,39 +2667,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/views.py",
-      "line": 16,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/strided_views.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/strided_views.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/views.py",
-      "line": 16,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/strided_views.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/strided_views.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "view rules over torch views: reference rearrangements, no gates",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3287,7 +2705,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -3331,39 +2748,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/attention.py",
-      "line": 11,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/attention.py",
-      "line": 11,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3391,39 +2777,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/bf16_gemm.py",
-      "line": 17,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/common.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/bf16_gemm.py",
-      "line": 17,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/common.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3451,39 +2806,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/cache_pad.py",
-      "line": 9,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/cache_pad.py",
-      "line": 9,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3511,39 +2835,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/collectives.py",
-      "line": 9,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/collectives.py",
-      "line": 9,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3571,39 +2864,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/cuda_norm.py",
-      "line": 8,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/cuda_norm.py",
-      "line": 8,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3631,39 +2893,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/elementwise.py",
-      "line": 10,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/common.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/elementwise.py",
-      "line": 10,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/common.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3691,39 +2922,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/fp8.py",
-      "line": 8,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/fp8.py",
-      "line": 8,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3760,7 +2960,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -3804,39 +3003,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/int8.py",
-      "line": 10,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/int8.py",
-      "line": 10,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3864,39 +3032,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/kv_prefix.py",
-      "line": 9,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/kv_prefix.py",
-      "line": 9,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -3933,7 +3070,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -3977,39 +3113,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py",
-      "line": 8,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/strided_views.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/strided_views.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/norm_chain.py",
-      "line": 8,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/strided_views.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/strided_views.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -4059,23 +3164,7 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/observations.py",
-      "line": 7,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/target_profile.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/target_profile.py",
-     "line": 552,
-     "ctx": "function",
-     "text": "import torch"
-    }
-   },
+   "chain_own": null,
    "reason": "fields observed on the construction host, in one module state",
    "reason_basis": "docstring",
    "doubt": null,
@@ -4103,39 +3192,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/operands.py",
-      "line": 8,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/operands.py",
-      "line": 8,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -4178,7 +3236,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -4228,39 +3285,8 @@
      "text": "from vllm.model_executor.layers.linear import LinearBase"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
-      "line": 10,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
-      "line": 10,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -4288,39 +3314,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/views.py",
-      "line": 8,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/views.py",
-      "line": 8,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds an op of vLLM's exported graph to a Definition (vllm_bindings/__init__: 'per-op bindings for the graph torch.export produces from the ACTUAL pinned vLLM model classes')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -4348,39 +3343,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_dsa.py",
-      "line": 42,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_dsa.py",
-      "line": 42,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds DeepSeek sparse attention as vLLM serves it over export_compat's leaves",
    "reason_basis": "docstring",
    "doubt": "predict's decoders import its geometry constants (FA3_SPARSE_GEOMETRY, DECODE_THRESHOLD, PAD_SCORE, long_row_*): kernel settings the call list would carry",
@@ -4408,39 +3372,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_dsa_absorb.py",
-      "line": 14,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/common.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_dsa_absorb.py",
-      "line": 14,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/common.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds MLA's latent absorptions as vLLM serves them",
    "reason_basis": "docstring",
    "doubt": null,
@@ -4477,7 +3410,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -4521,39 +3453,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_dsv4.py",
-      "line": 27,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_dsv4.py",
-      "line": 27,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds DeepSeek-V4's sparse MLA as vLLM serves it",
    "reason_basis": "docstring",
    "doubt": "predict.dsv4 imports its COMPRESSORS and FLASHMLA_GEOMETRY",
@@ -4587,29 +3488,7 @@
      "text": "import vllm"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_iface.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
-     "line": 17,
-     "ctx": "optional",
-     "text": "import torch as _torch"
-    }
-   },
-   "chain_kind": "at-import",
+   "chain": null,
    "chain_own": null,
    "reason": "the vLLM kernel interface the profile rules bind, or its stand-in without vLLM",
    "reason_basis": "docstring",
@@ -4638,39 +3517,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_marlin_moe.py",
-      "line": 30,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/common.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_marlin_moe.py",
-      "line": 30,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/common.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds vLLM's MXFP4 Marlin MoE",
    "reason_basis": "docstring",
    "doubt": null,
@@ -4698,39 +3546,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_mhc.py",
-      "line": 29,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/common.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_mhc.py",
-      "line": 29,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/common.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/common.py",
-     "line": 9,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds DeepSeek-V4's hyper-connections as vLLM runs them",
    "reason_basis": "docstring",
    "doubt": "predict.dsv4 imports its MHC_GEOMETRY and SMALL_FMA_TOKENS",
@@ -4764,39 +3581,8 @@
      "text": "import vllm"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_moe.py",
-      "line": 53,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_moe.py",
-      "line": 53,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "rules for vLLM's fused-MoE block's leaf kernels",
    "reason_basis": "docstring",
    "doubt": null,
@@ -4824,39 +3610,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_moe_fp8.py",
-      "line": 33,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_moe_fp8.py",
-      "line": 33,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds the block-scaled FP8 launches of vLLM's fused MoE",
    "reason_basis": "docstring",
    "doubt": null,
@@ -4884,39 +3639,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_moe_router.py",
-      "line": 27,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_moe_router.py",
-      "line": 27,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive.py",
-     "line": 40,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "binds vLLM's grouped sigmoid router",
    "reason_basis": "docstring",
    "doubt": null,
@@ -4944,39 +3668,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_sampling.py",
-      "line": 29,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py",
-     "line": 34,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_sampling.py",
-      "line": 29,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py",
-     "line": 34,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "the frontend rule for vLLM's stochastic token select",
    "reason_basis": "docstring",
    "doubt": "build_program imports its f32_bits, a kernel setting's encoding",
@@ -5019,7 +3712,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -5080,8 +3772,22 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/frontend/schemas.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
+     "line": 17,
+     "ctx": "optional",
+     "text": "import torch as _torch"
+    }
+   },
    "reason": "shape schemas in an authored function's annotations and their unification",
    "reason_basis": "docstring",
    "doubt": null,
@@ -5118,7 +3824,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -5183,23 +3888,7 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/seed_rule.py",
-      "line": 237,
-      "ctx": "function",
-      "to": "adapters/vllm/verity_vllm/program/frontend/outcomes.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/outcomes.py",
-     "line": 8,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain_own": null,
    "reason": "the seed rule's Definitions (kernel circuits), its derive hooks over torch meta tensors (PyTorch adapter) and the values a request's inputs take (vLLM side)",
    "reason_basis": "docstring",
    "doubt": "the seed and stop rules are check circuits a request Program returns, not served kernels; placed with kernel-circuits as Definitions",
@@ -5448,7 +4137,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -5560,39 +4248,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/strided_views.py",
-      "line": 14,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/value_types.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/value_types.py",
-     "line": 10,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/strided_views.py",
-      "line": 14,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/value_types.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/value_types.py",
-     "line": 10,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "static torch views as reference rearrangements",
    "reason_basis": "docstring",
    "doubt": null,
@@ -5642,23 +4299,7 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/target_profile.py",
-      "line": 26,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/config.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/config.py",
-     "line": 323,
-     "ctx": "function",
-     "text": "import vllm"
-    }
-   },
+   "chain_own": null,
    "reason": "the declared target a construction is applicable to: capability, SMs, batch invariance, backends, the pinned vLLM",
    "reason_basis": "docstring",
    "doubt": "targets.py's kernel bindings read its fields; the call list must carry those it reads as settings",
@@ -5697,7 +4338,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -6107,39 +4747,8 @@
      "text": "from torch.utils import _pytree as pytree"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py",
-      "line": 48,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/graph_translate.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/graph_translate.py",
-     "line": 10,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py",
-      "line": 48,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/graph_translate.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/graph_translate.py",
-     "line": 10,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "the PyTorch authoring frontend to Program",
    "reason_basis": "docstring",
    "doubt": null,
@@ -6191,39 +4800,8 @@
      "text": "from torch.nn.attention import SDPBackend, sdpa_kernel"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/train_step.py",
-      "line": 50,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive_graph.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive_graph.py",
-     "line": 19,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/train_step.py",
-      "line": 50,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/derive_graph.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/derive_graph.py",
-     "line": 19,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "one training step of an nn.Module as a Program",
    "reason_basis": "docstring",
    "doubt": null,
@@ -6251,39 +4829,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/triton_capture.py",
-      "line": 26,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/triton_iface.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/triton_iface.py",
-     "line": 16,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/triton_capture.py",
-      "line": 26,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/triton_iface.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/triton_iface.py",
-     "line": 16,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "interception of direct Triton launches during torch.export",
    "reason_basis": "docstring",
    "doubt": null,
@@ -6311,23 +4858,7 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/value_types.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
-     "line": 17,
-     "ctx": "optional",
-     "text": "import torch as _torch"
-    }
-   },
-   "chain_kind": "at-import",
+   "chain": null,
    "chain_own": null,
    "reason": "Value<w> and torch tensors: widths, Types, chunks, allocations",
    "reason_basis": "docstring",
@@ -6464,39 +4995,8 @@
      "text": "from vllm.model_executor.determinism import batch_invariant as bi"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/vllm_meta.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/frontend/__init__.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/__init__.py",
-     "line": 17,
-     "ctx": "optional",
-     "text": "import torch as _torch"
-    }
-   },
-   "chain_kind": "at-import",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/frontend/vllm_meta.py",
-      "line": 123,
-      "ctx": "function",
-      "to": "adapters/vllm/verity_vllm/program/frontend/export_compat.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/export_compat.py",
-     "line": 26,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "the pinned vLLM model class on the meta device through vLLM's registry, one engine step as a module",
    "reason_basis": "docstring",
    "doubt": null,
@@ -6568,39 +5068,8 @@
      "text": "from vllm.model_executor.determinism import batch_invariant as bi"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/gemm_target_correspondence.py",
-      "line": 38,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/config.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/config.py",
-     "line": 323,
-     "ctx": "function",
-     "text": "import vllm"
-    }
-   },
-   "chain_kind": "at-call",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/gemm_target_correspondence.py",
-      "line": 38,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/config.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/config.py",
-     "line": 323,
-     "ctx": "function",
-     "text": "import vllm"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "a GPU capture of a target's bf16 linears under vLLM (vLLM side) and their check against the registered GEMM Definition (kernel circuits)",
    "reason_basis": "docstring",
    "doubt": null,
@@ -6808,8 +5277,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/inputs.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "what fills each input of a served Program, declared, and the refusals that keep every value it reads accounted for: the I/O layout",
    "reason_basis": "docstring",
    "doubt": null,
@@ -6860,8 +5355,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/instances_file.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "the Build's instance sequence, one row per root node of the Program, the comparator's unit",
    "reason_basis": "docstring",
    "doubt": "pure circuit tooling over verity.circuits, neither a kernel's circuit nor the period's cut; placed with cut; its rows are read by the trace comparator, which is vLLM's side",
@@ -6893,35 +5414,7 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/layer_norm_difftest.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/__init__.py",
-      "line": 20,
-      "ctx": "type_checking",
-      "to": "adapters/vllm/verity_vllm/config.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/config.py",
-     "line": 323,
-     "ctx": "function",
-     "text": "import vllm"
-    }
-   },
-   "chain_kind": "type-checking",
+   "chain": null,
    "chain_own": null,
    "reason": "a difftest adapter: production runs torch's layer_norm (PyTorch adapter), cases and spec name the Definition (kernel circuits)",
    "reason_basis": "docstring",
@@ -7002,8 +5495,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/lifting/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "the lifted workload Program, its records and the padded Program's continuation logic",
    "reason_basis": "docstring",
    "doubt": "lifting is the padded Program's structure; no rule today says whether it is the cut or a circuit of its own",
@@ -7060,8 +5579,40 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/lifting/continuation.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/lifting/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/lifting/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "Continuation_v1, the padded Program's continuation logic per token slot",
    "reason_basis": "docstring",
    "doubt": "computed Boolean circuit values of the padded Program, not a served kernel's circuit",
@@ -7118,8 +5669,40 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/lifting/dump.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/lifting/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/lifting/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "the reference evaluator's complete assignment of a lifted Program, one row per gate",
    "reason_basis": "docstring",
    "doubt": "pure circuit tooling over verity.circuits, neither a kernel's circuit nor the period's cut; placed with cut",
@@ -7176,8 +5759,40 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/lifting/lifted_compose.py",
+      "line": 19,
+      "ctx": "function",
+      "to": "adapters/vllm/verity_vllm/program/workload.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/workload.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "the lifted workload Program: GP-01's compose over the lifted request components",
    "reason_basis": "docstring",
    "doubt": null,
@@ -7234,8 +5849,40 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/lifting/lifted_records.py",
+      "line": 10,
+      "ctx": "module",
+      "to": "adapters/vllm/verity_vllm/program/workload.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/workload.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "what a record says about a lifted Program: the post-EOS lag a run header attests and a Build declares",
    "reason_basis": "docstring",
    "doubt": "it reads run headers, which are the serving side's",
@@ -7315,39 +5962,8 @@
      "text": "import vllm"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/mla_capture.py",
-      "line": 29,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/config.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/config.py",
-     "line": 323,
-     "ctx": "function",
-     "text": "import vllm"
-    }
-   },
-   "chain_kind": "at-call",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/mla_capture.py",
-      "line": 29,
-      "ctx": "module",
-      "to": "adapters/vllm/verity_vllm/config.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/config.py",
-     "line": 323,
-     "ctx": "function",
-     "text": "import vllm"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "captures of vLLM's Triton MLA decode on a GPU (vLLM side) and the Boolean Definitions on bits checked against them (kernel circuits)",
    "reason_basis": "docstring",
    "doubt": null,
@@ -7608,8 +6224,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/model.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "what a checkpoint's configuration is (config_of over the HF config) and the roots that are functions of it",
    "reason_basis": "docstring",
    "doubt": "weights_type and its *_weights_type siblings are the circuit's weights record type; cos_sin_table is an analytic registered table",
@@ -7645,39 +6287,8 @@
      "text": "import vllm.model_executor.layers.fused_moe.fused_moe as FM"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/moe_difftest.py",
-      "line": 128,
-      "ctx": "function",
-      "to": "adapters/vllm/verity_vllm/program/frontend/target_profile.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/target_profile.py",
-     "line": 552,
-     "ctx": "function",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-call",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/moe_difftest.py",
-      "line": 128,
-      "ctx": "function",
-      "to": "adapters/vllm/verity_vllm/program/frontend/target_profile.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/target_profile.py",
-     "line": 552,
-     "ctx": "function",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "a difftest adapter: production runs vLLM's fused_experts (vLLM side), cases, bodies and spec are the Definitions' (kernel circuits)",
    "reason_basis": "docstring",
    "doubt": null,
@@ -7806,8 +6417,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/predict/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "ahead-of-time prediction of the Build's Programs from a row's declared facts φ",
    "reason_basis": "docstring",
    "doubt": "a package init; it goes with whichever side keeps the package path",
@@ -7844,7 +6481,6 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -7903,7 +6539,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -7962,7 +6597,6 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -8081,39 +6715,8 @@
      "text": "import torch"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/predict/build.py",
-      "line": 151,
-      "ctx": "function",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_moe.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_moe.py",
-     "line": 49,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
-   "chain_kind": "at-call",
-   "chain_own": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/predict/build.py",
-      "line": 151,
-      "ctx": "function",
-      "to": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_moe.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/program/frontend/rules/vllm_moe.py",
-     "line": 49,
-     "ctx": "module",
-     "text": "import torch"
-    }
-   },
+   "chain": null,
+   "chain_own": null,
    "reason": "the model's shape and forward emitted as calls (vLLM side), the kinds bound at their settings (_Specs: kernel circuits), and the Program wrapped and digested (cut)",
    "reason_basis": "code",
    "doubt": null,
@@ -8367,7 +6970,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -8441,7 +7043,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -8680,7 +7281,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -8751,7 +7351,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -8810,7 +7409,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -8863,7 +7461,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -8916,7 +7513,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -8975,7 +7571,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -9063,7 +7658,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -9122,7 +7716,6 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -9175,7 +7768,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -9228,7 +7820,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -9281,7 +7872,6 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -9334,7 +7924,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -9393,7 +7982,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -9470,8 +8058,40 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/predict/scan_state.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/predict/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/predict/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "the network certifier's scan state as a window class's Programs read it",
    "reason_basis": "docstring",
    "doubt": null,
@@ -9510,7 +8130,6 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -9565,7 +8184,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -9704,7 +8322,6 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -9765,7 +8382,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -10083,7 +8699,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -10148,7 +8763,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -10256,7 +8870,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -10335,7 +8948,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -10727,7 +9339,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -10840,7 +9451,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -11008,7 +9618,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -11125,7 +9734,6 @@
      "text": "import torch"
     }
    },
-   "chain_kind": "at-call",
    "chain_own": {
     "steps": [
      {
@@ -11219,7 +9827,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -11532,7 +10139,6 @@
      "text": "import torch as _torch"
     }
    },
-   "chain_kind": "at-import",
    "chain_own": {
     "steps": [
      {
@@ -11789,8 +10395,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/prefix_plan.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "each request's cached prefix as vLLM v1's KVCacheManager hashes it, from arrival chronology and prompt ids",
    "reason_basis": "docstring",
    "doubt": null,
@@ -11839,8 +10471,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/prune.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a flat body's dead units and the body without them: the registered compiler's dead-free form",
    "reason_basis": "docstring",
    "doubt": null,
@@ -11891,8 +10549,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -11949,8 +10633,40 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/act/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12013,8 +10729,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/act/silu_mul.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/act/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/act/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12052,47 +10806,7 @@
      "text": "import vllm._custom_ops"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/quarantine/act/silu_mul_difftest.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/quarantine/act/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/quarantine/act/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/__init__.py",
-      "line": 20,
-      "ctx": "type_checking",
-      "to": "adapters/vllm/verity_vllm/config.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/config.py",
-     "line": 323,
-     "ctx": "function",
-     "text": "import vllm"
-    }
-   },
-   "chain_kind": "type-checking",
+   "chain": null,
    "chain_own": null,
    "reason": "a difftest adapter: production runs vLLM's _C.silu_and_mul (vLLM side), cases and spec are the Definition's (kernel circuits)",
    "reason_basis": "docstring",
@@ -12186,8 +10900,40 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/collective/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12250,8 +10996,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/collective/allreduce.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/collective/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/collective/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12307,47 +11091,7 @@
      "text": "import torch.multiprocessing as mp"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/quarantine/collective/allreduce_difftest.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/quarantine/collective/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/quarantine/collective/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/__init__.py",
-      "line": 20,
-      "ctx": "type_checking",
-      "to": "adapters/vllm/verity_vllm/config.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/config.py",
-     "line": 323,
-     "ctx": "function",
-     "text": "import vllm"
-    }
-   },
-   "chain_kind": "type-checking",
+   "chain": null,
    "chain_own": null,
    "reason": "a difftest adapter: production runs ncclAllReduce through torch.distributed (PyTorch adapter), cases and spec are the Definition's (kernel circuits)",
    "reason_basis": "docstring",
@@ -12441,8 +11185,40 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12505,8 +11281,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/add_scalar_bf16.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12569,8 +11383,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/add_scalar_f32.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12633,8 +11485,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/add_widened_bf16.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12697,8 +11587,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/bf16_div_scalar.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12761,8 +11689,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/bf16_mul_scalar.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12825,8 +11791,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/bf16_mul_scalar_tensor.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12889,8 +11893,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/bf16_tanh.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -12953,8 +11995,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/gelu_tanh_mul.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13017,8 +12097,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/gelu_tanh_mul_bf16.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13081,8 +12199,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/mean_triton.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13145,8 +12301,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/mul_vec_f32.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13209,8 +12403,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/narrow_f32_bf16.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13273,8 +12505,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/rsqrt_f32.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13337,8 +12607,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/scale_row_bf16.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13401,8 +12709,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/scale_row_f32.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13465,8 +12811,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/softcap.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13529,8 +12913,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/square_bf16.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13593,8 +13015,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/square_f32.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13657,8 +13117,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/tanh_f32.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/dense/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13715,8 +13213,40 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/ov_moe/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13779,8 +13309,46 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/ov_moe/moe.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/ov_moe/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/ov_moe/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/quarantine/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/quarantine/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a provisional Definition of a served op, pending admission (quarantine/__init__: 'provisional numerical definitions, one sub-package per kind of op')",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13833,8 +13401,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/sampling_event.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "the Definition families that end an engine step and the circuit's token id (kernel circuits), and the construction read off Build dirs (vLLM side)",
    "reason_basis": "docstring",
    "doubt": null,
@@ -13930,8 +13524,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/sampling_rng.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "a torch-free mirror of Triton's Philox behind vLLM's Gumbel noise (kernel circuits) and readers of a sampler launch's snapshotted arguments (vLLM side)",
    "reason_basis": "docstring",
    "doubt": "the Philox mirror is numpy, not a Definition; it is placed with kernel-circuits as the kernel's reference",
@@ -14052,35 +13672,7 @@
      "text": "from vllm.v1.worker.gpu.sample.gumbel import apply_temperature, gumbel_sample"
     }
    ],
-   "chain": {
-    "steps": [
-     {
-      "from": "adapters/vllm/verity_vllm/program/sampling_topp_adapter.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/program/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/program/__init__.py",
-      "line": 0,
-      "ctx": "parent",
-      "to": "adapters/vllm/verity_vllm/__init__.py"
-     },
-     {
-      "from": "adapters/vllm/verity_vllm/__init__.py",
-      "line": 20,
-      "ctx": "type_checking",
-      "to": "adapters/vllm/verity_vllm/config.py"
-     }
-    ],
-    "heavy": {
-     "file": "adapters/vllm/verity_vllm/config.py",
-     "line": 323,
-     "ctx": "function",
-     "text": "import vllm"
-    }
-   },
-   "chain_kind": "type-checking",
+   "chain": null,
    "chain_own": null,
    "reason": "a difftest adapter: production runs vLLM's sampler (vLLM side), cases are the Definition's (kernel circuits)",
    "reason_basis": "docstring",
@@ -14168,8 +13760,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/shared_definitions.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "re-points each decoded request Program's definitions at one canonical object per id, so the workload Program encodes each once",
    "reason_basis": "docstring",
    "doubt": null,
@@ -14220,8 +13838,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/tp_binding.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "for each collective, which rank's producer output each segment of a rank's combine reads, derived from the rank Programs alone",
    "reason_basis": "docstring",
    "doubt": null,
@@ -14272,8 +13916,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/tp_workload.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "GP-01 at tensor parallelism: the W rank workloads composed with each request's binding",
    "reason_basis": "docstring",
    "doubt": null,
@@ -14324,8 +13994,34 @@
      "text": "import vllm"
     }
    },
-   "chain_kind": "type-checking",
-   "chain_own": null,
+   "chain_own": {
+    "steps": [
+     {
+      "from": "adapters/vllm/verity_vllm/program/workload.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/program/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/program/__init__.py",
+      "line": 0,
+      "ctx": "parent",
+      "to": "adapters/vllm/verity_vllm/__init__.py"
+     },
+     {
+      "from": "adapters/vllm/verity_vllm/__init__.py",
+      "line": 20,
+      "ctx": "type_checking",
+      "to": "adapters/vllm/verity_vllm/config.py"
+     }
+    ],
+    "heavy": {
+     "file": "adapters/vllm/verity_vllm/config.py",
+     "line": 323,
+     "ctx": "function",
+     "text": "import vllm"
+    }
+   },
    "reason": "GP-01, the workload Program: one rooted Program over a declared multi-request workload, the request Programs its components",
    "reason_basis": "docstring",
    "doubt": null,
