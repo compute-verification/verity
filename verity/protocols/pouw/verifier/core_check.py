@@ -230,7 +230,11 @@ def _nat_of(s: str, ctx: str) -> int:
 
 
 def ratio(s: str, ctx: str) -> Fraction:
-    """`Core.Ratio.ofString`: ``n`` or ``n/d`` in lowest terms with d >= 2, one spelling per ratio."""
+    """`Core.Ratio.ofString`: ``n`` or ``n/d`` in lowest terms with d >= 2, one spelling per ratio, in a string of fewer
+    than 2^32 bytes of UTF-8."""
+    # `surrogatepass`: a lone surrogate, which no Lean string holds, is refused below, where a plain encode would raise.
+    if (size := len(s.encode("utf-8", "surrogatepass"))) >= 2**32:
+        raise Refused(f"{ctx}: a string of {size} bytes is too long to be a ratio")
     parts = s.split("/")
     if len(parts) == 1:
         return Fraction(_nat_of(parts[0], ctx))
