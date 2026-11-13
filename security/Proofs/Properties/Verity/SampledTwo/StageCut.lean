@@ -206,7 +206,8 @@ theorem secondShown_of (C : CaseOf) (hC : CaseIsSent C) (hR : CutReads C) (hA : 
   intro o ha hg i it hi hit
   obtain ⟨k, p, c, e, c₂, ξ₂, _, _, hk, hd, hin, _, _, _⟩ := inputOn_accepts ha hi
   obtain ⟨hcase, hblobs⟩ := hC o k p c e hk hd
-  obtain ⟨⟨s, hs, hc₂⟩, hξ₂, -, -, vs, received₂, -, hieq⟩ := VStar.Recursive.SampledTwo.inputAt_ok hin
+  obtain ⟨⟨s, hs, hc₂⟩, hξ₂, -, -, vs, received₂, j₁, j₂, -, hieq, -, -, -⟩ :=
+    VStar.Recursive.SampledTwo.inputAt_ok hin
   rw [hieq] at hit
   have hsrc := inputOf_interior_source _ _ _ _ _ _ _ hit
   have hi₂ := interiorOf_of hs hc₂
