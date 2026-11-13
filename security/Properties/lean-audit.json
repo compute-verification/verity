@@ -959,9 +959,9 @@
    "Accounting.Assumptions.TS.OperandHMu",
    "Accounting.Assumptions.TS.ReceiptLuckAt",
    "Accounting.Assumptions.TS.UnitFixed",
+   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Accounting.Compose.PrefixOf",
    "Accounting.Compose.Scope",
-   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Properties.Pouw.Period.RegisteredBeforeDraw",
    "Properties.Pouw.Period.SaltIsLiveCoin",
    "Properties.Pouw.Period.SampleIsCoin",
@@ -1866,10 +1866,6 @@
   "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": {
    "type_hash": "c6fe7c762fd7bc79cd19290a70a6fd51f3797db9575d47acd8b4c539da6904e6",
    "unfolded_hash": "1fc01c53b7603b250f39742aedf7156fa8bebcc1f3c71f6c69119c08ebc44192"
-  },
-  "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": {
-   "type_hash": "1b82a49aa4304690a55b410ba0f355427a923988bc8c20a52915a714de747bcf",
-   "unfolded_hash": "6709db426dc7e0829eac1d8b5a48dfa36d953f8a90a3ba1e3e5f81c65704273e"
   },
   "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": {
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f",
@@ -7569,13 +7565,13 @@
     "                      (1 / 2)))",
     "              (And",
     "                (Eq (Properties.Pouw.Period.SecurityProofs.HonestH1.checkedPlay 64).game",
-    "                  (Accounting.Compose.periodGame",
+    "                  (Accounting.Compose.monitoringPeriodGame",
     "                    (Accounting.Compose.tileStage Properties.Pouw.Period.SecurityProofs.HonestH1.circuit 144)",
     "                    (Accounting.Compose.liveCone Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.scheme",
     "                      Properties.Pouw.Period.SecurityProofs.HonestH1.circuit 144)",
     "                    1 1 24 (Properties.Pouw.Period.SecurityProofs.HonestH1.period 64)))",
     "                (And",
-    "                  (Accounting.Compose.WindowPlay.EveryWindow",
+    "                  (Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
     "                    (fun live x =>",
     "                      Accounting.Compose.DeadConeDead Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.scheme",
     "                        Properties.Pouw.Period.SecurityProofs.HonestH1.circuit 144 live)",
@@ -7611,7 +7607,7 @@
     "                                (Properties.Pouw.Period.StagedPins Properties.Pouw.Period.SecurityProofs.HonestH1.staged",
     "                                  Properties.Pouw.Period.SecurityProofs.HonestH1.flat)",
     "                                (And",
-    "                                  (Accounting.Compose.WindowPlay.EveryWindow",
+    "                                  (Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
     "                                    (fun live W =>",
     "                                      Accounting.Compose.PerLiveTile",
     "                                        Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.scheme",
@@ -7620,7 +7616,7 @@
     "                                          (Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.scheme.mu k) G)",
     "                                    (Properties.Pouw.Period.SecurityProofs.HonestH1.period 64))",
     "                                  (And",
-    "                                    (Accounting.Compose.WindowPlay.EveryWindow",
+    "                                    (Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
     "                                      (fun live W =>",
     "                                        Accounting.Compose.PerLiveTile",
     "                                          Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.scheme",
@@ -7629,7 +7625,7 @@
     "                                            (Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.scheme.rB k) G)",
     "                                      (Properties.Pouw.Period.SecurityProofs.HonestH1.period 64))",
     "                                    (And",
-    "                                      (Accounting.Compose.WindowPlay.EveryWindow",
+    "                                      (Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
     "                                        (fun live W =>",
     "                                          Accounting.Compose.PerLiveTile",
     "                                            Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.scheme",
@@ -7642,7 +7638,7 @@
     "                                        (Accounting.Assumptions.TS.UnitFixed",
     "                                          (Properties.Pouw.Period.SecurityProofs.HonestH1.checkedPlay 64)",
     "                                          (Properties.Pouw.Period.SecurityProofs.HonestH1.layer 64)",
-    "                                          (Accounting.Compose.periodMode",
+    "                                          (Accounting.Compose.monitoringPeriodMode",
     "                                            Properties.Pouw.Period.SecurityProofs.HonestH1.circuit",
     "                                            (Properties.Pouw.Period.SecurityProofs.HonestH1.period 64)",
     "                                            (Properties.Pouw.Period.SecurityProofs.HonestH1.run 64))",
@@ -7705,7 +7701,7 @@
      "Accounting.Assumptions.TS.UnitFixed"
     ]
    },
-   "type_hash": "3510989b7c947667ab8e07c2b38ae744c26db23ad27d69499700aaa74af95ae5"
+   "type_hash": "af926d3e2b2a89d40db8b5d81a434b5930b7d59c29471d370209c604b639ea24"
   },
   "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod_nontrivial": {
    "owner": "@compute-accounting",
@@ -25374,7 +25370,7 @@
    }
   },
   "Properties.Pouw.Period.Witnesses": {
-   "digest": "45f23507732e542c4c53cd2c07795a3ed0bb91a9a38446471f15acad5bcf81da",
+   "digest": "0371d428586b6c60771dabc711402ffdb5815732d31dcd37adbfb2023ef038d0",
    "definitions": {
     "Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.anatomy": "39fb28d966c15223fa9009dee22c3f8f3ace9c990b84c7570532b1fdc7e9da8a",
     "Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.scheme": "c43c3f5988a13998b5851727f807a4750eb56ccdd6da15ff0d1d14103f903e54",
@@ -25398,8 +25394,8 @@
     "Properties.Pouw.Period.SecurityProofs.HonestH1.flat": "c70112a979bce6f2cbb3d03045709872466dc4455d02e0fcc1f35128d05055e4",
     "Properties.Pouw.Period.SecurityProofs.HonestH1.layer": "122c1d6ddc1e6bb0aba209924c23167a2650f1cc193d2b0accf645de18abd001",
     "Properties.Pouw.Period.SecurityProofs.HonestH1.opened": "069264e84dfe54b21296aead1e6ac28f7124ddc3fe34683a4a6efcc5ad010398",
-    "Properties.Pouw.Period.SecurityProofs.HonestH1.period": "0d5501bd5c6c7f3fcbf46b0616787b19dc3ffd9e4a7c28953c2112a7b4e6c1d7",
-    "Properties.Pouw.Period.SecurityProofs.HonestH1.play": "d1a5cc7f3ae4d52f22cdf862ceed44be151b62c869f1b149bd9d4a588d0ff261",
+    "Properties.Pouw.Period.SecurityProofs.HonestH1.period": "43030e57d4fea4cf80800083fd0d212a670f26e21b6444a86ca5f6652fb49eaa",
+    "Properties.Pouw.Period.SecurityProofs.HonestH1.play": "e376db9df80db54e827273a8e754234da9781254b26761d4e74f3a46f1e5fdcb",
     "Properties.Pouw.Period.SecurityProofs.HonestH1.prm": "9c5fc1c3c163c3295e8c12ab9baa7ec25d1ab82544bf29e31b7fc9774d314e51",
     "Properties.Pouw.Period.SecurityProofs.HonestH1.reg": "86c8d9c5074c7d81d1c3d507882a570dc36932afecd945908109555cf9f5e0bc",
     "Properties.Pouw.Period.SecurityProofs.HonestH1.run": "570b5f934b6c0709486b64c60c1943521c62a963134a3d41273e6c7fc79663de",
