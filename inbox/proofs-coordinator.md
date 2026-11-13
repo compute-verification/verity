@@ -125611,3 +125611,67 @@ Pushed: `cursor/proofs-members-oneparse-7b3e` `a2d48735c2b463c4ed31121ddc74a81f4
 **STOP RULE.** None. **NEEDS.** None. **To post.** Nothing.
 
 **Not established.** Everything the rehearsal is for. Pushed head: `0277a820e74eb46ff5b2ad1ecf93280f8fad501b`; nothing is left unpushed.
+
+## MESSAGES, Fri 06:50Z: SESSIONCOINS's new layout MEETS `sessionMsgs`'s order; at an honest play with two or more rounds a rep, `SeqCoinsRead`, `SessionsRun` and `SessionMsgs` HOLD TOGETHER (checked by hand at R = 2, [derived]), on three conditions no field of the join states; no statement the join reads changes
+
+**Plain words.** A session's messages, as my reading gives them, are the link, then rep 0's rounds, then rep 1's, then the closing message. SESSIONCOINS's mended layout puts the coins in that same order, so the coin read at each session round is the coin Flock's verifier checks that round's message against. I then wrote out the smallest honest play, one table with two rounds a rep. At it, all three premises hold together with one prover, the one that replays the session's messages. They hold whatever order the device opened the two reps' rounds in, because the layout places each opening by its stream's name and count, not by its place in the log. Three things must be true for this, and nothing in `JoinsAt` says them: each rep has exactly R rounds, a session has one table, and the join's `tab t` is that table's name.
+
+### 1. The layout against `sessionMsgs`: meets [read]
+
+- My order, `SessionMsgs.lean:107-112`: `mids ← (lv.streams.toList.flatMap Array.toList).mapM …`, then `(0 :: linkBody …) :: mids ++ [Final.encode …]`. `lv.streams` is `liveOf`'s, which reads the record's streams in `SessionSpec.repStreams` order (`Deploy.lean:167`), and that is `<t>/rep0` then `<t>/rep1` for one table (`Flock/Record.lean:53-54`). So session message `j`, for `1 ≤ j ≤ |rep0| + |rep1|`, is `0 ::` the bytes of rep 0's round `j - 1` if `j - 1 < |rep0|`, else rep 1's round `j - 1 - |rep0|`.
+- SESSIONCOINS's layout at `49dbe8d36f`, `SessionCoins.lean:72-74`: `slotStream tab R j = if j = 0 then (session, 0) else if j - 1 < R then (rep0, j - 1) else (rep1, j - 1 - R)`, with `R = repsOf K = (K - 2) / 2` (line 65). `roundOf` (96-100) is its inverse on openings: rep 0's `k`-th opening below R is round `k + 1`, rep 1's `k`-th is round `R + 1 + k`.
+- These are one order exactly where `|rep0| = R`. `FlockDeploy.custody` checks round `j`'s message and coin against the `(j - 1)`-th entry of the same `flatMap` (`Deploy.lean:185-188`), so all three readers now agree.
+- Both read the record's streams by name: `liveOf` takes the first stream so named (`find?`), and so does `recordRound` (`RecordRounds.lean`'s docstring). Same stream, same round.
+
+### 2. The three premises at an honest play, R = 2: hold [derived]
+
+One table `tab`. Rep 0 has rounds `a₀, a₁`, rep 1 has `b₀, b₁`. Then `K = k₀ = 2 + 2·2 = 6` and `repsOf 6 = 2`. The device opens, in any interleaving of the two reps: session round 0 (the link points), `a₀, a₁, b₀, b₁` (each rep's rounds in its own order), then session round 1 (the closing).
+
+| session round j | my message `S.msg o t j` | the coin's slot (`slotStream tab 2 j`) | what `custody` checks there |
+|---|---|---|---|
+| 0 | `0 :: linkBody rootB publics` | (session, 0): the link points | `lv.points == pointsOf spec c₁` |
+| 1 | `0 :: a₀.bytes` | (rep0, 0) | `flatMap[0] = a₀`: bytes and coins |
+| 2 | `0 :: a₁.bytes` | (rep0, 1) | `flatMap[1] = a₁` |
+| 3 | `0 :: b₀.bytes` | (rep1, 0) | `flatMap[2] = b₀` |
+| 4 | `0 :: b₁.bytes` | (rep1, 1) | `flatMap[3] = b₁` |
+| 5 | `Final.encode ⟨x, record, proofs⟩` | none (the closing is the session stream's second opening, `roundOf` gives none) | the decision; no coin is read |
+
+Under the old layout, row 2 read rep 1's round 0 where `custody` checks `a₁`. That was the fault.
+
+The prover in all three premises is my `replayProver C o t` (`SessionMsgs.lean:138`): at a history of `n` rounds it sends session message `n`, whatever coins it gets.
+
+- **`SessionMsgs`** (`Accepts.lean:247`) holds. `proverSeq` forwards session `t`'s prover at run rounds `off t + j`, unless Flock has decided a shorter prefix (`sessStep`, `SpotFlock/Code.lean`). Flock decides nothing before `j = 5` here, because messages 0 to 4 all start with tag `0`, so `act` answers a coin (`Deploy.lean:267`). `Final.encode` starts with tag `1` (`Deploy.lean:126`). This needs `setupOf true (stmtAt m₂ t)` to succeed, which `PlayAccepts`' equality `(V true).k (stmtAt m₂ t) = k₀ t` gives, since `k = 1` where setup fails.
+- **`SeqCoinsRead`** holds. It only asks each coin vector `r' t` to agree with what `withCoins` reads: at `j = 0..4`, equal on the elements below the opening's count `n` (`withCoins`' `agree`; `agree_record`). It reads nothing at `j = 5`.
+- **`SessionsRun`** holds. The decision reads the coins only through `custody`: `verdictM` takes the record and the proof files alone (`Deploy.lean:196-198`, `decisionAt` 237-241). So, on every `r'` that `SeqCoinsRead` allows:
+  - `custody`'s link line holds, since message 0 is built from the same `liveOf` record.
+  - Its round-count line holds: four rounds and four messages.
+  - Each of rounds 1 to 4 has the right bytes, since the message is the round's bytes.
+  - Each has the right coins: `r.coins == c.vals r.n` holds because `c` agrees with the record's round below the opening's count, and at an honest play that count is the round's `n`.
+  - The link points hold the same way at `j = 0`.
+  - The verdict, the draw, `read.check` and `RecordText` are the honest session's own checks. The deployed verifier passes them in run `r20261113-053625-2556` [relayed: TWOLEG, 05:54Z; 98 rounds a rep, opened `session 0`, `rep0 0..97`, `rep1 0..97`, `session 1`].
+- **The device's order does not matter.** Had it opened `a₀, b₀, a₁, b₁`, `roundOf` would still put `b₀` at round 3, by its stream (rep1) and its count among rep1's openings (0). The table is unchanged. So the layout needs no refusal of interleaved reps, and this answers my NEEDS 3 of 05:57Z from the coin side [derived].
+
+**The three conditions, each not established for an arbitrary accepted play:**
+1. **Each rep has exactly R rounds** (`|rep0| = |rep1| = repRounds`). `custody` checks only the total (`rounds.length == mids.length`), so a record with 3 + 1 rounds passes that line and then reads crossed coins. At an honest play it holds: `repPlan_size` (`Claims/ZK/SessionLean.lean:159`) [read] says the Lean ZK server's plan has `repRounds` openings a rep. That the Python server's count, 98 at `2556`, is `repRounds` at that statement is [guess]. It could be settled by a `#eval` of `FlockDeploy.repRounds true` at that statement, which I have not run. For a play that cheats, the form, or `Zk.verifyWithM`'s own reading of each rep, must refuse an uneven split; I have not read whether it does.
+2. **One table a session.** `repsOf` is `(K - 2) / 2` only where `rounds` sums over one table (`Deploy.lean:306-307`). I have not checked that every two-stage member session sets up one table; one-stage's `SetsUp.setup_one` is that leg's fact, not this one's.
+3. **`tab t` is the table of template `t`'s session statement.** `tab` is a free parameter of `JoinsAt` (`JoinsAt.lean:217`), and no field ties it to `(setupOf true (stmtAt m₂ t)).spec.tables`. The instantiation must choose it so. That works only if the table name is fixed by the template and not among the run's fields `PinHeld` lets vary, which I have not read.
+
+**Within reach, not written:** a lemma `sessionsRun_replay` with conditions 1 to 3 as its premises, proving `SessionsRun` and `SessionMsgs` at `replayProver` from `custody`'s lines. It needs `coin_record`/`agree_record` at the new layout (SESSIONCOINS's `7ab0`) and an honest-verdict premise. I start it when `7ab0` compiles, unless you rule otherwise.
+
+### Other
+- **The pen.** This machine is new: `~/wt` was gone at 06:38Z. I made `~/wt/.pen` at 06:38:31Z. The loop that held it on the machine before (`f7f31dd6cc` `reachedBy`/`reachedStrings`, `ee18b88c06`, both "not compiled") is not here; I continue from its pushed head.
+- **Try `954c`** (`MessagesOpen.lean` at `04da8512cc`): its result is not read in this entry.
+- **Your 06:04Z ruling:** I am not restating the join over `Opens`/`FixedBefore`/`Explains`.
+
+### STOP RULE
+Kept. No file changed in this turn; no lock, guarantee, named assumption or form touched.
+
+### NEEDS
+1. SESSIONCOINS / ASSEMBLY: conditions 2 and 3 as stated facts of the join's instantiation, or say who owns them.
+2. TWOLEG / soundness: does the form, or `Zk.verifyWithM`, refuse a record whose two reps' round counts differ but sum right (condition 1)?
+
+### Not established
+- Conditions 1 to 3 above; `sessionsRun_replay` not written; `SessionCoins.lean` at `49dbe8d36f` not yet compiled (`r20261113-063039-7ab0`, on a Lean slot since 06:41Z).
+- `MessagesOpen.lean` compiled whole (try `954c`'s result not read here; `f7f31dd6cc`/`ee18b88c06` in no try).
+
+Branch `cursor/proofs-messages-f55d` at `ee18b88c06`, nothing unpushed; no run of mine is out.
