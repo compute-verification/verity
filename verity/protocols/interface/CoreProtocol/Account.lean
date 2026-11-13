@@ -51,9 +51,9 @@ capacity, the certified amount with its error, and the other, which follows.
 * A period's error, of a flow and of a moment alike, is its answers' errors as the amount's `Pool` says: summed, or
   the one answer's that states it once for the period.
 * A row whose error is 1 or more is `Status.noBound`: it prints "no bound at this period" in place of a number.
-* A row whose accepted answers verify nothing of a registered capacity is `Status.nothingVerified`, whatever it
-  leaves free. A row reads `Status.certified` only with an amount verified, or with no registered capacity to verify
-  against: that its answers were accepted does not make it certified.
+* A row whose verified amount is 0 is `Status.nothingVerified`, whatever it leaves free, with a registered capacity
+  or with none. A row reads `Status.certified` only with an amount verified, or with no verified amount to print (a
+  free amount where the registration holds no capacity): that its answers were accepted does not make it certified.
 * What no accepted answer covers is `Status.notAudited`: charged at capacity. So is the memory of a device's sheet
   that none of its leaves holds.
 * An answer certifies a link only where the link joins a network certifier and a node of the prover's
@@ -508,11 +508,12 @@ def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   pure { place, certified, error, ticks, steps, capacity, series,
          amount := m.unit.base * ((ns.zip es).map fun x => kept x.1 x.2).sum }
 
-/-- A row's standing: an amount certified; accepted answers that verify nothing of the registered capacity
-(`nothingVerified`), whatever they leave free; an error of 1 or more ("no bound at this period"); a resource no
-accepted answer covers ("not audited: charged at capacity"); or a link of a Site that is not mediated. `certified`
-says that the row's verified amount is more than 0, or that the registration holds no capacity to verify against: a
-row made from accepted answers does not read `certified` for that alone. -/
+/-- A row's standing: an amount certified; accepted answers that verify nothing (`nothingVerified`: the row's verified
+amount is 0), whatever they leave free and whether the registration holds a capacity or none; an error of 1 or more
+("no bound at this period"); a resource no accepted answer covers ("not audited: charged at capacity"); or a link of
+a Site that is not mediated. `certified` says that the row's verified amount is more than 0, or that it has none to
+print, a free amount where the registration holds no capacity: a row made from accepted answers does not read
+`certified` for that alone. -/
 inductive Status where
   | certified
   | nothingVerified
@@ -596,8 +597,8 @@ private def together (each : List (Nat × List (Nat × Nat))) : Nat :=
 
 /-- The row of amount `m` certified as `n` at `error`, against capacity `total`: the other amount follows, and neither
 is printed at an error of 1 or more. An amount above the capacity is printed as it is, and the other is 0. A row whose
-verified amount is 0 against a registered capacity is `Status.nothingVerified`, whatever its free amount: its answers
-were accepted and verify nothing of the capacity. -/
+verified amount is 0 is `Status.nothingVerified`, whatever its free amount, where the registration holds a capacity
+and where it holds none: its answers were accepted and verify nothing. -/
 private def certifiedRow (m : Amount) (place reading : String) (total : Option Nat) (n : Nat) (error : Ratio)
     (sessions : Nat) (session : Option Nat) : Row :=
   let other : Option Nat := total.map fun c => c - n
@@ -606,8 +607,7 @@ private def certifiedRow (m : Amount) (place reading : String) (total : Option N
     | .verified => some n
     | .free => other
   { metric := m.metric, part := m.part, place, reading, session, sessions, side := some m.side, error,
-    status :=
-      if !bounded then .noBound else if total.isSome && verified == some 0 then .nothingVerified else .certified,
+    status := if !bounded then .noBound else if verified == some 0 then .nothingVerified else .certified,
     capacity := total,
     verified := if bounded then verified else none,
     free := if bounded then (match m.side with | .verified => other | .free => some n) else none,
@@ -1130,9 +1130,9 @@ private def cached : Site :=
    "\"place\":\"up0\",\"premises\":[],\"reading\":\"registered\",\"session\":null,\"sessions\":1," ++
    "\"status\":\"certified\"," ++
    "\"unit\":\"bits\",\"unpriced\":[],\"verified\":37000}"]
--- a row's standing follows its verified column: accepted answers that verify nothing of the registered capacity do
--- not make a certified row, whatever they leave free. A session that certifies nothing; a wipe of more memory than is
--- registered; a check whose bits pass its link's capacity; and, certified, a check that verifies some of it
+-- a row's standing follows its verified column: accepted answers that verify nothing do not make a certified row,
+-- whatever they leave free. A session that certifies nothing; a wipe of more memory than is registered; a check whose
+-- bits pass its link's capacity; and, certified, a check that verifies some of it
 private def standing (rs : List Row) : List (Status × Option Nat) := (rs.take 1).map fun r => (r.status, r.verified)
 #guard standing (table [held] [session 6000000000 "0" false]) == [(.nothingVerified, some 0)]
 #guard standing (table [wiped] [wipe 1000 9000000000]) == [(.nothingVerified, some 0)]
@@ -1157,6 +1157,13 @@ private def read (q : Nat) : Answer := accept "toy/reads" [("eps", .str "1/1000"
 #guard cells ((table [reads] [read 1000]).take 1) ==
   [("reads", "", "registered", some 3200000, some 8000, some 3192000, "1/1000")]
 #guard firstVerified (table [reads] [read 1000, read 700]) == [(some 8000, "1/500")]
+-- with no registered capacity the standing follows the verified column too: reads of two tiers, one a node's that
+-- states no rate. An answer that verifies nothing does not make a certified row, and one that verifies some does
+private def readsOfTwo : Account :=
+  { reads with amounts := reads.amounts.map fun m => { m with part := .read [.hbm, .dram] } }
+#guard ([read 0, read 1000].map fun a => ((rowsOf hosted digest auditor period [readsOfTwo] [a]).take 1).map
+    fun r => (r.status, r.capacity, r.verified, r.free)) ==
+  [[(.nothingVerified, none, some 0, none)], [(.certified, none, some 8000, none)]]
 
 /-- A link's bits whose check reads audits as given: its answer lists their names under `rests`. -/
 private def resting : Account :=
