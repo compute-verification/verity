@@ -249,6 +249,24 @@ theorem checkBlobsAt_scope {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.
   obtain ⟨⟨⟩, hck, -⟩ := ebind_ok hs
   exact ⟨tags0, circuitB, pubB, rd.registered.isSome, ht, hc, hp, hck⟩
 
+/-- **Where v2's check accepts at the coins `ξ`, its session sets up at the record's sample** (`setupAt`): at the
+statement's tags, the circuit and public files the parameters name on the blobs and the session's record. -/
+theorem checkBlobsAt_setup {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
+    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    ∃ tags0 circuitB pubB rd record x, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
+      bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
+      sessionRecord e bs = some record ∧
+      _root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) rd
+        (Flock.Witness.recordDraw record) = .ok x := by
+  obtain ⟨r, -, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run h
+  have hs := eq_single hsz
+  rw [hs] at hrun
+  obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, -, _, _, _, hstep⟩ := run_event hrun
+  obtain ⟨recB, record, _, _, _, _, hb, hrec, hst, -⟩ := step_event hstep hall
+  exact ⟨tags0, circuitB, pubB, rd, record, _, ht, hc, hp, sessionRecord_eq hs hb hrec, hst⟩
+
 /-! ## The session's descriptor -/
 
 /-- **Where `verify --zk`'s ports check passes at a flat untyped statement, the circuit file reads as a descriptor whose
