@@ -144,8 +144,8 @@ def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
             "shared_experts": flag(lambda: m.shared_experts is not None), "routed_scaling": flag(lambda: m.routed_scaling_factor != 1.0),
             "softmax_router": flag(lambda: type(r) is FusedTopKRouter and r.scoring_func == "softmax"),
             "triton_experts": flag(lambda: type(experts) is TritonExperts and not ex.quant_method.is_monolithic),
-            "bias": flag(lambda: experts.w1_bias is not None or experts.w2_bias is not None),
-            "clamp": flag(lambda: experts.activation_config.clamp_limit is not None),
+            "bias": None if experts is None else flag(lambda: experts.w1_bias is not None or experts.w2_bias is not None),
+            "clamp": None if experts is None else flag(lambda: experts.activation_config.clamp_limit is not None),
             "silu": flag(lambda: m.activation == MoEActivation.SILU),
             "bf16": all(t is not None and t.dtype == torch.bfloat16 for t in w.values())}
     return out
