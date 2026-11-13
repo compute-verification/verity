@@ -4802,7 +4802,6 @@
    "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsH200": {
-   "honest": ["Pous.SecurityProofs.StreamedWipeMeetsH200_honest"],
    "nontrivial": "Pous.SecurityProofs.StreamedWipeMeetsH200_nontrivial"
   },
   "Accounting.SecurityProofs.RateAudit": {
@@ -5528,6 +5527,12 @@
   "Pous.SecurityProofs.StreamedWipeMeetsFamily": {
    "type_hash": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255",
    "unfolded_hash": "2c44dfafca4dd9b61448620c3a735030c19a6af6381c8051349eb0bd3474d68e"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsH200": {
+   "type_hash": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
+   "missing": "honest",
+   "why": "its honest lemma, `StreamedWipeMeetsH200_honest`, shows only the H200 numbers (`0 < 33`, `32^2906 * 2^129 <= 33^2906` and the threshold `39068035213`) and no accepted play; MEM-245, Mon 16 Nov",
+   "unfolded_hash": "f5db05faad237b32a0f201ae3cb4b9673fd1cd9c7baea419c54066ea8cb521ae"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsReads": {
    "type_hash": "a2f5444f8d5e25a0cfbb34ecce8550e64849fff88fd423a419993391aa377856",

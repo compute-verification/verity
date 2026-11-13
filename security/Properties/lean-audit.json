@@ -1406,27 +1406,21 @@
    "nontrivial": "Properties.NetworkPeriod.rowsCapPublished_nontrivial"
   },
   "Pous.Period.SecurityProofs.periodHeld": {
-   "honest": ["Pous.Period.SecurityProofs.periodHeld_honestInstance"],
    "nontrivial": "Pous.Period.SecurityProofs.periodHeld_nontrivial"
   },
   "Pous.Period.SecurityProofs.periodCapacity": {
-   "honest": ["Pous.Period.SecurityProofs.periodCapacity_honestInstance"],
    "nontrivial": "Pous.Period.SecurityProofs.periodCapacity_nontrivialEmpty"
   },
   "Pous.Period.SecurityProofs.periodHeldDeployed": {
-   "honest": ["Pous.Period.SecurityProofs.periodHeldDeployed_honest"],
    "nontrivial": "Pous.Period.SecurityProofs.periodHeld_nontrivial"
   },
   "Pous.Period.SecurityProofs.obligationHeld": {
-   "honest": ["Pous.Period.SecurityProofs.obligationHeld_honestInstance"],
    "nontrivial": "Pous.Period.SecurityProofs.obligationHeld_nontrivial"
   },
   "Pous.Period.SecurityProofs.periodHeldAt": {
-   "honest": ["Pous.Period.SecurityProofs.periodHeldAt_honestInstance"],
    "nontrivial": "Pous.Period.SecurityProofs.periodHeld_nontrivial"
   },
   "Pous.Period.SecurityProofs.periodHeldDemo": {
-   "honest": ["Pous.Period.SecurityProofs.periodHeldDemo_honestInstance"],
    "nontrivial": "Pous.Period.SecurityProofs.periodHeldDemo_nontrivialDemo"
   },
   "Properties.Challenger.Drawn.familyOneCommitment": {
@@ -1597,6 +1591,42 @@
   "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt": {
    "type_hash": "d739e355c470adec077c55bcab72e4f9643a5c3b0a930e25382fb477cd500d78",
    "unfolded_hash": "623d16a89bb0cc3d13ae842f6efa2c935eee22295432f0382aea3336b383ade8"
+  },
+  "Pous.Period.SecurityProofs.obligationHeld": {
+   "type_hash": "f31db42a28a358d01783989144fd06d900c17f0c2781ee656f73160f84108d35",
+   "missing": "honest",
+   "why": "its honest lemma, `obligationHeld_honestInstance`, shows the device model, the instantiation and the fit at `obligationAudit`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
+   "unfolded_hash": "31d5f25d5b4a941187d3332230e482ec3f6753741e88053f0485d7f47d3dfc54"
+  },
+  "Pous.Period.SecurityProofs.periodCapacity": {
+   "type_hash": "1bf5978e0d2b8c3a3c1e28748c6edab67a042d18704f5bb0764ff33ac555606c",
+   "missing": "honest",
+   "why": "its honest lemma, `periodCapacity_honestInstance`, shows the device model, the instantiation, the fit and that the capacity verdict implies `sidAudit.Accepts`, at `sidAudit`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
+   "unfolded_hash": "d707b0fc20021c5a35bc2f764954c606827932ecfa5ad9c114f258750fbe1e63"
+  },
+  "Pous.Period.SecurityProofs.periodHeld": {
+   "type_hash": "490f8e2f6da996708950158f449ec1c4cebced6b38811e0091f1262cc31d7309",
+   "missing": "honest",
+   "why": "its honest lemma, `periodHeld_honestInstance`, is at `sidAudit`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
+   "unfolded_hash": "04811c762f5202050b9c03137e5efbca6c92436e2cf3e4dd371c22f0084820fb"
+  },
+  "Pous.Period.SecurityProofs.periodHeldAt": {
+   "type_hash": "0654ba44ddb9ce5cd0016e31b85a2b00599c4b03a263febd27ff5faeb4681907",
+   "missing": "honest",
+   "why": "its honest lemma, `periodHeldAt_honestInstance`, shows `RingDeviceAt` and the fit at `sidAuditAt (2^19)`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
+   "unfolded_hash": "45b5b884466a67826e9718d77fab1b3ae31d4558752482f6333f2b706da5d0e5"
+  },
+  "Pous.Period.SecurityProofs.periodHeldDemo": {
+   "type_hash": "dd2437050789b0efa4862ef682df951711b976fa9fae90350e72b8884fe4273d",
+   "missing": "honest",
+   "why": "its honest lemma, `periodHeldDemo_honestInstance`, shows `RingDeviceAt` and the fit at `sidAuditAt (1038 * 2^16)`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
+   "unfolded_hash": "2bdb97e1e46b354f0331dd7b5ed0c15ef0a57ef3a188d92c7f33dec812b062ea"
+  },
+  "Pous.Period.SecurityProofs.periodHeldDeployed": {
+   "type_hash": "8f6e4c37ca2146a19ac93109a1c7eb55d0f39106332e5156b95ea6da8c7df7c2",
+   "missing": "honest",
+   "why": "its honest lemma, `periodHeldDeployed_honest` (that is `periodHeld_honestInstance`), is at `sidAudit`, whose trusted list and store are empty, so it shows no accepted play; MEM-309, Fri 20 Nov",
+   "unfolded_hash": "a0ed5d5a2833f2490795c66cafdac2ca9745a83747ce711c1cf3a7c481f72d29"
   },
   "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
    "type_hash": "147702d45231f61ee43eef6d3a0f8e063948e0d0f874124c5542abf5dfbc8e67",
