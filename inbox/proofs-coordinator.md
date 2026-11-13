@@ -126585,3 +126585,72 @@ To post: the entry down to "Not for the post", on NET-403.
 
 Not established: what network's record for our two verdicts will be (its `format` words, and who supplies `link`,
 `window`, `head` and the schedule's class index); I name fields of an object that is not written yet.
+
+
+## SESSIONCOINS, Fri 13 Nov 07:08Z: ASSEMBLY, merge `49dbe8d36f`: the rep-stream layout COMPILES (`7ab0`, `ALL rc=0`: `SessionDev` 22 theorems, `SessionOpened` 6, `SessionCut` 7, each probe clean); at a record of 3 + 1 rounds nothing of mine refuses, and `sessionsRun` with `sessionMsgs` is then false, so the join needs the even split as a fact of the check
+
+`r20261113-063039-7ab0`, vy-nebius-2, at `49dbe8d36f5450cb24e0f6cb0bd323d95654a28f` (its `cwd` is `/workspace/research/src/49dbe8d36f…`), word for word from its `stdout.log` [run]:
+
+```
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionDev.lean: lean exit 0 in 354 s
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionDev.lean: axiom probe: none of its 22 theorems uses an axiom beyond propext, Classical.choice and Quot.sound
+TRY SessionDev exit 0
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionOpened.lean: lean exit 0 in 229 s
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionOpened.lean: axiom probe: none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound
+TRY SessionOpened exit 0
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionCut.lean: lean exit 0 in 389 s
+lean-try: security/Proofs/Properties/Verity/SampledTwo/SessionCut.lean: axiom probe: none of its 7 theorems uses an axiom beyond propext, Classical.choice and Quot.sound
+TRY SessionCut exit 0
+ALL rc=0
+```
+
+**Plain words.** The mended layout compiles, so ASSEMBLY can take `49dbe8d36f`. Two of its three changed files, `SessionCoins.lean` and `SessionRecord.lean`, were built in that run as imports and not probed on their own; one short try of the two is out. On your question: a record whose two reps have 3 and 1 rounds is refused by nothing of mine, and my lemmas stay true there. What breaks is the join's own pair of premises, and it breaks for the whole instance, not for that play alone. So the join needs, as a fact of the check, that an accepted session's record has the same count in each rep.
+
+### 1. What `7ab0` compiled, and what it did not probe [run]
+- **Tried, each with `--siblings`:** `SessionDev.lean`, `SessionOpened.lean`, `SessionCut.lean`: the ten lines above. Each sibling check printed "no built module of its package that doesn't import … declares a name it does".
+- **Built as imports, no error:** `SessionCoins` ("⚠ [11477/11482] Built … (11s)"), `SessionHeld` (✔), `SessionAgrees` (⚠), `SessionRecord` ("⚠ [11480/11482] Built … (4.9s)"), `SessionFits` (✔), then "Build completed successfully (11482 jobs)."; `SessionLogged` (✔) in the third try. Every ⚠ line of mine is a deprecation (`if_pos`, `if_neg`, `dif_neg`, `if_true`) or the `unnecessarySeqFocus` linter. The log's only `sorry` warnings are ArkLib's two.
+- **Not probed at this head:** `SessionCoins.lean` (it holds `roundOf_slot`, `MembersHeld.own`, `MembersHeld.key`) and `SessionRecord.lean` (`located_record`, `coin_record`, `agree_record`). `7ab0` compiled them; it ran no axiom probe and no sibling check of their own. `r20261113-065659-9684` does (section 6).
+- So the changed statements stand as in my 06:32Z entry, section 3. MESSAGES: `coin_record` and `agree_record` compile at the new layout.
+
+### 2. A record of 3 + 1 rounds at R = 2 (your 06:57Z, item 2) [derived, by hand; nothing here is in Lean]
+Nothing of mine refuses it, and `SeqCoinsRead` does not fail there either: it is not a check but a description of the coin vectors that agree with what was read, and it constrains a round only where a coin was read. Take session `t` with `K = 6`, so `repsOf K = 2`, a record with rep 0's rounds `a₀ a₁ a₂` and rep 1's `b₀`, and a log that opens just those (the members' check holds the tree's openings to the record's own rounds, and no rep's count to the statement's: `ChallengerTrees.lean`, `recordRounds`, `EXTRA_OPENING`) [read]. `roundOf` puts the link on round 0, `a₀` on 1, `a₁` on 2, `a₂` on no round (`k < R` fails at `k = 2`), `b₀` on round 3 (`R + 1 + 0`), and the closing on none. My lemmas hold as stated: the coin read at round 3 is `b₀`'s (`coin_record`), and rounds 4 and 5 carry no release, so no coin is read there (`withCoins.coin o t 4 = none` under `DevReads`). `SeqCoinsRead` then pins `r' t 0..3`, round 3 to `b₀`'s coins, and leaves `r' t 4` free. `custody` flattens the record to `[a₀, a₁, a₂, b₀]`: four rounds against four round messages, so its count line passes, and it then holds round 3's message and coin to `a₂` and round 4's to `b₀` (`b₀.coins == (r' t 4).vals b₀.n`). `SessionMsgs` fixes the session's last message, and with it the record, whatever `r'` is (through `proverSeq` forwarding session `t`'s prover); so on some `r'` that `SeqCoinsRead` allows that line fails, wherever `b₀` carries a coin. Hence **`SessionsRun` and `SessionMsgs` cannot both hold at one `P'` if the form accepts one such play.** Both are fields of `JoinsAt` over every exchange the form accepts (`∀ o, FormAccepts C o → …`, not only `JoinGood`'s or the strategy's) [read]. One accepted exchange with an uneven record therefore makes `JoinsAt` false, and the joined theorem then says nothing of the instance at all, not just nothing of that play. What the join needs is one fact: on every play the form accepts, each session's record has `repsOf K` rounds in each rep stream. If the deployed verdict refuses anything else (MESSAGES's reading), that fact is a lemma, and no statement of mine changes. If it does not, a locator cannot mend it: the run's round of a coin is fixed from the statement, before any record, so the form would need the refusal. No statement is changed for it. I have not worked through a record short of `K − 2` rounds in all.
+
+### 3. MESSAGES's conditions 2 and 3 (its NEEDS 1): the instance's, not premises of mine [derived]
+- My statements take `tab` free and hold at every `tab` and every `K`. At a `tab t` that is not the session's table's name, `roundOf` puts no rep stream's opening on a round, no coin is read past the link's, and the lemmas say nothing there. At a session of two tables `repsOf K` is the sum of two tables' counts, and the lemmas describe a reading that is not `custody`'s. Neither makes one false.
+- So conditions 2 and 3 are what makes `sessionsRun` satisfiable at an honest play, with condition 1. They are facts of the instance, like `stmtX` and `wiring` in ASSEMBLY's table: for each template `t`, `FlockDeploy.setupOf true (SpotFlock.stmtAt A.h m₂ t) = some (s, spec, #[st])` with `spec.tables = #[tab t]`. Then `K = 2 + 2 · repRounds true spec st` (`FlockDeploy.V`, `rounds`), `repsOf K = repRounds true spec st`, and `spec.repStreams` names `repStreamName (tab t) 0` and `1` (`Flock/Record.lean:53`; `repStreamName t r = s!"{t}/rep{r}"`) [read].
+- I can add the two bridges beside the layout if MESSAGES wants them from me for `sessionsRun_replay`: `repsOf` at a one-table setup is `repRounds`, and at `|rep 0| = R` the `(j − 1)`-th entry of the two streams' `flatMap` is stream `(slotStream tab R j).1`'s round `(slotStream tab R j).2`. Both are arithmetic, with no JSON. Not written.
+
+### 4. `FirstTreeless` at TWOLEG's next head: read, nothing written [read]
+- TWOLEG's tip `1583a8d3f2` (not compiled, not named) has `accepted_treeless` and `firstTreeless_lines` (`Steps.lean`). The second is `firstTreeless_of_plain`'s hypothesis but for one thing. The form's `firstLines` reads `e.coins`' `session`; the cut's (`Cut.lean`) reads `firstCoins e`'s, which is `e.coins` less its `key` entry.
+- That the two `session`s are one is the second conjunct of STAGECOINS's `SessionMatches` at `"session"` (`StageAlone.lean`), already a field of the join. The windows come from STAGECOINS's `firstDraws_window` and `secondDraws_parts`, as in its `firstUnshown_of`.
+- So the plan is `FirstTreeless C` from `CaseIsSent C` and `SessionMatches C`: the join loses the field `firstTreeless` and gains none. I write it on a merge of the head TWOLEG names and STAGECOINS's `bfac82043c`, when TWOLEG names one.
+
+### 5. For ASSEMBLY
+- Merge `49dbe8d36f`. It is `650835f367` plus one commit, which changes `SessionCoins.lean`, `SessionOpened.lean` and `SessionRecord.lean` only: no lakefile, no lock, no root [run: `git show --stat`].
+- The field `firstTreeless` stays as it is.
+- When you lift the mark on `sessionsRun` and `sessionMsgs`' docstrings: what is left is section 2's. They hold together only where every accepted session's record has `repsOf K` rounds in each rep, with MESSAGES's conditions 2 and 3.
+
+### 6. Runs, the machine, the pen
+- [run] `r20261113-063039-7ab0`: above. 24 GB asked; its cgroup's highest sample was 7.3 GB.
+- `r20261113-065659-9684`, vy-nebius-2, `--pool proofs`, `--mem-gb 24`, at `49dbe8d36f`, on Lean slot build/3 since 06:57Z: `--try` of `SessionCoins.lean` then `SessionRecord.lean`, each `--siblings`. The tree is warm there. Not read.
+- Neither command carries `ulimit -Sv` [run: each run's `job.json`].
+- This machine is new: `~/wt` was absent at 06:53Z. I made `~/wt/.pen` at 06:55:56Z, after seeing the branch's tip unmoved since 06:30Z and no entry of mine after 06:32Z. If another SESSIONCOINS loop still holds a pen, it has pushed nothing since.
+
+### STOP RULE
+Kept. No file changed in this turn; no statement, lock, guarantee, named assumption or form touched. Nothing written against TWOLEG's unnamed head.
+
+### NEEDS
+1. **TWOLEG:** the named head with the refusal, as ruled. Until then `FirstTreeless` stays the join's field.
+2. **MESSAGES / you:** whether the deployed verdict refuses an uneven split, and who states the fact for the join (section 2). Say if the two bridges of section 3 are mine.
+
+### To post
+Nothing.
+
+### Not established
+- `SessionCoins.lean` and `SessionRecord.lean`'s own probes at `49dbe8d36f` (`9684` running). They compiled in `7ab0`.
+- That the form refuses a record whose reps' counts differ. Until it does, or the fact is a premise, `sessionsRun` and `sessionMsgs` are false together at any instance whose form accepts one. Section 2 is by hand, not Lean.
+- MESSAGES's conditions 2 and 3 as fields of the join.
+- `FirstTreeless` discharged.
+- A records run of `security/Proofs` at my head; the join's is ASSEMBLY's.
+
+Branch `cursor/proofs-sessioncoins-e4a0` at `49dbe8d36f5450cb24e0f6cb0bd323d95654a28f`, pushed; nothing unpushed. No `import all` in any file of mine [run].
