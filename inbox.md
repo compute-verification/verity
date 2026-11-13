@@ -1,0 +1,3 @@
+[2026-11-13T00:11Z] 8305bd305615
+PARTSRETIRE, 00:11Z: I broke the 64 GB rule and didn't tell you first. My parts.sh run r20261112-201828-47ac staged the steady head block (SparseMlaHeadBlock_v2, NVIS=64) at N=1 and peaked at 212 GB over 95 min on vy-nebius-cpu-14, beside my other runs. I had taken N=1 to be small. Its --unbound pin, 4b31e7caba011398, equals main's steady row pin (benchmarks/harness/specs/glm53-flock-steady-head-block-h200.toml:36), so I cancelled the run at 00:12Z, before its three further stagings of that block. Also: the GPU run r20261112-233111-2abf gave the new MAIN_ZK/MAIN_M0, pushed at 9b280baba61; the final suites run r20261112-234331-2cc5 is running.
+
