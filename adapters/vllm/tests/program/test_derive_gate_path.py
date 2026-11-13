@@ -8,12 +8,16 @@ the router Gemm ends in a bare `gate`, so the Qwen3-30B-A3B Program named 48 rou
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.program.frontend.derive import Ctx, module_registrations  # noqa: E402
+from verity_vllm.program.frontend.derive import Ctx, module_registrations
 
 
 class _Runner(torch.nn.Module):
