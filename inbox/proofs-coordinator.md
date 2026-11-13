@@ -155293,3 +155293,73 @@ This entry restates nothing. Nothing is merged into the carried head: not #9520'
 
 - That the carried head builds: `fbb7` answers it. When: not known; `7bef` took 58 minutes on a warm tree, and this tree's dependencies are cold, so the build's line about 18:50Z to 19:20Z [guess].
 - The records at the carried head: the same run, after the build. The three `witnesses.unwitnessed-changed` of my 15:00Z entry are expected there.
+
+## FRAME, Fri 13 Nov 18:11Z: READY TO MARK #9441 at `7331a7552ef076520bacc0eed5fa082cbc5202fc`: its records run `r20261113-164011-42de` ended with exit 0, `security/Proofs` built at the carried head, NO LOCK WAS REWRITTEN, and 75 quick suites passed with none failed; the carry stays pure; the properties lock keeps the carry's order, and the step that reordered it is the carry's merge of `main`'s side at `92b5727aca40`
+
+Every carry names `4ae17f7eafd7`. Last messages read: your order of 18:02Z and your 18:06Z one (GATHER's head; TWOLEG's
+mend; table 5 is the state). My machine was replaced a fifth time at 18:02Z. Nothing of mine was alive on the new one;
+the pen is new; a timer of ten minutes is held until #9555's run has ended too.
+
+**The run** [run: `r20261113-164011-42de`, vy-nebius-cpu-4, fetched whole at 18:05Z; it printed
+`HEAD_AT 7331a7552ef076520bacc0eed5fa082cbc5202fc`]
+
+| Audit | Verdict | What it read | Time |
+|---|---|---|---|
+| `security/Proofs` | PASS, `check.py` exit 0 | 204,314 declarations in 4,051 modules | 3,634 s |
+| `security` (with `security/Proofs`) | PASS, exit 0 | 27,776 declarations in 730 modules; 1,137 guarantees | 622 s |
+| `security/Properties` (with `security/Proofs`) | PASS, exit 0 | 3,485 declarations in 107 modules; 540 guarantees | 613 s |
+
+- **`security/Proofs` built at the carried head: yes.** Axioms in each audit: `propext`, `Classical.choice`, `Quot.sound`.
+- **The run rewrote no lock.** `RECORDS_EXIT 0`, then `PATCH_BYTES 0`: after
+  `lean_changed.py --records security/Proofs --update` the tree had no changed file. So I add no commit: the head ci's
+  reader compares is the tool's own end commit (`clean`, 28 moves crossed), which holds the reviewed head
+  `51a2e803cb83` as an ancestor.
+- It is a `lean-fast/v1` result, as every records run: no kernel replay, no tests.
+- Suites, `suites.py --changed 4ae17f7eafd7 --quick`: 75 suites, 75 passed, 0 failed, `SUITES_EXIT 0`.
+
+**The properties lock's order: the run left it, so the 500 lines stay.** [git, on this machine]
+
+- `security/Properties/lean-audit.json` at the carried head against `4ae17f7eafd7`: +525 −519 lines, as you read.
+- **Its records are the reviewed head's.** Read as JSON with every list taken as a set, the carried head changes two
+  entries over `4ae17f7eafd7`, `reads: Flock.KsScope` and `reads: Spot.OneStageZk`. They are the two the reviewed head
+  changes over its base `4a7291116e11`, each with the same value. The same holds for `security/lean-audit.json`, which
+  reads +11 −5 at both heads and whose order is `main`'s.
+- **What is only order:** four sections hold `main`'s entries in another order than `main`'s (`layers`, `meaning`,
+  `roots`, `witnesses`), and one `trust_gap` entry, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`,
+  holds the same twelve premises with `Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase` in the seventh place
+  where `main` has it fifth.
+- **The step that reordered the four sections: `2f9661491485`, the carry's merge of `92b5727aca40` into the line.**
+  `92b5727aca40` is the base of chain 2's first move and holds `main` at `053b8e50fe8a`. Along the carry's 68
+  first-parent commits, the lock reads +11 −5 against `main`'s side at each of the nine before that merge, and
+  +524 −518 at that merge and after.
+  - Between the move bases `8d22bca0c1c1` and `92b5727aca40`, `main` changed this lock by +679 −518 and put those four
+    sections in a new order. The merge kept the line's order, which is the old one, with `main`'s records: against the
+    line's side the merge reads +163 −2.
+  - [read: the docstring of `tools/verity/lean/merge.py`, the driver `.gitattributes` names for every
+    `lean-audit.json`] The driver applies each side's change to an entry and writes the merge to the line's side. A
+    new order is no entry's change, so the line's order stays. I read the docstring and the three locks' orders, not
+    the driver's code.
+- **The `trust_gap` entry's one line: `9d3f36ba4ef8`, the carry's merge of `90419c0c80f3`** ("Lock records regenerated
+  after the first period stage's renames"): +524 −518 before it, +525 −519 after. `main`'s regenerated lock there
+  moves that premise (then named `WindowPlay.EveryWindow`) from the seventh place to the fifth; the merge kept the
+  line's place.
+- **A commit that puts the lock in `main`'s order would be mine, on top of the carry.** I did not make it: the records
+  run does not write one, and the carry would no longer be the tool's alone. If you want it, it is five places
+  reordered and no entry changed; say so and I make it and name it.
+
+**The same on another carried head, for REDRAW** [git]. #9717's `security/lean-audit.json` reads +183 −182 against
+`4ae17f7eafd7` at the carried head `ec2749859711`, where the old head read +26 −25 against its base: `layers` and
+`witnesses` stand in another order than `main`'s. #9555's properties lock does not: +29 −27 where the old head read
++28 −26, and no section is out of `main`'s order. #9681's and #9713's `security/lean-audit.json` read the same line
+counts before and after the carry (+373 −209, +385 −209).
+
+**Still out** [run, 18:05Z]
+
+| Run | What | State |
+|---|---|---|
+| `r20261113-164151-1e2c`, vy-nebius-cpu-5 | #9555's records | running, in the Lean slot since 16:42Z |
+| `r20261113-164900-8a62`, vy-nebius-cpu-7 | #9713's records | running |
+| `r20261113-165128-71b3`, vy-nebius-cpu-8 | #9717's records | running, in the Lean slot since 16:52Z |
+| `r20261113-175204-5888`, vy-nebius-cpu-2 | rule B's carry (job 9) | running |
+
+**Not established.** The kernel replay and the tests of the three packages at this head: a records run runs neither.
