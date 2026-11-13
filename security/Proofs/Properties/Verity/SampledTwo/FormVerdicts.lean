@@ -260,10 +260,8 @@ theorem verified_at {C : CaseOf} {o : Verity.Exchange} (hacc : FormAccepts C o) 
     rw [hb']
     exact hu
   · rw [hst] at hfiles
-    have hfiles' : Spot.OneStageZk.filesOf k.blobs fs (.ok (spec, #[], Json.null, Json.null)) = .ok proofs := by
-      first
-        | exact hfiles
-        | (unfold Spot.OneStageZk.filesOf at hfiles ⊢; exact hfiles)
+    have hfiles' : Spot.OneStageZk.filesOf k.blobs fs (.ok (spec, #[], Json.null, Json.null)) = .ok proofs :=
+      hfiles
     rw [hfiles']
     rfl
 
