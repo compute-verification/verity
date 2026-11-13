@@ -140477,3 +140477,95 @@ No stop.
   unchecked.
 
 ## ACCOUNTS, Fri 13 Nov 12:26Z: the label follows the verified column alone. `cursor/proofs-accounts-rows-7b2e` is at `63a9b9a024d3` (one commit on `ca8d91955791`: the one line in `certifiedRow`, one guard, the docstrings and the README that stated the narrower rule); run `r20261113-122339-48e1` through `research run --on auto --as proofs`, lean exit 0 at that commit, 146 guards [run]. The probe branch `cursor/proofs-accounts-probe-3e91` is deleted [run]. No pull request; #9593 is untouched at `9eec48aab933`; no statement and no lock record moves. Mailbox read to line 457. Not established: anything but this one file's try (no Lean check, no records run and no suite ran on this branch, and it is not carried).
+
+## HELDOF, Fri 13 Nov 12:26Z: THE STATEMENTS for the head with the check, as Lean text; and BY READING, the switch's run at `10948fd9d3a9` ALREADY runs `tablesHeld` at EVERY member, sampled or not, before the sessions, with `membersRun_files` compiled beside it, so MEMBERS may have nothing to write; the head I prove on must carry the join AND the switch
+
+In plain words: your 12:18Z is read, the `descOk` chain is stopped and I write nothing of `NamesAt`. The four statements are below. When I read the switch's file to say what the check should look like, I found the check is already there: the switch's run reads every member's statement, and a member's statement begins with the tables' check. MEMBERS should confirm that before writing anything.
+
+**1. The statements** (to go in `RefsOfSent.lean`, in `Verity.SampledTwo`; not written, not compiled).
+
+```lean
+theorem statement_tables {m : Spot.OneStageZk.Member} {slice : Lean.Json} {bs : Core.Blobs}
+    {a : Spot.OneStageZk.StepAt} (h : m.statement slice bs = .ok a) :
+    Spot.OneStageZk.tablesHeld m.own bs = .ok ()
+
+/-- Every member of an accepted play's parameters, sampled or not, has its circuit file on the play's blobs, and the
+file looks up exactly the pinned tables the blobs hold. -/
+theorem accepted_tables {C : CaseOf} {o : Verity.Exchange} {k : Case} {p : VStar.Recursive.SampledTwo.Params}
+    {c : Spot.OneStage.Commitment} {e : VStar.Recursive.SampledTwo.Evidence}
+    (hA : FormAccepts C o) (hk : C o = some k) (hdec : Decoded k p c e) :
+    ∀ m ∈ p.members, Properties.Spot.HoldsRegisteredTables m.own k.blobs
+
+/-- `TablesHeldAt` at template 0's member, from the form's accept. -/
+theorem tablesHeldAt_of_accept {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params}
+    {m₀ : Spot.OneStageZk.Member} (hP : DecodesAt C P) (hm : memberOf P 0 = some m₀) :
+    TablesHeldAt C m₀.own
+
+/-- `RefsAt` at the play of record's reference statements, or two of the blobs sent differ under one SHA-512. -/
+theorem refsAt_of_accept {C : CaseOf} {P : VStar.Recursive.SampledTwo.Params} {o₀ : Verity.Exchange} {k₀ : Case}
+    {c₀ : Spot.OneStage.Commitment} {e₀ : VStar.Recursive.SampledTwo.Evidence} {xs₀ : List Claims.Msg}
+    (hS : CaseIsSent C) (hP : DecodesAt C P)
+    (hA₀ : FormAccepts C o₀) (hk₀ : C o₀ = some k₀) (hd₀ : Decoded k₀ P c₀ e₀)
+    (hx₀ : refStmtsOf P k₀.blobs = some xs₀) : RefsAt C xs₀ ∨ SentCollides C
+```
+
+- `tablesHeldAt_of_accept` takes `DecodesAt` because `TablesHeldAt C q` holds one `q` for all plays, and template 0's member is the parameters'. `hm` is no premise in `refsAt_of_accept`: where the parameters name a template, the play of record's `hx₀` gives its member (`refStmtsOf_getElem?`, `refRawOf_some`), and where they name none, every play's reference statements are the empty list [derived].
+- **`refsAt_of_accept` has no premise on the plays but `CaseIsSent` and `DecodesAt`.** Its other four hypotheses name the play of record, the one accepted play whose blobs give `xs₀`: the join needs that `xs₀` to be `CopyOf`'s. With no accepted play `RefsAt` holds of any list. The form without a named play, `(∃ xs₀, RefsAt C xs₀) ∨ SentCollides C` from `hS` and `hP` alone, follows by cases [derived].
+- `heldOfAt_or_collide` then loses `hT` and nothing else: the held copies at the cases at one statement, or a collision, from `CaseIsSent`, `DescAt`, `DecodesAt`, the play of record and `CopyOf`.
+- It is `refsAt_of_held` (compiled at `2861eed8d0a`) with `TablesHeldAt` from the accept. `NamesAt` and `tablesHeldAt_of_names` go, unused.
+
+**2. What I need the check's text to look like: what the switch's text is already.** [read: `Spot/OneStageZk.lean` at `10948fd9d3a9` on `cursor/proofs-members-switch-34fd`; I compiled nothing there]
+
+```lean
+def runMembers (slice : Member → Json) (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat)
+    (bs : Core.Blobs) : V Run :=
+  membersHeld ms sts >>= fun held =>
+  sampledHeld held want >>= fun _ =>
+  membersFiles slice bs ms.toList >>= fun files =>
+  (sts.zip held).foldlM (stepMember (statementAt files) bs) ⟨#[], #[], #[], true⟩ >>= fun r => …
+
+def Member.files (m : Member) (slice : Json) (bs : Core.Blobs) : V StepAt :=
+  (m.statement slice bs >>= fun a => a.filesHeld >>= fun _ => pure a).mapError (s!"member {m.name}: {·}")
+
+def Member.statement (m : Member) (slice : Json) (bs : Core.Blobs) : V StepAt :=
+  statementOf m.own (m.population slice) bs >>= fun a => m.blockHeld a.g >>= fun _ => pure a
+
+def statementOf (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) : V StepAt :=
+  tablesHeld p bs >>= fun _ => …
+
+theorem membersRun_files (h : membersRun p ms c e sts bs = .ok r) :
+    ∃ roots, rootsOf ms c.record = .ok roots ∧ ∀ m ∈ ms, m.FilesHeld (m.slice c.record roots) bs
+```
+
+- **Which function runs it:** `runMembers`, through `membersFiles`, which reads `Member.files` of every member of the parameters, "sampled or not" (its docstring). The two-stage form reaches it by the one call it makes today, `OneStageZk.membersRun p.audit p.members c₂ e.interior e.statements bs` in `inputAt`, which `accepted_ran` already hands me.
+- **In what order:** `membersFiles` is `runMembers`' third step, before the fold over the statements' sessions. A member's statement begins with `statementOf`, whose first step is `tablesHeld m.own bs`.
+- **With which refusal:** `tablesHeld`'s own (`NO_TABLES`), under `Member.files`' "member NAME: ". I read only the passing direction, so the text is free.
+- **So on a head with the switch, the tables' check runs at every member of the parameters in every accepted play, and template 0's member is one of them** (`memberOf` is a `find?` in `p.members`). `membersRun_files` is in the code's Lean there, and `Member.FilesHeld`'s first conjunct is `m.statement slice bs = .ok a`. My proof is then `accepted_ran`, `membersRun_files`, `statement_tables` (two unfolds, two binds) and the existing `tablesHeld_ok`: about 30 lines for the four statements [derived, not compiled].
+- **What must stay as it is at `10948fd9d3a9`:** `membersRun_files`' statement; `tablesHeld` as the first `>>=` of `statementOf` and `statementOf` as the first of `Member.statement` (explicit binds, as they are, not an `if … then throw` in a `do` block); `inputAt`'s call of `membersRun` at `p.members`.
+- **If MEMBERS writes a separate check anyway** (say at each circuit file once, on `FileKept.lookups` and `tablesMatch`): I need one lemma beside it, where `membersRun_files` is: `membersRun p ms c e sts bs = .ok r → ∀ m ∈ ms, tablesHeld m.own bs = .ok ()`. At each template's first member alone is enough too, and costs me one congruence (`tablesHeld` reads only `p.circuit`).
+
+**3. The head.** [read] The switch's branch holds no two-stage form: its base is `main` at `4a7291116e1`, with no `VStarRecursive/SampledTwo.lean` and no `Proofs/Properties/Verity/SampledTwo/`. The join's `Spot/OneStageZk.lean`, at my head, is the text before the switch (`runMembers` reads a member's statement only inside `stepMember`). So the lemma is provable only on a head that carries both, the join with the switch merged, and MEMBERS's head alone is not it.
+- On that merge three lemmas of mine break and are deleted: `stepMember_tables`, `runMembers_tables`, `membersRun_tables` open the join's `runMembers` by position. Others' lemmas that open `membersRun`, `runMembers` or `stepMember` by their text break there too (`membersRun_held` in `SessionHeld.lean`, `stepMember_sessions` and `memberSession_checks` in `MemberChecks.lean`) [read: their proofs; not tried]. That is the merge's cost, not this lemma's.
+
+## STOP RULE
+
+None.
+
+## NEEDS
+
+- MEMBERS's yes or no to item 2: that at its head every member's statement, and so `tablesHeld`, runs in `runMembers` whichever members the sample holds.
+- The name of the head that carries the join and the switch, and who makes that merge. I merge nothing until you say.
+
+## To post
+
+Nothing new to post: the check soundness ruled on appears to be in the switch's run already, by reading; MEMBERS confirms.
+
+## Not established
+
+- Anything in items 1 to 3 by a compile: the four statements are text, and the switch's file is read, not built by me.
+- That the join's proofs survive the switch's `runMembers`: three of mine do not, and I named three of others' by reading.
+- `DecodesAt` and `CopyOf` at a case map or session of record, and that any accepted play passes `descOk`: as before.
+
+## Branches
+
+- `cursor/proofs-heldof-4c7b` at `2861eed8d0a` (pushed, compiled, unchanged since 11:54Z). No run is running, and no timer is set: I end the turn here and wait for your resume.
