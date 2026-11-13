@@ -470,12 +470,17 @@ def statementFits (limit : Nat) (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Co
   need (n < limit) s!"the statement the inputs name is {n} bytes, {limit} or more"
 
 /-- Whether each parsed field's canonical bytes parse back to it (the sample up to `Flock.norm`, the inner shape through
-`Inner.ofJson`): that `Names`' canonical pins agree with its parsed ones at these inputs. The difftest's, at the honest
-session. -/
+`Inner.ofJson`): that `Names`' canonical pins agree with its parsed ones at these inputs. A field and the parse of its
+bytes are two values, so they are compared by their canonical texts (`jeq`), never as trees: the parse has the field's
+canonical bytes again. The difftest's, at the honest session. -/
 def roundTrips (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Bool := do
-  let back (j : Json) : V Bool := do pure ((Flock.JsonParse.parse (← Flock.canon j)).toOption == some j)
+  let back (through : Json → Json) (j : Json) : V Bool := do
+    let text ← Flock.canon j
+    pure (match Flock.JsonParse.parse text with
+      | .ok j' => jeq (through j') j
+      | .error _ => false)
   let shapeOk := (do Flock.RecVStar.Inner.ofJson (← Flock.JsonParse.parse (← Flock.canon h.shape.toJson))).toOption == some h.shape
-  let mut ok := shapeOk && (← back o.partition)
+  let mut ok := shapeOk && (← back id o.partition)
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   for (p, s) in o.parts.zip pr.parts do
     let circuitB ← bs.get p.circuit "a part's circuit"
@@ -484,11 +489,11 @@ def roundTrips (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Boo
     let draw := if tags.hm96Rows then Flock.Witness.recordDraw record else none
     let drawOk ← match draw with
       | none => pure true
-      | some d => do pure ((Flock.JsonParse.parse (← Flock.canon d)).toOption.map Flock.norm == some d)
+      | some d => back Flock.norm d
     let regOk ← match p.registered with
       | none => pure true
-      | some r => back r
-    ok := ok && drawOk && regOk && (← back p.partition) && (← back p.bindings)
+      | some r => back id r
+    ok := ok && drawOk && regOk && (← back id p.partition) && (← back id p.bindings)
   pure ok
 
 /-- **The recursive session's verdict**: the inner session held (`innerHeld`), one part per V* statement at its shape
