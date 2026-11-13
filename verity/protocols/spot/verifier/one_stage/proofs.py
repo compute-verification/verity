@@ -63,7 +63,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from verity.definitions.circuits.library import TABLES
+from verity.circuits.library import TABLES
 
 from verity.protocols.spot.device.challenger import SAMPLE_LINK_FIRST, sample_link_first
 from .registration import digest as registration_digest
