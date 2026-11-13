@@ -18,6 +18,7 @@ from tests.commit.test_store_dump import STEPS
 from tests.pipeline.test_c2_replay_run import Spans
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.commit import store_dump as SD
+from verity_vllm.pipeline import replay_plan
 from verity_vllm.records import schema_ids
 
 MEMBER = "model.layers.0.self_attn.qkv_proj"
@@ -136,7 +137,7 @@ def test_a_slim_deferral_starts_its_planner_on_the_commit_s_flags_and_no_other_d
     def planner(args: Any) -> str:
         started.append(args)
         return "the planner"
-    monkeypatch.setattr(RB, "Planner", planner)
+    monkeypatch.setattr(replay_plan, "Planner", planner)
     slim = flags()
     assert RB.prepare(slim) == "the planner" and started == [slim]
     assert RB.prepare(flags(replay_deferred="full")) is None and RB.prepare(flags(replay_deferred=None)) is None

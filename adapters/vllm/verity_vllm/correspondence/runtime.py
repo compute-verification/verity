@@ -26,7 +26,7 @@ import json
 import os
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from verity.circuits.codec import canonical_json
 
@@ -522,7 +522,8 @@ def read_program_document(program_dir: Any) -> tuple[dict | None, str | None, st
     if doc is None:
         return None, None, None if recorded is None else f"{d}: result.json records a correspondence_digest but the descriptor carries no {NAMESPACE!r} annotation"
     digest = correspondence_digest(doc)
-    problem = None if recorded in (None, digest) else f"{d}: correspondence_digest {str(digest)[:16]} != result.json's {str(recorded)[:16]}"
+    # an annotation that is no record has no digest: beside a recorded one, the cut raises TypeError and neither reader returns
+    problem = None if recorded in (None, digest) else f"{d}: correspondence_digest {cast(str, digest)[:16]} != result.json's {str(recorded)[:16]}"
     return doc, digest, problem
 
 

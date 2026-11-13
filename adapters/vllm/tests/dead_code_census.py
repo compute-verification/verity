@@ -81,8 +81,8 @@ PROTECTED = (
     "verity_vllm/correspondence/runtime.py",
 )
 
-#: row_pod.sh's Match runs run_config with `--skip census,...,golden,...`: the modules those stages would `-m` are statically reachable
-#: (run_config's stage table names them) but never run by the live launcher.  Reported, not deleted.
+#: A row's Match (`pipeline.row_stages.SKIP`) runs run_config (`pipeline.match`) with `--skip census,...,golden,...`: the modules those
+#: stages would `-m` are statically reachable (run_config's stage table names them) but never run by the live launcher.  Reported, not deleted.
 RUN_CONFIG_SKIPPED_STAGE_MODULES = ("verity_vllm.properties.census", "verity_vllm.properties.noninterference", "verity_vllm.properties.golden")
 
 #: a circuit-check sidecar (`circuit_check.sidecars.SUFFIX`, which this suite cannot import): its name is no module name, so nothing
@@ -326,7 +326,7 @@ def shell_modules(g: Graph, text: str) -> set[str]:
     for tok in SHELL_PY_RE.findall(text):
         tok = tok.lstrip("./")
         if tok in g.mod_of:
-            if not is_test_file(tok):                  # row_pod.sh names the tests that extract its shell blocks, in comments
+            if not is_test_file(tok):                  # a shell names test files too: one canary.sh runs, the GPU probes the tap shells' comments name
                 mods.add(g.mod_of[tok])
             continue
         cands = non_test_by_base.get(os.path.basename(tok), [])

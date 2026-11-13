@@ -8,6 +8,7 @@ import functools
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -33,8 +34,11 @@ CHILD = ("import importlib, json, sys\n"
 @functools.cache
 def held(module: str) -> dict[str, dict[str, bool]]:
     """A fresh process that imports `module`, as its command does: whether `vu_store` is loaded and the driver's
-    `keep_population` is on after the import (`imported`), and after the Commit's hook is made there (`hook_made`)."""
-    child = subprocess.run([sys.executable, "-c", CHILD, module], capture_output=True, text=True, check=True)
+    `keep_population` is on after the import (`imported`), and after the Commit's hook is made there (`hook_made`).  It runs in
+    the adapter's directory, so the `verity_vllm` it imports is this tree's."""
+    child = subprocess.run([sys.executable, "-c", CHILD, module], cwd=Path(__file__).resolve().parents[2], capture_output=True,
+                           text=True, check=False)
+    assert child.returncode == 0, child.stderr[-2000:]
     return json.loads(child.stdout)
 
 
