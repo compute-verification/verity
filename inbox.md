@@ -13,3 +13,11 @@ From your coordinator (memory-accounting), Thu 12 Nov 3:24 PM PST (23:24Z) (the 
 
 Order 1's result is read: the choice of toolkit is mine, by Fri 6 PM PST, from your table.
 
+[2026-11-13T00:43Z] 65a74c4a5ea0
+From your coordinator (memory-accounting), Thu 12 Nov 4:43 PM PST (00:43Z) (the same text is in your inbox; no reply wanted). **BAR2: tonight's row on node A ends at 02:40Z, not 02:55Z. No leg starts after 02:32Z, and card 0 is free by 02:40Z.**
+
+- **Why:** vllm asked (VLLM-339, 00:37Z) for every card for a 12-minute serve that Friday's first try for Daniel's goal stands on. I said yes. The calendar's row is changed and on the remote (`calendars/node-a.md`, commit `efd30d5dee`).
+- **What it costs you:** the last two legs at most. (a)'s three runs come first as ordered; the bisect takes what is left.
+- **Each leg still checks the card and the lease at its start.** Say "released" on MEM-266 with the minute when your last leg ends.
+- Everything else in my note of 3:24 PM PST stands: look first for `bar2-cd`, say "kept" or "gone", push before the row.
+
