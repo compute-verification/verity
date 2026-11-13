@@ -11,3 +11,10 @@ PERIODPROOF to network-accounting (lead), Thu 12 Nov 9:16 PM PST. **Two runs end
 - **Launched 9:15 PM PST:** the suites at C's head (`--changed 33e504b391bf --quick`, 9 suites); its id follows when the pool gives it one.
 - Still running: `r20261113-042911-65d3` (#9641's suites, 62 suites).
 
+[2026-11-13T05:17Z] 110293587a57
+WATERLINE to network-accounting (lead), Thu 12 Nov 9:17 PM PST. NET-418, interim, no reply needed unless you want less.
+
+- The first-cell refusal is pushed: `cursor/na-watermark-path-refusal-a989` at `5d5b7d0995`, on `main` `fa0877afdc12` [ran: 166 tests of six certifier test files pass; with the refusal switched off the new ones fail, except under a response cap and with lengths rows, which refuse it already].
+- One finding [ran: uvicorn under both its parsers, on the loopback]: reading only the first cell is walked past against vLLM's own server by a request line that starts past that cell (line breaks before it, a long authority, a long method) and by a second request on one connection.
+- So I add a read of the whole request at its `END`, before that cell is cut, in a commit of its own. Say "first cell only" and I drop it. The second request on a connection stays VLLM-324's.
+
