@@ -1194,7 +1194,8 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
     (`a5_coins.held`: the key of ``--challenger-key``, or of the ``local`` challenger the first stage kept,
     `challenger_host`), and reads the first stage's evidence, ``stage1.json``'s, under them as it reads its own; no
     key is read from that file, and a hand-off whose coins are not that challenger's is refused before the session
-    opens (`first_coins`). ``summary.json`` under ``--out`` says what happened; exit 0 when the second stage held
+    opens (`first_coins`). ``summary.json`` under ``--out`` says what happened, and what it cost (module docstring: the
+    interior's commitment by ``clock``, the replay's own record's seconds); exit 0 when the second stage held
     (`held`)."""
     import a5_coins as AC
 
