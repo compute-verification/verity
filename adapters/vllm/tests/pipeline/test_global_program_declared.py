@@ -1,6 +1,7 @@
 """What the workload Program declares of its row before a component's Program is read
 (`verity_vllm.pipeline.global_program`): its requests in the manifest's order, its lag and the engine it models.  The requests
-take the ids `r<k>` by position, and a request listed out of its index or with no length is refused.  The lag is the declared
+take the ids `r<k>` by position, a request listed out of its index or with no length is refused, and a row that serves with
+the prefix cache states each request's cached rows and the requests that made them.  The lag is the declared
 target's (1 under async scheduling, which is the pinned resolver's value when the target says nothing; 0 synchronous), each
 component is held to it and to the pinned vLLM, and the first that disagrees is named.  The engine is the components' agreed
 block under the conditions the Program models: eager for an eager label, the agreed compilation facts for a compiled one, and a
@@ -64,6 +65,16 @@ def test_the_requests_are_the_record_s_in_its_order_under_the_ids_r_k_with_their
     assert any(r["arrive_step"] for r in rows) and GP.request_id_of(7) == GP.request_id_of("7") == "r7"
     undeclared = _requests(lambda reqs: [q.pop("arrive_step") for q in reqs] and [q.pop("index") for q in reqs])
     assert [r["arrive_step"] for r in undeclared] == [0] * 8 and [r["index"] for r in undeclared] == list(range(8))   # a request with neither
+
+
+def test_a_row_that_serves_with_the_prefix_cache_states_each_request_s_cached_rows_and_the_requests_that_made_them():
+    doc = copy.deepcopy(DOC)
+    doc["engine"]["args"]["enable_prefix_caching"] = True
+    for q, ids in zip(doc["requests"], ([1] * 40, [1] * 35, [1] * 16 + [2] * 20)):      # blocks of 16: two of the first's, then one of them
+        q.update(prompt_token_ids=ids, prompt_len=len(ids))
+    rows = GP.manifest_requests(Workload.of(doc, "w.json"))
+    assert [(r["cached"], r["producers"]) for r in rows] == [(0, []), (32, ["r0", "r0"]), (16, ["r0"]), *[(0, [])] * 5]
+    assert [list(r)[-2:] for r in rows] == [["cached", "producers"]] * 8 and not {"cached", "producers"} & {k for r in _requests() for k in r}
 
 
 @pytest.mark.parametrize("change, refusal", [
