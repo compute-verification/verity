@@ -159286,3 +159286,80 @@ All files at `main` `3f4af5f89966`, under `security/Proofs/`. Rulings used:
   `Zk.schedule m`. The count itself closes by `decide` at the deployed schedules [run: `r20261113-191149-e50b`].
 - **The decoder at multiplicity r.** That the decoder's proofs generalize from multiplicity k+1 to r.
 - **The records.** The exact list of records that move. That is `check.py --update`'s; mine is a text reach.
+
+
+## SESSIONCOINS, Fri 13 Nov 20:09Z: the whole entry: C-Flock's choice finders sized (parts A, B and C, route (a), the nine, the pickers, the cost point), corrected
+
+Everything is read at `main` `3f4af5f89966`. This entry gathers my entries since 18:23Z into one place and applies their corrections; each section names the entry that has the full text. The tags are as before: [read], [derived], [run] or [guess]. No Lean was written outside the scratch branch `cursor/sessioncoins-alignedx-try`, which has no pull request.
+
+**The answer.** The plurality ways from the original question don't keep V3's and V5's stated δ.
+- Way (i) as a search costs at least 2^21,632 runs per chooser call.
+- Way (ii) as a uniform guess makes δ at least 2^524,031.
+- Route (a) keeps `ksStrictZ` and both stated δ unchanged. Its parts:
+  - the constant chooser `fun _ _ _ _ => zeroTab`, with `zeroTab := fun _ _ => GF128.of F128.zero`;
+  - `AlignedX`, whose table case quantifies over two tables;
+  - `forkE_alignedX`, which says the fork's value doesn't read the chooser.
+- Its core compiles [run]. No schedule premise enters.
+- The one text change it needs is the cost hypothesis on `v`. At the deployed plans that hypothesis is a kernel `decide` with no figure moved [run].
+
+### Part B: `plurSZ`
+My 18:23Z entry, part B, has the full text.
+- **Way (i), a search under ruling B.** It is bounded, but every term it enters exceeds 1. After each masked table node, the rep's inner proof still draws β and 168 query words. So one chooser call costs at least 2^21,632 runs of cost `t′`, and q²/2^513 is at least 2^42,751. [read, derived]
+- **Way (ii), a uniform guess.** Each fork term gains the product of the table sizes the fork passes before its slot. That product is at least 2^1,048,576, from the rep's pads. So every level term and τ term is at least 2^524,031 at every deployed m. [derived]
+- **Route (a) keeps the stated δ.** The sizing is my 20:07Z entry.
+  - Both sides of a table node take `∀ t d`. All the alignment lemmas already take two indices and two oracle states (18:40Z).
+  - No schedule premise enters: no `Lock.PreFirst`, `Lock.Leads`, `Lock.Lead` or `SchedZ`. Those belong only to route (b) (18:50Z).
+  - The core compiles: `r20261113-184926-3df8`, scratch commit `3115692c3fb5`, lean exit 0 in 20 s. `AlignedX.toAligned`, `forkE_alignedX` and `forkE_const` each depend on `[propext, Classical.choice, Quot.sound]` only. [run]
+  - The restated chain is about 540 lines touched, all mechanical. The whole route is about 950 to 1,050 lines, pickers excluded. [run for the chain's current size, guess for the rest]
+  - I dropped route (b), at `forkC`, after soundness's 18:45Z yes to (a).
+- **The constant, and what it reaches.**
+  - It is written out as `fun _ _ => FlockLevel3.GF128.of Flock.F128.zero`, which reaches `F128.mk` and `UInt64` literals and no choice. [read, derived]
+  - The term must not be `(0 : GF128)`, which reaches `instFieldGF128`'s `Classical.choose`.
+  - The level-0 `default` in `lockSessZ … default cap₀` (`StrictZ:55, 64, 73`; `SessionZ.lean:157, 164, 171`; plain `StrictCRL.lean:152`) is replaced by the same constant.
+  - Soundness took both; they stay rows here, and lean adds the term to its walk's tests.
+
+### Part A: `candZC` and `candL`
+My 18:23Z entry has items 1 and 2; items 3 to 5 are in my 20:07Z entry.
+- **The message isn't determined.** No uniqueness lemma exists, and the radii (about 0.288) exceed unique decoding (about 0.25). So the finder must decode, with `zkDecodeR` or `flockDecode`. [read, derived]
+- **The decoders reach choice in four places,** and each has a fix: the irrational radius and `Nat.ceil` on ℝ (an integer threshold over ℕ, given), `novelInv` and `padInv` through `LinearEquiv.ofInjectiveEndo` (elimination), `GF128`'s inverse (a computed field), and `basis128` and `pack` (literals). [read, derived]
+- **The charge fails δ as proved.** Charged as proved (`zkPolyR`), the decoder breaks V3's and V5's stated δ from m = 26 on. Charged at the real elimination count `D_m`, it breaks it from m = 28 on. A Guruswami–Sudan decoder at fixed multiplicity r of about 71 to 76 keeps it, at `D_m/2^256 ≤ 2^−148` at every m. These numbers came to you before any statement changed, under your 18:35Z rule. [derived; that the proofs generalize to r is a guess]
+- **The hardest lemma** is the decoder's completeness at the compiled tables. [guess]
+
+### Part C: readers
+My 18:23Z entry has the method; this section applies the corrections from my 20:07Z entry. [run: text reach]
+- **`plurSZ`, the three `adv*SFinderZ`, `SessCRZ` and `TableCRZ`: 39 guarantees.** 18:23Z said 35. The four it missed are:
+  - `PublicAudit`, `RecursiveRanRegistered` and `RecursiveRanRegisteredExec`, through `SessForkZ` (`Recursive/Finds.lean:125`, `Finder.Finds`);
+  - `SoundAtBridge`, through `CR` (`SoundAtBridge/Session.lean:184`).
+- **`collOf`: 41 guarantees.**
+- **`plurSL`:** `flock_verify_sound` and `flock_verify_sound_205`. **`plurCL` and `plurS`:** none. **`plurC`:** `ProbBatchInduced`.
+- **The plain chain** (`plurSL`, `plurCL`) is aligned at every table node, at the levels only, with no pads and no τ. Of the 39, only `flock_verify_sound` reads it. Neither deployed guarantee, V3 or V5, reads it (20:07Z, section 7). [read]
+- **Deployed readers.** Of the lock's 14 deployed guarantees, two are among the finders' 39 and among `collOf`'s 41: `SampledKSLiveV3` and `SampledKSLiveV5`. [run: the reach rerun today, intersected with the lock's `deployed`]
+- **A correction to 18:23Z.** Its `collOf` list named `SessionLoopZKDeployed`, through `selfSFinderZ`. Today's rerun doesn't reach it, and its statement file (`SessionLoop/Statement.lean`) names no finder. Today's 41 are the 39 plus `RecursiveAuditC3`, through `SpotRecursiveAt`, and `flock_verify_sound_205`, through `selfSFinderL`. `check.py --update` gives the exact list.
+
+### The nine and the pickers
+The table is in my 20:07Z entry.
+- **Unique and computable:** `capOfRoot`, `tableZJ`, `bindReveal` and `outCL`. Each needs a lemma and a replay, or a computation. [read, derived; `outCL`'s replay over the step type is a guess]
+- **A search over a held finite list:**
+  - among the nine: `outBitOf`, `rowsOutZC` and `outRegZC`;
+  - among the pickers: `LinkFinder.outOf` and `opOfVZC`/`opOfVL`.
+- **`readsAtZC` passes only once restated** as an image over the sample.
+- **`collOf`** becomes a search over the openings' paths, as `findColl` already is.
+
+### The cost point
+My 19:11Z, 19:15Z and 20:06Z entries have the full text.
+- **The numbers.** At the deployed `--zk` plans (m = 25 to 35), one compared opening costs at most 19 SHA-512 calls: `3 + logLen₀ − ⌊log₂ q₀⌋` at m = 35. One run's openings together cost at most 23,830. The only figure that evaluates `v`, `DeltaPubDeployed` (deployed), holds for every `v ≤ 2^80`. So the ask is a changed text with unchanged figures, with room of a factor of at least 2^65.5. [derived; run]
+- **The third way doesn't avoid a text change.** `v` is constrained only by `0 ≤ v` in V3, and V5 has no `v`. The session game counts no call: `Finder.CR` charges `fun _ => q`. And three of the five forks compare openings of runs that may have been rejected. [read]
+- **Way (i)** is `_hvOpen : ∀ S R, ∀ T ∈ planZHJ … S R, (runOpenCalls T : ℝ) ≤ v`, classed `domain`. In plain words: `v` is at least the SHA-512 calls to check every opening one session run makes at any table of the plan.
+  - V5 also needs a `v` binder, with `qF qS` tied to `t′ + v`.
+  - The count closes by plain `decide` in the kernel at the deployed schedules. That covers `Nat.log` too; `rfl` and `decide +kernel` also work. The run is `r20261113-191149-e50b`, 6 theorems, 19 s for the file, five depending on no axiom and one on `propext`. [run]
+
+### Not established
+- That the restated chain compiles over `AlignedX`; only its core is compiled.
+- That `zeroTab` reaches no choice in lean's own walk, which I didn't run.
+- Which instance the level-0 `default` elaborates to, and whether `D` or `Sl` is a function type (`dfltOutZC`).
+- Way (i)'s two table facts: `T.q = 168` and `T.N ≤ 8192` at every table `planZHJ` admits, from `Zk.schedule m`. And kLog's deployed range, which picks N.
+- That `Zk.shaCalls` on an accepted run counts at least `runOpenCalls`. That fails if frame-v3 shares nodes, which I haven't read.
+- How soundness rules on charging the prover's runs at the stated `t′`, and whether setup work counts (`tableZJ`).
+- That the decoder's proofs generalize from multiplicity k+1 to r, and the cost unit, one SHA-512 evaluation per field operation.
+- That `Rows.ofNet`'s `Built` bounds a column below 2^32, and that each `*_conflict_collision` lemma has a version with the collision as data.
+- The exact records that move, which is `check.py --update`'s to say; mine are by text.
