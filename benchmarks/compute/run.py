@@ -101,7 +101,7 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity.hardware import cards
-from verity.hardware.site import Site
+from verity.device import Site
 from verity_bench import kit
 from verity_config.settings import SHARED
 

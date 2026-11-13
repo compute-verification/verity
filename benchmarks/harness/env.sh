@@ -24,4 +24,4 @@ if [ -z "${CUDA_HOME:-}" ]; then
 fi
 export PATH=${CUDA_HOME:+$CUDA_HOME/bin:}$VENV/bin:$PATH
 ROOT=$PWD
-export PYTHONPATH=$ROOT/benchmarks/harness:$ROOT/adapters/vllm:$ROOT/verity/configuration/config:$ROOT/tools/research/src:$ROOT:$ROOT/benchmarks${PYTHONPATH:+:$PYTHONPATH}
+export PYTHONPATH=$ROOT/benchmarks/harness:$ROOT/adapters/vllm:$ROOT/tools/config:$ROOT/tools/research/src:$ROOT:$ROOT/benchmarks${PYTHONPATH:+:$PYTHONPATH}
