@@ -4191,6 +4191,10 @@
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
   },
+  "Pouw.Salt.keyed_leaf_binds": {
+   "honest": ["Pouw.Salt.keyed_leaf_binds_honest"],
+   "nontrivial": "Pouw.Salt.keyed_leaf_binds_nontrivial"
+  },
   "Nci.SecurityProofs.CapabilityFloor": {
    "honest": ["Nci.SecurityProofs.CapabilityFloorHonest"],
    "nontrivial": "Nci.SecurityProofs.CapabilityFloorNontrivial"
@@ -4224,38 +4228,6 @@
    "honest": ["Nci.SecurityProofs.StatHeldBudgetHonest"],
    "nontrivial": "Nci.SecurityProofs.StatHeldBudgetNontrivial",
    "kind": "exclusion"
-  },
-  "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": {
-   "honest": ["NetTiming.Witness.MonitoringPeriodLeakAccepted_honest"],
-   "nontrivial": "NetTiming.Witness.MonitoringPeriodLeakAccepted_nontrivial"
-  },
-  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": {
-   "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest"],
-   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
-  },
-  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver": {
-   "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest"],
-   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
-  },
-  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver": {
-   "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest"],
-   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
-  },
-  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKPerProver": {
-   "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest"],
-   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
-  },
-  "Pouw.Salt.keyed_leaf_binds": {
-   "honest": ["Pouw.Salt.keyed_leaf_binds_honest"],
-   "nontrivial": "Pouw.Salt.keyed_leaf_binds_nontrivial"
-  },
-  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": {
-   "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest"],
-   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
-  },
-  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedPerProver": {
-   "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest"],
-   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
   },
   "Flock.SecurityProofs.RecursiveKSDeployed": {
    "honest": ["RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest"],
@@ -4296,6 +4268,30 @@
   "Verity.SecurityProofs.RegisteredLeakage": {
    "honest": ["Verity.SecurityProofs.RegisteredLeakage_honest"],
    "nontrivial": "Verity.SecurityProofs.RegisteredLeakage_nontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
   },
   "Verity.SecurityProofs.RegisteredStreamLeakage": {
    "honest": ["Verity.SecurityProofs.RegisteredStreamLeakage_honest"],
@@ -4554,6 +4550,10 @@
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakChecked_nontrivial"
   },
+  "Hash.SecurityProofs.HistoryReadBinding": {
+   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
+   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
+  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledAuditAccepted_nontrivial"
@@ -4565,6 +4565,10 @@
   "NetTiming.SecurityProofs.SampledLeakRegistered": {
    "honest": ["NetTiming.Witness.MonitoringPeriodLeakAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakRegistered_nontrivial"
+  },
+  "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": {
+   "honest": ["NetTiming.Witness.MonitoringPeriodLeakAccepted_honest"],
+   "nontrivial": "NetTiming.Witness.MonitoringPeriodLeakAccepted_nontrivial"
   },
   "Accounting.SecurityProofs.Bridge.CommOfMonitoringPeriodLeakAccepted": {
    "honest": ["NetTiming.Witness.MonitoringPeriodLeakAccepted_honest"],
@@ -4624,10 +4628,6 @@
    "honest": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial"
   },
-  "Hash.SecurityProofs.HistoryReadBinding": {
-   "honest": ["Hash.SecurityProofs.HistoryReadBinding_honest"],
-   "nontrivial": "Hash.SecurityProofs.HistoryReadBinding_nontrivial"
-  },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "nontrivial": "NetTiming.Witness.PooledLeakCarried_nontrivial"
   },
@@ -4648,68 +4648,6 @@
    "honest": ["Nci.SecurityProofs.DampenerRemotePeriod_honest"],
    "nontrivial": "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial",
    "kind": "exclusion"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": {
-   "honest": ["NetTiming.Witness.ConstantRate_honest"],
-   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeAdviceBits_nontrivial"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
-   "honest": ["NetTiming.Witness.ConstantRate_honest"],
-   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase": {
-   "honest": ["NetTiming.Witness.ConstantRatePerWindow_honest"],
-   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRatePerExecutionPhase_nontrivial"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases": {
-   "honest": ["NetTiming.Witness.ConstantRate_honest"],
-   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRateExecutionPhases_nontrivial"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
-   "honest": ["NetTiming.Witness.EncardAccSeqsSampledLe_honest"],
-   "nontrivial": "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
-   "honest": ["NetTiming.Witness.DecodableConstantRate_honest"],
-   "nontrivial": "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase": {
-   "honest": ["NetTiming.Witness.DecodableConstantRatePerWindow_honest"],
-   "nontrivial": "NetTiming.Witness.EncardDecodableLeConstantRatePerExecutionPhase_nontrivial"
-  },
-  "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressDecodableLe_nontrivial",
-   "kind": "acceptance"
-  },
-  "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial",
-   "kind": "acceptance"
-  },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial",
-   "kind": "acceptance"
-  },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial",
-   "kind": "acceptance"
-  },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerExecutionPhase_nontrivial",
-   "kind": "acceptance"
-  },
-  "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase": {
-   "honest": ["NetTiming.Witness.Ingress_honest"],
-   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLePerExecutionPhase_nontrivial",
-   "kind": "acceptance"
-  },
-  "NetTiming.SecurityProofs.PooledLeakAccepted": {
-   "honest": ["NetTiming.Witness.PooledLeakAccepted_honest"],
-   "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
   },
   "Accounting.SecurityProofs.TableReadBinding": {
    "honest": ["Accounting.SecurityProofs.TableReadBinding_honest"],
@@ -4754,6 +4692,10 @@
   "Claims.SamplingGeneric.compilerKSRegAtSB": {
    "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSRegAtSB_nontrivial"
+  },
+  "NetTiming.SecurityProofs.PooledLeakAccepted": {
+   "honest": ["NetTiming.Witness.PooledLeakAccepted_honest"],
+   "nontrivial": "NetTiming.Witness.PooledLeakAccepted_nontrivial"
   },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables": {
    "honest": ["Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables_honest"],
@@ -4819,6 +4761,64 @@
   "Verity.Sampled.remote_soundness_deployedReady": {
    "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
    "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": {
+   "honest": ["NetTiming.Witness.ConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeAdviceBits_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": {
+   "honest": ["NetTiming.Witness.ConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRate_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase": {
+   "honest": ["NetTiming.Witness.ConstantRatePerWindow_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRatePerExecutionPhase_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases": {
+   "honest": ["NetTiming.Witness.ConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsLeConstantRateExecutionPhases_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": {
+   "honest": ["NetTiming.Witness.EncardAccSeqsSampledLe_honest"],
+   "nontrivial": "NetTiming.Witness.EncardAccSeqsSampledLe_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
+   "honest": ["NetTiming.Witness.DecodableConstantRate_honest"],
+   "nontrivial": "NetTiming.Witness.EncardDecodableLeConstantRate_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase": {
+   "honest": ["NetTiming.Witness.DecodableConstantRatePerWindow_honest"],
+   "nontrivial": "NetTiming.Witness.EncardDecodableLeConstantRatePerExecutionPhase_nontrivial"
+  },
+  "NetTiming.SecurityProofs.EncardIngressDecodableLe": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressDecodableLe_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressDecodableLeContents_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLe_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLeContents_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLeContentsPerExecutionPhase_nontrivial",
+   "kind": "acceptance"
+  },
+  "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase": {
+   "honest": ["NetTiming.Witness.Ingress_honest"],
+   "nontrivial": "NetTiming.Witness.EncardIngressObsDecodableLePerExecutionPhase_nontrivial",
+   "kind": "acceptance"
   }
  },
  "unwitnessed": {
@@ -5993,6 +5993,11 @@
    "why": "a guarantee is stated over the hash area's definitions, never over a proof",
    "sealed": true
   },
+  "Definitions.Spot": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Spot"],
+   "except": [],
+   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
+  },
   "Definitions.Nci.Guarantees.FitRate": {
    "imports": [
     "Mathlib",
@@ -6027,39 +6032,6 @@
    ],
    "except": [],
    "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.MonitoringPeriod), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
-  },
-  "Definitions.Pouw.Lead.Model": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Hash.Basic",
-    "Definitions.Pouw.Lead.Layout",
-    "Definitions.Pouw.Dimension.Pointwise",
-    "Definitions.Pouw.Assumptions.Dimension.H100"
-   ],
-   "except": [],
-   "why": "the lead's strategy model, definitions only: a strategy's trace is MH100's instructions and its price MH100's tables (Op100, Prices100, regs100, cost100, from Definitions.Pouw.Assumptions.Dimension.H100, none of its named assumptions), its run the chunk model's (Definitions.Pouw.Dimension.Pointwise), and a commitment's messages and digests the hash area's (Definitions.Hash.Basic)"
-  },
-  "Definitions.Pouw.Lead.Deployed": {
-   "imports": ["Mathlib", "Definitions.Hash.Tree", "Definitions.Hash.Hm96", "Definitions.Pouw.Lead.Gap"],
-   "except": [],
-   "why": "the lead's deployed commitment and coin stream, definitions only: range-indexed frame-v3 trees under hm96 leaves (Definitions.Hash.Tree, Definitions.Hash.Hm96) over the lead's layout, model and chunks (Definitions.Pouw.Lead.Gap)"
-  },
-  "Definitions.Hash.Assumptions.Prf": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core.Digest",
-    "Definitions.Core.Game",
-    "Definitions.Hash",
-    "Definitions.Hash.Assumptions.Prf"
-   ],
-   "except": [],
-   "why": "the hash area's named assumptions (Sha512Prf, prf/sha-512) are stated over its messages and digests and core's coin probability (Definitions.Core.Game's prCoin), never over a proof",
-   "sealed": true
-  },
-  "Definitions.Spot": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Spot"],
-   "except": [],
-   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
   },
   "Definitions.WeightSecurity": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.WeightSecurity", "Definitions.Spot.Dataflow"],
@@ -6120,6 +6092,34 @@
    ],
    "except": [],
    "why": "the honest run the pooled bridge's witness is stated at reads the realization it instances (Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted), the idle period run's device and circuit (Definitions.Accounting.NetWitness) and the network certifier's witness layout (Definitions.NetworkCertifier.Witness); it imports no guarantee or proof"
+  },
+  "Definitions.Pouw.Lead.Model": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Hash.Basic",
+    "Definitions.Pouw.Lead.Layout",
+    "Definitions.Pouw.Dimension.Pointwise",
+    "Definitions.Pouw.Assumptions.Dimension.H100"
+   ],
+   "except": [],
+   "why": "the lead's strategy model, definitions only: a strategy's trace is MH100's instructions and its price MH100's tables (Op100, Prices100, regs100, cost100, from Definitions.Pouw.Assumptions.Dimension.H100, none of its named assumptions), its run the chunk model's (Definitions.Pouw.Dimension.Pointwise), and a commitment's messages and digests the hash area's (Definitions.Hash.Basic)"
+  },
+  "Definitions.Pouw.Lead.Deployed": {
+   "imports": ["Mathlib", "Definitions.Hash.Tree", "Definitions.Hash.Hm96", "Definitions.Pouw.Lead.Gap"],
+   "except": [],
+   "why": "the lead's deployed commitment and coin stream, definitions only: range-indexed frame-v3 trees under hm96 leaves (Definitions.Hash.Tree, Definitions.Hash.Hm96) over the lead's layout, model and chunks (Definitions.Pouw.Lead.Gap)"
+  },
+  "Definitions.Hash.Assumptions.Prf": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core.Digest",
+    "Definitions.Core.Game",
+    "Definitions.Hash",
+    "Definitions.Hash.Assumptions.Prf"
+   ],
+   "except": [],
+   "why": "the hash area's named assumptions (Sha512Prf, prf/sha-512) are stated over its messages and digests and core's coin probability (Definitions.Core.Game's prCoin), never over a proof",
+   "sealed": true
   }
  },
  "reads_exempt": {
@@ -27689,8 +27689,8 @@
    "Proofs.Flock.Soundness.Premises",
    "Definitions.Nci.Assumptions.Fit",
    "Definitions.Core.Assumptions.DeviceFigures",
-   "Definitions.Pouw.Assumptions.LeadCommit",
-   "Proofs.Accounting.TS.Session.Group.Premises"
+   "Proofs.Accounting.TS.Session.Group.Premises",
+   "Definitions.Pouw.Assumptions.LeadCommit"
   ],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
@@ -27965,6 +27965,10 @@
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
+   "Hash.SecurityProofs.HistoryReadBinding": {
+    "function": "Hash.EmbeddingRead.ok",
+    "outcome": "accept"
+   },
    "Pouw.Salt.keyed_leaf_hides": {
     "function": "Hash.Keyed.digest",
     "outcome": "none"
@@ -27975,10 +27979,6 @@
    },
    "Verity.SecurityProofs.CapacityWithinEstimate": {
     "function": "Verity.DeviceFigures.Accepted",
-    "outcome": "accept"
-   },
-   "Hash.SecurityProofs.HistoryReadBinding": {
-    "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
    },
    "Accounting.SecurityProofs.TableReadBinding": {
@@ -28500,6 +28500,9 @@
    "Pous.SecurityProofs.ObligationWide320": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (security/Definitions/Pous/P2/Mutable.lean) at every block count from 2^19 to 2^27, 320 reads with the state at most S0 at each, by 2^-20, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
    "Pous.SecurityProofs.ObligationWide320_honest": "frozen (no-function): ObligationWide320's honest witness, arithmetic: P2's per-round floor p = 0.043 and bad-event mass 2^-137 meet its RoundsBound premise at 320 rounds and 2^-20, and at the registered point's 2^19 blocks its WideBlockCount, TagsInjective and StateWithin premises hold; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.ObligationWide320_nontrivial": "frozen (no-function): ObligationWide320's nontrivial witness: at 2^19 blocks and 320 reads the sure event, which a verifier that accepts everything passes, has probability 1, above 2^-20; it is about no function of the PoUS code and rests on no named assumption.",
+   "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Nci.SecurityProofs.HeldBudget": "frozen (no-function): It is Lemma 1 with description hardness, about an arbitrary registration of a (c,k)-partition, item family, decoder and evaluator (Nci.Capability.HeldPriceAtMost, Nci.Assumptions.DescriptionHard, security/Definitions/Nci/Capability/Items.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
    "Nci.SecurityProofs.StatHeldBudget": "frozen (no-function): It is the statistical held budget, about an arbitrary registration of a (c,k)-partition, item family and distribution of honest runs (Nci.Capability.HeldPriceAtMost, Nci.Assumptions.MinEntropyHard, security/Definitions/Nci/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
    "Nci.SecurityProofs.RecoveredBudget": "frozen (no-function): It is Lemma 1 with a recoverable hard source, about an arbitrary registration of a (c,k)-partition, decoder, evaluator and source (Nci.Assumptions.SourceHard, Nci.Assumptions.Recovers, security/Definitions/Nci/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
@@ -28507,39 +28510,8 @@
    "Nci.SecurityProofs.RecomputeByGates": "frozen (no-function): It is double counting over an arbitrary declaration's consumers with overlap weights, within any gates (Nci.Capability.Consumers.OverlapWeights, security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
    "Nci.SecurityProofs.RecomputeByState": "frozen (no-function): It is about an arbitrary registration's proof blocks, a held budget and consumers whose recomputation needs state priced above it (Nci.Capability.HeldPriceAtMost, Nci.Capability.Consumers.RequiresState, security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
    "Nci.SecurityProofs.CapabilityFloor": "frozen (no-function): It bounds an event of an arbitrary task's probability (Accounting.Slowdown.Task.prob), which shape.events does not list, over an arbitrary class and computation under coverage (Nci.Assumptions.CoversEfficientMethods, security/Definitions/Accounting/Assumptions/Coverage.lean), not a function's acceptance.",
-   "Accounting.SecurityProofs.TS.LeafGroupSound": "frozen (no-function): a leaf proved as a group of one-unit C-Flock statements, any shape (Accounting.TS.Group.Ix L n: L = T.lanes lanes of n chunks each and one combine, G = L n + 1 sessions), realizes one unit's proof layer (groupLayer, accepted where the leaf verifier's check of the tile and its chunks, PouwWindow.Lanes.checkChunks, passes and flock-verify accepts all G sessions with their known-content, complete and known-read checks at known content ending in the o0 row 1, and pouw-leaf-own's checks of each file, draw and reads pass; its relation any relation of the opened value, or LeafColl, or LeafKnownColl) over every window of fully checked C-Flock sessions, not a Lean function. Its premises are named and on the premises list (Proofs.Accounting.TS.Session.Group.Premises): SessionsCR (RowsSession.CR at every session), WindowLaws (WindowLaw at every statement) and GroupRealizes (accounting-ts-group-realizes: the group's circuits realize the relation at the rows its sessions open, past the group check; proved at the 32 x 32 leaf with one chunk a lane from LaneLowers and CombineLowers, groupRealizes_lanes32, and assumed at other shapes, whose Definitions no Lean states yet). Port uniqueness and the ok port (the known-read check's names), full checking and a unit (the draw check) and registered served roots (the reads built from own and the one-read check) are proved, not assumed. Proved by Accounting.TS.Group.group_soundAt, the argument LeafLanesSound shares: CheckedSessionSound's SoundAt at each session, the unwritten outcomes at probability 0 under WindowLaw, the complete check's registration of every port row and a union bound over the group, at (L n + 1) delta.",
-   "Accounting.SecurityProofs.Remote.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
-   "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": "frozen (no-function): A cost bound over the MH100w machine model, not over a Lean function of the code, so it has no acceptance to take. It is about one straight-line program fixed before the coins: a program that branches on the coins, loads a whole chunk from a computed address (priced at `other`, which a device's chunk copy doesn't pay) or stores to one (no MH100w instruction) is outside it. Its model is reviewed against the H200's measurements (security/Definitions/Pouw/Assumptions/Dimension/H100W.lean): every definition it reads matches the hardware or is stricter, none looser, so the bound holds on the H200 a fortiori at any price table meeting Floor c. Floor c is the hypothesis: the H200's table meets it at c = 32 on every priced form, and the census's 26 unpriced forms keep h100Floor's marker (security/Definitions/Pouw/Assumptions/Dimension/H100Floor.lean) until they are priced.",
-   "Pouw.SecurityProofs.Writes.RunBall": "frozen (no-function): A bound in the chunk model (security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
-   "Pouw.SecurityProofs.Writes.RunPairs": "frozen (no-function): A bound in the chunk model (security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
-   "Pouw.SecurityProofs.Writes.SsnServedCharged": "frozen (no-function): A cost bound at MH100w's `h100Floor` table for served sparse noise's committed words on the full coin grid, not over a Lean function of the code, so it has no acceptance to take. It is about one program fixed before the coins and right on every coin value: a prover that branches on the coins, or is right only on a success set, is outside it. Its model is reviewed against the H200's measurements (security/Definitions/Pouw/Assumptions/Dimension/H100W.lean); the served layouts (security/Definitions/Pouw/Dimension/Ssn.lean) and h100Floor (security/Definitions/Pouw/Assumptions/Dimension/H100Floor.lean, until the census's 26 unpriced forms are priced) are draft, pending review, and the review must clear them before the statement says anything about a device.",
-   "Pouw.SecurityProofs.Writes.SsnServedDistinct": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (security/Definitions/Pouw/Dimension/Ssn.lean), for the 4- and 5-lane layouts as the definitions state them; it reads no function of the code, so it has no acceptance to take. That the served kernel commits exactly these words is completeness. The served layouts' semantics are draft, pending review (security/Definitions/Pouw/Dimension/Ssn.lean), and the review must clear them before the statement says anything about a device.",
-   "Pouw.SecurityProofs.Writes.SsnServedShift": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (security/Definitions/Pouw/Dimension/Ssn.lean): no two differ by a constant and none is a free value plus one, the hypotheses of carrier separation. It reads no function of the code, so it has no acceptance to take. The served layouts' semantics are draft, pending review (security/Definitions/Pouw/Dimension/Ssn.lean), and the review must clear them before the statement says anything about a device.",
-   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": "frozen (no-function): It is a fact of probability over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the monitoring period, with A3 and KS at the deployment) is not stated here.",
-   "Pous.SecurityProofs.StreamedWipeMeetsH200": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2906 reads, an H200 of 141 GiB filled whole, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Verity.SecurityProofs.TransportPassiveZk": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
-   "Verity.SecurityProofs.ImprintRootHidden": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
-   "Verity.SecurityProofs.TransportDelivers": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
-   "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
-   "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Accounting.SecurityProofs.PooledSampling": "frozen (no-function): It bounds uniform samples over an abstract causal family of rounds whose good sets are any functions of the earlier rounds' coins and of the round's own coins other than its sample (security/Definitions/Accounting/RateAuditHorizon.lean, Causal), not a deployed sampler or verifier.",
-   "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
-   "Pouw.Guarantees.Lead.G": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Compose.G; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.G_tail": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.G_tail; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.GapAll": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAll; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.GapAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAt; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.GapAtDecode": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAtDecode; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.GapFixedAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.gapFixedAt; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.Honest": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Compose.honest; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.NetworkFwd": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Network.networkFwd; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.NetworkLlama": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Network.networkLlama; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.Nontrivial": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.nontrivial; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.NontrivialTail": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.nontrivialTail; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.Guarantees.Lead.TailAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.tailAt; that guarantee is unlisted and the lead gets no new Lean",
-   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
-   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
+   "Accounting.SecurityProofs.TS.LeafGroupSound": "frozen (no-function): a leaf proved as a group of one-unit C-Flock statements, any shape (Accounting.TS.Group.Ix L n: L = T.lanes lanes of n chunks each and one combine, G = L n + 1 sessions), realizes one unit's proof layer (groupLayer, accepted where the leaf verifier's check of the tile and its chunks, PouwWindow.Lanes.checkChunks, passes and flock-verify accepts all G sessions with their known-content, complete and known-read checks at known content ending in the o0 row 1, and pouw-leaf-own's checks of each file, draw and reads pass; its relation any relation of the opened value, or LeafColl, or LeafKnownColl) over every window of fully checked C-Flock sessions, not a Lean function. Its premises are named and on the premises list (Proofs.Accounting.TS.Session.Group.Premises): SessionsCR (RowsSession.CR at every session), WindowLaws (WindowLaw at every statement) and GroupRealizes (accounting-ts-group-realizes: the group's circuits realize the relation at the rows its sessions open, past the group check; proved at the 32 x 32 leaf with one chunk a lane from LaneLowers and CombineLowers, groupRealizes_lanes32, and assumed at other shapes, whose Definitions no Lean states yet). Port uniqueness and the ok port (the known-read check's names), full checking and a unit (the draw check) and registered served roots (the reads built from own and the one-read check) are proved, not assumed. Proved by Accounting.TS.Group.group_soundAt, the argument LeafLanesSound shares: CheckedSessionSound's SoundAt at each session, the unwritten outcomes at probability 0 under WindowLaw, the complete check's registration of every port row and a union bound over the group, at (L n + 1) delta.",
    "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
    "Verity.SecurityProofs.RegisteredLeakage": "frozen (no-function): It is stated over an arbitrary value service, serving stack and event on the record, and says what a registration whose record carries its number and counts its epoch's sessions leaks through the stack's choice of its session, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.RecZK": "frozen (no-function): It is stated over an arbitrary outer proof system and compiled recursion (Verity.ZkSystem, Verity.Rec.Compiled, security/Definitions/Core/Rec.lean), and says that zero knowledge carries through the composition (Rec.system) under its premises, a simulation statement against every malicious verifier, rather than a Lean function's acceptance.",
@@ -28553,6 +28525,8 @@
    "Flock.SecurityProofs.JointSampledV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with a set W of proof blocks incorrect by the law's miss of W plus each member's eps_ks and eps_bind at its part's design, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointSampledV5 (security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Flock.SecurityProofs.JointShareV5": "frozen (no-function): A window's sample over several members (JointAuditV5): every member registered at one registration, one live draw (Bridge.execSel on the verifier's bytes under the registration's law on its strata, LawOn) over all their proof blocks, then one SampledKSLiveV5 session per member in order (MemberV5: flock-verify --zk --public-inputs at keyProgP, under RecordCustodyZKJPLaw at subset |S| for its part S, at one link-point count per member, hcls), with A3 for the draw's bytes and TableCRZAt and LinkCRZCAt at each member's session played alone; it bounds the event that every session accepts with more than an eps share of the window's proof blocks incorrect by the law's largest miss of such a set plus the members' eps_ks and eps_bind, a Verity.Game.prob event of the joint game rather than a run of a Lean function; it reads JointShareV5 (security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
    "Flock.SecurityProofs.JointHorizonV5": "frozen (no-function): JointSampledV5's window audit (JointAuditV5) over a monitoring period of T windows played as one causal game against one adaptive prover (monitoringPeriodG): the probability that every window accepts and the windows' incorrect proof blocks lie outside the period's confidence set at delta (the windows' laws miss them together with probability at least delta, and their ANDs and output bits in all are at most the most any choice in that set holds) is at most delta plus the sum of the windows' eps, under A3 at every window and TableCRZAt and LinkCRZCAt at each member's session played alone at every strategy the period plays its window with (JointPeriodV5.Plays); a Verity.Game.value event over the period's run rather than a run of a Lean function; it reads JointHorizonV5 (security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean), so the lock records its text, and it takes the shape when SampledKSLiveV5's statement moves into a Guarantees module of the spec. It sits in `unwitnessed` beside SampledKSLiveV5: its acceptance is fixed to flock-verify's AcceptsZKP, so no acceptance-kind witness (the statement false at a verifier that accepts everything) can be stated; restated over a verifier record, as RecursiveKSAtRec is, it takes its witnesses, and its entry leaves `unwitnessed`.",
+   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
+   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1, at the row cap 1/100, given the model conditions CodeSeedNoise, RelabelClosed, RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Nci.Formalism.SecurityProofs.Counting": "frozen (no-function): The counting lemma over kinds: it is about an arbitrary declaration, kinds of its work with caps on the gates of each that an inference block holds (Nci.Formalism.Caps, security/Definitions/Nci/Formalism/Inference.lean), kinds that each give a bound for the whole partition (Nci.Formalism.PartitionBound, security/Definitions/Nci/Formalism/Inference.lean) and its partitions into inference blocks (Verity.Partition.IsCK, security/Definitions/Core/Formalism.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.TokenCap": "frozen (no-function): The token kind's cap from A1 and the token-work bound: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, at every inference block, under the named CutCost and TokenWork (security/Definitions/Assumptions.lean), not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
    "Nci.Formalism.SecurityProofs.TokenCapClean": "frozen (no-function): The token cap's clean form, beside it, which gives the named TokenWork (security/Definitions/Assumptions.lean) from a bound on the token work per bit of state: it is about an arbitrary declaration, an annotation of its training (Nci.Formalism.Annotation, security/Definitions/Nci/Formalism/Training.lean), a finite family of witness blocks of its circuit, which sets A1's values (Nci.Formalism.Annotation.stateAt, readsAt and blockShared, security/Definitions/Nci/Formalism/Training.lean) and a set of its token gates, reading no partition, not about a function's code; the inference-only policy's check (NciCheck) joined to it, on declared partitions and annotations, is what would give it an acceptance.",
@@ -28634,6 +28608,8 @@
    "Pouw.SecurityProofs.PearlC.EpsFp4Sm120_8192": "frozen (conjecture,no-function,hash): GapFp4Sm120_8192 in ε form. It is a consequence of the named open conjecture TTOutFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is sampled uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise it bounds guessers only: B̃ is sampled from H, and no W1 program computes the noise (W1 has no oracle instruction), so it says nothing about a program that computes SHA-512's noise until F1 (W1 with the oracle) or D-SK over SHA-512.",
    "Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,no-function,hash): GapSm120v1LoopCast8p72Rev1Cap1000_8192 in ε form. It is a consequence of the named open conjecture TTOutPearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is sampled uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Flock.SecurityProofs.SampledAuditAnyDeployed": "frozen (no-function,world-unlisted): SampledAuditAny's bound (Loop.AuditAnyAt) at sampled sessions of the deployed session loop (Masked.dataE, at the loop's own link and Finish: ofLoopLink, Loop.anySim, Loop.anyErr) and N hm96 leaves at the pinned key: as a simulation statement on the audit's view it has no acceptance of a function to take; it is at a stack that reads no key (ZkServerOwnUser), at sessions whose values' unswitched round encoding is causal (RefSession.UnCausal), at a relation whose statements' table witnesses are valid (RefSession.Complete), where the transport's trusts hold at each session's worker (LeanRelease.TrustsStop), premises that aren't on the list. Its honest witness is SessionLoopZKAnyDeployed's: those premises are its own, at the same session.",
+   "Accounting.SecurityProofs.PooledSampling": "frozen (no-function): It bounds uniform samples over an abstract causal family of rounds whose good sets are any functions of the earlier rounds' coins and of the round's own coins other than its sample (security/Definitions/Accounting/RateAuditHorizon.lean, Causal), not a deployed sampler or verifier.",
+   "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
    "Accounting.SecurityProofs.RateWindowSample": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling's one round at M = P * N, for a chained window of abstract chip programs in the random-oracle model whose single draw opens d of all its passes' receipts after the last root (security/Definitions/Accounting/RateAuditHorizon.lean, WindowCoins, Chain.correctAll), not the rate audit's code.",
    "Accounting.SecurityProofs.RateRunSample": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for a session of such windows, each a function of the earlier windows' coins and draws (security/Definitions/Accounting/RateAuditHorizon.lean, Session), each window's correct receipts its good set, and again with every window's receipts good but the first holding at most K_w: abstract chip programs in the random-oracle model, not the rate audit's code.",
    "Accounting.SecurityProofs.Actual.SlowdownServerBlocksCap": "frozen (no-function,world-unlisted): It is ThreadedRuntime's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Nci.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
@@ -28645,6 +28621,7 @@
    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
    "Accounting.SecurityProofs.JointPooledLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointPooledBlocksLive": "frozen (no-function): Like JointPooledLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts are fields of the run, not Lean functions (security/Definitions/Accounting/JointLive.lean), each wipe is core's Verity.Wipe, with its survivor bound (Verity.Wipe.SurvivorBound) and a map of the run into the wipe's game at its boundary (Verity.Wipe.OfRun, whose measure preservation is a hypothesis) whose preimage of the survivor event is a disjunct, and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": "frozen (no-function): It is a fact of probability over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the monitoring period, with A3 and KS at the deployment) is not stated here.",
    "Verity.SecurityProofs.FingerprintCollision": "frozen (no-function): the collision bound behind a memory check's multiset equality test (Verity.MemCheck.fingerprint, security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and multisets of packed records, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
    "Verity.SecurityProofs.PrintCollision": "frozen (no-function): the collision bound behind a memory check's key prints (Verity.MemCheck.element, security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and set of packed keys, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
    "Verity.SecurityProofs.MemoryChecked": "frozen (no-function): offline memory checking over an abstract access log (Verity.MemCheck.Checked, security/Definitions/Core/MemCheck.lean), the reference semantics a memory-checked circuit's log is held to, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
@@ -28658,7 +28635,6 @@
    "Verity.SecurityProofs.RefineIncorrect": "frozen (no-function): It is stated over an arbitrary circuit, partition (or declaration) and transcript, and says what correct units, openings, refinements or containments establish, rather than a Lean function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedTied": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run records each window's trace of a checked population (security/Definitions/WeightSecurity/Tied.lean) by two to the served channel's covert capacity per charge unit in bits times the honest-use bound, under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable), the bound on what the audit leaves undetected among the traces' incorrect blocks (WeightSecurity.Served.UndetectedLe), the population's check (Population.Dataflow.Checked) and its fan-out to charge units (Population.Dataflow.FanOut), with two open premises as probability terms: that a release is not its trace's outputs, the network certifier's egress tie (WeightSecurity.Assumptions.EgressTied), and that a trace does not hold its window's inputs, the advice charge's (WeightSecurity.Assumptions.AdviceCovered); it reads no function's acceptance.",
    "Nci.Cut.SecurityProofs.CountHE": "frozen (no-function): Like HE, it is about an arbitrary registered circuit, its charged work and the values its words carry, under the named (H) and (E) (security/Definitions/Assumptions.lean), with its only premise on the circuit its count verdict (Nci.CompliesAtMost); the join from a published complies of the count to that verdict is NciCheck.Properties.DescCountsCK, stated among the properties and not yet proved, which is what would give it an acceptance.",
-   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "WeightSecurity.SecurityProofs.TheftFaulted": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Faulted.lean), with the audit's incorrect blocks as fault inputs to a faulted circuit rather than as overwrites of releases, under honest-use hardness on a typical set of weights (WeightSecurity.Assumptions.HonestUseHard), the model claim that the faults no cut covers, within the budget M, make the circuit at most N^(λ-1) times easier to use, N the number of such patterns (WeightSecurity.Assumptions.FaultedUseHard, taken at WeightSecurity.Cut.Interiors; a fault the cut covers adds only its hint to the fault channel's strings, with no premise), the fault channel's simulability (WeightSecurity.Assumptions.Simulable), an empty fault pattern beside each honest query (WeightSecurity.NoFault) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the atypical weights and the releases' faithfulness to the faulted run as probability terms, the second of which the network certifier's tie of each release to a trace of a checked dataflow discharges (Population.Dataflow.determinate_of_checked); it reads no function's acceptance.",
    "Nci.Cut.Guarantees.HECharged": "unstated: HE's count over a set G of a partition's blocks, each reading at most k gates outside θ, with the blocks outside G charged whole, under the named (H) and (E) (security/Definitions/Assumptions.lean). It is the corollary at one (H) of the count over a set of blocks each under its own cap, and no second statement of it: Nci.Cut.SecurityProofs.HECharged_of_countsOn proves it from that count taken as a hypothesis (Nci.Cut.SecurityProofs.CountsOn, security/Proofs/Nci/CutCharged.lean), which no theorem proves yet, so no theorem proves HECharged.",
    "Nci.Cut.Guarantees.HECharged_honest": "unstated: HECharged's premises holding together at the toy Nci.Cut.Toy, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_honest is proved and is listed with HECharged's once that is.",
@@ -28674,7 +28650,31 @@
    "Flock.SecurityProofs.StreamStopBudget": "frozen (no-function): at every run a stream's joint stop (Flock.StopCount.streamStop) is a Pattern at its failure budget b, at most b of its sessions stopping (Flock.StopCount.StreamStopWithin), and a Pattern at b takes Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1) values (card_streamStops), with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountStream.lean and StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved"
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
+   "Accounting.SecurityProofs.Remote.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
+   "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": "frozen (no-function): A cost bound over the MH100w machine model, not over a Lean function of the code, so it has no acceptance to take. It is about one straight-line program fixed before the coins: a program that branches on the coins, loads a whole chunk from a computed address (priced at `other`, which a device's chunk copy doesn't pay) or stores to one (no MH100w instruction) is outside it. Its model is reviewed against the H200's measurements (security/Definitions/Pouw/Assumptions/Dimension/H100W.lean): every definition it reads matches the hardware or is stricter, none looser, so the bound holds on the H200 a fortiori at any price table meeting Floor c. Floor c is the hypothesis: the H200's table meets it at c = 32 on every priced form, and the census's 26 unpriced forms keep h100Floor's marker (security/Definitions/Pouw/Assumptions/Dimension/H100Floor.lean) until they are priced.",
+   "Pouw.SecurityProofs.Writes.RunBall": "frozen (no-function): A bound in the chunk model (security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
+   "Pouw.SecurityProofs.Writes.RunPairs": "frozen (no-function): A bound in the chunk model (security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
+   "Pouw.SecurityProofs.Writes.SsnServedCharged": "frozen (no-function): A cost bound at MH100w's `h100Floor` table for served sparse noise's committed words on the full coin grid, not over a Lean function of the code, so it has no acceptance to take. It is about one program fixed before the coins and right on every coin value: a prover that branches on the coins, or is right only on a success set, is outside it. Its model is reviewed against the H200's measurements (security/Definitions/Pouw/Assumptions/Dimension/H100W.lean); the served layouts (security/Definitions/Pouw/Dimension/Ssn.lean) and h100Floor (security/Definitions/Pouw/Assumptions/Dimension/H100Floor.lean, until the census's 26 unpriced forms are priced) are draft, pending review, and the review must clear them before the statement says anything about a device.",
+   "Pouw.SecurityProofs.Writes.SsnServedDistinct": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (security/Definitions/Pouw/Dimension/Ssn.lean), for the 4- and 5-lane layouts as the definitions state them; it reads no function of the code, so it has no acceptance to take. That the served kernel commits exactly these words is completeness. The served layouts' semantics are draft, pending review (security/Definitions/Pouw/Dimension/Ssn.lean), and the review must clear them before the statement says anything about a device.",
+   "Pouw.SecurityProofs.Writes.SsnServedShift": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (security/Definitions/Pouw/Dimension/Ssn.lean): no two differ by a constant and none is a free value plus one, the hypotheses of carrier separation. It reads no function of the code, so it has no acceptance to take. The served layouts' semantics are draft, pending review (security/Definitions/Pouw/Dimension/Ssn.lean), and the review must clear them before the statement says anything about a device.",
+   "Pous.SecurityProofs.StreamedWipeMeetsH200": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2906 reads, an H200 of 141 GiB filled whole, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Verity.SecurityProofs.TransportPassiveZk": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
+   "Verity.SecurityProofs.ImprintRootHidden": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
+   "Verity.SecurityProofs.TransportDelivers": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
+   "Pouw.Guarantees.Lead.G": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Compose.G; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.G_tail": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.G_tail; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.GapAll": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAll; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.GapAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAt; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.GapAtDecode": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAtDecode; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.GapFixedAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.gapFixedAt; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.Honest": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Compose.honest; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.NetworkFwd": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Network.networkFwd; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.NetworkLlama": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Network.networkLlama; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.Nontrivial": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.nontrivial; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.NontrivialTail": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.nontrivialTail; that guarantee is unlisted and the lead gets no new Lean",
+   "Pouw.Guarantees.Lead.TailAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.tailAt; that guarantee is unlisted and the lead gets no new Lean",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -59294,7 +59294,7 @@
    }
   },
   "Spot.ChallengerCoins": {
-   "digest": "56fae9925796ca2bd372abbe8c79f7c10fd89dc6d45c156c88e032f8db35a0fb",
+   "digest": "0e322b9b7c5b799cd81c5b58adc652ffa71bfe9413429c42ba4c366668842a68",
    "definitions": {
     "Spot.Challenger.FAMILY_ROOT": "73d04951cb6d6dd23f80140003c5dd9cd93bd72079ccbe9ccadaa50bfcf55d71",
     "Spot.Challenger.LIMITS": "e7bfb471561d80fdee056273c9f5c772f1d8042bb580ecf0c98661c934fb8008",
@@ -59313,7 +59313,7 @@
     "Spot.Challenger.SEGMENT_FORM": "c52e73ce8c32b42739c3ed9507c9c2b8652602c5fcc9c9d9691216556e79324f",
     "Spot.Challenger.WITHHELD": "218d71c722297a393b300c9c0d32291a596d31ea111ff6e032acf001e1db8718",
     "Spot.Challenger.arrSize": "1ba24d09e64bb2ca0b304ea389f91ab093599edac9fdd8d71eb7e16507962c55",
-    "Spot.Challenger.challengerStream": "bf344249321fd12224dcbbf9a0a95a43b345e05bea215fb3cd20c8c720b7cedf",
+    "Spot.Challenger.challengerStream": "f233f44a6e4dafa1bcb451af24510fc1e4973bb8e6b47c54f45e55e9ce02abe3",
     "Spot.Challenger.withheldOn": "0b901e9670b0baeb11447d1b44a31ef6052853b2d04bd530284525d1d902ecf4",
     "Spot.Challenger.withinAt": "f6f5b3c70fda31eee55c13ee910e2ef8c8c3f61205d67d9361ca2859f535e35d"
    }
@@ -59346,7 +59346,7 @@
    }
   },
   "Spot.ChallengerRecord": {
-   "digest": "71f3992b42f34afb894b8bf000675545bf986babe34ed9e04c4d54928c64b462",
+   "digest": "ae9e8cd7e9852345ec3a820a32cb07fa1268cb1e8af9952a4cfa1ee08ea32300",
    "definitions": {
     "Spot.Challenger.COMMITMENT_TAG": "533b9e8aa59874facc70d607333a408dd5b2d893dbbbbbd3ff44360e1bca81d5",
     "Spot.Challenger.ChallengerKey": "28b8d7cf3733aafd4ec5fe39df55a719cc4712c962b00c6b39c49be8ab4f9804",
@@ -59366,12 +59366,12 @@
     "Spot.Challenger.field": "9699d70853b8497b176743bee5a63f2b5c8b62725b44f06e3ead4118b9f9b2e1",
     "Spot.Challenger.isHost": "dd9e52b5fc201441a1a230f2958756134719c5fedab0405363e76b6b5fc2f07e",
     "Spot.Challenger.recordMessage": "e6a79450a78cbd267e033e6c09f2e83f83ac0d69279ff2b69dabf9377afdac33",
-    "Spot.Challenger.recordReason": "529cd20715177e1287f66cd402a53f325fa0e3b85932e185a1e308e9bd8d9ed8",
+    "Spot.Challenger.recordReason": "3037e772f3afc9c26b3ee765f5fe0057bf641c0cae3db75f92be7762c5134eb2",
     "_private.Spot.ChallengerRecord.0.Spot.Challenger.hexOf?": "d7faeecdcfbc0613ef2452951b0dcd044a6ce82e31ca6185f3cc1c04be52c994"
    }
   },
   "Spot.ChallengerSession": {
-   "digest": "0e571b0f8fa59f9997bae8011949307a0fb526463316b6e3d544d20c509f1b50",
+   "digest": "7975b3d99311c6a4a7c58e1b5ae6ab6c6aefc9a07ae163dbb33b360e42d0cd99",
    "definitions": {
     "Spot.Challenger.Audited": "67907e70e13df8e0a71d4816b64126a9e02156a2a7f4c1774e923ffbcb2780de",
     "Spot.Challenger.Audited.circuit": "a73b3aad92abf4ba22c25228c2c6b5e86d2861b68fec367d0b459573c172b2c4",
@@ -59454,16 +59454,16 @@
     "Spot.Challenger.Win.root": "addbbb4bfd24443201b29060198f2e1765a9ec47a710d514f14fd173b0f2da28",
     "Spot.Challenger.ZERO": "485851f6467b12f818f58c0905c5c43e6d826f93a1de28d925a827df6b163520",
     "Spot.Challenger.auditedChallengePhase": "ac4fe8585ce40943430f47a9a6c860db8b225eede392293563276a8dc8b6f6f5",
-    "Spot.Challenger.auditedOpen": "6fe3726e737afb00e4102b7c7aa8e6121472707aaa1acc270546ffe56825b332",
-    "Spot.Challenger.challengePhaseNamed": "033e2c9d49f3e87802e6d8db858506eaa4ce61aa458e4cb52c01a420ed2141bc",
-    "Spot.Challenger.challengePhaseOf": "d91ebdb6dd18f93bfd25db34d47de20eeed8ba2b2ffad3308bba9aa01d249492",
-    "Spot.Challenger.checked": "f274ccd2dd3283a1d4e68a0d4d9d64c8e622ab49bd8c074ec067c8901c7666d0",
+    "Spot.Challenger.auditedOpen": "bd50bb1cceeee11640f9da3fa14e2fcc04c97307389954a8c2abf26f5b84f666",
+    "Spot.Challenger.challengePhaseNamed": "e336391255434cf900f1d9836d4e01d1f14776b15008df55e86c788a20756a63",
+    "Spot.Challenger.challengePhaseOf": "fd02b4cf7c63a9889d826ec7227e2741c40f29448137bb604e659f9af76963e5",
+    "Spot.Challenger.checked": "76dffab1db23eba9017d9d0727f22dc10991eb813d292c4b19331db47cacbda5",
     "Spot.Challenger.circuitReason": "4f82835da0c27d15b5754ed206ab67f2969cce5f3dd45efa4df2a3f06f39b73e",
     "Spot.Challenger.closeMessage": "8b2d69d7407f1b1f800e33fdea7306b96858c2cb9ce15250e4046f5ed463a84c",
     "Spot.Challenger.creditedChallengePhase": "ef7c78b7790f1f000cdc9947783f36831ccf6bdd2e88d14e7f0fed924efd47e4",
     "Spot.Challenger.dayOf": "3cd54f113dcece28dc86f26db9e76dda45c107f6ed88bb9e049adf488b97a1ae",
     "Spot.Challenger.event": "12b45ad3827f3bc8cc24825d88a96eadd45d82ce2e9f991c2cb5ea4add296dac",
-    "Spot.Challenger.firstParentReason": "f271874dd695861bf5af03cf5fd9629cbee6b33be5b55c134adfbd00daa5fa3d",
+    "Spot.Challenger.firstParentReason": "d9a7e64d5c22cb10852804be993b3d1681b2d95263a69d637c4f26d893eb2f73",
     "Spot.Challenger.instInhabitedLedgerEntry": "0f9b3d221a718a6872f03c6e47bd7b1102e9614d093f414c4a1339a8e1730a82",
     "Spot.Challenger.instInhabitedLedgerEntry.default": "74fbc4956f7092ee3d54ddd1c51e77745629a1a055ef56718c2c0ceb131e9562",
     "Spot.Challenger.instInhabitedMonitoringPeriod": "acc1302ffbfb2001c7e79e093685700f0fafbcef601ea5d7850f67158bc9e1f0",
@@ -59485,23 +59485,23 @@
     "Spot.Challenger.logDigest": "0b7cbc63f865c71786c13f2f15a17390c871c989e7cba191514f21c45cd46bca",
     "Spot.Challenger.pinOf?": "a2862c599daec4573da6b503f2ed846e1ea83d497bc32bc38d60d4f100f27880",
     "Spot.Challenger.pinnedChallengePhase": "d5eacf67b6e814ef6970fa90af4a2b34d0938d1d14c861606dc18cc7bbcea45d",
-    "Spot.Challenger.pinsReason": "b54bdd00c4d273bd5eed6c05b88929d12e34785fbb058ba17a033be25abbaa9d",
-    "Spot.Challenger.releasedRootsOf": "f6efdc7f4e3583700eee2975e7e7cd56b784443111f8e935ed685ceca06f130f",
+    "Spot.Challenger.pinsReason": "07ab80a979d68863b01cfb3f8d94870bc4d361239a1570bd023c70012294235a",
+    "Spot.Challenger.releasedRootsOf": "672f930c0d1974bbb6b57d832f667e3c151231f778487816bb5ecb53324d8356",
     "Spot.Challenger.treeLine": "d151b9c394dd0f77207eff5243c79a148ac33ccc204a06b9922aa71da348a358",
     "Spot.Challenger.trustedChallengePhaseOf": "de0fffc703dafaacfe584fced6a9cf49a2c5253d26e8bfbd10207ce6395edb39",
     "Spot.Challenger.verifyDays": "a426d9799f0d8bb794c117c77e8a7acd574a3cd796a8300851bec73c08ec47c9",
-    "Spot.Challenger.verifyLedger": "51e446b211e42c99d5d5bbe0eb44d259515528ea5d3086f79fcbb44105b66c5b",
+    "Spot.Challenger.verifyLedger": "58beeaab78478fe0b6363ea8294e89da4943312fae7add14330791f898cc383a",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.daysIn": "9c90608c5c0a8079b5429f656960a26f5888424dc8c73c55513374a87edb911d",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.digitsAt": "e377ed709709703303085d0f77be19e522e79a7be53736e97795bf5a68ffa67b",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.escapesSurrogate": "f84d9ba64a44ae5e3509323c9e7091f8d47df61f8e84c3b5a065ec3147252d11",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.hexAt?": "1f1f4249327f3e2098c03f64820f7231b571d3f8ce9ef4d40bf8f76100ff9ed0",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.inReserve": "67215c4728472eb4b7edd4155a7fd3beb210ff0b2cfec68e3973359ba53dac71",
-    "_private.Spot.ChallengerSession.0.Spot.Challenger.isBodyOf": "dd116acfb9ac7332a63737e23f2fe560320f194f0eb9d29d563bf4a34efa5235",
+    "_private.Spot.ChallengerSession.0.Spot.Challenger.isBodyOf": "90f08155bad61d8058c3ea7dccb18ce4859ca5fce55a49e43830b3341535e0bc",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isDeclaration": "f01983a9f33d3489d3749dae93f488e24858ef11f624a2cf892eb4daa77d0fc3",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isDigest": "149e7c28c97ccdb66a1550f063944007150f6f827d26b6ffe0c96471b9002f06",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isLedgerName": "70c59c791631dbd8e9e99952ee222e27b9e54349b1ee9f6abfaae8f53168ee90",
-    "_private.Spot.ChallengerSession.0.Spot.Challenger.isOutcome": "5927b4a83fb28d31844409744eab166c2ed695add546e7721dc32bd5ec7d84fc",
-    "_private.Spot.ChallengerSession.0.Spot.Challenger.isReserve": "ce47fe07f1f0212ba936d6225cfa4773917ac649746b06a1304c247d7e50f272",
+    "_private.Spot.ChallengerSession.0.Spot.Challenger.isOutcome": "597a16f4ee419cf8064402671354e62281b83ee58733cc17447e6177d48f4d0f",
+    "_private.Spot.ChallengerSession.0.Spot.Challenger.isReserve": "a8d528161a724e5426011310129c6cd45e6b8017a566e01710efdd1ca8459bcc",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isStr": "6cbe72c67080dcc9e217ff8bd4aec9d3c0995e54fb786645c0cfb5fc6efe35f2",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isTime": "fd317615edc610bc0062308f8245bb0e34c73ee1b55a817a4f0ba4bc874b0efd",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isV1Run": "caae722904a84cb2b6760c665b87430c7e5c81821cc795b1574c42bee19c3838",
@@ -59683,7 +59683,7 @@
    }
   },
   "Spot.Json": {
-   "digest": "61a1c4e7f9f80c8ce822366259cc058fabae80a37006109414c57a926b1104c8",
+   "digest": "50cd8453e0d39173371ed779315f4f419623f7425590ff9dd31591fc33bf7d3b",
    "definitions": {
     "Spot.Check": "7dfc036c0ba1e812942dcd7f6defc02cfba46485806ba0ffebbabd4c7c9260c1",
     "Spot.Check.codes": "2023c19204f36cb7b59a06c9f2226c76b613dcf8638fe1e5bacd4aad0829fc9e",
@@ -59699,6 +59699,7 @@
     "Spot.intsJson": "7c4db10607d2f0b45df2e6b5fe3af57d349ae4e507a9153fbdef4fe1464ddba7",
     "Spot.isHex": "d29ab48eb63f20868e0bdff2ab56ecd9c01f2eddcde41740cc7008dcf9055dce",
     "Spot.jeq": "fc16a705d80a01371429e1089648d1b33f9d090c9c6433c5c40bb8cef4e7440a",
+    "Spot.jsonBoolIs": "1e55a3a231e4513e24510c497d79424dca919a21b8cfb83583b73480c34925ce",
     "Spot.jsonStrIs": "a1e112d3c8033a562585752322bb461764454516cd47ff8ba2591ddb6c9f50ed",
     "Spot.keys?": "8b08331aacfaf869e4500a3cc8db0c87d45c0517274302d355ebd6804a712164",
     "Spot.nat?": "9a20b6b82e106116f06bb5c10731579b488794f6adcb2de42016e5f5ce2e7aa8",
