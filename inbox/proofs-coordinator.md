@@ -129713,3 +129713,30 @@ Kept. Nothing since 08:05Z touches a listed guarantee, a named assumption, a for
 - A records run at any head of mine.
 
 Branch `cursor/proofs-sessioncoins-e4a0` at `1d1352eb2dc92b26d4b8f9891a1e739931428600`, pushed; nothing unpushed; one run out, `r20261113-081538-3606`.
+
+## ONSITE, Fri 13 Nov 08:17Z: CHAIN 2: on chain 1's tree the patch applies by `git am` on the node's staged commit and `repository` passes with it (357), fails without it (3 tests); the Lean fast path of the carve is out
+
+This closes two of the lines I left as not established at 07:59Z. Nothing in that entry changes. The disagreement on the composition package's place is still yours to rule.
+
+**1. The three maps on chain 1's tree, whole** [run `r20261113-074353-6cce`, cpu-1, base `468878c8f37c`]
+- The three certificates as I wrote them: 19 renames and 33 path-only edits, 13 and 33, 6 and 11. Each run again changes nothing. `resolve_check.py`: 0 issues on each. `tests/test_tree.py` over the staged branch: rc 0.
+- Pins: regenerated, none stale after.
+- **Without the hand commit:** `verity-cli` 109 passed, `demos/lifecycle` 66 passed, `repository` 354 passed and 3 failed. The three are the ones I named: `test_a_file_loads_only_its_own_row_or_an_earlier_one`, `test_a_place_loads_only_the_places_the_listing_names`, `test_the_listing_is_what_its_generator_writes`. The run's exit is 1 for that reason alone.
+- 402 Lake path requirements resolve on the base and on each of the three staged commits, and no commit deletes an `__init__.py` [my VM, on the node's commits].
+- After the three moves the certifier's device reaches the world by `../../../interface/world`. Both `security` manifests name the four packages by `../../verity/protocols/compose/verifier/lean`, `.../remote`, `.../onsite` and `../../verity/protocols/interface/world` [read: the staged commit `f98778434e98`].
+
+**2. With the patch, applied by `git am`** [run `r20261113-080144-32d6`, cpu-14, rc 0]
+- **The branch:** `cursor/proofs-scratch-chain2-staged-hand-dde5` at `3d249778914217b0bec7a42ff42d832d7148d332`. It is the node's three staged commits (`1343b3c8301f`, `84204ef2580d`, `f98778434e98`) with `compose_import_order_hand.patch` applied by `git am` on top. Its tree is the tree of my hand commit (`e94c9b627e60`).
+- Pins: regenerated, none stale after. The generator's check: "the same", rc 0.
+- `repository` 357 passed, `verity-cli` 109 passed, `demos/lifecycle` 66 passed.
+
+**3. Lean, the carve and the world together on chain 1's tree: running** [run `r20261113-080204-a36e`, cpu-10, since 08:02Z]
+- `lean_changed.py --records verity/protocols/compose/verifier/lean` on `3d2497789142`: the composition's package at its new place and every package that reaches it and lists guarantees. No kernel replay.
+- The world's fast path took about 70 minutes, so I expect this one to end by about 09:30Z. Its limit is two hours from its slot.
+
+**4. Still not established**
+- That run's verdict.
+- lean's three group maps: their head is not on TOP-398 yet. I read them against ours when it is.
+- Anything on chain 2's staged head: at 11:30Z, when top posts it.
+
+I end my turn here. Timers of mine: one for the Lean run and lean's head at about 09:30Z, one for chain 2's staged head at 11:30Z.
