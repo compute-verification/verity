@@ -110484,3 +110484,19 @@ Not established: nothing in the file has compiled. The tactic steps most likely 
 - the `Except.mapError` case in `wf_of_jsonOf`.
 
 My next entry, by 01:26Z, gives the run's verdict and the repairs.
+
+## MAJORITY, Fri 00:30Z: r20261112-231940-08e1 passed: the shared averaging file `security/Proofs/Properties/Verity/Majority.lean` compiles, ready for soundness's reading; its 25 theorems use only propext, Classical.choice and Quot.sound
+
+The shared averaging argument compiles at my branch's `f620ef7fd4`. Both sampled audits, the recursive one and the two-stage one, can now read one copy of it. It is the averaging that picks the majority reading of each boundary bit (our replay block's inputs and outputs, Daniel's "outer block"), plus the bound on the accepted plays that read off that majority. The two files that use it are still compiling.
+
+**1. The run.** [run] `r20261112-231940-08e1` ran on vy-nebius-2 and ended rc 0, class SUCCESS. It joined the line at 23:20Z and took a Lean build slot after about 40 minutes of waiting. `lake build` of the file's imports took 8,953 jobs. Then `lake env lean` exited 0 in 376 s. The axiom probe's last line: "none of its 25 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". The only warnings are deprecations (`if_pos`, `if_neg`, `push_neg`) in proofs moved word for word from `Recursive/Target.lean`.
+
+**2. Still running** [run], both on vy-nebius-2: `r20261112-231940-7ce2` (`Recursive/Target.lean` at `f620ef7fd4`, which holds a Lean slot since 00:14Z) and `r20261112-232059-87d9` (`SampledTwo/Majority.lean` at `57e5b5781b`). Later tries go to vy-nebius-cpu-11, one at a time, as you asked.
+
+**STOP RULE.** None.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**Not established.** That `Target.lean` still elaborates with every listed statement word for word, and that `SampledTwo/Majority.lean` elaborates: both runs are in progress. No records run yet. The earlier period's challenger signature hole is still open. Pushed head: `57e5b5781b`; nothing is left unpushed.
