@@ -7,7 +7,11 @@
   (`prove_path.phi_of_serve`), the row's is `score.phi_of` on its workload file at PRED's checkpoint config; both have the
   same model, revision, checkpoint config, execution and default seed, and lower one window circuit at the class, cut at
   Pearl+'s linears under SCHEME (`window_circuit.lower`): each circuit's facts (its templates' ids and units, its
-  registered values' sizes and the cut's calls, DIR/circuit_facts.json) are compared by their SHA-512.
+  registered values' sizes and the cut's calls, DIR/circuit_facts.json) are compared by their SHA-512. PRED's checkpoint
+  config is the copy PRED keeps beside its predicted.json (`CONFIG_COPY`, which `served_verdicts.sh` writes after
+  `predict row`), else the file predicted.json names (`checkpoint_config`): that path is in the serving run's own
+  tree, so a serve dir kept after the tree is gone is compared again, by any tree, from the copy. The verdict keeps the
+  SHA-256 of the config it read, and PHI holds it to the comparing tree's config of record for the served checkpoint.
 - BUILD: PRED is the row's Build of record: its predicted.json names Program digest PROGRAM and manifest digest MANIFEST.
 - CUT: W, Pearl+'s window record, registers exactly the circuit's Pearl+ values (`PEARL_VALUES`), each at its size in the
   circuit (two u16 words an FP32 word), under SCHEME, in 32-bit words, and beside them only what its version registers
@@ -33,6 +37,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKLOADS = ROOT / "adapters" / "vllm" / "workloads"
+#: PRED's copy of the checkpoint config its Build was predicted from, beside its predicted.json
+CONFIG_COPY = "checkpoint_config.json"
 #: the circuit's values W registers: each linear's A rows and its y rows
 PEARL_VALUES = ("pearl-a/", "pearl-y/")
 #: what W registers beside them at its version 2 (`pearl_c.window`): each weight's B rows, ``pearl-b/<w>``, which the
@@ -47,6 +53,20 @@ def read_json(path: Path) -> Any:
         return json.loads(Path(path).read_text())
     except (OSError, ValueError) as e:
         raise ValueError(f"{path}: {type(e).__name__}: {e}") from e
+
+
+def checkpoint_config(pred: Path) -> Path:
+    """The checkpoint config ``pred``'s Build was predicted from: the copy ``pred`` keeps (`CONFIG_COPY`), else the file
+    its predicted.json names; a ValueError, with what to give, where neither is on this node."""
+    kept = pred / CONFIG_COPY
+    if kept.is_file():
+        return kept
+    named = read_json(pred / "predicted.json").get("config")
+    if named and Path(named).is_file():
+        return Path(named)
+    raise ValueError(f"{pred} keeps no {CONFIG_COPY}, and its predicted.json names a checkpoint config that is not on this "
+                     f"node ({named}): give --pred a dir that holds its predicted.json and, as {CONFIG_COPY}, the config "
+                     "its Build was predicted from")
 
 
 def facts(low: Any) -> dict[str, Any]:
@@ -186,14 +206,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     circuits: dict[str, Any] = {}
 
     def phi_verdict() -> dict[str, Any]:
-        config = read_json(a.pred / "predicted.json").get("config")
-        if not config or not Path(config).is_file():
-            raise ValueError(f"{a.pred}/predicted.json names no checkpoint config on this node ({config})")
-        fields, served, declared = lowered_facts(read_json(a.serve / "serve.json"), a.row, config, a.cls,
+        config = checkpoint_config(a.pred)
+        read = {"file": str(config), "sha256": hashlib.sha256(config.read_bytes()).hexdigest()}
+        fields, served, declared = lowered_facts(read_json(a.serve / "serve.json"), a.row, str(config), a.cls,
                                                  a.pearl_tables)
         circuits.update(served=served, declared=declared)
         (a.out / "circuit_facts.json").write_text(json.dumps(circuits, indent=1) + "\n")
-        return phi(fields, served, declared)
+        return {**phi(fields, served, declared), "config": read}
 
     verdicts = {"PHI": judged(phi_verdict), "BUILD": judged(lambda: build(a.pred, a.of_record))}
     verdicts["CUT"] = (judged(lambda: cut(a.window_record, circuits["served"]["params"], circuits["served"]["calls"],

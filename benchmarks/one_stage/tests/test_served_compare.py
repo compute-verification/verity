@@ -1,6 +1,7 @@
 """served_compare.py: the served compare's verdicts (PHI, BUILD, CUT), each failing where its file can't be read, and the
 line the record names. The lowering itself (`lowered_facts`) is stubbed: a real one reads the row's workload file and
 lowers the 1B's window circuit twice."""
+import hashlib
 import json
 import re
 import sys
@@ -125,18 +126,29 @@ def test_phi_takes_every_field_and_the_circuit_and_names_a_target_the_circuit_do
 
 
 def _main(tmp_path: Path, monkeypatch, declared: str = "ee" * 64, config: bool = True,
-          written: tuple[dict, dict] | None = None) -> tuple[int, Path]:
+          written: tuple[dict, dict] | None = None, kept: str | None = None,
+          lowered: list[str] | None = None) -> tuple[int, Path]:
     """The compare over a stand-in serve dir, the lowering stubbed. ``written`` is W and the served circuit's facts
-    (`_written`); without it W is `_w`'s exact one and the facts `_facts`'s."""
+    (`_written`); without it W is `_w`'s exact one and the facts `_facts`'s. predicted.json names a config in a tree
+    beside the serve dir, which is there only under ``config``; ``kept`` is the copy the Build's dir keeps of it, and
+    ``lowered`` gets the config each lowering read."""
     served = _facts() if written is None else written[1]
-    monkeypatch.setattr(SC, "lowered_facts", lambda serve, row, cfg, cls, scheme: (FIELDS, served,
-                                                                                    {**served, "digest": declared}))
+
+    def lowered_facts(serve, row, cfg, cls, scheme):
+        if lowered is not None:
+            lowered.append(cfg)
+        return FIELDS, served, {**served, "digest": declared}
+
+    monkeypatch.setattr(SC, "lowered_facts", lowered_facts)
     (serve := tmp_path / "serve").mkdir()
     (serve / "serve.json").write_text(json.dumps({"model": "m", "revision": "r"}))
     (pred := tmp_path / "predicted").mkdir()
-    cfg = tmp_path / ("config.json" if config else "gone.json")
+    cfg = tmp_path / "tree" / "config.json"
     if config:
+        cfg.parent.mkdir()
         cfg.write_text("{}")
+    if kept is not None:
+        (pred / SC.CONFIG_COPY).write_text(kept)
     (pred / "predicted.json").write_text(json.dumps({"program_digest": PROGRAM, "manifest_digest": MANIFEST,
                                                      "config": str(cfg)}))
     (w := serve / "pearlplus" / "w7" / "registration.json").parent.mkdir(parents=True)
@@ -181,12 +193,39 @@ def test_a_circuit_the_row_lowers_otherwise_is_not_equal_and_cut_holds_w_to_the_
     assert lines[-1].startswith("SERVED-COMPARE: NOT EQUAL (the serve against row row-1's Build of record: PHI FAIL; ")
 
 
-def test_a_pred_naming_no_config_here_fails_phi_and_cut_naming_why(tmp_path, monkeypatch, capsys):
-    """A predicted.json whose checkpoint config isn't on this node lowers nothing: PHI says so, naming both, and CUT has
-    no circuit to hold W to."""
+@pytest.mark.parametrize("config", [False, True])
+def test_a_kept_serve_dir_is_compared_again_from_its_copy_of_the_config_once_the_serving_tree_is_gone(
+        tmp_path, monkeypatch, capsys, config):
+    """predicted.json names its checkpoint config inside the serving run's tree, which goes when the run ends. A serve dir
+    kept after that is compared again from the copy its Build's dir keeps (`CONFIG_COPY`): the lowering reads the copy,
+    every verdict passes and PHI's keeps the copy's SHA-256. Where the named path is still a file, in a tree that may
+    have moved on since, the copy is read all the same."""
+    lowered: list[str] = []
+    rc, out = _main(tmp_path, monkeypatch, config=config, kept='{"hidden_size": 2048}', lowered=lowered)
+    lines = capsys.readouterr().out.splitlines()
+    assert (tmp_path / "tree").exists() is config
+    assert rc == 0 and all(x.endswith(": PASS") for x in lines[:3]) and lines[-1].startswith("SERVED-COMPARE: EQUAL"), lines
+    copy = tmp_path / "predicted" / SC.CONFIG_COPY
+    assert lowered == [str(copy)]
+    assert json.loads((out / "served_compare.json").read_text())["verdicts"]["PHI"]["config"] == {
+        "file": str(copy), "sha256": hashlib.sha256(b'{"hidden_size": 2048}').hexdigest()}
+
+
+def test_a_build_with_no_copy_is_lowered_at_the_config_its_predicted_json_names(tmp_path, monkeypatch, capsys):
+    lowered: list[str] = []
+    rc, _out = _main(tmp_path, monkeypatch, lowered=lowered)
+    assert rc == 0 and lowered == [str(tmp_path / "tree" / "config.json")], capsys.readouterr().out
+
+
+def test_a_pred_with_no_copy_naming_no_config_here_fails_phi_and_cut_naming_why(tmp_path, monkeypatch, capsys):
+    """A Build's dir that keeps no copy of its checkpoint config and whose predicted.json names one that isn't on this
+    node lowers nothing: PHI says so, naming both and what to give, and CUT has no circuit to hold W to."""
     rc, _out = _main(tmp_path, monkeypatch, config=False)
     lines = capsys.readouterr().out.splitlines()
-    assert rc == 1 and lines[0] == (f"PHI: can't be reached (ValueError: {tmp_path / 'predicted'}/predicted.json names no "
-                                    f"checkpoint config on this node ({tmp_path / 'gone.json'})): FAIL")
+    pred = tmp_path / "predicted"
+    assert rc == 1 and lines[0] == (
+        f"PHI: can't be reached (ValueError: {pred} keeps no checkpoint_config.json, and its predicted.json names a "
+        f"checkpoint config that is not on this node ({tmp_path / 'tree' / 'config.json'}): give --pred a dir that holds "
+        "its predicted.json and, as checkpoint_config.json, the config its Build was predicted from): FAIL")
     assert lines[2] == "CUT: can't be reached (PHI lowered no circuit to hold W to): FAIL"
     assert "PHI, CUT FAIL" in lines[-1]

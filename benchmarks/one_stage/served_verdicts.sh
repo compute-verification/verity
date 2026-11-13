@@ -3,7 +3,8 @@
 # verdict line in $OUT/verdicts.txt, and one record of every verdict. The chain, in order:
 #  0. B: `verity-vllm predict row` writes the H200 int8 row's Build of record (ROW_ID, default ROW's name) from its declared
 #     inputs alone into PRED ($D/predicted), before the lease and on the CPU: its request Programs, GP-01's workload and the
-#     manifest. `predict compare ROW --predicted PRED` holds it to the traced Build ROW, the cross-check: PREDICT-COMPARE,
+#     manifest, and beside them a copy of the checkpoint config it was predicted from (checkpoint_config.json, which the
+#     served compare reads). `predict compare ROW --predicted PRED` holds it to the traced Build ROW, the cross-check: PREDICT-COMPARE,
 #     every Program digest and the manifest's digest, Program digest and identities, gates the serve.
 #  1. serve: `verity-vllm serve-openai` of LLAMA32_1B_INT8 (REPO at REV, --precision PRECISION: verity-int8/Llama-3.2-1B-INT8, verity_int8) on one GPU
 #     under `gpu-lease`, `--scheme rows-sha512 --seal --admit release-order --window-requests SLOTS`, its committer built from
@@ -1718,6 +1719,11 @@ rc=$?
 cp "$PRED/predicted.json" "$OUT/"
 say "PREDICT-ROW $ROW_ID: $(cut -c1-600 "$OUT/predict_row.json")"
 CONFIG=$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["config"])' "$PRED/predicted.json")
+# the config the Build was predicted from, kept beside it for the served compare (served_compare.py's CONFIG_COPY): the
+# path predicted.json names is in this run's tree, which a run's own clone takes with it, and a kept serve dir is
+# compared again after that
+cp "$CONFIG" "$PRED/checkpoint_config.json" \
+  || { say "PREDICT-ROW $ROW_ID: its checkpoint config $CONFIG can't be kept beside predicted.json, where the served compare reads it"; stop predict 17; }
 vv predict compare "$ROW" --row "$ROW_ID" --config "$CONFIG" --predicted "$PRED" --out "$OUT/predict_compare.json" \
   > "$OUT/predict_compare.log" 2>&1
 rc=$?

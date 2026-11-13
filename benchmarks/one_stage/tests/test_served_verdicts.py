@@ -3159,6 +3159,37 @@ def test_under_pouw_pearlplus_the_challenger_peer_takes_its_default_only_where_t
     assert said.read_text().splitlines() == [str(gate) if live else "", exported]
 
 
+@pytest.mark.parametrize("there", [True, False])
+def test_the_run_keeps_the_builds_checkpoint_config_beside_its_predicted_json(tmp_path, there):
+    """`predict row`'s predicted.json names its checkpoint config where the run's tree has it, and a run's own clone goes
+    when it ends. So step 0 copies the config beside predicted.json (served_compare.py's CONFIG_COPY), where the served
+    compare reads it, on this run and on a kept serve dir afterwards; a config it can't copy stops the run there. Here
+    `predict row` writes a predicted.json naming CONFIG_NAMED, and `predict compare` then fails."""
+    venv = tmp_path / "toy-venv" / "bin"
+    _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n'
+                             'if [ "$1 $2 $3 $4" = "-m verity_vllm.pipeline.cli predict row" ]; then\n'
+                             '  mkdir -p "$8" && printf \'{"config": "%s"}\' "$CONFIG_NAMED" > "$8/predicted.json"; echo "{}"; exit 0\n'
+                             'fi\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
+                             f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
+    (one := tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True)
+    (one / "served_verdicts.py").symlink_to(HERE.parent / "served_verdicts.py")
+    named = tmp_path / "clone" / "LLAMA.config.json"
+    if there:
+        named.parent.mkdir()
+        named.write_text('{"hidden_size": 2048}')
+    rc, lines, _order, _limits = _v3c(tmp_path, (), VENV=str(venv.parent), HOST="vy-dc-h200", CONFIG_NAMED=str(named),
+                                      PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}")
+    kept = tmp_path / "serve" / "predicted" / "checkpoint_config.json"
+    if there:
+        assert rc == 18 and lines[-1] == "STOP at predict-compare (exit 18)", lines
+        assert kept.read_text() == '{"hidden_size": 2048}'
+    else:
+        assert rc == 17 and lines[-2:] == [
+            f"PREDICT-ROW row: its checkpoint config {named} can't be kept beside predicted.json, where the served "
+            "compare reads it", "STOP at predict (exit 17)"], lines
+        assert not kept.exists()
+
+
 @pytest.mark.parametrize("extra, refused", [
     ({"PEARLC_CHALLENGER_GATE": "", "PEARLC_CHALLENGER_PEER": "vy-peer"}, True),
     ({"PEARLC_CHALLENGER_GATE": ""}, False),
