@@ -217,22 +217,17 @@ def circAt (rs : List Ref) (t : Nat) : Circuit :=
 
 /-! ## A member's size -/
 
-/-- A member's unit source gates, `B` of its key program: `upv` copies of the unit's input bits, the bits before its
-constant row. -/
+/-- A unit's source gates: `upv` copies of the unit's input bits, the bits before its constant row. -/
 def unitIns (c : Circuit) : Nat := c.upv * min (c.unit.inWords * WORD) c.unit.constPos
 
-/-- A member's stacked unit rows' computed rows: `upv` copies of the unit net's computed rows, each with its constant
-row. -/
-def unitRows (c : Circuit) : Nat := c.upv * (c.unit.constPos - min (c.unit.inWords * WORD) c.unit.constPos + 1)
+/-- The returned output bits of one unit: sixteen for each returned output leaf of each of its `upv` instances. -/
+def outBits (c : Circuit) : Nat := ((List.range c.upv).map fun k => 16 * (c.leavesOut.getD k #[]).size).sum
 
-/-- A member's lowered size over `n` units: the constant, the zero and `B` source gates a unit, then `R` rows a unit,
-three gates each. -/
-def memberSize (c : Circuit) (n : Nat) : Nat := 2 + n * unitIns c + 3 * (n * unitRows c)
-
-/-- **A member fits the two-stage scope**, over `n` units: `unitLog ≤ 32`, an instance a unit at least, and at most
-`UNIT_CLASS_MAX` gates in its program. -/
-def memberOk (c : Circuit) (n : Nat) : Bool :=
-  decide (c.unit.unitLog ≤ 32) && decide (0 < c.upv) && decide (memberSize c n ≤ Spot.OneStageZk.UNIT_CLASS_MAX)
+/-- **A member fits the two-stage scope**: `unitLog ≤ 32`, an instance a unit at least, and a unit's inputs and
+returned output bits, the most one unit's proof block commits, at most `UNIT_CLASS_MAX`, whatever its count of units. -/
+def memberOk (c : Circuit) : Bool :=
+  decide (c.unit.unitLog ≤ 32) && decide (0 < c.upv) &&
+    decide (unitIns c + outBits c ≤ Spot.OneStageZk.UNIT_CLASS_MAX)
 
 /-! ## The registered wiring -/
 
@@ -448,7 +443,7 @@ def descOk (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : 
       let refReads := fun t => (it.circuits.map (·.2.2.2)).toList.getD t .null
       p.circuits.size == T && !rs.isEmpty &&
         rs.all (fun r => fits r && zkOk r.spec r.sts && templateOk r && ProvedScope.scopeOkH r.stmt) &&
-        (List.range T).all (fun t => memberOk (circAt rs t) (requests l * ns.getD t 0)) && designOk law l &&
+        (List.range T).all (fun t => memberOk (circAt rs t)) && designOk law l &&
         ks.size == T && ks.toList.all (1 ≤ ·) && ns.size == T &&
         wiringOk T names links wires rows (circAt rs) ns (unitsAt (requests l) ns T) refReads it.params.verifier
     | _, _ => false

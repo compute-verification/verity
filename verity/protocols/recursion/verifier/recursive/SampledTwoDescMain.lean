@@ -10,7 +10,7 @@ boundary registration, the evidence, the blobs, and the run of record's input fr
 descriptor check (`SampledTwoDesc.descOk`) on it:
 
 * on the play as it is, printing `pass` or the first of its clauses that fails (`why`), then every clause that fails
-  (`fails`) and, for each template, the numbers `memberOk` reads (`sizes`);
+  (`fails`) and, for each template, the numbers `memberOk` reads and its count of units (`sizes`);
 * on the play with its second template given the first's name, which `namesOnce` must refuse; a play of fewer than two
   templates has no such case, and the line says so;
 * on the play with its interior registering a value, which the check must refuse at that clause.
@@ -58,7 +58,7 @@ def clauses (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it :
         ("as many templates as the params name", p.circuits.size == T), ("a reference statement", !rs.isEmpty),
         ("fits", rs.all fits), ("zkOk", rs.all fun r => zkOk r.spec r.sts), ("templateOk", rs.all templateOk),
         ("scopeOkH", rs.all fun r => ProvedScope.scopeOkH r.stmt),
-        ("memberOk", (List.range T).all fun t => memberOk (circ t) (requests l * ns.getD t 0)),
+        ("memberOk", (List.range T).all fun t => memberOk (circ t)),
         ("designOk", designOk law l), ("a count a template", ks.size == T), ("counts at least 1", ks.toList.all (1 ≤ ·)),
         ("a cell a template", ns.size == T), ("namesOnce", namesOnce T names),
         ("writersFirst", writersFirst T names wires), ("sourceRowsNamed", sourceRowsNamed T names links wires circ),
@@ -82,8 +82,8 @@ def fails (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : S
   | .error e => [e]
   | .ok cs => (cs.filter fun c => !c.2).map (·.1)
 
-/-- **The numbers `memberOk` reads**, a line a template: its statement circuit's unit, the units the check counts it
-over (requests times cells), its member's lowered size against the bound, and the bits that circuit returns. -/
+/-- **The numbers `memberOk` reads**, a line a template: its statement circuit's unit, a unit's inputs and returned
+output bits against the bound, and the template's units (requests times cells), which the bound does not read. -/
 def sizes (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : Spot.Run.Interior) : List String :=
   match firstOf i, cellsOf i it, refsOf p bs with
   | some f, some (ns, ks), some rs =>
@@ -91,11 +91,10 @@ def sizes (p : SampledTwo.Params) (bs : Core.Blobs) (i : Spot.Run.Input) (it : S
     | some l =>
       (List.range it.circuits.size).map fun t =>
         let c := circAt rs t
-        let n := requests l * ns.getD t 0
-        s!"template {t}: unitLog {c.unit.unitLog}, upv {c.upv}, inWords {c.unit.inWords}, constPos {c.unit.constPos}, " ++
-          s!"unitIns {unitIns c}, unitRows {unitRows c}, requests {requests l}, cells {ns.getD t 0}, " ++
-          s!"count {ks.getD t 0}, n {n}, memberSize {memberSize c n}, bound {Spot.OneStageZk.UNIT_CLASS_MAX}, " ++
-          s!"memberOk {memberOk c n}, returnedBits {Spot.OneStageZk.returnedBits c}"
+        s!"template {t}: unitLog {c.unit.unitLog}, upv {c.upv}, inWords {c.unit.inWords}, " ++
+          s!"constPos {c.unit.constPos}, unitIns {unitIns c}, outBits {outBits c}, " ++
+          s!"bound {Spot.OneStageZk.UNIT_CLASS_MAX}, memberOk {memberOk c}, requests {requests l}, " ++
+          s!"cells {ns.getD t 0}, count {ks.getD t 0}, units {unitsAt (requests l) ns it.circuits.size t}"
     | none => []
   | _, _, _ => []
 

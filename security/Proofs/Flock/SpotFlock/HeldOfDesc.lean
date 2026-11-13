@@ -390,8 +390,7 @@ theorem portsOnce_eq (h : Held) : portsOnce h = SampledTwoDesc.portsOnce h.ms.le
 
 theorem outsOk_eq (h : Held) : outsOk h = SampledTwoDesc.outsOk h.ms.length (memberCircuit h) := rfl
 
-theorem memberOk_eq (c : _root_.Flock.Circuit) (us : Array ℕ) :
-    memberOk (c, us) = SampledTwoDesc.memberOk c us.size := rfl
+theorem memberOk_eq (c : _root_.Flock.Circuit) (us : Array ℕ) : memberOk (c, us) = SampledTwoDesc.memberOk c := rfl
 
 /-- **`decided`, from its clauses.** -/
 theorem decided_of {u : Unread} {it : Spot.Run.Interior} {H : Held} {l : Spot.Slots.SlotOrder} {d : Design}
@@ -488,9 +487,6 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
     show memberOk (stmtOf (refStmt (rs.map fun R => (rawOf R).encode) t),
       (unitsOf (requests l) ns it.circuits.size).getD t #[]) = true
     rw [memberOk_eq, stmtOf_refStmt hrs hfits hne' t]
-    have hsz : ((unitsOf (requests l) ns it.circuits.size).getD t #[]).size = requests l * ns.getD t 0 := by
-      simp [unitsOf, ht', List.getD_eq_getElem?_getD]
-    rw [hsz]
     exact List.all_eq_true.1 hmem t (List.mem_range.2 ht')
   · rw [designOk_eq]
     exact hdes
