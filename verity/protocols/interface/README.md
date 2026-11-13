@@ -87,7 +87,7 @@ signer and sessions) is its own check. The auditor's ledger (`Spot.Challenger.le
 
 ## The profile (`CoreProtocol/Profile.lean`)
 
-`Core.Integrity` is `verity.protocols.spot.verifier.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
+`Core.Integrity` is `verity.protocols.proofs.spot.verifier.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
 `linked`, `covered`, the `levels` coarse to fine (name, query, size, and sample: `{"bernoulli":"p"}`, `{"subset":k}` or
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
@@ -95,7 +95,7 @@ own profile type and JSON.
 
 ## The profile (`CoreProtocol/Profile.lean`)
 
-`Core.Integrity` is `verity.protocols.spot.verifier.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
+`Core.Integrity` is `verity.protocols.proofs.spot.verifier.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
 `linked`, `covered`, the `levels` coarse to fine (name, query, size, and sample: `{"bernoulli":"p"}`, `{"subset":k}` or
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
@@ -131,7 +131,7 @@ registered compiler and the days' registered circuits, `View.declared?`, at the 
 `Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
 evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
 ASCII without DEL as `Core.canonicalJson` does. `verity.hardware.registration` is its Python, held to it by the
-composition suite's difftest (`../remote/verifier/composition/tests/test_registration_difftest.py`).
+composition suite's difftest (`../compose/verifier/lean/tests/test_registration_difftest.py`).
 
 ## What a protocol accounts for (`CoreProtocol/Account.lean`)
 
@@ -183,7 +183,7 @@ round trips and refusals; `core-protocol-example` runs it.
 The code's copy of the spec's ticks, spans and monitoring period (`security/Definitions/Core/Period.lean`), so a
 verifier reads them without requiring `security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
 clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that cut it into its execution blocks'
-spans, and for each execution block the boundaries that cut its span into its sampling blocks' spans; `valid` holds
+spans, and for each execution block the boundaries that cut its span again, into its `samplingSpans`; `valid` holds
 when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
 `{"execution":[t,...],"sampling":[[t,...],...],"span":{...}}`, refuses any other key, and refuses a monitoring period
 that isn't valid. `Properties.Core.Period` states that the copy is the spec's. `verity.periods` mirrors it in

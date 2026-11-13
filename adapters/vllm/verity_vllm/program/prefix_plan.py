@@ -21,6 +21,9 @@ from __future__ import annotations
 
 from typing import Any
 
+__all__ = ["DEFAULT_BLOCK_SIZE", "cached_of", "cached_rows", "declares", "plan", "prefix_caching", "request_shape",
+           "shape", "shape_key", "shape_name", "with_cached"]
+
 #: vLLM's block size when the row does not set `engine.args.block_size` (the FlashAttention backends).
 DEFAULT_BLOCK_SIZE = 16
 
@@ -103,10 +106,6 @@ def shape_name(s: tuple[int, ...]) -> str:
 def shape_key(s: tuple[int, ...]) -> str:
     """`"LP,T"`, or `"LP,T,C"`: the key GP-01 and the Build's records file a shape under."""
     return ",".join(str(int(x)) for x in shape(*s))
-
-
-def parse_shape_key(k: str) -> tuple[int, ...]:
-    return shape(*(int(x) for x in k.split(",")))
 
 
 def cached_rows(s: tuple[int, ...]) -> int:

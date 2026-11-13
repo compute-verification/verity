@@ -29,11 +29,11 @@ from types import SimpleNamespace
 from typing import Any, Iterable, Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cache_pool_vectors as CPV
 import replay as RP
+import replay_input as RI
 
-from verity.definitions.commitments.gates import block_key as BK
-from verity.protocols.certifier.prover import compile_slice_v4 as V4, compile_slice_v6 as V6
+from verity.commitments.gates import block_key as BK
+from verity.protocols.accounting.certifier.prover import compile_slice_v4 as V4, compile_slice_v6 as V6
 from verity_vllm.engine import pool_row as PR
 
 GROUP = bytes(PR.GROUP_BYTES)
@@ -241,7 +241,7 @@ def kv_row(kv: Any, key: dict[int, bytes]) -> V6.PoolRow:
                       tuple(mlast), keys)
 
 
-def statics(inp: CPV.Input) -> dict[str, int]:
+def statics(inp: RI.Input) -> dict[str, int]:
     """A carried pool's class for the trace's engine: `compile_slice_v6.demo`'s, at the trace's NB, B and token width."""
     e = inp.engine
     ctw = max(max(max(r.tokens) for r in inp.requests).bit_length(), 1)
@@ -394,7 +394,7 @@ def keyed(drv: Driver):
 def drive(path: Path, *, every: int = 1) -> dict[str, Any]:
     """The transcribed pool over the trace at ``path``, held to `_KV` (the module's docstring); its counts and the root
     at each edge. Raises AssertionError where they disagree."""
-    inp = CPV.replay_input(path)
+    inp = RI.replay_input(path)
     if not inp.engine.enable_prefix_caching:
         raise ValueError(f"{path.name}: the pool row needs prefix caching on")
     drv = Driver(statics(inp), every)

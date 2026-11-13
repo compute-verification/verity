@@ -125,11 +125,25 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.circuits.evaluation.batch import type_shape
+from verity.definitions.boolean import boolean_version
+from verity.definitions.numerics import marlin_moe_rows as MR
+from verity.definitions.numerics.derived_rows import f2fp_bf16
+from verity.definitions.registry import marlin_moe as MM
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from tests.properties.glm53_block_fp8_capture_gpu import _activation, _error, _load, _save, _u16, _u32
-from verity.definitions.numerics import marlin_moe_rows as MR
+from tests.properties.glm53_block_fp8_capture_gpu import (
+    _activation,
+    _error,
+    _load,
+    _save,
+    _u16,
+    _u32,
+)
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-marlin-capture/v3"
@@ -248,13 +262,19 @@ def selection() -> dict[str, Any]:
     import torch
     from vllm.engine.arg_utils import EngineArgs
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
-    from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig, FusedMoEParallelConfig, RoutingMethodType
+    from vllm.model_executor.layers.fused_moe.config import (
+        FusedMoEConfig,
+        FusedMoEParallelConfig,
+        RoutingMethodType,
+    )
     from vllm.model_executor.layers.fused_moe.oracle.mxfp4 import (
         Mxfp4MoeBackend,
         mxfp4_round_up_hidden_size_and_intermediate_size,
         select_deepseek_v4_mxfp4_moe_backend,
     )
-    from vllm.model_executor.layers.quantization.utils.marlin_utils import get_marlin_input_dtype
+    from vllm.model_executor.layers.quantization.utils.marlin_utils import (
+        get_marlin_input_dtype,
+    )
     from vllm.usage.usage_lib import UsageContext
 
     cfg = FusedMoEConfig(num_experts=NUM_EXPERTS, experts_per_token=TOP_K, hidden_dim=HIDDEN, intermediate_size=INTER,
@@ -419,7 +439,9 @@ def weights(work: Path, seed: int) -> dict[str, Any]:
     codes [E][N][K] (every e2m1 code), scale bytes [E][N][K / 32] in SCALE_BYTES, the edge experts' partly from EDGE_BYTES; packed
     as the checkpoint is, two codes a byte, the even k in the low nibble (GPTQ's order, which `gptq_marlin_repack` reads)."""
     import torch
-    from vllm.model_executor.layers.quantization.utils.marlin_utils_fp4 import prepare_moe_mxfp4_layer_for_marlin
+    from vllm.model_executor.layers.quantization.utils.marlin_utils_fp4 import (
+        prepare_moe_mxfp4_layer_for_marlin,
+    )
 
     gen = torch.Generator(device="cuda").manual_seed(seed)
     edge = torch.tensor(EDGE_BYTES, device="cuda", dtype=torch.uint8)
@@ -532,7 +554,7 @@ def kernel_config(k: dict[str, Any] | None, sms: int, types: list[int] | None, *
     threads x 1 x 1 on a grid of sms * b x 1 x 1, with the block's `kernel_statics` and, when given, the served [a, b, c, s] type
     ids."""
     t = (k or {}).get("template")
-    if not t:
+    if k is None or not t:
         return None, False
     grid, threads = list(k.get("grid") or [0, 0, 0]), list(k.get("block") or [0, 0, 0])
     tk, tn = 16 * t["thread_k_blocks"], 16 * t["thread_n_blocks"]
@@ -605,7 +627,9 @@ def assignment(st: np.ndarray, ex: np.ndarray, ntpp: int, ids_flat: np.ndarray, 
     position in the sorted ids over ``block``) and that block's expert, and par = num_tokens_post_padded / ``block``; ok when every
     pair sits in exactly one block below par, whose expert routes it."""
     n = ids_flat.size
-    blk, e, seen = np.full(n, -1, dtype=np.int64), np.full(n, -1, dtype=np.int64), np.zeros(n, dtype=np.int64)
+    blk: np.ndarray = np.full(n, -1, dtype=np.int64)
+    e: np.ndarray = np.full(n, -1, dtype=np.int64)
+    seen: np.ndarray = np.zeros(n, dtype=np.int64)
     par = ntpp // block
     for b in range(min(int(ex.size), par)):
         p = st[b * block:(b + 1) * block]
@@ -705,7 +729,9 @@ def replay(L: dict[str, Any]) -> bool:
     call alone, the claim the record makes of the served path."""
     import torch
     from vllm import _custom_ops as ops
-    from vllm.model_executor.layers.quantization.utils.marlin_utils import marlin_make_workspace_new
+    from vllm.model_executor.layers.quantization.utils.marlin_utils import (
+        marlin_make_workspace_new,
+    )
 
     out = torch.full_like(L["output"].view(torch.int16), SENTINEL).view(torch.bfloat16)
     ops.moe_wna16_marlin_gemm(**{**L["call"], "output": out, "workspace": marlin_make_workspace_new(out.device, 4)})
@@ -790,7 +816,9 @@ def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int
 
     import torch
     from vllm import _custom_ops as ops
-    from vllm.model_executor.layers.quantization.utils.marlin_utils import marlin_make_workspace_new
+    from vllm.model_executor.layers.quantization.utils.marlin_utils import (
+        marlin_make_workspace_new,
+    )
 
     kind, L = cap["launch"], cap["L"]
     K, N = shape(kind)
@@ -800,6 +828,7 @@ def forced_launches(work: Path, W: dict[str, Any], cap: dict[str, Any], sms: int
     if list(xs.shape) != list(L["input"].shape):
         raise RuntimeError(f"probe {list(xs.shape)} for input {list(L['input'].shape)}")
     x = torch.from_numpy(xs.view(np.int16)).to(L["input"].device).view(torch.bfloat16)
+    classes: dict[str, list[list[int]]]
     launches, specs, classes = [], [], {}
     for tk, tn, b in candidates(moe_block_size_of(cap["M"])):
         out = torch.full_like(L["output"].view(torch.int16), SENTINEL).view(torch.bfloat16)
@@ -866,7 +895,7 @@ def compare_words(job: dict[str, Any]) -> dict[str, Any]:
     p = np.asarray(job["moved"][p0:p1], dtype=np.int64) if "moved" in job else np.arange(p0, p1)
     want, got = _twin(job, p, np.arange(job["N"]))
     bad = np.argwhere(want != got)
-    rec = {"words": int(want.size), "mismatch": len(bad), "first_mismatch": None}
+    rec: dict[str, Any] = {"words": int(want.size), "mismatch": len(bad), "first_mismatch": None}
     if len(bad):
         i, n = (int(v) for v in bad[0])
         rec["first_mismatch"] = {"pair": int(p[i]), "column": n, "want": int(want[i, n]), "kernel": int(got[i, n])}
@@ -880,11 +909,6 @@ def reference_job(spec: dict[str, Any], statics: list[int]) -> dict[str, Any]:
 def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
     """The plain-integer reference against the twin at the launch's statics: the schedule on its first four blocks, two pairs' sampled
     coordinates, and for the w2 launch one coordinate through the expert gather over every expert's rows."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-    from verity.definitions.numerics.derived_rows import f2fp_bf16
-    from verity.definitions.registry import marlin_moe as MM
-
     TK, TN, GRID = job["statics"]
     K, N, E, P, par = job["K"], job["N"], job["E"], job["pairs"], job["par"]
     KT, NT = K // TK, N // TN
@@ -906,12 +930,13 @@ def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
             cut_p = MR.schedule(KT, NT, GRID, int(blk[p]), par)
         for n in sorted({0, N - 1, (p * 7919) % N}):
             q, s, cut = w["wq"][e[p], n], w["ws"][e[p], n], cut_p[n // TN]
-            lead = [x[p].tolist(), cut.astype(int).tolist()] + ([int(gb[p])] if routed else [])
+            lead = [x[p].tolist(), cut.astype(int).tolist()] + ([int(gb[p])] if routed and gb is not None else [])
             y = evaluate(coord, *lead, q.tolist(), s.tolist())
             twin = MR.coordinates(x[p][None], cut[None], q[None], s[None], TK=TK, g=None if gb is None else gb[p:p + 1])
             rec["reference_coords"] += 1
             rec["twin_mismatch"] += y != (int(twin[0]),)
     if routed:
+        assert gb is not None, "a w2 launch saves its gates"
         n = (P * 7919) % N
         cut = cuts.get(int(blk[0]), MR.schedule(KT, NT, GRID, int(blk[0]), par))[n // TN]
         fn = bind(MM.MarlinMoeExpertCoordinateW, E=E, K=K, TK=TK, DOT=MM.DOT)
@@ -960,12 +985,6 @@ def model(served: dict[str, dict[str, list[int] | None]], sms: int) -> dict[str,
 def bind_check(served: set[tuple[str, int, int, int]]) -> dict[str, Any]:
     """`MarlinMoeExpertGemm(W)_v1` bind at every served (kind, TK, TN, GRID): the weight slabs [E][N][K] and [E][N][K / 32], and the
     Boolean version each names."""
-    from verity.circuits.codec import descriptor_id
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation.batch import type_shape
-    from verity.definitions.boolean import boolean_version
-    from verity.definitions.registry import marlin_moe as MM
-
     out: dict[str, Any] = {}
     for kind, TK, TN, GRID in sorted(served):
         K, N = shape(kind)
@@ -1009,6 +1028,7 @@ def cases(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Each case's own verdict: its launches' checks, the configs it ran (`auto` launches at their kernel's config, `forced` ones that
     were accepted), its probes and its words, so a NO-GO names what failed."""
     out: dict[str, dict[str, Any]] = {}
+    c: dict[str, Any] | None
     for x in doc["launches"]:
         c = out.setdefault(x["case"], {"launches_ok": True, "totals": {k: 0 for k in TOTALS}, "configs": [], "refused": 0})
         c["launches_ok"] = c["launches_ok"] and _launch_ok(x)

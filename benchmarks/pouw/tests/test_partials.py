@@ -17,9 +17,9 @@ import pytest
 import torch
 from verity_config.settings import of
 
-from verity.protocols.pouw.prover.circuit import h1tile as HT
-from verity.protocols.pouw.prover.circuit import seeds as SD
-from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+from verity.protocols.accounting.pouw.prover.circuit import seeds as SD
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
 SETTINGS = of(__file__)
 RC = PT.RC
