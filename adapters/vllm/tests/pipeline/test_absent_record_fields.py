@@ -284,6 +284,28 @@ def test_a_run_with_no_tokens_record_has_no_realized_shape(tmp_path, monkeypatch
     assert RC.write_realized(plan) is None and "realized" not in json.loads(plan.p("run").read_text())
 
 
+@pytest.mark.parametrize("control", [None, "null", "not json"])
+@pytest.mark.parametrize("empty", ["{}", "[]", "0", '""', "false", "0.0"])
+def test_an_empty_capture_document_beside_no_control_s_raises_and_leaves_no_realized_shape(tmp_path, monkeypatch, empty, control):
+    plan = _plan(tmp_path, monkeypatch)
+    (plan.capture_dir / "tokens.json").write_text(empty)
+    if control is not None:
+        plan.control_tokens_path().parent.mkdir()
+        plan.control_tokens_path().write_text(control)
+    with pytest.raises(AttributeError, match="'NoneType' object has no attribute 'get'"):
+        RC.write_realized(plan)
+    assert "realized" not in json.loads(plan.p("run").read_text())
+
+
+def test_an_empty_capture_document_gives_way_to_the_control_s(tmp_path, monkeypatch):
+    plan = _plan(tmp_path, monkeypatch)
+    (plan.capture_dir / "tokens.json").write_text("{}")
+    plan.control_tokens_path().parent.mkdir()
+    plan.control_tokens_path().write_text(json.dumps({"requests": [{"request_id": "r0", "first_step": 0, "finish_step": 1}]}))
+    real = RC.write_realized(plan)
+    assert real is not None and [r["request_id"] for r in real["requests"]] == ["r0"]
+
+
 @pytest.mark.parametrize("kept, steps", [
     ('{"steps": [3, 1, 1]}', [1, 3]), ('{"snapshot_steps": ["2", 0]}', [0, 2]), ('{"steps": [4], "snapshot_steps": [5]}', [4]),
     ('{"steps": [], "snapshot_steps": [5]}', [5]), ('{"steps": null, "snapshot_steps": [5, 6]}', [5, 6]),
