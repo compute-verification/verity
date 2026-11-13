@@ -305,7 +305,8 @@ A spec-level reference for network accounting's timing channel:
   and, with content rows (`WardenParams.content`), three tables a class of what each filed release carried
   (`content_rows`: its request, response and end rows), all committed as the cells' rows are and listed under one
   head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
-  `--registered` port of the proof blocks that read a table, one a row (`port`);
+  `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
+  that an execution phase has no head (`check_no_head`);
 - how an execution phase's class is charged (`class_charge.charge`): below its schedule only with a count above 0
   in that head and its four verdicts, each accepted, complete and on the head, all of one serve and registration;
   else its whole schedule;
