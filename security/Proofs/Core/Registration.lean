@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Core.Guarantees.Registration
+public import Definitions.Core.Guarantees.Registration.Witnesses
 public import Proofs.Core.Site
 
 /-!
@@ -19,10 +19,9 @@ public import Proofs.Core.Site
   θ value by its name; and `Registration.Valid.declarations_nodup`: the log declares each day once
   (`Registration.Valid.days_nodup`).
 
-`RegistrationSound_honest`: the onsite example's log, with day 0 declared, is valid, at a Site with a device and a
-boundary link.
-`RegistrationSound_nontrivial`: the view of a log with a device naming no sheet holds no registered facts, so the
-conclusion fails for a check that accepts every log.
+`RegistrationSound_honest` and `RegistrationSound_nontrivial`, at the witness site of
+`Definitions.Core.Guarantees.Registration.Witnesses`: its log passes the check by evaluation, and a log whose device
+names no sheet finds no sheet for it.
 -/
 
 @[expose] public section
@@ -136,9 +135,6 @@ theorem Valid.declarations_nodup {l : Registration} (h : Valid D A c l) :
     ((l.filterMap Entry.declared?).map (·.day)).Nodup := by
   simpa [days, List.map_filterMap] using h.days_nodup
 
-/-- A log whose one entry registers a device naming no sheet. -/
-def unnamed : Registration := [.site "genesis" { locs := [{ id := "gpu9", kind := .device }] }]
-
 end Registration
 
 end Verity
@@ -151,21 +147,15 @@ theorem RegistrationSound : Guarantees.RegistrationSound := by
   intro D A c log h
   exact ⟨h.devices, h.onsite, h.theta_nodup, h.declarations_nodup⟩
 
-/-- **`RegistrationSound`'s honest lemma: a valid log at a nonempty Site.** The onsite example's log, with day 0
-declared, passes the check; its Site has a device, and a boundary link, the node's uplink to its certifier. -/
-theorem RegistrationSound_honest :
-    Valid Example.digests Example.auditor .onsite Example.declaredLog ∧
-      Example.device "gpu0" "node0" Example.sheetA ∈ (Site.ofLog Example.declaredLog).locs ∧
-      (Site.ofLog Example.declaredLog).Boundary ⟨"uplink0", ("node0", "cert0"), 100000, 100000⟩ :=
-  ⟨Example.declaredLog_valid.1, by simp [Example.declaredLog, Example.onsite, Example.node, Site.ofLog, Entry.added],
-    by decide +kernel⟩
+theorem RegistrationSound_honest : Guarantees.RegistrationSound_honest := by
+  unfold Guarantees.RegistrationSound_honest
+  exact ⟨by decide +kernel, by simp [Witness.log, Witness.entry, Site.ofLog, Entry.added], by decide +kernel⟩
 
-/-- **`RegistrationSound`'s nontrivial lemma: its conclusion fails at a check that accepts everything.** A log whose
-device names no sheet: the device's sheet lookup finds none, so its view holds no registered facts. -/
-theorem RegistrationSound_nontrivial :
-    ¬(view Example.digests .onsite unnamed).Holds Example.digests Example.auditor .onsite := by
+theorem RegistrationSound_nontrivial : Guarantees.RegistrationSound_nontrivial := by
+  unfold Guarantees.RegistrationSound_nontrivial
   rintro ⟨hd, -⟩
-  obtain ⟨k, hk, -⟩ := hd { id := "gpu9", kind := .device } (by simp [view, unnamed, Site.ofLog, Entry.added]) rfl
-  simp [view, unnamed, Site.ofLog, Site.sheet?, Entry.added] at hk
+  obtain ⟨k, hk, -⟩ :=
+    hd { id := "gpu9", kind := .device } (by simp [view, Witness.unnamed, Site.ofLog, Entry.added]) rfl
+  simp [view, Witness.unnamed, Site.ofLog, Site.sheet?, Entry.added] at hk
 
 end Verity.SecurityProofs
