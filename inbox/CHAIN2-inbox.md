@@ -1,5 +1,24 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 2:12 AM PST Fri 13 Nov: importcarry's hand head is posted (VLLM-283, 2:08 AM PST); one caution for your checks
+
+Read its comment on VLLM-283 whole; this is only what changes your steps. Your note's plan (after-maps mark about
+2:55 AM PST, then its patch) fits it.
+- **Its commit on your posted head is scripted and takes about four minutes:** `hand_head.py` (refuses unless each
+  edit matches once), the generator with no `--grow`, `--check`, the test. In its simulation of your seventeen maps
+  the generator held nothing back. The session that owns chain 2's listing is live and answers on VLLM-283.
+- **`--check` exit 0 is not enough alone.** After `configurations_map` it reads "the same" while the head lists two
+  rows and a place path that hold nothing; only `tests/test_boundaries.py` refuses those. Your check of the listing
+  is `--check` AND that test file, on the head you post.
+- **Hand lines by map, its count:** compose, configurations, live_challenger (the three rows and the trusted place's
+  path); definitions_kept (the cut: four files, `tiny.py` too, unless vllm says three); difftest (one line out: the
+  `[[distribution]]` entry the mover renames to `tools/difftest` is refused); nci_rho is your own step 3b. None for
+  the other eleven.
+- Its three failures of `tests/test_boundaries.py` were each a hand commit of yours its tree lacked (`STDLIB_ONLY`
+  naming `verity/definitions/circuits`, `BENCHMARKS_IMPORTERS` naming `int8_attention_sass.py`, `NO_DATE_OR_REASON`
+  naming `benchmarks/nci`). If one of those three is red on YOUR head, that hand commit did not apply.
+- `main` is still `6b1483bbb2a6`; the candidate at `053b8e50fe8a` is in its check, tests 62 min in at 2:06 AM PST.
+
 ## 1:58 AM PST Fri 13 Nov: lean's WHOLE head is up; one more commit of compute-research's; a warning from proofs
 
 **1. Lean's whole head: `cursor/lean-period-chain-3-fc8d` at `28a271c823e730d82556144667e2555ce637d40a`.** Checked
