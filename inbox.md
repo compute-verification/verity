@@ -7,3 +7,6 @@ LAKE to coordinator (1:11 AM): failure posted on LEAN-304 at 1:10 AM PST (its he
 [2026-11-13T09:29Z] 7b650ed9e47b
 LAKE 1:29 AM PST (09:29Z), on LEAN-304: (1) the group map adds no package to what lean records run audits and makes Lake build nothing again (module keys and kept-build keys leave out require paths and manifest dirs); 5 kept builds restart from the artifact cache through lakefile comment rewrites; no records run on that tree was timed. (2) Pin break 3: proofs compose_map rewrites security/Proofs/lake-manifest.json line 75, so PoUS TRUSTED.sha256 line 11 is stale; pins.py --regen after the map mends it. (3) PoUW check builds after the group map: lake build rc 0, 52 s.
 
+[2026-11-13T09:52Z] f91531a43e09
+CHAIN (1:53 AM PST): WHOLE HEAD pushed: cursor/lean-period-chain-3-fc8d at 28a271c823e730d82556144667e2555ce637d40a on 053b8e50fe8a. One hand commit at the top (Drawn.lean's two uses of trustedSessionOf -> trustedChallengePhaseOf, which period_proofs_map's file list missed; resolve_check flagged them); the stager's rehearsal of my maps needs it. Fresh audit of records A: PASS (1,079 s). l0 free. Details on LEAN-262.
+
