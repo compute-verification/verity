@@ -36,10 +36,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import NamedTuple, Protocol, runtime_checkable
+from typing import Any, NamedTuple, Protocol, runtime_checkable
 
 __all__ = ["ValueRef", "Call", "CallGraph", "VerificationUnit", "Query", "Partition", "partition_by", "boundary_values",
-           "Policy", "RequiredValues", "required_values", "admissibility", "PartitionError"]
+           "Policy", "RequiredValues", "required_values", "PartitionError"]
 
 
 class ValueRef(NamedTuple):
@@ -109,16 +109,16 @@ class PartitionError(ValueError):
     """The units are not a partition of the Program's Calls (a Call in two units, or in none)."""
 
 
-def partition_by(key: Callable[[Call], str], *, order: Callable[[str], object] | None = None) -> Partition:
+def partition_by(key: Callable[[Call], Any], *, order: Callable[[Any], Any] | None = None) -> Partition:
     """The query whose units are the classes of ``key`` over the Program's Calls: unit id = the key, unit = every Call with that
     key.  Units are returned in first-seen body order unless ``order`` sorts the ids.  The canonical way to write a
     membership-derived query (``key`` = the owning module path, the layer, the Definition family, ...)."""
 
     def Q(P: CallGraph) -> Sequence[VerificationUnit]:
-        groups: dict[str, set[int]] = {}
+        groups: dict[Any, set[int]] = {}
         for c in P.calls:
             groups.setdefault(key(c), set()).add(c.id)
-        ids: Iterable[str] = groups if order is None else sorted(groups, key=order)
+        ids: Iterable[Any] = groups if order is None else sorted(groups, key=order)
         return tuple(VerificationUnit(k, frozenset(groups[k])) for k in ids)
 
     return Q
@@ -222,10 +222,6 @@ class Policy:
     prescribed_inputs: frozenset[ValueRef] = field(default_factory=frozenset)
     protocol_required: frozenset[ValueRef] = field(default_factory=frozenset)
 
-    @staticmethod
-    def none() -> "Policy":
-        return Policy()
-
 
 @dataclass(frozen=True)
 class RequiredValues:
@@ -261,16 +257,3 @@ def required_values(P: CallGraph, Q: Partition, policy: Policy) -> RequiredValue
         if v.call in by_id and v.port not in by_id[v.call].ports:
             raise ValueError(f"policy requires {v}, but Call {v.call} has ports {tuple(by_id[v.call].ports)}")
     return RequiredValues(boundary_values(P, Q), frozenset(policy.prescribed_inputs), frozenset(policy.protocol_required))
-
-
-def admissibility(required: Iterable[ValueRef], acquisition_support: Mapping[ValueRef, bool] | Callable[[ValueRef], bool] | Iterable[ValueRef]) -> list[ValueRef]:
-    """The required Values the acquisition cannot support, sorted.  ``acquisition_support`` is a table (a set of the supported
-    Values, a mapping Value -> bool, or a predicate) -- an *input*: this module has no collector.  Empty result = admissible."""
-    if isinstance(acquisition_support, Mapping):
-        ok = lambda v: bool(acquisition_support.get(v, False))  # noqa: E731
-    elif callable(acquisition_support):
-        ok = acquisition_support
-    else:
-        s = frozenset(acquisition_support)
-        ok = s.__contains__
-    return sorted(v for v in set(required) if not ok(v))

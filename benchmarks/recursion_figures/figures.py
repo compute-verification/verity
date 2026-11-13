@@ -50,6 +50,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE.parent / "recursion_e2e"))
 
 from rec_profile import SESSION_STEPS  # noqa: E402
+
 from verity.protocols.reporting import PERIODS  # noqa: E402
 
 FORMAT = "recursion-e2e/figures/v2"
@@ -202,8 +203,8 @@ def markdown(fig: dict[str, Any]) -> str:
              + (f", released on a {_e(s['release']['schedule_s'])} s schedule (ok: {_e(s['release']['ok'])})" if s.get("release") else "")
              + ".", "", f"- Cost: {fig['basis']['cost']}.", f"- Knowledge soundness: {fig['basis']['ks']}.",
              f"- Stop leak: {fig['basis']['leak']}.", "",
-             "| fleet | span | sessions | ANDs covered | CPU s | core-years | CPU s per AND | log₂ KS error, world's calls | "
-             "log₂ KS share a session | log₂ KS share an AND | log₂ KS error, datacenter's calls | stop leak bits | bits per AND |",
+             ("| fleet | span | sessions | ANDs covered | CPU s | core-years | CPU s per AND | log₂ KS error, world's calls | "
+              "log₂ KS share a session | log₂ KS share an AND | log₂ KS error, datacenter's calls | stop leak bits | bits per AND |"),
              "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
 
     def ks(k: dict[str, Any]) -> str:

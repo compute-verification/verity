@@ -26,6 +26,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING, TypeGuard
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]                     # adapters/vllm
@@ -177,7 +178,14 @@ def dotted(node: ast.AST) -> str | None:
     return None
 
 
-def is_str(node: ast.AST | None) -> bool:
+if TYPE_CHECKING:
+    class StrConstant(ast.Constant):
+        """What ``is_str`` narrows a node to: a constant whose value is a ``str``."""
+
+        value: str
+
+
+def is_str(node: ast.AST | None) -> TypeGuard[StrConstant]:
     return isinstance(node, ast.Constant) and isinstance(node.value, str)
 
 
@@ -264,7 +272,7 @@ def load_allowlist(name: str) -> Counter:
 
 
 def entry_line(key: tuple[str, str, str, str], count: int = 1) -> str:
-    d = {"file": key[0], "kind": key[1], "symbol": key[2], "detail": key[3]}
+    d: dict[str, str | int] = {"file": key[0], "kind": key[1], "symbol": key[2], "detail": key[3]}
     if count != 1:
         d["count"] = count
     return json.dumps(d, ensure_ascii=False)
