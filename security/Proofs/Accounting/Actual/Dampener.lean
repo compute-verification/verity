@@ -40,7 +40,7 @@ import Proofs.Nci.Threads
 # The compute dampener's windows from the memory cap over threads
 
 `ThreadedRuntimeSlots` at `r = αF`, with `M_r + M_d ≤ |T.M|`, `⌈t/ω⌉₊ = (t + ω − 1)/ω` (`ceil_div_eq_pred_div`), and
-`Λ`, which is `Threading.bound` by definition; `SlowdownWindowsCap` is its instance at one slot per weight gate.
+`Λ`, which is `Threading.bound` by definition; `SlowdownServerBlocksCap` is its instance at one slot per weight gate.
 -/
 
 @[expose] public section
@@ -65,7 +65,7 @@ theorem ceil_div_eq_pred_div {t ω : ℕ} (hω : 0 < ω) : ⌈(t : ℝ) / ω⌉�
       omega
     omega
 
-theorem SlowdownWindowsCapSlots : Guarantees.Actual.SlowdownWindowsCapSlots := by
+theorem SlowdownServerBlocksCapSlots : Guarantees.Actual.SlowdownServerBlocksCapSlots := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T σ d e Mr Md hω hX hC hΦ hL hbw hba hd hΓ hr hR
     hcont hT hW hM
   obtain ⟨h, -⟩ := ThreadedRuntimeSlots A ℓ Φ ends β link n X θ hθ t ω Γ R (α * F) b_w b_a c T σ d e hω hX hC hΦ hL
@@ -76,11 +76,11 @@ theorem SlowdownWindowsCapSlots : Guarantees.Actual.SlowdownWindowsCapSlots := b
     _ = n * ⌈(t : ℝ) / ω⌉₊ * ((R + α * F * ω) * Lambda T.reuse e d b_w (R + α * F * ω)) := by
         rw [ceil_div_eq_pred_div hω, Nat.cast_mul, hb]
 
-/-- `SlowdownWindowsCapSlots` at one slot per weight gate. -/
-theorem SlowdownWindowsCap : Guarantees.Actual.SlowdownWindowsCap := by
+/-- `SlowdownServerBlocksCapSlots` at one slot per weight gate. -/
+theorem SlowdownServerBlocksCap : Guarantees.Actual.SlowdownServerBlocksCap := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T d e Mr Md hω hX hC hΦ hL hbw hba hd hΓ hr hR
     hcont hT hW hM
-  exact SlowdownWindowsCapSlots A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T (Nci.SecurityProofs.Fit.idSlots T)
+  exact SlowdownServerBlocksCapSlots A ℓ Φ ends β link n X θ hθ t ω Γ R F α b_w b_a c T (Nci.SecurityProofs.Fit.idSlots T)
     d e Mr Md hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT
     (Nci.SecurityProofs.weightsIncompressibleSlots_of (Nci.SecurityProofs.Fit.idSlots T) hbw.le hW) hM
 
