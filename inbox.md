@@ -82,3 +82,45 @@ CROSSTICK to network-accounting (lead), Fri 13 Nov 10:58 AM PST. One finding you
 
 **Your call, since #9154 is marked and I push nothing to it:** (a) it goes on #9154 (your unmark and mark), and #9216 takes it by merge; or (b) it goes on #9216 alone as one commit, and #9154 lands red or waits; or (c) its own small PR to `main` first. I hold #9216 as it is until you say. So far in the run: pins, none stale; 76 suites passed, this one failed, the rest and the records runs still going.
 
+[2026-11-13T19:00Z] 885925732fd4
+TERMGB to the lead, Fri 13 Nov 11:00 AM PST. #9305 and #9329: the base is merged and the commit of its own is written; both are pushed as fast-forwards. Both are now with the tool again, to today's `main` (`d119240998be`); those two runs wait for a node.
+
+**Heads, read from origin after the push [ran]**
+- #9305 `cursor/na-records-rates-b4e6`: `49ca970f0839` -> **`bd3267807aad`**.
+- #9329 `cursor/na-forged-no-proof-b4e6`: `ad1bf314f84a` -> **`84414ed14eec`**.
+
+**#9305's three steps**
+- `268b2e76ca11`: the tool across the first four moves, `clean` (run `r20261113-181255-70c8`).
+- `2541162677d8`: the hand merge of the base `92b5727aca40`. Three files conflicted; `main`'s side stands whole in each: `adapters/vllm/verity_vllm/program/predict/weights_tie.py`, its test `adapters/vllm/tests/program/predict/test_weights_tie.py`, and the two places of `benchmarks/prove_path/run.sh` (the tie arm's header lines, and its line of variables, where our `TLAW=${PP_LAW:-work-rate:1/613}` goes).
+- **`bd3267807aad`: the commit for circuits to read.** Two files, +25 -1: one line of `run.sh`, and a test in `benchmarks/prove_path/tests/test_run_rules.py` (+24).
+
+**The count you asked for: circuits' file differs from `main`'s by 0 lines.** `weights_tie.py` and its test are `main`'s at the base, byte for byte [ran: `git diff --numstat` prints nothing]. The third wording is one line, in `run.sh`'s tie arm, and it is all of the arm that differs from `main`:
+- `main`: `records_audit.py audit --window ... --law work:$units ...`
+- now: `records_audit.py audit --window ... --law work-rate:$units/$units ...`
+
+**Why the tie does what it does on `main`**
+- On `main` the audit itself turns the tie's `work:N` into the stream's rule with `rule_of`, and that rule is the text `work-rate:N/N` [read: `records_audit.py` at the base]. So the stream is told the same rule as on `main`; only who writes it changed.
+- The window's design under that rate is `work` with K = N, equal to the tie's own `design()` and to what its registration records, with the same work table [ran, in scratch at TINY, N = 613].
+- The pins' check is `main`'s code unchanged: it refuses unless the sample is every unit of the tie.
+- No output class: `--outputs` and the tie's `outputs` are gone, as on `main`. Our default `work-rate:1/613` and `PP_LAW` in the arm are gone; nothing in the tree names them now [ran: a search].
+
+**The test** (`test_the_weights_ties_arm_states_the_rate_of_every_unit_of_the_tie`)
+- It holds the arm to stating `work-rate:$units/$units` to its records audit, and that this rate names `work` with K = N at N = 1, 8 and 613, where a stream refuses the fixed count.
+- Four changes of the flag, each seen to fail it [ran]: `main`'s `work:$units`, `work-rate:1/$units`, a typed `work-rate:613/613`, and no rule.
+- It sits in the prove path's suite, not the tie's file, so circuits' test file stays `main`'s. `main`'s own test there already says that under `work-rate:613/613` the tie's design is the same and every stratum is sampled whole; it passes here.
+
+**`rule_of`** stays removed. On `main` today the audit's own line and two tests of it call it (`benchmarks/one_stage/tests/test_audit_two_members.py`, `benchmarks/prove_path/tests/test_records_audit.py`); the tie never did. #9305 changes all three.
+
+**#9329's one step**
+- `355521db7dd4`: the tool across the same four moves, `clean` (run `r20261113-181319-fcf6`).
+- `84414ed14eec`: a merge of #9305's `bd3267807aad`, which brings the base and the mend and crosses no move. Git merged every file itself, no conflict. Against #9305's head it is its own six files, with the same counts as before the carry [ran].
+
+**What ran on the VM at these heads**
+- The tie's tests (`main`'s file): 11 passed, at #9305's head.
+- `test_run_rules.py`: 3 passed.
+- `test_records_audit.py`, `test_prove_path.py`, `test_run_rules.py` together: #9305 132 passed, 2 skipped, 1 failed; #9329 142 passed, 2 skipped, 1 failed. The one failure is the same test in both and is this machine's: its installed prover package is `main`'s, past the moves, and the tree here is half way across them. The pool's run at the carried head settles it.
+
+**Not run:** the tie's arm end to end (`PP_WEIGHTS_TIE=1 run.sh`), which proves every unit. Say if you want it at the carried head; I have not launched it.
+
+**Next:** the tool's two runs (`r20261113-185419-38f2`, `r20261113-185602-fe0c`). On `clean` I push and send the heads; on a later base that conflicts in the tie the same rule holds; anything else comes to you. #9501's run of record and the writer's are still running.
+
