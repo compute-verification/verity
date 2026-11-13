@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from verity.errors import InvalidArtifact
 
 from verity_vllm.commitments.leaves import (
     LeafOpening,
@@ -20,7 +21,7 @@ from verity_vllm.commitments.leaves import (
     tree_depth,
     verify_opening,
 )
-from verity.errors import InvalidArtifact
+
 
 def _values(n: int) -> list[LeafValue]:
     return [LeafValue(f"row/{i:03d}", "bfloat16", (4,), bytes([i, 0, i, 1, i, 2, i, 3])) for i in range(n)]

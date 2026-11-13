@@ -10,9 +10,16 @@ import hashlib
 import numpy as np
 import pytest
 
-from verity_vllm.pipeline.tp.negatives import parse_serve_shard_from
+from tests.check.test_weights_of_record import (  # noqa: F401  (fixture)
+    PREFIX,
+    _program,
+    _served,
+    checkpoint,
+    live_digests,
+)
 from verity_vllm.check import weights_of_record as WR
-from tests.check.test_weights_of_record import PREFIX, _program, _served, checkpoint, live_digests  # noqa: F401  (fixture)
+from verity_vllm.errors import Refused
+from verity_vllm.pipeline.tp.negatives import parse_serve_shard_from
 
 
 def _sha(a: np.ndarray) -> str:
@@ -27,7 +34,7 @@ def test_parse_serve_shard_from_names_rank_param_and_another_rank():
     swap = parse_serve_shard_from(["0:X.weight:1", "1:X.weight:0"], 2)
     assert swap == {"0": [{"param": "X.weight", "from_rank": 1}], "1": [{"param": "X.weight", "from_rank": 0}]}
     for bad in (["1:X.weight"], ["1::0"], ["1:X.weight:1"], ["2:X.weight:0"], ["1:X.weight:5"]):
-        with pytest.raises(SystemExit):
+        with pytest.raises(Refused):
             parse_serve_shard_from(bad, 2)
 
 
@@ -80,8 +87,8 @@ def test_a_replicated_parameter_has_no_other_ranks_shard(checkpoint):
 
 def test_repo_modules_loaded_names_this_process_imports_relative_to_the_repo():
     """The import path of record is written from the RUNNING process (sys.modules), not a static closure."""
-    from verity_vllm.pipeline.tp.rank_worker import repo_modules_loaded
     from verity_vllm.check import weights_of_record  # noqa: F401  -- imported here == must be listed
+    from verity_vllm.pipeline.tp.rank_worker import repo_modules_loaded
     r = repo_modules_loaded()
     assert r["method"].startswith("runtime:") and r["n"] == len(r["files"]) == len(set(r["files"]))
     assert "verity_vllm/pipeline/tp/rank_worker.py" in r["files"] and "verity_vllm/check/weights_of_record.py" in r["files"]
@@ -118,12 +125,14 @@ def test_ranged_swap_keeps_the_prefill_rows_and_exchanges_only_decode_labels():
     from verity_vllm.pipeline.tp.rank_worker import parse_swap_spec, swap_label
     r = parse_swap_spec(["r3", "r4", 1, 37])
     step_rows = {0: [("r3", 0, 305), ("r4", 305, 313)], 1: [("r3", 0, 1), ("r4", 1, 2)], 40: [("r3", 0, 1)]}
-    seen = {s: [(swap_label(l, r, s), lo, hi) for l, lo, hi in rows] for s, rows in step_rows.items()}
+    seen = {s: [(swap_label(label, r, s), lo, hi) for label, lo, hi in rows] for s, rows in step_rows.items()}
     assert seen[0] == step_rows[0]                                       # prefill untouched
     assert seen[1] == [("r4", 0, 1), ("r3", 1, 2)]                        # decode labels exchanged
     assert seen[40] == step_rows[40]                                      # outside the range untouched
     # per-label token counts per step: identical to the honest map (coverage-blind)
-    cnt = lambda rows: sorted((l, hi - lo) for l, lo, hi in rows)
+    def cnt(rows):
+        return sorted((label, hi - lo) for label, lo, hi in rows)
+
     for s in step_rows:
         assert cnt(seen[s]) == cnt(step_rows[s]) or s == 1
     assert cnt(seen[1]) == cnt(step_rows[1])
@@ -157,3 +166,17 @@ def test_negative_applied_is_recognised():
     assert all(v["applied"] is True for v in a.values()) and set(a) == {"flip_partial", "swap_requests", "omit_partial_site"}
     # the wrong rank requested (rank 0 did not flip) -> not applied
     assert negatives_applied("0:layers.3.mlp.down_proj", None, None, xr, made)["flip_partial"]["applied"] is False
+
+
+def test_a_pair_without_dumps_and_a_make_without_a_partial_source_leave_a_negative_not_applied():
+    from verity_vllm.pipeline.tp.negatives import negatives_applied
+    made = [{"rank": 0, "swap_requests_applied": None}, {"rank": 1, "swap_requests_applied": None, "tp_partial_source": None}]
+    # no pair's cross-rank pass wrote its dumps: the rank has no count, so the flip is unknown
+    a = negatives_applied("1:layers.3.mlp.down_proj", None, "1:layers.3.mlp.down_proj", [{"result": None}, {"dumps": None}, {"dumps": []}], made)
+    assert a["flip_partial"] == {"rank": "1", "flipped_collective_inputs_per_pair": [], "applied": None}
+    # the rank's make names no partial source: it omitted no site
+    assert a["omit_partial_site"] == {"rank": "1", "omit_site_per_rank": [None], "applied": False}
+    # one pair of two wrote its dumps: the count is that pair's alone
+    xr = [{"result": None}, {"dumps": [{"rank": 1, "flipped_collective_inputs": 8}]}]
+    assert negatives_applied("1:layers.3.mlp.down_proj", None, None, xr, made)["flip_partial"] == {
+        "rank": "1", "flipped_collective_inputs_per_pair": [8], "applied": True}

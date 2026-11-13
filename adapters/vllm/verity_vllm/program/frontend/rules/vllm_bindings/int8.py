@@ -4,14 +4,28 @@ attention."""
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
+
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, row_value, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.attention import UnifiedAttentionWithOutputRule
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import ATTN_PINS, _OBSERVED, _norm_attn, attn_kind_for
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    known,
+    row_value,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.attention import (
+    UnifiedAttentionWithOutputRule,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    _OBSERVED,
+    ATTN_PINS,
+    _norm_attn,
+    attn_kind_for,
+)
 from verity_vllm.program.frontend.torch_frontend import _tensor_type
 
 #: `engine.int8_attention_vllm.Int8AttentionImpl`, by name: the frontend reads the instantiated layers, never the engine
@@ -49,7 +63,7 @@ class Int8RowQuantRule(OpRule):
             return r
         if isinstance(ctx.val(x), Alloc):
             return "x is an unwritten allocation"
-        xs = shape(ctx, x)
+        xs = known(shape(ctx, x))
         if len(xs) != 2:
             return f"shape: x {xs} is not [M, K]"
         if xs[1] % 32:
@@ -59,7 +73,7 @@ class Int8RowQuantRule(OpRule):
     def emit(self, node, ctx):
         (x,) = node.args
         rows, lead = rows_of(ctx.coll(x))
-        K = shape(ctx, x)[1]
+        K = known(shape(ctx, x))[1]
         fq = ctx.kind("int8_row_quant", node, K=K)
         hint = ctx.hint_name(node)
         qs = [ctx.call(fq, r, node=node, rule=self, name=f"{hint}[{i}]") for i, r in enumerate(rows)]
@@ -91,7 +105,7 @@ class Int8ScaledMmRule(OpRule):
             return r
         if isinstance(ctx.val(xq), Alloc) or isinstance(ctx.val(sa), Alloc):
             return "xq / s_a is an unwritten allocation"
-        xs, as_, ws, ss = shape(ctx, xq), shape(ctx, sa), shape(ctx, w), shape(ctx, sw)
+        xs, as_, ws, ss = known(shape(ctx, xq)), shape(ctx, sa), shape(ctx, w), shape(ctx, sw)
         if len(xs) != 2 or ws is None or len(ws) != 2 or ws[1] != xs[1]:
             return f"shape: xq {xs} vs w {ws}"
         if as_ != (xs[0],):
@@ -108,7 +122,7 @@ class Int8ScaledMmRule(OpRule):
 
     def emit(self, node, ctx):
         xq, sa, w, sw = node.args
-        N, K = shape(ctx, w)
+        N, K = known(shape(ctx, w))
         rows, lead = rows_of(ctx.coll(xq))
         scales = ctx.coll(sa).reshape(Array(len(rows), Value(32)))
         wc, sc = ctx.coll(w), ctx.coll(sw).reshape(Array(N, Value(32)))
@@ -132,8 +146,8 @@ class Int8UnifiedAttentionRule(UnifiedAttentionWithOutputRule):
     (Int8LutAttentionRow_v2), reading the registered `exp2_lut127` the rule declares when a layer's observed impl is the int8 one."""
     info = RuleInfo("Int8UnifiedAttentionWithOutput[vllm]", 2, "state",
                     applies_to="vllm.unified_attention_with_output(query, key, value, Tensor! output, layer_name: str, None, None, kv_cache_dummy_dep?)",
-                    preconditions=(f"the layer's OBSERVED attention impl is {INT8_ATTENTION_IMPL}, with its K scales (one per KV head) and "
-                                   "float softmax scale read back",
+                    preconditions=((f"the layer's OBSERVED attention impl is {INT8_ATTENTION_IMPL}, with its K scales (one per KV head) and "
+                                   "float softmax scale read back"),
                                    "q [T, NH, D], k, v [T, KVH, D] bf16; NH % KVH == 0", "output is an unwritten allocation of q's shape",
                                    "assumed (op contract): causal attention over the history + this call's rows"),
                     evidence_domain="structural; numerics: Int8KvQuant_v1 + Int8LutAttentionRow_v1 (engine.int8_ops' kv_quant_batch and "

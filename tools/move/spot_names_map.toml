@@ -49,3 +49,16 @@ patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a
             'lanes/[\w.-]+', '\ba\.sampled_proofs\b',
             'Vectors for `verity\.core\.protocols\.sampled_proofs\.consumers\.exfiltration_bound` on a design with a replay stage']
 strings = []
+
+[keep_in]
+# The code that still spells the old name (a parameter and keyword, a dict key, test names, docstrings naming a module):
+# it is renamed by hand in a change of its own, after which this map goes.
+"adapters/vllm/tests/protocols/test_protocol_options.py" = ["sampled_proofs"]
+"adapters/vllm/verity_vllm/pipeline/c2_replay.py" = ["sampled_proofs"]
+"adapters/vllm/verity_vllm/pipeline/cpu_replay.py" = ["sampled_proofs"]
+"benchmarks/one_stage/pearlplus_local_e2e.py" = ["sampled_proofs"]
+"benchmarks/one_stage/served_verdicts.py" = ["sampled_proofs"]
+"benchmarks/one_stage/tests/test_served_cases.py" = ["sampled_proofs"]
+"benchmarks/one_stage/tests/test_served_pearlplus_lean.py" = ["sampled_proofs"]
+"benchmarks/one_stage/tests/test_served_verdicts.py" = ["sampled_proofs"]
+"verity/protocols/spot/verifier/one_stage/link_points.py" = ["SampledProofs"]

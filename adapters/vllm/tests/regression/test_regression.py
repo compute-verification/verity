@@ -97,6 +97,8 @@ from typing import NoReturn
 import pytest
 
 from . import checks, resolver, store_io
+from . import decisions as D
+from .checks import manifest_digest
 
 pytestmark = pytest.mark.regression
 
@@ -136,7 +138,7 @@ def _unresolved(why: str) -> NoReturn:
     if resolver.store_required():
         pytest.fail(f"{why}\n  ({resolver.STORE_REQUIRED_ENV}=1: an input that does not resolve fails; a check that cannot run on a row's "
                     "record is retired by `[rows.<row>.retired.<check>]` in fixtures.toml, with its reason)")
-    pytest.skip(why)
+    raise pytest.skip.Exception(why)
 
 
 def _skip_rebuild(what: str, candidate: str | None) -> None:
@@ -216,10 +218,10 @@ def test_negative_57_refusal_reproduces(record_property) -> None:
     if not ENABLED:
         pytest.skip("set VERITY_REGRESSION=1 to run the reference regression")
     _skip_rebuild("the #57 negative", os.environ.get(resolver.CANDIDATE_ENV))
-    row = next((r for r in resolver.rows() if r.number == 57), None)
-    if row is None:
+    numbered_57 = [r for r in resolver.rows() if r.number == 57]
+    if not numbered_57:
         pytest.skip("#57 not in fixtures.toml")
-    from .checks import manifest_digest
+    row = numbered_57[0]
     _skip_retired(row, manifest_digest.NAME, record_property)
     try:
         reachable = row.programs_root() is not None or row.candidate_root() is not None
@@ -249,7 +251,6 @@ def test_decisions_are_listed_and_well_formed(record_property) -> None:
     `python -m tests.regression.decisions`; no store, no VERITY_REGRESSION needed): row, check, finding, status, since, what it
     sanctions (`expected`) and pins (`pins`), the reason.  Fails on a malformed decision (missing DECISION_FIELDS, unknown status)
     -- `sanction` would ignore it silently otherwise -- so the pending ones (`status = "pending_review"`) are always reviewable."""
-    from . import decisions as D
     rows_ = D.listing()
     text = D.render(rows_)
     print("\n" + text)

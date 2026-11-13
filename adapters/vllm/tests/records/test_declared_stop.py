@@ -19,6 +19,7 @@ import pytest
 from tests.check import test_global_match as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401 - fixture
 from verity_vllm.check.match import global_match as gm
+from verity_vllm.check.match.declaration import mock_global_program
 from verity_vllm.records.declared_stop import DeclaredStop, LagBlock, StopRule
 from verity_vllm.records.fields import MissingField, RecordError
 
@@ -54,9 +55,9 @@ def test_the_real_record_loads():
 
 def test_the_mock_programs_load(tmp_path):
     wl = T.workload([T.R0], tmp_path / "workload.json")
-    lagged = DeclaredStop.of(gm.mock_global_program(wl, [], eos_token_ids=[T.EOS], lag=1), "mock")
+    lagged = DeclaredStop.of(mock_global_program(wl, [], eos_token_ids=[T.EOS], lag=1), "mock")
     assert lagged.declared_lag == 1 and lagged.stop_rule.eos_token_ids == [T.EOS] and lagged.lag == LagBlock(1, "mock_global_program(lag=...)")
-    pre = DeclaredStop.of(gm.mock_global_program(wl, []), "mock")
+    pre = DeclaredStop.of(mock_global_program(wl, []), "mock")
     assert pre.lag is None and pre.declared_lag is None and pre.stop_rule == StopRule(None, None, None, None, None, None)
 
 
