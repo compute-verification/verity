@@ -528,11 +528,12 @@ def commit_parsers(case: dict) -> dict:
     """A Commit record's text read once (`json.loads`, as `credit._loads` reads it): the value each of the Lean's two
     JSON parsers reads it as, or none when the record is not bytes in lowercase hex of UTF-8 JSON."""
     c = case["commit"]
+    if not (type(c) is str and Cr._HEX.fullmatch(c)):
+        return {"core": [], "total": []}
     try:
-        text = bytes.fromhex(c).decode() if type(c) is str and Cr._HEX.fullmatch(c) else None
-        v = [] if text is None else [json.loads(text, parse_constant=Cr._no_constant)]
+        v = [json.loads(bytes.fromhex(c).decode(), parse_constant=Cr._no_constant)]
     except (ValueError, RecursionError):
-        v = []
+        return {"core": [], "total": []}
     return {"core": v, "total": v}
 
 
