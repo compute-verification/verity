@@ -125,25 +125,25 @@ from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_level
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.circuits.codec import canonical_json
 from verity.commitments.randomness import Key, derive
-from verity.protocols.certifier.verifier.active import RUN_ID_BYTES
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import verifier as PV
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.prover.circuit import leaves as L
-from verity.protocols.pouw.prover.circuit import pc8
-from verity.protocols.pouw.verifier.coins import Challenger as Coins
-from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
-from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import pearl_c as C
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
-from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as D
-from verity.protocols.spot.verifier.one_stage import partition as PT
-from verity.protocols.spot.verifier.one_stage import registration as R
-from verity.protocols.spot.verifier.one_stage.verdict import Verdict, _Collect
+from verity.protocols.accounting.certifier.verifier.active import RUN_ID_BYTES
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import verifier as PV
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.prover.circuit import leaves as L
+from verity.protocols.accounting.pouw.prover.circuit import pc8
+from verity.protocols.accounting.pouw.verifier.coins import Challenger as Coins
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.protocols.accounting.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.proofs.spot.device import challenger as Ch
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.verifier.one_stage import partition as PT
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict, _Collect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import of_record as OR  # noqa: E402

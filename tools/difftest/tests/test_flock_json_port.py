@@ -346,16 +346,16 @@ def test_parse_core(server):
     D.run(PARSE_CORE, examples=3000, server=server)
 
 
-#: The public files Flock's producers wrote, recorded in `verity/protocols/flock/prover/tests`' fetched fixtures
+#: The public files Flock's producers wrote, recorded in `verity/protocols/proofs/flock/prover/tests`' fetched fixtures
 #: (`artifacts.json`), whose header line the sampled proofs verifier reads (`Spot.FilePart.header`).
-RECORDED = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "flock" / "prover" / "tests" / "fixtures"
+RECORDED = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "flock" / "prover" / "tests" / "fixtures"
 RECORDED_FIXTURES = ("forged-proofs", "public-inputs", "public-inputs-blocks", "rec-coins", "rec-links", "zk-sessions")
 
 
 def test_recorded_public_headers(server):
     """Both parsers read each recorded public file's header line (`RECORDED`) to the mirror's value, so to each other's:
     moving a read of it from Lean core's parser to `Flock.JsonParse.parse` changes the value read on none."""
-    missing = [f"verity/protocols/flock/prover/tests/fixtures/{f}" for f in RECORDED_FIXTURES if not (RECORDED / f).is_dir()]
+    missing = [f"verity/protocols/proofs/flock/prover/tests/fixtures/{f}" for f in RECORDED_FIXTURES if not (RECORDED / f).is_dir()]
     assert not missing, f"not fetched: `uv run research data fetch-fixtures {' '.join(missing)}`"
     files = sorted(p for f in RECORDED_FIXTURES for p in (RECORDED / f).rglob("*.bin")
                    if re.fullmatch(r"(.+\.)?pub(-\d+)?\.bin", p.name))

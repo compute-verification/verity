@@ -35,12 +35,12 @@ sys.path.insert(0, str(HERE))
 import certifier_serve as cs
 import warden_serve as WS
 
-from verity.protocols.certifier.verifier import io_tie as IT
-from verity.protocols.certifier.verifier import service as SVC
-from verity.protocols.certifier.verifier import warden as W
-from verity.protocols.certifier.verifier.active import DATA, id_request
-from verity.protocols.certifier.verifier.certificate import Direction
-from verity.protocols.certifier.verifier.schedule import SyncSet
+from verity.protocols.accounting.certifier.verifier import io_tie as IT
+from verity.protocols.accounting.certifier.verifier import service as SVC
+from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier.active import DATA, id_request
+from verity.protocols.accounting.certifier.verifier.certificate import Direction
+from verity.protocols.accounting.certifier.verifier.schedule import SyncSet
 from verity.commitments.crypto import lms
 
 PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through active.Proxy in front of the endpoint): "
