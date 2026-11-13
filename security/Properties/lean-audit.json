@@ -948,9 +948,9 @@
    "Accounting.Assumptions.TS.OperandHMu",
    "Accounting.Assumptions.TS.ReceiptLuckAt",
    "Accounting.Assumptions.TS.UnitFixed",
+   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Accounting.Compose.PrefixOf",
    "Accounting.Compose.Scope",
-   "Accounting.Compose.ExecutionPhasePlay.EveryExecutionPhase",
    "Properties.Pouw.Period.RegisteredBeforeDraw",
    "Properties.Pouw.Period.SaltIsLiveCoin",
    "Properties.Pouw.Period.SampleIsCoin",
@@ -8682,7 +8682,7 @@
      "Accounting.Remote.Draw.Assumptions.Refused"
     ]
    },
-   "type_hash": "ac98fed8a6775807f8c4772fbbceed2c2e683c9183d7efdc7ac14230163b086e"
+   "type_hash": "d612f0fd599a28c98b1cf684d4a0c1fc246b80dcaf2c8c5f8fb093f24533ec66"
   },
   "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_nontrivial": {
    "owner": "@memory-accounting",
@@ -23846,7 +23846,7 @@
    }
   },
   "Properties.Accounting.Remote.Subprotocol": {
-   "digest": "b89f80408b534757deb7ca126fd19de462b589c3313343c0f20e84bd9dfa1df0",
+   "digest": "de20ba68841183d4212170ae7de894887f8615dafc78ce63a1c7f8b02b9e0d48",
    "definitions": {
     "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": "5fc90912a6b189249808541a053d8d89b883764124ce64eb0781e90572d0520b",
     "Properties.RemoteAudit.Subprotocol.HonestSchedule": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
@@ -23854,7 +23854,7 @@
     "Properties.RemoteAudit.Subprotocol.LineHeldBy": "4f4117c4d5da44abee2d5ff68c56edc9f54b731808c5122db0d175ddd298702d",
     "Properties.RemoteAudit.Subprotocol.Plays": "cd90e454b261689d2136d86ff2e3c47523d396d72d2934a29d8724bf45587a80",
     "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": "9e7658d9ad6bfd062b2b5601fff6cfdddcdd435cb1692f222debe9d51296f602",
-    "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy": "d513d4ef22f5f242d104376a46170a79eda198177442d95ea3333448079326b1",
+    "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy": "eb11e697dfc89eeb8e0ad836792fee48968565a6975701ac4a8769a12f197054",
     "Properties.RemoteAudit.Subprotocol.QBytesBy": "f199917ff3d94900a1a721731ca4c8ca57a84563356b5262bae9370ce6afea5a",
     "Properties.RemoteAudit.Subprotocol.ReadBy": "b6bb8c08db864db7b362e5bc4eae9246e510634f345595a098d15c38867ccaf4",
     "Properties.RemoteAudit.Subprotocol.groupsBy": "158c1d4767d23fcbb4b0f277fb71816a87a4dfad310df14d4f5bd010ac8e44d8",
