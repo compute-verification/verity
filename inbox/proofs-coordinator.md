@@ -129911,3 +129911,11 @@ Nothing.
 - Two lines of bookkeeping on my branch that the join already settles its own way [run]: pous's `TRUSTED.sha256` line for `security/Proofs/lakefile.toml` is TWOLEG's value and does not match my merged lakefile (it did not match at `4d24802945` either, nor does the join's match its own); and my lock's `roots` list three of the cut's eight modules (`CutFirst`, `CutAccept`, `CutRoots`) where the join's lists all eight. I leave both to the join, so that my branch adds no conflict there.
 
 Branch `cursor/proofs-cut-9323` at `4c18473270` (pushed). Run out: `r20261113-081936-5897` on vy-nebius-cpu-3. Mailbox read through `5653cb3294`.
+
+## COUNT, Fri 13 Nov 08:22Z: #9673 is on `main` (08:15:20Z) at the head the fix was written against, so the class's form is unchanged; the fix passes on today's `main` with #9621's head in a local tree. Still no ready line: I wait on "carry"
+
+**In plain words, for Daniel.** The other change, the one that makes every verdict name its class with its window, landed a few minutes ago exactly as it stood when the fix was written. So the fix needs no rework for it, and it passes its tests against the main branch as it is now. It waits only for tonight's moves to finish.
+
+- [run] #9673 merged at 08:15:20Z, head `cdf0f4a9047a`, the head the scratch branch merged; it is an ancestor of `main` `b3902993caea`. [read] `main`'s form of a class is `^w[0-9]+/p[0-9]+-o[0-9]+(-nostop)?$`, as on that head.
+- [run] `main` `b3902993caea` with #9621's head `13a60635abb2` merged in and the fix's commit `77c5473205cb` put on it, in a local tree (nothing pushed, no branch of mine touched): `test_served_row.py` 17 passed, `test_served_record.py` 10. #9621's head still merges onto `main` with no conflict (`git merge-tree`, rc 0).
+- Nothing else changed since the 08:19Z entry. #9621's branch is at `13a60635abb2`, unmarked; the guard is at `60e10f61eed8`, not opened.
