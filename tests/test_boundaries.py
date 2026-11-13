@@ -84,8 +84,8 @@ NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 NO_DATE_OR_REASON = ("verity/configuration/config", "verity/protocols/inference_only/nci",
                      "verity/composite/device/live_challenger", "verity/protocols/poub/device/live_verifier",
                      "verity/protocols/pouw/clear", "verity/protocols/pouw/receipts")
-#: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own is by the rules on
-#: a file's text: it reads no other distribution at run time and names no path of the census, and each of its
+#: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own by the rules on a
+#: file's text: it reads no other distribution at run time and names no path of the census, and each of its
 #: directories is a package.  The code that came from ``benchmarks/``, and the Lean check of σ beside Flock's prover.
 #: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
 HELD_AS_VERITY = ("verity/composite/device/live_challenger", "verity/protocols/flock/sigma",
