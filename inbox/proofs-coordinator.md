@@ -120835,3 +120835,39 @@ Next: idle until TWOLEG's head with #9555, or CUT's two-case `LogRead`. Then I m
 **Pushed, and nothing unpushed.** `cursor/proofs-redraw-cc71` `a2c3831345e0d15bbed424c321009c26b4a7500d` (READY, 04:34Z); `cursor/proofs-keyheld-3c9a` `38b7c6df38ba9ad5ccfd154ae316b76697157020` (READY, this entry); `cursor/proofs-redraw-rate-5a71` `54d0d016ab7850e73ad933db5d7769dcf0c5811c` (READY, 03:10Z). No code changed this turn; both bodies name these verdicts. Mailbox read at 04:42Z: nothing after your 03:58Z message [run].
 
 **Still running, and owed in my next entry:** part two of `r20261113-030646-1057` (#9237's whole tier at the head before): 70 of 72 suites in at 04:31Z, one red, `research`, on the node's two tests [read then].
+
+## MAJORITY, Fri 04:41Z: `SampledTwo/Binding.lean` compiled in r20261113-043204-7674 (2 theorems, standard axioms only); it proves `ReadsBind` from row binding; head `a7cacd92709df11273ea65e682bed82903cc7d39`; the records audit r20261113-040212-1843 is running on vy-nebius-2
+
+In plain words: `majorityBound` took as a premise that two witnesses reading one bound wire differently give a SHA-512 collision (`ReadsBind`). A new file proves that premise from the proved row binding, wherever each witness carries the openings its readings rest on. That leaves a smaller premise: the witness hands over its openings. No statement the join reads changed. The file is new, and `Majority.lean` and `SampledTwo/Majority.lean` are as they were.
+
+**The file** [read: `security/Proofs/Properties/Verity/SampledTwo/Binding.lean`, a root on its own line in `security/Proofs/lakefile.toml`]
+- `OpensBy V θ F c readX openOf`: where `readX w` opens a wire `g` that is not a constant and sits at `p`, `openOf w g` is an opening the row-leaf check accepts at `p`, and its row holds the reading's bits from `p.offset`.
+- `collOfOpen`: a `Claims.Collision FlockDeploy.sha512` pair from the messages that both witnesses' openings of every wire hash (`hashedAll`), where one exists.
+- `readsBind_of : OpensBy … → ReadsBind V A x θ F c readX (collOfOpen V θ F c openOf)`.
+  - A constant wire opens only to its constant, so the two readings agree on it.
+  - At a placed wire, `Hash.SecurityProofs.RowBinding` gives equal rows, so the readings have equal bits, or a collision in what the two checks hashed.
+  - `sha512_bytes` turns that collision into a collision of `FlockDeploy.sha512`, through `Accounting.ReadUnit.Gates.isSha512_sha512`.
+
+**The try** [run] r20261113-043204-7674 on vy-nebius-cpu-3, `verity lean try … --on auto`: lean exit 0 in 398 s.
+- "axiom probe: none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound".
+- The first try, r20261113-042041-3a6b on vy-nebius-cpu-1, failed on one error only: `hashedAll` must be `noncomputable` because `Vocab.circuitOf` is. That is fixed in `a7cacd9270`.
+- vy-nebius-2 takes no `--on auto` job, so the try spilled to the CPU nodes. The records audit holds vy-nebius-2's one try of mine.
+
+**What of the brief is left** [derived]
+- `majorityBound`'s premises are now `hX`, `HoldsOnWitness` (proved from `holds_of_rTwo` by `holdsOnWitness_of`) and `ReadsBind`, which `readsBind_of` reduces to `OpensBy`.
+- Still to do:
+  - Nobody yet shows that the deployed witness carries its openings (`OpensBy`).
+  - Nobody yet shows that `dColl` prices hashing `hashedAll` (both witnesses' openings of every wire) under `ecr/sha-512`.
+  - The earlier period's challenger signature, which `SampledTwo/Majority.lean`'s header names, is still open.
+
+**For ASSEMBLY** [read] Merge `a7cacd92709df11273ea65e682bed82903cc7d39`. It holds `Binding.lean`, its root, and everything since `c4c6c19c13`. If the join takes only my files without `Recursive/Target.lean`, add `SampledTwo/Binding.lean` and its lakefile line.
+
+**The records audit** [run: `research status`, 04:40Z] r20261113-040212-1843 on vy-nebius-2: running. It waited from 04:04Z with 2 checks ahead and started by 04:29Z. [guess] It ends about 04:50Z.
+
+**STOP RULE.** None.
+
+**NEEDS.** None.
+
+**To post.** Nothing.
+
+**Not established.** The records audit. Pushed head: `a7cacd92709df11273ea65e682bed82903cc7d39`; nothing is left unpushed.
