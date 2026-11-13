@@ -12,22 +12,24 @@ The object, its keys in this order and every list sorted by name:
 - `format` (`FORMAT`), `commit` (the full sha REV resolves to), `today` (the day dates are compared to), `locks` (the path
   of every lock read);
 - `guarantees`: for each guarantee a lock's `deployed` lists, its `name`, `lock` and `owner`, its record's `type_hash` and
-  `unfolded_hash`, its `gap` (`[]` at zero), and `held_differs`: null, or `{"only_held", "only_computed"}` where the lock's
-  `trust_gap` entry and the computed gap differ;
+  `unfolded_hash`, its `gap` (`[]` at zero), `lacks_witness` (null when its lock lists it under neither `witnesses` nor
+  `unwitnessed`, else the halves of `WITNESS_HALVES` its `witnesses` entry names by no non-empty string or list; `[]` when
+  it names both) and `held_differs`: null, or `{"only_held", "only_computed"}` where the lock's `trust_gap` entry and the
+  computed gap differ;
 - `premises`: each open premise of any lock and each premise of any gap, once by name: its `kind` (`KINDS`, by the section
   that lists it; where locks list it in different sections, the first of `KINDS` among them), its `owner`, `issue` and `due`
   (the value every lock listing it gives, else null), `listed` (each lock that lists it, with the `kind`, `owner`, `issue`
-  and `due` of that lock's entry), `overdue` (its earliest `due` written YYYY-MM-DD, `check.OPEN_DUE`, is before `today`) and `in_gap_of`
-  (the deployed guarantees whose gap holds it);
+  and `due` of that lock's entry), `overdue` (its earliest `due` written YYYY-MM-DD, `check.OPEN_DUE`, is before `today`)
+  and `in_gap_of` (the deployed guarantees whose gap holds it);
 - `totals`: `deployed`, `gap_zero`, `gap_premises` (distinct names over all gaps), `open` (premises of kind `open`),
-  `overdue`, `owners_differ` (premises whose locks name different owners) and `by_owner` ({owner: its `deployed`,
-  `gap_premises`, `open` and `overdue`}, a premise counted under each owner its locks name; what names no owner is under
-  none).
+  `overdue`, `owners_differ` (premises whose locks name different owners), `no_honest_witness` (deployed guarantees whose
+  `lacks_witness` holds `honest`) and `by_owner` ({owner: its `deployed`, `gap_premises`, `open`, `overdue` and
+  `no_honest_witness`}, a premise counted under each owner its locks name; what names no owner is under none).
 
 Every owner is printed bare, as the lock writes it less one leading `@`, and held to no registry. A field a lock leaves out
-is null. A lock that is not a JSON object, whose `deployed` is not a list of names, or whose
-`deployed` names a guarantee it has no record of, ends the command with exit 1 and one line naming the lock and what is
-wrong.
+is null. A lock that is not a JSON object, whose `deployed` is not a list of names, whose `deployed` names a guarantee it
+has no record of, or whose `witnesses` or `unwitnessed` is not an object, ends the command with exit 1 and one line naming
+the lock and what is wrong.
 """
 from __future__ import annotations
 
@@ -45,6 +47,8 @@ FORMAT = 1
 POLICY = "lean-audit.json"
 #: the lock's sections that list premises, and each one's `kind`, in the order a premise listed in several takes its kind
 KINDS = {"open": "open", "assumptions": "assumption", "domain": "domain"}
+#: the two witnesses a `witnesses` entry names for a guarantee of what an acceptance means
+WITNESS_HALVES = ("honest", "nontrivial")
 #: the zone `--today` defaults to today's date in
 ZONE = "America/Los_Angeles"
 
@@ -84,7 +88,20 @@ def _parse(path: str, text: str, check) -> dict:
     if missing := sorted(g for g in deployed if not isinstance(records.get(g), dict)):
         raise Refused(f"verity lean deployed: {path}: `deployed` names {', '.join(missing)}, which `guarantees` has no "
                       "record of")
+    for section in ("witnesses", "unwitnessed"):
+        if not isinstance(lock.get(section, {}), dict):
+            raise Refused(f"verity lean deployed: {path}: `{section}` is not an object")
     return lock
+
+
+def lacks_witness(lock: dict, name: str) -> list[str] | None:
+    """The halves of `WITNESS_HALVES` that ``lock``'s `witnesses` entry for ``name`` names by no non-empty string or list,
+    or None when the lock lists ``name`` under neither `witnesses` nor `unwitnessed`."""
+    listed, exempt = lock.get("witnesses") or {}, lock.get("unwitnessed") or {}
+    if name not in listed and name not in exempt:
+        return None
+    entry = listed.get(name) if isinstance(listed.get(name), dict) else {}
+    return [h for h in WITNESS_HALVES if not (isinstance(v := entry.get(h), (str, list)) and v)]
 
 
 def rows(texts: dict[str, str], today: datetime.date, commit: str, check=None) -> dict:
@@ -100,7 +117,8 @@ def rows(texts: dict[str, str], today: datetime.date, commit: str, check=None) -
             differs = None if kept == set(gap) else {"only_held": sorted(kept - set(gap)),
                                                      "only_computed": sorted(set(gap) - kept)}
             guarantees.append({"name": g, "lock": path, "owner": _owner(rec.get("owner")), "type_hash": _str(rec.get("type_hash")),
-                               "unfolded_hash": _str(rec.get("unfolded_hash")), "gap": gap, "held_differs": differs})
+                               "unfolded_hash": _str(rec.get("unfolded_hash")), "gap": gap,
+                               "lacks_witness": lacks_witness(lock, g), "held_differs": differs})
         for section in KINDS:
             for name, entry in (lock.get(section) if isinstance(lock.get(section), dict) else {}).items():
                 entry = entry if isinstance(entry, dict) else {}
@@ -133,11 +151,16 @@ def totals(guarantees: list[dict], premises: list[dict]) -> dict:
     by_owner: dict[str, dict[str, int]] = {}
 
     def count(owner: str, key: str) -> None:
-        by_owner.setdefault(owner, dict.fromkeys(("deployed", "gap_premises", "open", "overdue"), 0))[key] += 1
+        keys = ("deployed", "gap_premises", "open", "overdue", "no_honest_witness")
+        by_owner.setdefault(owner, dict.fromkeys(keys, 0))[key] += 1
+
+    def unwitnessed(r: dict) -> bool:
+        return "honest" in (r["lacks_witness"] or ())
 
     for r in guarantees:
-        if r["owner"]:
-            count(r["owner"], "deployed")
+        for key, holds in (("deployed", True), ("no_honest_witness", unwitnessed(r))):
+            if r["owner"] and holds:
+                count(r["owner"], key)
     for p in premises:
         for o in owners(p):
             for key, holds in (("gap_premises", p["in_gap_of"]), ("open", p["kind"] == "open"), ("overdue", p["overdue"])):
@@ -146,7 +169,7 @@ def totals(guarantees: list[dict], premises: list[dict]) -> dict:
     return {"deployed": len(guarantees), "gap_zero": sum(not r["gap"] for r in guarantees),
             "gap_premises": sum(bool(p["in_gap_of"]) for p in premises), "open": sum(p["kind"] == "open" for p in premises),
             "overdue": sum(p["overdue"] for p in premises), "owners_differ": sum(len(owners(p)) > 1 for p in premises),
-            "by_owner": {o: by_owner[o] for o in sorted(by_owner)}}
+            "no_honest_witness": sum(map(unwitnessed, guarantees)), "by_owner": {o: by_owner[o] for o in sorted(by_owner)}}
 
 
 def _git(repo: Path, *argv: str) -> str:

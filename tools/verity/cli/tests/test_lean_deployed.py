@@ -56,15 +56,16 @@ def test_a_guarantee_at_gap_zero_and_one_with_a_gap():
     assert (out["format"], out["commit"], out["today"], out["locks"]) == (1, "c" * 40, "2030-06-15", ["pkg/lean-audit.json"])
     assert out["guarantees"] == [
         {"name": "P.Gapped", "lock": "pkg/lean-audit.json", "owner": "g", "type_hash": "t-P.Gapped",
-         "unfolded_hash": "u-P.Gapped", "gap": ["P.Assumed", "P.Open"], "held_differs": None},
+         "unfolded_hash": "u-P.Gapped", "gap": ["P.Assumed", "P.Open"], "lacks_witness": None, "held_differs": None},
         {"name": "P.Zero", "lock": "pkg/lean-audit.json", "owner": "g", "type_hash": "t-P.Zero", "unfolded_hash": "u-P.Zero",
-         "gap": [], "held_differs": None}]
+         "gap": [], "lacks_witness": None, "held_differs": None}]
     assert [(p["name"], p["kind"], p["in_gap_of"]) for p in out["premises"]] == [
         ("P.Assumed", "assumption", ["P.Gapped"]), ("P.Elsewhere", "open", []), ("P.Open", "open", ["P.Gapped"])]
     assert list(premise(out, "P.Open")) == ["name", "kind", "owner", "issue", "due", "listed", "overdue", "in_gap_of"]
     assert out["totals"] == {"deployed": 2, "gap_zero": 1, "gap_premises": 2, "open": 2, "overdue": 0, "owners_differ": 0,
-                             "by_owner": {"g": {"deployed": 2, "gap_premises": 0, "open": 0, "overdue": 0},
-                                          "o": {"deployed": 0, "gap_premises": 1, "open": 2, "overdue": 0}}}
+                             "no_honest_witness": 0,
+                             "by_owner": {"g": {"deployed": 2, "gap_premises": 0, "open": 0, "overdue": 0, "no_honest_witness": 0},
+                                          "o": {"deployed": 0, "gap_premises": 1, "open": 2, "overdue": 0, "no_honest_witness": 0}}}
 
 
 def test_a_gap_reaches_the_premises_of_a_guarantee_a_domain_hypothesis_cites():
@@ -95,8 +96,8 @@ def test_a_premise_two_locks_list_is_counted_once_with_equal_fields_and_with_two
     assert split["in_gap_of"] == ["A.G", "B.G"]
     t = out["totals"]
     assert (t["deployed"], t["gap_premises"], t["open"], t["overdue"], t["owners_differ"]) == (2, 2, 2, 1, 1)
-    assert t["by_owner"]["x"] == {"deployed": 0, "gap_premises": 2, "open": 2, "overdue": 1}
-    assert t["by_owner"]["y"] == {"deployed": 0, "gap_premises": 1, "open": 1, "overdue": 1}
+    assert t["by_owner"]["x"] == {"deployed": 0, "gap_premises": 2, "open": 2, "overdue": 1, "no_honest_witness": 0}
+    assert t["by_owner"]["y"] == {"deployed": 0, "gap_premises": 1, "open": 1, "overdue": 1, "no_honest_witness": 0}
 
 
 def test_a_lock_that_holds_only_open_premises():
@@ -104,7 +105,7 @@ def test_a_lock_that_holds_only_open_premises():
     assert out["guarantees"] == []
     assert [p["name"] for p in out["premises"]] == ["O.One", "O.Two"]
     assert {k: v for k, v in out["totals"].items() if k != "by_owner"} == {
-        "deployed": 0, "gap_zero": 0, "gap_premises": 0, "open": 2, "overdue": 0, "owners_differ": 0}
+        "deployed": 0, "gap_zero": 0, "gap_premises": 0, "open": 2, "overdue": 0, "owners_differ": 0, "no_honest_witness": 0}
 
 
 @pytest.mark.parametrize(("due", "overdue"), [("2030-06-14", True), ("2030-06-15", False), ("2030-06-16", False),
@@ -121,7 +122,7 @@ def test_a_lock_without_owners_issues_or_dates_reads_as_nulls():
             "assumptions": {"N.A": "not an object"}}
     out = run({"pkg/lean-audit.json": bare})
     assert out["guarantees"] == [{"name": "N.G", "lock": "pkg/lean-audit.json", "owner": None, "type_hash": None,
-                                  "unfolded_hash": None, "gap": ["N.P"],
+                                  "unfolded_hash": None, "gap": ["N.P"], "lacks_witness": None,
                                   "held_differs": {"only_held": [], "only_computed": ["N.P"]}}]
     assert out["premises"] == [{"name": "N.P", "kind": "open", "owner": None, "issue": None, "due": None,
                                 "listed": [{"lock": "pkg/lean-audit.json", "kind": "open", "owner": None, "issue": None,
@@ -136,6 +137,24 @@ def test_a_held_gap_that_differs_from_the_computed_one_is_reported_and_one_that_
     out = run({"pkg/lean-audit.json": pkg})
     assert [(r["name"], r["gap"], r["held_differs"]) for r in out["guarantees"]] == [
         ("H.G", ["H.Now"], {"only_held": ["H.Gone"], "only_computed": ["H.Now"]}), ("H.Same", ["H.Now"], None)]
+
+
+def test_each_row_says_which_witness_halves_its_lock_shows_it_lacks():
+    """Null where the witnesses rule doesn't hold the guarantee; else the halves its `witnesses` entry names by no non-empty
+    string or list, whatever `unwitnessed` says beside it."""
+    names = ("W.Free", "W.Both", "W.Bare", "W.Half", "W.Empty")
+    pkg = lock({g: {} for g in names}, list(names), witnesses={
+        "W.Both": {"honest": ["W.h"], "nontrivial": "W.n"}, "W.Half": {"honest": ["W.h"], "nontrivial": None},
+        "W.Empty": {"honest": [], "nontrivial": ""}}, unwitnessed={"W.Bare": "t", "W.Half": {"type_hash": "t"}})
+    for g in names:
+        pkg["guarantees"][g]["owner"] = "@" + g[2:].lower()
+    out = run({"pkg/lean-audit.json": pkg})
+    assert {r["name"]: r["lacks_witness"] for r in out["guarantees"]} == {
+        "W.Free": None, "W.Both": [], "W.Bare": ["honest", "nontrivial"], "W.Half": ["nontrivial"],
+        "W.Empty": ["honest", "nontrivial"]}
+    assert out["totals"]["no_honest_witness"] == 2
+    assert {o: v["no_honest_witness"] for o, v in out["totals"]["by_owner"].items()} == {
+        "free": 0, "both": 0, "bare": 1, "half": 0, "empty": 1}
 
 
 def test_a_premise_takes_the_first_kind_of_the_sections_that_list_it_and_each_listing_keeps_its_own():
@@ -163,6 +182,8 @@ def test_a_premise_takes_the_first_kind_of_the_sections_that_list_it_and_each_li
     (json.dumps(lock({"R.Other": {}}, ["R.G", "R.Other"])),
      "pkg/lean-audit.json: `deployed` names R.G, which `guarantees` has no record of"),
     (json.dumps({"deployed": ["R.G"]}), "pkg/lean-audit.json: `deployed` names R.G, which `guarantees` has no record of"),
+    (json.dumps({"witnesses": ["W.G"]}), "pkg/lean-audit.json: `witnesses` is not an object"),
+    (json.dumps({"unwitnessed": "W.G"}), "pkg/lean-audit.json: `unwitnessed` is not an object"),
 ])
 def test_a_lock_it_cannot_read_is_refused_by_name(text, why):
     with pytest.raises(deployed.Refused) as e:
