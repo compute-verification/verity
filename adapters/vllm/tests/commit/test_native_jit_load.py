@@ -164,7 +164,7 @@ def test_a_header_free_source_set_keeps_its_digest(tmp_path):
 
 
 def test_the_committer_stages_the_gpus_sha512_header_and_its_bytes_key_the_digest(tmp_path, monkeypatch):
-    from verity.definitions.kernels import SHA512
+    from verity.circuits.kernels import SHA512
 
     paths = nj.source_paths()
     assert ("sha512.cuh", str(SHA512)) in nj.local_headers(paths)
@@ -176,7 +176,7 @@ def test_the_committer_stages_the_gpus_sha512_header_and_its_bytes_key_the_diges
 
 
 def test_the_committer_stages_the_row_commit_header_and_the_sha512_header_it_includes(tmp_path, monkeypatch):
-    from verity.definitions.kernels import ROW_COMMIT, SHA512
+    from verity.circuits.kernels import ROW_COMMIT, SHA512
 
     paths = nj.source_paths()
     assert {("row_commit.cuh", str(ROW_COMMIT)), ("sha512.cuh", str(SHA512))} <= set(nj.local_headers(paths))

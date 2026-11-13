@@ -15,9 +15,9 @@ import pytest
 
 from verity.circuits import evaluation as E
 from verity.circuits.defs import bind
-from verity.definitions.ops import prims as P
-from verity.definitions.ops import s8 as S8
-from verity.definitions.silicon.integer import S32_MAX, S32_MIN, decode_int8, s32_value
+from verity.circuits.ops import prims as P
+from verity.circuits.ops import s8 as S8
+from verity.circuits.silicon.integer import S32_MAX, S32_MIN, decode_int8, s32_value
 from verity_flock import ir_lower as IL
 from verity_flock.gf2 import Circuit
 
@@ -131,8 +131,8 @@ def test_the_pieces_resolve_without_their_boolean_modules() -> None:
     ids = sorted(d.id for d in STEPS + LIMB_STEPS)
     code = ("import sys\n"
             "from verity_flock import ir_lower as IL\n"
-            "from verity.definitions.ops import prims, s8\n"
-            "assert not {'verity.definitions.ops.boolean.gemm', 'verity.definitions.ops.boolean.s8'} & set(sys.modules)\n"
+            "from verity.circuits.ops import prims, s8\n"
+            "assert not {'verity.circuits.ops.boolean.gemm', 'verity.circuits.ops.boolean.s8'} & set(sys.modules)\n"
             f"print(sorted(k for k in {ids!r} if k in IL.PIECES))\n")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
     assert out.strip() == repr(ids)
