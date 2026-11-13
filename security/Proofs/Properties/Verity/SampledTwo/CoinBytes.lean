@@ -39,7 +39,8 @@ theorem exists_src (B : ByteArray) (hB : B.size = SpotFlock.L) : ∃ c : FlockDe
     apply List.ext_getElem
     · rw [List.length_map, List.length_finRange, hlen]
     · intro n h1 h2
-      simp
+      rw [List.getElem_map, List.getElem_finRange]
+      rfl
   refine ⟨fun i => vs[i.val]'(by rw [hlen]; exact i.isLt), ?_⟩
   have hc : FlockDeploy.Coin.bytes (fun i => vs[i.val]'(by rw [hlen]; exact i.isLt)) = B.data.toList := by
     rw [← hv]
