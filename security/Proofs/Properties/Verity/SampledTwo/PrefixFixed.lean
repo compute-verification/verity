@@ -29,7 +29,10 @@ Three facts are needed, and the join is `Messages.session_prefix_fixed`:
   release on the statements' round (`locAt_run_ne_stmt`), so at the run's locator and the form's reading
   `ShowsPlaced` follows from `Messages.SessionsAsk` (`Messages.showsPlaced_run`).
 
-What this does not prove: `Messages.SessionsAsk`, that on an accepted play each session's round a release is put on
+At the form's reading `SessionsAsk` is a fact about the session reading alone, `Messages.SessionMsgsAsk`
+(`Messages.sessionsAsk_run`, `Messages.showsPlaced_form`).
+
+What this does not prove: `Messages.SessionMsgsAsk`, that on an accepted play each session's slot a release is put on
 is one whose session's statement sets up and whose session's messages up to it are of tag `0`. The verifier answers
 a session's round with a coin only before the round the session is decided on, so it says too that no release of
 such a play is put on that round.
@@ -203,6 +206,30 @@ theorem locAt_run_ne_stmt (A : Live₂) (Ls : CoinMap.Locate) (tab : ℕ → Str
     obtain ⟨-, hle⟩ := Option.filter_eq_some_iff.1 h'
     have hd := of_decide_eq_true hle
     omega
+
+/-- **A round past the statements' the run's locator puts a release on is a session's**: slot `k` of some
+template `t`'s session, the round `off t + k`. -/
+theorem locAt_run_session (A : Live₂) (Ls : CoinMap.Locate) (tab : ℕ → String) {pre : List Release}
+    {fr : Verity.Frame} {b : ByteArray} {n : ℕ} (h : CoinMap.locAt (runLocate A Ls tab) pre fr b = some n)
+    (hn : A.h.stage + 1 < n) :
+    ∃ t k, t < A.h.ms.length ∧ k < SpotFlock.k₀ A.h t ∧ n = SpotFlock.off A.h t + k := by
+  cases fr with
+  | hello sp => cases (show (none : Option ℕ) = some n from h)
+  | fresh l =>
+    have h' : (Ls pre (.fresh l) b).filter (fun m => decide (m ≤ A.h.stage)) = some n := h
+    obtain ⟨-, hle⟩ := Option.filter_eq_some_iff.1 h'
+    have hd := of_decide_eq_true hle
+    omega
+  | opening i s c =>
+    have h' : locOf A tab pre (.opening i s c) = some n := h
+    simp only [locOf, sessLoc] at h'
+    obtain ⟨j, -, hif⟩ := Option.bind_eq_some_iff.1 h'
+    have hc : (treesOpened pre).idxOf i < A.h.ms.length ∧ j < SpotFlock.k₀ A.h ((treesOpened pre).idxOf i) := by
+      by_contra hc
+      rw [ite_eq_right hc] at hif
+      cases hif
+    rw [ite_eq_left hc] at hif
+    exact ⟨_, j, hc.1, hc.2, (Option.some.inj hif).symm⟩
 
 end Verity.SampledTwo.SessionCoins
 
@@ -437,6 +464,60 @@ theorem showsPlaced_run (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading
     exact absurd hj (SessionCoins.locAt_run_ne_stmt A Ls tab a rl.frame rl.answers)
   obtain ⟨t, ht, ho, hk, hset, htag⟩ := hAsk o hacc hgood a rl b hlog j hj (by omega)
   exact coinAnswered_session A x _ ht ho hk hset htag
+
+/-- The form's reading reads the session reading's statements at the statements' round. -/
+theorem playMsgs_stmt (A : Live₂) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (o : Verity.Exchange) :
+    playMsgs (formReading A C S dev) o (A.h.stage + 1) = (S.stmts o).getD [] := by
+  have hpos : 0 < A.h.stage := Nat.succ_pos _
+  simp only [playMsgs, formReading, ite_eq_right (show ¬ A.h.stage + 1 = 0 by omega),
+    ite_eq_right (show ¬ A.h.stage + 1 = 1 by omega), ite_eq_right (show ¬ A.h.stage + 1 ≤ A.h.stage by omega),
+    ↓reduceIte]
+
+/-- The form's reading reads the session reading's message of template `t`'s session at that session's rounds. -/
+theorem playMsgs_session (A : Live₂) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (o : Verity.Exchange) {t l : ℕ}
+    (ht : t < A.h.ms.length) (h1 : SpotFlock.off A.h t ≤ l) (h2 : l < SpotFlock.off A.h t + SpotFlock.k₀ A.h t) :
+    playMsgs (formReading A C S dev) o l = (S.msg o t (l - SpotFlock.off A.h t)).getD [] := by
+  have hso := SpotFlock.stage_le_off A.h t
+  have hslot : SpotFlock.slotOf A.h (l + 1) = some t := SpotFlock.slotOf_eq A.h ht (by omega) (by omega)
+  simp only [playMsgs, formReading, ite_eq_right (show ¬ l = 0 by omega), ite_eq_right (show ¬ l = 1 by omega),
+    ite_eq_right (show ¬ l ≤ A.h.stage by omega), ite_eq_right (show ¬ l = A.h.stage + 1 by omega), hslot]
+
+/-- **The sessions' messages up to a slot a release is put on are coin requests**, said of the session reading `S`
+alone: on a play accepted (`Acc`) whose log the check read is the device's (`Good`), where the locator `L` puts a
+release of the play's log on slot `k` of template `t`'s session, the session's statement, read off the statements
+`S` reads, sets up, and each message `S` reads of that session up to slot `k` is of tag `0`. -/
+def SessionMsgsAsk (A : Live₂) (S : SessionReading) (Acc Good : Verity.Exchange → Prop) (L : CoinMap.Locate) :
+    Prop :=
+  ∀ o, Acc o → Good o → ∀ a rl b, o.log = a ++ rl :: b → ∀ t k, t < A.h.ms.length → k < SpotFlock.k₀ A.h t →
+    CoinMap.locAt L a rl.frame rl.answers = some (SpotFlock.off A.h t + k) →
+      (FlockDeploy.setupOf true (SpotFlock.stmtAt A.h ((S.stmts o).getD []) t)).isSome = true ∧
+        ∀ l, l ≤ k → ∃ u, (S.msg o t l).getD [] = 0 :: u
+
+/-- **At the run's locator and the form's reading, `SessionsAsk` is `SessionMsgsAsk`**: a round past the statements'
+a release is put on is a session's slot (`SessionCoins.locAt_run_session`), and the form's reading reads the session
+reading there (`playMsgs_stmt`, `playMsgs_session`). -/
+theorem sessionsAsk_run (A : Live₂) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop) (Ls : CoinMap.Locate)
+    (tab : ℕ → String) (h : SessionMsgsAsk A S (FormAccepts C) Good (SessionCoins.runLocate A Ls tab)) :
+    SessionsAsk A (formReading A C S dev) (FormAccepts C) Good (SessionCoins.runLocate A Ls tab) := by
+  intro o hacc hgood a rl b hlog j hj hpast
+  obtain ⟨t, k, ht, hk, rfl⟩ := SessionCoins.locAt_run_session A Ls tab hj hpast
+  obtain ⟨hset, htag⟩ := h o hacc hgood a rl b hlog t k ht hk hj
+  refine ⟨t, ht, Nat.le_add_right _ _, Nat.add_lt_add_left hk _, ?_, fun l hl1 hl2 => ?_⟩
+  · rw [playMsgs_stmt]
+    exact hset
+  · obtain ⟨u, hu⟩ := htag (l - SpotFlock.off A.h t) (by omega)
+    exact ⟨u, by rw [playMsgs_session A C S dev o ht hl1 (by omega)]; exact hu⟩
+
+/-- **At the run's locator and the form's reading, every round a release is put on answers with its coin**, where
+the sessions' messages up to a slot a release is put on are coin requests (`SessionMsgsAsk`). -/
+theorem showsPlaced_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (Good : Verity.Exchange → Prop) (Ls : CoinMap.Locate)
+    (tab : ℕ → String) (h : SessionMsgsAsk A S (FormAccepts C) Good (SessionCoins.runLocate A Ls tab)) :
+    ShowsPlaced A x (formReading A C S dev) (FormAccepts C) Good (SessionCoins.runLocate A Ls tab) :=
+  showsPlaced_run A x C S dev Good Ls tab (sessionsAsk_run A C S dev Good Ls tab h)
 
 /-! ## The join -/
 
