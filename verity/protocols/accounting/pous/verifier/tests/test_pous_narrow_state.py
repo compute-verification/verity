@@ -9,7 +9,12 @@ from __future__ import annotations
 import hashlib
 import random
 
-from verity.protocols.accounting.pous.verifier.labels import salt_value, tag, transpose, w_labels
+from verity.protocols.accounting.pous.verifier.labels import (
+    salt_value,
+    tag,
+    transpose,
+    w_labels,
+)
 from verity.protocols.accounting.pous.verifier.oracle import PiQuery, Tweak, run
 from verity.protocols.accounting.pous.verifier.params import Params
 from verity.protocols.accounting.pous.verifier.primitives import (

@@ -14,7 +14,9 @@ import pytest
 
 from verity.protocols.accounting.pous.device import memory_challenger
 from verity.protocols.accounting.pous.verifier import audit, streamed_wipe, wipe_stream
-from verity.protocols.accounting.pous.verifier.continuous import ContinuousMemoryChallenger
+from verity.protocols.accounting.pous.verifier.continuous import (
+    ContinuousMemoryChallenger,
+)
 
 
 def _wall_clock() -> int:
