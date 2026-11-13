@@ -47,13 +47,13 @@ import Std.Tactic.BVDecide.Normalize.Prop
 audits (`Accounting.JointBridge.RealizesCommOfMonitoringPeriodLeakAccepted`), the network audit's `PeriodRun.Sound` holds at
 `n · (δ + ε_ks + ε_bind + ε_tap)`. The network certifier accepting with the claim failing means some window fails
 `WindowGood` (`comm_iff`); the union bound over the windows sums each window's failure, which is at most the sampled
-verifier's `PrBad` at `RLeakCertifier` (`window_le`), which `PeriodLeakAccepted`'s per-window conjunct bounds by
+verifier's `PrBad` at `RLeakCertifier` (`period_le`), which `PeriodLeakAccepted`'s per-window conjunct bounds by
 `κ + √(γ·Pr[B]) + Pr[B_ext] + Pr[B_tap]`, at most `δ + ε_ks + ε_bind + ε_tap` at each window's prover.
 
 The per-window conjunct of `PeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
 so it is read off at the period of no windows (`ksLin_of_monitoringPeriodLeak`). Its count of the secrets is what the claim at
 `K` stands for, and the error doesn't use it. The network certifier's trust (`trusted-host`) is the realization's
-`trusted`, which this proof doesn't read: `window_le` is the per-window bound its records give, and deriving it from
+`trusted`, which this proof doesn't read: `period_le` is the per-window bound its records give, and deriving it from
 `PeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
 -/
 
@@ -133,7 +133,7 @@ theorem comm_of_monitoringPeriodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι 
               (R.stmt (Function.update ξ (r.own .network) x) i) (R.wit (Function.update ξ (r.own .network) x) i)
               (R.obs (Function.update ξ (r.own .network) x) i)) := pr_exists_le _
     _ ≤ ∑ _i : Fin n, (δ + εks + εbind + εtap) := by
-        refine Finset.sum_le_sum fun i _ => (R.window_le ξ i).trans ?_
+        refine Finset.sum_le_sum fun i _ => (R.period_le ξ i).trans ?_
         have h := hlin (R.stmt ξ i) (R.scope ξ i) (R.Tape ξ i) (R.prover ξ i)
         have he := herr ξ i
         have hx := hbind ξ i
