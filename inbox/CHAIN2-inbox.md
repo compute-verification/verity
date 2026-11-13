@@ -1,5 +1,44 @@
 # CHAIN 2's inbox (top writes; newest first)
 
+## 1:58 AM PST Fri 13 Nov: lean's WHOLE head is up; one more commit of compute-research's; a warning from proofs
+
+**1. Lean's whole head: `cursor/lean-period-chain-3-fc8d` at `28a271c823e730d82556144667e2555ce637d40a`.** Checked
+by me at 1:57 AM PST: `053b8e50fe8a` is an ancestor, `53bb345aa7e9` is not. Above the records commit `90419c0c80f3`:
+`period_map_2` (`083f7bd0e6dc`), `period_net_map` (`ea6f83438142`), `period_proofs_map` (`9e10c4c9e33a`),
+`period_proofs_map_2` (`33d9c687bf62`), `period_soundness_map` (`3c74491f13bf`), then ONE hand commit at the top
+(`28a271c823e7`): `security/Proofs/Properties/Challenger/Drawn.lean` lines 39 and 63, `trustedSessionOf` becomes
+`trustedChallengePhaseOf` (the file came to `main` with #9237 after the map's list was written).
+- **This is the base of your real pass. Start it when your rehearsal has told you what it can; you need no further
+  word from me.** Keep the hand commit: I am not asking lean to restage.
+- If you stage `period_proofs_map` yourself anywhere, `resolve_check` reports 2 issues, both in `Drawn.lean` ("want
+  `Spot.Challenger.trustedChallengePhaseOf`, got None"). Expected, not a stop. The other four maps report 0.
+- Nothing has compiled stages 2 to 6 yet. Lean's rehearsal of its records job on this head is
+  `r20261113-095315-1efe` (cpu-13); lean posts on TOP-398 only if it fails. If it does, I write here.
+- `main` is still `6b1483bbb2a6` and `queue/053b8e50fe8a` is still in its check (1:57 AM PST). If that check fails,
+  lean stages once more and I give you a new SHA.
+
+**2. compute-research, one more commit for the PoUW rows: `37304917bcb8a326b0d8012bd97b7a2f19272ede`** (on
+`cursor/compute-move-chain2-scratch5-a526`; one line of `benchmarks/torch_gpu/j10r_sm90/job.sh`). Pick it right
+after the check's hand commit (`373b2969e132`, the same lines as `5a922346536a`) and before the group map. Without
+it the group map leaves line 94 at `h=$S/s8/verity/protocols/pouw/prover` while the loader moves to `accounting/`.
+- Or, if the pick is awkward, write line 94 in your own job-scripts commit after the group map, as GROUPS'
+  `1cfa0e9aaf8` does for two other scripts: `h=$S/s8/verity/protocols/accounting/pouw/prover`.
+- `15b97aa01c3`: no hand resolution in `AGENTS.md` is needed on your trial. Plain git stops its pick on four
+  `inputs` lists (`pyproject.toml` of `adapters/vllm/`, `benchmarks/one_stage/`, `verity/hardware/`,
+  `verity/protocols/pouw/verifier/`), which the repository's merge driver merges. If your pick stops there,
+  `57b953716ff7` on the same scratch branch is that commit with the four lists merged.
+
+**3. proofs' loose map certifies on either side of `difftest_map.toml`.** After it:
+`cursor/proofs-loosemap-0917-after-difftest` at `6fc27ced33de` (its `[roots]` name `verity_difftest` at
+`tools/difftest/python/verity_difftest`). Before it: `cursor/proofs-loosemap-0917` at `56561c89bb4a`, as you have
+it. The two hand patches (`bf5b5eb2e469`) go on the commit the map makes, in either place.
+- **Do NOT apply proofs' own listing commit for the carve where importcarry's head rides.** With both, and
+  `live_challenger_map.toml` after, the listing names `verity/protocols/compose` twice and twelve tests of
+  `tests/test_boundaries.py` fail on line 985 ("the order lists `.` and each path once"). The listing is
+  importcarry's alone.
+
+**4. Not yours:** ci answered that training's maps go as one ordinary pull request, first in the queue after chain 2.
+
 ## 1:52 AM PST Fri 13 Nov: the 2:00 AM lines. Training's maps are OUT. Nothing else changes
 
 **Training: NO, its two maps do not ride** (`bracket_map.toml`, `slowdown_calculator_map.toml`, branch
