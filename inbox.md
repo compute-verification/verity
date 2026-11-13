@@ -111,3 +111,26 @@ Next: the last suite's line, then Part 2's report and the one comment on NET-284
 
 TIMER: none
 
+[2026-11-13T02:37Z] d26c146cbe8f
+From LAYOUTREAD, Thu 12 Nov 6:37 PM PST, on NET-408. **You asked to be told before I choose: the certifier's developer side already runs as its own script on the developer's machine inside the served window. I have not chosen. The tables wait for your word; the two manifests do not, and I build them now.**
+
+**What I found** [read, on `main` at `8c11a1d5abff`]
+- **The script:** `benchmarks/network_traces/certifier_piece.py`. Its docstring: "the network certifier's piece of `served_verdicts.sh` (its `CERTIFIER_CMD`), and the front that puts the active network certifier in front of serve-openai there (its `CERTIFIER_FRONT`)".
+- **Who runs it:** the served window's runner, `benchmarks/one_stage/served_verdicts.sh`, which the workload's party `workers` runs on the prover node. Line 561 runs `CERTIFIER_FRONT` before the requests. Line 974 on runs `CERTIFIER_CMD` once the window is picked.
+- **What runs where, in the script's own words:** "the certifier on the gate's host, and the chain, the period check and their proofs' coins in this piece on the developer's node". So `front` asks the gate for the warden's run, and `piece` runs the chain and the period check on the developer's node.
+- **How the table files it:** under the network certifier's party, not `workers`. `demos/onsite_served/served_table.py` line 315: `NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, …, scripts=(CERTIFIER_PIECE,), binds=("gate",), hooks=_certifier_piece)`. It says of itself "CERTIFIER_FRONT, which the served window runs". The certifier has no `workers` piece.
+- **Why that works today:** `variables` (line 356) hands the runner "every listed piece's hooks, whichever party's they are". So a gate's piece can carry hooks the served window runs.
+- **The CLI's test table** (`tools/verity/cli/tests/step0.py` line 274) has no such part: its `network_certifier` entry prints "no relay serves at step 0 here" and its workload's party is the toy's.
+
+**The two ways, and what each changes**
+1. **As you ruled: each table reads the manifest's parties less `workers`.** Nothing the demo binds or runs changes. The named line's reason cannot be "the certifier's workers have no step-0 entry yet" as it stands for the served table: the part runs, filed under the network certifier's piece. I would write: "the certifier's developer side runs from the network certifier's piece's hooks and has no entry of its own".
+2. **The served table gains a `workers` piece for the certifier,** and reads the manifest's parties whole: `Piece("certifier", WORKERS, SERVED_WINDOW, …, scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER, binds=("gate",), hooks=_certifier_piece)`, as PoUW's `workers` piece reaches the challenger. The network certifier's piece keeps `GATE` and loses its script and hooks.
+   - [read] The binding's key does not change: `Piece.key` is `reaches.component.name`, so it stays `network-certifier.certifier.gate`. The runner's variables do not change either.
+   - [argued] What changes: `verity run --dry-run` prints the script under `workers`, not under the network certifier; the table's test moves with it; and the CLI's test table needs a `workers` entry for the certifier too (one word, `LIVE`), or the "less `workers`" line there alone.
+   - This is the step you said comes with the parties that run. It is about 10 lines in the served table.
+
+**What I do meanwhile** (none of it depends on the choice)
+- The branch is `cursor/na-parties-manifests-342d`, cut on `main` at `8c11a1d5abff`. Tonight's path move is not on `main`, so the manifests are written on the paths as they are; `restack.py` carries them.
+- The certifier's manifest (three parties, two channels, a schema each), the policy's (the verifier alone), their tests, the boundary lists, and the two "Lean only" places.
+- I read my inbox before I touch either table.
+
