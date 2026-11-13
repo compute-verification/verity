@@ -78,13 +78,13 @@ def test_a_rows_commit_string_is_cores_at_every_padding_edge(row, role, sizes):
         assert L.commit(row, role, words, y) == L.INST.commit_string(L.KEY, x, y), n
 
 
-def test_every_per_call_row_but_ok_the_tile_the_caps_and_the_cuts_is_a_row_seg_row():
-    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, the execution phase tile's `pc8.SIDE_PORTS`, `cap.PORTS`, and the
-    row_k cut's `rowk.PORTS4`, `rowk.PORTS8`) are exactly the rows with a schema, and the row-seg ones are the per-call
-    rows (role X) but ok, the tile
-    digest, the cap's rows and the cut's six: A_i, A′_i ‖ P_A,i of both checks and A's salt-dead counts.  Every other row,
-    each registered row (role W) and the cap's chunk digests and strip row (64 words, one whole block, so a unit that reads
-    or writes one hashes a block before its last) included, is a `sha512/row/v2` row: no row is `sha512/row/v1`."""
+def test_every_per_call_row_but_ok_the_tile_the_inert_work_bounds_and_the_cuts_is_a_row_seg_row():
+    """The units' committed rows (`pc4.PORTS`, `pc8.PORTS`, the execution phase tile's `pc8.SIDE_PORTS`, `cap.PORTS`,
+    and the row_k cut's `rowk.PORTS4`, `rowk.PORTS8`) are exactly the rows with a schema, and the row-seg ones are the
+    per-call rows (role X) but ok, the tile digest, the inert-work bound's rows and the cut's six: A_i, A′_i ‖ P_A,i of
+    both checks and A's salt-dead counts.  Every other row, each registered row (role W) and the inert-work bound's
+    chunk digests and strip row (64 words, one whole block, so a unit that reads or writes one hashes a block before its
+    last) included, is a `sha512/row/v2` row: no row is `sha512/row/v1`."""
     used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS, {"side": pc8.SIDE_PORTS}, cap.PORTS, rowk.PORTS4,
                                       rowk.PORTS8)
             for unit in ports.values() for row, role, _ in unit["rows"]}
@@ -136,10 +136,10 @@ def test_statement_rows_refuse_ports_that_are_no_statement():
 
 
 def test_advice_is_in_no_read_set():
-    """Advice (`pc8.PORTS`: the cap tile's certificates) is plain witness only while no row or region reads it: each of
-    `pc8`'s units names its advice apart from its rows and regions; a tile with the cap's advice has the same statement
-    rows as without, so no committed row (and no link, which reads one) holds a bit of it; and advice that is also a
-    row's port or a public input region, or that names an output, is refused."""
+    """Advice (`pc8.PORTS`: the certificates of a tile's inert-work bound) is plain witness only while no row or region
+    reads it: each of `pc8`'s units names its advice apart from its rows and regions; a tile with the inert-work bound's
+    advice has the same statement rows as without, so no committed row (and no link, which reads one) holds a bit of it;
+    and advice that is also a row's port or a public input region, or that names an output, is refused."""
     for role, unit in pc8.PORTS.items():
         bound = {p for _r, _rl, ps in unit["rows"] for p in ps} | set(unit["regions"])
         assert not set(unit["advice"]) & bound and all(isinstance(p, str) for p in unit["advice"]), role

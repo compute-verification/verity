@@ -73,8 +73,8 @@ def test_the_windows_are_boolean():
 
 def test_building_a_tile_check_registers_them():
     """Flock's lowering finds a primitive's Boolean Definition only in core's registry, so importing `pc4` (and `pc8`,
-    which imports it) must register all fifteen (the hiding tile's digest calls the four Keccak words, the cap the five
-    window words), in a fresh interpreter where nothing else imported `boolean`."""
+    which imports it) must register all fifteen (the hiding tile's digest calls the four Keccak words, the inert-work
+    bound the five window words), in a fresh interpreter where nothing else imported `boolean`."""
     ids = [w.id.replace("_v1", "_v2") for w in (W.PouwF32SqrtRn, W.PouwETilde, W.PouwBf16Neg, W.PouwSqAcc, W.PouwSqCeil,
                                                 W.PouwSqGe, W.PouwBlackwellE4m3Window, W.PouwHopperE4m3Window,
                                                 W.PouwWindowWord, W.PouwBlackwellE4m3SaltDead, W.PouwHopperE4m3SaltDead)
