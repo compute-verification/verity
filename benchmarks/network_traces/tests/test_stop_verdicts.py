@@ -68,23 +68,37 @@ def registration(of: C.Head) -> dict:
             "certificate": {"key": "", "digest": of.digest().hex(), "signature": ""}}
 
 
-#: a serve's registration that registers both sampled populations at every block, and another serve's; each with
-#: the digest a record names it by
-SERVED = {"format": "a serve's registration", "rates": {"stop_record": "1/1", "response_tie": "1/1"}}
+#: the registration a serve registered its class under, and another serve's; each with the digest a record names
+#: it by
+SERVED = {"format": "a serve's registration"}
 OTHERS = SERVED | {"window": "another serve's"}
 REGISTERED, OTHER = SV.digest_of(SERVED), SV.digest_of(OTHERS)
+
+
+def streams(after: dict = SERVED, **over: object) -> dict[str, dict]:
+    """The registration record of the stop record's stream and of the response tie's, by verdict: each follows
+    ``after`` and registers every block of a population of 4, but for ``over``, the record's fields."""
+    return {kind: {"format": "a stream's registration", "window": f"the {kind}'s stream", SV.POPULATION: 4,
+                   SV.DESIGN: {SV.DESIGN: SV.SUBSET, "k": 4}, SV.PREVIOUS: SV.digest_of(after)} | over
+            for kind in SV.RATED}
+
+
+def with_streams(*docs: dict) -> list[dict]:
+    """Each of the serves' registrations ``docs`` with the two streams' that follow it (`streams`)."""
+    return [x for doc in docs for x in (doc, *streams(doc).values())]
 
 
 def four(of: C.Head, cls: int = 0, proved_by: object = None, **over: object) -> list[dict]:
     """The four verdicts' records on a class of a head, as their verifiers write them: each accepted, complete and
     naming the head, but for `over`, the verdict's fields; of one serve under `SERVED`, the stop record and the
-    response tie at the rate it registers."""
+    response tie each naming its stream's registration (`streams`) and the rate it registers."""
     return [{CC.RUN: f"run of the {kind}", CC.SERVE: "the serve", CC.REGISTRATION: REGISTERED,
              CC.VERIFIER: {"module": f"the {kind}'s verifier", "commit": "a commit"},
              CC.VERDICT: {SV.FORMAT: FORMATS[kind], CC.LINK: of.link, CC.WINDOW: of.window, CC.CLASS: cls,
                           CC.HEAD: of.digest().hex(), "registration": "a digest", CC.ACCEPTED: True,
                           CC.COMPLETE: True, "withheld": None, "codes": []} | over,
-             CC.PROVED_BY: proved_by} | ({SV.RATE: "1/1"} if kind in SV.RATES else {}) for kind in CC.VERDICTS]
+             CC.PROVED_BY: proved_by} | ({SV.RATE: "1/1", SV.STREAM: SV.digest_of(streams()[kind])}
+                                         if kind in SV.RATED else {}) for kind in CC.VERDICTS]
 
 
 def the_controls() -> list[dict]:
@@ -107,9 +121,10 @@ def refused(*kinds: str) -> str:
 
 def stop(registrations: list, records: list, left: list[str] | tuple = (), controls: list | None = None,
          served: list | None = None, spent: list | tuple = ()) -> LB.Stop:
-    """`SV.stop` with, unless they are given, the four verifiers' controls and the two serves' registrations."""
+    """`SV.stop` with, unless they are given, the four verifiers' controls and the two serves' registrations,
+    each with its streams'."""
     return SV.stop(registrations, records, left, the_controls() if controls is None else controls,
-                   [SERVED, OTHERS] if served is None else served, spent)
+                   with_streams(SERVED, OTHERS) if served is None else served, spent)
 
 
 def by_verdict(records: list[dict]) -> dict[str, list[dict]]:
@@ -237,8 +252,9 @@ def test_four_verdicts_of_two_serves_or_under_two_registrations_hold_nothing_and
                 f"verdicts on this head name 2 `{key}`s, not one ({', '.join(sorted((ours, other)))})"), (key, i)
             assert LB.table(LB.inputs(), got) == whole
             assert {v[key] for v in got.verdicts} == {ours, other}
-        # all four of the other serve, or under the other registration, are one class's
-        assert stop([registration(first)], [r | {key: other} for r in four(first)]).held == 1
+        # all four of the other serve, or under the other registration with its streams', are one class's
+        theirs = of_serve(other, four(first)) if key == CC.SERVE else under(OTHERS, four(first))
+        assert {r[key] for r in theirs} == {other} and stop([registration(first)], theirs).held == 1
     # one of another serve and one under another registration: both are named
     records = [r | change for r, change in zip(four(first), (
         {CC.SERVE: "another serve"}, {CC.REGISTRATION: OTHER}, {}, {}))]
@@ -247,7 +263,7 @@ def test_four_verdicts_of_two_serves_or_under_two_registrations_hold_nothing_and
                                                    "as one serve's under one registration")
     # two execution phases, each with its four of its own serve, are each held: the names are held to one a class
     second = head(4, 2, 0)
-    theirs = [r | {CC.SERVE: "another serve", CC.REGISTRATION: OTHER} for r in four(second)]
+    theirs = of_serve("another serve", under(OTHERS, four(second)))
     assert stop([registration(first), registration(second)], four(first) + theirs).held == 2
     # and a held execution phase beside one whose four are of two serves is still held: the line is the count
     mixed = [r | {CC.SERVE: "another serve"} if j == 0 else r for j, r in enumerate(four(second))]
@@ -479,8 +495,21 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
 
 
 def under(doc: dict, records: list[dict]) -> list[dict]:
-    """The records, naming ``doc`` as the registration their serve registered."""
-    return [r | {CC.REGISTRATION: SV.digest_of(doc)} for r in records]
+    """The records, naming ``doc`` as the registration their serve registered, and the stop record and the
+    response tie the registration of its stream that follows ``doc`` (`streams`)."""
+    after = streams(doc)
+    return [r | {CC.REGISTRATION: SV.digest_of(doc)} | (
+        {SV.STREAM: SV.digest_of(after[kind])} if (kind := SV.FORMATS.get(r[CC.VERDICT][SV.FORMAT])) in after else {})
+        for r in records]
+
+
+def on_stream(kind: str, doc: object, records: list[dict]) -> list[dict]:
+    """The records, the one of ``kind`` naming ``doc`` as its stream's registration: by its digest where it is a
+    record, as given where it is not, and naming none where it is `...`."""
+    i = CC.VERDICTS.index(kind)
+    name = SV.digest_of(doc) if isinstance(doc, dict) else doc
+    return [({k: v for k, v in r.items() if k != SV.STREAM} if doc is ... else r | {SV.STREAM: name}) if j == i else r
+            for j, r in enumerate(records)]
 
 
 def at_rate(kind: str, rate: object, records: list[dict]) -> list[dict]:
@@ -490,88 +519,122 @@ def at_rate(kind: str, rate: object, records: list[dict]) -> list[dict]:
             for j, r in enumerate(records)]
 
 
-def test_a_class_is_held_only_at_the_rate_its_registration_registers_for_both_populations():
-    """The rate is the registration's: the reader is handed the serve's registration, finds it by the digest the
-    class's verdicts name, and holds the class only where it registers every block of the stop record's and the
-    response tie's populations and each of those verdicts says it ran at that. A registration that was not handed
-    or states no rate, another rate registered, and a verdict that names no rate or another than the registered one
-    are each refused by name: among them a verdict that states `1/1` under a registration that says
-    otherwise."""
-    assert (SV.RATE, SV.EVERY_BLOCK) == ("rate", "1/1")
-    assert SV.RATES == {CC.STOP_RECORD: ("rates", "stop_record"), CC.RESPONSE_TIE: ("rates", "response_tie")}
+def test_a_class_is_held_only_at_the_rate_its_streams_registrations_register_for_both_populations():
+    """The rate is the registration's: a stop record's and a response tie's record each names the registration
+    record of its own stream, and the reader is handed that record, holds it to follow the registration the
+    class's verdicts name and reads the rate from it, K of its population under a subset design. The class is held
+    only where both register every block and each of the two verdicts says it ran at that. Each of these is
+    refused by name: a registration that was not handed, the class's or a stream's; a record that names no
+    registration of its stream; one that follows another record; one that registers no rate; another rate
+    registered; and a verdict that names no rate or another than the registered one, among them a verdict that
+    states `1/1` under a registration that says otherwise."""
+    assert (SV.RATE, SV.EVERY_BLOCK) == ("rate", "1/1") and SV.RATED == (CC.STOP_RECORD, CC.RESPONSE_TIE)
+    assert (SV.STREAM, SV.PREVIOUS, SV.POPULATION, SV.DESIGN, SV.SUBSET) == (
+        "stream_registration", "previous", "population", "law", "subset")
     assert REGISTERED == R.digest(SERVED) != OTHER and len(REGISTERED) == 128
     first, second, whole = head(3, 5, 0), head(4, 2, 0), LB.table(LB.inputs())
     one = [registration(first)]
     at = f"the link {LINK}, execution phase 3, class 0: held to its whole schedule by the rate: "
     assert stop(one, four(first)).held == 1
-    # the registration is found by the digest the verdicts name: one that was not handed, or another serve's handed
-    # in its place, leaves the rate unknown, whatever rate the verdicts state
-    for served in ([], [OTHERS]):
+
+    def subset(k: object, n: object = 4) -> dict:
+        return {SV.POPULATION: n, SV.DESIGN: {SV.DESIGN: SV.SUBSET, "k": k}}
+
+    # the registration the class's verdicts name is found by its digest: one that was not handed, or another
+    # serve's handed in its place, leaves what the serve registered unknown, whatever its streams' say
+    for served in ([], with_streams(OTHERS), list(streams().values())):
         got = stop(one, four(first), served=served)
         assert got.held == 0 and len(got.verdicts) == 4 and got.why[0] == held_back(1, 1, rate=1)
         assert got.why[4] == at + (f"the registration its verdicts name, `{REGISTERED}`, is not among the serves' "
-                                   "registrations read (`out/serve-registrations.jsonl`), so the rate it registers "
-                                   "is not known") and len(got.why) == 5
+                                   "registrations read (`out/serve-registrations.jsonl`), so what the serve "
+                                   "registered is not known") and len(got.why) == 5
         assert LB.table(LB.inputs(), got) == whole
-    # a registration that states no rate for a population is refused by the name of where it would state it
-    for key, kind in (("stop_record", CC.STOP_RECORD), ("response_tie", CC.RESPONSE_TIE)):
-        for rates in ({k: v for k, v in SERVED["rates"].items() if k != key}, SERVED["rates"] | {key: 1},
-                      SERVED["rates"] | {key: ""}, SERVED["rates"] | {key: None}):
-            doc = SERVED | {"rates": rates}
-            got = stop(one, under(doc, four(first)), served=[doc])
+    for kind in SV.RATED:
+        who, name = f"the {kind} of run of the {kind}", SV.digest_of(streams()[kind])
+        named = f"{who} names its stream's registration "
+        # a record that names no registration of its stream
+        for none in (..., None, "", 7):
+            got = stop(one, on_stream(kind, none, four(first)))
+            assert got.held == 0 and got.why[0] == held_back(1, 1, rate=1) and got.why[4] == at + (
+                f"{who} names no registration of its own stream (`stream_registration`), so the rate it is "
+                "registered at is not known") and len(got.why) == 5, (kind, none)
+        # one that was not handed, with the other stream's or without
+        missing = f"{named}`{name}`, which is not among the serves' registrations read (`out/serve-registrations.jsonl`)"
+        got = stop(one, four(first), served=[SERVED, *(doc for k, doc in streams().items() if k != kind)])
+        assert got.held == 0 and got.why[4] == at + missing, kind
+        got = stop(one, four(first), served=[SERVED])
+        assert got.held == 0 and missing in got.why[4].removeprefix(at).split("; ") and got.why[4].count("; ") == 1
+        # one that follows another record, or none: another serve's stream's, one registered first, the
+        # registration the class's verdicts name itself
+        for doc, follows in ((streams(OTHERS)[kind], f"`{OTHER}`"), (streams(previous=None)[kind], "no record"),
+                             (streams(previous=7)[kind], "no record"), (SERVED, "no record"),
+                             (streams(previous=name)[kind], f"`{name}`")):
+            got = stop(one, on_stream(kind, doc, four(first)), served=[*with_streams(SERVED, OTHERS), doc])
             assert got.held == 0 and got.why[4] == at + (
-                f"the registration `{SV.digest_of(doc)}` states no rate for the {kind} (`rates.{key}`)"), (key, rates)
-    for doc in ({k: v for k, v in SERVED.items() if k != "rates"}, SERVED | {"rates": "1/1"},
-                SERVED | {"rates": ["1/1"] * 2}):
-        got, name = stop(one, under(doc, four(first)), served=[doc]), SV.digest_of(doc)
-        assert got.held == 0 and got.why[4] == at + (
-            f"the registration `{name}` states no rate for the stop record (`rates.stop_record`); the registration "
-            f"`{name}` states no rate for the response tie (`rates.response_tie`)"), doc
-    for key, kind in (("stop_record", CC.STOP_RECORD), ("response_tie", CC.RESPONSE_TIE)):
-        # a registration that registers another rate holds nothing, and a verdict that states `1/1` under it
-        # is refused by name
-        doc = SERVED | {"rates": SERVED["rates"] | {key: "1/8"}}
-        got = stop(one, under(doc, four(first)), served=[doc])
+                f"{named}`{SV.digest_of(doc)}`, which follows {follows} and not the registration its verdicts "
+                f"name, `{REGISTERED}`"), (kind, doc)
+        # one that registers no rate: another sampling design than a subset, or a subset of no K of its population
+        for over in ({SV.DESIGN: {SV.DESIGN: "stratified", "k": 4, "strata": []}}, {SV.DESIGN: {SV.DESIGN: "work", "k": 4}},
+                     {SV.DESIGN: {"k": 4}}, {SV.DESIGN: SV.SUBSET}, {SV.DESIGN: None}, {SV.DESIGN: ...},
+                     {SV.DESIGN: {SV.DESIGN: SV.SUBSET}}, subset(0), subset(5), subset(-4), subset("4"), subset(True),
+                     subset(4.0), subset(None), subset(4, "4"), subset(4, None), subset(4, 4.0), subset(0, 0),
+                     subset(1, True), {SV.POPULATION: ...}):
+            doc = {k: v for k, v in streams(**over)[kind].items() if v is not ...}
+            got = stop(one, on_stream(kind, doc, four(first)), served=[*with_streams(SERVED), doc])
+            assert got.held == 0 and got.why[4] == at + (
+                f"{named}`{SV.digest_of(doc)}`, which registers no rate: its sampling design is no `subset` of K "
+                "of its population"), (kind, over)
+        # another rate registered holds nothing, and a verdict that states `1/1` under it is refused by name
+        eighth = streams(**subset(4, 32))[kind]
+        records = on_stream(kind, eighth, four(first))
+        got = stop(one, records, served=[*with_streams(SERVED), eighth])
         assert got.held == 0 and got.why[0] == held_back(1, 1, rate=1) and got.why[4] == at + (
-            f"the registration registers the {kind} at `1/8`, not `1/1`; the {kind} of run of the {kind} "
-            "states `1/1` under a registration that registers `1/8`"), kind
+            f"{who} is registered at `1/8`, not `1/1`; {who} states `1/1` under a registration that registers "
+            "`1/8`"), kind
         # a verdict that says it ran at the registered rate is not refused, and its class is not held
-        got = stop(one, at_rate(kind, "1/8", under(doc, four(first))), served=[doc])
-        assert got.held == 0 and got.why[4] == at + (
-            f"the registration registers the {kind} at `1/8`, not `1/1`"), kind
+        got = stop(one, at_rate(kind, "1/8", records), served=[*with_streams(SERVED), eighth])
+        assert got.held == 0 and got.why[4] == at + f"{who} is registered at `1/8`, not `1/1`", kind
         # under a registration at `1/1`, a verdict that states another rate, or none, is refused by name
         for rate, says in (("1/8", "states `1/8`"), ("2/2", "states `2/2`"), ("rate:1/1", "states `rate:1/1`"),
+                           ("4/4", "states `4/4`"), ("1/1 ", "states `1/1 `"), ("1", "states `1`"),
                            (None, "names no rate (`rate`)"), (1, "names no rate (`rate`)"),
                            ("", "names no rate (`rate`)"), (..., "names no rate (`rate`)")):
             got = stop(one, at_rate(kind, rate, four(first)))
             assert got.held == 0 and got.why[4] == at + (
-                f"the {kind} of run of the {kind} {says} under a registration that registers `1/1`"), (kind, rate)
-        # a rate's text is `NUM/DEN` in lowest terms with no prefix: a registration that states every block in
-        # another text registers another rate, whatever its verdicts state
-        for text in ("2/2", "rate:1/1", "1/1 ", "1 / 1", "01/1", "1"):
-            doc = SERVED | {"rates": SERVED["rates"] | {key: text}}
-            for records in (under(doc, four(first)), at_rate(kind, text, under(doc, four(first)))):
-                got = stop(one, records, served=[doc])
-                assert got.held == 0 and got.why[4].startswith(at + (
-                    f"the registration registers the {kind} at `{text}`, not `1/1`")), (kind, text)
-    # the certified read and the compute audit are over no sampled population: a rate on their records is not read
-    assert stop(one, [r | {SV.RATE: "1/8"} if i >= 2 else r for i, r in enumerate(four(first))]).held == 1
-    # `complete` holds no class to a rate: four complete accepts under a registration at an eighth hold nothing
-    eighth = OTHERS | {"rates": {"stop_record": "1/1", "response_tie": "1/8"}}
-    theirs = at_rate(CC.RESPONSE_TIE, "1/8", under(eighth, four(second)))
+                f"{who} {says} under a registration that registers `1/1`"), (kind, rate)
+        # a rate is K of the population in lowest terms: every block of a population of any size is `1/1`, and
+        # anything less is another rate, whatever its verdict states
+        for n in (1, 2, 1000):
+            doc = streams(**subset(n, n))[kind]
+            assert stop(one, on_stream(kind, doc, four(first)), served=[*with_streams(SERVED), doc]).held == 1, (kind, n)
+        for k, n, text in ((2, 4, "1/2"), (3, 4, "3/4"), (6, 8, "3/4"), (1, 1000, "1/1000"), (999, 1000, "999/1000")):
+            doc = streams(**subset(k, n))[kind]
+            for records in (on_stream(kind, doc, four(first)), at_rate(kind, text, on_stream(kind, doc, four(first)))):
+                got = stop(one, records, served=[*with_streams(SERVED), doc])
+                assert got.held == 0 and got.why[4].startswith(at + f"{who} is registered at `{text}`, not `1/1`")
+            assert got.why[4] == at + f"{who} is registered at `{text}`, not `1/1`", (kind, k, n)
+    # the certified read is over no sampled population and the compute audit's rate is not held: a rate or a
+    # stream's registration on their records is not read
+    assert stop(one, [r | {SV.RATE: "1/8", SV.STREAM: "a digest"} if i >= 2 else r
+                      for i, r in enumerate(four(first))]).held == 1
+    # `complete` holds no class to a rate: four complete accepts, the tie's stream registered at an eighth, hold
+    # nothing
+    eighth = streams(OTHERS, **subset(4, 32))[CC.RESPONSE_TIE]
+    theirs = at_rate(CC.RESPONSE_TIE, "1/8", on_stream(CC.RESPONSE_TIE, eighth, under(OTHERS, four(second))))
     assert all(r[CC.VERDICT][CC.COMPLETE] is True for r in theirs)
-    # two execution phases under two registrations: the one whose serve registered every block is held
-    got = stop(one + [registration(second)], four(first) + theirs, served=[SERVED, eighth])
+    # two execution phases under two registrations: the one whose streams registered every block is held
+    got = stop(one + [registration(second)], four(first) + theirs, served=[*with_streams(SERVED, OTHERS), eighth])
     assert got.held == 1 and got.why[0].startswith("1 of the 2 execution phase(s) read are charged below")
     assert got.why[6] == (f"the link {LINK}, execution phase 4, class 0: held to its whole schedule by the rate: the "
-                          "registration registers the response tie at `1/8`, not `1/1`") and len(got.why) == 7
-    # each class that holds a row is held to the rate of its own registration
+                          "response tie of run of the response tie is registered at `1/8`, not `1/1`")
+    assert len(got.why) == 7
+    # each class that holds a row is held to the rate of its own streams' registrations
     wide = head(3, 5, 2)
-    wider = four(wide) + at_rate(CC.RESPONSE_TIE, "1/8", under(eighth, four(wide, 1)))
-    got = stop([registration(wide)], wider, served=[SERVED, eighth])
+    wider = four(wide) + at_rate(CC.RESPONSE_TIE, "1/8", on_stream(CC.RESPONSE_TIE, eighth, under(OTHERS, four(wide, 1))))
+    got = stop([registration(wide)], wider, served=[*with_streams(SERVED, OTHERS), eighth])
     assert got.held == 0 and got.why[4] == (
-        f"the link {LINK}, execution phase 3, class 1: held to its whole schedule by the rate: the registration "
-        "registers the response tie at `1/8`, not `1/1`")
+        f"the link {LINK}, execution phase 3, class 1: held to its whole schedule by the rate: the response tie of "
+        "run of the response tie is registered at `1/8`, not `1/1`")
     assert stop([registration(wide)], four(wide) + four(wide, 1)).held == 1
     # held back by the rate and by a control: the first line counts each
     got = stop(one, four(first), controls=[], served=[])
@@ -851,11 +914,11 @@ def test_the_run_files_are_read_from_the_store_and_no_run_is_the_whole_schedule(
                "out/compute-audit-verdicts.jsonl": jsonl([audit]), "verdicts.jsonl": "not read",
                "out/stop-controls.jsonl": jsonl([of_stop, of_read, of_audit]), "controls.jsonl": "not read"},
         "r2": {"out/response-tie-verdicts.jsonl": jsonl([tie]), SV.REGISTRATIONS_FILE: jsonl(registrations),
-               "out/response-tie-controls.jsonl": jsonl([of_tie]), SV.SERVES_FILE: jsonl([SERVED]),
+               "out/response-tie-controls.jsonl": jsonl([of_tie]), SV.SERVES_FILE: jsonl(with_streams(SERVED)),
                "out/another.json": "{}"},
         "r3": {"out/another.json": "{}"}, "r4": None})
     assert SV.read(store, ["r1", "r2"]) == (registrations, [read, audit, stop_record, tie], [],
-                                            [of_stop, of_read, of_audit, of_tie], [SERVED], [], [])
+                                            [of_stop, of_read, of_audit, of_tie], with_streams(SERVED), [], [])
     neither = ("holds none of `out/*-verdicts.jsonl`, `out/registrations.jsonl`, `out/*-controls.jsonl`, "
                "`out/serve-registrations.jsonl`")
     got = SV.of_runs(store, ["r1", "r2", "r3", "r4", "r5"])
@@ -901,7 +964,7 @@ def held_files(of: C.Head, records: list, controls: list | None = None, served: 
     controls and the serve's registration."""
     return {SV.REGISTRATIONS_FILE: jsonl([registration(of)]), "out/the-verdicts.jsonl": jsonl(records),
             "out/the-controls.jsonl": jsonl(the_controls() if controls is None else controls),
-            SV.SERVES_FILE: jsonl([SERVED] if served is None else served)}
+            SV.SERVES_FILE: jsonl(with_streams(SERVED) if served is None else served)}
 
 
 def tie_but(of: C.Head, **over: object) -> list[dict]:
@@ -987,9 +1050,9 @@ def test_a_superseded_run_adds_no_accept(tmp_path):
     # `read` hands the accepts apart, leaves the refused controls out and keeps the registrations
     assert SV.read(store, ["r1", "r3"], ["r1"]) == (
         [registration(first)] * 2, records[:1] + records[2:], [dropped(4, "r1"), uncounted(4, "r1")],
-        the_controls(), [SERVED] * 2, records, [])
+        the_controls(), with_streams(SERVED) * 2, records, [])
     assert SV.read(store, ["r1", "r3"]) == ([registration(first)] * 2, records + records[:1] + records[2:], [],
-                                            the_controls() * 2, [SERVED] * 2, [], [])
+                                            the_controls() * 2, with_streams(SERVED) * 2, [], [])
     # a superseded run's refused control backs no verifier: the four of a later run are then held back by a control
     alone = Store(tmp_path / "controls", {"old": held_files(first, []), "new": held_files(first, records, controls=[])})
     assert SV.of_runs(alone, ["old", "new"]).held == 1
@@ -1016,14 +1079,14 @@ def test_a_superseded_run_adds_no_accept(tmp_path):
                                          "new": held_files(first, records, controls=carried)})
     assert SV.of_runs(alone, ["old", "new"]).held == SV.of_runs(alone, ["old", "new"], ["old"]).held == 1
     # an accept that names a superseded run as its serve is that run's, whichever run produced it and holds it
-    kept = {SV.REGISTRATIONS_FILE: jsonl([registration(first)]), SV.SERVES_FILE: jsonl([SERVED])}
+    kept = {SV.REGISTRATIONS_FILE: jsonl([registration(first)]), SV.SERVES_FILE: jsonl(with_streams(SERVED))}
     judged = {"out/the-verdicts.jsonl": jsonl(of_serve("s1", records)), "out/the-controls.jsonl": jsonl(the_controls())}
     served = Store(tmp_path / "serve", {"s1": kept, "v1": judged})
     assert SV.of_runs(served, ["s1", "v1"]).held == 1
     got = SV.of_runs(served, ["s1", "v1"], ["s1"])
     assert (got.held, got.verdicts) == (0, ()) and got.why[0] == LACK and got.why[-1] == dropped(4, "s1")
     assert SV.read(served, ["s1", "v1"], ["s1"]) == (
-        [registration(first)], [], [dropped(4, "s1")], the_controls(), [SERVED], of_serve("s1", records), [])
+        [registration(first)], [], [dropped(4, "s1")], the_controls(), with_streams(SERVED), of_serve("s1", records), [])
     # a superseded serve's head refuses only within its own serve: a later serve's head of the same number of the
     # link, another session's, is held, and the superseded one is named with what it lacks
     theirs = head(3, 5, 0, domain=bytes([1]) * 64)
@@ -1046,6 +1109,8 @@ def run_files() -> dict[str, dict[str, str]]:
     class on a head with the verifiers' controls and the serve's registration, and each way of being less."""
     first, other, second = head(3, 5, 0), head(3, 6, 0), head(4, 2, 0)
     theirs = head(3, 5, 0, domain=bytes([1]) * 64)
+    tie = CC.RESPONSE_TIE
+    eighth = streams(**{SV.POPULATION: 32})[tie]
     return {"the four": held_files(first, four(first)),
             "a tie refused": held_files(first, tie_but(first, accepted=False)),
             "a tie not complete": held_files(first, tie_but(first, complete=False)),
@@ -1059,8 +1124,14 @@ def run_files() -> dict[str, dict[str, str]]:
             "the four and a control that doesn't read": held_files(first, four(first), controls=[{CC.VERDICT: {}}]),
             "the four and no serve's registration": held_files(first, four(first), served=[]),
             "the four of another serve": held_files(first, of_serve("another serve", four(first))),
-            "the four under another registration": held_files(first, under(OTHERS, four(first)), served=[OTHERS]),
+            "the four under another registration": held_files(first, under(OTHERS, four(first)), served=with_streams(OTHERS)),
             "the four, the tie at another rate": held_files(first, at_rate(CC.RESPONSE_TIE, "1/8", four(first))),
+            "the four, the tie naming no stream's registration": held_files(first, on_stream(tie, ..., four(first))),
+            "the four, the tie on a stream registered at another rate": held_files(
+                first, on_stream(tie, eighth, four(first)), served=[*with_streams(SERVED), eighth]),
+            "the four, the tie on another serve's stream": held_files(
+                first, on_stream(tie, streams(OTHERS)[tie], four(first)), served=with_streams(SERVED, OTHERS)),
+            "the four and no stream's registration": held_files(first, four(first), served=[SERVED]),
             "the four, the tie by a verifier with no control": held_files(first, by_another(four(first))),
             "the four of the run old as their serve": held_files(first, of_serve("old", four(first))),
             "the four of the run new as their serve": held_files(first, of_serve("new", four(first))),
@@ -1070,7 +1141,7 @@ def run_files() -> dict[str, dict[str, str]]:
             "the four and a registration that doesn't read": held_files(first, four(first)) | {
                 SV.REGISTRATIONS_FILE: jsonl([registration(first), {"format": "another's"}])},
             "the four and a serve's registration that doesn't read": held_files(
-                first, four(first), served=[SERVED, "no object"])}
+                first, four(first), served=[*with_streams(SERVED), "no object"])}
 
 
 def test_a_superseded_run_takes_away_no_refusal(tmp_path):
@@ -1155,7 +1226,7 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
                        f"{at}: held to its whole schedule by a control: "
                        + no_control(CC.RESPONSE_TIE, module="a second tie's verifier"))}
     for name, (old, line) in stands.items():
-        store = Store(tmp_path / name, {"old": held_files(first, old, served=[SERVED, OTHERS]), "new": accepts})
+        store = Store(tmp_path / name, {"old": held_files(first, old, served=with_streams(SERVED, OTHERS)), "new": accepts})
         for superseded in ((), ["old"]):
             got = SV.of_runs(store, ["old", "new"], superseded)
             assert got.held == 0 and line in got.why, (name, superseded)
@@ -1172,7 +1243,7 @@ def test_a_superseded_run_takes_away_no_refusal(tmp_path):
                 got = SV.of_runs(store, ["old", "new"], superseded).held
                 assert got <= both, (a, b, superseded)
                 seen, lowered, most = seen + 1, lowered + (got < both), max(most, both)
-    assert (seen, most) == (3 * len(kept) ** 2, 2) == (1875, 2) and lowered
+    assert (seen, most) == (3 * len(kept) ** 2, 2) == (2523, 2) and lowered
 
 
 #: run ids in the order of their launch; `RUN` and `TWIN` state one second
@@ -1268,7 +1339,7 @@ def test_a_superseded_runs_record_that_doesnt_read_keeps_whole_each_serve_not_la
     second = head(4, 2, 0)
     both = {SV.REGISTRATIONS_FILE: jsonl([registration(first), registration(second)]),
             "out/the-verdicts.jsonl": jsonl(of_serve(EARLY, four(first)) + of_serve(LATE, four(second))),
-            "out/the-controls.jsonl": jsonl(the_controls()), SV.SERVES_FILE: jsonl([SERVED])}
+            "out/the-controls.jsonl": jsonl(the_controls()), SV.SERVES_FILE: jsonl(with_streams(SERVED))}
     store = Store(tmp_path / "serves", {RUN: bad, LAST: both})
     assert SV.of_runs(store, [LAST]).held == 2 and SV.of_runs(store, [RUN, LAST]).held == 0
     got = SV.of_runs(store, [RUN, LAST], [RUN])
@@ -1747,7 +1818,7 @@ def test_withheld_and_codes_move_no_charge(tmp_path):
                         {k: v for k, v in x.items() if k not in fields} for x in was.verdicts]
                     said[how] += lines != got.why
                 seen += 1
-    assert seen == 4 * len(kinds) ** 2 == 2500
+    assert seen == 4 * len(kinds) ** 2 == 3364
     assert said["withheld"] == said["stopped"] > 0 == said["nothing"] == said["codes"]
 
 
@@ -1777,7 +1848,7 @@ def test_superseding_a_run_raises_what_is_held_only_on_a_serve_launched_after_it
                     serves = {r[CC.SERVE] for r in handed[1] + handed[5] if CC.reads(r)}
                     assert any(SV.launched_after(s, run) for run in handed[6] for s in serves), (a, b, superseded)
                     raised[serve] += 1
-        assert seen == 3 * len(kinds) ** 2 == 2028
+        assert seen == 3 * len(kinds) ** 2 == 2700
     assert raised[EARLY] == 0 and raised[LATE]
 
 
@@ -1804,8 +1875,20 @@ def _head(doc: object) -> C.Head | None:
 
 
 def _counts(control: dict) -> bool:
-    kind = SV.FORMATS[control[CC.VERDICT][SV.FORMAT]]
-    return control[CC.VERDICT].get(CC.ACCEPTED) is False and control[SV.REASON] == SV.REASONS[kind]
+    kind, verdict = SV.FORMATS[control[CC.VERDICT][SV.FORMAT]], control[CC.VERDICT]
+    return (verdict.get(CC.ACCEPTED) is False and not verdict.get(CC.WITHHELD) and not verdict.get(CC.STOPPED)
+            and control[SV.REASON] == SV.REASONS[kind])
+
+
+def _every_block(x: dict, served: list[object]) -> bool:
+    """Whether a stop record's or a response tie's record ran at every block, by the registrations handed: the one
+    it names and its stream's, which follows that one and registers a subset of its whole population."""
+    docs = {SV.digest_of(doc): doc for doc in served if isinstance(doc, dict)}
+    stream = docs.get(x.get(SV.STREAM)) if isinstance(x.get(SV.STREAM), str) else None
+    if stream is None or x[CC.REGISTRATION] not in docs or stream.get("previous") != x[CC.REGISTRATION]:
+        return False
+    n = stream.get("population")
+    return type(n) is int and n > 0 and stream.get("law") == {"law": "subset", "k": n} and x.get(SV.RATE) == "1/1"
 
 
 #: the ways a thing the reader is handed stands against another: each is a refusal by the reader's rules, so
@@ -1815,12 +1898,15 @@ STANDS = ("a registration of connection rows that doesn't read", "a second head 
           "a control that was not refused for its control's word", "a verdict record that doesn't read",
           "a verdict that is refused or not complete",
           "an accept of another serve, or under another registration, than a record that stays on its head",
-          "an accept at another rate than every block", "an accept by a verifier without its control")
+          "an accept at another rate than every block, as its stream's registration registers it",
+          "an accept by a verifier without its control")
 
 
-def stands_against(kind: str, x: object, stays: list[tuple[str, object]], controls: list[object]) -> str | None:
+def stands_against(kind: str, x: object, stays: list[tuple[str, object]], controls: list[object],
+                   served: list[object]) -> str | None:
     """How a thing of a ``kind`` of file stands against what ``stays`` when it is left out, one of `STANDS`, or
-    None where it refuses nothing; ``controls`` are every control record handed."""
+    None where it refuses nothing; ``controls`` are every control record handed, and ``served`` every serve's
+    registration."""
     if kind == "registration":
         if (head := _head(x)) is None:
             return STANDS[0]
@@ -1848,7 +1934,7 @@ def stands_against(kind: str, x: object, stays: list[tuple[str, object]], contro
         return STANDS[7]
     if (of := SV.FORMATS.get(verdict.get(SV.FORMAT))) is None:
         return None
-    if of in SV.RATES and x.get(SV.RATE) != SV.EVERY_BLOCK:
+    if of in SV.RATED and not _every_block(x, served):
         return STANDS[8]
     its = [c for c in controls if not SV.control_lacks(c) and SV.FORMATS.get(c[CC.VERDICT].get(SV.FORMAT)) == of
            and c[SV.CONTROL] == SV.CONTROLS[of][0] and c[CC.VERIFIER] == x[CC.VERIFIER]]
@@ -1869,6 +1955,7 @@ def left_out(tmp: Path, olds: dict[str, dict[str, str]], news: dict[str, dict[st
         for b, new in news.items():
             runs = {"old": old, "new": new}
             controls = [x for kind, x in things(old) + things(new) if kind == "control"]
+            served = [x for kind, x in things(old) + things(new) if kind == "serve"]
             for superseded in ([], ["old"], ["new"]):
                 before = SV.of_runs(Store(tmp, runs), ["old", "new"], superseded).held
                 for what, less in (("the run, of the runs handed", None), *less_by_one(old)):
@@ -1880,14 +1967,14 @@ def left_out(tmp: Path, olds: dict[str, dict[str, str]], news: dict[str, dict[st
                     stays, gone = things(less or {}) + things(new), things(old)
                     for thing in things(less or {}):
                         gone.remove(thing)
-                    stood = {why for kind, x in gone if (why := stands_against(kind, x, stays, controls))}
+                    stood = {why for kind, x in gone if (why := stands_against(kind, x, stays, controls, served))}
                     assert stood, (a, b, superseded, what, before, after)
                     ways |= stood
                     # of a file or a run left out, the records that stand against what stays, alone put back
                     if whole := old.keys() - (less or {}).keys():
                         back = {path: "".join(line for line in old[path].splitlines(keepends=True)
                                               for kind, x in things({path: line})
-                                              if stands_against(kind, x, stays, controls)) for path in whole}
+                                              if stands_against(kind, x, stays, controls, served)) for path in whole}
                         only = SV.of_runs(Store(tmp, runs | {"old": (less or {}) | back}), ["old", "new"], superseded)
                         assert only.held <= before, (a, b, superseded, what, before, only.held)
                         files += 1
@@ -1903,7 +1990,7 @@ def test_leaving_a_thing_out_raises_what_is_held_only_where_it_stood_against_one
     kinds = run_files()
     # the things one run's files can be left without: the run, each file and each record, over the kinds
     cases = sum(1 + len(list(less_by_one(files))) for files in kinds.values())
-    assert (len(kinds), cases) == (25, 337)
+    assert (len(kinds), cases) == (29, 451)
     seen, ways, files = left_out(tmp_path, kinds, {name: kinds[name] for name in ("nothing", "the four")})
     assert (seen, ways) == (2 * 3 * cases, set(STANDS)) and files
 
@@ -1913,4 +2000,4 @@ def test_leaving_a_thing_out_of_any_two_runs_raises_what_is_held_only_where_it_s
     """The same over every pair of the kinds of run files, with neither, the one or the other superseded."""
     kinds = run_files()
     seen, ways, files = left_out(tmp_path, kinds, kinds)
-    assert (seen, ways) == (3 * 337 * len(kinds), set(STANDS)) and files
+    assert (seen, ways) == (3 * 451 * len(kinds), set(STANDS)) and files

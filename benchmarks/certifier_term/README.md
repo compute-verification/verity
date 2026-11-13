@@ -167,15 +167,18 @@ The records are in the evidence store, in the run files of the runs that carry
   the `commit` it ran at), `verdict` and `proved_by`. A record that names no run, serve, registration or verifier
   doesn't read, and one that doesn't read holds no execution phase, in a run that no other replaces. Of its
   `verdict` the rule reads `link`, `window`, `class`, `head`, `accepted` and `complete`. Which of the four verdicts
-  it is, is its verdict's `format`; a verdict whose verifier's format the reader doesn't list reads as missing;
+  it is, is its verdict's `format`; a verdict whose verifier's format the reader doesn't list reads as missing. A
+  stop record's and a response tie's record name two things more, `stream_registration` and `rate` ("The rate",
+  below);
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read;
 - `out/*-controls.jsonl`: a control record, `run`, `verifier` (its `module` and `commit`), `control` (what was
   changed), `verdict`, the verifier's own, whose `format` says which of the four it is a control of, and `reason`,
   the verifier's own word for why it refused. A control without `reason`, or a refused one whose reason is no
   text, doesn't read. Of a control record the reader reads these five fields and no other;
-- `out/serve-registrations.jsonl`: each serve's registration, which the verdict records name by its digest and which
-  states the rate each sampled population is registered at.
+- `out/serve-registrations.jsonl`: each registration record the verdict records name by its digest: the one a serve
+  registered its class under (`registration`), and the one of a verdict's own stream (`stream_registration`),
+  which follows it and registers the rate that stream's population is sampled at.
 
 The reader holds what the rule charges below to two more things, which the rule doesn't read:
 
@@ -193,14 +196,17 @@ The reader holds what the rule charges below to two more things, which the rule 
   the verifier that lacks its control, with the reason given beside the control's word; the class's line prints
   the reason each verifier gave.
 - **The rate.** A class is held only where every block of the stop record's and the response tie's populations is
-  proved: the registration its verdicts name registers `1/1` for both, and each of those two verdicts' records
-  says in `rate` that it ran at the registered rate. A rate's text is `NUM/DEN` in lowest terms with no prefix, so
-  a registration that states `2/2` or `rate:1/1` registers another rate. The rate is the registration's and never
-  the verdict's own word, so a verdict that states `1/1` under a registration that says otherwise is refused by
-  name, as is a registration that was not handed or states no rate. A failure is final for what its verdict speaks
-  for, one execution phase's class at `1/1`; a rate below `1/1` widens the failure to the whole registered
-  population, for when the reader takes one. Where a registration states the two rates is its writer's to name;
-  the reader holds it in one constant (`stop_verdicts.RATES`).
+  proved. Each of the two verdicts runs over a stream of its own, and its record names that stream's registration
+  record by digest (`stream_registration`). The reader is handed that record, holds it to follow the registration
+  the class's verdicts name (its `previous` is that digest), and reads the rate it registers: K of its
+  `population`, under a sampling design that is a `subset` of K, as `NUM/DEN` in lowest terms. The class is held
+  only where that is `1/1` for both, and each of the two records says in `rate` that it ran at the registered
+  rate. The rate is the registration's and never the verdict's own word, so a verdict that states `1/1` under a
+  registration that says otherwise is refused by name. So is a record that names no registration of its stream, a
+  registration that was not handed, one that follows another record, and one whose sampling design is no subset.
+  A failure is final for what its verdict speaks for, one execution phase's class at `1/1`; a rate below `1/1`
+  widens the failure to the whole registered population, for when the reader takes one. The rate of the compute
+  audit's second stage is not held here.
 
 The reader is handed every run that carries the record, with those another run replaces. A superseded run adds no
 accept and takes away no refusal: its records that are accepted and complete fill no verdict, its controls that

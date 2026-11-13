@@ -23,8 +23,9 @@ readers are the harness's). A run holds, each one JSON object a line:
   is read from the head;
 - its control records, in every file named as `CONTROLS_FILES`: an object with the fields `CONTROL_FIELDS` ("A
   negative control", below);
-- `SERVES_FILE`: each serve's registration that its verdict records name by digest (`digest_of`), which states the
-  rate each sampled population is registered at ("The rate", below).
+- `SERVES_FILE`: each registration record its verdict records name by digest (`digest_of`): the one a serve
+  registered its class under, and the one of each verdict's own stream, which follows it and registers the rate
+  that stream's population is sampled at ("The rate", below).
 
 **A superseded run** adds no accept and takes away no refusal. The caller hands `read` every run that carries the
 record and says which of them another run replaces. A superseded run's files are read as any run's, but for its
@@ -157,20 +158,25 @@ that doesn't read holds no execution phase at all, in a run that is not supersed
 that counts is left out, and one that was not refused, or was refused for another reason, stands, as its verdicts
 do.
 
-**The rate.** The stop record's and the response tie's populations, and the rate each is proved at, are the serve's
-to register before any coin, and a class is held only where every block of both is proved: the registration its
-verdicts name states `EVERY_BLOCK` for both (`RATES`), and each stop record's and each response tie's record says
-it ran at the registered rate (`RATE`). The rate is the registration's and never the verdict's own word: the
-reader is handed the registration itself (`SERVES_FILE`), finds it by the digest the class's records name
-(`digest_of`) and reads both rates from it. A registration that was not handed, one that states no rate for a
-population, one that registers another rate, and a verdict that names no rate or another than the registered one
-each leave the class at its whole schedule, with a line that names which; so a verdict that states `EVERY_BLOCK`
-under a registration that says otherwise is refused by name. A failure is final for what its verdict speaks for,
-which at `EVERY_BLOCK` is one execution phase's class; a rate below `EVERY_BLOCK` widens the failure to the whole
-registered population, for when the reader takes one. A verdict's ``complete`` says that every session ran
-to a verdict and holds no class to a rate. Where a registration states the two rates is its writer's to name, and
-`RATES` is the one place that holds it. A serve's registration that doesn't read holds no execution phase at all,
-in a run that is not superseded."""
+**The rate.** The stop record's and the response tie's populations (`RATED`), and the rate each is proved at, are
+registered before any challenge, and a class is held only where every block of both is proved. Each of the two
+verdicts runs over a stream of its own, whose registration record follows the one the class's verdicts name. A
+stop record's and a response tie's record names that record by digest (``stream_registration``, `STREAM`). The
+reader is handed the record itself (`SERVES_FILE`), finds it by that digest (`digest_of`), holds it to follow the
+registration the class's verdicts name (its ``previous`` is that digest) and reads the rate from what it
+registers: K of its population, under a sampling design that is a subset of K (`_registered`). The class is held
+only where that rate is `EVERY_BLOCK` for both, and each of the two records says it ran at the registered rate
+(``rate``, `RATE`). So the rate is the registration's and never the verdict's own word. Each of these leaves the
+class at its whole schedule, with a line that names which: the registration the class's verdicts name not handed;
+a record that names no registration of its stream, or one not handed; a stream's registration that follows
+another record or none; one whose sampling design is no subset of K of its population; another rate registered;
+and a verdict that names no rate or another than the registered one. So a verdict that states `EVERY_BLOCK` under
+a registration that says otherwise is refused by name. A failure is final for what its verdict speaks for, which
+at `EVERY_BLOCK` is one execution phase's class; a rate below `EVERY_BLOCK` widens the failure to the whole
+registered population, for when the reader takes one. A verdict's ``complete`` says that every session ran to a
+verdict and holds no class to a rate. The certified read is over no sampled population, and the rate of the
+compute audit's second stage is not held here: a rate on either's record is not read. A registration record that
+doesn't read holds no execution phase at all, in a run that is not superseded."""
 from __future__ import annotations
 
 import fnmatch
@@ -178,6 +184,7 @@ import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -213,9 +220,11 @@ REASONS = {CC.STOP_RECORD: "stop_word", CC.RESPONSE_TIE: "id", CC.CERTIFIED_READ
 #: the rate a record says its verdict ran at, and the one rate at which a class is held: every block proved. A
 #: rate's text is `NUM/DEN` in lowest terms, with no prefix
 RATE, EVERY_BLOCK = "rate", "1/1"
-#: where a serve's registration states the rate each sampled population is registered at, by the verdict over that
-#: population: the keys from the registration down to the rate. The names are the registration's writer's to give
-RATES = {CC.STOP_RECORD: ("rates", "stop_record"), CC.RESPONSE_TIE: ("rates", "response_tie")}
+#: the verdicts over a sampled population, whose rate is held; how a record of one names the registration record of
+#: its own stream, by digest; and what the reader reads of that record: the record it follows, its population and
+#: its sampling design, which registers a rate where it is a subset of K
+RATED = (CC.STOP_RECORD, CC.RESPONSE_TIE)
+STREAM, PREVIOUS, POPULATION, DESIGN, SUBSET = "stream_registration", "previous", "population", "law", "subset"
 #: what the answer's second line says of the serve an execution phase is of
 SERVE_NAMED = ("an execution phase is one serve's, and a head's serve is the one its verdict records name, which is "
                f"{LB.RUN_NOT_PROVED}")
@@ -322,11 +331,15 @@ def _kind(verdict: Mapping[str, Any]) -> str | None:
     return FORMATS.get(verdict.get(FORMAT)) if isinstance(verdict.get(FORMAT), str) else None
 
 
-def _rate_at(registration: Mapping[str, Any], path: Sequence[str]) -> str | None:
-    at: Any = registration
-    for key in path:
-        at = at.get(key) if isinstance(at, Mapping) else None
-    return at if _named(at) else None
+def _registered(registration: Mapping[str, Any]) -> str | None:
+    """The rate a stream's registration registers, as `NUM/DEN` in lowest terms: K of its population, under a
+    sampling design that is a subset of K. None where it registers no such design."""
+    design, n = registration.get(DESIGN), registration.get(POPULATION)
+    k = design.get("k") if isinstance(design, Mapping) and design.get(DESIGN) == SUBSET else None
+    if type(k) is not int or type(n) is not int or not 0 < k <= n:
+        return None
+    rate = Fraction(k, n)
+    return f"{rate.numerator}/{rate.denominator}"
 
 
 def _one_phase(a: C.Head, b: C.Head, of_a: set[str], of_b: set[str]) -> str | None:
@@ -348,25 +361,37 @@ Read = Sequence[tuple[str, Mapping[str, Any]]]
 
 def _unrated(read: Read, served: Mapping[str, Mapping[str, Any]]) -> list[str]:
     """What keeps a class the rule charges below from being held, by the rate (the module docstring's "The rate"),
-    from its records on its head: empty where the registration they name was handed and registers `EVERY_BLOCK`
-    for both populations, and each stop record and response tie among them says it ran at that."""
+    from its records on its head: empty where the registration they name was handed, and each stop record and
+    response tie among them names its own stream's registration, which was handed, follows that one and registers
+    `EVERY_BLOCK`, and says it ran at that."""
     name = read[0][1][CC.REGISTRATION]
     if name not in served:
         return [f"the registration its verdicts name, `{name}`, is not among the serves' registrations read "
-                f"(`{SERVES_FILE}`), so the rate it registers is not known"]
+                f"(`{SERVES_FILE}`), so what the serve registered is not known"]
     lacks = []
-    for kind, path in RATES.items():
-        registered = _rate_at(served[name], path)
-        if registered is None:
-            lacks.append(f"the registration `{name}` states no rate for the {kind} (`{'.'.join(path)}`)")
+    for kind, record in read:
+        if kind not in RATED:
             continue
-        if registered != EVERY_BLOCK:
-            lacks.append(f"the registration registers the {kind} at `{registered}`, not `{EVERY_BLOCK}`")
-        for of, record in read:
-            if of == kind and record.get(RATE) != registered:
+        who, stream = f"the {kind} of {record[CC.RUN]}", record.get(STREAM)
+        if not _named(stream):
+            lacks.append(f"{who} names no registration of its own stream (`{STREAM}`), so the rate it is registered "
+                         "at is not known")
+        elif stream not in served:
+            lacks.append(f"{who} names its stream's registration `{stream}`, which is not among the serves' "
+                         f"registrations read (`{SERVES_FILE}`)")
+        elif (previous := served[stream].get(PREVIOUS)) != name:
+            lacks.append(f"{who} names its stream's registration `{stream}`, which follows "
+                         + (f"`{previous}`" if _named(previous) else "no record")
+                         + f" and not the registration its verdicts name, `{name}`")
+        elif (registered := _registered(served[stream])) is None:
+            lacks.append(f"{who} names its stream's registration `{stream}`, which registers no rate: its sampling "
+                         f"design is no `{SUBSET}` of K of its population")
+        else:
+            if registered != EVERY_BLOCK:
+                lacks.append(f"{who} is registered at `{registered}`, not `{EVERY_BLOCK}`")
+            if record.get(RATE) != registered:
                 ran = record.get(RATE)
-                lacks.append(f"the {kind} of {record[CC.RUN]} "
-                             + (f"states `{ran}`" if _named(ran) else f"names no rate (`{RATE}`)")
+                lacks.append(f"{who} " + (f"states `{ran}`" if _named(ran) else f"names no rate (`{RATE}`)")
                              + f" under a registration that registers `{registered}`")
     return lacks
 
