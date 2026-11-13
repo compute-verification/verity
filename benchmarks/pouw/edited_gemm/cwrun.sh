@@ -24,7 +24,7 @@ nvcc -O3 -std=c++17 --no-compress -gencode arch=compute_120a,code=sm_120a -Xptxa
 rc=$?
 echo "build rc $rc" | tee -a "$O/rc.txt"
 [ "$rc" = 0 ] || { tail -40 "$O/build.log"; exit 4; }
-$PY verity/protocols/pouw/prover/sass_gate.py "$BIN/cwgemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
+$PY verity/protocols/accounting/pouw/prover/sass_gate.py "$BIN/cwgemm" --json "$O/sass_gate.json" > "$O/sass_gate.txt" 2>&1
 echo "sass_gate (whole binary) rc $?" | tee -a "$O/sass_gate.txt"
 # crun.sh's scope: flagged instructions pass only in egemm.cu's never-launched kernels (cw_* take WArgs, so never match)
 $PY - "$O/sass_gate.json" > "$O/sass_scope.txt" 2>&1 <<'EOF'

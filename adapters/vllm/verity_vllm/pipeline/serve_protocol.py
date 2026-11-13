@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.certifier.verifier import active as A, io_tie as IT, release as REL
+from verity.protocols.accounting.certifier.verifier import active as A, io_tie as IT, release as REL
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
 

@@ -31,20 +31,20 @@ LIVE = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(LIVE))
-sys.path.insert(0, str(ROOT / "verity" / "protocols" / "poub" / "verifier" / "tests"))
+sys.path.insert(0, str(ROOT / "verity" / "protocols" / "accounting" / "poub" / "verifier" / "tests"))
 
 import auditor as A  # noqa: E402
 import auditor_line as al  # noqa: E402
-from verity.protocols.poub.verifier.session import challengers  # noqa: E402
-from verity.protocols.poub.verifier.session import verifier  # noqa: E402
-from verity.protocols.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
-from verity.protocols.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import challengers  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
-from verity.protocols.certifier.verifier import certificate as cert  # noqa: E402
-from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
-from verity.protocols.poub.verifier import coins  # noqa: E402
-from verity.protocols.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import certificate as cert  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
+from verity.protocols.accounting.poub.verifier import coins  # noqa: E402
+from verity.protocols.proofs.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
 
 P = lms.Params(64, 4, 4)
