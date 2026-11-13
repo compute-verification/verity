@@ -9,7 +9,7 @@ what `interior_rows.interior` takes as ``links`` and ``tables``, and the challen
   reading port's (`link_schemas`). `links` reads a block's off its Definition and round 1's record as round 2 does.
 * `Operand`: a parameter the replay gives (a picking unit's scores and count, a table read's row, salt and path). The
   verifier holds none of its bytes, so the value is the interior's own: its rows the replayed units' at their places,
-  each under a fresh salt, its root registered before the second draw's coins, and R7 holds its name, rows, words and
+  each under a fresh salt, its root registered before the second sample's coins, and R7 holds its name, rows, words and
   domain to the verifier's own entry (`link_words`).
 * `Supply`, `supplied`, `sources`, `history`: a parameter the verifier supplies. `supplied` makes its value at public
   salts and the verifier fills it from its own sources (`sources`), reading each source's bytes by the row's leaf type
@@ -431,7 +431,7 @@ def _digest_words(b: bytes) -> np.ndarray:
 
 
 def kept_table(kept: BT.Served) -> HT.HistoryTable:
-    """The table `interior_rows.interior` opens for a drawn span, from what rank 0 kept of it (`boundary_tables.load`): its C rows
+    """The table `interior_rows.interior` opens for a sampled span, from what rank 0 kept of it (`boundary_tables.load`): its C rows
     committed again under their kept salts, round 1's program, name, words and leaves, refused unless that is the entry
     round 1 listed. On the node only, as the rows are."""
     t = HT.HistoryTable(kept.program, kept.value, kept.words, kept.leaves)

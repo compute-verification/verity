@@ -234,7 +234,7 @@ structure Params where
   p : Nat
   deriving Repr, Inhabited
 
-/-- `optimize.CHORDS`: the breakpoints `two_stage_exfil`'s chords of `h` are drawn at. -/
+/-- `optimize.CHORDS`: the breakpoints `two_stage_exfil`'s chords of `h` are sampled at. -/
 def chords : List Rat := [0, 1 / 256, 1 / 16, 1 / 4, 1, 2, 3, 4, 5, 6, 8]
 
 /-- `ys` strictly increasing. -/

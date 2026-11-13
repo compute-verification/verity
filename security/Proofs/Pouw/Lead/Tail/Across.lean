@@ -12,7 +12,7 @@ share of the coins, `λ_X = ρ² · blocks² / 2^57` (`lamX`).
 
 A block's own coordinates are its step's three coin lanes of its coin tile at its column block's eight columns
 (`setLanes`). The lead's columns fill whole column blocks, so every coin lane is one block's, and the coins are the
-rest (`b`, `a₁`, `G`), drawn first, and a product over the blocks in block order (`blkIdx`, `laneEquiv`).
+rest (`b`, `a₁`, `G`), sampled first, and a product over the blocks in block order (`blkIdx`, `laneEquiv`).
 `count_tail_equiv` then needs:
 
 * **Reads**: block `β`'s tiles read the lanes of `β`'s coin tile and column block at steps up to `β`'s, and the
