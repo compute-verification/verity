@@ -1,5 +1,5 @@
-"""`verity.protocols.poub.verifier.commitments.gates.block_check`: the reference of PoUB's opening unit is its Python
-checks (`verity.protocols.poub.verifier.codec`, `receipts`, `audit`'s trees and `merkle.verify_opening`) on random
+"""`verity.protocols.accounting.poub.verifier.commitments.gates.block_check`: the reference of PoUB's opening unit is its Python
+checks (`verity.protocols.accounting.poub.verifier.codec`, `receipts`, `audit`'s trees and `merkle.verify_opening`) on random
 openings at p512/k2 and p1024/k3/masked, appended and registered, and names the check each wrong opening fails: a tampered
 block, a payload not the committed one or not the committed KV, a word at or above p, a wrong append coin, a wrong receipt
 leaf, salt or path, a plan without the block at the sampled position, a receipt the pass's tree commits but the block doesn't
@@ -14,14 +14,14 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.protocols.poub.verifier import audit as AU
-from verity.protocols.poub.verifier import codec as CO
-from verity.protocols.poub.verifier import receipts as RC
+from verity.protocols.accounting.poub.verifier import audit as AU
+from verity.protocols.accounting.poub.verifier import codec as CO
+from verity.protocols.accounting.poub.verifier import receipts as RC
 from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.commitments import CommitmentDomain, Opening, verify_opening
-from verity.protocols.poub.verifier.commitments.gates import block_check as BC
+from verity.protocols.accounting.poub.verifier.commitments.gates import block_check as BC
 from verity.commitments.gates import frame_v3 as FV
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import MerkleTree, merkle_depth
