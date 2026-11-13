@@ -316,7 +316,7 @@ malicious-verifier claim rests on beyond the theorems.
   `verity/commitments/randomness/tests/vectors.json`, and Python matches its vectors
   (`verity/protocols/flock/prover/tests/test_randomness_spec.py`).
 - **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
-  most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window sample
+  most that many stream tuples. `keyedExecutionPhase_escape_le` takes A4 for one test per set `B` (`executionPhaseTest`: the window sample
   misses `B`), and `η` enters its bound.
 - **What it assumes of SHA-512.** Its compression function `f`, on a 1024-bit message block and a 512-bit chaining
   value, is a pseudorandom function in two ways.
@@ -339,7 +339,7 @@ malicious-verifier claim rests on beyond the theorems.
 **A5. The PoUW window's secret is `S` uniform bytes, fresh for the window** (`uniform/python-secrets`).
 
 - **Statement.** A source is a finite probability space and, on each outcome, the secret. `UniformSecret sec` says every
-  event about the secret has the probability it has for `S` uniform bytes. `keyedWindow` samples over the real secret
+  event about the secret has the probability it has for `S` uniform bytes. `keyedExecutionPhase` samples over the real secret
   source, and its theorems take A5 as `hsec`. It is satisfiable: the identity source satisfies it
   (`Law.uniformSecret_id`, `KeyedDraw.lean`).
 - **What A5 assumes of the verifier.** Its window secret is `secrets.token_bytes(32)` from the operating system's CSPRNG,
