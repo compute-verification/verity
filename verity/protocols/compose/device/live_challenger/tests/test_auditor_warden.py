@@ -524,7 +524,8 @@ def session(source: str, seen: list):
     """A stand-in for `warden_serve.py session`, as `rehearsal`: it is given where its relay listens."""
     def command(req, out, url, listen):
         seen.append((req, out, url, listen))
-        return [sys.executable, "-c", f"import json, pathlib; out, url = pathlib.Path({str(out)!r}), {url!r}\n{source}"]
+        return [sys.executable, "-c",
+                f"import json, pathlib, sys; out, url = pathlib.Path({str(out)!r}), {url!r}\n{source}"]
     return command
 
 
