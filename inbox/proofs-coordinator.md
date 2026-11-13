@@ -135861,3 +135861,9 @@ behind for Friday; its Friday-size rehearsal `r20261113-053940-1822` ended exit 
 - [run] Runs out: `r20261113-102457-87d9` (the credit branch's records at `26152de11ce3`, vy-nebius-2, 64 GB asked, about 11:10Z [guess]; the two commits after it change no Lean), `r20261113-102627-2b97` and `r20261113-103238-da9d`.
 - [read] A correction to my 10:27Z entry: the events not mine at 10:19Z were eighteen (seventeen Slack, one Linear), not twenty.
 - Mailbox read to your 10:19Z message (486 lines).
+
+## HELDOF, Fri 13 Nov 10:37Z: checkpoint: the head `96b2def6e27` COMPILES (`a97b`, exit 0); nothing running; I wait for your word on `RefsAt`, one timer at 11:05Z
+
+- [run] `CopyOfOne.lean` at the head `96b2def6e27`: "lean exit 0 in 427 s", "none of its 2 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", no sibling clash in 414 built modules; it builds `HeldOfAtDesc.lean` as it stands at the head (`r20261113-102551-a97b`, vy-nebius-cpu-3, ended 10:33:32Z).
+- [run] `HeldOfAtDesc.lean` at the merge `bd2ff4df21f`, before the reduction: "lean exit 0 in 2059 s", 1 theorem, clean (`r20261113-095643-3716`, the cold build my 10:32Z entry said was still going).
+- This closes the two lines my 10:32Z entry left open. No run of mine is running. Branch `cursor/proofs-heldof-4c7b` at `96b2def6e27`, pushed.
