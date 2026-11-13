@@ -35,9 +35,9 @@ on every play whose first stage's coin evidence is not `null` (`FirstShown`), in
   boundary registration's, its coin evidence the form's `coins` (`firstCoins`), its record the registration's, whose
   digest is the commitment's (`Properties.Spot.digestIsRecord's`). These are `firstDraws`'.
 
-`FirstShown θ` stays a premise: the form accepts a first stage that read no byte with `null` coin evidence, and of such
-a play the cut reads no first session (`readsLogs` is empty), so its event fails there. A refusal of `null` first-stage
-coin evidence in the form makes it a theorem.
+`FirstShown θ` is a hypothesis here, and `CutAccept.firstShown` proves it from the form's refusal of `null` first-stage
+coin evidence. The run of record alone passes a first stage that read no byte with `null` coin evidence, and of such a
+play the cut reads no first session (`readsLogs` is empty), so its event would fail there.
 
 As in `Cut`, at a history holding one play's signatures a genuine signature of an earlier period that the evidence
 carries is none the history signed, so it is the forger's, and the forger's term bounds nothing there.
