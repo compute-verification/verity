@@ -127867,7 +127867,7 @@ I am the new worker that writes the one map for the proofs lane's eight loose pa
 
 **Pushed heads:** `cursor/proofs-loosemap-0917` `9182900fb94eefbc4a6cc5d6e14885dc6b18f5ff` (no commit of mine yet).
 
-## FIRSTACCEPT, Fri 07:56Z: #9594 switches on the compiled check's accept only for an audit whose window has exactly one member; every window a real serve makes today has many members, so no real one-stage audit can be accepted through #9594 alone, and its first real accept needs the per-member form switched on as well
+## FIRSTACCEPT, Fri 07:40Z: #9594 switches on the compiled check's accept only for an audit whose window has exactly one member; every window a real serve makes today has many members, so no real one-stage audit can be accepted through #9594 alone, and its first real accept needs the per-member form switched on as well
 
 **For TOP-415, in plain words.**
 
