@@ -126090,3 +126090,23 @@ Nothing.
 
 ## Not established
 - The six other files weren't rebuilt at `bfac82043c`. They compiled at `41720dd161` (`r20261113-060344-5094`), and only `Spot/Run.lean`'s visibility and `FirstCoins`' import line changed below them.
+
+## RELAX, Fri 13 Nov 06:53Z: ready to mark #9672 at 05484421f8b7fa48c90a595deab8f41e2c4e9e93
+
+The README's trim passed its quick tier, all ten suites, and nothing about it moved since my 06:11Z entry: same head, still clean with `main` and with the six marked pull requests that change the file. It is ready for your mark. The word "component" waits for #9555 on `main`, as you ruled at 06:26Z; one consequence of "all four places" is under "The word".
+
+- **Head:** `cursor/proofs-spot-readme-trim-484c` at `05484421f8b7fa48c90a595deab8f41e2c4e9e93`, pushed, unmarked, one file (`verity/protocols/spot/verifier/README.md`, 34 lines added, 72 removed). [run: `git ls-remote`, `gh pr view 9672`, 06:49Z]
+- **Quick tier:** `r20261113-060722-6d29` on vy-nebius-cpu-12, `suites.py --changed b843a10af48a --quick` at the head: done, rc 0, "10 suites: 10 passed (0 cached), 0 failed". The ten: verity-vllm, verity-bench, verity-network-e2e, verity-pouw-benchmarks, repository, research, verity-graph, verity/commitments, verity-flock, verity/protocols/pouw/verifier. [run: `research status`, the run's `stdout.log` fetched]
+- **Retired terms** on the file, by the lint's own scanner: 83 sites on `main`, 73 at the head; the same under the branch's copy of the lint and under `main`'s at `7f5205fe75e4`, which #9658 changed. No file goes up. [run, 06:52Z]
+- **Markdown caps:** the gate says "1 Markdown file(s) changed, 0 put over the cap". The file is 49,340 bytes on `main`, 46,033 at the head, the cap 49,152. [run: `markdown_caps.py origin/main HEAD`, `wc -c`]
+- **Merged trees:** the head merges clean with `main` at `7f5205fe75e4` (which has not changed the file) and with each marked pull request that changes it: #9636 `a287d4bf1247`, #9458 `049c5875989c`, #9537 `44b84839217d`, #9555 `38b7c6df38ba`, #9584 `ae80f367e6a2`, #9075 `cbe0bcdd160d`; none of the six is on `main` yet. With all six on the trim the file is 48,645 bytes. [run: `git merge-tree --write-tree` each, and three-way merges of the file alone in that order, 06:50Z]
+
+**The word.** #9555 is not on `main` at 06:51Z [run: `merge-base --is-ancestor`]. When it is, I change "component" to "subprotocol" at the four places and give a second ready line. If the trim has landed by then, the word goes in a pull request of its own from `main`; if not, I merge `main` into the trim's branch. One of the four is the docstring of `Spot/ChallengerDraw.lean`, so that change is a Lean change to the queue: it takes the Lean slot and I owe a try of that file with it [read: AGENTS.md, "Checking and merging"]. My default is all four, as you said. Say so if you would rather the README and the two test comments go alone and the docstring ride with the next change to that file.
+
+**This machine.** It was replaced again at about 06:48Z; nothing was unpushed. I took `~/wt/.pen` at 06:49:02Z (token `659c2fe23b47`). No sign of a second loop: the branch's head on origin is mine, and the newest RELAX entry before this one is mine of 06:11Z. [run]
+
+**Events that were not mine**, acted on in no way: at 06:47Z ten task-finished notices for workers I did not launch (GATHER, RUNCOINS, REDRAW, TWOLEG, RUNSAS, SESSIONOF, STOPDRIVER, CUT, PERIODREAD, STAGECOINS), then a batch of Slack and Linear events stamped 05:17Z to 05:32Z.
+
+**Not established:** the whole check (this is the quick tier of the ten suites the change touches); the 48,645 is from merges of the file alone, not from a candidate the queue built; when #9555 lands.
+
+For the table: #9672 | README trim, 49,340 to 46,033 | ready to mark at `05484421f8b7` | quick tier `r20261113-060722-6d29` 10 of 10 | the word waits on #9555 landing.
