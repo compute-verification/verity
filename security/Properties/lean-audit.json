@@ -1419,6 +1419,10 @@
   "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets": {
    "honest": ["Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets_honest"],
    "nontrivial": "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
+   "honest": ["Properties.Pouw.PearlPlus.drawIsOnItsStreams_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.drawIsOnItsStreams_nontrivial"
   }
  },
  "unwitnessed": {
@@ -6969,6 +6973,15 @@
     "reads": []
    },
    "type_hash": "6ec01e57310a86ffe9338892475b8ac130ab76e5e296ca2d1c199830267265a4"
+  },
+  "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
+   "owner": "@compute-accounting"
+  },
+  "Properties.Pouw.PearlPlus.drawIsOnItsStreams_honest": {
+   "owner": "@compute-accounting"
+  },
+  "Properties.Pouw.PearlPlus.drawIsOnItsStreams_nontrivial": {
+   "owner": "@compute-accounting"
   },
   "Properties.Pouw.PearlPlus.loadedGivesUp": {
    "owner": "@proofs",
@@ -13252,6 +13265,10 @@
    "NciCheck.SecurityProofs.ServedComplies": {
     "function": ["NciCheck.Properties.Record.Form.read", "NciCheck.Properties.Record.Form.rate"],
     "outcome": "accept"
+   },
+   "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
+    "function": "PouwCheck.PearlPlus.draw",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -13262,7 +13279,6 @@
    "Pous.EndToEnd.RunCertifies": "unstated: a step of periodHeld: it joins the composed check's runCheckAccepts with the setup check's acceptsDecodes and publishesRoot, all three proved, and runCertifies proves it from them",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.DrawIsOnItsStreams": "unstated: Pearl+'s run draw names, for draw j, the tile of the ticket (Pouw.Ticket, in finSigmaFinEquiv's order) its key's stream j numbers, the law Pouw.MissBound reads. It is proved (Proofs.Properties.Pouw.PearlPlus.drawIsOnItsStreams) but not listed: its one hypothesis, that the run's tickets hold weight (0 < ticketTotal (tickets passes)), is inline, neither an acceptance of PouwCheck.PearlPlus.draw, which returns no sample rather than refusing a run whose tickets hold none (pearlDraw's empty filter), nor a premise. Stated with that case inside its conclusion, it is a property of draw at outcome none, a restatement for its own PR",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": "frozen (no-function,world-unlisted): E2E-POUW's bridge (#4363, red team at 28a6d49e15), CircuitWorkMonitoringPeriod at the period's proofs with the deployed check's verdict (Properties.Pouw.Period.checkedRun): a window is credited exactly when PouwCheck.protocol.check accepts it and every earlier window, so the accepted prefix and its live words are the check's (checkedLive); except with probability delta_s + n (delta_bind + delta_ks). The check is read inside the event, through the prefix, not as one acceptance hypothesis, and the event is a Pouw.RelativeSecurity.prob that shape.events does not list. Its premises off the premises list: CircuitWorkMonitoringPeriod's claims; RegisteredBeforeDraw, SampleIsCoin and ServiceSound (in place of JointSound) are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): RegisteredBeforeDraw and SampleIsCoin protocol-code facts to prove (the record doesn't order registration before the draw coin, CMP-91's to fix; the check's draw is the model's), ServiceSound standard crypto (C-Flock's soundness under live coins); proved from CircuitWorkMonitoringPeriod (Proofs.Pouw.Period).",
