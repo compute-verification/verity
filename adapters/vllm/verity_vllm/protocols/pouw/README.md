@@ -26,7 +26,7 @@ what the module holds. H1 (`h1`) is a package of its own inside this one and sta
   `_constant_keys`, `_constants`, `_pipeline`, `_steps`, `_write` and `_zeros` and `pearl_c.host`'s `_Driver`.
 - **Loaded by:** the adapter's selector (`verity_vllm.protocols`), its `pipeline`, `acquire` and `check.replay` packages
   and H1; and the benchmarks under `benchmarks/pouw/`, `benchmarks/harness/` and `benchmarks/one_stage/`.
-- **Loads:** `verity.protocols.pouw.verifier`, `verity.protocols.pouw.prover`, `verity.protocols.spot.device`,
+- **Loads:** `verity.protocols.accounting.pouw.verifier`, `verity.protocols.accounting.pouw.prover`, `verity.protocols.proofs.spot.device`,
   `verity.commitments`, `verity.circuits` and `verity.definitions`; the adapter's `protocols.interface` and
   `query.manifest.format`, and H1 with its `settings`, `window`, `hooks` and `requests`; numpy at import; torch and vLLM
   inside the functions that use them; and Triton in `pearl_c.screen_kernels`, which `pearl_c.screen` loads inside its

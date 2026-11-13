@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.certifier.verifier.active import VirtualClock
-from verity.protocols.certifier.verifier.certificate import DeviceState, StartRefused
-from verity.protocols.certifier.verifier.pacer import ClockRefused
+from verity.protocols.accounting.certifier.verifier.active import VirtualClock
+from verity.protocols.accounting.certifier.verifier.certificate import DeviceState, StartRefused
+from verity.protocols.accounting.certifier.verifier.pacer import ClockRefused
 
 from test_warden_serve import PARAMS, SESSION
 
