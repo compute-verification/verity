@@ -1,5 +1,5 @@
 {
- "schema": "circuits/request-cover/v5",
+ "schema": "circuits/request-cover/v6",
  "tree": "5f0c008aa0403ac275f5626828c534f93d987048",
  "list_run": "r20261112-203223-8ab0",
  "lead_run": "r20261112-201113-d1f1",
@@ -19369,10 +19369,10 @@
    "cir272": {
     "tag": "t032",
     "run": "r20261113-162041-a5fd",
-    "outcome": "running",
-    "text": "started"
+    "outcome": "accepted",
+    "state": "own-definition"
    },
-   "bound_outcome": "running"
+   "bound_outcome": "accepted-own-definition"
   },
   {
    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
@@ -47287,10 +47287,98 @@
      "boolean_version": "Fp8GroupQuantUe8m0_v2{K=6144,G=128}"
     },
     "lines": [
-     "16:41:05Z t032: census:Fp8GroupQuantUe8m0_v1{K=6144,G=128} N=1 (session; limit 6000s)"
+     "16:41:05Z t032: census:Fp8GroupQuantUe8m0_v1{K=6144,G=128} N=1 (session; limit 6000s)",
+     "17:07:01Z t032: stage.py census:Fp8GroupQuantUe8m0_v1{K=6144,G=128} 1 --bind: rc 0; Elapsed (wall clock) time (h:mm:ss or m:ss): 25:30.20;Maximum resident set size (kbytes): 67065788; ",
+     "STAGED t032 {\"definition\": \"Fp8GroupQuantUe8m0_v1{K=6144,G=128}\", \"word\": \"Fp8GroupQuantUe8m0_v1{K=6144,G=128}\", \"n\": 1, \"ands\": 10868736, \"k_log\": 25, \"circuit_bytes\": 27324462390, \"statement\": {\"reads\": \"inline\"}, \"seconds\": {\"values\": 0.0, \"built\": 1360.1, \"round\": 151.3, \"total\": 1511.4}, \"maxrss_gb\": 63.96, \"lookups\": {}, \"slot_types\": 4}",
+     "17:07:02Z t032: other Programs: {\"other-def\": {\"definition\": \"RoPEHeadGptJ_v2{D=64}\", \"population\": 1, \"partition\": \"6eff8c36bcf46957\", \"program\": \"b63ff9b8ac0ee610\", \"program_bytes\": 2842}}",
+     "17:32:22Z t032: --zk session: {\"cmd\": \"ulimit -v 142606336; exec /home/research/.cache/verity-a11/flock-f75a77a95366989d/flock-circuit-prove prove --zk --verifier 127.0.0.1:33501 --instances /workspace/tmp/hidden-zk.25F2N6/t032/B/; serve {\"cmd\": \"ulimit -v 83886080; exec /home/research/.cache/verity-a11/flock-f75a77a95366989d/flock-circuit-prove serve --zk --listen 127.0.0.1:33501 --out /workspace/tmp/hidden-zk.25F2N6/t032/B/sessions ; ",
+     "VERDICTS t032 B.ks-form: exit 0; KS-FORM ok; units=None; note=None",
+     "VERDICTS t032 B.statement.held: exit 0; statement ok; units=derived; note=units derived: Q_template_instances v0 over the verifier's program (1 units); the statement's 1 units are instances of Fp8GroupQuantUe8m0_v1{K=6144,G=128}; no cut wire between the statement's units",
+     "VERDICTS t032 B.statement.no-program: exit 0; statement ok; units=as stated; note=units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate Q_template_instances v0",
+     "VERDICTS t032 B.statement.other-def: exit 1; setup: partition: the verifier's program is not the one the partition object names; units=None; note=None",
+     "VERDICTS t032 B.verify.held: exit 0; accepted=True why=''; units=derived; note=units derived: Q_template_instances v0 over the verifier's program (1 units); the statement's 1 units are instances of Fp8GroupQuantUe8m0_v1{K=6144,G=128}; no cut wire between the statement's units",
+     "VERDICTS t032 B.verify.no-program: exit 1; accepted=False why=\"refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered\"; units=as stated; note=units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate Q_template_instances v0",
+     "VERDICTS t032 B.verify.other-def: exit 1; accepted=False why=\"setup: partition: the verifier's program is not the one the partition object names\"; units=None; note=None",
+     "17:48:26Z t032: done: exit 0 in 4041s"
     ],
-    "outcome": "running",
-    "text": "started",
+    "done": {
+     "exit": 0,
+     "seconds": 4041,
+     "timeout": false
+    },
+    "stage": {
+     "definition": "Fp8GroupQuantUe8m0_v1{K=6144,G=128}",
+     "word": "Fp8GroupQuantUe8m0_v1{K=6144,G=128}",
+     "ands": 10868736,
+     "k_log": 25,
+     "circuit_bytes": 27324462390,
+     "statement": {
+      "reads": "inline"
+     },
+     "maxrss_gb": 63.96,
+     "wall_s": 1530.2
+    },
+    "verdicts": {
+     "B.statement.held": {
+      "exit": 0,
+      "accepted": null,
+      "why": null,
+      "units": null,
+      "wall": "4:43.29",
+      "maxrss_gb": 105.51
+     },
+     "B.statement.no-program": {
+      "exit": 0,
+      "accepted": null,
+      "why": null,
+      "units": null,
+      "wall": "4:39.58",
+      "maxrss_gb": 105.51
+     },
+     "B.statement.other-def": {
+      "exit": 1,
+      "accepted": null,
+      "why": "setup: partition: the verifier's program is not the one the partition object names",
+      "units": null,
+      "wall": "4:36.68",
+      "maxrss_gb": 105.51
+     },
+     "B.ks-form": {
+      "exit": 0,
+      "accepted": null,
+      "why": "ok",
+      "units": null,
+      "wall": "4:40.52",
+      "maxrss_gb": 105.51
+     },
+     "B.verify.held": {
+      "exit": 0,
+      "accepted": true,
+      "why": null,
+      "units": "units derived: Q_template_instances v0 over the verifier's program (1 units); the statement's 1 units are instances of Fp8GroupQuantUe8m0_v1{K=6144,G=128}; no cut wire between the statement's units",
+      "wall": "6:03.89",
+      "maxrss_gb": 96.67
+     },
+     "B.verify.no-program": {
+      "exit": 1,
+      "accepted": false,
+      "why": "refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered",
+      "units": "units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate Q_template_instances v0",
+      "wall": "6:00.73",
+      "maxrss_gb": 96.63
+     },
+     "B.verify.other-def": {
+      "exit": 1,
+      "accepted": false,
+      "why": "setup: partition: the verifier's program is not the one the partition object names",
+      "units": null,
+      "wall": "3:44.67",
+      "maxrss_gb": 96.67
+     }
+    },
+    "peak_gb": 105.51,
+    "outcome": "accepted",
+    "state": "own-definition",
     "estimate": {
      "basis": "its own run r20261112-215921-f101: the stager passed 62 GB at 613.0 s",
      "kind": "measured",
@@ -59757,8 +59845,8 @@
    8276535264
   ],
   "accepted-own-definition": [
-   163,
-   2994826360
+   164,
+   2995318048
   ],
   "not-run-estimate-past-64GB": [
    56,
@@ -59779,17 +59867,13 @@
   "not-run-stage-past-62GB": [
    4,
    2496
-  ],
-  "running": [
-   1,
-   491688
   ]
  },
  "bound_shares": {
   "accepted": {
-   "types": 179,
-   "blocks": 11273917528,
-   "share": 0.99988
+   "types": 180,
+   "blocks": 11274409216,
+   "share": 0.999923
   },
   "refused": {
    "types": 0,
@@ -59807,10 +59891,272 @@
    "share": 7.7e-05
   },
   "running": {
-   "types": 1,
-   "blocks": 491688,
-   "share": 4.4e-05
+   "types": 0,
+   "blocks": 0,
+   "share": 0.0
   }
+ },
+ "beside_extras": {
+  "v2t161": {
+   "tag": "v2t161",
+   "extra": "beside",
+   "run": "r20261113-170442-5534",
+   "node": "vy-nebius-cpu-5",
+   "list": "k",
+   "mem_gb": 64,
+   "tree": "33d7c7dfd8c23f5db0c93584aeb7a96391defde9",
+   "staged_unit": "census:SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+   "lookup": {
+    "kind": "flat Boolean, no table",
+    "zk_refusal": null,
+    "error": null,
+    "boolean_version": null
+   },
+   "lines": [
+    "17:06:53Z v2t161: census:SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}} N=1 (session; limit 3600s)",
+    "17:17:00Z v2t161: stage.py census:SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}} 1 --bind: rc 0; Elapsed (wall clock) time (h:mm:ss or m:ss): 9:52.69;Maximum resident set size (kbytes): 20906848; ",
+    "STAGED v2t161 {\"definition\": \"SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=63,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}\", \"word\": \"SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\\\"fn\\\":\\\"HopperBF16WgmmaDot16_v1\\\"},SCALE={\\\"f64\\\":\\\"0x1.0000000000000p-4\\\"}}\", \"n\": 1, \"ands\": 16441680, \"k_log\": 27, \"circuit_bytes\": 5156948421, \"statement\": {\"reads\": \"inline\"}, \"seconds\": {\"values\": 0.0, \"built\": 539.0, \"round\": 41.9, \"total\": 580.9}, \"maxrss_gb\": 19.94, \"lookups\": {}, \"slot_types\": 4}",
+    "17:17:00Z v2t161: other Programs: {\"other-def\": {\"definition\": \"RoPEHeadGptJ_v2{D=64}\", \"population\": 1, \"partition\": \"6eff8c36bcf46957\", \"program\": \"b63ff9b8ac0ee610\", \"program_bytes\": 2842}}",
+    "17:23:02Z v2t161: --zk session: {\"cmd\": \"ulimit -v 56623104; exec /home/research/.cache/verity-a11/flock-f75a77a95366989d/flock-circuit-prove prove --zk --verifier 127.0.0.1:34651 --instances /workspace/tmp/hidden-zk.qxgwdS/v2t161/B; serve {\"cmd\": \"ulimit -v 33554432; exec /home/research/.cache/verity-a11/flock-f75a77a95366989d/flock-circuit-prove serve --zk --listen 127.0.0.1:34651 --out /workspace/tmp/hidden-zk.qxgwdS/v2t161/B/session; ",
+    "VERDICTS v2t161 B.ks-form: exit 0; KS-FORM ok; units=None; note=None",
+    "VERDICTS v2t161 B.statement.held: exit 0; statement ok; units=derived; note=units derived: Q_template_instances v0 over the verifier's program (1 units); the statement's 1 units are instances of SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}; no c",
+    "VERDICTS v2t161 B.statement.no-program: exit 0; statement ok; units=as stated; note=units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate Q_template_instances v0",
+    "VERDICTS v2t161 B.statement.other-def: exit 1; setup: partition: the verifier's program is not the one the partition object names; units=None; note=None",
+    "VERDICTS v2t161 B.verify.held: exit 0; accepted=True why=''; units=derived; note=units derived: Q_template_instances v0 over the verifier's program (1 units); the statement's 1 units are instances of SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}; no c",
+    "VERDICTS v2t161 B.verify.no-program: exit 1; accepted=False why=\"refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered\"; units=as stated; note=units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate Q_template_instances v0",
+    "VERDICTS v2t161 B.verify.other-def: exit 1; accepted=False why=\"setup: partition: the verifier's program is not the one the partition object names\"; units=None; note=None",
+    "17:27:24Z v2t161: done: exit 0 in 1231s"
+   ],
+   "done": {
+    "exit": 0,
+    "seconds": 1231,
+    "timeout": false
+   },
+   "stage": {
+    "definition": "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=63,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}",
+    "word": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "ands": 16441680,
+    "k_log": 27,
+    "circuit_bytes": 5156948421,
+    "statement": {
+     "reads": "inline"
+    },
+    "maxrss_gb": 19.94,
+    "wall_s": 592.7
+   },
+   "verdicts": {
+    "B.statement.held": {
+     "exit": 0,
+     "accepted": null,
+     "why": null,
+     "units": null,
+     "wall": "1:01.48",
+     "maxrss_gb": 21.2
+    },
+    "B.statement.no-program": {
+     "exit": 0,
+     "accepted": null,
+     "why": null,
+     "units": null,
+     "wall": "1:01.03",
+     "maxrss_gb": 21.2
+    },
+    "B.statement.other-def": {
+     "exit": 1,
+     "accepted": null,
+     "why": "setup: partition: the verifier's program is not the one the partition object names",
+     "units": null,
+     "wall": "0:59.98",
+     "maxrss_gb": 21.2
+    },
+    "B.ks-form": {
+     "exit": 0,
+     "accepted": null,
+     "why": "ok",
+     "units": null,
+     "wall": "1:00.45",
+     "maxrss_gb": 21.19
+    },
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true,
+     "why": null,
+     "units": "units derived: Q_template_instances v0 over the verifier's program (1 units); the statement's 1 units are instances of SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF1",
+     "wall": "1:36.69",
+     "maxrss_gb": 19.53
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false,
+     "why": "refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered",
+     "units": "units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate Q_template_instances v0",
+     "wall": "1:36.66",
+     "maxrss_gb": 19.53
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false,
+     "why": "setup: partition: the verifier's program is not the one the partition object names",
+     "units": null,
+     "wall": "0:48.90",
+     "maxrss_gb": 19.53
+    }
+   },
+   "peak_gb": 29.39,
+   "outcome": "accepted",
+   "state": "boolean-version",
+   "earlier_form": {
+    "tag": "t161",
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=63,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "blocks": 19968,
+    "k_log": 27,
+    "staged_unit": null,
+    "outcome": "not-run",
+    "why": "estimate-past-64GB"
+   }
+  },
+  "v2t113": {
+   "tag": "v2t113",
+   "extra": "beside",
+   "run": "r20261113-170442-5534",
+   "node": "vy-nebius-cpu-5",
+   "list": "k",
+   "mem_gb": 64,
+   "tree": "33d7c7dfd8c23f5db0c93584aeb7a96391defde9",
+   "staged_unit": "census:SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+   "lookup": {
+    "kind": "flat Boolean, no table",
+    "zk_refusal": null,
+    "error": null,
+    "boolean_version": null
+   },
+   "lines": [
+    "17:27:25Z v2t113: census:SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}} N=1 (session; limit 2400s)",
+    "17:31:07Z v2t113: stage.py census:SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}} 1 --bind: rc 0; Elapsed (wall clock) time (h:mm:ss or m:ss): 3:28.90;Maximum resident set size (kbytes): 7259456; ",
+    "STAGED v2t113 {\"definition\": \"SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=21,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}\", \"word\": \"SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\\\"fn\\\":\\\"HopperBF16WgmmaDot16_v1\\\"},SCALE={\\\"f64\\\":\\\"0x1.0000000000000p-4\\\"}}\", \"n\": 1, \"ands\": 5498034, \"k_log\": 25, \"circuit_bytes\": 1647108172, \"statement\": {\"reads\": \"inline\"}, \"seconds\": {\"values\": 0.0, \"built\": 188.4, \"round\": 13.5, \"total\": 201.9}, \"maxrss_gb\": 6.92, \"lookups\": {}, \"slot_types\": 4}",
+    "17:31:07Z v2t113: other Programs: {\"other-def\": {\"definition\": \"RoPEHeadGptJ_v2{D=64}\", \"population\": 1, \"partition\": \"6eff8c36bcf46957\", \"program\": \"b63ff9b8ac0ee610\", \"program_bytes\": 2842}}",
+    "17:33:39Z v2t113: --zk session: {\"cmd\": \"ulimit -v 56623104; exec /home/research/.cache/verity-a11/flock-f75a77a95366989d/flock-circuit-prove prove --zk --verifier 127.0.0.1:39759 --instances /workspace/tmp/hidden-zk.qxgwdS/v2t113/B; serve {\"cmd\": \"ulimit -v 33554432; exec /home/research/.cache/verity-a11/flock-f75a77a95366989d/flock-circuit-prove serve --zk --listen 127.0.0.1:39759 --out /workspace/tmp/hidden-zk.qxgwdS/v2t113/B/session; ",
+    "VERDICTS v2t113 B.ks-form: exit 0; KS-FORM ok; units=None; note=None",
+    "VERDICTS v2t113 B.statement.held: exit 0; statement ok; units=derived; note=units derived: Q_template_instances v0 over the verifier's program (1 units); the statement's 1 units are instances of SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}; no c",
+    "VERDICTS v2t113 B.statement.no-program: exit 0; statement ok; units=as stated; note=units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate Q_template_instances v0",
+    "VERDICTS v2t113 B.statement.other-def: exit 1; setup: partition: the verifier's program is not the one the partition object names; units=None; note=None",
+    "VERDICTS v2t113 B.verify.held: exit 0; accepted=True why=''; units=derived; note=units derived: Q_template_instances v0 over the verifier's program (1 units); the statement's 1 units are instances of SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}; no c",
+    "VERDICTS v2t113 B.verify.no-program: exit 1; accepted=False why=\"refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered\"; units=as stated; note=units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate Q_template_instances v0",
+    "VERDICTS v2t113 B.verify.other-def: exit 1; accepted=False why=\"setup: partition: the verifier's program is not the one the partition object names\"; units=None; note=None",
+    "17:35:25Z v2t113: done: exit 0 in 480s"
+   ],
+   "done": {
+    "exit": 0,
+    "seconds": 480,
+    "timeout": false
+   },
+   "stage": {
+    "definition": "SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=21,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}",
+    "word": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "ands": 5498034,
+    "k_log": 25,
+    "circuit_bytes": 1647108172,
+    "statement": {
+     "reads": "inline"
+    },
+    "maxrss_gb": 6.92,
+    "wall_s": 208.9
+   },
+   "verdicts": {
+    "B.statement.held": {
+     "exit": 0,
+     "accepted": null,
+     "why": null,
+     "units": null,
+     "wall": "0:21.24",
+     "maxrss_gb": 8.21
+    },
+    "B.statement.no-program": {
+     "exit": 0,
+     "accepted": null,
+     "why": null,
+     "units": null,
+     "wall": "0:20.98",
+     "maxrss_gb": 8.21
+    },
+    "B.statement.other-def": {
+     "exit": 1,
+     "accepted": null,
+     "why": "setup: partition: the verifier's program is not the one the partition object names",
+     "units": null,
+     "wall": "0:20.72",
+     "maxrss_gb": 8.21
+    },
+    "B.ks-form": {
+     "exit": 0,
+     "accepted": null,
+     "why": "ok",
+     "units": null,
+     "wall": "0:20.48",
+     "maxrss_gb": 8.21
+    },
+    "B.verify.held": {
+     "exit": 0,
+     "accepted": true,
+     "why": null,
+     "units": "units derived: Q_template_instances v0 over the verifier's program (1 units); the statement's 1 units are instances of SparseMlaHeadScores_v2{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF1",
+     "wall": "0:33.24",
+     "maxrss_gb": 6.53
+    },
+    "B.verify.no-program": {
+     "exit": 1,
+     "accepted": false,
+     "why": "refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered",
+     "units": "units taken as stated, not derived: the verifier's copy of the program was not given (--program) to evaluate Q_template_instances v0",
+     "wall": "0:32.07",
+     "maxrss_gb": 6.56
+    },
+    "B.verify.other-def": {
+     "exit": 1,
+     "accepted": false,
+     "why": "setup: partition: the verifier's program is not the one the partition object names",
+     "units": null,
+     "wall": "0:16.44",
+     "maxrss_gb": 6.55
+    }
+   },
+   "peak_gb": 8.21,
+   "outcome": "accepted",
+   "state": "boolean-version",
+   "earlier_form": {
+    "tag": "t113",
+    "block": "SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=21,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+    "blocks": 24960,
+    "k_log": 25,
+    "staged_unit": null,
+    "outcome": "not-run",
+    "why": "estimate-past-64GB"
+   }
+  }
+ },
+ "fourth_pass": {
+  "word": "the circuits coordinator, Fri 13 Nov 17:06Z: SparseMlaHeadScores_v2 at NVIS=63 and NVIS=21 (FIRST=true), each an extra beside its listed _v1 type, at 64 GB; nothing else",
+  "ruling": "a type counts as covered only in the form the plan stages for it (form.py's rule); an acceptance of a _v2 whose word form is not refused is an extra, not counted in the 254",
+  "beside": {
+   "v2t161": "t161",
+   "v2t113": "t113"
+  },
+  "plan": "scratch/cir272/p4-plan.json",
+  "runs": [
+   {
+    "run": "r20261113-170442-5534",
+    "list": "k",
+    "node": "vy-nebius-cpu-5",
+    "mem_gb": 64,
+    "state": "ended"
+   }
+  ],
+  "mem_gb": 64,
+  "budget_s": {
+   "k": 6600
+  },
+  "tree": "5427f12eabf1 (bound.sh as at 33d7c7dfd8c2)",
+  "supersedes": "art:3d708c34f04b952ef68d1f4b39a390c38cb8898c627354055f442661bc200e75"
  },
  "third_pass": {
   "word": "the circuits coordinator, Fri 13 Nov about 8:22 AM PST: t019, t031 and t032 at --mem-gb 160, nothing else",
@@ -59830,7 +60176,7 @@
     "list": "i",
     "node": "vy-nebius-cpu-13",
     "mem_gb": 160,
-    "state": "running"
+    "state": "ended"
    },
    {
     "run": "r20261113-162110-c261",
@@ -59910,13 +60256,20 @@
     "list": "i",
     "node": "vy-nebius-cpu-13",
     "mem_gb": 160,
-    "state": "running"
+    "state": "ended"
    },
    {
     "run": "r20261113-162110-c261",
     "list": "j",
     "node": "vy-nebius-cpu-14",
     "mem_gb": 160,
+    "state": "ended"
+   },
+   {
+    "run": "r20261113-170442-5534",
+    "list": "k",
+    "node": "vy-nebius-cpu-5",
+    "mem_gb": 64,
     "state": "ended"
    }
   ],
@@ -60229,6 +60582,7 @@
    "f": "after A and B ended: the 10 extras and t171, t173, t175, t177, t179, which A and B listed, did not reach, and no live run held (types-p2f.tsv)",
    "g": "the rest of those: t172, t174, t176, t178, t202 (types-p2g.tsv)",
    "h": "after D ended: the 5 types of list d that D did not reach, the next --mem-gb 160 run, with a 15000 s budget so that it ends before the record is due (types-p2h.tsv)",
+   "k": "fourth pass: two extras beside listed types, SparseMlaHeadScores_v2 at NVIS=63 (beside t161) then NVIS=21 (beside t113), FIRST=true, each named directly in its row; --mem-gb 64, limits 3600 and 2400 s, budget 6600 s (types-p4k.tsv)",
    "i": "third pass: t019 (its Boolean version, 9000 s), then t032 (6000 s); --mem-gb 160, budget 15600 s (types-p3i.tsv)",
    "j": "third pass: t031 (its Boolean version, 9000 s); --mem-gb 160, budget 9600 s (types-p3j.tsv)"
   },
