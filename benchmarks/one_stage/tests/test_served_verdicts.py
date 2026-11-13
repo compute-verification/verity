@@ -61,7 +61,7 @@ from typing import Any
 
 import jsonschema
 import pytest
-from verity.hardware import site as SITE
+from verity import device as SITE
 from verity.hardware import registration as RL
 from verity.protocols.pous.verifier import wipe_period as W
 from verity.protocols.spot.verifier.one_stage import registration as REG

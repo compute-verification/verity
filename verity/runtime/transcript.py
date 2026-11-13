@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
-from verity.configuration.wire import (
+from verity.channel import (
     KINDS,
     NAME,
     PUBLIC,
