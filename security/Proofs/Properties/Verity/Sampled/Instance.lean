@@ -583,13 +583,13 @@ theorem registeredFiles : I.RegisteredFiles := by
 
 /-- **v2's session at the registered files' files**: at parameters naming the one-stage form where the deployment runs
 a session, committed files that name the registered circuit and public files, and that some play's sampled verdict
-accepts, are files v2 sets that session up on, and the session's files pass `verify --zk`'s ports check
-(`Live.OpensReady`). -/
+accepts on blobs holding each pinned table at its registered file (`TablesSent`), are files v2 sets that session up
+on, and the session's files pass `verify --zk`'s ports check (`Live.OpensReady`). -/
 def SessionAt (k : Verity.Registration.Composite) : Prop :=
   ∀ θ F A, I.session θ = some A → (∃ p, ParamsAt θ p) →
     I.base.circuitFile θ F = I.base.circuitFile θ (I.base.registered θ) →
     I.base.publicFile θ F = I.base.publicFile θ (I.base.registered θ) →
-    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o) →
+    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent o.sent) →
       SetsUp I.base θ F A ∧ A.OpensReady
 
 /-- A play that some strategy wins with nonzero probability is won on some tape. -/
@@ -606,28 +606,43 @@ theorem exists_tape_of_prob_ne {β : Type} {p : β → Prop} {g : Verity.Game β
 /-- **`Covers` at the deployed vocabulary**: where the deployment runs no session, the published δ is `⊤`
 (`deltaOf`); where it runs one that v2 doesn't set up on the committed files, an accepting play's files pass the file
 check, so under the further finders' premises they name the registered files (`namedFile_eq`), where v2 sets the
-session up (`SessionAt`). -/
+session up (`SessionAt`) unless the play's blobs hold a pinned table at other bytes than its registered file. That is a
+SHA-512 collision the read finder outputs (`Binding.finder_of_tables`), at most its collision bound under its premise
+(`Vocab.FinderCR`), which the session's δ adds (`Live.delta`). -/
 theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hSa : I.SessionAt k) :
     Covers (I.vocab K) k I.sessions := by
-  intro θ F hS hP c σ hcr
+  intro θ F hS hP c σ hcr hFC
   rcases hA : I.session θ with _ | A
   · exact le_top.trans_eq (I.deltaOf_none hA _).symm
-  refine le_of_eq_of_le ?_ zero_le
-  by_contra hne
-  obtain ⟨t, hv⟩ := exists_tape_of_prob_ne hne
-  have hreach : Verity.Game.Reaches (I.base.game θ F c) (Verity.Game.Tape.out _ σ t) :=
-    Verity.Game.Tape.reaches_out _ σ t
-  have hv' : I.base.Verdict k .sampled (Verity.Game.Tape.out _ σ t) := hv
-  obtain ⟨hθ, hF, -⟩ := Binding.play_reaches hreach
-  have hreg : I.base.Registered θ F := by
-    have h1 := hv'.1
-    rw [hθ, hF] at h1
-    exact h1
-  have hR := hRg θ F hP hreg
-  obtain ⟨h1, h2⟩ := I.fileCR K hcr
-  have hs := hSa θ F A hA hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) ⟨c, _, hreach, hv'⟩
-  rw [I.sessions_of hA hs.1 hs.2] at hS
-  cases hS
+  have hno : ∀ t : Verity.Game.Tape (I.base.game θ F c) σ, I.base.Verdict k .sampled (Verity.Game.Tape.out _ σ t) →
+      ¬ TablesSent (Verity.Game.Tape.out _ σ t).sent := by
+    intro t hv ht
+    have hreach : Verity.Game.Reaches (I.base.game θ F c) (Verity.Game.Tape.out _ σ t) :=
+      Verity.Game.Tape.reaches_out _ σ t
+    obtain ⟨hθ, hF, -⟩ := Binding.play_reaches hreach
+    have hreg : I.base.Registered θ F := by
+      have h1 := hv.1
+      rw [hθ, hF] at h1
+      exact h1
+    have hR := hRg θ F hP hreg
+    obtain ⟨h1, h2⟩ := I.fileCR K hcr
+    have hs := hSa θ F A hA hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) ⟨c, _, hreach, hv, ht⟩
+    rw [I.sessions_of hA hs.1 hs.2] at hS
+    cases hS
+  rw [Verity.Game.prob_eq_prCoin]
+  calc Verity.Game.prCoin (fun t => (I.vocab K).Verdict k .sampled (Verity.Game.Tape.out _ σ t))
+      ≤ Verity.Game.prCoin (fun t => ∃ u v, (Binding.readFinder I.base I.dev θ F c σ).out t = some (u, v) ∧
+          Claims.Collision Verity.sha512Msg u v) :=
+        Verity.Game.prCoin_mono fun t hv => Binding.finder_of_tables I.base I.dev θ F c σ t (hno t hv)
+    _ = ENNReal.ofReal ((Binding.readFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg) :=
+        Verity.Game.prCoin_eq_ofReal_pr _
+    _ ≤ ENNReal.ofReal (I.sampledBound θ ((I.vocab K).cost θ F c σ)) :=
+        ENNReal.ofReal_le_ofReal ((I.vocab K).finderPr_le_crBound hFC)
+    _ ≤ (I.vocab K).delta θ .sampled ((I.vocab K).cost θ F c σ) := by
+        show _ ≤ I.deltaOf θ .sampled _
+        rw [I.deltaOf_some hA]
+        unfold Live.delta
+        exact le_add_self
 
 /-! ## The other subprotocols' targets are the base's -/
 
