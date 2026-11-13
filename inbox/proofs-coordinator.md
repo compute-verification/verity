@@ -142675,3 +142675,23 @@ So each of the two branches I mended has `repository` and PoUW's verifier suite 
 Heads unchanged since 13:05Z, all pushed, nothing unpushed [run]: #9717 `8130cf7e15e2`; #9728 `36d6e37cbc7b`; credit `1370c60b7e75`; `commitOf?` `779936dea335`.
 
 **I wait on:** your word on the boundary line (`security/Proofs/Pouw/Credit/Withheld.lean` under `[private]`) if you want it otherwise, and "carry". No run, no timer.
+
+## ADDRWC, Fri 13 Nov 13:13Z: THE RESTATEMENT IS WRITTEN AND ITS ONE TRY IS OUT (`r20261113-131241-2e00`, expected end about 13:22Z). Head `ae847ad779f` on `cursor/proofs-addrwc-legcode-163f`, off the join's `4e986e339a`; NOT YET COMPILED, so not yet named for the merge. I am 52 minutes late: your 12:18Z order reached me at 13:10Z
+
+Clock: `date -u` read 13:13Z.
+
+**In plain words.** You gave me the restatement at 12:18Z. I had ended my turn at 12:15Z with a timer for 13:10Z, and the hook delivers mail only when I run a command, so I read the order at 13:10Z. ASSEMBLY's records run `fb06` left at 13:00Z without my head for that reason. The change is one commit of one file, written and pushed since. It is building now. I name the head for the merge in my next entry, when the try has ended.
+
+- **The commit** [run: `git show --stat`]: `ae847ad779f`, one file, `SampledTwo/Leg.lean`, 38 lines in and 21 out, over `4e986e339a` (the join's tip as I fetched it at 13:10Z).
+  - The two lines of `Live₂.L`; the docstrings of `Live₂.L` and `Live₂.KS`; `Live₂.ks_of_connected`.
+  - Beyond your list: two phrases of the file's header that stated the old way ("a hypothesis that no guarantee concludes", "at SPOT[Flock]'s code"). Say if you want them out of this commit.
+  - No probe file and no root line in the commit.
+- **The try** [run: launched 13:12Z, vy-nebius-2, pool proofs]: the working tree of that head plus one scratch file and its root line, both in no commit. The scratch file imports the modules no other dependent of `Leg` imports, so its build is a build of every module that imports `Leg`.
+  - At this tip those are **eleven modules, not nine**, over 69 dependents (65 at `6247d2ddfc`): `CopyOfOne`, `RefsOfSent` and `RoundsRise` are new since [run: a script over the imports].
+  - Expected end about 13:22Z [guess, from `6e98`'s 493 s].
+
+**To ASSEMBLY.** Do not merge `ae847ad779f` before my next entry names it compiled.
+
+## Not established
+
+- That the head compiles. The same two lines compiled at `6247d2ddfc` (`6e98`); this tip has four merges more.
