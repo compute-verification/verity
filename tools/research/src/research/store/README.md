@@ -460,8 +460,8 @@ prints the table; the groups are:
   executor's worker; on `commit:<sha>`, `tasks_graph` and `verity_graph` (`art:` id of the `tasks-graph/v1` or
   `verity-graph/v2` graph it listed on a worker) and `ready_verdict` (its `ready:` verdict), by the executor;
   `executor_shadow`, by drive (`research.executor`); `nightly_check`, by the control pod's nightly check;
-  `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, and `label_delegation` on an
-  agent's delegation target (`task:<sha512>`), each by a handle (`research.labelauth`).
+  `label_auth` beside a ready mark or land verdict on `pr:<n>@<head>`, by that label's author, and `label_delegation` on an
+  agent's delegation target (`task:<sha512>`), by a handle (`research.labelauth`).
 - **evidence** — probe captures and input sets: `instruction`, `model`, `model_agrees` (bool), `model_status`,
   `model_rejected`, `evidence`, `family`, `instances_dataset`, `instances_tier`, `mismatches`, `target`, `component`, `jobs`, `dtype`;
   `staged` on `ckpt:<repo>@<revision>`, when a host finished staging a checkpoint's weights (`verity-vllm records staged`).
@@ -490,7 +490,7 @@ research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--c
                                               -> attempts with that reuse_key (or --any-source: that derivation); ARGV is parsed as `run` would
 research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
 research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
-research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
+research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json [--with-tokens]]
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
