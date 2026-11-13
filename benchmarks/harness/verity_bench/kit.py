@@ -16,7 +16,8 @@ directory: under a research run, the run's). Each
 measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its 95% interval
 (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was computed from
 (other measurements' names, run or `art:` ids) and the `host` stamp it was written under; a measurement with no value
-(`value` None) may say why (`why`, held only where given). The writer appends: every
+(`value` None) may say why (`why`, held only where given), and any measurement may carry keys of its benchmark's own
+(`extra`), such as what its number rests on. The writer appends: every
 writer of a research run, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
 A result holds one run's measurements, one a name, and one validation, so a rerun writes a fresh directory.
 
@@ -252,13 +253,15 @@ class Writer:
 
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
-                    why: str | None = None) -> dict:
+                    why: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
         """Appends one measurement to `out/result.json` and returns it: `value` in `unit` (None where the benchmark has no
         finite value to give, and then `why`, in words, where given), its 95% `interval` (low, high), which the result
         holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check against that target, and
-        the `inputs` it was computed from, with this run, its commit and the host stamp. It refuses what isn't a
-        measurement (a value that isn't a number, a verdict with no target or in a verdict of record's or a seal's words,
-        a `why` beside a value), a name the result already holds, and a result of another run."""
+        the `inputs` it was computed from, with this run, its commit and the host stamp, and beside them the keys of
+        `extra`, each a JSON value the benchmark states of the number. It refuses what isn't a measurement (a value that
+        isn't a number, a verdict with no target or in a verdict of record's or a seal's words, a `why` beside a value),
+        an `extra` key the entry already has a meaning for or a value that isn't JSON, a name the result already holds,
+        and a result of another run."""
 
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"a measurement has a name, not {name!r}")
@@ -284,6 +287,14 @@ class Writer:
                  "verdict": _target_check(verdict, target), "inputs": inputs, "host": dict(self.stamp)}
         if why is not None:
             entry["why"] = why
+        for key, held in (extra or {}).items():
+            if not isinstance(key, str) or key in entry or key == "why":
+                raise ValueError(f"{name}'s extra key {key!r} is a key the measurement already has a meaning for")
+            try:
+                json.dumps(held, allow_nan=False)
+            except (TypeError, ValueError):
+                raise ValueError(f"{name}'s extra {key} is a JSON value, not {held!r}") from None
+            entry[key] = held
         with self._open() as (path, doc):
             if any(m.get("name") == name for m in doc["measurements"]):
                 raise ValueError(f"{path} already holds a measurement named {name}: a result holds one a name (a rerun writes "

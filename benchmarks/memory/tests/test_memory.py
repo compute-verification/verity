@@ -649,8 +649,9 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
         "error": [RUN, "ledger.declared.gamma.spec.error.windows"]}
     for n, m in got.items():
         assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
-        assert (m["target"], m["verdict"], m["ci95"]) == ((0.14, "past target", None) if n == M.METRIC
-                                                          else (None, None, None))
+        assert (m["target"], m["verdict"], m["ci95"]) == ((0.14, "past target; the verifier held no checkpoint", None)
+                                                          if n == M.METRIC else (None, None, None))
+        assert m.get("bound", "absent") == (False if n == M.METRIC else "absent")
     assert got[M.METRIC]["unit"] == M.UNIT
 
 
@@ -804,5 +805,21 @@ def test_the_metrics_tabs_row_holds_the_number_against_its_target(gamma, verdict
     row = rows[M.METRIC]
     assert (row["owner"], row["unit"], row["better"]) == ("memory-accounting", M.UNIT, "lower")
     assert "benchmarks/memory/run.py --from" in row["command"]
-    (m,) = [m for m in M.amounts({"value": gamma, "unit": M.UNIT, "run": RUN}, {}) if m["name"] == M.METRIC]
+    (m,) = [m for m in M.amounts({"value": gamma, "unit": M.UNIT, "run": RUN, "bound": True}, {}) if m["name"] == M.METRIC]
     assert (m["value"], m["target"], m["verdict"]) == (gamma, M.TARGET, verdict) and M.TARGET == 0.14
+    assert "extra" not in m
+
+
+@pytest.mark.parametrize("bound", [False, None], ids=["unbound", "older record"])
+def test_an_unbound_sessions_row_is_written_and_says_its_verifier_held_no_checkpoint(store, monkeypatch, tmp_path, bound):
+    """A session whose verifier bound its store to no checkpoint still writes the Metrics tab's row; the entry carries
+    `"bound": false` and its verdict names the premise, which the console and `research metrics` show as written. A
+    document with no `bound` (a record from before it) reads as unbound."""
+    doc = {"value": 0.127, "unit": M.UNIT, "run": RUN, **({} if bound is None else {"bound": bound})}
+    (m,) = [m for m in M.amounts(doc, {}) if m["name"] == M.METRIC]
+    assert m["verdict"] == "within target; the verifier held no checkpoint" and m["extra"] == {"bound": False}
+    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session()), binding={"name": "SOME_ROLE", "bound": True})})
+    held = a_run(monkeypatch, tmp_path)
+    assert bench(store, "--from", RUN) == 0
+    bound_row = written(held)[M.METRIC]
+    assert bound_row["verdict"] == "past target" and "bound" not in bound_row

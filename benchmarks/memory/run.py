@@ -40,7 +40,8 @@ Under `research run` an accepted session of a node run or of `--from` also write
 `$RESEARCH_RUN_DIR/result.json`, the file `research` reads a run's result from, through the harness kit's writer
 (`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
 alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), the same number under
-`METRIC`, the id `benchmarks/metrics.toml` holds it to on the console's Metrics tab, with its `TARGET`, `verified` (the bytes
+`METRIC`, the id `benchmarks/metrics.toml` holds it to on the console's Metrics tab, with its `TARGET` (and, unbound,
+`"bound": false` and the premise in its verdict), `verified` (the bytes
 the verifier certified read over the session's span), `capacity at READING` and `free at READING` for each reading the
 ledger holds (`READINGS`: the node's read rate times the span, and γ of it), and `error` (the probability the verified
 amount doesn't hold). A reading's rate is the verifier's own figure for the node (`timing.py`), not the registered
@@ -88,8 +89,10 @@ RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.jso
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
+#: what an unbound session's number rests on, in its Metrics row's verdict
+HELD_NONE = "the verifier held no checkpoint"
 #: a node's store that its verifier bound to no model, in the store's line
-UNBOUND = "the verifier held no checkpoint: the store's bytes are the developer's choice"
+UNBOUND = f"{HELD_NONE}: the store's bytes are the developer's choice"
 #: the readings of the verifier's ledger, each the key it holds one under and the read rate it takes for the node: the
 #: number is printed at the first
 READINGS = {"spec": "the data sheet's read bandwidth", "measured": "the measured read rate"}
@@ -412,7 +415,8 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
 
     - `metric`: the printed number in its unit.
     - `METRIC`: the same number, the Metrics tab's row (`benchmarks/metrics.toml`), with `TARGET` and where the number
-      stands against it.
+      stands against it. A session whose verifier held no checkpoint still writes the row, with `"bound": false` and
+      its verdict naming that premise (`HELD_NONE`); a bound session's row holds neither.
     - `verified`: the bytes the verifier certified read over the session's span, its own `certified_bytes` at the
       reading the number is printed at; none at a share of 1 or more, which certifies nothing.
     - `capacity at READING`, for each reading the ledger holds (`READINGS`): the reading's read rate times the
@@ -429,9 +433,12 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     A measurement whose keys the record doesn't hold as numbers is left out."""
     run = [doc["run"]] if doc["run"] else []
     first = next(iter(READINGS))
-    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]},
-           {"name": METRIC, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"],
-            "target": TARGET, "verdict": "within target" if doc["value"] <= TARGET else "past target"}]
+    standing = "within target" if doc["value"] <= TARGET else "past target"
+    row = {"name": METRIC, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"],
+           "target": TARGET, "verdict": standing if doc.get("bound") is True else f"{standing}; {HELD_NONE}"}
+    if doc.get("bound") is not True:
+        row["extra"] = {"bound": False}
+    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]}, row]
     if (verified := _at(ledger, first, "certified_bytes")) is not None:
         out.append({"name": "verified", "value": max(verified, 0.0), "unit": BYTES,
                     "inputs": [*run, f"ledger.{first}.certified_bytes"]})

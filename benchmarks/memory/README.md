@@ -74,7 +74,9 @@ binding terms to the ledger's own and holds no PRF advantage; no rate is in it, 
 readings). A capacity's rate is the verifier's own figure for the node (`timing.py`), not the registered hardware's,
 and its unit says so. The printed number is written once more under
 `memory-accounting/node-read-rate-uncertified`, the id of its row on the console's Metrics tab (`benchmarks/metrics.toml`).
-That entry also carries the goal's target, 0.14, and says whether the number is within it or past it. At a share of 1 or
+That entry also carries the goal's target, 0.14, and says whether the number is within it or past it. A session whose
+verifier held no checkpoint (`BIND=0`) still writes it, with `"bound": false` and its verdict naming that premise
+(`within target; the verifier held no checkpoint`); a bound session's entry holds neither. At a share of 1 or
 more, verified is 0 and free the whole capacity. An amount whose keys the
 record doesn't hold as numbers is left out of the result. The two references are other runs' numbers and are not in
 it; a loopback writes none, since it certifies nothing, and a session that wasn't accepted writes none, as it prints
