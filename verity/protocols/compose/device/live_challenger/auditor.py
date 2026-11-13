@@ -251,7 +251,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   are the one list `ROW_LINE`, each a hiding commitment, a certificate or the schedule's and the execution phase's
   own structure, and a line with a key the list doesn't rule fails the rehearsal's end and publishes no
   registration) and a `--window-per-group` run's `groups.json`. Of the connection rows' registrations and a load's,
-  `out/` and the end hold the certificates and nothing else: no root, domain or layout.
+  `out/` and the end hold the certificates and nothing else: no root, domain or layout. Of the word that an
+  execution phase has no head, `out/` holds its certificate likewise.
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
   `WARDEN_COUNTS` names) and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
@@ -458,7 +459,8 @@ WARDEN_PUBLIC = ("deployment.json", "groups.json", "load-relay.json")
 #: the row registrations' files of `witness/`, the cells' and the connection rows' (`connection_rows`), each with
 #: the file of `out/` that holds its lines' certificates, line for line (`row_certificate`). A line is a
 #: registration, or the execution phase it was refused for, and its cost; of a connection rows' registration
-#: `out/` holds the certificate and nothing else
+#: `out/` holds the certificate and nothing else, and of the word that an execution phase has no head
+#: (`ROWS_NO_HEAD`) the same
 ROW_CERTIFICATES = {"cells.jsonl": "cells-certificates.jsonl", "rows.jsonl": "rows-certificates.jsonl"}
 #: the cells' registrations' file of `witness/` with the file of `out/` that holds its lines as the witness writes
 #: them, line for line, less what `ROW_LINE` leaves out (`row_registration`). The connection rows' registrations
@@ -491,6 +493,10 @@ ROW_LINE = {
 #: the direction a connection rows' certificate signs, which its registration doesn't name
 #: (`connection_rows.check_registration`)
 ROWS_DIRECTION = "egress"
+#: what a line of `rows.jsonl` holds in place of a registration where its execution phase ends in the network
+#: certifier's word that it has no head (the lengths rows' form 2): the word's record, which `connection_rows.no_head`
+#: calls public, under this key (`connection_rows_run.NO_HEAD`)
+ROWS_NO_HEAD = "no_head"
 #: of the check's `cell_rows`, what an end carries: how many of the cells' registrations it accepted, and of how
 #: many. Its other keys are the registrations' cost
 CELL_ROWS = ("registered", "of")
@@ -2533,8 +2539,11 @@ WARDEN_COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified
 def row_certificate(line: dict) -> dict:
     """A row registration's line (`ROW_CERTIFICATES`) as `out/` holds it: its certificate, the key, digest and
     signature under the link, direction and window its registration names (`certificate.Certificate`'s fields), or
-    the execution phase it was refused for. Nothing else of the registration, and not the line's cost."""
-    r = line.get("registration")
+    the execution phase it was refused for. Nothing else of the registration, and not the line's cost. A connection
+    rows' line that holds the word in place of a registration (`ROWS_NO_HEAD`) gives the word's certificate in the
+    same fields, each one of the word's public record, and no cost: a reader tells it from a head's by its digest,
+    which is a function of the link, the execution phase and the schedule's digest."""
+    r = line.get("registration") or line.get(ROWS_NO_HEAD)
     if r is None:
         return {k: line[k] for k in ("refused",) if k in line}
     c = r["certificate"]

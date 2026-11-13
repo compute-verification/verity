@@ -202,6 +202,11 @@ ROWS_REGISTRATION = {"format": "verity-network-certifier/connection-rows-registr
                      "certificate": {"key": "0c" * 16, "digest": "9e" * 64, "signature": "e6" * 40}}
 #: a line's cost: a registration's rows and their bytes, and two measured times
 COST = {"rows": 600, "row_bytes": 2048, "commit_ms": 41.375, "sign_ms": 7.125}
+#: the network certifier's word that an execution phase has no head, with `connection_rows.no_head`'s keys, and its
+#: line's cost, one measured time
+NO_HEAD = {"format": "verity-network-certifier/connection-rows-no-head-word/v1", "link": LINK, "window": 2,
+           "parameters": "31" * 64, "certificate": {"key": "0c" * 16, "digest": "9f" * 64, "signature": "e7" * 40}}
+WORD_COST = {"sign_ms": 3.625}
 CHECK = {"accepted": True, "problems": [], "summary": {
     "requests": 4, "ended": 4, "refused": 0, "failed": [], "windows": 2, "certified_windows": 6, "certificates": 6,
     "signer_refused": [], "cell_rows": {"registered": 4, "of": 4, "rows": [600], "row_bytes": [2048],
@@ -415,6 +420,29 @@ def test_fetch_gives_a_warden_rehearsals_witness_to_its_own_lane_and_vy_admin_al
         assert {f"{run}/witness/cells.jsonl", f"{run}/witness/rows.jsonl", f"{run}/witness/cells.salts",
                 f"{run}/witness/certified.jsonl", f"{run}/witness/check.json",
                 f"{run}/witness/rehearse.log", f"{run}/witness/tunnel.log"} <= hidden
+
+
+def test_of_the_word_that_an_execution_phase_has_no_head_the_rehearsal_publishes_its_certificate(host):
+    """A line of `rows.jsonl` that holds, in place of a registration, the network certifier's word that its
+    execution phase has no head stays whole in `witness/`. `out/` holds its certificate in the fields a head's has,
+    the link's egress in the word's execution phase: each value is one the word's public record holds, and the
+    line's cost and the key the line holds the word under are in neither `out/` nor the end."""
+    source = WARDEN_FILES + ('with (out / "rows.jsonl").open("a") as f:\n'
+                             f'    f.write(json.dumps({{{A.ROWS_NO_HEAD!r}: {NO_HEAD!r}, "cost": {WORD_COST!r}}}) + "\\n")\n')
+    run, _ = run_warden(host, source)
+    d = host.certifier / run
+    out = d / "out"
+    line = {A.ROWS_NO_HEAD: NO_HEAD, "cost": WORD_COST}
+    assert json.loads((d / A.WITNESS / "rows.jsonl").read_text().splitlines()[2]) == line
+    word = NO_HEAD["certificate"]
+    published = {"certificate": {"key_id": word["key"], "link": NO_HEAD["link"], "direction": "egress",
+                                 "window": NO_HEAD["window"], "digest": word["digest"],
+                                 "signature": word["signature"]}}
+    assert [json.loads(x) for x in (out / "rows-certificates.jsonl").read_text().splitlines()][2:] == [published]
+    assert A.row_certificate(line) == published
+    public = b"".join(p.read_bytes() for p in out.rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
+    for held in (A.ROWS_NO_HEAD, "cost", "sign_ms", "3.625"):
+        assert held.encode() not in public, held
 
 
 def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_why(host):
