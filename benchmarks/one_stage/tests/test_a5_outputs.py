@@ -96,11 +96,11 @@ def test_an_output_class_is_refused_before_the_sample():
 
 
 def test_an_output_class_the_design_samples_whole_needs_no_closure_map():
-    """A design that samples every unit of the class's stratum (`draw.derive` at k = N) puts the class in every sample, so
+    """A design that samples every unit of the class's stratum (`D.derive` at k = N) puts the class in every sample, so
     a5 takes it; at K of N the same class is refused, and a class split across a whole stratum and a sampled one is refused
     for the sampled one's units alone."""
     table = S.selection_table(RULE, program(), QUERY, TABLE)
-    whole, part = (D.derive(program(), QUERY, {"law": "work", "k": k}, table) for k in (N, K))
+    whole, part = (D.derive(program(), QUERY, D.parse_design(f"work:{k}"), table) for k in (N, K))
     assert [s["k"] for s in whole["strata"]] == [N]
     assert A5.output_refusal(args(), whole) is None
     assert A5.output_refusal(args(), part) == {"output-class-needs-a-closure-map": {"units": len(OUTS)}}

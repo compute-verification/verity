@@ -37,7 +37,7 @@ from verity.commitments.gates.sha512 import IV
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
 
-LAW, CAP = D.parse_design("work:613"), 16
+DESIGN, CAP = D.parse_design("work:613"), 16
 EMBED = "model.embed_tokens.weight"
 
 
@@ -61,7 +61,7 @@ def _unopened(win: IF.Window, c: CS.Committed, d: Path, pins: dict[str, dict]) -
     """Lean's registered reads of the written window ``d`` on the host (`Flock.Registered.checkPort`), from its records
     and the verifier's ``pins`` alone: each member's ports, ``(member, port)``, whose table rows' ``b || c`` don't open
     the pinned root at their stated positions."""
-    mine, doc = IF.of_records(d, LAW, IF.resolve)
+    mine, doc = IF.of_records(d, DESIGN, IF.resolve)
     files = IF.registered_reads(doc, mine, pins, registered=G)
     assert set(files) == {m.key for m in mine.members}
     written, bad = json.loads((d / "window.json").read_text()), set()
@@ -78,7 +78,7 @@ def _unopened(win: IF.Window, c: CS.Committed, d: Path, pins: dict[str, dict]) -
 
 def _summary(t: WT.Tie, registration: dict, record: dict, roots: dict[str, str], **kw) -> dict:
     """An accepting records audit's summary of ``t`` as `checked_pins` reads it, the window's roots ``roots``."""
-    want = WT.audit_inputs(registration, record, t, LAW, CAP)
+    want = WT.audit_inputs(registration, record, t, DESIGN, CAP)
     return {"ok": True, "circuit": want["circuit"], "run_root": want["run"], "population": t.units(),
             "draw": list(range(t.units())), "registered": {"pins": {p: e["root"] for p, e in _pins(want).items()}, "roots": roots}, **kw}
 
@@ -132,14 +132,14 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
                                              (SS.row(tag, 64), 255), (SS.last(tag, 64, len(tagged)), 1))]
     assert IF.seg_ports(t.circuit().registered) == {
         descriptor_id(fn): {"data"} for fn in (SS.row(tag, 64), SS.last(tag, 64, len(tagged)))}
-    got = WT.audit_inputs(registration, record, t, LAW, CAP)
-    assert t.design() == LAW and got["units"] == 613 and got["run"] == t.run and "outputs" not in got
+    got = WT.audit_inputs(registration, record, t, DESIGN, CAP)
+    assert t.design() == DESIGN and got["units"] == 613 and got["run"] == t.run and "outputs" not in got
     assert got["registered"][0] == {"program": registration["program"], "values": registration["values"]}
     assert set(got["registered"][1]["values"]) == {n for c in t.chains for n in c.supplied()}
-    assert got["circuit"] == t.digest(LAW, CAP) != WT.tie(reg, d, man, grain=GRAIN, run_id="other").digest(LAW, CAP)
-    w = t.window(LAW, CAP).window
+    assert got["circuit"] == t.digest(DESIGN, CAP) != WT.tie(reg, d, man, grain=GRAIN, run_id="other").digest(DESIGN, CAP)
+    w = t.window(DESIGN, CAP).window
     rated = D.derive(w.program, w.query, *SV.params_law("work-rate:613/613", w.program, w.query, w.work_table))
-    assert D.same_design(D.derive(w.program, w.query, LAW, w.work_table), rated)
+    assert D.same_design(D.derive(w.program, w.query, DESIGN, w.work_table), rated)
     assert all(s["k"] == s["floor"] == sum(hi - lo for lo, hi in s["units"]) for s in rated["strata"])
 
 
@@ -149,7 +149,7 @@ def test_the_honest_registration_is_accepted(x, tmp_path):
     opens the supplied root. Written, its registration records each weight's registered root, the verifier's window from
     its records alone is the tie's (one circuit digest), and the verifier pins the roots on an accepting audit of it."""
     reg, (d, man) = S._registered(), x
-    registration, t, win = WT.commit(reg, KEY, d, man, law=LAW, cap=CAP, grain=GRAIN)
+    registration, t, win = WT.commit(reg, KEY, d, man, law=DESIGN, cap=CAP, grain=GRAIN)
     assert registration == WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
     assert win.mismatches(kernel="auto") == {}
     assert _ends(win) == {f"{c.name}/sha512": IF.digest_words(c.digest) for c in t.chains}
@@ -159,13 +159,13 @@ def test_the_honest_registration_is_accepted(x, tmp_path):
     roots = rec["window"]["registered_roots"]
     assert {p: roots[p] for p in registration["values"]} == WW.WeightsRegistration.of(registration, "r").roots
     record = WW.weights_record(reg, d, man, grain=GRAIN)
-    want = WT.audit_inputs(registration, record, t, LAW, CAP)
-    mine, _doc = IF.of_records(tmp_path / "w", LAW, IF.resolve)
+    want = WT.audit_inputs(registration, record, t, DESIGN, CAP)
+    mine, _doc = IF.of_records(tmp_path / "w", DESIGN, IF.resolve)
     assert rec["window"]["circuit"] == want["circuit"] and mine.run == want["run"]
     pins = _pins(want)
     assert set(roots) == set(pins) and {p: roots[p] for p in pins} == {p: e["root"] for p, e in pins.items()}
     assert _unopened(win, c, tmp_path / "w", pins) == set()
-    assert WT.checked_pins(registration, record, t, _summary(t, registration, record, roots), LAW, CAP) == \
+    assert WT.checked_pins(registration, record, t, _summary(t, registration, record, roots), DESIGN, CAP) == \
         WW.registration_pins(registration, record)
 
 
@@ -179,19 +179,19 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
     reg, (d, man) = S._registered(), x
     honest = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
     served = WW.record_words(reg, *_checkpoint(tmp_path / "y", seed=4))
-    registration, t, win = WT.commit(reg, KEY, d, man, law=LAW, cap=CAP, grain=GRAIN, served=served)
+    registration, t, win = WT.commit(reg, KEY, d, man, law=DESIGN, cap=CAP, grain=GRAIN, served=served)
     assert set(registration["values"]) == set(honest["values"])
     assert not [p for p, e in registration["values"].items() if e["root"] == honest["values"][p]["root"]]
     assert win.mismatches(kernel="auto") == {}
     digests = {f"{c.name}/sha512": IF.digest_words(c.digest) for c in t.chains}
     assert not [v for v, row in _ends(win).items() if row == digests[v]]
     record = WW.weights_record(reg, d, man, grain=GRAIN)
-    pins = _pins(WT.audit_inputs(registration, record, t, LAW, CAP))
+    pins = _pins(WT.audit_inputs(registration, record, t, DESIGN, CAP))
     ends = {(m.key, "o0") for m in win.window.members if m.template in _ends_of(win)}
     c = win.close()
     win.write(c, tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
     assert len(ends) == len(t.chains) and _unopened(win, c, tmp_path / "w", pins) == ends
-    _r, _t, forged = WT.commit(reg, KEY, d, man, law=LAW, cap=CAP, grain=GRAIN, served=served, forge_digest=True)
+    _r, _t, forged = WT.commit(reg, KEY, d, man, law=DESIGN, cap=CAP, grain=GRAIN, served=served, forge_digest=True)
     assert _ends(forged) == digests
     assert forged.mismatches(kernel="auto") == {t: [0] for t in _ends_of(forged)}
     fc = forged.close()
@@ -204,11 +204,11 @@ def test_another_checkpoints_words_are_refused(x, tmp_path):
                      ({"population": t.units() + 1, "draw": list(range(t.units() + 1))}, "not every one"),
                      ({"registered": {}}, "held no registered pins")]:
         with pytest.raises(ValueError, match=why):
-            WT.checked_pins(registration, record, t, _summary(t, registration, record, roots, **bad), LAW, CAP)
+            WT.checked_pins(registration, record, t, _summary(t, registration, record, roots, **bad), DESIGN, CAP)
     other = {**roots, next(iter(roots)): "ab" * 64}
     with pytest.raises(ValueError, match="roots for .* aren't the registration's"):
-        WT.checked_pins(registration, record, t, _summary(t, registration, record, other), LAW, CAP)
-    assert WT.checked_pins(registration, record, t, _summary(t, registration, record, roots), LAW, CAP) == roots
+        WT.checked_pins(registration, record, t, _summary(t, registration, record, other), DESIGN, CAP)
+    assert WT.checked_pins(registration, record, t, _summary(t, registration, record, roots), DESIGN, CAP) == roots
 
 
 def test_a_registration_that_roots_the_rotary_table_is_refused_at_the_pins(x, tmp_path):
@@ -220,13 +220,13 @@ def test_a_registration_that_roots_the_rotary_table_is_refused_at_the_pins(x, tm
     field = next(f for f in record["fields"] if f.get("pinned") == "analytic")
     rooted = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN,
                                      tables={"cos_sin": M.cos_sin_table(field["analytic"]["C"])})
-    registration, t, win = WT.commit(reg, KEY, d, man, law=LAW, cap=CAP, grain=GRAIN)
+    registration, t, win = WT.commit(reg, KEY, d, man, law=DESIGN, cap=CAP, grain=GRAIN)
     rope = sorted(set(rooted["values"]) - set(registration["values"]))
     assert rope == sorted(t.unrooted) and {p: rooted["values"][p] for p in registration["values"]} == registration["values"]
     win.write(win.close(), tmp_path / "w", {"tie": WT.TIE_TAG}, registrar=R)
     roots = json.loads((tmp_path / "w" / "registration.json").read_text())["window"]["registered_roots"]
     with pytest.raises(ValueError, match=re.escape(f"the records audit's roots for {rope} aren't the registration's roots")):
-        WT.checked_pins(rooted, record, t, _summary(t, rooted, record, roots), LAW, CAP)
+        WT.checked_pins(rooted, record, t, _summary(t, rooted, record, roots), DESIGN, CAP)
 
 
 def test_the_command_pins_only_on_an_accepting_audit(x, tmp_path, capsys):
