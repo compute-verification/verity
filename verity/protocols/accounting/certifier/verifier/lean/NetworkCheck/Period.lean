@@ -8,6 +8,7 @@ public import Flock.Public
 public import Flock.WindowRecord
 public import NciCheck.Desc
 public import NciCheck.DefinitionDigest
+public import Spot.Record
 meta import NetworkCheck.Check
 meta import NetworkCheck.Clocks
 meta import CoreProtocol.Profile
@@ -16,6 +17,7 @@ meta import Flock.Public
 meta import Flock.WindowRecord
 meta import NciCheck.Desc
 meta import NciCheck.DefinitionDigest
+meta import Spot.Record
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
@@ -144,11 +146,18 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   audit's registration, so a scan whose `prog` the prover committed alone is refused; and the answer is one-stage's
   for that registration's digest, accepted with one level of the scan's 2T units sampled `subset:k` or stratified,
   sampling no more than the level holds and no more of a stratum than the stratum holds, its strata's sizes summing
-  to the level's (`factsOf` refuses a profile that fails any of the three), and its `bound`;
+  to the level's (`factsOf` refuses a profile that fails any of the three); the level is the registration's own
+  sample, its `population` under its sampling design (`sampleOf`), so its strata, the units of each and how many
+  each holds are the ones registered before any coin, and a profile of another is refused by name; and its count of
+  incorrect proof blocks is the larger of its public's `bound` and that sample's bound at the profile's δ, which the
+  check computes itself with one-stage's `Spot.Bound.boundOf` (`sampleBound`: a stratified sample's a stratum at a
+  time, each one `subset:k_s` of its own units, at δ split equally over the strata), so no answer is refused for
+  its `bound`;
 * in the rows form, every accepted link-window's scan is at one δ, `MonitoringPeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
-  registration's digest, accepted with one level of its Program's units sampled `subset:k` or stratified (a work sampling design's
-  sample is stratified), held to the same three (`factsOf`), and its `bound`, at any sample: this is the consistency
+  registration's digest, accepted with one level of its Program's units sampled `subset:k` or stratified (a work
+  sampling design's sample is stratified), held to the same three and to its registration's sample, its count read
+  the same way (`factsOf`), at any sample: this is the consistency
   check (each audit's answer is its registration's, and in the rows form its outputs are the scan's `prog` and its
   `SCAN_STATE` the scan's state, below), and what a sample in part leaves unproved is in `K` (in the rows form, a tied
   audit's `faulty_entries` and δ, below);
@@ -202,13 +211,21 @@ its `prog`, one input node of `E_w` entry bits a link-window (`wired`, `scanOf`)
 slot's entry, a `ScanSlots_v2` one setting the `occ` and prompts its slots' Programs read, or any other its entries
 read, changes at most those `E_w` bits; the scan reads an entry only where its own state has the slot due and occupied,
 and refuses one there whose `read` is 0, so no `occ` the audit computes drops a request. The check accepts a tied audit
-at any sample; sampled in part, its at most `b` incorrect proof blocks can set any of its link-window's entries, so that
-link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and its δ is in
-`eps`:
+at any sample; sampled in part, the period reads its sample at its own `δ_i` = 2^-64 (`tiedDelta`, fixed before any
+coin), where its at most `b` incorrect proof blocks can set any of its link-window's entries, so that link-window's
+term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and `δ_i` is in `eps`:
 
-    {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ + Σ δ_i,
+    {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c,
+     "charged": [{"delta": δ_i, …}, …], "eps": m · δ + Σ δ_i,
      ["max_tokens_cap": cap,] "scans": [terms, …], "schedules": c, "windows": m}
 
+* `audits` are the compute audits' facts as their answers give them: each at the δ its answer reads its sample at,
+  and the count read there (`factsOf`).
+* `charged` are the tied audits sampled in part, in the order of `audits` and with an entry's keys, each read at `δ_i`
+  off the same sample (`Facts.readAt`: the larger of its count in `audits` and its sample's bound at `δ_i`,
+  `sampleBound`, no second sample): its count is `b` at `δ_i`, which `faulty_entries` reads. The answer's reading
+  stays its own, at its own δ, so each reading is its own term of the composite's error: `δ_i` in this protocol's
+  `eps`, the answer's δ in its audit's.
 * `max_tokens_cap`, present when the schedule has a response cap and absent when it has none, is that cap: each
   response the network certifier released in the period has at most its request's `max_tokens` tokens, and every
   request it released has `max_tokens` at most the cap (`warden`'s "The response cap",
@@ -226,13 +243,14 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
   moves the free term from the scan's `prog` to the tied audit's inputs), `steps` T, `faulty_bits`
   `b · max(b_ing, b_eg)` with `b_ing` an ingress instance's return bits (its verdict u16, state and view) and `b_eg` an
   egress instance's (its u16 and row): each instance's committed values (`faultyBits`), the outputs it computes and
-  other proof blocks or the client read. `b` is its answer's `bound` (over its sample's strata, `countBound`), 0 when every
-  unit is sampled, `drawn` its sample's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
-  sets a stratified sample leaves possible too. `faulty_entries` is `E_w`, its slot entries' bits (`Scan.entries`:
-  `lanes · T / every` entries of its `prog` ports' type, 8 · 112 = 896 at w63k4), when an audit its `prog` is tied to
-  is sampled in part with a `bound` of at least one incorrect proof block (`faultyEntries`), else 0.
-* `eps` is the scans' δ summed, `m · δ`, and each tied audit's sampled in part (`chargedOf`), whose bound
-  `faulty_entries` reads: the δ part of the union over the monitoring period's windows that
+  other proof blocks or the client read. `b` is the count the check reads of its answer (`factsOf`: the larger of its
+  `bound` and its registered sample's own, which is 0 when every unit is sampled), `drawn` its sample's `Σ k`, and
+  `faulty_sets` every set of at most `b` of its 2T units, which holds the sets a stratified sample leaves possible
+  too. `faulty_entries` is `E_w`, its slot entries' bits (`Scan.entries`: `lanes · T / every` entries of its `prog`
+  ports' type, 8 · 112 = 896 at w63k4), when an audit its `prog` is tied to is sampled in part with a count of at
+  least one incorrect proof block at `δ_i` (`faultyEntries`), else 0.
+* `eps` is the scans' δ summed, `m · δ`, and `δ_i` for each tied audit sampled in part (`chargedOf`), whose bound
+  at `δ_i` `faulty_entries` reads: the δ part of the union over the monitoring period's windows that
   `CommOfMonitoringPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
 
 **Profile**: the link and `m`.
@@ -423,12 +441,16 @@ structure Evidence where
   audits : Array Core.Answer
   windows : Array ExecutionPhase
 
-/-- What an accepted audit establishes: its proof blocks, its sample, its δ, and its bound on incorrect proof blocks. -/
+/-- What an accepted audit establishes: its proof blocks, its sample, its δ, its bound on incorrect proof blocks at
+that δ, and the sample's design (`design`), which bounds them at any other δ (`Facts.readAt`). -/
 structure Facts where
   units : Nat
   drawn : Nat
   delta : Core.Ratio
   wrong : Nat
+  /-- The sample's design, the registered one (`factsOf`); `subset 0`, none sampled, where none is read, at which
+  every unit may be incorrect at any δ. -/
+  design : Core.SamplingDesign := .subset 0
 
 /-! ## Decoding -/
 
@@ -1135,12 +1157,44 @@ def tiedOf : Form → Commitment → Nat → Bool
 def records (link : String) : Array (String × Direction) :=
   #[(link, .ingress), (link, .egress), (link ++ "-fails", .egress)]
 
+/-- The sample a registration states, as one-stage's profile has it: its `population` units under the sampling design
+it states, read as one-stage reads it for its profile's level, a `subset:k` or a stratified one (a work sampling
+design's is stratified); none where the registration names neither, or a Bernoulli sample, which the period check
+reads no profile of. A registration is committed before any coin, so the strata of its sample, the units of each and
+how many each holds, are fixed there. -/
+def sampleOf (reg : Json) : Option (Nat × Core.SamplingDesign) := do
+  let n ← Spot.nat? (reg.getObjValD "population")
+  match ← Spot.Record.profileDraw (reg.getObjValD "law") with
+  | .subset k => pure (n, .subset k)
+  | .stratified ss => pure (n, .stratified ss)
+  | _ => none
+
+/-- A stratified sample's bound on incorrect proof blocks at `δ`, a stratum at a time: each stratum is one
+`subset:k_s` of its own `n_s` units, bounded by one-stage's `Spot.Bound.boundOf` at `δ` split equally over the
+strata, `δ / S` each of `S`, and the sum of the strata's bounds holds except with probability `δ`. The stratified
+rule is never read as one sampling design of the whole population. -/
+def strataBound (ss : Array Core.Stratum) (δ : Core.Ratio) : Nat :=
+  ss.foldl (fun b st => b + Spot.Bound.boundOf st.size (.subset st.k) ⟨δ.num, δ.den * ss.size⟩) 0
+
+/-- The bound on incorrect proof blocks the period reads of a sample of `n` units at `δ`, computed with one-stage's
+`Spot.Bound.boundOf` and nothing else: a `subset:k`'s is its bound at `δ`, and a stratified sample's the sum of its
+strata's own (`strataBound`), never the bound of its totals `Σ k_s` of `n` read as one sample. -/
+def sampleBound (n : Nat) (d : Core.SamplingDesign) (δ : Core.Ratio) : Nat :=
+  match d with
+  | .stratified ss => strataBound ss δ
+  | d => Spot.Bound.boundOf n d δ
+
 /-- An accepted scan's or audit's facts: one level sampled `subset:k` or stratified (a work sample's profile is
 stratified, its `Σ k_s` sampled), and its bound. A profile that names more sampled than its level holds is no sample
 of the level and is refused. So is a stratified one that names more sampled of a stratum than the stratum holds, or
 whose strata's sizes do not sum to the level's size: with both held, a level sampled whole is every stratum sampled
-whole. -/
-def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts := do
+whole. The level is then held to the sample its registration `reg` states (`sampleOf`): a profile of another size or
+design, a stratum renamed, resized or sampled otherwise among them, is refused, so the strata are the registered ones.
+And the count of incorrect proof blocks is at least that sample's: the check computes the sample's bound at the
+profile's δ itself (`sampleBound`) and reads the larger of it and the public's `bound`, so no answer is refused for
+its `bound`, and one that states a smaller `bound` than its sample gives gains nothing by it. That the answer is its
+audit's own verifier's is not checked here. -/
+def factsOf (what : String) (reg : Json) (prof : Core.Integrity) (pub : Json) : Found Facts := do
   let #[l] := prof.levels | refuse s!"{what}: profile: not one level"
   let drawn ← match l.draw with
     | some (.subset k) => pure k
@@ -1153,9 +1207,21 @@ def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts :
     let held := ss.foldl (fun n st => n + st.size) 0
     unless held = l.size do
       refuse s!"{what}: profile: strata of {held} units in a level of {l.size}: their sizes do not sum to the level's"
+  let some (n, d) := sampleOf reg
+    | refuse s!"{what}: registration: no sample: it names no subset or stratified sample of a population"
+  unless n = l.size ∧ some d = l.draw do
+    refuse s!"{what}: profile: not the registration's sample: its level of {l.size} units and its sampling design \
+      are not the registration's {n} units and theirs"
   match Flock.J.nat pub "bound" "public" with
-  | .ok b => pure { units := l.size, drawn, delta := prof.delta, wrong := b }
+  | .ok b =>
+    pure { units := l.size, drawn, delta := prof.delta, wrong := max b (sampleBound l.size d prof.delta), design := d }
   | .error e => refuse s!"{what}: {e}"
+
+/-- The same sample read at `δ`: the count of incorrect proof blocks is the larger of the facts' own and the
+sample's bound at `δ` (`sampleBound`, the function `factsOf` reads it with), off the design the facts were
+established by, with no second sample. -/
+def Facts.readAt (f : Facts) (δ : Core.Ratio) : Facts :=
+  { f with delta := δ, wrong := max f.wrong (sampleBound f.units f.design δ) }
 
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
 facts and its tied audits' free inputs (`tiedAudits`: the parameters' `free` of each audit whose output the scan's
@@ -1176,7 +1242,7 @@ def rowsExecutionPhaseCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits
     refuse s!"{what}: the scan's prog is no compute audit's output: no scan/prog<j> entry's root and domain are an \
       output port's of an audit's registration"
   let (prof, pub) ← answered what reg x.answer
-  let f ← factsOf what prof pub
+  let f ← factsOf what reg prof pub
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
   pure (f, (tiedAudits audits reg).foldl (fun n i => n + ((p.audits[i]?.map (·.free)).getD 0)) 0)
 
@@ -1187,7 +1253,7 @@ def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) : Found Fact
   let what := s!"audit {i}"
   unless reg.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
   let (prof, pub) ← answered what reg x
-  let f ← factsOf what prof pub
+  let f ← factsOf what reg prof pub
   unless f.units == a.units do refuse s!"{what}: profile: {f.units} units, not its Program's {a.units}"
   pure f
 
@@ -1288,15 +1354,17 @@ structure Public where
   rows : Bool := false
   schedules : Nat
   windows : Nat
-  /-- The facts of the rows form's tied audits sampled in part (`chargedOf`), whose bounds `faulty_entries` reads, so
-  whose δ is in `eps`. -/
+  /-- The facts of the rows form's tied audits sampled in part, each read at `tiedDelta` (`chargedOf`), whose bounds
+  `faulty_entries` reads, so whose `δ_i` is in `eps`. -/
   charged : Array Facts := #[]
   /-- The schedule's response cap (`Form.maxTokensCap`), published when it has one. -/
   maxTokensCap : Option Nat := none
 
 def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0
 
-/-- `Σ_i δ_i` over the units and the charged audits, exactly, in lowest terms: the union bound on `K` failing. -/
+/-- `Σ_i δ_i` over the units and the charged audits, exactly, in lowest terms: the union bound on `K` failing. It is
+the period's error with each tied audit sampled in part read at `tiedDelta` (`charged`), the δ its count there is at;
+the δ of an audit's own answer is in `audits` and, in the rows form, is no term of this sum. -/
 def Public.eps (x : Public) : Core.Ratio :=
   let (n, d) := (x.units.map (·.facts) ++ x.charged).foldl
     (fun (n, d) f => (n * f.delta.den + f.delta.num * d, d * f.delta.den)) (0, 1)
@@ -1318,17 +1386,23 @@ def terms (audits : Array Audit) (facts : Array Facts) (cells : Array Nat) (jitt
 length, one of `cap_c + 1`, fixes its admission and the lanes it frees), and each link-window's scan's from the scan's
 terms, its facts, its tied audits' free inputs and the entry bits their incorrect proof blocks can set (`scans`, a triple a
 link-window). The compute audits' own terms are in none: a tied audit's free inputs and incorrect proof blocks are in its
-link-window's, and the δ of one sampled in part (`charged`) in `eps`. -/
+link-window's, and the `δ_i` of one sampled in part (`charged`) in `eps`. -/
 def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat × Nat)) (cells : Array Nat)
     (jitter windows : Nat) (charged : Array Facts := #[]) : Public :=
   { audits := facts, cells := capsTerm cells, units := scans.map fun (f, t, b) => scan.terms f t b jitter,
     rows := true, schedules := capsTerm cells, windows, charged }
 
+/-- `δ_i` = 2^-64, the δ at which the rows form reads a tied audit's sample (`chargedOf`): a constant of the check, so
+fixed before any coin, and its own reading of the sample, beside the δ its answer reads the same sample at (in
+`audits`). -/
+def tiedDelta : Core.Ratio := ⟨1, 2 ^ 64⟩
+
 /-- Audit `i`'s facts when the rows form charges it: accepted, tied to a link-window's scan (`tiedOf`) and sampled in
-part, so its at most `b` incorrect proof blocks are in its link-windows' terms (`faultyEntries`) and its δ in `eps`. -/
+part, read at `tiedDelta` (`Facts.readAt`), so its at most `b` incorrect proof blocks at `δ_i` are in its
+link-windows' terms (`faultyEntries`) and `δ_i` in `eps`. -/
 def chargedOf (p : Params) (c : Commitment) (as : Array (Found Facts)) (i : Nat) : Option Facts :=
   match as[i]? with
-  | some (.ok f) => if tiedOf p.form c i && f.drawn < f.units then some f else none
+  | some (.ok f) => if tiedOf p.form c i && f.drawn < f.units then some (f.readAt tiedDelta) else none
   | _ => none
 
 /-- A link-window's `β_w`: every slot entry bit of its scan (`Scan.entries`, `E_w`) when an audit its `prog` is tied
@@ -1400,7 +1474,7 @@ def publicJson (x : Public) : Json :=
   Json.mkObj ([
     ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
     ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
-    (if x.rows then [("scans", termsJson x.units true)] else []) ++
+    (if x.rows then [("charged", factsJson x.charged), ("scans", termsJson x.units true)] else []) ++
     (x.maxTokensCap.map fun cap => ("max_tokens_cap", toJson cap)).toList)
 
 def profileJson (pr : Profile) : Json :=
@@ -1436,7 +1510,8 @@ def protocol : Core.Protocol where
   #[] 1 1 1).eps.toString == "10001/1000000"
 -- eps over audits at δ = 1/10, 1/15 and 1/6 is 1/3; over none it is 0
 #guard (terms #[⟨0, 0, "", 1, 16, #[]⟩, ⟨0, 0, "", 1, 16, #[]⟩, ⟨0, 0, "", 1, 16, #[]⟩]
-  #[⟨1, 1, ⟨1, 10⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 6⟩, 0⟩] #[] 1 1 1).eps.toString == "1/3"
+  #[⟨1, 1, ⟨1, 10⟩, 0, .subset 1⟩, ⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, ⟨1, 1, ⟨1, 6⟩, 0, .subset 1⟩] #[] 1 1 1
+  ).eps.toString == "1/3"
 #guard (terms #[] #[] #[] 1 1 1).eps.toString == "0"
 -- the rows form over 1 link-window: 7 cells on one connection and 2 on another (3 + 2 bits, for the schedules and
 -- again for the fail cells), an audit whose own terms are in none, and one scan of 20 units (T = 10) sampled at
@@ -1455,17 +1530,30 @@ def protocol : Core.Protocol where
 #guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 0⟩
   #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 8 * 1136, 0)] #[] 1 1).K == 9088
 -- eps over the scans' δ = 1/15 and 1/15 is 2/15; the audit's 1/10 is in it no more
-#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0), (⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[]
-  1 2).eps.toString == "2/15"
+#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0, .subset 1⟩] ⟨0, 0, 0, 0, 0⟩
+  #[(⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, 0, 0), (⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, 0, 0)] #[] 1 2).eps.toString == "2/15"
 -- w63k4: T = 32, 4 lanes, every 16, so 8 slot entries of 112 bits a link-window; its tied audit sampled in part, with at
 -- most 2 incorrect proof blocks, which can set any entry: its link-window's term charges E_w = 896 bits beside its free inputs
 #guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112⟩
   #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 9088, 8 * 112)] #[] 1 1).K == 9088 + 896
 -- a charged audit's δ = 1/10 is in eps beside its scan's 1/15: 1/6
-#guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0, 0)] #[] 1 1 #[⟨2, 1, ⟨1, 10⟩, 0⟩]
-  ).eps.toString == "1/6"
--- w63k4's tied audit of 16 proof blocks sampled at one (`subset:1`), with a bound of 2 incorrect ones: charged, its
--- link-window's β_w every one of the scan's E_w = 896 entry bits; sampled whole, uncharged and β_w = 0
+#guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0, .subset 1⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, 0, 0)] #[] 1 1
+  #[⟨2, 1, ⟨1, 10⟩, 0, .subset 1⟩]).eps.toString == "1/6"
+-- the same sample read at δ_i = 2^-64: one of 16 sampled (`subset:1`, 8 at δ = 1/2) leaves 15 possibly incorrect, all
+-- 16 sampled none, and facts with no design every unit; a count above the sample's bound stays; a stratified
+-- sample's bound at δ = 1/2 is its strata's own at 1/4 each, summed
+#guard (Facts.readAt ⟨16, 1, ⟨1, 2⟩, 8, .subset 1⟩ tiedDelta).wrong == 15 &&
+  (Facts.readAt ⟨16, 1, ⟨1, 2⟩, 8, .subset 1⟩ ⟨1, 2⟩).wrong == 8 &&
+  (Facts.readAt ⟨16, 16, ⟨1, 2⟩, 0, .subset 16⟩ tiedDelta).wrong == 0 &&
+  (Facts.readAt { units := 16, drawn := 1, delta := ⟨1, 2⟩, wrong := 8 } tiedDelta).wrong == 16 &&
+  (Facts.readAt ⟨16, 16, ⟨1, 2⟩, 3, .subset 16⟩ tiedDelta).wrong == 3 &&
+  (Facts.readAt
+    ⟨9, 5, ⟨1, 10⟩, 0, .stratified #[{ name := "a", size := 4, k := 4 }, { name := "b", size := 5, k := 1 }]⟩
+    ⟨1, 2⟩).wrong == 3
+-- w63k4's tied audit of 16 proof blocks sampled at one (`subset:1`), its count 8 at δ = 1/2: charged, read at
+-- δ_i = 2^-64 with a bound of 15, its link-window's β_w every one of the scan's E_w = 896 entry bits; sampled whole,
+-- uncharged and β_w = 0. The public keeps the answer's δ and count in `audits` and the period's reading in `charged`,
+-- and its eps is the scan's δ = 2^-64 and δ_i: 2^-63
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112⟩
   let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[]⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
@@ -1473,20 +1561,39 @@ def protocol : Core.Protocol where
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]
   let c : Commitment := ⟨#[at_ (entriesPort "SelectEntry_v1{KO=4}" 0)], #[at_ (progName 0)], .empty⟩
-  let one : Array (Found Facts) := #[.ok ⟨16, 1, ⟨1, 100⟩, 2⟩]
-  let whole : Array (Found Facts) := #[.ok ⟨16, 16, ⟨1, 100⟩, 0⟩]
-  tiedIn c.audits c.windows 0 && (chargedOf p c one 0).isSome && faultyEntries p c one scan (at_ (progName 0)) == 896 &&
-    (chargedOf p c whole 0).isNone && faultyEntries p c whole scan (at_ (progName 0)) == 0
+  let one : Array (Found Facts) := #[.ok ⟨16, 1, ⟨1, 2⟩, 8, .subset 1⟩]
+  let whole : Array (Found Facts) := #[.ok ⟨16, 16, ⟨1, 2⟩, 0, .subset 16⟩]
+  let pub := rowsPublic p c one scan #[(⟨64, 64, tiedDelta, 0, .subset 64⟩, 0)]
+  tiedIn c.audits c.windows 0 && (chargedOf p c one 0).map (fun f => (f.delta, f.wrong)) == some (tiedDelta, 15) &&
+    faultyEntries p c one scan (at_ (progName 0)) == 896 &&
+    (chargedOf p c whole 0).isNone && faultyEntries p c whole scan (at_ (progName 0)) == 0 &&
+    pub.audits.map (fun f => (f.delta, f.wrong)) == #[((⟨1, 2⟩ : Core.Ratio), 8)] &&
+    pub.charged.map (fun f => (f.delta, f.wrong)) == #[(tiedDelta, 15)] && pub.eps == (⟨1, 2 ^ 63⟩ : Core.Ratio)
+
+/-- A sampling design as a registration states it, for the guards below: a stratified one's strata tile the units in
+order, and a work one is not written. -/
+private def statedDesign : Core.SamplingDesign → Json
+  | .bernoulli p => Json.mkObj [("law", "bernoulli"), ("p", .str p.toString)]
+  | .subset k => Json.mkObj [("law", "subset"), ("k", toJson k)]
+  | .stratified ss => Json.mkObj [("law", "stratified"), ("strata", Json.arr (ss.foldl (fun (lo, out) st =>
+      (lo + st.size, out.push (Json.mkObj [("template", .str st.name), ("k", toJson st.k),
+        ("units", Json.arr #[Json.arr #[toJson lo, toJson (lo + st.size)]])]))) (0, #[])).2)]
+  | .work .. => Json.null
+
+/-- A registration of `size` units under the sampling design `d`, for the guards below. -/
+private def statedSample (size : Nat) (d : Core.SamplingDesign) : Json :=
+  Json.mkObj [("population", toJson size), ("law", statedDesign d)]
+
 -- `factsOf` reads a profile of one level sampled within it, `subset:k` or stratified, whole or in part, and refuses
 -- one that names more sampled than the level has, 3 of 2 or strata of 2 of 1 and 1 of 1, then one that names more
 -- sampled of a stratum than the stratum has, strata of 2 of 1 and 0 of 1 in a level of 2, then one whose strata's
 -- sizes do not sum to the level's, strata of 1 of 2 and 1 of 2 or of 1 of 1 alone in a level of 2, each before the
--- bound is read
+-- registration's sample and the bound are read
 #guard
   let facts := fun (size : Nat) (d : Core.SamplingDesign) =>
-    match (factsOf "x" ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[]⟩
+    match (factsOf "x" (statedSample size d) ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[]⟩
       (Json.mkObj [("bound", toJson (1 : Nat))])).toOption with
-    | some ⟨units, k, _, b⟩ => some (units, k, b)
+    | some ⟨units, k, _, b, _⟩ => some (units, k, b)
     | none => none
   facts 2 (.subset 2) == some (2, 2, 1) && facts 2 (.subset 1) == some (2, 1, 1) &&
     facts 3 (.stratified #[⟨"a", 2, 2⟩, ⟨"b", 1, 0⟩]) == some (3, 2, 1) &&
@@ -1495,7 +1602,8 @@ def protocol : Core.Protocol where
     facts 2 (.stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) == none && facts 2 (.stratified #[⟨"a", 1, 1⟩]) == none
 #guard
   let reason := fun (d : Core.SamplingDesign) =>
-    match factsOf "x" ⟨#[], #[], false, #[], #[⟨"unit", none, 2, some d⟩], ⟨1, 100⟩, #[]⟩ (Json.mkObj []) with
+    match factsOf "x" (statedSample 2 d) ⟨#[], #[], false, #[], #[⟨"unit", none, 2, some d⟩], ⟨1, 100⟩, #[]⟩
+      (Json.mkObj []) with
     | .error (_, r) => r
     | .ok _ => ""
   reason (.subset 3) == "x: profile: 3 sampled of 2 units: more than the level holds" &&
@@ -1504,6 +1612,52 @@ def protocol : Core.Protocol where
       "x: profile: stratum 'a': 2 sampled of 1 units: more than the stratum holds" &&
     reason (.stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) ==
       "x: profile: strata of 4 units in a level of 2: their sizes do not sum to the level's"
+-- the level is its registration's sample: a profile is refused by name where its `k` is another, a stratum is
+-- renamed, the strata are resized or sampled otherwise at the same totals, its size is another or its design is of
+-- the other kind, and where the registration names no sample (no sampling design, a Bernoulli one, no population)
+#guard
+  let reg := statedSample
+  let reason := fun (r : Json) (size : Nat) (d : Core.SamplingDesign) =>
+    match factsOf "x" r ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], ⟨1, 100⟩, #[]⟩
+      (Json.mkObj [("bound", toJson size)]) with
+    | .error (_, e) => e
+    | .ok _ => ""
+  let two : Core.SamplingDesign := .stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]
+  let other := "x: profile: not the registration's sample: its level of 4 units and its sampling design are not \
+    the registration's 4 units and theirs"
+  let unsampled := "x: registration: no sample: it names no subset or stratified sample of a population"
+  reason (reg 4 two) 4 two == "" && reason (reg 4 (.subset 2)) 4 (.subset 2) == "" &&
+    reason (reg 4 (.subset 2)) 4 (.subset 1) == other &&
+    reason (reg 4 two) 4 (.stratified #[⟨"a", 2, 1⟩, ⟨"c", 2, 1⟩]) == other &&
+    reason (reg 4 two) 4 (.stratified #[⟨"a", 1, 1⟩, ⟨"b", 3, 1⟩]) == other &&
+    reason (reg 4 two) 4 (.stratified #[⟨"a", 2, 2⟩, ⟨"b", 2, 0⟩]) == other &&
+    reason (reg 4 two) 4 (.subset 2) == other && reason (reg 4 (.subset 2)) 4 two == other &&
+    reason (reg 5 (.subset 2)) 4 (.subset 2) ==
+      "x: profile: not the registration's sample: its level of 4 units and its sampling design are not the \
+        registration's 5 units and theirs" &&
+    reason (Json.mkObj [("population", toJson (4 : Nat))]) 4 two == unsampled &&
+    reason (reg 4 (.bernoulli ⟨1, 2⟩)) 4 two == unsampled &&
+    reason (Json.mkObj [("law", statedDesign two)]) 4 two == unsampled
+-- the count is the larger of the public's `bound` and the sample's, computed here: 3 of 10 at δ = 1/10 leave at most
+-- 4 incorrect, so a `bound` of 3 is read as 4, and 4 and 5 as themselves; strata of 9 of 10 and 1 of 10 at δ = 1/100
+-- leave at most 1 and 9 at 1/200 each, so 9 is read as 10, where their totals, 10 of 20, would leave 5; two strata
+-- of 4 of 8 at δ = 1/10 leave at most 3 each at 1/20, so 0 is read as 6, where one-stage's bound of the stratified
+-- rule over all 16 is 3; a level sampled whole leaves none, and its `bound` is read as it is
+#guard
+  let count := fun (size : Nat) (d : Core.SamplingDesign) (δ : Core.Ratio) (b : Nat) =>
+    (factsOf "x" (statedSample size d) ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], δ, #[]⟩
+      (Json.mkObj [("bound", toJson b)])).toOption.map (·.wrong)
+  let strata : Core.SamplingDesign := .stratified #[⟨"a", 10, 9⟩, ⟨"b", 10, 1⟩]
+  let halves : Core.SamplingDesign := .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]
+  count 10 (.subset 3) ⟨1, 10⟩ 3 == some 4 && count 10 (.subset 3) ⟨1, 10⟩ 4 == some 4 &&
+    count 10 (.subset 3) ⟨1, 10⟩ 5 == some 5 &&
+    sampleBound 10 (.subset 3) ⟨1, 10⟩ == Spot.Bound.boundOf 10 (.subset 3) ⟨1, 10⟩ &&
+    count 20 strata ⟨1, 100⟩ 9 == some 10 && count 20 strata ⟨1, 100⟩ 12 == some 12 &&
+    Spot.Bound.boundOf 20 (.subset 10) ⟨1, 100⟩ == 5 &&
+    Spot.Bound.boundOf 10 (.subset 9) ⟨1, 200⟩ == 1 && Spot.Bound.boundOf 10 (.subset 1) ⟨1, 200⟩ == 9 &&
+    count 16 halves ⟨1, 10⟩ 0 == some 6 && count 16 halves ⟨1, 10⟩ 7 == some 7 &&
+    Spot.Bound.boundOf 8 (.subset 4) ⟨1, 20⟩ == 3 && Spot.Bound.boundOf 16 halves ⟨1, 10⟩ == 3 &&
+    count 10 (.subset 10) ⟨1, 10⟩ 0 == some 0 && count 10 (.subset 10) ⟨1, 10⟩ 2 == some 2
 -- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||

@@ -5,6 +5,8 @@ import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
 import all Init.Data.Repr
+import all Init.Data.Range.Basic
+import all Init.Data.Array.DecidableEq
 public import Mathlib.Algebra.GroupWithZero.Nat
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
@@ -23,9 +25,14 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 its facts and every link-window's its scan's, so the public's `audits` and `units` hold them position for position
 (`getElem?_filterMap_of_isSome`), `charged` is `chargedOf` over the audits (`charged_eq`), and a link-window's term's
 `faultyEntries` is `faultyEntries` of its registration. An audit's facts are `factsOf`'s, which refuses a profile
-sampling more than its level holds (`factsOf_sampled_le_units`). It also refuses a stratified profile with a stratum
-sampling more than it holds, and one whose strata's sizes do not sum to the level's, so facts with `drawn = units` are
-of a profile whose every stratum is sampled whole (`factsOf_stratified_whole`, by `strata_whole`).
+sampling more than its level holds, a stratified one with a stratum sampling more than it holds or whose strata's
+sizes do not sum to the level's, and one that is another sample than its registration's (`factsOf_sample`), so facts
+of a registered stratified sample that is sampled whole are of every stratum sampled whole (`strata_whole`).
+
+`RegisteredSampleHeld` and `SampleBoundCharged` read the same public in both forms (`check_clock`, `check_rows`): what
+`factsOf` gives of every answer (`factsOf_sample`: facts of the registered sample, with a count at least its bound,
+the larger of the stated one and `sampleBound`) holds of each audit's facts and each scan's
+(`rowsExecutionPhaseCheck_facts`), position for position (`answersAt`).
 
 `RowsCapPublished` reads the public off the acceptance, in each form.
 -/
@@ -376,7 +383,7 @@ theorem auditCheck_facts {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answe
       simp [c1, refuse] at h
   | ok pp =>
     obtain ⟨prof, pub⟩ := pp
-    cases hf : factsOf s!"audit {i}" prof pub with
+    cases hf : factsOf s!"audit {i}" reg prof pub with
     | error r =>
       simp only [ha, hf, bind, Except.bind] at h
       by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
@@ -387,9 +394,12 @@ theorem auditCheck_facts {i : ℕ} {a : Audit} {reg : Lean.Json} {x : Core.Answe
       by_cases c1 : (reg.getObjValD "program" == Lean.Json.str a.program) = true <;>
         by_cases c2 : g.units = a.units <;> simp_all [refuse, pure, Except.pure]
 
-/-- The facts `factsOf` gives sample no more than their level holds: it refuses a profile that names more. -/
-theorem factsOf_sampled_le_units {what : String} {prof : Core.Integrity} {pub : Lean.Json} {f : Facts}
-    (h : factsOf what prof pub = .ok f) : f.drawn ≤ f.units := by
+/-- The facts `factsOf` gives are of the sample the registration states, one its units hold, and charge it: it
+refuses a profile that names more sampled than its level holds, one with a stratum that samples more than it holds,
+one whose strata's sizes do not sum to the level's and one that is another sample than the registration's, and the
+count it reads is the larger of the stated bound and the sample's (`sampleBound`). -/
+theorem factsOf_sample {what : String} {reg : Lean.Json} {prof : Core.Integrity} {pub : Lean.Json} {f : Facts}
+    (h : factsOf what reg prof pub = .ok f) : SampleHeld reg f ∧ SampleCharged reg f := by
   have one : ∀ (body : Core.Level → Found Facts) (alt : Found Facts),
       (match prof.levels with | #[l] => body l | _ => alt) = .ok f → alt = .ok f ∨ ∃ l, body l = .ok f := by
     intro body alt hm
@@ -400,10 +410,24 @@ theorem factsOf_sampled_le_units {what : String} {prof : Core.Integrity} {pub : 
   unfold factsOf at h
   rcases one _ _ h with h | ⟨l, h⟩
   · cases h
-  · simp only [bind, Except.bind, pure, Except.pure, refuse] at h
-    repeat' split at h
-    all_goals cases h
-    all_goals assumption
+  rcases hd : l.draw with _ | (p | k | ss | ⟨w, ws⟩) <;>
+    simp only [hd, bind, Except.bind, pure, Except.pure, refuse] at h <;>
+    (repeat' split at h) <;> cases h
+  · obtain ⟨hn, hreg⟩ := ‹_ = l.size ∧ _›
+    cases hn
+    cases hreg
+    exact ⟨⟨l.size, .subset k, by assumption, rfl, rfl, by assumption, .inl ⟨k, rfl, rfl⟩⟩,
+      l.size, .subset k, by assumption, .inl ⟨k, rfl, Nat.le_max_right _ _⟩⟩
+  · obtain ⟨hn, hreg⟩ := ‹_ = l.size ∧ _›
+    cases hn
+    cases hreg
+    have hnone : ∀ st, ss.find? (fun st => decide (st.size < st.k)) = some st → False := by assumption
+    have hsum : ss.foldl (fun n st => n + st.size) 0 = l.size := by assumption
+    refine ⟨⟨l.size, .stratified ss, by assumption, rfl, rfl, by assumption,
+        .inr ⟨ss, rfl, rfl, fun st m => ?_, hsum⟩⟩,
+      l.size, .stratified ss, by assumption, .inr ⟨ss, rfl, Nat.le_max_right _ _⟩⟩
+    have := Array.find?_eq_none.mp (Option.eq_none_iff_forall_ne_some.mpr hnone) st m
+    simpa using this
 
 /-- Strata that each sample no more than they hold, and in all as many as they hold, are each sampled whole. -/
 theorem strata_whole (xs : List Core.Stratum) (hle : ∀ st ∈ xs, st.k ≤ st.size) (a b : ℕ) (hab : a ≤ b)
@@ -419,31 +443,30 @@ theorem strata_whole (xs : List Core.Stratum) (hle : ∀ st ∈ xs, st.k ≤ st.
     · omega
     · exact r st m
 
-/-- The facts `factsOf` gives of a stratified profile with `drawn = units` are of every stratum sampled whole: it
-refuses a profile with a stratum that samples more than it holds, and one whose strata's sizes do not sum to the
-level's. -/
-theorem factsOf_stratified_whole {what : String} {prof : Core.Integrity} {pub : Lean.Json} {f : Facts}
-    {l : Core.Level} {ss : Array Core.Stratum} (h : factsOf what prof pub = .ok f) (hl : prof.levels = #[l])
-    (hs : l.draw = some (.stratified ss)) (hw : f.drawn = f.units) : ∀ st ∈ ss, st.k = st.size := by
-  have one : ∀ (body : Core.Level → Found Facts) (alt : Found Facts),
-      (match prof.levels with | #[l] => body l | _ => alt) = .ok f → body l = .ok f := by
-    intro body alt hm
-    rw [hl] at hm
-    exact hm
-  unfold factsOf at h
-  replace h := one _ _ h
-  simp only [hs, bind, Except.bind, pure, Except.pure, refuse] at h
+/-- Facts of a registered stratified sample that is sampled whole are of every stratum sampled whole. -/
+theorem sampleHeld_whole {reg : Lean.Json} {f : Facts} {n : ℕ} {ss : Array Core.Stratum} (h : SampleHeld reg f)
+    (hs : sampleOf reg = some (n, .stratified ss)) (hw : f.drawn = f.units) : ∀ st ∈ ss, st.k = st.size := by
+  obtain ⟨n', d, hs', hu, -, -, hd⟩ := h
+  rw [hs] at hs'
+  cases hs'
+  rcases hd with ⟨k, hk, -⟩ | ⟨ss', hss, hdr, hle, hsum⟩
+  · cases hk
+  · cases hss
+    have hk : ss.toList.foldl (fun n st => n + st.k) 0 = ss.toList.foldl (fun n st => n + st.size) 0 := by
+      rw [Array.foldl_toList, Array.foldl_toList]
+      omega
+    exact fun st m => (strata_whole ss.toList (fun st m => hle st (Array.mem_toList_iff.mp m)) 0 0 (Nat.le_refl 0)
+      hk).2 st (Array.mem_toList_iff.mpr m)
+
+/-- The rows form's check of a scan, where it accepts, has the scan's answer's facts. -/
+theorem rowsExecutionPhaseCheck_facts {p : Params} {s : Schedule} {sd : ByteArray} {audits : Array Lean.Json} {w : ℕ}
+    {reg : Lean.Json} {x : ExecutionPhase} {u : Facts × ℕ} (h : rowsExecutionPhaseCheck p s sd audits w reg x = .ok u) :
+    ∃ (what : String) (prof : Core.Integrity) (pub : Lean.Json), factsOf what reg prof pub = .ok u.1 := by
+  unfold rowsExecutionPhaseCheck at h
+  simp only [bind, Except.bind, pure, Except.pure, refuse] at h
   repeat' split at h
   all_goals cases h
-  have hnone : ∀ st, ss.find? (fun st => decide (st.size < st.k)) = some st → False := by assumption
-  have hsum : ss.foldl (fun n st => n + st.size) 0 = l.size := by assumption
-  have hle : ∀ st ∈ ss.toList, st.k ≤ st.size := fun st m => by
-    have := Array.find?_eq_none.mp (Option.eq_none_iff_forall_ne_some.mpr hnone) st (Array.mem_toList_iff.mp m)
-    simpa using this
-  have hk : ss.toList.foldl (fun n st => n + st.k) 0 = ss.toList.foldl (fun n st => n + st.size) 0 := by
-    rw [Array.foldl_toList, Array.foldl_toList]
-    exact hw.trans hsum.symm
-  exact fun st m => (strata_whole ss.toList hle 0 0 (Nat.le_refl 0) hk).2 st (Array.mem_toList_iff.mpr m)
+  all_goals exact ⟨_, _, _, by assumption⟩
 
 /-- A link-window with no finding has its scan's facts and its tied audits' free inputs. -/
 theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedule} {sd : ByteArray}
@@ -457,8 +480,23 @@ theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedul
   | error r => simp [hr, Functor.map, Except.map] at hz
   | ok u => exact ⟨u, by simpa [hr, Functor.map, Except.map] using hz.symm⟩
 
+/-- Facts of a registered sample, read at any δ, charge that sample's bound there: the reading's count is the larger
+of the facts' own and the bound of the facts' design at that δ, and the design is the registered one. -/
+theorem sampleCharged_readAt {reg : Lean.Json} {f : Facts} (h : SampleHeld reg f) (δ : Core.Ratio) :
+    SampleCharged reg (f.readAt δ) := by
+  obtain ⟨u, dr, δ₀, w, dw⟩ := f
+  obtain ⟨n, d, hs, hu, hdesign, -, hd⟩ := h
+  obtain rfl : u = n := hu
+  obtain rfl : dw = d := hdesign
+  refine ⟨_, _, hs, ?_⟩
+  rcases hd with ⟨k, hk, -⟩ | ⟨ss, hss, -⟩
+  · cases hk
+    exact .inl ⟨k, rfl, Nat.le_max_right _ _⟩
+  · cases hss
+    exact .inr ⟨ss, rfl, Nat.le_max_right _ _⟩
+
 /-- With every audit accepted, the audits the rows form charges are those the accepted facts name: tied and sampled in
-part. -/
+part, each read at the period's own δ. -/
 theorem charged_eq {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
     (hform : p.form = .rows s sd scan) {as : Array (Found Facts)} (has : ∀ y ∈ as, findingOf y = none) :
     (Array.range as.size).filterMap (chargedOf p c as) =
@@ -477,7 +515,10 @@ theorem charged_eq {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray}
   | none => rfl
   | some y =>
     obtain ⟨f, rfl⟩ := findingOf_none (has y (Array.mem_of_getElem? hi))
-    simp [hform, tiedOf, Except.toOption, Option.filter]
+    have hf : (some (Except.ok f : Found Facts)).bind Except.toOption = some f := rfl
+    simp only [hform, tiedOf, hf, Option.filter]
+    by_cases h : (tiedIn c.audits c.windows i && decide (f.drawn < f.units)) = true <;>
+      simp only [h, ↓reduceIte] <;> rfl
 
 theorem rowsTiedCharged : RowsTiedCharged := by
   intro p c e pub prof h s sd scan hform
@@ -495,17 +536,22 @@ theorem rowsTiedCharged : RowsTiedCharged := by
     obtain ⟨v, rfl⟩ := findingOf_none (has y hy)
     rfl
   have hfacts := auditCheck_facts hf
-  refine ⟨_, f, hx, hfacts, ?_, ?_, ?_⟩
+  have hheld : SampleHeld reg f := by
+    obtain ⟨_, _, -, hfo⟩ := hfacts
+    exact (factsOf_sample hfo).1
+  refine ⟨_, f, hx, hfacts, ?_, ?_, ?_, ?_⟩
   · show ((auditChecks p c e).filterMap (·.toOption))[i]? = some f
     rw [getElem?_filterMap_of_isSome _ _ hall, hget]
     rfl
-  · obtain ⟨_, _, -, hfo⟩ := hfacts
-    exact factsOf_sampled_le_units hfo
+  · obtain ⟨_, _, -, hu, -, hle, -⟩ := hheld
+    omega
+  · exact fun hw _ _ hs => sampleHeld_whole hheld hs hw
   · intro hd
-    have hch : chargedOf p c (auditChecks p c e) i = some f := by
+    have hch : chargedOf p c (auditChecks p c e) i = some (f.readAt tiedDelta) := by
       simp [chargedOf, hget, hform, tiedOf, htied, hd]
-    refine ⟨?_, ?_⟩
-    · show f ∈ (Array.range (auditChecks p c e).size).filterMap (chargedOf p c (auditChecks p c e))
+    refine ⟨?_, sampleCharged_readAt hheld tiedDelta, ?_⟩
+    · show f.readAt tiedDelta ∈
+        (Array.range (auditChecks p c e).size).filterMap (chargedOf p c (auditChecks p c e))
       exact Array.mem_filterMap.mpr ⟨i, Array.mem_range.mpr (Array.getElem?_eq_some_iff.mp hget).1, hch⟩
     · intro hwrong w wreg hw hc
       obtain ⟨hwlt, -⟩ := Array.getElem?_eq_some_iff.mp hw
@@ -546,13 +592,15 @@ def chargedParams : Params :=
 def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩
 
 /-- Its honest side, at the slot audit tied to `tiedExecutionPhase`: sampled 1 of its 2 units with a bound of one incorrect
-proof block, the audit is charged and its link-window's `β_w` is the scan's every entry bit; sampled whole, it is not
-charged and `β_w` is 0. -/
+proof block, the audit is charged, read at the period's own δ, where the one unit it leaves may be incorrect, and its
+link-window's `β_w` is the scan's every entry bit; sampled whole, it is not charged and `β_w` is 0. -/
 theorem rowsTiedCharged_honest :
-    (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] 0).isSome = true ∧
-      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] ⟨0, 0, 0, 0, 7⟩ tiedExecutionPhase = 7 ∧
-      (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0⟩] 0).isNone = true ∧
-      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0⟩] ⟨0, 0, 0, 0, 7⟩ tiedExecutionPhase = 0 := by
+    (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1, .subset 1⟩] 0).isSome = true ∧
+      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1, .subset 1⟩] ⟨0, 0, 0, 0, 7⟩
+        tiedExecutionPhase = 7 ∧
+      (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0, .subset 2⟩] 0).isNone = true ∧
+      faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 2, ⟨0, 1⟩, 0, .subset 2⟩] ⟨0, 0, 0, 0, 7⟩
+        tiedExecutionPhase = 0 := by
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsTiedCharged`'s property** (its nontrivial lemma): such a check
@@ -606,5 +654,216 @@ theorem rowsCapPublished_nontrivial :
 /-- **No period check that accepts every period has `RowsCapPublished`'s property.** -/
 theorem rowsCapPublished_acceptAll : ¬ RowsCapPublishedOf acceptAllRows :=
   fun h => rowsCapPublished_nontrivial (h cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl)
+
+/-! ## Every answer is of its registered sample and charges its bound -/
+
+/-- What acceptance in the clock form gives: the sizes, no finding of an audit, and the public, the clock form's
+(`terms`) over the accepted audits' facts. -/
+theorem check_clock {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
+    {ss : NetworkCertifier.SyncSet} (hform : p.form = .clock ss) (h : check p c e = .accept pub prof) :
+    c.audits.size = p.audits.size ∧ e.audits.size = c.audits.size ∧
+      (∀ y ∈ auditChecks p c e, findingOf y = none) ∧
+      pub = { terms p.audits ((auditChecks p c e).filterMap (·.toOption)) p.cells p.jitter
+        (ss.deltas.length * ss.rhos.length) p.windows with maxTokensCap := p.form.maxTokensCap } := by
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  rename_i h1 h2 h3 h4
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF
+    refine ⟨by omega, by omega, ?_, ?_⟩
+    · intro y hy
+      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
+        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))
+    · injection h with hp
+      rw [hform]
+      exact hp.symm
+
+/-- What acceptance gives of the audits in either form: the sizes, no finding of an audit, and the public's audits'
+facts, the accepted ones'. -/
+theorem check_audits {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
+    (h : check p c e = .accept pub prof) :
+    c.audits.size = p.audits.size ∧ e.audits.size = c.audits.size ∧
+      (∀ y ∈ auditChecks p c e, findingOf y = none) ∧
+      pub.audits = (auditChecks p c e).filterMap (·.toOption) := by
+  cases hform : p.form with
+  | clock ss =>
+    obtain ⟨hca, hea, has, rfl⟩ := check_clock hform h
+    exact ⟨hca, hea, has, rfl⟩
+  | rows s sd scan =>
+    obtain ⟨hca, -, hea, -, has, rfl⟩ := check_rows hform h
+    exact ⟨hca, hea, has, rfl⟩
+
+/-- What `factsOf` gives of every answer holds of an accepted period's public: of each audit's facts, which are its
+term's in the clock form, and in the rows form of each scan's. -/
+theorem answersAt {P : Lean.Json → Facts → Prop}
+    (hP : ∀ (what : String) (reg : Lean.Json) (prof : Core.Integrity) (pub : Lean.Json) (f : Facts),
+      factsOf what reg prof pub = .ok f → P reg f)
+    {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
+    (h : check p c e = .accept pub prof) : AnswersAt P p c pub := by
+  refine ⟨?_, ?_⟩
+  · intro i reg hreg
+    obtain ⟨hca, hea, has, haud⟩ := check_audits h
+    obtain ⟨hlt, -⟩ := Array.getElem?_eq_some_iff.mp hreg
+    have hi : i < p.audits.size := by omega
+    have hx : e.audits[i]? = some (e.audits[i]'(by omega)) := Array.getElem?_eq_getElem (by omega)
+    have hget := auditChecks_getElem? (Array.getElem?_eq_getElem hi) hreg hx
+    obtain ⟨f, hf⟩ := findingOf_none (has _ (Array.mem_of_getElem? hget))
+    rw [hf] at hget
+    have hall : ∀ y ∈ auditChecks p c e, (Except.toOption y).isSome = true := by
+      intro y hy
+      obtain ⟨v, rfl⟩ := findingOf_none (has y hy)
+      rfl
+    have hfi : ((auditChecks p c e).filterMap (·.toOption))[i]? = some f := by
+      rw [getElem?_filterMap_of_isSome _ _ hall, hget]
+      rfl
+    obtain ⟨_, _, -, hfo⟩ := auditCheck_facts hf
+    refine ⟨f, haud ▸ hfi, hP _ _ _ _ _ hfo, ?_⟩
+    intro ss hform
+    obtain ⟨-, -, -, rfl⟩ := check_clock hform h
+    have hz : (p.audits.zip ((auditChecks p c e).filterMap (·.toOption)))[i]? = some (p.audits[i], f) :=
+      Array.getElem?_zip_eq_some.mpr ⟨Array.getElem?_eq_getElem hi, hfi⟩
+    exact ⟨AuditTerms.of p.audits[i] f p.jitter, by simp [terms, hz], rfl⟩
+  · intro s sd scan hform w reg hw
+    obtain ⟨hca, hew, hea, hws, has, rfl⟩ := check_rows hform h
+    obtain ⟨hwlt, -⟩ := Array.getElem?_eq_some_iff.mp hw
+    have hxw : e.windows[w]? = some (e.windows[w]'(by omega)) := Array.getElem?_eq_getElem (by omega)
+    have hz : (c.windows.zip e.windows)[w]? = some (reg, e.windows[w]'(by omega)) :=
+      Array.getElem?_zip_eq_some.mpr ⟨hw, hxw⟩
+    have hwget : (rowsWindows p c e s sd)[w]? =
+        some (some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega))) := by
+      simp [rowsWindows, Array.getElem?_zipIdx, hz]
+    obtain ⟨u, hu⟩ := rowsWindows_ok hws _ (Array.mem_of_getElem? hwget)
+    have hrc : rowsExecutionPhaseCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega)) = .ok u := by
+      cases hr : rowsExecutionPhaseCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega)) with
+      | error r => simp [hr, Functor.map, Except.map] at hu
+      | ok v => simpa [hr, Functor.map, Except.map] using hu
+    rw [hu] at hwget
+    have hwall : ∀ y ∈ rowsWindows p c e s sd, (y.toOption.join).isSome = true := by
+      intro y hy
+      obtain ⟨u, rfl⟩ := rowsWindows_ok hws y hy
+      rfl
+    have hscan : ((rowsWindows p c e s sd).filterMap (·.toOption.join))[w]? = some u := by
+      rw [getElem?_filterMap_of_isSome _ _ hwall, hwget]
+      rfl
+    have hzip : (((rowsWindows p c e s sd).filterMap (·.toOption.join)).zip c.windows)[w]? = some (u, reg) :=
+      Array.getElem?_zip_eq_some.mpr ⟨hscan, hw⟩
+    obtain ⟨_, _, _, hfo⟩ := rowsExecutionPhaseCheck_facts hrc
+    exact ⟨scan.terms u.1 u.2 (faultyEntries p c (auditChecks p c e) scan reg) p.jitter,
+      by simp [rowsPublic, rowsTerms, hzip], hP _ _ _ _ _ hfo⟩
+
+theorem registeredSampleHeld : RegisteredSampleHeld :=
+  fun _ _ _ _ _ h => answersAt (fun _ _ _ _ _ hf => (factsOf_sample hf).1) h
+
+theorem sampleBoundCharged : SampleBoundCharged :=
+  fun _ _ _ _ _ h => answersAt (fun _ _ _ _ _ hf => (factsOf_sample hf).2) h
+
+/-- **`RegisteredSampleHeld`'s honest lemma**: the period check accepts a period, `cappedPeriod` with nothing
+registered, and of an answer whose profile is the sample its registration states, two strata of 8 units with 4 of
+each sampled, the facts it reads are of the 16 units with 8 sampled. A period with an audit needs one-stage's answer
+at its window record's digest, which the period's difftest builds and checks against the mirror. -/
+theorem registeredSampleHeld_honest :
+    (∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof) ∧
+      (factsOf "audit 0" halvesReg halvesProfile (statedBound 0)).toOption.map (fun f => (f.units, f.drawn)) =
+        some (16, 8) := by
+  refine ⟨rowsCapPublished_honest, ?_⟩
+  decide +kernel
+
+/-- **`RegisteredSampleHeld`'s nontrivial lemma, at the level**: no facts are of a registration that states 3
+sampled of 2 units, so a period check that accepts an audit registered so and publishes its facts as stated, 3 of 2
+units sampled, fails `AnswersAt SampleHeld`. The registration states no stratum, so the other two clauses hold. -/
+theorem registeredSampleHeld_nontrivial :
+    ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 2 (subsetDesign 3)], #[], .empty⟩
+      (statedPublic ⟨2, 3, ⟨1, 10⟩, 0, .subset 3⟩) := by
+  intro h
+  obtain ⟨f, -, ⟨n, d, hs, -, -, hle, hd⟩, -⟩ := h.1 0 (sampleReg 2 (subsetDesign 3)) rfl
+  have hreg : sampleOf (sampleReg 2 (subsetDesign 3)) = some (2, .subset 3) := by decide +kernel
+  rw [hreg] at hs
+  cases hs
+  rcases hd with ⟨k, hk, hdr⟩ | ⟨ss, hss, -⟩
+  · cases hk
+    omega
+  · cases hss
+
+/-- **`RegisteredSampleHeld` fails at a stratum sampled above its size**: no facts are of a registration whose
+stratum `a` states 2 sampled of its 1 unit, in 3 units of which 2 are sampled and whose strata's sizes sum to 3, so
+a period check that accepts an audit registered so fails `AnswersAt SampleHeld` on that clause alone. -/
+theorem registeredSampleHeld_stratum :
+    ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 3 (strataDesign 1 2 2 0)], #[], .empty⟩
+      (statedPublic ⟨3, 2, ⟨1, 10⟩, 0, .stratified #[⟨"a", 1, 2⟩, ⟨"b", 2, 0⟩]⟩) := by
+  intro h
+  obtain ⟨f, -, ⟨n, d, hs, -, -, -, hd⟩, -⟩ := h.1 0 (sampleReg 3 (strataDesign 1 2 2 0)) rfl
+  have hreg : sampleOf (sampleReg 3 (strataDesign 1 2 2 0)) = some (3, .stratified #[⟨"a", 1, 2⟩, ⟨"b", 2, 0⟩]) := by
+    decide +kernel
+  rw [hreg] at hs
+  cases hs
+  rcases hd with ⟨k, hk, -⟩ | ⟨ss, hss, -, hle, -⟩
+  · cases hk
+  · cases hss
+    have := hle ⟨"a", 1, 2⟩ (by simp)
+    simp at this
+
+/-- **`RegisteredSampleHeld` fails at strata whose sizes do not sum to the units**: no facts are of a registration
+of 2 units whose two strata hold 2 units each, 1 of each sampled, so no more sampled than the units and no stratum
+above its size, and a period check that accepts an audit registered so fails `AnswersAt SampleHeld` on that clause
+alone. -/
+theorem registeredSampleHeld_sizes :
+    ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 2 (strataDesign 2 1 2 1)], #[], .empty⟩
+      (statedPublic ⟨2, 2, ⟨1, 10⟩, 0, .stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]⟩) := by
+  intro h
+  obtain ⟨f, -, ⟨n, d, hs, -, -, -, hd⟩, -⟩ := h.1 0 (sampleReg 2 (strataDesign 2 1 2 1)) rfl
+  have hreg : sampleOf (sampleReg 2 (strataDesign 2 1 2 1)) = some (2, .stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) := by
+    decide +kernel
+  rw [hreg] at hs
+  cases hs
+  rcases hd with ⟨k, hk, -⟩ | ⟨ss, hss, -, -, hsum⟩
+  · cases hk
+  · cases hss
+    exact absurd hsum (by decide +kernel)
+
+/-- **`SampleBoundCharged`'s honest lemma**: the period check accepts a period, `cappedPeriod` with nothing
+registered, and of an answer for two registered strata of 4 of 8 units at δ = 1/10 whose public states a bound of 0,
+the count it reads is 6: each stratum's own bound at δ = 1/20 is 3. A period with an audit needs one-stage's answer
+at its window record's digest, which the period's difftest builds and checks against the mirror. -/
+theorem sampleBoundCharged_honest :
+    (∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof) ∧
+      (factsOf "audit 0" halvesReg halvesProfile (statedBound 0)).toOption.map (·.wrong) = some 6 := by
+  refine ⟨rowsCapPublished_honest, ?_⟩
+  decide +kernel
+
+/-- **`SampleBoundCharged`'s nontrivial lemma**: a period check that accepts an audit registered at two strata of 4
+of 8 units and publishes its facts with a count of 5 at δ = 1/10, below the 6 its strata's bounds sum to, fails
+`AnswersAt SampleCharged`. -/
+theorem sampleBoundCharged_nontrivial :
+    ¬ AnswersAt SampleCharged cappedPeriod ⟨#[halvesReg], #[], .empty⟩
+      (statedPublic ⟨16, 8, ⟨1, 10⟩, 5, .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]⟩) := by
+  intro h
+  obtain ⟨f, hf, ⟨n, d, hs, hd⟩, -⟩ := h.1 0 halvesReg rfl
+  obtain rfl : f = ⟨16, 8, ⟨1, 10⟩, 5, .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]⟩ := by
+    simpa [statedPublic, rowsTerms] using hf.symm
+  have hreg : sampleOf halvesReg = some (16, .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]) := by decide +kernel
+  rw [hreg] at hs
+  cases hs
+  rcases hd with ⟨k, hk, -⟩ | ⟨ss, hss, hb⟩
+  · cases hk
+  · cases hss
+    exact absurd hb (by decide +kernel)
+
+/-- **No period check that accepts every period has `AnswersOf`'s property**, whatever it says of an answer: such a
+check accepts a period with an audit and publishes no facts of it. -/
+theorem answers_acceptAll (P : Lean.Json → Facts → Prop) : ¬ AnswersOf P acceptAllRows := by
+  intro h
+  obtain ⟨f, hf, -⟩ := (h cappedPeriod ⟨#[Lean.Json.null], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl).1 0 _ rfl
+  simp [rowsTerms] at hf
 
 end Properties.NetworkPeriod
