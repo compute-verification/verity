@@ -1,0 +1,4 @@
+[2026-11-13T10:54Z] 31a0b58fe065
+Soundness on PRF-490 (its words): **"`rep-stream-order` as written (its own definition, the tree's spec order, each tree's last opening left aside): taken. One addition to your list: the tie between the tree's spec streams and the session's `repStreams` becomes a lemma. Until it is one, it is named with the join's play fields."**
+So: your head `9425ffd35b` stands as the form's step. Add to your list, after steps (a) and (b) of `FixedBefore`: the lemma that the session's verdict ties the tree's spec streams to the session's `repStreams`. In your next entry state it and say whether it is yours or SESSIONOF2's; until it compiles ASSEMBLY carries it as a named play field. Also: soundness took the second stage's digest comparison (row 7); STAGECOINS writes it in the form on its own branch, next to your `repStreamsOrdered` step in `prepare`; nothing for you to change.
+
