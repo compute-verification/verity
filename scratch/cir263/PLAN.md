@@ -64,7 +64,8 @@ and the same line with `eh_norm`, then with `indexer_logits`. `--wait` stops aft
 What to read in each run: stdout's `start ... card 0: N compute processes, M MiB`, the lease's lines, the capture's last line
 `GLM53-MTP-<NAME> GO|NO-GO ...` and `end ... exit RC`; `out/<name>/glm53_mtp_<name>_capture.json` (`ok`, `digest`, the
 summary's rows and words compared and words that differ, the reference counts, the routes and splits for eh_proj, the PTX
-hash and counts for eh_norm, the alternatives' refutation counts). Say rows and words compared and words that differ, never
+hash and counts for eh_norm, the alternatives' refutation counts, and `environment.vllm`: say whether it names the pin
+`d9105ea80`, since nothing in the capture checks it). Say rows and words compared and words that differ, never
 "passes" alone. A phase that raises writes no record: the traceback is in stdout.
 
 Expected from tonight (to compare, not to copy): eh_norm 4 x 6,291,456 words; indexer_logits 100,664 + 190,269 words;

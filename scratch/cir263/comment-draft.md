@@ -11,6 +11,8 @@
 
 Pin: vLLM `d9105ea80`, FlashMLA `6bc49418c5ea`. Branch `cursor/circuits-cir263-draft-layer-kernels-6f04` at `78884a1b8aa7`, no pull request yet.
 
+What ties the card's kernels to the pin: the captures run the vLLM installed on the node and write its version into their record. With no record sealed I have not read that version; only the norm is tied so far, by its PTX hash, which equals the one compiled from the pin's source.
+
 **1. `_fused_eh_norm_kernel` (pin `common/kernels.py:987-1019`).** Each of its two norms is the registered `TritonBlockRMSNorm_v1{N=6144, BLOCK=8192, WARPS=4, EPS=1e-5}` (`registry/dsa_norm.py`). It is not `DsaRMSNorm_v1`, which is that norm only at a power-of-two row; here 6,144 live elements sit in a masked block of 8,192.
 - What shows it: the kernel's PTX on the card is one specialisation whose hash and op counts equal the ones pinned from Triton 3.7.1's sm_90 PTX (`.reqntid 128`, `div.full.f32` by 6,144), and its SASS has two `FFMA` of the scaled sum by 1/6144 plus eps, two `MUFU.RSQ` and no `MUFU.RCP`: one rounding before rsqrt, as the Definition states.
 - Position 0: the kernel compares the whole int64 position to 0 and, where it is, replaces the embedding row by bf16 +0 before its norm. The hidden-state half is never zeroed.
