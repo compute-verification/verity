@@ -147,7 +147,7 @@ class Audit:
 
     def __init__(self, args: argparse.Namespace, lay: L.StoreLayout) -> None:
         import sketch as K
-        from verity.protocols.poub.verifier import receipts as R
+        from verity.protocols.accounting.poub.verifier import receipts as R
 
         self.K, self.R = K, R
         self.store_units = lay.params.blocks_per_segment * lay.params.segments // K.PER
