@@ -388,7 +388,7 @@ def test_the_commits_session_refuses_engines_it_does_not_serve_and_sets_the_rest
 
 def test_the_phases_summary_is_each_phases_quantiles_over_the_closed_intervals_in_ms():
     """`Phases.summary` over the closed intervals: a phase an interval didn't run counts 0 there, the quantile at q is
-    the sorted list's entry at ⌊q·n⌋ (its last at 1.0, which p99 is not past 100 intervals), the mean is over every
+    the sorted list's entry at ⌊q·n⌋ (its last at 1.0, and at 0.99 too up to 100 intervals), the mean is over every
     interval, all in ms to 3 places, and the phases come sorted by name."""
     phases = remote.Phases()
     assert phases.summary() == {}
