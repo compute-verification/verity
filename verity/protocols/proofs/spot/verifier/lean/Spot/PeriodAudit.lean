@@ -296,7 +296,7 @@ def executionPhaseAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins :
   let (a, opened) ← coinOf (Challenger.auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]))
   if let some why := Challenger.pinsReason a.session opened pins then throw (Code.coin, why)
   if let some why := Challenger.firstParentReason a.session a.pinned p.main then throw (Code.coin, why)
-  let (_, roots) ← coinOf (Challenger.sessionNamed a p.ledger.key ev.session)
+  let (_, roots) ← coinOf (Challenger.challengePhaseNamed a p.ledger.key ev.session)
   unless Challenger.withheldOn ledger w.root do throw (Code.coin, Challenger.WITHHELD)
   let sampled := sampledOn p.ledger.label w.root roots
   let want ← match sampled.toList with
