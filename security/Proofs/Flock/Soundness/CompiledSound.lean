@@ -18,8 +18,8 @@ opening disagrees with the fixed tables either opens a position two ways within 
 (`SelfClash`) or opens a position off the table fixed at some cap (`bad_split`). By rewinding at
 every cap (`Lock.leafE_off_le`), the second costs `√(N · Q · Adv)` per cap, where `Adv` is the
 probability that two continuations from the cap open a position differently; each such pair,
-like each self-clash, is a SHA-512 collision (`Merkle.openPair_spec`). The two colliding strings are functions of the
-openings: `opOfPair` for two runs at a position, and `clashCands` for two openings of one run.
+like each self-clash, is a SHA-512 collision (`Merkle.openCollPair_spec`). The two colliding strings are functions of
+the openings: `opOfPair` for two runs at a position, and `clashCands` for two openings of one run.
 -/
 
 @[expose] public section
@@ -311,11 +311,11 @@ abbrev ClashAt (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap : Cap D) 
   w.1.1 = w.2.1 ∧ Verified H E cap lanes depth w.1 ∧ Verified H E cap lanes depth w.2 ∧ w.1.2.1 ≠ w.2.2.1
 
 /-- **A clash's candidates**: for each two of the openings, the test that they clash and the pair of the two openings
-(`Merkle.openPair`). -/
+(`Merkle.openCollPair`). -/
 def clashCands (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap : Cap D) (lanes depth : ℕ)
     (xs : List (ℕ × List F × List D)) : List (Prop × (List UInt8 × List UInt8)) :=
   (Merkle.pairsOf xs).map fun w =>
-    (ClashAt H E cap lanes depth w, Merkle.openPair H E w.1.1 w.1.2.1 w.2.2.1 w.1.2.2 w.2.2.2)
+    (ClashAt H E cap lanes depth w, Merkle.openCollPair H E w.1.1 w.1.2.1 w.2.2.1 w.1.2.2 w.2.2.2)
 
 /-- **A clash is a collision**: a candidate whose test passes is one. -/
 theorem clashCands_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {cap : Cap D} {lanes depth : ℕ}
@@ -324,7 +324,7 @@ theorem clashCands_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {cap 
   obtain ⟨w, -, rfl⟩ := List.mem_map.1 hc
   have hw : ClashAt H E cap lanes depth w := h
   obtain ⟨h1, h2, h3, h4⟩ := hw
-  exact Merkle.openPair_spec H E cap depth w.1.1 w.1.2.1 w.2.2.1 w.1.2.2 w.2.2.2 h4 h2.2 (h1 ▸ h3.2)
+  exact Merkle.openCollPair_spec H E cap depth w.1.1 w.1.2.1 w.2.2.1 w.1.2.2 w.2.2.2 h4 h2.2 (h1 ▸ h3.2)
 
 /-- A clash has a candidate whose test passes. -/
 theorem Clash.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {cap : Cap D} {lanes depth : ℕ}
@@ -372,12 +372,12 @@ noncomputable def firstOf (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (la
     (xs : List (ℕ × List F × List D)) (cap : Cap D) (p : Fin (2 ^ d)) : Option (ℕ × List F × List D) :=
   (xs.filter fun x => decide (x.1 = p.val ∧ Verified H E cap lanes depth x)).head?
 
-/-- **The pair of two runs at a position**: the pair of their first verifying openings there (`Merkle.openPair`), and
+/-- **The pair of two runs at a position**: the pair of their first verifying openings there (`Merkle.openCollPair`), and
 the empty pair when either run has none. -/
 noncomputable def opOfPair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (lanes depth d : ℕ)
     (xs xs' : List (ℕ × List F × List D)) (cap : Cap D) (p : Fin (2 ^ d)) : List UInt8 × List UInt8 :=
   match firstOf H E lanes depth d xs cap p, firstOf H E lanes depth d xs' cap p with
-  | some x, some y => Merkle.openPair H E p.val x.2.1 y.2.1 x.2.2 y.2.2
+  | some x, some y => Merkle.openCollPair H E p.val x.2.1 y.2.1 x.2.2 y.2.2
   | _, _ => ([], [])
 
 theorem firstOf_of_isSome {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {lanes depth d : ℕ}
@@ -410,11 +410,11 @@ theorem opOf_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) 
     congrArg (Option.map fun x : ℕ × List F × List D => rowFin lanes x.2.1) hx
   have hoy : opOf H E lanes depth d xs' cap p = some (rowFin lanes y.2.1) :=
     congrArg (Option.map fun x : ℕ × List F × List D => rowFin lanes x.2.1) hy
-  have e : opOfPair H E lanes depth d xs xs' cap p = Merkle.openPair H E p.val x.2.1 y.2.1 x.2.2 y.2.2 := by
+  have e : opOfPair H E lanes depth d xs xs' cap p = Merkle.openCollPair H E p.val x.2.1 y.2.1 x.2.2 y.2.2 := by
     unfold opOfPair
     rw [hx, hy]
   rw [e]
-  refine Merkle.openPair_spec H E cap depth p.val x.2.1 y.2.1 x.2.2 y.2.2 (fun hxy => hne ?_)
+  refine Merkle.openCollPair_spec H E cap depth p.val x.2.1 y.2.1 x.2.2 y.2.2 (fun hxy => hne ?_)
     (hxp ▸ hxv.2) (hyp ▸ hyv.2)
   rw [hox, hoy, hxy]
 
@@ -720,7 +720,7 @@ prover `P*` (strategy `σ`), with `T*(P*)` the plurality table of its level-0 op
 plus `√(N·Q·Adv)` for the level-0 cap and for every rep's cap, plus the probability of a
 self-clash. Each `Adv` is the success probability of an explicit collision finder, and every
 pair it counts, like every self-clash, is two verifying openings of one position to different
-rows under one cap: a SHA-512 collision (`Merkle.openPair_spec`). -/
+rows under one cap: a SHA-512 collision (`Merkle.openCollPair_spec`). -/
 theorem table_sound_compiled (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)

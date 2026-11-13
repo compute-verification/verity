@@ -137,14 +137,14 @@ def clashCandsW (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.
   (Merkle.pairsOf xs).map fun x => (ClashWAt H E Lf cap w depth x, Exec.pairL H E Lf x.1.1 x.1 x.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A clash is a collision**, under any salts: a candidate whose test passes is one (`Merkle.openPairL_spec`). -/
+/-- **A clash is a collision**, under any salts: a candidate whose test passes is one (`Merkle.openCollPairL_spec`). -/
 theorem clashCandsW_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {cap : Cap D} {w depth : ℕ} {xs : List (ℕ × List F × Sl × List D)} {c : Prop × (List UInt8 × List UInt8)}
     (hc : c ∈ clashCandsW H E Lf cap w depth xs) (h : c.1) : Hash.Collision H c.2.1 c.2.2 := by
   obtain ⟨x, -, rfl⟩ := List.mem_map.1 hc
   have hx : ClashWAt H E Lf cap w depth x := h
   obtain ⟨h1, h2, h3, h4⟩ := hx
-  exact Merkle.openPairL_spec H E Lf cap depth x.1.1 x.1.2.1 x.2.2.1 x.1.2.2.1 x.2.2.2.1 x.1.2.2.2 x.2.2.2.2 h4 h2.2
+  exact Merkle.openCollPairL_spec H E Lf cap depth x.1.1 x.1.2.1 x.2.2.1 x.1.2.2.1 x.2.2.2.1 x.1.2.2.2 x.2.2.2.2 h4 h2.2
     (h1 ▸ h3.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
@@ -210,7 +210,7 @@ theorem opOfW_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F)
     unfold opOfWPair
     rw [hx, hy]
   rw [e]
-  refine Merkle.openPairL_spec H E Lf cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
+  refine Merkle.openCollPairL_spec H E Lf cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
     (fun hxy => hne ?_) (hxp ▸ hxv.2) (hyp ▸ hyv.2)
   rw [hox, hoy, hxy]
 
@@ -313,9 +313,9 @@ def PadsClashAtZ (Hs : Hashes F D Sl) (N q : ℕ) (out : OutZC F D Sl) : Prop :=
       ((out.opens.inner r).pads jj).1 ≠ ((out.opens.inner r).pads jj').1
 
 /-- **The pair of two pads openings** of rep `r` at position `pos`: query `jj`'s in the run `out` and query `jj'`'s in
-the run `out'` (`Merkle.openPairL`). -/
+the run `out'` (`Merkle.openCollPairL`). -/
 def padsPairZ (Hs : Hashes F D Sl) (r pos : ℕ) (out out' : OutZC F D Sl) (jj jj' : ℕ) : List UInt8 × List UInt8 :=
-  Merkle.openPairL Hs.H Hs.Ep Hs.Lp pos ((out.opens.inner r).pads jj).1 ((out'.opens.inner r).pads jj').1
+  Merkle.openCollPairL Hs.H Hs.Ep Hs.Lp pos ((out.opens.inner r).pads jj).1 ((out'.opens.inner r).pads jj').1
     ((out.opens.inner r).pads jj).2.1 ((out'.opens.inner r).pads jj').2.1 ((out.opens.inner r).pads jj).2.2
     ((out'.opens.inner r).pads jj').2.2
 
@@ -344,14 +344,14 @@ def padsCands (Hs : Hashes F D Sl) (N q : ℕ) (out : OutZC F D Sl) : List (Prop
       padsPairZ Hs r ((if r = 0 then out.pend.1 else out.pend.2).qpos jj.1) out out jj.1 jj.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A pads clash is a collision**: a candidate whose test passes is one (`Merkle.openPairL_spec`). -/
+/-- **A pads clash is a collision**: a candidate whose test passes is one (`Merkle.openCollPairL_spec`). -/
 theorem padsCands_spec {Hs : Hashes F D Sl} {N q : ℕ} {out : OutZC F D Sl} {c : Prop × (List UInt8 × List UInt8)}
     (hc : c ∈ padsCands Hs N q out) (h : c.1) : Hash.Collision Hs.H c.2.1 c.2.2 := by
   obtain ⟨r, -, hc⟩ := List.mem_flatMap.1 hc
   obtain ⟨jj, -, rfl⟩ := List.mem_map.1 hc
   have hw : PadsClashAt Hs N out r jj.1 jj.2 := h
   obtain ⟨h1, h2, hne⟩ := hw
-  exact Merkle.openPairL_spec Hs.H Hs.Ep Hs.Lp (fun _ => padsRootZ Hs out r jj.1) (Nat.log 2 N) _ _ _ _ _ _ _
+  exact Merkle.openCollPairL_spec Hs.H Hs.Ep Hs.Lp (fun _ => padsRootZ Hs out r jj.1) (Nat.log 2 N) _ _ _ _ _ _ _
     hne h1 h2
 
 omit [Field F] [Fintype F] [DecidableEq F] in
@@ -449,7 +449,7 @@ theorem opPadsAtZ_conflict_collision {Hs : Hashes F D Sl} {N q r : ℕ} {c : Cap
     unfold opPadsAtZPair
     rw [hj, hj']
   rw [e]
-  refine Merkle.openPairL_spec Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val _ _ _ _ _ _
+  refine Merkle.openCollPairL_spec Hs.H Hs.Ep Hs.Lp (fun _ => c 0) (Nat.log 2 N) p.val _ _ _ _ _ _
     (fun e' => h.2.2 ?_) (firstPadsZ_some hj) (firstPadsZ_some hj')
   rw [e1, e2, e']
 

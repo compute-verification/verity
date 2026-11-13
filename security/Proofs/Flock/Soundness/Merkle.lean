@@ -11,7 +11,7 @@ opening verifies under the unsalted leaf scheme (`Leaf.plain`) exactly when it v
 
 **Binding** is in `Proofs.Flock.Soundness.MerklePair`: two openings of one position that both verify against one tree
 top (`Definitions.Flock.Merkle`) but carry different columns give two byte strings that collide under `H`
-(`openPair_spec`, and `openPairL_spec` for any leaf scheme, salted ones included).
+(`openCollPair_spec`, and `openCollPairL_spec` for any leaf scheme, salted ones included).
 -/
 
 @[expose] public section

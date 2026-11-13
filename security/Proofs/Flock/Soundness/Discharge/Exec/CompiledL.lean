@@ -15,9 +15,9 @@ is the `hm96-sha512/v1` table flock-verify checks (`accepts_tables_hm96`).
 
 The argument is `CompiledSound`'s, and only the openings change. A salted opening is `(position, row, salt, path)`. A
 clash is two verifying openings of one position to different rows, under any salts, and the pair of the two openings
-(`Merkle.openPairL`) is a collision of `H` by `Merkle.openPairL_spec`: the leaf scheme's pair (`Leaf.pair`) does what
-the encoding's injectivity does for the unsalted leaf. The lockstep with the oracle table (`lockTableL`) is `lockTable` with the salts in the openings'
-message; the reps' locksteps (`lockRep`) are unchanged.
+(`Merkle.openCollPairL`) is a collision of `H` by `Merkle.openCollPairL_spec`: the leaf scheme's pair (`Leaf.pair`)
+does what the encoding's injectivity does for the unsalted leaf. The lockstep with the oracle table (`lockTableL`) is
+`lockTable` with the salts in the openings' message; the reps' locksteps (`lockRep`) are unchanged.
 
 * `table_sound_compiledL`: `Pr[accepted ∧ T*(P*) uncommitted] ≤ tableError + √(N₀·Q₀·Adv₀) + Σ √(N_ℓ·Q_ℓ·Adv_{r,ℓ})
   + Pr[self-clash]`, with each `Adv` and the self-clash a collision of `H` (`op₀L_conflict_collision`,
@@ -378,10 +378,10 @@ abbrev ClashLAt (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.
     (lanes depth : ℕ) (w : (ℕ × List F × Sl × List D) × (ℕ × List F × Sl × List D)) : Prop :=
   w.1.1 = w.2.1 ∧ VerifiedL H E Lf cap lanes depth w.1 ∧ VerifiedL H E Lf cap lanes depth w.2 ∧ w.1.2.1 ≠ w.2.2.1
 
-/-- **The pair of two salted openings** `x` and `y` at position `pos` (`Merkle.openPairL`). -/
+/-- **The pair of two salted openings** `x` and `y` at position `pos` (`Merkle.openCollPairL`). -/
 def pairL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (pos : ℕ)
     (x y : ℕ × List F × Sl × List D) : List UInt8 × List UInt8 :=
-  Merkle.openPairL H E Lf pos x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
+  Merkle.openCollPairL H E Lf pos x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
 
 /-- **A clash's candidates**: for each two of the openings, the test that they clash and the pair of the two openings
 (`pairL`). -/
@@ -390,7 +390,7 @@ def clashCandsL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.
   (Merkle.pairsOf xs).map fun w => (ClashLAt H E Lf cap lanes depth w, pairL H E Lf w.1.1 w.1 w.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
-/-- **A clash is a collision**, under any salts: a candidate whose test passes is one (`Merkle.openPairL_spec`). -/
+/-- **A clash is a collision**, under any salts: a candidate whose test passes is one (`Merkle.openCollPairL_spec`). -/
 theorem clashCandsL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf : Merkle.Leaf (List F) Sl D H}
     {cap : Cap D} {lanes depth : ℕ} {xs : List (ℕ × List F × Sl × List D)}
     {c : Prop × (List UInt8 × List UInt8)} (hc : c ∈ clashCandsL H E Lf cap lanes depth xs) (h : c.1) :
@@ -398,7 +398,7 @@ theorem clashCandsL_spec {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf 
   obtain ⟨w, -, rfl⟩ := List.mem_map.1 hc
   have hw : ClashLAt H E Lf cap lanes depth w := h
   obtain ⟨h1, h2, h3, h4⟩ := hw
-  exact Merkle.openPairL_spec H E Lf cap depth w.1.1 w.1.2.1 w.2.2.1 w.1.2.2.1 w.2.2.2.1 w.1.2.2.2 w.2.2.2.2 h4 h2.2
+  exact Merkle.openCollPairL_spec H E Lf cap depth w.1.1 w.1.2.1 w.2.2.1 w.1.2.2.1 w.2.2.2.1 w.1.2.2.2 w.2.2.2.2 h4 h2.2
     (h1 ▸ h3.2)
 
 omit [Field F] [Fintype F] [DecidableEq F] in
@@ -501,7 +501,7 @@ theorem opOfL_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F)
     unfold opOfLPair
     rw [hx, hy]
   rw [e]
-  refine Merkle.openPairL_spec H E Lf cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
+  refine Merkle.openCollPairL_spec H E Lf cap depth p.val x.2.1 y.2.1 x.2.2.1 y.2.2.1 x.2.2.2 y.2.2.2
     (fun hxy => hne ?_) (hxp ▸ hxv.2) (hyp ▸ hyv.2)
   rw [hox, hoy, hxy]
 
@@ -800,7 +800,7 @@ openings: `Pr[accepted ∧ no codeword near T*(P*) packs a satisfying witness]` 
 `√(N·Q·Adv)` for the level-0 cap and for every rep's cap, plus the probability of a self-clash. Each `Adv` is the
 success probability of an explicit collision finder, and every pair it counts, like every self-clash, is two verifying
 openings of one position to different rows under one cap, under any salts: a collision of `H`
-(`Merkle.openPairL_spec`). At `Leaf.plain` it is `table_sound_compiled`'s bound; at `Refine.leaf512`,
+(`Merkle.openCollPairL_spec`). At `Leaf.plain` it is `table_sound_compiled`'s bound; at `Refine.leaf512`,
 `hm96-sha512/v1`'s. -/
 theorem table_sound_compiledL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
