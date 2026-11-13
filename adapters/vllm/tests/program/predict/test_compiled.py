@@ -16,6 +16,7 @@ its pin (`predict compiled-pin`) and pin both.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -76,3 +77,88 @@ def test_a_config_outside_the_compiled_layouts_is_refused(cfg, needle):
 def test_a_step_at_a_fused_moe_row_count_without_a_recorded_launch_is_refused():
     with pytest.raises(Unmodelled, match="no fused_moe_kernel launch at 50 rows"):
         PC.predict("QWEN3_30B_A3B", H200, [{"request_id": "r0", "arrive": 0, "prompt_tokens": 50, "max_tokens": 2}], 2)
+
+
+ONE = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 9, "max_tokens": 2}]
+
+
+def _pinned(monkeypatch, change) -> None:
+    """Every served pin read through `change`: a pin that states less than the one of record."""
+    load = PC.load_pin
+    monkeypatch.setattr(PC, "load_pin", lambda role, device: change(load(role, device)))
+
+
+def test_a_pin_that_states_no_kernels_of_a_piece_kind_is_refused_by_the_kernel_it_lacks(monkeypatch):
+    _pinned(monkeypatch, lambda pin: {**pin, "kernels": {k: v for k, v in pin["kernels"].items() if k != "middle"}})
+    with pytest.raises(Unmodelled, match="the pin has no kernel triton_red_fused_fused_add_rms_norm_0 in its middle pieces: None"):
+        PC.predict("LLAMA32_1B", RTX, ONE, 2)
+
+
+@pytest.mark.parametrize("change", [
+    lambda pin: {k: v for k, v in pin.items() if k != "moe"},
+    lambda pin: {**pin, "moe": {k: v for k, v in pin["moe"].items() if k != "configs"}},
+], ids=["no-moe-block", "no-configs"])
+def test_a_pin_that_states_no_fused_moe_launch_is_refused_at_the_first_row_count(monkeypatch, change):
+    """A fused-MoE model's pin without its `moe` block, or whose block holds no `configs`, records no launch."""
+    _pinned(monkeypatch, change)
+    with pytest.raises(Unmodelled, match="no fused_moe_kernel launch at 137 rows"):
+        PC.predict("QWEN3_30B_A3B", H200, SCHEDULE, 14)
+
+
+def test_a_traced_build_that_states_no_artifact_differs_in_each_kernel_and_winner_of_the_predicted_one():
+    """`differences` against a traced Build without its `artifact` block names every kernel and winner of the predicted artifact
+    as absent from the pinned one; against one whose artifact differs in nothing but its digest it says so in one line."""
+    m = PC.predict("LLAMA32_1B", RTX, ONE, 2)
+    art = m["artifact"]
+    got = PC.differences(m, {k: v for k, v in m.items() if k != "artifact"})
+    assert sorted(d.split(":")[1].split()[0] for d in got) == ["kernels"] * len(art["kernels"]) + ["winners"] * len(art["winners"])
+    assert got and all(d.startswith("artifact: ") and ": pinned absent, loaded " in d for d in got)
+    assert PC.differences(m, {**m, "artifact": {**art, "digest": "0" * 64}}) == ["artifact digest"]
+
+
+def _workload(tmp_path: Path, schedule: list[dict]) -> str:
+    """`schedule` as a sweep workload's file: each request's prompt of that many tokens, arriving at its step."""
+    (wl := tmp_path / "workload.json").write_text(json.dumps({"requests": [
+        {"prompt_token_ids": [0] * r["prompt_tokens"], "max_tokens": r["max_tokens"], "arrive_step": r["arrive"]} for r in schedule]}))
+    return str(wl)
+
+
+def test_the_command_writes_the_prediction_and_holds_it_to_a_traced_build(tmp_path, capsys):
+    """`predict compiled` writes `predict`'s Build of the workload's schedule and exits 0; with `--compare` it exits 0 where the
+    Build named is the predicted one and 5 where it differs, each difference a line it prints."""
+    a = PC.Options(role="LLAMA32_1B", device=RTX, workload=_workload(tmp_path, SCHEDULE), steps=14, out=str(out := tmp_path / "build.json"))
+    assert PC.main(a) == 0
+    m = json.loads(out.read_text())
+    assert m == PC.predict("LLAMA32_1B", RTX, SCHEDULE, 14)
+    wrote = (f"[predict compiled] program {m['program_digest'][:16]} manifest {m['manifest_digest'][:16]} artifact "
+             f"{m['artifact']['digest'][:16]} identities {len(m['identities'])} complete True -> {out}")
+    assert capsys.readouterr().out.splitlines() == [wrote]
+    (traced := tmp_path / "traced.json").write_text(out.read_text())
+    assert PC.main(replace(a, compare=str(traced))) == 0
+    assert capsys.readouterr().out.splitlines() == [wrote, f"[predict compiled] against {traced}: equal"]
+    traced.write_text(json.dumps({**m, "program_digest": "0" * 128}))
+    assert PC.main(replace(a, compare=str(traced))) == 5
+    assert capsys.readouterr().out.splitlines() == [wrote, f"[predict compiled] against {traced}: differs",
+                                                    f"  program_digest: predicted {m['program_digest'][:16]}, traced {'0' * 16}"]
+
+
+def test_the_command_refuses_a_step_it_has_no_launch_for(tmp_path, capsys):
+    """`predict compiled` exits 3 on a schedule `predict` refuses, the refusal printed and nothing written."""
+    wl = _workload(tmp_path, [{"arrive": 0, "prompt_tokens": 50, "max_tokens": 2}])
+    assert PC.main(PC.Options(role="QWEN3_30B_A3B", device=H200, workload=wl, steps=2, out=str(out := tmp_path / "build.json"))) == 3
+    (said,) = capsys.readouterr().out.splitlines()
+    assert said.startswith("[predict compiled] refused: ") and "no fused_moe_kernel launch at 50 rows" in said and not out.exists()
+
+
+def test_the_pin_command_writes_the_pin_of_the_build_on_its_routes_device(tmp_path, monkeypatch, capsys):
+    """`predict compiled-pin` writes the pin `pin_of` makes of a traced Build on the device its `routes.json` names, and prints the
+    pin's kernel launches and winners. `pin_of` is stood in here: it reads the Inductor dir of a serving process."""
+    (tmp_path / "build.json").write_text(json.dumps({"program": {}}))
+    (tmp_path / "routes.json").write_text(json.dumps({"device": H200}))
+    pin = {"role": "R", "kernels": {"first": {"a": "1", "b": "2"}, "middle": {"a": "1"}, "last": {}}, "artifact": {"winners": ["w0", "w1"]}}
+    seen: dict = {}
+    monkeypatch.setattr(PC, "pin_of", lambda build, inductor_dir, moe, **kw: seen.update(build=build, inductor_dir=inductor_dir, moe=moe, **kw) or pin)
+    a = PC.PinOptions(build=str(tmp_path / "build.json"), inductor_dir="inductor", role="R", evidence="r0", out=str(out := tmp_path / "pin.json"))
+    assert PC.main(a) == 0 and json.loads(out.read_text()) == pin
+    assert seen == {"build": {"program": {}}, "inductor_dir": "inductor", "moe": None, "role": "R", "device": H200, "evidence": "r0"}
+    assert capsys.readouterr().out.splitlines() == [f"[predict compiled-pin] R on {H200}: 3 kernel launches, 2 winners -> {out}"]

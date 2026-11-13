@@ -43,6 +43,9 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.errors import Refused
+from verity_vllm.pipeline.tp.rank_replay import request_program_dirs
+from verity_vllm.records.schema_ids import NODE_REGISTRATION_SCHEMA
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -68,10 +71,6 @@ class Options:
     salts: str = option("--salts", help="where each value's row salts go (private: never under --out)")
     workers: int = option("--workers", type=int, default=8, help="ranks registered at once, a spawned process each (1: in this process)")
     cmd: str = field(default="node-registration", init=False)
-
-
-class Refused(Exception):
-    """The node's parameters are not the descriptor's, or a rank's θ is not what its Commit of record registered."""
 
 
 def load_descriptor(path: str | os.PathLike) -> dict[str, Any]:
@@ -147,7 +146,6 @@ def rank_job(o: Options, out: Path, pair: int, c: dict[str, Any], dd: dict[str, 
     """What rank `rank`'s process registers, once its bundle, Build and trace are shown to be the record's (module docstring)."""
     from verity_vllm.pipeline import cpu_replay as CPU
     from verity_vllm.pipeline import replay_bundle as RB
-    from verity_vllm.pipeline.tp.rank_replay import request_program_dirs
 
     world = len(P.phis)
     try:
@@ -188,6 +186,7 @@ def register_rank(job: dict[str, Any]) -> dict[str, Any]:
     """Rank `job["rank"]`'s θ parameters committed (`registered_rows.commit`) one tensor at a time, each opened against the rank's
     committed weights root, its salts written to `<salts>/<value>.salts`: the entries, without salts."""
     from verity.circuits.types import type_from_json
+
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.commit import registered_rows as RR
     from verity_vllm.pipeline import cpu_replay as CPU
@@ -284,7 +283,7 @@ def register(o: Options) -> dict[str, Any]:
     reg = RL.record(digest, P.params, theta, entries, window)
     for name in ("record", "trusted", "provenance"):
         (out / f"{name}.json").write_text(json.dumps(reg[name], separators=(",", ":")) + "\n")
-    doc = {"schema": "verity-vllm/node-registration/v1", "program_digest": digest, "record_digest": reg["digest"], "row": o.row,
+    doc = {"schema": NODE_REGISTRATION_SCHEMA, "program_digest": digest, "record_digest": reg["digest"], "row": o.row,
            "wrapper": o.wrapper, "shape": shape, "commit_out": str(commit_out), "pair": pair, "window": window,
            "theta_parameters": len(P.theta), "theta_nodes": len(theta), "rows": sum(e["leaves"] for e in entries.values()),
            "checkpoint": checkpoint, "ranks": ranks, "salts": str(salts),
