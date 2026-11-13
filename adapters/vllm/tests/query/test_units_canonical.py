@@ -3,7 +3,7 @@
 The manifest names the Program's partition of record as a `verity/partition/v1` object (`required.partition_of`: Q_word v1,
 X = 16, W = 32), and the object derives what each Call commits: every gate another unit of the Call's cut reads and every gate the
 Call returns.  Serving decides the Call outputs (the boundary of `query.units` with every Call a unit, plus the policy:
-`Population`) and the word cut the interior words (`verity.definitions.word`).  Those commits, per Call in `CallGraph`'s
+`Population`) and the word cut the interior words (`verity.circuits.word`).  Those commits, per Call in `CallGraph`'s
 numbering, are what `partition_object.verify` holds to the object the manifest records, on TINY's derived greedy serve.
 
 The boundary alone is not the canonical set: a Value no Call reads and the Program does not return is no boundary Value, while the
@@ -21,7 +21,7 @@ torch = pytest.importorskip("torch")
 
 from verity.circuits import partition_object as PO  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
-from verity.definitions import word as W  # noqa: E402
+from verity.circuits import word as W  # noqa: E402
 from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
 from verity_vllm.pipeline.manifest import recorded_program_digest  # noqa: E402
 from verity_vllm.query.program_view import from_instances  # noqa: E402
