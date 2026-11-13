@@ -26,8 +26,10 @@ released, and writes OUT/record.json and OUT/record.md: each zone's verdicts and
 `PeriodLeakAccepted`'s symbols (`TERMS`), in the period check's reading of a phase's free inputs (`READING`, its scan's
 view rows), per monitoring period, for each zone, the lab's zones summed, the census's
 datacenter and the world, labelled simulated with the premises the lab leaves unmet (`SIMULATED`). Each K bounds a
-count expression and is called no leak bound (`COUNT`); a phase's figure with both of the scan's ties stands beside its
-K only as conditional on them (`TIES`), and no period's figure is made from it.
+count expression and is called no leak bound, and every row of it, in the JSON and above each table, carries its
+reading's label: the reading's name, those words and the premises it is open on (`leak_bounds.label`, `k_rows`; `record`
+writes no row without it). A phase's figure with both of the scan's ties is given only as conditional on them
+(`leak_bounds.TIES`), under its own heading (`HEADINGS`), and no period's figure is made from it.
 
     python onsite.py front --out DIR --keep DIR [--blocks 4 ...]
     python onsite.py piece --out DIR --keep DIR [--front DIR] [--zone b0 ...] [--lean EXE] [CR_K=V ...]
@@ -71,14 +73,16 @@ GATE_CLASS = "w63"
 #: own, the scan's view rows, which it charges every phase while it holds no view tie
 READING = LB.CHECKED
 #: the reading a phase's figure with both of the scan's ties is in, the scan's slot entries once in its view rows'
-#: place, and the two ties it is conditional on. Neither is a check of the period check's: it holds a scan's state only
-#: to an audit's by root and domain, and reads no view tie
+#: place, conditional on the two ties (`leak_bounds.TIES`). Neither is a check of the period check's: it holds a scan's
+#: state only to an audit's by root and domain, and reads no view tie. It has a phase's figure only, under its own
+#: heading, and no period's
 WITH_TIES = LB.WITH_TIES
-TIES = ("each ingress unit's state read is the unit before's output, at the network certifier's run",
-        "each egress unit's view read is its ingress unit's output, at the network certifier's run")
-#: what every K of the record bounds
-COUNT = ("a count expression: the product the period check's rows form charges is at most 2^K. No statement in the "
-         "lock yet ties that count to the bits a zone's server can send, so no K here is a leak bound")
+#: what the figure with both ties is of
+PHASE_ONLY = "a phase alone: no period's, lab's, datacenter's or world's figure is made from it"
+#: the record's two sections of K: every row under the first is in the check's reading, and the second holds the
+#: figure with both ties alone. No table and no line holds both, and nothing is their sum
+HEADINGS = {READING: "## K, the count the period check charges a zone's link",
+            WITH_TIES: "## The count with both of the scan's ties, which no check holds"}
 #: `NetTiming.Guarantees.PeriodLeakAccepted`'s terms, in the order the bound adds them
 TERMS = ("k_sched", "k_fail", "ell_a", "k_skip", "jitter")
 BOUND = "k_exfil(Y) ≤ k_sched + k_fail + Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)"
@@ -349,64 +353,80 @@ def terms(k: dict, period: str) -> dict:
     """One zone's bound over ``period`` in `PeriodLeakAccepted`'s terms, from `chain_record.leak`'s doc ``k``, beside the
     pooled form's at each δ, whose incorrect proof blocks are its k_skip."""
     t = k["terms"]
-    (row,) = [r for r in k["rows"] if (r["period"], r["scope"], r["prog"]) == (period, "link", READING)]
+    (row,) = [r for r in k["rows"] if (r["period"], r["scope"], r["reading"]) == (period, "link", READING)]
     m, requests = row["link_windows"], row["requests"]
     got = {"m": m, "requests": requests, "k_sched": m * t["schedules_per_block"],
-           "k_fail": m * t["cells_per_block"], "ell_a": m * t["free_per_block"][READING],
+           "k_fail": m * t["cells_per_block"], "ell_a": m * k["readings"][READING]["free_per_block"],
            "k_skip": 0, "jitter": m * t["jitter_per_block"]}
     if not math.isclose(sum(got[x] for x in TERMS), row["per_period"], rel_tol=1e-12):
         raise SystemExit(f"{period}: the terms sum to {sum(got[x] for x in TERMS)}, not leak's {row['per_period']}")
     return got | {"bound": row["per_period"], "share": row["per_period_share"], "eps": row["eps"],
                   "delta_net": delta_net(row["eps"], m), "vacuous": Fraction(row["eps"]) >= 1,
                   "pooled": {d: {"bound": b, "k_skip": b - row["per_period"], "share": row["pooled_share"][d]}
-                             for d, b in row["pooled"].items()}}
+                             for d, b in row["pooled"].items()}} | {f: row[f] for f in LB.LABEL}
 
 
 def zone_record(zd: Path) -> dict:
     """A zone's verdicts and K, from what its front and its piece released in ``zd``. K is `PeriodLeakAccepted`'s
     bound at the zone's run, established only where the period check accepted (``established``); elsewhere it is the
-    bound the zone's load would have had."""
+    bound the zone's load would have had. Every row of it, a phase's, a period's and a scope's, is in the check's
+    reading and carries that reading's label as its own fields (`leak_bounds.label`). The figure with both of the
+    scan's ties is beside K and never in it (``with_ties``): a phase's alone, under its own label."""
     session = _json(zd / "front" / "session.json")
     entry = {"gate": gate_outcome(session), "chain": chain_outcome(zd / "piece"), "period": period_outcome(zd / "piece")}
     entry["verdict"] = (entry["period"] or {}).get("verdict") or "not run"
     if not (zd / "front" / "bundle.tgz").is_file() or not entry["gate"]["accepted"]:
-        return entry | {"K": None}
+        return entry | {"K": None, "with_ties": None}
     with tempfile.TemporaryDirectory() as tmp:
         k = CR.leak(warden_run(zd / "front" / "bundle.tgz", Path(tmp)))
     T = k["params"]["window"]
     entry["K"] = {
         "established": entry["verdict"] == "accept", "statement": LB.STATEMENTS["per_period"], "bound": BOUND,
-        "bounds": COUNT, "conditional_on": list(OPEN_CHECKS), "reading": READING, "class": k["class"],
+        "bounds": LB.COUNT, "conditional_on": list(OPEN_CHECKS), "reading": READING, "class": k["class"],
         "scan_class": scan_class(session), "params": k["params"], "run": k["run"],
         "per_phase": {"connections": k["terms"]["connections_per_block"], "cell": k["terms"]["cell"],
                       "k_sched": k["terms"]["schedules_per_block"], "k_fail": k["terms"]["cells_per_block"],
-                      "ell_a": k["terms"]["free_per_block"][READING], "k_skip": 0, "T_j": T,
+                      "ell_a": k["readings"][READING]["free_per_block"], "k_skip": 0, "T_j": T,
                       "tau_ms": k["params"]["bucket_ms"], "phase_s": k["run"]["link_window_s"],
                       "d_jit": k["terms"]["jitter_bound"], "jitter": k["terms"]["jitter_per_block"],
-                      "K": next(r["per_link_window"] for r in k["rows"] if r["prog"] == READING),
-                      "with_ties": {"reading": WITH_TIES, "conditional_on": list(TIES),
-                                    "ell_a": k["terms"]["free_per_block"][WITH_TIES],
-                                    "K": next(r["per_link_window"] for r in k["rows"] if r["prog"] == WITH_TIES)}},
+                      "K": next(r["per_link_window"] for r in k["rows"] if r["reading"] == READING)}
+                     | LB.label(READING),
         "periods": {p: terms(k, p) for p in LB.PERIODS},
         "scopes": [{key: r[key] for key in ("period", "scope", "links", "link_windows", "per_period",
-                                            "per_period_share", "eps", "pooled", "pooled_share")}
+                                            "per_period_share", "eps", "pooled", "pooled_share", *LB.LABEL)}
                    | {"delta_net": delta_net(r["eps"], r["link_windows"])}
-                   for r in k["rows"] if r["prog"] == READING],
+                   for r in k["rows"] if r["reading"] == READING],
         "load": k}
+    entry["with_ties"] = LB.label(WITH_TIES) | {
+        "ties": dict(LB.TIES), "of": PHASE_ONLY,
+        "ell_a": k["readings"][WITH_TIES]["free_per_block"],
+        "K": next(r["per_link_window"] for r in k["rows"] if r["reading"] == WITH_TIES)}
     return entry
 
 
 def lab_sum(zones: dict[str, dict]) -> dict | None:
-    """The lab's zones summed (`leak_bounds.datacenter` on each zone's link): our composition, as the census's."""
+    """The lab's zones summed (`leak_bounds.datacenter` on each zone's link): our composition, as the census's. Each
+    period's row carries its reading's label, the sum's own (`leak_bounds.Bound.label`)."""
     links = [load(z["K"]["load"]) for z in zones.values() if z["K"]]
     if not links:
         return None
     phases = {p: sum(z["K"]["periods"][p]["m"] for z in zones.values() if z["K"]) for p in LB.PERIODS}
     return {p: {"per_period": (per := LB.datacenter(links, p, READING)).bits, "share": per.share, "m": phases[p],
                 "eps": str(per.eps), "delta_net": delta_net(per.eps, phases[p]), "vacuous": per.eps >= 1,
-                "pooled": {f"{float(d):g}": LB.datacenter(links, p, READING, d).bits for d in LB.DELTAS}}
+                "pooled": {f"{float(d):g}": LB.datacenter(links, p, READING, d).bits for d in LB.DELTAS}} | per.label
             for p in LB.PERIODS} | {"links": len(links), "of": len(zones),
                                     "established": all(z["K"] and z["K"]["established"] for z in zones.values())}
+
+
+def k_rows(doc: dict) -> list[dict]:
+    """Every row of K the record ``doc`` holds: each zone's phase, its periods', its scopes' and its figure with both
+    ties, and each period's of the lab's sum. `record` writes none of them without its reading's label
+    (`leak_bounds.labelled`)."""
+    rows = []
+    for z in doc["zones"].values():
+        if z.get("K"):
+            rows += [z["K"]["per_phase"], *z["K"]["periods"].values(), *z["K"]["scopes"], z["with_ties"]]
+    return rows + [doc["lab"][p] for p in LB.PERIODS if doc.get("lab")]
 
 
 #: what each scope's figures rest on
@@ -435,17 +455,20 @@ def notes() -> list[str]:
         "so the record reads it in the period check's reading (leak_bounds): the scan's T_j view rows, its egress "
         "units' states of NV bits each, which the period check charges every phase while it holds no view tie, as it "
         "holds none",
-        "every K here bounds " + COUNT + ". Each is open besides: no statement in the lock cuts the scan's inputs at "
-        "its view rows, and none states the period check's K of the count PeriodLeakAccepted bounds. K rests on "
+        LB.COUNT + ": every K here is that K, and each row of it says so. Each is open besides ("
+        + ", ".join(LB.OPEN[READING]) + "): no statement in the lock cuts the scan's inputs at its view rows, none "
+        "states the period check's K of the count PeriodLeakAccepted bounds, and the answers the period check reads "
+        "are taken as given. K rests on "
         "neither of the scan's ties. A phase whose scan is sampled in part is charged its tied audits' counted free "
         "inputs beside its view rows, which holds only once two checks are Lean refusals in the period check ("
         + "; ".join(OPEN_CHECKS) + "). No advice cap is charged for what is open: the link figure charges the advice "
         "through the scan's inputs, and the advice's padded length is in no term of K",
-        "beside K a phase stands the figure with both of the scan's ties, given only as conditional on them: the "
+        "the figure with both of the scan's ties has its own section and is given only as conditional on them: the "
         "scan's NR·T_j/EVERY slot entries of NE bits once in its view rows' place, as the period check would charge a "
-        "scan with every proof block drawn if " + " and ".join(TIES) + ". Neither tie is checked: the period check "
-        "holds a scan's state only to an audit's by root and domain, and reads no view tie. That figure bounds a "
-        "count expression too, and no period's, lab's, datacenter's or world's figure is made from it",
+        "scan with every proof block drawn if " + " and ".join(LB.TIES.values()) + ". Neither tie is checked: the "
+        "period check holds a scan's state only to an audit's by root and domain, and reads no view tie. That figure "
+        "bounds a count expression too, and no period's, lab's, datacenter's or world's figure is made from it; no "
+        "table holds it beside K, and nothing is the two's sum",
         "k_skip,j is 0 in the per-period form, every proof block being drawn; the pooled form's k_skip at δ is "
         "F·log2(N + 1) + b·F (leak_bounds), and that form is conditional (hesc and hleak await SampledKSLive and P2)",
         f"the jitter is T_j·log2 d_jit at d_jit = {LB.JITTER_BOUND}, T_j bits a phase: JitterBounded holds only at "
@@ -506,21 +529,20 @@ def markdown(doc: dict) -> str:
                   f"Its tampered negatives refused: {', '.join(negatives) or 'none'}"
                   + (f"; NOT refused: {', '.join(missed)}" if missed else "") + "."]
     accepted = [b for b, z in zones.items() if z["K"] and z["K"]["established"]]
-    lines += ["", "## K, the count the period check charges a zone's link", "",
+    LB.labelled(k_rows(doc), "the lab record's tables")
+    lines += ["", HEADINGS[READING], "",
               f"`{LB.STATEMENTS['per_period']}`: {BOUND}, in the period check's reading (ℓ_a,j the scan's view "
               f"rows), shares of one copy of the weights ({LB.WEIGHTS.label}). It bounds a zone only over a period "
               f"its period check accepted: K is established for {', '.join(accepted) or 'no zone'} here. A zone's "
               "figures without that accept are the bound its run's load would have had, had its period check "
               "accepted.", "",
-              f"Every K here bounds {COUNT}. It charges ℓ_a,j as the scan's view rows, as the period check does "
-              "while it holds no view tie, and rests on neither of the scan's ties; it is open until the lock states "
-              "the cut of the scan's inputs at its view rows and the period check's K of the count. A phase whose "
+              f"{LB.COUNT}: every K in this section is that K. It charges ℓ_a,j as the scan's view rows, as the "
+              "period check does while it holds no view tie, and rests on neither of the scan's ties; it is open "
+              "until the lock states the cut of the scan's inputs at its view rows and the period check's K of the "
+              "count, and the answers the period check reads are verified. A phase whose "
               "scan is sampled in part is charged its tied audits' counted free inputs beside its view rows, which "
               f"holds only once the period check holds {OPEN_CHECKS[0]} and {OPEN_CHECKS[1]} in Lean. No advice cap "
               "is charged for what is open: the link figure charges the advice through the scan's inputs.", "",
-              "Beside K a phase is the figure with both of the scan's ties, the scan's slot entries once in its view "
-              f"rows' place. It is given only as conditional on them ({'; '.join(TIES)}), neither of which any check "
-              "holds, and no period's figure is made from it.", "",
               "Each bound holds except at δ_net = eps + m·(ε_ks + ε_bind + ε_tap) over its row's m phases. The tables "
               "give eps, the period check's δ part of δ_net; no check computes ε_ks, ε_bind or ε_tap, so δ_net has "
               "no number here.", ""]
@@ -538,9 +560,7 @@ def markdown(doc: dict) -> str:
                   f"k_sched = k_fail = {w['k_sched']:,} ({w['connections']} connections the schedule can carry, "
                   f"{w['cell']} bits each), ℓ_a,j = {w['ell_a']:,} (the scan's view rows, as the period check "
                   f"charges them), k_skip,j = 0, T_j·log2 d_jit = {w['jitter']} "
-                  f"(d_jit = {w['d_jit']}); K a phase = {w['K']:,.0f}. Conditional on both of the scan's ties, "
-                  f"neither checked: ℓ_a,j = {w['with_ties']['ell_a']:,} (its slot entries once) and K a phase = "
-                  f"{w['with_ties']['K']:,.0f}.", "",
+                  f"(d_jit = {w['d_jit']}); K a phase = {w['K']:,.0f}.", "", LB.caption(w["reading"]), "",
                   f"| period | m ({w['phase_s']:g} s phases) | k_sched | k_fail | Σ_j ℓ_a,j | Σ_j T_j·log2 d_jit | "
                   "K per period (share) | eps (δ part) | K pooled, δ = 1e-6 (k_skip) |",
                   "|---|---|---|---|---|---|---|---|---|"]
@@ -558,6 +578,7 @@ def markdown(doc: dict) -> str:
                   f"m counts the phases over the period, summed over the scope's links, each phase T_j = {w['T_j']} "
                   f"buckets of τ = {w['tau_ms']} ms ({w['phase_s']:g} s), the lab's tick. K a phase reads no τ, so at "
                   "a longer tick a period holds fewer phases and its K and eps shrink in proportion.", "",
+                  LB.caption(doc["lab"][next(iter(LB.PERIODS))]["reading"]), "",
                   "| period | scope | links | m | established | K per period (share) | eps (δ part) | "
                   "K pooled, δ = 1e-6 | basis |", "|---|---|---|---|---|---|---|---|---|"]
         for p in LB.PERIODS:
@@ -576,6 +597,17 @@ def markdown(doc: dict) -> str:
                                  f"{fmt(r['per_period'])} ({r['per_period_share']:.3g}) | {delta(r['eps'])} | "
                                  f"{fmt(r['pooled']['1e-06'])} | {r['scope']} |")
         lines += ["", *(f"- **{k}**: {v}" for k, v in BASIS.items())]
+    tied = {b: z["with_ties"] for b, z in zones.items() if z["K"]}
+    if tied:
+        first = next(iter(tied.values()))
+        lines += ["", HEADINGS[first["reading"]], "",
+                  "A phase's figure alone, the scan's slot entries once in its view rows' place. It is given only as "
+                  "conditional on both ties, neither of which any check holds: "
+                  + "; ".join(f"`{name}`, that {says}" for name, says in first["ties"].items())
+                  + ". No period's, lab's, datacenter's or world's figure is made from it, and it is never added to "
+                  "the K above or set in its tables.", "", LB.caption(first["reading"]), "",
+                  "| zone | ℓ_a,j, the slot entries once | the count a phase |", "|---|---|---|",
+                  *(f"| {b} | {t['ell_a']:,} | {t['K']:,.0f} |" for b, t in tied.items())]
     lines += ["", "## Notes", "", *(f"- {n}" for n in doc["notes"]), ""]
     return "\n".join(lines)
 
@@ -597,6 +629,7 @@ def record(args) -> int:
     for z in zones.values():
         if z["K"]:
             z["K"].pop("load")
+    LB.labelled(k_rows(doc), "the lab record")
     (out / "record.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     (out / "record.md").write_text(markdown(doc))
     print(markdown(doc))

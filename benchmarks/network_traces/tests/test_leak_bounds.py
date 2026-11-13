@@ -78,22 +78,69 @@ def test_per_link_datacenter_and_world_are_chain_records_rows(tmp_path):
     link = LB.link(sz.CLASS, per_s, **at)
     for r in doc["rows"]:
         if r["scope"] == "link":
-            got = {d: LB.per_link(sz.CLASS, per_s, r["period"], r["prog"], d, **at) for d in (None, *LB.DELTAS)}
+            got = {d: LB.per_link(sz.CLASS, per_s, r["period"], r["reading"], d, **at) for d in (None, *LB.DELTAS)}
         elif r["scope"] == "world":
-            got = {d: LB.world(link, r["period"], r["prog"], d) for d in (None, *LB.DELTAS)}
+            got = {d: LB.world(link, r["period"], r["reading"], d) for d in (None, *LB.DELTAS)}
         else:
-            got = {d: LB.datacenter({link: LB.datacenter_links()}, r["period"], r["prog"], d)
+            got = {d: LB.datacenter({link: LB.datacenter_links()}, r["period"], r["reading"], d)
                    for d in (None, *LB.DELTAS)}
         assert r["per_period"] == got[None].bits and r["per_period_share"] == got[None].share
         assert Fraction(r["eps"]) == got[None].eps
         assert r["pooled"] == {f"{float(d):g}": got[d].bits for d in LB.DELTAS}
         assert r["pooled_share"] == {f"{float(d):g}": got[d].share for d in LB.DELTAS}
-        assert r["per_link_window"] == LB.per_link(sz.CLASS, per_s, Fraction(32, 10), r["prog"], **at).bits
-    rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
+        assert r["per_link_window"] == LB.per_link(sz.CLASS, per_s, Fraction(32, 10), r["reading"], **at).bits
+    rows = {(r["period"], r["scope"], r["reading"]): r for r in doc["rows"]}
     one, many = rows["week", "link", "anchors"], rows["week", "datacenter", "anchors"]
     assert many["per_period"] == pytest.approx(12_500 * one["per_period"], rel=1e-12)
     assert many["pooled"]["0.01"] > 12_500 * one["pooled"]["0.01"]
     assert doc["theorems"]["datacenter"] == LB.STATEMENTS["datacenter"]
+
+
+def test_no_row_of_K_leaves_the_calculator_without_its_readings_label():
+    """Every `Bound` the calculator gives, one link's, a datacenter's or the world's, in each reading, period and form,
+    carries its reading's label as its own fields: the reading's name, the words that K bounds a count and is no leak
+    bound, and the premises it is open on. A reading of the slot entries names the two ties it is conditional on and
+    says no check holds them. A row with any one field removed, or with another reading's, is not labelled, and a
+    writer's guard refuses it with the fix."""
+    assert LB.LABEL == ("reading", "what", "bounds", "open", "conditional_on")
+    assert "bounds a count expression" in LB.COUNT and "K is no leak bound" in LB.COUNT
+    assert LB.OPEN["view"] == ("view-cut", "period-checked", "answers-verified") and list(LB.TIES) == [
+        "state-tied", "view-tied"]
+    one = LB.link(KO1, RATE, T=32)
+    seen = 0
+    for reading in LB.READINGS:
+        want = LB.label(reading)
+        assert list(want) == list(LB.LABEL) and (want["reading"], want["bounds"]) == (reading, LB.COUNT)
+        if reading == LB.CHECKED:
+            assert want["open"] == ["view-cut", "period-checked", "answers-verified"] and want["conditional_on"] == []
+        else:
+            assert want["conditional_on"] == ["state-tied", "view-tied"] and "which no check holds" in want["what"]
+            assert {"state-tied", "view-tied", "period-checked", "answers-verified"} <= set(want["open"])
+            assert "view-cut" not in want["open"]
+        for period in LB.PERIODS:
+            for delta in (None, *LB.DELTAS):
+                for b in (LB.per_link(KO1, RATE, period, reading, delta, T=32),
+                          LB.datacenter([one] * 3, period, reading, delta), LB.world(one, period, reading, delta)):
+                    row = b._asdict()
+                    assert {k: list(row[k]) if isinstance(row[k], tuple) else row[k] for k in LB.LABEL} == want
+                    assert b.label == want and LB.unlabelled(row) == [] and LB.labelled([row], "a test") == [row]
+                    seen += 1
+        assert LB.caption(reading).startswith(f"K in the reading `{reading}`: {want['what']}. {LB.COUNT}. Open on ")
+        assert all(f"`{o}`" in LB.caption(reading) for o in want["open"])
+        assert ("which no check holds." in LB.caption(reading)) == (reading != LB.CHECKED)
+    assert seen == 3 * 3 * 3 * 3
+    row = LB.per_link(KO1, RATE, "week", "view", T=32)._asdict() | {"period": "week", "scope": "link"}
+    for field in LB.LABEL:
+        cut = {k: v for k, v in row.items() if k != field}
+        assert field in LB.unlabelled(cut)
+        with pytest.raises(ValueError, match=f"a calculator's writer: row 0 of K .*lacks its label's .*{field}"):
+            LB.labelled([cut], "a calculator's writer")
+    assert LB.unlabelled(row | {"reading": "registered"}) == ["what", "open", "conditional_on"]
+    assert LB.unlabelled(row | {"open": ["view-cut"]}) == ["open"] and LB.unlabelled({}) == list(LB.LABEL)
+    with pytest.raises(ValueError, match="build the row with `leak_bounds.label\\(reading\\)`"):
+        LB.labelled([row, row | {"bounds": "a leak bound"}], "a calculator's writer")
+    with pytest.raises(ValueError, match="a reading is one of view, registered, anchors"):
+        LB.label("entries")
 
 
 def test_datacenter_is_links_times_per_link():

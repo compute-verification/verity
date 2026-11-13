@@ -619,7 +619,11 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     as the adversary resource model's compute fills (`leak_bounds.world`). Each count is in both forms, the per-period
     form (`PeriodLeakAccepted`'s count) and the pooled one (`PooledLeakAccepted`'s at q = 1), in each reading of the
     sampling block's free inputs (`leak_bounds.READINGS`: the period check's, the scan's view rows, first), and beside
-    ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
+    ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`). Each row is of one reading and
+    carries that reading's label as its own fields (`leak_bounds.label`: the reading's name and words, that K bounds a
+    count and is no leak bound, the premises it is open on and the ties it is conditional on); no row leaves without
+    it (`leak_bounds.labelled`). A sampling block's free inputs are under each reading's own label (``readings``), and
+    no figure is the readings' sum."""
     import leak_bounds as LB
     from verity.core.protocols.certifier import ingress_scan as IS, warden as W
     weights = LB.WEIGHTS if weights is None else weights
@@ -657,10 +661,10 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 pooled = {f"{float(d):g}": bound(scope, period, reading, d) for d in LB.DELTAS}
                 per = bound(scope, period, reading)
                 rows.append({"period": period, "scope": scope, "links": links[scope], "link_windows": lw,
-                             "requests": rate * lw, "prog": reading, "pooled": {d: b.bits for d, b in pooled.items()},
+                             "requests": rate * lw, "pooled": {d: b.bits for d, b in pooled.items()},
                              "pooled_share": {d: b.share for d, b in pooled.items()},
                              "per_period": per.bits, "per_period_share": per.share, "eps": str(per.eps),
-                             "per_link_window": link.bits(link.block_s, reading)})
+                             "per_link_window": link.bits(link.block_s, reading)} | per.label)
     split = "; ".join(f"the {scope}'s F = {LB.fmax(d / links[scope])} at δ = {float(d):g}"
                       for scope in SCOPES[1:] for d in LB.DELTAS)
     return {"warden_run": (_json(run / "end.json") or {}).get("run") or run.name, "params": dep["params"],
@@ -672,12 +676,13 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "terms": {"connections_per_block": link.connections, "cell": link.cell,
                       "schedules_per_block": link.connections * link.cell,
                       "cells_per_block": link.connections * link.cell, "cap_per_block": link.cap,
-                      "free_per_block": {r: link.free(r) for r in LB.READINGS},
                       "faulty": 0,
                       "jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND, "jitter_term": LB.JITTER,
                       "b": link.b, "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS},
                       "scan_delta": str(link.scan_delta)},
-            "links": links, "weights": weights._asdict(), "rows": rows, "theorems": dict(LB.STATEMENTS),
+            "readings": {r: LB.label(r) | {"free_per_block": link.free(r)} for r in LB.READINGS},
+            "links": links, "weights": weights._asdict(), "rows": LB.labelled(rows, "leak"),
+            "theorems": dict(LB.STATEMENTS),
             "conditions": [
                 "the generator reading of the scan's statement (each proof block's registered rows its boundary "
                 "values): a claim, not yet a locked guarantee",
@@ -711,21 +716,26 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
 
 
 def leak_markdown(doc: dict) -> str:
+    """``leak``'s rows as tables, one a reading under its own heading, each with its reading's label on the line
+    directly above it (`leak_bounds.caption`); a ValueError for a row that carries no label (`leak_bounds.labelled`).
+    No table holds two readings, and none their sum."""
     import leak_bounds as LB
     d1, d2 = (f"{float(d):g}" for d in LB.DELTAS)
     bits = lambda x: f"{x / 10 ** (e := math.floor(math.log10(x))):.3g}·10^{e}" if x >= 1e6 else f"{x:,.0f}"
     share = lambda x: f"{100 * x:.3g}%" if x < 1 else f"{x:.3g}×" if x < 100 else f"{x:,.0f}×"
+    rows = LB.labelled(doc["rows"], "leak's tables")
     lines = []
-    for reading, title in LB.READINGS.items():
-        lines += [f"**{title}**, bits, the share of one copy of the weights ({doc['weights']['label']}) and ε, the "
-                  f"scans' δ summed (the jitter term one bit a bucket, {LB.JITTER}):", "",
+    for reading in dict.fromkeys(r["reading"] for r in rows):
+        lines += [f"## K in the reading `{reading}`", "",
+                  f"Bits, the share of one copy of the weights ({doc['weights']['label']}) and ε, the scans' δ summed "
+                  f"(the jitter term one bit a bucket, {LB.JITTER}).", "", LB.caption(reading), "",
                   "| period | links | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | ε | a sampling block |",
                   "|---|---|---|---|---|---|---|"]
         lines += [f"| {r['period']} | {r['scope']}, {r['links']:,} | {bits(r['pooled'][d1])} "
                   f"({share(r['pooled_share'][d1])}) | {bits(r['pooled'][d2])} ({share(r['pooled_share'][d2])}) | "
                   f"{bits(r['per_period'])} ({share(r['per_period_share'])}) | {float(Fraction(r['eps'])):.3g} | "
                   f"{r['per_link_window']:,.0f} |"
-                  for r in doc["rows"] if r["prog"] == reading]
+                  for r in rows if r["reading"] == reading]
         lines.append("")
     return "\n".join(lines)
 

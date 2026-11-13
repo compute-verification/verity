@@ -533,12 +533,14 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     assert doc["links"] == {"link": 1, "datacenter": 12_500, "world": 18_550_229}
     assert "BF16" in doc["weights"]["label"] and "BF16" in cr.leak_markdown(doc)
     json.dumps(doc)
-    rows = {(r["period"], r["scope"], r["prog"]): r for r in doc["rows"]}
+    rows = {(r["period"], r["scope"], r["reading"]): r for r in doc["rows"]}
     week = {p: rows["week", "link", p] for p in ("view", "registered", "anchors")}
     lw, cap = 604_800 / 3.2, 2 * 128 * 7
     assert week["view"]["per_period"] == pytest.approx(lw * (32 * 4_832 + 32 + cap))
     assert week["registered"]["per_period"] == pytest.approx(lw * (8 * 1_136 + 32 + cap))
-    assert doc["terms"]["free_per_block"] == {"view": 32 * 4_832, "registered": 8 * 1_136, "anchors": 8 * 1_121}
+    assert {r: x["free_per_block"] for r, x in doc["readings"].items()} == {
+        "view": 32 * 4_832, "registered": 8 * 1_136, "anchors": 8 * 1_121}
+    assert "free_per_block" not in doc["terms"]
     assert any("none is a leak bound" in c for c in doc["conditions"])
     assert week["anchors"]["per_link_window"] == pytest.approx(8 * 1_121 + cap + 32)
     assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
@@ -555,6 +557,57 @@ def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "egress_cells": 7}}))
     with pytest.raises(SystemExit, match="0 of scan_zk's classes have a schedule of 7 egress cells"):
         cr.leak(run)
+
+
+def test_no_row_of_leak_leaves_without_its_readings_label(tmp_path, monkeypatch):
+    """Every row `leak` writes, a week's, a month's and a year's for a link, the datacenter and the world, carries its
+    reading's label as its own fields (`leak_bounds.label`): the reading's name, the words that K bounds a count and
+    is no leak bound, and the premises it is open on; a reading of the slot entries carries the two ties and says no
+    check holds them. Each table of `leak_markdown` is of one reading, under that reading's own heading, with the label
+    on the line directly above it, and no figure is two readings' sum. Take a label's field out of a row and
+    `leak_markdown` writes no table; take it out where the rows are made and `leak` returns none."""
+    from dataclasses import asdict
+    sz = sys.modules.get("scan_zk") or _load("scan_zk")
+    sys.modules["scan_zk"] = sz
+    import leak_bounds as LB
+    run = tmp_path / "c1"
+    (run / "out").mkdir(parents=True)
+    (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.W63K4.params)}))
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 1, "requests": 4}}))
+    doc = json.loads(json.dumps(cr.leak(run)))
+    assert len(doc["rows"]) == 3 * 3 * 3 and {r["period"] for r in doc["rows"]} == {"week", "month", "year"}
+    for r in doc["rows"]:
+        assert {k: r[k] for k in LB.LABEL} == LB.label(r["reading"]) and "prog" not in r
+        assert "bounds a count expression" in r["bounds"] and "K is no leak bound" in r["bounds"]
+        if r["reading"] == "view":
+            assert (r["open"], r["conditional_on"]) == (["view-cut", "period-checked", "answers-verified"], [])
+        else:
+            assert r["conditional_on"] == ["state-tied", "view-tied"] and "which no check holds" in r["what"]
+            assert set(r["conditional_on"]) <= set(r["open"])
+    assert {r: {k: x[k] for k in LB.LABEL} for r, x in doc["readings"].items()} == {r: LB.label(r) for r in LB.READINGS}
+    assert [x["free_per_block"] for x in doc["readings"].values()] == [25_600, 896, 8 * (33 + 4 * 17)]
+    md = cr.leak_markdown(doc).split("\n")
+    tables = [i for i, line in enumerate(md) if line.startswith("| period |")]
+    heads = [i for i, line in enumerate(md) if line.startswith("## ")]
+    assert [md[i] for i in heads] == [f"## K in the reading `{r}`" for r in LB.READINGS] and len(tables) == 3
+    for reading, h, t, end in zip(LB.READINGS, heads, tables, [*heads[1:], len(md)]):
+        assert h < t < end and md[t - 2] == LB.caption(reading) and md[t - 1] == ""
+        body = [line for line in md[t + 2:end] if line]
+        assert len(body) == 9 and all(line.startswith("| ") for line in body)
+        block = {f"{x['per_link_window']:,.0f}" for x in doc["rows"] if x["reading"] == reading}
+        assert len(block) == 1 and all(line.endswith(f"| {next(iter(block))} |") for line in body)
+    assert not any("27,296" in line for line in md) and "27296" not in json.dumps(doc)
+    for field in LB.LABEL:
+        cut = dict(doc, rows=[{k: v for k, v in doc["rows"][0].items() if k != field}, *doc["rows"][1:]])
+        with pytest.raises(ValueError, match=f"leak's tables: row 0 of K .*lacks its label's .*{field}"):
+            cr.leak_markdown(cut)
+        full = LB.Bound.label
+        monkeypatch.setattr(LB.Bound, "label", property(lambda b, f=field: {k: v for k, v in LB.label(b.reading).items()
+                                                                            if k != f}))
+        with pytest.raises(ValueError, match=f"leak: row 0 of K .*lacks its label's .*{field}"):
+            cr.leak(run)
+        monkeypatch.setattr(LB.Bound, "label", full)
+    assert len(cr.leak(run)["rows"]) == 27
 
 
 def test_leak_counts_a_w63k4_run_at_w63k4s_class(tmp_path):

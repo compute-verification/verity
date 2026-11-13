@@ -198,12 +198,18 @@ for each zone, the lab's zones summed, the census's datacenter and the world, ea
 ε_tap once a phase, which no check computes, so δ_net has no number. K is established only for a zone whose period
 check accepted, since `PeriodLeakAccepted` bounds only such a period; every other zone's figures are the bound
 its run's load would have had. Every K bounds a count expression, which no statement in the lock yet ties to the bits
-a zone's server can send, so the record calls none a leak bound (`onsite.COUNT`); K rests on neither of the scan's
-ties. A phase whose scan is sampled in part is charged its tied audits' counted free inputs beside its view rows, which
+a zone's server can send, so the record calls none a leak bound (`leak_bounds.COUNT`); K rests on neither of the scan's
+ties. Every row of K, a phase's, a period's, a scope's and the lab's sum's, carries its reading's label as its own
+fields (`leak_bounds.label`: the reading's name, those words, and the premises it is open on, `view-cut`,
+`period-checked` and `answers-verified`), and each table of `record.md` has it on the line directly above; `record`
+writes no row without it (`onsite.k_rows`). A phase whose scan is sampled in part is charged its tied audits' counted
+free inputs beside its view rows, which
 holds only once the period check computes `free` off the tied audit's registered descriptor and holds each phase's
-window circuit to the registered class circuit, both in Lean (`onsite.OPEN_CHECKS`). Beside K a phase stands the figure
-with both of the scan's ties, the scan's slot entries once in its view rows' place, given only as conditional on them
-(`onsite.TIES`, neither a check of the period check's), and no period's figure is made from it. No advice cap is charged
+window circuit to the registered class circuit, both in Lean (`onsite.OPEN_CHECKS`). The figure
+with both of the scan's ties, the scan's slot entries once in its view rows' place, is a phase's alone, under its own
+heading and its own label (each zone's `with_ties`): given only as conditional on the two ties (`leak_bounds.TIES`,
+`state-tied` and `view-tied`, which no check holds), never in a table of K or added to it, and no period's figure is
+made from it. No advice cap is charged
 for what is open: the link figure charges the advice through the scan's inputs.
 
 As two recorded runs on the lab host: the front with the lab up and idle (it needs sudo), then the piece from a clone in

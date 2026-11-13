@@ -258,7 +258,8 @@ The terms, in the generator reading of the scan's statement (each proof block's 
   They are charged whatever the requests served, since the sender picks how many connections it opens. The
   endpoint's slot count isn't a term of the network certifier's schedule: it enters the compute audit's terms, which go
   into JointPeriodLive.
-- The free inputs (`terms.free_per_block`), in three readings. The check's: the scan's view rows, its T egress units'
+- The free inputs (`readings`, each reading's under its own label), in three readings. The check's: the scan's view
+  rows, its T egress units'
   states of NV bits (`ingress_scan.view_bits`), which the period check charges every sampling block while it holds no
   view tie, as it holds none (`NetworkCheck.Period`'s `Scan.terms`). As registered: the sampling block's slot entries,
   NR·T / EVERY entries of NE bits (`ingress_scan.entry_bits`), which the check would charge once in the view rows'
@@ -324,6 +325,15 @@ FILE has each reading of the free inputs. The scan's view rows are the record's 
 entries is what the generator-form lowering would give if it registers `prog` everywhere but its anchors; neither is
 the record's number. K in any reading bounds a count expression, which no statement yet ties to the bits a sender can
 move, so none is a leak bound.
+
+A table of a week's, a month's and a year's K is what a reader copies, so every row carries its reading's label as its
+own fields (`leak_bounds.label`): `reading`, the reading's name; `what`, its words; `bounds`, that K bounds a count
+expression and is no leak bound; `open`, the premises it is open on, by the onsite record's names for them (`view-cut`,
+`period-checked` and `answers-verified` in the check's reading); and `conditional_on`, the scan's two ties
+(`state-tied`, `view-tied`) in a reading of the slot entries, whose words say that no check holds them. `leak` returns
+no row without its label and `leak_markdown` writes no table of one (`leak_bounds.labelled`). FILE.md has one table a
+reading, each under its own heading with the label on the line directly above it (`leak_bounds.caption`); no table
+holds two readings, and no figure is their sum.
 
 K also rests on these conditions:
 - The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.

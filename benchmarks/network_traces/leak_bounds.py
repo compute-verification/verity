@@ -7,6 +7,10 @@ rows form's terms are the exponents of; no statement yet ties that count to the 
 move, so K in any reading is no leak bound. It is the one calculator of K:
 `chain_record.py leak` reads it on a warden run, and the slowdown ρ is derived from both bounds.
 
+Every row of K carries its reading's label as fields of the row itself (`label`: the reading's name and words, what K
+bounds, the premises it is open on and the ties it is conditional on), and a writer hands on no row without it
+(`labelled`): a table of a week's, a month's and a year's K is what a reader copies, and the label goes with it.
+
 A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
 second of one scan class (`ingress_scan.Class`, or a window class's `scan`). Its sampling blocks are each 2T transfer
 blocks, T buckets of τ seconds each way, every one proved as its own proof block, every proof block drawn, each sampling
@@ -46,7 +50,7 @@ from __future__ import annotations
 import json
 import math
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -86,10 +90,27 @@ READINGS = {"view": "the scan's view rows, each egress unit's state, as the peri
                     "while it holds no view tie (the record's K)",
             "registered": "`prog` as registered, the sampling block's slot entries once (conditional on both of the "
                           "scan's ties, which no check holds)",
-            "anchors": "`prog` only at its anchored entries, every slot entry anchored (conditional on the "
-                       "generator-form lowering)"}
+            "anchors": "`prog` only at its anchored entries, every slot entry anchored (conditional on both of the "
+                       "scan's ties, which no check holds, and on the generator-form lowering)"}
 #: the period check's reading, the one a record's K is in, and the one it would be in with both of the scan's ties
 CHECKED, WITH_TIES = "view", "registered"
+#: what K bounds in any reading, the words every row of K carries (`label`'s ``bounds``)
+COUNT = ("K bounds a count expression, the product the period check's rows form charges, which is at most 2^K. No "
+         "statement yet ties that count to the bits a covert sender in the server can move, so K is no leak bound")
+#: the scan's two ties, by the names the onsite record gives its premises, each with what it says. No check holds
+#: either, so a reading of the slot entries is conditional on both
+TIES = {"state-tied": "each ingress unit's state read is the unit before's output, at the network certifier's run",
+        "view-tied": "each egress unit's view read is its ingress unit's output, at the network certifier's run"}
+#: the premises K is open on in each reading, by the onsite record's names for them: the cut of the scan's inputs at
+#: what the reading charges, the period's statement of K's count, and that the answers the period check reads are
+#: verified; and, in a reading of the slot entries, the two ties
+OPEN = {"view": ("view-cut", "period-checked", "answers-verified"),
+        "registered": ("entries-cut", "period-checked", "answers-verified", *TIES),
+        "anchors": ("entries-cut", "period-checked", "answers-verified", *TIES)}
+#: the fields of a row's label (`label`), which no row of K leaves a writer without (`labelled`)
+LABEL = ("reading", "what", "bounds", "open", "conditional_on")
+UNLABELLED = ("a row of K carries its reading's label as its own fields, whoever copies it: build the row with "
+              "`leak_bounds.label(reading)` (or from a `Bound`'s own fields) and keep every field of `LABEL` in it")
 STATEMENTS = {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted",
               "pooled": "PooledLeakAccepted, conditional: hesc and hleak await SampledKSLive and P2",
               "datacenter": "the sum over links of each link's statement, each at δ / links: our composition, which no "
@@ -99,13 +120,65 @@ STATEMENTS = {"per_period": "NetTiming.Guarantees.PeriodLeakAccepted",
 class Bound(NamedTuple):
     """K in bits and its share of ``weights`` (`Weights.label`). ``delta`` is what the bound fails with at most beside
     ``eps``, None in the per-period form; ``eps`` is the union of its scans' δ (the rows form's `eps`, m·δ_scan summed
-    over the links); and ``statement`` is what it rests on (`STATEMENTS`)."""
+    over the links); ``statement`` is what it rests on (`STATEMENTS`); and the rest is its reading's label (`label`,
+    the fields of `LABEL`), which goes wherever the bits go."""
     bits: float
     share: float
     delta: Fraction | float | None
     eps: Fraction | float
     statement: str
     weights: str
+    reading: str
+    what: str
+    bounds: str
+    open: tuple[str, ...]
+    conditional_on: tuple[str, ...]
+
+    @property
+    def label(self) -> dict[str, Any]:
+        """The row's label as a writer puts it in a row of its own (`label`'s form)."""
+        return label(self.reading)
+
+
+def label(reading: str) -> dict[str, Any]:
+    """What every row of K in ``reading`` carries, as fields of the row (`LABEL`): the reading's name and its words
+    (`READINGS`), what K bounds and that it is no leak bound (`COUNT`), the premises it is open on (`OPEN`) and the
+    ties it is conditional on (`TIES`'s names in a reading of the slot entries, none in the check's)."""
+    if reading not in READINGS:
+        raise ValueError(f"a reading is one of {', '.join(READINGS)}, not {reading!r}")
+    return {"reading": reading, "what": READINGS[reading], "bounds": COUNT, "open": list(OPEN[reading]),
+            "conditional_on": [] if reading == CHECKED else list(TIES)}
+
+
+def unlabelled(row: Mapping[str, Any]) -> list[str]:
+    """The fields of its reading's label (`label`) that ``row`` lacks or holds otherwise, none for a row that carries
+    its label whole; every field for a row that names no reading."""
+    if row.get("reading") not in READINGS:
+        return list(LABEL)
+    want = label(row["reading"])
+    got = {k: list(v) if isinstance(v := row.get(k), (list, tuple)) else v for k in LABEL}
+    return [k for k in LABEL if k not in row or got[k] != want[k]]
+
+
+def labelled(rows: Iterable[Mapping[str, Any]], where: str) -> list[Mapping[str, Any]]:
+    """``rows`` as a list, each carrying its reading's label whole (`unlabelled`); a ValueError naming ``where`` and
+    the first row's missing fields otherwise. A writer of K's rows passes them through this before it writes."""
+    rows = list(rows)
+    for i, row in enumerate(rows):
+        if missing := unlabelled(row):
+            at = ", ".join(f"{k} {row[k]!r}" for k in ("period", "scope", "reading") if k in row)
+            raise ValueError(f"{where}: row {i} of K{at and f' ({at})'} lacks its label's {', '.join(missing)}, or "
+                             f"holds another's. {UNLABELLED}")
+    return rows
+
+
+def caption(reading: str) -> str:
+    """The label of ``reading`` as one line, which a table of K's rows in that reading has directly above it."""
+    at = label(reading)
+    tied = (f" Conditional on {', '.join(f'`{t}`' for t in at['conditional_on'])}, which no check holds."
+            if at["conditional_on"] else "")
+    return (f"K in the reading `{reading}`: {at['what']}. {at['bounds']}. Open on "
+            f"{', '.join(f'`{o}`' for o in at['open'])}.{tied}")
 
 
 @dataclass(frozen=True)
@@ -274,6 +347,13 @@ def link(cls: Any, rate: float | Fraction, *, T: int | None = None, tau: float |
     return LinkLoad(scan, rate, T, tau, egress_cells, scan_delta)
 
 
+def _bound(bits: float, weights: Weights, delta: Fraction | float | None, eps: Fraction | float, statement: str,
+           reading: str) -> Bound:
+    at = label(reading)
+    return Bound(bits, bits / weights.bits, delta, eps, statement, weights.label, reading, at["what"], at["bounds"],
+                 tuple(at["open"]), tuple(at["conditional_on"]))
+
+
 def per_link(cls: Any, rate: float | Fraction, period: str | float | Fraction, reading: str,
              delta: float | Fraction | None = None, *, T: int | None = None, tau: float | Fraction = TAU,
              egress_cells: int | None = None, scan_delta: float | Fraction = SCAN_DELTA,
@@ -283,7 +363,7 @@ def per_link(cls: Any, rate: float | Fraction, period: str | float | Fraction, r
     one = link(cls, rate, T=T, tau=tau, egress_cells=egress_cells, scan_delta=scan_delta)
     bits = one.bits(period, reading, delta)
     statement = STATEMENTS["per_period" if delta is None else "pooled"]
-    return Bound(bits, bits / weights.bits, delta, one.eps(period), statement, weights.label)
+    return _bound(bits, weights, delta, one.eps(period), statement, reading)
 
 
 def datacenter(links: Sequence[LinkLoad] | Mapping[LinkLoad, int], period: str | float | Fraction, reading: str,
@@ -320,7 +400,7 @@ def datacenter(links: Sequence[LinkLoad] | Mapping[LinkLoad, int], period: str |
     each = None if delta is None else delta / counts.total()
     bits = math.fsum(n * l.bits(period, reading, each) for l, n in counts.items())
     eps = sum(n * l.eps(period) for l, n in counts.items())
-    return Bound(bits, bits / weights.bits, delta, eps, STATEMENTS["datacenter"], weights.label)
+    return _bound(bits, weights, delta, eps, STATEMENTS["datacenter"], reading)
 
 
 def world(one: LinkLoad, period: str | float | Fraction, reading: str, delta: float | Fraction | None = None, *,

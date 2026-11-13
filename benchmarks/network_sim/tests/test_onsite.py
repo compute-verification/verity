@@ -96,6 +96,22 @@ def zone(out: Path, b: str, params: dict, *, answer: dict | None, refused: str |
         (piece / "refused.txt").write_text(refused + "\n")
 
 
+UNWIRED = {"protocol": "verity/certifier/v0", "verdict": "reject", "reason": "the scan's prog is no compute "
+           "audit's slot entries"}
+
+
+def lab(out: Path, params: dict) -> None:
+    """Three zones' released outcomes under ``out``: one whose period check rejected, one whose piece refused and one
+    accepted, with the front's front.json."""
+    zone(out, "b0", params, answer=UNWIRED)
+    zone(out, "b1", params, answer=None, refused="the chain wrote no report (exit 7)")
+    zone(out, "b2", params, answer={"protocol": "verity/certifier/v0", "verdict": "accept", "reason": None})
+    out.joinpath("front.json").write_text(json.dumps({
+        "host": "lab", "declaration": "leaf-spine-3",
+        "zones": {b: {"zone": f"na-{b}", "certifier": f"na-{b}-cert", "address": a}
+                  for b, a in (("b0", "10.77.0.1"), ("b1", "10.77.0.9"), ("b2", "10.77.0.17"))}}))
+
+
 def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_simulated(onsite, tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(TRACES))
     import leak_bounds as LB
@@ -104,15 +120,8 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     params = asdict(SZ.W63K4.params)
     assert params["egress_cells"] == W63K4_CELLS
     out = tmp_path / "out"
-    unwired = {"protocol": "verity/certifier/v0", "verdict": "reject", "reason": "the scan's prog is no compute "
-               "audit's slot entries"}
-    zone(out, "b0", params, answer=unwired)
-    zone(out, "b1", params, answer=None, refused="the chain wrote no report (exit 7)")
-    zone(out, "b2", params, answer={"protocol": "verity/certifier/v0", "verdict": "accept", "reason": None})
-    out.joinpath("front.json").write_text(json.dumps({
-        "host": "lab", "declaration": "leaf-spine-3",
-        "zones": {b: {"zone": f"na-{b}", "certifier": f"na-{b}-cert", "address": a}
-                  for b, a in (("b0", "10.77.0.1"), ("b1", "10.77.0.9"), ("b2", "10.77.0.17"))}}))
+    unwired = UNWIRED
+    lab(out, params)
     assert onsite.record(argparse.Namespace(out=str(out))) == 0
     doc = json.loads((out / "record.json").read_text())
     assert (doc["label"], doc["served"], doc["simulated"]) == ("simulated", False, list(onsite.SIMULATED))
@@ -136,11 +145,12 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     assert {x: k["per_phase"][x] for x in ("ell_a", "k_skip", "T_j", "d_jit", "jitter")} == {
         "ell_a": ell_a, "k_skip": 0, "T_j": T, "d_jit": 2, "jitter": T}
     assert k["per_phase"]["K"] == 384 + 384 + ell_a + T == 26_400
-    assert k["per_phase"]["with_ties"] == {"reading": "registered", "conditional_on": list(onsite.TIES),
-                                           "ell_a": entries, "K": 384 + 384 + entries + T}
-    assert k["per_phase"]["with_ties"]["K"] == 1_696 and len(onsite.TIES) == 2
-    assert (k["reading"], k["bounds"]) == ("view", onsite.COUNT) and "no K here is a leak bound" in onsite.COUNT
-    assert "with_ties" not in json.dumps({"periods": k["periods"], "scopes": k["scopes"], "lab": doc["lab"]})
+    assert "with_ties" not in k["per_phase"] and b0["with_ties"] == LB.label("registered") | {
+        "ties": dict(LB.TIES), "of": onsite.PHASE_ONLY, "ell_a": entries, "K": 384 + 384 + entries + T}
+    assert onsite.PHASE_ONLY == "a phase alone: no period's, lab's, datacenter's or world's figure is made from it"
+    assert b0["with_ties"]["K"] == 1_696 and b0["with_ties"]["conditional_on"] == list(LB.TIES) and len(LB.TIES) == 2
+    assert (k["reading"], k["bounds"]) == ("view", LB.COUNT) and "K is no leak bound" in LB.COUNT
+    assert "with_ties" not in json.dumps({"K": k, "lab": doc["lab"]})
     assert all(z["K"]["conditional_on"] == list(onsite.OPEN_CHECKS) for z in (b0, b2))
     one = LB.link(cls, Fraction(4, 1) / (T * Fraction(1, 10)), T=T, tau=Fraction(1, 10), egress_cells=W63K4_CELLS)
     for period, t in k["periods"].items():
@@ -182,17 +192,86 @@ def test_the_record_is_each_zones_verdicts_and_K_in_the_bounds_terms_labelled_si
     assert "each phase T_j = 32 buckets of τ = 100 ms (3.2 s), the lab's tick" in md
     assert "(vacuous)" in md and "known overcount" in md and "Σ_j (ℓ_a,j + k_skip,j + T_j·log2 d_jit)" in md
     assert f"ℓ_a,j = {ell_a:,} (the scan's view rows, as the period check charges them)" in md
-    assert ("K a phase = 26,400. Conditional on both of the scan's ties, neither checked: ℓ_a,j = 896 (its slot "
-            "entries once) and K a phase = 1,696.") in md
-    assert "Every K here bounds a count expression" in md and "so no K here is a leak bound" in md
-    assert "rests on neither of the scan's ties" in md and "no period's figure is made from it" in md
-    assert all(t in md for t in onsite.TIES) and "## K, the count the period check charges a zone's link" in md
+    assert "(d_jit = 2); K a phase = 26,400.\n" in md and "| b0 | 896 | 1,696 |" in md
+    assert "K bounds a count expression" in md and "so K is no leak bound: every K in this section is that K" in md
+    assert "rests on neither of the scan's ties" in md
+    assert "No period's, lab's, datacenter's or world's figure is made from it" in md
+    assert all(t in md for t in LB.TIES.values()) and "## K, the count the period check charges a zone's link" in md
     assert "can send beyond its committed program" not in md and "Every K here is conditional" not in md
     assert all(c in md for c in onsite.OPEN_CHECKS) and "ℓ_a + 1" not in md
     assert "the link figure charges the advice through the scan's inputs" in md
     for retired in ("D_j", "k_i", "link-window", "delta_net", "J is", "brief", "NET-", "advice width"):
         assert retired not in md, retired
     assert onsite.short("word " * 50).endswith(" …") and len(onsite.short("word " * 50)) <= 162
+
+
+def test_no_row_of_K_leaves_the_record_without_its_readings_label(onsite, tmp_path, monkeypatch):
+    """Every row of K the lab record writes, a zone's phase, its week's, month's and year's, its datacenter's and
+    world's and the lab's sum's, carries its reading's label as its own fields (`leak_bounds.label`): the reading's
+    name, the words that K bounds a count and is no leak bound, and the premises it is open on. Every such row is in
+    the check's reading. The figure with both of the scan's ties is a phase's alone, beside K under its own heading,
+    with the two ties it is conditional on and the words that no check holds them; no table and no line holds the two
+    readings, and nothing is their sum. Each table has its label on the line directly above it. Take a label's field
+    out of a row and `markdown` writes no table; take it out where a row is made and `record` writes no record."""
+    monkeypatch.syspath_prepend(str(TRACES))
+    import leak_bounds as LB
+    import scan_zk as SZ
+    out = tmp_path / "out"
+    lab(out, asdict(SZ.W63K4.params))
+    assert onsite.record(argparse.Namespace(out=str(out))) == 0
+    doc = json.loads((out / "record.json").read_text())
+    rows, view = onsite.k_rows(doc), LB.label("view")
+    assert len(rows) == 3 * (1 + 3 + 9 + 1) + 3
+    for z in doc["zones"].values():
+        period_rows = [z["K"]["per_phase"], *z["K"]["periods"].values(), *z["K"]["scopes"]]
+        assert len(period_rows) == 13 and all({k: r[k] for k in LB.LABEL} == view for r in period_rows)
+        tied = z["with_ties"]
+        assert {k: tied[k] for k in LB.LABEL} == LB.label("registered") and "which no check holds" in tied["what"]
+        assert tied["conditional_on"] == ["state-tied", "view-tied"] == list(tied["ties"])
+        assert not {"week", "month", "year", "periods", "scopes"} & set(tied) and "a phase alone" in tied["of"]
+    assert all({k: doc["lab"][p][k] for k in LB.LABEL} == view for p in LB.PERIODS)
+    assert (view["open"], view["conditional_on"]) == (["view-cut", "period-checked", "answers-verified"], [])
+    assert "bounds a count expression" in view["bounds"] and "K is no leak bound" in view["bounds"]
+    assert all(LB.unlabelled(r) == [] for r in rows)
+    assert "27296" not in json.dumps(doc) and "28096" not in json.dumps(doc)
+
+    md = (out / "record.md").read_text().split("\n")
+    heads = {line: i for i, line in enumerate(md) if line.startswith("## ")}
+    k, tied = heads[onsite.HEADINGS["view"]], heads[onsite.HEADINGS["registered"]]
+    assert k < heads["## Over all compute"] < tied < heads["## Notes"]
+    assert onsite.HEADINGS["registered"] == "## The count with both of the scan's ties, which no check holds"
+    tables = [i for i, line in enumerate(md) if line.startswith(("| period |", "| zone | ℓ_a,j"))]
+    assert len(tables) == 3 + 1 + 1
+    for t in tables:
+        assert md[t - 1] == "" and md[t - 2] == LB.caption("view" if t < tied else "registered"), md[t]
+    assert [t > tied for t in tables] == [False, False, False, False, True]
+    assert all("1,696" not in line and "896" not in line for line in md[:tied])
+    assert all("26,400" not in line for line in md[tied:heads["## Notes"]]) and not any("27,296" in x for x in md)
+    assert sum("| 896 | 1,696 |" in line for line in md[tied:]) == 3
+
+    for field in LB.LABEL:
+        for pick in (lambda d: d["zones"]["b2"]["K"]["periods"]["week"], lambda d: d["zones"]["b0"]["K"]["scopes"][4],
+                     lambda d: d["lab"]["year"], lambda d: d["zones"]["b1"]["with_ties"],
+                     lambda d: d["zones"]["b0"]["K"]["per_phase"]):
+            cut = json.loads(json.dumps(doc))
+            del pick(cut)[field]
+            with pytest.raises(ValueError, match=f"the lab record's tables: row .*lacks its label's .*{field}"):
+                onsite.markdown(cut)
+    (out / "record.json").unlink()
+    terms = onsite.terms
+    monkeypatch.setattr(onsite, "terms", lambda k, p: {x: v for x, v in terms(k, p).items() if x != "open"})
+    with pytest.raises(ValueError, match="the lab record: row 1 of K .*lacks its label's open.*leak_bounds.label"):
+        onsite.record(argparse.Namespace(out=str(out)))
+    assert not (out / "record.json").exists()
+    monkeypatch.setattr(onsite, "terms", terms)
+    whole = LB.Bound.label
+    monkeypatch.setattr(LB.Bound, "label", property(lambda b: {x: v for x, v in LB.label(b.reading).items()
+                                                               if x != "bounds"}))
+    with pytest.raises(ValueError, match="leak: row 0 of K .*lacks its label's bounds"):
+        onsite.record(argparse.Namespace(out=str(out)))
+    assert not (out / "record.json").exists()
+    monkeypatch.setattr(LB.Bound, "label", whole)
+    assert onsite.record(argparse.Namespace(out=str(out))) == 0 and (out / "record.json").is_file()
 
 
 def test_a_zone_whose_gate_didnt_accept_has_no_K(onsite, tmp_path):
