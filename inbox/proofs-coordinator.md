@@ -115787,3 +115787,37 @@ Mailbox read to its 02:26Z message before writing [run].
 - When #9375 lands on `main`, the one conflict is `verity/protocols/spot/verifier/lean/tests/test_difftest.py`'s import, with CROSSCLOSE's three lines for it [relayed]; I merge, rerun and write the new line within the hour, as you asked.
 
 Pushed: nothing new since the board entry; unpushed: nothing [run].
+
+## WINDOWAT, Fri 13 Nov 02:49Z: `MemberForm/Read.lean` compiles whole (the read at an accept of the form, 6 theorems, standard axioms); the link-first refusal passes its suites; half of E is written, its list part checked
+
+**Compiled since 02:08Z** (no try waited over ten minutes: `4c37` waited 27 s on vy-nebius-2, `0c5b` 23 s on vy-nebius-cpu-12):
+- [run `r20261113-021053-4c37`, vy-nebius-2, launched 02:10:53Z, started 02:11:20Z, running] `MemberForm/Read.lean` at `47d2c04d8f`: "lean exit 0 in 1491 s", "none of its 6 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". That is `accept_read`, v2's read at an accept of the form, with `membersStructure_ok` and `membersTreesHeld_ok` under it. The run goes on to `MemberForm/Links.lean` and the aggregator; no verdict on those yet.
+- [run `r20261113-014952-79a2`, vy-nebius-2, ended 02:08:56Z, rc 0] the link-first refusal at `1ca22d7e7e`: its verifier Lean (said at 02:08Z) and the quick tier of the two suites that read it, with its difftest by name: "2 suites: 2 passed".
+- [checked on the VM, not a run] `MemberForm/Ranges.lean` (343 lines, 23 theorems, at `6c5900a112`): it imports Mathlib alone, and the tree's own Mathlib is built on this VM, so `lean` on that one file elaborates it as the build will: exit 0, no warning, 1 s, 790 MiB; `#print axioms` of each theorem names only `propext`, `Classical.choice`, `Quot.sound`. A research run will repeat it with the next try.
+
+**Failed, already fixed:** [run `r20261113-012705-4804`, vy-nebius-cpu-12, ended 02:31:35Z, rc 1] `Read.lean` at the older head, refused only at the name `members_read` that soundness's merge brought; the rename to `accept_read` is what `4c37` compiled.
+
+**Running:** [run `r20261113-023737-0c5b`, vy-nebius-cpu-12, launched 02:37:37Z, started 02:38:00Z] `MemberForm/Run.lean` and `MemberForm/Passes.lean` at `ba64988bee`, the proving branch with the refusal of a statement of a member the sample missed merged in (it rebuilds what reads `Spot/OneStageZk.lean`); expected to end by about 03:30Z.
+
+Mailbox read at `ebd237cdb3`: nothing for me after your 02:00Z three answers.
+
+**1. E, the record's sample at each sampled member, is half written.** Branch `cursor/proofs-windowat-5e4b` at `6c5900a112`.
+
+- [read: `Window/Steps.lean`, `WindowSessions.session`] What the window asks of member `i` with a sampled unit: the session at place `drawnBefore W.ms S i` has a record whose sample is the print of `m.part S`, the member's part of the window's sample. The form's check never compares a record's sample to the window's; it holds the two together only through the units: each session's proved units, appended and sorted, are the evidence's `proved_units` (`provedHeld`), which v1's check holds to the window's sample.
+- [checked on the VM] `MemberForm/Ranges.lean`, the part over natural numbers alone. `UnitsOver`: members of one range each, no unit in two; the statements' members among them, in order; each session's units in its statement's member's range; the units wanted exactly the sessions'. From it `UnitsOver.kept`: the statements' members are the members with a wanted unit, in the members' order; and `UnitsOver.mem_units`: a unit of a statement's member's range is wanted exactly when that statement's session proved it. With `filter_at`, `filter_length` and `forall₂_countP` these give the session's place (`drawnBefore`) and the count of trees.
+- [written, modelled on the VM against copies of the verifier's definitions, NOT compiled in the tree] `MemberForm/Sample.lean` (288 lines, 12 theorems, at `248c44313a`). `session_sample`: at a member of the one range `[lo, hi)`, a session whose verdict passes at the member's statement has a record whose sample is the subset print of slots `us` ascending below the member's count, over the member's count, and the units it proved are `lo + u` for each slot, in order. It reads the member's population check (`Member.population`: the public file's instances are the member's count, its unit indices the member's units), `laidHeld` (each member one range) and the one-statement proof's facts in `Held.lean`.
+- [derived] What is left of E: one file that builds `UnitsOver` from the run (`membersRun_ok`, `laidHeld`, `sampledHeld`, `provedHeld`, the window laid out), and the print of `m.part S` from `mem_units`. Then `Reads.lean`.
+- [read] E rests on three checks of the form's run, all on the proving branch: `laidHeld` (each member one range of the population), `sampledHeld` (no statement of a member the sample missed; #9576) and `provedHeld`; and on the window laid out (`MembersSetUp.laid`), for members sharing no unit.
+- [derived] `windowReads_members` will take a hypothesis `∀ θ F W, I.SetsUp θ F W → MembersSetUp I.base θ F W`, the converse of the one `windowAt_members` takes: `WindowInstance.SetsUp` is a field, and the read needs what it holds. With `SetsUp := MembersSetUp`, which you adopted once it elaborates, both are `id`. No listed statement changes.
+
+**2. The size, against the merged tree** [run: `wc`, `rg -c` at `6c5900a112`]: `MemberForm/` is 18 files, 4,909 lines, 220 theorems; of them mine 16 files (soundness's are `Order.lean` and `Evidence.lean`). Still to write: the file of item 1's last step (about 250 lines) and `Reads.lean` with the assembly (about 400 lines).
+
+**3. Words.** [run: the retired-terms lint on the new files] `Ranges.lean` has no site. `Sample.lean` has 22, every one an existing identifier it must name (`Flock.Witness.recordDraw`, `Flock.Draw.UnitDraw`, `drawLaw_ok`, `lawWhy_zk`, `recordDrawn_of_subset`, the record's key `"unit_draw"`) or a reference to one in a docstring; its prose says sample. The lint counts identifiers, so these stay until the identifiers are renamed, which is not mine.
+
+**Not established**
+- `Sample.lean` in the tree: modelled only. Its risk is in the lemmas it calls as I read them (`statement_reads`, `population_header`, `setupTables_population`, `units_of_norm`, `recordDraw_raw`), not in the list reasoning, which the model checks.
+- `Links.lean` and the aggregator (`4c37` still on them); `Run.lean` and `Passes.lean` on the merged tree (`0c5b`).
+- The window's sample equal to the units wanted (`joint_draw_of_drew` at `W.joint 0`, with `W.nJ` equal to the sample's population): read, not written.
+- Nothing of A28's two statements is assembled yet.
+
+**To post:** nothing.
