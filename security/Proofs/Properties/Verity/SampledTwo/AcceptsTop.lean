@@ -7,7 +7,8 @@ public import Proofs.Properties.Verity.SampledTwo.RuleTwo
 public import Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf
 public import Proofs.Flock.SpotFlock.RunsAs.SecondStageOf
 public import Proofs.Properties.Verity.SampledTwo.RecordNames
-public import Proofs.Properties.Verity.SampledTwo.RunChecks
+public import Proofs.Flock.SpotFlock.RunsAs.Steps
+public import Proofs.Flock.SpotFlock.HeldOf
 public import Proofs.Properties.Verity.SampledTwo.AtStmt
 public import Proofs.Flock.Claims.Complete.Encode
 
@@ -32,7 +33,7 @@ that are proved and so not asked:
   parser reads its canonical text, `readBack`, so the proved verifier's reader reads it back from those bytes);
 * `RecordsAt`: the interior record registers no value (`Round2.registersNone_of_two`: where the design evaluates, the
   interior registration registers none), and both records name their registrations' names (`recordsHeldAt_of`: an
-  accepted run's registration checks have no code, `RunChecks.checks_of_accepted`, and a check with no code names its
+  accepted run's registration checks have no code, `checks_of_accepted`, and a check with no code names its
   registration's names, `RecordNames.recordOk_of_check`). For that, the held copies are asked to be the ones `heldOf`
   builds (`HeldOfAt`) and each registration to list each port once (`PortsDistinctAt`), which R3-ports doesn't
   check.
@@ -100,6 +101,20 @@ theorem recordsRead (C : CaseOf) : RecordsRead C := by
   rw [hr1, hr2]
   exact ⟨jsonMsg_of_readBack hj₁ hx, jsonMsg_of_readBack hj₂ hm₁⟩
 
+/-- **An accepted two-stage run's registration checks have no code**, the boundary record's and the interior
+record's (`RunsAs.accepted_registered`), each at a registration with the run's own ports and registered values
+(`namesOf`): the run checks each at its own registration with the law it expands and, at the boundary, its work
+table. -/
+theorem checks_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Lean.Json}
+    (ha : SpotFlock.RunsAs.AcceptedTwo i it j) :
+    (∃ v, Spot.Registration.check i.record v = #[] ∧
+        SpotFlock.HeldOf.namesOf v = SpotFlock.HeldOf.namesOf i.params.verifier) ∧
+      ∃ v, Spot.Registration.check it.record v = #[] ∧
+        SpotFlock.HeldOf.namesOf v = SpotFlock.HeldOf.namesOf it.params.verifier := by
+  obtain ⟨n, rule, law, workTable, resolved, draw, rest, read, ns, -, -, -, -, h₁, -, -, -, -, h₂⟩ :=
+    SpotFlock.RunsAs.accepted_registered ha
+  exact ⟨⟨_, Array.isEmpty_iff.1 h₁, rfl⟩, _, Array.isEmpty_iff.1 h₂, rfl⟩
+
 /-- **Each accepted play's held copies are the ones `heldOf` builds** from its input and interior. -/
 def HeldOfAt (A : Live₂) (C : CaseOf) : Prop :=
   ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it →
@@ -111,7 +126,7 @@ def PortsDistinctAt (C : CaseOf) : Prop :=
     (i.params.verifier.ports.map (·.1)).toList.Nodup ∧ (it.params.verifier.ports.map (·.1)).toList.Nodup
 
 /-- **An accepted play's records name their registrations' names**: its run's registration checks have no code
-(`RunChecks.checks_of_accepted`), and each names its registration's names (`RecordNames.recordOk_of_check`), which
+(`checks_of_accepted`), and each names its registration's names (`RecordNames.recordOk_of_check`), which
 are the held copies' (`HeldOf.namesHeld_of`). -/
 theorem recordsHeldAt_of {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hports : PortsDistinctAt C) :
     RecordsHeldAt A C := by
@@ -119,7 +134,7 @@ theorem recordsHeldAt_of {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hports
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
   obtain ⟨hb, hn⟩ := SpotFlock.HeldOf.namesHeld_of hu
   obtain ⟨j, hj⟩ := acceptedTwo_of_formAccepts (ruleIsTwo C) hA hi hit
-  obtain ⟨⟨v, hv, hvn⟩, w, hw, hwn⟩ := SpotFlock.RunChecks.checks_of_accepted hj
+  obtain ⟨⟨v, hv, hvn⟩, w, hw, hwn⟩ := checks_of_accepted hj
   obtain ⟨hpb, hpi⟩ := hports o i it hA hi hit
   obtain ⟨hjx, hjm⟩ := recordsRead C o i it x m₁ hA hi hit hx hm₁
   have hnv : (v.ports.map (·.1)).toList.Nodup := by
