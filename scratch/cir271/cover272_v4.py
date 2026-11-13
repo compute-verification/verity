@@ -1,4 +1,5 @@
-"""cover272_v4.py COVER.json PLAN.json RUNS_DIR RUN:LIST:NODE:MEM_GB[:running]... (in launch order): CIR-272's second pass, `circuits/request-cover/v4`,
+"""cover272_v4.py [--v5] COVER.json PLAN.json RUNS_DIR RUN:LIST:NODE:MEM_GB[:running]... (in launch order): CIR-272's second pass,
+(with --v5 and scratch/cir272/p3-plan.json, the third pass's lists i and j too, as `circuits/request-cover/v5`), `circuits/request-cover/v4`,
 written over COVER.json, which must be v3 (`art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888`, the record
 NET-390 quoted; `git show 9a0d813ec490:scratch/cir271/cover.json`).
 
@@ -48,9 +49,17 @@ LISTS = {
          "before the record is due (types-p2h.tsv)",
 }
 
+V4 = "art:fd2160d5541b057b59c6fb8fc1a105ff2c3f9939cd6a078352cd988c55eee67e"
+V5 = sys.argv[1] == "--v5"
+if V5:
+    sys.argv.pop(1)
+    LISTS["i"] = "third pass: t019 (its Boolean version, 9000 s), then t032 (6000 s); --mem-gb 160, budget 15600 s (types-p3i.tsv)"
+    LISTS["j"] = "third pass: t031 (its Boolean version, 9000 s); --mem-gb 160, budget 9600 s (types-p3j.tsv)"
 cover_path, plan_path, runs_dir = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 cover, plan = json.loads(cover_path.read_text()), json.loads(plan_path.read_text())
 split = plan.pop("_split", None)
+third = plan.pop("_third", None)
+assert V5 == (third is not None), "--v5 takes scratch/cir272/p3-plan.json, and only it"
 assert cover["schema"] == "circuits/request-cover/v3", cover["schema"]
 RUNS = []
 for a in sys.argv[4:]:
@@ -178,7 +187,11 @@ for b in cover["blocks"]:
 on = [b for b in cover["blocks"] if b["on_card"]]
 total = sum(b["blocks"] for b in on)
 cnt = Counter(b["bound_outcome"] for b in on)
-cover["schema"] = "circuits/request-cover/v4"
+cover["schema"] = "circuits/request-cover/v5" if V5 else "circuits/request-cover/v4"
+if V5:
+    cover["third_pass"] = {**third, "plan": "scratch/cir272/p3-plan.json", "runs": [r for r in RUNS if r["list"] in third["lists"]],
+                           "mem_gb": 160, "stage_stop_gb": 156, "lean_gate_gb": 150, "budget_s": {"i": 15600, "j": 9600},
+                           "tree": "94c4c61b1768 (bound.sh as at 33d7c7dfd8c2)", "supersedes": V4}
 cover["second_pass"] = {"issue": "CIR-272", "tree": TREE, "branch": "cursor/circuits-cir272-bound-6f04", "plan": "scratch/cir272/p2-plan.json",
                         "runs": RUNS, "threads": 8, "mem_gb": 64, "stage_stop_gb": 62, "lean_gate_gb": 60, "lean_stop_gb": 62,
                         "budget_s": {"a-g": 21000, "h": 15000}, "runner_changes": CHANGES, "split": split, "lists": LISTS, "v3": "art:de7ccd2119367c0264ca57c1be3d88774345f1ea13a8f91baf09817c4a188888"}
