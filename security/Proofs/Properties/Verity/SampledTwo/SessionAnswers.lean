@@ -160,9 +160,12 @@ theorem recordDigest_round {record : Json} {t : LoggedTree} {streams : Array Jso
   obtain ⟨-, o, ho, hmsg⟩ :=
     hall x hx n rs hn hrs (rs[k], k) (Array.mem_zipIdx_iff_getElem?.2 (Array.getElem?_eq_getElem hk))
   refine ⟨o, ho, ?_⟩
-  simp only [Array.getElem?_eq_getElem hk, Option.bind_some]
   have hmsg' : getD rs[k] "msg_sha512" = .str o.after := hmsg
-  rw [hmsg']
+  split
+  case h_2 hnone => cases hnone.symm.trans hfind
+  rename_i x' hfind'
+  obtain rfl : x' = x := Option.some.inj (hfind'.symm.trans hfind)
+  simp only [hrs, Array.getElem?_eq_getElem hk, Option.bind_some, hmsg']
 
 /-- A session's round past its first is of a stream other than `TREE_SESSION`. -/
 theorem slotStream_ne_session (tab : String) (R : ℕ) {j : ℕ} (h : j ≠ 0) :
