@@ -85,7 +85,7 @@ from .landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, KILLED_RC, KILLED_SAYS, 
 from .queue import _SUMMARY_RE, CHECK_STEPS, KEY_COMMAND, QueueError, _git
 from .reds import named
 from .store.fixtures import REPLICA_MAP, entries
-from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, PASS, PENDING, STATES, Failed, Verdict, meets
+from .vqueue import FAIL, INFRA, KINDS, LIST_FAILED, MACHINE_KINDS, PASS, PENDING, STATES, Failed, Verdict, meets
 from .vqueue_records import FAULT_RE
 
 #: a candidate's state from its two verdicts' (`combine`): the first of these either has
@@ -1290,20 +1290,23 @@ def based(v: Verdict, base: dict | None, so_far: bool = False) -> Verdict:
     and None while it runs, or when it ended without judging it, so `vqueue.decide` takes a failure the base has too as
     inherited.  With ``so_far`` (a base that is itself a candidate), one whose check hasn't ended answers with what it has
     failed so far (its ``early``, `_early`) where that holds every test failed of the step, and None otherwise, since it
-    may yet fail the rest: a candidate above another is failed on its own failures once its base's word on them is known."""
+    may yet fail the rest: a candidate above another is failed on its own failures once its base's word on them is known.  A
+    step its base's machine failed (`vqueue.MACHINE_KINDS`) answers None: the base never ran those tests to an end."""
     got = (base or {}).get("verdict")
     if early := so_far and base is not None and not isinstance(got, dict):
         got = base.get("early") or {}
     if not isinstance(got, dict) or not v.failed:
         return v
     failed = {f.get("task"): f.get("tests") for f in got.get("failed") or () if isinstance(f, dict)}
+    erred = {f.get("task") for f in got.get("failed") or () if isinstance(f, dict) and f.get("kind") in MACHINE_KINDS}
     passed = set(got.get("passed") or ())
 
     def of(f: Failed) -> Failed:
         s = f.task.removeprefix("step ")
         if s == f.task:
             return f
-        tests = frozenset(failed[f.task] or {step_test(s)}) if f.task in failed else frozenset() if s in passed else None
+        tests = (None if f.task in erred else frozenset(failed[f.task] or {step_test(s)}) if f.task in failed else
+                 frozenset() if s in passed else None)
         return replace(f, base_tests=None if early and tests is not None and not f.tests <= tests else tests)
 
     return replace(v, failed=tuple(of(f) for f in v.failed))
