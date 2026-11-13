@@ -81,7 +81,9 @@ def test_the_build_is_the_served_computation(art: Path) -> None:
 
 def test_the_gemm_route_follows_the_step(art: Path) -> None:
     plans = {s["step"]: s for s in _build(art)["steps_plan"]}
-    down = lambda s: plans[s]["gemms"]["8192,2048"]
+    def down(s: int) -> dict:
+        return plans[s]["gemms"]["8192,2048"]
+
     assert down(1)["base"] == "CublasSplitKGemm_v1" and down(1)["statics"]["SPLIT_K"] == 3
     assert down(0)["statics"]["SPLIT_K"] == 2
     assert down(6)["base"] == "Gemm_v2"
@@ -148,7 +150,9 @@ def test_add_norm_storing_its_rows_twice_binds_its_definition_per_buffer(art: Pa
     srcs = [(n, s) for p in sorted((art / "inductor").rglob("*.py")) for n, s in T.kernel_sources(p.read_text()).items()]
     name, src = next((n, s) for n, s in srcs if T.recognize(n, s, T.launch_config(configs, s), cc=CC)["template"] == "ADD_NORM")
     cfg = T.launch_config(configs, src)
-    store = re.search(r"\n( +tl\.store\(out_ptr1 \+ [^\n]*\n)", src).group(1)
+    stored = re.search(r"\n( +tl\.store\(out_ptr1 \+ [^\n]*\n)", src)
+    assert stored is not None
+    store = stored.group(1)
     twice = (src.replace("'out_ptr1': '*bf16'", "'out_ptr1': '*bf16', 'out_ptr2': '*bf16'", 1)
              .replace("out_ptr1, xnumel", "out_ptr1, out_ptr2, xnumel", 1).replace(store, store + store.replace("out_ptr1", "out_ptr2"), 1))
     one, two = T.recognize(name, src, cfg, cc=CC), T.recognize(name, twice, cfg, cc=CC)
