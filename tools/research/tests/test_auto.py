@@ -603,7 +603,8 @@ def test_the_probe_counts_a_pools_free_memory_as_its_slots_count_the_live_reserv
     """A pool's `free_gb` is what a lane run would find free there, which `choose` places by. Slots with peaks= count the
     live lane reservations as a crowd reaches them (slot.py's `reserved_gb`), so the probe counts them the same way, with the
     tree's own slot.py: counted whole, a pool whose slots would start the job reads as short of memory and the job goes to
-    wait elsewhere. Here the machine's memory is a stated 200 GiB and six live runs each reserved 30 GiB and reached none."""
+    wait elsewhere. Here the machine's memory is a stated 200 GiB, six live runs each reserved 30 GiB and reached none, and
+    its disks have room: slot.py reads /workspace and the home directory's for itself, at no path the probe is handed."""
     slots, ramlock, src = tmp_path / "locks" / "research" / "slots", tmp_path / "ramlock", tmp_path / "src"
     slots.parent.mkdir(parents=True)
     ramlock.mkdir()
@@ -612,7 +613,8 @@ def test_the_probe_counts_a_pools_free_memory_as_its_slots_count_the_live_reserv
     monkeypatch.setenv("RESEARCH_RAMLOCK_DIR", str(ramlock))
     monkeypatch.setattr(slot_only, "POOLS", {**slot_only.POOLS, auto.SPILL_POOL: str(slots)})
     (src / auto.SLOT_PY).parent.mkdir(parents=True)
-    (src / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text() + "\n\ndef memory_gb(root=None):\n    return 200\n")
+    (src / auto.SLOT_PY).write_text((REPO / auto.SLOT_PY).read_text() + "\n\ndef memory_gb(root=None):\n    return 200\n"
+                                    "\n\ndef disk_short(path=None):\n    return None\n")
 
     def read(lines: str) -> dict:
         slots.write_text(lines)
