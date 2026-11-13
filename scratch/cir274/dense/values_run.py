@@ -83,6 +83,8 @@ log(f"check: {rec['totals']}")
 if not a.no_plants:
     plants = {}
     for key, make in (("a_wire_row3", lambda: NV.plant_wire_row(c, "AllReduceResidualMnnvl_v1", "parts", 3)),
+                      ("a2_wire_row3_kept_row0", lambda: NV.plant_wire_row(c, "AllReduceResidualMnnvl_v1", "parts", 3,
+                                                                          keep=True)),
                       ("b_read_shift", lambda: NV.plant_read_shift(c, "RoPE"))):
         try:
             c2, tid, what = make()
