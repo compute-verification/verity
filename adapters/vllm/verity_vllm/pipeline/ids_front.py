@@ -14,17 +14,22 @@ a process of the server's side, on its host, between the network certifier and t
   feed reads. Of the server's streamed chunks only the token ids come back, each one id event written as its chunk
   arrives, then the trailer at ``data: [DONE]``. A stream that doesn't get there (the server refused the request, sent an
   error event or text without its ids, or broke off) ends as `IdsProtocol`'s failed stream does: its ids so far, no
-  trailer and none of the server's text, so the network certifier fails the connection.
+  trailer and none of the server's text, so the network certifier fails the connection. Once the network certifier's
+  side of the connection has ended (closed, or broken), the front closes its connection to the server, whatever the
+  server has sent, so the server sees the close as it would on a connection of its own: vLLM's server aborts a request
+  on its connection's close, and one the tick gate dropped (`serve_admit`: a lost release's) gets no chunk and ends no
+  other way. What the network certifier sends after its request is read and dropped.
 * **Every other connection** (``GET /v1/models``, the watermark's ``POST /verity/watermark``, a probe's HTTP) is relayed
   byte for byte, both ways, until both sides have closed.
 
 Once it listens it writes one line, ``{"listening": [HOST, PORT]}``, on stdout, and serves until SIGTERM or SIGINT.
 ``--log`` appends one JSON line per id request when its connection ends: the release's number, run and bucket
 (``n``, ``run``, ``bucket``), the prompt's and the output's id counts (``prompt``, ``ids``), ``ended`` (the trailer was
-sent; else ``why``), ``at`` (the seconds from the front's start to the request's arrival, whole) and ``ms`` (each id
-event's write after the arrival, in milliseconds, then the trailer's). It holds no id and no text. A connection's
-egress cell i is due i // r buckets after its first, so the delay a connection needed after its release is the most of
-``ms[i]`` less (i // r) buckets, over its events and its trailer.
+sent; else ``why``, which is `GONE` where the network certifier's side ended first), ``at`` (the seconds from the
+front's start to the request's arrival, whole) and ``ms`` (each id event's write after the arrival, in milliseconds,
+then the trailer's). It holds no id and no text. A connection's egress cell i is due i // r buckets after its first,
+so the delay a connection needed after its release is the most of ``ms[i]`` less (i // r) buckets, over its events and
+its trailer.
 """
 from __future__ import annotations
 
@@ -45,7 +50,7 @@ from verity.protocols.accounting.certifier.verifier import release as REL
 from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline.serve_protocol import ID_PAYLOAD, id_request_fields
 
-__all__ = ["BODY_BYTES", "Broken", "Front", "Options", "address", "chunk_ids", "main", "serve", "server_request",
+__all__ = ["BODY_BYTES", "GONE", "Broken", "Front", "Options", "address", "chunk_ids", "main", "serve", "server_request",
            "token_ids"]
 
 READ_BYTES = 1 << 16
@@ -53,6 +58,8 @@ READ_BYTES = 1 << 16
 BODY_BYTES = 1 << 26
 COMPLETIONS = b"POST /v1/completions HTTP/1.1"
 BLANK = b"\r\n\r\n"
+#: an id request's ``why`` where its connection ended before the server's stream of it did
+GONE = "the network certifier's side ended before the server's stream"
 
 
 class Broken(Exception):
@@ -162,6 +169,13 @@ async def _pump(src: asyncio.StreamReader, dst: asyncio.StreamWriter) -> None:
             dst.write_eof()
 
 
+async def _ended(reader: asyncio.StreamReader) -> None:
+    """Returns once `reader`'s side has ended or broken; what it sends before that is read and dropped."""
+    with contextlib.suppress(OSError):
+        while await reader.read(READ_BYTES):
+            pass
+
+
 async def _close(writer: asyncio.StreamWriter | None) -> None:
     if writer is not None:
         writer.close()
@@ -194,7 +208,7 @@ class Front:
             arrived = self.clock()
             fields = id_request_fields(first, self.payload)
             if fields is not None:
-                await self.ids(first.partition(BLANK)[0] + BLANK, fields, writer, arrived)
+                await self.ids(first.partition(BLANK)[0] + BLANK, fields, reader, writer, arrived)
             elif first:
                 await self.relay(first, reader, writer)
         except OSError:
@@ -212,9 +226,11 @@ class Front:
         finally:
             await _close(server)
 
-    async def ids(self, head: bytes, fields: dict[str, Any], writer: asyncio.StreamWriter, arrived: float) -> None:
+    async def ids(self, head: bytes, fields: dict[str, Any], reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+                  arrived: float) -> None:
         """An id request (its head and fields, whole at `arrived`) answered in the id form from the server's stream of
-        it."""
+        it, until that stream ends or `reader`'s side, the network certifier's, does: either way the server's connection
+        is closed."""
         rel = REL.release_of(head)
         n, run, bucket = rel if rel is not None else (None, None, None)
         rec: dict[str, Any] = {"n": n, "run": run.hex() if run else None, "bucket": bucket, "prompt": len(fields["prompt"]),
@@ -224,7 +240,9 @@ class Front:
             rec["ms"].append(round((self.clock() - arrived) * 1000, 1))
 
         server = None
-        try:
+
+        async def answer() -> None:
+            nonlocal server
             back, server = await asyncio.open_connection(*self.upstream)
             server.write(server_request(head, fields, self.host))
             async with contextlib.aclosing(token_ids(back)) as chunks:
@@ -238,12 +256,23 @@ class Front:
             wrote()
             await writer.drain()
             rec["ended"] = True
+
+        stream, gone = asyncio.ensure_future(answer()), asyncio.ensure_future(_ended(reader))
+        try:
+            await asyncio.wait({stream, gone}, return_when=asyncio.FIRST_COMPLETED)
+            if stream.done():
+                stream.result()
+            else:
+                rec["why"] = GONE
         except Broken as e:
             rec["why"] = str(e)
         except OSError as e:
             rec["why"] = f"a connection broke ({type(e).__name__})"
             raise
         finally:
+            for task in (stream, gone):
+                task.cancel()
+            await asyncio.gather(stream, gone, return_exceptions=True)
             await _close(server)
             if self.log is not None:
                 self.log(rec)
