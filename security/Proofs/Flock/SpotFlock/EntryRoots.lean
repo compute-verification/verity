@@ -343,7 +343,8 @@ theorem holds_of_wiring (W : Wiring h) (hr : r.Ok h) {i : ℕ} (hi : r.s.prog.Ne
       rw [hwp'] at hlw hym
       have hmap : wireMap h i = y := wireMap_of_target h hxy
       have hnm : h.names.getD tw "" = w.writer := by
-        have h1 : (h.names.getD tw "" == w.writer) = true := List.find?_some htw'
+        have h0 := List.find?_some htw'
+        have h1 : (h.names.getD tw "" == w.writer) = true := h0
         exact eq_of_beq h1
       have hbit : bitAtGate h (wireMap h i) = some (tw, Spot.Bits.RowPos.mk w.wport u' rp.bit) := by
         rw [hmap]
