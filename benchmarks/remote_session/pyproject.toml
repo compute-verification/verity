@@ -51,8 +51,8 @@ inputs = ["verity/protocols/poub/prover/remote_session/prover.py", "verity/proto
           # engine.py's kv.so (test_store_layout imports it) opens through the benchmarks' one loader
           # test_host_read.py imports device.py, which names its ABI beside the reader's and the sketch's constants;
           # test_host_read_flow.py runs host_read.py, whose reference receipts are sketching.py's product
-          "benchmarks/codec_tensor/reader.py", "benchmarks/codec_tensor/sketch_receipt.py",
-          "benchmarks/codec_tensor/sketching.py",
+          "verity/protocols/poub/prover/codec_tensor/reader.py", "verity/protocols/poub/prover/codec_tensor/sketch_receipt.py",
+          "verity/protocols/poub/prover/codec_tensor/sketching.py",
           # test_host_read_tiers.py: host_read_tiers.sh's lease, asked of the tree's own gpu-lease over faked cards
           "tools/research/src/research/pods/sh/gpu_lease.sh", "verity/protocols/poub/prover/word_codec/cuda_lib.py",
           # test_sampling_inputs.py: sampling_inputs.py prices an opening with sampled proofs' one cost fit
