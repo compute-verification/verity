@@ -117380,3 +117380,68 @@ Nothing. `Premises` is my own definition, restated to the guarantee's new text; 
 ### To post
 
 Nothing.
+
+## ACCEPTS, Fri 03:21Z: `stmtAt`'s axiom probe is clean; three new files are written and in line, none compiled (a try waited 12 minutes unstarted on cpu-12); the base's new head does not merge with RUNCOINS's branch
+
+COMPILED so far: `Accepts.lean`, `AcceptsProof.lean`, `Cover.lean`, `ReadsOnly.lean` at `ce21628a5f` (`0088`), and now `Accepts.lean`'s probe [run]. In plain words: the statement piece is finished and checked. Since 03:00Z I wrote the three things that entry promised: the lemma MESSAGES asked for, the bridge from RUNCOINS's theorem to my accept, and the proof that an accepted run read no more than its coins. All three are pushed and waiting for a machine. TWOLEG's branch took `main` at 03:07Z, and that head no longer merges cleanly with the branch RUNCOINS built its theorem on, in four files that are neither mine nor theirs to guess at.
+
+**1. The probe** [run `r20261113-024812-7b19`, vy-nebius-2]
+
+- "`Accepts.lean`: lean exit 0 in 229 s", then "axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound". `stmtAt` is one of the eight. So `stmtAt` is DONE by the brief's definition, at `ce21628a5f`.
+- The same run is now on `AcceptsProof.lean`, then `Cover.lean`.
+
+**2. Written since 03:00Z, pushed, not compiled** [read]
+
+| file | what it proves | lines |
+|---|---|---|
+| `SampledTwo/Reached.lean` | `reaches_frame`: on a play of the frame the check accepts, with the run's coins agreeing with what the check read, a run whose messages are the check's wherever it has one has all `k` messages. With it `reachedAccepts`: such a run also accepts. This is MESSAGES's `RunsThrough` plus the coins' agreement as a hypothesis. | 142 |
+| `SampledTwo/OfRun.lean` | `playAccepts_of_run`: `PlayAccepts` from RUNCOINS's `spotRunAcceptsPlay` and `acceptedTwo_of_check`. `acceptsRun_of_run`: `AcceptsRun` at the form from them. | 199 |
+| `SampledTwo/Fits.lean` | `sourcesFit : SourcesFit A C`, with no premise, from TWOLEG's `accepted_fits`. `acceptsRun_fits`: `acceptsRun_of'` without `SourcesFit`. | 62 |
+
+- `AcceptsProof.lean` changed by one refactor: the body of `acceptsRun` is now a theorem of its own, `proverAt`, which `Reached.lean` reads. The proof text is the same; it recompiles in the runs below.
+- TWOLEG had already written what my 03:00Z NEEDS 2 asked for (`accepted_fits`, at `b6d988648b`). It bounds both stages by one coin's bytes, which is within `stage` coins'.
+
+**3. The premises `acceptsRun_of_run` is left with**, each a named `Prop` in `OfRun.lean` or `Accepts.lean` [read]
+
+| premise | says | owner |
+|---|---|---|
+| `SessionMsgs` | the sessions' messages `proverSeq` sends are those the check read | MESSAGES |
+| `StmtsRead` | the reading has the statements' message, and it states the statements the run's second stage checked | MESSAGES |
+| `SessionsRun` | Flock's masked verifier accepts each session's prover on coins agreeing with the check's | SESSIONOF, SESSIONCOINS, MESSAGES |
+| `RoundsHeldAt`, `ScopeHeldAt`, `PinHeldAt` | the three clauses on a statement's own bytes, over the reading's `stmts` | SESSIONOF, HELDOF, MESSAGES |
+| `HeldAt`, `TwoHolds`, `NamesDistinct` | the held copies are what the run reads | HELDOF |
+| `RecordsAt` | the records name their registrations' names; the interior record registers no value | FRAME, TWOLEG's map |
+| `RecordsRead` | each record's bytes read back as the record the run held | TWOLEG's two lines (03:00Z, section 2), then mine |
+| `RuleIsTwo` | the parameters' rule is two-stage | nobody yet: a lemma from the parameters' parser |
+| `RoundTwo` | the second stage's statement check gives the model's | RUNSAS, compiled at `87d9f87c4a` [relayed]. My tree has that file but an older `Round2.lean` under it, so I take it as a premise. |
+| `ReadsWithin` | a stage's sample reads no byte past its source | asked of RUNCOINS at 03:00Z (NEEDS 3); mine if they say so |
+| `SourcesFit` | gone once `Fits.lean` compiles | |
+
+**4. Merges** [run]
+
+- RUNCOINS's `36d3f9a124` (holds my `ce21628a5f`): clean.
+- The base at `b6d988648b` (the size refusals and `accepted_fits`): clean; `Spot/Run.lean` merged by itself, a docstring only.
+- **The base's head `b774e651d2` does not merge.** It holds `main` (`a05e3c9bf9`). Against my tree, which holds RUNCOINS's branch, four files conflict: `benchmarks/one_stage/tests/test_two_stage_second.py`, `benchmarks/one_stage/two_stage_small.py`, `benchmarks/one_stage/two_stage_small.sh` and `verity/protocols/spot/verifier/lean/tests/test_difftest.py`. None is mine, and none is a Lean file a proof reads. I aborted that merge and stopped at `b6d988648b`.
+
+**5. Runs** [run]
+
+- `r20261113-031810-5040` (vy-nebius-cpu-12, launched 03:18Z, head `02c26ad4d9`): tries of `Fits`, `Reached`, `OfRun`, in that order, each with siblings. Waiting, 4 ahead at 03:19Z.
+- `r20261113-031354-d0df` (vy-nebius-2, launched 03:14Z, head `98df55aa88`, before the base merge): `Reached`, `OfRun`. Waiting, 8 ahead at 03:19Z. It is the fallback if the form's new refusals do not compile.
+- `r20261113-030559-de33` (cpu-12): cancelled unstarted after 12 minutes; its file is in both runs above.
+- Expected: `5040` starts by about 03:45Z and ends by about 04:30Z [guess].
+
+Branch `cursor/proofs-accepts-7d08` at `02c26ad4d9`, pushed. Nothing is unpushed.
+
+**STOP RULE.** Nothing done. No lock, no `Sampled.lean`, no switch.
+
+**NEEDS.**
+
+1. Coordinator: who takes `main` into the line RUNCOINS, HELDOF and I stand on (section 4). Until then I merge the base only up to `b6d988648b`.
+2. RUNCOINS: `ReadsWithin` (`OfRun.lean`), or say it is mine. `onWith_take` and `stratifiedWith_take` already carry the bound; `drawUnits_seq` drops it.
+3. The 03:00Z NEEDS 1 (the form hands the run each record as the proved verifier's parser reads it) stands.
+
+**To post.** Nothing.
+
+**Ready for soundness's reading:** `Accepts.lean` (compiled, probed). `AcceptsProof.lean`, `Cover.lean`, `ReadsOnly.lean` compiled at `ce21628a5f`; `ReadsOnly`'s probe is clean, the other two's probes are running, and `AcceptsProof.lean` has the refactor of section 2 since.
+
+**Not established.** `Reached.lean`, `OfRun.lean`, `Fits.lean`: not compiled. Every premise in section 3's table. An earlier period's genuine challenger signature still makes the error ⊤.
