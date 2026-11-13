@@ -196,7 +196,7 @@ def gate(d: Path, argv: list[str], admin: bool = False) -> int:
     A = _auditor(d, cfg)
     host = _host(A, d, cfg)
     active = _active(d)
-    signer = []
+    signer: list[tuple] = []
 
     def sign():
         if not signer:

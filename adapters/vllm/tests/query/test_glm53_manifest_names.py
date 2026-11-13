@@ -17,11 +17,15 @@ import pytest
 from tests.acquire.glm53_model import CMAP, ENV
 from verity_vllm.acquire.sources import linear_quant_source as LQ
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.commit.committer.native_host import CALL_DEPENDENT_RE
-from verity_vllm.correspondence.reader_for_query import Correspondence, held_module_paths, parse_call_name
+from verity_vllm.correspondence.reader_for_query import (
+    Correspondence,
+    held_module_paths,
+    parse_call_name,
+)
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER
 from verity_vllm.query.compose import merge_ranks
+from verity_vllm.query.manifest.bind import Binder
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
 from verity_vllm.query.required import Population, request_manifest
 from verity_vllm.query.units import ValueRef as R
@@ -38,7 +42,10 @@ class _Build:
     """A rank Program built Call by Call under v1 names (`<module>/<fx node>[/<hint>][row]`)."""
 
     def __init__(self, rank: int, fused=lambda step, norm: step > 0):
-        self.rank, self.calls, self.weights, self.peers, self.coll, self.fused = rank, [], [], [], 0, fused
+        self.rank, self.coll, self.fused = rank, 0, fused
+        self.calls: list[CallView] = []
+        self.weights: list[str] = []
+        self.peers: list[InputView] = []
 
     def w(self, path: str) -> R:
         if path not in self.weights:
@@ -53,7 +60,7 @@ class _Build:
         return cid
 
     def parts(self, own: list[R], elems: int) -> list[R]:
-        k, self.coll = self.coll, self.coll + 1
+        self.coll += 1
         received = []
         for j in range(WORLD - 1):
             iid = -3 - len(self.peers)
@@ -116,6 +123,7 @@ class _Build:
             down = self.linear(f"{HELD}.down_proj", act, step, weight=f"{shared}.down_proj")
             # the routed experts' stand-in: the runner reads the router logits and adds the shared expert's output
             mlp_out = [R(self.call("ResidualAdd_v1", f"{pre}.mlp.experts/add[{i}]", [r, g]), "out") for i, (r, g) in enumerate(zip(down, logits))]
+        assert mlp_out is not None
         h, _ = self.norm_site("model", "model.norm", mlp_out, residual, step)
         shard = self.call("Gemm_v2", "logits_processor/linear[0]", [h[-1], self.w("lm_head.weight")])
         lm = self.call(f"AllGather_v1{{WORLD={WORLD},N={N}}}", "logits_processor/all_gather[0]/all_gather", self.parts([R(shard, "out")], N),
@@ -192,7 +200,7 @@ def test_each_norms_collective_is_spelt_under_the_norm_on_both_paths(manifests):
     decode (fused): `<norm>/0`, `/1` and `/part_rank<r>` from the one fused Call -- the names `allreduce_norm` binds on either path."""
     rank = 3
     m = manifests[rank]
-    by = {}
+    by: dict[tuple, dict] = {}
     for r in m["identities"]:
         if r["op_path"] in NORMS and r["family"] != "weights":
             by.setdefault((r["step"], r["op_path"]), {})[r["output_member"]] = (r["spec"], r["invocation"], r["element_range"])

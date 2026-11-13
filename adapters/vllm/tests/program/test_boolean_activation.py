@@ -8,16 +8,15 @@ import json
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import evaluation as E
 from verity.circuits import partition_object as PO
-from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
 from verity.definitions.registry import boolean_activation as BA
 from verity.definitions.registry import dense as D
 
@@ -26,7 +25,7 @@ PINS = {
     "TanhBf16_v2": (391, 1628, 31, "556586c2a32ec874adf62df5acc74a853dde4642b1add2cd3365cdd55d3f876147219bbb421733c9d7dd74897869b3b6a4945c01dc25a833f45bc3a54be7d4fd"),
     "Bf16Tanh_v2{N=8}": (3128, 13024, 248, "a145e0351c69d4a45f8740b301f91e6682306d7cde53a41c75d7c77329862567bf16add6473d294b9d8f501e714af3a84cbdfb2a26a938d27503d84bbb8f01ba"),
 }
-WORDS = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
+WORDS: np.ndarray = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
 
 
 def _word(target, *inputs) -> np.ndarray:
