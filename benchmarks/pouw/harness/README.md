@@ -116,7 +116,8 @@ space at `m32-n8192-k8192` is 134,216. A run that doesn't take every named confi
 
 An arm's `build` names every cubin, fatbin or library its kernels come from in `binaries` (arm interface v0.3; a cubin loaded
 with `cuModuleLoadData` is never mapped, so the gate can't find it alone). The gate needs `cuobjdump` and `nvdisasm`
-(`POUW_CUDA_BIN`, `CUDA_HOME/bin`, the PATH or `/usr/local/cuda/bin`) and caches passes by the binary's sha256
+(`POUW_CUDA_BIN`, `CUDA_HOME/bin`, the PATH or `/usr/local/cuda/bin`), and the system's `libzstd.so.1` for a binary whose
+device code nvcc compressed (build with `--no-compress` and it needs none), and caches passes by the binary's sha256
 (`POUW_SASS_GATE_CACHE`). To check a build before a run: `python sass_gate.py my_kernels.cubin --json gate.json`. Build
 sm_120a with a pinned toolkit (CUDA 12.9.1 from `jobs/toolkit.sh`, or 13.0.1, the RTX PRO 6000 node's `/usr/local/cuda`)
 and without `-ftz=true`, `--use_fast_math`, `-prec-div=false` or `-prec-sqrt=false`; `-fmad=false` is pinned too. Any

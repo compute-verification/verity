@@ -9,8 +9,7 @@
     apply_plan_to_committer(committer, plan)                    the `NativeHostCommitter` (and its native_collect subclass) takes its
                                                                module set and consumer-input set from the plan; the rest of the committer
                                                                (arena, hashing, roots, sources) is untouched
-    plan_selection(plan, model)                                 that module set and consumer-input set, shared with the compiled workloads'
-                                                               record ops (`CompiledGraphSource.wrap_model`)
+    plan_selection(plan, model)                                 that module set and consumer-input set
 
 A plan with an UNSUPPORTED Value is refused by name (`IncompletePlan`) unless the caller says `refuse_incomplete=False` -- fail closed.
 `sink(site_key, tensor)` receives the observed tensor at each site; `OccurrenceSink` counts occurrences and records shapes only (no
@@ -179,9 +178,9 @@ def install_from_plan(plan: AcquisitionPlan | Mapping[str, Any], model: Any, run
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 def plan_selection(plan: AcquisitionPlan | Mapping[str, Any], model: Any) -> tuple[list[str], list[str]]:
-    """The module boundaries the plan hooks on `model`: (producer_output modules in runtime order, consumer_input modules sorted) -- the
-    ONE selection both the committer (`apply_plan_to_committer`) and the compiled workloads' record ops (`CompiledGraphSource.wrap_model`)
-    take.  Refuses (`IncompletePlan`) a plan with UNSUPPORTED Values or with hook sites that are not modules of `model`."""
+    """The module boundaries the plan hooks on `model`: (producer_output modules in runtime order, consumer_input modules sorted), which
+    the committer takes (`apply_plan_to_committer`).  Refuses (`IncompletePlan`) a plan with UNSUPPORTED Values or with hook sites that
+    are not modules of `model`."""
     hooks, _deferred, unsupported = _sites_of(plan)
     if unsupported:
         raise IncompletePlan(f"{len(unsupported)} unsupported Value(s): " + "; ".join(f"{u.get('value')}: {u.get('why')}" for u in unsupported[:6]))

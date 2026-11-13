@@ -28,7 +28,6 @@ PROG = "verity-vllm"
 
 #: command -> (module, one-line help).  Modules are imported only when their command runs.
 COMMANDS: dict[str, tuple[str, str]] = {
-    "admission-bound": ("verity_vllm.pipeline.admission_bound", "host-retention bound of a --retain host Commit"),
     "advice": ("verity_vllm.pipeline.advice", "a served run's advice (I1) for the precommitted compiler, from its step trace and Commit record"),
     "batch-decomp": ("verity_vllm.check.match.batch_decomp", "B>1 Match by per-request decomposition"),
     "block-counts": ("verity_vllm.program.predict.block_counts", "a day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared n: the judgment public, the counts private"),
@@ -40,10 +39,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
     "commit-replay": ("verity_vllm.pipeline.cpu_replay", "a deferred Commit's C2 replay on CPU, from its sealed replay bundle"),
     "replay-plan": ("verity_vllm.pipeline.replay_plan", "a slim replay bundle's planner process (started by a `--replay-deferred slim` Commit)"),
-    "compiled": ("verity_vllm.acquire.compiled", "required-value manifest of an Execution=compiled row"),
+    "compiled": ("verity_vllm.acquire.compiled", "hold the Build an Execution=compiled row's treatment ran with to the one it rederived (verify)"),
     "compiled-merge": ("verity_vllm.pipeline.compiled_merge", "merge control/treatment outputs of a compiled row"),
     "coverage-workloads": ("verity_vllm.pipeline.coverage_workloads", "coverage campaign workloads"),
-    "descriptor-equivalence": ("verity_vllm.program.descriptor_equivalence", "correspondence of two encodings of one program"),
     "epoch": ("verity_vllm.pipeline.epoch", "the re-baseline epoch's row job (job, resolve, row-state, word-check, digests, ...)"),
     "fa2-tap-build": ("verity_vllm.acquire.fa2_tap_src.build_ext", "build one FA2 forward variant extension"),
     "fa3-tap-build": ("verity_vllm.acquire.fa3_tap_src.build_fa3_ext", "build the FA3 forward extension"),
@@ -58,7 +56,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "golden": ("verity_vllm.properties.golden", "golden corpus check"),
     "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
     "ids-front": ("verity_vllm.pipeline.ids_front", "the network certifier's id form in front of vLLM's own OpenAI server"),
-    "kernel-identity": ("verity_vllm.engine.kernel_identity", "generated-kernel identity"),
     "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
     "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),
     "manifest": ("verity_vllm.pipeline.manifest", "the required-value manifest (build, build-global, compare)"),
@@ -71,7 +68,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
-    "served": ("verity_vllm.acquire.served", "the served-compiled Program and required-value manifest (build), the GEMM routes it needs (routes)"),
     "served-match": ("verity_vllm.pipeline.served_match", "the Match of a served-compiled row on live data: serve committed, Build from the process's own artifact, check"),
     "served-pin": ("verity_vllm.acquire.served_artifact", "a served row's pinned compile artifact: seed a fresh Inductor dir with its autotune winners (seed), check a dir's (check)"),
     "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
@@ -88,7 +84,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "resolve-log": ("verity_vllm.observe.fold.resolve_log", "resolve an observation log against a profile"),
     "row": ("verity_vllm.pipeline.row", "run a sweep row's stages: Build, Match, Commit (run, stage, chain, shed)"),
     "runtime-tree": ("verity_vllm.observe.runtime_tree", "the runtime's module tree"),
-    "sampling-rng": ("verity_vllm.program.sampling_rng", "sampler noise recomputation"),
     "serving-rows": ("verity_vllm.pipeline.deferred_rows", "a deferred Commit's serving rows and one-stage registration, from its sealed replay bundle"),
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
     "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),

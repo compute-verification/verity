@@ -2,7 +2,7 @@
 (`check.replay.coverage`) and the identity rows as written, one per required Value.
 
 Its writers are `query.required.request_manifest` (a request Program), `query.compose` (the global composition and a TP workload's
-rank merge), `acquire.compiled` and `acquire.served`; each writes every field typed here as
+rank merge) and `acquire.served`; each writes every field typed here as
 required.  `commit.binding.load_required_manifest` checks the digests against the Program, and `query.manifest.format` holds the
 identity rows' encoding (`IDENTITY_KEY`, `manifest_digest`).
 
@@ -32,8 +32,8 @@ class RequiredManifest:
     identities: Sequence[Mapping[str, Any]]
     # the query header: the served-compiled manifest (`acquire.served`) writes none
     query: Mapping[str, Any] | None
-    # Program op_path -> [canonical op_path, invocation] of a shared module's calls: the compiled and served manifests
-    # (`acquire.compiled`, `acquire.served`) address no shared module and write none
+    # Program op_path -> [canonical op_path, invocation] of a shared module's calls: the served-compiled manifest
+    # (`acquire.served`) addresses no shared module and writes none
     op_path_aliases: Mapping[str, Sequence[Any]] | None
     # the engine that built it, its dataflow guard's state and its one-release cross-check: an older header's, which a
     # manifest of record may still carry; no writer in this tree writes them

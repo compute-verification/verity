@@ -14,7 +14,7 @@ A task is one of:
                 compiled, dependencies included (the distinct `M` of its `lean-audit/**/build*.log` lines `Built M (t)`), against
                 the modules of the packages it audited (each package's `AUDIT P: ... in N modules` line, once), the rest of which it
                 restored or replayed. A records run without that result (cancelled or killed) is unfinished: counted, not timed.
-  lean-audit, lean-suites, lean-build, lean-changed
+  lean-audit, lean-suites, lean-build
                 one such step of a recorded check (`check.py`'s result: `check/v1`, a shard's or a deferred run's), its `seconds`,
                 which for `lean-audit` include its wait for a Lean audit slot. One check.py audits a step's packages together, so a
                 `lean-audit` step counts once in its kind and once under each package it audited (its result's `reuse`, the
@@ -51,7 +51,7 @@ READ_JOBS = 32
 CHECK = "tools/verity/check/check.py"
 RECORDS = re.compile(r"lean_changed\.py --records (\S+)")
 SUITES_STEP = "lean-suites"
-STEPS = (LEAN_AUDIT_STEP, SUITES_STEP, "lean-build", "lean-changed")
+STEPS = (LEAN_AUDIT_STEP, SUITES_STEP, "lean-build")
 KINDS = ("records", *STEPS)
 WORK = re.compile(r"^lean-records: (\S+): check\.py (?:--dev-cache )?exit -?\d+ in (\d+) s", re.M)
 AUDITED = re.compile(r"^AUDIT (\S+): (?:PASS|FAIL)\s+\d+ declarations in (\d+) modules", re.M)

@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Refine.Schedule
 public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Soundness.Refine.WideLeafChecks
 public import Proofs.Flock.Soundness.Refine.Run
 public import Proofs.Flock.Soundness.Refine.Plays
 public import Proofs.Flock.Soundness.Refine.Exec

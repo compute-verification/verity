@@ -1,7 +1,7 @@
 # tools/verity/lean: the Lean audit
 
 One audit for every Lake package (`python tools/verity/lean/check.py --all --build`), which `check` runs on the packages
-whose inputs changed (`check.py --build PKG...`), and Lean's jobs in `check`. This file is an outline: what the audit is,
+whose inputs changed (`check.py --build PKG...`), and Lean's job in `check`. This file is an outline: what the audit is,
 its commands, what it checks, the lock's sections, and one line per module. The detail is in the docstring each line
 names, and new detail goes there: here it gets one line at most.
 
@@ -150,9 +150,10 @@ keeps or drops from and never adds to.
   `Properties.Assumptions` beside `Definitions.Assumptions`, for an assumption stated over the code), each a module of
   the build or of a package it requires. A domain hypothesis is part of what its guarantee says, with a one-line
   `why`, or `cites` the listed guarantee whose statement it is; every other premise is open, with the Linear `issue`
-  that discharges it and its `due` date, written by hand. Each has an `owner` and a `digest`, so a change to a premise
-  or to what it reads fails under its own name. `open_seed`, `open_default_issue` and `default_owner` are what
-  `--update` and the records run fill an entry from (`bookkeeping_ticket`).
+  that discharges it and its `due` date, written by hand. A `Prop` a statement reads without taking it is open only by
+  an entry that gives a `why`, for each guarantee that reads it (`on_read`). Each has an `owner` and a `digest`, so a
+  change to a premise or to what it reads fails under its own name. `open_seed`, `open_default_issue` and
+  `default_owner` are what `--update` and the records run fill an entry from (`bookkeeping_ticket`).
 - `trust`: `base` ({premise: the trust assumption it states}, the same in every lock) and `extra` ({deployed guarantee:
   {premise: the ruling's rule}}, what it alone may rest on). `deployed`: the guarantees that state the deployed system.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
@@ -223,6 +224,10 @@ One line per mechanism; a new one gets its line here and its detail in the docst
   the lock `--update` would among its reports (`regenerated`, `changes`). A candidate's records run runs with
   `--regenerate`, and the verified queue commits those records on top of the candidate, whose check passes
   `--no-regenerate`, so a record difference that reaches it fails there (`research.vqueue_records`).
+- **An allowance is no pass.** A lane's fast path takes a finding ruled open as known, by its code and entry
+  (`lean_changed.py --records --allow CODE:ENTRY`; `failure_codes` and `failure_entries` in `report.json`): the run
+  exits 3 and keeps no pass, and the record it regenerates stays outside `record/` (`lean_changed.py`'s `ALLOWABLE`,
+  `conclude` and `withheld`). `check.py` takes none.
 - **Bookkeeping warns in a records run.** A candidate's records run (`--bookkeeping warn`) repairs a lock that fails
   only on bookkeeping, and the caps beside it, and warns each owner (`BOOKKEEPING`, `repaired`, `bookkeeping_repairs`;
   `lean_audit.py`'s `held_caps` and `raised_unread`; `research.merge.REPAIRED`).
@@ -266,11 +271,11 @@ The auditor:
 - `cache.py`: the build cache: main's compiled modules, published on merge and restored sha256-checked; the audit
   never reads it. `run_daily.py`: its daily publish.
 
-Lean's jobs in `check` and the tools around the audit:
+Lean's job in `check` and the tools around the audit:
 
 - `lean_audit.py`: the lean-audit step: which packages miss (the key of a pass; `--explain PKG` says what a miss
   changed), their scratch tree, the warm dependencies and builds, the replay cache, the unread ratchet.
-- `lean_changed.py`: the lean-changed step, a lane's fast path to its records (`--records`) and the edit loop on a
+- `lean_changed.py`: no step of `check`: a lane's fast path to its records (`--records`) and the edit loop on a
   node (`--try`).
 - `lean-deps.json`: the pinned dependency bundles (`lean_audit.py --pin`).
 - `warm.py`: the Lean audit of a ready mark's merge, which builds a Lean change before a candidate holds it.

@@ -7,7 +7,7 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 | --- | --- |
 | `tests` | `pytest` (every test suite, through `suites.py`), `lean-suites` (the suites that read the Lean verifier's build), `ratchet-gate` (the vLLM integration's ratchet gate on each merge above the check's base: in a candidate, it names the PR whose merge grows a lint allowlist) |
 | `circuits` | `flock-circuit-build`, `flock-rust-tests` (Flock's Rust), `circuit-check` (the property checks every circuit passes) |
-| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), `lean-changed` (the early Lean check on a merge, which halts the run; off the gate and in no shard), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
+| `lean` | `lean-build` and `lean-unit-cut` (the Lean verifier and its partition check), `lean-audit` (the Lean check of every Lake package, `tools/verity/lean/`), and `lean-agreement` (the cross-check against upstream's Rust verifier, when a change touches Flock) |
 
 `verity check tests|circuits|lean` runs only those parts and what their jobs need. `check.py`'s docstring lists the rest: shards,
 `--deferred STEP,...`, `--plan` and `--slots`.
@@ -21,9 +21,7 @@ such a failure as not red (no suspect, no ejection, no hold on `main`) until it 
 allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
-merge` requires it of no check. Today those are `circuit-check`, `ratchet-gate` and `lean-changed`. `lean-changed` catches
-nothing the audit doesn't, so no shard runs it, of a plan or an auto one (`shards.NO_SHARD`): neither a recorded check nor a
-candidate's sharded check runs it. Each of the other two still runs in a candidate's check,
+merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each still runs in a candidate's check,
 and its red holds nothing; under the loop's `--gate check`, a red that the run beside the candidate's base didn't have rings
 its owners. Under the loop's `--gate graph2`, `ratchet-gate` runs with
 `lean-agreement` in a run of their own beside the executor's check of the candidate (`research.vqueue_slim`), which waits
@@ -200,7 +198,7 @@ PRs land through the verified queue (`research queue vqueue`): its flags are `dr
 `queue.toml`. A PR's ready mark runs the landing gates `drive.toml` names on its head, and its warn gates
 (`gates/markdown_caps.py`) too, whose failure only warns. The loop merges the marked PRs that are reviewed or low-risk onto
 `main` as a candidate, checks it (by default graph2's tasks, with `lean-agreement` and `ratchet-gate` run beside them; under
-`--gate check`, every job, those off the gate too, in shards: `train.sh --deferred`, where no shard runs `lean-changed`), and
+`--gate check`, every job, those off the gate too, in shards: `train.sh --deferred`), and
 moves `main` only to a candidate with no new failure, each gating task passed or failing on its base too; `post_train.py`
 then runs the vLLM regression's rebuilds and fast neutrality tier. A failure the candidate's base shares blames no PR; any
 other's suspects are the PRs whose change touches what it names: a lone one is ejected, several are bisected. A red job off

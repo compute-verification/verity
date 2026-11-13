@@ -869,6 +869,19 @@ def test_a_vm_can_boot_on_another_ones_kept_data_disk():
         assert 'disk_id "$DATA_NAME"' in (NEBIUS / script).read_text() and '"$VM_NAME-data"' not in (NEBIUS / script).read_text()
 
 
+def test_a_data_disk_of_a_type_that_comes_in_93_gib_units_is_refused_at_another_size_before_anything_is_created():
+    """Nebius refuses such a data disk only after launch.sh has created the boot disk, which then stays behind, billed."""
+    cpu = {"NEBIUS_SSH_PUBKEY": "ssh-ed25519 dummy", "NEBIUS_VM_NAME": "vy-nebius-cpu-14", "NEBIUS_PLATFORM_PREFIX": "cpu-d3",
+           "NEBIUS_PRESET": "192vcpu-768gb"}
+    for kind in ("network_ssd_io_m3", "network_ssd_non_replicated"):
+        r = launch("--dry-run", NEBIUS_DATA_TYPE=kind, NEBIUS_DATA_GIB="1280", **cpu)
+        assert r.returncode == 1 and f"not a multiple of 93, the unit {kind} disks come in: 1209 is the next size down" in r.stderr
+        r = launch("--dry-run", NEBIUS_DATA_TYPE=kind, NEBIUS_DATA_GIB="1209", **cpu)
+        assert r.returncode == 0 and f"else created (1209 GiB {kind})" in r.stdout, r.stderr
+    r = launch("--dry-run", NEBIUS_DATA_TYPE="network_ssd", NEBIUS_DATA_GIB="1280", **cpu)
+    assert r.returncode == 0 and "else created (1280 GiB network_ssd)" in r.stdout, r.stderr
+
+
 @pytest.mark.parametrize("path, nodes", [("now", 2), ("quota", 2), ("reattach", 1)])
 def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_nothing(path, nodes):
     """n1_replacement.sh plan prints the creates, which spend, for the coordinator: it runs no Nebius call, and each node it

@@ -1,0 +1,24 @@
+{
+ "definitions": {
+  "ResponseTieNoStop_v1{O=16}": {
+   "and": 563,
+   "type": "eb35553931a52d3e27c9600a837ba5840245b15bc13347a84f5589e54c4bd272ced9e7be26c8678d71dd4b4b6baac18fccbb1bcf0247406e6639adb31005fc99"
+  },
+  "ResponseTieNoStop_v1{O=2}": {
+   "and": 98,
+   "type": "c7cc45c7f87304365f710befb0dddc55f4ec6f39bc7acbb21830d56ba40766c04405eae6a4c6b996c96b719ff0f94d22485a67dfbe0125cc3d0d8b4b5d38b282"
+  },
+  "ResponseTieStop_v1{O=1024}": {
+   "and": 33915,
+   "type": "266469c1d8fef14c580c180e88d12b0e0f603d49350c4cd2bc7238c27e835ca022d3270e57f75783d36bc5de6ff6930f57c3726d6115b0728ef7a34b2b43c988"
+  },
+  "ResponseTieStop_v1{O=16}": {
+   "and": 589,
+   "type": "751809bca81b25c7dabd8fdb857a546820f0bc86fd6540100f5003595f993cf33617b5f2853b1ec44c64df287bd868c3c64940dad8a935a6ac77399267742728"
+  },
+  "ResponseTieStop_v1{O=4096}": {
+   "and": 135357,
+   "type": "0bb21c20690ccc82ee19ae705fd5ad279f49305a7305c9111e6eaa24071f0ac62c0e5ef57991ce74d32e8dfeea88dc5fe25d51b520cac13ae34352934e9473b8"
+  }
+ }
+}

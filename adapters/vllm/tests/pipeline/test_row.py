@@ -779,6 +779,19 @@ def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
     assert "--replay-deferred" in tp.commit_cmd([]) and "--serving-rows" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
 
 
+def test_the_serving_rows_request_carries_the_per_expert_tables_under_their_key(tmp_path):
+    """SERVING_ROWS_TABLES reaches the request as the ``tables`` `expert_rows.of_request` reads, ``{rank}`` left for each rank; a
+    registration without its key is refused before the Commit serves anything."""
+    pf, reg, key = str(tmp_path / "partition.json"), str(tmp_path / "tables-rank{rank}.json"), str(tmp_path / "tables.key")
+    tp = _tp_row(tmp_path, TP_DENSE, environ={"SERVING_ROWS": pf, "REPLAY_DEFERRED": "1", "SERVING_ROWS_TABLES": reg,
+                                              "SERVING_ROWS_TABLES_KEY": key})
+    cmd = tp.commit_cmd([])
+    req = json.loads(Path(cmd[cmd.index("--serving-rows") + 1]).read_text())
+    assert req["partition"] == pf and req["tables"] == {"key": key, "registration": reg}
+    with pytest.raises(SystemExit, match="SERVING_ROWS_TABLES_KEY"):
+        _tp_row(tmp_path, TP_DENSE, environ={"SERVING_ROWS": pf, "REPLAY_DEFERRED": "1", "SERVING_ROWS_TABLES": reg}).commit_cmd([])
+
+
 def test_a_row_given_a_run_dir_writes_nothing_into_the_runners(tmp_path):
     """`--research-run-dir` is where the row's result, its record copies and its Commit's window go, whatever run dir the
     runner's environment names: a script whose run dir is published keeps them out of it."""
@@ -793,6 +806,7 @@ def test_a_row_given_a_run_dir_writes_nothing_into_the_runners(tmp_path):
     r.research_result()
     assert (kept / "result.json").is_file() and (kept / "evidence" / "stages.txt").is_file(), Path(r.d, "row.log").read_text()
     assert list(published.iterdir()) == []
+
 
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 

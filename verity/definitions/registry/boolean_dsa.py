@@ -26,6 +26,7 @@ view key by key, and the gates that read only q and w are computed once a row, a
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from itertools import accumulate
 
 from verity.circuits.evaluation import bits as BS
 from verity.circuits import boolean as BL
@@ -131,6 +132,18 @@ def replayed(inner: CompositeDefinition, statics: Sequence[str], signature: Call
             return [out[e - w:e] for w, e in zip(widths, ends)]
         return run
     return build
+
+
+def own_gates(part: CompositeDefinition) -> Callable:
+    """A builder for the traced ``part``, its own gates on a circuit: with one, Flock's flat lowering runs each activation of
+    the part (`ir_lower.lower_gates`) and keeps a word for what it returns, not for each of its gates.  The circuit it lowers
+    to is the same.  A part with statics takes them first."""
+    def gates(C, S, *elements):
+        bound = bind(part, **{k: getattr(S, k) for k in part.statics})
+        out = replay(BS.compile(bound), C, [f for e in elements for f in e])
+        ends = list(accumulate(BL.elements(bound.signature()[1])))
+        return [out[a:e] for a, e in zip([0, *ends], ends)]
+    return gates if part.statics else lambda C, *elements: gates(C, None, *elements)
 
 
 def flat(name: str, version: int, statics: Sequence[str], signature: Callable, body: Callable, word,

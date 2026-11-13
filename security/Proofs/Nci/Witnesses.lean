@@ -2,7 +2,10 @@ module
 
 public import Definitions.Nci.Guarantees.Witnesses
 public import Proofs.Nci.Rate
-public import Proofs.Nci.Reads
+public import Proofs.Core
+public import Proofs.Nci.Lemmas
+public import Proofs.Nci.LoomisWhitneyBase
+public import Definitions.Nci.Reads
 public import Proofs.Nci.RemotePeriod
 public import Proofs.Nci.Capability.Witnesses
 public import Proofs.Core.Circuit
@@ -15,8 +18,8 @@ public import Mathlib.Tactic.Linarith
 Each witness of `Definitions.Nci.Guarantees.Witnesses`, at the toy (`Nci.Capability.Toy`) and the instances of
 `Nci.Witness`. The facts they share come first: the toy's one proof block is a `(2, 1)`-partition of exactly two gates,
 so the toy complies at `Γ = 2` and the rate `α = 1/2`, and with the token registered at `α = 0`; the threading `T1` is
-`(1, 0)`-threaded and its weights incompressible at half a bit each, read off the toy's sixteen sets of gates; `T0` has
-no counted multiplication and bound `e`; and `F` is positive.
+`(1, 0)`-threaded and its weights incompressible at half a bit each, read off the toy's sixteen sets of gates; and `T0`
+has no counted multiplication and bound `e`.
 -/
 
 @[expose] public section
@@ -112,122 +115,7 @@ theorem bound_T1 (k : ℝ) (hk : 0 ≤ k) : T1.bound k (1 / 2) 1 0 = k / 2 := by
   rw [max_eq_right (by positivity)]
   ring
 
-theorem readFactor_ge {K b_w b_a d : ℝ} (hK : 0 < K) (hw : 0 ≤ b_w) (ha : 0 ≤ b_a) (hd : 0 ≤ d) :
-    min (9 / 4 * b_w * b_a * d / K) (3 / 4 * b_a * √(b_w / K)) ≤ readFactor K b_w b_a d := by
-  unfold readFactor
-  have hbdd : BddAbove (Set.range fun μ : Set.Ioo (0 : ℝ) 1 =>
-      min ((1 + √(μ : ℝ)) ^ 2 * b_w * b_a * d / K) (√2 * (1 + √(μ : ℝ)) * √(1 - μ) * b_a * √(b_w / K))) := by
-    refine ⟨4 * (b_w * b_a * d / K), ?_⟩
-    rintro _ ⟨μ, rfl⟩
-    refine (min_le_left _ _).trans ?_
-    have h1 : √(μ : ℝ) ≤ 1 := (Real.sqrt_le_sqrt μ.2.2.le).trans_eq Real.sqrt_one
-    have h0 : 0 ≤ √(μ : ℝ) := Real.sqrt_nonneg _
-    have h4 : (1 + √(μ : ℝ)) ^ 2 ≤ 4 := by nlinarith
-    have hbd : 0 ≤ b_w * b_a * d / K := by positivity
-    calc (1 + √(μ : ℝ)) ^ 2 * b_w * b_a * d / K = (1 + √(μ : ℝ)) ^ 2 * (b_w * b_a * d / K) := by ring
-      _ ≤ 4 * (b_w * b_a * d / K) := mul_le_mul_of_nonneg_right h4 hbd
-  refine le_ciSup_of_le hbdd ⟨1 / 4, by norm_num, by norm_num⟩ ?_
-  have hs : √((1 / 4 : ℝ)) = 1 / 2 := by
-    rw [show (1 / 4 : ℝ) = (1 / 2) ^ 2 by norm_num, Real.sqrt_sq (by norm_num)]
-  have h34 : (1 / 2 : ℝ) ≤ √(1 - 1 / 4) := by
-    calc (1 / 2 : ℝ) = √((1 / 2) ^ 2) := (Real.sqrt_sq (by norm_num)).symm
-      _ ≤ √(1 - 1 / 4) := Real.sqrt_le_sqrt (by norm_num)
-  have h2 : (1 : ℝ) ≤ √2 := by
-    calc (1 : ℝ) = √1 := Real.sqrt_one.symm
-      _ ≤ √2 := Real.sqrt_le_sqrt (by norm_num)
-  show _ ≤ min ((1 + √(1 / 4 : ℝ)) ^ 2 * b_w * b_a * d / K)
-    (√2 * (1 + √(1 / 4 : ℝ)) * √(1 - 1 / 4) * b_a * √(b_w / K))
-  rw [hs]
-  refine min_le_min (le_of_eq (by ring)) ?_
-  have hx : 0 ≤ b_a * √(b_w / K) := by positivity
-  calc 3 / 4 * b_a * √(b_w / K) = (1 * (1 + 1 / 2) * (1 / 2)) * (b_a * √(b_w / K)) := by ring
-    _ ≤ (√2 * (1 + 1 / 2) * √(1 - 1 / 4)) * (b_a * √(b_w / K)) := by gcongr
-    _ = √2 * (1 + 1 / 2) * √(1 - 1 / 4) * b_a * √(b_w / K) := by ring
-
-theorem F_ge {α K b_w b_a d : ℝ} (hα : 0 < α) (hK : 0 < K) (hw : 0 ≤ b_w) (ha : 0 ≤ b_a) (hd : 0 ≤ d) :
-    min (9 / 4 * b_w * b_a * d / K) (3 / 4 * b_a * √(b_w / K)) / (2 * α) ≤ F α K b_w b_a d := by
-  rw [SecurityProofs.F_eq_readFactor]
-  exact div_le_div_of_nonneg_right (readFactor_ge hK hw ha hd) (by positivity)
-
-theorem ch0_weightsUsed (D' : Circuit) (R : Finset (Fin D'.N)) : (ch0 D').weightsUsed R = ∅ :=
-  eq_empty_of_forall_notMem fun x _ => x.1.elim0
-
-theorem ch0_inputsUsed (D' : Circuit) (R : Finset (Fin D'.N)) : (ch0 D').inputsUsed R = ∅ :=
-  eq_empty_of_forall_notMem fun x _ => x.1.elim0
-
-theorem ch0_G (D' : Circuit) : (ch0 D').G = 0 := Finset.sum_eq_zero fun ℓ _ => ℓ.elim0
-
-/-- `ch1` is linked to no whole entry: its one multiplication has no predecessor. -/
-theorem ch1_notLinked (R : Finset (Fin 4)) (x : (ℓ : Fin ch1.L) × Fin ch1.N × Fin (ch1.d ℓ)) :
-    ¬ ch1.LinkedWhole R x.1 x.2.1 x.2.2 := by
-  rcases x with ⟨⟨ℓ, hℓ⟩, t, j⟩
-  cases ℓ with
-  | zero => exact id
-  | succ ℓ => exact absurd hℓ (by change ¬ (ℓ + 1 < 1); omega)
-
-theorem ch1_nat : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-    (ch1.weightsUsed R).card ≤ novelReads D R ∧ (ch1.inputsUsed R).card ≤ novelReads D R := by decide
-
-theorem ch1_G : ch1.G = 1 := rfl
-
-theorem ch1_spread {n : ℕ} (P : Partition C n) (x : (ℓ : Fin ch1.L) × Fin ch1.N × Fin (ch1.e ℓ)) :
-    ch1.spread P x.1 x.2.1 x.2.2 ≤ 1 := by
-  classical
-  unfold Chain.spread
-  refine card_le_one.2 fun u hu v hv => ?_
-  simp only [mem_filter, mem_univ, true_and] at hu hv
-  obtain ⟨_, hu⟩ := hu
-  obtain ⟨_, hv⟩ := hv
-  rw [Partition.mem_gates] at hu hv
-  exact Option.some_injective _ (hu.symm.trans hv)
-
-theorem dark_M1 : M1.dark = ∅ := Finset.sdiff_self _
-
 theorem dark_Mθ : Mθ.dark = ∅ := Finset.sdiff_self _
-
-theorem darkReads_M1 (K : ℝ) : Assumptions.DarkReads M1 K :=
-  fun v hv => absurd hv (by rw [dark_M1]; exact notMem_empty v)
-
-theorem darkReads_Mθ (K : ℝ) : Assumptions.DarkReads Mθ K :=
-  fun v hv => absurd hv (by rw [dark_Mθ]; exact notMem_empty v)
-
-theorem coverage_ch1 : Assumptions.Coverage 1 D (2 * ch1.G) := by
-  unfold Assumptions.Coverage
-  rw [size_D, ch1_G]
-  norm_num
-
-theorem not_coverage_ch0 : ¬ Assumptions.Coverage 1 D (2 * (ch0 C).G) := by
-  unfold Assumptions.Coverage
-  rw [size_D, ch0_G]
-  norm_num
-
-theorem ch1_T1_incompressible {k : ℝ} : Assumptions.TrainingIncompressible D ch1 T1 2 k (1 / 2) (1 / 2) := by
-  intro n P
-  refine ⟨fun _ => 0, ?_, fun u hu => ⟨?_, T1_weights _ hu⟩⟩
-  · refine le_trans (Finset.sum_le_sum fun x _ => Nat.sub_le_of_le_add (ch1_spread P x)) ?_
-    simp
-  · simp only [ch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte, Nat.max_zero]
-    obtain ⟨hw, hi⟩ := ch1_nat _ hu.1
-    have hw' : ((ch1.weightsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by exact_mod_cast hw
-    have hi' : ((ch1.inputsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by exact_mod_cast hi
-    linarith
-
-theorem ch0_T0_incompressible : Assumptions.TrainingIncompressible D (ch0 C) (T0 D) 2 1 1 2 := by
-  intro n P
-  refine ⟨fun _ => 0, le_trans (le_of_eq (Finset.sum_eq_zero fun x _ => x.1.elim0)) (Nat.zero_le _),
-    fun u hu => ⟨?_, T0_weights D 2 1 1 2 _ hu⟩⟩
-  rw [ch0_weightsUsed, ch0_inputsUsed]
-  simp
-
-/-- The factor the contained bounds charge a product at `μ = 1`, `K = 1`, `b_w = b_a = 1/2`, `dd = emax = 1`: its
-second branch, `μ b_a / max(emax, K/(4 b_w dd)) = 1/2`. -/
-theorem factor_half : (1 / 2 : ℝ) ≤
-    max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
-      (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) :=
-  le_max_of_le_right (by rw [max_eq_left (by norm_num : (1 / (4 * (1 / 2) * 1) : ℝ) ≤ 1)]; norm_num)
-
-theorem not_bound {m x y : ℝ} (hm : 1 / 2 ≤ m) (hx : 1 ≤ x) (hy : y ≤ 0) : ¬ (m * x ≤ y) :=
-  fun h => by nlinarith
 
 theorem mb0_updateHardness (r : RegisteredCircuit) (s : ℕ) (b : ℝ) : Cover.Assumptions.UpdateHardness (mb0 r) s b := by
   intro S _ B hB _
@@ -372,49 +260,6 @@ theorem DampenerThreadedSlots_nontrivial : Guarantees.DampenerThreadedSlots_nont
     by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weightsSlots _ _ _ _ _,
     by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
     by norm_num [Assumptions.WindowLength], by norm_num, not_windowsHold_T0, dampener_T0_fails⟩
-
-theorem IncompressibleContainedTraining_honest : Guarantees.IncompressibleContainedTraining_honest :=
-  ⟨compliesRate_D, theta_id D, ch1_T1_incompressible, coverage_ch1⟩
-
-theorem IncompressibleContainedTraining_nontrivial : Guarantees.IncompressibleContainedTraining_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, fun ℓ => ℓ.elim0, compliesRate_D, theta_id D,
-    ch0_T0_incompressible, not_coverage_ch0, ?_⟩
-  have hF := F_ge (α := 1 / 2) (K := 1) (b_w := 1) (b_a := 2) (d := 1)
-    (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
-  rw [size_D]
-  norm_num at hF ⊢
-  linarith
-
-theorem IncompressibleContainedMatMulOn_honest : Guarantees.IncompressibleContainedMatMulOn_honest :=
-  ⟨compliesRate_D, theta_id D, darkReads_M1 _, ch1_T1_incompressible⟩
-
-theorem IncompressibleContainedMatMulOn_nontrivial : Guarantees.IncompressibleContainedMatMulOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_T1_incompressible,
-    not_bound factor_half (Nat.one_le_cast.2 (by decide)) (by norm_num)⟩
-
-theorem IncompressibleContainedTrainingOn_honest : Guarantees.IncompressibleContainedTrainingOn_honest :=
-  ⟨compliesRate_D, theta_id D, darkReads_M1 _, ch1_T1_incompressible, coverage_ch1⟩
-
-theorem IncompressibleContainedTrainingOn_nontrivial : Guarantees.IncompressibleContainedTrainingOn_nontrivial :=
-  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
-    fun _ => le_rfl, fun _ => le_rfl, compliesRate_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_T1_incompressible, coverage_ch1,
-    not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
-
-theorem IncompressibleThreadedThrottled_honest : Guarantees.IncompressibleThreadedThrottled_honest :=
-  ⟨compliesRate_D, theta_id D, T1_threaded, ch1_T1_incompressible⟩
-
-theorem IncompressibleThreadedThrottled_nontrivial : Guarantees.IncompressibleThreadedThrottled_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded,
-    ch1_T1_incompressible, ?_⟩
-  rw [card_T1]
-  norm_num
-
-theorem IncompressibleThreadedThrottledOn_nontrivial : Guarantees.IncompressibleThreadedThrottledOn_nontrivial := by
-  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, compliesRate_Dθ, not_theta_Dθ, T1_threaded,
-    ch1_T1_incompressible, ?_⟩
-  rw [show (T1.M ∩ Mθ.S).card = 1 by decide]
-  norm_num
 
 theorem oneWindow_withinCompute : Assumptions.WithinCompute OneWindow.cap 2 := by
   norm_num [Assumptions.WithinCompute]

@@ -298,9 +298,13 @@ def report(rows: list[dict], hours: float) -> list[dict]:
     return sorted(out, key=lambda r: -(r["usd"] or 0))
 
 
+def totals(rep: list[dict]) -> tuple[float, float]:
+    """A report's dollars, and the part of them spent on idle hours; a VM with no rate registered counts for nothing."""
+    return sum(r["usd"] or 0 for r in rep), sum((r["rate_usd_per_hour"] or 0) * r["idle_hours"] for r in rep)
+
+
 def render(rep: list[dict], hours: float, end: float) -> str:
-    total = sum(r["usd"] or 0 for r in rep)
-    idle_usd = sum((r["rate_usd_per_hour"] or 0) * r["idle_hours"] for r in rep)
+    total, idle_usd = totals(rep)
     lines = [f"Compute, the {hours:g} h to {utc(end)}: ${total:,.0f} across {len(rep)} VMs; ${idle_usd:,.0f} of it on idle hours "
              f"(no GPU at {BUSY_PCT}%+, load under {IDLE_LOAD_SHARE:.0%} of cores, memory in use under {IDLE_MEM_SHARE:.0%})."]
     for r in rep:
@@ -340,8 +344,7 @@ def _idle_entry(r: dict) -> str:
 def brief(rep: list[dict], hours: float, end: float) -> str:
     """The daily post: the window's spend, its idle part and the idlest machines, short enough for `research msg` (the whole report
     is `fleet.py report`, and each machine by hour the console's Usage tab)."""
-    total = sum(r["usd"] or 0 for r in rep)
-    idle_usd = sum((r["rate_usd_per_hour"] or 0) * r["idle_hours"] for r in rep)
+    total, idle_usd = totals(rep)
     idlest = sorted((r for r in rep if r["idle_hours"] > 0), key=lambda r: -(r["rate_usd_per_hour"] or 0) * r["idle_hours"])
     return (f"Compute, the {hours:g} h to {utc(end)}: ${total:,.0f} across {len(rep)} VMs, ${idle_usd:,.0f} of it idle."
             + (f" Idlest: {_named(idlest, _idle_entry)}." if idlest else "")

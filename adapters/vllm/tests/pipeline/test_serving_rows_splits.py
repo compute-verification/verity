@@ -93,7 +93,7 @@ TMPLS = [F16, B16, F8, E0, C2]
 CAPS = {F16: 3, B16: 4, F8: 4, E0: 3, C2: 4}
 #: ``TMPLS`` with each key block its Boolean body, what a partition names for a window proved under ``--zk``
 BITS = [block(16, boolean=True), block(boolean=True), block(8, boolean=True), E0, C2]
-BITS_CAPS = dict(zip(BITS, CAPS.values()))
+BITS_PER_CHUNK = dict(zip(BITS, CAPS.values()))
 #: TOY's places in a head's chain: split 0's blocks 1 and 0 (visit order) and its column end, split 1's block 2 and its column
 #: end, then the combine; per block place, its split, its block in the split's visit order and its keys
 PLACES = {F16: [0], B16: [1], E0: [2, 4], F8: [3], C2: [5]}
@@ -134,15 +134,15 @@ class Served:
         return self.y[lo:hi], None
 
 
-def members(s: Served, tmpls=TMPLS, caps=CAPS) -> list[CS.Member]:
-    return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, caps), tmpls, [s.rows] * len(tmpls))
+def members(s: Served, tmpls=TMPLS, per_chunk=CAPS) -> list[CS.Member]:
+    return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, per_chunk), tmpls, [s.rows] * len(tmpls))
 
 
-def window(s: Served, tmpls=TMPLS, caps=CAPS, law: dict | None = None) -> CS.Binding:
-    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``law`` (one unit of each template by default)."""
-    ms = members(s, tmpls, caps)
+def window(s: Served, tmpls=TMPLS, per_chunk=CAPS, design: dict | None = None) -> CS.Binding:
+    """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
+    ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), design or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:
@@ -219,7 +219,7 @@ def test_the_key_blocks_boolean_bodies_are_the_same_units_rows_and_wires():
     """A window over ``BITS`` is the window over ``TMPLS`` but for its key blocks' template ids: each member's rows, outputs,
     units and wires, and every word serving reads for it."""
     s = Served(n=2)
-    ms, bits = members(s), members(s, BITS, BITS_CAPS)
+    ms, bits = members(s), members(s, BITS, BITS_PER_CHUNK)
     of = dict(zip(TMPLS, BITS))
     assert [(of[m.template], m.rows, m.outs, m.n, m.base, m.wired) for m in ms] == [
         (m.template, m.rows, m.outs, m.n, m.base, m.wired) for m in bits]

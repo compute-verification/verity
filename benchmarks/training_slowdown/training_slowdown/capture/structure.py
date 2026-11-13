@@ -6,10 +6,11 @@ Every matmul-class node (``mm``, ``addmm``, ``bmm``, ``baddbmm``, ``addbmm``, ``
 the varied captures, `trace`). A matmul-like op outside that list is refused. `macs` is the GEMMs' MACs. The rest of
 the step's share of |C| is counted by training_slowdown.flops's rule, so `c_macs` matches the harness's count: one MAC per output
 element of each elementwise multiplication (`elementwise_macs`: ``mul``, ``div``, ``addcmul``, ``addcdiv``, ``lerp``,
-``add`` and ``sub`` with a scale, their in-place and ``_foreach_`` forms, fused optimizer steps at their unfused forms'
-multiplications), dense linear algebra at n³ per matrix (`approx_macs`), and any other forward op that combines an
-activation with a parameter that differs from θ (a norm with a trained gain, an add then ``exp``) at one MAC per element
-of its largest operand or result (only its indices and result, for a gather), as training_slowdown.flops counts it.
+``add`` and ``sub`` with a scale, their in-place and ``_foreach_`` forms, fused optimizer steps at a constant per
+parameter, never below their unfused forms' multiplications), dense linear algebra at n³ per matrix (`approx_macs`),
+and any other forward op that combines an activation with a parameter that differs from θ (a norm with a trained gain,
+an add then ``exp``) at one MAC per element of its largest operand or result (only its indices and result, for a
+gather), as training_slowdown.flops counts it.
 
 Terms are the training ontology's, with T2 read as deep use of activations that depend on the run's own persistent
 values, however the circuit is written.
@@ -73,14 +74,13 @@ import numpy as np
 import torch
 
 from training_slowdown.capture.circuit import ATTR, CARRIED, COMPUTED, OTHER_INPUT, RANDOM, TOKEN_INPUT, Net, StepCircuit, measure
-from training_slowdown.capture.trace import BACKWARD, PHASE, Capture, CaptureRefused
+from training_slowdown.capture.trace import BACKWARD, Capture, CaptureRefused
 from training_slowdown.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
                            TOKEN_INDEX, _is_view, gather_macs)
 from training_slowdown.gates import kind_of, per_mac
 
 __all__ = ["CLASSES", "Matmul", "StepGraph"]
 
-aten = torch.ops.aten
 #: operand classes, highest first: a GEMM's weight is its highest
 CLASSES = ("updated", "registered", "gradient", "activation", "constant")
 _RANK = {c: i for i, c in enumerate(CLASSES)}
@@ -258,10 +258,6 @@ def _arg_nodes_of(args) -> list:
     return out
 
 
-def _width(dtype: str) -> int:
-    return _dtype_bits(getattr(torch, dtype))
-
-
 def _dtype_bits(dtype: torch.dtype) -> int:
     return 1 if dtype == torch.bool else dtype.itemsize * 8
 
@@ -302,25 +298,11 @@ class Matmul:
     #: the narrowest width of its update-dependent operands (0: none)
     width: int = 0
 
-    def to_json(self) -> dict:
-        d = {k: getattr(self, k) for k in ("node", "op", "part", "phase", "macs", "dims", "operands", "weight", "result", "role",
-                                           "upstream", "upstream_fwd", "step", "tokens", "width")}
-        d["token_dims"] = {k: list(v) for k, v in self.token_dims.items()}
-        d["params"] = list(self.params)
-        d["dtypes"] = list(self.dtypes)
-        d["per_token"] = str(self.per_token)
-        d["upstream_macs"] = str(self.upstream_macs)
-        return d
-
 
 def _phases(gm) -> dict:
-    """Each node's phase: a recorded program's (``meta["te_phase"]``, `trace.record_program`), else from the
-    `record_function` markers around it (module docstring of `trace`)."""
+    """Each node's phase, from the `record_function` markers around it (module docstring of `trace`)."""
     out, stack = {}, []
     for n in gm.graph.nodes:
-        if "te_phase" in n.meta:
-            out[n] = n.meta["te_phase"]
-            continue
         name = _pk(n.target) if n.op == "call_function" else ""
         if name == "_record_function_enter_new":
             stack.append((n, str(n.args[0])))
@@ -336,9 +318,6 @@ def _phases(gm) -> dict:
                 break
             if m.startswith("Optimizer."):
                 ph = "optimizer"
-                break
-            if m.startswith(PHASE):
-                ph = m[len(PHASE):]
                 break
         out[n] = ph
     return out
@@ -965,11 +944,6 @@ class StepGraph:
                    beta=beta, cut=cut, sinks=sink_names, circuit=circuit,
                    formalism=measure(circuit) if circuit is not None else None, _inputs=(base, varied, axis_names))
 
-    def with_updated(self, updated) -> "StepGraph":
-        """The same graph classified with another `updated` set (no recapture)."""
-        base, varied, names = self._inputs
-        return StepGraph._analyze(base, varied, names, frozenset(updated), self.name)
-
     # -- totals -----------------------------------------------------------------------------------------------------
     @property
     def macs(self) -> int:
@@ -1001,42 +975,9 @@ class StepGraph:
                "cut_bits": self.cut_bits, "beta": self.beta}
         return out | ({"formalism": self.formalism} if self.formalism is not None else {})
 
-    def role_macs(self, role: str) -> int:
-        return sum(m.macs for m in self.matmuls if m.role == role)
-
-    def phase_macs(self) -> dict:
-        out: dict[str, int] = {}
-        for m in self.matmuls:
-            out[m.phase] = out.get(m.phase, 0) + m.macs
-        return out
-
     def updated_macs(self) -> int:
         """The forward's updated MACs, GEMMs and elementwise."""
         return sum(m.macs for m in self._updated())
-
-    def depth_profile(self, unit: str = "macs") -> list[tuple[Fraction | int, int]]:
-        """(upstream, MACs) of every updated MAC node of the forward, upstream in per-token MACs (``unit="macs"``) or
-        updated GEMM nodes (``"matmuls"``)."""
-        key = {"macs": lambda m: m.upstream_macs, "matmuls": lambda m: m.upstream}[unit]
-        return sorted((key(m), m.macs) for m in self._updated())
-
-    def deep_macs(self, D, unit: str = "macs") -> int:
-        return sum(macs for up, macs in self.depth_profile(unit) if up >= D)
-
-    def phi(self, D, unit: str = "macs") -> Fraction:
-        """The share of the step's |C| (`c_macs`) in updated MACs with at least D upstream (`depth_profile`'s unit)."""
-        return Fraction(self.deep_macs(D, unit), self.c_macs) if self.c_macs else Fraction(0)
-
-    def summary(self) -> dict:
-        roles = {r: self.role_macs(r) for r in ("updated", "producing", "neither")}
-        return {"name": self.name, "digest": self.digest, "tokens": self.tokens, "axes": self.axes, "macs": self.macs,
-                "elementwise_macs": self.elementwise_macs, "approx_macs": self.approx_macs, "c_macs": self.c_macs,
-                "macs_per_token": str(Fraction(self.macs, self.tokens)), "roles": roles, "phases": self.phase_macs(),
-                "updated_macs": self.updated_macs(),
-                "depth_max": str(max((m.upstream_macs for m in self._updated()), default=0)),
-                "updated": sorted(self.updated), "trained": sorted(self.trained), "dependent": self.dependent,
-                "sinks": self.sinks, "cut_bits": self.cut_bits, "beta": self.beta, "cut": self.cut[:12],
-                "params": self.params, "step_crossing": self.step_crossing, "matmuls": [m.to_json() for m in self.matmuls]}
 
 
 def _walks(a) -> bool:

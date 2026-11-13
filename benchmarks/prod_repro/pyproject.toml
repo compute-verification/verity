@@ -1,0 +1,24 @@
+# vLLM at its serving settings, replayed (README.md). Not a package: its runs use a node's pinned vLLM venv; the suite tests the
+# report on synthetic arm and replay directories and the runner against a stand-in for the serving cost benchmark's,
+# stdlib only.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.verity.tests]
+# the report is made of the serving cost benchmark's functions (its metrics, its cost and the replay's window and
+# comparison), which read the run's id through verity_config's SHARED settings; a cost by vLLM's client is the
+# benchmark kit's paired ratio
+inputs = [
+    "benchmarks/serve_tax/serve_tax.py",
+    "benchmarks/serve_tax/replay.py",
+    "benchmarks/harness/verity_bench/__init__.py",
+    "benchmarks/harness/verity_bench/nsys.py",
+    "benchmarks/harness/verity_bench/overhead.py",
+    # overhead.paired calls the kit's, which reads its settings
+    "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/settings.py",
+    "benchmarks/harness/verity_bench/overhead_node.py",
+    "verity/configuration/config/verity_config",
+    "verity/__init__.py",
+    "verity/settings.py",
+]

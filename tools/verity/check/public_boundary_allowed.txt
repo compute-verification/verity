@@ -30,12 +30,3 @@ adapters/vllm/verity_vllm/program/predict/window_rows.py -> verity/protocols/cer
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/prove_path.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/records_audit.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/run.sh
-# the block check is public and sits under PoUB's verifier package, whose `__init__.py` and `pyproject.toml` are not
-verity/protocols/poub/verifier/commitments/__init__.py -> verity/protocols/poub/verifier/__init__.py
-verity/protocols/poub/verifier/commitments/__init__.py -> verity/protocols/poub/verifier/pyproject.toml
-verity/protocols/poub/verifier/commitments/gates/__init__.py -> verity/protocols/poub/verifier/__init__.py
-verity/protocols/poub/verifier/commitments/gates/__init__.py -> verity/protocols/poub/verifier/pyproject.toml
-verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.py -> verity/protocols/poub/verifier/__init__.py
-verity/protocols/poub/verifier/commitments/gates/block_check.circuit-check.py -> verity/protocols/poub/verifier/pyproject.toml
-verity/protocols/poub/verifier/commitments/gates/block_check.py -> verity/protocols/poub/verifier/__init__.py
-verity/protocols/poub/verifier/commitments/gates/block_check.py -> verity/protocols/poub/verifier/pyproject.toml

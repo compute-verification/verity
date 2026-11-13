@@ -322,7 +322,12 @@ def render_wasters(rep: dict) -> str:
     cells = [("NODE", "OWNER", "KIND", "HELD IDLE GPU-H", "HELD GPU-H", "IDLE % OF MEASURED", "UNMEASURED GPU-H")]
     cells += [(w["node"], w["owner"], w["kind"] or "-", _h(w["idle_s"]), _h(w["held_s"]), _pct(w["idle_pct"]),
                _h(w["unmeasured_s"])) for w in rep["wasters"]]
-    out += _cols(cells) if len(cells) > 1 else ["no holding held a GPU idle that day"]
+    if len(cells) > 1:
+        out += _cols(cells)
+    elif any(rep["hours_covered"].values()):
+        out.append("no holding held a GPU idle that day")
+    else:
+        out.append("not measured: no hour of that day was read")
     out += [f"finding: {f}" for f in rep["findings"]]
     return "\n".join(out) + "\n"
 

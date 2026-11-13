@@ -1,7 +1,7 @@
 """`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs drive's policy
 takes off the merge gate (policy.toml's `off_gate`: circuit-check and ratchet-gate, which run after landing, in drive's
-after-landing run on `checked`'s tip, and lean-changed, which no shard runs: `shards.NO_SHARD`).  It reports each step's real
-verdict; what gates and what may stay red is drive's (`research.policy`).
+after-landing run on `checked`'s tip).  It reports each step's real verdict; what gates and what may stay red is drive's
+(`research.policy`).
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -31,8 +31,7 @@ verdict; what gates and what may stay red is drive's (`research.policy`).
                                                             run, where a cold `--all` (~4 h) outlasted every run
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
-                                                            policy.toml's `off_gate`: circuit-check, lean-changed,
-                                                            ratchet-gate), which only
+                                                            policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
                                                             `--deferred` and `--no-cache` run: an Attempt of the clean commit
                                                             checked out, the record `research merge` reads; with presigned URLs
                                                             for the pinned upstream build and inputs when the commit changes
@@ -139,9 +138,9 @@ once it passes, so a check that one of them fails ends in seconds, not hours.
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
 removes its scratch tree) and whatever is left of them SIGKILL after `STOP_GRACE_S`, and no group starts another step. Such a
 step's status is `stopped`. `--keep-going` lets every group run to its end instead, keeping the verdicts its passing steps store,
-except after a failed preflight, which starts no group, or a step in `HALTS`: a Lean module that doesn't compile, or a guarantee whose
-record is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
-(`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
+except after a failed preflight, which starts no group, or a step whose log has the text ci.toml names for it (`halts_on`,
+`HALTS_ON`): a Rust crate that doesn't compile (flock-circuit-build's log says `could not compile`) fails flock-rust-tests
+too, so nothing still running is worth the slot.
 A step whose outputs (its log, the run dir's files named after it, `WATCH`'s) haven't changed for `IDLE_S`, or that is still
 running after `STEP_BUDGET_S`, is stopped the same way (SIGTERM, then SIGKILL) and fails, `hung: no output for N min` or `over
 budget`, so a hung test can't hold a check slot for a day; each suite is bounded first by its own `--timeouts`.
@@ -194,12 +193,6 @@ doesn't name:
                     files, kernel bypasses, code run while compiling, dependency .olean digests, the guarantees' records, a
                     kernel replay; its reports under `lean-audit/`).  It reads only the source tree and builds nothing in the
                     checkout, so the lean group's steps never wait on it, nor it on them
-    lean-changed    at once with the lean group: `lake build` of each Lake package whose audit misses, on a tree this machine
-                    keeps built (`lean_changed.py`), then the audit's judgment of its guarantees on that build without the
-                    kernel replay, so a module that no longer compiles or a guarantee's record a merge left stale ends the
-                    run in minutes, not when the audit's cold build reaches it; it skips what it can't build or read here and
-                    vouches for nothing: the audit decides.  Off the gate and in no shard (`shards.NO_SHARD`): a recorded
-                    check skips it, and no shard of a sharded run runs it, though `--deferred` names it
     ratchet-gate    `adapters/vllm/tools/ratchet_gate.py BASE HEAD`, the gate as BASE has it: no change above BASE (the
                     commit in the run's `check-ratchet-base.txt` or else `check-base.txt`, which `--record --on` sends: its
                     --ratchet-base REF's and its --base REF's; else origin/main)
@@ -229,8 +222,6 @@ local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical i
                     package first waits for one of the node's Lean audit slots (`lean_slot.py`). The step fails on a fast-path
                     result in its `audit.json`, cached or not (`lean_fast`): no merge check accepts an audit without the kernel
                     replay
-    lean-changed    not a verdict: its tree under `lean-changed/` keeps each package's last build there, so Lake rebuilds only
-                    what changed and what imports it, and its fetched dependencies are hard links to lean-audit's, read-only
     lean-agreement  a pass is reused when everything the job reads is the same (`agreement_key`: verity/protocols/flock/agreement/'s
                     tracked files, which pin the upstream build and inputs, the interpreter, the platform, the environment)
     flock-rust-tests  likewise (`rust_tests_key`: the script, which pins the Flock commit and the Rust toolchain, the patches,
@@ -336,7 +327,7 @@ def _load(name: str, d: Path | None = None):
 #: every environment variable check reads, declared once (`settings.py`)
 SETTINGS = _load("settings")
 DECLARATION = _load("declaration")
-#: the jobs `tools/verity/check/ci.toml` declares: their groups, order within a group, and what halts the run (`groups`, `HALTS`)
+#: the jobs `tools/verity/check/ci.toml` declares: their groups, order within a group, and what halts the run (`groups`, `HALTS_ON`)
 JOBS = DECLARATION.load()
 
 
@@ -806,7 +797,8 @@ def take_verdict_urls(out: Path) -> list[dict]:
         if isinstance(doc, list) else []
 
 
-#: Lean's job code, which the lean-audit and lean-changed steps run (`lean_audit.py`, `lean_changed.py`)
+#: Lean's job code: the lean-audit step's (`lean_audit.py`), and the fast path's (`lean_changed.py`), whose kind and keys
+#: `lean_fast` and `lean_passes` read
 LEAN_JOBS = ROOT / "tools" / "verity" / "lean"
 
 
@@ -1648,25 +1640,39 @@ def verdicts_fetched(listed: list[dict], only: str | tuple[str, ...] | None = No
 
 #: The suites whose tests run `lake` or what the Lean steps build under `.lake/`: a step of the Lean group once `lean-build` has
 #: built the verifier, with elan's `lake` on the PATH, so what they run or skip never depends on how far a concurrent
-#: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit and lean-changed, which run
-#: beside them, build only in trees of their own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
+#: `lake build` has got, and no test's `lake build` shares a build directory with one: lean-audit, which runs
+#: beside them, builds only in trees of its own (tests/test_no_wall_clock.py holds every other suite to not skipping on them).
 #: `suites.py` run on its own builds the verifier before them itself; here it is told the build is done (`--lean-built`).
 AFTER_LEAN = SUITES.AFTER_LEAN
 
 #: The opt-in tests a cold check runs by name (`--no-cache`, unsharded and without `--deferred`: the nightly `audit-main`), each
-#: suite's in a `suites.py` run of its own with its variable set, in the step that runs the suite, after the suite's own run
-#: (`opt_in`): suite -> (the variable, the tests by node id in the suite).  Each skips in every other check by a mark in its own
-#: file that reads the variable (tests/test_opt_in_tests.py), so no candidate's check pays for it and no suite's key holds the
-#: variable; a test the variable turns on that this doesn't name, circuit-check's serial-report test of about 2.5 h, stays off.
+#: suite's in a `suites.py` run of its own with its variables set, in the step that runs the suite, after the suite's own run
+#: (`opt_in`): suite -> each variable its opt-in tests read -> those tests by node id in the suite.  Each skips in every other
+#: check by a mark in its own file that reads its variable (tests/test_opt_in_tests.py), so no candidate's check pays for it and
+#: no suite's key holds a variable; a test a variable turns on that this doesn't name, circuit-check's serial-report test of
+#: about 2.5 h, stays off.
 OPT_IN = {
-    "tools/verity/circuit_check": ("VERITY_CIRCUIT_CHECK_SLOW", (
+    "tools/verity/circuit_check": {"VERITY_CIRCUIT_CHECK_SLOW": (
         "tests/test_circuit_check.py::test_every_call_the_suite_checks_is_partitioned",
-        "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")),
-    "verity/protocols/remote/verifier/composition": ("VERITY_SLOW", (
+        "tests/test_circuit_check.py::test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees")},
+    "verity/protocols/remote/verifier/composition": {"VERITY_SLOW": (
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
         "tests/test_composition_difftest.py::test_product_over_remotes_subprotocols_is_remote",
-        "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")),
+        "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
+    "adapters/vllm": {
+        "VERITY_VLLM_INTERIOR_TABLE": (
+            "tests/pipeline/test_interior_table.py::test_an_interior_opens_the_tables_round_1_served_and_the_challenger_resolves_its_reads_to_them",
+            "tests/pipeline/test_interior_table.py::test_round_2_derives_no_links_from_a_block_that_returns_a_read_of_two_outputs",
+            "tests/pipeline/test_interior_table.py::test_round_2_reads_root_and_domain_at_the_name_the_served_records_ports_give_their_links",
+            "tests/pipeline/test_interior_table.py::test_a_table_round_1_did_not_register_is_refused",
+            "tests/pipeline/test_interior_table.py::test_every_table_of_a_class_publishes_its_c_strings_whatever_its_length",
+            "tests/pipeline/test_interior_table.py::test_a_table_reads_interior_without_a_test_key_registers_the_same_root_and_domain",
+            "tests/pipeline/test_interior_table.py::test_a_read_that_does_not_open_its_table_is_refused_before_anything_is_committed",
+            "tests/pipeline/test_interior_table.py::test_a_table_read_interior_is_refused_without_its_tables_or_with_tables_it_cannot_read",
+            "tests/pipeline/test_interior_table.py::test_the_challengers_history_refuses_a_table_round_1_did_not_register"),
+        "VERITY_VLLM_HISTORY_E2E": (
+            "tests/pipeline/test_serving_rows_history.py::test_the_window_commits_the_writers_rows_as_its_tables_strings_and_the_verifier_pins_each_root",)},
 }
 #: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
 OPT_IN_DIR = "opt-in"
@@ -1682,7 +1688,7 @@ def then_opt_in(argv: list[str], out: Path, step: str, args: list[str]) -> str:
 def opt_in(out: Path, step: str, args: list[str]) -> int:
     """`check.py --opt-in OUT STEP ARGS...`, a cold check's opt-in tests (`OPT_IN`) of the suites step STEP runs (pytest: those not
     in `AFTER_LEAN`; lean-suites: those in it; all: every one, on a tree without the verifier), each suite's in a `suites.py` run
-    of its own with ARGS, its variable set to 1 and its tests named, with its outcome and log in OUT's `OPT_IN_DIR`.  0 only when
+    of its own with ARGS, its variables set to 1 and its tests named, with its outcome and log in OUT's `OPT_IN_DIR`.  0 only when
     each named test passed: one that skipped, or that its suite doesn't have, fails the step."""
     if step not in ("pytest", "lean-suites", "all"):
         print(f"check: --opt-in OUT STEP: STEP is pytest, lean-suites or all, not {step!r}", file=sys.stderr)
@@ -1691,18 +1697,20 @@ def opt_in(out: Path, step: str, args: list[str]) -> int:
     d = out / OPT_IN_DIR
     d.mkdir(parents=True, exist_ok=True)
     rc = 0
-    for path, (var, tests) in OPT_IN.items():
+    for path, by_var in OPT_IN.items():
         if step != "all" and (names[path] in AFTER_LEAN) != (step == "lean-suites"):
             continue
+        tests, on = [t for of in by_var.values() for t in of], ", ".join(f"{var}=1" for var in by_var)
         j = d / f"{path.replace('/', '_')}.json"
         j.unlink(missing_ok=True)
-        print(f"check: opt-in: {path} with {var}=1: {', '.join(t.partition('::')[2] for t in tests)}", flush=True)
+        print(f"check: opt-in: {path} with {on}: {', '.join(t.partition('::')[2] for t in tests)}", flush=True)
         ran = subprocess.run([sys.executable, str(ROOT / "tools" / "verity" / "check" / "suites.py"), path, "--json", str(j),
-                              "--logs", str(d), *args, "--", *tests], cwd=ROOT, env={**os.environ, var: "1"}).returncode
+                              "--logs", str(d), *args, "--", *tests], cwd=ROOT,
+                             env={**os.environ, **dict.fromkeys(by_var, "1")}).returncode
         c = (next(iter(json.loads(j.read_text())), {}).get("counts") or {}) if j.exists() else {}
         if ran or c.get("passed", 0) < len(tests) or any(c.get(k) for k in ("failed", "error", "skipped")):
             why = ", ".join(f"{v} {k}" for k, v in c.items() if k != "passed" and v) or f"suites.py exited {ran}"
-            print(f"check: opt-in: {path}: {c.get('passed', 0)} of the {len(tests)} tests named with {var}=1 passed ({why}); "
+            print(f"check: opt-in: {path}: {c.get('passed', 0)} of the {len(tests)} tests named with {on} passed ({why}); "
                   f"its log is in {d}", flush=True)
             rc = 1
     return rc
@@ -1956,10 +1964,6 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
              "ratchet-gate": ("ratchet-gate", ratchet_gate(out, cache), ROOT)}
     if len(lean) > 1:
         built |= {s[0]: s for s in lean}
-        changed: list[str] | str = ([py, str(LEAN_JOBS / "lean_changed.py"), "--cache", str(cache_dir() / "lean-audit"),
-                                     "--deps", str(cache_dir() / "lean-deps"), "--tree", str(cache_dir() / "lean-changed")]
-                                    if cache else "skipped: --no-cache: lean-audit builds every package cold")
-        built["lean-changed"] = ("lean-changed", changed, ROOT)
     else:
         built["lean-build"] = lean[0]                  # no verifier: one skip, named `lean`, where its group starts
     if undeclared := set(built) - {j.name for j in JOBS}:
@@ -1999,10 +2003,10 @@ def deferred_parts(steps: str) -> list[str]:
 def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file: Path | None = None) -> dict:
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
     gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
-    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), and never
-    those of `shards.NO_SHARD`, "all": every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake
-    packages, each spec's audit on its provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there
-    is no such plan or shard, or the tree can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
+    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
+    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
+    provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
+    can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
     if spec.startswith("auto:"):
         return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
@@ -2015,8 +2019,8 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
     held = {p for s in shards for p in s}
     mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
     return {"k": k, "n": n,
-            "parts": [p for p in DECLARATION.all_parts(JOBS, parts_of) if p in mine and p.partition(":")[0] not in SHARDS.NO_SHARD
-                      and (not gated or p.partition(":")[0] not in OFF_GATE)],
+            "parts": [p for p in DECLARATION.all_parts(JOBS, parts_of)
+                      if p in mine and (not gated or p.partition(":")[0] not in OFF_GATE)],
             "all": DECLARATION.all_parts(DECLARATION.gated(JOBS), parts_of)}
 
 
@@ -2759,10 +2763,8 @@ def watch(name: str, p: subprocess.Popen, out: Path) -> tuple[int, str | None]:
     return rc, None
 
 
-#: the steps whose failure stops the run even under --keep-going (`halts` in ci.toml)
-HALTS = frozenset(j.name for j in JOBS if j.halts)
-#: ... and those whose failure does when their log has this text (`halts_on`); without it (a failed clone or toolchain download)
-#: the other groups keep their verdicts
+#: the steps whose failure stops the run even under --keep-going when their log has this text (`halts_on` in ci.toml); without
+#: it (a failed clone or toolchain download) the other groups keep their verdicts
 HALTS_ON = {j.name: j.halts_on for j in JOBS if j.halts_on}
 #: a step that starts only once the named step in another group has ended (`after` in ci.toml)
 AFTER = {j.name: j.after for j in JOBS if j.after}
@@ -2917,7 +2919,7 @@ class Reused:
 
 class Steps:
     """The steps of one run: their processes while they run, so that the first failure stops the others (unless ``keep_going``,
-    and a step in `HALTS`, or one `HALTS_ON` marks `halts`, stops them even then), and each step's record appended to `STEPS_LOG`
+    and a step `HALTS_ON` marks `halts` stops them even then), and each step's record appended to `STEPS_LOG`
     as it ends, and each start and end to the run's live record (`LIVE`)."""
 
     def __init__(self, out: Path, keep_going: bool = False, packs: Packs | None = None, reused: Reused | None = None,
@@ -2972,7 +2974,7 @@ class Steps:
                 self.packs.request()
             if self.reused is not None:
                 self.reused.ended(rec)
-            if rec["status"] == "failed" and not self.stopping and (not self.keep_going or rec["step"] in HALTS or rec.get("halts")):
+            if rec["status"] == "failed" and not self.stopping and (not self.keep_going or rec.get("halts")):
                 self.halted = rec["step"]
                 self.stop(f"{rec['step']} failed")
         return rec

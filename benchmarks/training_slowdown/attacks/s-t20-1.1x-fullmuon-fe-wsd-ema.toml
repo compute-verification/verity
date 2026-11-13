@@ -1,0 +1,21 @@
+# Muon on every block's matrices and AdamW on the gains at a rate of their own, the embedding untrained, in two
+# forwards of 32 rows a step. The output is the average of the weights over the last tenth of the steps so far; E is
+# the averages.
+start = "s-t20"
+route = "ema"
+target = { gain = 1.1 }
+budget = { steps = 2518, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+trainable = "blocks.*,norm"
+opt = "muon"
+lr = 2.5e-3
+gain_lr = 2e-3
+weight_decay = 0.05
+warmup = 0.02
+decay = 0.4
+micro_batches = 2
+fused = true
+ema_horizon = 0.1

@@ -70,9 +70,9 @@ from verity_config.settings import SHARED
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
+from verity.definitions.circuits.targets import target as T
 from verity.definitions.silicon import models as S
 from verity.definitions.silicon.cast import f32_to_bf16_word
-from verity.definitions.circuits.targets import target as T
 
 if TYPE_CHECKING:
     from collections.abc import Callable

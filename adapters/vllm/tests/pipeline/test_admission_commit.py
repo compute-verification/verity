@@ -1,12 +1,9 @@
 """Commit admission: the scheduled host-retention bound is SOUND (>= every observed step) and TIGHT (within 15 % of the
-run total) on three recorded runs with per-step `n_bytes`, refuses by name over the cgroup, and is torch-free."""
+run total) on three recorded runs with per-step `n_bytes`, and refuses by name over the cgroup."""
 
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -30,10 +27,12 @@ def test_scheduled_bound_is_sound_and_tight_on_the_r16_records(name, max_ratio):
     sizing, wl, obs = _fixture(name)
     mnbt = wl["engine"]["args"]["max_num_batched_tokens"]
     sched = ADM.scheduled_step_bytes(sizing, wl["requests"], max_num_batched_tokens=mnbt, lag=1)
-    chk = ADM.compare_observed(sched, obs)
-    assert chk["sound"], f"{name}: under-predicted steps {chk['under']}"
-    assert chk["steps_under_predicted"] == 0
-    assert 1.0 <= chk["ratio_pred_over_obs"] <= max_ratio, chk
+    pred = {x["step"]: x["bytes"] for x in sched["per_step"]}
+    under = [(s, o, pred.get(s, 0)) for s, o in obs.items() if o > pred.get(s, 0)]
+    assert not under, f"{name}: under-predicted steps {under[:8]}"
+    common = [s for s in obs if s in pred]
+    ratio = sum(pred[s] for s in common) / sum(obs[s] for s in common)
+    assert 1.0 <= ratio <= max_ratio, ratio
     # every observed step is predicted (the lag row is one extra scheduled step beyond the record's last step)
     assert sched["steps"] >= len(obs)
 
@@ -120,7 +119,7 @@ def test_bounded_staging_retain_exclude_hidden_predicts_the_kept_pool():
     assert b_other["predicted_host_bytes"] == full["predicted_host_bytes"]
     lv = ADM.admission(sizing, wl["requests"], small, retain="none", max_num_batched_tokens=5348, lag=1, bounded=True)
     assert lv["predicted_host_bytes"] == int(raw * (full["levels_factor"] - 1.0)) and "levels only" in lv["pool_rule"]
-    # the CLI alias hidden_m1 names both tap families
+    # either hidden family in the exclusion drops the hidden stream
     rule = ADM.predicted_pool_bytes(1000, 600, retain="host", levels_factor=1.25, windowed=True, bounded=True, retain_exclude={"fa2_hidden_m1"})
     assert rule[0] == 650 and "hidden M1" in rule[1]
 
@@ -144,57 +143,6 @@ def test_lag_rows_chunking_and_the_rope_correction_are_named_and_monotone():
     assert pt2 == sizing["per_token_bytes"] and note2 is None
     with pytest.raises(ValueError):
         ADM.scheduled_step_bytes(sizing, [{"prompt_len": 0, "max_tokens": 1, "arrive_step": 0}])
-
-
-def _bare_env() -> dict[str, str]:
-    """PATH and the tree on PYTHONPATH, beside the suite's read guard's own variables and path so the child is still traced."""
-    path = os.pathsep.join(filter(None, [str(REPO), str(REPO / "vllm-poc"), os.environ.get("PYTHONPATH")]))
-    return {**{k: v for k, v in os.environ.items() if k.startswith("VERITY_SUITE_")}, "PYTHONPATH": path, "PATH": "/usr/bin:/bin"}
-
-
-def test_cli_is_torch_free_and_reports_the_observed_check(tmp_path):
-    sizing, wl, obs = _fixture("b16")
-    sz = tmp_path / "sizing.json"; sz.write_text(json.dumps(sizing))
-    st = tmp_path / "steps.jsonl"
-    st.write_text("".join(json.dumps({"pair": 0, "arm": "instrumented", "step": s, "n_bytes": b}) + "\n" for s, b in obs.items()))
-    cmd = [sys.executable, "-c", "import sys; sys.modules['torch'] = None; from verity_vllm.pipeline import cli; sys.exit(cli.main(['admission-bound', *sys.argv[1:]]))",
-           "--workload", str(REPO / "workloads" / f"{wl['sweep']['row_id']}.json"), "--sizing", str(sz),
-           "--cap-bytes", str(CAP_CP_BIG), "--observed", str(st)]
-    p = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, env=_bare_env())
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert "ADMITTED" in p.stdout and "SOUND" in p.stdout and "under-predicted 0" in p.stdout
-    p2 = subprocess.run(cmd[:-2] + ["--cap-bytes", str(16 << 30)], cwd=REPO, capture_output=True, text=True,
-                        env=_bare_env())
-    assert p2.returncode == 3 and "REFUSED" in p2.stdout
-
-
-def test_host_cap_names_its_source_and_a_bare_host_is_still_a_bound(monkeypatch, tmp_path):
-    """no visible cgroup limit -> MemTotal, named; a cgroup limit wins when present; the record carries a domain."""
-    import verity_vllm.pipeline.admission_bound as M
-    real = M.Path.read_text
-
-    def fake(self, *a, **k):
-        p = str(self)
-        if p.startswith("/sys/fs/cgroup"):
-            raise OSError(p)
-        if p == "/proc/meminfo":
-            return "MemTotal:       16384000 kB\nMemFree: 1 kB\n"
-        return real(self, *a, **k)
-
-    monkeypatch.setattr(M.Path, "read_text", fake)
-    cap, src = M.host_cap()
-    assert cap == 16384000 * 1024 and "MemTotal" in src
-    sizing, wl, _ = _fixture("b4")
-    rec = M.admission(sizing, wl["requests"], cap)
-    assert rec["admitted"] is False and rec["domain"].startswith("--retain host")
-
-    def fake2(self, *a, **k):
-        if str(self) == "/sys/fs/cgroup/memory.max":
-            return "377000000000\n"
-        return fake(self, *a, **k)
-
-    monkeypatch.setattr(M.Path, "read_text", fake2)
-    assert M.host_cap() == (377000000000, "/sys/fs/cgroup/memory.max")
 
 
 def test_the_commit_admission_counts_the_declared_lag():

@@ -77,6 +77,7 @@ import itertools
 import json
 import math
 import re
+import sys
 from fractions import Fraction
 from typing import Any, NamedTuple
 
@@ -213,9 +214,18 @@ def _quote(s: str) -> str:
     return '"' + "".join(esc.get(c) or (f"\\x{ord(c):02x}" if ord(c) <= 31 or ord(c) == 0x7f else c) for c in s) + '"'
 
 
+def _digits(s: str) -> int:
+    """The number ASCII digits `s` spell, however many: `int` refuses more digits than the process's limit
+    (`sys.get_int_max_str_digits`), so `s` is read in pieces no longer than the least limit a process can set."""
+    if len(s) <= sys.int_info.str_digits_check_threshold:
+        return int(s)
+    h = len(s) // 2
+    return _digits(s[:-h]) * 10**h + _digits(s[-h:])
+
+
 def _nat_of(s: str, ctx: str) -> int:
     if s and all(c in "0123456789" for c in s) and (len(s) == 1 or s[0] != "0"):
-        return int(s)
+        return _digits(s)
     raise Refused(f"{ctx}: {_quote(s)} is not a natural number in canonical form")
 
 
@@ -400,7 +410,7 @@ def _exactly(written: Any, j: Any, ctx: str) -> None:
 def _core_draw(j: Any, ctx: str) -> dict:
     """`Core.Draw.ofJson`, as `Draw.toJson` writes it."""
     if _has(j, "bernoulli"):
-        d: dict = {"bernoulli": str(ratio(_str_at(j, "bernoulli", ctx), f"{ctx}.bernoulli"))}
+        d: dict = {"bernoulli": Wd.ratio_str(ratio(_str_at(j, "bernoulli", ctx), f"{ctx}.bernoulli"))}
     elif _has(j, "subset"):
         d = {"subset": _nat_at(j, "subset", ctx)}
     elif _has(j, "strata"):
@@ -448,7 +458,8 @@ def integrity(j: Any, ctx: str = "profile") -> dict:
 def integrity_json(p: dict) -> dict:
     """`Core.Integrity.toJson`."""
     return {"programs": p["programs"], "prescribed": sorted(p["prescribed"]), "linked": p["linked"],
-            "covered": sorted(p["covered"]), "levels": p["levels"], "delta": str(p["delta"]), "drawn": dict(p["drawn"])}
+            "covered": sorted(p["covered"]), "levels": p["levels"], "delta": Wd.ratio_str(p["delta"]),
+            "drawn": dict(p["drawn"])}
 
 
 def answer_of(j: Any, ctx: str = "answer") -> dict:
@@ -558,7 +569,7 @@ def expected_items(p: dict, ell: int, w: Wd.Work, k: int, root_w: Any) -> dict:
     """The registered items as the verifier computes them at level `ell` (`served_commit.items_of`)."""
     tw = p["check"]["tile_work"]
     return {"check": check_item(p), "root_W": root_w, "work": w.to_json(tw),
-            "sampling": {"delta": str(p["delta"]), "eps": str(p["eps"]), "grid_bits": p["grid_bits"],
+            "sampling": {"delta": Wd.ratio_str(p["delta"]), "eps": Wd.ratio_str(p["eps"]), "grid_bits": p["grid_bits"],
                          "law": {"k": k, "law": "subset"}}}
 
 
@@ -627,7 +638,8 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
     if prof["levels"] != [{"name": LEVEL, "query": rec["partition"], "size": w.n, "draw": {"subset": k}}]:
         return "reject", f"profile: its levels are not the registered partition's {w.n} units drawn subset:{k}", None
     if prof["delta"] != p["delta"]:
-        return "reject", f"profile: delta {prof['delta']}, not the window's {p['delta']}", None
+        return ("reject", f"profile: delta {Wd.ratio_str(prof['delta'])}, not the window's {Wd.ratio_str(p['delta'])}",
+                None)
     if prof["drawn"] != [(LEVEL, k)]:
         return "reject", f"profile: drawn {_canon(dict(prof['drawn']))}, not {k} units", None
     if not (draw["law"] == "subset" and draw["k"] == k) or draw["population"] != w.n:

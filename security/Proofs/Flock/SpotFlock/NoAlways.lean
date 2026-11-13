@@ -109,16 +109,16 @@ theorem code_noAlways_checked_sub (x : Msg) (r : Fin ((code h).V.k x) → FlockD
     ∀ u ∈ (code h.noAlways).checked x r, u ∈ (code h).checked x r := by
   intro u hu
   change u ∈ ((reg h.noAlways x).map fun g => g.checked (SamplingDeploy.units ((base h).atOrder (order h)) x)
-    (src (r (order h x).first)) (src (r (order h x).second))).getD [] at hu
+    (src (r (order h x).first)) (stageSrc (stageCoins h x r))).getD [] at hu
   change u ∈ ((reg h x).map fun g => g.checked (SamplingDeploy.units ((base h).atOrder (order h)) x)
-    (src (r (order h x).first)) (src (r (order h x).second))).getD []
+    (src (r (order h x).first)) (stageSrc (stageCoins h x r))).getD []
   cases hd : decode x with
   | none => simp [reg, hd] at hu
   | some _ =>
     have hu' : u ∈ h.noAlways.reg.checked (SamplingDeploy.units ((base h).atOrder (order h)) x)
-        (src (r (order h x).first)) (src (r (order h x).second)) := by simpa [reg, hd] using hu
+        (src (r (order h x).first)) (stageSrc (stageCoins h x r)) := by simpa [reg, hd] using hu
     have hsub : u ∈ h.reg.checked (SamplingDeploy.units ((base h).atOrder (order h)) x)
-        (src (r (order h x).first)) (src (r (order h x).second)) := h.reg.noAlways_checked_sub _ _ _ u hu'
+        (src (r (order h x).first)) (stageSrc (stageCoins h x r)) := h.reg.noAlways_checked_sub _ _ _ u hu'
     simpa [reg, hd] using hsub
 
 /-- **K at the emptied registration's code**: where the second stage draws, the gates the checked proof blocks need
@@ -126,7 +126,7 @@ number at most each drawn block's, summed. -/
 theorem code_card_biUnion_noAlways_le (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin)
     (needs : ℕ → Finset ℕ) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
-      (src (r (order h x).second)) = .ok (draw, n)) :
+      (stageSrc (stageCoins h x r)) = .ok (draw, n)) :
     (((code h.noAlways).checked x r).toFinset.biUnion needs).card ≤
       ((Spot.Draw.proved draw).toList.map fun j =>
         (needs (h.reg.blockAt (h.reg.sample (src (r (order h x).first))) j.toNat)).card).sum := by
@@ -142,7 +142,7 @@ most gates a block needs. -/
 theorem code_card_biUnion_noAlways_le_mul (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin)
     (needs : ℕ → Finset ℕ) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
-      (src (r (order h x).second)) = .ok (draw, n)) (M : ℕ) (hM : ∀ u, (needs u).card ≤ M) :
+      (stageSrc (stageCoins h x r)) = .ok (draw, n)) (M : ℕ) (hM : ∀ u, (needs u).card ≤ M) :
     (((code h.noAlways).checked x r).toFinset.biUnion needs).card ≤ (Spot.Draw.proved draw).size * M :=
   code_card_biUnion_le_mul h.noAlways x r needs hsel (fun _ => rfl) M hM
 
@@ -186,7 +186,7 @@ theorem ksTwo_noAlways (hB : Built h) (hS : Addresses h) :
 /-! ## The addresses premise only weakens -/
 
 /-- **An accepted run's checked unit at the emptied registration is one at the registration.** -/
-theorem CheckedRun.ok_noAlways {r : CheckedRun} (hr : r.Ok h.noAlways) : r.Ok h := by
+theorem CheckedRun.ok_noAlways {r : CheckedRun h.stage} (hr : r.Ok h.noAlways) : r.Ok h := by
   obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hrest⟩ := hr
   exact ⟨Pt, d, spec, hx, hP, h2, hin, hok, h.reg.noAlways_checked_sub _ _ _ _ hu, hrest⟩
 

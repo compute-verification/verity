@@ -10,14 +10,13 @@ other bindings as context.  Such a sample without its coin is refused by name:
   proof-block sample, with `per_stratum` units of each stratum sampled uniformly at the stratum's index (`stratum_picks`).
   No replay calls it.
 
-The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
-difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
-(`stream`, `generator`): changing one moves every sample taken from it.  Every replay of the Commit takes a legacy seed.
-`root_seed` and `kernel_check_seed` read the run root alone, with no coin: the prover fixes the root, so it steers
-their samples by committing again, in about the lesser of 1/p and 2^64 tries (2^32 for the kernel seed), p the chance
-one sample misses its faults, and a replay under either is a measurement.  `legacy_replay_seed` hashes a challenge
-string with the root through SHA-256 and keeps 8 bytes: it is a coin's only when the auditor host's challenger issued
-that string.
+The legacy seeds of the other drivers (replay's tiers, recompute's reference rows, difftest, the relation checkers)
+are here too (`root_seed` .. `case_seed`), with the only generator constructors (`stream`, `generator`): changing one
+moves every sample taken from it.  Every replay of the Commit takes a legacy seed.  `root_seed` reads the run root
+alone, with no coin: the prover fixes the root, so it steers the sample by committing again, in about the lesser of 1/p
+and 2^64 tries, p the chance one sample misses its faults, and a replay under it is a measurement.
+`legacy_replay_seed` hashes a challenge string with the root through SHA-256 and keeps 8 bytes: it is a coin's only
+when the auditor host's challenger issued that string.
 """
 from __future__ import annotations
 
@@ -134,12 +133,6 @@ def challenge_seed(challenge: str, run_root: bytes) -> int:
     """The legacy seed under a challenge string (`legacy_replay_seed`): bound to the root, so a challenge issued
     before the root was fixed, or for another run, selects another sample."""
     return legacy_replay_seed(challenge, run_root)
-
-
-def kernel_check_seed(run_root: bytes) -> int:
-    """The compiled-kernel check's step seed: the run root's first 4 bytes, ``int(run_root.hex()[:8], 16)``.  No coin: the
-    prover steers the sampled steps by committing again, in at most about 2^32 tries, and no rule grades this seed."""
-    return int(bytes(run_root).hex()[:8], 16)
 
 
 def reference_rows_seed(rows_total: int, rows_pending: int) -> int:

@@ -224,6 +224,11 @@ def _lane(i: dict, owners: dict[str, str]) -> str:
     return _lane_label(i) or owners.get(i["team"]["key"]) or NO_LANE
 
 
+def ask_open(a: dict) -> bool:
+    """Whether a person's ask (`Linear.asks`) is not delivered: open, parked, or canceled without its asker's yes."""
+    return a["type"] in (*OPEN_TYPES, "backlog") or a["type"] == "canceled" and not a["ok"]
+
+
 def ask_findings(asks: list[dict], now: float) -> list[dict]:
     """The audit's findings on people's asks (`Linear.asks`), as `audit` gives them (ASK_KINDS):
     - parked: in Backlog, or canceled, without ASKER_OK: only its asker parks or cancels it.  A duplicate isn't parked: the

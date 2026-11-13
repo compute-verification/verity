@@ -11,8 +11,8 @@
 # one lease of the card (gpu-lease, at most LEASE_MIN minutes, default 90, and MEM_GB GiB of host memory, default 72; in
 # the caller's lease when GPU_LEASE_UUID is set): served_piece.py with vLLM's venv (PY, default
 # /workspace/cp/venv312/bin/python), the snapshot under HF_HOME (default /workspace/hf) and the memory challenger on
-# vy-auditor-2, its case answered by pous-run-protocol, which must agree with the Python. MEM_GB's default is
-# served_case.sh's, by its estimate: about 4 times the case's line while the Lean answers it, beside the snapshot's table
+# vy-auditor-2, its case answered by pous-run-protocol, which must agree with the Python. MEM_GB's default leaves
+# about 4 times the case's line while the Lean answers it, beside the snapshot's table
 # and the card's runtime; LEASE_MIN's leaves the Lean's answer its time between the two sessions. Once PoUS's session
 # completes and its case is answered, the same process runs PoUB-P2's session over the store it holds, against
 # vy-auditor-2's bandwidth party for at most BW_PARTY_MIN minutes (default 10, the gate's cap), the case answered by

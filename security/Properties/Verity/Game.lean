@@ -351,7 +351,7 @@ def takeCoin (l : String) : List (String × ℕ) → Option (List (String × ℕ
     if l' = l then (match n with | 0 => none | n + 1 => some ((l', n) :: fs)) else (takeCoin l fs).map ((l', n) :: ·)
 
 /-- The most coin-tree lines the device's log holds, each tree it sampled and each round it opened (`MAX_TREE_LINES`). -/
-def maxTreeLines : ℕ := 2 ^ 20
+def maxTreeLines : ℕ := 2 ^ 23
 
 /-- **The most coins a coin tree the device samples holds**, every stream's every round (`MAX_TREE_COINS`). -/
 def maxTreeCoins : ℕ := 2 ^ 26
@@ -375,7 +375,7 @@ opening once its log holds `MAX_TREE_LINES` of them (`LiveChallenger._tree_line`
 def treeLines (ts : List OpenTree) : ℕ := (ts.map fun T => 1 + ∑ s, T.opened s).sum
 
 /-- **The most leaves the device's coin trees hold in a play**: at most `maxTreeLines` trees (`treeLines`), each of at
-most `maxTreeCoins` leaves (`TreeSpecOk`), `2^46`. -/
+most `maxTreeCoins` leaves (`TreeSpecOk`), `2^49`. -/
 def maxLeaves : ℕ := maxTreeLines * maxTreeCoins
 
 /-- **The most frames the device serves** under the coin commitment's families `fs`: each frame it serves releases one of

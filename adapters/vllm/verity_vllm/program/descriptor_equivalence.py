@@ -18,27 +18,19 @@ Reference sequences are compared through `canonical_runs`, a representation-inde
 sequence of body-scoped references into maximal runs `(space, idx, base, stride, count)` with stride in {0, 1}
 (the greedy leaf-level decomposition, computed run-by-run so a 7.8 M-part KV-cache concat costs O(parts), not
 O(leaves)). Two `Refs` denote the same sequence iff their canonical runs are equal.
-
-    PYTHONPATH=. verity-vllm descriptor-equivalence --old B0-v0.json --new B0-v1.json --out report.json
-    PYTHONPATH=. verity-vllm descriptor-equivalence --old B0-v0.json --build B0 32 7
 """
 
 from __future__ import annotations
 
-import json
 import random
-import sys
 import time
-from dataclasses import dataclass
 from typing import Any, Iterator
 
-from verity.circuits.codec import decode_program, descriptor_id, program_digest
-from verity.circuits.defs import PrimitiveDefinition, REGISTRY, SpecializedDefinition
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.circuits.evaluation import evaluate_call
 from verity.circuits.layout import FunctionCall
 from verity.circuits.refs import Affine, Concat, Explicit, Refs, Strided
-
-from verity_vllm.config import UsageError, option
 
 Run = tuple[str, int, int, int, int]  # (space, idx, base, stride, count); stride 0 = the same leaf repeated
 
@@ -374,62 +366,3 @@ def compare(A, B, *, gate_samples: int = 2000, call_samples: int = 24, depth: in
     rep["seconds"] = round(time.time() - t0, 2)
     rep["verdict"] = "equivalent"
     return rep
-
-
-def _load(path: str):
-    t0 = time.time()
-    with open(path) as f:
-        desc = json.load(f)
-    # IT-F5 (`independent-tests.md`): a descriptor names its primitives by id and `REGISTRY` holds only what the process
-    # imported; every registry module is loaded so a Hopper / TP=2 / single-request stochastic descriptor decodes too.
-    from verity.definitions.registry.catalog import load
-    load()
-    d = decode_program(desc, REGISTRY)
-    return d, {"path": path, "schema": desc.get("schema"), "digest": program_digest(desc), "bytes": None, "seconds_decode": round(time.time() - t0, 1)}
-
-
-@dataclass(frozen=True, kw_only=True)
-class Options:
-    old: str = option("--old", help="descriptor JSON (the reference encoding)")
-    new: str | None = option("--new", default=None, help="descriptor JSON to compare against")
-    build: list[str] | None = option("--build", default=None, nargs=3, metavar=("CONFIG", "LP", "STEPS"),
-                                     help="or: build Serve{C,LP,STEPS} with the current library")
-    gate_samples: int = option("--gate-samples", type=int, default=2000)
-    call_samples: int = option("--call-samples", type=int, default=24)
-    eval_samples: int = option("--eval-samples", type=int, default=4)
-    seed: int = option("--seed", type=int, default=0)
-    out: str | None = option("--out", default=None)
-
-
-def main(a: Options) -> int:
-    import os
-    A, ia = _load(a.old)
-    ia["bytes"] = os.path.getsize(a.old)
-    if a.new:
-        B, ib = _load(a.new)
-        ib["bytes"] = os.path.getsize(a.new)
-    elif a.build:
-        from verity.circuits.program import Program
-        from verity.circuits.defs import bind
-        from verity.definitions.registry import b1
-        from verity.circuits.codec import encode_program, canonical_json
-        cfg, LP, STEPS = a.build[0], int(a.build[1]), int(a.build[2])
-        t0 = time.time()
-        B = Program(bind(b1.Serve, C={"B1": b1.B1_CONFIG, "B0": b1.B0_CONFIG}[cfg], LP=LP, STEPS=STEPS))
-        desc = encode_program(B)
-        ib = {"built": a.build, "schema": desc["schema"], "digest": program_digest(desc), "bytes": len(canonical_json({k: v for k, v in desc.items() if k != "annotations"})),
-              "seconds_build_encode": round(time.time() - t0, 1)}
-    else:
-        raise UsageError("--new or --build")
-    print(f"[equiv] old {ia}", file=sys.stderr, flush=True)
-    print(f"[equiv] new {ib}", file=sys.stderr, flush=True)
-    try:
-        rep = compare(A, B, gate_samples=a.gate_samples, call_samples=a.call_samples, eval_samples=a.eval_samples, seed=a.seed)
-    except Mismatch as e:
-        rep = {"verdict": "MISMATCH", "detail": str(e)}
-    out = {"schema": "verity-ir/descriptor-equivalence/v0", "old": ia, "new": ib, "comparison": rep}
-    print(json.dumps(out, indent=1))
-    if a.out:
-        with open(a.out, "w") as f:
-            json.dump(out, f, indent=1)
-    return 0 if rep.get("verdict") == "equivalent" else 1

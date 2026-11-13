@@ -2,9 +2,6 @@
  "schema": "vllm-dead-code-keep/v1",
  "dynamic_record": "art:a265fc569719ee1a410f0863416416af91c66d02b1ed8703a9f60fd19e614f2f",
  "modules": {
-  "verity_vllm.commitments.vllm_v1.vectors": "the generator of the vllm-v1 conformance vectors (vectors.json), run as a module by hand and held to its file by tests/commitments/test_vllm_v1.py",
-  "verity_vllm.commitments.vllm_v1.vectors_sha512": "the generator of the vllm-v1-sha512 conformance vectors (vectors_sha512.json), run as a module by hand and held to its file by verity/commitments/tests/test_sha512_framings.py",
-  "verity_vllm.program.frontend.serve_families": "which Serve family and attention geometry an instance pins, read by tests/program/test_composition.py ahead of a production caller (LIVE registry.b1)",
   "verity.definitions.numerics.ref_prims_twins": "numpy twins of registry.ref_prims, checked against the registered bodies by tests/program/test_ref_prims.py (LIVE registry.ref_prims)",
   "verity_vllm.program.lifting.lifted_compose": "the lifted fixed workload Program (GP-01's compose over lifted components) of tests/program/test_lifted_mixed.py / test_lifted_r17.py (LIVE registry.lifted)",
   "verity_vllm.program.frontend.derive_examples": "source modules of the derivation tests (LIVE frontend.derive)",
@@ -16,9 +13,9 @@
   "verity.definitions.numerics.program_walk": "the training step's call-by-call walk against its GPU dump, checked by verity/definitions/tests/test_program_walk.py and run on the dump remotely; live once TrainStep_v1's check reads it",
   "verity.definitions.numerics.torch_blocks": "numpy models of the training step's blocks (registry.torch_attention, torch_loss, torch_embedding, torch_clip), which verity/definitions/tests/test_torch_*.py hold each block to word for word and program_walk calls by family on the GPU dump; live once TrainStep_v1's check reads them",
   "verity.definitions.numerics.torch_step": "numpy models of TrainStep_v1's own nodes (F.linear's GEMMs, the transpose, RMS norm, SiLU, the master grad, AdamW and the bf16 copy-back), which verity/definitions/tests/test_torch_step.py holds to bits and program_walk calls by family on the GPU dump; live once TrainStep_v1's check reads them",
-  "verity_vllm.protocols.linear": "the linear-site interface, ahead of its first consumer (the MVP's install, migration step 3 of the research store's docs/pouw/vllm-integration-api.md); tests/linear",
+  "verity_vllm.protocols.linear": "the linear-site interface; no module of the package imports it, its callers are benchmarks/pouw/pearl_c_vllm/e2e.py and bench_arm.py; tests/linear",
   "verity_vllm.protocols.linear.api": "see verity_vllm.protocols.linear",
-  "verity_vllm.protocols.linear.vllm_site": "see verity_vllm.protocols.linear; benchmarks/pouw's e2e.py, profile_decode.py and vllm_bench.py attach through it",
+  "verity_vllm.protocols.linear.vllm_site": "see verity_vllm.protocols.linear; benchmarks/pouw/pearl_c_vllm/e2e.py and bench_arm.py attach through it",
   "verity_vllm.program.quarantine.collective": "provisional TP AllReduce definitions; test_tp_collective.py",
   "verity_vllm.program.quarantine.collective.allreduce": "see quarantine.collective",
   "verity_vllm.program.quarantine.collective.allreduce_difftest": "see quarantine.collective",
@@ -32,6 +29,8 @@
   "verity_vllm.program.tp_workload": "the TP window over all W ranks (pipeline.tp.wires.sites_circuit over program.tp_binding's bindings of program.predict.tp_steps' rank Programs, composed by program.tp_workload), read by tests/program/test_tp_binding.py, tests/program/predict/test_tp_steps.py and tests/pipeline/test_tp_wires.py; the TP served Commit (pipeline.tp.commit) commits each rank's rows and builds no window yet, and this entry goes once that Commit builds the TP window",
   "verity.definitions.tiny": "the tiny whole-model configurations (TINY, TINY_NOBIAS, TINY_FP8) at which the registry's circuit-check sidecars (verity/definitions/registry/*.circuit-check.py) and circuit_check.targets bind whole-model roots; neither is a vLLM entry point",
   "verity_vllm.program.predict.template_counts": "n_t(c), each template's instances in a request unit's Program read off its key, held to the built Programs' template partitions by tests/program/predict/test_template_counts.py ahead of the compile that reads it (LIVE predict.step_needs)",
-  "verity_vllm.log": "the logger every library module logs through (init_logger), checked by tests/test_log.py ahead of the first module that converts its prints"
+  "verity_vllm.log": "the logger every library module logs through (init_logger), checked by tests/test_log.py ahead of the first module that converts its prints",
+  "verity_vllm.commitments.vllm_v1.vectors": "the generator of the vllm-v1 conformance vectors (vectors.json), run as a module by hand and held to its file by tests/commitments/test_vllm_v1.py",
+  "verity_vllm.commitments.vllm_v1.vectors_sha512": "the generator of the vllm-v1-sha512 conformance vectors (vectors_sha512.json), run as a module by hand and held to its file by verity/commitments/tests/test_sha512_framings.py"
  }
 }

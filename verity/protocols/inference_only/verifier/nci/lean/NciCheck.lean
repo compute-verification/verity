@@ -11,6 +11,7 @@ public import NciCheck.BaselineDifftest
 public import NciCheck.Protocol
 public import NciCheck.Count
 public import NciCheck.CountDifftest
+public import NciCheck.DefinitionDigest
 
 /-!
 # The NCI policy's check
@@ -42,6 +43,11 @@ activations of the block Definitions the declaration names, with each block Defi
 table and its fresh bits from `NciCheck.Desc`'s summaries. It publishes only the judgment against `n`, `{complies}`;
 the whole verdict, with the counts, is `NciCheck.Count.checkDetail`, for the private record. `NciCheck.CountDifftest`
 holds both to the Python reference.
+
+`NciCheck.DefinitionDigest` holds a Definition's digests, read off its Program's descriptor with no decode: the circuit
+format's own (`definitionDigest`), over the Definition's body, and the closure digest (`closureDigest`), over its body
+and every body it reaches, which a check that takes a Definition by digest pins. It reads none of the modules above;
+the period check takes its slot entries' Definitions by it.
 -/
 
 @[expose] public section
