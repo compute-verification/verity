@@ -3,7 +3,7 @@
 # `verify --zk`, a row unit's anchors held to the verifier's own `TileAnchors.public_inputs` file. Run from the source tree's
 # root (`research run --cwd source --declared-output 'out/*'`); results go to $RESEARCH_RUN_DIR/out, scratch to a
 # `mktemp -d` directory the job removes, builds to $HZ_CACHE (kept, keyed by their inputs) or the scratch directory.
-#   1. builds flock-circuit twice from Flock b684b12 and verity/protocols/flock/prover's patches (the proving build: sha512, glue; the
+#   1. builds flock-circuit twice from Flock b684b12 and verity/protocols/proofs/flock/prover's patches (the proving build: sha512, glue; the
 #      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
 #      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
@@ -55,7 +55,7 @@ TH=$(nproc)
 export RAYON_NUM_THREADS=$TH
 log() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/job.log"; }
 vlimit() { echo "ulimit -v $(( $1 * 1024 * 1024 ));"; }
-. "$SRC/verity/protocols/spot/verifier/one_stage/verifier_env.sh"
+. "$SRC/verity/protocols/proofs/spot/verifier/one_stage/verifier_env.sh"
 
 # ---- 1. builds -----------------------------------------------------------------------------------------------------------
 tree_key() { (cd "$SRC" && find "$@" -type f -not -path '*/.lake/*' -not -path '*/__pycache__/*' -print0 | sort -z \
@@ -66,11 +66,11 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   local D=$1 F=$W/flock
   rm -rf "$F" "$D.tmp"
   git clone -q https://github.com/succinctlabs/flock "$F" && cd "$F" && git checkout -q b684b12 || return 1
-  for p in link gpu-link; do git apply "$SRC/verity/protocols/flock/prover/flock-$p-b684b12.patch" || return 1; done
-  cp -r "$SRC/verity/protocols/flock/prover/live" crates/flock-live
+  for p in link gpu-link; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
+  cp -r "$SRC/verity/protocols/proofs/flock/prover/live" crates/flock-live
   grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
   rm -f crates/flock-merkle/src/hm96.rs
-  for p in sha512 glue zk vtime; do git apply "$SRC/verity/protocols/flock/prover/flock-$p-b684b12.patch" || return 1; done
+  for p in sha512 glue zk vtime; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
   mkdir -p "$D.tmp"
   CARGO_TARGET_DIR=$W/target cargo build -q --release -p flock-live --features sha512,glue --bin flock-circuit -j "$TH" \
     && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit-prove" || return 1
@@ -79,11 +79,11 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   rm -rf "$D" && mv "$D.tmp" "$D"
 }
 lean_key() {        # lean_key [FILE...]: the key of the Lean verifier's package, the packages it requires by path, and FILEs
-  python3 "$SRC/verity/protocols/flock/pod/lake_closure.py" key "$SRC/verity/protocols/flock/verifier" "$@"
+  python3 "$SRC/verity/protocols/proofs/flock/prover/pod/lake_closure.py" key "$SRC/verity/protocols/proofs/flock/verifier" "$@"
 }
 lean_copy() {       # lean_copy DEST: those packages copied under DEST, with DEST/.lake the verifier's build directory; its directory on stdout
   local P
-  P=$(python3 "$SRC/verity/protocols/flock/pod/lake_closure.py" copy "$SRC/verity/protocols/flock/verifier" "$1") \
+  P=$(python3 "$SRC/verity/protocols/proofs/flock/prover/pod/lake_closure.py" copy "$SRC/verity/protocols/proofs/flock/verifier" "$1") \
     && ln -s "${P#"$1/"}/.lake" "$1/.lake" && echo "$P"
 }
 build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
@@ -96,7 +96,7 @@ build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1 P
   rm -rf "$D.tmp" && P=$(lean_copy "$D.tmp") \
-    && cp "$SRC/verity/protocols/flock/prover/tests/lean/TmplUnit.lean" "$P/" \
+    && cp "$SRC/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean" "$P/" \
     && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$P/lakefile.toml" \
     && (cd "$P" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
@@ -120,7 +120,7 @@ setup() {
   { lscpu | grep -E 'Model name|^CPU\(s\)'; echo "threads $TH"; grep -E 'MemTotal|MemAvailable' /proc/meminfo; cat /proc/self/cgroup
     taskset -pc $$; df -h "${HZ_CACHE:-$W}" "$W"; } > "$OUT/host.txt" 2>&1
   local fail=0 p
-  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/protocols/flock/prover/live verity/protocols/flock/prover/*.patch)" build_circuit > "$W/flock.dir" &
+  [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/protocols/proofs/flock/prover/live verity/protocols/proofs/flock/prover/*.patch)" build_circuit > "$W/flock.dir" &
   [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(lean_key)" build_lean > "$W/lean.dir" &
   [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
   wait
@@ -133,7 +133,7 @@ setup() {
     log "build FAILED"; for f in "$OUT"/build-*.log; do echo "== $f"; tail -20 "$f"; done | tee -a "$OUT/job.log"; exit 1
   fi
   sha256sum "$BIN" "$SBIN" "$LEAN" | tee "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
-  "$PY" -c "import numpy, blake3, verity.protocols.pouw.verifier, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
+  "$PY" -c "import numpy, blake3, verity.protocols.accounting.pouw.verifier, verity_flock; print('python', numpy.__version__, blake3.__version__)" | tee -a "$OUT/job.log"
   TIME="$PY $J/timed.py"
   log "built"
 }
@@ -177,7 +177,7 @@ controls() {  # controls D O ROLE: the selftest build's cases, recorded for the 
     rc=$?
     log "  selftest $c exit $rc: $(grep -E '^NEG' "$O/selftest-$c.out" | cut -c1-200)"
   done
-  "$PY" "$SRC/verity/protocols/flock/agreement/selftest_records.py" "$D/rec" "$D/st" > /dev/null
+  "$PY" "$SRC/verity/protocols/proofs/flock/prover/agreement/selftest_records.py" "$D/rec" "$D/st" > /dev/null
 }
 
 lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at once as fit beside each other
@@ -242,7 +242,7 @@ $(tail -1 "$O/lean-$tag.err" | cut -c1-160)"
 stage_config() {   # stage_config ROLE K TAG D O: D holds the config's staged files, from the stage cache or staged now
   local role=$1 k=$2 tag=$3 D=$4 O=$5 key S rc=0
   key=$(tree_key benchmarks/pouw/hidden_zk/stage.py benchmarks/pouw/hidden_zk/fast_stage.py benchmarks/pouw/hidden_zk/core3_scratch.py \
-    benchmarks/pouw/hidden_zk/hash_scratch.py verity/protocols/flock/prover/python verity verity/circuits verity/definitions/kernels \
+    benchmarks/pouw/hidden_zk/hash_scratch.py verity/protocols/proofs/flock/prover/python verity verity/circuits verity/circuits/kernels \
     )
   S=${HZ_CACHE:-$W/cache}/stage/$tag-n$N-$HZ_STAGE-$(basename "$(dirname "$(dirname "$PY")")")-$key
   mkdir -p "$(dirname "$S")"

@@ -1,6 +1,6 @@
 """The int8 attention's two Triton kernels (`int8_attention_triton.kv_rows` and `lut_rows`) held to Int8KvQuant_v1 and
 Int8LutAttentionRow_v1 at the PTX and SASS level, as `int8_fused.ptx_check` holds the fused linears at the PTX level and
-benchmarks/pouw/harness/sass_gate.py holds the PoUW kernels' SASS.  Each kernel is compiled by Triton for sm_120 and sm_90
+verity/protocols/accounting/pouw/prover/sass_gate.py holds the PoUW kernels' SASS.  Each kernel is compiled by Triton for sm_120 and sm_90
 (no GPU needed: Triton's own ptxas and nvdisasm) under `int8_fused.OPTS`, the options it is launched with, or taken from a
 GPU process's JIT cache after a launch (`launched`).
 
@@ -47,7 +47,7 @@ from types import ModuleType
 from typing import Any
 
 SCHEMA = "verity-vllm/int8-attention-sass/v1"
-HARNESS = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "harness" / "sass_gate.py"
+HARNESS = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "sass_gate.py"
 ARCHES = (120, 90)
 #: ptxas's IEEE subroutines (div.rn.f32's slow path; div.s64 / div.u64 / rem for integer division by a 64-bit divisor)
 IEEE_SUBROUTINES = frozenset({"__cuda_sm3x_div_rn_noftz_f32_slowpath", "__cuda_sm20_div_s64", "__cuda_sm20_div_u64",
@@ -76,8 +76,9 @@ class ToolMissing(RuntimeError):
 
 @functools.cache
 def harness() -> ModuleType:
-    """benchmarks/pouw/harness/sass_gate.py: its nvdisasm parser, `Function` (subroutine regions) and `flagged`."""
+    """verity/protocols/accounting/pouw/prover/sass_gate.py: its nvdisasm parser, `Function` (subroutine regions) and `flagged`."""
     spec = importlib.util.spec_from_file_location("pouw_harness_sass_gate", HARNESS)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -164,7 +165,9 @@ def _int_seed(op: list[str]) -> bool:
 def sass_rules(kernel: str, text: str) -> dict[str, Any]:
     G = harness()
     c: Counter = Counter()
-    flagged_out, foreign, mma = Counter(), Counter(), Counter()
+    flagged_out: Counter = Counter()
+    foreign: Counter = Counter()
+    mma: Counter = Counter()
     for fd in G.parse_nvdisasm(text):
         fn = G.Function(fd)
         sub = {k: name for name, s, e in fn.subroutines.values() for k in range(s, e)}
@@ -241,8 +244,8 @@ def fmad_rule(ptx: str, cap: int) -> dict[str, Any]:
     ffma = [sum(t.split()[0].startswith("FFMA") for t in x) for x in (on, off)]
     same = on == off
     return {"same": same, "ffma_contraction_allowed": ffma[0], "ffma_fmad_false": ffma[1],
-            "refused": [] if same else [f"fmad: ptxas contracts this PTX when allowed ({ffma[0]} FFMA against {ffma[1]} with "
-                                        "--fmad=false)"]}
+            "refused": [] if same else [(f"fmad: ptxas contracts this PTX when allowed ({ffma[0]} FFMA against {ffma[1]} with "
+                                         "--fmad=false)")]}
 
 
 def gate(kernel: str, ptx: str, cubin: bytes, cap: int) -> dict[str, Any]:
@@ -266,6 +269,7 @@ def div_full_mutant(where: Path) -> ModuleType:
     path = where / "int8_attention_triton_div_full.py"
     path.write_text(src.replace(old, "x / s"))
     spec = importlib.util.spec_from_file_location("int8_attention_triton_div_full", path)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -314,6 +318,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"[negative] {name} sm_{cap} ok={r['ok']} {r.get('same_sass', '')} {[x[:120] for x in r['refused']]}", flush=True)
     if a.launch:
         import torch
+
         from tests.engine import int8_batch_gpu as B
         for i, case in enumerate([(32, 8, 128, 8, 600, 16, 1.0), (8, 2, 64, 6, 200, 16, 1.0)]):
             B.run_case(7000 + i, case)

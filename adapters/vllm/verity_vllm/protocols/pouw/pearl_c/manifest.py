@@ -4,14 +4,16 @@ execution phase's coins or, for a pass recorded before them, from its beacon.
 """
 from __future__ import annotations
 
-from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.verifier.audit import Epoch, Workload
-from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
-from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.pouw.verifier.window import LIVE_SCHEME
-from verity.protocols.spot.device.challenger import LiveCommitment, LiveOpening
+from verity.protocols.accounting.pouw.verifier import core_check as CC
+from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
+from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment, CoinOpening
+from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
+from verity.protocols.accounting.pouw.verifier.window import LIVE_SCHEME
+from verity.protocols.proofs.spot.device.challenger import LiveCommitment, LiveOpening
 
 from verity_vllm.protocols.pouw.pearl_c.host import epoch_of
+
+__all__ = ["manifest_epoch", "session_head"]
 
 #: what a live pass's manifest names of its session: the gate's open answer's session, ledger seq, root (its salt execution phase's
 #: execution phase root, `salt.epoch_open_root`) and coin commitment's root (`pouw_h1_challenger.SESSION_FIELDS`), never its hello's
@@ -34,7 +36,7 @@ def manifest_schema(man: dict, recorded: bool = False) -> str:
     if schema == CC.MANIFEST_RECORDED and not recorded:
         raise DomainError(f"the pass's manifest is {schema}, recorded before epoch coins: only a replay of a recorded pass "
                           "reads it")
-    if schema not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
+    if not isinstance(schema, str) or schema not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
         raise DomainError(f"schema {schema!r}, not {CC.MANIFEST_SCHEMA}" + (f" or {CC.MANIFEST_RECORDED}" if recorded else ""))
     return schema
 

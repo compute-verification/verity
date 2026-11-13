@@ -12,8 +12,8 @@ import pytest
 from verity.circuits import boolean as BL
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import mufu as BU, quant as BQ
-from verity.definitions.silicon import fp
+from verity.circuits.ops.boolean import mufu as BU, quant as BQ
+from verity.circuits.silicon import fp
 from verity.circuits.types import Array
 
 
