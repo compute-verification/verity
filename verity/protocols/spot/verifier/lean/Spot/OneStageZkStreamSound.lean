@@ -547,6 +547,58 @@ theorem membersHeld_ok {ms : Array Member} {sts : Array StatementFiles} {held : 
   obtain ⟨hsz, _, hk⟩ := heldFold sts.toList #[] held h
   refine ⟨by rw [hsz]; simp, fun k st m hst hm => hk k st m (by rwa [Array.getElem?_toList]) (by simpa using hm)⟩
 
+/-- **The finish's run on what was kept is `membersRun` on all the blobs**, where the stream kept every member's files
+and every statement's session as they read on them. -/
+theorem runKept_eq {p : Params} {c : OneStage.Commitment} {e : Evidence} {ms : Array Member}
+    {sts : Array StatementFiles} {S : State} {full : Core.Blobs}
+    (hF : FilesKept (Ctx.of p c e ms sts) full S) (hS : SessionsKept (Ctx.of p c e ms sts) full S) :
+    runKept (Ctx.of p c e ms sts) S = membersRun p ms c e sts full := by
+  unfold runKept structureKept membersRun membersStructure runMembers
+  cases hh : membersHeld ms sts with
+  | error err => simp only [Ctx.of, hh]; rfl
+  | ok held =>
+    obtain ⟨_, hone⟩ := membersHeld_ok hh
+    have hk : ∀ (k : Nat) (st : StatementFiles) (m : Member), (sts.zip held)[k]? = some (st, m) →
+        ∃ s a, st.sessions = #[s] ∧ S.sessions[k]? = some (some (SessionKept.of m a full s)) := by
+      intro k st m hz
+      obtain ⟨hst, hm⟩ := Array.getElem?_zip_eq_some.1 hz
+      obtain ⟨⟨s, hs⟩, _⟩ := hone k st m hst hm
+      exact ⟨s, _, hs, hS held hh k st m s hst hm (by simp [hs])⟩
+    have ht : ∀ ts log, treesKept ts log (sts.zip held).size S = membersTreesHeld ts log (sts.zip held) full :=
+      fun _ _ => treesKept_eq hk
+    simp only [Ctx.of, hh, ok_bind, ht]
+    congr 1
+    funext _
+    have hfl := files_toList hF
+    cases hr : rootsOf ms c.record with
+    | error err => rfl
+    | ok roots =>
+      simp only [Ctx.of, hr, Except.toOption, Option.getD] at hfl hS
+      simp only [ok_bind]
+      cases sampledHeld held e.base.provedUnits with
+      | error err => rfl
+      | ok u =>
+        simp only [ok_bind]
+        rw [hfl, files_forM]
+        cases hf : membersFiles (fun m => m.slice c.record roots) full ms.toList with
+        | error err => rfl
+        | ok files =>
+          simp only [ok_bind]
+          have hfold : Array.foldlM (stepKept S) ⟨#[], #[], #[], true⟩ (sts.zip held).zipIdx =
+              Array.foldlM (stepMember (statementAt files) full) ⟨#[], #[], #[], true⟩ (sts.zip held) := by
+            rw [← Array.foldlM_toList, ← Array.foldlM_toList, Array.toList_zipIdx]
+            refine foldlM_zipIdx _ 0 _ fun k x r hx => ?_
+            obtain ⟨st, m⟩ := x
+            rw [Nat.zero_add]
+            have hz : (sts.zip held)[k]? = some (st, m) := by rwa [Array.getElem?_toList] at hx
+            obtain ⟨hst, hm⟩ := Array.getElem?_zip_eq_some.1 hz
+            obtain ⟨⟨s, hs⟩, hfind⟩ := hone k st m hst hm
+            have hsk := hS held hh k st m s hst hm (by simp [hs])
+            obtain ⟨a, ha, hsa⟩ := statementAt_of hf (by rwa [Array.find?_toList])
+            exact stepKept_eq hs hsk ha hsa
+          rw [hfold]
+          rfl
+
 /-- **The fold's half of `StreamSound`, stated and not proved**: on a feed in the per-member stream's order, its
 state after every step keeps every member's files and every statement's session as they read on all the blobs fed. -/
 def StepsKept : Prop :=
