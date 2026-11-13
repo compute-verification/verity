@@ -44,8 +44,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.definitions.silicon import cast, models as S
-from verity.definitions.silicon.errors import InvalidArtifact
+from verity.circuits.silicon import cast, models as S
+from verity.circuits.silicon.errors import InvalidArtifact
 from verity.definitions.circuits.targets.target import FIRST
 
 from .. import settings
@@ -371,8 +371,8 @@ def _source_digests() -> dict[str, str]:
     files = {
         "verity_numerical/bench/instances.py": Path(__file__),
         "verity_numerical/bench/instances_gen.py": Path(G.__file__),
-        "verity/definitions/silicon/models.py": Path(S.__file__),
-        "verity/definitions/silicon/cast.py": Path(cast.__file__),
+        "verity/circuits/silicon/models.py": Path(S.__file__),
+        "verity/circuits/silicon/cast.py": Path(cast.__file__),
         "verity_numerical/reference/hawkeye_close.py": Path(hawkeye_close.__file__),
     }
     return {k: sha256_file(p) for k, p in files.items()}

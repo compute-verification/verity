@@ -7,7 +7,7 @@ import json
 import types
 
 import pytest
-from verity.definitions import word as W_
+from verity.circuits import word as W_
 
 from verity_vllm.acquire import plan
 from verity_vllm.acquire import plan as PL

@@ -20,11 +20,11 @@ from __future__ import annotations
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ONE, ZERO, const_bits, or_reduce, sub
 from verity.circuits.boolean.trace import definition
-from verity.definitions.ops.boolean import cast as BC
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.boolean import mufu as BM
-from verity.definitions.ops.boolean import scalar as SC
+from verity.circuits.ops.boolean import cast as BC
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import scalar as SC
 from verity.circuits.refs import Coll, concat
 from verity.circuits.defs import bind
 from verity.definitions.registry import dsa as D

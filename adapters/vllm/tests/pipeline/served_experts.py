@@ -87,7 +87,7 @@ def specs() -> SimpleNamespace:
     w13 unweighted on MMA v2, w2 weighted and swapped on QGMMA."""
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import bind
-    from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
     from verity.definitions.registry import act, deepgemm, fp8_moe_experts, moe
 
     return SimpleNamespace(
